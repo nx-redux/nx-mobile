@@ -144,3 +144,11 @@ Game side (GameActivity split):
 - [ ] DS 3D resolution: Auto follows rotation/fold, a fixed pick, the software-fallback notice
 - [ ] Touch shortcuts: FF and rewind (hold and toggle), the strip slots, Adjust buttons backdrop
 - [ ] Mic: first toggle asks permission (denied = noise); off under the menu and in the background, back on resume
+- [ ] Quit right after a manual Save/Load or a Wii HOME press on each early path (netplay or no-states game, quit while
+  the resume loads, Wii Menu exit): clean exit, the slot is written
+- [ ] An NDS game with a stale resume: the first menu shows no deleted slot and no last-slot pointer on it
+- [ ] A SAF cue/bin with a missing track still refuses with the error
+- [ ] 3DS then Wii in a row (and back): motion works in the second game; the 3DS tilt stops after quitting
+- [ ] Mic button and touch shortcut buttons on DS/3DS and in a netplay game (speed shortcuts hidden in netplay)
+- [ ] Sega pad Auto picks the cart's pad type; 3DS New Controls Auto reads the title
+- [ ] Save/Load state shortcut or skin SAVE/LOAD right after launch uses the last-used slot

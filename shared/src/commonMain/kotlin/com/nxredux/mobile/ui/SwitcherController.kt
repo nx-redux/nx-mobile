@@ -31,8 +31,17 @@ internal interface SwitcherHost {
     fun swapMainRows()
     fun refreshResume()
     suspend fun refreshMainRows()
+    suspend fun rebuildMainRows()
     /** recent.txt's read-modify-write lock, shared with every other writer. */
     val recentsLock: Mutex
+}
+
+/** What a launch tells the switcher ([LaunchController]): a load still under way stops, and the runner's call sets the return. */
+internal interface LaunchSwitcher {
+    /** A switcher still loading is abandoned (a launch, Home or B came first). */
+    fun cancelLoad()
+    /** The runner is being called for a game; [fromSwitcher]: it was resumed from the switcher, whose return is armed only here (a refused launch never arms it). */
+    fun onRunnerCalled(fromSwitcher: Boolean)
 }
 
 /**
@@ -48,11 +57,11 @@ internal class SwitcherController(
     private val userData: UserDataStore,
     private val returns: SwitcherReturnMark?,
     private val host: SwitcherHost,
-) {
+) : LaunchSwitcher {
     private var beforeSwitcher: Pair<Screen, ListSelection>? = null
     private var switcherJob: Job? = null   // switcher entries loading
     private var switcherRemoval: Job? = null   // the switcher's last Y Remove write (chained after the one before)
-    var switcherReturn = false   // a game resumed from the switcher is running: the menu's next foreground reopens it
+    private var switcherReturn = false   // a game resumed from the switcher is running: the menu's next foreground reopens it
 
     /** [switcherReturn] came from disk (this menu started while, or after, such a game ran): it waits for the first loaded screen. */
     private var switcherRestored = false
@@ -99,10 +108,37 @@ internal class SwitcherController(
      * A game was opened from the switcher, which stays up under it the whole game: the game opens over it and Save & Quit
      * cuts back to it, with no slide either way ([refreshSwitcher] on the way back).
      */
-    var switcherUnderGame = false
+    private var switcherUnderGame = false
 
     /** Home's rows were rebuilt after a game the switcher stayed up over: its close swaps them in ([closeSwitcher]). */
-    var switcherRowsRebuilt = false
+    private var switcherRowsRebuilt = false
+
+    override fun onRunnerCalled(fromSwitcher: Boolean) { switcherReturn = fromSwitcher }
+
+    /**
+     * The menu came to the foreground: true when it is back from a game opened over the switcher that is still up
+     * ([backUnderGame] then follows). Read once: a later foreground is not one from that game.
+     */
+    /**
+     * Back in the foreground: when the switcher stayed up over the game, the action that takes it back (read now, run
+     * by the caller once its other returns are done); else null. The flag is used up either way.
+     */
+    fun onForeground(): (() -> Unit)? {
+        val back = switcherUnderGame && screen.value is Screen.Switcher
+        switcherUnderGame = false
+        return if (back) ::backUnderGame else null
+    }
+
+    /**
+     * Back from the game the switcher stayed up over: its return is used up, Home's rows are rebuilt behind it (swapped
+     * in at its close), and its cards read again in place.
+     */
+    private fun backUnderGame() {
+        dropSwitcherReturn()
+        switcherRowsRebuilt = true
+        scope.launch { host.rebuildMainRows() }
+        refreshSwitcher()
+    }
 
     /**
      * A from the switcher: the game opens over the switcher, which stays ([switcherUnderGame]). A launch that never reaches the runner
@@ -121,7 +157,7 @@ internal class SwitcherController(
      * The switcher back on screen after its game: its cards read again (the game just played first, the latest recent),
      * in place; none left resumable, it closes.
      */
-    fun refreshSwitcher() {
+    private fun refreshSwitcher() {
         val here = screen.value as? Screen.Switcher ?: return
         switcherJob?.cancel()
         switcherJob = scope.launch {
@@ -209,8 +245,7 @@ internal class SwitcherController(
         }
     }
 
-    /** A switcher still loading is abandoned (a launch, Home or B came first). */
-    fun cancelLoad() { switcherJob?.cancel() }
+    override fun cancelLoad() { switcherJob?.cancel() }
 
     /** The page under the switcher was a hidden tab pushed over the menu, now dropped: the snapshot goes with it. */
     fun dropPushedSnapshot() {

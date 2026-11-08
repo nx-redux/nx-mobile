@@ -1302,6 +1302,7 @@ class AppState(
             override fun swapMainRows() = this@AppState.swapMainRows()
             override fun refreshResume() = this@AppState.refreshResume()
             override suspend fun refreshMainRows() = this@AppState.refreshMainRows()
+            override suspend fun rebuildMainRows() = this@AppState.rebuildMainRows()
             override val recentsLock: Mutex get() = this@AppState.recentsLock
         },
     )
@@ -1340,11 +1341,11 @@ class AppState(
         host = object : SettingsHost {
             override fun kidsToolsAllowed(): Boolean = kidsUi.kidsToolsAllowed
             override fun loaderActive(): Boolean = loader.active
+            override fun minimalPending(): Boolean = launches.minimalPending
             override fun secondConnected(): Boolean = this@AppState.secondConnected
             override fun select(index: Int) = this@AppState.select(index)
             override fun openSelected() = this@AppState.openSelected()
             override fun back(): Boolean = this@AppState.back()
-            override fun onButton(button: NxButton) = this@AppState.onButton(button)
             override fun rememberMenuSelection() = this@AppState.rememberMenuSelection()
             override fun refreshInstalled() = this@AppState.refreshInstalled()
             override fun settingsRows(section: SettingsSection): List<SettingsRow> = this@AppState.settingsRows(section)
@@ -4763,8 +4764,7 @@ class AppState(
     fun onForeground() {
         kidsUi.kidsReturned()   // back from Usage access or Alarms & reminders: a setup step moves on once granted
         kidsUi.kidsHomeCheck()  // back from setup's home question: on once home
-        val switcherBack = switcher.switcherUnderGame && _screen.value is Screen.Switcher
-        switcher.switcherUnderGame = false
+        val switcherBack = switcher.onForeground()
         checkArt(reuse = true)   // art deleted or added while away (only changed art folders are listed)
         launches.returnFromLaunch()   // back from a game or an app a Minimal launch handed off to
         if (!launches.minimalPending) launches.clearMinimalOpening()
@@ -4777,7 +4777,7 @@ class AppState(
         // ([SwitcherController.reopenSwitcher]): over the main menu after the rows rebuilt below (a swap would abandon an open under way).
         // Back on a list or a page: Home's rows are rebuilt all the same (the page stays as it is; [swapMainRows] only acts
         // on the menu), so B to the menu shows Continue's new resume frame, not the one read when the game launched.
-        if (switcherBack) { switcher.dropSwitcherReturn(); switcher.switcherRowsRebuilt = true; scope.launch { rebuildMainRows() }; switcher.refreshSwitcher(); return }
+        if (switcherBack != null) { switcherBack(); return }
         val s = _screen.value as? Screen.Systems ?: run { scope.launch { refreshMainRows() }; switcher.reopenSwitcher(); return }
         if (s.menu != null) { switcher.dropSwitcherReturn(); return }
         if (!firstSetup) updaterOnMainMenu()   // back over the menu (from a game, or the install-permission screen)
@@ -5081,7 +5081,7 @@ class AppState(
         when (val s = _screen.value) {
             is Screen.Onboarding -> onboardingRow(_selection.value.index)
             is Screen.Systems -> if (styleOf(s) == MenuStyle.MINIMAL) launches.openMinimal(s) else openMainRow(s, _selection.value.index)
-            is Screen.SettingsMenu -> s.sections.getOrNull(_selection.value.index)?.let(::openSettings)
+            is Screen.SettingsMenu -> settingsUi.openHighlightedSection()
             is Screen.ToolApps -> if (s.pick == AppPick.GAMES) androidApps.toggleAndroidGame(s) else androidApps.launchDrawerApp(s)
             is Screen.CheatDb -> onCheatDbButton(s, NxButton.A)
             Screen.DeviceSync -> onDeviceSyncButton(NxButton.A)
@@ -5750,7 +5750,15 @@ class AppState(
         dismissNoticeOnPress()
         (_screen.value as? Screen.Onboarding)?.let { onOnboardingButton(it, button); return }
         netplay?.takeIf { it.page.value != null }?.let { it.onButton(button); return }   // the Netplay sheet over a game list
-        if (settingsUi.onRowEditButton(_screen.value, button)) return
+        // A two-pane page's row edit takes the press, or has the page hear LEFT / RIGHT as its own B / A.
+        val heard = settingsUi.onRowEditButton(_screen.value, button) ?: return
+        // A held direction turned into B or A acts once: its repeats would climb or open one page per repeat.
+        if (repeat && heard != button) return
+        onPageButton(heard, repeat)
+    }
+
+    /** [button] as the screen itself hears it, once the dialogs, popups and row edit that come first ([onButton]) let it through. */
+    private fun onPageButton(button: NxButton, repeat: Boolean) {
         if (isKidsScreen(_screen.value)) return kidsUi.onKidsButton(_screen.value, button)
         (_screen.value as? Screen.KidsSetup)?.let { kidsUi.onKidsSetupButton(it, button); return }
         (_screen.value as? Screen.KidsDayEdit)?.let { kidsUi.onKidsDayButton(it, button); return }

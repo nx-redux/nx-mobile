@@ -5,12 +5,27 @@ import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.swordfish.libretrodroid.NxLog
 import com.swordfish.libretrodroid.Variable
 
+/** What [Res3dController] needs from [GameActivity]: the game state it reads, the core options and the open menu it writes. */
+internal interface Res3dHost : GameScreenHost {
+    val gameTag: String
+    val gameCoreId: String
+    val frontendValues: Map<String, String>
+    val netplayNow: com.nxredux.mobile.netplay.NetplaySession?
+    val ndsView: com.nxredux.mobile.options.NdsView?
+    /** melonds_render_mode this game started with, and whether OpenGL fell back to software. */
+    val ndsRenderMode: String?
+    val ndsFellBack: Boolean
+    fun applyOptions(vars: List<Variable>)
+    fun withMenu(block: (InGameMenuModel) -> Unit)
+    fun withMenuIf(pred: (InGameMenuModel) -> Boolean, block: (InGameMenuModel) -> Unit)
+}
+
 /**
  * The DS / 3DS / PS2 3D resolution the app sets for the game ([Nds3dResolution], [N3ds3dResolution]): melonDS's GL scale,
  * Azahar's factor and ARMSX2's upscale follow the layout and the 3D Resolution rows. Owns the [Nds3dSender] and its
- * 100 ms drain; [game] keeps the core, the options and the menu. Main thread.
+ * 100 ms drain; [host] keeps the core, the options and the menu. Main thread.
  */
-internal class Res3dController(private val game: GameActivity, private val renderer: FrontendRenderer) {
+internal class Res3dController(private val host: Res3dHost, private val renderer: FrontendRenderer) {
     private val sender = Nds3dSender()
     /** The 3D scale last sent to the core (the launch's included); null for another core. */
     var value: Int? = null
@@ -22,7 +37,7 @@ internal class Res3dController(private val game: GameActivity, private val rende
     private val tick = Runnable { tick() }
 
     /** The console whose 3D scale the app sets for this game: a DS on melonDS DS, a 3DS on Azahar, a PS2 on ARMSX2; null for any other. */
-    val console: Res3dConsole? get() = Res3dConsole.forTag(game.gameTag)?.takeIf { game.gameCoreId == it.coreId }
+    val console: Res3dConsole? get() = Res3dConsole.forTag(host.gameTag)?.takeIf { host.gameCoreId == it.coreId }
 
     fun applies(): Boolean = console != null
 
@@ -31,9 +46,9 @@ internal class Res3dController(private val game: GameActivity, private val rende
         this.current = current
         this.displayMax = displayMax
         // An open menu's Max Scale / Scale lists follow a rotation or fold.
-        game.withMenuIf({ it.displayMax3d != displayMax }) { it.displayMax3d = displayMax }
+        host.withMenuIf({ it.displayMax3d != displayMax }) { it.displayMax3d = displayMax }
         // An open menu's DS / 3DS layout row follows a rotation or a controller hiding the pad.
-        game.withMenuIf({ it.ndsView != game.ndsView }) { it.ndsView = game.ndsView }
+        host.withMenuIf({ it.ndsView != host.ndsView }) { it.ndsView = host.ndsView }
         offer(sizeChange)
     }
 
@@ -42,7 +57,7 @@ internal class Res3dController(private val game: GameActivity, private val rende
      * offered and the sender keeps the value the core has; [GameActivity.becomeLocal] offers again), not while quitting,
      * not once the view is gone.
      */
-    private fun canSend(): Boolean = game.netplayNow == null && !game.quitting && game.retroView?.isAttachedToWindow == true
+    private fun canSend(): Boolean = host.netplayNow == null && !host.quitting && host.retroView?.isAttachedToWindow == true
 
     /**
      * The 3D scale for the console's rows' values and the layout now, to the core if it changed: at once, or for a game area that
@@ -52,7 +67,7 @@ internal class Res3dController(private val game: GameActivity, private val rende
         val console = console ?: return
         if (!canSend()) return
         val max = displayMax ?: return
-        val value = Nds3dResolution.valueFor(game.frontendValues, current, max, console)
+        val value = Nds3dResolution.valueFor(host.frontendValues, current, max, console)
         sender.offer(value, sizeChange, SystemClock.uptimeMillis())?.let(::send)
         scheduleTick()
     }
@@ -64,14 +79,14 @@ internal class Res3dController(private val game: GameActivity, private val rende
     }
 
     private fun scheduleTick() {
-        val root = game.window?.decorView ?: return
+        val root = host.activity.window?.decorView ?: return
         root.removeCallbacks(tick)
         if (sender.pending) root.postDelayed(tick, 100)
     }
 
     /** onDestroy: no drain after the screen. */
     fun cancelTick() {
-        game.window?.decorView?.removeCallbacks(tick)
+        host.activity.window?.decorView?.removeCallbacks(tick)
     }
 
     /**
@@ -81,10 +96,10 @@ internal class Res3dController(private val game: GameActivity, private val rende
     private fun send(value: Int) {
         val console = console ?: return
         this.value = value
-        NxLog.i(TAG_LOG, "${game.gameTag} 3D resolution ${value}x (${Nds3dMode.parse(game.frontendValues[console.modeKey]).value})")
-        game.applyOptions(listOf(Variable(console.coreKey, console.coreValue(value))))
+        NxLog.i(TAG_LOG, "${host.gameTag} 3D resolution ${value}x (${Nds3dMode.parse(host.frontendValues[console.modeKey]).value})")
+        host.applyOptions(listOf(Variable(console.coreKey, console.coreValue(value))))
         if (console == Res3dConsole.N3DS) renderer.onN3dsFactorSent(value)
-        game.withMenu { publish(it) }
+        host.withMenu { publish(it) }
     }
 
     /**
@@ -94,17 +109,17 @@ internal class Res3dController(private val game: GameActivity, private val rende
      */
     fun launchOption(): Map<String, String> {
         val console = console ?: return emptyMap()
-        val shape = game.windowShape()
+        val shape = host.activity.windowShape()
         val max = console.displayMaxOf(shape.widthPx to shape.heightPx, shape.screenClass)
         if (max == null) {
             if (console == Res3dConsole.N3DS) CoreRegistry.forId(console.coreId)?.defaultOptions?.get(console.coreKey)?.toIntOrNull()?.let(renderer::startN3dsFactor)
             return emptyMap()
         }
-        val value = Nds3dResolution.valueFor(game.frontendValues, null, max, console)
+        val value = Nds3dResolution.valueFor(host.frontendValues, null, max, console)
         sender.offer(value, sizeChange = false, SystemClock.uptimeMillis())
         this.value = value
         if (console == Res3dConsole.N3DS) renderer.startN3dsFactor(value)
-        NxLog.i(TAG_LOG, "${game.gameTag} 3D resolution ${value}x at launch (${Nds3dMode.parse(game.frontendValues[console.modeKey]).value})")
+        NxLog.i(TAG_LOG, "${host.gameTag} 3D resolution ${value}x at launch (${Nds3dMode.parse(host.frontendValues[console.modeKey]).value})")
         return mapOf(console.coreKey to console.coreValue(value))
     }
 
@@ -115,6 +130,6 @@ internal class Res3dController(private val game: GameActivity, private val rende
     fun publish(model: InGameMenuModel) {
         val console = console ?: return
         // The 3DS has no software renderer to fall back to (Software API hidden), nor has the PS2: their scale always applies.
-        model.setNds3d(value, software = console == Res3dConsole.DS && NdsRenderer.rendersSoftware(game.ndsRenderMode, game.ndsFellBack))
+        model.setNds3d(value, software = console == Res3dConsole.DS && NdsRenderer.rendersSoftware(host.ndsRenderMode, host.ndsFellBack))
     }
 }

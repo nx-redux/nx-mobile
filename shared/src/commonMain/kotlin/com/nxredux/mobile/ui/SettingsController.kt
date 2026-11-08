@@ -25,18 +25,19 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * What Settings' pages need from [AppState]: each page's rows and values ([settingsRows], [settingValue]: they read and
- * write state all over the app), the menu row to come back to, the pad's own dispatch, and what a reset touches beyond
+ * write state all over the app), the menu row to come back to, leaving a page, and what a reset touches beyond
  * the settings.
  */
 internal interface SettingsHost {
     fun kidsToolsAllowed(): Boolean
     fun loaderActive(): Boolean
+    /** A Minimal open is under way: input waits ([LaunchController.minimalPending]). */
+    fun minimalPending(): Boolean
     /** A second display is connected: its category shows. */
     fun secondConnected(): Boolean
     fun select(index: Int)
     fun openSelected()
     fun back(): Boolean
-    fun onButton(button: NxButton)
     fun rememberMenuSelection()
     fun refreshInstalled()
     fun settingsRows(section: SettingsSection): List<SettingsRow>
@@ -176,25 +177,27 @@ internal class SettingsController(
      * RIGHT for its values (the page's own handling). Two panes: LEFT and RIGHT go between pages (LEFT as B; RIGHT opens a `›`
      * row, as A) and never change a value. A on a row of segments, swatches or a stepped value ([NxPadA.EDIT]) starts
      * changing it: then LEFT / RIGHT step it (the page's own LEFT / RIGHT), A or B stop, UP / DOWN stop and move. A
-     * switch's A flips it and a picker's opens it, as before (the page's own A). True when the press is taken here.
+     * switch's A flips it and a picker's opens it, as before (the page's own A). Returns the press the page hears
+     * ([button] itself, or LEFT's B and RIGHT's A); null when it is taken here.
      */
-    fun onRowEditButton(s: Screen, button: NxButton): Boolean {
-        val key = rowEditKey(s) ?: return false
-        if (rowEditBlocked(s)) return false
-        if (!rowEditTwoPane(s, settingsSplit)) { rowEdit.value = null; return false }
+    fun onRowEditButton(s: Screen, button: NxButton): NxButton? {
+        val key = rowEditKey(s) ?: return button
+        if (rowEditBlocked(s)) return button
+        if (!rowEditTwoPane(s, settingsSplit)) { rowEdit.value = null; return button }
         val i = selection.value.index
         if (rowEdit.value == RowEdit(key, i)) return when (button) {
-            NxButton.A, NxButton.B -> { rowEdit.value = null; true }
-            NxButton.UP, NxButton.DOWN -> { rowEdit.value = null; false }
-            else -> false   // LEFT / RIGHT: the page steps the value; X: its info
+            NxButton.A, NxButton.B -> { rowEdit.value = null; null }
+            NxButton.UP, NxButton.DOWN -> { rowEdit.value = null; button }
+            else -> button   // LEFT / RIGHT: the page steps the value; X: its info
         }
         rowEdit.value = null
         val row = settingTouchRow(i)
         return when (button) {
-            NxButton.A -> if (row?.padA == NxPadA.EDIT) { rowEdit.value = RowEdit(key, i); true } else false
-            NxButton.LEFT -> { host.onButton(NxButton.B); true }
-            NxButton.RIGHT -> { if (row?.opens == true) host.onButton(NxButton.A); true }
-            else -> false
+            NxButton.A -> if (row?.padA == NxPadA.EDIT) { rowEdit.value = RowEdit(key, i); null } else button
+            NxButton.LEFT -> NxButton.B
+            // A `›` row has no values (its A opens), so its A never starts an edit here.
+            NxButton.RIGHT -> if (row?.opens == true) NxButton.A else null
+            else -> button
         }
     }
 
@@ -277,7 +280,7 @@ internal class SettingsController(
         // One tap opens the section, from the root or from another section's page.
         if (screen.value is Screen.SettingsMenu) {
             host.select(index)
-            host.openSelected()
+            if (!host.minimalPending()) openHighlightedSection()
             return
         }
         if (settingsPane(screen.value) != SettingsPane.RIGHT) return   // a stale tap from a page drawn whole: the root's row stays
@@ -286,11 +289,16 @@ internal class SettingsController(
         repeat(SETTINGS_MAX_DEPTH) {
             if (host.loaderActive()) return
             if (settingsPane(screen.value) != SettingsPane.RIGHT) {
-                if (screen.value is Screen.SettingsMenu) { host.select(index); host.openSelected() }
+                if (screen.value is Screen.SettingsMenu) { host.select(index); if (!host.minimalPending()) openHighlightedSection() }
                 return
             }
             host.back()
         }
+    }
+
+    /** The section menu's highlighted section opens; the caller has checked that input is not waiting. */
+    fun openHighlightedSection() {
+        (screen.value as? Screen.SettingsMenu)?.sections?.getOrNull(selection.value.index)?.let(::openSettings)
     }
 
     /**

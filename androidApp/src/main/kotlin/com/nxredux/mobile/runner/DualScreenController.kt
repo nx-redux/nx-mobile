@@ -10,7 +10,6 @@ import android.view.Surface
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
-import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -28,7 +27,6 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.R
 import com.nxredux.mobile.achievements.sortedBy
@@ -64,7 +62,6 @@ import com.nxredux.mobile.ui.nx.MenuEffect
 import com.nxredux.mobile.ui.nx.NxTheme
 import com.nxredux.mobile.ui.nx.PanelPill
 import com.nxredux.mobile.ui.nx.nxColorsFor
-import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.LibretroDroid
 import com.swordfish.libretrodroid.NxLog
 import com.swordfish.libretrodroid.ScreenRect
@@ -85,15 +82,12 @@ import kotlin.math.roundToInt
  * orientation lock), the game's state and flags (owned there: read, never copied), and the in-game menu, which the panel
  * shares its effects and data with.
  */
-internal interface DualScreenHost : LifecycleOwner {
-    val activity: ComponentActivity
-    val retroView: GLRetroView?
+internal interface DualScreenHost : GameScreenHost {
     val frontendValues: Map<String, String>
     /** The config's resolved values (launch, or the last restore): the 3DS swap values leaving split puts back. */
     val storedValues: Map<String, String>
     val gameReady: Boolean
     val resumePending: Boolean
-    val quitting: Boolean
     val menuOpen: Boolean
     val isNds: Boolean
     val isN3ds: Boolean
@@ -109,7 +103,6 @@ internal interface DualScreenHost : LifecycleOwner {
     fun menuLayoutParams(orientation: Int, overPanel: Boolean, glass: Boolean): FrameLayout.LayoutParams
     fun isLandscape(): Boolean
     fun syncN3dsCore()
-    fun toast(msg: String): android.widget.Toast
     /** The panel's Second screen, Players and Cheats rows act as the in-game menu's own effects ([MenuEffect]). */
     fun handleMenuEffect(effect: MenuEffect)
     /** The open menu's Second screen shortcut again. */
