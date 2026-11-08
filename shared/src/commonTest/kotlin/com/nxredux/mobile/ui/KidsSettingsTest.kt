@@ -440,8 +440,13 @@ class KidsSettingsTest {
         val t = atWhoStep(home = true)
         t.st.onboardingRow(1)                                              // My kids
         assertEquals(PinPurpose.SETUP_NEW, assertIs<Screen.KidsPin>(t.st.screen.value).purpose)
+        assertEquals(OnboardingStep.KIDS.name, t.settings.onboardingStep)   // killed mid-setup: Who's this for? again, never Done
         t.st.typePin("123456"); t.st.typePin("123456"); t.st.pickAlpha(); t.st.next(); t.st.next()
         assertTrue(t.settings.kidsEnabled)
+        val done = assertIs<Screen.Onboarding>(t.st.screen.value)
+        assertEquals(OnboardingStep.DONE, done.step)
+        assertFalse(done.canGoBack)                                        // Kids Mode on: no way back to the parent's steps
+        t.st.onButton(NxButton.B)
         assertEquals(OnboardingStep.DONE, assertIs<Screen.Onboarding>(t.st.screen.value).step)
         t.st.pressStart()
         assertEquals(true, t.settings.onboardingDone)

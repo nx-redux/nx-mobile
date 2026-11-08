@@ -2019,6 +2019,7 @@ class AppState(
      */
     private fun onboardingTakesOver(): Boolean {
         if (onboarding.step != null) return true
+        kidsInOnboarding = false   // a setup from onboarding's Who's this for? never outlives the screen it was on
         if (deps.settings.onboardingDone != false) return false
         if (firstSetup) return false   // the folder steps' scans: their own page follows, onboarding starts after them
         onboarding.context = onboarding.context.copy(signedIn = deps.settings.raToken != null, kidsOffered = kids != null && deps.launcher != null)
@@ -2045,7 +2046,7 @@ class AppState(
             return
         }
         val pageTitle = onboardingPageTitle()
-        val canGoBack = step != OnboardingStep.WELCOME
+        val canGoBack = step != OnboardingStep.WELCOME && !kidsOnAtDone()
         _screen.value = Screen.Onboarding(
             step, pageTitle, listOf(title) + details, rows, accent = deps.settings.accent, padTheme = deps.settings.padTheme,
             canGoBack = canGoBack, shot = onboardingShot(step), touchRows = onboardingTouchRows(step, rows),
@@ -2595,6 +2596,7 @@ class AppState(
 
     /** B: the step before; WELCOME stays, the first post-folder step goes back to the ROMs folder step. */
     private fun onboardingBack() {
+        if (kidsOnAtDone()) return   // Kids Mode on: the earlier steps (Device Sync, the folders) are a parent's, Press Start alone goes on
         // A first run's first step after the folders: back to the ROMs folder step (going on again comes back here, the saved step kept).
         if (onboarding.isFirstMain()) { onboarding.finish(); return showAddFirstExtra() }
         if (onboarding.step == OnboardingStep.SYSTEM_BUTTONS) systemButtons = null
@@ -3072,6 +3074,7 @@ class AppState(
 
     /** Onboarding done: the menu on Home, its tabs rebuilt for the layout and options picked. */
     private fun finishOnboarding() {
+        kidsInOnboarding = false
         onboarding.finish()
         resetOnboardingRun()
         deps.settings.onboardingDone = true
@@ -7175,7 +7178,7 @@ class AppState(
     fun onHomeRoleRefused() {
         val kidsAsked = deps.settings.kidsOnWhenHome   // Kids Mode's setup asked: its own notice says it is off
         onLauncherChanged()
-        if (kidsAsked) return
+        if (kidsAsked || _notice.value == KIDS_HOME_REFUSED) return   // said already (a stopped activity's onForeground ran first)
         showNotice("Set NX Redux as the home app in Android settings → Default apps")
     }
 
@@ -7769,16 +7772,19 @@ class AppState(
     private var kidsInOnboarding = false
 
     /**
-     * Onboarding's My kids: Kids Mode's setup, as its switch would run it (home its last step). Onboarding is saved at
-     * Done first, so the new home instance that accepting the role starts resumes there, Kids Mode on ([kidsHomeCheck]).
+     * Onboarding's My kids: Kids Mode's setup, as its switch would run it (home its last step). Only right before the
+     * home question is onboarding saved at Done ([kidsUseHome]), so the new home instance that accepting the role starts
+     * resumes there, Kids Mode on ([kidsHomeCheck]); a relaunch before it asks Who's this for? again.
      */
     private fun kidsStartInOnboarding() {
         if (kids == null || deps.settings.kidsEnabled) return onboardingNext()
-        kidsInOnboarding = true
-        deps.settings.onboardingStep = OnboardingStep.DONE.name
+        kidsInOnboarding = true   // onboarding stays saved at Who's this for? until the home question ([kidsUseHome])
         kidsSetEnabled(true)
         if (deps.settings.kidsEnabled) kidsBackToOnboarding(done = true)   // a PIN already set and home: on at once
     }
+
+    /** Onboarding's Done with Kids Mode on (My kids set it up): no way back into the steps before it, only Press Start. */
+    private fun kidsOnAtDone(): Boolean = onboarding.step == OnboardingStep.DONE && deps.settings.kidsEnabled
 
     /** Off setup back into onboarding: Done once Kids Mode is on ([done]), else Who's this for? again. */
     private fun kidsBackToOnboarding(done: Boolean) {
@@ -7792,7 +7798,7 @@ class AppState(
 
     /** Setup's end or its cancel: back into onboarding when it ran from there, else the Kids Mode page. */
     private fun kidsSetupExit(done: Boolean) {
-        if (kidsInOnboarding) kidsBackToOnboarding(done) else kidsShowPage(SettingsKind.KIDS_ENABLE)
+        if (kidsInOnboarding && onboarding.step != null) kidsBackToOnboarding(done) else { kidsInOnboarding = false; kidsShowPage(SettingsKind.KIDS_ENABLE) }
     }
 
     /**
@@ -7805,6 +7811,7 @@ class AppState(
         kidsNewPin?.let(deps.settings::setKidsPin)
         kidsNewPin = null
         deps.settings.kidsOnWhenHome = true
+        if (kidsInOnboarding && onboarding.step != null) deps.settings.onboardingStep = OnboardingStep.DONE.name   // a relaunch resumes on Done
         deps.launcher?.setHome(true)
     }
 
