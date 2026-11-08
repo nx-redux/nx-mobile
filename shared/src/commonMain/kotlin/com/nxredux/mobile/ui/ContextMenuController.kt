@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.tryOr
 import com.nxredux.mobile.library.CollectionRename
 import com.nxredux.mobile.library.CollectionWrite
 import com.nxredux.mobile.library.Collections
@@ -490,7 +491,7 @@ internal class ContextMenuController(
         if (name == null || name == g.shownName) { closeContextMenu(); return }
         menuAction(m.copy(prompt = null)) {
             val key = if (g.lookupDir != g.relativeDir) g.relativeDir.substringAfterLast('/') else g.fileName   // a disc folder is keyed by its folder name
-            val ok = runCatching { sidecars.setName(g.sourceId, g.lookupDir, key, name) }.getOrElse { if (it is CancellationException) throw it; false }
+            val ok = tryOr({ false }) { sidecars.setName(g.sourceId, g.lookupDir, key, name) }
             if (!ok) { closeContextMenu(); _error.value = "Could not save the name"; return@menuAction }
             if (!host.renameInIndex(g, name)) { closeContextMenu(); host.rescan(); return@menuAction }   // stale list: the alias is saved, the scan shows it
             val path = g.path
@@ -589,8 +590,7 @@ internal class ContextMenuController(
         setMenu(m.copy(busy = true))
         scope.launch {
             // A provider can throw here (a revoked grant on a non-external-storage provider); the scope has no handler.
-            val ok = runCatching { sidecars.set(game.sourceId, game.folder, game.relativeDir, game.fileName, tag) }
-                .getOrElse { if (it is CancellationException) throw it; false }
+            val ok = tryOr({ false }) { sidecars.set(game.sourceId, game.folder, game.relativeDir, game.fileName, tag) }
             if (!ok) { _error.value = "Could not save the emulator choice"; closeContextMenu(); return@launch }
             host.finishSwitch(game, from, tag)
         }

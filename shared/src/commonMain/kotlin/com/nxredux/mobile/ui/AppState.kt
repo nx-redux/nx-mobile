@@ -1,5 +1,8 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.tryOr
+import com.nxredux.mobile.tryOrNull
+import com.nxredux.mobile.tryQuietly
 import com.nxredux.mobile.sync.SyncLink
 import com.nxredux.mobile.kids.KIDS_WARNING
 import com.nxredux.mobile.kids.KidsController
@@ -1155,7 +1158,7 @@ class AppState(
         if (!on) { drawerPreviewJob?.cancel(); drawerPreviewJob = null; _drawerPreview.value = null; return }
         if (_drawerPreview.value != null || drawerPreviewJob?.isActive == true) return
         drawerPreviewJob = scope.launch {
-            val apps = try { l!!.installedApps() } catch (e: CancellationException) { throw e } catch (e: Exception) { return@launch }
+            val apps = tryOr({ return@launch }) { l!!.installedApps() }
             installedCache = apps
             _drawerPreview.value = drawerRows(apps)
         }
@@ -1615,6 +1618,11 @@ class AppState(
         // No All files access: the home is the app's Android/media folder, nothing to pick. Once per run (a failed scan of it picks).
         val media = deps.homes?.media
         if (media != null && inFirstSetup() && !mediaHomeTaken && !homePickShown()) return takeMediaHome(media)
+        showPickFolderScreen()
+    }
+
+    /** The home pick's page itself, no step before it. */
+    private fun showPickFolderScreen() {
         _screen.value = Screen.PickFolder
         _selection.value = ListSelection(0, 1)
     }
@@ -2879,7 +2887,7 @@ class AppState(
     private fun showHomePage(home: ContentRef) {
         _screen.value = Screen.Loading
         scope.launch {
-            val outside = try { scanner.scanOutsideRoms(home, deps.settings.defaultTags) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+            val outside = tryOr({ emptyList() }) { scanner.scanOutsideRoms(home, deps.settings.defaultTags) }
             val index = library ?: return@launch showAddFirstExtra()
             homeOutside = outside
             val summary = homeSummary(index, outside).copy(split = splitFolders(index).size)
@@ -2905,49 +2913,55 @@ class AppState(
      * other folders merged into its main one, every line naming a merged game rewritten (Recents, pins, hidden games,
      * collections), then a rescan and the result.
      */
-    private fun moveHomeOutside(s: Screen.FolderSummary) {
+    private fun moveHomeOutside(s: Screen.FolderSummary) = launchMove(s) { home, index, mover ->
+        // Each merged game's old line → new, filled as it moves: whatever ends the move (a stop, an error, the app
+        // closing), every line naming a game that did move is rewritten to it.
+        val moved = LinkedHashMap<String, String>()
+        // The lines of the games moved so far, rewritten every few seconds too: a process killed mid-merge leaves
+        // only the last few seconds' games at their old paths, not all of them.
+        val rewritten = HashSet<String>()
+        suspend fun flushLines() {
+            val fresh = moved.filterKeys { it !in rewritten }
+            if (fresh.isEmpty()) return
+            runCatching { rewriteHomeLines(fresh) }.onSuccess { rewritten += fresh.keys }
+        }
+        val flusher = launch { while (true) { delay(LINES_FLUSH_MS); withContext(NonCancellable) { flushLines() } } }
+        var outside = MoveResult()
+        val result = try {
+            val items = mover.planLoose(homeOutside, index)
+            val movedItems = HashSet<MoveItem>()
+            outside = mover.run(items, ::moveProgress, onMoved = { movedItems += it }) { moveCancelled }
+            // Folders where a game (or a file nothing placed) stayed are never tried: a wrong empty listing must not delete them.
+            val keep = homeOutside.filter { f -> movedItems.none { it.relativeDir == f.relativeDir && (it.subdir != null || f.entry.name in it.files) } }
+            mover.pruneEmpty(home, homeOutside.map { it.relativeDir }, keep = keep.map { it.relativeDir })
+            val merged = if (outside.cancelled) MoveResult() else FolderMerge(deps.source, home).merge(index, splitFolders(index), moved, ::moveProgress) { moveCancelled }.first
+            MoveResult(outside.moved + merged.moved, outside.clashed + merged.clashed, outside.failed + merged.failed, outside.cancelled || merged.cancelled)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // What moved is counted; the rest (outside and merge) stays where it was.
+            outside.copy(moved = outside.moved + moved.size, failed = outside.failed + 1)
+        } finally {
+            flusher.cancel()
+            withContext(NonCancellable) { flushLines() }
+        }
+        homeOutside = emptyList()
+        scanNow(home, then = { showHomeSummary(s.summary, result) })
+    }
+
+    /** A move from [s]: its progress on the page from 0, then [move] with the home, the library and a mover into the home. */
+    private fun launchMove(s: Screen.FolderSummary, move: suspend CoroutineScope.(home: ContentRef, index: LibraryIndex, mover: RomMover) -> Unit) {
         val home = home() ?: return
         val index = library ?: return
         moveCancelled = false
         _screen.value = s.copy(progress = 0 to 0)
         _selection.value = ListSelection(0, 0)
-        scope.launch {
-            val mover = RomMover(deps.source, home)
-            val progress = { done: Int, total: Int -> (_screen.value as? Screen.FolderSummary)?.let { _screen.value = it.copy(progress = done to total) }; Unit }
-            // Each merged game's old line → new, filled as it moves: whatever ends the move (a stop, an error, the app
-            // closing), every line naming a game that did move is rewritten to it.
-            val moved = LinkedHashMap<String, String>()
-            // The lines of the games moved so far, rewritten every few seconds too: a process killed mid-merge leaves
-            // only the last few seconds' games at their old paths, not all of them.
-            val rewritten = HashSet<String>()
-            suspend fun flushLines() {
-                val fresh = moved.filterKeys { it !in rewritten }
-                if (fresh.isEmpty()) return
-                runCatching { rewriteHomeLines(fresh) }.onSuccess { rewritten += fresh.keys }
-            }
-            val flusher = launch { while (true) { delay(LINES_FLUSH_MS); withContext(NonCancellable) { flushLines() } } }
-            var outside = MoveResult()
-            val result = try {
-                val items = mover.planLoose(homeOutside, index)
-                val movedItems = HashSet<MoveItem>()
-                outside = mover.run(items, progress, onMoved = { movedItems += it }) { moveCancelled }
-                // Folders where a game (or a file nothing placed) stayed are never tried: a wrong empty listing must not delete them.
-                val keep = homeOutside.filter { f -> movedItems.none { it.relativeDir == f.relativeDir && (it.subdir != null || f.entry.name in it.files) } }
-                mover.pruneEmpty(home, homeOutside.map { it.relativeDir }, keep = keep.map { it.relativeDir })
-                val merged = if (outside.cancelled) MoveResult() else FolderMerge(deps.source, home).merge(index, splitFolders(index), moved, progress) { moveCancelled }.first
-                MoveResult(outside.moved + merged.moved, outside.clashed + merged.clashed, outside.failed + merged.failed, outside.cancelled || merged.cancelled)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // What moved is counted; the rest (outside and merge) stays where it was.
-                outside.copy(moved = outside.moved + moved.size, failed = outside.failed + 1)
-            } finally {
-                flusher.cancel()
-                withContext(NonCancellable) { flushLines() }
-            }
-            homeOutside = emptyList()
-            scanNow(home, then = { showHomeSummary(s.summary, result) })
-        }
+        scope.launch { move(home, index, RomMover(deps.source, home)) }
+    }
+
+    /** A move's progress, on the summary page while it shows. */
+    private fun moveProgress(done: Int, total: Int) {
+        (_screen.value as? Screen.FolderSummary)?.let { _screen.value = it.copy(progress = done to total) }
     }
 
     /** Every saved line naming a game the merge [moved] (old path → new) follows it: Recents, pins, hidden games, collections. */
@@ -3024,34 +3038,21 @@ class AppState(
     }
 
     /** The summary's move: [s]'s placed games into the home's Roms, its progress on the page, then a rescan and the result. */
-    private fun moveSummaryGames(s: Screen.FolderSummary) {
-        val home = home() ?: return
-        val index = library ?: return
-        moveCancelled = false
-        _screen.value = s.copy(progress = 0 to 0)
-        _selection.value = ListSelection(0, 0)
-        scope.launch {
-            val mover = RomMover(deps.source, home)
-            // An unexpected error is a result too (nothing moved past it), never a crash of the app's scope.
-            val result = try {
-                val items = mover.plan(index, s.extraId)
-                mover.run(items, { done, total -> (_screen.value as? Screen.FolderSummary)?.let { _screen.value = it.copy(progress = done to total) } }) { moveCancelled }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                MoveResult(failed = s.summary.games - s.summary.unassigned)
-            }
-            scanNow(home, then = {
-                // Emptied by the move: the folder is no longer a source.
-                val extra = deps.settings.extraFolders.firstOrNull { it.id == s.extraId }
-                if (extra != null && library?.let { folderSummary(it, s.extraId).games } == 0) {
-                    deps.settings.extraFolders = deps.settings.extraFolders - extra
-                    deps.folderPicker.forget(extra.ref)
-                    libraryDirty = true
-                }
-                showFolderSummary(s.extraId, result, before = s.summary)
-            })
+    private fun moveSummaryGames(s: Screen.FolderSummary) = launchMove(s) { home, index, mover ->
+        // An unexpected error is a result too (nothing moved past it), never a crash of the app's scope.
+        val result = tryOr({ MoveResult(failed = s.summary.games - s.summary.unassigned) }) {
+            mover.run(mover.plan(index, s.extraId), ::moveProgress) { moveCancelled }
         }
+        scanNow(home, then = {
+            // Emptied by the move: the folder is no longer a source.
+            val extra = deps.settings.extraFolders.firstOrNull { it.id == s.extraId }
+            if (extra != null && library?.let { folderSummary(it, s.extraId).games } == 0) {
+                deps.settings.extraFolders = deps.settings.extraFolders - extra
+                deps.folderPicker.forget(extra.ref)
+                libraryDirty = true
+            }
+            showFolderSummary(s.extraId, result, before = s.summary)
+        })
     }
 
     /** First setup is on: the welcome was not finished by an earlier run. */
@@ -3189,9 +3190,9 @@ class AppState(
                 gameInfoDirty = false
                 // A failed read keeps that half's last good map (before any, empty). The shelves wait for a play time
                 // read that works: with none, every game would be Not started.
-                val read = try { deps.gameTime?.byPath().orEmpty() } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
-                val raRead = try { deps.achievements?.progressByPath().orEmpty() } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
-                try { deps.achievements?.hashesByPath()?.let { ra.raHashes = it } } catch (e: CancellationException) { throw e } catch (e: Exception) { }
+                val read = tryOrNull { deps.gameTime?.byPath().orEmpty() }
+                val raRead = tryOrNull { deps.achievements?.progressByPath().orEmpty() }
+                tryQuietly { deps.achievements?.hashesByPath()?.let { ra.raHashes = it } }
                 ra.followRaPanel(force = true)   // the panel's game may have data now (a download just ended)
                 ra.followRaDetails(force = true)
                 val times = read?.also { lastTimes = it } ?: lastTimes
@@ -3407,6 +3408,7 @@ class AppState(
                 }
             }
             .onFailure { e ->
+                if (e is CancellationException) throw e   // a cancelled scan is not a failed one: no error, no picker
                 if (e is ListingUnavailable) {
                     listingHidden(root, indexShown = false, kept)
                     return
@@ -3598,10 +3600,7 @@ class AppState(
     private suspend fun ensureSkeleton(root: ContentRef) {
         if (skeletonFor == root) return
         skeletonFor = root
-        runCatching { Skeleton.ensure(deps.source, root) }.onFailure {
-            if (it is CancellationException) throw it
-            if (it is ListingUnavailable) skeletonFor = null   // cut short before any create: the next scan tries again
-        }
+        tryOr<Unit>({ if (it is ListingUnavailable) skeletonFor = null }) { Skeleton.ensure(deps.source, root) }   // a listing cut short before any create: the next scan tries again
     }
 
     /**
@@ -3952,7 +3951,7 @@ class AppState(
         _screen.value = Screen.Loading
         scope.launch {
             if (back != null) {
-                val restored = try { up.restoreHomeKeys(back.id) } catch (e: CancellationException) { throw e } catch (e: Exception) { false }
+                val restored = tryOr({ false }) { up.restoreHomeKeys(back.id) }
                 if (!restored) return@launch upgradeFailed()
                 deps.settings.extraFolders = deps.settings.extraFolders.filter { it != back }
             }
@@ -3989,7 +3988,7 @@ class AppState(
     /** [StorageUpgradePlatform.adoptPickerHome]: the extra (null: the old home is gone, nothing to adopt), or its failure. */
     private suspend fun upgradeAdopt(old: ContentRef, into: ContentRef?): Result<ExtraFolder?> {
         val up = deps.storageUpgrade ?: return Result.success(null)
-        return try { Result.success(up.adoptPickerHome(old, into)) } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+        return tryOr({ Result.failure(it) }) { Result.success(up.adoptPickerHome(old, into)) }
     }
 
     /** Moves the private data into [home]; marks the upgrade done and runs [then] only when the move finished. */
@@ -4029,7 +4028,7 @@ class AppState(
         _screen.value = s.copy(busy = true)
         _selection.value = ListSelection(0, 0)
         scope.launch {
-            val copied = try { withContext(deps.compute) { up.copySaves(s.from, s.to) } } catch (e: CancellationException) { throw e } catch (e: Exception) { false }
+            val copied = tryOr({ false }) { withContext(deps.compute) { up.copySaves(s.from, s.to) } }
             if (_screen.value != s.copy(busy = true)) return@launch
             if (copied) copySavesDone()
             else { _screen.value = s.copy(error = COPY_FAILED); _selection.value = ListSelection(0, 1) }
@@ -4309,6 +4308,12 @@ class AppState(
         _screen.value = page
         _selection.value = selectableOn(page, sectionSelections[section] ?: ListSelection(0, 0))
         if (section == SettingsSection.LIBRARY) refreshInstalled()   // the Android games count: the cached one until it lands
+    }
+
+    /** Opens [to] from [from], keeping [from]'s highlighted row for the return. */
+    private fun openSubPage(from: Screen.Settings, to: SettingsSection) {
+        sectionSelections[from.section] = _selection.value
+        openSettings(to)
     }
 
     /**
@@ -4660,7 +4665,7 @@ class AppState(
      * once (no suspension) finds [gpuJob] already set and the rows it rebuilds do not ask again.
      */
     private fun queryGpu(): Job = gpuJob ?: scope.launch(start = CoroutineStart.LAZY) {
-        val name = try { deps.deviceGpu() } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+        val name = tryOrNull { deps.deviceGpu() }
         _gpu.value = name?.trim()?.ifEmpty { null } ?: UNKNOWN_INFO
         if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SYSTEM) refreshSettings()
     }.also { gpuJob = it; it.start() }
@@ -5175,7 +5180,8 @@ class AppState(
         refreshSettings()
         val root = home() ?: return
         scope.launch {   // background re-index without Loading; Back then reads it (the lock orders the two)
-            runCatching {
+            // A failed re-index leaves the old index: it no longer fits, so Back rescans.
+            tryQuietly {
                 mutateIndex(IndexRefresh(counts = true)) { current ->
                     val previous = current ?: readStoredIndex()
                     stamped(scanner.scan(root, deps.settings.extraFolders, deps.settings.defaultTags, previous), previous).also { lateMountHere = it.lateMount }
@@ -5189,7 +5195,7 @@ class AppState(
                     _screen.value = page
                     _selection.value = selectableOn(page, _selection.value)
                 }
-            }.onFailure { if (it is CancellationException) throw it }   // a failed re-index leaves the old index: it no longer fits, so Back rescans
+            }
         }
     }
 
@@ -5468,10 +5474,13 @@ class AppState(
             if (_screen.value !== here) return@launch
             if (entries.isEmpty()) { leaveList(source.parent); return@launch }
             val at = picked?.let { p -> entries.indexOfFirst { it.game.path == p } }?.takeIf { it >= 0 } ?: listSearchFrom
-            val parent = (source.parent as? ListSource.Console)?.let { c -> consoleGroup(c.system)?.let { ListSource.Console(it) } } ?: source.parent
-            showList(parent, entries, at)
+            showList(freshSource(source.parent), entries, at)
         }
     }
+
+    /** [source], a console's with its systems as they are now (a hide may have emptied one tag of a merged console). */
+    private fun freshSource(source: ListSource): ListSource =
+        (source as? ListSource.Console)?.let { c -> consoleGroup(c.system)?.let { ListSource.Console(it) } } ?: source
 
     /** The Layout icon: opens the dropdown on the layout in use, or closes it when open. */
     fun toggleLayoutMenu() {
@@ -5533,9 +5542,7 @@ class AppState(
                 if (_screen.value !== s) return   // the user navigated while the source was read
                 if (entries.isEmpty()) { leaveList(s.source); return }
                 val index = select?.let { p -> entries.indexOfFirst { it.game.path == p } }?.takeIf { it >= 0 } ?: _selection.value.index
-                // A console's systems as they are now (a hide may have emptied one tag of a merged console).
-                val source = (s.source as? ListSource.Console)?.let { c -> consoleGroup(c.system)?.let { ListSource.Console(it) } } ?: s.source
-                _screen.value = Screen.Games(source, entries)
+                _screen.value = Screen.Games(freshSource(s.source), entries)
                 _selection.value = ListSelection(index, entries.size).clampedTo(entries.size)
                 refreshResume()
             }
@@ -5601,13 +5608,7 @@ class AppState(
             val sys = (if (coreOverride == null) classicNesSystem(entry) else null) ?: listed
             val core = coreOverride ?: sys.core ?: return@launch
             // A .cue/.m3u/.ccd/.toc loads the files it names from the same folder; all must be there before the core starts.
-            val lookup = try {
-                DiscSheet.companions(deps.source, game.folder, game.fileName)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                null
-            }
+            val lookup = companionsOrNull { DiscSheet.companions(deps.source, game.folder, game.fileName) }
             val companions = when (lookup) {
                 null -> { launchError(gone); return@launch }
                 is CompanionLookup.Missing -> { launchError("Missing ${lookup.name} next to ${lookup.sheet}"); return@launch }
@@ -5620,28 +5621,20 @@ class AppState(
             // A NAOMI/Atomiswave clone takes its parent set from beside it (flycast opens /rom/<parent>.zip); its BIOS is GameActivity's check.
             val naomiArchive = core.id == "flycast" && CoreRegistry.loadsArchive(sys.tag, game.fileName)
             val all = if (fbneoSet) {
-                val arcade = try {
+                val arcade = companionsOrNull {
                     // The set table's first read parses it (hundreds of KB): off the main thread.
                     val sets = withContext(deps.compute) { deps.arcadeSets() }
                     ArcadeCompanions.find(deps.source, game.folder, game.fileName, sets)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Throwable) {
-                    launchError(gone); return@launch
-                }
+                } ?: run { launchError(gone); return@launch }
                 systemSets = arcade.systemSets
                 companions + arcade.companions
             } else if (naomiArchive) {
-                val parent = try {
+                val parent = companionsOrNull {
                     val sets = withContext(deps.compute) { deps.naomiSets() }
                     // A zipped disc (not one of flycast's sets) is unpacked at launch and takes no parent.
                     if (!CoreRegistry.loadsArchive(sys.tag, game.fileName, sets)) emptyList()
                     else ArcadeCompanions.findParent(deps.source, game.folder, game.fileName, sets)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Throwable) {
-                    launchError(gone); return@launch
-                }
+                } ?: run { launchError(gone); return@launch }
                 companions + parent
             } else companions
             // The Brick records the shown name on every open (launcher.c Recents_setAlias(self->name)), replacing a stale one.
@@ -5664,6 +5657,10 @@ class AppState(
         job.invokeOnCompletion { if (launchJob === job) launchJob = null }
         return job
     }
+
+    /** [load]'s companion lookup, or null when it fails: any failure, an Error too, is a game not found. */
+    private inline fun <T : Any> companionsOrNull(load: () -> T): T? =
+        try { load() } catch (e: CancellationException) { throw e } catch (e: Throwable) { null }
 
     /** [launch]'s Problem: held during a launch sequence's spread (shown after its retreat, [openMinimal]), else shown now. */
     private fun launchError(text: String) {
@@ -6346,21 +6343,21 @@ class AppState(
                     SettingsKind.RESCAN -> rescanFromSettings()
                     SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
                     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER ->
-                        SettingsSection.entries.firstOrNull { it.opener == row.kind }?.let { sectionSelections[s.section] = _selection.value; openSettings(it) }
-                    SettingsKind.DEFAULTS -> { sectionSelections[s.section] = _selection.value; openSettings(SettingsSection.DEFAULT_EMULATORS) }
-                    SettingsKind.SAVES -> { sectionSelections[s.section] = _selection.value; openSettings(SettingsSection.SAVES) }
+                        SettingsSection.entries.firstOrNull { it.opener == row.kind }?.let { openSubPage(s, it) }
+                    SettingsKind.DEFAULTS -> openSubPage(s, SettingsSection.DEFAULT_EMULATORS)
+                    SettingsKind.SAVES -> openSubPage(s, SettingsSection.SAVES)
                     SettingsKind.EXPORT_SAVES -> deps.saveTransfer?.exportSaves(::showTransferNotice)
                     SettingsKind.LICENSES_LINK -> deps.openUrl(LICENSES_URL)
-                    SettingsKind.IMPORT_SAVES -> { sectionSelections[s.section] = _selection.value; openSettings(SettingsSection.IMPORT_SAVES) }
+                    SettingsKind.IMPORT_SAVES -> openSubPage(s, SettingsSection.IMPORT_SAVES)
                     SettingsKind.IMPORT_FOLDER -> importSaves(ImportSource.FOLDER)
                     SettingsKind.IMPORT_ZIP -> importSaves(ImportSource.ZIP)
                     SettingsKind.IMPORT_RETROARCH -> importSaves(ImportSource.RETROARCH)
                     SettingsKind.IMPORT_DONE -> leaveSubPage(SettingsSection.IMPORT_RESULT)
-                    SettingsKind.BUTTON_LAYOUT -> { sectionSelections[s.section] = _selection.value; openSettings(SettingsSection.BUTTON_LAYOUT) }
+                    SettingsKind.BUTTON_LAYOUT -> openSubPage(s, SettingsSection.BUTTON_LAYOUT)
                     SettingsKind.BUTTON_LAYOUT_ORIENTATION -> row.landscape?.let(::openSkinEditor)
                     SettingsKind.BUTTON_LAYOUT_RESET -> _screen.value = s.copy(confirmReset = true)   // asks first
-                    SettingsKind.SHORTCUTS -> { sectionSelections[s.section] = _selection.value; openSettings(SettingsSection.SHORTCUTS) }
-                    SettingsKind.SYSTEM_BUTTONS -> { sectionSelections[s.section] = _selection.value; openSettings(SettingsSection.SYSTEM_BUTTONS) }
+                    SettingsKind.SHORTCUTS -> openSubPage(s, SettingsSection.SHORTCUTS)
+                    SettingsKind.SYSTEM_BUTTONS -> openSubPage(s, SettingsSection.SYSTEM_BUTTONS)
                     // Without a controller too: one plugged in next answers it (the row says to connect one).
                     SettingsKind.SHORTCUT_BIND -> row.shortcut?.let(::startCapture)
                     SettingsKind.SYSTEM_BUTTON_BIND -> row.systemRole?.let { systemButtonWaiting = it; refreshSettings() }
@@ -6995,26 +6992,8 @@ class AppState(
             if (button == NxButton.A) answerAndroidGames(true) else if (button == NxButton.B) answerAndroidGames(false)
             return
         }
-        if (_updateConfirm.value != null) {   // About's confirm: A Update, B Cancel, up / down scroll long notes
-            when (button) {
-                NxButton.A -> answerUpdateConfirm(true)
-                NxButton.B -> answerUpdateConfirm(false)
-                NxButton.UP -> _updateScroll.tryEmit(-1)
-                NxButton.DOWN -> _updateScroll.tryEmit(1)
-                else -> Unit
-            }
-            return
-        }
-        if (updatePopupShows()) {   // the update dialog: A Update, B Not now, up / down scroll long notes
-            when (button) {
-                NxButton.A -> answerUpdate(true)
-                NxButton.B -> answerUpdate(false)
-                NxButton.UP -> _updateScroll.tryEmit(-1)
-                NxButton.DOWN -> _updateScroll.tryEmit(1)
-                else -> Unit
-            }
-            return
-        }
+        if (_updateConfirm.value != null) { onUpdateDialogButton(button, ::answerUpdateConfirm); return }   // About's confirm: A Update, B Cancel
+        if (updatePopupShows()) { onUpdateDialogButton(button, ::answerUpdate); return }   // the update dialog: A Update, B Not now
         // Setup's two buttons side by side ([setupButtons]), the selection on one: LEFT takes the first, RIGHT the second.
         if (button == NxButton.LEFT || button == NxButton.RIGHT) setupButtonPair()?.takeIf { _selection.value.index >= it }?.let { first ->
             _selection.value = _selection.value.copy(index = if (button == NxButton.LEFT) first else first + 1)
@@ -7206,7 +7185,7 @@ class AppState(
                     !inFirstSetup() -> skipFirstExtra()
                     page != null -> { _screen.value = page; _selection.value = ListSelection(0, folderSummaryRows(page).size) }   // back to the home page
                     mediaHomeTaken -> backPastMediaHome()
-                    else -> { _screen.value = Screen.PickFolder; _selection.value = ListSelection(0, 1) }
+                    else -> showPickFolderScreen()
                 }
                 true
             }
@@ -7224,7 +7203,7 @@ class AppState(
                     s.confirmMove -> _screen.value = s.copy(confirmMove = false)   // the move's confirmation closes first
                     s.progress != null -> moveCancelled = true
                     s.extraId == Recents.HOME && mediaHomeTaken -> backPastMediaHome()
-                    s.extraId == Recents.HOME -> { homePage = null; _screen.value = Screen.PickFolder; _selection.value = ListSelection(0, 1) }
+                    s.extraId == Recents.HOME -> { homePage = null; showPickFolderScreen() }
                     else -> showAddFirstExtra()
                 }
                 true
@@ -7295,7 +7274,7 @@ class AppState(
      */
     private suspend fun refreshAndroidConsole() {
         val l = deps.launcher ?: return
-        val apps = try { l.installedApps() } catch (e: CancellationException) { throw e } catch (e: Exception) { return }
+        val apps = tryOr({ return }) { l.installedApps() }
         val appsTab = withKidsApps(emptyList())
         installedCache = apps
         if (withKidsApps(emptyList()) != appsTab) swapMainRows()   // Kids Mode's Apps tab: an allowed app installed or removed
@@ -7351,6 +7330,17 @@ class AppState(
     /** The update dialog is drawn and still fits what shows now (so a press is its answer). */
     private fun updatePopupShows(): Boolean =
         updatePopup.value != null && updatePopupFits(_androidGamesAsk.value, _error.value, _screen.value)
+
+    /** An update dialog's pad: A answers yes, B no, up / down scroll long notes. */
+    private fun onUpdateDialogButton(button: NxButton, answer: (Boolean) -> Unit) {
+        when (button) {
+            NxButton.A -> answer(true)
+            NxButton.B -> answer(false)
+            NxButton.UP -> _updateScroll.tryEmit(-1)
+            NxButton.DOWN -> _updateScroll.tryEmit(1)
+            else -> Unit
+        }
+    }
 
     /**
      * Update ([yes]) or Not now to the update dialog: Update downloads the release (its progress on About's row and in the
@@ -7413,7 +7403,7 @@ class AppState(
         if (l == null || deps.settings.androidGamesAsked) { endFolderSteps(); next(); return }
         _screen.value = Screen.Loading   // a second Skip or pick cannot start it twice
         scope.launch {
-            val apps = try { l.installedApps() } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+            val apps = tryOrNull { l.installedApps() }
             if (apps != null) installedCache = apps
             val ask = apps?.let(::androidGamesAskFor)
             if (ask == null) { endFolderSteps(); next(); return@launch }
@@ -7541,7 +7531,7 @@ class AppState(
         val l = deps.launcher ?: return
         kidsTilesJob?.cancel()
         kidsTilesJob = scope.launch {
-            val apps = try { l.installedApps() } catch (e: CancellationException) { throw e } catch (e: Exception) { return@launch }
+            val apps = tryOr({ return@launch }) { l.installedApps() }
             val tiles = kidsTilesOf(apps, deps.settings.kidsAllowedApps)
             _kidsTiles.value = tiles
             if (_screen.value == Screen.KidsHome) _selection.value = ListSelection(_selection.value.index.coerceIn(0, tiles.size), tiles.size + 1)
@@ -8006,7 +7996,7 @@ class AppState(
         kidsShowSetup(first, 0)
         val l = deps.launcher ?: return
         scope.launch {
-            val apps = try { l.installedApps() } catch (e: CancellationException) { throw e } catch (e: Exception) { return@launch }
+            val apps = tryOr({ return@launch }) { l.installedApps() }
             val now = _screen.value as? Screen.KidsSetup ?: return@launch
             if (now.step != KidsSetupStep.APPS || now.setup != setup) return@launch
             kidsShowSetup(now.copy(apps = apps), _selection.value.index)

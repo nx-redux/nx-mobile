@@ -1,5 +1,8 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.tryOr
+import com.nxredux.mobile.tryOrNull
+import com.nxredux.mobile.tryQuietly
 import com.nxredux.mobile.netplay.Advert
 import com.nxredux.mobile.netplay.FoundHost
 import com.nxredux.mobile.netplay.NetplayChannel
@@ -19,7 +22,6 @@ import com.nxredux.mobile.netplay.wizard.HostOutcome
 import com.nxredux.mobile.netplay.wizard.Wizard
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.ui.nx.NxButton
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -278,15 +280,11 @@ class NetplayController(
                 advert = if (link != null) platform.advertiseTo(game, link.peerIp) else platform.advertise(game)
                 watchLink()
                 while (true) {
-                    val ch = try {
-                        platform.accept()
-                    } catch (x: CancellationException) {
-                        throw x
-                    } catch (x: Exception) {
+                    val ch = tryOr({
                         stopHosting()
                         _page.value = NetplayPage.Error(NetplayText.HOST_FAILED, role)
                         return@launch
-                    }
+                    }) { platform.accept() }
                     if (link != null && ch.remoteAddress != link.peerIp) {   // over the cable, only the cable's peer
                         ch.close()
                         continue
@@ -357,16 +355,13 @@ class NetplayController(
         searchText = NetplayText.SEARCHING
         showHosts()
         browseJob = scope.launch {
-            try {
+            // Discovery that cannot listen leaves the list as it is; the timer then says no host was found.
+            tryQuietly {
                 platform.browse().collect { h ->
                     val at = hosts.indexOfFirst { it.ip == h.ip }
                     hosts = if (at >= 0) hosts.toMutableList().also { it[at] = h } else hosts + h
                     if (_page.value is NetplayPage.Hosts) showHosts()
                 }
-            } catch (x: CancellationException) {
-                throw x
-            } catch (x: Exception) {
-                Unit   // discovery could not listen: the list stays as it is and the timer says no host was found
             }
         }
         noHostJob = scope.launch {
@@ -389,13 +384,8 @@ class NetplayController(
             val link = bringUpCable(NetplayText.JOIN) ?: return@launch
             _page.value = NetplayPage.Progress(NetplayText.JOIN, NetplayText.CONNECTING)
             watchLink()
-            val heard = try {
-                withTimeoutOrNull(USB_PEEK_MS) { platform.browse().first { it.ip == link.peerIp } }
-            } catch (x: CancellationException) {
-                throw x
-            } catch (x: Exception) {
-                null   // discovery could not listen: join without the title check
-            }
+            // Discovery that cannot listen joins without the title check.
+            val heard = tryOrNull { withTimeoutOrNull(USB_PEEK_MS) { platform.browse().first { it.ip == link.peerIp } } }
             val host = heard ?: FoundHost(link.peerIp, own)
             if (NetplayWire.equivalent(host.game, own)) handshake(host, any = false)
             else _page.value = NetplayPage.JoinAnyway(host, NetplayText.joinAnyway(host.game, own))
@@ -495,13 +485,7 @@ class NetplayController(
     private suspend fun connectWithRetries(ip: String, link: NetplayLink): NetplayChannel? {
         repeat(CONNECT_ATTEMPTS) { i ->
             if (i > 0) delay(CONNECT_RETRY_MS)
-            try {
-                return platform.connect(ip, link)
-            } catch (x: CancellationException) {
-                throw x
-            } catch (x: Exception) {
-                Unit   // refused or timed out: try again
-            }
+            tryQuietly { return platform.connect(ip, link) }   // refused or timed out: try again
         }
         return null
     }
