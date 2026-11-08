@@ -244,16 +244,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_NETPLAY_EMPTY_SAVES = "netplay_empty_saves"   // Boolean: no save copy happened although one was due
         const val EXTRA_NETPLAY_USB = "netplay_usb"              // Boolean: the session runs over the USB cable
         const val EXTRA_NETPLAY_USB_TOKEN = "netplay_usb_token"  // Long: the menu's cable start this session runs on (UsbCables.token)
-        /** The Dolphin core's descriptor id (Wii and GameCube tags). */
-        private const val DOLPHIN_ID = "dolphin"
         private const val MUPEN64PLUS_NEXT_ID = "mupen64plus_next"
         private const val KEY_NAME_HOLD_SHOWN_AT = "nx_name_hold_shown_at"   // the launch name's hold was up ([LaunchNameHold.shownAt])
         /** Kids Mode's "Games close in 10 minutes" toast stays this long. */
         private const val KIDS_WARNING_MS = 6000L
         /** Beside a real-path cache copy: what it was copied from ([realPathCopyStamp]). */
         private const val REAL_PATH_STAMP = ".nxstamp"
-        /** How long the Wii's HOME holds the core's Home (R3): a few frames, as a tap. */
-        private const val WII_HOME_PRESS_MS = 150L
         /** [onCoreHung]: between the hung game's finish and the process kill. */
         private const val HUNG_FINISH_GRACE_MS = 500L
         /** [endProcess]: at most this long for the netplay engine's shutdown before the process goes anyway. */
@@ -331,26 +327,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var n3dsTitle: N3dsTitle? = null
     /** The 3DS pad draws the New 3DS controls (ZL, ZR, the C-stick): New 3DS Controls resolved ([N3dsNewControls]). */
     private var n3dsNew = false
-    /** The Wii game's controls from GameTDB, looked up by the disc ID read at launch (null = unread or not listed). */
-    private var wiiControls: WiiControls? = null
-    /** The resolved Wii controller ([WiiController.resolve]); null outside Wii, and until the launch resolves it. */
-    override var wiiPad: WiiPad? = null
-        private set
-    /** Motion Controls resolved ([WiiMotion.resolve]): the phone's sensors drive port 0's Wiimote. */
-    private var wiiMotionOn = false
-    /** The phone's accelerometer and gyroscope, created for a Wii game only. */
-    private var motionSensors: MotionSensors? = null
+    override val wiiPad: WiiPad? get() = wii.pad
     /** Ends the game if its core hangs inside a frame ([onCoreHung]); from the view's creation to the end of onDestroy. */
     private var coreWatchdog: CoreWatchdog? = null
-    /** The display rotation the motion level was last captured in: a change mid-game recentres ([onConfigurationChanged]). */
-    private var lastRotation = -1
-    /**
-     * The disc read under the WII tag is a GameCube disc ([WiiDisc.gameCube]): it keeps the plain pad and the descriptor's
-     * ports, with no Wiimote, pointer, motion or Wii menu rows.
-     */
-    private var wiiGameCube = false
-    override val isWii: Boolean get() = WiiOptions.appliesTo(gameTag) && !wiiGameCube
-    override val isDolphin: Boolean get() = gameCoreId == DOLPHIN_ID
+    override val isWii: Boolean get() = WiiOptions.appliesTo(gameTag) && !wii.gameCube
+    override val isDolphin: Boolean get() = gameCoreId == WiiDolphinController.DOLPHIN_ID
     /** This launch asked the core for Vulkan (Display → Graphics API): a failure to start it relaunches on GLES. */
     @Volatile private var launchedOnVulkan = false
     /**
@@ -385,6 +366,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     internal var focusPaused = false
         private set
     private val saves = SaveSession(this, renderer, menu)
+    private val wii = WiiDolphinController(this, input, saves)
     override val slotsUi: androidx.compose.runtime.State<List<SlotUi>> get() = saves.slotsUi
     override var lastSlotCache: Int?
         get() = saves.lastSlotCache
@@ -429,8 +411,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var nameHold: LaunchNameHold? = null   // main thread only; null once it has gone
     private val heldDowns = HashSet<Int>()   // key codes whose press the hold swallowed: their release is swallowed too
     private val holdTouches = HoldTouchGate()   // touches the hold swallows (the on-screen pad stays lit above it)
-    private var wiiHomeSaving = false   // [pressWiiHome]'s resume point being saved (main thread only)
-    @Volatile private var wiiHomeSaved = false   // [pressWiiHome] saved this session's resume point
     // RomCache entries this game uses (its extraction, or its real-path copies): held so no sweep deletes them; released in onDestroy.
     private val cacheHolds = java.util.concurrent.ConcurrentLinkedQueue<String>()
     @Volatile private var cacheHoldsDrained = false   // set in onDestroy; a hold kept later (an unpack/copy that outlived us) is released at once
@@ -446,7 +426,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** Debug builds: when this screen was created; game.json's autoState names only a slot 9 written since. */
     private var debugStartedAt = 0L
     /** Players this game's core gives ([CoreRegistry.playersFor]); 1 until launch. */
-    private var playerCount = 1
+    internal var playerCount = 1
+        private set
     override var frontendValues: Map<String, String> = FrontendOptions.defaults()   // every frontend key, as in effect now
         private set
     /** The core can rewind ([com.nxredux.mobile.runner.CoreDescriptor.rewind]); false until the launch resolves the core. */
@@ -498,10 +479,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var padProfileCache: PadProfile? = null
     /** Bumped whenever [padProfileCache] is dropped, so Compose readers of [padProfile] (the menu's hint glyphs) redraw. */
     override val padProfileRevision = mutableStateOf(0)
-    private fun dropPadProfile() { padProfileCache = null; padProfileRevision.value++; input.gcClearTriggers() }
+    internal fun dropPadProfile() { padProfileCache = null; padProfileRevision.value++; input.gcClearTriggers() }
     /** The on-screen pad's profile for this game's system (its kind, face letters, hidden buttons); the intent's tag, for onCreate's layout. */
     override fun padProfile(): PadProfile =
-        padProfileCache ?: PadProfile.forTag(layoutTag(), segaPad, n3dsNew, wiiPad, gameCube = wiiGameCube).also { padProfileCache = it }
+        padProfileCache ?: PadProfile.forTag(layoutTag(), segaPad, n3dsNew, wiiPad, gameCube = wii.gameCube).also { padProfileCache = it }
 
     // ---- cheats ----
     override var cheatSet: CheatSet = CheatSet.EMPTY   // resolved on IO after start; toggles live here until Save Changes
@@ -702,7 +683,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // A quit writes it once itself, off the main thread (quitWithAutoState), so nothing here then.
         if (!quitting) saves.writeBatterySave(notify = false)
         gameNetplay.run?.pause()   // netplay: backgrounded: no input goes out; the other side stalls, 30 s ends the session
-        syncMotionSensors(foreground = false)
+        wii.syncMotionSensors(foreground = false)
         // Closes the phone mic at once (the paused core stops reading it); the toggle stays as it is for onResume.
         retroView?.microphoneSource = MicSource.SILENCE.native
         super.onPause()
@@ -716,7 +697,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             if (!quitting) rumbles.forEach { it.resume() }
             gameNetplay.run?.resume()   // netplay: input flows again; with the menu open it stays paused until Continue
         }
-        syncMotionSensors(foreground = true)
+        wii.syncMotionSensors(foreground = true)
         shortcuts.onResume()
         dual.syncDual()   // Settings → Second screen may have changed meanwhile
     }
@@ -785,7 +766,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** The opening menu holds the game ([InGameMenuController.openMenu]), as [focusPause] does. */
     override fun pauseForMenu() {
         syncKeepScreenOn()
-        syncMotionSensors()   // no motion while paused
+        wii.syncMotionSensors()   // no motion while paused
         holdCore()   // the phone mic closes under the menu too
         lifecycleScope.launch(Dispatchers.IO) { saves.writeBatterySave(notify = true) }
     }
@@ -796,8 +777,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // with it, unsaved, so the game never plays on under it and a menu opened again is not drawn beneath it
         closeSkinEdit()
         syncKeepScreenOn()
-        if (focusPaused) { syncMotionSensors(); shortcuts.pushMicSource(); return }   // another app has the focus: focusResume plays on later
-        syncMotionSensors()
+        if (focusPaused) { wii.syncMotionSensors(); shortcuts.pushMicSource(); return }   // another app has the focus: focusResume plays on later
+        wii.syncMotionSensors()
         releaseCore()
     }
 
@@ -888,8 +869,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         renderer.cancelGeometryWatch()
         res3d.cancelTick()
         rumbles.forEach { it.release() }
-        motionSensors?.stop()
-        if (isWii) LibretroDroid.setSensorEnabled(0, false)   // a next Wii game sets its own on its first frame
+        wii.onDestroy()
         if (isFinishing || relaunching) endGameTime()   // Back/finish without Quit (quit already ended it), or the GLES relaunch
         if (isFinishing) launchRecords.drop(launchId)   // quit before the first frame: the launch never started
         if (BuildConfig.DEBUG && isFinishing) debugReportStopped()
@@ -1267,35 +1247,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val wiiDisc = if (!WiiOptions.appliesTo(tag) || !WiiDiscId.readable(inner?.name ?: romFileName)) null else withContext(Dispatchers.IO) {
             inner?.let(WiiDiscIdReader::read) ?: WiiDiscIdReader.read(refs, content, romFileName)
         }
-        // A GameCube image under the WII tag (outside a gc folder): the plain pad, the C-stick as the right stick.
-        if (wiiDisc?.gameCube == true) {
-            wiiGameCube = true
-            dropPadProfile()   // the GameCube pad, not the plain one
-            relayoutPad()   // the pad was composed from the intent tag in onCreate
-            NxLog.i(TAG_LOG, "GameCube disc ${wiiDisc.id} under the Wii tag: no Wii controls")
-            withMenu { refreshWiiMenu(it) }   // a menu opened during the read drops its Wii rows
-        }
-        if (WiiOptions.appliesTo(tag) && !wiiGameCube) {
-            val id = wiiDisc?.id
-            wiiControls = withContext(Dispatchers.IO) { WiiControlsAsset.get(this@GameActivity).lookup(id) }
-            val sensors = motionSensors ?: MotionSensors(this@GameActivity) { a, g ->
-                LibretroDroid.setSensorValues(0, a.x, a.y, a.z, g.x, g.y, g.z)
-            }.also { motionSensors = it }
-            LibretroDroid.setSensorAvailable(sensors.hasAccel, sensors.hasGyro)
-            // The rotation the level starts in: only a real rotation recentres, not the first unrelated configuration
-            // change (a pad attached, a fold posture).
-            lastRotation = displayRotation()
-            // The current values: the menu may have changed them while the image was read.
-            val pad = WiiController.resolve(frontendValues[WiiOptions.CONTROLLER], wiiControls)
-            wiiPad = pad
-            wiiMotionOn = WiiMotion.resolve(frontendValues[WiiOptions.MOTION], pad, wiiControls, sensors.hasSensors)
-            LibretroDroid.setSensorEnabled(0, wiiMotionOn)
-            NxLog.i(TAG_LOG, "Wii disc $id: $wiiControls -> $pad, motion $wiiMotionOn")
-            dropPadProfile()
-            relayoutPad()
-            // A menu opened during the read: its Motion Controls row (left out until the sensors were known) and its Wii rows.
-            withMenu { refreshWiiMenu(it) }
-        }
+        wii.resolveAtLaunch(tag, wiiDisc)
         padMap = if (isDc) PadMap.IDENTITY else PadMap.forTag(tag, segaPad)
         // Only 3-button draws differently from the six the pad was composed with in onCreate: recompose it.
         if (segaPad == SegaPad.THREE) relayoutPad()
@@ -1358,7 +1310,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                         NxLog.i(TAG_LOG, "N64 hi-res VRAM limit: $limit MB (device ${total / (1024 * 1024)} MB)")
                         mapOf(N64HiresPack.VRAM_KEY to limit)
                     } else emptyMap()
-                    val forced = netplayPad?.options.orEmpty() + linkOptions + wiiScreenOption() + nds3dLaunch + ps2BiosOption + n64Vram + graphics.forcedOptions
+                    val forced = netplayPad?.options.orEmpty() + linkOptions + wii.screenOption() + nds3dLaunch + ps2BiosOption + n64Vram + graphics.forcedOptions
                     variables = (options.map { v ->
                         forced[v.key]?.let { Variable(v.key, it) } ?: v
                     } + forced.filterKeys { k -> options.none { it.key == k } }.map { (k, v) -> Variable(k, v) }).toTypedArray()
@@ -1384,10 +1336,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     // its unused ports set to none, which completes its device setup (the VMU in slot 1). Player 2+
                     // ports get the same device, as does a forced genesis_plus_gx Controller Type.
                     descriptor?.let { controllerPorts = it.controllerPortsFor(players) }
-                    // Dolphin: port 0 and the slots a pad already holds get the game's device (Wii: the resolved controller,
-                    // Dolphin's Wiimote + Nunchuk, Classic, MotionPlus); the other ports stay unplugged until a pad claims
-                    // them (connectDolphinPorts), or Dolphin connects Wiimotes 2-4 and the game shows a co-star cursor.
-                    if (descriptor?.id == DOLPHIN_ID) controllerPorts = dolphinPorts(dolphinDevice(), claimedPorts(), players)
+                    if (descriptor?.id == WiiDolphinController.DOLPHIN_ID) controllerPorts = wii.launchPorts(players)
                     if (descriptor?.id == SegaPadType.GPGX) SegaPadType.gpgxPorts(launchSega, players)?.let { controllerPorts = it }
                     if (descriptor?.id == SegaPadType.PICODRIVE && launchSega != null) controllerPorts = SegaPadType.picodrivePorts(launchSega, launchSegaPad, players)
                     netplayPad?.ports?.takeIf { it.isNotEmpty() }?.let { controllerPorts = controllerPorts + it }   // netplay: the pak's ports 0-1
@@ -1435,7 +1384,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             runCatching { if (v != null) android.system.Os.setenv(k, v, true) else android.system.Os.unsetenv(k) }
                 .onFailure { NxLog.w("GameActivity", "could not set $k", it) }
         }
-        if (isN3ds) offerN3dsMotion()
+        if (isN3ds) wii.offerN3dsMotion()
         val view = GLRetroView(this, data)
         view.pictureHeld = true   // black until the first frame's layout places the picture ([PictureHold])
         retroView = view
@@ -1452,12 +1401,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             view.getRumbleEvents().collect { e -> if (!quitting) rumbles.getOrNull(e.port)?.onRumble(e.strengthWeak, e.strengthStrong) }
         }
         // The core asked to end (Dolphin: the game's HOME menu → Wii Menu, which is not installed): close as Quit does,
-        // without a resume state, since the game has stopped itself by then. The resume point is HOME's ([pressWiiHome]).
+        // without a resume state, since the game has stopped itself by then. The resume point is HOME's ([WiiDolphinController.pressHome]).
         lifecycleScope.launch {
             view.getShutdownRequests().first()
             // Left without HOME this session (a game's own "Wii Menu", a channel launch): the resume point on disk is an
             // older session's, behind the game's own save on the NAND. Dropped, so the next launch boots fresh.
-            if (!wiiHomeSaved) saves.dropAutoInOrder()
+            if (!wii.homeSaved) saves.dropAutoInOrder()
             quitWithAutoState(chosen = true, autoState = false)
         }
         // Subscribed before the login (startSession, after the first frame): events are not replayed.
@@ -1530,24 +1479,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 val now = frontendValues[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO
                 if (now != launched) sendSegaPad(now)
             }
-            if (isDolphin && !isWii) sendWiiDevice()   // GameCube: a slot claimed while the game loaded
-            if (isWii) {
-                view.stickyPointer = true   // the right stick moves the IR pointer, which stays where it was left
-                // Always, not only on a change made during load: a previous game's core unload (its onDestroy can run
-                // after this screen's onCreate) resets the native sensor state, and resending the device makes Dolphin
-                // ask for the sensors again (cores/patches/dolphin.patch).
-                motionSensors?.let { LibretroDroid.setSensorAvailable(it.hasAccel, it.hasGyro) }
-                LibretroDroid.setSensorEnabled(0, wiiMotionOn)
-                sendWiiDevice()
-                syncMotionSensors()
-                if (wiiControls?.motionPlus == true && motionSensors?.hasSensors != true) {
-                    toast("Motion actions in this game need a phone with a gyroscope")
-                }
-            }
-            if (isN3ds) {
-                offerN3dsMotion()   // again: a previous game's unload can reset the native sensor state after the launch's offer
-                syncMotionSensors()
-            }
+            wii.onFirstFrame(view)
             dual.pushSecondSurface()   // a presentation shown before the view ran
             if (dual.panelShown()) dual.refreshDiscs()   // a panel up before the game ran asked too early
             // A core may change its geometry later (SET_GEOMETRY), as Azahar does a frame or so after a layout switch: the
@@ -1559,7 +1491,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 view.getGameGeometryChanges().collect {
                     val g = view.getGameGeometry()
                     renderer.onCoreGeometry(g)
-                    followWiiShape(g)
+                    wii.followShape(g)
                 }
             }
             renderer.relayoutFrontend()   // the core's geometry (a DS game's 256x384) is only known now
@@ -1825,8 +1757,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // screen's half size (and watches for its frame) until the relayout fills the new space ([onN3dsPictureSpace]).
         if (isN3ds) renderer.forgetN3dsPictureSpace()
         padLayout.applyLayout(newConfig.orientation)   // also re-sizes the menu and the notifications to the game area; syncs the 3DS core
-        // The motion level is captured in the display's frame: a new rotation takes the phone's attitude as level again.
-        if (isWii) displayRotation().let { r -> if (r != lastRotation) { lastRotation = r; motionSensors?.recenter() } }
+        wii.onConfigurationChanged()
         if (retroView != null) {
             // The overlay set follows the orientation (768p portrait, 720p landscape); the size change re-lays out.
             renderer.updateOverlay(FrontendSettings.parse(frontendValues))
@@ -1969,7 +1900,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             applyN3dsNewControls(values[N3dsOptions.NEW_CONTROLS])
             syncN3dsCore()   // a layout row changed in the menu, or the hotkey's
         }
-        if (isWii && wiiPad != null) applyWii(values)   // before the launch resolves it, the launch reads the values itself
+        wii.apply(values)
         speed.configure(SpeedSettings.parse(values, canRewind), canRewind)   // applied once the view exists, and on every row change
         val s = FrontendSettings.parse(values)
         padLayout.padLandscapeAlpha.value = s.padLandscapeAlpha
@@ -2033,187 +1964,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
     }
 
-    /**
-     * A Wii Controller or Motion Controls change (menu row, Restore Defaults, the pad's motion button): resolved again,
-     * the pad rebuilt, and the core given the new device on every port now (Dolphin rebuilds a port's mapping live, and
-     * re-asks the runner for sensors before it does; cores/patches/dolphin.patch).
-     */
-    private fun applyWii(values: Map<String, String>) {
-        val pad = WiiController.resolve(values[WiiOptions.CONTROLLER], wiiControls)
-        val motion = WiiMotion.resolve(values[WiiOptions.MOTION], pad, wiiControls, motionSensors?.hasSensors == true)
-        if (pad == wiiPad && motion == wiiMotionOn) return
-        if (pad != wiiPad) {
-            // Only a pad change lets go of everything: a motion toggle (the pad's MOTION, tapped with one thumb) must
-            // not drop the stick the other thumb holds.
-            if (!menuOpen) input.releaseAllGameInput()
-            // A stick held through the change would keep the pointer drifting (a Classic Controller never stops it), and
-            // a right stick left tilted under Classic would stay stuck as the Nunchuk's tilt, which the right stick does
-            // not reach (Dolphin binds it to tilt under IR mode 2): both are zeroed on every port.
-            retroView?.let { v ->
-                for (p in 0 until maxOf(playerCount, 1)) {
-                    v.setPointerVelocity(p, 0f, 0f)
-                    v.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, 0f, 0f, p)
-                }
-            }
-        }
-        wiiPad = pad
-        wiiMotionOn = motion
-        LibretroDroid.setSensorEnabled(0, motion)
-        dropPadProfile()
-        // Before the first frame the core may not be loaded: the first-frame block sends the device then, whatever it is.
-        if (gameReady) { sendWiiDevice(); syncMotionSensors() }
-        // Posted, as for the Sega pad (applySegaPad): the press that made the change is still being dispatched.
-        findViewById<FrameLayout>(R.id.root).post {
-            if (menuOpen) menu.menuRouter.releaseAll()
-            relayoutPad()
-        }
-    }
+    override fun connectDolphinPorts() = wii.connectDolphinPorts()
 
-    /** The Dolphin device for [pad]: MotionPlus added when the game takes it ([WiiController.motionPlus]). */
-    private fun wiiDevice(pad: WiiPad): Int = WiiController.device(pad, WiiController.motionPlus(pad, wiiControls))
+    override fun recenterWiiMotion() = wii.recenterMotion()
 
-    /** Dolphin's device for its connected ports: the resolved Wii controller, or the descriptor's plain pad (GameCube). */
-    private fun dolphinDevice(): Int =
-        wiiPad?.let(::wiiDevice) ?: CoreDescriptor.JOYPAD
+    override fun pressWiiHome() = wii.pressHome()
 
-    /** The ports a pad holds in [slots] (live or held for it): with port 0, the ones Dolphin has connected ([dolphinPorts]). */
-    private fun claimedPorts(): Set<Int> =
-        input.slots?.slots().orEmpty().withIndex().filter { it.value != SlotView.Empty }.map { it.index }.toSet()
-
-    /**
-     * Sends the device to port 0 and every claimed port on the emulation thread. Never plugs in an unclaimed port, and a
-     * pad that unplugs keeps its port (its slot is held), so the game is not asked to reconnect a remote.
-     */
-    private fun sendWiiDevice() {
-        if (!isDolphin) return
-        val view = retroView ?: return
-        val ports = dolphinPorts(dolphinDevice(), claimedPorts(), playerCount).filterValues { it != CoreDescriptor.NONE }
-        view.queueEvent {
-            for ((p, device) in ports) {
-                runCatching { view.setControllerType(p, device) }.onFailure { NxLog.w(TAG_LOG, "setting the Dolphin controller failed", it) }
-            }
-        }
-    }
-
-    /** A pad took player slot N on Dolphin: that port is connected now (before this, it was unplugged). */
-    override fun connectDolphinPorts() {
-        if (isDolphin && gameReady) sendWiiDevice()
-    }
-
-    /**
-     * The sensors listen only while motion is on and the game runs (not paused, menu closed, in front). [foreground]:
-     * onResume and onPause pass it, as the lifecycle state there does not say yet which side of the pause this is.
-     */
-    private fun syncMotionSensors(foreground: Boolean = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-        val sensors = motionSensors ?: return
-        val n3ds = isN3ds && sensors.hasAccel
-        val run = ((isWii && wiiMotionOn) || n3ds) && gameReady && !menuOpen && !quitting && foreground
-        when {
-            !run -> sensors.stop()
-            n3ds -> sensors.startN3ds(::displayRotation)
-            else -> sensors.start(::displayRotation, { wiiPad ?: WiiPad.SIDEWAYS })
-        }
-    }
-
-    /**
-     * 3DS motion: the phone's sensors offered to the core. Before the load, as Azahar asks for them once, when its HID
-     * service builds the motion device (citra_libretro/input/input_factory.cpp), each sensor on its own: without a gyroscope
-     * the tilt still comes through and the gyro reads still; without an accelerometer the console reads as a 3DS at rest.
-     */
-    private fun offerN3dsMotion() {
-        val sensors = motionSensors ?: MotionSensors(this) { a, g ->
-            LibretroDroid.setSensorValues(0, a.x, a.y, a.z, g.x, g.y, g.z)
-        }.also { motionSensors = it }
-        LibretroDroid.setSensorAvailable(sensors.hasAccel, sensors.hasGyro)
-        LibretroDroid.setSensorEnabled(0, sensors.hasAccel)
-    }
-
-    /** The display's rotation (Surface.ROTATION_*), which [MotionSensors] turns the phone's axes by. */
-    @Suppress("DEPRECATION")
-    private fun displayRotation(): Int =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) display?.rotation ?: 0 else windowManager.defaultDisplay.rotation
-
-    /** The pad's motion button: tap toggles Motion Controls (saved for this game), long press recentres. */
-    private fun toggleWiiMotion() {
-        if (WiiOptions.MOTION in lockedOptions) return   // locked in the .cfg: left alone, as the hotkeys do (setNdsKey)
-        val next = if (wiiMotionOn) WiiMotion.OFF else WiiMotion.ON
-        applyFrontend(frontendValues + (WiiOptions.MOTION to next))
-        persistGameKey(WiiOptions.MOTION, next, "Could not save Motion Controls")
-    }
-
-    /** Takes the phone's attitude at the next reading as the Wiimote's level. */
-    override fun recenterWiiMotion() { motionSensors?.recenter() }
-
-    /** The Wii shape chosen at launch ([wiiScreenOption]); null for any other console. */
-    private var wiiLaunchWide: Boolean? = null
-    /** The shape the pointer geometry is set for: the launch's, then the game's own ([followWiiShape]). */
-    private var wiiPointerWide: Boolean? = null
-    /** [WiiScreen.keptShapeNote] is said once per launch. */
-    private var wiiShapeNoted = false
-
-    /**
-     * Display → Wii Screen for a Wii game: Dolphin's widescreen system setting, chosen from the orientation the
-     * game starts in and the screen's shape (games read it once at boot), and the touch pointer's geometry for that
-     * shape. Empty for any other console.
-     */
-    private fun wiiScreenOption(): Map<String, String> {
-        if (!WiiOptions.appliesTo(gameTag) || wiiGameCube) return emptyMap()
-        val portrait = resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
-        val m = resources.displayMetrics
-        val screenAspect = maxOf(m.widthPixels, m.heightPixels).toFloat() / minOf(m.widthPixels, m.heightPixels).coerceAtLeast(1)
-        val wide = WiiScreen.widescreen(frontendValues[WiiOptions.SCREEN], portrait, screenAspect)
-        wiiLaunchWide = wide
-        wiiPointerWide = wide
-        return mapOf(WiiScreen.CORE_KEY to WiiScreen.coreValue(wide)) + wiiPointerOptions(wide)
-    }
-
-    private fun wiiPointerOptions(wide: Boolean): Map<String, String> = WiiScreen.pointerOptions(
-        wide, frontendValues[WiiOptions.POINTER_WIDTH], frontendValues[WiiOptions.POINTER_HEIGHT], frontendValues[WiiOptions.POINTER_OFFSET],
-    )
-
-    /**
-     * A save state keeps the shape its game booted with, so a resumed Wii game can draw the other shape than the one
-     * chosen at launch: the core's frame aspect ([g], `[w, h, aspect, rotation]`) says which. The pointer geometry follows
-     * it (Dolphin takes it live), so a tap still lands under the finger, and a note says once why Wii Screen did not apply.
-     */
-    private fun followWiiShape(g: FloatArray) {
-        val launchWide = wiiLaunchWide ?: return
-        if (g.size < 3 || g[2] <= 0f) return
-        val wide = WiiScreen.isWide(g[2])
-        if (wide != wiiPointerWide) {
-            wiiPointerWide = wide
-            NxLog.i("GameActivity", "Wii game draws ${if (wide) "16:9" else "4:3"} (launched ${if (launchWide) "16:9" else "4:3"}): pointer follows")
-            applyOptions(wiiPointerOptions(wide).map { (k, v) -> Variable(k, v) })
-        }
-        if (!wiiShapeNoted) WiiScreen.keptShapeNote(wide, launchWide)?.let {
-            wiiShapeNoted = true
-            android.widget.Toast.makeText(this, it, android.widget.Toast.LENGTH_LONG).show()   // two lines: the short one ends too soon
-        }
-    }
-
-    /**
-     * The Wii's HOME (the pad's, or a controller's right-stick click): saves the resume point, then taps the core's Home
-     * (R3). Choosing Wii Menu in the game's HOME menu closes the game ([GLRetroView.getShutdownRequests]) with no state of
-     * its own, since the game has stopped itself by then: resuming lands here, just before the HOME menu opened. A press
-     * while one is still being saved is dropped.
-     */
-    override fun pressWiiHome() {
-        if (wiiHomeSaving) return
-        val view = retroView ?: return
-        val ss = saveStates
-        if (ss == null || !gameReady || resumePending) { tapWiiHome(view); return }
-        wiiHomeSaving = true
-        saves.writeHomeResumePoint(view, ss, onSaved = { wiiHomeSaved = true }) { wiiHomeSaving = false; if (!quitting) tapWiiHome(view) }
-    }
-
-    private fun tapWiiHome(view: GLRetroView) {
-        view.sendKeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_THUMBR, 0)
-        lifecycleScope.launch { delay(WII_HOME_PRESS_MS); view.sendKeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BUTTON_THUMBR, 0) }
-    }
-
-    /** The pad's motion button ([PadMotion]): Wiimote types on a phone with both sensors; none without them. */
-    override fun padMotion(): PadMotion? =
-        if (isWii && padProfile().motionButton && motionSensors?.hasSensors == true) PadMotion(wiiMotionOn, ::toggleWiiMotion, ::recenterWiiMotion) else null
+    override fun padMotion(): PadMotion? = wii.padMotion()
 
     override fun padMic(): PadMic? = shortcuts.padMic()
 
@@ -2227,14 +1984,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // A pad skin sets the screens' size and place: its scaling, offsets, overlay and screen layouts are not offered.
         val skinned = if (padLayout.skinShown) SKIN_HIDDEN_OPTIONS else emptySet()
         return noRewind + skinned + when {
-            wiiGameCube -> lockedOptions + WiiOptions.table.map { it.key }
-            isWii && motionSensors?.hasSensors != true -> lockedOptions + WiiOptions.MOTION
+            wii.gameCube -> lockedOptions + WiiOptions.table.map { it.key }
+            isWii && !wii.hasSensors -> lockedOptions + WiiOptions.MOTION
             else -> lockedOptions
         }
     }
 
     /** The open menu's Wii rows: Motion Controls, once the sensors are known. */
-    private fun refreshWiiMenu(model: InGameMenuModel) {
+    internal fun refreshWiiMenu(model: InGameMenuModel) {
         model.setFrontend(frontendValues, renderer.overlayNames(), menuLocked(), gameTag, overlayAvailable = !renderer.ndsSplit)
     }
 
@@ -2804,7 +2561,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun handleMenuEffect(effect: MenuEffect) = menu.handle(effect)
     override fun publishMenuSecondScreen() { menu.menuModel?.let(menu::publishSecondScreen) }
     override fun placeMenu() = menu.placeMenu()
-    private fun relayoutPad() = padLayout.applyLayout(resources.configuration.orientation)
+    internal fun relayoutPad() = padLayout.applyLayout(resources.configuration.orientation)
     override fun withMenu(block: (InGameMenuModel) -> Unit) { menu.menuModel?.let { block(it); menu.menuState.value = it.state } }
     internal fun withMenuIf(pred: (InGameMenuModel) -> Boolean, block: (InGameMenuModel) -> Unit) { menu.menuModel?.takeIf(pred)?.let { block(it); menu.menuState.value = it.state } }
 
