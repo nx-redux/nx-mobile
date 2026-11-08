@@ -166,7 +166,7 @@ import kotlin.concurrent.thread
 internal const val TAG_LOG = "NXAPP"
 
 internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost, FrontendHost, DualScreenHost, InGameMenuHost,
-    Res3dHost {
+    Res3dHost, ShortcutsMicHost {
 
     companion object {
         /** The frontend rows a pad skin leaves out ([menuLocked]): it places the screens itself. */
@@ -317,7 +317,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * Settings → System → Pause when unfocused: another app took the top focus while this window stays visible (split
      * screen, a freeform window, an app on another display), so the game holds, as under the menu, until it is back.
      */
-    internal var focusPaused = false
+    override var focusPaused = false
         private set
     internal val saves = SaveSession(this, renderer, menu)
     internal val wii = WiiDolphinController(this, input, saves)
@@ -382,14 +382,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override var frontendValues: Map<String, String> = FrontendOptions.defaults()   // every frontend key, as in effect now
         internal set
     /** The core can rewind ([com.nxredux.mobile.runner.CoreDescriptor.rewind]); false until the launch resolves the core. */
-    internal var canRewind = false
+    override var canRewind = false
         internal set
     /**
      * Fast forward and rewind on the view; the shortcuts drive it ([onShortcut]), the speed rows configure it ([applyFrontend]).
      * Off for a netplay session ([SpeedController.setSession]): a link session's end turns it back on ([becomeLocal]), a
      * lockstep session's does not, so a game played on alone after lockstep keeps it off, as it keeps save states off.
      */
-    internal val speed by lazy {
+    override val speed by lazy {
         // The panels' Fast forward / Rewind tiles follow whatever changed them (a shortcut, a tile, the buffer running out).
         // So do the touch shortcut buttons' toggled look and their Rewind rows.
         SpeedController(lifecycleScope, lifecycle, onTiles = { dual.refreshDualPanel(); menu.menuModel?.let(menu::publishSpeed); shortcuts.refreshTouchShortcuts() }) { retroView }
@@ -399,7 +399,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     internal val intentTitle: String? get() = intent.getStringExtra(EXTRA_TITLE)
     internal val intentTag: String? get() = intent.getStringExtra(EXTRA_TAG)
     // One instance per game: the game process's prefs refresh in place (Prefs.refreshGame), so reads stay current.
-    internal val settings by lazy { AndroidAppSettings(this) }
+    override val settings by lazy { AndroidAppSettings(this) }
     /** Each port's rumble (index = port); empty until the launch ([LaunchPipeline]) builds it, so every use must tolerate empty. */
     override var rumbles: Array<RumbleMotor> = emptyArray()
         internal set

@@ -2,11 +2,14 @@ package com.nxredux.mobile.runner
 
 import android.os.SystemClock
 import android.view.View
+import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.R
+import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.shortcuts.ClaimedInput
 import com.nxredux.mobile.shortcuts.ConsoleHotkeys
 import com.nxredux.mobile.shortcuts.EffectiveShortcuts
@@ -25,12 +28,35 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
+ * What [ShortcutsMicController] needs from [GameActivity]: the state its shortcuts and mic follow, and the actions a
+ * shortcut runs (speed, reset, quit, slots), which stay the activity's.
+ */
+internal interface ShortcutsMicHost : LifecycleOwner {
+    /** For the mic permission prompt, which must be registered while the activity is being created. */
+    val activity: ComponentActivity
+    val settings: AndroidAppSettings
+    val speed: SpeedController
+    val retroView: com.swordfish.libretrodroid.GLRetroView?
+    val menuOpen: Boolean
+    val focusPaused: Boolean
+    val quitting: Boolean
+    val canRewind: Boolean
+    val saveStates: SaveStates?
+    var lastSlotCache: Int?
+    fun askReset()
+    fun quitGame(chosen: Boolean, autoState: Boolean)
+    fun saveToSlot(slot: Int)
+    fun loadFromSlot(slot: Int)
+    fun toast(msg: String): android.widget.Toast
+}
+
+/**
  * The game's shortcuts (bound keys, the touch shortcut buttons, a pad skin's SAVE / LOAD / REWIND / FAST) and the DS / 3DS
- * Mic toggle. Built at launch ([launch]); the actions themselves (speed, reset, quit, slots) stay [game]'s. Main thread.
+ * Mic toggle. Built at launch ([launch]); the actions themselves (speed, reset, quit, slots) stay [host]'s. Main thread.
  * Constructed with the activity: [micPrompt] must be registered before it is created.
  */
 internal class ShortcutsMicController(
-    private val game: GameActivity,
+    private val host: ShortcutsMicHost,
     private val padLayout: PadLayoutController,
     private val renderer: FrontendRenderer,
     private val menu: InGameMenuController,
@@ -47,11 +73,11 @@ internal class ShortcutsMicController(
     /** The pad's mic button, snapshot state read in the pads' composition ([padMic]): set by [applyMic]. */
     private val padMicState = mutableStateOf<PadMic?>(null)
     // RECORD_AUDIO, asked from the Mic toggle only ([setMic]): the answer is pushed at once, so a denial gives noise.
-    private val micPrompt = game.registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    private val micPrompt = host.activity.registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         mic?.setGranted(granted)
         applyMic()
     }
-    private val micAccess by lazy { AndroidMicAccess(game) { micPrompt.launch(android.Manifest.permission.RECORD_AUDIO) } }
+    private val micAccess by lazy { AndroidMicAccess(host.activity) { micPrompt.launch(android.Manifest.permission.RECORD_AUDIO) } }
     // What [applyShortcuts] last built: the touch buttons' actions ([refreshTouchShortcuts]).
     private var effectiveShortcuts: EffectiveShortcuts? = null
     /** The touch shortcut buttons the pads draw: snapshot state, read in the pads' composition. */
@@ -81,10 +107,10 @@ internal class ShortcutsMicController(
         canMic = microphone
         mic = if (canMic) MicControl(micAccess.usable).apply {
             setGranted(micAccess.granted())
-            setAsked(game.settings.micAsked)
+            setAsked(host.settings.micAsked)
             setSession(netplay = netplay)
         } else null
-        shortcutBase = Shortcuts.decodeBase(game.settings.shortcuts)
+        shortcutBase = Shortcuts.decodeBase(host.settings.shortcuts)
         shortcutClaimed = ConsoleHotkeys.claimed(tag)
         applyShortcuts(overrides)
         applyMic()
@@ -105,9 +131,9 @@ internal class ShortcutsMicController(
 
     fun onShortcut(action: ShortcutAction, down: Boolean) {
         if (action == ShortcutAction.TOGGLE_MIC) { if (down && mic != null) toggleMic(); return }
-        when (game.speed.onAction(action, down)) {
-            SpeedEffect.AskReset -> game.askReset()
-            SpeedEffect.SaveAndQuit -> game.quitGame(chosen = true, autoState = true)   // the menu's Save & Quit
+        when (host.speed.onAction(action, down)) {
+            SpeedEffect.AskReset -> host.askReset()
+            SpeedEffect.SaveAndQuit -> host.quitGame(chosen = true, autoState = true)   // the menu's Save & Quit
             SpeedEffect.SaveState -> quickState(save = true)
             SpeedEffect.LoadState -> quickState(save = false)
             null -> Unit
@@ -116,13 +142,13 @@ internal class ShortcutsMicController(
 
     /** Save state / Load state from a shortcut: the save-state slot last used, as the in-game menu's. */
     private fun quickState(save: Boolean) {
-        val ss = game.saveStates ?: run { game.toast("Save states are off here"); return }
-        val go = { slot: Int -> if (save) game.saveToSlot(slot) else game.loadFromSlot(slot) }
-        game.lastSlotCache?.let { return go(it) }
+        val ss = host.saveStates ?: run { host.toast("Save states are off here"); return }
+        val go = { slot: Int -> if (save) host.saveToSlot(slot) else host.loadFromSlot(slot) }
+        host.lastSlotCache?.let { return go(it) }
         // Cold cache (the launch's strip refresh has not landed): the pointer file is read off the main thread.
-        game.lifecycleScope.launch {
+        host.lifecycleScope.launch {
             val slot = withContext(Dispatchers.IO) { ss.lastSlot() }
-            go(game.lastSlotCache ?: slot.also { game.lastSlotCache = it })
+            go(host.lastSlotCache ?: slot.also { host.lastSlotCache = it })
         }
     }
 
@@ -130,7 +156,7 @@ internal class ShortcutsMicController(
 
     /** A pad skin's SAVE / LOAD (the last-used slot), REWIND (held) or FAST (toggled), as the touch shortcuts go. */
     fun onSkinShortcut(action: SkinAction, down: Boolean) {
-        if (down && game.menuOpen) return   // a release always goes through: a held REWIND must not stick
+        if (down && host.menuOpen) return   // a release always goes through: a held REWIND must not stick
         when (action) {
             SkinAction.SAVE, SkinAction.LOAD -> if (down) quickState(save = action == SkinAction.SAVE)
             SkinAction.REWIND -> onShortcut(ShortcutAction.HOLD_REWIND, down)
@@ -145,7 +171,7 @@ internal class ShortcutsMicController(
      */
     fun onPadShortcut(slot: TouchSlot, down: Boolean) {
         if (down) {
-            if (game.menuOpen) return
+            if (host.menuOpen) return
             val action = touchShortcuts.value[slot]?.action ?: return
             touchHeld[slot] = action
             onShortcut(action, true)
@@ -159,12 +185,12 @@ internal class ShortcutsMicController(
      * speed's tiles change (a toggle's look, the Rewind row).
      */
     fun refreshTouchShortcuts() {
-        val speed = game.speed
+        val speed = host.speed
         val before = touchShortcuts.value.keys
         touchShortcuts.value = visibleTouchShortcuts(effectiveShortcuts, speed.output, speed.inSession, rewind = speed.rewindShown)
         padLayout.refreshSkinShortcuts()
         // A button coming or going changes the landscape pad's second row, so its height and reach: lay out again.
-        if (touchShortcuts.value.keys != before) game.findViewById<View?>(R.id.root)?.post { renderer.relayoutFrontend() }
+        if (touchShortcuts.value.keys != before) host.activity.findViewById<View?>(R.id.root)?.post { renderer.relayoutFrontend() }
     }
 
     /**
@@ -173,13 +199,13 @@ internal class ShortcutsMicController(
      */
     fun applyShortcuts(overrides: ShortcutOverrides) {
         shortcutOverrides = overrides
-        val effective = Shortcuts.effective(shortcutBase, overrides, shortcutClaimed, game.canRewind, canMic = canMic)
+        val effective = Shortcuts.effective(shortcutBase, overrides, shortcutClaimed, host.canRewind, canMic = canMic)
         effectiveShortcuts = effective
         shortcutKeys = ShortcutKeys(effective, shortcutClaimed, SystemClock::uptimeMillis)
         refreshTouchShortcuts()
     }
 
-    fun publishShortcuts(model: InGameMenuModel) = model.setShortcuts(shortcutBase, shortcutOverrides, shortcutClaimed, game.canRewind, canMic)
+    fun publishShortcuts(model: InGameMenuModel) = model.setShortcuts(shortcutBase, shortcutOverrides, shortcutClaimed, host.canRewind, canMic)
 
     /** The pad's fixed mic button ([PadMic]): the session's Mic toggle on DS / 3DS, hidden in netplay; null otherwise. */
     fun padMic(): PadMic? = padMicState.value
@@ -195,7 +221,7 @@ internal class ShortcutsMicController(
     fun setMic(on: Boolean) {
         val m = mic ?: return
         if (m.setOn(on)) {
-            game.settings.micAsked = true
+            host.settings.micAsked = true
             m.setAsked(true)
             micPrompt.launch(android.Manifest.permission.RECORD_AUDIO)   // the prompt only: never the settings page
         }
@@ -208,10 +234,10 @@ internal class ShortcutsMicController(
      * What the core hears now: the toggle's source while the game runs in front, else silence, which closes the phone
      * mic ([com.swordfish.libretrodroid.GLRetroView.microphoneSource]). [foreground]: as the motion sensors' sync.
      */
-    fun pushMicSource(foreground: Boolean = game.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+    fun pushMicSource(foreground: Boolean = host.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
         val m = mic ?: return
-        val run = !game.menuOpen && !game.focusPaused && !game.quitting && foreground
-        game.retroView?.microphoneSource = (if (run) m.source else MicSource.SILENCE).native
+        val run = !host.menuOpen && !host.focusPaused && !host.quitting && foreground
+        host.retroView?.microphoneSource = (if (run) m.source else MicSource.SILENCE).native
     }
 
     /** The Mic toggle changed (or its permission or session): the source, the pad's button and both panels' tiles. */
