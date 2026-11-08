@@ -334,6 +334,20 @@ class AppUpdateUiTest {
         assertEquals(1, p.installs)
     }
 
+    @Test fun an_unverified_release_checks_again_from_about() = runTest {
+        val p = FakePlatform().apply { feed = releaseJson("v0.4.0").replace(""""digest":"sha256:abc123",""", "") }
+        val r = rig(p, load = false)
+        r.openAbout()
+        r.pressUpdateRow()                                                  // check: no checksum
+        assertEquals("Update not verified: GitHub sent no checksum", r.updateRow()?.label)
+        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Check")), settingsHints(assertIs<Screen.Settings>(r.state.screen.value).rows, r.state.selection.value.index))
+        p.feed = releaseJson("v0.4.0")
+        r.pressUpdateRow()                                                  // checks again, no confirm
+        assertNull(r.state.updateConfirm.value)
+        assertEquals("Update to 0.4.0", r.updateRow()?.label)
+        assertEquals(0, p.downloads)
+    }
+
     @Test fun a_on_a_failed_download_downloads_again() = runTest {
         val p = FakePlatform()
         val r = rig(p, load = false)
@@ -416,6 +430,6 @@ class AppUpdateUiTest {
         const val NOW = 100_000_000_000L
 
         fun releaseJson(tag: String) =
-            """{"tag_name":"$tag","body":"Faster menus.","assets":[{"name":"NXReduxMobile-$tag.apk","size":100,"digest":"sha256:abc123","browser_download_url":"https://example.com/$tag.apk"}]}"""
+            """{"tag_name":"$tag","body":"Faster menus.","assets":[{"name":"NXReduxMobile-$tag.apk","size":100,"digest":"sha256:abc123","browser_download_url":"https://github.com/x/y/releases/download/$tag/NXReduxMobile-$tag.apk"}]}"""
     }
 }

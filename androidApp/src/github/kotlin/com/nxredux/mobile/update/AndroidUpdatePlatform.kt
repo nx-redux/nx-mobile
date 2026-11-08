@@ -51,6 +51,17 @@ internal fun busyReason(game: Boolean, sync: Boolean, art: Boolean, ra: Boolean,
 }
 
 /**
+ * Where a download's redirect [location] (relative or absolute) leads from [from]; throws when it has none or leaves
+ * [downloadUrlAllowed]'s hosts. Pure, for the test.
+ */
+internal fun redirectTarget(from: String, location: String?, local: Boolean): String {
+    if (location.isNullOrEmpty()) throw IOException("download: redirect without a location")
+    val to = try { URL(URL(from), location).toString() } catch (e: java.net.MalformedURLException) { throw IOException("download: bad redirect", e) }
+    if (!downloadUrlAllowed(to, local)) throw IOException("download: redirect off GitHub refused")
+    return to
+}
+
+/**
  * The github flavor's [UpdatePlatform]: GitHub over HttpURLConnection, the APK in `cacheDir/update/` (NxApplication
  * clears it on start), PackageInstaller for the install ([UpdateInstallReceiver] gets its status) and the check times
  * in the `app_update` prefs. [scope]: the controller's (Main); I/O moves to IO here.
@@ -63,6 +74,7 @@ class AndroidUpdatePlatform(private val app: Context, private val scope: Corouti
     override val dev: Boolean = BuildConfig.DEBUG
     override val installedCode: Long = BuildConfig.VERSION_CODE.toLong()
     override val installedVersion: String = BuildConfig.VERSION_NAME
+    override val localFeed: Boolean = BuildConfig.DEBUG && loopbackUrl(BuildConfig.UPDATE_FEED)
 
     override suspend fun fetchLatest(): String = withContext(Dispatchers.IO) {
         val conn = open(BuildConfig.UPDATE_FEED, "application/vnd.github+json")
@@ -77,12 +89,13 @@ class AndroidUpdatePlatform(private val app: Context, private val scope: Corouti
     override suspend fun download(release: AppRelease, onProgress: (done: Long, total: Long) -> Unit): UpdateFile =
         withContext(Dispatchers.IO) {
             val dir = File(app.cacheDir, "update").apply { mkdirs() }
-            val name = release.apkUrl.substringAfterLast('/').substringBefore('?').ifEmpty { "update.apk" }
+            val name = release.apkName
             val target = File(dir, name)
+            if (target.parentFile != dir) throw IOException("download: bad asset name")
             // Its own name per attempt: a cancelled download stalled in a read deletes only its own file when it ends.
             val part = File(dir, "$name.${System.nanoTime()}.part")
             try {
-                val conn = open(release.apkUrl, "application/octet-stream")
+                val conn = openDownload(release.apkUrl)
                 try {
                     if (conn.responseCode != HttpURLConnection.HTTP_OK) throw IOException("download: HTTP ${conn.responseCode}")
                     val total = conn.contentLengthLong.takeIf { it > 0 } ?: release.apkSize
@@ -310,12 +323,29 @@ class AndroidUpdatePlatform(private val app: Context, private val scope: Corouti
         get() = pendingUpdate(app)
         set(value) { prefs.edit().putString(PENDING_KEY, value).apply() }
 
+    /**
+     * The APK's GET, following redirects here: HttpURLConnection's own following keeps the scheme but goes to any host,
+     * and GitHub's link redirects to its asset host, so each hop is checked against [downloadUrlAllowed] instead.
+     */
+    private fun openDownload(url: String): HttpURLConnection {
+        if (!downloadUrlAllowed(url, localFeed)) throw IOException("download: not a GitHub download")
+        var current = url
+        repeat(MAX_REDIRECTS + 1) {
+            val conn = open(current, "application/octet-stream", follow = false)
+            if (conn.responseCode !in REDIRECTS) return conn
+            val location = conn.getHeaderField("Location")
+            conn.disconnect()
+            current = redirectTarget(current, location, localFeed)
+        }
+        throw IOException("download: too many redirects")
+    }
+
     /** A GET with the Cheats & Patches tool's timeouts; [accept]: the Accept header. */
-    private fun open(url: String, accept: String): HttpURLConnection = (URL(url).openConnection() as HttpURLConnection).apply {
+    private fun open(url: String, accept: String, follow: Boolean = true): HttpURLConnection = (URL(url).openConnection() as HttpURLConnection).apply {
         requestMethod = "GET"
         connectTimeout = 15_000
         readTimeout = 30_000
-        instanceFollowRedirects = true
+        instanceFollowRedirects = follow
         setRequestProperty("Accept", accept)
         setRequestProperty("User-Agent", userAgent)
     }
@@ -332,6 +362,8 @@ class AndroidUpdatePlatform(private val app: Context, private val scope: Corouti
         private const val WRITING = -1
         private const val CHUNK = 64 * 1024
         private const val PROGRESS_STEP = 256 * 1024L
+        private const val MAX_REDIRECTS = 5
+        private val REDIRECTS = setOf(301, 302, 303, 307, 308)
         /** The same channel as [AppUpdateService]'s, created here too in case the wait outlives a channel reset. */
         private const val WAIT_CHANNEL_ID = "app-update"
     }

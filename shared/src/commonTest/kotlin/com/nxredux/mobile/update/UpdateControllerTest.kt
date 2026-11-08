@@ -14,7 +14,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 
 /** Scriptable platform: set the fields, then read the recorded calls. */
-private class FakeUpdatePlatform(override val dev: Boolean = false) : UpdatePlatform {
+private class FakeUpdatePlatform(override val dev: Boolean = false, override val localFeed: Boolean = false) : UpdatePlatform {
     override val installedCode = 3_000L
     override val installedVersion = "0.3.0"
     /** The feed's body; [feedError] makes `fetchLatest` throw instead (offline, 403). */
@@ -28,6 +28,7 @@ private class FakeUpdatePlatform(override val dev: Boolean = false) : UpdatePlat
     var digestGate: CompletableDeferred<Unit>? = null
 
     var fetches = 0
+    var downloads = 0
     var digests = 0
     var permissionAsks = 0
     val discarded = ArrayList<String>()
@@ -47,6 +48,7 @@ private class FakeUpdatePlatform(override val dev: Boolean = false) : UpdatePlat
 
     override suspend fun fetchLatest(): String { fetches++; feedError?.let { throw it }; return feed }
     override suspend fun download(release: AppRelease, onProgress: (done: Long, total: Long) -> Unit): UpdateFile {
+        downloads++
         onProgress(500L, 1000L)
         downloadGate?.await()
         onProgress(1000L, 1000L)
@@ -65,12 +67,14 @@ private class FakeUpdatePlatform(override val dev: Boolean = false) : UpdatePlat
     override fun showWaiting(reason: String?) { waits += reason }
 }
 
-private fun releaseJson(tag: String, digest: String? = null): String {
+private fun releaseJson(tag: String, digest: String? = null, url: String = "https://github.com/x/y/releases/download/$tag/NXReduxMobile-$tag.apk", draft: Boolean = false): String {
     val digestField = digest?.let { ""","digest":"$it"""" } ?: ""
-    return """{"tag_name":"$tag","body":"Faster menus.","assets":[{"name":"NXReduxMobile-$tag.apk","size":1000$digestField,"browser_download_url":"https://example.com/$tag.apk"}]}"""
+    return """{"tag_name":"$tag","draft":$draft,"body":"Faster menus.","assets":[{"name":"NXReduxMobile-$tag.apk","size":1000$digestField,"browser_download_url":"$url"}]}"""
 }
 
-private val RELEASE = AppRelease("0.4.0", 4_000L, "Faster menus.", "https://example.com/v0.4.0.apk", 1000L, "abc123")
+private val RELEASE = AppRelease(
+    "0.4.0", 4_000L, "Faster menus.", "https://github.com/x/y/releases/download/v0.4.0/NXReduxMobile-v0.4.0.apk", 1000L, "abc123", "NXReduxMobile-v0.4.0.apk",
+)
 
 private const val NOW = 100_000_000_000L
 
@@ -131,7 +135,7 @@ class UpdateControllerTest {
 
     @Test fun a_release_without_this_builds_apk_is_up_to_date() = runTest {
         // The dev build against the real feed: only the release APK is attached.
-        val fake = FakeUpdatePlatform(dev = true).apply { feed = """{"tag_name":"v0.4.0","assets":[{"name":"NXReduxMobile-v0.4.0.apk","size":1000,"browser_download_url":"https://example.com/v0.4.0.apk"}]}"""; lastFailure = 7L }
+        val fake = FakeUpdatePlatform(dev = true).apply { feed = """{"tag_name":"v0.4.0","assets":[{"name":"NXReduxMobile-v0.4.0.apk","size":1000,"browser_download_url":"https://github.com/x/y/releases/download/v0.4.0/NXReduxMobile-v0.4.0.apk"}]}"""; lastFailure = 7L }
         val c = controller(fake)
         c.onMainMenu()
         assertEquals(UpdateState.UpToDate("0.3.0"), c.state.value)
@@ -450,11 +454,70 @@ class UpdateControllerTest {
         assertEquals(listOf("/cache/update.apk"), fake.discarded)
     }
 
-    @Test fun a_release_without_a_digest_skips_the_check() = runTest {
-        val fake = FakeUpdatePlatform().apply { feed = releaseJson("v0.4.0") }
+    @Test fun a_newer_release_without_a_digest_is_not_offered() = runTest {
+        val fake = FakeUpdatePlatform().apply { feed = releaseJson("v0.4.0"); lastFailure = 7L }
+        val c = controller(fake)
+        c.onMainMenu()
+        assertEquals(UpdateState.Failed(UpdateController.NO_CHECKSUM_TEXT, null), c.state.value)
+        assertNull(c.popup.value)
+        assertEquals(NOW, fake.lastSuccess)   // GitHub answered: no hourly retry
+        assertEquals(7L, fake.lastFailure)
+        c.update()
+        assertEquals(0, fake.downloads)
+        assertTrue(fake.installs.isEmpty())
+    }
+
+    @Test fun a_newer_release_with_another_algorithms_digest_is_not_offered() = runTest {
+        val fake = FakeUpdatePlatform().apply { feed = releaseJson("v0.4.0", digest = "sha512:abc") }
+        val c = controller(fake)
+        c.checkNow()
+        assertEquals(UpdateState.Failed(UpdateController.NO_CHECKSUM_TEXT, null), c.state.value)
+    }
+
+    @Test fun an_installed_release_without_a_digest_is_up_to_date() = runTest {
+        val fake = FakeUpdatePlatform().apply { feed = releaseJson("v0.3.0") }
+        val c = controller(fake)
+        c.checkNow()
+        assertEquals(UpdateState.UpToDate("0.3.0"), c.state.value)
+    }
+
+    @Test fun a_newer_release_from_another_host_is_not_offered() = runTest {
+        for (url in listOf("https://example.com/v0.4.0.apk", "http://github.com/x.apk", "http://localhost:8000/x.apk")) {
+            val fake = FakeUpdatePlatform().apply { feed = releaseJson("v0.4.0", digest = "sha256:abc123", url = url); lastFailure = 7L }
+            val c = controller(fake)
+            c.onMainMenu()
+            assertEquals(UpdateState.Failed(UpdateController.NOT_GITHUB_TEXT, null), c.state.value, url)
+            assertNull(c.popup.value)
+            assertEquals(NOW, fake.lastSuccess)
+            assertEquals(7L, fake.lastFailure)
+            assertEquals(0, fake.downloads)
+        }
+    }
+
+    @Test fun a_local_feed_may_download_from_loopback() = runTest {
+        val fake = FakeUpdatePlatform(dev = true, localFeed = true).apply {
+            feed = """{"tag_name":"v0.4.0","body":"Faster menus.","assets":[{"name":"NXReduxMobile-v0.4.0-dev.apk","size":1000,"digest":"sha256:abc123","browser_download_url":"http://localhost:8000/NXReduxMobile-v0.4.0-dev.apk"}]}"""
+        }
         val c = downloaded(fake)
-        assertEquals(0, fake.digests)
-        assertEquals(UpdateState.Installing(RELEASE.copy(sha256 = null)), c.state.value)
+        assertEquals(1, fake.downloads)
+        assertIs<UpdateState.Installing>(c.state.value)
+    }
+
+    @Test fun a_draft_is_up_to_date_without_a_failure() = runTest {
+        val fake = FakeUpdatePlatform().apply { feed = releaseJson("v0.4.0", digest = "sha256:abc123", draft = true); lastFailure = 7L }
+        val c = controller(fake)
+        c.onMainMenu()
+        assertEquals(UpdateState.UpToDate("0.3.0"), c.state.value)
+        assertEquals(NOW, fake.lastSuccess)
+        assertEquals(7L, fake.lastFailure)
+    }
+
+    @Test fun a_prerelease_tag_is_up_to_date_without_a_failure() = runTest {
+        val fake = FakeUpdatePlatform().apply { feed = releaseJson("v0.4.0-rc1", digest = "sha256:abc123") }
+        val c = controller(fake)
+        c.checkNow()
+        assertEquals(UpdateState.UpToDate("0.3.0"), c.state.value)
+        assertEquals(0L, fake.lastFailure)
     }
 
     @Test fun cancel_during_download_is_available_again() = runTest {
