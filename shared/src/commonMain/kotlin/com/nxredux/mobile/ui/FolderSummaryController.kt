@@ -62,6 +62,18 @@ internal class FolderSummaryController(
     var homePage: Screen.FolderSummary? = null   // first setup's home page, when the home held games: B on the next step returns to it
     var homeOutside: List<LooseFile> = emptyList()   // that home's games outside Roms
     @Volatile var moveCancelled = false   // B while a summary's move runs: it stops after the current game
+        private set
+
+    /** First setup starts over: no home page to return to and no outside games planned. */
+    fun reset() {
+        homePage = null
+        homeOutside = emptyList()
+    }
+
+    /** B while a summary's move runs: the move stops after the current game. */
+    fun cancelMove() {
+        moveCancelled = true
+    }
     /**
      * First setup's home page after the pick's scan: what [home] holds, in `Roms/` and outside it (its outside games
      * found as an extra folder's are). A home with no game skips it, to the ROMs folder offer.

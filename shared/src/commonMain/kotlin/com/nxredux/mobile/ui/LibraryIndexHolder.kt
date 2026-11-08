@@ -18,6 +18,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
 
+/**
+ * Art results are written and shown once they stop coming for [ART_QUIET_MS], or every [ART_MAX_WAIT_MS] while they keep
+ * coming (a long fetch still saves and shows its art as it goes); a fetch's or Reset's end writes them at once.
+ */
 internal const val ART_QUIET_MS = 1_500L
 internal const val ART_MAX_WAIT_MS = 15_000L
 
@@ -78,6 +82,7 @@ internal class LibraryIndexHolder(
                 if (persistNow) {
                     persist(it)
                     artUnsaved = false   // the whole index went out, the art in it with it
+                    dropLookups()
                 } else {
                     artUnsaved = true; artUnshown = true; artSeq++
                 }
@@ -93,8 +98,16 @@ internal class LibraryIndexHolder(
     suspend fun forget() {
         lock.withLock {
             library = null
+            dropLookups()
             try { store.delete() } catch (d: CancellationException) { throw d } catch (d: Throwable) { Unit }
         }
+    }
+
+    /** Lets go of the lookups built for a replaced index, so the old index is not kept alive by them. */
+    private fun dropLookups() {
+        artPositionsOf = null
+        playableOf = null
+        hiddenLookupOf = null
     }
 
     /** The stored index, or null when there is none, it cannot be read, or it does not decode (garbage, another version). */
@@ -130,17 +143,16 @@ internal class LibraryIndexHolder(
 
     /**
      * An art result for the game at [ref]: only the in-memory update under the lock; the write and the refresh are
-     * batched ([flushArt]: after a pause in the results, and at the job's end). False when the game is not in the index.
+     * batched ([flushArt]: after a pause in the results, and at the job's end). A game not in the index is ignored.
      */
-    suspend fun applyArt(ref: GameRef, art: ArtRefs): Boolean {
+    suspend fun applyArt(ref: GameRef, art: ArtRefs) {
         mutate(persistNow = false) { current ->
             current ?: return@mutate null
             val positions = artPositionsOf?.takeIf { it.first === current }?.second ?: artPositions(current)
             val at = positions[ref] ?: return@mutate null
             current.withArtAt(at, art).also { artPositionsOf = it to positions }   // same order and sizes: the places hold
-        } ?: return false
+        } ?: return
         scheduleArtFlush()
-        return true
     }
 
     private fun artPositions(index: LibraryIndex): Map<GameRef, List<Pair<Int, Int>>> {

@@ -629,11 +629,6 @@ internal const val ANDROID_ASK_GUARD_MILLIS = 300L
 internal const val MINIMAL_LEAVE_MS = 120L
 
 /**
- * Art results are written and shown once they stop coming for [ART_QUIET_MS], or every [ART_MAX_WAIT_MS] while they keep
- * coming (a long fetch still saves and shows its art as it goes); a fetch's or Reset's end writes them at once.
- */
-
-/**
  * A Minimal page's folder being opened ([AppState.minimalOpening]): the page it is on ([page]: a tab's [MenuCategory], a
  * game list's [ListSource]; only that page draws it) and the row's [index]; the other names fade before its list comes in.
  * A launch is not one: it runs [AppState.launchSequence], and nothing on the page moves or fades.
@@ -1401,6 +1396,12 @@ class AppState(
     /** This instance's [UpdateController.hostBusy], kept so [releaseUpdater] lets go of it only while still the updater's. */
     private val updateHost: () -> String? = { updateHostBusy() }
 
+    /** The library index in memory and stored, its lock and the lookups built from it; art results' flush shows here. Declared before
+     * [init]: its collectors run during construction on the main dispatcher. */
+    private val libraryIndex = LibraryIndexHolder(scope, deps.indexStore, deps.compute) { shown ->
+        afterIndexChange(shown, IndexRefresh(rows = true, openList = true, ui = true))
+    }
+
     init {
         switcher.restoreReturn()
         deps.updater?.let { u ->
@@ -1530,11 +1531,6 @@ class AppState(
             delay(NOTICE_MILLIS)
             if (_notice.value == text) _notice.value = null
         }
-    }
-
-    /** The library index in memory and stored, its lock and the lookups built from it; art results' flush shows here. */
-    private val libraryIndex = LibraryIndexHolder(scope, deps.indexStore, deps.compute) { shown ->
-        afterIndexChange(shown, IndexRefresh(rows = true, openList = true, ui = true))
     }
 
     /**
@@ -2852,7 +2848,8 @@ class AppState(
     }
 
     /** First setup's home page and folder summaries, with their moves. */
-    private val folders: FolderSummaryController = FolderSummaryController(
+    // Lazy: built on first use, so a collector of [init] that reaches it during construction gets it, not null.
+    private val folders: FolderSummaryController by lazy { FolderSummaryController(
         scope, _screen, _selection, deps, scanner, libraryIndex, collections,
         host = object : FolderSummaryHost {
             override fun home(): ContentRef? = this@AppState.home()
@@ -2862,7 +2859,7 @@ class AppState(
             override fun markLibraryDirty() { libraryDirty = true }
             override val recentsLock: Mutex get() = this@AppState.recentsLock
         },
-    )
+    ) }
 
     /** First setup's ROMs folder offer (after the home page, or B from the handheld question): Add folder, Skip. */
     private fun showAddFirstExtra() {
@@ -2938,8 +2935,7 @@ class AppState(
         allFilesStepShown = false
         androidStepShown = false
         addedExtraId = null
-        folders.homePage = null
-        folders.homeOutside = emptyList()
+        folders.reset()
     }
 
     /** Onboarding done: the menu on Home, its tabs rebuilt for the layout and options picked. */
@@ -3576,7 +3572,8 @@ class AppState(
     }
 
     /** The one-time storage upgrade's pages and the copy offer after a home change. */
-    private val upgrade: StorageUpgradeController = StorageUpgradeController(
+    // Lazy, as [folders].
+    private val upgrade: StorageUpgradeController by lazy { StorageUpgradeController(
         scope, _screen, _selection, _error, deps,
         host = object : StorageUpgradeHost {
             override fun load() = this@AppState.load()
@@ -3589,7 +3586,7 @@ class AppState(
                 if (filePickerOn()) p.open(FilePickMode.Home, null, picked)
             }
         },
-    )
+    ) }
 
     /** A or a tap on the upgrade page's row [index]. */
     fun storageUpgradeRow(index: Int) = upgrade.storageUpgradeRow(index)
@@ -5940,7 +5937,7 @@ class AppState(
             is Screen.FolderSummary -> {
                 when {
                     s.confirmMove -> _screen.value = s.copy(confirmMove = false)   // the move's confirmation closes first
-                    s.progress != null -> folders.moveCancelled = true
+                    s.progress != null -> folders.cancelMove()
                     s.extraId == Recents.HOME && mediaHomeTaken -> backPastMediaHome()
                     s.extraId == Recents.HOME -> { folders.homePage = null; showPickFolderScreen() }
                     else -> showAddFirstExtra()

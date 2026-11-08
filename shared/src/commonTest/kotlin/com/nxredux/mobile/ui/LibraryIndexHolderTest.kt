@@ -17,10 +17,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
-import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LibraryIndexHolderTest {
@@ -65,8 +63,10 @@ class LibraryIndexHolderTest {
         val h = holder(backgroundScope, store, shown)
         h.mutate { index(3) }
         val writes = store.writes
-        repeat(3) { assertTrue(h.applyArt(GameRef("home", "Roms/GB", "g$it.gb"), ArtRefs(boxart = "b$it"))) }
-        assertFalse(h.applyArt(GameRef("home", "Roms/GB", "missing.gb"), ArtRefs(boxart = "x")))
+        repeat(3) { h.applyArt(GameRef("home", "Roms/GB", "g$it.gb"), ArtRefs(boxart = "b$it")) }
+        val before = h.snapshot
+        h.applyArt(GameRef("home", "Roms/GB", "missing.gb"), ArtRefs(boxart = "x"))
+        assertSame(before, h.snapshot)   // a game not in the index changes nothing
         assertEquals(writes, store.writes)   // in memory only until the debounce
         assertEquals(listOf("b0", "b1", "b2"), h.snapshot!!.systems[0].games.map { it.boxart })
         advanceTimeBy(ART_QUIET_MS * 2 + 1); runCurrent()
