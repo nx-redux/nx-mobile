@@ -102,8 +102,8 @@ void LibretroDroid::updateAudioSampleRateMultiplier() {
 }
 
 void LibretroDroid::updateFastForwardAudioSpeed() {
-    // Audible FF plays at the game's achieved speed. Audio combines it with the pause speed, so a pause (0) set on the UI
-    // thread mid-step still wins: the GL thread never writes the pause speed.
+    // Audible FF plays at the game's achieved speed. Audio combines it with the pause speed, so a pause (0) still wins
+    // over an FF speed computed before it.
     if (audio) audio->setFastForwardSpeed(fastForwardPlaybackSpeed.load());
 }
 
@@ -747,6 +747,8 @@ void LibretroDroid::step() {
 
     // Read once: the UI thread can change it mid-step, and the run loop and the paused redraw must agree.
     unsigned int speed = frameSpeed;
+    // Here, not in setFrameSpeed: audio belongs to the GL thread, which frees it in destroy(). A paused step runs too.
+    if (audio) audio->setPlaybackSpeed(speed);
     const bool lk = gbalink::active();               // GBA link: speed 1, held while either side pauses
     const bool np = !lk && netplay::active();        // netplay: one lockstep frame per step
     const bool paused = speed == 0 && !np && !lk;
@@ -942,7 +944,6 @@ bool LibretroDroid::isRumbleEnabled() const {
 
 void LibretroDroid::setFrameSpeed(unsigned int speed) {
     frameSpeed = speed;
-    if (audio) audio->setPlaybackSpeed(speed);
 }
 
 void LibretroDroid::runFrame(bool np, bool lk, float frameSeconds) {

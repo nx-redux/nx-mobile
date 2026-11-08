@@ -6,6 +6,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Build
+import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -24,8 +25,9 @@ import kotlinx.coroutines.launch
  * [area] gives the laid-out area's top in window px and its height (null: not laid out yet); [onChange] gets each
  * posture change, debounced by [DEBOUNCE_MS], with the hinge angle it was decided at.
  *
- * Each posture it holds while started is also published as the process's [PostureHint], so a window opened meanwhile
- * (the game, launched from the menu) can lay itself out for it before its own reading arrives ([seed]).
+ * Each posture it holds while started is also published as the process's [PostureHint]: the game runs in its own
+ * process, so the launch carries the hint in its intent ([postureSeedExtras]) and the game's window lays itself out for
+ * it before its own reading arrives ([seed]).
  *
  * Construction touches no system service (safe as an activity field, before onCreate); call [start] from onCreate.
  */
@@ -61,12 +63,12 @@ class PostureTracker(
     }
 
     /**
-     * Starts from [PostureHint] instead of [Posture.Flat] ([seededPosture]: only for a window of the hint's size), before
-     * [start]: the first reading that agrees changes nothing, one that does not replaces it as any change does.
+     * Starts from [hint] (the menu's, from the launch intent) instead of [Posture.Flat] ([seededPosture]: only for a
+     * window of the hint's size), before [start]: the first reading that agrees changes nothing, one that does not
+     * replaces it as any change does.
      */
-    fun seed(): Posture {
+    fun seed(hint: PostureSeed?): Posture {
         val bounds = WindowMetricsCalculator.getOrCreate().computeCurrentWindowMetrics(activity).bounds
-        val hint = PostureHint.seen
         posture = seededPosture(hint?.posture, hint?.windowW ?: 0, hint?.windowH ?: 0, bounds.width(), bounds.height())
         return posture
     }
@@ -143,11 +145,13 @@ class PostureTracker(
 
 /**
  * The last posture a started [PostureTracker] decided, in window px for a [Seen.windowW] x [Seen.windowH] window; null
- * when none is started. Main thread only. The menu's tracker is still started while the game's activity is created
- * (the menu stops after it), so a game launched half-folded reads it and places its skin at the hinge first.
+ * when none is started. Main thread only. The menu's tracker is still started when it launches a game, so the launch
+ * hands it to the game's process ([postureSeedExtras]) and a game launched half-folded places its skin at the hinge first.
  */
 object PostureHint {
-    class Seen(val owner: PostureTracker, val posture: Posture, val windowW: Int, val windowH: Int)
+    class Seen(val owner: PostureTracker, val posture: Posture, val windowW: Int, val windowH: Int) {
+        val seed: PostureSeed get() = PostureSeed(posture, windowW, windowH)
+    }
 
     var seen: Seen? = null
         private set
@@ -161,3 +165,40 @@ object PostureHint {
         if (seen?.owner === owner) seen = null
     }
 }
+
+/** A posture in window px for a [windowW] x [windowH] window, as it travels from the menu to the game's process. */
+data class PostureSeed(val posture: Posture, val windowW: Int, val windowH: Int)
+
+internal const val KEY_POSTURE_WINDOW_W = "posture_window_w"
+internal const val KEY_POSTURE_WINDOW_H = "posture_window_h"
+internal const val KEY_POSTURE_HINGE_TOP = "posture_hinge_top"
+internal const val KEY_POSTURE_HINGE_BOTTOM = "posture_hinge_bottom"
+
+/** [seed] as key/value pairs through [put] ([readPostureSeed] reads them back); nothing for none. */
+internal fun writePostureSeed(seed: PostureSeed?, put: (String, Int) -> Unit) {
+    seed ?: return
+    put(KEY_POSTURE_WINDOW_W, seed.windowW)
+    put(KEY_POSTURE_WINDOW_H, seed.windowH)
+    val p = seed.posture
+    if (p is Posture.Tabletop) {
+        put(KEY_POSTURE_HINGE_TOP, p.hingeTop)
+        put(KEY_POSTURE_HINGE_BOTTOM, p.hingeBottom)
+    }
+}
+
+/** The seed [writePostureSeed] wrote, read through [get]; null when there is none or no window size. */
+internal fun readPostureSeed(get: (String) -> Int?): PostureSeed? {
+    val w = get(KEY_POSTURE_WINDOW_W) ?: return null
+    val h = get(KEY_POSTURE_WINDOW_H) ?: return null
+    val top = get(KEY_POSTURE_HINGE_TOP)
+    val bottom = get(KEY_POSTURE_HINGE_BOTTOM)
+    val posture = if (top != null && bottom != null) Posture.Tabletop(top, bottom) else Posture.Flat
+    return PostureSeed(posture, w, h)
+}
+
+/** This process's [PostureHint] as extras for the game's intent ([postureSeedFrom] reads them back). */
+internal fun postureSeedExtras(): Bundle = Bundle().apply { writePostureSeed(PostureHint.seen?.seed, ::putInt) }
+
+/** The menu's posture in a game intent's [extras]; null: none (no tracker was started, or another launcher). */
+internal fun postureSeedFrom(extras: Bundle?): PostureSeed? =
+    extras?.let { b -> readPostureSeed { k -> if (b.containsKey(k)) b.getInt(k) else null } }

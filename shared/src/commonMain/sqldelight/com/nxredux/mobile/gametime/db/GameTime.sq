@@ -76,7 +76,8 @@ closeSession:
 UPDATE session SET ended_at = :endedAt, duration = :endedAt - started_at WHERE uuid = :uuid AND ended_at IS NULL;
 
 closeStaleSessions:
-UPDATE session SET ended_at = last_seen_at, duration = last_seen_at - started_at WHERE ended_at IS NULL AND device_id = ?;
+UPDATE session SET ended_at = last_seen_at, duration = last_seen_at - started_at
+WHERE ended_at IS NULL AND device_id = :deviceId AND last_seen_at <= :seenBefore;
 
 deleteImplausible:
 DELETE FROM session WHERE ended_at IS NOT NULL AND (duration < :minMs OR duration > :maxMs);

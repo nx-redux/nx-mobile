@@ -21,6 +21,7 @@
 #include <jni.h>
 #include <string>
 
+// A null jstring reads as "".
 class JniString {
 public:
     JniString(JNIEnv *env, jstring javaString);

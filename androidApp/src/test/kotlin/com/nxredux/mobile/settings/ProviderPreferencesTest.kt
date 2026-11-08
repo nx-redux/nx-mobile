@@ -15,6 +15,7 @@ class ProviderPreferencesTest {
         override fun call(method: String, name: String, args: Map<String, Any?>): Map<String, Any?> {
             calls++
             if (failing) error("menu gone")
+            if (method == PrefsProvider.METHOD_GET_ALL) return mapOf(PrefsProvider.RESULT_ENTRIES to HashMap(data))
             check(method == PrefsProvider.METHOD_APPLY) { method }
             if (args[PrefsProvider.ARG_CLEAR] == true) data.clear()
             @Suppress("UNCHECKED_CAST")
@@ -84,5 +85,49 @@ class ProviderPreferencesTest {
         assertEquals(mapOf<String, Any?>("d" to "4"), owner.data)
         assertEquals(mapOf<String, Any?>("d" to "4"), prefs.all)
         assertNull(prefs.getString("b", null))
+    }
+
+    // Launcher mode: Home suspends the game, the menu changes Settings, the game comes back: it reads the menu's values.
+    @Test fun refreshReadsTheOwnersCurrentValues() {
+        val owner = FakeOwner(hashMapOf("screen" to "AUTO", "pause" to true, "gone" to "x"))
+        val prefs = ProviderPreferences("p", owner, LocalFile(mapOf("screen" to "AUTO", "pause" to true, "gone" to "x")))
+        owner.data["screen"] = "OFF"; owner.data["pause"] = false; owner.data.remove("gone"); owner.data["new"] = 5
+        assertEquals("AUTO", prefs.getString("screen", null))   // nothing reaches the game until it asks
+        prefs.refresh()
+        assertEquals("OFF", prefs.getString("screen", null))
+        assertFalse(prefs.getBoolean("pause", true))
+        assertNull(prefs.getString("gone", null))
+        assertFalse(prefs.contains("gone"))
+        assertEquals(5, prefs.getInt("new", 0))
+        assertEquals(mapOf<String, Any?>("screen" to "OFF", "pause" to false, "new" to 5), prefs.all)
+        val calls = owner.calls
+        prefs.getString("screen", null); prefs.getBoolean("pause", true)
+        assertEquals(calls, owner.calls)   // reads after a refresh still never call the owner
+    }
+
+    @Test fun refreshKeepsThisProcesssWritesAndLaterMenuChangesWin() {
+        val owner = FakeOwner(hashMapOf("a" to "1"))
+        val prefs = ProviderPreferences("p", owner, LocalFile(mapOf("a" to "1")))
+        prefs.edit().putString("mine", "game").remove("a").commit()
+        prefs.refresh()
+        assertEquals("game", prefs.getString("mine", null))
+        assertNull(prefs.getString("a", null))
+        // The menu changes a key this process wrote earlier: the next refresh shows the menu's value.
+        owner.data["mine"] = "menu"
+        prefs.refresh()
+        assertEquals("menu", prefs.getString("mine", null))
+        // A clear here, then a refresh: still cleared.
+        prefs.edit().clear().commit()
+        prefs.refresh()
+        assertEquals(emptyMap<String, Any?>(), prefs.all)
+    }
+
+    @Test fun aFailedRefreshKeepsTheCurrentView() {
+        val owner = FakeOwner(hashMapOf("k" to "old"))
+        val prefs = ProviderPreferences("p", owner, LocalFile(mapOf("k" to "old")))
+        owner.data["k"] = "new"
+        owner.failing = true
+        prefs.refresh()
+        assertEquals("old", prefs.getString("k", null))
     }
 }

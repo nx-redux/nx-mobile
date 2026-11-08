@@ -192,8 +192,9 @@ internal fun HomeScreen(
                     val v = -tracker.calculateVelocity().y / density   // dp/s, up the page positive
                     scope.launch {
                         scroll.updateBounds(0f, maxScroll)
-                        scroll.animateDecay(v, decay)
-                        scroll.updateBounds(null, null)
+                        // a touch or a selection follow cancels the fling; the bounds must not outlive it, or a grown board
+                        // stays clamped to this max
+                        try { scroll.animateDecay(v, decay) } finally { scroll.updateBounds(null, null) }
                     }
                 },
             ) { change, dy ->

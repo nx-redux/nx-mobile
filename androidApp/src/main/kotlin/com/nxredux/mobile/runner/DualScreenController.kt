@@ -167,7 +167,12 @@ internal class DualScreenController(
     private fun syncN3dsCore() = owner.syncN3dsCore()
     private fun toast(msg: String) = owner.toast(msg)
 
-    val secondScreens by lazy { SecondScreens(activity) }
+    val secondScreens by lazy { SecondScreens(activity, hostDisplay = ::gameDisplayId) }
+
+    /** The display the game's window is on now (a monitor or DeX: not the default one). */
+    private fun gameDisplayId(): Int =
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) activity.display?.displayId ?: Display.DEFAULT_DISPLAY
+        else @Suppress("DEPRECATION") activity.windowManager.defaultDisplay.displayId
     val appSettings by lazy { AndroidAppSettings(activity) }   // reads the prefs live: the dual paths' settings
     var presentation: SecondScreenPresentation? = null
         private set

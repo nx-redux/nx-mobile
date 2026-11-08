@@ -53,6 +53,25 @@ class GameTimeStoreRecordingTest {
         assertEquals(60_000L, s.duration)
     }
 
+    // The menu process opens the database while a game plays in the game process: the live session stays open.
+    @Test fun anotherProcessPreparingKeepsALiveSession() {
+        val id = store.start("/Roms/GB/Tetris.gb", "GB", "Tetris")
+        clock += GameTimeStore.TOUCH_MS; store.touch(id)
+        clock += GameTimeStore.TOUCH_MS - 1_000
+        GameTimeStore(pair.second, "dev-1", "Fold", { clock }) { "menu" }.prepare()
+        clock += 1_000; store.touch(id)
+        clock += 30_000; store.end(id)
+        assertEquals(2 * GameTimeStore.TOUCH_MS + 30_000, q.sessionByUuid(id).executeAsOne().duration)
+    }
+
+    @Test fun prepareClosesASessionPastTheStaleBound() {
+        val id = store.start("/Roms/GB/Tetris.gb", "GB", "Tetris")
+        clock += GameTimeStore.TOUCH_MS; store.touch(id)
+        clock += GameTimeStore.STALE_MS + 1
+        GameTimeStore(pair.second, "dev-1", "Fold", { clock }) { "menu" }.prepare()
+        assertEquals(GameTimeStore.TOUCH_MS, q.sessionByUuid(id).executeAsOne().duration)
+    }
+
     @Test fun startClosesAnOpenSessionFirst() {
         val a = store.start("/Roms/GB/Tetris.gb", "GB", "Tetris"); clock += 30_000; store.touch(a)
         clock += 10_000

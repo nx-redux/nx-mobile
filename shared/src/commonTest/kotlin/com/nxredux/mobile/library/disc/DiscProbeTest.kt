@@ -42,4 +42,18 @@ class DiscProbeTest {
         assertEquals("segacd", probe.identify(dir.first { it.name == "S.chd" }, dir))
         assertNull(DiscProbe(src).identify(dir.first { it.name == "S.chd" }, dir))       // no CHD reader: a CD CHD stays unplaced
     }
+
+    // A Windows-1252 cue whose FILE differs in case and code page from the bin on disk: read as the scanner reads it.
+    @Test fun a_legacy_cue_finds_its_bin() = runTest {
+        val cue = "FILE \"pok\u00e9mon.BIN\" BINARY\n TRACK 01 MODE2/2352\n  INDEX 01 00:00:00\n"
+        val src = FakeRomsSource(
+            mapOf("d" to listOf("Pok\u00e9mon.bin", "P.cue")),
+            texts = mapOf("d/P.cue" to cue.replace('\u00e9', '\uFFFD')),
+            bytes = mapOf("d/P.cue" to ByteArray(cue.length) { cue[it].code.toByte() }, "d/Pok\u00e9mon.bin" to ps1Bin()),
+        )
+        val dir = src.listChildren(ContentRef("d"))
+        val r = DiscProbe(src).probe(dir.first { it.name == "P.cue" }, dir)
+        assertEquals("ps", r.console)
+        assertEquals("Pok\u00e9mon.bin", r.data?.name)
+    }
 }

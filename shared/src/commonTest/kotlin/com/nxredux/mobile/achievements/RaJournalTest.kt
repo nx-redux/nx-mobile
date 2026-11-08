@@ -4,6 +4,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 
 class RaJournalTest {
@@ -70,5 +74,22 @@ class RaJournalTest {
         store.put(RaPaths.JOURNAL, store.text(RaPaths.JOURNAL) + """{"u":"me","a":2""")   // what a torn write would leave
         assertTrue(j.append(e2))
         assertEquals(listOf(e1, e2), j.entries())
+    }
+
+    // The game process journals an unlock while the menu's sync rewrites the file without the ones it sent: two journals
+    // (two processes) on one store. The append waits for the rewrite instead of landing in the file it replaces.
+    @Test fun an_append_from_another_process_during_a_remove_is_kept() = runTest {
+        val store = FakeRaStore()
+        val game = RaJournal(store, RaPaths.JOURNAL); val menu = RaJournal(store, RaPaths.JOURNAL)
+        game.append(e1)
+        val gate = CompletableDeferred<Unit>()
+        store.beforeWrite = { gate.await() }
+        launch { menu.remove(listOf(e1)) }
+        runCurrent()                        // the rewrite has read the file and waits to write
+        launch { game.append(e2) }
+        runCurrent()
+        store.beforeWrite = {}
+        gate.complete(Unit); advanceUntilIdle()
+        assertEquals(listOf(e2), menu.entries())
     }
 }

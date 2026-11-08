@@ -618,11 +618,12 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     }
 
     /**
-     * Before onCreate's first [applyLayout]: starts from the menu's posture ([PostureTracker.seed]), so a game launched
-     * half-folded places its skin at the hinge first instead of flat, which the hinge reading would replace a moment later.
+     * Before onCreate's first [applyLayout]: starts from the menu's posture [hint] ([PostureTracker.seed]), so a game
+     * launched half-folded places its skin at the hinge first instead of flat, which the hinge reading would replace a
+     * moment later.
      */
-    fun seedPosture() {
-        posture = postureTracker.seed()
+    fun seedPosture(hint: PostureSeed?) {
+        posture = postureTracker.seed(hint)
         if (posture != Posture.Flat) NxLog.i(TAG_LOG, "posture: $posture seeded from the menu")
     }
 

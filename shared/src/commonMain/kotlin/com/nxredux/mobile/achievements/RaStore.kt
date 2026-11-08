@@ -18,6 +18,12 @@ interface RaStore {
     /** Immediate child names of [dir] (files and directories), empty when absent. */
     suspend fun list(dir: String): List<String>
     suspend fun exists(path: String): Boolean
+    /**
+     * Runs [block] holding [path]'s exclusive lock, shared with every process of the app (a game runs in its own), so a
+     * read-modify-write of [path] never loses another process's append. Not reentrant. The default locks nothing: a
+     * store with one process only.
+     */
+    suspend fun <T> locked(path: String, block: suspend () -> T): T = block()
 }
 
 /**

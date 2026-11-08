@@ -13,7 +13,8 @@ data class RaUnlock(val u: String, val a: Int, val m: String, val t: Long)
  * Append-only JSONL (`pending/unlocks.jsonl` or `pending/confirmed.jsonl`). Deduplicated by (u, a, m); unparseable
  * lines are kept verbatim through a rewrite so nothing a future version understands is thrown away. The dedupe keys
  * are read once and kept in memory while the file's size is the one this journal last saw (a reset, another writer or
- * a failed append makes it read the file again).
+ * a failed append makes it read the file again). Appends and rewrites hold the store's cross-process lock on the file:
+ * the game process journals unlocks while the menu's sync rewrites it.
  */
 class RaJournal(private val store: RaStore, private val path: String) {
     private val lock = Mutex()
@@ -23,7 +24,9 @@ class RaJournal(private val store: RaStore, private val path: String) {
     private var torn = false
 
     /** True when appended, false when an equal (u, a, m) entry already exists. Throws [RaStoreException] on write failure. */
-    suspend fun append(entry: RaUnlock): Boolean = lock.withLock {
+    suspend fun append(entry: RaUnlock): Boolean = lock.withLock { store.locked(path) { appendLocked(entry) } }
+
+    private suspend fun appendLocked(entry: RaUnlock): Boolean {
         val known = keys?.takeIf { (store.size(path) ?: 0L) == knownSize } ?: load()
         if (Triple(entry.u, entry.a, entry.m) in known) return false
         // A torn last line (crash mid-append) must not swallow this entry: start a fresh line.
@@ -35,7 +38,7 @@ class RaJournal(private val store: RaStore, private val path: String) {
             throw e
         }
         known += Triple(entry.u, entry.a, entry.m); knownSize += bytes.size; torn = false
-        true
+        return true
     }
 
     /** [user]'s entries (every user's when null); RA usernames are case-insensitive, so the match ignores case. */
@@ -44,7 +47,9 @@ class RaJournal(private val store: RaStore, private val path: String) {
     suspend fun count(user: String): Int = entries(user).size
 
     /** Rewrites the file without [done] (matched by u, a, m), atomically. */
-    suspend fun remove(done: Collection<RaUnlock>) = lock.withLock {
+    suspend fun remove(done: Collection<RaUnlock>): Unit = lock.withLock { store.locked(path) { removeLocked(done) } }
+
+    private suspend fun removeLocked(done: Collection<RaUnlock>) {
         val gone = done.map { Triple(it.u, it.a, it.m) }.toSet()
         val kept = parsedLines().filter { (_, e) -> e == null || Triple(e.u, e.a, e.m) !in gone }
         val bytes = kept.joinToString("") { "${it.first}\n" }.encodeToByteArray()

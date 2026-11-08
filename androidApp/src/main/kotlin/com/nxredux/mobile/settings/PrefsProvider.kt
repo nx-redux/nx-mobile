@@ -11,8 +11,8 @@ import com.nxredux.mobile.netplay.usb.UsbCables
 import com.nxredux.mobile.storage.DataRoot
 
 /**
- * The game process's calls into the main process: its settings writes ([ProviderPreferences]; reads come from its own
- * copy of the file), and the data root and USB cable the main process owns ([DataRoot], [UsbCables]). The provider has
+ * The game process's calls into the main process: its settings writes and refreshes ([ProviderPreferences]; reads come
+ * from its own copy of the file), and the data root and USB cable the main process owns ([DataRoot], [UsbCables]). The provider has
  * no `process` attribute, so it always runs where the real [android.content.SharedPreferences] live. Not exported.
  */
 class PrefsProvider : ContentProvider() {
@@ -58,6 +58,7 @@ class PrefsProvider : ContentProvider() {
                 }
                 encode(mapOf(RESULT_OK to editor.commit()))
             }
+            METHOD_GET_ALL -> encode(mapOf(RESULT_ENTRIES to HashMap(prefs.all)))
             else -> null
         }
     }
@@ -75,6 +76,9 @@ class PrefsProvider : ContentProvider() {
         const val ARG_REMOVE = "remove"
         const val ARG_CLEAR = "clear"
         const val RESULT_OK = "ok"
+        /** Every entry of the file `arg` as this process holds it now; result [RESULT_ENTRIES] (key to value). */
+        const val METHOD_GET_ALL = "getAll"
+        const val RESULT_ENTRIES = "entries"
         /** The data root as [DataRoot.settled] answers in the main process; result [RESULT_PATH]. The `arg` name is unused. */
         const val METHOD_DATA_ROOT_SETTLED = "dataRootSettled"
         /** [ARG_BEGIN] true: [DataRoot.useBegin], false: [DataRoot.useEnd]; the game process holds off the data move through it. */

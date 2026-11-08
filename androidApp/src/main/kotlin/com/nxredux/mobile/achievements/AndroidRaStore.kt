@@ -6,7 +6,13 @@ import com.nxredux.mobile.storage.DataRoot
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.RandomAccessFile
+import java.nio.channels.FileChannel
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -71,4 +77,31 @@ class AndroidRaStore internal constructor(private val privateRoot: () -> File, p
     override suspend fun list(dir: String): List<String> = io("list $dir") { file(dir).list()?.toList() ?: emptyList() }
 
     override suspend fun exists(path: String): Boolean = io("exists $path") { file(path).exists() }
+
+    /**
+     * An OS file lock on `<path>.lock` beside [path]: a sidecar, because a POSIX lock goes with any descriptor of its file
+     * the process closes, and [path] itself is replaced by atomic writes. A process holds one such lock per file, so its
+     * own callers queue on [processLocks] first. A file system that refuses locks runs [block] unlocked rather than
+     * failing the write.
+     */
+    override suspend fun <T> locked(path: String, block: suspend () -> T): T {
+        val lockFile = File(file(path).path + ".lock")
+        return processLocks.computeIfAbsent(lockFile.path) { Mutex() }.withLock {
+            val channel: FileChannel? = withContext(Dispatchers.IO) {
+                try {
+                    lockFile.parentFile?.mkdirs()
+                    RandomAccessFile(lockFile, "rw").channel.also { c ->
+                        try { c.lock() } catch (e: IOException) { c.close(); throw e }
+                    }
+                } catch (e: IOException) { null } catch (e: SecurityException) { null }
+            }
+            try { block() } finally {
+                channel?.let { withContext(NonCancellable + Dispatchers.IO) { runCatching { it.close() } } }
+            }
+        }
+    }
+
+    private companion object {
+        val processLocks = ConcurrentHashMap<String, Mutex>()
+    }
 }

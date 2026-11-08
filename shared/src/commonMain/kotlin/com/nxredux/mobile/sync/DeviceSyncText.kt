@@ -35,6 +35,8 @@ object DeviceSyncText {
     const val NO_RSYNC = "This build is missing its rsync, so Device Sync can't run."
     const val NO_SERVER = "Could not start the sync server."
     const val SERVER_TIMEOUT = "Timed out waiting for the other device (1 h)."
+    const val PEER_SILENT = "The other device stopped answering (5 min)."
+    const val NO_DEVICE = "No device found. Open Device Sync on the other device, then sync again."
     /** The paired peer sent FAIL: its run failed or was stopped. */
     const val PEER_FAILED = "The other device's sync failed. Check it, then sync again."
     /** A on Done/Failed while the ended run still cleans up (a stopped server stopping its daemon). */

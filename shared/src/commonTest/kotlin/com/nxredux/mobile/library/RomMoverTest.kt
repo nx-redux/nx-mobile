@@ -154,4 +154,43 @@ class RomMoverTest {
         assertEquals(1, deletes)                                          // Done only
         assertEquals(listOf("Roms", "Stuff"), src.listChildren(ContentRef("H")).map { it.name })
     }
+
+    /**
+     * A cue written in Windows-1252 that names its second track in another case: [FakeRomsSource.readText] gives what a
+     * UTF-8 read makes of it (U+FFFD for each Latin-1 byte), its head the bytes as they are.
+     */
+    private val legacyCue = "FILE \"Pok\u00e9mon (Track 1).bin\" BINARY\n TRACK 01 MODE2/2352\nFILE \"pok\u00e9mon (track 2).BIN\" BINARY\n TRACK 02 AUDIO\n"
+    private val legacyCueBytes = ByteArray(legacyCue.length) { legacyCue[it].code.toByte() }
+    private val legacyCueUtf8 = legacyCue.replace('\u00e9', '\uFFFD')
+
+    @Test fun a_legacy_cue_moves_with_its_bins_under_their_names_on_disk() = runTest {
+        val bins = listOf("Pok\u00e9mon (Track 1).bin", "Pok\u00e9mon (Track 2).bin")
+        val src = FakeRomsSource(
+            mapOf("H" to listOf("Roms"), "H/Roms" to emptyList(), "x" to listOf("P.cue") + bins),
+            texts = mapOf("x/P.cue" to legacyCueUtf8),
+            bytes = mapOf("x/P.cue" to legacyCueBytes, "x/${bins[0]}" to ByteArray(10), "x/${bins[1]}" to ByteArray(20)),
+        )
+        val idx = LibraryIndex(LibraryIndex.VERSION, "H", emptyList(), emptyMap(), listOf(IndexedSystem("PS", "Sony PlayStation", games = listOf(game("P.cue", "P")))))
+        val mover = RomMover(src, ContentRef("H"))
+        val items = mover.plan(idx, "x")
+        assertEquals(listOf("P.cue") + bins, items.single().files)
+        assertEquals(MoveResult(moved = 1), mover.run(items, { _, _ -> }) { false })
+        assertEquals(listOf("P.cue") + bins, names(src, "H/Roms/Sony PlayStation (PS)"))
+    }
+
+    @Test fun a_loose_legacy_cue_moves_with_its_bins() = runTest {
+        val bins = listOf("Pok\u00e9mon (Track 1).bin", "Pok\u00e9mon (Track 2).bin")
+        val src = FakeRomsSource(
+            mapOf("H" to listOf("Roms", "Stuff"), "H/Roms" to emptyList(), "H/Stuff" to listOf("P.cue") + bins),
+            texts = mapOf("H/Stuff/P.cue" to legacyCueUtf8),
+            bytes = mapOf("H/Stuff/P.cue" to legacyCueBytes, "H/Stuff/${bins[0]}" to ps1Bin(), "H/Stuff/${bins[1]}" to ByteArray(20)),
+        )
+        val files = LibraryScanner(src).scanOutsideRoms(ContentRef("H"), emptyMap())
+        val mover = RomMover(src, ContentRef("H"))
+        val items = mover.planLoose(files, LibraryIndex(LibraryIndex.VERSION, "H", emptyList(), emptyMap(), emptyList()))
+        assertEquals(listOf("P.cue") + bins, items.single().files)
+        assertEquals(MoveResult(moved = 1), mover.run(items, { _, _ -> }) { false })
+    }
+
+    private fun ps1Bin(): ByteArray = com.nxredux.mobile.library.disc.DiscProbeTest().ps1BinBytes()
 }

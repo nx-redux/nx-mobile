@@ -71,6 +71,7 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
             .apply { session.gamePath?.let { putExtra(GameActivity.EXTRA_GAME_PATH, it) } }
             .apply { session.artPath?.let { putExtra(GameActivity.EXTRA_ART_PATH, it) } }
             .apply { session.launchName?.let { putExtras(launchNameExtras(it)) } }   // the hold's name (LaunchNameHold)
+            .putExtras(postureSeedExtras())   // the game's process has no PostureHint of its own
             .apply {
                 session.netplay?.let {
                     putExtra(GameActivity.EXTRA_NETPLAY_ROLE, it.role.name)

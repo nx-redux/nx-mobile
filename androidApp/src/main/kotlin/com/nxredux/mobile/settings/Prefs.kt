@@ -7,7 +7,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Where every [SharedPreferences] of the app is opened: the real file in the main process; in `:game`, the file read
- * locally with writes sent to the main process ([ProviderPreferences]).
+ * locally with writes sent to the main process and reads refreshed from it on [refreshGame] ([ProviderPreferences]).
  */
 object Prefs {
     /** One per file for the whole game process: settings are opened per key event (an `AndroidAppSettings` each time). */
@@ -16,6 +16,15 @@ object Prefs {
         ProviderPreferences(name, PrefsProvider.channel(app), app.getSharedPreferences(name, Context.MODE_PRIVATE))
     }
     @Volatile private var appContext: Context? = null
+
+    /**
+     * Game process: every file opened so far reads the main process's current entries ([ProviderPreferences.refresh]),
+     * so a setting changed in the menu meanwhile applies. One blocking call per file: never on the key-event path.
+     * Nothing in the main process.
+     */
+    fun refreshGame() {
+        if (AppProcess.isGame()) game.all().forEach { it.refresh() }
+    }
 
     fun open(context: Context, name: String): SharedPreferences {
         if (!AppProcess.isGame()) return context.getSharedPreferences(name, Context.MODE_PRIVATE)
@@ -28,4 +37,6 @@ object Prefs {
 class OnePerName<T : Any>(private val create: (String) -> T) {
     private val made = ConcurrentHashMap<String, T>()
     operator fun get(name: String): T = made.computeIfAbsent(name, create)
+    /** Every [T] made so far. */
+    fun all(): Collection<T> = made.values
 }

@@ -9,9 +9,12 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
@@ -40,10 +43,66 @@ internal enum class KeepAliveStep {
     }
 }
 
+/** A CPU and Wi-Fi hold: [acquire] and [release] are each safe to call again (not reference counted). */
+internal interface AwakeLocks {
+    fun acquire()
+    fun release()
+}
+
+/** Holds [AwakeLocks] (made on first use by [make]) while [hold] was last called with true. Main thread only. */
+internal class KeepAwake(private val make: () -> AwakeLocks) {
+    private var locks: AwakeLocks? = null
+    private var held = false
+
+    fun hold(on: Boolean) {
+        if (on == held) return
+        held = on
+        val l = locks ?: make().also { locks = it }
+        if (on) l.acquire() else l.release()
+    }
+}
+
+/**
+ * A partial wake lock and a Wi-Fi lock: with the screen off the CPU would otherwise suspend and the Wi-Fi radio drop to
+ * power save, stalling a sync's rsync and sockets. The wake lock's timeout is only a safety net for a job whose end is
+ * never reported. [what]: the job, in the locks' tags.
+ */
+internal class AndroidAwakeLocks(context: Context, what: String) : AwakeLocks {
+    private val wake = (context.getSystemService(Context.POWER_SERVICE) as PowerManager)
+        .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "nxredux:$what").apply { setReferenceCounted(false) }
+    private val wifi = lowLatencyWifiLock(context, "nxredux:$what")
+
+    override fun acquire() {
+        runCatching { wake.acquire(MAX_HOLD_MS) }.onFailure { NxLog.w("NXAPP", "wake lock: ${it.message}") }
+        runCatching { wifi?.acquire() }.onFailure { NxLog.w("NXAPP", "Wi-Fi lock: ${it.message}") }
+    }
+
+    override fun release() {
+        runCatching { if (wake.isHeld) wake.release() }
+        runCatching { if (wifi?.isHeld == true) wifi.release() }
+    }
+
+    private companion object {
+        /** Longer than any sync or download; the hold ends with the job well before. */
+        const val MAX_HOLD_MS = 6 * 60 * 60 * 1000L
+    }
+}
+
+/** A not reference-counted, not yet acquired Wi-Fi lock in the lowest-latency mode the API has; null: no Wi-Fi. */
+@Suppress("DEPRECATION")   // FULL_HIGH_PERF: the low-latency mode's stand-in before API 29
+internal fun lowLatencyWifiLock(context: Context, tag: String): WifiManager.WifiLock? {
+    val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) WifiManager.WIFI_MODE_FULL_LOW_LATENCY else WifiManager.WIFI_MODE_FULL_HIGH_PERF
+    return runCatching {
+        (context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)
+            ?.createWifiLock(mode, tag)?.apply { setReferenceCounted(false) }
+    }.getOrNull()
+}
+
 /**
  * One keep-alive service's process state, held in its class's companion (Android builds the instances; the state
  * outlives them): whether a job wants the service, the job's last progress, a start in flight and the instance in the
  * foreground. Driven only through [update]. All state lives on the main thread. [what]: the job in a log line ("fetch").
+ * While a job wants the service, the CPU and Wi-Fi are held awake ([KeepAwake]), also when the service could not start.
  */
 class KeepAlive<P>(private val service: Class<out KeepAliveService<P>>, internal val tag: String, private val what: String) {
     private val main = Handler(Looper.getMainLooper())
@@ -52,6 +111,7 @@ class KeepAlive<P>(private val service: Class<out KeepAliveService<P>>, internal
     internal var progress: P? = null
     internal var starting = false
     internal var running: KeepAliveService<P>? = null
+    private var awake: KeepAwake? = null
 
     /** A job wants the service (its last [update] was active). Main thread only. */
     val active: Boolean get() = wanted
@@ -64,6 +124,7 @@ class KeepAlive<P>(private val service: Class<out KeepAliveService<P>>, internal
 
     private fun apply(app: Context, active: Boolean, p: P?) {
         wanted = active; progress = p
+        awakeFor(app).hold(active)
         val svc = running
         when (KeepAliveStep.of(svc != null, active, starting)) {
             KeepAliveStep.REFRESH -> svc?.refresh()
@@ -79,6 +140,15 @@ class KeepAlive<P>(private val service: Class<out KeepAliveService<P>>, internal
             }
             KeepAliveStep.NONE -> {}
         }
+    }
+
+    private fun awakeFor(app: Context): KeepAwake =
+        awake ?: KeepAwake { AndroidAwakeLocks(app, what) }.also { awake = it }
+
+    /** The service ran out of time: the job no longer keeps it, nor the CPU and Wi-Fi, awake. Main thread. */
+    internal fun timedOut(app: Context) {
+        wanted = false
+        awakeFor(app).hold(false)
     }
 }
 
@@ -139,7 +209,7 @@ abstract class KeepAliveService<P> : Service() {
 
     override fun onTimeout(startId: Int, fgsType: Int) {
         onTimedOut()
-        keepAlive.wanted = false
+        keepAlive.timedOut(applicationContext)
         stop()
     }
 

@@ -306,6 +306,19 @@ class ShortcutsSettingsTest {
         assertEquals("Hold MENU for a combo", settingsInfo(s.row("Toggle FF")).line)
     }
 
+    // Every pad skin carries all four touch buttons: under its screen on a skin, as pills over a full-screen game.
+    @Test fun touchButtonHelpNamesWhereTheyShow() = runTest {
+        val s = state()
+        s.openShortcuts()
+        assertEquals(
+            "The action of a touch button on the on-screen pad. None, the default, leaves it off the pad. Hold actions work " +
+                "while your finger stays on it, toggles flip on each tap. All four sit in the row under the pad skin's " +
+                "screen (Adjust buttons in the in-game Controls moves them); over a full-screen game they show as " +
+                "see-through pills.",
+            settingsInfo(s.row("Touch button 1")).detail,
+        )
+    }
+
     // Touch only: the on-screen pad binds nothing, so the bind rows give way to a line pointing at the touch buttons.
     @Test fun touchOnlyHidesTheBindRows() = runTest {
         val settings = Settings().apply { shortcuts = Shortcuts.encodeBase(ShortcutSet(mapOf(ShortcutAction.TOGGLE_FF to ShortcutBinding(null, KeyCodes.BUTTON_R1)), emptyMap())) }
