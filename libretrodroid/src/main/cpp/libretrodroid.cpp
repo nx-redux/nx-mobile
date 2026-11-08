@@ -138,7 +138,7 @@ void LibretroDroid::changeDisk(unsigned int index) {
         return;
     }
 
-    if (index < 0 || index >= Environment::getInstance().getRetroDiskControlCallback()->get_num_images()) {
+    if (index >= Environment::getInstance().getRetroDiskControlCallback()->get_num_images()) {
         LOGE("Requested image index is not valid.");
         return;
     }
@@ -200,8 +200,11 @@ jboolean LibretroDroid::unserializeMemory(unsigned id, int8_t* data, size_t size
     size_t memorySize = core->retro_get_memory_size(id);
     void *memory = core->retro_get_memory_data(id);
 
-    if (memory == nullptr) {
-        LOGE("Cannot load memory %u: nullptr in retro_get_memory_data", id);
+    if (memory == nullptr || memorySize == 0) {
+        // Most cores have no clock, so a missing RTC is normal.
+        if (memory == nullptr && id != RETRO_MEMORY_RTC) {
+            LOGE("Cannot load memory %u: nullptr in retro_get_memory_data", id);
+        }
         return false;
     }
 
@@ -237,15 +240,7 @@ JNIEXPORT jboolean JNICALL LibretroDroid::unserializeSRAM(int8_t* data, size_t s
 std::pair<int8_t*, size_t> LibretroDroid::serializeSRAM() { return serializeMemory(RETRO_MEMORY_SAVE_RAM); }
 
 // The clock (gambatte, mGBA, ...): minarch keeps it in Saves/<TAG>/<rom.ext>.rtc (ma_saves.c RTC_read/RTC_write).
-jboolean LibretroDroid::unserializeRTC(int8_t* data, size_t size) {
-    std::lock_guard<std::mutex> lock(coreLock);
-    if (core == nullptr) return false;
-    size_t rtcSize = core->retro_get_memory_size(RETRO_MEMORY_RTC);
-    void* rtc = core->retro_get_memory_data(RETRO_MEMORY_RTC);
-    if (rtc == nullptr || rtcSize == 0) return false;
-    memcpy(rtc, data, std::min(size, rtcSize));   // minarch reads at most the clock's size
-    return true;
-}
+jboolean LibretroDroid::unserializeRTC(int8_t* data, size_t size) { return unserializeMemory(RETRO_MEMORY_RTC, data, size); }
 std::pair<int8_t*, size_t> LibretroDroid::serializeRTC() { return serializeMemory(RETRO_MEMORY_RTC); }
 
 void LibretroDroid::onSurfaceChanged(unsigned int width, unsigned int height) {
@@ -492,17 +487,31 @@ void LibretroDroid::create(
     rumble = std::make_unique<Rumble>();
 }
 
-void LibretroDroid::loadGameFromPath(const std::string& gamePath) {
-    LOGD("Performing libretrodroid loadGameFromPath");
+bool LibretroDroid::coreNeedsFullPath() {
     struct retro_system_info system_info {};
     core->retro_get_system_info(&system_info);
+    return system_info.need_fullpath;
+}
+
+void LibretroDroid::loadGame(const retro_game_info& gameInfo) {
+    threadsBeforeLoad = ThreadList::list();   // ADPF: the core's threads are the ones after this
+    if (!core->retro_load_game(&gameInfo)) {
+        LOGE("Cannot load game. Leaving.");
+        throw std::runtime_error("Cannot load game");
+    }
+
+    afterGameLoad();
+}
+
+void LibretroDroid::loadGameFromPath(const std::string& gamePath) {
+    LOGD("Performing libretrodroid loadGameFromPath");
 
     this->gamePath = gamePath;
     struct retro_game_info game_info {};
     game_info.path = this->gamePath.c_str();
     game_info.meta = nullptr;
 
-    if (system_info.need_fullpath) {
+    if (coreNeedsFullPath()) {
         game_info.data = nullptr;
         game_info.size = 0;
     } else {
@@ -512,28 +521,19 @@ void LibretroDroid::loadGameFromPath(const std::string& gamePath) {
         game_info.size = file.size;
     }
 
-    threadsBeforeLoad = ThreadList::list();   // ADPF: the core's threads are the ones after this
-    bool result = core->retro_load_game(&game_info);
-    if (!result) {
-        LOGE("Cannot load game. Leaving.");
-        throw std::runtime_error("Cannot load game");
-    }
-
-    afterGameLoad();
+    loadGame(game_info);
 }
 
 void LibretroDroid::loadGameFromBytes(std::unique_ptr<int8_t[]> data, size_t size) {
     LOGD("Performing libretrodroid loadGameFromBytes");
     gameBytes = std::move(data);
 
-    struct retro_system_info system_info {};
-    core->retro_get_system_info(&system_info);
 
     struct retro_game_info game_info {};
     game_info.path = nullptr;
     game_info.meta = nullptr;
 
-    if (system_info.need_fullpath) {
+    if (coreNeedsFullPath()) {
         game_info.data = nullptr;
         game_info.size = 0;
     } else {
@@ -541,20 +541,11 @@ void LibretroDroid::loadGameFromBytes(std::unique_ptr<int8_t[]> data, size_t siz
         game_info.size = size;
     }
 
-    threadsBeforeLoad = ThreadList::list();   // ADPF: the core's threads are the ones after this
-    bool result = core->retro_load_game(&game_info);
-    if (!result) {
-        LOGE("Cannot load game. Leaving.");
-        throw std::runtime_error("Cannot load game");
-    }
-
-    afterGameLoad();
+    loadGame(game_info);
 }
 
 void LibretroDroid::loadGameFromVirtualFiles(std::vector<VFSFile> virtualFiles) {
     LOGD("Performing libretrodroid loadGameFromVirtualFiles");
-    struct retro_system_info system_info {};
-    core->retro_get_system_info(&system_info);
 
     if (virtualFiles.empty()) {
         LOGE("Calling loadGameFromVirtualFiles without any file.");
@@ -564,7 +555,7 @@ void LibretroDroid::loadGameFromVirtualFiles(std::vector<VFSFile> virtualFiles) 
     std::string firstFilePath = virtualFiles[0].getFileName();
     int firstFileFD = virtualFiles[0].getFD();
 
-    bool loadUsingVFS = system_info.need_fullpath || virtualFiles.size() > 1;
+    bool loadUsingVFS = coreNeedsFullPath() || virtualFiles.size() > 1;
 
     gamePath = firstFilePath;
     struct retro_game_info game_info {};
@@ -588,14 +579,7 @@ void LibretroDroid::loadGameFromVirtualFiles(std::vector<VFSFile> virtualFiles) 
         virtualFiles[0].releaseFD();
     }
 
-    threadsBeforeLoad = ThreadList::list();   // ADPF: the core's threads are the ones after this
-    bool result = core->retro_load_game(&game_info);
-    if (!result) {
-        LOGE("Cannot load game. Leaving.");
-        throw std::runtime_error("Cannot load game");
-    }
-
-    afterGameLoad();
+    loadGame(game_info);
 }
 
 void LibretroDroid::addVirtualFiles(std::vector<VFSFile> virtualFiles) {

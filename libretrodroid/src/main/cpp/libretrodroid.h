@@ -311,6 +311,9 @@ private:
     // GL thread: retro_run with the per-frame work around it (pointers, RAM cheats, achievements).
     void runFrame(bool np, bool lk, float frameSeconds);
     float findDefaultAspectRatio(const retro_system_av_info &system_av_info);
+    bool coreNeedsFullPath();
+    // retro_load_game, then afterGameLoad; throws when the core refuses the game.
+    void loadGame(const retro_game_info& gameInfo);
     void afterGameLoad();
     void releaseCore();
     // The input state, replaced by a fresh one when pause()/resume() asked for it. GL thread.
