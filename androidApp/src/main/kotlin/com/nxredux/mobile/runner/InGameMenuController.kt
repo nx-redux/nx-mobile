@@ -5,7 +5,7 @@ import androidx.compose.ui.draw.clip
 import android.content.res.Configuration
 import android.view.Gravity
 import com.nxredux.mobile.options.PxRect
-import com.nxredux.mobile.skin.menuRect
+import com.nxredux.mobile.skin.menuRoom
 import com.nxredux.mobile.ui.nx.LocalInSkin
 import kotlin.math.roundToInt
 import android.widget.FrameLayout
@@ -421,6 +421,7 @@ internal class InGameMenuController(
         }
         menuView = overlay
         padLayout.skinStripHidden = true   // the skin's strip shortcuts (SAVE, LOAD, ...) go while the menu is up
+        padLayout.skinUnderMenu = !dual.mainPanelCoversWindow()   // in the skin (not over the dual-screen panel): its frame round the menu
         root.addView(overlay, menuLayoutParams(resources.configuration.orientation, overPanel = dual.mainPanelCoversWindow(), glass = true))
         dual.syncMainPanelHost()
         padLayout.updatePadVisibility()
@@ -454,12 +455,13 @@ internal class InGameMenuController(
     private fun skinGlassCorner(): Float = menuGlass()?.corner ?: 0f
 
     /**
-     * The room the menu takes over a pad skin, window px: its screen glass ([menuGlass]) and the touch shortcut strip under
-     * it, hidden while the menu is open ([com.nxredux.mobile.skin.menuRect]); null with no skin shown.
+     * The room the menu takes over a pad skin, window px ([com.nxredux.mobile.skin.menuRoom]): its glass and the touch
+     * shortcut strip under it (hidden while the menu is open); a portrait DS / 3DS both screens down to the touch screen's
+     * strip. Null with no skin shown.
      */
-    private fun skinGlass(): PxRect? = menuGlass()?.let { g -> padLayout.skinPlacement()?.menuRect(g) ?: g.rect }
+    private fun skinGlass(): PxRect? = if (padLayout.skinShown) padLayout.skinPlacement()?.menuRoom() else null
 
-    /** The glass the menu sits in: the biggest of the skin's (a DS's top screen), never across the frames between two. */
+    /** The glass whose corners the menu's room takes: the biggest of the skin's (a DS's top screen). */
     private fun menuGlass(): com.nxredux.mobile.skin.PlacedGlass? {
         if (!padLayout.skinShown) return null
         return padLayout.skinPlacement()?.glasses?.maxByOrNull { it.rect.width * it.rect.height }
@@ -475,6 +477,7 @@ internal class InGameMenuController(
         menuView?.let { findViewById<FrameLayout>(R.id.root).removeView(it) }
         menuView = null
         padLayout.skinStripHidden = false   // the skin's strip shortcuts back
+        padLayout.skinUnderMenu = false
         dual.syncMainPanelHost()
         menuModel = null
         menuState.value = null

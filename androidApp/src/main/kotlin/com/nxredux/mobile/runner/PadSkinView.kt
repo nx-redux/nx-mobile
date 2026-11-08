@@ -15,6 +15,8 @@ import android.view.View
 import android.widget.FrameLayout
 import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.skin.PlacedControl
+import com.nxredux.mobile.skin.stackedMenuRoom
+import com.nxredux.mobile.skin.underMenu
 import com.nxredux.mobile.skin.SkinCell
 import com.nxredux.mobile.skin.SkinPackManifest
 import com.nxredux.mobile.skin.SkinPlacement
@@ -139,6 +141,16 @@ internal class PadSkinView(
             field = value
             refresh()
         }
+    /**
+     * The in-game menu sits in this skin: two screens one above the other draw as one glass the menu's room in the
+     * layout's frame ([underMenu]), the pieces it covers gone; any other layout as it is.
+     */
+    var underMenu: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            refresh()
+        }
     /** Controls drawn shaded while their toggle is off (the Wii's MOTION), with a held cap's shade. */
     var dimmed: Set<String> = emptySet()
         set(value) {
@@ -165,8 +177,10 @@ internal class PadSkinView(
         val p = placement?.forStick(useStick)
         val ids = p?.spec?.let { sp -> (listOfNotNull(sp.frame?.strip) + sp.pieces.mapNotNull { it.strip }).flatMap { st -> st.labels.map { it.id } } }?.toSet().orEmpty()
         val gone = if (stripHidden) ids else ids.filter { id -> slotOf(id)?.let { it !in shortcuts } ?: false }.toSet()
-        shown = if (p == null || gone.isEmpty()) p
+        val drawn = if (p == null || gone.isEmpty()) p
             else p.copy(pieces = if (stripHidden) p.pieces.filterNot { it.strip } else p.pieces, controls = spread(p.controls.filterNot { it.spec.id in gone }, p, ids))
+        // the menu's room from the whole placement (its strip controls mark the room's foot)
+        shown = if (underMenu && drawn != null) p?.stackedMenuRoom()?.let { drawn.underMenu(it) } ?: drawn else drawn
         touch.placement = shown
         layer.invalidate()
         invalidate()

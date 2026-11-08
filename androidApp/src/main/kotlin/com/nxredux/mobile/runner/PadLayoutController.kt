@@ -180,6 +180,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     /** The in-game menu is open: the skin's strip shortcuts are hidden ([PadSkinView.stripHidden]). */
     var skinStripHidden: Boolean = false
         set(value) { field = value; skinViews().forEach { it.stripHidden = value } }
+    /** The in-game menu sits in the skin: stacked screens draw as one glass in the frame ([PadSkinView.underMenu]). */
+    var skinUnderMenu: Boolean = false
+        set(value) { field = value; skinView?.underMenu = value }
     /** The last [skinPlacement] / [barePlacement] worked out, and what it was worked out for. */
     private var skinCache: Pair<SkinKey, SkinPlacement?>? = null
     private var bareCache: Pair<SkinKey, SkinPlacement?>? = null
@@ -479,6 +482,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val below = listOfNotNull(menuView, notificationsView).map { root.indexOfChild(it) }.filter { it >= 0 }.minOrNull() ?: -1
         root.addView(view, below, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         view.stripHidden = skinStripHidden
+        if (!bare) view.underMenu = skinUnderMenu
         view.shortcuts = host.padShortcuts
         return view
     }
