@@ -18,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -48,9 +47,7 @@ internal fun OptionsBody(
 ) {
     val colors = LocalNxColors.current
     if (page.rows.isEmpty()) {
-        Box(modifier.fillMaxWidth().padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
-            Text(page.footer, color = colors.hint, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = NxTextSizes.menuInfo, lineHeight = NxTextSizes.menuInfoLine, textAlign = TextAlign.Center)
-        }
+        CentredNote(page.footer, modifier.fillMaxWidth().padding(horizontal = 28.dp), NxTextSizes.menuInfo, FontWeight.SemiBold, NxTextSizes.menuInfoLine)
         return
     }
     val itemHeight = nxOptionsRowHeight(rowHeight, LocalNxOptionText.current)   // Appearance → Text size

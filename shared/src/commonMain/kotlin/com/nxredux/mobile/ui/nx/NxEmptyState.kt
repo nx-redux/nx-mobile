@@ -1,6 +1,7 @@
 package com.nxredux.mobile.ui.nx
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.nx_mark
@@ -59,5 +61,13 @@ fun NxEmptyState(
             if (touchOnly()) NxTouchButtons(emptyStateButtons(hints), onHint)
             else NxHintBar(hints, Modifier.width(IntrinsicSize.Max), onHint = onHint)
         }
+    }
+}
+
+/** A short note centred in [modifier]'s box, in the hint ink: what an empty page or tab says in place of its rows. */
+@Composable
+internal fun CentredNote(text: String, modifier: Modifier, fontSize: TextUnit, fontWeight: FontWeight? = null, lineHeight: TextUnit = TextUnit.Unspecified) {
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Text(text, color = LocalNxColors.current.hint, fontFamily = LocalNxFont.current, fontWeight = fontWeight, fontSize = fontSize, lineHeight = lineHeight, textAlign = TextAlign.Center)
     }
 }

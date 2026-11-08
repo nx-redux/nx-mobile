@@ -277,21 +277,6 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** From [setPanelHeader]; until then the panel's header is the game's title alone. */
     private var panelHeader: GamePanelHeader? = null
 
-    /** The panel's shortcut grid columns as drawn (the UI reports them: 2 when narrow); UP/DOWN step a row of them. */
-    var panelColumns: Int = 4
-
-    /**
-     * The Menu tab drew the shortcuts below its words (too narrow beside them; the UI reports it): DOWN from the last word
-     * goes into them and UP from their top row comes back, where beside them RIGHT and LEFT do.
-     */
-    var shortcutsBelow: Boolean = false
-
-    /**
-     * In portrait the Options page's words fit beside the root's (the UI reports it): else the root keeps the shortcuts
-     * while Options is highlighted (no preview) and the Options page opens whole ([menuPanes]).
-     */
-    var optionsBeside: Boolean = true
-
     /** The Options page [optionsPreview] last built, and the inputs it was built from. */
     private var previewPage: Pair<OptionsPreviewInputs, MenuPage>? = null
 
@@ -534,13 +519,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         return when (button) {
             // The first word: UP goes up to the tab row over it (the words no longer wrap there).
             NxButton.UP -> { if (root && tabsShown() && state.page.selected == 0) state = state.copy(panelFocus = PanelFocus.Tabs) else move(-1); null }
-            // The last word with the shortcuts below: DOWN goes into them.
-            NxButton.DOWN -> {
-                if (root && panelShown() && shortcutsBelow && state.page.selected == state.page.rows.lastIndex && panelShortcuts().isNotEmpty()) {
-                    state = state.copy(panelFocus = PanelFocus.Item(0))
-                } else move(1)
-                null
-            }
+            NxButton.DOWN -> { move(1); null }
             // In two panes ([split]), off the root LEFT goes back to the page on the left and RIGHT opens a row's page:
             // they never change a value there, A starts that ([editsOnA]). One page (no pane to go to): LEFT / RIGHT
             // change a value row at once, as on the root's Disc row and Save / Load; B goes back.
@@ -552,11 +531,6 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 !root && opensPage(state.page.rows.getOrNull(state.page.selected)) -> activate(state.page.selected)
                 !root -> if (stepsOnSide()) { intoAdjust(state.page.selected); change(1) } else null
                 visualRow(state.page.selected) != null -> { intoAdjust(state.page.selected); change(1) }
-                // The Disc row keeps RIGHT for its value; every other row enters the shortcuts (beside or below the words),
-                // when there are any: none in the menu now (the skin's strip has them), so RIGHT stays on the words.
-                panelShown() && panelShortcuts().isNotEmpty() && state.page.rows.getOrNull(state.page.selected) !is MenuRow.Option -> {
-                    state = state.copy(panelFocus = PanelFocus.Item(0)); null
-                }
                 // Options moves into its preview, as A, whether or not the menu splits.
                 (split || state.preview != null) && opensPage(state.page.rows.getOrNull(state.page.selected)) -> activate(state.page.selected)
                 else -> change(1)
@@ -1043,7 +1017,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         val ra = achievementSummary.takeIf { GamePanelTab.ACHIEVEMENTS in tabs }
         val header = panelHeader ?: GamePanelHeader(gameTitle, null, frontendTag, 0L, null, "", null)
         return GamePanelState(
-            header.copy(ra = ra), tabs, GamePanelModel.resolveTab(state.panelTab, tabs), panelShortcuts(), panelAchievements(),
+            header.copy(ra = ra), tabs, GamePanelModel.resolveTab(state.panelTab, tabs),
+            // No tiles: the skin's touch strip holds the shortcuts, Reset is a root row and the Disc row swaps discs (the
+            // second-screen panel keeps its own, [GamePanelModel.shortcuts]).
+            emptyList(), panelAchievements(),
             badges, playerSlots, playerPads, panelCheats(),
             GamePanelModel.noCheatsText(cheatsFolder, cheatsExpected), focus = state.panelFocus,
         )
@@ -1099,16 +1076,6 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun offMenuTab(): Boolean = tabsShown() && panelTab() != GamePanelTab.SHORTCUTS
 
     /**
-     * The Menu tab would show the shortcuts beside or below the words: a row other than Save / Load (their slot card) or
-     * Options (its [MenuState.preview]) highlighted.
-     */
-    private fun menuShortcutsShown(): Boolean =
-        tabsShown() && state.page.rows.getOrNull(state.page.selected) !is MenuRow.Slot && (state.preview == null || (!split && !optionsBeside))
-
-    /** The shortcuts are on screen: the Menu tab, with [menuShortcutsShown]. */
-    private fun panelShown(): Boolean = menuShortcutsShown() && panelTab() == GamePanelTab.SHORTCUTS
-
-    /**
      * Achievements with a set; Cheats for a core that takes them (none for the game: the tab says how to add some); Players
      * with more than one slot. Never Cheats or Players in netplay (the root had no Options or Players row there).
      */
@@ -1117,12 +1084,6 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         cheats = cheatsAvailable && !netplay,
     )
 
-    /**
-     * None: the skin's touch strip holds the shortcuts, Reset is a root row and the Disc row swaps discs. The
-     * second-screen panel keeps its own tiles ([GamePanelModel.shortcuts]).
-     */
-    private fun panelShortcuts(): List<ShortcutState> = emptyList()
-
     private fun panelAchievements(): List<RaAchievement> = achievements.orEmpty().sortedBy(achievementOrder)
 
     private fun panelCheats(): List<CheatRow> = GamePanelModel.cheatRows(cheats)
@@ -1130,7 +1091,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun panelTab(): GamePanelTab = GamePanelModel.resolveTab(state.panelTab, panelTabs())
 
     private fun panelItemCount(tab: GamePanelTab): Int = when (tab) {
-        GamePanelTab.SHORTCUTS -> panelShortcuts().size
+        GamePanelTab.SHORTCUTS -> 0   // the Menu tab: its words, no items
         GamePanelTab.ACHIEVEMENTS -> panelAchievements().size
         GamePanelTab.CHEATS -> cheats.size
         GamePanelTab.PLAYERS -> playerSlots.size
@@ -1138,17 +1099,15 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /**
      * Input while the focus is in the panel, or on another tab than Menu: L1/R1 tabs; on the tab row LEFT/RIGHT step the
-     * tabs too and DOWN goes into the tab (the Menu tab: its words; another: its first item); in the shortcut grid UP/DOWN
-     * step a row, LEFT/RIGHT along it, LEFT at its left edge back to the words beside it, UP from its top row to the words
-     * above it ([shortcutsBelow]) or the tab row; B back to the Menu tab's words; A the item (on the tab row: the Menu tab
-     * goes to its words, Achievements and Players open their full page). Off the Menu tab no focus reads as the tab row.
+     * tabs too and DOWN goes into the tab (the Menu tab: its words; another: its first item); in a tab's list UP/DOWN step
+     * an item, UP from the first to the tab row, LEFT one back; B back to the Menu tab's words; A the item (on the tab row:
+     * the Menu tab goes to its words, Achievements and Players open their full page). Off the Menu tab no focus reads as
+     * the tab row.
      */
     private fun pressPanel(button: NxButton): MenuEffect? {
         val tab = panelTab()
         val onMenu = tab == GamePanelTab.SHORTCUTS
-        val count = if (onMenu && !panelShown()) 0 else panelItemCount(tab)
-        val cols = if (onMenu) panelColumns.coerceAtLeast(1) else 1
-        val below = onMenu && shortcutsBelow
+        val count = panelItemCount(tab)
         val at = (state.panelFocus as? PanelFocus.Item)?.index
         val focus: PanelFocus? = when (button) {
             NxButton.L1, NxButton.R1 -> { stepTab(if (button == NxButton.L1) -1 else 1); return null }
@@ -1159,29 +1118,18 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 else -> { openTabPage(tab); return null }
             }
             NxButton.B -> { if (!onMenu) state = state.copy(panelTab = GamePanelTab.SHORTCUTS); null }
-            NxButton.UP -> when {
-                at == null -> PanelFocus.Tabs
-                at - cols >= 0 -> PanelFocus.Item(at - cols)
-                below -> null
-                else -> PanelFocus.Tabs
-            }
+            NxButton.UP -> if (at != null && at > 0) PanelFocus.Item(at - 1) else PanelFocus.Tabs
             NxButton.DOWN -> when {
                 at == null -> if (onMenu) null else if (count > 0) PanelFocus.Item(0) else PanelFocus.Tabs
-                at + cols < count -> PanelFocus.Item(at + cols)
-                at / cols < (count - 1) / cols -> PanelFocus.Item(count - 1)   // the short last row's last pill
+                at + 1 < count -> PanelFocus.Item(at + 1)
                 else -> PanelFocus.Item(at)
             }
             NxButton.LEFT -> when {
                 at == null -> { stepTab(-1); return null }
-                at % cols != 0 -> PanelFocus.Item(at - 1)
-                onMenu && !below -> null
+                at > 0 -> PanelFocus.Item(at - 1)
                 else -> PanelFocus.Item(at)
             }
-            NxButton.RIGHT -> when {
-                at == null -> { stepTab(1); return null }
-                at % cols < cols - 1 && at + 1 < count -> PanelFocus.Item(at + 1)
-                else -> PanelFocus.Item(at)
-            }
+            NxButton.RIGHT -> if (at == null) { stepTab(1); return null } else PanelFocus.Item(at)
             else -> state.panelFocus
         }
         state = state.copy(panelFocus = focus)
@@ -1198,7 +1146,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         val next = tabs.stepFrom(panelTab(), delta)
         val focus = when {
             state.panelFocus !is PanelFocus.Item -> PanelFocus.Tabs
-            next == GamePanelTab.SHORTCUTS -> if (menuShortcutsShown() && panelItemCount(next) > 0) PanelFocus.Item(0) else null
+            next == GamePanelTab.SHORTCUTS -> null   // the Menu tab's words
             panelItemCount(next) > 0 -> PanelFocus.Item(0)
             else -> PanelFocus.Tabs
         }
@@ -1216,15 +1164,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /** The shown tab's item that asks for [event] ([panelItemEvent] backwards); null for a tab, the Game pill, or none. */
     private fun panelItemIndex(event: GamePanelEvent): Int? = when (panelTab()) {
-        GamePanelTab.SHORTCUTS -> when (event) {
-            GamePanelEvent.SwapDisc -> Shortcut.SWAP_DISC
-            is GamePanelEvent.SetSecondScreen -> Shortcut.SECOND_SCREEN
-            is GamePanelEvent.SetFastForward -> Shortcut.FAST_FORWARD
-            is GamePanelEvent.SetRewind -> Shortcut.REWIND
-            is GamePanelEvent.SetMic -> Shortcut.MIC
-            GamePanelEvent.Reset -> Shortcut.RESET
-            else -> null
-        }?.let { s -> panelShortcuts().indexOfFirst { it.shortcut == s } }
+        GamePanelTab.SHORTCUTS -> null   // no items
         GamePanelTab.ACHIEVEMENTS -> null   // its rows ask for nothing
         GamePanelTab.CHEATS -> (event as? GamePanelEvent.SetCheat)?.index
         GamePanelTab.PLAYERS -> (event as? GamePanelEvent.SetPlayer)?.slot
@@ -1232,8 +1172,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /** What A on item [index] of [tab] asks for, as a tap there would ([GamePanel]); null for a disabled shortcut or an achievement. */
     private fun panelItemEvent(tab: GamePanelTab, index: Int): GamePanelEvent? = when (tab) {
-        GamePanelTab.SHORTCUTS -> panelShortcuts().getOrNull(index)?.let(GamePanelModel::eventFor)
-        GamePanelTab.ACHIEVEMENTS -> null
+        GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS -> null
         GamePanelTab.CHEATS -> GamePanelModel.cheatEvent(index, panelCheats())
         GamePanelTab.PLAYERS -> if (index < playerSlots.size) GamePanelModel.nextPlayer(index, playerSlots, playerPads) else null
     }

@@ -501,7 +501,7 @@ private fun ContinueCard(row: MainRow.Continue, lit: Boolean, info: List<InfoLin
     val sub = if (lit) colors.hint else colors.inkDim.copy(alpha = colors.inkDim.alpha * 0.7f)   // role: an unselected Grid tile's under-name lines
     Box(modifier) {
         // No ring: the subtle edge, over everything, keeps the card's rounded shape off a dark picture's ground.
-        BoxWithConstraints(Modifier.fillMaxSize().clip(RoundedCornerShape(NX_TILE_CORNER.dp)).background(colors.background).border(NX_DRAIN_EDGE, colors.inkEdge, RoundedCornerShape(NX_TILE_CORNER.dp))) {
+        BoxWithConstraints(Modifier.fillMaxSize().homeCardFrame(colors)) {
             if (picture != null) {
                 AsyncImage(
                     model = model, contentDescription = null, contentScale = ContentScale.Crop,
@@ -602,6 +602,12 @@ private fun InfoRow(lines: List<InfoLine>, sizeSp: Float, lineSp: Float, color: 
     HomeText(info.text, color, sizeSp, lineSp, maxLines = 1, inlineContent = info.inlineContent)
 }
 
+/** A Home card's frame: rounded as the tiles, on the background, with the subtle edge that keeps its shape off a dark picture. */
+private fun Modifier.homeCardFrame(colors: NxColors): Modifier {
+    val shape = RoundedCornerShape(NX_TILE_CORNER.dp)
+    return clip(shape).background(colors.background).border(NX_DRAIN_EDGE, colors.inkEdge, shape)
+}
+
 /**
  * A fresh install's only card: an abstract picture in the accent's palette ([abstractAccentArtUrl]; Crop, through the one
  * image loader), the NX mark in front of it (centred, the drawn mark 60% of the card's [cardH], [homeMarkAlpha] of the
@@ -614,7 +620,7 @@ internal fun PickCard(lit: Boolean, portrait: Boolean, cardH: Float, modifier: M
     val url = remember(colors.accent) { abstractAccentArtUrl(colors.accent.toArgb() and 0xFFFFFF) }
     val litness = nxLitness(lit)
     Box(modifier) {
-        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(NX_TILE_CORNER.dp)).background(colors.background).border(NX_DRAIN_EDGE, colors.inkEdge, RoundedCornerShape(NX_TILE_CORNER.dp)), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().homeCardFrame(colors), contentAlignment = Alignment.Center) {
             AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().nxDrain(litness))
             Image(
                 painterResource(homePickMark), contentDescription = null, contentScale = ContentScale.Fit,
