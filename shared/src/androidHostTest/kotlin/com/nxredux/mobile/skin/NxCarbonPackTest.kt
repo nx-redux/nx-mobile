@@ -16,6 +16,8 @@ class NxCarbonPackTest {
     /** The 3DS's twins of the DS layouts (stacked, large and its wide, flex and its wide, the fold board, both landscapes), the fold board and the tall landscape with both sticks shown. */
     private val N3DS_LAYOUTS = 16   // the New 3DS twins and the regular 3DS twins, 8 each
     private val GRIP_COLUMNS = 21   // each landscape shell's twin with the small caps in a column (the Fold cover)
+    /** How far (picture px) the frame's touch slots keep below the screen, so a press on one never lands on the picture. */
+    private val SLOT_SCREEN_GAP = 12f
 
     /** A landscape layout with each side's small caps in one column (a `_col` twin, or a tall shell). */
     private fun SkinPlacement.columns() = spec.family == SkinFamily.GRIP && (spec.id.endsWith("_col") || spec.id.contains("_tall"))
@@ -986,7 +988,7 @@ class NxCarbonPackTest {
             val rim = f.glass.y   // the frame's own rim and groove, as at its top
             assertEquals((bottom - rim) / 2f + rim, (st.y + st.wordUp).toFloat(), 2f, "${l.id} words centred in the band")
             assertTrue(st.hh >= 30, "${l.id} touch slots still easy to press")
-            assertTrue(bottom - st.y - st.hh >= SkinTweaks.SCREEN_CLEAR, "${l.id} slots clear of the screen")
+            assertTrue(bottom - st.y - st.hh >= SLOT_SCREEN_GAP, "${l.id} slots clear of the screen")
         }
         val p = assertNotNull(SkinChoice.place(pack, 2520, 1080, 480, false, false, 240f to 160f, null, variant = SkinVariant.GBA))
         val slot = p.controls.first { it.spec.id == "TOUCH_1" }

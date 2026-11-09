@@ -73,7 +73,7 @@ class SkinEditorState(
         tweaks = t
     }
 
-    /** The selected group's size times [factor], held to [SkinTweaks.MIN_SCALE]..[SkinTweaks.MAX_SCALE] (and the room round it). */
+    /** The selected group's size times [factor], held to the room round it. */
     fun resize(factor: Float) {
         val id = selected ?: return
         if (!factor.isFinite() || factor <= 0f) return

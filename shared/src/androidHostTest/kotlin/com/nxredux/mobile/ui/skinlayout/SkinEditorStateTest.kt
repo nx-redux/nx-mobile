@@ -63,13 +63,14 @@ class SkinEditorStateTest {
         val t = assertNotNull(s.tweaks["MENU"])
         near(t.dx, 20f, "dx"); near(t.dy, 0f, "dy")
         near(box(s.placed(), "MENU").x, box(p, "MENU").x + 40f, "drawn")
-        // MENU may move half its larger side (100 picture px): a long drag stops there
+        // a long drag stops at the window's edge (MENU's box is its button's)
         s.drag(Offset(100000f, 0f))
-        near(assertNotNull(s.tweaks["MENU"]).dx, 50f, "capped dx")
-        near(box(s.placed(), "MENU").x, box(p, "MENU").x + 100f, "drawn at the cap")
+        val edge = 1080f - (box(p, "MENU").x + box(p, "MENU").width)
+        near(assertNotNull(s.tweaks["MENU"]).dx, edge / 2f, "dx at the edge")
+        near(box(s.placed(), "MENU").let { it.x + it.width }, 1080f, "drawn at the edge")
         // and comes back at once (what is stored is where it stands)
         s.drag(Offset(-20f, 0f))
-        near(assertNotNull(s.tweaks["MENU"]).dx, 40f, "back")
+        near(assertNotNull(s.tweaks["MENU"]).dx, edge / 2f - 10f, "back")
     }
 
     @Test
@@ -92,19 +93,23 @@ class SkinEditorStateTest {
 
     @Test
     fun a_drag_moves_into_the_room_another_group_left() {
-        // the face buttons dragged right to the window's edge leave room: the d-pad (before them in the layout) dragged
-        // right goes into it, stops against them, reads back as far as it got and comes back at once
+        // the face buttons dragged right to the window's edge (their buttons') leave room: the d-pad (before them in the
+        // layout) dragged right goes into it, stops with its touch area against theirs, reads back as far as it got and
+        // comes back at once
         val p = menu()
         val s = SkinEditorState(p, emptyMap(), 1080f, 2520f)
         val face0 = box(p, "A+B+X+Y"); val dpad0 = box(p, "DPAD")
+        val faceButtons = p.controls.filter { it.spec.id in setOf("A", "B", "X", "Y") }
+        val pad = p.controls.single { it.spec.id == "DPAD" }
         s.select(centre(face0)); s.drag(Offset(1000f, 0f))
-        val room = 1080f - (face0.x + face0.width)
+        val room = 1080f - faceButtons.maxOf { it.x + it.spec.r }
         near(assertNotNull(s.tweaks["A+B+X+Y"]).dx, room, "face at the edge")
         s.select(centre(dpad0)); s.drag(Offset(1000f, 0f))
-        val reached = face0.x + room - (dpad0.x + dpad0.width)
-        assertTrue(reached > face0.x - (dpad0.x + dpad0.width) + 1f, "past the face buttons' home")
+        // the d-pad's touch area reaches 22 px past its hit box; the round face buttons' is their circle
+        val gap = faceButtons.minOf { it.x - it.spec.r } - (pad.x + pad.spec.r + 22f * p.k)
+        val reached = gap + room
+        assertTrue(reached > gap + 1f, "past the face buttons' home")
         near(assertNotNull(s.tweaks["DPAD"]).dx, reached, "d-pad read back")
-        near(box(s.placed(), "DPAD").x + dpad0.width, box(s.placed(), "A+B+X+Y").x, "against the face buttons")
         near(assertNotNull(s.tweaks["A+B+X+Y"]).dx, room, "face buttons stay")
         s.drag(Offset(-20f, 0f))
         near(assertNotNull(s.tweaks["DPAD"]).dx, reached - 20f, "back")
@@ -119,8 +124,11 @@ class SkinEditorStateTest {
         s.select(centre(box(p, "MENU")))
         s.resize(1.2f)
         near(assertNotNull(s.tweaks["MENU"]).scale, 1.2f, "scale", e = 0.001f)
+        // no cap on the size: it grows until its touch area meets its neighbours'
         s.resize(10f)
-        near(assertNotNull(s.tweaks["MENU"]).scale, SkinTweaks.MAX_SCALE, "capped", e = 0.001f)
+        val grown = assertNotNull(s.tweaks["MENU"]).scale
+        assertTrue(grown > 1.5f && grown < 12f, "grew to $grown")
+        near(box(s.placed(), "MENU").width, box(p, "MENU").width * grown, "drawn at that size", e = 0.5f)
     }
 
     @Test

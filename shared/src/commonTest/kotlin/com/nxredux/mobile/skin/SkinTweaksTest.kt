@@ -1,13 +1,9 @@
 package com.nxredux.mobile.skin
 
-import com.nxredux.mobile.options.PxRect
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class SkinTweaksTest {
-    private fun group(free: Boolean = false) =
-        SkinGroup(if (free) SkinGroups.STRIP else "A+B", emptyList(), listOf("A"), PxRect(0f, 0f, 200f, 100f), free)
-
     @Test fun encode_decode_round_trips() {
         val m = mapOf(
             "gba" to mapOf(
@@ -25,13 +21,14 @@ class SkinTweaksTest {
         assertEquals(mapOf("gba" to mapOf("stacked" to mapOf("A+B" to SkinTweak(1f, 2f, 1.5f), "D" to SkinTweak(3f, 4f, 1f)))), m)
     }
 
-    @Test fun limit_clamps_move_and_scale() {
-        assertEquals(SkinTweak(100f, -100f, 1.25f), SkinTweaks.limit(SkinTweak(500f, -500f, 2f), group()))
-        assertEquals(0.8f, SkinTweaks.limit(SkinTweak(0f, 0f, 0.5f), group()).scale)
+    @Test fun limit_keeps_any_move_and_any_positive_scale() {
+        // the room round a group is what holds it ([SkinTweaks.apply]), not a cap on the tweak
+        assertEquals(SkinTweak(500f, -500f, 2f), SkinTweaks.limit(SkinTweak(500f, -500f, 2f)))
+        assertEquals(SkinTweak(900f, 0f, 0.1f), SkinTweaks.limit(SkinTweak(900f, 0f, 0.1f)))
     }
 
-    @Test fun the_strip_moves_freely() {
-        assertEquals(SkinTweak(900f, 0f, 1.25f), SkinTweaks.limit(SkinTweak(900f, 0f, 3f), group(free = true)))
+    @Test fun limit_drops_a_scale_that_is_not_a_size() {
+        for (s in listOf(0f, -1f, Float.NaN, Float.POSITIVE_INFINITY)) assertEquals(1f, SkinTweaks.limit(SkinTweak(3f, 4f, s)).scale, "$s")
     }
 
     @Test fun tweaks_are_keyed_by_layout_not_pack() {

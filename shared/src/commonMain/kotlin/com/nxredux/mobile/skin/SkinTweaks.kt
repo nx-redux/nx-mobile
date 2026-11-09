@@ -10,35 +10,35 @@ data class SkinTweak(val dx: Float = 0f, val dy: Float = 0f, val scale: Float = 
 /** One console's tweaks: layout id, then group id. Keyed by layout, so every pack sharing the layout shares the tweak. */
 typealias ConsoleTweaks = Map<String, Map<String, SkinTweak>>
 
+/**
+ * Which limits [SkinTweaks.apply] holds a group to. [SKIN]: on the skin, where the screens' middles and a half-fold's
+ * hinge stay clear. [OVERLAY]: the buttons over the game's full-window picture, where the picture is no limit.
+ */
+enum class TweakRules { SKIN, OVERLAY }
+
 object SkinTweaks {
-    const val MIN_SCALE = 0.8f
-    const val MAX_SCALE = 1.25f
+    /**
+     * [t] as [apply] takes it: a scale that is not a size (zero, negative, not finite) counts as none. What limits a
+     * move or a size is the room round the group, not the tweak.
+     */
+    fun limit(t: SkinTweak): SkinTweak = if (t.scale.isFinite() && t.scale > 0f) t else t.copy(scale = 1f)
 
-    /** How far a group may move from where its layout puts it, as a fraction of its larger side. */
-    const val MOVE_FRACTION = 0.5f
-
-    /** [t] held to the limits for [g]: scale within [MIN_SCALE]..[MAX_SCALE], a move within [MOVE_FRACTION] of its size (a free group is not capped). */
-    fun limit(t: SkinTweak, g: SkinGroup): SkinTweak {
-        val cap = MOVE_FRACTION * maxOf(g.ref.width, g.ref.height)
-        return SkinTweak(
-            dx = if (g.free) t.dx else t.dx.coerceIn(-cap, cap),
-            dy = if (g.free) t.dy else t.dy.coerceIn(-cap, cap),
-            scale = t.scale.coerceIn(MIN_SCALE, MAX_SCALE),
-        )
-    }
-
-    /** How far (picture px) a group keeps from every screen. */
-    const val SCREEN_CLEAR = 12f
+    /** How much of a screen's width (left and right) and height (top and bottom) a group may cover from its edges. */
+    private const val SCREEN_EDGE = 0.2f
 
     /**
-     * Where no group may go in [p] (window px): each screen with [SCREEN_CLEAR] round it, each piece holding a screen as
-     * drawn (the large DS layout's touch-screen frame reaches past that margin), and on a layout made for half-folding
-     * the band from the screen frame's bottom past the fold (the pieces keep [FrameSpec.hinge] below it).
+     * Where no group may go in [p] (window px) under [rules]. [TweakRules.SKIN]: each screen's middle (all but
+     * [SCREEN_EDGE] of it from each edge), so a button may cover a screen's edge but never what the game shows in the
+     * middle; and on a layout made for half-folding the band from the screen frame's bottom past the fold (the pieces
+     * keep [FrameSpec.hinge] below it), where a button on the crease is hard to press. [TweakRules.OVERLAY]: nowhere.
      */
-    fun noGo(p: SkinPlacement): List<PxRect> {
-        val m = SCREEN_CLEAR * p.k
-        val out = p.glasses.mapTo(ArrayList()) { PxRect(it.rect.x - m, it.rect.y - m, it.rect.width + 2 * m, it.rect.height + 2 * m) }
-        for (piece in p.pieces) if (piece.piece >= 0 && p.spec.pieces.getOrNull(piece.piece)?.glass != null) out += piece.dst
+    fun noGo(p: SkinPlacement, rules: TweakRules = TweakRules.SKIN): List<PxRect> {
+        if (rules == TweakRules.OVERLAY) return emptyList()
+        val out = p.glasses.mapTo(ArrayList()) {
+            val r = it.rect
+            val keep = 1f - 2f * SCREEN_EDGE
+            PxRect(r.x + SCREEN_EDGE * r.width, r.y + SCREEN_EDGE * r.height, keep * r.width, keep * r.height)
+        }
         val f = p.spec.frame
         val g = p.glasses.firstOrNull()   // the frame's screen comes first
         if (f != null && f.hinge >= 0 && g != null) {
@@ -50,59 +50,109 @@ object SkinTweaks {
         return out
     }
 
+    /** What the game's hit test adds round a rect button's or the d-pad's hit box (picture px), as SkinPadTouch does. */
+    private const val TOUCH_SLOP = 22f
+
+    /** A stick's touch area: its ring's radius times this, as SkinPadTouch does. */
+    private const val STICK_SLOP = 1.25f
+
     /**
-     * [p] with [tweaks] (group id to tweak, each held to [limit]) applied in a [windowW] x [windowH] window: each group's
-     * pieces and controls (their place and every size) scaled about the middle of its pieces and moved. A group's box
-     * (its pieces and its controls' hit areas) may not go further into [noGo], into another group's box, or out of the
-     * window than it started, nor pass over any of them on the way: the move stops short (and a growth likewise, toward
-     * its own size). Groups go in [SkinGroups.of]'s order, each against the groups before it where they ended and the
-     * groups after it where they are going (so a group may move into the room a later one leaves); a later group that
-     * gets less far than that is tried again where it got to, and should that still leave two groups on each other, each
-     * group goes against the later ones where they stand. The frame's strip ([SkinGroups.STRIP]) moves its labels and its
-     * buttons. Apply before [SkinPlacement.forStick] (both of a swap's sets move together).
+     * [c]'s touch area (window px, [k] window px per picture px): where the game takes a touch as [c]'s. A rect button
+     * and the d-pad: the hit box and [TOUCH_SLOP] round it; a stick: the square round its ring times [STICK_SLOP]; a
+     * round button: its circle's square.
      */
-    fun apply(p: SkinPlacement, tweaks: Map<String, SkinTweak>, windowW: Float, windowH: Float): SkinPlacement {
+    internal fun touchZone(c: PlacedControl, k: Float): PxRect = grow(core(c), pad(c.spec, k))
+
+    /** The part of [c]'s [touchZone] that scales with it: a stick's whole touch area, else its hit box. */
+    private fun core(c: PlacedControl): PxRect =
+        if (c.spec.shape == ControlShape.STICK) grow(hit(c), c.spec.r * (STICK_SLOP - 1f)) else hit(c)
+
+    /** The part of a [touchZone] round its [core] that stays the same at any size: the slop. */
+    private fun pad(s: ControlSpec, k: Float) =
+        if (s.shape == ControlShape.RECT || s.shape == ControlShape.DPAD) TOUCH_SLOP * k else 0f
+
+    private fun grow(r: PxRect, m: Float) = PxRect(r.x - m, r.y - m, r.width + 2f * m, r.height + 2f * m)
+
+    /**
+     * [p] with [tweaks] (group id to tweak, each through [limit]) applied in a [windowW] x [windowH] window: each
+     * group's pieces and controls (their place and every size) scaled about the middle of its pieces and moved. A
+     * group may not go further than it started into [noGo] for [rules] (its pieces and its controls' hit boxes), with its
+     * controls' touch areas ([touchZone]) onto another group's or onto a control in no group, nor with its hit boxes
+     * out of the window; nor pass over any of them on the way: the move stops short (and a growth likewise, toward its
+     * own size). Drawn parts may lie on each other and past the window's edge: only where a touch lands has to stay
+     * clear. A shrink stops where a control's hit box would be under [minTouchPx] (window px) on its shorter side, and
+     * a group already under it does not shrink. Groups go in [SkinGroups.of]'s order, each against the groups before it
+     * where they ended and the groups after it where they are going (so a group may move into the room a later one
+     * leaves); a later group that gets less far than that is tried again where it got to, and should that still leave
+     * two groups on each other, each group goes against the later ones where they stand. The frame's strip
+     * ([SkinGroups.STRIP]) moves its labels and its buttons. Apply before [SkinPlacement.forStick] (both of a swap's
+     * sets move together).
+     */
+    fun apply(
+        p: SkinPlacement, tweaks: Map<String, SkinTweak>, windowW: Float, windowH: Float,
+        rules: TweakRules = TweakRules.SKIN, minTouchPx: Float = 0f,
+    ): SkinPlacement {
         // groups are made of a layout's pieces, and only a frame layout has pieces (every pack's piece layout has one)
         val frame = p.spec.frame
         if (tweaks.isEmpty() || frame == null) return p
         val groups = SkinGroups.of(p.spec)
-        val zones = noGo(p)
+        val zones = noGo(p, rules)
         val window = PxRect(0f, 0f, windowW, windowH)
         val (pieceAt, controlAt) = members(p, groups)
-        val ts = groups.map { g -> tweaks[g.id]?.let { limit(it, g) }?.takeIf { it != SkinTweak() } }
-        fun boxOf(gi: Int, pieces: List<SkinPiece>, controls: List<PlacedControl>) =
-            union(pieceAt[gi].map { pieces[it].dst } + controlAt[gi].map { hit(controls[it]) })
-        val home = groups.indices.map { boxOf(it, p.pieces, p.controls) }
+        val ts = groups.map { g -> tweaks[g.id]?.let { limit(it) }?.takeIf { it != SkinTweak() } }
+        // controls no group holds never move: their touch areas are in every group's way
+        val held = controlAt.flatten().toSet()
+        val loose = p.controls.indices.filter { it !in held }.map { touchZone(p.controls[it], p.k) }
+        val home = groups.indices.map { footprint(p, pieceAt[it], controlAt[it], p.pieces, p.controls) }
         // the middle a group scales about: its pieces' (the strip's: its whole box)
-        val mids = groups.indices.map { gi -> (if (groups[gi].id == SkinGroups.STRIP) null else union(pieceAt[gi].map { p.pieces[it].dst })) ?: home[gi] }
-
-        /** [r] scaled by [s] about [m]'s centre and moved [ox], [oy]. */
-        fun moved(r: PxRect, m: PxRect, s: Float, ox: Float, oy: Float): PxRect {
-            val cx = m.x + m.width / 2f; val cy = m.y + m.height / 2f
-            return PxRect(cx + (r.x - cx) * s + ox, cy + (r.y - cy) * s + oy, r.width * s, r.height * s)
+        val mids = groups.indices.map { gi -> (if (groups[gi].id == SkinGroups.STRIP) null else union(pieceAt[gi].map { p.pieces[it].dst })) ?: home[gi]?.box }
+        // the smallest scale that keeps every control's hit box at [minTouchPx] (a group already under it: its own size)
+        val floors = groups.indices.map { gi ->
+            val side = controlAt[gi].minOfOrNull { hit(p.controls[it]).let { h -> minOf(h.width, h.height) } } ?: 0f
+            if (minTouchPx <= 0f || side <= 0f) 0f else if (side < minTouchPx) 1f else minTouchPx / side
         }
 
-        /** Every group placed in turn, each against [ahead]'s boxes for the groups after it: the pieces, controls and boxes. */
-        fun place(ahead: List<PxRect?>): Triple<List<SkinPiece>, List<PlacedControl>, List<PxRect?>> {
+        /**
+         * How far group [gi] gets against the no-go zones, the window and [others]' touch areas: its scale and its move
+         * (window px), walked from where it starts. None when it has no tweak or nothing placed.
+         */
+        fun land(gi: Int, others: List<List<PxRect>>): Triple<Float, Float, Float>? {
+            val t = ts[gi] ?: return null
+            val start = home[gi] ?: return null
+            val mid = mids[gi] ?: start.box
+            // how far the group is in each no-go zone (its area there), on each other group's touch areas and out of the
+            // window (its hit boxes' edges' distance past it): never more than where it started
+            fun cost(f: Footprint) = zones.map { overlap(f.box, it) } + others.map { touching(f.touch, it) } +
+                outside(f.hit ?: f.box, window)
+            val base = cost(start)
+            fun fits(f: Footprint) = cost(f).zip(base).all { (c, b) -> c <= b + 0.01f }   // px², over float noise
+            val ox = t.dx * p.k; val oy = t.dy * p.k
+            val target = maxOf(t.scale, floors[gi])
+            // a growth only adds to the group round its middle (no jumping), a move is walked from where it starts
+            val sc = 1f + (target - 1f) * longest { fits(start.moved(mid, 1f + (target - 1f) * it, 0f, 0f)) }
+            val f = reach(maxOf(abs(ox), abs(oy))) { fits(start.moved(mid, sc, ox * it, oy * it)) }
+            return Triple(sc, ox * f, oy * f)
+        }
+
+        /**
+         * Where group [gi] is going: its tweak as far as the screens and the window let it, the other groups left out
+         * (a move past the window's edge would otherwise hold back a group that could take the room it leaves).
+         */
+        fun going(gi: Int): Footprint? {
+            val f = home[gi] ?: return null
+            val (sc, dx, dy) = land(gi, listOf(loose)) ?: return f
+            return f.moved(mids[gi] ?: f.box, sc, dx, dy)
+        }
+
+        /** Every group placed in turn, each against [ahead]'s footprints for the groups after it: the pieces, controls and footprints. */
+        fun place(ahead: List<Footprint?>): Triple<List<SkinPiece>, List<PlacedControl>, List<Footprint?>> {
             val pieces = p.pieces.toMutableList()
             val controls = p.controls.toMutableList()
-            val boxes = home.toMutableList()
+            val placed = home.toMutableList()
             for (gi in groups.indices) {
-                val t = ts[gi] ?: continue
-                val box = home[gi] ?: continue
-                val mid = mids[gi] ?: box
-                val others = groups.indices.mapNotNull { i -> if (i < gi) boxes[i] else if (i > gi) ahead[i] else null }
-                val obstacles = zones + others
-                // how far the box is in each obstacle (its area there) and out of the window (its edges' distance past
-                // it): never more than where it started
-                fun cost(r: PxRect) = obstacles.map { overlap(r, it) } + outside(r, window)
-                val base = cost(box)
-                fun fits(r: PxRect) = cost(r).zip(base).all { (c, b) -> c <= b + 0.01f }   // px², over float noise
-                val ox = t.dx * p.k; val oy = t.dy * p.k
-                // a growth only adds to the box round its middle (no jumping), a move is walked from where it starts
-                val sc = 1f + (t.scale - 1f) * longest { fits(moved(box, mid, 1f + (t.scale - 1f) * it, 0f, 0f)) }
-                val f = reach(maxOf(abs(ox), abs(oy))) { fits(moved(box, mid, sc, ox * it, oy * it)) }
-                val dx = ox * f; val dy = oy * f
+                val others = groups.indices.mapNotNull { i -> if (i < gi) placed[i]?.touch else if (i > gi) ahead[i]?.touch else null } + listOf(loose)
+                val (sc, dx, dy) = land(gi, others) ?: continue
+                val mid = mids[gi] ?: continue
                 val cx = mid.x + mid.width / 2f; val cy = mid.y + mid.height / 2f
                 fun mx(x: Float) = cx + (x - cx) * sc + dx
                 fun my(y: Float) = cy + (y - cy) * sc + dy
@@ -114,29 +164,59 @@ object SkinTweaks {
                     val c = controls[i]
                     controls[i] = PlacedControl(c.spec.scaled(sc), mx(c.x), my(c.y))
                 }
-                boxes[gi] = boxOf(gi, pieces, controls)
+                placed[gi] = footprint(p, pieceAt[gi], controlAt[gi], pieces, controls)
             }
-            return Triple(pieces, controls, boxes)
+            return Triple(pieces, controls, placed)
         }
 
-        /** No two groups more on each other in [boxes] than they started. */
-        fun clear(boxes: List<PxRect?>) = groups.indices.all { i ->
+        /** No two groups' touch areas more on each other in [placed] than they started. */
+        fun clear(placed: List<Footprint?>) = groups.indices.all { i ->
             (i + 1 until groups.size).all { j ->
-                val a = boxes[i]; val b = boxes[j]
-                a == null || b == null || overlap(a, b) <= overlap(home[i]!!, home[j]!!) + 0.01f
+                val a = placed[i]; val b = placed[j]
+                a == null || b == null || touching(a.touch, b.touch) <= touching(home[i]!!.touch, home[j]!!.touch) + 0.01f
             }
         }
 
-        // first where each group is going (its whole tweak, nothing in the way), then where it got to
-        var ahead = groups.indices.map { gi -> val b = home[gi]; val t = ts[gi]; if (b == null || t == null) b else moved(b, mids[gi] ?: b, t.scale, t.dx * p.k, t.dy * p.k) }
+        // first where each group is going, then where it got to
+        var ahead = groups.indices.map { going(it) }
         repeat(PASSES) {
-            val (pieces, controls, boxes) = place(ahead)
-            if (clear(boxes)) return p.copy(pieces = pieces, controls = controls)
-            ahead = boxes
+            val (pieces, controls, placed) = place(ahead)
+            if (clear(placed)) return p.copy(pieces = pieces, controls = controls)
+            ahead = placed
         }
         // each against the later groups where they stand: never on each other
         val (pieces, controls) = place(home)
         return p.copy(pieces = pieces, controls = controls)
+    }
+
+    /**
+     * What of a group [apply] keeps clear (window px): its [box] (pieces and controls' hit boxes, against the no-go
+     * zones), its controls' hit boxes together ([hit], against the window; none without controls) and its controls'
+     * touch areas ([touch], against other groups'), each a [cores] rect with its [pads] round it.
+     */
+    private class Footprint(val box: PxRect, val hit: PxRect?, val cores: List<PxRect>, val pads: List<Float>) {
+        val touch: List<PxRect> = cores.mapIndexed { i, c -> grow(c, pads[i]) }
+
+        /** This scaled by [s] about [m]'s centre and moved [ox], [oy]: the slop round each touch area stays as it is. */
+        fun moved(m: PxRect, s: Float, ox: Float, oy: Float): Footprint {
+            val cx = m.x + m.width / 2f; val cy = m.y + m.height / 2f
+            fun mv(r: PxRect) = PxRect(cx + (r.x - cx) * s + ox, cy + (r.y - cy) * s + oy, r.width * s, r.height * s)
+            return Footprint(mv(box), hit?.let(::mv), cores.map(::mv), pads)
+        }
+    }
+
+    private fun footprint(p: SkinPlacement, pieceAt: List<Int>, controlAt: List<Int>, pieces: List<SkinPiece>, controls: List<PlacedControl>): Footprint? {
+        val cs = controlAt.map { controls[it] }
+        val hs = cs.map { hit(it) }
+        val box = union(pieceAt.map { pieces[it].dst } + hs) ?: return null
+        return Footprint(box, union(hs), cs.map { core(it) }, cs.map { pad(it.spec, p.k) })
+    }
+
+    /** How much (px²) any of [a] lies on any of [b], added up. */
+    private fun touching(a: List<PxRect>, b: List<PxRect>): Float {
+        var sum = 0f
+        for (x in a) for (y in b) sum += overlap(x, y)
+        return sum
     }
 
     /** How many times [apply] tries the groups against where the later ones are going before it gives that up. */
