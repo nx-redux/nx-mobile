@@ -748,7 +748,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // Subscribed before the login (startSession, after the first frame): events are not replayed.
             achievements?.let { b ->
                 b.attach(view)
-                lifecycleScope.launch { b.events.collect { onAchievementEvent(it) } }
+                b.deliverEvents { onAchievementEvent(it) }
             }
             // The core's on-screen messages: the few worth showing (CoreMessages: the FDS disk side) as a toast on the picture.
             lifecycleScope.launch { view.getCoreMessages().collect { m -> CoreMessages.toast(cfg.coreId, m)?.let(dual::pictureToast) } }

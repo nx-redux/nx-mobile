@@ -1339,9 +1339,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         endGameTime()
         val view = retroView
         input.gcClearTriggers()   // a latched soft press never outlives the game
-        // Detached now (no achievement event shows during the quit); its native unload takes the core's lock, so it waits
-        // off the main thread for the quit's read of the core.
+        // Detached now: its events stop reaching the screen (no toast during the quit). Its native unload takes the core's
+        // lock, so it waits off the main thread for the quit's read of the core.
         val ach = achievements
+        ach?.detach()
         achievements = null
         if (view == null || !gameReady) { ach?.stop(); finish(); return }   // not running yet: no save to write
         saves.writeOnQuit(view, chosen, autoState, release = { live -> ach?.stop(native = live) }, finish = ::finish)
