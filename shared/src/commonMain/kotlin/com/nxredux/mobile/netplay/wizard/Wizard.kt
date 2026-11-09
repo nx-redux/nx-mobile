@@ -34,7 +34,7 @@ object Wizard {
     const val GAME_TOKEN_MAX = 255
 
     /** A Cable Link session runs both GBAs on mGBA, whatever either side's Emulator row says. */
-    const val CABLE_LINK_CORE = "mgba"
+    const val CABLE_LINK_CORE = NetplayCores.CABLE_LINK_CORE
 
     /** [HostOutcome.Turned.reason] for a Cable Link exchange that failed before the saves (hashes or a ROM); never sent. */
     const val GAME_COPY_FAILED = "game"

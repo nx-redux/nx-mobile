@@ -349,6 +349,18 @@ interface AppSettings {
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
+    /**
+     * Settings → System → Cable Link input delay: 0 = Auto (the engine adapts it), 1..8 = pinned to that many frames, for
+     * trying a game at a fixed delay. Defaulted, like [debugLog].
+     */
+    var cableLinkDelayPin: Int
+        get() = 0
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /** Settings → System → Cable Link delay overlay: the current input delay in a corner of the game. Defaulted, like [debugLog]. */
+    var cableLinkDelayOverlay: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
     /** Kids Mode (default off) and its state; all defaulted, like [debugLog]. */
     var kidsEnabled: Boolean
         get() = false

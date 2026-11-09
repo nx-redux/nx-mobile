@@ -9,4 +9,7 @@
     <TextView android:id="@+id/fps" android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:layout_margin="8dp" android:textColor="#80FFFFFF" android:textSize="12sp"
         android:fontFamily="monospace" android:visibility="gone" />
+    <TextView android:id="@+id/netplayDelay" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_gravity="top|end" android:layout_margin="8dp" android:textColor="#80FFFFFF" android:textSize="12sp"
+        android:fontFamily="monospace" android:visibility="gone" />
 </FrameLayout>

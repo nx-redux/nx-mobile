@@ -6,6 +6,7 @@ import com.nxredux.mobile.netplay.NetplayRole
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.netplay.NetplayWire
+import com.nxredux.mobile.netplay.wizard.CableLinkSetup
 import com.swordfish.libretrodroid.LibretroNetplay
 import com.swordfish.libretrodroid.NxLog
 import kotlinx.coroutines.CoroutineScope
@@ -28,7 +29,7 @@ private const val TICK_MS = 250L
 
 /** What one status read of the engine means for the game screen ([netplayNotice]). */
 internal sealed interface NetplayNotice {
-    /** Nothing to show (running, syncing, a local pause): the countdown pill goes. */
+    /** Nothing to show (running, the start's state sync, a local pause): the countdown pill goes. */
     data object Clear : NetplayNotice
     /** A countdown the other side causes (stall, its pause), as the progress pill. */
     data class Pill(val text: String) : NetplayNotice
@@ -49,8 +50,16 @@ internal fun netplayNotice(state: Int, secondsLeft: Int, reason: Int, onCopy: Bo
         if (connectingMs >= NETPLAY_CONNECT_TIMEOUT_MS) NetplayNotice.Failed(NetplayText.FAILED_CONNECT) else NetplayNotice.Clear
     LibretroNetplay.STATE_STALLED -> NetplayNotice.Pill(NetplayText.waiting(secondsLeft))
     LibretroNetplay.STATE_PEER_PAUSED -> NetplayNotice.Pill(NetplayText.peerPaused(secondsLeft))
-    LibretroNetplay.STATE_ENDED ->
-        NetplayNotice.Ended("${if (onCopy) NetplayText.ENDED_COPY else NetplayText.ENDED}\n${NetplayText.ENDED_DETAIL}")
+    // Cable Link: the host's state is replacing this phone's after a drift check failed.
+    LibretroNetplay.STATE_RESYNCING -> NetplayNotice.Pill(NetplayText.SYNCING)
+    LibretroNetplay.STATE_ENDED -> NetplayNotice.Ended(
+        when (reason) {
+            // Cable Link's own endings: both phones show the same reason (the engine sends it).
+            LibretroNetplay.REASON_DRIFT -> NetplayText.ENDED_DRIFT
+            LibretroNetplay.REASON_TOO_SLOW -> NetplayText.ENDED_TOO_SLOW
+            else -> "${if (onCopy) NetplayText.ENDED_COPY else NetplayText.ENDED}\n${NetplayText.ENDED_DETAIL}"
+        },
+    )
     LibretroNetplay.STATE_FAILED -> NetplayNotice.Failed(
         when (reason) {
             LibretroNetplay.REASON_STATE_MISMATCH -> NetplayText.FAILED_MISMATCH
@@ -69,15 +78,21 @@ internal fun netplayNotice(state: Int, secondsLeft: Int, reason: Int, onCopy: Bo
  * roles need the peer: the client connects to it, the host's engine accepts only it (an IPv4-mapped one is normalised).
  * [emptySaves]: no save copy happened although one was due ([NetplaySession.emptySaves]); [overUsb]: the session runs
  * over the USB cable ([NetplaySession.overUsb]); [mixed] and [peerWl]: [NetplaySession.mixed], [NetplaySession.peerWl].
+ * [cableLink]: a Cable Link over Wi-Fi session's settled fields; one without the other GBA's ROM, with a slot other than 1
+ * or 2, or an unknown BIOS mode makes no session.
  */
 internal fun netplaySessionFrom(
     role: String?, peer: String?, coreId: String, folderCoreId: String?, emptySaves: Boolean = false, overUsb: Boolean = false,
-    mixed: Boolean = false, peerWl: String? = null,
+    mixed: Boolean = false, peerWl: String? = null, cableLink: CableLinkSetup? = null,
 ): NetplaySession? {
     val r = NetplayRole.entries.firstOrNull { it.name == role } ?: return null
     if (folderCoreId.isNullOrEmpty()) return null
     val ip = NetplayAddress.ipv4(peer) ?: return null
-    return NetplaySession(r, ip, coreId, folderCoreId, emptySaves, overUsb, mixed, peerWl)
+    val session = NetplaySession(r, ip, coreId, folderCoreId, emptySaves, overUsb, mixed, peerWl)
+    if (cableLink == null) return session
+    if (cableLink.otherRomPath.isEmpty() || cableLink.localSlot !in 1..2) return null
+    if (cableLink.biosMode != CableLinkSetup.BIOS_REAL && cableLink.biosMode != CableLinkSetup.BIOS_HLE) return null
+    return session.withCableLink(cableLink)
 }
 
 /**
@@ -103,6 +118,50 @@ internal interface NetplayRun {
     fun detach()
 }
 
+/** The lockstep engine as [NetplayGame] drives it: [LibretroNetplay] on a device ([JniLockstepEngine]). */
+internal interface LockstepEngine {
+    fun shutdown()
+    fun setPresyncFrames(frames: Int)
+    fun setPairMode(on: Boolean): Boolean
+    fun setDelayPin(frames: Int)
+    fun start(role: Int, peerIp: String, port: Int): Boolean
+    fun status(): IntArray
+    fun pause()
+    fun resume()
+    fun leave()
+    fun currentDelay(): Int
+    fun lastVerifiedFrame(): Long
+}
+
+internal object JniLockstepEngine : LockstepEngine {
+    override fun shutdown() = LibretroNetplay.shutdown()
+    override fun setPresyncFrames(frames: Int) = LibretroNetplay.setPresyncFrames(frames)
+    override fun setPairMode(on: Boolean): Boolean = LibretroNetplay.setPairMode(on)
+    override fun setDelayPin(frames: Int) = LibretroNetplay.setDelayPin(frames)
+    override fun start(role: Int, peerIp: String, port: Int): Boolean = LibretroNetplay.start(role, peerIp, port)
+    override fun status(): IntArray = LibretroNetplay.status()
+    override fun pause() = LibretroNetplay.pause()
+    override fun resume() = LibretroNetplay.resume()
+    override fun leave() = LibretroNetplay.leave()
+    override fun currentDelay(): Int = LibretroNetplay.currentDelay()
+    override fun lastVerifiedFrame(): Long = LibretroNetplay.lastVerifiedFrame()
+}
+
+/**
+ * netplay: the engine calls before a session's start, on the engine thread: a shutdown (np_start refuses until one, even
+ * after an ENDED session), the presync frames, pair mode (asked before every start, on or off: a failed start can leave
+ * the request set) and the input delay pin ([delayPin]: 0 Auto, 1..8; Cable Link only). False when a Cable Link
+ * session's core has no pair hash.
+ */
+internal fun prepareEngine(engine: LockstepEngine, session: NetplaySession, delayPin: Int): Boolean {
+    engine.shutdown()
+    engine.setPresyncFrames(NetplayCores.presyncFrames(session.coreId))
+    val pair = engine.setPairMode(session.cableLink)
+    if (session.cableLink && !pair) return false
+    engine.setDelayPin(if (session.cableLink) delayPin.coerceIn(0, NetplayCores.CABLE_LINK_DELAY_MAX) else 0)
+    return true
+}
+
 /** Every blocking engine call (both engines), in order: a later session's start never overtakes an earlier screen's shutdown. */
 internal object NetplayEngine {
     val executor: ExecutorService = Executors.newSingleThreadExecutor { Thread(it, "nx-netplay") }
@@ -117,12 +176,19 @@ internal object NetplayEngine {
  * [live] is true from a successful [start] until the session ends (an ENDED or FAILED read, [leave], [release]); after
  * that every call is a no-op and the game runs on its own. Blocking engine calls (np_shutdown can take ~0.75 s) run on
  * one process-wide "nx-netplay" thread, in call order, never on the main thread.
+ * Cable Link: [delayPin] is the Developer input delay (0 Auto), [onDelay] gets the current delay on every status read
+ * (the Developer overlay; null: not shown), and [onEnding] gets the last verified frame when the session ends (an
+ * ENDED or FAILED read, or [leave]), read before the engine shuts down, which resets it.
  */
 internal class NetplayGame(
     val session: NetplaySession,
     private val scope: CoroutineScope,
     private val now: () -> Long,
     private val onNotice: (NetplayNotice) -> Unit,
+    private val engine: LockstepEngine = JniLockstepEngine,
+    private val delayPin: Int = 0,
+    private val onDelay: ((Int) -> Unit)? = null,
+    private val onEnding: (verifiedFrame: Long) -> Unit = {},
 ) : NetplayRun {
     @Volatile override var live = false
         private set
@@ -137,17 +203,17 @@ internal class NetplayGame(
 
     /**
      * Starts the engine (the client connects to the host; the host listens and accepts only the client's address) and
-     * the status ticker. A shutdown first: np_start refuses until one, even after an ENDED session. False when the
-     * engine would not start.
+     * the status ticker, after [prepareEngine]. False when the engine would not start.
      */
     suspend fun start(): Boolean {
         val role = if (session.role == NetplayRole.HOST) LibretroNetplay.ROLE_HOST else LibretroNetplay.ROLE_CLIENT
         val peer = session.peerIp
         val ok = withContext(NetplayEngine.dispatcher) {
             runCatching {
-                LibretroNetplay.shutdown()
-                LibretroNetplay.setPresyncFrames(NetplayCores.presyncFrames(session.coreId))
-                LibretroNetplay.start(role, peer, NetplayWire.ENGINE_PORT)
+                if (!prepareEngine(engine, session, delayPin)) {
+                    NxLog.w(TAG, "netplay: the core has no pair mode")
+                    false
+                } else engine.start(role, peer, NetplayWire.ENGINE_PORT)
             }.onFailure { NxLog.w(TAG, "netplay start failed", it) }.getOrDefault(false)
         }
         if (!ok) return false
@@ -155,8 +221,9 @@ internal class NetplayGame(
         startedAt = now()
         ticker = scope.launch {
             while (live) {
-                val s = runCatching { LibretroNetplay.status() }.getOrNull()
-                if (held && live) runCatching { LibretroNetplay.pause() }   // idempotent while already paused
+                val s = runCatching { engine.status() }.getOrNull()
+                if (held && live) runCatching { engine.pause() }   // idempotent while already paused
+                onDelay?.let { show -> runCatching { engine.currentDelay() }.getOrNull()?.let(show) }
                 if (s != null && s.size >= 3 && live) {
                     val notice = netplayNotice(s[0], s[1], s[2], session.onCopy, now() - startedAt)
                     if (notice is NetplayNotice.Ended || notice is NetplayNotice.Failed) end()
@@ -171,26 +238,34 @@ internal class NetplayGame(
     /** The menu opened or the app went to the background: this device stops sending input (nothing on the wire; the other side stalls and counts down). */
     override fun pause() {
         held = true
-        if (live) runCatching { LibretroNetplay.pause() }
+        if (live) runCatching { engine.pause() }
     }
 
     /** Back from the menu or the background: input goes out again. */
     override fun resume() {
         held = false
-        if (live) runCatching { LibretroNetplay.resume() }
+        if (live) runCatching { engine.resume() }
     }
 
     /** Leave on "Leave netplay?": DISCONNECT, then the engine is shut down. Off the main thread. */
     override fun leave() {
         val was = live
         detach()
-        if (was) NetplayEngine.executor.execute { runCatching { LibretroNetplay.leave(); LibretroNetplay.shutdown() } }
+        if (!was) return
+        ending()
+        NetplayEngine.executor.execute { runCatching { engine.leave(); engine.shutdown() } }
     }
 
     /** An ENDED or FAILED read: the session is over, the engine goes idle (the game then runs as any other). */
     private fun end() {
         detach()
-        NetplayEngine.executor.execute { runCatching { LibretroNetplay.shutdown() } }
+        ending()
+        NetplayEngine.executor.execute { runCatching { engine.shutdown() } }
+    }
+
+    /** Before the shutdown is queued: the verified frame is still the session's. */
+    private fun ending() {
+        onEnding(runCatching { engine.lastVerifiedFrame() }.getOrDefault(-1L))
     }
 
     override fun detach() {

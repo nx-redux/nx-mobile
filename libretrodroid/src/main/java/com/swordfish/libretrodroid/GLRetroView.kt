@@ -330,6 +330,13 @@ class GLRetroView(
      */
     var onShaderError: ((String) -> Unit)? = null
 
+    /**
+     * Called on the GL thread right after each step, outside the core lock: the core is between frames, so what it is
+     * asked here (the save memory, the netplay frame count) belongs to the frame that just ran.
+     */
+    @Volatile
+    var afterStep: (() -> Unit)? = null
+
     private val openGLESVersion: Int
 
     private var isGameLoaded = false
@@ -852,6 +859,7 @@ class GLRetroView(
             if (isEmulationReady) {
                 stepStartedAt = SystemClock.uptimeMillis()
                 try { LibretroDroid.step(this@GLRetroView) } finally { stepStartedAt = 0L }
+                afterStep?.invoke()
                 retroGLEventsSubject.tryEmit(GLRetroEvents.FrameRendered)
                 if (LibretroDroid.takeShutdownRequest()) shutdownRequests.tryEmit(Unit)
                 if (LibretroDroid.takeGameGeometryChanged()) gameGeometryChanges.tryEmit(Unit)

@@ -1,5 +1,6 @@
 package com.nxredux.mobile.settings
 
+import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.kids.KidsPin
 import android.content.Context
 import androidx.core.content.edit
@@ -260,6 +261,14 @@ class AndroidAppSettings(context: Context) : AppSettings {
             NxLog.enabled = value   // at once: the app, the runner and the cores in this process
         }
 
+    override var cableLinkDelayPin: Int
+        get() = prefs.getInt(KEY_CABLE_LINK_DELAY, 0).coerceIn(0, NetplayCores.CABLE_LINK_DELAY_MAX)
+        set(value) = prefs.edit { putInt(KEY_CABLE_LINK_DELAY, value.coerceIn(0, NetplayCores.CABLE_LINK_DELAY_MAX)) }
+
+    override var cableLinkDelayOverlay: Boolean
+        get() = prefs.getBoolean(KEY_CABLE_LINK_DELAY_OVERLAY, false)
+        set(value) = prefs.edit { putBoolean(KEY_CABLE_LINK_DELAY_OVERLAY, value) }
+
     override var kidsEnabled: Boolean
         get() = prefs.getBoolean(KEY_KIDS_ENABLED, false)
         set(value) = prefs.edit { putBoolean(KEY_KIDS_ENABLED, value) }
@@ -387,6 +396,8 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_SKIN_TWEAKS = "skin_tweaks"
         private const val KEY_GAME_RUMBLE = "game_rumble"
         private const val KEY_DEBUG_LOG = "debug_log"
+        private const val KEY_CABLE_LINK_DELAY = "cable_link_delay"
+        private const val KEY_CABLE_LINK_DELAY_OVERLAY = "cable_link_delay_overlay"
         private const val KEY_KIDS_ENABLED = "kids_enabled"
         private const val KEY_KIDS_SCHEDULE = "kids_schedule"
         private const val KEY_KIDS_APPS = "kids_apps"

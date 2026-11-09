@@ -30,6 +30,12 @@ import com.nxredux.mobile.ui.nx.nxOptionsValueText
 
 private val SheetRowHeight = 28.dp
 
+private fun connectionLabel(link: NetplayLink?): String = when (link) {
+    NetplayLink.USB -> NetplayText.USB_CABLE
+    NetplayLink.CABLE_LINK_WIFI -> NetplayText.CABLE_LINK
+    NetplayLink.WIFI, null -> NetplayText.WIFI
+}
+
 /**
  * The Netplay sheet in the shared modal frame, drawn over the game list while [NetplayController.page] is set. Every tap
  * goes through [onButton] (as a pad press would) or [onSelect] (a row highlight; a tap on the highlighted row is A).
@@ -50,7 +56,7 @@ fun NetplaySheet(page: NetplayPage, onButton: (NxButton) -> Unit, onSelect: (Int
                 when (row) {
                     NetplayRoleRow.CONNECTION -> NxRow(
                         NetplayText.CONNECTION, cycleable = true,
-                        secondary = nxOptionsValueText(if (page.connection == NetplayLink.USB) NetplayText.USB_CABLE else NetplayText.WIFI, selected = i == page.selected, cycleable = true),
+                        secondary = nxOptionsValueText(connectionLabel(page.connection), selected = i == page.selected, cycleable = true),
                     )
                     NetplayRoleRow.HOST -> NxRow(NetplayText.HOST)
                     NetplayRoleRow.JOIN -> NxRow(NetplayText.JOIN)

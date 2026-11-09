@@ -28,6 +28,15 @@ object NetplayCores {
 
     fun supported(tag: String): Boolean = CoreRegistry.handheldTag(tag) in table
 
+    /** Cable Link over Wi-Fi: every GBA and MGBA folder game, whichever core the folder runs. */
+    fun cableLinkOffered(tag: String): Boolean = CoreRegistry.handheldTag(tag.trim().uppercase()) in CABLE_LINK_TAGS
+
+    /** A Cable Link session runs both GBAs on mGBA (the pair core), whatever either side's folder or Emulator row says. */
+    const val CABLE_LINK_CORE = "mgba"
+    private val CABLE_LINK_TAGS = setOf("GBA", "MGBA")
+    /** The longest input delay a Cable Link session can be pinned to (the engine's 1..8; 0 is Auto). */
+    const val CABLE_LINK_DELAY_MAX = 8
+
     /**
      * [tag]'s netplay cores, default first; without the cable ([usb] false) the ones [wifiOk] refuses for this game ([wl])
      * are left out. Every adoption decision below uses this connection-aware list.

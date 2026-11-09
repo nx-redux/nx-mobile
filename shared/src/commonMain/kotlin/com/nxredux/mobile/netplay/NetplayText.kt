@@ -47,6 +47,21 @@ object NetplayText {
     const val GAME_TRANSFER_FAILED = "Couldn't send the game - waiting for another player"
     const val CABLE_LINK_COPY_FAILED = "Could not swap games and saves\nwith the other phone.\n\nPlease try again."
     const val GAME_DAMAGED = "The other phone's game\narrived damaged.\n\nPlease try again."
+    /** The Connection row's third value, GBA games only. */
+    const val CABLE_LINK = "Cable Link over Wi-Fi"
+    /** A sent or received game's progress on the waiting pages. */
+    fun transfer(sending: Boolean, done: Long, total: Long): String {
+        val percent = if (total <= 0) 0 else (done * 100 / total).coerceIn(0, 100)
+        return "${if (sending) SENDING_GAME else RECEIVING_GAME} $percent%"
+    }
+    const val CABLE_LINK_ARCHIVE = "Cable Link over Wi-Fi needs the\ngame unzipped.\n\nExtract the .gba file and try again."
+    const val CABLE_LINK_READ_FAILED = "Could not read the game\nfor Cable Link over Wi-Fi."
+    /** In game, while the host's state replaces this phone's after the two games drifted apart. */
+    const val SYNCING = "Syncing..."
+    const val ENDED_DRIFT = "The two games drifted apart, so the session ended. Your progress up to a few seconds ago is saved."
+    const val ENDED_TOO_SLOW = "This phone can't run both games at full speed, so the session ended."
+    /** The Developer overlay's current input delay in a Cable Link session. */
+    fun inputDelay(frames: Int) = "Delay $frames"
     const val CONNECTION = "Connection"
     const val WIFI = "Wi-Fi"
     const val USB_CABLE = "USB Cable"

@@ -79,6 +79,7 @@ import com.nxredux.mobile.library.withFirstSeen
 import com.nxredux.mobile.options.CoreOptionSource
 import com.nxredux.mobile.options.EmulatorPage
 import com.nxredux.mobile.options.NoCoreOptions
+import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.runner.BottomScreen
 import com.nxredux.mobile.runner.Console
@@ -520,7 +521,7 @@ sealed interface Screen {
 /** Kids Mode's first switch-on, in order (the spec's): PIN, allowed apps, play times, then the two permissions and home. */
 enum class KidsSetupStep { PIN, APPS, TIMES, USAGE, ALARMS, HOME }
 
-enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE,
+enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
@@ -3936,6 +3937,11 @@ class AppState(
         // Logging for a bug report; off, only errors reach logcat.
         add(SettingsRow(SettingsKind.DEBUG_LOG, "Debug log", if (deps.settings.debugLog) "On" else "Off"))
         deps.linkRomCache?.let { add(SettingsRow(SettingsKind.CLEAR_LINK_ROMS, "Clear link ROM cache", formatBytes(it.sizeBytes()))) }
+        // Cable Link over Wi-Fi's input delay, for trying a game at a fixed one (the platform with a link ROM cache has Cable Link).
+        if (deps.linkRomCache != null) {
+            add(SettingsRow(SettingsKind.CABLE_LINK_DELAY, "Cable Link input delay", cableLinkDelayLabel(deps.settings.cableLinkDelayPin)))
+            add(SettingsRow(SettingsKind.CABLE_LINK_DELAY_OVERLAY, "Cable Link delay overlay", if (deps.settings.cableLinkDelayOverlay) "On" else "Off"))
+        }
         add(SettingsRow(SettingsKind.GAP, ""))
         add(SettingsRow(SettingsKind.SECTION, "About"))
         queryGpu()   // the page (or its preview) shows: the GPU row reads "…" until this lands
@@ -3982,6 +3988,12 @@ class AppState(
             deps.copyText(aboutCopyText(deps.appInfo, _gpu.value))
             showNotice("Device info copied")
         }
+    }
+
+    private fun cableLinkDelayLabel(frames: Int): String = when (frames) {
+        0 -> "Auto"
+        1 -> "1 frame"
+        else -> "$frames frames"
     }
 
     private fun bottomScreenLabel(b: BottomScreen): String = when (b) {
@@ -4150,6 +4162,8 @@ class AppState(
             SettingsKind.SECOND_SCREEN_ENABLE -> flip(s.secondScreen) { s.secondScreen = it }
             SettingsKind.BOTTOM_SCREEN -> cycle(BottomScreen.entries, s.bottomScreen, ::bottomScreenLabel) { s.bottomScreen = it }   // Auto, Main screen, Second screen
             SettingsKind.DEBUG_LOG -> flip(s.debugLog) { s.debugLog = it }
+            SettingsKind.CABLE_LINK_DELAY -> cycle((0..NetplayCores.CABLE_LINK_DELAY_MAX).toList(), s.cableLinkDelayPin.coerceIn(0, NetplayCores.CABLE_LINK_DELAY_MAX), ::cableLinkDelayLabel) { s.cableLinkDelayPin = it }
+            SettingsKind.CABLE_LINK_DELAY_OVERLAY -> flip(s.cableLinkDelayOverlay) { s.cableLinkDelayOverlay = it }
             // Kids Mode On / Off: the first switch-on runs setup (another screen), so the page is republished only if still up.
             SettingsKind.KIDS_ENABLE -> kids?.let {
                 flip(s.kidsEnabled, after = { if ((_screen.value as? Screen.Settings)?.section == SettingsSection.KIDS) settingsUi.refreshSettings() }) { on -> kidsUi.kidsSetEnabled(on) }
@@ -5476,7 +5490,7 @@ class AppState(
     // --- Netplay: the sheet over a game list or the main menu (context menu's Netplay, or Y on a game) ---
 
     /** The Netplay sheet; null on a platform without netplay. While its page is set it takes every pad press and Back. */
-    val netplay: NetplayController? = deps.netplay?.let { NetplayController(scope, it, ::launchNetplay, work = deps.compute) }   // handshakes and save files off the main thread
+    val netplay: NetplayController? = deps.netplay?.let { NetplayController(scope, it, ::launchNetplay, work = deps.compute, findLibraryRom = ::findLocalRom) }   // handshakes and save files off the main thread
 
     /** [entry] can be played over netplay here: the platform has it, the game's tag has netplay cores, and it can launch. */
     fun canNetplay(entry: Listed?): Boolean =

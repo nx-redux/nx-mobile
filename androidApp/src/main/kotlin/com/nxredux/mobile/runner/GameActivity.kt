@@ -204,6 +204,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_NETPLAY_MIXED = "netplay_mixed"          // Boolean: a GBA link with the other side on the other core
         const val EXTRA_NETPLAY_PEER_WL = "netplay_peer_wl"      // the other side's GBA link mode token; absent: it sent none
         const val EXTRA_NETPLAY_USB_TOKEN = "netplay_usb_token"  // Long: the menu's cable start this session runs on (UsbCables.token)
+        // Cable Link over Wi-Fi (NetplaySession.cableLink and what its handshake settled)
+        const val EXTRA_NETPLAY_CABLE_LINK = "netplay_cable_link"        // Boolean
+        const val EXTRA_NETPLAY_OTHER_ROM = "netplay_other_rom"          // the other player's ROM, a filesystem path
+        const val EXTRA_NETPLAY_OTHER_SAVE = "netplay_other_save"        // its save in a session dir; absent: none
+        const val EXTRA_NETPLAY_LOCAL_SLOT = "netplay_local_slot"        // Int: 1 = GBA 1 (host), 2 = GBA 2
+        const val EXTRA_NETPLAY_BIOS = "netplay_bios"                    // "real" | "hle"
+        const val EXTRA_NETPLAY_RTC = "netplay_rtc"                      // Long: the session clock, epoch seconds
         private const val KEY_NAME_HOLD_SHOWN_AT = "nx_name_hold_shown_at"   // the launch name's hold was up ([LaunchNameHold.shownAt])
         /** Kids Mode's "Games close in 10 minutes" toast stays this long. */
         private const val KIDS_WARNING_MS = 6000L

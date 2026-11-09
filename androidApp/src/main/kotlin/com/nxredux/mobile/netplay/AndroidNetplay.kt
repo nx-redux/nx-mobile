@@ -12,6 +12,7 @@ import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.netplay.usb.NetplayLink
 import com.nxredux.mobile.netplay.usb.UsbCable
 import com.nxredux.mobile.netplay.usb.UsbCables
+import com.nxredux.mobile.netplay.wizard.CableLinkOffer
 import com.nxredux.mobile.netplay.wizard.HostSaves
 import com.nxredux.mobile.netplay.wizard.SaveSink
 import com.nxredux.mobile.runner.Archives
@@ -64,7 +65,7 @@ class AndroidNetplay(context: Context, private val sdRoot: () -> File) : Netplay
     private val prefs = Prefs.open(this.context, "netplay")
 
     override var lastLink: NetplayLink
-        get() = if (prefs.getString(KEY_LINK, null) == NetplayLink.USB.name) NetplayLink.USB else NetplayLink.WIFI
+        get() = prefs.getString(KEY_LINK, null).let { name -> NetplayLink.entries.firstOrNull { it.name == name } } ?: NetplayLink.WIFI
         set(value) { prefs.edit().putString(KEY_LINK, value.name).apply() }
 
     override val usb: UsbCable get() = UsbCables.get(context)
@@ -230,7 +231,7 @@ class AndroidNetplay(context: Context, private val sdRoot: () -> File) : Netplay
         val socket = Socket()
         try {
             when (link) {
-                NetplayLink.WIFI -> WifiNetworks.network(connectivity)?.let { n -> runCatching { n.bindSocket(socket) } }
+                NetplayLink.WIFI, NetplayLink.CABLE_LINK_WIFI -> WifiNetworks.network(connectivity)?.let { n -> runCatching { n.bindSocket(socket) } }
                 NetplayLink.USB -> UsbCables.get(context).network?.let { n -> runCatching { n.bindSocket(socket) } }
             }
             blockingClosedOnCancel(socket) { socket.connect(InetSocketAddress(ip, NetplayWire.CONTROL_PORT), CONNECT_TIMEOUT_MS) }
@@ -316,6 +317,12 @@ class AndroidNetplay(context: Context, private val sdRoot: () -> File) : Netplay
     override fun clientSink(romFileName: String): SaveSink = NetplaySessionDir.sink(context.filesDir, romFileName, Rsync.find(context))
 
     override fun keepScreenOn(on: Boolean) = screenOn(on)
+
+    override val cableLinkAvailable: Boolean get() = true
+
+    override suspend fun cableLinkOffer(
+        tag: String, romFileName: String, content: ContentRef, findLibraryRom: suspend (hash: String, sizeBytes: Long) -> String?,
+    ): CableLinkOffer = AndroidCableLink.offer(context, sdRoot(), tag, romFileName, content, findLibraryRom)
 
     /** Runs blocking [block] (on the caller's IO thread) and closes [resource] if the coroutine is cancelled meanwhile. */
     private suspend fun <T> blockingClosedOnCancel(resource: Closeable, block: () -> T): T =
