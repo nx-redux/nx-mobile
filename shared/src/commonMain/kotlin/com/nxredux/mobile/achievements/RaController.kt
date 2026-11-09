@@ -270,10 +270,20 @@ class RaController(
             try {
                 withContext(NonCancellable) {
                     settings.raToken = null; settings.raEnabled = false   // no in-game session on a stale token
+                    val store = platform.store
                     when (what) {
-                        ResetScope.ALL -> { platform.store.deleteTree(RaPaths.ACCOUNT); platform.store.deleteTree(RaPaths.GAMES) }
-                        ResetScope.LOGIN -> platform.store.delete(RaPaths.login())
-                        ResetScope.ACCOUNT -> { platform.store.delete(RaPaths.login()); platform.store.deleteTree(RaPaths.SESSIONS); platform.store.deleteTree(RaPaths.PENDING) }
+                        ResetScope.ALL -> {
+                            clearingJournals {
+                                for (name in store.list(RaPaths.ACCOUNT)) if (name != PENDING_DIR) store.deleteTree("${RaPaths.ACCOUNT}/$name")
+                                clearPending()
+                            }
+                            store.deleteTree(RaPaths.GAMES)
+                        }
+                        ResetScope.LOGIN -> store.delete(RaPaths.login())
+                        ResetScope.ACCOUNT -> {
+                            store.delete(RaPaths.login()); store.deleteTree(RaPaths.SESSIONS)
+                            clearingJournals { clearPending() }
+                        }
                     }
                 }
                 emit(RaMessage.Notice(when (what) { ResetScope.ALL -> "Achievement data erased"; ResetScope.LOGIN -> "Signed out"; ResetScope.ACCOUNT -> "Account data reset" }))
@@ -282,6 +292,19 @@ class RaController(
                 RaState.Idle(readStatus())
             }
         }
+    }
+
+    /**
+     * [block] holding both journals' locks, as their appends and rewrites do: the game process may be journaling an
+     * unlock, and a delete under it would lose the file it is appending to.
+     */
+    private suspend fun clearingJournals(block: suspend () -> Unit) =
+        platform.store.locked(RaPaths.JOURNAL) { platform.store.locked(RaPaths.CONFIRMED) { block() } }
+
+    /** Everything in `pending/` but the lock sidecars: deleting one a process holds would split the lock in two. */
+    private suspend fun clearPending() {
+        val store = platform.store
+        for (name in store.list(RaPaths.PENDING)) if (!name.endsWith(RaPaths.LOCK_SUFFIX)) store.deleteTree("${RaPaths.PENDING}/$name")
     }
 
     /** Stops a sync or prefetch; sign-in and resets run to completion. */
@@ -377,6 +400,8 @@ sealed interface RaGameFetch {
 
 private const val RA_SIGN_IN_AGAIN = "Sign in again: RetroAchievements refused the saved login"
 private const val RA_BUSY = "RetroAchievements is busy, try later"
+/** [RaPaths.PENDING]'s name under the account tree. */
+private val PENDING_DIR = RaPaths.PENDING.substringAfterLast('/')
 
 /**
  * A sync's outcome for the user: why it stopped, else what it did. "Up to date" only when nothing is left journaled;

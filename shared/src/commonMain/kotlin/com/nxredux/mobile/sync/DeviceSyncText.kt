@@ -41,6 +41,13 @@ object DeviceSyncText {
     const val PEER_FAILED = "The other device's sync failed. Check it, then sync again."
     /** The peer sent FAIL while the confirm page showed: its user pressed Cancel there. */
     const val PEER_CANCELLED = "The other device cancelled the sync."
+    /**
+     * The peer sent FAIL before any file moved: mostly its user pressed B on its confirm page, but the same FAIL comes
+     * from a server whose daemon would not start, or a client whose run ended before its first step.
+     */
+    const val PEER_ENDED_EARLY = "The other device cancelled the sync or couldn't start it."
+    /** A serving phone heard nothing for an hour and the peer never connected: it left its confirm page some other way. */
+    const val PEER_NEVER_CONNECTED = "The other device never started syncing (1 h)."
     /** A on Done/Failed while the ended run still cleans up (a stopped server stopping its daemon). */
     const val FINISHING = "Device Sync is finishing… please wait"
     fun linkName(link: SyncLink) = if (link == SyncLink.CABLE) "cable" else "Wi-Fi"

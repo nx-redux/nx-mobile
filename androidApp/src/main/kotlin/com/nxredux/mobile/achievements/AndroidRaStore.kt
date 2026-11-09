@@ -8,9 +8,16 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.RandomAccessFile
 import java.nio.channels.FileChannel
+import java.nio.channels.OverlappingFileLockException
+import java.nio.file.Files
+import java.nio.file.NoSuchFileException
+import java.nio.file.attribute.BasicFileAttributes
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -64,7 +71,18 @@ class AndroidRaStore internal constructor(private val privateRoot: () -> File, p
         FileOutputStream(f, true).use { it.write(bytes); it.fd.sync() }
     }
 
-    override suspend fun size(path: String): Long? = io("size $path") { file(path).takeIf { it.isFile }?.length() }
+    /**
+     * Size, modification time and file key (device + inode): an atomic rewrite is a new inode, so a remove plus a
+     * same-length append from another process never matches what came before, even inside one clock tick.
+     */
+    override suspend fun stamp(path: String): String? = io("stamp $path") {
+        val a = try {
+            Files.readAttributes(file(path).toPath(), BasicFileAttributes::class.java)
+        } catch (e: NoSuchFileException) {
+            return@io null
+        }
+        if (!a.isRegularFile) null else "${a.size()}:${a.lastModifiedTime().to(TimeUnit.NANOSECONDS)}:${a.fileKey()}"
+    }
 
     override suspend fun delete(path: String) { io("delete $path") { file(path).delete() } }
 
@@ -85,17 +103,37 @@ class AndroidRaStore internal constructor(private val privateRoot: () -> File, p
      * failing the write.
      */
     override suspend fun <T> locked(path: String, block: suspend () -> T): T {
-        val lockFile = File(file(path).path + ".lock")
+        val lockFile = File(file(path).path + RaPaths.LOCK_SUFFIX)
         return processLocks.computeIfAbsent(lockFile.path) { Mutex() }.withLock {
-            val channel: FileChannel? = withContext(Dispatchers.IO) {
-                try {
-                    lockFile.parentFile?.mkdirs()
-                    RandomAccessFile(lockFile, "rw").channel.also { c ->
-                        try { c.lock() } catch (e: IOException) { c.close(); throw e }
+            // Set from inside the IO hop, not returned from it: a caller cancelled while lock() blocks gets the hop's
+            // result discarded on the way back (withContext's prompt cancellation, NonCancellable or not), and a
+            // dropped channel would keep the OS lock, so every later lock here would overlap it.
+            var channel: FileChannel? = null
+            try {
+                withContext(Dispatchers.IO) {
+                    channel = try {
+                        lockFile.parentFile?.mkdirs()
+                        RandomAccessFile(lockFile, "rw").channel.also { c ->
+                            try {
+                                c.lock()
+                            } catch (e: Throwable) {
+                                c.close()
+                                throw e
+                            }
+                        }
+                    } catch (e: IOException) {
+                        null
+                    } catch (e: SecurityException) {
+                        null
+                    } catch (e: OverlappingFileLockException) {
+                        // This process already holds it outside [processLocks] (it never should): unlocked, as a
+                        // refusing file system runs, rather than failing every write.
+                        null
                     }
-                } catch (e: IOException) { null } catch (e: SecurityException) { null }
-            }
-            try { block() } finally {
+                }
+                currentCoroutineContext().ensureActive()
+                block()
+            } finally {
                 channel?.let { withContext(NonCancellable + Dispatchers.IO) { runCatching { it.close() } } }
             }
         }

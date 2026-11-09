@@ -26,7 +26,22 @@ class GameTimeStore(
             q.insertDevice(deviceId, deviceName)
             q.renameDevice(deviceName, deviceId)
         }
-        closeStale(seenBefore = now() - STALE_MS)
+        closeLeft()
+    }
+
+    /** When [closeLeft] last ran; null before. */
+    @Volatile private var leftClosedAt: Long? = null
+
+    /**
+     * Closes the sessions a dead process left open (untouched for [STALE_MS]), at most once per [TOUCH_MS]. [prepare]
+     * runs once per process, and the menu's lives long: a game that crashes after it would keep an open session that
+     * Home's window counts and the totals (closed sessions only) never do. So the screens' reads run this too.
+     */
+    fun closeLeft() {
+        val t = now()
+        if (leftClosedAt?.let { t - it in 0 until TOUCH_MS } == true) return
+        leftClosedAt = t
+        closeStale(seenBefore = t - STALE_MS)
     }
 
     /**
