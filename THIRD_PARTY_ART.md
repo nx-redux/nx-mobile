@@ -24,8 +24,8 @@ Converted from SVG to Android vector drawables (paths unchanged, filled white):
 
 ## Tab row icons (`nav_icon_*.xml`)
 
-Google's Material Icons "search", "history", "delete", "filter_list", "create_new_folder", "call_merge", "call_split", "sd_card" and
-"grid_view", under the Apache License 2.0 (https://github.com/google/material-design-icons). Paths unchanged, filled white (grid_view drawn
+Google's Material Icons "search", "history", "delete", "filter_list", "create_new_folder", "call_merge", "call_split", "sd_card",
+"vertical_align_top" and "grid_view", under the Apache License 2.0 (https://github.com/google/material-design-icons). Paths unchanged, filled white (grid_view drawn
 at 80% scale).
 
 ## Pad mic button (`pad_mic.xml`)

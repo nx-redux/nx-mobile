@@ -1095,6 +1095,16 @@ class AppState(
     private var toolUnderRow: MainRow? = null   // the menu row the tool was opened from, kept highlighted below it
     private var toolUnderIndex = 0
 
+    private val _appOnTop = MutableStateFlow(false)
+    /** An app the player opened holds the top screen: the main menu shows the button that takes it back ([takeTopScreen]). */
+    val appOnTop: StateFlow<Boolean> = _appOnTop.asStateFlow()
+
+    /** The platform tells an app holds the top screen ([on]) or let it go. */
+    fun onAppOnTop(on: Boolean) { _appOnTop.value = on }
+
+    /** Takes the top screen back from the app there; set by the platform. */
+    var takeTopScreen: () -> Unit = {}
+
     /** The platform tells the menu is on the second display ([active]) or back on the main one. */
     fun onDualMenu(active: Boolean) {
         _displayDualMenu.value = active

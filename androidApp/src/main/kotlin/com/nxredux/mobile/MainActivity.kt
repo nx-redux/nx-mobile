@@ -502,6 +502,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         // Dual mode: apps open on the top screen; one there takes our window on that display down until it leaves.
         launcher.topDisplay = ::appTopDisplay
         TopScreenHost.onChange = topScreenChanged
+        state.takeTopScreen = { TopScreenHost.reclaim(this) }
         // Every screen change, Settings → Second screen and Bottom screen included (their rows change with them).
         scope.launch { state.screen.collect { syncSecondScreen() } }
     }
@@ -568,6 +569,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         val active = inFront && settings.secondScreen && display != null && bottomScreenPrompt == null
         if (TopScreenHost.active && inFront && (!settings.secondScreen || display?.displayId != TopScreenHost.heldDisplay)) TopScreenHost.release(this)
         val appOnTop = TopScreenHost.active
+        state.onAppOnTop(appOnTop)
         if (::kids.isInitialized) AndroidKids.topScreenChanged(this)   // the menu stays shown under an app on top: the guard watches it
         val wanted = display.takeIf { active && !launching && !appOnTop }
         if (wanted == null) cancelMenuRetry()
