@@ -2,6 +2,8 @@ package com.nxredux.mobile.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
@@ -25,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.background
 import com.nxredux.mobile.shared.res.nx_logo
+import com.nxredux.mobile.ui.keyboard.NxKeyboardBar
 import com.nxredux.mobile.ui.nx.LauncherChrome
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.LocalLauncherChrome
@@ -53,7 +56,7 @@ import org.jetbrains.compose.resources.painterResource
  * (two screens in one window), already inside the shell's insets.
  */
 @Composable
-fun MenuTopScreen(state: AppState, inSkin: Boolean = false) {
+fun MenuTopScreen(state: AppState, inSkin: Boolean = false, keyboard: Boolean = false) {
     val screen by state.screen.collectAsState()
     val secondList by state.secondList.collectAsState()
     val drawerPreview by state.drawerPreview.collectAsState()
@@ -69,8 +72,9 @@ fun MenuTopScreen(state: AppState, inSkin: Boolean = false) {
     val touchscreen = rememberHasTouchscreen()
     NxTheme(colors = look.colors) {
         MenuLocals(state, look, footerModeFor(controllerConnected, padVisible = inSkin), touchscreen) {
+            Column(Modifier.fillMaxSize()) {
             BoxWithConstraints(
-                Modifier.fillMaxSize().background(LocalNxColors.current.background)
+                Modifier.weight(1f).fillMaxWidth().background(LocalNxColors.current.background)
                     .let { if (inSkin) it else it.windowInsetsPadding(nxScreenInsets()) }.clipToBounds(),
             ) {
                 // No HandheldShell here: the screen's own shape and size, as the shell gives App's pages.
@@ -103,6 +107,8 @@ fun MenuTopScreen(state: AppState, inSkin: Boolean = false) {
                         TopContent.Backdrop -> Backdrop()
                     }
                 }
+            }
+            if (keyboard) NxKeyboardBar(state)   // this window is in the hands (the menu on the second display): the keyboard docks here
             }
         }
     }

@@ -1,6 +1,7 @@
 package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.ui.keyboard.LocalPromptKeyboard
+import com.nxredux.mobile.ui.keyboard.NxKeyboardBar
 import com.nxredux.mobile.ui.keyboard.PromptKeyboard
 import com.nxredux.mobile.ui.nx.LocalSkinPacks
 import com.nxredux.mobile.ui.nx.SkinPad
@@ -157,7 +158,7 @@ internal fun nxImageLoader(context: PlatformContext): ImageLoader =
 
 /** Root composable. The host creates AppState once (so a folder pick can reach setHome/addExtra) and passes it in. */
 @Composable
-fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
+fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}, keyboard: Boolean = false) {
     setSingletonImageLoaderFactory(::nxImageLoader)   // a no-op when the platform installed it first (Android: at process start)
     val screen by state.screen.collectAsState()
     val error by state.error.collectAsState()
@@ -276,6 +277,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                             }
                             PageOverlays(state, chooser, error, notice)
                         }
+                        if (keyboard) NxKeyboardBar(state)   // this window is in the hands: the NX keyboard docks here
                         }
                     }
                 }
