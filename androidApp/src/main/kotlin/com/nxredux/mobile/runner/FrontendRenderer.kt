@@ -266,6 +266,9 @@ internal class FrontendRenderer(
 
     /** What a save state's picture keeps (game-area px): the one picture, or the DS / 3DS top screen ([thumbnailPicture]). */
     fun thumbnailPicture(): PxRect? = if (ndsRegions.isNotEmpty()) ndsRegions.thumbnailPicture() else shownPicture
+
+    /** Called after each relayout: [thumbnailPicture] may have moved (the resume cover follows it). */
+    var onPictureLaidOut: (() -> Unit)? = null
     private var hudJob: Job? = null
 
     /** The overlay file names offered for this console (the Overlay setting's list). */
@@ -606,6 +609,7 @@ internal class FrontendRenderer(
             } else {
                 logLayout(w, h, shape, room.name, spaceAndPicture(space, shown), "ds $scales")
             }
+            onPictureLaidOut?.invoke()
             return
         }
         if (view.screenRegions.isNotEmpty()) view.screenRegions = emptyList()
@@ -664,6 +668,7 @@ internal class FrontendRenderer(
         // A bezel counts as picture: the pad over its border is see-through. Under Auto the shown rect is that box (offset).
         val covered = if (s.scaling != ScreenScaling.AUTO && overlayAspect != null && overlayAspect > 0f) box else shown
         fitPad(room, covered, frameKnown = frame != null, h, overlayH)
+        onPictureLaidOut?.invoke()
         val scale = frame?.let { shown.height / (if (it.rotated) it.width else it.height) }
         logLayout(w, h, shape, room.name, spaceAndPicture(space, shown), "${s.scaling} frame=${frame?.let { "${it.width.roundToInt()}x${it.height.roundToInt()}" }} scale=${scale?.let { "%.2f".format(java.util.Locale.US, it) }}")
     }

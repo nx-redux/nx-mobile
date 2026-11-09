@@ -7,17 +7,20 @@ import android.graphics.Color
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
+import com.nxredux.mobile.options.PxRect
 import java.io.File
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * A resume's screenshot over the game view until the resumed game's own frame replaces it (NX Redux's minarch shows
  * the state's screenshot from its window's first moment): no black while the core loads, and no flash of the fresh
- * boot that runs before the state loads. Up before the game view exists it fills the game container; then it takes the
- * game view's bounds, which are what the screenshot captured.
+ * boot that runs before the state loads. The screenshot is the picture alone ([FrontendRenderer.thumbnailPicture]), so
+ * the cover sits where the picture is drawn ([picture], container px: under a pad skin, its screen glass, not the view's
+ * middle); until that is known it takes the game view's bounds, and before the game view exists the container's.
  * Main thread only.
  */
-internal class ResumeCover(context: Context, private val container: FrameLayout) {
+internal class ResumeCover(context: Context, private val container: FrameLayout, private val picture: () -> PxRect?) {
     private val image = ImageView(context).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
     private val follow = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> place() }
     private var bitmap: Bitmap? = null
@@ -63,13 +66,20 @@ internal class ResumeCover(context: Context, private val container: FrameLayout)
         bitmap = null
     }
 
-    private fun place() {
+    /** Re-places the cover: the picture was laid out again ([picture] may have moved). */
+    fun place() {
         val bmp = bitmap ?: return
+        val p = picture()?.takeIf { it.width >= 1f && it.height >= 1f }
         val g = game?.takeIf { it.width > 0 && it.height > 0 }   // laid out; before, the cover keeps the container's size
-        val (w, h) = if (g != null) g.width to g.height else container.width to container.height
-        if (g != null) (image.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
-            if (lp.width != w || lp.height != h || lp.leftMargin != g.left || lp.topMargin != g.top) {
-                lp.width = w; lp.height = h; lp.leftMargin = g.left; lp.topMargin = g.top
+        val box = when {
+            p != null -> intArrayOf(p.x.roundToInt(), p.y.roundToInt(), p.width.roundToInt(), p.height.roundToInt())
+            g != null -> intArrayOf(g.left, g.top, g.width, g.height)
+            else -> null
+        }
+        val (w, h) = if (box != null) box[2] to box[3] else container.width to container.height
+        if (box != null) (image.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+            if (lp.width != w || lp.height != h || lp.leftMargin != box[0] || lp.topMargin != box[1]) {
+                lp.width = w; lp.height = h; lp.leftMargin = box[0]; lp.topMargin = box[1]
                 image.layoutParams = lp
             }
         }
