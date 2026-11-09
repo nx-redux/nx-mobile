@@ -62,9 +62,63 @@ class ProviderPreferencesTest {
         assertEquals("new", prefs.getString("k", null))
         assertEquals(1L shl 40, prefs.getLong("l", 0))
         assertEquals(1.5f, prefs.getFloat("f", 0f), 0f)
-        prefs.edit().putInt("n", 3).apply()   // apply is synchronous too
-        assertEquals(3, owner.data["n"])
+        prefs.edit().putInt("n", 3).apply()
         assertEquals(3, prefs.getInt("n", 0))
+    }
+
+    /** Runs nothing until [runAll]: the sends a menu process cold start would hold up. */
+    private class HeldSender : java.util.concurrent.Executor {
+        val queue = ArrayDeque<Runnable>()
+        override fun execute(command: Runnable) { queue.add(command) }
+        fun runAll() { while (queue.isNotEmpty()) queue.removeFirst().run() }
+    }
+
+    // The menu process was killed: the UI thread's apply must not wait for it to start.
+    @Test fun applyIsReadBackAtOnceAndSentLaterInOrder() {
+        val owner = FakeOwner()
+        val sender = HeldSender()
+        val prefs = ProviderPreferences("p", owner, LocalFile(emptyMap()), sender)
+        prefs.edit().putBoolean("b", true).apply()
+        prefs.edit().putBoolean("b", false).putString("s", "x").apply()
+        assertEquals(0, owner.calls)
+        assertFalse(prefs.getBoolean("b", true))
+        assertEquals("x", prefs.getString("s", null))
+        sender.runAll()
+        assertEquals(2, owner.calls)
+        assertEquals(false, owner.data["b"])
+        assertEquals("x", owner.data["s"])
+    }
+
+    @Test fun aRefreshBeforeAnApplyLandsKeepsTheApply() {
+        val owner = FakeOwner(hashMapOf("k" to "old"))
+        val sender = HeldSender()
+        val prefs = ProviderPreferences("p", owner, LocalFile(mapOf("k" to "old")), sender)
+        prefs.edit().putString("k", "new").apply()
+        prefs.refresh()   // the owner still has "old": the apply is on its way
+        assertEquals("new", prefs.getString("k", null))
+        sender.runAll()
+        prefs.refresh()
+        assertEquals("new", prefs.getString("k", null))
+        owner.data["k"] = "menu"
+        prefs.refresh()   // everything landed: the menu's later change wins
+        assertEquals("menu", prefs.getString("k", null))
+    }
+
+    @Test fun aFailedApplyKeepsTheValueForTheSession() {
+        val owner = FakeOwner().apply { failing = true }
+        val prefs = ProviderPreferences("p", owner, LocalFile(mapOf("k" to "old")), java.util.concurrent.Executor { it.run() })
+        prefs.edit().putString("k", "new").apply()
+        assertEquals("new", prefs.getString("k", null))
+    }
+
+    @Test fun commitWaitsForEarlierApplies() {
+        val owner = FakeOwner()
+        val prefs = ProviderPreferences("p", owner, LocalFile(emptyMap()))   // the real sender thread
+        repeat(20) { prefs.edit().putInt("n", it).apply() }
+        assertTrue(prefs.edit().putString("last", "x").commit())
+        assertEquals(19, owner.data["n"])
+        assertEquals("x", owner.data["last"])
+        assertTrue(ProviderPreferences.awaitSends(1000))
     }
 
     @Test fun failedChannelWriteReturnsFalseAndLeavesTheLocalValue() {

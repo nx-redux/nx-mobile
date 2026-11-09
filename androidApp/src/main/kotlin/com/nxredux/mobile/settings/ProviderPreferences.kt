@@ -2,6 +2,11 @@ package com.nxredux.mobile.settings
 
 import android.content.SharedPreferences
 import com.swordfish.libretrodroid.NxLog
+import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeUnit
 
 /**
  * The call into the main process's [PrefsProvider], in plain Kotlin types (the provider converts to and from a Bundle
@@ -16,8 +21,10 @@ fun interface PrefsChannel {
  * stood at launch, until a [refresh] replaces it with the owner's current entries: a setting changed in the menu while
  * the game was away (launcher mode's Home) reaches it when it comes back. A read never calls the menu process, so a key
  * event never waits on it. Writes go to the owner, the
- * main process ([PrefsProvider]), so its cached copy never writes over them later; once applied there they are kept in
- * memory here ([written]) and read back at once. They are never written to the file from this process: [local]'s copy
+ * main process ([PrefsProvider]), so its cached copy never writes over them later; they are kept in memory here
+ * ([written]) and read back at once. [apply] keeps the value here at once and sends it on [sender], one at a time in
+ * order: the call may have to cold-start the menu's process, which must not stall the UI thread. [commit] waits for its
+ * send (and every one queued before it). They are never written to the file from this process: [local]'s copy
  * may be older than the owner's, and saving it would undo the menu's changes. Change listeners are not supported:
  * nothing in the game process uses them.
  */
@@ -25,6 +32,7 @@ class ProviderPreferences(
     private val name: String,
     private val channel: PrefsChannel,
     private val local: SharedPreferences,
+    private val sender: Executor = SENDER,
 ) : SharedPreferences {
     private val lock = Any()
     /** This process's applied writes: a value, or [REMOVED]. */
@@ -33,8 +41,10 @@ class ProviderPreferences(
     private var cleared = false
     /** The owner's entries as the last [refresh] read them; null: none yet, [local] stands. */
     private var fetched: Map<String, Any?>? = null
-    /** Counts this process's applied writes: a [refresh] tells whether one landed while it was asking. */
+    /** Counts this process's writes kept in [written]: a [refresh] tells whether one came while it was asking. */
     private var writes = 0L
+    /** [apply] sends queued and not yet answered: the owner's entries may not hold them yet. */
+    private var unsent = 0
 
     /**
      * [key] as this process sees it: its own write, else nothing after a clear, else [fetched]'s, else [local]'s (a
@@ -68,12 +78,26 @@ class ProviderPreferences(
         endRefresh(startedAt, entries)
     }
 
-    private fun beginRefresh(): Long = synchronized(lock) { writes }
+    /** [writes] now, or -1 when an [apply] is still on its way: the owner's answer may predate it, so [written] stays. */
+    private fun beginRefresh(): Long = synchronized(lock) { if (unsent > 0) -1L else writes }
 
     private fun endRefresh(startedAt: Long, entries: Map<String, Any?>) = synchronized(lock) {
         fetched = HashMap(entries)
-        if (writes == startedAt) { written.clear(); cleared = false }
+        if (startedAt >= 0 && writes == startedAt) { written.clear(); cleared = false }
     }
+
+    /** Keeps an edit in [written]; under [lock]. */
+    private fun keep(put: Map<String, Any?>, remove: Collection<String>, clear: Boolean) {
+        writes++
+        if (clear) { cleared = true; written.clear() }
+        remove.forEach { written[it] = REMOVED }
+        put.forEach { (k, v) -> if (v != null) written[k] = v }
+    }
+
+    private fun send(args: Map<String, Any?>): Boolean =
+        runCatching { channel.call(PrefsProvider.METHOD_APPLY, name, args)[PrefsProvider.RESULT_OK] == true }
+            .onFailure { NxLog.w("NXAPP", "settings write ($name): ${it.message}") }
+            .getOrDefault(false)
 
     override fun getAll(): MutableMap<String, *> = synchronized(lock) {
         val out = HashMap<String, Any?>(if (cleared) emptyMap() else fetched ?: local.all)
@@ -117,29 +141,47 @@ class ProviderPreferences(
         override fun remove(key: String): SharedPreferences.Editor { put.remove(key); remove.add(key); return this }
         override fun clear(): SharedPreferences.Editor { clear = true; return this }
 
+        private fun args() = mapOf(PrefsProvider.ARG_PUT to HashMap(put), PrefsProvider.ARG_REMOVE to remove.toList(), PrefsProvider.ARG_CLEAR to clear)
+
+        /**
+         * Blocking, behind every [apply] queued before it: for a write that must have reached the owner before the process
+         * goes. Kept here only once the owner took it.
+         */
         override fun commit(): Boolean {
-            val args = mapOf(PrefsProvider.ARG_PUT to HashMap(put), PrefsProvider.ARG_REMOVE to remove.toList(), PrefsProvider.ARG_CLEAR to clear)
-            val ok = runCatching { channel.call(PrefsProvider.METHOD_APPLY, name, args)[PrefsProvider.RESULT_OK] == true }
-                .onFailure { NxLog.w("NXAPP", "settings write ($name): ${it.message}") }
-                .getOrDefault(false)
-            if (ok) synchronized(lock) {
-                writes++
-                if (clear) { cleared = true; written.clear() }
-                remove.forEach { written[it] = REMOVED }
-                put.forEach { (k, v) -> if (v != null) written[k] = v }
+            val args = args()
+            val putNow = HashMap(put); val removeNow = remove.toList(); val clearNow = clear
+            val task = FutureTask {
+                send(args).also { ok -> if (ok) synchronized(lock) { keep(putNow, removeNow, clearNow) } }
             }
-            return ok
+            sender.execute(task)
+            return runCatching { task.get() }.getOrDefault(false)
         }
 
         /**
-         * Synchronous too, on the caller's thread: the game process can be killed any moment, and a write must not be lost
-         * with it; callers read their own write back at once.
+         * Read back at once, sent in order on [sender]. A failed send keeps the value for this process's session (the
+         * owner never got it; logged). The process ending waits for the queue ([awaitSends]).
          */
-        override fun apply() { commit() }
+        override fun apply() {
+            val args = args()
+            synchronized(lock) { keep(HashMap(put), remove.toList(), clear); unsent++ }
+            sender.execute {
+                try { send(args) } finally { synchronized(lock) { unsent-- } }
+            }
+        }
     }
 
     companion object {
         private val REMOVED = Any()
+
+        /** One thread for every file's sends: a write never overtakes an earlier one. */
+        private val SENDER: ExecutorService = Executors.newSingleThreadExecutor { r -> Thread(r, "prefs-send").apply { isDaemon = true } }
+
+        /**
+         * Waits up to [timeoutMs] for every send queued so far (the default sender's): before the game process ends, so
+         * an [apply] just made is not lost with it. False on a timeout.
+         */
+        fun awaitSends(timeoutMs: Long): Boolean =
+            runCatching { SENDER.submit {}.get(timeoutMs, TimeUnit.MILLISECONDS); true }.getOrDefault(false)
 
         /**
          * [refresh] for every file in [prefs] in one call into the owner: a call may have to start the menu's process, so
