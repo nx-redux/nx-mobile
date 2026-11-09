@@ -489,10 +489,16 @@ class GLRetroView(
         LibretroDroid.takeShaderError()?.let { message -> post { onShaderError?.invoke(message) } }
     }
 
+    /**
+     * Not [catchExceptions]: that skips everything once an earlier GL callback aborted (a Vulkan init that failed), and the
+     * native core and its session must still be released, above all for the GLES relaunch in this same process. Each
+     * step's failure is logged only: nothing is left to report it to.
+     */
     @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-    fun onDestroy() = catchExceptions {
-        LibretroNetplay.linkUnblock()   // a held GBA link cable must not block the GL thread destroy waits on
-        destroyOnEmulationThread()
+    fun onDestroy() {
+        runCatching { LibretroNetplay.linkUnblock() }   // a held GBA link cable must not block the GL thread destroy waits on
+            .onFailure { NxLog.e(TAG_LOG, "link unblock on destroy failed", it) }
+        runCatching { destroyOnEmulationThread() }.onFailure { NxLog.e(TAG_LOG, "native destroy failed", it) }
         lifecycle = null
     }
 
