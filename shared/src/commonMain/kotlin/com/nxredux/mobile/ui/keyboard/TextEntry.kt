@@ -149,3 +149,6 @@ fun TextEntry.withValues(values: List<String>): TextEntry {
     val cursor = if (changed) values[active].length else cursor.coerceIn(0, values[active].length)
     return copy(fields = fields, cursor = cursor)
 }
+
+/** The box's button the highlight is on, as the modal's footer counts them (0 confirm, 1 Cancel); -1 on a key or a field. */
+fun TextEntry.buttonFocus(): Int = (focus as? EntryFocus.Button)?.index ?: -1

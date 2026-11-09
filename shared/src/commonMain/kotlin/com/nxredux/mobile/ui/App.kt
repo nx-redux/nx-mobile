@@ -1,5 +1,7 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.keyboard.LocalPromptKeyboard
+import com.nxredux.mobile.ui.keyboard.PromptKeyboard
 import com.nxredux.mobile.ui.nx.LocalSkinPacks
 import com.nxredux.mobile.ui.nx.SkinPad
 import com.nxredux.mobile.ui.nx.nxPageInset
@@ -314,7 +316,10 @@ internal fun rememberMenuLook(state: AppState, screen: Screen): MenuLook {
 @Composable
 internal fun MenuLocals(state: AppState, look: MenuLook, footer: FooterMode, touchscreen: Boolean, content: @Composable () -> Unit) {
     val chrome = launcherChromeFor(look.pageTitle, look.buttonHints, footer, look.extraInfo, look.netplayHint, look.homeStats)
+    val entry by state.textEntry.collectAsState()
+    val keyboard = remember(entry) { PromptKeyboard(entry, state::keyboardTapField, state::promptAnswer) }
     CompositionLocalProvider(
+        LocalPromptKeyboard provides keyboard,
         LocalFooterMode provides footer, LocalLauncherChrome provides chrome, LocalHasTouchscreen provides touchscreen,
         LocalAppIcons provides state.appIcons, LocalNxOptionText provides look.optionText, LocalDialogFocus provides state.dialogFocus,
         content = content,
