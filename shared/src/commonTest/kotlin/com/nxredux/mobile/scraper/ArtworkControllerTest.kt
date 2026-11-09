@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -21,6 +22,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 class ArtworkControllerTest {
     private val tetris = Scrape.homeGame("Tetris.gb")
@@ -30,7 +32,7 @@ class ArtworkControllerTest {
     private class Rig(
         scope: TestScope, games: List<LibraryGameRef>, val creds: FakeCredentials = FakeCredentials(), more: List<ArtSource> = emptyList(),
         jobClock: () -> Long = { scope.testScheduler.currentTime }, val fs: FakeRomsSource = Scrape.homeTree(),
-        pixels: PixelCodec? = null,
+        pixels: PixelCodec? = null, engineClock: () -> Long = { scope.testScheduler.currentTime },
     ) {
         val http = FakeHttp().apply { clock = { scope.testScheduler.currentTime } }
         val host = FakeHost(games)
@@ -42,7 +44,7 @@ class ArtworkControllerTest {
             host,
             { auth, onArt, onWritten, _, logged, onOptions, picked ->
                 ssEngine(
-                    http, FakeFitter(), FakeHasher(), fs, Scrape.home, auth, { scope.testScheduler.currentTime }, { delay(it) }, onArt, onWritten,
+                    http, FakeFitter(), FakeHasher(), fs, Scrape.home, auth, engineClock, { delay(it) }, onArt, onWritten,
                     art, { androidRefreshed++ }, more, logged, onOptions, picked, pixels = pixels,
                 )
             },
@@ -637,6 +639,54 @@ class ArtworkControllerTest {
         assertEquals(1, rig.http.count("romnom=Zelda.gb"))
     }
 
+    // Every skip is emitted and every tenth saved, the save suspending: the stop request runs while the job is between
+    // emissions, and the job's next one meets the stop.
+    @Test fun aPauseOrCancelDuringAFastSkipStretchStopsTheJob() = runTest(timeout = 10.seconds) {
+        for (phase in listOf(JobPhase.PAUSED, JobPhase.CANCELLED)) {
+            val games = (1..60).map { Scrape.homeGame("G$it.gb", have = Scrape.HAS_ART) }
+            var now = 0L
+            val rig = Rig(this, games, engineClock = { now += ScrapeEngine.EMIT_EVERY_MS; now })
+            rig.host.yieldOnWrite = true
+            rig.host.files[ArtworkController.JOB_FILE] = ScrapeJobCodec.encode(ScrapeState(JobPhase.PAUSED, games.map { Scrape.item(it) }), replace = false)
+            rig.runner.hook = { if (it == "Fetching art 5/60") if (phase == JobPhase.PAUSED) rig.controller.pause() else rig.controller.cancel() }
+            assertTrue(rig.controller.restorePending())
+            rig.controller.resume()
+            advanceUntilIdle()
+            val s = rig.controller.state.value
+            assertEquals(phase, s.phase)
+            assertTrue(s.done in 5 until 60, "${s.done} done")
+            assertEquals(List(s.done) { ItemStatus.SKIPPED } + List(60 - s.done) { ItemStatus.WAITING }, s.items.map { it.status })
+            assertEquals(s.items, ScrapeJobCodec.decode(rig.host.files.getValue(ArtworkController.JOB_FILE))!!.first.items)
+            assertEquals(false to null, rig.runner.calls.last())
+            if (phase == JobPhase.PAUSED) {
+                rig.runner.hook = {}
+                rig.controller.resume()
+                advanceUntilIdle()
+                assertEquals(JobPhase.DONE, rig.controller.state.value.phase)
+                assertTrue(rig.controller.state.value.items.all { it.status == ItemStatus.SKIPPED })
+            }
+        }
+    }
+
+    // A host failure right after a stretch of skips that were not emitted yet: those games stay finished, not refetched.
+    @Test fun aHostFailurePausesWithTheGamesFinishedSinceTheLastEmission() = runTest {
+        val skipped = listOf(Scrape.homeGame("Tetris.gb", have = Scrape.HAS_ART), Scrape.homeGame("Zelda.gb", have = Scrape.HAS_ART))
+        val rig = Rig(this, skipped + sonic)
+        for (folder in listOf("boxart2d", "screenshot")) {
+            rig.fs.writeBytes(rig.fs.ensurePath(Scrape.home, listOf("Roms", "MD", ".media", folder))!!, "Sonic.png", OK_PNG.body!!)
+        }
+        rig.host.throwOnApply = { if (it == sonic.gamePath) IllegalStateException("index update failed") else null }
+        val queued = (skipped + sonic).map { Scrape.item(it) }
+        rig.host.files[ArtworkController.JOB_FILE] = ScrapeJobCodec.encode(ScrapeState(JobPhase.PAUSED, queued), replace = false)
+        assertTrue(rig.controller.restorePending())
+        rig.controller.resume()
+        advanceUntilIdle()
+        val s = rig.controller.state.value
+        assertEquals(JobPhase.PAUSED, s.phase)
+        assertEquals(ScrapeEngine.FAILED, s.pauseReason)
+        assertEquals(listOf(ItemStatus.SKIPPED, ItemStatus.SKIPPED, ItemStatus.WAITING), s.items.map { it.status })
+    }
+
     @Test fun cancelStopsTheJob() = runTest {
         val rig = Rig(this, listOf(tetris, zelda))
         rig.http.on("romnom=", Scrape.BOTH)
@@ -765,6 +815,45 @@ class ArtworkControllerTest {
         // With no job live, a single fetch starts the sources as a run does.
         rig.controller.fetchGame(zelda.gamePath, replaceExisting = true)
         assertEquals(2, other.starts)
+    }
+
+    // The stopped job's run still holds the shared sources while it winds down: a single fetch then waits for it.
+    @Test fun aSingleFetchDuringAStopStartsTheSourcesOnlyOnceTheStoppedRunEnded() = runTest {
+        val other = FakeSource("other")
+        val rig = Rig(this, listOf(tetris, zelda.copy(have = Scrape.HAS_ART)), more = listOf(other))
+        rig.http.on("romnom=", Scrape.BOTH)
+        rig.http.on("https://m/", OK_PNG)
+        rig.http.latency = 100
+        rig.controller.fetchMissing()   // Tetris only
+        testScheduler.runCurrent()
+        other.onEnd = { delay(50) }   // the stopped run's wind-down takes a while
+        rig.controller.pause()
+        var single: FetchResult? = null
+        launch { single = rig.controller.fetchGame(zelda.gamePath, replaceExisting = true) }   // not in the job
+        advanceUntilIdle()
+        assertEquals(ItemStatus.DONE, single?.status)
+        assertEquals(listOf("start", "end", "start", "end"), other.events)
+        assertEquals(JobPhase.PAUSED, rig.controller.state.value.phase)
+    }
+
+    // The run returns with games it never emitted (skips inside the emit interval) just as a pause stops it: they stay
+    // finished, whether the loop's own merge or the pause records them.
+    @Test fun gamesFinishedAsTheRunEndsAtAPauseStayFinished() = runTest {
+        val other = FakeSource("other")
+        val games = listOf(tetris.copy(have = Scrape.HAS_ART), zelda.copy(have = Scrape.HAS_ART))
+        val rig = Rig(this, games, more = listOf(other), engineClock = { 0L })   // no time passes: the skips are never emitted
+        rig.http.on("romnom=", Scrape.BOTH)
+        rig.http.on("https://m/", OK_PNG)
+        rig.host.files[ArtworkController.JOB_FILE] = ScrapeJobCodec.encode(ScrapeState(JobPhase.PAUSED, games.map { Scrape.item(it) }), replace = false)
+        assertTrue(rig.controller.restorePending())
+        other.onEnd = { rig.controller.pause(); yield() }   // the pause lands as the run's last step ends
+        rig.controller.resume()
+        advanceUntilIdle()
+        val s = rig.controller.state.value
+        assertEquals(JobPhase.PAUSED, s.phase)
+        assertEquals(listOf(ItemStatus.SKIPPED, ItemStatus.SKIPPED), s.items.map { it.status })
+        assertEquals(s.items, ScrapeJobCodec.decode(rig.host.files.getValue(ArtworkController.JOB_FILE))!!.first.items)
+        assertEquals(false to null, rig.runner.calls.last())
     }
 
     @Test fun fetchGameKeepsHandPlacedArtUnlessReplaceIsOn() = runTest {

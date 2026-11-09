@@ -158,7 +158,7 @@ private fun ShortcutsTab(shortcuts: List<ShortcutState>, focused: Int?, bottom: 
 }
 
 /**
- * The shortcut grid's columns in a panel [width] wide (the in-game menu steps by them): the most of 4, 2 and 1 whose
+ * The shortcut grid's columns in a panel [width] wide (the second-screen panel's): the most of 4, 2 and 1 whose
  * cell holds a pill as wide as the widest label or value ([widest]), so none is cut; 2 under [GP_NARROW] at most.
  */
 internal fun gamePanelColumns(width: Dp, widest: Dp): Int {

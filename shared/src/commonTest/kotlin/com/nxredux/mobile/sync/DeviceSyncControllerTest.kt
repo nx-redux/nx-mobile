@@ -261,16 +261,45 @@ class DeviceSyncControllerTest {
         assertFalse(c.running)
     }
 
-    /** A peer that vanishes (Wi-Fi gone, no FAIL) with no rsync connection open: the server gives up after minutes, not an hour. */
+    /** A peer that vanishes (Wi-Fi gone, no FAIL) after a step, no rsync connection open: the server gives up after minutes, not an hour. */
     @Test fun the_server_gives_up_on_a_silent_peer_with_no_connection_open() = runTest {
         val p = FakeSyncPlatform()
         val c = serving(p)
+        p.logLine!!("2026/10/14 23:28:20 [7] connect from UNKNOWN ($handheld)")
+        p.logLine!!("2026/10/14 23:28:21 [7] sent 120 bytes  received 4096 bytes  total size 4096")
         advanceTimeBy(299_000); runCurrent()
         assertEquals(SyncRole.SERVER, (c.page.value as DeviceSyncPage.Syncing).role)
         advanceTimeBy(3_000); runCurrent()
         assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.PEER_SILENT), c.page.value)
         assertEquals(listOf("stop"), p.serverCalls)
         assertEquals(false to null, p.alive.last())
+    }
+
+    /**
+     * A client on its confirm page sends nothing (it drops READY until its A), and its page has no time limit: before
+     * the first connection the server waits as long as a client waits for READY.
+     */
+    @Test fun the_server_waits_out_a_slow_confirm_on_the_client() = runTest {
+        val p = FakeSyncPlatform()
+        val c = serving(p)
+        advanceTimeBy(30 * 60_000L); runCurrent()
+        assertEquals(SyncRole.SERVER, (c.page.value as DeviceSyncPage.Syncing).role)
+        assertEquals(emptyList(), p.serverCalls)
+        p.logLine!!("2026/10/14 23:58:20 [7] connect from UNKNOWN ($handheld)")
+        p.logLine!!("2026/10/14 23:58:21 [7] sent 120 bytes  received 4096 bytes  total size 4096")
+        p.socket.from(handheld, SyncWire.DONE); runCurrent()
+        assertIs<DeviceSyncPage.Done>(c.page.value)
+    }
+
+    /** A client that never connects (gone while confirming) still ends the server, after the hour. */
+    @Test fun the_server_gives_up_after_an_hour_with_no_connection_ever() = runTest {
+        val p = FakeSyncPlatform()
+        val c = serving(p)
+        advanceTimeBy(3_599_000); runCurrent()
+        assertEquals(SyncRole.SERVER, (c.page.value as DeviceSyncPage.Syncing).role)
+        advanceTimeBy(1_500); runCurrent()
+        assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.PEER_NEVER_CONNECTED), c.page.value)
+        assertEquals(listOf("stop"), p.serverCalls)
     }
 
     /** A step's connection closed (its totals line): the short limit applies again from its last line. */
@@ -617,9 +646,20 @@ class DeviceSyncControllerTest {
         assertFalse(q.socket.sent.any { it.first == SyncWire.FAIL })
     }
 
+    /** A FAIL before any connection: the client's user pressed B on its confirm page (or its run could not start). */
+    @Test fun the_peers_fail_before_any_connection_reads_as_a_cancel() = runTest {
+        val p = FakeSyncPlatform()
+        val c = serving(p)
+        p.socket.from(handheld, SyncWire.FAIL); advanceTimeBy(1_000); runCurrent()
+        assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.PEER_ENDED_EARLY), c.page.value)
+        assertEquals(listOf("stop"), p.serverCalls)
+        assertEquals(0, p.socket.fails(handheld))
+    }
+
     @Test fun the_server_ends_on_the_peers_fail_without_echoing_it() = runTest {
         val p = FakeSyncPlatform()
         val c = serving(p)
+        p.logLine!!("2026/10/14 23:28:20 [7] connect from UNKNOWN ($handheld)")
         p.socket.from("192.168.1.99", SyncWire.FAIL); runCurrent()   // not the peer
         assertIs<DeviceSyncPage.Syncing>(c.page.value)
         p.socket.from(handheld, SyncWire.FAIL); advanceTimeBy(1_000); runCurrent()
@@ -643,8 +683,8 @@ class DeviceSyncControllerTest {
     @Test fun a_timed_out_server_sends_fail() = runTest {
         val p = FakeSyncPlatform()
         val c = serving(p)
-        advanceTimeBy(301_500); runCurrent()
-        assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.PEER_SILENT), c.page.value)
+        advanceTimeBy(3_601_500); runCurrent()
+        assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.PEER_NEVER_CONNECTED), c.page.value)
         assertEquals(5, p.socket.fails(handheld))
     }
 
@@ -1859,7 +1899,7 @@ class DeviceSyncControllerTest {
         assertIs<DeviceSyncPage.Done>(d.page.value)
     }
 
-    /** The server's user pressed B after this side's A: its FAIL ends the wait for READY at once. */
+    /** The server's user pressed B after this side's A (or its daemon would not start): its FAIL ends the wait for READY at once. */
     @Test fun the_servers_fail_before_ready_ends_the_clients_wait() = runTest {
         val p = FakeSyncPlatform()
         val c = rig(p)
@@ -1867,7 +1907,7 @@ class DeviceSyncControllerTest {
         p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
         assertIs<DeviceSyncPage.Syncing>(c.page.value)
         p.socket.from(handheld, SyncWire.FAIL); advanceTimeBy(1_000); runCurrent()
-        assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.PEER_FAILED), c.page.value)
+        assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.PEER_ENDED_EARLY), c.page.value)
         assertEquals(0, p.socket.fails(handheld))
         assertTrue(p.stepsRun.isEmpty())
     }

@@ -141,6 +141,17 @@ class WrittenArtLogTest {
         assertEquals("$p\tscreenscraper\tlast\t\n", host.files["log"])
     }
 
+    // The lines earlier sessions appended count too: a long-lived app compacts on its next change, not never.
+    @Test fun linesAppendedInEarlierSessionsAreCompactedOnTheNextChange() = runTest {
+        val p = "Roms/GB/.media/box2d/Tetris.png"
+        val earlier = (0..ArtLogStore.COMPACT_MIN).joinToString("") { WrittenArtLog.line(p, ArtOrigin("screenscraper", "$it", null)) }
+        val host = FakeHost(emptyList()).apply { appendable = true; files["log"] = earlier }
+        val store = ArtLogStore(host, "log")
+        store.add(listOf("Roms/GB/.media/box2d/Zelda.png" to null))
+        assertEquals(1, host.writes.size)
+        assertEquals("$p\tscreenscraper\t${ArtLogStore.COMPACT_MIN}\t\nRoms/GB/.media/box2d/Zelda.png\n", host.files["log"])
+    }
+
     @Test fun aTornLastLineIsDroppedAndTheNextChangeRewritesTheFile() = runTest {
         val host = FakeHost(emptyList()).apply { appendable = true; files["log"] = "Roms/GB/.media/box2d/Zelda.png\nRoms/GB/.media/box2d/Tetr" }
         val store = ArtLogStore(host, "log")

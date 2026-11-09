@@ -60,15 +60,19 @@ class ProviderPreferences(
      * them, and a later change there wins.
      */
     fun refresh() {
-        val startedAt = synchronized(lock) { writes }
+        val startedAt = beginRefresh()
         @Suppress("UNCHECKED_CAST")
         val entries = runCatching { channel.call(PrefsProvider.METHOD_GET_ALL, name, emptyMap())[PrefsProvider.RESULT_ENTRIES] as Map<String, Any?> }
             .onFailure { NxLog.w("NXAPP", "settings read ($name): ${it.message}") }
             .getOrNull() ?: return
-        synchronized(lock) {
-            fetched = HashMap(entries)
-            if (writes == startedAt) { written.clear(); cleared = false }
-        }
+        endRefresh(startedAt, entries)
+    }
+
+    private fun beginRefresh(): Long = synchronized(lock) { writes }
+
+    private fun endRefresh(startedAt: Long, entries: Map<String, Any?>) = synchronized(lock) {
+        fetched = HashMap(entries)
+        if (writes == startedAt) { written.clear(); cleared = false }
     }
 
     override fun getAll(): MutableMap<String, *> = synchronized(lock) {
@@ -134,7 +138,22 @@ class ProviderPreferences(
         override fun apply() { commit() }
     }
 
-    private companion object {
-        val REMOVED = Any()
+    companion object {
+        private val REMOVED = Any()
+
+        /**
+         * [refresh] for every file in [prefs] in one call into the owner: a call may have to start the menu's process, so
+         * one start, not one per file. Blocking, as [refresh]; a failed call keeps every view as it was, and a file the
+         * answer leaves out keeps its own.
+         */
+        fun refreshAll(channel: PrefsChannel, prefs: Collection<ProviderPreferences>) {
+            if (prefs.isEmpty()) return
+            val started = prefs.associateWith { it.beginRefresh() }
+            @Suppress("UNCHECKED_CAST")
+            val files = runCatching {
+                channel.call(PrefsProvider.METHOD_GET_ALL_FILES, "", mapOf(PrefsProvider.ARG_NAMES to prefs.map { it.name }))[PrefsProvider.RESULT_FILES] as Map<String, Map<String, Any?>>
+            }.onFailure { NxLog.w("NXAPP", "settings read: ${it.message}") }.getOrNull() ?: return
+            for ((p, startedAt) in started) files[p.name]?.let { p.endRefresh(startedAt, it) }
+        }
     }
 }

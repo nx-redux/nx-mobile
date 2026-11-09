@@ -22,7 +22,7 @@ class FakeRaStore : RaStore {
         if (failAppend) throw RaStoreException("append failed")
         files[path] = (files[path] ?: ByteArray(0)) + bytes; writes += path
     }
-    override suspend fun size(path: String): Long? = files[path]?.size?.toLong()
+    override suspend fun stamp(path: String): String? = files[path]?.let { "${it.size}:${it.contentHashCode()}" }
     override suspend fun delete(path: String) { beforeDelete(); files.remove(path) }
     override suspend fun deleteTree(dir: String) { beforeDelete(); if (dir.isEmpty()) throw RaStoreException("refusing to delete the store root"); files.keys.filter { it == dir || it.startsWith("$dir/") }.forEach { files.remove(it) } }
     override suspend fun list(dir: String): List<String> = if (failList.also { beforeList() }) throw RaStoreException("list failed") else files.keys.filter { it.startsWith("$dir/") }.map { it.removePrefix("$dir/").substringBefore('/') }.distinct()

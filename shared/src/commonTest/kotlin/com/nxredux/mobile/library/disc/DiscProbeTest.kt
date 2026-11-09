@@ -43,6 +43,14 @@ class DiscProbeTest {
         assertNull(DiscProbe(src).identify(dir.first { it.name == "S.chd" }, dir))       // no CHD reader: a CD CHD stays unplaced
     }
 
+    // A cue a Windows editor saved with a UTF-8 byte order mark: its first line is still its FILE.
+    @Test fun a_cue_with_a_bom_finds_its_bin() = runTest {
+        val cue = "\uFEFFFILE \"G.bin\" BINARY\n TRACK 01 MODE2/2352\n  INDEX 01 00:00:00\n"
+        val src = FakeRomsSource(mapOf("d" to listOf("G.bin", "G.cue")), bytes = mapOf("d/G.cue" to cue.encodeToByteArray(), "d/G.bin" to ps1Bin()))
+        val dir = src.listChildren(ContentRef("d"))
+        assertEquals("ps", DiscProbe(src).identify(dir.first { it.name == "G.cue" }, dir))
+    }
+
     // A Windows-1252 cue whose FILE differs in case and code page from the bin on disk: read as the scanner reads it.
     @Test fun a_legacy_cue_finds_its_bin() = runTest {
         val cue = "FILE \"pok\u00e9mon.BIN\" BINARY\n TRACK 01 MODE2/2352\n  INDEX 01 00:00:00\n"

@@ -116,10 +116,6 @@ internal class SwitcherController(
     override fun onRunnerCalled(fromSwitcher: Boolean) { switcherReturn = fromSwitcher }
 
     /**
-     * The menu came to the foreground: true when it is back from a game opened over the switcher that is still up
-     * ([backUnderGame] then follows). Read once: a later foreground is not one from that game.
-     */
-    /**
      * Back in the foreground: when the switcher stayed up over the game, the action that takes it back (read now, run
      * by the caller once its other returns are done); else null. The flag is used up either way.
      */

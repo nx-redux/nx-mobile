@@ -135,6 +135,7 @@ internal class ShortcutsMicController(
 
     /** Save state / Load state from a shortcut: the save-state slot last used, as the in-game menu's. */
     private fun quickState(save: Boolean) {
+        if (host.quitting) return   // the quit's resume point is being written: no slot moves under it
         val ss = host.saveStates ?: run { host.toast("Save states are off here"); return }
         val go = { slot: Int -> if (save) host.saveToSlot(slot) else host.loadFromSlot(slot) }
         host.lastSlotCache?.let { return go(it) }
@@ -149,7 +150,7 @@ internal class ShortcutsMicController(
 
     /** A pad skin's SAVE / LOAD (the last-used slot), REWIND (held) or FAST (toggled), as the touch shortcuts go. */
     fun onSkinShortcut(action: SkinAction, down: Boolean) {
-        if (down && host.menuOpen) return   // a release always goes through: a held REWIND must not stick
+        if (down && (host.menuOpen || host.quitting)) return   // a release always goes through: a held REWIND must not stick
         when (action) {
             SkinAction.SAVE, SkinAction.LOAD -> if (down) quickState(save = action == SkinAction.SAVE)
             SkinAction.REWIND -> onShortcut(ShortcutAction.HOLD_REWIND, down)

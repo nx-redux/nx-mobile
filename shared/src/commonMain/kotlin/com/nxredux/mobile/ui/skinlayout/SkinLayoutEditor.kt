@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -212,6 +213,8 @@ private fun EditorToolbar(title: String, state: SkinEditorState, editor: Rect, o
     val sel = state.selected
     var moved by remember { mutableStateOf(Offset.Zero) }   // dragged from its starting spot, px
     var placed by remember { mutableStateOf(Rect.Zero) }    // where it is now, root px
+    // read live: the drag coroutine outlives an unfold or rotation, which hands in new bounds
+    val bounds by rememberUpdatedState(editor)
     Column(
         modifier.padding(12.dp)
             .offset { IntOffset(moved.x.roundToInt(), moved.y.roundToInt()) }
@@ -220,8 +223,8 @@ private fun EditorToolbar(title: String, state: SkinEditorState, editor: Rect, o
                 detectDragGestures { change, delta ->
                     change.consume()
                     // keep the whole panel on screen: the room left on each side bounds this step
-                    val dx = delta.x.coerceIn(minOf(0f, editor.left - placed.left), (editor.right - placed.right).coerceAtLeast(0f))
-                    val dy = delta.y.coerceIn(minOf(0f, editor.top - placed.top), (editor.bottom - placed.bottom).coerceAtLeast(0f))
+                    val dx = delta.x.coerceIn(minOf(0f, bounds.left - placed.left), (bounds.right - placed.right).coerceAtLeast(0f))
+                    val dy = delta.y.coerceIn(minOf(0f, bounds.top - placed.top), (bounds.bottom - placed.bottom).coerceAtLeast(0f))
                     moved += Offset(dx, dy)
                 }
             }

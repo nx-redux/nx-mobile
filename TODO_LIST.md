@@ -152,3 +152,27 @@ Game side (GameActivity split):
 - [ ] Mic button and touch shortcut buttons on DS/3DS and in a netplay game (speed shortcuts hidden in netplay)
 - [ ] Sega pad Auto picks the cart's pad type; 3DS New Controls Auto reads the title
 - [ ] Save/Load state shortcut or skin SAVE/LOAD right after launch uses the last-used slot
+
+## Review round 2 fixes: device checks still owed
+
+Already passed on the Nova (wireless adb): GBA, DS, PS smoke; GBA, PS2, GC, Wii, PSP, 3DS, DC, N64 run, hold under the
+menu, survive Home and return, quit and reload slot 9 (8/8); save then quit at once ×3; Wii quit ×3 in 5–6 s.
+
+- [ ] Art fetch: Pause, Cancel and Reset during a long run of "has art" skips stop at once (no hang); Resume continues;
+  a single-game fetch started during a Pause waits for it
+- [ ] Remove an extra on a large library, then rename / hide a game during the re-index: no stall
+- [ ] Art fetch on a big library: the menu stays smooth on each art flush; art results during a rescan are kept
+- [ ] A Notepad-saved .cue (UTF-8 BOM) in an extra or loose folder is identified and placed
+- [ ] Update dialog: holding DOWN on long notes stops on release; the Scroll hint steps from the current target
+- [ ] Skin layout editor toolbar: drag, unfold / rotate, drag again — it reaches the new edges
+- [ ] Device Sync (two devices): a client left on its confirm page > 5 min still syncs; B on either side after the
+  other's A shows "The other device cancelled the sync or couldn't start it."
+- [ ] RetroAchievements: Stop a sync while a game journals an unlock; the next sync works (no OverlappingFileLock)
+- [ ] Kill a game mid-play, wait > 3 min in the menu: Game Time and Home agree
+- [ ] Save & Quit, then tap LOAD during the save: the next launch resumes at the quit point; Wii HOME during a quit is ignored
+- [ ] Launcher mode: Home out of a game, kill the menu process, return — no stall; then change Second screen / Pause when
+  unfocused and return — it applies (both directions in multi-window)
+- [ ] Kids Mode: lock / unlock / lock quickly — at most one bounce a second
+- [ ] Wi-Fi netplay: after the peer ends, `dumpsys wifi` shows no nxredux:netplay lock while the game plays on
+- [ ] Vulkan PSP / Azahar with a shader preset and while the picture is held; GL Dolphin / Flycast with a preset
+- [ ] Save / load states on PS2 and Wii (large), PPSSPP; SRAM / RTC with a clock game; multi-file VFS launches and RA hashing

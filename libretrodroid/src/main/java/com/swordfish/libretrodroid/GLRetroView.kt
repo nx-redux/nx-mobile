@@ -891,7 +891,8 @@ class GLRetroView(
             return@catchExceptions
         }
         if (data.extraVirtualFiles.isNotEmpty()) {
-            LibretroDroid.addVirtualFiles(data.extraVirtualFiles.map { DetachedVirtualFile(it.virtualPath, it.fileDescriptor.detachFd()) })
+            val extra = detachAll(data.extraVirtualFiles) { DetachedVirtualFile(it.virtualPath, it.fileDescriptor.detachFd()) }
+            handOver(extra) { LibretroDroid.addVirtualFiles(it) }
         }
         when {
             data.gameFilePath != null -> loadGameFromPath(data.gameFilePath!!)
@@ -917,9 +918,8 @@ class GLRetroView(
     }
 
     private fun loadGameFromVirtualFiles(virtualFiles: List<VirtualFile>) {
-        val detachedVirtualFiles = virtualFiles
-            .map { DetachedVirtualFile(it.virtualPath, it.fileDescriptor.detachFd()) }
-        LibretroDroid.loadGameFromVirtualFiles(detachedVirtualFiles)
+        val detachedVirtualFiles = detachAll(virtualFiles) { DetachedVirtualFile(it.virtualPath, it.fileDescriptor.detachFd()) }
+        handOver(detachedVirtualFiles) { LibretroDroid.loadGameFromVirtualFiles(it) }
     }
 
     private fun loadGameFromBytes(gameFileBytes: ByteArray) {

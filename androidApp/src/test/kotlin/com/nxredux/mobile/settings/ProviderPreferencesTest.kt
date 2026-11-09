@@ -130,4 +130,45 @@ class ProviderPreferencesTest {
         prefs.refresh()
         assertEquals("old", prefs.getString("k", null))
     }
+
+    /** The owner's files by name, answering the one-call read of several of them. */
+    private class FakeFiles(val files: MutableMap<String, MutableMap<String, Any?>>) : PrefsChannel {
+        var calls = 0
+        var failing = false
+        override fun call(method: String, name: String, args: Map<String, Any?>): Map<String, Any?> {
+            calls++
+            if (failing) error("menu gone")
+            check(method == PrefsProvider.METHOD_GET_ALL_FILES) { method }
+            @Suppress("UNCHECKED_CAST")
+            val names = args[PrefsProvider.ARG_NAMES] as List<String>
+            return mapOf(PrefsProvider.RESULT_FILES to names.associateWith { HashMap(files[it].orEmpty()) })
+        }
+    }
+
+    // Back from the background with the menu process killed: each call would cold-start it, so every file comes in one.
+    @Test fun refreshAllReadsEveryFileInOneCall() {
+        val owner = FakeFiles(hashMapOf("a" to hashMapOf<String, Any?>("k" to "1"), "b" to hashMapOf<String, Any?>("n" to 1)))
+        val a = ProviderPreferences("a", owner, LocalFile(mapOf("k" to "1")))
+        val b = ProviderPreferences("b", owner, LocalFile(mapOf("n" to 1)))
+        owner.files["a"]!!["k"] = "2"; owner.files["b"]!!["n"] = 7
+        ProviderPreferences.refreshAll(owner, listOf(a, b))
+        assertEquals(1, owner.calls)
+        assertEquals("2", a.getString("k", null))
+        assertEquals(7, b.getInt("n", 0))
+    }
+
+    @Test fun refreshAllCallsOnlyForOpenFilesAndAFailureKeepsTheView() {
+        val owner = FakeFiles(hashMapOf("a" to hashMapOf<String, Any?>("k" to "1")))
+        val writes = FakeOwner(hashMapOf("k" to "1"))
+        val a = ProviderPreferences("a", writes, LocalFile(mapOf("k" to "1")))
+        owner.files["a"]!!["k"] = "menu"
+        owner.failing = true
+        ProviderPreferences.refreshAll(owner, listOf(a))
+        assertEquals("1", a.getString("k", null))
+        owner.failing = false
+        ProviderPreferences.refreshAll(owner, emptyList())
+        assertEquals(1, owner.calls)   // nothing opened: no call
+        ProviderPreferences.refreshAll(owner, listOf(a))
+        assertEquals("menu", a.getString("k", null))
+    }
 }

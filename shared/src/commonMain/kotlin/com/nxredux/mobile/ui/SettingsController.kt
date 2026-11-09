@@ -70,8 +70,17 @@ internal class SettingsController(
     private val kidsAvailable: Boolean,
     private val host: SettingsHost,
 ) {
-    val sectionSelections = HashMap<SettingsSection, ListSelection>()   // each section's row, remembered across visits
-    var settingsMenuSelection = ListSelection(0, 0)
+    private val sectionSelections = HashMap<SettingsSection, ListSelection>()   // each section's row, remembered across visits
+    private var settingsMenuSelection = ListSelection(0, 0)
+
+    /** [sel] is [section]'s row on its next visit. */
+    fun rememberSection(section: SettingsSection, sel: ListSelection) { sectionSelections[section] = sel }
+
+    /** [section]'s next visit starts on its first row. */
+    fun forgetSection(section: SettingsSection) { sectionSelections.remove(section) }
+
+    /** [sel] is the section menu's row on its next show. */
+    fun rememberSettingsMenu(sel: ListSelection) { settingsMenuSelection = sel }
     var settingsSplit = false   // the UI draws Settings as two panes ([onSettingsSplit])
         private set
 
