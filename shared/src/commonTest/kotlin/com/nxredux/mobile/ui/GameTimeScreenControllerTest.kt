@@ -44,6 +44,7 @@ class GameTimeScreenControllerTest {
         override suspend fun byPath() = rows.associateBy { it.romPath }
         override suspend fun window(sinceMs: Long, nowMs: Long) = WindowTotals(rows.sumOf { it.totalMs }, rows.maxByOrNull { it.totalMs })
         override suspend fun playedPaths(sinceMs: Long, nowMs: Long) = rows.map { it.romPath }.toSet()
+        override suspend fun renamePaths(map: Map<String, String>) { calls += "rename $map" }
     }
 
     private fun total(id: Long, name: String, ms: Long, members: Int = 0) = GameTotal(id, name, "GB", "/Roms/GB/$name.gb", ms, 1, 0, members)

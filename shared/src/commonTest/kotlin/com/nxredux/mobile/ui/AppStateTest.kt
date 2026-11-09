@@ -637,6 +637,27 @@ class AppStateTest {
         assertEquals("$new\n/Roms/Game Boy Advance (GBA)/A.gba\n", src.readText(ContentRef("S/Collections/Favs.txt")))
     }
 
+    // Play time is keyed by the game's path too: the merge moves it with the game.
+    @Test fun the_home_page_merge_moves_the_play_time_of_moved_games() = runTest {
+        val gba = "S/Roms/Game Boy Advance (GBA)"; val mgba = "S/Roms/Game Boy Advance (MGBA)"
+        val src = FakeRomsSource(
+            dirs = mapOf("S" to listOf("Roms"), "S/Roms" to listOf("Game Boy Advance (GBA)", "Game Boy Advance (MGBA)"),
+                gba to listOf("A.gba"), mgba to listOf("K.gba")),
+            bytes = mapOf("$mgba/K.gba" to ByteArray(4)),
+        )
+        val renamed = mutableMapOf<String, String>()
+        val gameTime = object : GameTimeData by NoGameTime {
+            override suspend fun renamePaths(map: Map<String, String>) { renamed += map }
+        }
+        val state = state(freshInstall(), src = src, gameTime = gameTime)
+        state.load(); state.getStarted()
+        state.setHome(ContentRef("S")); advanceUntilIdle()
+        val s = assertIs<Screen.FolderSummary>(state.screen.value)
+        state.select(folderSummaryRows(s).lastIndex); state.onButton(NxButton.A)
+        state.onButton(NxButton.A); advanceUntilIdle()   // the move's confirmation: Move
+        assertEquals(mapOf("/Roms/Game Boy Advance (MGBA)/K.gba" to "/Roms/Game Boy Advance (GBA)/K.gba"), renamed)
+    }
+
     // A long merge rewrites the lines of the games already moved every few seconds, so a process killed mid-merge does not
     // leave every moved game's Recents, pins and collection lines at the old paths.
     @Test fun a_merge_still_running_has_already_rewritten_the_lines_of_moved_games() = runTest {
@@ -13790,4 +13811,5 @@ private object NoGameTime : GameTimeData {
     override suspend fun byPath(): Map<String, GameTotal> = emptyMap()
     override suspend fun window(sinceMs: Long, nowMs: Long): WindowTotals = WindowTotals(0L, null)
     override suspend fun playedPaths(sinceMs: Long, nowMs: Long): Set<String> = emptySet()
+    override suspend fun renamePaths(map: Map<String, String>): Unit = error("unused")
 }
