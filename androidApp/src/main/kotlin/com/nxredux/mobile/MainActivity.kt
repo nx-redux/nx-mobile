@@ -440,6 +440,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 allFilesAccess = allFiles,
                 notificationAccess = notificationAccess,
                 micAccess = micAccess,
+                linkRomCache = com.nxredux.mobile.storage.LinkRomCaches.get(this),
                 localFiles = AndroidLocalFiles(AndroidLocalFiles.deviceVolumes(applicationContext)),
                 archiveHead = { ref, name, exts, max -> withContext(Dispatchers.IO) { Archives.head(applicationContext, ref, name, exts, max) } },
                 builtInSecondScreen = { secondScreens.builtInNow() != null },

@@ -240,6 +240,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     // System's About group: what each read-only value is, and the two actions.
     SettingsKind.INFO -> SettingText("")   // System's About values read alone, compact (no description)
     SettingsKind.COPY_INFO -> quiet("Put the version, build and device on the clipboard, for a bug report")
+    SettingsKind.CLEAR_LINK_ROMS -> quiet("Delete the game files kept from Cable Link over Wi-Fi sessions; they are sent again next time")
     SettingsKind.APP_UPDATE -> quiet("Check for a new version and install it")
     SettingsKind.DEBUG_LOG -> quiet(
         "Detailed logs in Android's system log, for a bug report",

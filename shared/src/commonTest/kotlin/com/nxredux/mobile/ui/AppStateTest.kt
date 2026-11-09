@@ -2104,8 +2104,8 @@ class AppStateTest {
         assertEquals(2, runner.launched.size)
     }
 
-    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, skinEditor: SkinEditorLauncher? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }) =
-        AppState(AppDeps(settings, src, runner, picker, data, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, skinEditor = skinEditor, saveTransfer = saveTransfer, allFilesAccess = allFiles, micAccess = mic, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, skinEditor: SkinEditorLauncher? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }, linkRomCache: com.nxredux.mobile.netplay.cablelink.LinkRomCache? = null) =
+        AppState(AppDeps(settings, src, runner, picker, data, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, skinEditor = skinEditor, saveTransfer = saveTransfer, allFilesAccess = allFiles, micAccess = mic, linkRomCache = linkRomCache, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
 
     /** What a scan of [src] for [settings] stores, built without an AppState (so without the skeleton). */
     private suspend fun scannedIndex(settings: MemorySettings, src: RomsSource = source): LibraryIndex =
@@ -10434,6 +10434,53 @@ class AppStateTest {
         state.onButton(NxButton.LEFT)
         assertEquals(true, settings.debugLog)
         assertEquals("On", row().secondary)
+    }
+
+    // Settings → System → Clear link ROM cache: its value is the cache's size; A empties it.
+    @Test fun settings_row_shows_size_and_clears() = runTest {
+        val store = com.nxredux.mobile.netplay.cablelink.MemoryCacheStore()
+        store.files["a".repeat(40)] = ByteArray(2048)
+        val cache = com.nxredux.mobile.netplay.cablelink.LinkRomCache(store)
+        val state = state(MemorySettings(ContentRef("Home")), linkRomCache = cache)
+        state.load()
+        state.openSettings(SettingsSection.SYSTEM)
+        fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
+        fun row() = rows().single { it.kind == SettingsKind.CLEAR_LINK_ROMS }
+        assertEquals("Clear link ROM cache" to "2.0 KB", row().label to row().secondary)
+        state.select(rows().indexOf(row()))
+        state.onButton(NxButton.A)
+        assertEquals(0L, cache.sizeBytes())
+        assertEquals("0 B", row().secondary)
+    }
+
+    @Test fun no_clear_row_without_a_link_rom_cache() = runTest {
+        val state = state(MemorySettings(ContentRef("Home")))
+        state.load()
+        state.openSettings(SettingsSection.SYSTEM)
+        assertEquals(false, assertIs<Screen.Settings>(state.screen.value).rows.any { it.kind == SettingsKind.CLEAR_LINK_ROMS })
+    }
+
+    @Test fun find_local_rom_looks_only_in_gba_folders() = runTest {
+        val gba = ByteArray(4096) { (it * 5).toByte() }
+        val gb = ByteArray(4096) { (it * 11).toByte() }
+        val src = FakeRomsSource(
+            dirs = mapOf(
+                "Home" to listOf("Roms"),
+                "Home/Roms" to listOf("Game Boy (GB)", "Game Boy Advance (GBA)"),
+                "Home/Roms/Game Boy (GB)" to listOf("Tetris.gb"),
+                "Home/Roms/Game Boy Advance (GBA)" to listOf("Mario.gba"),
+            ),
+            bytes = mapOf("Home/Roms/Game Boy Advance (GBA)/Mario.gba" to gba, "Home/Roms/Game Boy (GB)/Tetris.gb" to gb),
+        )
+        src.sizes["Home/Roms/Game Boy Advance (GBA)/Mario.gba"] = gba.size.toLong()
+        src.sizes["Home/Roms/Game Boy (GB)/Tetris.gb"] = gb.size.toLong()
+        val state = state(MemorySettings(ContentRef("Home")), src)
+        state.load(); advanceUntilIdle()
+        fun sha(x: ByteArray) = com.nxredux.mobile.netplay.cablelink.RomHash.sha1Hex(sequenceOf(x))
+        assertEquals("Home/Roms/Game Boy Advance (GBA)/Mario.gba", state.findLocalRom(sha(gba), "GBA"))
+        assertEquals("Home/Roms/Game Boy Advance (GBA)/Mario.gba", state.findLocalRom(sha(gba), "MGBA"))
+        assertNull(state.findLocalRom(sha(gb), "GBA"))
+        assertNull(state.findLocalRom(sha(gba), "GB"))
     }
 
     // Settings → System → Pause when unfocused (its General group, the first row), On by default; A, left and right each flip it.

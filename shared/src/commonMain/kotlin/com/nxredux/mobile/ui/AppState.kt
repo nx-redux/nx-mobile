@@ -264,6 +264,8 @@ class AppDeps(
     val allFilesAccess: AllFilesAccess? = null,
     /** Microphone access for DS / 3DS games' Mic toggle (Settings → Library row); null: none, or no mic to use. */
     val micAccess: MicAccess? = null,
+    /** ROMs received over a Cable Link session (Settings → System's Clear link ROM cache row); null: none on this platform. */
+    val linkRomCache: com.nxredux.mobile.netplay.cablelink.LinkRomCache? = null,
     /** Local folders for the list-style picker and the SAF → file conversion; null: Android's pickers only. */
     val localFiles: LocalFiles? = null,
     /**
@@ -518,7 +520,7 @@ sealed interface Screen {
 /** Kids Mode's first switch-on, in order (the spec's): PIN, allowed apps, play times, then the two permissions and home. */
 enum class KidsSetupStep { PIN, APPS, TIMES, USAGE, ALARMS, HOME }
 
-enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE,
+enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
@@ -3933,6 +3935,7 @@ class AppState(
         deps.launcher?.let { l -> add(SettingsRow(SettingsKind.HOME_SCREEN, "Use as home screen", if (l.isHome()) "On" else "Off")) }
         // Logging for a bug report; off, only errors reach logcat.
         add(SettingsRow(SettingsKind.DEBUG_LOG, "Debug log", if (deps.settings.debugLog) "On" else "Off"))
+        deps.linkRomCache?.let { add(SettingsRow(SettingsKind.CLEAR_LINK_ROMS, "Clear link ROM cache", formatBytes(it.sizeBytes()))) }
         add(SettingsRow(SettingsKind.GAP, ""))
         add(SettingsRow(SettingsKind.SECTION, "About"))
         queryGpu()   // the page (or its preview) shows: the GPU row reads "…" until this lands
@@ -3959,6 +3962,18 @@ class AppState(
         _gpu.value = name?.trim()?.ifEmpty { null } ?: UNKNOWN_INFO
         if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SYSTEM) settingsUi.refreshSettings()
     }.also { gpuJob = it; it.start() }
+
+    private val localRomFinder = com.nxredux.mobile.library.LocalRomFinder(deps.source)
+
+    /**
+     * The library GBA ROM (a GBA or MGBA folder, whichever core plays it) whose SHA-1 is [hash], as a ref value; null
+     * when there is none or [tag] is not a GBA tag. Hashes on [AppDeps.compute], each ROM once per change.
+     */
+    suspend fun findLocalRom(hash: String, tag: String): String? {
+        if (tag != "GBA" && tag != "MGBA") return null
+        val games = (libraryIndex.current() ?: return null).systems.filter { it.tag == "GBA" || it.tag == "MGBA" }.flatMap { it.games }
+        return withContext(deps.compute) { localRomFinder.find(hash, games) }
+    }
 
     /** Copy device info: the About rows as text on the clipboard (after the GPU query, which is quick), then a notice. */
     private fun copyDeviceInfo() {
@@ -5134,6 +5149,7 @@ class AppState(
                     SettingsKind.EMULATORS -> { settingsUi.sectionSelections[s.section] = _selection.value; emulatorSettings.openList(systemsCache) }
                     SettingsKind.INFO -> Unit   // About: read-only
                     SettingsKind.COPY_INFO -> copyDeviceInfo()
+                    SettingsKind.CLEAR_LINK_ROMS -> deps.linkRomCache?.let { it.clear(); settingsUi.refreshSettings() }
                     SettingsKind.APP_UPDATE -> deps.updater?.let(::appUpdateRowA)
                     SettingsKind.HOME_SCREEN -> deps.launcher?.let { it.setHome(!it.isHome()); settingsUi.refreshSettings() }
                     SettingsKind.ANDROID_GAMES -> openToolApps(AppPick.GAMES)
