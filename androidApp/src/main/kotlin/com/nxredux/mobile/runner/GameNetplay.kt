@@ -3,19 +3,12 @@ package com.nxredux.mobile.runner
 import android.content.Intent
 import android.os.Bundle
 import android.os.SystemClock
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
 import android.view.View
 import android.widget.TextView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.R
 import com.nxredux.mobile.lowLatencyWifiLock
-import com.nxredux.mobile.netplay.cablelink.CheckpointFiles
-import com.nxredux.mobile.netplay.cablelink.PairCheckpointFrames
-import com.nxredux.mobile.netplay.cablelink.PairSaveCheckpoint
-import com.nxredux.mobile.netplay.wizard.CableLinkSetup
-import com.nxredux.mobile.settings.AndroidAppSettings
-import com.swordfish.libretrodroid.GLRetroView
-import com.swordfish.libretrodroid.LibretroNetplay
 import com.nxredux.mobile.netplay.NetplayLinkKind
 import com.nxredux.mobile.netplay.NetplayLinkOptions
 import com.nxredux.mobile.netplay.NetplayRole
@@ -23,10 +16,16 @@ import com.nxredux.mobile.netplay.NetplaySaves
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.NetplayText
+import com.nxredux.mobile.netplay.cablelink.CheckpointFiles
+import com.nxredux.mobile.netplay.cablelink.PairSaveCheckpoint
+import com.nxredux.mobile.netplay.wizard.CableLinkSetup
+import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.PrefsProvider
 import com.nxredux.mobile.storage.NxPaths
 import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.nxredux.mobile.ui.nx.NotificationQueue
+import com.swordfish.libretrodroid.GLRetroView
+import com.swordfish.libretrodroid.LibretroNetplay
 import com.swordfish.libretrodroid.NxLog
 import com.swordfish.libretrodroid.Variable
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +49,8 @@ internal interface GameNetplayHost : GameScreenHost {
     fun fail(message: String, title: String = GameActivity.START_FAILED)
     fun quitGame(chosen: Boolean, autoState: Boolean)
     fun becomeLocal(localCheats: (() -> Job)?)
+    /** Opens the in-game menu (nothing when it is open). */
+    fun showMenu()
 }
 
 /**
@@ -109,11 +110,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
         private set
     @Volatile private var ownCopyFailed = false   // a host's copy of its own saves failed: it starts without them
     /** Cable Link: the real save's checkpoints ([attachCheckpoint]); null for every other launch. */
-    private var checkpoint: PairSaveCheckpoint? = null
-    /** Cable Link: the save snapshots waiting for the drift checks' verdicts; its lock also guards [pairClosed]. */
-    private val pairFrames = PairCheckpointFrames()
-    /** Cable Link: the session ended and its save was committed; nothing is snapshot or committed again. */
-    private var pairClosed = false
+    private var pairSaves: PairSaveSession? = null
 
     /** onCreate: the session this launch plays (a session launches cold: no saved or requested resume slot). */
     fun onCreate(intent: Intent, savedInstanceState: Bundle?) {
@@ -149,7 +146,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
         wifi = null
         // Cable Link ended by the screen going (a quit, the system): the last verified checkpoint becomes the real save. A
         // verdict still in flight is lost with the engine, which the native destroy already shut down.
-        if (closePair()) commitPair()
+        pairSaves?.end(null)
         session?.let { np ->
             val owner = owner
             val filesDir = host.activity.filesDir
@@ -242,7 +239,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
                 np, host.lifecycleScope, SystemClock::elapsedRealtime, ::onNotice,
                 delayPin = if (np.cableLink) settings.cableLinkDelayPin else 0,
                 onDelay = if (overlay) ::showDelay else null,
-                onEnding = { verified -> if (np.savesAtCheckpoints) endPair(verified) },
+                onEnding = { verified -> pairSaves?.end(verified) },
             ).also { run = it }.start()
         }
         NetplayLinkKind.NETPACKET -> (run as? NetplayLinkGame)?.let { it.begin(); it.live } ?: false
@@ -272,7 +269,9 @@ internal class GameNetplay(private val host: GameNetplayHost) {
                 if (pillShown) notifications.hideProgress()
                 pillShown = false
                 notifications.push(notice.text, null, NETPLAY_NOTICE_MS, now)
-                if (session?.endsAsLocalGame == true) linkEnded() else {
+                if (session?.endsAsLocalGame == true) linkEnded()
+                else if (session?.cableLink == true) cableLinkEnded()
+                else {
                     // The ended session holds no frames: an open menu pauses the game as for any other launch.
                     if (host.menuOpen || host.focusPaused) host.retroView?.frameSpeed = 0
                     ended = true
@@ -331,6 +330,21 @@ internal class GameNetplay(private val host: GameNetplayHost) {
         }
     }
 
+    /**
+     * Cable Link: the session is over and its save is committed from the last verified checkpoint, so the game stops (it
+     * holds the other player's GBA, and nothing more would be saved) and the menu offers only Quit ([quitOnly]).
+     */
+    private fun cableLinkEnded() {
+        ended = true
+        host.retroView?.frameSpeed = 0
+        host.retroView?.audioEnabled = false
+        host.showMenu()
+        host.withMenu { it.endNetplay(local = false, quitOnly = true) }
+    }
+
+    /** Cable Link's session ended: the game stays stopped and the menu stays open on Quit alone. */
+    val quitOnly: Boolean get() = ended && session?.cableLink == true
+
     /** netplay link: the session ended; from here [now] is null and the game is the normal launch ([GameActivity.becomeLocal]). */
     private fun playLocally() {
         if (local) return
@@ -340,7 +354,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
 
     /** Cable Link: the launch's checkpoint files (the real save, through the battery save's naming and encoding). */
     fun attachCheckpoint(files: CheckpointFiles) {
-        checkpoint = PairSaveCheckpoint(files)
+        pairSaves = PairSaveSession(PairSaveCheckpoint(files), PairSaveFiles.writer::execute)
     }
 
     /**
@@ -348,45 +362,10 @@ internal class GameNetplay(private val host: GameNetplayHost) {
      * engine's last verified frame names becomes the checkpoint (written off this thread).
      */
     private fun afterPairFrame(view: GLRetroView) {
-        val hit = synchronized(pairFrames) {
-            if (pairClosed || checkpoint == null) return
-            runCatching {
-                pairFrames.afterFrame(LibretroNetplay.runFrame(), LibretroNetplay.lastVerifiedFrame()) { view.serializeSRAM(useEmulationThread = false) }
-            }.onFailure { NxLog.w(TAG_LOG, "pair save snapshot failed", it) }.getOrNull()
-        } ?: return
-        recordCheckpoint(hit)
-    }
-
-    /** Cable Link's session ended ([verified]: the engine's last verified frame): its checkpoint, then the commit. */
-    private fun endPair(verified: Long) {
-        val hit = synchronized(pairFrames) {
-            if (pairClosed) return
-            pairClosed = true
-            pairFrames.verified(verified)
-        }
-        hit?.let(::recordCheckpoint)
-        commitPair()
-    }
-
-    /** True once: the first caller commits. */
-    private fun closePair(): Boolean = synchronized(pairFrames) {
-        if (pairClosed || checkpoint == null) false else { pairClosed = true; true }
-    }
-
-    private fun recordCheckpoint(snapshot: PairCheckpointFrames.Snapshot) {
-        val cp = checkpoint ?: return
-        PairSaveFiles.writer.execute {
-            runCatching { cp.onVerified(snapshot.frame, snapshot.save) }.onFailure { NxLog.e(TAG_LOG, "pair checkpoint not written", it) }
-        }
-    }
-
-    private fun commitPair() {
-        val cp = checkpoint ?: return
-        PairSaveFiles.writer.execute {
-            runCatching { cp.commit() }
-                .onSuccess { NxLog.i(TAG_LOG, if (it) "pair save committed" else "pair save: no verified checkpoint") }
-                .onFailure { NxLog.e(TAG_LOG, "pair save commit failed", it) }
-        }
+        val saves = pairSaves ?: return
+        runCatching {
+            saves.afterFrame(LibretroNetplay.runFrame(), LibretroNetplay.lastVerifiedFrame()) { view.serializeSRAM(useEmulationThread = false) }
+        }.onFailure { NxLog.w(TAG_LOG, "pair save snapshot failed", it) }
     }
 
     /** The Developer overlay's input delay; null hides it. Main thread. */

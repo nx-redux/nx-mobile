@@ -2030,6 +2030,25 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.QuitWithoutResume, m.press(NxButton.A))   // no states: no auto state
     }
 
+    @Test fun an_ended_cable_link_session_offers_only_quit() {
+        val m = model()
+        m.netplay = true
+        m.refresh()
+        m.endNetplay(local = false, quitOnly = true)
+        assertEquals(listOf("Quit"), m.state.page.rows.map { it.label })      // no Continue: the game has stopped
+        assertEquals(com.nxredux.mobile.netplay.NetplayText.CABLE_LINK_ENDED, m.state.page.footer)
+        assertNull(m.press(NxButton.B))                                        // nothing closes the menu
+        assertNull(m.press(NxButton.MENU))
+        assertEquals(listOf("Quit"), m.state.page.rows.map { it.label })
+        assertEquals(MenuEffect.QuitWithoutResume, m.press(NxButton.A))
+
+        // A menu opened after the end (the host's flags) is the same page.
+        val reopened = model()
+        reopened.netplay = true; reopened.netplayEnded = true; reopened.netplayQuitOnly = true; reopened.refresh()
+        assertEquals(listOf("Quit"), reopened.state.page.rows.map { it.label })
+        assertNull(reopened.press(NxButton.B))
+    }
+
     @Test fun an_ended_link_session_is_the_normal_root() {
         val m = model().also { it.cheatsAvailable = false }   // as in a session (no cheats)
         m.setPlayers(listOf(p1), listOf(padA))

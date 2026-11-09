@@ -5,9 +5,12 @@ import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplayText
 import com.swordfish.libretrodroid.LibretroNetplay
 import com.nxredux.mobile.netplay.NetplayCores
+import com.nxredux.mobile.netplay.cablelink.CheckpointFiles
+import com.nxredux.mobile.netplay.cablelink.PairSaveCheckpoint
 import com.nxredux.mobile.netplay.wizard.CableLinkSetup
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -116,6 +119,15 @@ class NetplayGameTest {
         override fun lastVerifiedFrame(): Long { calls += "verified"; return verified }
     }
 
+    private class RealSave : CheckpointFiles {
+        var session: ByteArray? = null
+        var real: ByteArray? = null
+        override fun readSession() = session
+        override fun writeSession(bytes: ByteArray) { session = bytes }
+        override fun deleteSession() { session = null }
+        override fun writeReal(bytes: ByteArray) { real = bytes }
+    }
+
     private val cable = NetplaySession(NetplayRole.HOST, "10.0.0.2", "mgba", "gpsp", cableLink = true, otherRomPath = "/c/rom", localSlot = 1)
 
     /** Lets the engine thread finish what was queued on it. */
@@ -159,11 +171,19 @@ class NetplayGameTest {
             val engine = FakeEngine(LibretroNetplay.STATE_ENDED, reason).apply { verified = 360 }
             val notices = java.util.Collections.synchronizedList(ArrayList<NetplayNotice>())
             val endings = java.util.Collections.synchronizedList(ArrayList<Long>())
-            val game = NetplayGame(cable, this, { 0L }, { notices += it }, engine, onEnding = { endings += it; engine.calls += "ending" })
+            // The session's saves: a snapshot at the frame-360 check whose verdict comes with the ending.
+            val files = RealSave()
+            val saves = PairSaveSession(PairSaveCheckpoint(files)) { it.run() }
+            saves.afterFrame(360, 240) { byteArrayOf(36) }
+            val game = NetplayGame(cable, this, { 0L }, { notices += it }, engine, onEnding = {
+                endings += it; engine.calls += "ending"; saves.end(it)
+            })
             assertTrue(game.start())
             delay(50)
             drainEngine()
             assertEquals(listOf(360L), endings.toList())                    // the checkpoint's frame, once, for the commit
+            assertArrayEquals(byteArrayOf(36), files.real)                  // committed: the save as it was at frame 360
+            assertFalse(saves.end(null))                                    // the screen's destroy commits nothing more
             val tail = engine.calls.toList().dropWhile { it != "verified" }
             assertEquals(listOf("verified", "ending", "shutdown"), tail)     // read before the shutdown resets it
             assertTrue(notices.single() is NetplayNotice.Ended)

@@ -462,6 +462,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val gameNetplay = GameNetplay(this)
     override val netplay: NetplaySession? get() = gameNetplay.session
     override val netplayEnded: Boolean get() = gameNetplay.ended
+    override val netplayQuitOnly: Boolean get() = gameNetplay.quitOnly
+    override fun showMenu() { if (!menuOpen) menu.toggleMenu() }
     override val netplayNow: NetplaySession? get() = gameNetplay.now
 
     // ---- RetroAchievements (see the "achievements" block) ----
@@ -702,10 +704,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         shortcuts.pushMicSource()
     }
 
-    /** Plays the core on; a failed netplay start keeps the game paused behind its dialog. */
+    /** Plays the core on; a failed netplay start keeps the game paused behind its dialog, an ended Cable Link session for good. */
     private fun releaseCore() {
         gameNetplay.run?.takeIf { it.live }?.resume()
-        if (!gameNetplay.startFailed) {
+        if (!gameNetplay.startFailed && !gameNetplay.quitOnly) {
             retroView?.frameSpeed = 1
             retroView?.audioEnabled = true
         }
@@ -877,6 +879,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         SaveSession.awaitAutoWrites()
         GameTimeService.flush()
         runCatching { NetplayEngine.executor.submit {}.get(PROCESS_END_WAIT_S, TimeUnit.SECONDS) }
+        runCatching { PairSaveFiles.writer.submit {}.get(PROCESS_END_WAIT_S, TimeUnit.SECONDS) }   // a Cable Link save's commit
         NxLog.i(TAG_LOG, "the game has ended: ending its process")
         Process.killProcess(Process.myPid())
     }

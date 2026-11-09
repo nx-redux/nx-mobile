@@ -98,6 +98,8 @@ internal interface InGameMenuHost : GameScreenHost {
     val netplay: NetplaySession?
     val netplayNow: NetplaySession?
     val netplayEnded: Boolean
+    /** netplay: an ended Cable Link session: the menu stays open with Quit alone. */
+    val netplayQuitOnly: Boolean
     // The game's config: the store in use, which layer it is, what is locked, forced or hidden, and its resolved values.
     val configStore: CoreConfigStore?
     var configSource: ConfigSource
@@ -198,6 +200,7 @@ internal class InGameMenuController(
     private val netplay get() = host.netplay
     private val netplayNow get() = host.netplayNow
     private val netplayEnded get() = host.netplayEnded
+    private val netplayQuitOnly get() = host.netplayQuitOnly
     private val configStore get() = host.configStore
     private var configSource: ConfigSource
         get() = host.configSource
@@ -291,7 +294,7 @@ internal class InGameMenuController(
             // netplay: the root is "Leave netplay?" only; Continue / Quit once the session has ended. An ended link
             // session's game is a local one ([netplayNow] null): the normal root.
             if (netplayNow != null) {
-                it.netplay = true; it.netplayLink = netplay?.endsAsLocalGame == true; it.netplayEnded = netplayEnded; it.refresh()
+                it.netplay = true; it.netplayLink = netplay?.endsAsLocalGame == true; it.netplayEnded = netplayEnded; it.netplayQuitOnly = netplayQuitOnly; it.refresh()
             }
         }
         if (retroView != null) {
@@ -491,7 +494,7 @@ internal class InGameMenuController(
     }
 
     fun closeMenu() {
-        if (!menuOpen) return
+        if (!menuOpen || netplayQuitOnly) return   // an ended Cable Link session: only Quit leaves
         menuOpen = false
         menuRouter.releaseAll()
         input.stickRouter.onMenuToggled()

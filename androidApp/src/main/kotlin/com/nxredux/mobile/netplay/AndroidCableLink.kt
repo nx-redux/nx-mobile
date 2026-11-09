@@ -36,7 +36,6 @@ internal object AndroidCableLink {
     private const val GBA_BIOS = "gba_bios.bin"
     private const val GBA_BIOS_SIZE = 16 * 1024L
     private const val ROM_MAX = 32L * 1024 * 1024
-    private const val CHUNK = 64 * 1024
 
     suspend fun offer(
         context: Context, sdRoot: File, tag: String, romFileName: String, content: ContentRef,
@@ -48,7 +47,7 @@ internal object AndroidCableLink {
         val sha = Sha1()
         var size = 0L
         (refs.openInput(content) ?: throw IOException("cannot open $romFileName")).use { input ->
-            read(input) { buf, n ->
+            input.forEachChunk { buf, n ->
                 size += n
                 if (size > ROM_MAX) throw CableLinkRefused(NetplayText.CABLE_LINK_READ_FAILED)
                 sha.update(buf, 0, n)
@@ -69,18 +68,9 @@ internal object AndroidCableLink {
         BiosImport.sync(context, AndroidHomeLocator(context).current(), BiosFolders.forTag(tag), biosDir, listOf(GBA_BIOS))
         val bios = File(biosDir, GBA_BIOS).takeIf { it.isFile && it.length() == GBA_BIOS_SIZE } ?: return@runCatching null
         val sha = Sha1()
-        bios.inputStream().use { input -> read(input) { buf, n -> sha.update(buf, 0, n) } }
+        bios.inputStream().use { input -> input.forEachChunk { buf, n -> sha.update(buf, 0, n) } }
         sha.hex()
     }.onFailure { NxLog.w(TAG, "GBA BIOS hash failed; offering none", it) }.getOrNull()
-
-    private inline fun read(input: InputStream, block: (ByteArray, Int) -> Unit) {
-        val buf = ByteArray(CHUNK)
-        while (true) {
-            val n = input.read(buf)
-            if (n < 0) break
-            if (n > 0) block(buf, n)
-        }
-    }
 
     const val TAG = "NxNetplay"
 }
@@ -109,12 +99,7 @@ internal class AndroidCableLinkFiles(
         return withContext(Dispatchers.IO) {
             cache.put(hash) { sink ->
                 (refs.openInput(ref) ?: throw IOException("cannot open the library ROM")).use { input ->
-                    val buf = ByteArray(64 * 1024)
-                    while (true) {
-                        val n = input.read(buf)
-                        if (n < 0) break
-                        if (n > 0) sink.write(buf, 0, n)
-                    }
+                    input.forEachChunk { buf, n -> sink.write(buf, 0, n) }
                 }
             }
         }
@@ -122,18 +107,13 @@ internal class AndroidCableLinkFiles(
 
     override suspend fun readOwnRom(chunk: suspend (ByteArray, Int) -> Unit) = withContext(Dispatchers.IO) {
         (refs.openInput(content) ?: throw IOException("cannot open $romFileName")).use { input ->
-            val buf = ByteArray(64 * 1024)
-            while (true) {
-                val n = input.read(buf)
-                if (n < 0) break
-                if (n > 0) chunk(buf, n)
-            }
+            input.forEachChunk { buf, n -> chunk(buf, n) }
         }
     }
 
     override suspend fun ownSave(): ByteArray? = withContext(Dispatchers.IO) {
         val paths = NxPaths(tag, "", romFileName, AndroidAppSettings(context).saveNaming)
-        PairSaveFiles.pending(context.filesDir, paths.saveRam) ?: paths.findSave(sdRoot)?.readSaveDecoded()
+        PairSaveFiles.pending(context.filesDir, paths) ?: paths.findSave(sdRoot)?.readSaveDecoded()
     }
 
     override suspend fun writeOtherSave(bytes: ByteArray): String = withContext(Dispatchers.IO) {
@@ -143,4 +123,14 @@ internal class AndroidCableLinkFiles(
     }
 
     override fun log(message: String) = NxLog.i(AndroidCableLink.TAG, message)
+}
+
+/** Reads the stream to its end in 64 KiB chunks, handing each one's buffer and length to [block] (the buffer is reused). */
+private inline fun InputStream.forEachChunk(block: (ByteArray, Int) -> Unit) {
+    val buf = ByteArray(64 * 1024)
+    while (true) {
+        val n = read(buf)
+        if (n < 0) break
+        if (n > 0) block(buf, n)
+    }
 }

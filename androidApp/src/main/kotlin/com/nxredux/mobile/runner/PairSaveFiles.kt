@@ -1,22 +1,33 @@
 package com.nxredux.mobile.runner
 
 import com.nxredux.mobile.netplay.cablelink.CheckpointFiles
+import com.nxredux.mobile.netplay.cablelink.PairCheckpointFrames
+import com.nxredux.mobile.netplay.cablelink.PairSaveCheckpoint
+import com.nxredux.mobile.storage.NxPaths
+import com.nxredux.mobile.storage.SaveCopyRules
+import com.swordfish.libretrodroid.NxLog
 import java.io.File
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /**
- * Where a Cable Link session keeps the player's last verified save until its end: app-private, one file per real save
- * ([saveRam] is NxPaths.saveRam), so the menu process (the next session's save exchange) and the game process (the
- * launch's promotion) find the same one.
+ * Where a Cable Link session keeps the player's last verified save until its end: app-private, one file per game's
+ * save, so the menu process (the next session's save exchange) and the game process (the launch's promotion) find the
+ * same one. Keyed by the save's folder and name without the save-format extension, so a format change between a crash
+ * and the next launch still finds it.
  */
 internal object PairSaveFiles {
-    fun sessionFile(filesDir: File, saveRam: String): File = File(File(filesDir, "cablelink/checkpoints"), saveRam)
+    fun sessionFile(filesDir: File, paths: NxPaths): File =
+        File(File(filesDir, "cablelink/checkpoints"), "${paths.savesDir}/${paths.saveName}.verified")
 
-    /** The verified copy a session left behind for [saveRam] (its process died before the end); null when none. */
-    fun pending(filesDir: File, saveRam: String): ByteArray? = sessionFile(filesDir, saveRam).takeIf { it.isFile }?.readBytes()
+    /** The verified copy a session left behind for [paths] (its process died before the end); null when none. */
+    fun pending(filesDir: File, paths: NxPaths): ByteArray? = sessionFile(filesDir, paths).takeIf { it.isFile }?.readBytes()
 
-    /** Checkpoint and commit writes, in order, off the GL and main threads. */
+    /** Checkpoint and commit writes, in order, off the GL and main threads; the game process's end waits for it. */
     val writer: ExecutorService = Executors.newSingleThreadExecutor { Thread(it, "nx-pair-saves") }
 }
 
@@ -25,5 +36,64 @@ internal class AndroidCheckpointFiles(private val session: File, private val bat
     override fun readSession(): ByteArray? = session.takeIf { it.isFile }?.readBytes()
     override fun writeSession(bytes: ByteArray) = session.writeAtomically(bytes)
     override fun deleteSession() { session.delete() }
-    override fun writeReal(bytes: ByteArray) { synchronized(battery) { battery.write(bytes) } }
+
+    /** An unchanged save counts as written; a damaged real save that is never overwritten does not (the session file stays). */
+    override fun writeReal(bytes: ByteArray) {
+        synchronized(battery) {
+            if (!battery.write(bytes) && !battery.writable) throw IOException("the real save is damaged and is not overwritten")
+        }
+    }
+
+    /**
+     * Before a promotion: a real save ([real]) changed after the session's last checkpoint (Device Sync, an import) is
+     * copied aside as `<name>.<yyyyMMdd-HHmmss>.bak`, which the promotion then replaces. The copy, or null when none was due.
+     */
+    fun keepNewerReal(real: File): File? {
+        if (!session.isFile || !real.isFile || real.lastModified() <= session.lastModified()) return null
+        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+        val dir = real.parentFile ?: return null
+        val bak = File(dir, SaveCopyRules.freeBackupName(real.name, stamp) { File(dir, it).exists() })
+        real.copyTo(bak)
+        NxLog.w(TAG_LOG, "${real.name} changed since the Cable Link session's last checkpoint; kept as ${bak.name}")
+        return bak
+    }
+}
+
+/**
+ * One Cable Link launch's save checkpoints: snapshots paired with the drift checks' verdicts ([afterFrame], on the GL
+ * thread), then exactly one commit at the session's end ([end]: an engine ending, Leave, or the screen going). Every
+ * write is handed to [post] (one thread, in order) under this object's lock, so a verdict's write always lands before
+ * the commit and none follows it.
+ */
+internal class PairSaveSession(private val checkpoint: PairSaveCheckpoint, private val post: (Runnable) -> Unit) {
+    private val frames = PairCheckpointFrames()
+    private var closed = false
+
+    /** After a step: [runFrame] frames run, [verifiedFrame] the engine's last verified one, [readSave] the local save now. */
+    fun afterFrame(runFrame: Long, verifiedFrame: Long, readSave: () -> ByteArray): Unit = synchronized(this) {
+        if (closed) return
+        frames.afterFrame(runFrame, verifiedFrame, readSave)?.let(::record)
+    }
+
+    /**
+     * The session ended: [verifiedFrame] is the engine's last verified frame, read before its shutdown (null when it is
+     * gone already), so a verdict still waiting is written first; then the commit. False when it had ended already.
+     */
+    fun end(verifiedFrame: Long?): Boolean = synchronized(this) {
+        if (closed) return false
+        closed = true
+        verifiedFrame?.let(frames::verified)?.let(::record)
+        post(Runnable {
+            runCatching { checkpoint.commit() }
+                .onSuccess { NxLog.i(TAG_LOG, if (it) "pair save committed" else "pair save: no verified checkpoint") }
+                .onFailure { NxLog.e(TAG_LOG, "pair save commit failed", it) }
+        })
+        true
+    }
+
+    private fun record(snapshot: PairCheckpointFrames.Snapshot) {
+        post(Runnable {
+            runCatching { checkpoint.onVerified(snapshot.frame, snapshot.save) }.onFailure { NxLog.e(TAG_LOG, "pair checkpoint not written", it) }
+        })
+    }
 }

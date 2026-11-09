@@ -60,6 +60,8 @@ object NetplayText {
     const val SYNCING = "Syncing..."
     const val ENDED_DRIFT = "The two games drifted apart, so the session ended. Your progress up to a few seconds ago is saved."
     const val ENDED_TOO_SLOW = "This phone can't run both games at full speed, so the session ended."
+    /** The in-game menu's footer once a Cable Link session is over (Quit is its only row). */
+    const val CABLE_LINK_ENDED = "The Cable Link session is over. Your save is kept up to the last moment both phones agreed on."
     /** The Developer overlay's current input delay in a Cable Link session. */
     fun inputDelay(frames: Int) = "Delay $frames"
     const val CONNECTION = "Connection"
