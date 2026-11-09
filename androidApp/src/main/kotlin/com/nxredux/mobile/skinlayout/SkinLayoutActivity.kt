@@ -84,7 +84,7 @@ class SkinLayoutActivity : ComponentActivity() {
                     SideEffect { editor = state }
                     SkinLayoutEditor(
                         state, spec.picture, spec.parts, bare, backdrop = null, title = title,
-                        onSave = { tweaks -> SkinLayoutEdit.save(AndroidAppSettings(this@SkinLayoutActivity), console.id, spec.layoutId, tweaks); setResult(RESULT_OK); finish() },
+                        onSave = { saved -> SkinLayoutEdit.save(AndroidAppSettings(this@SkinLayoutActivity), console.id, spec.layoutId, saved); setResult(RESULT_OK); finish() },
                         onClose = ::finish,
                     )
                 }
@@ -117,7 +117,7 @@ class SkinLayoutActivity : ComponentActivity() {
         val stick = profile.stickByDefault || DcGames.stickFirst(base, arcadeSet = false) || profile.kind == PadProfile.Kind.GC
         val image = pack.picture(placed.spec.image)?.asImageBitmap() ?: return null
         val parts = placed.spec.parts?.let { pack.picture(it) }?.asImageBitmap()
-        return SkinLayoutEdit.state(settings, console.id, placed.forStick(stick), w, h) to Placed(placed.spec.id, image, parts)
+        return SkinLayoutEdit.state(settings, console.id, placed.forStick(stick), w, h, overlay = false, minTouchPx = 0f) to Placed(placed.spec.id, image, parts)
     }
 
     /** No layout fits this window (or the pack can't be read): say so and leave. */

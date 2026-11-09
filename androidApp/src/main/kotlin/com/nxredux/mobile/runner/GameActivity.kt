@@ -1664,7 +1664,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun showSkinEdit(edit: PadLayoutController.SkinEdit, frame: Bitmap?) {
         if (!menuOpen || quitting || skinEditView != null) { frame?.recycle(); return }
         val root = findViewById<FrameLayout>(R.id.root)
-        val state = SkinLayoutEdit.state(settings, edit.consoleId, edit.placement, edit.w, edit.h)
+        val state = SkinLayoutEdit.state(settings, edit.consoleId, edit.placement, edit.w, edit.h, overlay = false, minTouchPx = 0f)
         val colors = nxColorsFor(settings.accent, settings.secondaryAccent)
         val title = CoreRegistry.consoles.firstOrNull { it.id == edit.consoleId }?.displayName ?: "Adjust buttons"
         val picture = edit.picture.asImageBitmap()
@@ -1683,8 +1683,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                         }
                         SkinLayoutEditor(
                             state, picture, parts, edit.bare, backdrop, title,
-                            onSave = { tweaks ->
-                                SkinLayoutEdit.save(settings, edit.consoleId, edit.placement.spec.id, tweaks)
+                            onSave = { saved ->
+                                SkinLayoutEdit.save(settings, edit.consoleId, edit.placement.spec.id, saved)
                                 closeSkinEdit()
                                 relayoutPad()
                             },

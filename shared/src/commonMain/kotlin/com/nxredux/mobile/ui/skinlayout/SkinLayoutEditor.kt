@@ -74,13 +74,13 @@ private val HandleHit = 28.dp   // a touch this near the handle resizes rather t
  * into the main screen, or into the window when [bare] (the game runs full-screen there), else black; the skin from
  * [picture] / [parts] as [state] places it (only its buttons at [bareAlpha] when [bare], as the overlay draws them); the
  * no-go zone tinted; the selected group outlined with its resize handle. A tap selects a group, a drag moves it, a drag
- * from the handle resizes it. The toolbar saves ([onSave] gets the tweaks), resets the group or all, or cancels
+ * from the handle resizes it. The toolbar saves ([onSave] gets the state), resets the group or all, or cancels
  * ([onClose], after "Discard changes?" when something changed). The skin's buttons do not press here.
  */
 @Composable
 fun SkinLayoutEditor(
     state: SkinEditorState, picture: ImageBitmap, parts: ImageBitmap?, bare: Boolean, backdrop: ImageBitmap?, title: String,
-    onSave: (Map<String, SkinTweak>) -> Unit, onClose: () -> Unit, bareAlpha: Float = 0.6f,
+    onSave: (SkinEditorState) -> Unit, onClose: () -> Unit, bareAlpha: Float = 0.6f,
 ) {
     val colors = LocalNxColors.current
     val placed = state.placed()
@@ -170,7 +170,7 @@ fun SkinLayoutEditor(
         // the toolbar at the top of the screen, clear of the camera cutout and bars, with a margin below them
         Box(Modifier.placedPx(window)) {
             EditorToolbar(
-                title, state, Rect(origin, Size(size.width.toFloat(), size.height.toFloat())), onSave = { onSave(state.tweaks) }, onCancel = { if (state.requestCancel()) onClose() },
+                title, state, Rect(origin, Size(size.width.toFloat(), size.height.toFloat())), onSave = { onSave(state) }, onCancel = { if (state.requestCancel()) onClose() },
                 Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).padding(top = ToolbarTopMargin),
             )
         }

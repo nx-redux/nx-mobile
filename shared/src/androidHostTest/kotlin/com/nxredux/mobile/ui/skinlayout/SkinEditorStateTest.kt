@@ -8,6 +8,9 @@ import com.nxredux.mobile.skin.SkinPlacement
 import com.nxredux.mobile.skin.SkinTweak
 import com.nxredux.mobile.skin.SkinTweaks
 import com.nxredux.mobile.skin.SkinVariant
+import com.nxredux.mobile.skin.TweakRules
+import com.nxredux.mobile.settings.AppSettings
+import java.lang.reflect.Proxy
 import java.io.File
 import kotlin.math.abs
 import kotlin.test.Test
@@ -108,8 +111,12 @@ class SkinEditorStateTest {
         // the d-pad's touch area reaches 22 px past its hit box; the round face buttons' is their circle
         val gap = faceButtons.minOf { it.x - it.spec.r } - (pad.x + pad.spec.r + 22f * p.k)
         val reached = gap + room
-        assertTrue(reached > gap + 1f, "past the face buttons' home")
         near(assertNotNull(s.tweaks["DPAD"]).dx, reached, "d-pad read back")
+        // its touch area's right edge meets the face buttons' nearest edge
+        val now = s.placed().controls
+        val padRight = now.single { it.spec.id == "DPAD" }.let { it.x + it.spec.r + 22f * p.k }
+        val faceLeft = now.filter { it.spec.id in setOf("A", "B", "X", "Y") }.minOf { it.x - it.spec.r }
+        near(padRight, faceLeft, "d-pad against the face buttons", e = 0.5f)
         near(assertNotNull(s.tweaks["A+B+X+Y"]).dx, room, "face buttons stay")
         s.drag(Offset(-20f, 0f))
         near(assertNotNull(s.tweaks["DPAD"]).dx, reached - 20f, "back")
@@ -164,5 +171,90 @@ class SkinEditorStateTest {
         assertTrue(s.requestCancel().not() && s.confirmDiscard, "Cancel asks first when dirty")
         s.keepEditing()
         assertFalse(s.confirmDiscard)
+    }
+
+    private fun overlayState(p: SkinPlacement, skin: Map<String, SkinTweak>, own: Map<String, SkinTweak>, w: Float = 1080f, h: Float = 2520f) =
+        SkinEditorState(p, skin + own, w, h, TweakRules.OVERLAY, 0f, skin, own.keys)
+
+    @Test
+    fun overlay_reset_returns_to_the_skin_positions() {
+        val p = menu()
+        val skin = mapOf("MENU" to SkinTweak(dx = 30f))
+        val s = overlayState(p, skin, mapOf("MENU" to SkinTweak(dx = -10f), "DPAD" to SkinTweak(dy = 15f)))
+        assertEquals(setOf("MENU", "DPAD"), s.saved().keys)
+        s.select(centre(box(s.placed(), "MENU")))
+        s.resetGroup()
+        near(assertNotNull(s.tweaks["MENU"]).dx, 30f, "back at the skin's")
+        near(box(s.placed(), "MENU").x, box(SkinTweaks.apply(p, skin, 1080f, 2520f), "MENU").x, "drawn at the skin's", e = 0.5f)
+        assertEquals(setOf("DPAD"), s.saved().keys, "follows the skin again")
+        s.resetAll()
+        assertTrue(s.saved().isEmpty())
+        assertEquals(skin.keys, s.tweaks.keys)
+        near(assertNotNull(s.tweaks["MENU"]).dx, 30f, "reset all: the skin's")
+        assertTrue(s.dirty)
+    }
+
+    @Test
+    fun an_overlay_drag_saves_only_that_group() {
+        val p = menu()
+        val skin = mapOf("MENU" to SkinTweak(dx = 30f))
+        val s = overlayState(p, skin, emptyMap())
+        assertFalse(s.dirty)
+        assertTrue(s.saved().isEmpty())
+        s.select(centre(box(s.placed(), "DPAD")))
+        s.drag(Offset(0f, -20f))
+        assertEquals(setOf("DPAD"), s.saved().keys)
+        assertEquals(setOf("DPAD"), s.owned)
+        near(assertNotNull(s.saved()["DPAD"]).dy, -20f, "dy")
+        assertTrue(s.dirty)
+        // an owned group dragged back home stores an identity tweak: it no longer follows the skin
+        s.drag(Offset(0f, 20f))
+        assertEquals(SkinTweak(), s.saved()["DPAD"]?.let { SkinTweak(if (abs(it.dx) < 0.01f) 0f else it.dx, if (abs(it.dy) < 0.01f) 0f else it.dy, it.scale) })
+    }
+
+    @Test
+    fun a_skin_editor_saves_like_before() {
+        val p = menu()
+        val s = SkinEditorState(p, emptyMap(), 1080f, 2520f)
+        s.select(centre(box(p, "MENU"))); s.drag(Offset(30f, 0f))
+        assertEquals(s.tweaks, s.saved())
+        assertTrue(s.owned.isEmpty())
+        var skin = ""; var overlay = ""
+        val settings = Proxy.newProxyInstance(AppSettings::class.java.classLoader, arrayOf(AppSettings::class.java)) { _, m, a ->
+            when (m.name) {
+                "getSkinTweaks" -> skin
+                "setSkinTweaks" -> { skin = a[0] as String; null }
+                "getOverlayTweaks" -> overlay
+                "setOverlayTweaks" -> { overlay = a[0] as String; null }
+                else -> error(m.name)
+            }
+        } as AppSettings
+        SkinLayoutEdit.save(settings, "gba", "stacked_menu", s)
+        assertEquals(s.tweaks.keys, SkinTweaks.of(skin, "gba", "stacked_menu").keys)
+        assertEquals("", overlay)
+        val o = SkinLayoutEdit.state(settings, "gba", p, 1080, 2520, overlay = true, minTouchPx = 0f)
+        near(assertNotNull(o.tweaks["MENU"]).dx, 30f, "overlay starts from the skin's")
+        assertTrue(o.owned.isEmpty())
+        o.select(centre(box(o.placed(), "DPAD"))); o.drag(Offset(0f, 10f))
+        SkinLayoutEdit.save(settings, "gba", "stacked_menu", o)
+        assertEquals(setOf("DPAD"), SkinTweaks.of(overlay, "gba", "stacked_menu").keys)
+        assertEquals(setOf("MENU"), SkinTweaks.of(skin, "gba", "stacked_menu").keys, "the skin's stays")
+        val again = SkinLayoutEdit.state(settings, "gba", p, 1080, 2520, overlay = true, minTouchPx = 0f)
+        assertEquals(setOf("DPAD"), again.owned)
+        assertFalse(again.dirty)
+    }
+
+    @Test
+    fun overlay_editor_ignores_the_screens() {
+        val p = grip()
+        val zone = SkinTweaks.noGo(p).first()
+        val id = "A+B+X+Y"
+        val skin = SkinEditorState(p, emptyMap(), 2420f, 1080f)
+        skin.select(centre(box(p, id))); skin.drag(Offset(-100000f, 0f))
+        val ov = overlayState(p, emptyMap(), emptyMap(), 2420f, 1080f)
+        assertTrue(ov.noGo.isEmpty())
+        ov.select(centre(box(p, id))); ov.drag(Offset(-100000f, 0f))
+        assertTrue(box(ov.placed(), id).x < box(skin.placed(), id).x - 1f, "the overlay goes on into the glass")
+        assertTrue(box(ov.placed(), id).x < zone.x + zone.width - 1f)
     }
 }
