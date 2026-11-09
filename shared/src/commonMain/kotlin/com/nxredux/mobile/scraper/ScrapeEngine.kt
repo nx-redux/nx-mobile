@@ -199,10 +199,10 @@ class ScrapeEngine(
             if (clock() - shownAt >= EMIT_EVERY_MS) show()
         }
         val stop: (ArtSource, SourceStop) -> Unit = { src, e -> stopped += src.id; s = s.copy(notes = s.notes + (src.id to e.note)); unshown = true }
-        show()
         var blocked = false
         val listings = Listings()
         try {
+            show()
             if (startSources) for (src in sources) if (src.enabled && src.id !in stopped) try { src.startJob() } catch (e: SourceStop) { stop(src, e) }
             for (i in items.indices) {
                 if (items[i].status != ItemStatus.WAITING) continue
@@ -229,10 +229,15 @@ class ScrapeEngine(
             s = current().copy(phase = if (blocked) JobPhase.PAUSED else JobPhase.DONE, pauseReason = if (blocked) ALL_STOPPED else null)
         } catch (p: JobPause) {
             s = current().inFlightToWaiting().copy(phase = JobPhase.PAUSED, pauseReason = p.reason)
-        } catch (e: CancellationException) {
-            // A game finished within the last emit interval is still unshown: emit it, or Resume would fetch it again.
-            if (unshown) withContext(NonCancellable) { update(current().inFlightToWaiting()) }
+        } catch (e: Throwable) {
+            // Cancelled, or a host failure: a game finished within the last emit interval is still unshown. Emitted, or
+            // Resume would fetch it again; a failure of the emission itself leaves the one already thrown.
+            if (unshown) withContext(NonCancellable) {
+                try { update(current().inFlightToWaiting()) } catch (_: Throwable) {}
+            }
             throw e
+        } finally {
+            if (startSources) withContext(NonCancellable) { for (src in sources) src.endJob() }
         }
         update(s)
         return s
@@ -246,7 +251,7 @@ class ScrapeEngine(
         val parts = path.split('/')
         val dir = source.findDir(home, parts.dropLast(1)) ?: return@guard Deleted.ABSENT
         when {
-            source.delete(dir, parts.last()) -> Deleted.DELETED
+            source.delete(dir, parts.last()) -> Deleted.DELETED.also { diskGeneration++ }
             source.child(dir, parts.last()) == null -> Deleted.ABSENT
             else -> Deleted.FAILED
         }
@@ -262,13 +267,15 @@ class ScrapeEngine(
         val dirs = paths.map { it.split('/').dropLast(1) }.toSet()
         val slots = dirs.filter { it.size >= 2 && it[it.size - 2] == ".media" && it.last() in slotFolders }
         val medias = dirs.mapNotNull { d -> d.lastIndexOf(".media").takeIf { it >= 0 }?.let { d.take(it + 1) } }.toSet()
-        for (d in slots + medias) guard { source.findDir(home, d.dropLast(1))?.let { source.deleteEmptyDirectory(it, d.last()) } }
+        for (d in slots + medias) {
+            if (guard { source.findDir(home, d.dropLast(1))?.let { source.deleteEmptyDirectory(it, d.last()) } } == true) diskGeneration++
+        }
     }
 
     /** Deletes the Android games console's stored pictures (and hero marks), then rebuilds the console when any went; how many. */
     suspend fun deleteAndroidArt(): Int {
         val deleted = androidArt?.let { store -> guard { store.deleteAll() } } ?: 0
-        if (deleted > 0) onAndroidArt()
+        if (deleted > 0) { diskGeneration++; onAndroidArt() }
         return deleted
     }
 
@@ -288,13 +295,16 @@ class ScrapeEngine(
      */
     private val pickWrites = Mutex()
 
-    /** Bumped by each pick's write: a run's [Listings] made before it may not know the folders or files it made. */
-    @Volatile private var pickGeneration = 0
+    /**
+     * Bumped by each pick's write and each Reset delete: a run's [Listings] made before it may not know the folders or
+     * files made, or still hold ones removed.
+     */
+    @Volatile private var diskGeneration = 0
 
     /**
      * One run's slot folders and their listings: each folder is found (a provider query per path segment) and listed at
      * most once per run (a console's games share them), then kept in step with the run's own writes, deletes and
-     * folders made. A pick's write since ([pickGeneration]) drops what was kept. Per call of [run] (or of a public read),
+     * folders made. A pick's write or a Reset delete since ([diskGeneration]) drops what was kept. Per call of [run] (or of a public read),
      * never shared.
      */
     private inner class Listings {
@@ -302,15 +312,20 @@ class ScrapeEngine(
         /** Folders below the home by their segments; null = not there when looked up. */
         private val dirs = HashMap<List<String>, ContentRef?>()
         private var writable = false
-        private var picks = pickGeneration
+        private var generation = diskGeneration
 
-        private fun dropIfPicked() {
-            if (picks == pickGeneration) return
-            map.clear(); dirs.clear(); picks = pickGeneration
+        private fun dropIfChanged() {
+            if (generation == diskGeneration) return
+            drop()
         }
 
+        fun drop() { map.clear(); dirs.clear(); generation = diskGeneration }
+
+        /** The folder at [segments] was found or made earlier in this run (it may be gone since). */
+        fun cached(segments: List<String>): Boolean = dirs[segments] != null
+
         suspend fun of(dir: ContentRef): List<Entry> {
-            dropIfPicked()
+            dropIfChanged()
             return map.getOrPut(dir.value) {
                 (tryOrNull { source.listChildren(dir) } ?: emptyList()).toMutableList()
             }
@@ -321,7 +336,7 @@ class ScrapeEngine(
 
         /** The existing folder at [segments] below the home ([findDir]), or null; nothing created. */
         suspend fun dir(segments: List<String>): ContentRef? {
-            dropIfPicked()
+            dropIfChanged()
             if (segments.isEmpty()) return home
             if (dirs.containsKey(segments)) return dirs[segments]
             val parent = dir(segments.dropLast(1)) ?: return null
@@ -330,7 +345,7 @@ class ScrapeEngine(
 
         /** The folder at [segments] below the home, made as needed ([ensurePath]); null when it cannot be. */
         suspend fun ensure(segments: List<String>): ContentRef? {
-            dropIfPicked()
+            dropIfChanged()
             dirs[segments]?.let { return it }
             if (!writable) { if (!source.canWrite(home)) return null; writable = true }
             var dir = home
@@ -705,7 +720,7 @@ class ScrapeEngine(
         return pickWrites.withLock {
             val ls = Listings()
             val before = artOnDisk(target, ls)
-            val wrote = try { writeSlot(target, option.slot, fitted, option.origin, replace = true, ls) } finally { pickGeneration++ }
+            val wrote = try { writeSlot(target, option.slot, fitted, option.origin, replace = true, ls) } finally { diskGeneration++ }
             if (!wrote) return@withLock null
             if (slot in MIX_INPUTS && extras().mix && pixels != null && appMix(target, ls)) makeMix(ref, target, before, mapOf(slot to fitted.bytes), ls)
             indexArt(ref, before, artOnDisk(target, ls), picked = setOf(slot))
@@ -1007,11 +1022,19 @@ class ScrapeEngine(
         }
     }
 
-    /** Writes [name] under [segments] (created as needed); its folder and its entry, or null when the write failed. */
+    /**
+     * Writes [name] under [segments] (created as needed); its folder and its entry, or null when the write failed. A
+     * failed write into a folder this run found earlier is tried once more with nothing kept: the folder may have been
+     * removed since by something [diskGeneration] does not see.
+     */
     private suspend fun writeOne(segments: List<String>, name: String, bytes: ByteArray, ls: Listings): Pair<ContentRef, Entry>? = guard {
-        val dir = ls.ensure(segments) ?: return@guard null
-        if (!source.writeBytes(dir, name, bytes)) return@guard null
-        source.child(dir, name)?.takeIf { !it.isDirectory }?.let { dir to it }
+        suspend fun once(): Pair<ContentRef, Entry>? {
+            val dir = ls.ensure(segments) ?: return null
+            if (!source.writeBytes(dir, name, bytes)) return null
+            return source.child(dir, name)?.takeIf { !it.isDirectory }?.let { dir to it }
+        }
+        val cached = ls.cached(segments)
+        once() ?: if (cached) { ls.drop(); once() } else null
     }
 
     /**

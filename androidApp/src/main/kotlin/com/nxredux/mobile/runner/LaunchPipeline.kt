@@ -737,6 +737,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // without a resume state, since the game has stopped itself by then. The resume point is HOME's ([WiiDolphinController.pressHome]).
             lifecycleScope.launch {
                 view.getShutdownRequests().first()
+                wii.endedByCore = true   // before the drop suspends: no slot 9 may queue behind it
                 // Left without HOME this session (a game's own "Wii Menu", a channel launch): the resume point on disk is an
                 // older session's, behind the game's own save on the NAND. Dropped, so the next launch boots fresh.
                 if (!wii.homeSaved) saves.dropAutoInOrder()

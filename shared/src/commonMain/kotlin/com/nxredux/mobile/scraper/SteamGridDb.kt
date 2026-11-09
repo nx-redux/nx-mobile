@@ -142,6 +142,7 @@ class SteamGridDbSource(
     private val answers = JobAnswers()
 
     override suspend fun startJob() { pendingStop.clear(); answers.clear() }
+    override suspend fun endJob() { answers.clear() }
 
     override suspend fun find(ref: LibraryGameRef, wanted: Set<ArtSlot>): List<ArtHit> {
         val k = key()?.ifEmpty { null } ?: return emptyList()

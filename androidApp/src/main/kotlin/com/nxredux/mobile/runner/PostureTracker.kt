@@ -27,7 +27,8 @@ import kotlinx.coroutines.launch
  *
  * Each posture it holds while started is also published as the process's [PostureHint]: the game runs in its own
  * process, so the launch carries the hint in its intent ([postureSeedExtras]) and the game's window lays itself out for
- * it before its own reading arrives ([seed]).
+ * it before its own reading arrives ([seed]). Published only when the posture or the window changed, and never in the
+ * game's process (nothing launches a game from there).
  *
  * Construction touches no system service (safe as an activity field, before onCreate); call [start] from onCreate.
  */
@@ -42,6 +43,14 @@ class PostureTracker(
     private var angle: Float? = null
     private var pending: Posture? = null
     private var pendingJob: Job? = null
+    /** Only the menu's process hands a hint on. */
+    private val publishes by lazy { !com.nxredux.mobile.AppProcess.isGame() }
+    // What was last published ([publish]): the posture, the area's top and the window's size; [publishedPosture] null
+    // when nothing is (not yet, or since a stop).
+    private var publishedPosture: Posture? = null
+    private var publishedTop = 0
+    private var publishedW = 0
+    private var publishedH = 0
 
     /**
      * The hinge angle sensor: an on-change sensor, registered at SENSOR_DELAY_NORMAL only while started and a folding
@@ -86,6 +95,7 @@ class PostureTracker(
                 } finally {
                     listen(false)
                     PostureHint.forget(this@PostureTracker)   // stopped: no longer a live reading for a new window
+                    publishedPosture = null
                 }
             }
         }
@@ -118,10 +128,20 @@ class PostureTracker(
         }
     }
 
-    /** [posture] (area-relative, the area at window y [top]) as the process's [PostureHint], in window px. */
+    /**
+     * [posture] (area-relative, the area at window y [top]) as the process's [PostureHint], in window px. The hinge
+     * sensor calls this on every event: the decor view's size stands in for the window's to tell nothing changed, so
+     * the metrics are computed and a new hint made only on a change.
+     */
     private fun publish(top: Int) {
-        val bounds = WindowMetricsCalculator.getOrCreate().computeCurrentWindowMetrics(activity).bounds
+        if (!publishes) return
         val p = posture
+        val decor = activity.window?.decorView
+        val w = decor?.width ?: 0
+        val h = decor?.height ?: 0
+        if (p == publishedPosture && top == publishedTop && w == publishedW && h == publishedH && PostureHint.seen?.owner === this) return
+        publishedPosture = p; publishedTop = top; publishedW = w; publishedH = h
+        val bounds = WindowMetricsCalculator.getOrCreate().computeCurrentWindowMetrics(activity).bounds
         val inWindow = if (p is Posture.Tabletop) Posture.Tabletop(p.hingeTop + top, p.hingeBottom + top) else p
         PostureHint.publish(this, inWindow, bounds.width(), bounds.height())
     }

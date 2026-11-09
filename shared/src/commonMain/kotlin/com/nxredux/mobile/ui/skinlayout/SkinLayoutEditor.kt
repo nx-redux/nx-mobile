@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +64,7 @@ import com.nxredux.mobile.ui.nx.ModalKind
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxModal
 import com.nxredux.mobile.ui.nx.SkinArt
+import com.nxredux.mobile.ui.nx.SKIN_LABEL_CAP
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -74,13 +76,13 @@ private val HandleHit = 28.dp   // a touch this near the handle resizes rather t
  * into the main screen, or into the window when [bare] (the game runs full-screen there), else black; the skin from
  * [picture] / [parts] as [state] places it (only its buttons at [bareAlpha] when [bare], as the overlay draws them); the
  * no-go zone tinted; the selected group outlined with its resize handle. A tap selects a group, a drag moves it, a drag
- * from the handle resizes it. The toolbar saves ([onSave] gets the tweaks), resets the group or all, or cancels
+ * from the handle resizes it. The toolbar saves ([onSave] gets the state), resets the group or all, or cancels
  * ([onClose], after "Discard changes?" when something changed). The skin's buttons do not press here.
  */
 @Composable
 fun SkinLayoutEditor(
     state: SkinEditorState, picture: ImageBitmap, parts: ImageBitmap?, bare: Boolean, backdrop: ImageBitmap?, title: String,
-    onSave: (Map<String, SkinTweak>) -> Unit, onClose: () -> Unit, bareAlpha: Float = 0.6f,
+    onSave: (SkinEditorState) -> Unit, onClose: () -> Unit, bareAlpha: Float = 0.6f,
 ) {
     val colors = LocalNxColors.current
     val placed = state.placed()
@@ -156,8 +158,8 @@ fun SkinLayoutEditor(
                 },
         ) {
             val stroke = 2.dp.toPx()
-            for (z in state.noGo) {
-                drawRect(colors.editorOverlap.copy(alpha = 0.18f), Offset(z.x, z.y), Size(z.width, z.height))   // role: where no group may go, faint
+            for (z in state.screenAreas) {
+                drawRect(colors.editorOverlap.copy(alpha = 0.18f), Offset(z.x, z.y), Size(z.width, z.height))   // role: the screens a group may only edge onto, faint
                 drawRect(colors.editorOverlap, Offset(z.x, z.y), Size(z.width, z.height), style = Stroke(width = stroke))
             }
             state.selected?.let(state::boxOf)?.let { r ->
@@ -170,7 +172,7 @@ fun SkinLayoutEditor(
         // the toolbar at the top of the screen, clear of the camera cutout and bars, with a margin below them
         Box(Modifier.placedPx(window)) {
             EditorToolbar(
-                title, state, Rect(origin, Size(size.width.toFloat(), size.height.toFloat())), onSave = { onSave(state.tweaks) }, onCancel = { if (state.requestCancel()) onClose() },
+                title, state, Rect(origin, Size(size.width.toFloat(), size.height.toFloat())), onSave = { onSave(state) }, onCancel = { if (state.requestCancel()) onClose() },
                 Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).padding(top = ToolbarTopMargin),
             )
         }
@@ -212,6 +214,8 @@ private fun EditorToolbar(title: String, state: SkinEditorState, editor: Rect, o
     val sel = state.selected
     var moved by remember { mutableStateOf(Offset.Zero) }   // dragged from its starting spot, px
     var placed by remember { mutableStateOf(Rect.Zero) }    // where it is now, root px
+    // read live: the drag coroutine outlives an unfold or rotation, which hands in new bounds
+    val bounds by rememberUpdatedState(editor)
     Column(
         modifier.padding(12.dp)
             .offset { IntOffset(moved.x.roundToInt(), moved.y.roundToInt()) }
@@ -220,8 +224,8 @@ private fun EditorToolbar(title: String, state: SkinEditorState, editor: Rect, o
                 detectDragGestures { change, delta ->
                     change.consume()
                     // keep the whole panel on screen: the room left on each side bounds this step
-                    val dx = delta.x.coerceIn(minOf(0f, editor.left - placed.left), (editor.right - placed.right).coerceAtLeast(0f))
-                    val dy = delta.y.coerceIn(minOf(0f, editor.top - placed.top), (editor.bottom - placed.bottom).coerceAtLeast(0f))
+                    val dx = delta.x.coerceIn(minOf(0f, bounds.left - placed.left), (bounds.right - placed.right).coerceAtLeast(0f))
+                    val dy = delta.y.coerceIn(minOf(0f, bounds.top - placed.top), (bounds.bottom - placed.bottom).coerceAtLeast(0f))
                     moved += Offset(dx, dy)
                 }
             }
@@ -276,8 +280,10 @@ private fun StripPlaceholders(placed: SkinPlacement, modifier: Modifier = Modifi
             // as large as fits the slot: about 0.6 of the size per letter across, 0.9 of the height up
             val px = minOf(hh * 0.9f, hw * 2f * 0.85f / (text.length * 0.6f))
             val m = measurer.measure(text, TextStyle(color = ink.copy(alpha = 0.7f),   // role: its word
-                 fontSize = (px / density).sp))
-            drawText(m, topLeft = Offset(c.x - m.size.width / 2f, c.y + c.spec.labelDy - m.size.height / 2f))   // where the slot's words go
+                 fontSize = px.toSp()))
+            // its capitals' middle on the pill's (the slot's middle, not its word line): the line box keeps room above
+            // and below the capitals, so its own middle is off
+            drawText(m, topLeft = Offset(c.x - m.size.width / 2f, c.y + px * SKIN_LABEL_CAP / 2f - m.firstBaseline))
         }
     }
 }

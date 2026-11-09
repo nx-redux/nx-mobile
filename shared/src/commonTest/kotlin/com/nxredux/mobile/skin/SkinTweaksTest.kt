@@ -1,13 +1,9 @@
 package com.nxredux.mobile.skin
 
-import com.nxredux.mobile.options.PxRect
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class SkinTweaksTest {
-    private fun group(free: Boolean = false) =
-        SkinGroup(if (free) SkinGroups.STRIP else "A+B", emptyList(), listOf("A"), PxRect(0f, 0f, 200f, 100f), free)
-
     @Test fun encode_decode_round_trips() {
         val m = mapOf(
             "gba" to mapOf(
@@ -25,13 +21,14 @@ class SkinTweaksTest {
         assertEquals(mapOf("gba" to mapOf("stacked" to mapOf("A+B" to SkinTweak(1f, 2f, 1.5f), "D" to SkinTweak(3f, 4f, 1f)))), m)
     }
 
-    @Test fun limit_clamps_move_and_scale() {
-        assertEquals(SkinTweak(100f, -100f, 1.25f), SkinTweaks.limit(SkinTweak(500f, -500f, 2f), group()))
-        assertEquals(0.8f, SkinTweaks.limit(SkinTweak(0f, 0f, 0.5f), group()).scale)
+    @Test fun limit_keeps_any_move_and_any_positive_scale() {
+        // the room round a group is what holds it ([SkinTweaks.apply]), not a cap on the tweak
+        assertEquals(SkinTweak(500f, -500f, 2f), SkinTweaks.limit(SkinTweak(500f, -500f, 2f)))
+        assertEquals(SkinTweak(900f, 0f, 0.1f), SkinTweaks.limit(SkinTweak(900f, 0f, 0.1f)))
     }
 
-    @Test fun the_strip_moves_freely() {
-        assertEquals(SkinTweak(900f, 0f, 1.25f), SkinTweaks.limit(SkinTweak(900f, 0f, 3f), group(free = true)))
+    @Test fun limit_drops_a_scale_that_is_not_a_size() {
+        for (s in listOf(0f, -1f, Float.NaN, Float.POSITIVE_INFINITY)) assertEquals(1f, SkinTweaks.limit(SkinTweak(3f, 4f, s)).scale, "$s")
     }
 
     @Test fun tweaks_are_keyed_by_layout_not_pack() {
@@ -55,5 +52,21 @@ class SkinTweaksTest {
         val cleared = SkinTweaks.decode(SkinTweaks.withLayout(stored, "nes", "stacked", emptyMap()))
         assertEquals(setOf("gba"), cleared.keys)
         assertEquals(setOf("wide"), SkinTweaks.decode(SkinTweaks.withLayout(stored, "gba", "stacked", emptyMap()))["gba"]?.keys)
+    }
+
+    @Test fun an_unedited_overlay_group_follows_the_skin_an_edited_one_stays() {
+        val a = SkinTweak(1f, 2f, 1f)
+        val b = SkinTweak(3f, 4f, 1f)
+        val b2 = SkinTweak(9f, 9f, 1.2f)
+        fun stored(vararg g: Pair<String, SkinTweak>) = SkinTweaks.encode(mapOf("gba" to mapOf("stacked" to mapOf(*g))))
+        val overlay = stored("B" to b2)
+        assertEquals(mapOf("A" to a, "B" to b2), SkinTweaks.overlayOf(stored("A" to a, "B" to b), overlay, "gba", "stacked"))
+        val a3 = SkinTweak(7f, 7f, 1f)
+        assertEquals(mapOf("A" to a3, "B" to b2), SkinTweaks.overlayOf(stored("A" to a3, "B" to SkinTweak(5f, 5f, 1f)), overlay, "gba", "stacked"))
+    }
+
+    @Test fun an_empty_overlay_is_the_skin() {
+        val skin = SkinTweaks.encode(mapOf("gba" to mapOf("stacked" to mapOf("A" to SkinTweak(1f, 2f, 1f)))))
+        assertEquals(SkinTweaks.of(skin, "gba", "stacked"), SkinTweaks.overlayOf(skin, "", "gba", "stacked"))
     }
 }

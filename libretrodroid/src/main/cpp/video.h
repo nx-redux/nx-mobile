@@ -128,6 +128,10 @@ public:
         return renderer->rendersInVideoCallback();
     }
 
+    bool hasCoreGlState() {
+        return renderer->hasCoreGlState();
+    }
+
     // A RetroArch preset chain drawn instead of the built-in shader; nullopt returns to it.
     void setPresetChain(std::optional<PresetChain> chain);
     void setPresetParameter(const std::string& id, float value);

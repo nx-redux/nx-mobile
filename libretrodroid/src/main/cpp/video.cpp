@@ -209,7 +209,7 @@ void Video::updatePresetRenderer() {
     if (!requestedPreset) return;
     try {
         presetRenderer = std::make_unique<PresetChainRenderer>(*requestedPreset);
-        presetRenderer->setPreserveTextureBindings(rendersInVideoCallback());
+        presetRenderer->setPreserveTextureBindings(hasCoreGlState());
     } catch (const std::exception& e) {
         LOGE("Preset chain failed: %s", e.what());
         presetError = e.what();
@@ -298,8 +298,12 @@ private:
 unsigned Video::sampledTextureUnits() const {
     // The built-in shaders and immersive mode sample units 0 and 1.
     unsigned units = 2;
-    // The chain is (re)built inside this draw, after the guard: its units are not known yet.
-    if (presetDirty && requestedPreset) return CoreGlStateGuard::MAX_SAMPLER_UNITS;
+    // The chain is (re)built inside this draw, after the guard; it will sample what PresetChainRenderer::textureUnits
+    // counts (one LUT texture per lut, one output per pass). A held picture keeps it pending and the current chains
+    // alive (the second surface still draws with them), so both count.
+    if (presetDirty && requestedPreset) {
+        units = std::max(units, 2 + (unsigned) requestedPreset->luts.size() + (unsigned) requestedPreset->passes.size());
+    }
     // The second surface's chain, when not built yet, is built from the main one's preset: the same units.
     if (presetRenderer) units = std::max(units, presetRenderer->textureUnits());
     if (secondaryPresetRenderer) units = std::max(units, secondaryPresetRenderer->textureUnits());
@@ -308,7 +312,7 @@ unsigned Video::sampledTextureUnits() const {
 
 void Video::renderFrame(bool force) {
     // Same for the paused redraw.
-    CoreGlStateGuard guard(rendersInVideoCallback(), sampledTextureUnits());
+    CoreGlStateGuard guard(hasCoreGlState(), sampledTextureUnits());
     drawFrame(force);
 }
 
@@ -692,7 +696,7 @@ void Video::updateSecondaryPresetRenderer() {
     if (!presetRenderer || secondaryPresetRenderer || secondaryPresetFailed || !requestedPreset) return;
     try {
         secondaryPresetRenderer = std::make_unique<PresetChainRenderer>(*requestedPreset);
-        secondaryPresetRenderer->setPreserveTextureBindings(rendersInVideoCallback());
+        secondaryPresetRenderer->setPreserveTextureBindings(hasCoreGlState());
     } catch (const std::exception& e) {
         // The main chain built from the same source, so this is unexpected; the second surface then draws its shaded
         // regions with the built-in shader. Not reported as presetError: that belongs to the main chain.
@@ -707,7 +711,7 @@ void Video::renderSecondary(unsigned width, unsigned height) {
         secondaryLayout.updateScreenSize(width, height);
     }
 
-    CoreGlStateGuard guard(rendersInVideoCallback(), sampledTextureUnits());
+    CoreGlStateGuard guard(hasCoreGlState(), sampledTextureUnits());
 
     glDisable(GL_DEPTH_TEST);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);

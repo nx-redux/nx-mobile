@@ -10,8 +10,11 @@ interface RaStore {
     suspend fun writeAtomic(path: String, bytes: ByteArray)
     /** Durable append (fsync); throws [RaStoreException] on failure. */
     suspend fun append(path: String, bytes: ByteArray)
-    /** The file's length in bytes, null when absent (a cheap change check; the default reads the file). */
-    suspend fun size(path: String): Long? = read(path)?.size?.toLong()
+    /**
+     * A cheap change check: null when absent, else a value that differs once the file changed, including a rewrite to
+     * the same length. The default reads the file.
+     */
+    suspend fun stamp(path: String): String? = read(path)?.let { "${it.size}:${it.contentHashCode()}" }
     suspend fun delete(path: String)
     /** Deletes [dir] recursively; never the store root. */
     suspend fun deleteTree(dir: String)
@@ -49,6 +52,8 @@ object RaPaths {
     const val GAMES = "$SHARED/cache/games"
     const val SESSIONS = "$ACCOUNT/cache/sessions"
     const val PENDING = "$ACCOUNT/pending"
+    /** The cross-process lock's sidecar beside a locked file ([RaStore.locked]); never deleted, as a holder may be on it. */
+    const val LOCK_SUFFIX = ".lock"
     private val hashRe = Regex("[0-9a-f]{32}")
     private val nameRe = Regex("[A-Za-z0-9_.-]+")
     fun isHash(s: String) = hashRe.matches(s)

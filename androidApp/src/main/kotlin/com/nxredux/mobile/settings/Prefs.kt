@@ -18,12 +18,14 @@ object Prefs {
     @Volatile private var appContext: Context? = null
 
     /**
-     * Game process: every file opened so far reads the main process's current entries ([ProviderPreferences.refresh]),
-     * so a setting changed in the menu meanwhile applies. One blocking call per file: never on the key-event path.
-     * Nothing in the main process.
+     * Game process: every file opened so far reads the main process's current entries ([ProviderPreferences.refreshAll]),
+     * so a setting changed in the menu meanwhile applies. One blocking call, which may have to start the menu's process:
+     * off the main thread. Nothing in the main process.
      */
     fun refreshGame() {
-        if (AppProcess.isGame()) game.all().forEach { it.refresh() }
+        if (!AppProcess.isGame()) return
+        val app = appContext ?: return
+        ProviderPreferences.refreshAll(PrefsProvider.channel(app), game.all().toList())
     }
 
     fun open(context: Context, name: String): SharedPreferences {

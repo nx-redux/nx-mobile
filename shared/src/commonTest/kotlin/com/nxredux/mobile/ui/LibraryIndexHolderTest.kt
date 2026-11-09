@@ -85,11 +85,66 @@ class LibraryIndexHolderTest {
         val h = holder(backgroundScope, store, shown)
         h.mutate { index(1) }
         h.applyArt(GameRef("home", "Roms/GB", "g0.gb"), ArtRefs(boxart = "b"))
-        h.mutate { it!!.copy(scannedAt = 5) }   // written whole, art in it
+        h.mutate { it!!.copy(scannedAt = 5) }   // written whole, art in it; its caller shows it
         val writes = store.writes
         h.flushArt()
         assertEquals(writes, store.writes)   // not written again
-        assertEquals(1, shown.indexes.size)   // but still shown once
+        assertEquals(0, shown.indexes.size)   // nor shown again
+        advanceTimeBy(ART_MAX_WAIT_MS * 2); runCurrent()
+        assertEquals(0, shown.indexes.size)   // the scheduled flush has nothing left either
+    }
+
+    @Test
+    fun rebuildRunsOutsideTheLockAndKeepsArtThatLandedMeanwhileWithoutBuildingAgain() = runTest {
+        val store = MemoryLibraryIndexStore()
+        val h = holder(backgroundScope, store, Shown())
+        h.mutate { index(2) }
+        var builds = 0
+        val next = h.rebuild { from ->
+            builds++
+            // An art result during the build: it would wait forever were the lock held.
+            h.applyArt(GameRef("home", "Roms/GB", "g0.gb"), ArtRefs(boxart = "b"))
+            h.applyArt(GameRef("home", "Roms/GB", "gone.gb"), ArtRefs(boxart = "x"))   // in neither index: ignored
+            index(3).copy(scannedAt = 7)   // the scan found a third game
+        }
+        assertEquals(1, builds)   // the art went onto the fresh index; no second scan
+        assertSame(next, h.snapshot)
+        assertEquals("b", next!!.systems[0].games[0].boxart)
+        assertEquals(3, next.systems[0].games.size)
+        assertEquals(7L, next.scannedAt)
+        assertEquals("b", LibraryIndexCodec.decode(store.text!!)!!.systems[0].games[0].boxart)   // written with it
+    }
+
+    @Test
+    fun rebuildBuildsAgainOnAnotherChangeThatLandedMeanwhile() = runTest {
+        val store = MemoryLibraryIndexStore()
+        val h = holder(backgroundScope, store, Shown())
+        h.mutate { index(2) }
+        val seen = ArrayList<LibraryIndex?>()
+        val next = h.rebuild { from ->
+            seen += from
+            // Not an art result (a rename, a move): only a build on the changed index keeps it.
+            if (seen.size == 1) h.mutate { it!!.copy(scannedAt = 9) }
+            from!!.copy(systems = from.systems.map { it.copy(displayName = "built ${seen.size}") })
+        }
+        assertEquals(2, seen.size)
+        assertEquals(9L, seen[1]!!.scannedAt)
+        assertSame(next, h.snapshot)
+        assertEquals(9L, next!!.scannedAt)
+        assertEquals("built 2", next.systems[0].displayName)
+    }
+
+    @Test
+    fun rebuildWithNoChangeMeanwhileBuildsOnce() = runTest {
+        val store = MemoryLibraryIndexStore()
+        val h = holder(backgroundScope, store, Shown())
+        val first = index(1)
+        h.mutate { first }
+        var builds = 0
+        val next = h.rebuild { from -> builds++; assertSame(first, from); index(3) }
+        assertEquals(1, builds)
+        assertSame(next, h.snapshot)
+        assertEquals(3, next!!.systems[0].games.size)
     }
 
     /** Art results from many threads at once: none is lost, as every change runs under the one lock. */

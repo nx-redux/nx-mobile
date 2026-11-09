@@ -29,7 +29,7 @@ data class MenuPanes(val left: MenuPage, val right: MenuPaneContent, val focusLe
  * RetroAchievements levels) the top page is focused on the right and the page under it dimmed on the left, its
  * highlighted row the one that opened the top. When the menu does not [split] (portrait) only the root and the Options
  * page over it draw as two (in the root's columns), while its words fit beside the root's ([optionsBeside]: else the
- * Options page draws whole, and the root keeps the shortcuts beside it instead of the preview); a deeper page draws whole.
+ * Options page draws whole, and the root keeps the panel beside it instead of the preview); a deeper page draws whole.
  */
 fun menuPanes(state: MenuState, split: Boolean = true, optionsBeside: Boolean = true): MenuPanes? {
     val top = state.page
@@ -38,7 +38,7 @@ fun menuPanes(state: MenuState, split: Boolean = true, optionsBeside: Boolean = 
         val right = when (top.rows.getOrNull(top.selected)) {
             null -> MenuPaneContent.Empty
             is MenuRow.Slot -> MenuPaneContent.Slots
-            // The Options preview only where its words fit beside the root's ([optionsBeside]); else the shortcuts stay.
+            // The Options preview only where its words fit beside the root's ([optionsBeside]); else the panel stays.
             else -> state.preview?.takeIf { split || optionsBeside }?.let { MenuPaneContent.Page(it) } ?: MenuPaneContent.Panel
         }
         return MenuPanes(top, right, focusLeft = true)

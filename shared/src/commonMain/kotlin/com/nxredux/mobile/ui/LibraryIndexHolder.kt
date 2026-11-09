@@ -1,6 +1,7 @@
 package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.library.ArtRefs
+import com.nxredux.mobile.library.IndexedGame
 import com.nxredux.mobile.library.LibraryIndex
 import com.nxredux.mobile.library.LibraryIndexCodec
 import com.nxredux.mobile.library.SystemFolder
@@ -11,6 +12,7 @@ import com.nxredux.mobile.storage.LibraryIndexStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -42,9 +44,6 @@ internal class LibraryIndexHolder(
     private val lock = Mutex()             // every index read, write and in-memory swap
     @Volatile private var library: LibraryIndex? = null   // the library as last scanned, read or moved
 
-    /** [LibraryIndex.lateMount] of this run's last scan (a stored one is stale). Main thread. */
-    var lateMountHere: List<String> = emptyList()
-
     // Art results applied to [library] but not yet written ([artUnsaved]) or shown ([artUnshown]); [artSeq] counts them so
     // [artFlushJob] knows they stopped coming. All under [lock].
     private var artUnsaved = false
@@ -57,6 +56,17 @@ internal class LibraryIndexHolder(
      * each find their game without a pass over the library. Read and written under [lock] only.
      */
     private var artPositionsOf: Pair<LibraryIndex, Map<GameRef, List<Pair<Int, Int>>>>? = null
+
+    /**
+     * What landed on the index while a [rebuild]'s build ran, one record per build in flight. Under [lock]. Art results
+     * go onto the fresh index as they came; any other change ([other]) is the index's own record (a rename, a move, a
+     * read-back of art on disk, another rebuild) that only a build from the changed index keeps.
+     */
+    private class Landed {
+        val art = LinkedHashMap<GameRef, ArtRefs>()
+        var other = false
+    }
+    private val landing = ArrayList<Landed>()
 
     @Volatile private var playableOf: Pair<List<SystemFolder>, Map<GameRef, Listed>>? = null   // [playableLookup] of the systems it was built for
     @Volatile private var hiddenLookupOf: Pair<LibraryIndex, Map<GameRef, Listed>>? = null     // [gameLookup] of the index it was built for (Hidden)
@@ -80,8 +90,11 @@ internal class LibraryIndexHolder(
             change(current)?.takeIf { it !== current }?.also {
                 library = it
                 if (persistNow) {
+                    for (l in landing) l.other = true   // art results come with persistNow false ([applyArt])
                     persist(it)
-                    artUnsaved = false   // the whole index went out, the art in it with it
+                    // The whole index went out, the art in it with it; the caller refreshes what it shows, so a
+                    // flush showing the same art again would only rebuild the menu twice.
+                    artUnsaved = false; artUnshown = false
                     dropLookups()
                 } else {
                     artUnsaved = true; artUnshown = true; artSeq++
@@ -89,15 +102,54 @@ internal class LibraryIndexHolder(
             }
         }
 
+    /**
+     * A whole new index built by [build] from the one in memory (null: none), made the index as [mutate] does. [build]
+     * (a scan: seconds of tree reads) runs outside the lock, so art results, renames and lookups go on meanwhile. A
+     * change that landed during it is never dropped: art results (a fetch sends them all along) are applied to the
+     * fresh index, each to its game where it still is; any other change ([Landed.other]) runs [build] again under the
+     * lock on the changed index, as only the build knows how its record carries over. Returns the new index, or null
+     * for no change.
+     */
+    suspend fun rebuild(build: suspend (LibraryIndex?) -> LibraryIndex): LibraryIndex? {
+        val landed = Landed()
+        val before = lock.withLock { landing += landed; library }
+        try {
+            val built = build(before)
+            return mutate { now ->
+                landing -= landed   // this rebuild's own change is no other change for it
+                when {
+                    now === before -> built
+                    landed.other -> build(now)
+                    else -> built.withLandedArt(landed.art)
+                }
+            }
+        } finally {
+            withContext(NonCancellable) { lock.withLock { landing -= landed } }
+        }
+    }
+
+    /** [art] applied to the games of this index that have it (the others are not here any more); each console copied once. */
+    private fun LibraryIndex.withLandedArt(art: Map<GameRef, ArtRefs>): LibraryIndex {
+        if (art.isEmpty()) return this
+        val positions = artPositions(this)
+        val games = HashMap<Int, MutableList<IndexedGame>>()
+        for ((ref, refs) in art) positions[ref]?.forEach { (si, gi) ->
+            games.getOrPut(si) { systems[si].games.toMutableList() }.let { it[gi] = it[gi].withArt(refs) }
+        }
+        if (games.isEmpty()) return this
+        return copy(systems = systems.mapIndexed { si, s -> games[si]?.let { s.copy(games = it) } ?: s })
+    }
+
     /** The index fitting [fits]: the in-memory one, else the stored copy (which then becomes the one in memory). */
     suspend fun fitting(fits: (LibraryIndex) -> Boolean): LibraryIndex? = lock.withLock {
-        library?.takeIf(fits) ?: readStored()?.takeIf(fits)?.also { library = it }
+        library?.takeIf(fits) ?: readStored()?.takeIf(fits)?.also { library = it; for (l in landing) l.other = true }
     }
 
     /** The home is gone: no index in memory, and the stored copy deleted so the next start scans. */
     suspend fun forget() {
         lock.withLock {
             library = null
+            for (l in landing) l.other = true
             dropLookups()
             try { store.delete() } catch (d: CancellationException) { throw d } catch (d: Throwable) { Unit }
         }
@@ -150,6 +202,7 @@ internal class LibraryIndexHolder(
             current ?: return@mutate null
             val positions = artPositionsOf?.takeIf { it.first === current }?.second ?: artPositions(current)
             val at = positions[ref] ?: return@mutate null
+            for (l in landing) l.art[ref] = art   // a rebuild in flight puts it on its fresh index too
             current.withArtAt(at, art).also { artPositionsOf = it to positions }   // same order and sizes: the places hold
         } ?: return
         scheduleArtFlush()

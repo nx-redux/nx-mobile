@@ -64,7 +64,7 @@ class SkinWellsTest {
             val p = SkinSolver.placePieces(spec, w.toFloat(), h.toFloat(), 1f) ?: continue
             val groups = SkinGroups.of(spec)
             fun at(sign: Float) = groups.associate { g ->
-                g.id to if (g.free) SkinTweak(dx = sign * 0.25f * g.ref.width) else SkinTweaks.limit(SkinTweak(sign * 1e6f, sign * 1e6f), g)
+                g.id to if (g.free) SkinTweak(dx = sign * 0.25f * g.ref.width) else SkinTweak(sign * 1e6f, sign * 1e6f)
             }
             File(out, "${spec.id}_base.json").writeText(skinPreviewJson(w, h, p))
             File(out, "${spec.id}_plus.json").writeText(skinPreviewJson(w, h, SkinTweaks.apply(p, at(1f), w.toFloat(), h.toFloat())))

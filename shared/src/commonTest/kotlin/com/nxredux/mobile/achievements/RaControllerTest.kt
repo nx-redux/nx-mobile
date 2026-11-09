@@ -196,6 +196,28 @@ class RaControllerTest {
         c.eraseAll()
         assertTrue(store.files.isEmpty())
     }
+    // The game process may be mid-append: the reset waits for the journal locks, and leaves their .lock files (deleting
+    // one while held would let the next locker lock a new file beside the holder).
+    @Test fun reset_and_erase_wait_for_the_journal_locks_and_keep_the_lock_files() = runTest {
+        for (erase in listOf(false, true)) {
+            val store = FakeRaStore()
+            store.put(RaPaths.JOURNAL, "x\n"); store.put(RaPaths.CONFIRMED, "y\n")
+            store.put(RaPaths.JOURNAL + RaPaths.LOCK_SUFFIX, ""); store.put(RaPaths.CONFIRMED + RaPaths.LOCK_SUFFIX, "")
+            store.put(RaPaths.LAST_SYNC, "1")
+            val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+            val c = controller(fakePlatform(store), Settings(), scope, ArrayList())
+            val release = CompletableDeferred<Unit>()
+            for (path in listOf(RaPaths.JOURNAL, RaPaths.CONFIRMED)) {
+                val held = CompletableDeferred<Unit>()
+                scope.launch { store.locked(path) { held.complete(Unit); release.await() } }
+                held.await()
+            }
+            if (erase) c.eraseAll() else c.resetAccount()
+            assertEquals("x\n", store.text(RaPaths.JOURNAL)); assertEquals("y\n", store.text(RaPaths.CONFIRMED))
+            release.complete(Unit); advanceUntilIdle()
+            assertEquals(setOf(RaPaths.JOURNAL + RaPaths.LOCK_SUFFIX, RaPaths.CONFIRMED + RaPaths.LOCK_SUFFIX), store.files.keys)
+        }
+    }
     @Test fun ra_paths_split_account_and_shared() {
         assertEquals("android/ra/pending/unlocks.jsonl", RaPaths.JOURNAL)
         assertEquals("android/ra/cache/login.json", RaPaths.login())

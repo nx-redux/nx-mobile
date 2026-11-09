@@ -884,6 +884,16 @@ class AppState(
     private var romsPending = false          // ROMs arrived off a plain Systems page: the library rescans when one shows again
     private var noticeSticky = false     // the notice is a transfer's progress: it stays until the result replaces it
     private var systemsCache: List<SystemFolder> = emptyList()
+    private var reindexJob: Job? = null   // [removeExtra]'s background re-index
+    private var lateMountHere: List<String> = emptyList()   // [LibraryIndex.lateMount] of this run's last scan (a stored one is stale)
+    /**
+     * [systemsCache]'s writers take a generation before computing it ([takeSystemsGen]) and write only when it is newer than
+     * the one shown ([offerSystems]): passes run side by side, and an older one landing late never puts back what a newer
+     * one (a hide, a refresh) changed. Under [systemsLock].
+     */
+    private val systemsLock = Mutex()
+    private var systemsTaken = 0L
+    private var systemsWritten = 0L
     /** The last search confirmed this run (START's prompt opens on it); not saved. */
     internal var lastSearch: String = ""
         private set
@@ -894,7 +904,7 @@ class AppState(
     /** [allMenuTabs] less Tools while Kids Mode hides it: never offered as a hidden tab either. */
     private val kidsMenuTabs: List<MenuTab> get() = if (kidsUi.kidsToolsAllowed) kidsUi.withKidsLock(allMenuTabs) else allMenuTabs.filter { it.category != MenuCategory.TOOLS }
     private var pins: List<Shortcut> = emptyList()           // shortcuts.txt as last read
-    private var hiddenPaths: List<String> = emptyList()      // hidden.txt as last read
+    @Volatile private var hiddenPaths: List<String> = emptyList()      // hidden.txt as last read; an index refresh off the main thread reads it
     /** The pinned tools, in pin order: [ToolPins.FILE] in [AppDeps.privateFiles] as last read or written (never shortcuts.txt). */
     var toolPins: List<String> = emptyList()
         private set
@@ -999,7 +1009,7 @@ class AppState(
             override fun showNotice(text: String) = this@AppState.showNotice(text)
             override fun refreshInstalled() = this@AppState.refreshInstalled()
             override fun installedLoaded(apps: List<InstalledApp>) { installedCache = apps }
-            override fun rememberSettingsRow() { (_screen.value as? Screen.Settings)?.let { settingsUi.sectionSelections[it.section] = _selection.value } }
+            override fun rememberSettingsRow() { (_screen.value as? Screen.Settings)?.let { settingsUi.rememberSection(it.section, _selection.value) } }
             override fun back(): Boolean = this@AppState.back()
             override fun openSelected() = this@AppState.openSelected()
             override fun openContextMenu() = this@AppState.openContextMenu()
@@ -1543,8 +1553,13 @@ class AppState(
     }
 
     private suspend fun afterIndexChange(index: LibraryIndex, r: IndexRefresh) {
+        // Both are a pass over every game: built on [AppDeps.compute], so an art flush or a rename never walks the library on
+        // the main thread; the lookup is cached for the systems list taken, so the rows built next find it ready.
+        val gen = takeSystemsGen()
+        val hidden = hiddenPaths.toSet()
+        val systems = withContext(deps.compute) { index.playableSystems(hidden) }
         suspend fun steps() {
-            systemsCache = index.playableSystems(hiddenPaths.toSet())
+            if (offerSystems(gen, systems)) libraryIndex.playableOffMain(systems)
             if (r.counts) invalidateCollectionCounts()
             if (r.rows) rebuildMainRows()
             if (r.openList) refreshOpenList(select = (_screen.value as? Screen.Games)?.entries?.getOrNull(_selection.value.index)?.game?.path)
@@ -1675,17 +1690,18 @@ class AppState(
         pins = deps.userData.readPins()
         val recents = deps.userData.readRecents()
         // Continue: the first recent that resolves, whether or not it can resume.
-        val lastGame = recents.firstNotNullOfOrNull { resolveOne(it.path) }
+        val lookup = playableOffMain()
+        val lastGame = recents.firstNotNullOfOrNull { resolveIn(lookup, it.path) }
         val tools = toolRows()
         // The Android pins after the ROM pins, resolved against the console (one that left it is skipped, and kept).
         // Each game once (a hidden copy's line opens its home game, [resolveDistinct]); the recent set also holds the
         // resolved games' own paths, so a home game played as its hidden copy is not "not started".
-        val lookup = playable()
-        val played = recents.map { it.path }.toSet() + resolveDistinct(lookup, recents.map { it.path }).map { it.game.path }
+        val playedGames = resolveDistinct(lookup, recents.map { it.path })
+        val played = recents.map { it.path }.toSet() + playedGames.map { it.game.path }
         val pinned = resolveDistinct(lookup, pins.map { it.path }) + androidPinned()
         // Each game's hidden save state's frame (Save & Quit's), for Continue, the pins and the shelves' played games: only
         // a played game has one, so the recents and the pins are every candidate.
-        val shots = homeShots(listOfNotNull(lastGame) + pinned + resolveDistinct(lookup, recents.map { it.path }))
+        val shots = homeShots(listOfNotNull(lastGame) + pinned + playedGames)
         val last = lastGame?.let { e -> MainRow.Continue(e, deps.userData.resumeInfo(e.system.tag, e.game.fileName), shots[e.game.path]) }
         val inputs = HomeInputs(last, pinned, pinnedToolRows(toolPins, tools + homeOnlyAppRows(tools)), played, shots)
         val built = homeTab.homeFor(kidsUi.kidsHomeInputs(inputs))   // the stats as they are now, after the reads
@@ -2005,8 +2021,16 @@ class AppState(
         return hiddenPaths.toSet()
     }
 
+    /** A generation for a [systemsCache] about to be computed (see [systemsLock]). */
+    private suspend fun takeSystemsGen(): Long = systemsLock.withLock { ++systemsTaken }
+
+    /** [systems], computed under [gen], becomes [systemsCache] unless a newer computation's is shown; true when it did. */
+    private suspend fun offerSystems(gen: Long, systems: List<SystemFolder>): Boolean = systemsLock.withLock {
+        (gen > systemsWritten).also { if (it) { systemsWritten = gen; systemsCache = systems } }
+    }
+
     private suspend fun showSystems(playable: List<SystemFolder>) {
-        systemsCache = playable
+        offerSystems(takeSystemsGen(), playable)
         invalidateCollectionCounts()
         rebuildMainRows()
         when {
@@ -3135,8 +3159,11 @@ class AppState(
     }
 
     /** The index built for [root] and the current extras and default tags: the in-memory one, else the stored copy. */
-    private suspend fun fittingIndex(root: ContentRef): LibraryIndex? =
-        libraryIndex.fitting { ix -> ix.fits(root, deps.settings.extraFolders, deps.settings.defaultTags) }
+    private suspend fun fittingIndex(root: ContentRef): LibraryIndex? {
+        // A re-index for the settings just changed is waited for: the old index no longer fits, and a second scan would repeat it.
+        reindexJob?.join()
+        return libraryIndex.fitting { ix -> ix.fits(root, deps.settings.extraFolders, deps.settings.defaultTags) }
+    }
 
     /** True when an extra [index] recorded as offline is mounted again (a platform check, no tree query). */
     private suspend fun backOnline(index: LibraryIndex): Boolean =
@@ -3167,14 +3194,9 @@ class AppState(
                 throw OldPick()
             }
             ensureSkeleton(root)
-            val dropped = ArrayList<ExtraFolder>()
+            val dropped = LinkedHashSet<ExtraFolder>()   // a set: a scan run again reports the same extra again
             // Systems is shown from it below, which sets the playable cache: no refresh here.
-            val fresh = mutateIndex(refresh = null) { current ->
-                val previous = current ?: libraryIndex.readStored()   // which extras were offline: one just mounted gets a retry
-                stamped(scanner.scan(root, deps.settings.extraFolders, deps.settings.defaultTags, previous) { extra, e ->
-                    if (isGone(e)) dropped += extra
-                }, previous).also { libraryIndex.lateMountHere = it.lateMount }
-            }!!   // a scan is always a new index
+            val fresh = scanIndex(root, refresh = null) { extra, e -> if (isGone(e)) dropped += extra }
             // An offline extra is kept (settings and grant) with no games; the next start or return to the library finds it back.
             // One mounted but not listing yet (lateMount) only needs a moment, not the card.
             val awayExtra = deps.settings.extraFolders.firstOrNull { it.id in fresh.offline }
@@ -3240,6 +3262,25 @@ class AppState(
                 }
                 showPickFolder()
             }
+    }
+
+    /**
+     * Scans every tree into a new index and makes it the library ([LibraryIndexHolder.rebuild]: the scan holds no lock),
+     * then [refresh] as [mutateIndex]. The index it starts from tells which extras were offline (one just mounted gets a
+     * retry): the one in memory, else the stored copy. [onExtraError]: an extra that failed to list.
+     */
+    private suspend fun scanIndex(
+        root: ContentRef,
+        refresh: IndexRefresh?,
+        onExtraError: suspend (ExtraFolder, Throwable) -> Unit = { _, _ -> },
+    ): LibraryIndex {
+        val fresh = libraryIndex.rebuild { current ->
+            val previous = current ?: libraryIndex.readStored()
+            stamped(scanner.scan(root, deps.settings.extraFolders, deps.settings.defaultTags, previous, onExtraError), previous)
+        }!!   // a scan is always a new index
+        lateMountHere = fresh.lateMount
+        refresh?.let { afterIndexChange(fresh, it) }
+        return fresh
     }
 
     /**
@@ -3978,7 +4019,7 @@ class AppState(
      * switch opening Android's page, Saves, Android games, and Unassigned and Hidden while they hold a game. From memory
      * only, no SAF call. Extras reflect the last scan: one whose card was pulled since reads as fine until a rescan. "Not
      * ready yet" (mounted but not listing, as the scan's notice says) only comes from a scan in this AppState
-     * ([LibraryIndexHolder.lateMountHere]); a lateMount read from the stored index is from an earlier run, so it reads "Not available".
+     * ([lateMountHere]); a lateMount read from the stored index is from an earlier run, so it reads "Not available".
      */
     private fun libraryRows(): List<SettingsRow> = buildList {
         val ix = libraryIndex.snapshot
@@ -4001,7 +4042,7 @@ class AppState(
             val state = when {
                 ix == null || it.id !in ix.offline -> null
                 fileAccessOff(it.ref) -> "All files access off"
-                it.id in ix.lateMount && it.id in libraryIndex.lateMountHere -> "Not ready yet"
+                it.id in ix.lateMount && it.id in lateMountHere -> "Not ready yet"
                 else -> "Not available"
             }
             add(SettingsRow(SettingsKind.EXTRA, "ROM Folder: ${deps.source.displayName(it.ref)}", state ?: Sources.displayPath(it.ref) ?: "ROM folder", extra = it, warning = state != null))
@@ -4154,7 +4195,7 @@ class AppState(
                 importResult = result.summary
                 if ((_screen.value as? Screen.Settings)?.section != SettingsSection.IMPORT_SAVES) return showNotice(result.summary.lines().joinToString("; "))
                 dismissNotice()
-                settingsUi.sectionSelections.remove(SettingsSection.IMPORT_RESULT)
+                settingsUi.forgetSection(SettingsSection.IMPORT_RESULT)
                 openSettings(SettingsSection.IMPORT_RESULT)
             }
             is ImportResult.Message -> showNotice(result.text)
@@ -4383,13 +4424,10 @@ class AppState(
         deps.folderPicker.forget(extra.ref)
         settingsUi.refreshSettings()
         val root = home() ?: return
-        scope.launch {   // background re-index without Loading; Back then reads it (the lock orders the two)
+        reindexJob = scope.launch {   // background re-index without Loading; Back then reads it ([fittingIndex] waits for it)
             // A failed re-index leaves the old index: it no longer fits, so Back rescans.
             tryQuietly {
-                mutateIndex(IndexRefresh(counts = true)) { current ->
-                    val previous = current ?: libraryIndex.readStored()
-                    stamped(scanner.scan(root, deps.settings.extraFolders, deps.settings.defaultTags, previous), previous).also { libraryIndex.lateMountHere = it.lateMount }
-                }
+                scanIndex(root, IndexRefresh(counts = true))
                 libraryDirty = false   // the index is this re-index's
                 refreshCollectionNames()
                 refreshMainRows()   // the consoles and the collection counts follow the new index, names changed or not
@@ -4713,7 +4751,7 @@ class AppState(
     private fun rememberSelection() {
         when (val s = _screen.value) {
             is Screen.Systems -> rememberMenuSelection()
-            is Screen.Settings -> settingsUi.sectionSelections[s.section] = _selection.value
+            is Screen.Settings -> settingsUi.rememberSection(s.section, _selection.value)
             else -> Unit
         }
     }
@@ -5114,8 +5152,8 @@ class AppState(
                     SettingsKind.SHORTCUT_BIND -> row.shortcut?.let(::startCapture)
                     SettingsKind.SYSTEM_BUTTON_BIND -> row.systemRole?.let { systemButtonWaiting = it; settingsUi.refreshSettings() }
                     SettingsKind.HIDDEN -> openList(ListSource.Hidden)
-                    SettingsKind.UNASSIGNED -> unassignedSystem()?.let { settingsUi.sectionSelections[s.section] = _selection.value; openSystem(it) }
-                    SettingsKind.EMULATORS -> { settingsUi.sectionSelections[s.section] = _selection.value; emulatorSettings.openList(systemsCache) }
+                    SettingsKind.UNASSIGNED -> unassignedSystem()?.let { settingsUi.rememberSection(s.section, _selection.value); openSystem(it) }
+                    SettingsKind.EMULATORS -> { settingsUi.rememberSection(s.section, _selection.value); emulatorSettings.openList(systemsCache) }
                     SettingsKind.INFO -> Unit   // About: read-only
                     SettingsKind.COPY_INFO -> copyDeviceInfo()
                     SettingsKind.APP_UPDATE -> deps.updater?.let(::appUpdateRowA)
@@ -5513,7 +5551,11 @@ class AppState(
         }
         hiddenPaths = next
         libraryDirty = true
-        systemsCache = libraryIndex.current()?.playableSystems(next.toSet()) ?: systemsCache
+        val hiddenSet = next.toSet()
+        libraryIndex.current()?.let { ix ->
+            val gen = takeSystemsGen()
+            offerSystems(gen, withContext(deps.compute) { ix.playableSystems(hiddenSet) })
+        }
         invalidateCollectionCounts()   // a hidden game leaves the counts
         rebuildMainRows()
         if (closeMenu) closeContextMenu()
@@ -5890,7 +5932,7 @@ class AppState(
                 else if (s.pushed) { popHiddenTab(); true }
                 else false
             is Screen.Settings -> if (s.confirmReset) { _screen.value = s.copy(confirmReset = false); true } else {   // Back keeps the settings
-                settingsUi.sectionSelections[s.section] = _selection.value
+                settingsUi.rememberSection(s.section, _selection.value)
                 // A sub-page goes back to its section. Library or Emulators: after a change ([libraryDirty]), or an extra set
                 // or default tag changed behind the page's back (it fails the fit), it reloads (rescanning if needed); either
                 // way it ends on the menu.
@@ -5898,7 +5940,7 @@ class AppState(
                 else if (s.section.reloads && libraryStale()) load { settingsUi.showSettingsMenu() } else settingsUi.showSettingsMenu()
                 true
             }
-            is Screen.SettingsMenu -> { settingsUi.settingsMenuSelection = _selection.value; showTools(); true }
+            is Screen.SettingsMenu -> { settingsUi.rememberSettingsMenu(_selection.value); showTools(); true }
             is Screen.ToolApps -> {
                 if (s.menu != null) { if (!s.menu.busy) closeContextMenu() }
                 else if (s.pick == AppPick.GAMES) settingsUi.showSettingsOn(SettingsSection.LIBRARY, SettingsKind.ANDROID_GAMES)

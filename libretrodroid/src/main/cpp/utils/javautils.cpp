@@ -55,14 +55,20 @@ void JavaUtils::forEachOnJavaIterable(
         jList,
         env->GetMethodID(jIterableClass, "iterator", "()Ljava/util/Iterator;")
     );
+    if (env->ExceptionCheck()) {
+        env->DeleteLocalRef(jIterableClass);
+        return;
+    }
     jclass jIteratorClass = env->GetObjectClass(jIterator);
 
     jmethodID nextMethodID = env->GetMethodID(jIteratorClass, "next", "()Ljava/lang/Object;");
     jmethodID hasNextMethodID = env->GetMethodID(jIteratorClass, "hasNext", "()Z");
 
-    // Dropped per item so a long list cannot fill the local reference table.
-    while (env->CallBooleanMethod(jIterator, hasNextMethodID)) {
+    // Stops at a Java exception (from the list or from lambda), left pending for the caller: no further JNI call may
+    // run with one pending. Dropped per item so a long list cannot fill the local reference table.
+    while (!env->ExceptionCheck() && env->CallBooleanMethod(jIterator, hasNextMethodID)) {
         jobject item = env->CallObjectMethod(jIterator, nextMethodID);
+        if (env->ExceptionCheck()) break;
         lambda(item);
         env->DeleteLocalRef(item);
     }

@@ -12,14 +12,16 @@ data class RaUnlock(val u: String, val a: Int, val m: String, val t: Long)
 /**
  * Append-only JSONL (`pending/unlocks.jsonl` or `pending/confirmed.jsonl`). Deduplicated by (u, a, m); unparseable
  * lines are kept verbatim through a rewrite so nothing a future version understands is thrown away. The dedupe keys
- * are read once and kept in memory while the file's size is the one this journal last saw (a reset, another writer or
- * a failed append makes it read the file again). Appends and rewrites hold the store's cross-process lock on the file:
+ * are read once and kept in memory while the file's [RaStore.stamp] is the one this journal last saw (a reset, another
+ * writer or a failed append makes it read the file again; the size alone would miss a remove plus an append of the same
+ * length). Appends and rewrites hold the store's cross-process lock on the file:
  * the game process journals unlocks while the menu's sync rewrites it.
  */
 class RaJournal(private val store: RaStore, private val path: String) {
     private val lock = Mutex()
     private var keys: HashSet<Triple<String, Int, String>>? = null
-    private var knownSize = 0L
+    /** The stamp the cached [keys] belong to; null with no file. */
+    private var knownStamp: String? = null
     /** The file ends without a newline (a torn last line from a crash mid-append). */
     private var torn = false
 
@@ -27,7 +29,7 @@ class RaJournal(private val store: RaStore, private val path: String) {
     suspend fun append(entry: RaUnlock): Boolean = lock.withLock { store.locked(path) { appendLocked(entry) } }
 
     private suspend fun appendLocked(entry: RaUnlock): Boolean {
-        val known = keys?.takeIf { (store.size(path) ?: 0L) == knownSize } ?: load()
+        val known = keys?.takeIf { store.stamp(path) == knownStamp } ?: load()
         if (Triple(entry.u, entry.a, entry.m) in known) return false
         // A torn last line (crash mid-append) must not swallow this entry: start a fresh line.
         val bytes = ((if (torn) "\n" else "") + RaJson.json.encodeToString(entry) + "\n").encodeToByteArray()
@@ -37,7 +39,8 @@ class RaJournal(private val store: RaStore, private val path: String) {
             keys = null   // a part may have landed: read the file again next time
             throw e
         }
-        known += Triple(entry.u, entry.a, entry.m); knownSize += bytes.size; torn = false
+        known += Triple(entry.u, entry.a, entry.m); torn = false
+        knownStamp = store.stamp(path)   // under the lock: no other writer in between
         return true
     }
 
@@ -55,15 +58,15 @@ class RaJournal(private val store: RaStore, private val path: String) {
         val bytes = kept.joinToString("") { "${it.first}\n" }.encodeToByteArray()
         keys = null
         store.writeAtomic(path, bytes)
-        keys = kept.mapNotNullTo(HashSet()) { (_, e) -> e?.let { Triple(it.u, it.a, it.m) } }; knownSize = bytes.size.toLong(); torn = false
+        keys = kept.mapNotNullTo(HashSet()) { (_, e) -> e?.let { Triple(it.u, it.a, it.m) } }; knownStamp = store.stamp(path); torn = false
     }
 
     /** Reads the file once for its keys and whether it ends torn. */
     private suspend fun load(): HashSet<Triple<String, Int, String>> {
-        val bytes = store.read(path) ?: ByteArray(0)
-        val text = bytes.decodeToString()
+        val stamp = store.stamp(path)
+        val text = store.read(path)?.decodeToString() ?: ""
         return parsedLines(text).mapNotNullTo(HashSet()) { (_, e) -> e?.let { Triple(it.u, it.a, it.m) } }.also {
-            keys = it; knownSize = bytes.size.toLong(); torn = text.isNotEmpty() && !text.endsWith("\n")
+            keys = it; knownStamp = stamp; torn = text.isNotEmpty() && !text.endsWith("\n")
         }
     }
 

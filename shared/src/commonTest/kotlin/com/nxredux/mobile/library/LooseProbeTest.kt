@@ -18,7 +18,7 @@ class LooseProbeTest {
             mapOf("H" to listOf("Roms"), "H/Roms" to emptyList(), "x" to listOf("G.bin", "G.cue", "K.gba")),
             texts = mapOf("x/G.cue" to cue),
             bytes = mapOf("x/G.bin" to DiscProbeTest().ps1BinBytes(), "x/K.gba" to ByteArray(4)),
-        )
+        ).apply { stamps["x/G.cue"] = 1_000L; stamps["x/G.bin"] = 1_000L }
         val src = CountingRomsSource(fake)
         val scanner = LibraryScanner(src, Sidecars(src, MemorySidecarStore()) { ContentRef("H") })
         val extra = ExtraFolder("x-1", ContentRef("x"))
@@ -37,7 +37,7 @@ class LooseProbeTest {
         val src = FakeRomsSource(
             mapOf("H" to listOf("Roms"), "H/Roms" to emptyList(), "x" to listOf("N.bin")),
             bytes = mapOf("x/N.bin" to ByteArray(40000) { (it * 7).toByte() }),
-        )
+        ).apply { stamps["x/N.bin"] = 1_000L }
         val index = LibraryScanner(src, Sidecars(src, MemorySidecarStore()) { ContentRef("H") })
             .scan(ContentRef("H"), listOf(ExtraFolder("x-1", ContentRef("x"))), emptyMap())
         assertEquals(listOf("N"), index.systems.single { it.unassigned }.games.map { it.name })
@@ -49,7 +49,7 @@ class LooseProbeTest {
         val fake = FakeRomsSource(
             mapOf("H" to listOf("Roms"), "H/Roms" to emptyList(), "x" to listOf("G.cue")),
             texts = mapOf("x/G.cue" to cue),
-        )
+        ).apply { stamps["x/G.cue"] = 1_000L }
         val src = CountingRomsSource(fake)
         val scanner = LibraryScanner(src, Sidecars(src, MemorySidecarStore()) { ContentRef("H") })
         val extra = ExtraFolder("x-1", ContentRef("x"))
@@ -62,5 +62,22 @@ class LooseProbeTest {
         src.calls.clear()
         scanner.scan(ContentRef("H"), listOf(extra), emptyMap(), previous = found)
         assertTrue(src.calls.any { it.startsWith("readRange:x/G.bin") }, "${src.calls}")
+    }
+
+    // Without a modified time a same-size rewrite would go unseen: such a file is probed every scan, never kept.
+    @Test fun a_file_without_a_modified_time_is_probed_again_and_kept_once() = runTest {
+        val fake = FakeRomsSource(mapOf("x" to listOf("G.cue", "G.bin", "N.cue", "N.bin")), texts = mapOf("x/G.cue" to cue, "x/N.cue" to cue.replace("G.bin", "N.bin")),
+            bytes = mapOf("x/G.bin" to DiscProbeTest().ps1BinBytes(), "x/N.bin" to DiscProbeTest().ps1BinBytes()))
+            .apply { stamps["x/G.cue"] = 1_000L; stamps["x/G.bin"] = 1_000L }
+        val src = CountingRomsSource(fake)
+        val dir = fake.listChildren(ContentRef("x"))
+        val g = dir.first { it.name == "G.cue" }
+        val n = dir.first { it.name == "N.cue" }
+        val stale = listOf(IndexedProbe(n.ref.value, n.sizeBytes, null, "md", "x/N.bin", 1L, null))
+        val probes = DiscProbes(com.nxredux.mobile.library.disc.DiscProbe(src), stale)
+        assertEquals("ps", probes.consoleOf(n, dir))
+        assertTrue(src.calls.any { it == "readRange:x/N.bin" }, "${src.calls}")
+        probes.consoleOf(g, dir); probes.consoleOf(g, dir)   // a folder reached twice
+        assertEquals(listOf(g.ref.value), probes.used.map { it.ref })
     }
 }
