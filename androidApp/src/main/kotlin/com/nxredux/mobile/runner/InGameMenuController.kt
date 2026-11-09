@@ -253,7 +253,7 @@ internal class InGameMenuController(
 
     /** Shows the in-game menu panel's Second screen shortcut while a second display is attached, with the setting's value. */
     fun publishSecondScreen(model: InGameMenuModel) {
-        model.setSecondScreen(dual.secondScreens.current.value != null, dual.appSettings.secondScreen)
+        model.setSecondScreen(dual.secondScreens.current.value != null, dual.appSettings.secondScreen, dual.screenTaken())
         menuState.value = model.state
     }
 
@@ -606,6 +606,7 @@ internal class InGameMenuController(
             is MenuEffect.SetMic -> { host.setMic(effect.on); closeMenu() }
             MenuEffect.ResetGame -> { host.resetGame(); closeMenu() }
             MenuEffect.AdjustButtons -> host.adjustButtons()
+            MenuEffect.UseTopScreen -> { dual.useTakenScreen(); closeMenu() }
             is MenuEffect.SetPlayer -> input.slots?.let { s ->
                 val benchedBefore = s.outOfPlay
                 s.assign(effect.slot, effect.key?.let(::DeviceKey)).forEach { port ->

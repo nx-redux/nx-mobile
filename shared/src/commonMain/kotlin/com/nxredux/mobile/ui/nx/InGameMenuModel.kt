@@ -38,7 +38,7 @@ import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.ui.SHORTCUTS_NO_CONTROLLER
 import com.nxredux.mobile.ui.SHORTCUT_PROMPT
 
-enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET, ASK_RESET, CANCEL, ADJUST_BUTTONS }
+enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET, ASK_RESET, CANCEL, ADJUST_BUTTONS, USE_TOP_SCREEN }
 enum class SlotAction { SAVE, LOAD }
 
 sealed interface PageKind {
@@ -236,6 +236,8 @@ sealed interface MenuEffect {
     data object ResetGame : MenuEffect
     /** Adjust buttons: the host opens the skin layout editor over the paused game; the menu stays as it is under it. */
     data object AdjustButtons : MenuEffect
+    /** Use top screen: the game moves onto the display it left to an app opened there, then the menu closes. */
+    data object UseTopScreen : MenuEffect
 }
 
 /**
@@ -264,6 +266,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** From [setSecondScreen]; the panel shows the Second screen shortcut only while a second display is [secondConnected]. */
     private var secondConnected = false
     private var secondOn = true
+    /** From [setSecondScreen]: an app holds the second display, so Use top screen shows on the root. */
+    private var screenTaken = false
     /** From [setSpeedTiles]: the panel's Fast forward and Rewind tiles' live state; [speedRewind] null: no Rewind tile. */
     private var speedFf = false
     private var speedRewind: Boolean? = null
@@ -878,12 +882,13 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /**
      * A second display is [connected] and the setting is [on]; shows (or hides) the panel's Second screen shortcut and
-     * Display's Bottom screen row, keeping the selection.
+     * Display's Bottom screen row, keeping the selection. [taken]: an app the player opened holds it (Use top screen).
      */
-    fun setSecondScreen(connected: Boolean, on: Boolean) {
+    fun setSecondScreen(connected: Boolean, on: Boolean, taken: Boolean = false) {
         val changed = connected != secondConnected
         secondConnected = connected
         secondOn = on
+        screenTaken = taken
         refreshRoot()
         if (!changed) return
         // Display may come or go with its Bottom screen row (a console whose other rows are all locked).
@@ -1224,6 +1229,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         MenuAction.ASK_RESET -> { push(resetPage()); resetClosesOnCancel = false; null }
         MenuAction.CANCEL -> cancelReset()
         MenuAction.ADJUST_BUTTONS -> MenuEffect.AdjustButtons
+        MenuAction.USE_TOP_SCREEN -> MenuEffect.UseTopScreen
         MenuAction.LEAVE_NETPLAY -> MenuEffect.LeaveNetplay
         MenuAction.SAVE_FOR_CONSOLE -> { popTo(PageKind.Options); MenuEffect.SaveForConsole }
         MenuAction.SAVE_FOR_GAME -> { popTo(PageKind.Options); MenuEffect.SaveForGame }
@@ -1495,6 +1501,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             add(MenuRow.Slot("Save", SlotAction.SAVE))
             add(MenuRow.Slot("Load", SlotAction.LOAD))
             add(MenuRow.Action("Reset", MenuAction.ASK_RESET))   // asks first ([resetPage]); the panel's Reset tile before
+            if (screenTaken) add(MenuRow.Action(USE_TOP_SCREEN_LABEL, MenuAction.USE_TOP_SCREEN))
             add(MenuRow.Submenu("Options", PageKind.Options))
             add(MenuRow.Action("Quit", MenuAction.QUIT))
         },
@@ -1825,6 +1832,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     companion object {
         const val SHORTCUTS_LABEL = "Shortcuts"
+        const val USE_TOP_SCREEN_LABEL = "Use top screen"
         const val SHORTCUTS_FOOTER = "Changes here apply to this console or game. Save them with Save Changes."
         const val BIND_KEY_PREFIX = "nx:bind:"
         const val TOUCH_KEY_PREFIX = "nx:touch:"

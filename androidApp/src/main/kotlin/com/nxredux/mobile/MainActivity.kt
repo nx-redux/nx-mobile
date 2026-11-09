@@ -56,6 +56,7 @@ import com.nxredux.mobile.gametime.LazyGameTimeData
 import com.nxredux.mobile.launcher.AndroidAppLauncher
 import com.nxredux.mobile.launcher.EXTRA_KEEP_PLACE
 import com.nxredux.mobile.launcher.TopScreenHost
+import com.nxredux.mobile.launcher.TopScreenTaken
 import com.nxredux.mobile.launcher.currentDisplayId
 import com.nxredux.mobile.launcher.hideTaskFromRecents
 import com.nxredux.mobile.launcher.ownAppTask
@@ -64,6 +65,8 @@ import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.netplay.AndroidNetplay
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.usb.UsbCables
+import com.nxredux.mobile.options.N3dsOptions
+import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.skinlayout.SkinLayoutActivity
 import com.nxredux.mobile.runner.AndroidEmulatorConfigStore
 import com.nxredux.mobile.runner.AndroidMicAccess
@@ -388,7 +391,16 @@ class MainActivity : ComponentActivity(), FolderPicker {
         kids = AndroidKids.get(this)   // the process's one: the alarms and the screen on/off hook share its Parent mode
         // Launcher mode (this instance is the home task's): games get their own task; otherwise they share this one.
         val runner = LibretroRunner(this) { asHome }
-        runner.beforeLaunch = { launching = true; syncMenuScreen() }   // GameActivity takes the display; nothing stays behind the game
+        // GameActivity takes the display; nothing stays behind the game. An app on the top screen stays there for a
+        // one-screen game (watch while playing); a DS/3DS game needs both screens, so the menu takes it back for good.
+        runner.beforeLaunch = { session ->
+            launching = true
+            TopScreenTaken.consume(this)
+            val tag = session.systemTag
+            val leave = TopScreenHost.heldDisplay.takeIf { TopScreenHost.active && !NdsOptions.appliesTo(tag) && !N3dsOptions.appliesTo(tag) }
+            if (leave != null || !TopScreenHost.reclaim(this)) syncMenuScreen()
+            leave
+        }
         runner.launchFailed = { launching = false; syncMenuScreen() }   // no game after all: the menu's second screen comes back
         val indexStore = AndroidLibraryIndexStore(this)
         val glesVersion = getSystemService(ActivityManager::class.java).deviceConfigurationInfo.reqGlEsVersion
@@ -719,6 +731,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
             state.onForeground()   // a card inserted while in the background: its games come back
         }
         inFront = true
+        if (TopScreenTaken.consume(this)) TopScreenHost.reclaim(this)   // the game took the app's top screen: it stays ours
         syncBottomScreenPrompt()
         secondScreens.start()
         if (::state.isInitialized) state.onSecondScreenChanged(secondScreens.current.value != null)   // what is there now, once, after the pause

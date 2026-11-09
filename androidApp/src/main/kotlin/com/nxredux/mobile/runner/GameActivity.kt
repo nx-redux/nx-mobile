@@ -184,6 +184,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_CORE_FILE = "core_file"
         const val EXTRA_CORE_ID = "core_id"
         const val EXTRA_TAG = "tag"
+        const val EXTRA_LEAVE_DISPLAY = "leave_display"   // Int: an app the player opened on this display stays there
         const val EXTRA_TITLE = "title"
         const val EXTRA_FILE_NAME = "file_name"      // ROM file name; keys save data
         const val EXTRA_CONTENT_URI = "content_uri"
