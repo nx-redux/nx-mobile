@@ -34,6 +34,7 @@
 #include "video.h"
 #include "renderers/renderer.h"
 #include "fpssync.h"
+#include "avtiming.h"
 #include "threadlist.h"
 #include "presenttime.h"
 #include <unistd.h>
@@ -172,11 +173,13 @@ void LibretroDroid::setControllerType(unsigned int port, unsigned int type) {
 }
 
 void LibretroDroid::setStickyPointer(unsigned int port, bool sticky) {
+    std::lock_guard<std::mutex> guard(inputLock);
     if (port < 4) stickyPointers[port] = sticky;
     currentInput()->setStickyPointer(port, sticky);
 }
 
 void LibretroDroid::setPointerVelocity(unsigned int port, float vx, float vy) {
+    std::lock_guard<std::mutex> guard(inputLock);
     currentInput()->setPointerVelocity(port, vx, vy);
 }
 
@@ -338,6 +341,11 @@ Input* LibretroDroid::currentInput() {
     return input.get();
 }
 
+Input LibretroDroid::inputSnapshot() {
+    std::lock_guard<std::mutex> guard(inputLock);
+    return *currentInput();
+}
+
 void LibretroDroid::onMotionEvent(
     unsigned int port,
     unsigned int source,
@@ -345,6 +353,7 @@ void LibretroDroid::onMotionEvent(
     float yAxis
 ) {
     LOGD("Received motion event: %d %.2f, %.2f", source, xAxis, yAxis);
+    std::lock_guard<std::mutex> guard(inputLock);
     currentInput()->onMotionEvent(port, source, xAxis, yAxis);
 }
 
@@ -353,16 +362,19 @@ void LibretroDroid::onTouchEvent(float xAxis, float yAxis) {
     if (video) {
         auto [rx, ry] = video->getLayout().getRelativePosition(xAxis, yAxis);
         auto [x, y] = video->mapCompositionPoint(rx, ry);
+        std::lock_guard<std::mutex> guard(inputLock);
         currentInput()->onMotionEvent(0, Input::MOTION_SOURCE_POINTER, x, y);
     }
 }
 
 void LibretroDroid::onTriggerEvent(unsigned int port, float l2, float r2) {
+    std::lock_guard<std::mutex> guard(inputLock);
     currentInput()->onTriggerEvent(port, l2, r2);
 }
 
 void LibretroDroid::onKeyEvent(unsigned int port, int action, int keyCode) {
     LOGD("Received key event with action (%d) and keycode (%d)", action, keyCode);
+    std::lock_guard<std::mutex> guard(inputLock);
     currentInput()->onKeyEvent(port, action, keyCode);
 }
 
@@ -385,14 +397,16 @@ void LibretroDroid::create(
 
     CoreLog::clear();
 
-    {
-        // Achievements is a process-wide singleton that outlives a session: a previous view that was only stopped
-        // (never destroyed) leaves its client, loaded game and region table here, all pointing into the core about to
-        // be released. Drop them first so no later step() reads through the old core's memory. The host enables
-        // achievements before the view exists, so an enabled client is replaced by a fresh one, not dropped.
-        std::lock_guard<std::mutex> lock(coreLock);
-        Achievements::getInstance().resetSession(true);
-    }
+    // Held until the new core is initialised: a previous view that was only stopped (never destroyed) may still save
+    // SRAM, RTC or a state through coreLock, and must never see the old core mid-teardown or the new one before
+    // retro_init. Nothing below takes coreLock again; videoViewsLock nests inside it, as in step().
+    std::unique_lock<std::mutex> lock(coreLock);
+
+    // Achievements is a process-wide singleton that outlives a session: a previous view that was only stopped
+    // (never destroyed) leaves its client, loaded game and region table here, all pointing into the core about to
+    // be released. Drop them first so no later step() reads through the old core's memory. The host enables
+    // achievements before the view exists, so an enabled client is replaced by a fresh one, not dropped.
+    Achievements::getInstance().resetSession(true);
 
     // Before resetGlobalVariables(), which would otherwise dlclose a leftover core without retro_deinit().
     releaseCore();
@@ -473,6 +487,7 @@ void LibretroDroid::create(
 
     core->retro_init();
     coreInitialized = true;
+    lock.unlock();
 
     preferLowLatencyAudio = lowLatencyAudio;
 
@@ -568,13 +583,13 @@ void LibretroDroid::loadGameFromVirtualFiles(std::vector<VFSFile> virtualFiles) 
         game_info.data = nullptr;
         game_info.size = 0;
     } else {
+        // readFileAsBytes owns the fd from here and closes it even when it throws: released first, so the VFSFile
+        // destructor never closes it a second time.
+        virtualFiles[0].releaseFD();
         struct Utils::ReadResult file = Utils::readFileAsBytes(firstFileFD);
         gameFileData.reset(file.data);
         game_info.data = file.data;
         game_info.size = file.size;
-        // readFileAsBytes already closed the fd via fclose. Release it here so the
-        // VFSFile destructor doesn't close the same fd a second time.
-        virtualFiles[0].releaseFD();
     }
 
     loadGame(game_info);
@@ -642,14 +657,21 @@ void LibretroDroid::destroy() {
     rumble = nullptr;
     fpsSync = nullptr;
     audio = nullptr;
-    input = nullptr;
+    {
+        std::lock_guard<std::mutex> guard(inputLock);
+        input = nullptr;
+    }
     perfHint.close();   // ADPF
     perfHintSteps = 0;
 
     Environment::getInstance().deinitialize();
     // Reset on unload only (initialize() runs deinitialize() too): the next core never sees a previous game's motion; the host sets it before each launch.
     SensorState::get().reset();
-    stickyPointers.fill(false);   // likewise: the next game's view sets its own (Wii only) before its first frame
+    {
+        // Likewise: the next game's view sets its own (Wii only) before its first frame.
+        std::lock_guard<std::mutex> guard(inputLock);
+        stickyPointers.fill(false);
+    }
     VFS::getInstance().deinitialize();
     TeardownContext::forget();
 }
@@ -766,7 +788,10 @@ void LibretroDroid::step() {
         // step back per frame at most.
         frames = (np || lk || rewinding) ? 1 : std::min(requestedFrames, 2u);
     }
-    if (np && !netplay::preFrame(*core, *currentInput())) speed = 0;   // waiting: redraw the last frame
+    if (np) {
+        Input local = inputSnapshot();
+        if (!netplay::preFrame(*core, local)) speed = 0;   // waiting: redraw the last frame
+    }
     if (lk && !gbalink::preFrame()) speed = 0;                         // a pause: redraw the last frame
 
     // A stick-driven pointer moves once per emulated frame, so its speed is per second of game time.
@@ -938,7 +963,10 @@ void LibretroDroid::setFrameSpeed(unsigned int speed) {
 }
 
 void LibretroDroid::runFrame(bool np, bool lk, float frameSeconds) {
-    currentInput()->advancePointers(frameSeconds);
+    {
+        std::lock_guard<std::mutex> guard(inputLock);
+        currentInput()->advancePointers(frameSeconds);
+    }
     if (!np && !lk && !memoryCheats.empty()) applyMemoryCheats();   // never in netplay or link: the peer's RAM would differ
     core->retro_run();
     gldebug::pollErrors();
@@ -1214,6 +1242,7 @@ int16_t LibretroDroid::handleSetInputState(
 ) {
     const int stepNetplay = stepNetplayActive.load(std::memory_order_relaxed);
     if (stepNetplay >= 0 ? stepNetplay == 1 : netplay::active()) return netplay::inputState(port, device, index, id);
+    std::lock_guard<std::mutex> guard(inputLock);
     return currentInput()->getInputState(port, device, index, id);
 }
 
@@ -1323,13 +1352,20 @@ void LibretroDroid::afterGameLoad() {
     struct retro_system_av_info system_av_info {};
     core->retro_get_system_av_info(&system_av_info);
 
-    fpsSync = std::make_unique<FPSSync>(system_av_info.timing.fps, screenRefreshRate);
+    const double fps = avtiming::fpsOrDefault(system_av_info.timing.fps);
+    const double sampleRate = avtiming::sampleRateOrDefault(system_av_info.timing.sample_rate);
+    if (fps != system_av_info.timing.fps || sampleRate != system_av_info.timing.sample_rate) {
+        LOGW("Core reported fps %f, sample rate %f; using %f, %f", system_av_info.timing.fps,
+             system_av_info.timing.sample_rate, fps, sampleRate);
+    }
 
-    double inputSampleRate = system_av_info.timing.sample_rate * fpsSync->getTimeStretchFactor();
+    fpsSync = std::make_unique<FPSSync>(fps, screenRefreshRate);
+
+    double inputSampleRate = sampleRate * fpsSync->getTimeStretchFactor();
 
     audio = std::make_unique<Audio>(
         (int32_t) std::lround(inputSampleRate),
-        system_av_info.timing.fps,
+        fps,
         preferLowLatencyAudio,
         audioBufferMs.load()
     );
