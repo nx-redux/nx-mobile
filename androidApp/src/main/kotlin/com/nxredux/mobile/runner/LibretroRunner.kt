@@ -119,7 +119,9 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
  * suspended in its own task; a new launch replaces a suspended game (its auto-state was written on stop). Otherwise
  * the game shares the menu's task (no NEW_TASK, so the manifest taskAffinity is ignored), the only way GameActivity's
  * cross-fade can run: Android ignores an app's custom animation (ActivityOptions or overrideActivityTransition) for a
- * task change.
+ * task change. Android does animate that task change (a slide), so it opens with NO_ANIMATION, the one switch it honours
+ * there: a launch sequence's menu black and name meet the hold's, and any other launch cuts straight to the game screen
+ * (the pad sits on the same pixels in both, so only the top changes).
  */
 internal fun gameLaunchFlags(ownTask: Boolean): Int =
-    if (ownTask) Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK else 0
+    if (ownTask) Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION else 0

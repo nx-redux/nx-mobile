@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.graphics.drawable.ColorDrawable
 import android.hardware.input.InputManager
 import android.media.AudioManager
 import android.os.Build
@@ -21,6 +22,7 @@ import android.view.Display
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
@@ -193,6 +195,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_LAUNCH_ID = "launch_id"      // Long: the launcher's launch record (LaunchRecords), marked started once the game runs
         const val EXTRA_GAME_PATH = "game_path"      // the library path (GamePath): game time's identity; absent = not recorded
         const val EXTRA_ART_PATH = "art_path"        // the game's box art (GameSession.artPath): the game panel's header; absent = the console logo
+        private const val FINISH_WHEN_HIDDEN_MS = 1_500L   // a quit still on screen this long after asking for the menu finishes anyway
         const val EXTRA_OWN_TASK = "own_task"        // Boolean: launcher mode, the game runs in its own task
         const val EXTRA_FORCE_GLES = "force_gles"    // Boolean: the relaunch after Vulkan could not start (VulkanFallback)
         // netplay: a Wi-Fi netplay launch (GameSession.netplay); all absent for every other launch. The run core is EXTRA_CORE_ID.
@@ -364,6 +367,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val launchId by lazy { intent.getLongExtra(EXTRA_LAUNCH_ID, LaunchRecords.NONE) }
     private var failShown = false   // the could-not-start dialog is up (it only leaves by finishing)
     override var quitting = false   // set by quitWithAutoState: quit is single-shot, the menu freezes, onStop skips its auto state
+    private var finishWhenHidden = false   // a quit in launcher mode waits for the menu to cover it ([finish])
         private set
     override val resumePending: Boolean get() = saves.resumePending
     // The launch sequence's name (a Minimal launch; null: none, the screen opens without one) and its hold over the window.
@@ -481,8 +485,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // only the top (game) area changes. A launch sequence's (a [launchName]) opens with none: the menu's black meets
         // this screen's black and the name hold (LibretroRunner gives the same with the start: the :game process starts too late for this alone). Back to the
         // menu the game fades to black over 150 ms (launch_return_out, see [finish]); the menu fades itself in. Only while
-        // the game shares the menu's task (launcher mode off); in launcher mode it has its own task and the system task
-        // animation runs, as Android ignores these overrides for a task change (LibretroRunner's gameLaunchFlags).
+        // the game shares the menu's task (launcher mode off); in launcher mode it has its own task, where Android ignores
+        // these overrides, and opens with no animation at all (LibretroRunner's gameLaunchFlags).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             if (launchName != null) overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, 0, 0)
             else overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, android.R.anim.fade_in, android.R.anim.fade_out)
@@ -496,6 +500,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         setContentView(R.layout.activity_game)
         showNameHold(savedInstanceState)
+        opaqueAfterFirstFrame()
         dual.readPlayTotal()   // before this launch's own slices land: the header's total stays as it was
         volumeControlStream = AudioManager.STREAM_MUSIC   // volume keys set the game's (media) volume, even between sounds
         syncKeepScreenOn()
@@ -788,6 +793,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         dual.secondScreens.stop()
         dual.syncDual()
         super.onStop()
+        finishIfWaiting()   // a quit behind the menu now ([finish])
     }
 
     /** After a process kill the system recreates this activity with its original intent: what it resumes travels here. */
@@ -816,9 +822,25 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** Back to the menu the game fades to black over 150 ms: below Android 14 (no close override set in onCreate) set here. */
     override fun finish() {
         // Launcher mode, quit on screen (not a handoff behind the menu, not the GLES relaunch): back to NX Redux's home.
-        if (intent.getBooleanExtra(EXTRA_OWN_TASK, false) && !relaunching && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) bringHomeTaskToFront()
+        if (intent.getBooleanExtra(EXTRA_OWN_TASK, false) && !relaunching && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            bringHomeTaskToFront()
+            // A quit finishes once the menu covers it (onStop): a task closing on screen slides out, Android's task
+            // animation, which no app override reaches; a hidden one just goes. FINISH_WHEN_HIDDEN_MS in case it stays.
+            if (quitting && !finishWhenHidden) {
+                finishWhenHidden = true
+                window.decorView.postDelayed({ finishIfWaiting() }, FINISH_WHEN_HIDDEN_MS)
+                return
+            }
+        }
         super.finish()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) @Suppress("DEPRECATION") overridePendingTransition(0, R.anim.launch_return_out)
+    }
+
+    /** A quit waiting to be hidden ([finish]) finishes now. */
+    private fun finishIfWaiting() {
+        if (!finishWhenHidden) return
+        finishWhenHidden = false
+        super.finish()
     }
 
     override fun onDestroy() {
@@ -912,6 +934,28 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * [dispatchTouchEvent]. A recreation (the GLES relaunch) puts it back up with its first clock, so its minimum
      * is not counted twice and nothing fades in between; a restore after it had gone shows none.
      */
+    /**
+     * The window opens translucent from Android 11 (Theme.NxMobile.Game, values-v30), the menu showing through until
+     * this screen's first frame is up; a frame after it, it turns opaque on black, so the menu behind can stop.
+     */
+    private fun opaqueAfterFirstFrame() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val decor = window.decorView
+        decor.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                decor.viewTreeObserver.removeOnPreDrawListener(this)
+                decor.postOnAnimation {
+                    decor.postOnAnimation {
+                        if (isDestroyed) return@postOnAnimation
+                        window.setBackgroundDrawable(ColorDrawable(android.graphics.Color.BLACK))
+                        setTranslucent(false)
+                    }
+                }
+                return true
+            }
+        })
+    }
+
     private fun showNameHold(saved: Bundle?) {
         val name = launchName ?: return
         val shownAt = if (saved == null) SystemClock.uptimeMillis() else saved.getLong(KEY_NAME_HOLD_SHOWN_AT, -1L).takeIf { it >= 0L } ?: return
