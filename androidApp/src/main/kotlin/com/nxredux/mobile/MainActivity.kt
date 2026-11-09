@@ -558,7 +558,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
      * there. Gone while a game starts ([launching]), an app opened on the top screen runs there ([TopScreenHost.active]:
      * the presentation would cover it) or the app stops. Dual mode follows the window: on only once it is shown (a failed
      * show leaves the menu whole on this screen), kept through [launching] so the cross-fade stays, and through an app on
-     * top so the menu keeps its shape, except on a game list: its list is on the top screen, so this one shows it whole.
+     * top so the main menu keeps its shape; any other screen (a tool, a game list) would be on the top screen, so this
+     * one shows it whole.
      * That display gone or Second screen off lets go of the app on top ([TopScreenHost.release]).
      */
     private fun syncMenuScreen() {
@@ -577,7 +578,9 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 if (showMenuScreen(wanted)) menuRetries = 0 else retryMenuScreen()
             }
         }
-        state.onDualMenu(active && (launching || (appOnTop && state.screen.value !is Screen.Games) || menuScreen != null))
+        // Under an app on top only the main menu keeps its two-screen shape: a tool or a game list would draw on the top
+        // screen, behind the app, so they take this screen whole.
+        state.onDualMenu(active && (launching || (appOnTop && state.screen.value is Screen.Systems) || menuScreen != null))
         // No window on the second display: no prompt is there, so the keyboard setting rules again.
         if (menuScreen == null && promptOnSecond) { promptOnSecond = false; state.refreshKeyboard() }
         val shown = menuScreen ?: return
