@@ -163,11 +163,13 @@ class NetplayGameTest {
         assertEquals(NetplayNotice.Ended(NetplayText.ENDED_TOO_SLOW), notice(LibretroNetplay.STATE_ENDED, reason = LibretroNetplay.REASON_TOO_SLOW))
         assertEquals("The two games drifted apart, so the session ended. Your progress up to a few seconds ago is saved.", NetplayText.ENDED_DRIFT)
         assertEquals("This phone can't run both games at full speed, so the session ended.", NetplayText.ENDED_TOO_SLOW)
+        assertEquals(NetplayNotice.Ended(NetplayText.ENDED_PEER_TOO_SLOW), notice(LibretroNetplay.STATE_ENDED, reason = LibretroNetplay.REASON_PEER_TOO_SLOW))
+        assertEquals("The other phone can't run both games at full speed, so the session ended.", NetplayText.ENDED_PEER_TOO_SLOW)
         // The other player leaving keeps today's text.
         assertEquals(NetplayNotice.Ended("${NetplayText.ENDED}\n${NetplayText.ENDED_DETAIL}"), notice(LibretroNetplay.STATE_ENDED, reason = LibretroNetplay.REASON_PEER_LEFT))
         assertEquals(NetplayNotice.Pill(NetplayText.SYNCING), notice(LibretroNetplay.STATE_RESYNCING))
 
-        for (reason in listOf(LibretroNetplay.REASON_DRIFT, LibretroNetplay.REASON_TOO_SLOW, LibretroNetplay.REASON_PEER_LEFT, LibretroNetplay.REASON_TIMEOUT)) {
+        for (reason in listOf(LibretroNetplay.REASON_DRIFT, LibretroNetplay.REASON_TOO_SLOW, LibretroNetplay.REASON_PEER_TOO_SLOW, LibretroNetplay.REASON_PEER_LEFT, LibretroNetplay.REASON_TIMEOUT)) {
             val engine = FakeEngine(LibretroNetplay.STATE_ENDED, reason).apply { verified = 360 }
             val notices = java.util.Collections.synchronizedList(ArrayList<NetplayNotice>())
             val endings = java.util.Collections.synchronizedList(ArrayList<Long>())
@@ -209,5 +211,14 @@ class NetplayGameTest {
         assertNull(netplaySessionFrom("CLIENT", "10.0.0.1", "mgba", "gpsp", cableLink = setup.copy(otherRomPath = "")))
         assertNull(netplaySessionFrom("CLIENT", "10.0.0.1", "mgba", "gpsp", cableLink = setup.copy(localSlot = 0)))
         assertNull(netplaySessionFrom("CLIENT", "10.0.0.1", "mgba", "gpsp", cableLink = setup.copy(biosMode = "")))
+    }
+
+    @Test fun the_engine_end_is_seen_once_after_it_was_active() {
+        val watch = EngineEndWatch()
+        assertFalse(watch.endedNow(false))   // not started yet: no end
+        assertFalse(watch.endedNow(true))
+        assertFalse(watch.endedNow(true))
+        assertTrue(watch.endedNow(false))    // the step the session ended
+        assertFalse(watch.endedNow(false))
     }
 }

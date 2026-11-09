@@ -3,9 +3,8 @@ package com.nxredux.mobile.netplay.cablelink
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 class PairSaveCheckpointTest {
     private class Files(var session: ByteArray? = null, var real: ByteArray? = null) : CheckpointFiles {
@@ -31,10 +30,10 @@ class PairSaveCheckpointTest {
         cp.onVerified(120, save(9))   // an older checkpoint never replaces a newer one
         assertContentEquals(save(2), files.session)
         assertContentEquals(save(0), files.real)   // nothing reaches the real save before the end
-        assertTrue(cp.commit())
+        assertEquals(PairSaveCheckpoint.Commit.Written, cp.commit())
         assertContentEquals(save(2), files.real)
         assertNull(files.session)
-        assertFalse(cp.commit())   // twice: nothing left to write
+        assertEquals(PairSaveCheckpoint.Commit.NothingVerified, cp.commit())   // twice: nothing left to write
         assertEquals(1, files.realWrites)
     }
 
@@ -44,7 +43,7 @@ class PairSaveCheckpointTest {
         val frames = PairCheckpointFrames()
         // Snapshots at the check frames, but the other phone never agreed on any of them.
         for (f in 1L..400L) assertNull(frames.afterFrame(f, verifiedFrame = -1) { save(f.toInt()) })
-        assertFalse(cp.commit())
+        assertEquals(PairSaveCheckpoint.Commit.NothingVerified, cp.commit())
         assertContentEquals(save(0), files.real)
         assertEquals(0, files.realWrites)
 
@@ -52,7 +51,7 @@ class PairSaveCheckpointTest {
         val failing = Files(real = save(0)).apply { failReal = true }
         val cp2 = PairSaveCheckpoint(failing)
         cp2.onVerified(120, save(3))
-        assertFalse(cp2.commit())
+        assertIs<PairSaveCheckpoint.Commit.NotWritten>(cp2.commit())
         assertContentEquals(save(3), failing.session)
     }
 
@@ -79,12 +78,12 @@ class PairSaveCheckpointTest {
     @Test fun promotes_pending_session_save_on_next_launch() {
         // The process died mid-session: the last verified checkpoint is still in the session file.
         val files = Files(session = save(4), real = save(0))
-        assertTrue(PairSaveCheckpoint(files).promotePending())
+        assertEquals(PairSaveCheckpoint.Commit.Written, PairSaveCheckpoint(files).promotePending())
         assertContentEquals(save(4), files.real)
         assertNull(files.session)
         // A normal launch with nothing pending touches nothing.
         val clean = Files(real = save(0))
-        assertFalse(PairSaveCheckpoint(clean).promotePending())
+        assertEquals(PairSaveCheckpoint.Commit.NothingVerified, PairSaveCheckpoint(clean).promotePending())
         assertEquals(0, clean.realWrites)
     }
 }

@@ -8,6 +8,7 @@ import com.nxredux.mobile.netplay.cablelink.LinkRomCache
 import com.nxredux.mobile.netplay.cablelink.MemoryCacheStore
 import com.nxredux.mobile.netplay.cablelink.RomHash
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -31,14 +32,19 @@ class CableLinkWizardTest {
     private val biosB = "b".repeat(40)
 
     /** One phone's files: [library] maps hash to path, [own] is its game, [save] its battery save. */
-    private class FakeFiles(val own: ByteArray, val save: ByteArray?, val library: Map<String, String> = emptyMap()) : CableLinkFiles {
+    private class FakeFiles(
+        val own: ByteArray, val save: ByteArray?, val library: Map<String, String> = emptyMap(), val findMs: Long = 0,
+    ) : CableLinkFiles {
         val store = MemoryCacheStore()
         override val cache = LinkRomCache(store)
         var romReads = 0
         val otherSaves = ArrayList<ByteArray>()
         val logged = ArrayList<String>()
         override fun log(message: String) { logged += message }
-        override suspend fun findRom(hash: String, sizeBytes: Long): String? = library[hash] ?: cache.find(hash)
+        override suspend fun findRom(hash: String, sizeBytes: Long): String? {
+            delay(findMs)
+            return library[hash] ?: cache.find(hash)
+        }
         override suspend fun readOwnRom(chunk: suspend (ByteArray, Int) -> Unit) {
             romReads++
             own.toList().chunked(1_000).forEach { part -> chunk(part.toByteArray(), part.size) }
@@ -343,5 +349,32 @@ class CableLinkWizardTest {
         assertEquals("SAVE none", c2.readLine(1000))
         c2.writeLine("SAVE lots")
         assertEquals(HostOutcome.Turned("sync"), hostJob2.await())
+    }
+
+    @Test fun a_slow_library_lookup_keeps_the_other_side_waiting() = runTest {
+        // The host's lookup outlasts several of the guest's line waits; its WAIT lines keep the guest on.
+        val slow = CableLinkExchange.STEP_MS * 3
+        val hostFiles = FakeFiles(ruby, null, library = mapOf(sapphireHash to "/roms/Sapphire.gba"), findMs = slow)
+        val clientFiles = FakeFiles(sapphire, null, library = mapOf(rubyHash to "/roms/Ruby.gba"))
+        val e = play(hostOffer(offer(ruby, hostFiles)), clientOffer(offer(sapphire, clientFiles), game = "Pokemon Sapphire (USA)", any = true))
+        assertEquals("/roms/Sapphire.gba", assertIs<HostOutcome.Started>(e.host).cableLink!!.otherRomPath)
+        assertEquals("/roms/Ruby.gba", assertIs<ClientOutcome.Started>(e.client).cableLink!!.otherRomPath)
+    }
+
+    @Test fun waiting_past_the_cap_ends_the_exchange() = runTest {
+        val files = FakeFiles(sapphire, null, library = mapOf(rubyHash to "/roms/Ruby.gba"))
+        val (h, join) = rawHost(files)
+        h.readLine(1000); h.readLine(1000)   // CABLE, NEED none
+        repeat(CableLinkExchange.WAIT_MAX) { h.writeLine("WAIT") }
+        h.writeLine("NEED none")
+        h.writeLine("SAVE none")
+        assertEquals("SAVE none", h.readLine(1000))   // up to the cap, WAITs are skipped
+
+        val files2 = FakeFiles(sapphire, null, library = mapOf(rubyHash to "/roms/Ruby.gba"))
+        val (h2, join2) = rawHost(files2)
+        h2.readLine(1000); h2.readLine(1000)
+        repeat(CableLinkExchange.WAIT_MAX + 1) { h2.writeLine("WAIT") }
+        assertEquals(ClientOutcome.Refused(NetplayText.CABLE_LINK_COPY_FAILED), join2.await())
+        join.cancel()
     }
 }

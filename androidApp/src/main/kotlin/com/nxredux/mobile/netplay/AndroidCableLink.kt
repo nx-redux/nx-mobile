@@ -18,8 +18,6 @@ import com.nxredux.mobile.storage.AndroidRefs
 import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.storage.LinkRomCaches
 import com.nxredux.mobile.storage.NxPaths
-import com.nxredux.mobile.storage.findSave
-import com.nxredux.mobile.storage.readSaveDecoded
 import com.swordfish.libretrodroid.NxLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -113,7 +111,7 @@ internal class AndroidCableLinkFiles(
 
     override suspend fun ownSave(): ByteArray? = withContext(Dispatchers.IO) {
         val paths = NxPaths(tag, "", romFileName, AndroidAppSettings(context).saveNaming)
-        PairSaveFiles.pending(context.filesDir, paths) ?: paths.findSave(sdRoot)?.readSaveDecoded()
+        PairSaveFiles.launchSave(context.filesDir, sdRoot, paths)
     }
 
     override suspend fun writeOtherSave(bytes: ByteArray): String = withContext(Dispatchers.IO) {

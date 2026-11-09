@@ -56,7 +56,8 @@ typedef enum {
 	NP_REASON_CONNECT,
 	NP_REASON_IO,
 	NP_REASON_DRIFT,	/* pair mode: the third hash mismatch within 60 s */
-	NP_REASON_TOO_SLOW	/* pair mode: a frame thread missed the frame budget for more than 10 s while its peer waited */
+	NP_REASON_TOO_SLOW,	/* pair mode: this frame thread missed the frame budget for more than 10 s while its peer waited */
+	NP_REASON_PEER_TOO_SLOW	/* pair mode: the peer's frame thread did (its PAIR_END said so) */
 } np_reason;
 
 /* Threads: np_pre_frame / np_post_frame / np_input / np_analog only from the frame (GL) thread; np_start / np_pause /
@@ -102,8 +103,8 @@ void np_shutdown(void);			  /* join the thread, close sockets, reset to IDLE (sa
  * NP_PAIR_CHECK_INTERVAL frames and compare; on a mismatch the host's state replaces the client's at an agreed frame
  * (NP_RESYNCING meanwhile). The first two mismatches within 60 s resync; the third ends the session
  * (NP_REASON_DRIFT). The input delay adapts (or is pinned), and a frame thread that cannot keep the frame rate ends it
- * (NP_REASON_TOO_SLOW). Both peers must be in pair mode: it adds commands to the wire. Off, the wire is exactly the
- * handheld's protocol 3. */
+ * (NP_REASON_TOO_SLOW on that side, NP_REASON_PEER_TOO_SLOW on its peer). Both peers must be in pair mode: it adds
+ * commands to the wire. Off, the wire is exactly the handheld's protocol 3. */
 #define NP_PAIR_CHECK_INTERVAL 120
 typedef uint64_t (*np_hash_fn)(void); /* called on the frame thread, after a frame */
 /* Asks for pair mode in the next np_start, which consumes the request (a later session is in pair mode only when asked

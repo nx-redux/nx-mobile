@@ -20,6 +20,15 @@ interface CheckpointFiles {
 class PairSaveCheckpoint(private val files: CheckpointFiles) {
     private var verifiedFrame = -1L
 
+    /** How a [commit] went. */
+    sealed interface Commit {
+        data object Written : Commit
+        /** No verified checkpoint to write. */
+        data object NothingVerified : Commit
+        /** The real save could not be written ([error]); the session file stays for the next launch. */
+        class NotWritten(val error: Exception) : Commit
+    }
+
     /** The local GBA's save as it was at [frame], which both phones' hashes matched; an older frame than one kept is ignored. */
     fun onVerified(frame: Long, localSaveRam: ByteArray) {
         if (frame <= verifiedFrame) return
@@ -27,23 +36,20 @@ class PairSaveCheckpoint(private val files: CheckpointFiles) {
         verifiedFrame = frame
     }
 
-    /**
-     * Writes the last verified copy to the real save and clears the session file. False when there was none, or the real
-     * save could not be written (the session file then stays for the next launch).
-     */
-    fun commit(): Boolean {
-        val bytes = files.readSession() ?: return false
+    /** Writes the last verified copy to the real save and clears the session file. */
+    fun commit(): Commit {
+        val bytes = files.readSession() ?: return Commit.NothingVerified
         try {
             files.writeReal(bytes)
         } catch (e: Exception) {
-            return false
+            return Commit.NotWritten(e)
         }
         files.deleteSession()
-        return true
+        return Commit.Written
     }
 
     /** At a launch: a session file left by a process that died mid-session becomes the real save. */
-    fun promotePending(): Boolean = commit()
+    fun promotePending(): Commit = commit()
 }
 
 /**

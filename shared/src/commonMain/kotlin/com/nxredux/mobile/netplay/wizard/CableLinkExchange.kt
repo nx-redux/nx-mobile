@@ -5,6 +5,12 @@ import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.netplay.cablelink.LinkRomHashMismatch
 import com.nxredux.mobile.netplay.cablelink.RomHash
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The Cable Link over Wi-Fi part of the handshake, after both HELLOs carried `cl=1`. Both sides run it; the host leads
@@ -15,6 +21,9 @@ import kotlinx.coroutines.CancellationException
  * 3. a needed ROM, host's first: `ROM <size>`, the raw bytes, then the receiver's `ROM-OK` or `ROM-BAD`;
  * 4. saves, host's first: `SAVE <size>` and the raw bytes, or `SAVE none`;
  * 5. host: `CLOCK <epoch seconds>`.
+ *
+ * While a side looks up the other's ROM in its library (hashing same-size files, maybe copying one), it sends `WAIT` lines
+ * so the other side's line wait does not run out; a reader skips them, up to [WAIT_MAX] in a row.
  *
  * Any failure ends the exchange; the caller closes the channel, which also ends the other side's wait.
  */
@@ -31,6 +40,12 @@ internal object CableLinkExchange {
     const val SAVE_MAX = 1024 * 1024
 
     private const val NONE = "none"
+
+    private const val WAIT = "WAIT"
+    /** Well inside [STEP_MS], so a late beat still lands before the other side gives up. */
+    const val WAIT_EVERY_MS = 10_000L
+    /** Five minutes of lookup is plenty for any library; past that the other side gives up. */
+    const val WAIT_MAX = 30
 
     sealed interface Result {
         data class Done(val setup: CableLinkSetup) : Result
@@ -63,7 +78,7 @@ internal object CableLinkExchange {
         ch.writeLine("CABLE ${offer.romHash} ${offer.romSize} ${offer.biosHash ?: NONE}")
         val peer = parseCable(readLine(ch))
 
-        var otherRom = files.findRom(peer.romHash, peer.romSize)
+        var otherRom = keepingAlive(ch) { files.findRom(peer.romHash, peer.romSize) }
         ch.writeLine("NEED ${if (otherRom == null) peer.romHash else NONE}")
         val peerNeed = fields(readLine(ch), "NEED", 2)[1]
         val peerNeedsMine = when (peerNeed) {
@@ -179,11 +194,33 @@ internal object CableLinkExchange {
         return files.writeOtherSave(bytes)
     }
 
-    /** The next line; a REJECT from the other side becomes its text. */
+    /** Runs [work] while a `WAIT` line goes out every [WAIT_EVERY_MS]; a beat already being written finishes first. */
+    private suspend fun <T> keepingAlive(ch: NetplayChannel, work: suspend () -> T): T = coroutineScope {
+        val beat = launch {
+            while (true) {
+                delay(WAIT_EVERY_MS)
+                withContext(NonCancellable) { ch.writeLine(WAIT) }
+            }
+        }
+        try {
+            work()
+        } finally {
+            beat.cancelAndJoin()
+        }
+    }
+
+    /** The next line past any `WAIT`s; a REJECT from the other side becomes its text. */
     private suspend fun readLine(ch: NetplayChannel): String {
-        val line = ch.readLine(STEP_MS)
-        Reject.parse(line)?.let { throw Fail(NetplayText.reject(it.reason)) }
-        return line
+        var waits = 0
+        while (true) {
+            val line = ch.readLine(STEP_MS)
+            if (line == WAIT) {
+                if (++waits > WAIT_MAX) throw Fail(NetplayText.CABLE_LINK_COPY_FAILED)
+                continue
+            }
+            Reject.parse(line)?.let { throw Fail(NetplayText.reject(it.reason)) }
+            return line
+        }
     }
 
     private fun fields(line: String, head: String, count: Int): List<String> {

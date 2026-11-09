@@ -28,8 +28,10 @@ object LibretroNetplay {
     const val REASON_IO = 5
     /** Pair mode: the third drift-check mismatch within 60 s. */
     const val REASON_DRIFT = 6
-    /** Pair mode: a phone missed the frame budget for more than 10 s while its peer waited (either side's). */
+    /** Pair mode: this phone missed the frame budget for more than 10 s while its peer waited. */
     const val REASON_TOO_SLOW = 7
+    /** Pair mode: the other phone did (it said so before it left). */
+    const val REASON_PEER_TOO_SLOW = 8
 
     /** The GBA link (`cpp/netplay/np_link.h`): gpSP and mGBA packets over TCP 55437; no input or state exchange. */
     const val LINK_IDLE = 0
@@ -69,6 +71,8 @@ object LibretroNetplay {
      * the session ended until [shutdown].
      */
     @JvmStatic external fun lastVerifiedFrame(): Long
+    /** A session is started and not yet ended or failed; cheap, any thread (the GL thread polls it after each step). */
+    @JvmStatic external fun active(): Boolean
     @JvmStatic external fun pause()
     @JvmStatic external fun resume()
     @JvmStatic external fun leave()

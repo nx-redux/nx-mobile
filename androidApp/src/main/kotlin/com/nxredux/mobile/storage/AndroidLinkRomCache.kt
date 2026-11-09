@@ -8,6 +8,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
+import java.util.UUID
 
 /**
  * Link ROMs in `filesDir/link-roms/`: the files dir, not the cache dir, so Android never drops a ROM a session is about
@@ -25,7 +27,7 @@ class AndroidCacheStore(private val dir: File) : CacheStore {
     override suspend fun write(name: String, write: suspend (ByteSink) -> Unit): String = withContext(Dispatchers.IO) {
         val target = file(name)
         dir.mkdirs()
-        val part = File(dir, "$name.${java.util.UUID.randomUUID()}.part")   // one per writer: a failed one never touches another's bytes
+        val part = File(dir, "$name.${UUID.randomUUID()}.part")   // one per writer: a failed one never touches another's bytes
         try {
             FileOutputStream(part).use { out ->
                 write(object : ByteSink {
@@ -34,7 +36,7 @@ class AndroidCacheStore(private val dir: File) : CacheStore {
                 out.flush()
                 out.fd.sync()
             }
-            if (!part.renameTo(target)) throw java.io.IOException("could not move ${part.name} into place")
+            if (!part.renameTo(target)) throw IOException("could not move ${part.name} into place")
         } catch (e: Throwable) {
             part.delete()
             throw e

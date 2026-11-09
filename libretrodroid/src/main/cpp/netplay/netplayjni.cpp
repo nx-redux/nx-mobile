@@ -97,6 +97,13 @@ JNIEXPORT jlong JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_runFram
     return (jlong) np_run_frame();
 }
 
+JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_active(
+    JNIEnv* env,
+    jclass obj
+) {
+    return (jboolean) np_active();
+}
+
 JNIEXPORT jlong JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_lastVerifiedFrame(
     JNIEnv* env,
     jclass obj

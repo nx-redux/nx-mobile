@@ -1620,6 +1620,25 @@ static int case_too_slow_ends_with_reason(void) {
 	return 0;
 }
 
+/* The peer's PAIR_END too slow (reason 2) ends this side with the peer-side reason, so it blames the other phone. */
+static int case_peer_too_slow_ends_with_peer_reason(void) {
+	uint16_t port = next_port++;
+	fake_set(1000000);
+	core_reset(1);
+	int fd = -1;
+	CHECK(start_pair_host(port, &fd) == 0);
+	uint32_t ps = 1;
+	CHECK(raw_feed_and_run(fd, &ps, 30, 0x6A6A, NULL, 16) == 0);
+	const uint8_t code = 2;
+	CHECK(raw_pkt(fd, 0x0F, 0, &code, 1) == 0);
+	CHECK(wait_state(NP_ENDED, 3000, 1) == 0);
+	np_reason why = NP_REASON_NONE;
+	CHECK(np_get_state(NULL, &why) == NP_ENDED && why == NP_REASON_PEER_TOO_SLOW);
+	np_shutdown();
+	close(fd);
+	return 0;
+}
+
 /* A local pause of 15 s with no frames at all, or frames that keep returning 0, is not "too slow"; nor is a frame
  * thread that stopped for 15 s without a pause (the peer's stall countdown handles that). */
 static int case_pair_pause_gap_not_too_slow(void) {
@@ -1922,6 +1941,7 @@ int main(void) {
 	local_case("adaptive_delay_rises_on_stall_and_eases", case_adaptive_delay_rises_on_stall_and_eases);
 	local_case("delay_pin_holds", case_delay_pin_holds);
 	local_case("too_slow_ends_with_reason", case_too_slow_ends_with_reason);
+	local_case("peer_too_slow_ends_with_peer_reason", case_peer_too_slow_ends_with_peer_reason);
 	local_case("pair_pause_gap_not_too_slow", case_pair_pause_gap_not_too_slow);
 	local_case("pair_peer_stall_not_too_slow", case_pair_peer_stall_not_too_slow);
 	local_case("pair_resync_across_pause_and_stall", case_pair_resync_across_pause_and_stall);

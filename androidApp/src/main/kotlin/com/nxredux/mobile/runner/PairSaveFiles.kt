@@ -27,6 +27,14 @@ internal object PairSaveFiles {
     /** The verified copy a session left behind for [paths] (its process died before the end); null when none. */
     fun pending(filesDir: File, paths: NxPaths): ByteArray? = sessionFile(filesDir, paths).takeIf { it.isFile }?.readBytes()
 
+    /**
+     * The save the next launch of the game under [root] boots, which is what the other phone must get: a pending
+     * checkpoint (the launch promotes it), else the battery save as the launch loads it ([BatterySaves.load], which skips
+     * a damaged or empty file for the next candidate).
+     */
+    fun launchSave(filesDir: File, root: File, paths: NxPaths): ByteArray? =
+        pending(filesDir, paths) ?: BatterySaves(File(root, paths.savesDir), paths).load()
+
     /** Checkpoint and commit writes, in order, off the GL and main threads; the game process's end waits for it. */
     val writer: ExecutorService = Executors.newSingleThreadExecutor { Thread(it, "nx-pair-saves") }
 }
@@ -42,6 +50,17 @@ internal class AndroidCheckpointFiles(private val session: File, private val bat
         synchronized(battery) {
             if (!battery.write(bytes) && !battery.writable) throw IOException("the real save is damaged and is not overwritten")
         }
+    }
+
+    /**
+     * At a launch: the session file a process that died mid-session left becomes the real save [real]. [battery] loads
+     * first, so a damaged real save is set aside as a `.bak` before the promotion replaces it, as any first write does.
+     */
+    fun promotePending(real: File): PairSaveCheckpoint.Commit {
+        if (!session.isFile) return PairSaveCheckpoint.Commit.NothingVerified
+        synchronized(battery) { battery.load() }
+        keepNewerReal(real)
+        return PairSaveCheckpoint(this).promotePending()
     }
 
     /**
@@ -85,7 +104,13 @@ internal class PairSaveSession(private val checkpoint: PairSaveCheckpoint, priva
         verifiedFrame?.let(frames::verified)?.let(::record)
         post(Runnable {
             runCatching { checkpoint.commit() }
-                .onSuccess { NxLog.i(TAG_LOG, if (it) "pair save committed" else "pair save: no verified checkpoint") }
+                .onSuccess {
+                    when (it) {
+                        PairSaveCheckpoint.Commit.Written -> NxLog.i(TAG_LOG, "pair save committed")
+                        PairSaveCheckpoint.Commit.NothingVerified -> NxLog.i(TAG_LOG, "pair save: no verified checkpoint")
+                        is PairSaveCheckpoint.Commit.NotWritten -> NxLog.e(TAG_LOG, "pair save not written; kept for the next launch", it.error)
+                    }
+                }
                 .onFailure { NxLog.e(TAG_LOG, "pair save commit failed", it) }
         })
         true

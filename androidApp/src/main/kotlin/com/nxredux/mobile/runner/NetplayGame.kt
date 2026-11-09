@@ -54,9 +54,11 @@ internal fun netplayNotice(state: Int, secondsLeft: Int, reason: Int, onCopy: Bo
     LibretroNetplay.STATE_RESYNCING -> NetplayNotice.Pill(NetplayText.SYNCING)
     LibretroNetplay.STATE_ENDED -> NetplayNotice.Ended(
         when (reason) {
-            // Cable Link's own endings: both phones show the same reason (the engine sends it).
+            // Cable Link's own endings, which the engine sends to the other phone: drift reads the same on both, too slow
+            // names the phone that was.
             LibretroNetplay.REASON_DRIFT -> NetplayText.ENDED_DRIFT
             LibretroNetplay.REASON_TOO_SLOW -> NetplayText.ENDED_TOO_SLOW
+            LibretroNetplay.REASON_PEER_TOO_SLOW -> NetplayText.ENDED_PEER_TOO_SLOW
             else -> "${if (onCopy) NetplayText.ENDED_COPY else NetplayText.ENDED}\n${NetplayText.ENDED_DETAIL}"
         },
     )

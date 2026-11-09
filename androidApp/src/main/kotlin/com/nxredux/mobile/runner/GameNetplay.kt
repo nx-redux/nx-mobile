@@ -114,6 +114,8 @@ internal class GameNetplay(private val host: GameNetplayHost) {
     @Volatile private var ownCopyFailed = false   // a host's copy of its own saves failed: it starts without them
     /** Cable Link: the real save's checkpoints ([attachCheckpoint]); null for every other launch. */
     private var pairSaves: PairSaveSession? = null
+    /** Cable Link, GL thread: sees the engine's end at the first step after it. */
+    private val pairEnd = EngineEndWatch()
 
     /** onCreate: the session this launch plays (a session launches cold: no saved or requested resume slot). */
     fun onCreate(intent: Intent, savedInstanceState: Bundle?) {
@@ -381,6 +383,9 @@ internal class GameNetplay(private val host: GameNetplayHost) {
      * engine's last verified frame names becomes the checkpoint (written off this thread).
      */
     private fun afterPairFrame(view: GLRetroView) {
+        // Once the engine is over the core would run free (its frames no longer wait for inputs) until the main thread's
+        // ending notice stops it a status tick later: stopped here, at the step the session ended.
+        if (pairEnd.endedNow(LibretroNetplay.active())) view.frameSpeed = 0
         val saves = pairSaves ?: return
         runCatching {
             saves.afterFrame(LibretroNetplay.runFrame(), LibretroNetplay.lastVerifiedFrame()) { view.serializeSRAM(useEmulationThread = false) }
@@ -399,5 +404,21 @@ internal class GameNetplay(private val host: GameNetplayHost) {
         const val KEY_NETPLAY_LOCAL = "nx_netplay_local"   // netplay link: the session had ended ([local])
         const val NETPLAY_NOTICE_MS = 5000L   // netplay: "Netplay ended ...", "Using <core> for this match ..."
         const val NETPLAY_PILL_MS = 1000L     // netplay: a countdown pill outlives one 250 ms status tick
+    }
+}
+
+/**
+ * A session engine's end, seen by polling whether it is active: true once, at the first inactive poll after an active
+ * one (before the engine starts it is inactive too, which is not an end). One thread.
+ */
+internal class EngineEndWatch {
+    private var seenActive = false
+    private var ended = false
+
+    fun endedNow(active: Boolean): Boolean {
+        if (active) { seenActive = true; return false }
+        if (!seenActive || ended) return false
+        ended = true
+        return true
     }
 }

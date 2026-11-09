@@ -371,6 +371,7 @@ static const char* reason_name(np_reason r) {
 	case NP_REASON_IO: return "i/o";
 	case NP_REASON_DRIFT: return "drift";
 	case NP_REASON_TOO_SLOW: return "too slow";
+	case NP_REASON_PEER_TOO_SLOW: return "peer too slow";
 	}
 	return "?";
 }
@@ -510,7 +511,7 @@ static bool run_slot_complete(void) {
 // Pair mode (np_mutex held)
 //////////////////////////////////////////////////////////////////////////////
 
-// Tell the peer why (it ends with the same reason), then DISCONNECT.
+// Tell the peer why (it ends with the same reason, or the peer-side one for too slow), then DISCONNECT.
 static void pair_end(np_reason why) {
 	if (!is_live())
 		return;
@@ -761,7 +762,7 @@ static void handle_packet(const np_packet* p, uint64_t now) {
 			return;
 		end_session(NP_ENDED,
 					p->payload[0] == PAIR_END_DRIFT		 ? NP_REASON_DRIFT
-					: p->payload[0] == PAIR_END_TOO_SLOW ? NP_REASON_TOO_SLOW
+					: p->payload[0] == PAIR_END_TOO_SLOW ? NP_REASON_PEER_TOO_SLOW
 														 : NP_REASON_PEER_LEFT,
 					false);
 		return;

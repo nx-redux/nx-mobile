@@ -88,7 +88,7 @@ class PairSaveFilesTest {
         val files = AndroidCheckpointFiles(session, battery)
         val cp = PairSaveCheckpoint(files)
         cp.onVerified(120, save(3))
-        assertFalse(cp.commit())
+        assertTrue(cp.commit() is PairSaveCheckpoint.Commit.NotWritten)
         assertTrue(session.isFile)                                        // kept for a later launch
 
         // An unchanged real save counts as written.
@@ -98,7 +98,7 @@ class PairSaveFilesTest {
         val session2 = File(root, "session2.verified")
         val cp2 = PairSaveCheckpoint(AndroidCheckpointFiles(session2, battery2))
         cp2.onVerified(120, save(4))
-        assertTrue(cp2.commit())
+        assertEquals(PairSaveCheckpoint.Commit.Written, cp2.commit())
         assertFalse(session2.exists())
     }
 
@@ -122,5 +122,42 @@ class PairSaveFilesTest {
         assertNotNull(bak)
         assertTrue(bak!!.name.startsWith("Ruby.srm.") && bak.name.endsWith(".bak"))
         assertArrayEquals(save(8), bak.readBytes())
+    }
+
+    private fun damagedConfigured(saves: File): File =
+        File(saves, paths.saveRam.substringAfterLast('/')).apply { writeBytes(Rzip.encode(ByteArray(64) { 7 }).copyOf(24)) }
+
+    @Test fun the_save_sent_is_the_one_the_launch_loads() {
+        val saves = File(root, "Saves/GBA").apply { mkdirs() }
+        val configured = damagedConfigured(saves)
+        val alternate = paths.saveRamCandidates().map { it.substringAfterLast('/') }.first { it != configured.name }
+        File(saves, alternate).writeBytes(save(6))
+        val filesDir = File(root, "files")
+        assertArrayEquals(save(6), PairSaveFiles.launchSave(filesDir, root, paths))
+        assertArrayEquals(save(6), BatterySaves(saves, paths).load())
+
+        // A checkpoint a dead session left comes first: the launch promotes it.
+        PairSaveFiles.sessionFile(filesDir, paths).apply { parentFile!!.mkdirs(); writeBytes(save(2)) }
+        assertArrayEquals(save(2), PairSaveFiles.launchSave(filesDir, root, paths))
+    }
+
+    @Test fun promotion_sets_a_damaged_real_save_aside_first() {
+        val saves = File(root, "Saves/GBA").apply { mkdirs() }
+        val configured = damagedConfigured(saves)
+        val damagedBytes = configured.readBytes()
+        val session = File(root, "s.verified").apply { writeBytes(save(3)) }
+        configured.setLastModified(session.lastModified() - 10_000)
+        val battery = BatterySaves(saves, paths)
+        val files = AndroidCheckpointFiles(session, battery)
+        assertEquals(PairSaveCheckpoint.Commit.Written, files.promotePending(File(root, paths.saveRam)))
+        val baks = saves.listFiles()!!.filter { it.name.endsWith(".bak") }
+        assertEquals(1, baks.size)
+        assertArrayEquals(damagedBytes, baks.single().readBytes())
+        assertArrayEquals(save(3), Rzip.decode(configured.readBytes()))
+        assertFalse(session.exists())
+
+        // Nothing pending: the real save is not even read.
+        val clean = AndroidCheckpointFiles(File(root, "none.verified"), BatterySaves(saves, paths))
+        assertEquals(PairSaveCheckpoint.Commit.NothingVerified, clean.promotePending(File(root, paths.saveRam)))
     }
 }

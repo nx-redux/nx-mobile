@@ -532,8 +532,14 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 // Cable Link: a game process that died mid-session left the last save both phones agreed on; it is the real
                 // save from now on, whatever this launch is.
                 pairFiles?.let { f ->
-                    runCatching { f.keepNewerReal(File(dataRoot, paths.saveRam)); PairSaveCheckpoint(f).promotePending() }
-                        .onSuccess { if (it) NxLog.i(TAG_LOG, "promoted a Cable Link session's verified save") }
+                    runCatching { f.promotePending(File(dataRoot, paths.saveRam)) }
+                        .onSuccess {
+                            when (it) {
+                                PairSaveCheckpoint.Commit.Written -> NxLog.i(TAG_LOG, "promoted a Cable Link session's verified save")
+                                PairSaveCheckpoint.Commit.NothingVerified -> Unit
+                                is PairSaveCheckpoint.Commit.NotWritten -> NxLog.e(TAG_LOG, "could not promote a Cable Link session's save", it.error)
+                            }
+                        }
                         .onFailure { NxLog.e(TAG_LOG, "could not promote a Cable Link session's save", it) }
                 }
                 battery.load() to clock?.load()

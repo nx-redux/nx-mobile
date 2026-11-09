@@ -1,5 +1,7 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.library.LocalRomFinder
+import com.nxredux.mobile.netplay.cablelink.LinkRomCache
 import com.nxredux.mobile.tryOr
 import com.nxredux.mobile.tryOrNull
 import com.nxredux.mobile.tryQuietly
@@ -265,7 +267,7 @@ class AppDeps(
     /** Microphone access for DS / 3DS games' Mic toggle (Settings → Library row); null: none, or no mic to use. */
     val micAccess: MicAccess? = null,
     /** ROMs received over a Cable Link session (Settings → System's Clear link ROM cache row); null: none on this platform. */
-    val linkRomCache: com.nxredux.mobile.netplay.cablelink.LinkRomCache? = null,
+    val linkRomCache: LinkRomCache? = null,
     /** Local folders for the list-style picker and the SAF → file conversion; null: Android's pickers only. */
     val localFiles: LocalFiles? = null,
     /**
@@ -3995,7 +3997,7 @@ class AppState(
         if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SYSTEM) settingsUi.refreshSettings()
     }.also { gpuJob = it; it.start() }
 
-    private val localRomFinder = com.nxredux.mobile.library.LocalRomFinder(deps.source, deps.privateFiles)
+    private val localRomFinder = LocalRomFinder(deps.source, deps.privateFiles)
 
     /**
      * The library GBA ROM (a GBA or MGBA folder, whichever core plays it) whose SHA-1 is [hash] and size [sizeBytes], as a ref value; null
