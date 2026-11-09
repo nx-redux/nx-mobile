@@ -255,6 +255,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
     private var bottomScreenPrompt: SecondScreenPresentation? = null
     /** The main menu's window on the second display ([syncMenuScreen]): the top screen, or the menu itself; null while not shown. */
     private var menuScreen: SecondScreenPresentation? = null
+    /** The open prompt is drawn on the second display ([syncMenuScreen]): NX's keyboard always types it. */
+    private var promptOnSecond = false
     /** A failed [showMenuScreen] looks again shortly ([retryMenuScreen]): the game's own window may still be on the display. */
     private val menuRetry = Runnable { menuRetryPending = false; syncMenuScreen() }
     private var menuRetryPending = false
@@ -447,6 +449,9 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 homes = AndroidHomeLocator(this),
                 storageUpgrade = AndroidStorageUpgrade(this),
                 switcherReturns = LaunchRecords.of(this),
+                ownKeyboard = true,
+                pasteText = { AndroidDeviceInfo.clipboardText(applicationContext) },
+                promptOnSecondDisplay = { promptOnSecond },
             ),
             scope,
             kids,
@@ -571,7 +576,10 @@ class MainActivity : ComponentActivity(), FolderPicker {
         // The focused screen: the top screen's list on a game list, the menu everywhere else.
         val screen = state.screen.value
         val hostsFocus = if (onSecond) screen !is Screen.Games else screen is Screen.Games
-        val focusable = hostsFocus && state.textEntryOpen   // any text field App or the top screen can show
+        // A prompt drawn there: Android's keyboard won't open on that display, so NX's types it, from this window.
+        val promptThere = hostsFocus && state.textEntryOpen
+        if (promptThere != promptOnSecond) { promptOnSecond = promptThere; state.refreshKeyboard() }
+        val focusable = promptThere && !state.nxKeyboard   // the NX keyboard needs no key focus there
         val handBack = shown.focusable && !focusable
         shown.focusable = focusable
         if (handBack) reclaimKeyFocus()
@@ -861,7 +869,23 @@ class MainActivity : ComponentActivity(), FolderPicker {
         if (::state.isInitialized && systemButtonKey(raw)) return true
         val event = SystemButtonKeys.translate(this, raw)
         if (::state.isInitialized && captureKey(event)) return true
-        if (::state.isInitialized && !state.textEntryOpen && keyToButton(event.keyCode) != null) {
+        // The NX keyboard types: a physical keyboard's characters, Backspace, Enter and Tab go to it; the pad's keys go to
+        // the pad as when no prompt is open (no text field needs them first).
+        if (::state.isInitialized && state.textEntry.value != null && keyToButton(event.keyCode) == null) {
+            when (val a = keyboardKeyAction(event.keyCode, event.unicodeChar)) {
+                KeyboardKeyAction.Pass -> Unit
+                else -> {
+                    if (event.action == KeyEvent.ACTION_DOWN) when (a) {
+                        is KeyboardKeyAction.Type -> state.keyboardType(a.text)
+                        KeyboardKeyAction.Backspace -> state.keyboardBackspace()
+                        is KeyboardKeyAction.Press -> state.onButton(a.button)
+                        KeyboardKeyAction.Pass -> Unit
+                    }
+                    return true
+                }
+            }
+        }
+        if (::state.isInitialized && (!state.textEntryOpen || state.textEntry.value != null) && keyToButton(event.keyCode) != null) {
             when (event.action) {
                 KeyEvent.ACTION_DOWN -> { onUserInteraction(); return onKeyDown(event.keyCode, event) }
                 KeyEvent.ACTION_UP -> { onUserInteraction(); return onKeyUp(event.keyCode, event) }
