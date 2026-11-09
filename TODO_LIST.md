@@ -1,5 +1,16 @@
 # TODO list
 
+## Controls editor: skin and overlay layouts
+
+Device checks still owed:
+
+- [ ] Landscape: R shoulder moves to the very top edge on a skin; buttons enter each screen up to 20% from its edges, not further.
+- [ ] Resize a button very large and very small (floor/ceiling hold); two buttons can overlap visually but their touch areas never stack.
+- [ ] Pad skin Off: Adjust buttons edits the overlay; untouched overlay buttons start at the skin positions; moving them doesn't change the skin; Pad skin On again shows the skin layout unchanged.
+- [ ] Existing skin tweaks from before the upgrade still land where they were.
+- [ ] Frame layouts' touch-shortcut strips may now enter the bottom 20% of the screen above them
+- [ ] Editor drag stays smooth on a slow device (AYANEO) with long drags
+
 ## Dolphin (GameCube / Wii) multiplayer: untested
 
 GameCube and Wii pass with 2 controllers (Double Dash, NSMB Wii sideways). Still untested:

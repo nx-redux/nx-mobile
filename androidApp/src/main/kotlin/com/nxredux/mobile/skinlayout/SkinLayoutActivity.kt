@@ -24,6 +24,7 @@ import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.runner.Console
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.runner.MIN_TOUCH_DP
 import com.nxredux.mobile.runner.PadSkinPack
 import com.nxredux.mobile.runner.SystemButtonKeys
 import com.nxredux.mobile.runner.WiiPad
@@ -117,7 +118,9 @@ class SkinLayoutActivity : ComponentActivity() {
         val stick = profile.stickByDefault || DcGames.stickFirst(base, arcadeSet = false) || profile.kind == PadProfile.Kind.GC
         val image = pack.picture(placed.spec.image)?.asImageBitmap() ?: return null
         val parts = placed.spec.parts?.let { pack.picture(it) }?.asImageBitmap()
-        return SkinLayoutEdit.state(settings, console.id, placed.forStick(stick), w, h, overlay = false, minTouchPx = 0f) to Placed(placed.spec.id, image, parts)
+        // Pad skin Off: the game draws the bare buttons, so their own (overlay) layout is the one edited
+        val minTouchPx = resources.displayMetrics.density * MIN_TOUCH_DP
+        return SkinLayoutEdit.state(settings, console.id, placed.forStick(stick), w, h, overlay = !settings.padSkin, minTouchPx = minTouchPx) to Placed(placed.spec.id, image, parts)
     }
 
     /** No layout fits this window (or the pack can't be read): say so and leave. */
