@@ -42,9 +42,6 @@ internal class LibraryIndexHolder(
     private val lock = Mutex()             // every index read, write and in-memory swap
     @Volatile private var library: LibraryIndex? = null   // the library as last scanned, read or moved
 
-    /** [LibraryIndex.lateMount] of this run's last scan (a stored one is stale). Main thread. */
-    var lateMountHere: List<String> = emptyList()
-
     // Art results applied to [library] but not yet written ([artUnsaved]) or shown ([artUnshown]); [artSeq] counts them so
     // [artFlushJob] knows they stopped coming. All under [lock].
     private var artUnsaved = false
@@ -81,13 +78,27 @@ internal class LibraryIndexHolder(
                 library = it
                 if (persistNow) {
                     persist(it)
-                    artUnsaved = false   // the whole index went out, the art in it with it
+                    // The whole index went out, the art in it with it; the caller refreshes what it shows, so a
+                    // flush showing the same art again would only rebuild the menu twice.
+                    artUnsaved = false; artUnshown = false
                     dropLookups()
                 } else {
                     artUnsaved = true; artUnshown = true; artSeq++
                 }
             }
         }
+
+    /**
+     * A whole new index built by [build] from the one in memory (null: none), made the index as [mutate] does. [build]
+     * (a scan: seconds of tree reads) runs outside the lock, so art results, renames and lookups go on meanwhile. When
+     * the index changed during it, it runs again under the lock on the changed one: a change that landed meanwhile is
+     * never dropped. Returns the new index, or null for no change.
+     */
+    suspend fun rebuild(build: suspend (LibraryIndex?) -> LibraryIndex): LibraryIndex? {
+        val before = current()
+        val built = build(before)
+        return mutate { now -> if (now === before) built else build(now) }
+    }
 
     /** The index fitting [fits]: the in-memory one, else the stored copy (which then becomes the one in memory). */
     suspend fun fitting(fits: (LibraryIndex) -> Boolean): LibraryIndex? = lock.withLock {

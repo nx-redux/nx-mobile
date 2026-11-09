@@ -85,11 +85,45 @@ class LibraryIndexHolderTest {
         val h = holder(backgroundScope, store, shown)
         h.mutate { index(1) }
         h.applyArt(GameRef("home", "Roms/GB", "g0.gb"), ArtRefs(boxart = "b"))
-        h.mutate { it!!.copy(scannedAt = 5) }   // written whole, art in it
+        h.mutate { it!!.copy(scannedAt = 5) }   // written whole, art in it; its caller shows it
         val writes = store.writes
         h.flushArt()
         assertEquals(writes, store.writes)   // not written again
-        assertEquals(1, shown.indexes.size)   // but still shown once
+        assertEquals(0, shown.indexes.size)   // nor shown again
+        advanceTimeBy(ART_MAX_WAIT_MS * 2); runCurrent()
+        assertEquals(0, shown.indexes.size)   // the scheduled flush has nothing left either
+    }
+
+    @Test
+    fun rebuildRunsOutsideTheLockAndKeepsAChangeThatLandedMeanwhile() = runTest {
+        val store = MemoryLibraryIndexStore()
+        val h = holder(backgroundScope, store, Shown())
+        h.mutate { index(2) }
+        val seen = ArrayList<LibraryIndex?>()
+        val next = h.rebuild { from ->
+            seen += from
+            // An art result during the first build: it would wait forever were the lock held.
+            if (seen.size == 1) h.applyArt(GameRef("home", "Roms/GB", "g0.gb"), ArtRefs(boxart = "b"))
+            from!!.copy(scannedAt = seen.size.toLong())
+        }
+        assertEquals(2, seen.size)   // built again on the changed index
+        assertEquals("b", seen[1]!!.systems[0].games[0].boxart)
+        assertSame(next, h.snapshot)
+        assertEquals("b", next!!.systems[0].games[0].boxart)
+        assertEquals(2L, next.scannedAt)
+    }
+
+    @Test
+    fun rebuildWithNoChangeMeanwhileBuildsOnce() = runTest {
+        val store = MemoryLibraryIndexStore()
+        val h = holder(backgroundScope, store, Shown())
+        val first = index(1)
+        h.mutate { first }
+        var builds = 0
+        val next = h.rebuild { from -> builds++; assertSame(first, from); index(3) }
+        assertEquals(1, builds)
+        assertSame(next, h.snapshot)
+        assertEquals(3, next!!.systems[0].games.size)
     }
 
     /** Art results from many threads at once: none is lost, as every change runs under the one lock. */

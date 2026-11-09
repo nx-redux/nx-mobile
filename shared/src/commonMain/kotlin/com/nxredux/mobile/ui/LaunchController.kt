@@ -91,7 +91,10 @@ internal class LaunchController(
     private var launchSeqIds = 0L
 
     /** The runner (or an app's start) was called since the sequence's open: a hand-off, not a refusal. */
-    var launchHandedOff = false
+    private var launchHandedOff = false
+
+    /** An app (a tool's or an Android game's) was started: a launch sequence under way hands off rather than retreats. */
+    fun appStarted() { launchHandedOff = true }
 
     /** A launch's Problem met during the spread: shown once the black has retreated. */
     private var heldLaunchError: String? = null
@@ -139,7 +142,7 @@ internal class LaunchController(
         // After a game the menu is its own tab again (the pushed one is not restored): dropped only for a launch that
         // happens (an app's start, or the runner's call), so a coreless, in-flight, vanished or unreadable game leaves the
         // push for B to return to.
-        if (listed.android) { host.dropPushedTab(); if (host.launchApp(entry)) launchHandedOff = true; return null }
+        if (listed.android) { host.dropPushedTab(); if (host.launchApp(entry)) appStarted(); return null }
         if (coreOverride == null && listed.core == null) return null
         if (launchJob?.isActive == true) return null   // a launch is already in flight
         switcher.cancelLoad()   // a switcher still loading must not open over the launched game
