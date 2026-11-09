@@ -10477,10 +10477,10 @@ class AppStateTest {
         val state = state(MemorySettings(ContentRef("Home")), src)
         state.load(); advanceUntilIdle()
         fun sha(x: ByteArray) = com.nxredux.mobile.netplay.cablelink.RomHash.sha1Hex(sequenceOf(x))
-        assertEquals("Home/Roms/Game Boy Advance (GBA)/Mario.gba", state.findLocalRom(sha(gba), "GBA"))
-        assertEquals("Home/Roms/Game Boy Advance (GBA)/Mario.gba", state.findLocalRom(sha(gba), "MGBA"))
-        assertNull(state.findLocalRom(sha(gb), "GBA"))
-        assertNull(state.findLocalRom(sha(gba), "GB"))
+        assertEquals("Home/Roms/Game Boy Advance (GBA)/Mario.gba", state.findLocalRom(sha(gba), gba.size.toLong(), "GBA"))
+        assertEquals("Home/Roms/Game Boy Advance (GBA)/Mario.gba", state.findLocalRom(sha(gba), gba.size.toLong(), "MGBA"))
+        assertNull(state.findLocalRom(sha(gb), gb.size.toLong(), "GBA"))
+        assertNull(state.findLocalRom(sha(gba), gba.size.toLong(), "GB"))
     }
 
     // Settings → System → Pause when unfocused (its General group, the first row), On by default; A, left and right each flip it.

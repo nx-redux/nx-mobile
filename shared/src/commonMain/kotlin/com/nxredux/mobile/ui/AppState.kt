@@ -3963,16 +3963,16 @@ class AppState(
         if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SYSTEM) settingsUi.refreshSettings()
     }.also { gpuJob = it; it.start() }
 
-    private val localRomFinder = com.nxredux.mobile.library.LocalRomFinder(deps.source)
+    private val localRomFinder = com.nxredux.mobile.library.LocalRomFinder(deps.source, deps.privateFiles)
 
     /**
-     * The library GBA ROM (a GBA or MGBA folder, whichever core plays it) whose SHA-1 is [hash], as a ref value; null
+     * The library GBA ROM (a GBA or MGBA folder, whichever core plays it) whose SHA-1 is [hash] and size [sizeBytes], as a ref value; null
      * when there is none or [tag] is not a GBA tag. Hashes on [AppDeps.compute], each ROM once per change.
      */
-    suspend fun findLocalRom(hash: String, tag: String): String? {
+    suspend fun findLocalRom(hash: String, sizeBytes: Long, tag: String): String? {
         if (tag != "GBA" && tag != "MGBA") return null
         val games = (libraryIndex.current() ?: return null).systems.filter { it.tag == "GBA" || it.tag == "MGBA" }.flatMap { it.games }
-        return withContext(deps.compute) { localRomFinder.find(hash, games) }
+        return withContext(deps.compute) { localRomFinder.find(hash, sizeBytes, games) }
     }
 
     /** Copy device info: the About rows as text on the clipboard (after the GPU query, which is quick), then a notice. */

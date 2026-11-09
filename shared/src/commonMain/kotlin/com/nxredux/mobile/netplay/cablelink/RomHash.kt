@@ -38,11 +38,13 @@ class Sha1 {
         for (t in 16 until 80) w[t] = (w[t - 3] xor w[t - 8] xor w[t - 14] xor w[t - 16]).let { (it shl 1) or (it ushr 31) }
         var a = h[0]; var b = h[1]; var c = h[2]; var d = h[3]; var e = h[4]
         for (t in 0 until 80) {
-            val (f, k) = when {
-                t < 20 -> ((b and c) or (b.inv() and d)) to 0x5A827999
-                t < 40 -> (b xor c xor d) to 0x6ED9EBA1
-                t < 60 -> ((b and c) or (b and d) or (c and d)) to 0x8F1BBCDC.toInt()
-                else -> (b xor c xor d) to 0xCA62C1D6.toInt()
+            val f: Int
+            val k: Int
+            when {
+                t < 20 -> { f = (b and c) or (b.inv() and d); k = 0x5A827999 }
+                t < 40 -> { f = b xor c xor d; k = 0x6ED9EBA1 }
+                t < 60 -> { f = (b and c) or (b and d) or (c and d); k = 0x8F1BBCDC.toInt() }
+                else -> { f = b xor c xor d; k = 0xCA62C1D6.toInt() }
             }
             val tmp = ((a shl 5) or (a ushr 27)) + f + e + k + w[t]
             e = d; d = c; c = (b shl 30) or (b ushr 2); b = a; a = tmp

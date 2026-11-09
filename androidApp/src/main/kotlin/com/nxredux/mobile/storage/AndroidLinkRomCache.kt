@@ -21,11 +21,11 @@ class AndroidCacheStore(private val dir: File) : CacheStore {
 
     override fun path(name: String): String? = file(name).takeIf { it.isFile }?.absolutePath
 
-    /** Through `<name>.part` and a rename, so [path] never answers with a half-written ROM. */
+    /** Through a private `.part` file and a rename, so [path] never answers with a half-written ROM. */
     override suspend fun write(name: String, write: suspend (ByteSink) -> Unit): String = withContext(Dispatchers.IO) {
         val target = file(name)
         dir.mkdirs()
-        val part = File(dir, "$name.part")
+        val part = File(dir, "$name.${java.util.UUID.randomUUID()}.part")   // one per writer: a failed one never touches another's bytes
         try {
             FileOutputStream(part).use { out ->
                 write(object : ByteSink {
