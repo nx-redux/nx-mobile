@@ -832,8 +832,17 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun finish() {
         // Launcher mode, quit on screen (not a handoff behind the menu, not the GLES relaunch): back to NX Redux's home.
         if (intent.getBooleanExtra(EXTRA_OWN_TASK, false) && !relaunching && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) bringHomeTaskToFront()
+        if (!relaunching) markClosing()
         super.finish()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) @Suppress("DEPRECATION") overridePendingTransition(0, R.anim.launch_return_out)
+    }
+
+    /**
+     * The menu must not bring this screen back from here on ([canBringBack]): its task would come forward only to finish,
+     * and no game would start. A pick of the same game then waits for this process to end and starts fresh.
+     */
+    private fun markClosing() {
+        runCatching { liveGameStore.markClosing(Process.myPid(), launchId) }.onFailure { NxLog.w(TAG_LOG, "could not mark the game closing", it) }
     }
 
     override fun onDestroy() {
@@ -1323,6 +1332,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun quitWithAutoState(chosen: Boolean, autoState: Boolean = true) {
         if (quitting) return   // single-shot: a second job could serialize after the core is destroyed
         quitting = true
+        markClosing()
         GameHeartbeat.start(this)   // the menu may be waiting for this process to end: its saves can take a while
         rumbles.forEach { it.release() }
         shortcuts.pushMicSource()   // silence now, so the phone's mic closes before the save, not at the pause

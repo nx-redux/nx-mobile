@@ -41,9 +41,9 @@ class GameProcessControlTest {
         return GameSession("GBA", "Zelda", CoreDescriptor("mgba", "libmgba.so", setOf("gba")), ref, ref, "Zelda.gba", resumeSlot = slot, gamePath = path)
     }
 
-    private fun live(pid: Int = 42, path: String = "Roms/GBA/Zelda.gba") {
+    private fun live(pid: Int = 42, path: String = "Roms/GBA/Zelda.gba", closing: Boolean = false) {
         alive += pid
-        store.write(LiveGame(pid, 7L, path, "mgba", "GBA", null, false))
+        store.write(LiveGame(pid, 7L, path, "mgba", "GBA", null, false, closing))
     }
 
     @Test fun noLiveGameStarts() {
@@ -58,6 +58,17 @@ class GameProcessControlTest {
         assertEquals(GameProcessControl.Decision.BROUGHT_BACK, control.prepare(session(slot = 9)))
         assertEquals(1, brings)
         assertEquals(0, ends)
+        assertTrue(killed.isEmpty())
+    }
+
+    // The same game picked while its screen is still quitting: waited out, then started fresh.
+    @Test fun sameGameClosingIsWaitedForThenStarted() {
+        live(closing = true)
+        onSleep = { t -> if (t >= 300) alive -= 42 }
+        assertEquals(GameProcessControl.Decision.START, control.prepare(session()))
+        assertEquals(0, brings)
+        assertEquals(1, ends)
+        assertEquals(300L, slept)
         assertTrue(killed.isEmpty())
     }
 

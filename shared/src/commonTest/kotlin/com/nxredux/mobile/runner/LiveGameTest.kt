@@ -29,13 +29,19 @@ class LiveGameTest {
 
     @Test fun netplayCannot() = assertFalse(live.copy(netplay = true).canBringBack(session()))
 
+    // Home during a slow quit, then the same game: its closing task must not be brought forward.
+    @Test fun closingCannot() = assertFalse(live.copy(closing = true).canBringBack(session()))
+
+    @Test fun recordBeforeClosingReadsAsNotClosing() =
+        assertEquals(live, LiveGame.decode("1\t42\t7\t1Roms/GBA/Zelda.gba\tmgba\tGBA\t\t0"))
+
     @Test fun codecRoundTrip() {
-        for (g in listOf(live, live.copy(gamePath = null, resumeSlot = 9, netplay = true), live.copy(gamePath = "a\tb\\c\nd", tag = "")))
+        for (g in listOf(live, live.copy(gamePath = null, resumeSlot = 9, netplay = true), live.copy(gamePath = "a\tb\\c\nd", tag = ""), live.copy(closing = true)))
             assertEquals(g, LiveGame.decode(g.encode()))
     }
 
     @Test fun garbageDecodesToNull() {
-        for (t in listOf("", "x", "1\t2", "1\tx\t7\t0\ta\tb\t\t0", "2\t1\t7\t0\ta\tb\t\t0", "1\t1\t7\t0\ta\tb\t\t2", "1\t1\t7\t1\\q\ta\tb\t\t0"))
+        for (t in listOf("", "x", "1\t2", "1\tx\t7\t0\ta\tb\t\t0", "2\t1\t7\t0\ta\tb\t\t0", "1\t1\t7\t0\ta\tb\t\t2", "1\t1\t7\t1\\q\ta\tb\t\t0", "2\t1\t7\t0\ta\tb\t\t0\t2", "1\t1\t7\t0\ta\tb\t\t0\t0"))
             assertNull(LiveGame.decode(t), t)
     }
 }

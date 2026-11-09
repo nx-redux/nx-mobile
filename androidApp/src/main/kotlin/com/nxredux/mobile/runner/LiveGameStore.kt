@@ -25,6 +25,12 @@ class LiveGameStore(private val file: File, private val isAlive: (Int) -> Boolea
         if (game.pid == pid && (launchId == null || game.launchId == launchId)) file.delete()
     }
 
+    /** [pid]'s record for [launchId] now says closing ([LiveGame.closing]); a newer launch's record is left alone. */
+    fun markClosing(pid: Int, launchId: Long) {
+        val game = read() ?: return
+        if (game.pid == pid && game.launchId == launchId && !game.closing) write(game.copy(closing = true))
+    }
+
     /** The game alive now, or null; a stale record is deleted. */
     fun current(): LiveGame? {
         val game = read() ?: return null
