@@ -72,7 +72,7 @@ class NetplayControllerTest {
 
     @Test fun gba_shows_the_emulator_row_with_gpsp_and_mgba() = runTest {
         val c = controller(FakeNetplayPlatform())
-        c.open(ruby)
+        c.open(ruby); runCurrent()
         val role = assertIs<NetplayPage.Role>(c.page.value)
         assertEquals(listOf("Auto (match the other device)", "gpSP", "mGBA"), role.emulators)
         assertEquals(listOf(NetplayRoleRow.HOST, NetplayRoleRow.JOIN, NetplayRoleRow.EMULATOR), role.rows)
@@ -81,12 +81,12 @@ class NetplayControllerTest {
     @Test fun mgba_pinned_over_wifi_is_refused_with_the_cable_only_text() = runTest {
         val p = FakeNetplayPlatform()
         val c = controller(p)
-        c.open(ruby)
+        c.open(ruby); runCurrent()
         c.press(NxButton.DOWN, NxButton.DOWN, NxButton.RIGHT, NxButton.RIGHT, NxButton.UP, NxButton.UP)   // Emulator = mGBA, on Host
         assertEquals(2, assertIs<NetplayPage.Role>(c.page.value).pick)
         c.press(NxButton.A)
         val err = assertIs<NetplayPage.Error>(c.page.value)
-        assertEquals("mGBA links over the USB cable only.\n\nPick USB Cable, or another emulator.", err.text)
+        assertEquals("mGBA links this game over the USB cable only.\n\nPick USB Cable, or another emulator.", err.text)
         assertEquals(0, p.adverts.size)
         c.press(NxButton.B)
         assertEquals(2, assertIs<NetplayPage.Role>(c.page.value).pick)                     // back on the Role page, pick kept
@@ -99,11 +99,65 @@ class NetplayControllerTest {
         val (h, cEnd) = PipeChannel.pair()
         val p = FakeNetplayPlatform().apply { connectTo = { cEnd } }
         val c = controller(p)
-        c.open(ruby)
-        c.press(NxButton.DOWN, NxButton.A)   // Join on Auto over Wi-Fi: mGBA is not a choice here
+        c.open(ruby); runCurrent()
+        c.press(NxButton.DOWN, NxButton.A)   // Join on Auto over Wi-Fi: mGBA is not a choice for a game without a Wi-Fi mode
         p.found.emit(FoundHost("10.0.0.1", "Pokemon Ruby (USA)")); runCurrent()
         c.press(NxButton.A); runCurrent()
-        assertEquals("core=gpsp,tag=GBA", HelloCodec.parse(h.readLine(1000))!!.caps)
+        assertEquals("core=gpsp,tag=GBA,wl=none", HelloCodec.parse(h.readLine(1000))!!.caps)
+    }
+
+    @Test fun a_gba_game_is_probed_once_off_the_main_thread_and_its_mode_goes_in_the_caps() = runTest {
+        val (h, cEnd) = PipeChannel.pair()
+        val p = FakeNetplayPlatform().apply { connectTo = { cEnd }; gbaMode = "rfu" }
+        val c = controller(p)
+        c.open(ruby)
+        assertIs<NetplayPage.Progress>(c.page.value)                       // the probe runs on the work context
+        runCurrent()
+        assertIs<NetplayPage.Role>(c.page.value)
+        assertEquals(listOf("Pokemon Ruby (USA).gba"), p.probes)
+        c.press(NxButton.DOWN, NxButton.A)   // Join on Auto over Wi-Fi: with a Wi-Fi mode either core can link
+        p.found.emit(FoundHost("10.0.0.1", "Pokemon Ruby (USA)")); runCurrent()
+        c.press(NxButton.A); runCurrent()
+        assertEquals("core=gpsp,tag=GBA,wl=rfu,auto=1", HelloCodec.parse(h.readLine(1000))!!.caps)
+        assertEquals(1, p.probes.size)
+    }
+
+    @Test fun mgba_pinned_over_wifi_hosts_a_wifi_mode_game() = runTest {
+        val p = FakeNetplayPlatform().apply { gbaMode = "poke" }
+        val c = controller(p)
+        c.open(ruby); runCurrent()
+        c.press(NxButton.DOWN, NxButton.DOWN, NxButton.RIGHT, NxButton.RIGHT, NxButton.UP, NxButton.UP, NxButton.A)   // Emulator = mGBA, Host
+        runCurrent()
+        assertIs<NetplayPage.Hosting>(c.page.value)
+        assertEquals(1, p.adverts.size)
+    }
+
+    @Test fun host_turns_away_a_game_in_another_link_mode_and_says_so() = runTest {
+        val p = FakeNetplayPlatform().apply { gbaMode = "poke" }
+        val c = controller(p)
+        c.open(ruby); runCurrent()
+        c.press(NxButton.DOWN, NxButton.DOWN, NxButton.RIGHT, NxButton.RIGHT, NxButton.UP, NxButton.UP, NxButton.A)   // Emulator = mGBA, Host
+        runCurrent()
+        val (h, cEnd) = PipeChannel.pair()
+        p.lan.pending.send(h)
+        cEnd.writeLine("HELLO 2 Pokemon${esc}Ruby${esc}(USA) client caps=core=gpsp,tag=GBA,wl=rfu"); runCurrent()
+        assertEquals("REJECT link-mgba.poke.rfu", cEnd.readLine(1000)); runCurrent()
+        assertEquals(NetplayText.LINK_TURNED_AWAY, assertIs<NetplayPage.Hosting>(c.page.value).status)
+        advanceTimeBy(NetplayController.NOTICE_MS + 1)
+        assertEquals(NetplayText.WAITING_PLAYER, assertIs<NetplayPage.Hosting>(c.page.value).status)
+    }
+
+    @Test fun only_gba_link_games_are_probed_and_b_during_the_probe_closes() = runTest {
+        val p = FakeNetplayPlatform()
+        val c = controller(p)
+        c.open(kart)
+        assertIs<NetplayPage.Role>(c.page.value)
+        assertEquals(emptyList<String>(), p.probes)
+        c.open(ruby)
+        c.press(NxButton.B)
+        assertNull(c.page.value)
+        runCurrent()
+        assertNull(c.page.value)                                           // a late probe result opens nothing
     }
 
     @Test fun a_console_folder_game_listed_under_the_default_emulator_offers_that_emulator_tag() = runTest {

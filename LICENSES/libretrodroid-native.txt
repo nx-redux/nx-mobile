@@ -2,7 +2,7 @@ The native runner liblibretrodroid.so (a fork of LibretroDroid by Filippo Scogna
 links the following libraries, whose licences require their notices to accompany the binary. They follow.
 Pins: oboe b15f5e39, rcheevos v12.2.1 (40d916de), libretro-common b0c348ea, libchdr 8e7b8bd3 with its bundled miniz 3.1.2,
 zstd 1.5.7 and LZMA SDK 26.02; LZ4 v1.10.0 (library only, vendored); libsamplerate 0.2.2 (c96f5e3d); SoundTouch 2.3.3
-(e83424d5).
+(e83424d5); gba_wifi_link's gwl_mode.c and gwl_games.h (from gpSP 5819380c, GPL-2.0-or-later).
 
 # oboe (Apache-2.0) ###################################################################################################
 
@@ -402,6 +402,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 LZMA SDK is placed in the public domain.
 
 Anyone is free to copy, modify, publish, use, compile, sell, or distribute the original LZMA SDK code, either in source code form or as a compiled binary, for any purpose, commercial or non-commercial, and by any means.
+# gba_wifi_link: gwl_mode.c, gwl_games.h (GPL-2.0-or-later) ##########################################################
+
+The GBA link mode probe (cores/gba_wifi_link/gwl_mode.c and gwl_games.h, shared with the mGBA core) reproduces gpSP's
+(gameplaySP, https://github.com/libretro/gpsp) per-game link mode choice (gba_memory.c) and is generated from its game
+table (gba_over.h). gameplaySP copyright (C) 2006 Exophase <exophase@gmail.com> and the gpSP contributors. Licensed
+under the GNU General Public License, version 2 or (at your option) any later version, which lets it be part of this
+GPL-3.0 runner; the GPL-3.0 text is in LICENSE and the GPL-2.0 text at
+https://www.gnu.org/licenses/old-licenses/gpl-2.0.html. Source: cores/gba_wifi_link (see its NOTICE.txt).
+
 # SoundTouch 2.3.3 (LGPL-2.1) ###################################################################################
 
 SoundTouch audio processing library

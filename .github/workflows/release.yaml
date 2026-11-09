@@ -105,6 +105,7 @@ jobs:
           # - the core's patch and its numbered patches (cores/patches/<core>/*.patch), and for melondsds its melonDS
           #   dependency's patch
           # - the set-table generators (fbneo, flycast)
+          # - the frontend's link libraries compiled into gpsp (sio_lockstep) and mgba (sio_lockstep, gba_wifi_link)
           FILES=(cores/Makefile)
           if [ -f "cores/patches/${{ matrix.core }}.patch" ]; then
             FILES+=("cores/patches/${{ matrix.core }}.patch")
@@ -114,6 +115,14 @@ jobs:
           done
           if [ "${{ matrix.core }}" = "melondsds" ]; then
             FILES+=(cores/patches/melonds.patch)
+          fi
+          case "${{ matrix.core }}" in
+            gpsp) LINK_DIRS=(cores/sio_lockstep) ;;
+            mgba) LINK_DIRS=(cores/sio_lockstep cores/gba_wifi_link) ;;
+            *) LINK_DIRS=() ;;
+          esac
+          if [ ${#LINK_DIRS[@]} -gt 0 ]; then
+            while IFS= read -r f; do FILES+=("$f"); done < <(find "${LINK_DIRS[@]}" -type f | LC_ALL=C sort)
           fi
           for f in cores/scripts/*; do
             [ -f "$f" ] && FILES+=("$f")

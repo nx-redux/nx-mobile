@@ -57,6 +57,8 @@ object LibretroNetplay {
     @JvmStatic external fun linkStart(role: Int, peerIp: String, port: Int, mode: String): Boolean
     /** Client: the host's mode from its READY ("" when it sent none); null until then, and always for a host. */
     @JvmStatic external fun linkHostMode(): String?
+    /** The link mode token (gwl_mode_token) of the GBA ROM at [path], which the mGBA core's link options take. */
+    @JvmStatic external fun gbaLinkMode(path: String): String
     @JvmStatic external fun linkPause()
     @JvmStatic external fun linkResume()
     @JvmStatic external fun linkLeave()

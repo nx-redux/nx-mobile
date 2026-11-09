@@ -52,7 +52,7 @@ internal class LinkConnectingClock(private var startedAt: Long) {
 
 /**
  * netplay link: one GBA link session (gpSP or mGBA) inside the game screen. Unlike lockstep it starts before the core
- * loads ([connect]): the joiner must know the host's gpsp_serial first (the handheld reloads instead). Its
+ * loads ([connect]): the joiner must know the host's link mode first (the handheld reloads instead). Its
  * status ticks from the first frame ([begin]) every 250 ms on [scope], with notices to [onNotice] (main thread).
  * Blocking engine calls run on [NetplayEngine]'s thread.
  */
@@ -71,9 +71,10 @@ internal class NetplayLinkGame(
 
     /**
      * Starts the link (the host listens and accepts only the joiner's address; the joiner connects and waits for the
-     * host's READY). The raw gpsp_serial the core runs with: the host's own ([ownSerial], or the default); the joiner's is
-     * the host's, or its own when the host sent none; "" for mGBA. Null when the engine would not start, or the joiner
-     * heard no READY within [NETPLAY_CONNECT_TIMEOUT_MS].
+     * host's READY). The raw gpsp_serial or mgba_link_mode the core runs with: the host's own ([ownSerial], or the
+     * default); the joiner's is the host's, or its own when the host sent none or the session is mixed (the host's value
+     * is the other core's option). Null when the engine would not start, or the joiner heard no READY within
+     * [NETPLAY_CONNECT_TIMEOUT_MS].
      */
     suspend fun connect(ownSerial: String?): String? {
         val host = session.role == NetplayRole.HOST
@@ -93,7 +94,7 @@ internal class NetplayLinkGame(
         if (host) return mode
         while (live && now() - startedAt < NETPLAY_CONNECT_TIMEOUT_MS) {   // live: a leave during the wait stops it
             runCatching { LibretroNetplay.linkHostMode() }.getOrNull()?.let {
-                return NetplayLinkOptions.joinerMode(session.coreId, ownSerial, it)
+                return NetplayLinkOptions.joinerMode(session.coreId, ownSerial, it, session.mixed)
             }
             val s = runCatching { LibretroNetplay.linkStatus() }.getOrNull()
             if (s != null && s.isNotEmpty() && (s[0] == LibretroNetplay.LINK_FAILED || s[0] == LibretroNetplay.LINK_ENDED)) break

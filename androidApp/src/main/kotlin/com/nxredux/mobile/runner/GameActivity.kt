@@ -201,6 +201,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_NETPLAY_FOLDER_CORE = "netplay_folder_core"  // the game folder's own core id (saves belong to it)
         const val EXTRA_NETPLAY_EMPTY_SAVES = "netplay_empty_saves"   // Boolean: no save copy happened although one was due
         const val EXTRA_NETPLAY_USB = "netplay_usb"              // Boolean: the session runs over the USB cable
+        const val EXTRA_NETPLAY_MIXED = "netplay_mixed"          // Boolean: a GBA link with the other side on the other core
+        const val EXTRA_NETPLAY_PEER_WL = "netplay_peer_wl"      // the other side's GBA link mode token; absent: it sent none
         const val EXTRA_NETPLAY_USB_TOKEN = "netplay_usb_token"  // Long: the menu's cable start this session runs on (UsbCables.token)
         private const val KEY_NAME_HOLD_SHOWN_AT = "nx_name_hold_shown_at"   // the launch name's hold was up ([LaunchNameHold.shownAt])
         /** Kids Mode's "Games close in 10 minutes" toast stays this long. */

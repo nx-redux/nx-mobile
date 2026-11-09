@@ -84,6 +84,9 @@ set (LIBRETRO_COMMON
         libretro/libretro-common/time/rtime.c
 )
 
+# The GBA link mode probe is shared with the mGBA core (cores/gba_wifi_link).
+set(GWL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../cores/gba_wifi_link)
+
 add_library(libretrodroid SHARED
         libretrodroidjni.h
         libretrodroidjni.cpp
@@ -217,12 +220,14 @@ add_library(libretrodroid SHARED
         netplay/linkhooks.h
         netplay/linkhooks.cpp
         netplay/linkjni.cpp
+        ${GWL_DIR}/gwl_mode.c
         ${RCHEEVOS_SOURCES}
         ${LIBRETRO_COMMON}
         lz4/lz4.c
 )
 
 # Support 16k pages for Android 15
+target_include_directories(libretrodroid PRIVATE ${GWL_DIR})
 target_link_options(libretrodroid PRIVATE "-Wl,-z,max-page-size=16384")
 
 # add lib dependencies

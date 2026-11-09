@@ -43,14 +43,61 @@ class NetplayCoresTest {
         assertNull(NetplayCores.link("snes9x"))
         assertTrue(NetplayCores.isLink("gpsp"))
         assertFalse(NetplayCores.isLink("picodrive"))
-        assertTrue(NetplayCores.usbOnly("MGBA"))
-        assertTrue(NetplayCores.usbOnly(" mgba "))
-        for (tag in listOf("GBA", "GB", "GBC", "SFC")) assertFalse(NetplayCores.usbOnly(tag), tag)
-        assertTrue(NetplayCores.cableOnly("mgba"))
-        assertFalse(NetplayCores.cableOnly("gpsp"))
+        assertTrue(NetplayCores.usbOnly("MGBA", "none"))
+        assertTrue(NetplayCores.usbOnly(" mgba ", null))
+        assertFalse(NetplayCores.usbOnly("MGBA", "rfu"))
+        assertFalse(NetplayCores.usbOnly("MGBA", "aw2"))
+        for (tag in listOf("GBA", "GB", "GBC", "SFC")) assertFalse(NetplayCores.usbOnly(tag, "none"), tag)
     }
 
-    @Test fun without_the_cable_mgba_is_never_offered() {
+    @Test fun mgba_leaves_the_cable_only_for_a_wifi_mode_game() {
+        assertTrue(NetplayCores.wifiOk("mgba", "poke"))
+        assertTrue(NetplayCores.wifiOk("mgba", "rfu"))
+        assertFalse(NetplayCores.wifiOk("mgba", "none"))
+        assertFalse(NetplayCores.wifiOk("mgba", null))
+        assertFalse(NetplayCores.wifiOk("mgba", "aw3"))
+        assertTrue(NetplayCores.wifiOk("gpsp", "none"))
+        assertTrue(NetplayCores.wifiOk("snes9x", null))
+        assertEquals(listOf("mgba", "gpsp"), NetplayCores.offered("MGBA", usb = false, wl = "rfu"))
+        assertEquals(listOf("gpsp", "mgba"), NetplayCores.offered("GBA", usb = false, wl = "poke"))
+        assertEquals(listOf("gpsp"), NetplayCores.offered("MGBA", usb = false, wl = "none"))
+        assertEquals(listOf("mgba", "gpsp"), NetplayCores.offered("MGBA", usb = true, wl = "none"))
+    }
+
+    @Test fun a_mixed_pair_runs_only_when_switching_is_not_possible_and_the_modes_match() {
+        // Joiner pinned to mGBA, host on gpSP, both rfu over Wi-Fi: each keeps its core.
+        assertEquals("mgba", NetplayCores.joinerRun("GBA", "mgba", "mgba", "gpsp", usb = false, ourWl = "rfu", peerWl = "rfu"))
+        assertNull(NetplayCores.joinerRun("GBA", "mgba", "mgba", "gpsp", usb = false, ourWl = "poke", peerWl = "rfu"))
+        assertNull(NetplayCores.joinerRun("GBA", "mgba", "mgba", "gpsp", usb = false, ourWl = "rfu", peerWl = null))   // an older host
+        // Over the cable only rfu stays itself: the other modes turn into the real cable there.
+        assertEquals("mgba", NetplayCores.joinerRun("GBA", "mgba", "mgba", "gpsp", usb = true, ourWl = "rfu", peerWl = "rfu"))
+        assertNull(NetplayCores.joinerRun("GBA", "mgba", "mgba", "gpsp", usb = true, ourWl = "poke", peerWl = "poke"))
+        // Auto still switches to the host's core.
+        assertEquals("gpsp", NetplayCores.joinerRun("MGBA", "mgba", null, "gpsp", usb = false, ourWl = "rfu", peerWl = "rfu"))
+        assertEquals("mgba", NetplayCores.joinerRun("GBA", "gpsp", null, "mgba", usb = false, ourWl = "rfu", peerWl = "rfu"))
+        // Lockstep cores never mix.
+        assertNull(NetplayCores.joinerRun("MD", pico, pico, gpgx, usb = false, ourWl = "rfu", peerWl = "rfu"))
+        // Hosting: pinned, or a handheld joiner on a core this connection does not offer here.
+        assertEquals("gpsp", NetplayCores.hostRun("GBA", "gpsp", "gpsp", "mgba", "MGBA", joinerAuto = false, usb = false, ourWl = "rfu", peerWl = "rfu"))
+        assertNull(NetplayCores.hostRun("GBA", "gpsp", "gpsp", "mgba", "MGBA", joinerAuto = false, usb = false, ourWl = "rfu", peerWl = "poke"))
+        // Auto host and a handheld on mGBA with a Wi-Fi mode: the host adopts it (same core preferred).
+        assertEquals("mgba", NetplayCores.hostRun("GBA", "gpsp", null, "mgba", "MGBA", joinerAuto = false, usb = false, ourWl = "rfu", peerWl = "rfu"))
+        // A joiner on Auto that will switch: the host keeps its core.
+        assertEquals("gpsp", NetplayCores.hostRun("GBA", "gpsp", null, "mgba", "MGBA", joinerAuto = true, usb = false, ourWl = "rfu", peerWl = "rfu"))
+        // Retry: on Auto, mGBA over Wi-Fi only for a Wi-Fi mode game.
+        assertEquals("mgba", NetplayCores.joinerRetry("GBA", null, "mgba", mayRetry = true, usb = false, ourWl = "aw1"))
+        assertNull(NetplayCores.joinerRetry("GBA", null, "mgba", mayRetry = true, usb = false, ourWl = "none"))
+    }
+
+    @Test fun the_joiner_switches_to_the_hosts_core_only_on_auto_with_it_offered() {
+        assertTrue(NetplayCores.joinerSwitches("gpsp", "MGBA", joinerAuto = true, usb = false, joinerWl = "none"))
+        assertTrue(NetplayCores.joinerSwitches("mgba", "GBA", joinerAuto = true, usb = false, joinerWl = "rfu"))
+        assertFalse(NetplayCores.joinerSwitches("mgba", "GBA", joinerAuto = true, usb = false, joinerWl = "none"))
+        assertFalse(NetplayCores.joinerSwitches("gpsp", "MGBA", joinerAuto = false, usb = false, joinerWl = "rfu"))
+        assertFalse(NetplayCores.joinerSwitches("gpsp", null, joinerAuto = true, usb = false, joinerWl = "rfu"))
+    }
+
+    @Test fun without_the_cable_or_a_wifi_mode_mgba_is_not_offered() {
         assertEquals(listOf("gpsp", "mgba"), NetplayCores.offered("GBA"))
         assertEquals(listOf("gpsp"), NetplayCores.offered("GBA", usb = false))
         assertEquals(listOf("mgba", "gpsp"), NetplayCores.offered("MGBA"))
@@ -63,7 +110,20 @@ class NetplayCoresTest {
         assertNull(NetplayCores.hostRun("GBA", "gpsp", null, "mgba", "MGBA", joinerAuto = false, usb = false))
         assertEquals("The host is using\nmGBA (MGBA folder).\n\nPick the game from the same\nfolder on both devices.",
             NetplayCores.refusal("GBA", "gpsp", "mgba", "MGBA", usb = false))
-        assertEquals("mGBA links over the USB cable only.\n\nPick USB Cable, or another emulator.", NetplayText.cableOnly("mGBA"))
+        assertEquals("mGBA links this game over the USB cable only.\n\nPick USB Cable, or another emulator.", NetplayText.cableOnly("mGBA"))
+    }
+
+    /** WizCaps_mgbaNeedsWl's rows (test_wiz_caps.c): mGBA off the cable needs the other side's wl=. */
+    @Test fun mgba_off_the_cable_needs_the_other_sides_wifi_modes() {
+        assertTrue(NetplayCores.needsPeerWl("mgba", null, "rfu", null, usb = false))
+        assertTrue(NetplayCores.needsPeerWl("mgba", "mgba", "rfu", null, usb = false))
+        assertTrue(NetplayCores.needsPeerWl("mgba", "gpsp", "rfu", null, usb = false))
+        assertTrue(NetplayCores.needsPeerWl("gpsp", "mgba", null, "rfu", usb = false))
+        assertFalse(NetplayCores.needsPeerWl("mgba", null, "rfu", null, usb = true))
+        assertFalse(NetplayCores.needsPeerWl("mgba", "gpsp", "rfu", "rfu", usb = false))
+        assertFalse(NetplayCores.needsPeerWl("mgba", "mgba", "none", "none", usb = false))
+        assertFalse(NetplayCores.needsPeerWl("gpsp", null, "rfu", null, usb = false))
+        assertFalse(NetplayCores.needsPeerWl("gpsp", "gpsp", "rfu", null, usb = false))
     }
 
     @Test fun phone_hosts_follow_the_handheld_and_keep_their_core_for_a_phone_on_auto() {

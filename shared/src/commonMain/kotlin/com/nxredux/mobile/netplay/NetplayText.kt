@@ -22,6 +22,8 @@ object NetplayText {
     const val RECEIVING = "Receiving saves..."
     const val STARTING = "Connected - starting game..."
     const val CONNECTING = "Connecting..."
+    /** While the GBA game's link mode is read, before the Role page. */
+    const val READING_GAME = "Reading the game..."
     const val HOST_FAILED = "Could not start hosting.\n\nPlease try again."
     const val NO_ANSWER = "The host did not answer.\n\nPlease try again."
     const val NOT_WAITING = "That device is not waiting\nfor a netplay player."
@@ -81,11 +83,34 @@ object NetplayText {
     const val SAVES_NOT_COPIED = "Saves not copied - playing on empty saves."
     /** The host runs another emulator (the handheld's wording); [tag] is the host's folder, null when it sent none. */
     fun coreMismatch(name: String, tag: String?): String =
-        "The host is using\n${if (tag.isNullOrEmpty()) name else "$name ($tag folder)"}.\n\nPick the game from the same\nfolder on both devices."
+        "The host is using\n${if (tag.isNullOrEmpty()) name else "$name ($tag folder)"}.\n\n$SAME_FOLDER"
     /** This device has the host's emulator, but its Emulator row pins another. */
     fun setEmulator(name: String) = "The host is using $name.\nSet Emulator to $name."
-    /** Host or Join over Wi-Fi with the Emulator row pinned to a cable-only core ([name]: mGBA). */
-    fun cableOnly(name: String) = "$name links over the USB cable only.\n\nPick USB Cable, or another emulator."
+    /** Host or Join over Wi-Fi with the Emulator row pinned to a core that links this game over the cable alone ([name]: mGBA). */
+    fun cableOnly(name: String) = "$name links this game over the USB cable only.\n\nPick USB Cable, or another emulator."
+    /** Opening the sheet on a device without a USB link for a game that [name] (mGBA) links over the cable alone. */
+    fun cableOnlyNoUsb(name: String) = "$name links this game over the USB cable only, which this device does not have."
+    /** mGBA off the cable against a side without the Wi-Fi link modes (the handheld's WIZ_NET_MGBA_WL_TEXT). */
+    const val NO_WIFI_MODES = "The other device can't link\nmGBA over Wi-Fi.\n\nUpdate it, or use the USB Cable."
+    /** The handheld's WIZ_NET_CORE_HINT. */
+    const val SAME_FOLDER = "Pick the game from the same\nfolder on both devices."
+    /** What a player calls a game's Wi-Fi link mode ([GbaWifiLink] token); "" for none. */
+    fun linkModeName(wl: String?): String = when (wl) {
+        "rfu" -> "Wireless Adapter"
+        "poke" -> "Pokémon cable"
+        "aw1" -> "Advance Wars cable"
+        "aw2" -> "Advance Wars 2 cable"
+        else -> ""
+    }
+    /**
+     * gpSP and mGBA in Wi-Fi modes that can't link (the handheld's `link-` REJECT text): [theirs] the other side's mode,
+     * [ours] this one's; the same mode on both only fails over the USB cable. Worded for either side of the refusal.
+     */
+    fun linkModes(theirs: String?, ours: String?, hint: String = SAME_FOLDER): String =
+        if (theirs != ours) "The other player's game links\nwith the ${linkModeName(theirs)},\nthis one with the ${linkModeName(ours)}.\n\n$hint"
+        else "With two different emulators,\nthis game links only\nover Wi-Fi.\n\n$hint"
+    /** Flashed on the host's Wi-Fi waiting page when a joiner whose game links in another mode was refused. */
+    const val LINK_TURNED_AWAY = "A player whose game links in another mode was turned away."
     /** Flashed on the host's waiting page when a joiner on another core was refused. */
     fun coreTurnedAway(name: String) = "A player using $name was turned away."
     fun joinAnyway(host: String, own: String) =
@@ -96,7 +121,7 @@ object NetplayText {
         RejectReason.GAME -> "The host is running a\ndifferent game."
         RejectReason.ROLE -> "Both devices are hosting.\n\nOne of them must join instead."
         RejectReason.SYNC -> "The host could not share\nits saves."
-        RejectReason.CORE, RejectReason.OTHER -> "The host refused the connection."
+        RejectReason.CORE, RejectReason.LINK, RejectReason.OTHER -> "The host refused the connection."
     }
     /** Titles in prompts are cut to 40 characters plus "..." (the handheld's PROMPT_TITLE_MAX). */
     fun elide(title: String): String = if (title.length <= 40) title else title.take(40) + "..."

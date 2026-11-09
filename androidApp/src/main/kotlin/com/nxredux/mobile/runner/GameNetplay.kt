@@ -95,6 +95,8 @@ internal class GameNetplay(private val host: GameNetplayHost) {
             intent.getStringExtra(GameActivity.EXTRA_CORE_ID) ?: "", intent.getStringExtra(GameActivity.EXTRA_NETPLAY_FOLDER_CORE),
             intent.getBooleanExtra(GameActivity.EXTRA_NETPLAY_EMPTY_SAVES, false),
             intent.getBooleanExtra(GameActivity.EXTRA_NETPLAY_USB, false),
+            intent.getBooleanExtra(GameActivity.EXTRA_NETPLAY_MIXED, false),
+            intent.getStringExtra(GameActivity.EXTRA_NETPLAY_PEER_WL),
         )
         // netplay link: recreated after a process kill once its session had ended: the local game it had become, as a
         // normal launch (its resume slot below), not a session.
@@ -206,7 +208,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
         NetplayLinkKind.GBLINK -> true
     }
 
-    /** netplay link: the GBA link engine, started before the core loads; the raw gpsp_serial the core runs with, or null. */
+    /** netplay link: the GBA link engine, started before the core loads; the raw link mode the core runs with, or null. */
     suspend fun connectLink(np: NetplaySession, ownSerial: String?): String? =
         NetplayLinkGame(np, host.lifecycleScope, SystemClock::elapsedRealtime, ::onNotice).also { run = it }.connect(ownSerial)
 

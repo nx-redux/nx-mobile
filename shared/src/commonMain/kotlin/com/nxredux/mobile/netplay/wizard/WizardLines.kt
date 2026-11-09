@@ -1,5 +1,8 @@
 package com.nxredux.mobile.netplay.wizard
 
+import com.nxredux.mobile.netplay.GbaWifiLink
+import com.nxredux.mobile.netplay.NetplayCores
+import com.nxredux.mobile.netplay.NetplayLinkKind
 import com.nxredux.mobile.netplay.NetplayWire
 import com.nxredux.mobile.netplay.RejectReason
 import com.nxredux.mobile.runner.CoreRegistry
@@ -7,7 +10,8 @@ import com.nxredux.mobile.runner.CoreRegistry
 /**
  * The handheld's capability token (nx-redux wiz_caps.c at 8f5a760b): the HELLO field `caps=<token>` after the four fixed
  * fields, `[A-Za-z0-9._=,-]`, 1..63 chars, comma-separated `key=value` elements. This device always sends
- * `core=<core id>,tag=<TAG>`, a joiner on Auto adds `,auto=1`.
+ * `core=<core id>,tag=<TAG>`; gpSP and mGBA add the game's link mode `,wl=<token>` (netplay-prelaunch.sh), a joiner on
+ * Auto adds `,auto=1`.
  */
 object Caps {
     const val MAX = 63
@@ -44,13 +48,17 @@ object Caps {
 
     /**
      * What this device sends: `core=<core>,tag=<TAG>` (the handheld's tag, [CoreRegistry.handheldTag]: GPGX_SMS goes as
-     * GPGX, which the handheld knows), plus `,auto=1` when [auto] (a joiner whose Emulator row is Auto and could switch);
-     * "" when that would break the grammar. The `auto` element is dropped when it would not fit. The handheld reads only
-     * `core` and `tag` from caps (wiz_caps.c WizCaps_value), so the extra element is safe there.
+     * GPGX, which the handheld knows), then for gpSP and mGBA `,wl=<wl>` (the game's link mode, when known), then
+     * `,auto=1` when [auto] (a joiner whose Emulator row is Auto and could switch); "" when that would break the grammar.
+     * The `auto` element, then `wl`, is dropped when it would not fit. The handheld reads caps by key (wiz_caps.c
+     * WizCaps_value), so elements it does not know are safe there.
      */
-    fun of(core: String, tag: String, auto: Boolean = false): String {
+    fun of(core: String, tag: String, auto: Boolean = false, wl: String? = null): String {
         val base = "core=$core,tag=${CoreRegistry.handheldTag(tag)}"
-        if (auto) "$base,auto=1".takeIf { isValid(it) }?.let { return it }
+        val withWl = if (wl != null && NetplayCores.link(core) == NetplayLinkKind.NETPACKET) "$base,wl=$wl" else base
+        if (auto) "$withWl,auto=1".takeIf { isValid(it) }?.let { return it }
+        withWl.takeIf { isValid(it) }?.let { return it }
+        // Only a core or tag with characters outside the grammar gets here; gpSP and mGBA with a GBA tag always fit.
         return base.takeIf { isValid(it) } ?: ""
     }
 }
@@ -70,6 +78,9 @@ data class Hello(
 ) {
     val core: String? get() = Caps.value(caps, "core")
     val tag: String? get() = Caps.value(caps, "tag")
+
+    /** The game's link mode a gpSP or mGBA side sent (`wl=`); null when it sent none. */
+    val wl: String? get() = Caps.value(caps, "wl")
 
     /** A phone joiner on Auto (`auto=1`): it switches to the host's core, so a phone host on Auto keeps its own. */
     val auto: Boolean get() = Caps.value(caps, "auto") == "1"
@@ -113,10 +124,17 @@ object HelloCodec {
     }
 }
 
-/** `REJECT <reason>`; a core refusal names the refusing side's core and folder (`core-<core>.<tag>`, WizCaps_coreReason). */
-data class Reject(val reason: RejectReason, val core: String? = null, val tag: String? = null) {
+/**
+ * `REJECT <reason>`; a core refusal names the refusing side's core and folder (`core-<core>.<tag>`, WizCaps_coreReason).
+ * A link-mode refusal ([RejectReason.LINK], WizCaps_linkReason) names the refusing side's core, its game's mode [wl] and
+ * the other side's [peerWl]: `link-<core>.<wl>.<peerWl>`.
+ */
+data class Reject(
+    val reason: RejectReason, val core: String? = null, val tag: String? = null, val wl: String? = null, val peerWl: String? = null,
+) {
     fun format(): String = when (reason) {
         RejectReason.CORE -> "REJECT ${coreReason(core, tag)}"
+        RejectReason.LINK -> "REJECT link-$core.$wl.$peerWl"
         RejectReason.OTHER -> "REJECT"
         else -> "REJECT ${reason.wire}"
     }
@@ -136,12 +154,32 @@ data class Reject(val reason: RejectReason, val core: String? = null, val tag: S
             }
         }
 
+        /**
+         * WizCaps_linkReason: gpSP and mGBA on the two sides ([senderCore] refusing, [receiverCore] refused), both games
+         * in a Wi-Fi mode, yet the modes differ or the transport turns them into the real cable ([GbaWifiLink.mixedOk]).
+         * Only builds that send `wl=` get here, so the refused side knows the reason. null when the refusal is about
+         * something else (a side in no Wi-Fi mode runs the real cable, which the plain core refusal covers).
+         */
+        fun link(senderCore: String, senderWl: String?, receiverCore: String?, receiverWl: String?, usb: Boolean): Reject? {
+            if (receiverCore == null || receiverCore == senderCore || '.' in senderCore) return null
+            val a = senderWl?.takeIf { it in GbaWifiLink.WIFI_MODES } ?: return null
+            val b = receiverWl?.takeIf { it in GbaWifiLink.WIFI_MODES } ?: return null
+            if (GbaWifiLink.mixedOk(a, b, usb) || "link-$senderCore.$a.$b".length > REASON_MAX) return null
+            return Reject(RejectReason.LINK, senderCore, wl = a, peerWl = b)
+        }
+
         /** null for anything that is not a REJECT line; an unknown reason is [RejectReason.OTHER]. */
         fun parse(line: String): Reject? {
             val f = line.substringBefore('\n').substringBefore('\r').split(' ').filter { it.isNotEmpty() }
             if (f.isEmpty() || f[0] != "REJECT") return null
             val token = f.getOrNull(1)?.take(REASON_MAX) ?: return Reject(RejectReason.OTHER)
             if (token == RejectReason.CORE.wire) return Reject(RejectReason.CORE)
+            if (token.startsWith("link-")) {
+                val parts = token.substring(5).split('.')
+                if (parts.size != 3 || parts[0].isEmpty() || parts[1] !in GbaWifiLink.WIFI_MODES || parts[2] !in GbaWifiLink.WIFI_MODES)
+                    return Reject(RejectReason.OTHER)
+                return Reject(RejectReason.LINK, parts[0], wl = parts[1], peerWl = parts[2])
+            }
             if (token.startsWith("core-") && token.length > 5) {
                 val rest = token.substring(5)
                 val dot = rest.indexOf('.')   // core names carry no '.', so the first one starts the folder tag

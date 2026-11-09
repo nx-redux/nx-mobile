@@ -2,30 +2,43 @@ package com.nxredux.mobile.netplay.wizard
 
 /**
  * What this device hosts: its game token, folder [tag], the core it runs ([pick] or the tag's default) and the Emulator
- * pick (null = Auto); [usb]: over the USB cable (the sheet's Connection), which cable-only cores need.
+ * pick (null = Auto); [usb]: over the USB cable (the sheet's Connection), which cable-only cores need; [wl]: the GBA
+ * game's link mode token ([com.nxredux.mobile.netplay.GbaWifiLink]), null for other games.
  */
-data class HostOffer(val game: String, val tag: String, val core: String, val pick: String?, val usb: Boolean)
+data class HostOffer(val game: String, val tag: String, val core: String, val pick: String?, val usb: Boolean, val wl: String? = null)
 
 /**
  * What this device joins with; [usb]: over the USB cable; [mayRetry]: a `REJECT core-<c>` may still be answered by one
- * reconnect with `c`.
+ * reconnect with `c`; [wl]: as [HostOffer.wl].
  */
 data class ClientOffer(
     val game: String, val any: Boolean, val tag: String, val core: String, val pick: String?, val usb: Boolean,
-    val mayRetry: Boolean = true,
+    val mayRetry: Boolean = true, val wl: String? = null,
 )
 
 /** How a host handshake ended. */
 sealed interface HostOutcome {
-    /** Both sides start [core]; [peer] is the joiner's address; [emptySaves]: saves were due but not served (no rsync). */
-    data class Started(val core: String, val peer: String, val emptySaves: Boolean) : HostOutcome
+    /**
+     * Both sides start [core]; [peer] is the joiner's address; [emptySaves]: saves were due but not served (no rsync).
+     * [mixed]: the two sides' caps named different GBA link cores and the games' modes allow a mixed link (each side then
+     * runs the game's own mode); [peerWl]: the joiner's `wl=` (null: none sent).
+     */
+    data class Started(
+        val core: String, val peer: String, val emptySaves: Boolean, val mixed: Boolean = false, val peerWl: String? = null,
+    ) : HostOutcome
 
     /**
-     * The joiner was turned away. [reason]: the REJECT reason sent (`version`, `game`, `role`, `core`), or `sync` for any
+     * The joiner was turned away. [reason]: the REJECT reason sent (`version`, `game`, `role`, `core`, `link`), or `sync` for any
      * failed save copy (REJECT sync when the saves could not be served, a SYNC-FAIL, or no SYNC-DONE within 30 s);
-     * null for an I/O or protocol failure. [joinerCore] is the joiner's core for `core`.
+     * null for an I/O or protocol failure. [joinerCore] is the joiner's core for `core` and `link`; [noWifiModes]: refused
+     * because mGBA would run off the cable against a side without the Wi-Fi modes
+     * ([com.nxredux.mobile.netplay.NetplayCores.needsPeerWl]). For `link` (both games in Wi-Fi modes that can't link),
+     * [ownWl] and [joinerWl] are the two games' modes.
      */
-    data class Turned(val reason: String?, val joinerCore: String? = null) : HostOutcome
+    data class Turned(
+        val reason: String?, val joinerCore: String? = null, val noWifiModes: Boolean = false,
+        val ownWl: String? = null, val joinerWl: String? = null,
+    ) : HostOutcome
 }
 
 /** How a client handshake ended. */
@@ -33,9 +46,12 @@ sealed interface ClientOutcome {
     /**
      * The host starts [core]; this device plays as [player]. [emptySaves] is always false from [Wizard.client]: a client
      * never declines offered saves (without rsync it sends SYNC-FAIL), and when the host skips SYNC-READY this device
-     * cannot tell whether it had saves; its empty session copy matches the host either way.
+     * cannot tell whether it had saves; its empty session copy matches the host either way. [mixed] and [peerWl]: as
+     * [HostOutcome.Started], for the host.
      */
-    data class Started(val core: String, val player: Int, val emptySaves: Boolean) : ClientOutcome
+    data class Started(
+        val core: String, val player: Int, val emptySaves: Boolean, val mixed: Boolean = false, val peerWl: String? = null,
+    ) : ClientOutcome
 
     /** The join failed; [message] is the user-facing text. */
     data class Refused(val message: String) : ClientOutcome

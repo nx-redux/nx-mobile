@@ -87,4 +87,5 @@ object NetplayWire {
 
 data class Discovery(val version: Int, val port: Int, val game: String, val linkMode: String)
 
-enum class RejectReason(val wire: String) { VERSION("version"), GAME("game"), ROLE("role"), CORE("core"), SYNC("sync"), OTHER("") }
+/** [LINK] is only ever sent as `link-<core>.<wl>.<wl>` ([com.nxredux.mobile.netplay.wizard.Reject]), never bare. */
+enum class RejectReason(val wire: String) { VERSION("version"), GAME("game"), ROLE("role"), CORE("core"), SYNC("sync"), LINK("link"), OTHER("") }

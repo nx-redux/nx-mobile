@@ -63,11 +63,15 @@ endif
 # A bare `gmake` builds the cores (not check-tools, which is the first rule below).
 .DEFAULT_GOAL := cores
 
-.PHONY: all cores cores-json verify verify-options check-licenses install clean nuke check-tools nxprobe options test-sio-lockstep
+.PHONY: all cores cores-json verify verify-options check-licenses install clean nuke check-tools nxprobe options test-sio-lockstep test-gwl
 
 # The link cable state machine's host tests (cores/sio_lockstep/tests).
 test-sio-lockstep:
 	sh sio_lockstep/tests/run_tests.sh
+
+# gba_wifi_link's host tests (cores/gba_wifi_link/tests); they check its gpSP copies against the pinned gpsp_HASH.
+test-gwl:
+	sh gba_wifi_link/tests/run_tests.sh
 
 check-tools:
 	@test -x $(NDK_BUILD) || (echo "NDK not found at $(NDK). Set ANDROID_NDK_HOME." && exit 1)
@@ -141,8 +145,9 @@ mgba_BUILD_PATH = .
 mgba_CMAKE_TARGET = mgba_libretro
 # Link (netplay stage 2c): patches/mgba/001-sio-lockstep.patch is nx-redux main's (2f25643b), the real link cable with a
 # CMakeLists.txt hunk that compiles cores/sio_lockstep in (NX_SIOLS_DIR). The core is then GPL-2.0-or-later (NOTICE.txt).
-mgba_FLAGS = -DBUILD_LIBRETRO=ON -DUSE_SQLITE3=OFF -DNX_SIOLS_DIR=$(CURDIR)/sio_lockstep
-mgba_LICENSE_EXTRA = sio_lockstep/NOTICE.txt
+# patches/mgba/003-wifi-link.patch adds gpSP's Wireless Adapter and cable protocols (cores/gba_wifi_link, NX_GWL_DIR).
+mgba_FLAGS = -DBUILD_LIBRETRO=ON -DUSE_SQLITE3=OFF -DNX_SIOLS_DIR=$(CURDIR)/sio_lockstep -DNX_GWL_DIR=$(CURDIR)/gba_wifi_link
+mgba_LICENSE_EXTRA = sio_lockstep/NOTICE.txt gba_wifi_link/NOTICE.txt
 mgba_ARTIFACT = mgba_libretro.so
 
 # patches/mupen64plus_next/0012 (nx-redux's): retro_cheat_set sizes its code arrays to the code; database codes with
