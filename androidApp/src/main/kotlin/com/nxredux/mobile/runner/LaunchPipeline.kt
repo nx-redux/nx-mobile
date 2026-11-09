@@ -10,6 +10,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.BuildConfig
+import com.nxredux.mobile.DebugLogFile
 import com.nxredux.mobile.R
 import com.nxredux.mobile.cheats.CheatSet
 import com.nxredux.mobile.cheats.DolphinCheats
@@ -280,6 +281,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val coreId = activity.intent.getStringExtra(EXTRA_CORE_ID) ?: coreFile.removePrefix("lib").substringBefore("_libretro")
             // The tag's own descriptor: a tag view (SGB) carries its own extensions and defaults; the id alone would give plain mgba.
             val descriptor = CoreRegistry.forTag(tag)?.takeIf { it.id == coreId } ?: CoreRegistry.forId(coreId)
+            DebugLogFile.nameGame(tag, coreId)
             val players = CoreRegistry.playersFor(tag, descriptor)
             playerCount = players
             // netplay: no slots, so every pad and the touch pad drive native port 0, the engine's local word.

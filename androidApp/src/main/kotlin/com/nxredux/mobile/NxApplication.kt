@@ -15,10 +15,10 @@ import com.swordfish.libretrodroid.NxLog
 import java.io.File
 
 /**
- * Applies Settings → System → Debug log when the process starts, whichever activity starts it (a game
- * launched from another launcher starts at GameActivity), moves the saves, states, settings and cheats an earlier
- * version kept in private storage into the home folder when it can do so quietly, and clears an earlier run's in-app
- * update download. Installs the image loader every screen shares.
+ * Applies Settings → System → Debug log (and its file in the home folder) when the process starts, whichever activity
+ * starts it (a game launched from another launcher starts at GameActivity), moves the saves, states, settings and
+ * cheats an earlier version kept in private storage into the home folder when it can do so quietly, and clears an
+ * earlier run's in-app update download. Installs the image loader every screen shares.
  */
 class NxApplication : Application() {
     companion object {
@@ -70,5 +70,6 @@ class NxApplication : Application() {
             // The Kotlin flag is already set (the setter sets it first); a game launch hits the same load failure.
             NxLog.e("NXAPP", "native log flag not set", e)
         }
+        DebugLogFile.start(this)
     }
 }

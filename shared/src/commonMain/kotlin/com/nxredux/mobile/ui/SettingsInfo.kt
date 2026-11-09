@@ -242,9 +242,10 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     SettingsKind.COPY_INFO -> quiet("Put the version, build and device on the clipboard, for a bug report")
     SettingsKind.APP_UPDATE -> quiet("Check for a new version and install it")
     SettingsKind.DEBUG_LOG -> quiet(
-        "Detailed logs in Android's system log, for a bug report",
-        "Writes the app's and the emulators' detailed logs to Android's system log, for a bug report. Off, only errors " +
-            "are logged. It takes effect at once.",
+        "Saves detailed logs to Logs in your home folder, for a bug report",
+        "Saves the app's and the emulators' detailed logs to the Logs folder in your home folder, one file each time " +
+            "the app or a game starts, so you can attach it to a bug report. Off, only errors reach Android's system " +
+            "log and no file is written. It takes effect at once.",
     )
     SettingsKind.LICENSES_LINK -> quiet(row.secondary.orEmpty())   // the URL behind the icon; A opens it
     // Settings -> Kids Mode.
