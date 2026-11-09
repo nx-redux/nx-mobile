@@ -136,12 +136,27 @@ class TopScreenHost : Activity() {
 
         /** The top screen's display went away, or dual mode was turned off: no host waits any more. The caller re-syncs. */
         fun release(context: Context) {
+            TopScreenCover.uncover()
             if (!active) return
             active = false
             direct = false
             stopWaiting()
             current = null
             removeHostTasks(context)
+        }
+
+        /**
+         * Kids Mode's guard sent an app back while an app opened on the top screen was there: the top screen is taken
+         * back, the menu's window over whatever is on that display now (a bounce to the menu covers only the menu's own
+         * display) and a [TopScreenCover] in front of it. False when nothing held the top screen.
+         */
+        fun takeBack(context: Context): Boolean {
+            if (!active) return false
+            val display = heldDisplay
+            release(context)
+            TopScreenCover.cover(context, display)
+            onChange()
+            return true
         }
 
         private fun stopWaiting() {
@@ -205,6 +220,7 @@ class TopScreenHost : Activity() {
          * activity from this app (the caller then launches as usual, the window comes back).
          */
         fun start(from: Activity, app: Intent, display: Int, fallback: Int): Boolean {
+            TopScreenCover.uncover()
             stopWaiting()
             removeHostTasks(from)
             direct = false
