@@ -326,6 +326,13 @@ object SkinTweaks {
         decode(stored)[consoleId]?.get(layoutId).orEmpty()
 
     /**
+     * The overlay's tweaks: per group the [overlayStored] one when the player edited it there, else the [skinStored]
+     * one, so a group they never touched in the overlay keeps following the skin layout.
+     */
+    fun overlayOf(skinStored: String, overlayStored: String, consoleId: String, layoutId: String): Map<String, SkinTweak> =
+        of(skinStored, consoleId, layoutId) + of(overlayStored, consoleId, layoutId)
+
+    /**
      * The [stored] text with [tweaks] as [consoleId]'s for [layoutId]; its other layouts and every other console's stay.
      * No tweaks drops the layout, and a console left with none goes too.
      */

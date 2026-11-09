@@ -164,6 +164,7 @@ class AppStateTest {
         override var extraFolders: List<ExtraFolder> = emptyList()
         override var defaultTags: Map<String, String> = emptyMap()
         override var skinTweaks = ""
+        override var overlayTweaks = ""
         override var debugLog = false
         override var secondScreen = true
         override var pauseWhenUnfocused = true

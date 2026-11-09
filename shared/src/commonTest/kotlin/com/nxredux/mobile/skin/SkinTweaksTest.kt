@@ -53,4 +53,20 @@ class SkinTweaksTest {
         assertEquals(setOf("gba"), cleared.keys)
         assertEquals(setOf("wide"), SkinTweaks.decode(SkinTweaks.withLayout(stored, "gba", "stacked", emptyMap()))["gba"]?.keys)
     }
+
+    @Test fun an_unedited_overlay_group_follows_the_skin_an_edited_one_stays() {
+        val a = SkinTweak(1f, 2f, 1f)
+        val b = SkinTweak(3f, 4f, 1f)
+        val b2 = SkinTweak(9f, 9f, 1.2f)
+        fun stored(vararg g: Pair<String, SkinTweak>) = SkinTweaks.encode(mapOf("gba" to mapOf("stacked" to mapOf(*g))))
+        val overlay = stored("B" to b2)
+        assertEquals(mapOf("A" to a, "B" to b2), SkinTweaks.overlayOf(stored("A" to a, "B" to b), overlay, "gba", "stacked"))
+        val a3 = SkinTweak(7f, 7f, 1f)
+        assertEquals(mapOf("A" to a3, "B" to b2), SkinTweaks.overlayOf(stored("A" to a3, "B" to SkinTweak(5f, 5f, 1f)), overlay, "gba", "stacked"))
+    }
+
+    @Test fun an_empty_overlay_is_the_skin() {
+        val skin = SkinTweaks.encode(mapOf("gba" to mapOf("stacked" to mapOf("A" to SkinTweak(1f, 2f, 1f)))))
+        assertEquals(SkinTweaks.of(skin, "gba", "stacked"), SkinTweaks.overlayOf(skin, "", "gba", "stacked"))
+    }
 }
