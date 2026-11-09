@@ -184,7 +184,8 @@ private:
 };
 
 // Each DetachedVirtualFile of list as File(virtual path, file descriptor). Stops at a Java exception, which it leaves
-// pending: the caller checks ExceptionCheck() and drops the files read so far.
+// pending: the caller checks ExceptionCheck() and closes the files read so far. Each item read is marked taken, so the
+// Java side closes only the fds of the items never reached.
 template <typename File>
 std::vector<File> virtualFilesFromJava(JNIEnv* env, jobject list) {
     std::vector<File> files;
@@ -192,7 +193,8 @@ std::vector<File> virtualFilesFromJava(JNIEnv* env, jobject list) {
     if (dvf == nullptr) return files;
     jmethodID getPath = env->GetMethodID(dvf, "getVirtualPath", "()Ljava/lang/String;");
     jmethodID getFd = getPath != nullptr ? env->GetMethodID(dvf, "getFileDescriptor", "()I") : nullptr;
-    if (getFd != nullptr) {
+    jfieldID taken = getFd != nullptr ? env->GetFieldID(dvf, "taken", "Z") : nullptr;
+    if (taken != nullptr) {
         JavaUtils::forEachOnJavaIterable(env, list, [&](jobject item) {
             auto path = (jstring) env->CallObjectMethod(item, getPath);
             if (env->ExceptionCheck()) return;
@@ -201,6 +203,7 @@ std::vector<File> virtualFilesFromJava(JNIEnv* env, jobject list) {
             auto fd = (int) env->CallIntMethod(item, getFd);
             if (env->ExceptionCheck()) return;
             files.emplace_back(std::move(virtualPath), fd);
+            env->SetBooleanField(item, taken, JNI_TRUE);
         });
     }
     env->DeleteLocalRef(dvf);

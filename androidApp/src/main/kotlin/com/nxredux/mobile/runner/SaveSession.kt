@@ -71,6 +71,7 @@ internal class SaveSession(
     val slotsUi = mutableStateOf<List<SlotUi>>(emptyList())
     @Volatile var lastSlotCache: Int? = null   // SaveStates.lastSlot(); null until the first read
     private var slotsJob: Job? = null   // the newest strip refresh (main thread only); a newer one cancels it
+    private val lastSlotWaiters = LastSlotWaiters()   // callbacks of cancelled refreshes too: the next one to land runs them
     var saveStates: SaveStates? = null
         private set
     private var batterySaves: BatterySaves? = null
@@ -389,10 +390,11 @@ internal class SaveSession(
      * Re-reads the slot strip (and the last-used slot) on IO and publishes it to [slotsUi]; main thread. The listing and
      * the thumbnails' bounds stay off the main thread: the previous strip shows until this lands (it differs only after
      * a write, which refreshes it too), and a newer refresh cancels an older one so a stale read never lands last.
-     * [onLast] gets the last-used slot once it lands (main).
+     * [onLast] gets the last-used slot once a refresh lands (main), this one or a newer one that cancelled it.
      */
     fun refreshSlots(onLast: ((Int) -> Unit)? = null) {
         val ss = saveStates ?: run { slotsUi.value = emptyList(); return }
+        lastSlotWaiters.add(onLast)
         slotsJob?.cancel()
         slotsJob = host.lifecycleScope.launch {
             val (slots, last) = withContext(Dispatchers.IO) {
@@ -401,7 +403,7 @@ internal class SaveSession(
             } ?: return@launch
             slotsUi.value = slots
             lastSlotCache = last
-            onLast?.invoke(last)
+            lastSlotWaiters.takeAll().forEach { it(last) }
         }
     }
 
@@ -578,4 +580,13 @@ internal suspend fun joinSlotJobs(jobs: List<Job>) {
         if (running.isEmpty()) return
         running.forEach { it.join() }
     }
+}
+
+/** Last-used slot callbacks waiting for a strip refresh to land; main thread only. */
+internal class LastSlotWaiters {
+    private val waiting = mutableListOf<(Int) -> Unit>()
+
+    fun add(onLast: ((Int) -> Unit)?) { if (onLast != null) waiting += onLast }
+
+    fun takeAll(): List<(Int) -> Unit> = waiting.toList().also { waiting.clear() }
 }

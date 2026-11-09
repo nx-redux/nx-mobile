@@ -8,3 +8,5 @@
     private void onCoreFrameDrawn();
 }
 -keep class com.swordfish.libretrodroid.AchievementInfo { <init>(...); <fields>; }
+# Read and marked taken by the native VFS hand-over (virtualFilesFromJava).
+-keep class com.swordfish.libretrodroid.DetachedVirtualFile { <fields>; <methods>; }

@@ -766,7 +766,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             withContext(Dispatchers.IO) { Prefs.refreshGame() }
             if (quitting || isFinishing || !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return@launch
             dual.syncDual()
-            if (!topResumed && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && settings.pauseWhenUnfocused) focusPause()
+            // Both ways: a focus change before the refresh landed acted on the old value.
+            val resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+            when (focusPauseStep(focusPaused, topResumed, settings.pauseWhenUnfocused, resumed)) {
+                FocusPauseStep.PAUSE -> focusPause()
+                FocusPauseStep.RESUME -> focusResume()
+                FocusPauseStep.NONE -> Unit
+            }
         }
     }
 
@@ -1922,3 +1928,17 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 /** These options with a second-screen [split]'s fixed ones in place of the same keys; unchanged without one. */
 internal fun List<Variable>.withN3dsSplit(split: Map<String, String>?): List<Variable> =
     if (split == null) this else filterNot { it.key in split } + split.map { (k, v) -> Variable(k, v) }
+
+internal enum class FocusPauseStep { PAUSE, RESUME, NONE }
+
+/**
+ * What a focus pause needs once Pause when unfocused may have changed: one made under the old value ends when the
+ * setting is off or the window is the top one again; a playing game that is not the top one pauses when it is on. Not yet
+ * [resumed]: no pause; the focus change that follows onResume decides.
+ */
+internal fun focusPauseStep(focusPaused: Boolean, topResumed: Boolean, pauseWhenUnfocused: Boolean, resumed: Boolean): FocusPauseStep =
+    when {
+        focusPaused && (!pauseWhenUnfocused || topResumed) -> FocusPauseStep.RESUME
+        !focusPaused && pauseWhenUnfocused && !topResumed && resumed -> FocusPauseStep.PAUSE
+        else -> FocusPauseStep.NONE
+    }
