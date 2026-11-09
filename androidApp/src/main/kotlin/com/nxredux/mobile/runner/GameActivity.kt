@@ -83,6 +83,7 @@ import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.options.AudioOptions
 import com.nxredux.mobile.options.FrameSkipOptions
 import com.nxredux.mobile.options.BottomScreenOptions
+import com.nxredux.mobile.options.ConfigFile
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.CoreConfig
 import com.nxredux.mobile.options.FrontendOptions
@@ -659,9 +660,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         dual.syncDual()   // Settings → Second screen may have changed meanwhile
     }
 
+    private var topResumed = true   // the last onTopResumedActivityChanged (API 29+); below that, always the top one
     /** API 29+: multi-resume keeps this activity resumed while another app has the focus; only the top one is told. */
     override fun onTopResumedActivityChanged(isTopResumedActivity: Boolean) {
         super.onTopResumedActivityChanged(isTopResumedActivity)
+        topResumed = isTopResumedActivity
         if (isTopResumedActivity) focusResume() else if (settings.pauseWhenUnfocused) focusPause()
     }
 
@@ -752,13 +755,19 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /**
      * Back from the background (launcher mode's Home, the menu over a shared task): Settings may have changed in the menu
-     * meanwhile, and onStart / onResume read them (Second screen, Bottom screen, System buttons, Pause when unfocused).
-     * One call per settings file into the menu's process, here and not on the key-event path. A first start reads the
-     * file as the launch left it.
+     * meanwhile (Second screen, Bottom screen, System buttons, Pause when unfocused). One call into the menu's process,
+     * off the main thread: a killed menu process starts again first, which must not hold the window. Until it lands the
+     * old values stand; then what onResume and the focus change read is applied again (System buttons are read per key).
+     * A first start reads the file as the launch left it.
      */
     override fun onRestart() {
         super.onRestart()
-        Prefs.refreshGame()
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { Prefs.refreshGame() }
+            if (quitting || isFinishing || !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return@launch
+            dual.syncDual()
+            if (!topResumed && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && settings.pauseWhenUnfocused) focusPause()
+        }
     }
 
     override fun onStart() {
@@ -781,7 +790,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // clears this screen. A quit writes its own; a game that never got ready writes nothing (writeAutoStateOnStop);
         // one that failed after starting and leaves through its dialog keeps the last good resume point.
         // API 26–27: onSaveInstanceState already ran; the outcome of the write is recorded in its bundle.
-        saves.onStop(writeAuto = !quitting && !relaunching && !(isFinishing && failShown))
+        saves.onStop(writeAuto = !quitting && !wii.endedByCore && !relaunching && !(isFinishing && failShown))
         if (isFinishing) { input.gcClearTriggers(); stopAchievements() }
         input.onStop()   // the pen and 3DS hotkey ticks stop; onStart restarts them
         // A Presentation stays up while its activity is stopped: no second screen in the background.
@@ -1162,13 +1171,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Before the first frame the core may not be loaded (a device set then is overwritten by the launch's ports):
         // the first-frame block sends the setting if it differs from the one the core was launched with.
         if (gameReady) sendSegaPad(setting)
-        // Posted: the pad view whose press made the change is still dispatching it, and the menu router arms that
-        // press's repeat only after this returns. The rebuilt pad never sends the press's release, so the repeat is
-        // stopped here, or it would keep cycling the row.
-        findViewById<FrameLayout>(R.id.root).post {
-            if (menuOpen) menu.menuRouter.releaseAll()
-            relayoutPad()
-        }
+        relayoutPadAfterPress()
     }
 
     /**
@@ -1184,11 +1187,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         input.n3dsPadRight = 0f to 0f
         input.syncN3dsCursor()
         dropPadProfile()
-        // Posted, as for the Sega pad (applySegaPad): the press that made the change is still being dispatched.
-        findViewById<FrameLayout>(R.id.root).post {
-            if (menuOpen) menu.menuRouter.releaseAll()
-            relayoutPad()
-        }
+        relayoutPadAfterPress()
     }
 
     override fun connectDolphinPorts() = wii.connectDolphinPorts()
@@ -1217,11 +1216,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
     }
 
-    /** The open menu's Wii rows: Motion Controls, once the sensors are known. */
-    override fun refreshWiiMenu(model: InGameMenuModel) {
-        model.setFrontend(frontendValues, renderer.overlayNames(), menuLocked(), gameTag, overlayAvailable = !renderer.ndsSplit)
-    }
-
     /** Sends Controller Type [setting] to the running core on the emulation thread (each player's port device or core option). */
     private fun sendSegaPad(setting: String) {
         if (netplayNow != null) return   // netplay: the pad type is fixed for the session (set at launch)
@@ -1238,32 +1232,27 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun relayoutFrontend() = renderer.relayoutFrontend()
 
-    override fun persistConsoleKey(key: String, value: String, failure: String) {
-        val store = configStore ?: return
-        lifecycleScope.launch {
-            val written = configWrites.withLock {
-                withContext(Dispatchers.IO) {
-                    runCatching { store.saveConsoleKey(key, value) }
-                        .onFailure { NxLog.w("GameActivity", "saving $key failed", it) }.getOrNull()
-                }
-            }
-            if (written == null) { toast(failure); return@launch }
-            if (configSource == ConfigSource.NONE) configSource = ConfigSource.CONSOLE
-            lockedOptions = written.locked + forcedOptions
-        }
-    }
+    override fun persistConsoleKey(key: String, value: String, failure: String) =
+        persistKey(key, failure, ConfigSource.CONSOLE) { it.saveConsoleKey(key, value) }
 
-    override fun persistGameKey(key: String, value: String, failure: String) {
+    override fun persistGameKey(key: String, value: String, failure: String) =
+        persistKey(key, failure, ConfigSource.GAME) { it.saveGameKey(key, value) }
+
+    /**
+     * One key written to this console's or game's config ([save], off main and in turn with the other writes); its locks
+     * apply once written. The game's config is the one in effect from then on; the console's only when none was.
+     */
+    private fun persistKey(key: String, failure: String, source: ConfigSource, save: (CoreConfigStore) -> ConfigFile) {
         val store = configStore ?: return
         lifecycleScope.launch {
             val written = configWrites.withLock {
                 withContext(Dispatchers.IO) {
-                    runCatching { store.saveGameKey(key, value) }
+                    runCatching { save(store) }
                         .onFailure { NxLog.w("GameActivity", "saving $key failed", it) }.getOrNull()
                 }
             }
             if (written == null) { toast(failure); return@launch }
-            configSource = ConfigSource.GAME
+            if (source == ConfigSource.GAME || configSource == ConfigSource.NONE) configSource = source
             lockedOptions = written.locked + forcedOptions
         }
     }
@@ -1357,7 +1346,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun becomeLocal(localCheats: (() -> Job)?) {
         speed.setSession(netplay = false)   // the shortcuts work again
         shortcuts.onSessionEnded()
-        saves.openLocal(dataRoot, paths)
+        saves.openLocal(dataRoot, paths) { slot -> withMenu { it.showSlot(slot - 1) } }
         localCheats?.let { load ->
             val job = load().also { cheatsLoad = it }
             lifecycleScope.launch {
@@ -1726,6 +1715,18 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun publishMenuSecondScreen() { menu.menuModel?.let(menu::publishSecondScreen) }
     override fun placeMenu() = menu.placeMenu()
     override fun relayoutPad() = padLayout.applyLayout(resources.configuration.orientation)
+
+    /**
+     * [relayoutPad] for a change a pad press made (a menu row): posted, since the pad view whose press made it is still
+     * dispatching it, and the menu router arms that press's repeat only after this returns. The rebuilt pad never sends
+     * the press's release, so the repeat is stopped here, or it would keep cycling the row.
+     */
+    override fun relayoutPadAfterPress() {
+        findViewById<FrameLayout>(R.id.root).post {
+            if (menuOpen) menu.menuRouter.releaseAll()
+            relayoutPad()
+        }
+    }
     override fun withMenu(block: (InGameMenuModel) -> Unit) { menu.menuModel?.let { block(it); menu.menuState.value = it.state } }
     override fun withMenuIf(pred: (InGameMenuModel) -> Boolean, block: (InGameMenuModel) -> Unit) { menu.menuModel?.takeIf(pred)?.let { block(it); menu.menuState.value = it.state } }
 

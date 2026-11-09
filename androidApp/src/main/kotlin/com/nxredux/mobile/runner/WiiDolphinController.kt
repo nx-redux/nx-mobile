@@ -3,14 +3,10 @@ package com.nxredux.mobile.runner
 import android.content.res.Configuration
 import android.os.Build
 import android.view.KeyEvent
-import android.widget.FrameLayout
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import com.nxredux.mobile.R
 import com.nxredux.mobile.options.WiiOptions
 import com.nxredux.mobile.options.WiiScreen
-import com.nxredux.mobile.ui.nx.InGameMenuModel
-import com.nxredux.mobile.ui.nx.InputRouter
 import com.nxredux.mobile.ui.nx.PadProfile
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.LibretroDroid
@@ -32,7 +28,6 @@ internal interface WiiDolphinHost : GameScreenHost {
     val isN3ds: Boolean
     val gameReady: Boolean
     val menuOpen: Boolean
-    val menuRouter: InputRouter
     val playerCount: Int
     val frontendValues: Map<String, String>
     val lockedOptions: Set<String>
@@ -42,8 +37,10 @@ internal interface WiiDolphinHost : GameScreenHost {
     fun padProfile(): PadProfile
     fun dropPadProfile()
     fun relayoutPad()
-    fun withMenu(block: (InGameMenuModel) -> Unit)
-    fun refreshWiiMenu(model: InGameMenuModel)
+    /** [relayoutPad] posted, for a change made by a press still being dispatched ([GameActivity.relayoutPadAfterPress]). */
+    fun relayoutPadAfterPress()
+    /** The open menu's frontend rows again (its Wii rows follow [menuLocked]). */
+    fun publishMenuFrontend()
 }
 
 /**
@@ -84,6 +81,11 @@ internal class WiiDolphinController(
     /** [pressHome] saved this session's resume point. */
     @Volatile var homeSaved = false
         private set
+    /**
+     * The core asked to end (main thread): set before the launch drops the stale resume point, while the quit has not
+     * started yet, so neither a HOME save nor onStop's auto state can queue a slot 9 behind the drop.
+     */
+    var endedByCore = false
     /** The Wii shape chosen at launch ([screenOption]); null for any other console. */
     private var launchWide: Boolean? = null
     /** The shape the pointer geometry is set for: the launch's, then the game's own ([followShape]). */
@@ -105,7 +107,7 @@ internal class WiiDolphinController(
             host.dropPadProfile()   // the GameCube pad, not the plain one
             host.relayoutPad()   // the pad was composed from the intent tag in onCreate
             NxLog.i(TAG_LOG, "GameCube disc ${wiiDisc.id} under the Wii tag: no Wii controls")
-            host.withMenu { host.refreshWiiMenu(it) }   // a menu opened during the read drops its Wii rows
+            host.publishMenuFrontend()   // a menu opened during the read drops its Wii rows
         }
         if (WiiOptions.appliesTo(tag) && !gameCube) {
             val id = wiiDisc?.id
@@ -124,7 +126,7 @@ internal class WiiDolphinController(
             host.dropPadProfile()
             host.relayoutPad()
             // A menu opened during the read: its Motion Controls row (left out until the sensors were known) and its Wii rows.
-            host.withMenu { host.refreshWiiMenu(it) }
+            host.publishMenuFrontend()
         }
     }
 
@@ -198,11 +200,7 @@ internal class WiiDolphinController(
         host.dropPadProfile()
         // Before the first frame the core may not be loaded: the first-frame block sends the device then, whatever it is.
         if (host.gameReady) { sendDevice(); syncMotionSensors() }
-        // Posted, as for the Sega pad (applySegaPad): the press that made the change is still being dispatched.
-        host.activity.findViewById<FrameLayout>(R.id.root).post {
-            if (host.menuOpen) host.menuRouter.releaseAll()
-            host.relayoutPad()
-        }
+        host.relayoutPadAfterPress()
     }
 
     /** The Dolphin device for [pad]: MotionPlus added when the game takes it ([WiiController.motionPlus]). */
@@ -334,7 +332,8 @@ internal class WiiDolphinController(
      * while one is still being saved is dropped.
      */
     fun pressHome() {
-        if (homeSaving) return
+        // A quit (or the core's own end) decides slot 9 itself: a HOME save now would race it, and the core is about to go.
+        if (homeSaving || host.quitting || endedByCore) return
         val view = host.retroView ?: return
         val ss = saves.saveStates
         if (ss == null || !host.gameReady || saves.resumePending) { tapHome(view); return }
