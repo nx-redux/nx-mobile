@@ -4,7 +4,7 @@
 
 - [ ] Kids: unlock sheet on the tiles, screen off then on → tiles, not the sheet; same from Open mode's lock icon → menu; sheet left 60 s closes; Home over it, back → gone.
 - [ ] Kids: Open mode, MENU on a game shows only play items (no Hide, Rename, art, Game Settings, Emulator, collections); Parent mode shows them all; a Rename prompt open when Parent ends closes.
-- [ ] Kids, dual screen (Nova + second screen): Locked, open an allowed app on the top screen, follow a link to a blocked app → bounced back (and the bounce covers the top display).
+- [x] Kids, dual screen (Nova + second screen): blocked app opened from a top-screen app is covered and stopped; reopened from Recents → sent back (Nova 2026-11-09).
 - [ ] RA: revoke/sign out mid-game, unlock, sign in, sync → the unlock arrives; quit right after an unlock → no toast during the quit.
 - [ ] Merge a split console in the home summary → play time follows the games.
 - [ ] Device Sync: stray `.tmp` in Saves and a stale `.part` in Roms are not sent; SAF home scrape/sync sidecars still write.
