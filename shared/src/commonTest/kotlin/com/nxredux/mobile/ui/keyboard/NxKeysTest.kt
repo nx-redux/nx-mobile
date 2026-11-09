@@ -39,6 +39,10 @@ class NxKeysTest {
 
     @Test fun downFromLastRowStays() = assertEquals(KeyPos(4, 2), NxKeys.move(KeyPage.LETTERS, false, KeyPos(4, 2), NxButton.DOWN))
 
+    @Test fun wordKeysAreWideEnoughForTheirWords() {
+        assertEquals(1.5f, NxKeys.width(Key.Paste)); assertEquals(1.5f, NxKeys.width(Key.Next)); assertEquals(1.5f, NxKeys.width(Key.Done))
+    }
+
     @Test fun homeIsG() {
         val rows = NxKeys.rows(KeyPage.LETTERS, false)
         assertEquals(Key.Char('g'), rows[NxKeys.HOME.row][NxKeys.HOME.col])

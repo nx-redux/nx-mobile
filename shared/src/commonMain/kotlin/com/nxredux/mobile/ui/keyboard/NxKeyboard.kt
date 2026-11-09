@@ -36,7 +36,8 @@ import com.nxredux.mobile.ui.nx.nxTextScale
  */
 fun keyboardHints(entry: TextEntry, confirmLabel: String): List<Hint> = when (val f = entry.focus) {
     is EntryFocus.Keys -> listOf(
-        Hint(NxButton.A, "Type"), Hint(NxButton.B, "Delete"), Hint(NxButton.Y, "Space"), Hint(NxButton.X, "Shift"),
+        // X shifts too, but its key is on the board: five hints fit a handheld's bar, six drop A's.
+        Hint(NxButton.A, "Type"), Hint(NxButton.B, "Delete"), Hint(NxButton.Y, "Space"),
         Hint(NxButton.START, "Done"), Hint(NxButton.MENU, "Cancel"),
     )
     EntryFocus.Field -> listOf(

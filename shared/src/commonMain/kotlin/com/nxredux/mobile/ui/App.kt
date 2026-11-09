@@ -277,12 +277,18 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}, keyboard: Boolean 
                             }
                             PageOverlays(state, chooser, error, notice)
                         }
-                        if (keyboard) NxKeyboardBar(state)   // this window is in the hands: the NX keyboard docks here
+                        // This window is in the hands: the NX keyboard docks under the pages (over the drawn pad when one shows, below).
+                        if (keyboard && !menuPad) NxKeyboardBar(state)
                         }
                     }
                 }
             },
         )
+        // A drawn pad: the keyboard covers it while it types (taps on the keys or a controller), leaving the screen its
+        // full height for the prompt's box; a phone's screen above the pad is too short for both.
+        if (keyboard && menuPad) Box(Modifier.align(Alignment.BottomCenter)) {
+            NxTheme(colors = look.colors) { MenuLocals(state, look, footerModeFor(controllerConnected, false), touchscreen) { NxKeyboardBar(state) } }
+        }
     }
 }
 

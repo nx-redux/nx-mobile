@@ -51,10 +51,10 @@ object NxKeys {
         return (if (page == KeyPage.LETTERS) letters else symbols) + listOf(bottom)
     }
 
-    /** A key's width in key units: space spans four, shift and backspace one and a half. */
+    /** A key's width in key units: space spans four; shift, backspace and the word keys one and a half (room for the word). */
     fun width(key: Key): Float = when (key) {
         Key.Space -> 4f
-        Key.Shift, Key.Backspace -> 1.5f
+        Key.Shift, Key.Backspace, Key.Paste, Key.Next, Key.Done -> 1.5f
         else -> 1f
     }
 
