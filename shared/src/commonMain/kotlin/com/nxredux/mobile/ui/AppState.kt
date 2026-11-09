@@ -6284,7 +6284,7 @@ class AppState(
 
     init {
         // Last in the class: every property [KidsScreensController.onKidsMode] reads is set by now.
-        kids?.let { k -> scope.launch { k.mode.collect { kidsUi.onKidsMode(it) } } }
+        kids?.let { k -> scope.launch { k.mode.collect { kidsUi.onKidsMode(it); contextMenus.onKidsRestricted() } } }
     }
 }
 

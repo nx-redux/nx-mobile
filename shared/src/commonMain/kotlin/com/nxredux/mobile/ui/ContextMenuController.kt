@@ -195,7 +195,7 @@ internal class ContextMenuController(
                 val row = s.rows.getOrNull(i)
                 // The hidden tabs after the item's own items; a row without a menu (a console, Pick a game, "+N", an empty
                 // tab) gets one holding just these. A pushed tab never offers them again.
-                val tabs = if (s.pushed) emptyList() else ContextMenus.hiddenTabItems(host.hiddenTabs())
+                val tabs = if (s.pushed) emptyList() else hiddenTabItems()
                 fun show(fromStart: Boolean) {
                     val own = rowMenu(row, fromStart, s.category)?.let(::forKids)
                     val menu = when {
@@ -235,10 +235,23 @@ internal class ContextMenuController(
     fun openTabMenu(): Boolean {
         val s = _screen.value as? Screen.Systems ?: return false
         if (s.menu != null || s.pushed || s.search != null) return false
-        val items = ContextMenus.hiddenTabItems(host.hiddenTabs())
+        val items = hiddenTabItems()
         if (items.isEmpty()) return false
         _screen.value = s.copy(menu = ContextMenu(null, items, title = APP_NAME))
         return true
+    }
+
+    /** The hidden-tab items, only a kid's ([ContextMenus.kidsPlayItems]) while Kids Mode limits the menu. */
+    private fun hiddenTabItems(): List<ContextItem> =
+        ContextMenus.hiddenTabItems(host.hiddenTabs()).let { if (host.kidsRestricted) ContextMenus.kidsPlayItems(it) else it }
+
+    /**
+     * Kids Mode began limiting the menu: a submenu (Emulator, Console, Add to Collection) or text prompt a parent left open
+     * closes, since none of them is a kid's. A top-level menu stays; [act] refuses its library items.
+     */
+    fun onKidsRestricted() {
+        val m = _screen.value.contextMenu ?: return
+        if (host.kidsRestricted && (m.sub != null || m.prompt != null)) closeContextMenu()
     }
 
     /** Opens [s]'s menu on [e]; [canResume]: it has a save state, so Play from start leads. */
@@ -297,6 +310,8 @@ internal class ContextMenuController(
 
     fun onMenuButton(m: ContextMenu, button: NxButton) {
         if (m.busy) return   // a choice is being applied; rebuilding the screen ends this
+        // A submenu or prompt that opened as Parent mode ended (an async collection picker) is no kid's either.
+        if (host.kidsRestricted && (m.sub != null || m.prompt != null)) { closeContextMenu(); return }
         m.prompt?.let { p -> onPromptButton(m, p, button); return }
         m.sub?.let { sub ->
             when (button) {
@@ -320,7 +335,7 @@ internal class ContextMenuController(
 
     /** The text prompt's live text (the composable reports every change), so A can confirm with it. */
     fun menuDraft(text: String) {
-        val m = _screen.value.contextMenu?.takeIf { !it.busy } ?: return
+        val m = _screen.value.contextMenu?.takeIf { !it.busy && !host.kidsRestricted } ?: return
         when (val p = m.prompt) {
             is MenuPrompt.Rename -> setMenu(m.copy(prompt = p.copy(draft = text)))
             is MenuPrompt.NewCollection -> setMenu(m.copy(prompt = p.copy(draft = text)))

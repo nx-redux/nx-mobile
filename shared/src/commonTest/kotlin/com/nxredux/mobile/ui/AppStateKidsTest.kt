@@ -864,6 +864,38 @@ class AppStateKidsTest {
         assertTrue(ContextKind.HIDE in kinds && ContextKind.RENAME in kinds && ContextKind.GAME_SETTINGS in kinds, "$kinds")
     }
 
+    /** A Rename prompt a parent left open goes when Parent mode ends under it, before its A could rename anything. */
+    @Test fun parentEndingClosesAnOpenRenamePrompt() = runTest {
+        val settings = MemorySettings()
+        val platform = Platform(SAT, 10 * 60)
+        val kids = KidsController(settings, platform)
+        val st = state(settings, kids)
+        st.load()
+        kids.enterParent(platform.epochMs)
+        val sys = assertIs<Screen.Systems>(st.screen.value).tabs.flatMap { it.rows }
+            .flatMap { (it as? MainRow.System)?.systems.orEmpty() }.first { it.tag == "GB" }
+        st.openSystem(sys)
+        st.openContextMenu(0)
+        val items = assertIs<Screen.Games>(st.screen.value).menu!!.items
+        st.menuSelect(items.indexOfFirst { it.kind == ContextKind.RENAME })
+        st.menuOpen()
+        assertIs<MenuPrompt.Rename>(assertIs<Screen.Games>(st.screen.value).menu?.prompt)
+        st.kidsEndParent()
+        assertIs<KidsMode.Open>(kids.mode.value)
+        assertNull((st.screen.value as? Screen.Games)?.menu)
+    }
+
+    /** The main menu's hidden-tab items while Open: only the kid's (Consoles, Collections), never Tools. */
+    @Test fun hiddenTabItemsWhileOpenAreOnlyTheKids() = runTest {
+        val settings = MemorySettings().apply { showConsolesTab = false; showCollectionsTab = false; showToolsTab = false }
+        val st = state(settings, KidsController(settings, Platform(SAT, 10 * 60)))
+        st.load()
+        st.openContextMenu(0)
+        val kinds = assertIs<Screen.Systems>(st.screen.value).menu?.items.orEmpty().map { it.kind }
+        assertTrue(ContextKind.OPEN_CONSOLES in kinds, "$kinds")
+        assertTrue(kinds.all { ContextMenus.kidsMayPick(it) }, "$kinds")
+    }
+
     @Test fun kidsPlayItemsKeepPlayAndDropLibraryEdits() {
         val all = ContextKind.entries.map { ContextItem(it, it.name) }
         assertEquals(
