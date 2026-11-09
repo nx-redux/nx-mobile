@@ -10,6 +10,7 @@ import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.library.volumeOffline
 import com.nxredux.mobile.runner.ContentRef
+import com.nxredux.mobile.runner.uniqueTempName
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -123,7 +124,7 @@ class SafRomsSource(private val resolver: ContentResolver, private val storage: 
     }
 
     /**
-     * [writeBytes]'s `<name>.part` swap, so a failed or killed write leaves the old sidecar (`map.txt`, `systems.txt`, a
+     * [writeBytes]'s `<name>.<hex>.part` swap, so a failed or killed write leaves the old sidecar (`map.txt`, `systems.txt`, a
      * collection) whole instead of truncated in the shared home tree. Where the swap cannot run, [name] is written in
      * place ("wt"): a provider whose documents cannot be renamed (or whose old [name] cannot be deleted), so
      * sidecar writes keep working there, and a swap that failed after the old [name] was deleted (nothing left to lose).
@@ -145,7 +146,7 @@ class SafRomsSource(private val resolver: ContentResolver, private val storage: 
     }
 
     /**
-     * `<name>.part` first, then the old [name] deleted and the part renamed; a failed step deletes the part. Not atomic
+     * `<name>.<hex>.part` first, then the old [name] deleted and the part renamed; a failed step deletes the part. Not atomic
      * on SAF (there is no replacing rename): false may mean the old [name] is already gone. A provider without rename
      * support always fails, with the old [name] kept. A rename the provider turns into another name ("Tetris (1).png") is
      * deleted and fails. The folder is listed at most once per write ([SafTree.lookup]).
@@ -162,12 +163,14 @@ class SafRomsSource(private val resolver: ContentResolver, private val storage: 
     }
 
     private fun replace(parent: Uri, name: String, bytes: ByteArray): Replace {
-        val partName = "$name${Names.PART}"
+        // A part of its own, so two overlapping writes of one sidecar never write into the same document. One a killed
+        // write leaves is skipped by scans and sync like any `.part` ([Names.isHidden]).
+        val partName = uniqueTempName(name, Names.PART)
         var part: Uri? = null
         var oldGone = false
         try {
             val find = saf.lookup(parent)
-            find(partName)?.let { saf.delete(it.uri) }   // a leftover from an interrupted write
+            find("$name${Names.PART}")?.let { saf.delete(it.uri) }   // the fixed part name older versions left behind
             part = saf.createNew(parent, partName) ?: return Replace.FAILED
             // Asked before anything is deleted: a provider that reports no rename support would lose the old name.
             if (flags(part)?.let { (it and DocumentsContract.Document.FLAG_SUPPORTS_RENAME) == 0 } == true) {

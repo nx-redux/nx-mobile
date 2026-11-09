@@ -6,15 +6,14 @@ import kotlin.random.Random
 
 /**
  * Writes via a sibling temp file + rename, so a crash or kill never leaves a half-written file. The temp
- * name is unique per call, so concurrent writers of one file don't share it: the last rename wins. The
- * temp file is removed when the write or the rename fails.
+ * name is unique per call ([uniqueTempName], ending in [suffix]), so concurrent writers of one file don't
+ * share it: the last rename wins. The temp file is removed when the write or the rename fails.
  */
-fun File.writeAtomically(bytes: ByteArray) {
+fun File.writeAtomically(bytes: ByteArray, suffix: String = ".tmp") {
     val dir = parentFile
     dir?.mkdirs()
-    // createNewFile is atomic, so two writers can never claim the same name. A short suffix keeps long ROM
-    // names under the file-name length limit.
-    val tmp = generateSequence { File(dir, "$name.${Random.nextInt().toUInt().toString(16)}.tmp") }
+    // createNewFile is atomic, so two writers can never claim the same name.
+    val tmp = generateSequence { File(dir, uniqueTempName(name, suffix)) }
         .first { it.createNewFile() }
     try {
         tmp.outputStream().use { it.write(bytes); it.fd.sync() }
@@ -24,6 +23,13 @@ fun File.writeAtomically(bytes: ByteArray) {
         throw e
     }
 }
+
+/**
+ * `<name>.<hex><suffix>`: a temp sibling name another writer of [name] all but never picks. A short random part keeps
+ * long ROM names under the file-name length limit; the suffix stays last, so the rules that skip temp files by their
+ * ending (`.tmp`, `.part`) still see it.
+ */
+fun uniqueTempName(name: String, suffix: String): String = "$name.${Random.nextInt().toUInt().toString(16)}$suffix"
 
 /**
  * A stamp that changes when the file is rewritten, for an image ref's version ([com.nxredux.mobile.storage.FileRefs.versioned]):
