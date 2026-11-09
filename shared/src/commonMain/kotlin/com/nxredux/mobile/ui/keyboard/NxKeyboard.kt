@@ -18,7 +18,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,7 +42,11 @@ fun keyboardHints(entry: TextEntry, confirmLabel: String): List<Hint> = when (va
         Hint(NxButton.A, "Type"), Hint(NxButton.B, "Delete"), Hint(NxButton.Y, "Space"),
         Hint(NxButton.START, "Done"), Hint(NxButton.MENU, "Cancel"),
     )
-    EntryFocus.Field -> listOf(
+    // A password's field: A shows or hides it, in Space's place (five hints fit a handheld's bar).
+    EntryFocus.Field -> if (entry.fields[entry.active].password) listOf(
+        Hint(NxButton.LEFT, "Move cursor"), Hint(NxButton.A, if (entry.reveal) "Hide" else "Show"), Hint(NxButton.B, "Delete"),
+        Hint(NxButton.START, "Done"), Hint(NxButton.MENU, "Cancel"),
+    ) else listOf(
         Hint(NxButton.LEFT, "Move cursor"), Hint(NxButton.B, "Delete"), Hint(NxButton.Y, "Space"),
         Hint(NxButton.START, "Done"), Hint(NxButton.MENU, "Cancel"),
     )
@@ -68,6 +74,7 @@ fun NxKeyboard(entry: TextEntry, onKey: (KeyPos) -> Unit, onHint: (NxButton) -> 
     val rows = NxKeys.rows(entry.page, entry.twoFields)
     val lit = (entry.focus as? EntryFocus.Keys)?.at
     val keyHeight = 40.dp * nxTextScale()
+    val haptics = LocalHapticFeedback.current
     Column(modifier.fillMaxWidth().background(colors.modalPanel).navigationBarsPadding().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             rows.forEachIndexed { r, row ->
@@ -77,7 +84,10 @@ fun NxKeyboard(entry: TextEntry, onKey: (KeyPos) -> Unit, onHint: (NxButton) -> 
                         Box(
                             Modifier.weight(NxKeys.width(key)).height(keyHeight)
                                 .background(if (on) colors.main else colors.fieldGround, RoundedCornerShape(8.dp))
-                                .pointerInput(r, c) { detectTapGestures { onKey(KeyPos(r, c)) } },
+                                .pointerInput(r, c) {
+                                    // A light tick under the finger, as a phone's keyboard gives (the system's haptics setting rules it).
+                                    detectTapGestures { haptics.performHapticFeedback(HapticFeedbackType.KeyboardTap); onKey(KeyPos(r, c)) }
+                                },
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(

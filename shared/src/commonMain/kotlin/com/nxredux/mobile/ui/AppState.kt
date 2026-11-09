@@ -5911,6 +5911,9 @@ class AppState(
     /** A tap on the open prompt's field [index]: it becomes the one typed in. */
     fun keyboardTapField(index: Int) = keyboard.tapField(index)
 
+    /** The open prompt's password shown as typed, or as dots again (its field's Show / Hide). */
+    fun keyboardToggleReveal() = keyboard.toggleReveal()
+
     /** A physical keyboard's printable [text], at the cursor. */
     fun keyboardType(text: String) { keyboard.type(text)?.let(::promptAnswer) }
 

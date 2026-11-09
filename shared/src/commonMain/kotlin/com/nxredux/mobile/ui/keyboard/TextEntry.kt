@@ -42,12 +42,14 @@ data class TextEntry(
     val shift: Boolean = false,
     val page: KeyPage = KeyPage.LETTERS,
     val keyAt: KeyPos = NxKeys.HOME,
+    /** The password drawn as typed instead of dots (the field's Show). */
+    val reveal: Boolean = false,
 ) {
     val twoFields: Boolean get() = fields.size > 1
     val text: String get() = fields[active].value
 
     override fun toString(): String =
-        "TextEntry(fields=$fields, active=$active, cursor=$cursor, focus=$focus, shift=$shift, page=$page)"
+        "TextEntry(fields=$fields, active=$active, cursor=$cursor, focus=$focus, shift=$shift, page=$page, reveal=$reveal)"
 }
 
 private fun TextEntry.none() = EntryStep(this, EntryOutcome.None)
@@ -116,6 +118,7 @@ fun TextEntry.press(button: NxButton, repeat: Boolean = false): EntryStep {
             NxButton.LEFT -> EntryStep(cursorBy(-1), EntryOutcome.None)
             NxButton.RIGHT -> EntryStep(cursorBy(1), EntryOutcome.None)
             NxButton.DOWN -> EntryStep(copy(focus = EntryFocus.Keys(keyAt)), EntryOutcome.None)
+            NxButton.A -> EntryStep(if (fields[active].password) toggleReveal() else this, EntryOutcome.None)
             NxButton.UP -> EntryStep(if (active > 0) toField(active - 1) else copy(focus = EntryFocus.Button(0)), EntryOutcome.None)
             else -> none()
         }
@@ -142,6 +145,9 @@ fun TextEntry.tapKey(key: Key): EntryStep = when (key) {
     Key.Next -> next()
     Key.Done -> done()
 }
+
+/** The password shown as typed, or as dots again (its field's Show / Hide). */
+fun TextEntry.toggleReveal(): TextEntry = copy(reveal = !reveal)
 
 /** A tap on the key at [at]: the highlight moves onto it (the pad carries on from there), then it types. */
 fun TextEntry.tapKeyAt(at: KeyPos): EntryStep {

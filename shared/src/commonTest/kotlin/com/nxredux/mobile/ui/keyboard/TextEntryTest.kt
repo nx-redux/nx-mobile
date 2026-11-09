@@ -4,6 +4,7 @@ import com.nxredux.mobile.ui.nx.NxButton
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class TextEntryTest {
     private val signIn = TextEntry(listOf(EntryField("Username", ""), EntryField("Password", "", password = true)))
@@ -152,5 +153,19 @@ class TextEntryTest {
         assertEquals(EntryOutcome.Edit(0, "q"), step.outcome)
         assertEquals(EntryFocus.Keys(KeyPos(1, 0)), step.entry.focus)
         assertEquals(EntryFocus.Keys(KeyPos(1, 1)), step.entry.press(NxButton.RIGHT).entry.focus)
+    }
+
+    @Test fun aInThePasswordFieldTogglesShowingIt() {
+        val onPassword = signIn.copy(active = 1, cursor = 0, focus = EntryFocus.Field)
+        val shown = onPassword.press(NxButton.A).entry
+        assertTrue(shown.reveal)
+        assertFalse(shown.press(NxButton.A).entry.reveal)
+        assertFalse(signIn.copy(focus = EntryFocus.Field).press(NxButton.A).entry.reveal)   // the username has nothing to show
+    }
+
+    @Test fun toggleRevealKeepsThePasswordOutOfToString() {
+        val e = signIn.copy(fields = listOf(EntryField("Username", "me"), EntryField("Password", "hunter2", password = true))).toggleReveal()
+        assertTrue(e.reveal)
+        assertFalse(e.toString().contains("hunter2"))
     }
 }

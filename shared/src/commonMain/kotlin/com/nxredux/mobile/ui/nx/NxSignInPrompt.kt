@@ -59,6 +59,7 @@ fun NxSignInPrompt(
                 NxEntryField(
                     f.value, f.password, entry.cursor.takeIf { entry.active == i },
                     focused = entry.active == i && entry.focus == EntryFocus.Field, onTap = { keyboard.tapField(i) },
+                    revealed = f.password && entry.reveal, onReveal = if (f.password) keyboard.toggleReveal else null,
                 )
             }
         }

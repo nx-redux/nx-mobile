@@ -25,4 +25,11 @@ class KeyboardHintsTest {
         assertEquals("Sign in", keyboardHints(entry.copy(focus = EntryFocus.Button(0)), "Sign in").single { it.button == NxButton.A }.label)
         assertEquals("Cancel", keyboardHints(entry.copy(focus = EntryFocus.Button(1)), "Sign in").single { it.button == NxButton.A }.label)
     }
+
+    @Test fun passwordFieldHintsShowOrHide() {
+        val onPassword = entry.copy(active = 1, cursor = 0, focus = EntryFocus.Field)
+        assertEquals("Show", keyboardHints(onPassword, "Sign in").single { it.button == NxButton.A }.label)
+        assertEquals("Hide", keyboardHints(onPassword.copy(reveal = true), "Sign in").single { it.button == NxButton.A }.label)
+        assertTrue(keyboardHints(entry.copy(focus = EntryFocus.Field), "Sign in").none { it.button == NxButton.A })
+    }
 }

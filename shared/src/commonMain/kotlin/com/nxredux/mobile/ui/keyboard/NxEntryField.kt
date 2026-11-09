@@ -11,6 +11,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -23,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -34,13 +36,15 @@ import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxFont
 import com.nxredux.mobile.ui.nx.NxButton
+import com.nxredux.mobile.ui.nx.nxModalSmall
 import com.nxredux.mobile.ui.nx.nxModalText
 
 /**
  * What the prompts need of the NX keyboard: the open prompt's [entry] (null: the platform's keyboard types, the prompts
- * keep their text fields), a tap on a field ([tapField]) and the box's own buttons answering past the keyboard ([answer]).
+ * keep their text fields), a tap on a field ([tapField]), the box's own buttons answering past the keyboard ([answer])
+ * and a password's Show / Hide ([toggleReveal]).
  */
-class PromptKeyboard(val entry: TextEntry?, val tapField: (Int) -> Unit, val answer: (NxButton) -> Unit)
+class PromptKeyboard(val entry: TextEntry?, val tapField: (Int) -> Unit, val answer: (NxButton) -> Unit, val toggleReveal: () -> Unit = {})
 
 /** The app's [PromptKeyboard]; none outside the menu. */
 val LocalPromptKeyboard = compositionLocalOf { PromptKeyboard(null, {}, {}) }
@@ -54,9 +58,12 @@ private const val PASSWORD_DOT = '•'
  * makes it the field typed in.
  */
 @Composable
-fun NxEntryField(value: String, password: Boolean, cursor: Int?, focused: Boolean, onTap: () -> Unit, modifier: Modifier = Modifier) {
+fun NxEntryField(
+    value: String, password: Boolean, cursor: Int?, focused: Boolean, onTap: () -> Unit, modifier: Modifier = Modifier,
+    revealed: Boolean = false, onReveal: (() -> Unit)? = null,
+) {
     val colors = LocalNxColors.current
-    val shown = if (password) PASSWORD_DOT.toString().repeat(value.length) else value
+    val shown = if (password && !revealed) PASSWORD_DOT.toString().repeat(value.length) else value
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val scroll = rememberScrollState()
     val blink by rememberInfiniteTransition(label = "caret").animateFloat(
@@ -75,13 +82,14 @@ fun NxEntryField(value: String, password: Boolean, cursor: Int?, focused: Boolea
         if (x - scroll.value > w - caretPad) scroll.scrollTo((x - w + caretPad).toInt().coerceAtLeast(0))
         else if (x < scroll.value) scroll.scrollTo((x - caretPad).toInt().coerceAtLeast(0))
     }
-    Box(
+    Row(
         modifier.fillMaxWidth().background(colors.fieldGround, shape)
             .then(if (focused) Modifier.border(2.dp, colors.listText, shape) else Modifier)
             .pointerInput(onTap) { detectTapGestures { onTap() } }
             .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.fillMaxWidth().onSizeChanged { viewport.value = it.width }.horizontalScroll(scroll)) {
+        Box(Modifier.weight(1f).onSizeChanged { viewport.value = it.width }.horizontalScroll(scroll)) {
             Text(
                 shown, color = colors.listText, fontFamily = LocalNxFont.current, fontSize = nxModalText(), maxLines = 1, softWrap = false,
                 onTextLayout = { layout = it },
@@ -97,5 +105,10 @@ fun NxEntryField(value: String, password: Boolean, cursor: Int?, focused: Boolea
                 },
             )
         }
+        // A password's Show / Hide: the typed text as it is, for checking it before signing in.
+        if (onReveal != null) Text(
+            if (revealed) "Hide" else "Show", color = colors.hint, fontFamily = LocalNxFont.current, fontSize = nxModalSmall(),
+            modifier = Modifier.padding(start = 12.dp).pointerInput(onReveal) { detectTapGestures { onReveal() } },
+        )
     }
 }

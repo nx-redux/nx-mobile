@@ -44,6 +44,8 @@ internal class TextEntryController(private val spec: () -> PromptSpec?, private 
 
     fun tapField(index: Int) { _entry.value?.let { _entry.value = it.tapField(index) } }
 
+    fun toggleReveal() { _entry.value?.let { _entry.value = it.toggleReveal() } }
+
     /** A physical keyboard's printable [text]. */
     fun type(text: String): NxButton? = _entry.value?.let { apply(it.type(text)) }
 
