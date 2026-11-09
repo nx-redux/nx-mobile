@@ -86,7 +86,6 @@ import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.EmulatorRunner
 import com.nxredux.mobile.runner.GameSession
-import com.nxredux.mobile.runner.LaunchName
 import com.nxredux.mobile.scraper.AndroidArtStore
 import com.nxredux.mobile.scraper.ArtSlot
 import com.nxredux.mobile.scraper.ArtHave
@@ -288,8 +287,6 @@ class AppDeps(
     val storageUpgrade: StorageUpgradePlatform? = null,
     /** The in-app updater (Android's, process-wide): the main menu's Update available popup and About's update row; null: neither. */
     val updater: UpdateController? = null,
-    /** The system asks for reduced motion (animator scale 0, remove animations): a launch fades instead of spreading. */
-    val reducedMotion: () -> Boolean = { false },
     /** The switcher return kept on disk (the game runs in another process, which may outlive this one); null: memory only. */
     val switcherReturns: com.nxredux.mobile.runner.SwitcherReturnMark? = null,
 )
@@ -624,14 +621,14 @@ internal const val ANDROID_ASK_GUARD_MILLIS = 300L
 
 /**
  * A Minimal page's folder open: the other names fade out over [MINIMAL_LEAVE_MS] and its list opens then; the opening
- * clears this long after. A game or a tool runs the launch sequence instead ([AppState.launchSequence]).
+ * clears this long after. A game or a tool opens at once instead.
  */
 internal const val MINIMAL_LEAVE_MS = 120L
 
 /**
  * A Minimal page's folder being opened ([AppState.minimalOpening]): the page it is on ([page]: a tab's [MenuCategory], a
  * game list's [ListSource]; only that page draws it) and the row's [index]; the other names fade before its list comes in.
- * A launch is not one: it runs [AppState.launchSequence], and nothing on the page moves or fades.
+ * A game's or a tool's open is not one: nothing on the page moves or fades.
  */
 data class MinimalOpening(val page: Any, val index: Int)
 
@@ -1242,13 +1239,6 @@ class AppState(
         if (opens) openSelected()
     }
 
-    /** The system's reduced motion, as the platform reports it now ([AppDeps.reducedMotion]). */
-    val reducedMotion: () -> Boolean = deps.reducedMotion
-    /** The UI's capture of the selected name (set by the menu): a launch sequence's game carries it ([GameSession.launchName]). */
-    var launchNameProvider: (() -> LaunchName?)?
-        get() = launches.launchNameProvider
-        set(v) { launches.launchNameProvider = v }
-
     /** The screen's footer mode as App last reported it ([onFooterMode]); HINTS until then, as [LocalFooterMode]'s default. */
     private var footerMode = FooterMode.HINTS
 
@@ -1316,7 +1306,7 @@ class AppState(
             override val recentsLock: Mutex get() = this@AppState.recentsLock
         },
     )
-    /** Game launches, resume and a Minimal page's open and launch sequence. */
+    /** Game launches, resume and a Minimal page's open. */
     private val launches: LaunchController = LaunchController(
         scope, _screen, _selection, _error, deps, sidecars, switcher,
         host = object : LaunchHost {
@@ -1328,13 +1318,10 @@ class AppState(
             override suspend fun moveInIndex(game: GameEntry, from: SystemFolder, toTag: String): Boolean = this@AppState.moveInIndex(game, from, toTag)
             override suspend fun refreshOpenList(select: String?) = this@AppState.refreshOpenList(select)
             override fun openMainRow(s: Screen.Systems, index: Int, forward: NavMotion): Job? = this@AppState.openMainRow(s, index, forward)
-            override fun clockNow(): Long = this@AppState.clockNow()
         },
     )
     /** A Minimal page's folder being opened ([LaunchController.openMinimal]); null otherwise. */
     val minimalOpening: StateFlow<MinimalOpening?> get() = launches.minimalOpening
-    /** A Minimal game's or tool's launch sequence ([LaunchController.launchSequence]); null otherwise. */
-    val launchSequence: StateFlow<LaunchSequence?> get() = launches.launchSequence
     private var hideJob: Job? = null       // A-in-the-hidden-list unhide in flight
     private val recents = deps.recents ?: RecentsRecorder(deps.userData, scope)
     private val recentsLock get() = recents.lock   // serialises recent.txt read-modify-writes, process-wide
@@ -1585,8 +1572,6 @@ class AppState(
 
     /** The app left the foreground: art results still waiting are written now, not left to a debounce a kill would lose. */
     fun onBackground() {
-        // The game (or app) a Minimal launch handed off to is in front: no give-up now, the next onForeground fades it.
-        launches.onBackground()
         kidsUi.kidsCloseUnlock()   // the unlock PIN or sheet never waits behind another app for the kid to come back to
         if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) { closeShortcuts(); settingsUi.refreshSettings() }
         scope.launch { flushArt() }
@@ -4808,7 +4793,6 @@ class AppState(
         kidsUi.kidsHomeCheck()  // back from setup's home question: on once home
         val switcherBack = switcher.onForeground()
         checkArt(reuse = true)   // art deleted or added while away (only changed art folders are listed)
-        launches.returnFromLaunch()   // back from a game or an app a Minimal launch handed off to
         if (!launches.minimalPending) launches.clearMinimalOpening()
         onLauncherChanged()   // back from Android's home settings or the role dialog: System re-reads its state
         refreshInstalled()    // apps may have been installed or removed meanwhile
@@ -4998,7 +4982,7 @@ class AppState(
             }
             ToolKind.SETTINGS -> openSettingsMenu()
             ToolKind.APPS -> openToolApps(AppPick.TOOLS)
-            ToolKind.APP -> if (androidApps.openApp(row)) launches.appStarted()
+            ToolKind.APP -> androidApps.openApp(row)
             ToolKind.KIDS_LOCK -> kidsUi.kidsLockNow()
         }
     }
@@ -5092,7 +5076,7 @@ class AppState(
             is MainRow.Pin -> {
                 rememberMenuSelection()
                 if (!row.entry.system.android) return launches.resumeFromSave(row.entry, orPlay = true)
-                if (androidApps.launchApp(row.entry)) launches.appStarted()
+                androidApps.launchApp(row.entry)
             }
             // A shelf game, as a pin (never an Android game).
             is MainRow.Shelf -> { rememberMenuSelection(); return launches.resumeFromSave(row.entry, orPlay = true) }

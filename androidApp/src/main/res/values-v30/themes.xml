@@ -1,0 +1,12 @@
+<resources>
+    <!-- GameActivity's from Android 11 (Activity.setTranslucent): it opens see-through, so the menu stays up behind it
+         until this screen's first frame covers it; an opaque window would hide the menu at the start, Android 13 and older
+         not waiting for the first frame under NO_ANIMATION, and leave the screen empty while the game's process starts.
+         GameActivity turns itself opaque after that frame. No starting window either (windowDisablePreview): Android 13
+         gives even a translucent one a splash. -->
+    <style name="Theme.NxMobile.Game">
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+</resources>

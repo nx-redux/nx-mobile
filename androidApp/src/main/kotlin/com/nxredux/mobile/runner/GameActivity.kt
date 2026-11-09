@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.graphics.drawable.ColorDrawable
 import android.hardware.input.InputManager
 import android.media.AudioManager
 import android.os.Build
@@ -21,6 +22,7 @@ import android.view.Display
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
@@ -195,6 +197,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_LAUNCH_ID = "launch_id"      // Long: the launcher's launch record (LaunchRecords), marked started once the game runs
         const val EXTRA_GAME_PATH = "game_path"      // the library path (GamePath): game time's identity; absent = not recorded
         const val EXTRA_ART_PATH = "art_path"        // the game's box art (GameSession.artPath): the game panel's header; absent = the console logo
+        private const val FINISH_WHEN_HIDDEN_MS = 1_500L   // a quit still on screen this long after asking for the menu finishes anyway
         const val EXTRA_OWN_TASK = "own_task"        // Boolean: launcher mode, the game runs in its own task
         const val EXTRA_FORCE_GLES = "force_gles"    // Boolean: the relaunch after Vulkan could not start (VulkanFallback)
         // netplay: a Wi-Fi netplay launch (GameSession.netplay); all absent for every other launch. The run core is EXTRA_CORE_ID.
@@ -206,7 +209,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_NETPLAY_MIXED = "netplay_mixed"          // Boolean: a GBA link with the other side on the other core
         const val EXTRA_NETPLAY_PEER_WL = "netplay_peer_wl"      // the other side's GBA link mode token; absent: it sent none
         const val EXTRA_NETPLAY_USB_TOKEN = "netplay_usb_token"  // Long: the menu's cable start this session runs on (UsbCables.token)
-        private const val KEY_NAME_HOLD_SHOWN_AT = "nx_name_hold_shown_at"   // the launch name's hold was up ([LaunchNameHold.shownAt])
         /** Kids Mode's "Games close in 10 minutes" toast stays this long. */
         private const val KIDS_WARNING_MS = 6000L
         /** The failure dialog's title unless a caller names another. */
@@ -366,13 +368,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val launchId by lazy { intent.getLongExtra(EXTRA_LAUNCH_ID, LaunchRecords.NONE) }
     private var failShown = false   // the could-not-start dialog is up (it only leaves by finishing)
     override var quitting = false   // set by quitWithAutoState: quit is single-shot, the menu freezes, onStop skips its auto state
+    private var finishWhenHidden = false   // a quit in launcher mode waits for the menu to cover it ([finish])
         private set
     override val resumePending: Boolean get() = saves.resumePending
-    // The launch sequence's name (a Minimal launch; null: none, the screen opens without one) and its hold over the window.
-    private val launchName by lazy { launchNameFrom(intent.extras) }
-    private var nameHold: LaunchNameHold? = null   // main thread only; null once it has gone
-    private val heldDowns = HashSet<Int>()   // key codes whose press the hold swallowed: their release is swallowed too
-    private val holdTouches = HoldTouchGate()   // touches the hold swallows (the on-screen pad stays lit above it)
     /** Game time for this activity's game (null until the first frame, or when the launch had no library path). */
     private var gameTime: GameTimeRecorder? = null
     private var gameTimeTicker: Job? = null
@@ -480,14 +478,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         // Cross-fade in from the menu instead of the default slide-from-right: the bottom pad is
         // identical and in the same position in both screens, so a fade keeps it visually steady while
-        // only the top (game) area changes. A launch sequence's (a [launchName]) opens with none: the menu's black meets
-        // this screen's black and the name hold (LibretroRunner gives the same with the start: the :game process starts too late for this alone). Back to the
-        // menu the game fades to black over 150 ms (launch_return_out, see [finish]); the menu fades itself in. Only while
-        // the game shares the menu's task (launcher mode off); in launcher mode it has its own task and the system task
-        // animation runs, as Android ignores these overrides for a task change (LibretroRunner's gameLaunchFlags).
+        // only the top (game) area changes (LibretroRunner gives the same with the start: the :game process starts too
+        // late for this alone). Back to the menu the game fades to black over 150 ms (launch_return_out, see [finish]).
+        // Only while the game shares the menu's task (launcher mode off); in launcher mode it has its own task, where
+        // Android ignores these overrides, and opens with no animation at all (LibretroRunner's gameLaunchFlags).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            if (launchName != null) overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, 0, 0)
-            else overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, android.R.anim.fade_in, android.R.anim.fade_out)
+            overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, android.R.anim.fade_in, android.R.anim.fade_out)
             overrideActivityTransition(Activity.OVERRIDE_TRANSITION_CLOSE, 0, R.anim.launch_return_out)
         }
         // The game's own Recents entry (launcher mode) carries its title; sharing the menu's task, the entry stays the app's.
@@ -497,7 +493,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             else @Suppress("DEPRECATION") setTaskDescription(ActivityManager.TaskDescription(recentsLabel))
         }
         setContentView(R.layout.activity_game)
-        showNameHold(savedInstanceState)
+        opaqueAfterFirstFrame()
         dual.readPlayTotal()   // before this launch's own slices land: the header's total stays as it was
         volumeControlStream = AudioManager.STREAM_MUSIC   // volume keys set the game's (media) volume, even between sounds
         syncKeepScreenOn()
@@ -531,7 +527,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // onKeyDown): what the key's press did there, the in-game menu toggles (B inside it). Before 16 the gesture and
         // the key both arrive as KEYCODE_BACK, which onKeyDown consumes, so this never runs twice for one Back.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() { if (!holdKeepsBack()) backPressed() }
+            override fun handleOnBackPressed() { backPressed() }
         })
         // netplay: a session launches cold: no saved or requested resume slot.
         gameNetplay.onCreate(intent, savedInstanceState)
@@ -803,6 +799,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         dual.secondScreens.stop()
         dual.syncDual()
         super.onStop()
+        finishIfWaiting()   // a quit behind the menu now ([finish])
     }
 
     /** After a process kill the system recreates this activity with its original intent: what it resumes travels here. */
@@ -810,7 +807,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         super.onSaveInstanceState(outState)
         saves.onSaveInstanceState(outState)
         gameNetplay.onSaveInstanceState(outState)
-        nameHold?.let { outState.putLong(KEY_NAME_HOLD_SHOWN_AT, it.shownAt) }
     }
 
     /**
@@ -831,8 +827,17 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** Back to the menu the game fades to black over 150 ms: below Android 14 (no close override set in onCreate) set here. */
     override fun finish() {
         // Launcher mode, quit on screen (not a handoff behind the menu, not the GLES relaunch): back to NX Redux's home.
-        if (intent.getBooleanExtra(EXTRA_OWN_TASK, false) && !relaunching && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) bringHomeTaskToFront()
         if (!relaunching) markClosing()
+        if (intent.getBooleanExtra(EXTRA_OWN_TASK, false) && !relaunching && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            bringHomeTaskToFront()
+            // A quit finishes once the menu covers it (onStop): a task closing on screen slides out, Android's task
+            // animation, which no app override reaches; a hidden one just goes. FINISH_WHEN_HIDDEN_MS in case it stays.
+            if (quitting && !finishWhenHidden) {
+                finishWhenHidden = true
+                window.decorView.postDelayed({ finishIfWaiting() }, FINISH_WHEN_HIDDEN_MS)
+                return
+            }
+        }
         super.finish()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) @Suppress("DEPRECATION") overridePendingTransition(0, R.anim.launch_return_out)
     }
@@ -843,6 +848,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     private fun markClosing() {
         runCatching { liveGameStore.markClosing(Process.myPid(), launchId) }.onFailure { NxLog.w(TAG_LOG, "could not mark the game closing", it) }
+    }
+
+    /** A quit waiting to be hidden ([finish]) finishes now. */
+    private fun finishIfWaiting() {
+        if (!finishWhenHidden) return
+        finishWhenHidden = false
+        super.finish()
     }
 
     override fun onDestroy() {
@@ -929,21 +941,25 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /**
-     * The launch sequence's hold ([LaunchNameHold]) from this screen's first frame until the game's: on the root right
-     * after the layout's own children (the game container, so its picture and the resume cover; the FPS line), so all the
-     * root gets later sits above it: the pads (the portrait band stays lit, identical to the menu's, never blinking; a
-     * landscape skin's bare buttons over the black likewise), the notifications, the in-game menu. Without an on-screen pad it
-     * covers the whole window. Its input is held back by [dispatchKeyEvent], [dispatchGenericMotionEvent] and
-     * [dispatchTouchEvent]. A recreation (the GLES relaunch) puts it back up with its first clock, so its minimum
-     * is not counted twice and nothing fades in between; a restore after it had gone shows none.
+     * The window opens translucent from Android 11 (Theme.NxMobile.Game, values-v30), the menu showing through until
+     * this screen's first frame is up; a frame after it, it turns opaque on black, so the menu behind can stop.
      */
-    private fun showNameHold(saved: Bundle?) {
-        val name = launchName ?: return
-        val shownAt = if (saved == null) SystemClock.uptimeMillis() else saved.getLong(KEY_NAME_HOLD_SHOWN_AT, -1L).takeIf { it >= 0L } ?: return
-        nameHold = LaunchNameHold(this, name, shownAt).also {
-            // Called right after setContentView: nothing but the layout's children is in the root yet.
-            findViewById<FrameLayout>(R.id.root).addView(it, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        }
+    private fun opaqueAfterFirstFrame() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val decor = window.decorView
+        decor.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                decor.viewTreeObserver.removeOnPreDrawListener(this)
+                decor.postOnAnimation {
+                    decor.postOnAnimation {
+                        if (isDestroyed) return@postOnAnimation
+                        window.setBackgroundDrawable(ColorDrawable(android.graphics.Color.BLACK))
+                        setTranslucent(false)
+                    }
+                }
+                return true
+            }
+        })
     }
 
     /**
@@ -975,8 +991,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (isFinishing || isDestroyed || failShown) return   // observeErrors can report more than once: one dialog, never a stack
         failShown = true
         rumbles.forEach { it.release() }
-        nameHold?.remove()   // the dialog never sits on the launch name
-        nameHold = null
         // A controller's A only focuses the button (Android clicks on ENTER): A, B and BACK leave on release. A release
         // needs its press here first, so a button held from the game as the dialog opens does not close it unseen.
         var pressed = -1
@@ -1763,10 +1777,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
     override val gameContainer: FrameLayout get() = findViewById(R.id.gameContainer)
 
-    /**
-     * While the launch name's hold is up keys wait for the game ([holdSwallows]): a swallowed press's repeats and release
-     * are swallowed too, even after the hold went; a release whose press went through goes through.
-     */
     override fun dispatchKeyEvent(raw: KeyEvent): Boolean {
         kidsInputSeen()
         val event = SystemButtonKeys.translate(this, raw)   // a bound SELECT / START / MENU button as its role, first
@@ -1777,46 +1787,18 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_BUTTON_B)) skinEditBack()
             return true
         }
-        when (event.action) {
-            KeyEvent.ACTION_UP -> if (heldDowns.remove(code)) return true
-            KeyEvent.ACTION_DOWN -> {
-                if (code in heldDowns) return true
-                if (nameHold != null) {
-                    if (holdSwallows(code, heldForMs())) { heldDowns += code; return true }
-                    if (code == KeyEvent.KEYCODE_BACK) dropHoldForBack()
-                }
-            }
-        }
         return super.dispatchKeyEvent(event)
     }
 
-    /** How long the launch name's hold has been up; 0 without one. */
-    private fun heldForMs(): Long = nameHold?.let { SystemClock.uptimeMillis() - it.shownAt } ?: 0L
-
-    /** The back callback's Back (Android 16+): kept by the hold before its give-up; past it the hold goes and Back acts. */
-    private fun holdKeepsBack(): Boolean {
-        if (nameHold == null) return false
-        if (holdSwallows(KeyEvent.KEYCODE_BACK, heldForMs())) return true
-        dropHoldForBack()
-        return false
-    }
-
-    /** Back past the give-up on a core that never drew: the hold goes at once so the in-game menu Back opens is seen. */
-    private fun dropHoldForBack() {
-        nameHold?.remove()
-        nameHold = null
-    }
-
-    /** Touches wait for the game while the launch name's hold is up ([HoldTouchGate]): the lit pad above it does nothing yet. */
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         kidsInputSeen()
-        return holdTouches.swallows(event.actionMasked, nameHold != null) || super.dispatchTouchEvent(event)
+        return super.dispatchTouchEvent(event)
     }
 
-    /** Sticks wait for the game while the launch name's hold is up, and go nowhere under the Adjust buttons editor. */
+    /** Sticks go nowhere under the Adjust buttons editor. */
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
         kidsInputSeen()
-        return nameHold != null || skinEditView != null || super.dispatchGenericMotionEvent(event)
+        return skinEditView != null || super.dispatchGenericMotionEvent(event)
     }
 
     override fun onGenericMotionEvent(event: MotionEvent?): Boolean = input.onGenericMotionEvent(event)
@@ -1911,7 +1893,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) rec.pause()
             startGameTimeTicker(rec)
         }
-        override fun releaseNameHold() { game.nameHold?.release { game.nameHold = null } }
 
         override fun fail(message: String, title: String) = game.fail(message, title)
         override fun relaunchOnGles() = game.relaunchOnGles()

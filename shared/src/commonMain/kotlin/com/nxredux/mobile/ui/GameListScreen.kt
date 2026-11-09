@@ -146,7 +146,7 @@ fun GameListScreen(
     layoutOpen: Boolean = false,          // the dropdown is open: its icon lit
     onAchievements: (() -> Unit)? = null, // the trophy icon (touchscreens) and X's hint: the achievements panel
     achievementsOpen: Boolean = false,    // the panel is open: its icon lit
-    minimalOpening: MinimalOpening? = null,   // Minimal: this list's selected row opening as a folder: the others fade (a launch runs App's [LaunchOverlay])
+    minimalOpening: MinimalOpening? = null,   // Minimal: this list's selected row opening as a folder: the others fade
     tapOpens: (Int) -> Boolean = NxTapNeverOpens,   // one tap on another game opens it too ([LocalNxTapOpens]); the second display's preview
 ) {
     val index = rememberUpdatedState(selectedIndex)

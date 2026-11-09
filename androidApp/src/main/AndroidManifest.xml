@@ -116,7 +116,7 @@
             android:taskAffinity="${applicationId}.game"
             android:autoRemoveFromRecents="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|locale|layoutDirection|colorMode|fontWeightAdjustment|grammaticalGender|touchscreen|mcc|mnc"
-            android:theme="@style/Theme.NxMobile" />
+            android:theme="@style/Theme.NxMobile.Game" />
         <!-- The menu asks the game process's game to quit (auto state, saves) before it starts another (GameProcessControl). -->
         <receiver
             android:name=".runner.EndGameReceiver"
