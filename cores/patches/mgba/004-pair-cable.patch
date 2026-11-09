@@ -45,7 +45,7 @@ index f714cf85..a4f93a4b 100644
  	hw->rtc.time[1] = _rtcBCD(date.tm_mon + 1);
  	hw->rtc.time[2] = _rtcBCD(date.tm_mday);
 diff --git forkSrcPrefix/src/platform/libretro/libretro.c forkDstPrefix/src/platform/libretro/libretro.c
-index f2283851..fdc883ab 100644
+index f2283851..f0848743 100644
 --- forkSrcPrefix/src/platform/libretro/libretro.c
 +++ forkDstPrefix/src/platform/libretro/libretro.c
 @@ -24,6 +24,9 @@
@@ -58,7 +58,15 @@ index f2283851..fdc883ab 100644
  #include <mgba/internal/gba/sio/nx_lockstep.h>
  #include <mgba/internal/gba/sio/nx_wifi_link.h>
  #include "gwl_mode.h"
-@@ -98,6 +101,41 @@ static uint16_t np_peer_id;
+@@ -87,6 +90,7 @@ static int32_t _readGyroZ(struct mRotationSource* source);
+ static void _setupMaps(struct mCore* core);
+ 
+ static struct mCore* core;
++static bool pairMode; /* mgba_pair: see the pair mode notes below */
+ #ifdef M_CORE_GBA
+ /* NXRedux netpacket session (link cable, see np_iface) */
+ static retro_netpacket_send_t np_send;
+@@ -98,6 +102,40 @@ static uint16_t np_peer_id;
   * nothing on the serial port */
  static enum GwlLinkPick np_link;
  static enum GwlMode np_wl_mode;
@@ -75,7 +83,6 @@ index f2283851..fdc883ab 100644
 +	int id;
 +};
 +
-+static bool pairMode;
 +static unsigned pairLocal; /* index of core in pairCores: 0 = GBA 1 */
 +static bool pairRealBios;
 +static int64_t pairRtc;
@@ -110,15 +117,21 @@ index f2283851..fdc883ab 100644
  	struct mCoreOptions opts = {
  		.useBios = true,
  		.volume = 0x100,
-@@ -1266,12 +1305,137 @@ static void _reloadSettings(void) {
+@@ -1266,12 +1305,149 @@ static void _reloadSettings(void) {
  	if (environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
  		mCoreConfigSetDefaultIntValue(&core->config, "gba.forceGbp", strcmp(var.value, "ON") == 0);
  	}
 +	if (pairMode) {
-+		// Idle loop removal keeps state that save states leave out
-+		// (haltPending, detection steps), so a GBA loaded from a state
-+		// could run differently from the one it was saved from.
-+		mCoreConfigSetDefaultValue(&core->config, "idleOptimization", "ignore");
++		// Both phones must run the same two GBAs whatever each player set,
++		// so every option that changes emulation is fixed here. Idle loop
++		// removal also keeps state that save states leave out (haltPending,
++		// detection steps). The BIOS is mgba_pair_bios's: without useBios a
++		// GBA never looks for one on its own.
++		opts.useBios = pairRealBios;
++		opts.skipBios = true;
++		mCoreConfigSetValue(&core->config, "idleOptimization", "ignore");
++		mCoreConfigSetIntValue(&core->config, "allowOpposingDirections", 0);
++		mCoreConfigSetIntValue(&core->config, "gba.forceGbp", 0);
 +	}
  #endif
  
@@ -133,8 +146,14 @@ index f2283851..fdc883ab 100644
 +#ifdef M_CORE_GBA
 +static void _pairReset(void) {
 +	// GBA 1 first: the coordinator's clock follows its player 0.
-+	pairCores[0]->reset(pairCores[0]);
-+	pairCores[1]->reset(pairCores[1]);
++	unsigned i;
++	for (i = 0; i < 2; ++i) {
++		pairCores[i]->reset(pairCores[i]);
++		// A reset reads a clock cart's saved RTC back with mktime, in this
++		// phone's time zone, and the offset it derives is not in save states.
++		// Zero, as on the first boot (the save is loaded after that reset).
++		((struct GBA*) pairCores[i]->board)->memory.hw.rtc.offset = 0;
++	}
 +}
 +
 +static void _pairSleep(struct mLockstepUser* user) {
@@ -248,7 +267,7 @@ index f2283851..fdc883ab 100644
  static void _doDeferredSetup(void) {
  	// Libretro API doesn't let you know when it's done copying data into the save buffers.
  	// On the off-hand chance that a core actually expects its buffers to be populated when
-@@ -1280,6 +1444,11 @@ static void _doDeferredSetup(void) {
+@@ -1280,6 +1456,11 @@ static void _doDeferredSetup(void) {
  	struct VFile* save = VFileFromMemory(savedata, GBA_SIZE_FLASH1M);
  
      /* need to defer resetting the core on start so drivers are initialized */
@@ -260,7 +279,7 @@ index f2283851..fdc883ab 100644
      core->reset(core);
  	_setupMaps(core);
  
-@@ -1290,6 +1459,19 @@ static void _doDeferredSetup(void) {
+@@ -1290,6 +1471,19 @@ static void _doDeferredSetup(void) {
  	if (!core->loadSave(core, save)) {
  		save->close(save);
  	}
@@ -280,21 +299,17 @@ index f2283851..fdc883ab 100644
  	deferredSetup = false;
  }
  
-@@ -1578,6 +1760,13 @@ void retro_run(void) {
- 		if (environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+@@ -1575,7 +1769,8 @@ void retro_run(void) {
+ 			.key = "mgba_allow_opposing_directions",
+ 			.value = 0
+ 		};
+-		if (environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
++		// Pinned off in pair mode (_reloadSettingsFor)
++		if (!pairMode && environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
  			mCoreConfigSetIntValue(&core->config, "allowOpposingDirections", strcmp(var.value, "yes") == 0);
  			core->reloadConfigOption(core, "allowOpposingDirections", NULL);
-+#ifdef M_CORE_GBA
-+			if (pairMode) {
-+				struct mCore* other = pairCores[!pairLocal];
-+				mCoreConfigSetIntValue(&other->config, "allowOpposingDirections", strcmp(var.value, "yes") == 0);
-+				other->reloadConfigOption(other, "allowOpposingDirections", NULL);
-+			}
-+#endif
  		}
- 
- 		_loadFrameskipSettings(NULL);
-@@ -1615,6 +1804,14 @@ void retro_run(void) {
+@@ -1615,6 +1810,14 @@ void retro_run(void) {
  		);
  	}
  	core->setKeys(core, keys);
@@ -309,7 +324,7 @@ index f2283851..fdc883ab 100644
  
  	if (!luxSensorUsed) {
  		static bool wasAdjustingLux = false;
-@@ -1693,6 +1890,11 @@ void retro_run(void) {
+@@ -1693,6 +1896,11 @@ void retro_run(void) {
        updateAudioLatency = false;
     }
  
@@ -321,7 +336,7 @@ index f2283851..fdc883ab 100644
  	core->runFrame(core);
  	unsigned width, height;
  	core->currentVideoSize(core, &width, &height);
-@@ -1955,6 +2157,11 @@ static void _setupMaps(struct mCore* core) {
+@@ -1955,6 +2163,11 @@ static void _setupMaps(struct mCore* core) {
  }
  
  void retro_reset(void) {
@@ -333,7 +348,7 @@ index f2283851..fdc883ab 100644
  	core->reset(core);
  	mRumbleIntegratorReset(&rumble);
  	_setupMaps(core);
-@@ -2121,6 +2328,89 @@ static void _resolveLinkMode(void) {
+@@ -2121,6 +2334,89 @@ static void _resolveLinkMode(void) {
  	np_link = gwl_mgba_pick(option, autoMode);
  	np_wl_mode = gwl_mgba_wifi_mode(option, autoMode);
  }
@@ -423,7 +438,7 @@ index f2283851..fdc883ab 100644
  #endif
  
  bool retro_load_game(const struct retro_game_info* game) {
-@@ -2160,6 +2450,9 @@ bool retro_load_game(const struct retro_game_info* game) {
+@@ -2160,6 +2456,9 @@ bool retro_load_game(const struct retro_game_info* game) {
  	}
  	mCoreInitConfig(core, NULL);
  	core->init(core);
@@ -433,7 +448,7 @@ index f2283851..fdc883ab 100644
  
  #ifdef _3DS
  	outputBuffer = linearMemAlign(VIDEO_BUFF_SIZE, 0x80);
-@@ -2200,6 +2493,10 @@ bool retro_load_game(const struct retro_game_info* game) {
+@@ -2200,6 +2499,10 @@ bool retro_load_game(const struct retro_game_info* game) {
  
  	core->setAVStream(core, &stream);
  	core->setPeripheral(core, mPERIPH_RUMBLE, &rumble);
@@ -444,7 +459,7 @@ index f2283851..fdc883ab 100644
  	core->setPeripheral(core, mPERIPH_ROTATION, &rotation);
  
  	savedata = anonymousMemoryMap(GBA_SIZE_FLASH1M);
-@@ -2208,6 +2505,14 @@ bool retro_load_game(const struct retro_game_info* game) {
+@@ -2208,6 +2511,14 @@ bool retro_load_game(const struct retro_game_info* game) {
  	_reloadSettings();
  	core->loadROM(core, rom);
  	deferredSetup = true;
@@ -459,7 +474,7 @@ index f2283851..fdc883ab 100644
  
  	const char* sysDir = 0;
  	const char* biosName = 0;
-@@ -2216,7 +2521,9 @@ bool retro_load_game(const struct retro_game_info* game) {
+@@ -2216,7 +2527,9 @@ bool retro_load_game(const struct retro_game_info* game) {
  
  #ifdef M_CORE_GBA
  	if (core->platform(core) == mPLATFORM_GBA) {
@@ -470,21 +485,34 @@ index f2283851..fdc883ab 100644
  		biosName = "gba_bios.bin";
  
  	}
-@@ -2260,6 +2567,21 @@ bool retro_load_game(const struct retro_game_info* game) {
+@@ -2260,6 +2573,34 @@ bool retro_load_game(const struct retro_game_info* game) {
  #endif
  
  #ifdef ENABLE_VFS
 +#ifdef M_CORE_GBA
 +	// mgba_pair_bios decides for both GBAs: the phones agreed on it.
++	// mGBA's HLE BIOS instead would split the phones, so no BIOS fails the
++	// load.
 +	if (pairMode) {
-+		if (pairRealBios && sysDir) {
-+			snprintf(biosPath, sizeof(biosPath), "%s%s%s", sysDir, PATH_SEP, biosName);
++		if (pairRealBios) {
 +			unsigned i;
 +			for (i = 0; i < 2; ++i) {
-+				struct VFile* bios = VFileOpen(biosPath, O_RDONLY);
-+				if (bios) {
-+					pairCores[i]->loadBIOS(pairCores[i], bios, 0);
++				struct VFile* bios = NULL;
++				if (sysDir) {
++					snprintf(biosPath, sizeof(biosPath), "%s%s%s", sysDir, PATH_SEP, biosName);
++					bios = VFileOpen(biosPath, O_RDONLY);
 +				}
++				if (!bios || bios->size(bios) != GBA_SIZE_BIOS || !GBAIsBIOS(bios)) {
++					mLOG(GBA_SIO, ERROR, "Pair: mgba_pair_bios is real but there is no GBA BIOS at %s",
++					     sysDir ? biosPath : "(no system directory)");
++					if (bios) {
++						bios->close(bios);
++					}
++					retro_unload_game();
++					core = NULL;
++					return false;
++				}
++				pairCores[i]->loadBIOS(pairCores[i], bios, 0);
 +			}
 +		}
 +	} else
@@ -492,7 +520,7 @@ index f2283851..fdc883ab 100644
  	if (core->opts.useBios && sysDir && biosName) {
  		snprintf(biosPath, sizeof(biosPath), "%s%s%s", sysDir, PATH_SEP, biosName);
  		struct VFile* bios = VFileOpen(biosPath, O_RDONLY);
-@@ -2270,7 +2592,8 @@ bool retro_load_game(const struct retro_game_info* game) {
+@@ -2270,7 +2611,8 @@ bool retro_load_game(const struct retro_game_info* game) {
  #endif
  
  #ifdef M_CORE_GBA
@@ -502,7 +530,7 @@ index f2283851..fdc883ab 100644
  		_resolveLinkMode();
  		environCallback(RETRO_ENVIRONMENT_SET_NETPACKET_INTERFACE,
  		                (void*) (np_link == GWL_PICK_WIFI ? &np_wl_iface : &np_iface));
-@@ -2292,19 +2615,195 @@ void retro_unload_game(void) {
+@@ -2292,19 +2634,240 @@ void retro_unload_game(void) {
  		np_poll = NULL;
  		np_peer = false;
  	}
@@ -602,6 +630,37 @@ index f2283851..fdc883ab 100644
 +	return ok;
 +}
 +
++/* Whether a GBA's part of a pair state will load: this build's state version,
++ * this GBA's game, and its link driver's state. Checked for both GBAs before
++ * either is touched, so a refused state leaves the pair as it was. */
++static bool _pairCheckState(unsigned i, const uint8_t* state, size_t length) {
++	struct mCore* gbaCore = pairCores[i];
++	struct GBA* gba = gbaCore->board;
++	if (length < gbaCore->stateSize(gbaCore) || !gba->memory.rom) {
++		return false;
++	}
++	const struct GBASerializedState* gbaState = (const struct GBASerializedState*) state;
++	// The header GBADeserialize compares against
++	const struct GBACartridge* cart = (const struct GBACartridge*) (gba->memory.unl.type == GBA_UNL_CART_MULTICART ?
++	                                                                gba->memory.unl.multi.rom : gba->memory.rom);
++	uint32_t magic;
++	LOAD_32LE(magic, 0, &gbaState->versionMagic);
++	if (magic != GBASavestateMagic + GBASavestateVersion || gbaState->id != cart->id ||
++	    memcmp(gbaState->title, cart->title, sizeof(gbaState->title)) != 0) {
++		return false;
++	}
++	struct mStateExtdata extdata;
++	struct mStateExtdataItem item;
++	mStateExtdataInit(&extdata);
++	struct VFile* vf = VFileFromConstMemory(state, length);
++	bool ok = mCoreExtractExtdata(gbaCore, vf, &extdata) &&
++	          mStateExtdataGet(&extdata, EXTDATA_SUBSYSTEM_START + GBA_SUBSYSTEM_SIO_DRIVER, &item) &&
++	          item.size > (ssize_t) sizeof(uint32_t);
++	vf->close(vf);
++	mStateExtdataDeinit(&extdata);
++	return ok;
++}
++
 +static bool _pairUnserialize(const void* in, size_t size) {
 +	const uint8_t* bytes = in;
 +	uint32_t magic, version, length[2];
@@ -617,6 +676,9 @@ index f2283851..fdc883ab 100644
 +		return false;
 +	}
 +	const uint8_t* state[2] = { &bytes[PAIR_HEADER_SIZE], &bytes[PAIR_HEADER_SIZE + length[0]] };
++	if (!_pairCheckState(0, state[0], length[0]) || !_pairCheckState(1, state[1], length[1])) {
++		return false;
++	}
 +	bool ok = true;
 +	unsigned i;
 +	for (i = 0; i < 2; ++i) {
@@ -669,6 +731,8 @@ index f2283851..fdc883ab 100644
 +		hash = _pairHashBytes(hash, &cpu->spsr.packed, sizeof(cpu->spsr.packed));
 +		hash = _pairHashBytes(hash, cpu->bankedRegisters, sizeof(cpu->bankedRegisters));
 +		hash = _pairHashBytes(hash, cpu->bankedSPSRs, sizeof(cpu->bankedSPSRs));
++		uint8_t halted = cpu->halted;
++		hash = _pairHashBytes(hash, &halted, sizeof(halted));
 +		hash = _pairHashBytes(hash, gba->memory.wram, GBA_SIZE_EWRAM);
 +		hash = _pairHashBytes(hash, gba->memory.iwram, GBA_SIZE_IWRAM);
 +		hash = _pairHashBytes(hash, gba->video.palette, GBA_SIZE_PALETTE_RAM);
@@ -677,6 +741,15 @@ index f2283851..fdc883ab 100644
 +		hash = _pairHashBytes(hash, gba->memory.io, sizeof(gba->memory.io));
 +		hash = _pairHashBytes(hash, &gba->sio.rcnt, sizeof(gba->sio.rcnt));
 +		hash = _pairHashBytes(hash, &gba->sio.siocnt, sizeof(gba->sio.siocnt));
++		hash = _pairHashBytes(hash, gba->memory.hw.rtc.time, sizeof(gba->memory.hw.rtc.time));
++		hash = _pairHashBytes(hash, &gba->memory.hw.rtc.control, sizeof(gba->memory.hw.rtc.control));
++		struct GBASIOLockstepPlayer* player = _pairPlayer(i);
++		if (player) {
++			int32_t mode = player->mode;
++			uint8_t dataReceived = player->dataReceived;
++			hash = _pairHashBytes(hash, &mode, sizeof(mode));
++			hash = _pairHashBytes(hash, &dataReceived, sizeof(dataReceived));
++		}
 +		void* sram = NULL;
 +		size_t sramSize = gbaCore->savedataClone(gbaCore, &sram);
 +		hash = _pairHashBytes(hash, sram, sramSize);
@@ -698,7 +771,7 @@ index f2283851..fdc883ab 100644
  	struct VFile* vfm = VFileMemChunk(NULL, 0);
  	mCoreSaveStateNamed(core, vfm, SAVESTATE_SAVEDATA | SAVESTATE_RTC);
  	size_t size = vfm->size(vfm);
-@@ -2316,6 +2815,11 @@ bool retro_serialize(void* data, size_t size) {
+@@ -2316,6 +2879,11 @@ bool retro_serialize(void* data, size_t size) {
  	if (deferredSetup) {
  		_doDeferredSetup();
  	}
@@ -710,7 +783,7 @@ index f2283851..fdc883ab 100644
  	struct VFile* vfm = VFileMemChunk(NULL, 0);
  	mCoreSaveStateNamed(core, vfm, SAVESTATE_SAVEDATA | SAVESTATE_RTC);
  	if ((ssize_t) size > vfm->size(vfm)) {
-@@ -2334,6 +2838,11 @@ bool retro_unserialize(const void* data, size_t size) {
+@@ -2334,6 +2902,11 @@ bool retro_unserialize(const void* data, size_t size) {
  	if (deferredSetup) {
  		_doDeferredSetup();
  	}
@@ -722,6 +795,16 @@ index f2283851..fdc883ab 100644
  	struct VFile* vfm = VFileFromConstMemory(data, size);
  	bool success = mCoreLoadStateNamed(core, vfm, SAVESTATE_RTC);
  	vfm->close(vfm);
+@@ -2353,6 +2926,9 @@ void retro_cheat_reset(void) {
+ void retro_cheat_set(unsigned index, bool enabled, const char* code) {
+ 	UNUSED(index);
+ 	UNUSED(enabled);
++	if (pairMode) {
++		return; /* only this phone would run them */
++	}
+ 	struct mCheatDevice* device = core->cheatDevice(core);
+ 	struct mCheatSet* cheatSet = NULL;
+ 	if (mCheatSetsSize(&device->cheats)) {
 diff --git forkSrcPrefix/src/platform/libretro/link.T forkDstPrefix/src/platform/libretro/link.T
 index 9e82b5dd..f0d0dc00 100644
 --- forkSrcPrefix/src/platform/libretro/link.T

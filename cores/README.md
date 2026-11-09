@@ -241,15 +241,17 @@ GB/GBC and GBA link as on the NX Redux handheld (nx-redux main 2f25643b):
   (`ON`), `mgba_pair_local` (`1`/`2`: the GBA the content ROM, video, audio and save RAM belong to),
   `mgba_pair_other_rom` / `mgba_pair_other_save` (paths; that save is read, never written), `mgba_pair_rtc` (Unix
   seconds; both clocks read it plus emulated time, as UTC) and `mgba_pair_bios` (`real`: `gba_bios.bin` from the system
-  directory on both; anything else: mGBA's HLE BIOS). Port 0 drives GBA 1, port 1 GBA 2. The GBAs take turns on the
-  frame thread, the one behind on the link's clock first; idle loop removal, turbo and the sensors are off for both. A
+  directory on both, and the load fails without it; anything else: mGBA's HLE BIOS). Port 0 drives GBA 1, port 1 GBA 2.
+  The GBAs take turns on the frame thread, the one behind on the link's clock first. Each phone's Settings never reach
+  them: skip BIOS is on, idle loop removal, opposite directions, the Game Boy Player, turbo, cheats and the sensors are
+  off for both. A
   state holds both GBAs with their saves (one size for the session), and the exported `nx_pair_hash()` hashes their
   CPU, memory, I/O registers and saves for the drift check. Outside pair mode the core is unchanged.
   Host checks: `gmake test-pair PAIR_ROM_A=<gba> PAIR_ROM_B=<gba> [PAIR_BIOS=<gba_bios.bin>] [PAIR_TRANSFERS=1]` builds
   the core for the host with and without `004` (`pair_harness/run_tests.sh`, into `build/pair_harness`) and checks that
-  two runs, a state reload, both phones' views (`mgba_pair_local` 1 and 2) and each BIOS choice give the same hashes,
-  and that pair mode off matches the core without `004`; without the ROMs it skips with a notice. PAIR_ROM_A also runs
+  two runs, a state reload, both phones' views (`mgba_pair_local` 1 and 2), each BIOS choice, opposite Settings and a
+  reset in another time zone give the same hashes, and that pair mode off matches the core without `004`; without the ROMs it skips with a notice. PAIR_ROM_A also runs
   alone, so pick one without a cartridge clock. `pair_harness` plays a fixed input stream that takes Mario Kart: Super
-  Circuit into a 2-player game (2243 link transfers in the 3600 frames; Four Swords: 13734).
+  Circuit into a 2-player game.
 - gambatte: `HAVE_NETWORK` is on upstream (`jni/Android.mk`); nx-redux `patches/gambatte/002` (async slave reply) minus
   its `Makefile.common` hunk (`-lpthread`; bionic has pthreads in libc).

@@ -126,9 +126,9 @@ else
 	pass pair_local_switch
 fi
 
+mkdir -p "$T/system"
+[ -z "$PAIR_BIOS" ] || cp "$PAIR_BIOS" "$T/system/gba_bios.bin"
 if [ -n "$PAIR_BIOS" ]; then
-	mkdir -p "$T/system"
-	cp "$PAIR_BIOS" "$T/system/gba_bios.bin"
 	pair "$T/real1" "$PAIR_ROM_A" "$PAIR_ROM_B" --frames 600 --every 60 --system "$T/system" --opt mgba_pair_bios=real
 	pair "$T/real2" "$PAIR_ROM_A" "$PAIR_ROM_B" --frames 600 --every 60 --system "$T/system" --opt mgba_pair_bios=real
 	pair "$T/hle1" "$PAIR_ROM_A" "$PAIR_ROM_B" --frames 600 --every 60 --system "$T/system" --opt mgba_pair_bios=hle \
@@ -143,6 +143,34 @@ if [ -n "$PAIR_BIOS" ]; then
 	fi
 else
 	echo "SKIP pair_bios_forced: set PAIR_BIOS to a gba_bios.bin"
+fi
+
+# Each phone's own Settings must not reach the pair: opposite values of every option that changes emulation, with
+# opposite directions pressed together, and a BIOS in the system directory that HLE must not pick up.
+pair "$T/setA" "$PAIR_ROM_A" "$PAIR_ROM_B" --frames 600 --every 60 --opposing 1 --system "$T/system" \
+	--opt mgba_skip_bios=OFF --opt mgba_use_bios=ON --opt mgba_allow_opposing_directions=yes --opt mgba_force_gbp=ON \
+	--opt "mgba_idle_optimization=Detect and Remove" --opt mgba_frameskip=fixed_interval --opt mgba_frameskip_interval=2
+pair "$T/setB" "$PAIR_ROM_A" "$PAIR_ROM_B" --frames 600 --every 60 --opposing 1 --system "$T/system" \
+	--opt mgba_skip_bios=ON --opt mgba_use_bios=OFF --opt mgba_allow_opposing_directions=no --opt mgba_force_gbp=OFF \
+	--opt "mgba_idle_optimization=Remove Known"
+settings_ok=1
+same "$T/setA" "$T/setB" && [ -s "$T/setA" ] || settings_ok=0
+if [ -n "$PAIR_BIOS" ]; then
+	pair "$T/setRealA" "$PAIR_ROM_A" "$PAIR_ROM_B" --frames 600 --every 60 --system "$T/system" \
+		--opt mgba_pair_bios=real --opt mgba_skip_bios=OFF
+	pair "$T/setRealB" "$PAIR_ROM_A" "$PAIR_ROM_B" --frames 600 --every 60 --system "$T/system" \
+		--opt mgba_pair_bios=real --opt mgba_skip_bios=ON
+	same "$T/setRealA" "$T/setRealB" && [ -s "$T/setRealA" ] || settings_ok=0
+fi
+if [ "$settings_ok" = 1 ]; then pass pair_settings_pinned; else fail pair_settings_pinned "options changed the hashes"; fi
+
+# A reset re-reads a clock cart's saved RTC in the host's time zone; the phones may be in different ones.
+(TZ=UTC; export TZ; pair "$T/resetUtc" "$PAIR_ROM_A" "$PAIR_ROM_B" --frames 1100 --every 60 --reset-at 500)
+(TZ=Asia/Kuala_Lumpur; export TZ; pair "$T/resetKl" "$PAIR_ROM_A" "$PAIR_ROM_B" --frames 1100 --every 60 --reset-at 500)
+if same "$T/resetUtc" "$T/resetKl" && [ "$(wc -l < "$T/resetUtc")" -eq 19 ]; then
+	pass pair_reset_tz_independent
+else
+	fail pair_reset_tz_independent "a reset in another time zone changed the hashes"
 fi
 
 "$H" --core "$STOCK" --rom "$PAIR_ROM_A" --frames 600 --every 60 > "$T/stock" 2> "$T/stock.log" || true

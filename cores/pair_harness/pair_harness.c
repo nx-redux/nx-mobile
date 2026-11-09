@@ -17,6 +17,8 @@
  *     --first-frame N     number of the first frame run (for --state-in)
  *     --save-ram-at F     print RETRO_MEMORY_SAVE_RAM's size and FNV-1a after
  *                         frame F (repeatable)
+ *     --reset-at F        retro_reset after frame F
+ *     --opposing 1        also press opposite directions together now and then
  *     --shot F:PATH       write frame F's picture as a BMP
  *     --count-log TEXT    print how many core log lines contained TEXT
  *
@@ -51,6 +53,8 @@ static const char* systemDir = ".";
 static long currentFrame;
 static const char* countText;
 static long countHits;
+static bool opposing;
+static bool variablesReported;
 
 static uint16_t* lastFrame;
 static unsigned lastWidth;
@@ -85,9 +89,10 @@ static void* readFile(const char* path, size_t* size) {
 	if (!f) {
 		die("cannot read %s", path);
 	}
-	fseek(f, 0, SEEK_END);
-	long length = ftell(f);
-	fseek(f, 0, SEEK_SET);
+	long length = fseek(f, 0, SEEK_END) == 0 ? ftell(f) : -1;
+	if (length < 0 || fseek(f, 0, SEEK_SET) != 0) {
+		die("cannot size %s", path);
+	}
 	void* data = malloc(length ? length : 1);
 	if (fread(data, 1, length, f) != (size_t) length) {
 		die("short read on %s", path);
@@ -128,6 +133,10 @@ static uint16_t mash(long frame, unsigned port) {
 	unsigned pick = (seed >> 16) % 6;
 	if (pick < 4) {
 		buttons |= 1 << dirs[pick];
+	}
+	if (opposing && frame % 50 < 5) {
+		buttons |= 1 << RETRO_DEVICE_ID_JOYPAD_LEFT | 1 << RETRO_DEVICE_ID_JOYPAD_RIGHT;
+		buttons |= 1 << RETRO_DEVICE_ID_JOYPAD_UP | 1 << RETRO_DEVICE_ID_JOYPAD_DOWN;
 	}
 	return buttons;
 }
@@ -172,7 +181,9 @@ static bool environment(unsigned cmd, void* data) {
 		((struct retro_log_callback*) data)->log = logPrintf;
 		return true;
 	case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
-		*(bool*) data = false;
+		/* once, as a frontend does after the first frame's options are set */
+		*(bool*) data = !variablesReported;
+		variablesReported = true;
 		return true;
 	default:
 		return false;
@@ -294,7 +305,7 @@ int main(int argc, char** argv) {
 	const char* stateIn = NULL;
 	const char* stateOutPath = NULL;
 	const char* shotPath = NULL;
-	long frames = 600, every = 60, firstFrame = 1, stateOutFrame = -1, shotFrame = -1;
+	long frames = 600, every = 60, firstFrame = 1, stateOutFrame = -1, shotFrame = -1, resetFrame = -1;
 	long saveRamAt[MAX_SAVE_RAM_AT];
 	int nSaveRamAt = 0;
 	int i;
@@ -345,6 +356,10 @@ int main(int argc, char** argv) {
 			}
 		} else if (strcmp(arg, "--count-log") == 0) {
 			countText = value;
+		} else if (strcmp(arg, "--reset-at") == 0) {
+			resetFrame = strtol(value, NULL, 10);
+		} else if (strcmp(arg, "--opposing") == 0) {
+			opposing = strcmp(value, "1") == 0;
 		} else {
 			die("unknown option %s", arg);
 		}
@@ -367,6 +382,7 @@ int main(int argc, char** argv) {
 	SYM(void, retro_init, (void));
 	SYM(bool, retro_load_game, (const struct retro_game_info*));
 	SYM(void, retro_run, (void));
+	SYM(void, retro_reset, (void));
 	SYM(size_t, retro_serialize_size, (void));
 	SYM(bool, retro_serialize, (void*, size_t));
 	SYM(bool, retro_unserialize, (const void*, size_t));
@@ -427,6 +443,9 @@ int main(int argc, char** argv) {
 		}
 		if (currentFrame == shotFrame) {
 			writeShot(shotPath);
+		}
+		if (currentFrame == resetFrame) {
+			retro_reset();
 		}
 		int j;
 		for (j = 0; j < nSaveRamAt; ++j) {
