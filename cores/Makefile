@@ -63,7 +63,7 @@ endif
 # A bare `gmake` builds the cores (not check-tools, which is the first rule below).
 .DEFAULT_GOAL := cores
 
-.PHONY: all cores cores-json verify verify-options check-licenses install clean nuke check-tools nxprobe options test-sio-lockstep test-gwl
+.PHONY: all cores cores-json verify verify-options check-licenses install clean nuke check-tools nxprobe options test-sio-lockstep test-gwl test-pair
 
 # The link cable state machine's host tests (cores/sio_lockstep/tests).
 test-sio-lockstep:
@@ -146,6 +146,8 @@ mgba_CMAKE_TARGET = mgba_libretro
 # Link (netplay stage 2c): patches/mgba/001-sio-lockstep.patch is nx-redux main's (2f25643b), the real link cable with a
 # CMakeLists.txt hunk that compiles cores/sio_lockstep in (NX_SIOLS_DIR). The core is then GPL-2.0-or-later (NOTICE.txt).
 # patches/mgba/003-wifi-link.patch adds gpSP's Wireless Adapter and cable protocols (cores/gba_wifi_link, NX_GWL_DIR).
+# patches/mgba/004-pair-cable.patch (phone only) adds pair mode: two GBAs on mGBA's own link cable in one core, for Cable
+# Link over Wi-Fi (host checks: gmake test-pair).
 mgba_FLAGS = -DBUILD_LIBRETRO=ON -DUSE_SQLITE3=OFF -DNX_SIOLS_DIR=$(CURDIR)/sio_lockstep -DNX_GWL_DIR=$(CURDIR)/gba_wifi_link
 mgba_LICENSE_EXTRA = sio_lockstep/NOTICE.txt gba_wifi_link/NOTICE.txt
 mgba_ARTIFACT = mgba_libretro.so
@@ -749,6 +751,23 @@ endif
 endef
 
 $(foreach CORE,$(CORES),$(eval $(call TEMPLATE,$(CORE))))
+
+# mGBA pair mode's host checks (cores/pair_harness): two host builds of the core (with and without
+# patches/mgba/004-pair-cable.patch) run on your own GBA ROMs, never committed: PAIR_ROM_A and PAIR_ROM_B (the same
+# file twice is fine), PAIR_BIOS (a gba_bios.bin) for the BIOS check, PAIR_TRANSFERS=1 to count link transfers.
+PAIR_ROM_A ?=
+PAIR_ROM_B ?=
+PAIR_BIOS ?=
+PAIR_TRANSFERS ?=
+ifeq (,$(and $(strip $(PAIR_ROM_A)),$(strip $(PAIR_ROM_B))))
+test-pair:
+	@echo "test-pair: skipped (set PAIR_ROM_A and PAIR_ROM_B to GBA ROMs)"
+else
+test-pair: $(SRC_ROOT)/mgba/.checkout-$(mgba_HASH)
+	MGBA_SRC=$(SRC_ROOT)/mgba MGBA_HASH=$(mgba_HASH) CMAKE=$(CMAKE) NINJA=$(NINJA) BUILD_DIR=$(BUILD_ROOT)/pair_harness \
+	  PAIR_ROM_A="$(PAIR_ROM_A)" PAIR_ROM_B="$(PAIR_ROM_B)" PAIR_BIOS="$(PAIR_BIOS)" PAIR_TRANSFERS=$(PAIR_TRANSFERS) \
+	  sh pair_harness/run_tests.sh
+endif
 
 # <artifact name>=<coreId> per core, for verify.sh's option-table check (the one place mupen's _gles3 maps to its id).
 OPTIONS_IDS = $(foreach CORE,$(CORES),$($(CORE)_CORE)=$($(CORE)_OPTIONS_ID))

@@ -38,7 +38,7 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | fceumm | libretro/libretro-fceumm | e0f3086a8104f8fbbe49a2615b10401504a9533f | ndk-build | 0:06 |
 | snes9x | libretro/snes9x | fae2fea08f74180759ef540ee94259213f503480 | ndk-build | 0:15 |
 | genesis_plus_gx | libretro/Genesis-Plus-GX | f27655b592ef43f317272d79883bcaa10d3ac8ad | ndk-build | 0:07 |
-| mgba | libretro/mgba | 7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6 | cmake (patched: real link cable) | 0:09 |
+| mgba | libretro/mgba | 7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6 | cmake (patched: real link cable, pair mode) | 0:09 |
 | melondsds | JesseTG/melonds-ds | f394adbacb5722ee97c1b37c8064da9a25818310 (v1.4.0) | cmake (JIT, GLES 3.2 port of the new GL renderer, patched; 11 FetchContent deps pinned offline; 6.6 MB stripped) | 0:50 |
 | mupen64plus_next | libretro/mupen64plus-libretro-nx | 15bada85906593376e8fd697f1b0b3af3a20f512 | ndk-build (GLES3, patched: cheat code parts; hi-res packs read through the VFS) | 0:20 |
 | ppsspp | hrydgard/ppsspp | d4e3c7eb2bf0ec9241621b3752cd3e5406178c78 | cmake (patched: cheat slots) | 16:24 |
@@ -234,5 +234,22 @@ GB/GBC and GBA link as on the NX Redux handheld (nx-redux main 2f25643b):
   library copied from nx-redux `workspace/all/cores/gba_wifi_link` with its host tests (`gmake test-gwl`, which check
   its gpSP files against `gpsp_HASH` plus gpSP `patches/gpsp/001` and `002`). Its `NOTICE.txt` is appended to the mGBA
   licence file. The app asks `gwl_mode.c` (compiled into libretrodroid) which mode a ROM uses.
+- mGBA: `patches/mgba/004-pair-cable.patch`, phone only (nx-redux never carries it), for Cable Link over Wi-Fi: pair
+  mode runs two GBAs in one core, joined by mGBA's own in-process link cable (`src/gba/sio/lockstep.c`, which the
+  patch adds to the libretro build), so two phones compute the same pair from the same two input streams. Off unless
+  the frontend sets these variables (none is declared as a core option, so Settings never lists them): `mgba_pair`
+  (`ON`), `mgba_pair_local` (`1`/`2`: the GBA the content ROM, video, audio and save RAM belong to),
+  `mgba_pair_other_rom` / `mgba_pair_other_save` (paths; that save is read, never written), `mgba_pair_rtc` (Unix
+  seconds; both clocks read it plus emulated time, as UTC) and `mgba_pair_bios` (`real`: `gba_bios.bin` from the system
+  directory on both; anything else: mGBA's HLE BIOS). Port 0 drives GBA 1, port 1 GBA 2. The GBAs take turns on the
+  frame thread, the one behind on the link's clock first; idle loop removal, turbo and the sensors are off for both. A
+  state holds both GBAs with their saves (one size for the session), and the exported `nx_pair_hash()` hashes their
+  CPU, memory, I/O registers and saves for the drift check. Outside pair mode the core is unchanged.
+  Host checks: `gmake test-pair PAIR_ROM_A=<gba> PAIR_ROM_B=<gba> [PAIR_BIOS=<gba_bios.bin>] [PAIR_TRANSFERS=1]` builds
+  the core for the host with and without `004` (`pair_harness/run_tests.sh`, into `build/pair_harness`) and checks that
+  two runs, a state reload, both phones' views (`mgba_pair_local` 1 and 2) and each BIOS choice give the same hashes,
+  and that pair mode off matches the core without `004`; without the ROMs it skips with a notice. PAIR_ROM_A also runs
+  alone, so pick one without a cartridge clock. `pair_harness` plays a fixed input stream that takes Mario Kart: Super
+  Circuit into a 2-player game (2243 link transfers in the 3600 frames; Four Swords: 13734).
 - gambatte: `HAVE_NETWORK` is on upstream (`jni/Android.mk`); nx-redux `patches/gambatte/002` (async slave reply) minus
   its `Makefile.common` hunk (`-lpthread`; bionic has pthreads in libc).
