@@ -45,6 +45,13 @@ class ProviderPreferences(
     private var writes = 0L
     /** [apply] sends queued and not yet answered: the owner's entries may not hold them yet. */
     private var unsent = 0
+    /**
+     * [apply]s whose send failed, by key (a value or [REMOVED]): the owner never got them, so a [refresh] keeps them in
+     * [written]. A later successful send of the same key drops it (the owner holds the newer value).
+     */
+    private val failed = HashMap<String, Any>()
+    /** An applied clear never reached the owner: its entries still stand there, so a [refresh] keeps every write here. */
+    private var failedClear = false
 
     /**
      * [key] as this process sees it: its own write, else nothing after a clear, else [fetched]'s, else [local]'s (a
@@ -66,8 +73,8 @@ class ProviderPreferences(
     /**
      * Reads the owner's current entries (one call into the main process) and reads from them from now on. Blocking:
      * never on the key-event path. A failed call keeps the view as it was. This process's own writes stay in front only
-     * if one landed while the call ran (the owner's answer may predate it); otherwise the owner's entries already hold
-     * them, and a later change there wins.
+     * if one landed while the call ran (the owner's answer may predate it), or if its send failed (the owner never got
+     * it); otherwise the owner's entries already hold them, and a later change there wins.
      */
     fun refresh() {
         val startedAt = beginRefresh()
@@ -83,7 +90,24 @@ class ProviderPreferences(
 
     private fun endRefresh(startedAt: Long, entries: Map<String, Any?>) = synchronized(lock) {
         fetched = HashMap(entries)
-        if (startedAt >= 0 && writes == startedAt) { written.clear(); cleared = false }
+        if (startedAt >= 0 && writes == startedAt && !failedClear) {
+            written.clear()
+            written.putAll(failed)
+            cleared = false
+        }
+    }
+
+    /** A send's outcome for [failed]; under [lock]. */
+    private fun sent(ok: Boolean, put: Map<String, Any?>, remove: Collection<String>, clear: Boolean) {
+        if (ok) {
+            if (clear) { failed.clear(); failedClear = false }
+            remove.forEach(failed::remove)
+            put.keys.forEach(failed::remove)
+        } else {
+            if (clear) { failedClear = true; failed.clear() }
+            remove.forEach { failed[it] = REMOVED }
+            put.forEach { (k, v) -> if (v != null) failed[k] = v }
+        }
     }
 
     /** Keeps an edit in [written]; under [lock]. */
@@ -151,27 +175,41 @@ class ProviderPreferences(
             val args = args()
             val putNow = HashMap(put); val removeNow = remove.toList(); val clearNow = clear
             val task = FutureTask {
-                send(args).also { ok -> if (ok) synchronized(lock) { keep(putNow, removeNow, clearNow) } }
+                send(args).also { ok -> if (ok) synchronized(lock) { keep(putNow, removeNow, clearNow); sent(true, putNow, removeNow, clearNow) } }
             }
-            sender.execute(task)
+            // Already on the sender (a send's own code): waiting for a task queued behind this one would never end.
+            if (onSender.get() == true) { task.run(); return runCatching { task.get() }.getOrDefault(false) }
+            sender.execute { asSender(task::run) }
             return runCatching { task.get() }.getOrDefault(false)
         }
 
         /**
          * Read back at once, sent in order on [sender]. A failed send keeps the value for this process's session (the
-         * owner never got it; logged). The process ending waits for the queue ([awaitSends]).
+         * owner never got it; logged), through later refreshes too ([failed]). The process ending waits for the queue
+         * ([awaitSends]).
          */
         override fun apply() {
             val args = args()
-            synchronized(lock) { keep(HashMap(put), remove.toList(), clear); unsent++ }
+            val putNow = HashMap(put); val removeNow = remove.toList(); val clearNow = clear
+            synchronized(lock) { keep(putNow, removeNow, clearNow); unsent++ }
             sender.execute {
-                try { send(args) } finally { synchronized(lock) { unsent-- } }
+                var ok = false
+                try { ok = asSender { send(args) } } finally { synchronized(lock) { sent(ok, putNow, removeNow, clearNow); unsent-- } }
             }
         }
     }
 
     companion object {
         private val REMOVED = Any()
+
+        /** Set while a send runs on the sender thread: a [SharedPreferences.Editor.commit] there runs inline. */
+        private val onSender = ThreadLocal<Boolean>()
+
+        private inline fun <T> asSender(block: () -> T): T {
+            val outer = onSender.get()
+            onSender.set(true)
+            try { return block() } finally { if (outer == null) onSender.remove() }
+        }
 
         /** One thread for every file's sends: a write never overtakes an earlier one. */
         private val SENDER: ExecutorService = Executors.newSingleThreadExecutor { r -> Thread(r, "prefs-send").apply { isDaemon = true } }

@@ -111,6 +111,52 @@ class ProviderPreferencesTest {
         assertEquals("new", prefs.getString("k", null))
     }
 
+    // The menu process was briefly gone: the game's choice must not revert at the next refresh.
+    @Test fun aFailedApplyStaysThroughLaterRefreshesUntilASendLands() {
+        val owner = FakeOwner(hashMapOf("k" to "old", "gone" to "x")).apply { failing = true }
+        val prefs = ProviderPreferences("p", owner, LocalFile(mapOf("k" to "old", "gone" to "x")), java.util.concurrent.Executor { it.run() })
+        prefs.edit().putString("k", "new").remove("gone").apply()
+        owner.failing = false
+        prefs.refresh()
+        assertEquals("new", prefs.getString("k", null))
+        assertNull(prefs.getString("gone", null))
+        prefs.edit().putString("k", "newer").apply()   // lands: the owner holds it now
+        owner.data["k"] = "menu"
+        prefs.refresh()
+        assertEquals("menu", prefs.getString("k", null))
+        assertNull(prefs.getString("gone", null))   // still never sent
+    }
+
+    @Test fun aFailedAppliedClearKeepsEveryWriteThroughARefresh() {
+        val owner = FakeOwner(hashMapOf("a" to "1")).apply { failing = true }
+        val prefs = ProviderPreferences("p", owner, LocalFile(mapOf("a" to "1")), java.util.concurrent.Executor { it.run() })
+        prefs.edit().clear().apply()
+        owner.failing = false
+        prefs.edit().putString("b", "2").apply()
+        prefs.refresh()
+        assertNull(prefs.getString("a", null))
+        assertEquals("2", prefs.getString("b", null))
+    }
+
+    // A commit from inside a send (on the sender thread) would wait on a task queued behind itself.
+    @Test fun commitOnTheSenderThreadRunsInline() {
+        val owner = FakeOwner()
+        lateinit var prefs: ProviderPreferences
+        var nested: Boolean? = null
+        val channel = PrefsChannel { method, name, args ->
+            @Suppress("UNCHECKED_CAST")
+            val put = args[PrefsProvider.ARG_PUT] as? Map<String, Any?>
+            if (put?.containsKey("outer") == true) nested = prefs.edit().putString("inner", "y").commit()
+            owner.call(method, name, args)
+        }
+        prefs = ProviderPreferences("p", channel, LocalFile(emptyMap()))   // the real sender thread
+        prefs.edit().putString("outer", "x").apply()
+        assertTrue(ProviderPreferences.awaitSends(2000))
+        assertEquals(true, nested)
+        assertEquals("y", owner.data["inner"])
+        assertEquals("y", prefs.getString("inner", null))
+    }
+
     @Test fun commitWaitsForEarlierApplies() {
         val owner = FakeOwner()
         val prefs = ProviderPreferences("p", owner, LocalFile(emptyMap()))   // the real sender thread
