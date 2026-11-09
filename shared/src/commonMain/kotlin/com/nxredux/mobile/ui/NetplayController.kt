@@ -323,11 +323,15 @@ class NetplayController(
                     }
                     channel = ch
                     hostStatus(NetplayText.PLAYER_CONNECTED)
-                    val out = withContext(work) {   // staging the saves and the rsync daemon: off the main thread
-                        Wizard.host(ch, HostOffer(game, tag, own, pick, usb, wl), saves = { platform.hostSaves(tag, rom, e.game.ref) }, onSync = { hostStatus(NetplayText.SENDING) })
+                    // A failed or cancelled wizard must still close the peer's socket (it would wait for its timeout).
+                    val out = try {
+                        withContext(work) {   // staging the saves and the rsync daemon: off the main thread
+                            Wizard.host(ch, HostOffer(game, tag, own, pick, usb, wl), saves = { platform.hostSaves(tag, rom, e.game.ref) }, onSync = { hostStatus(NetplayText.SENDING) })
+                        }
+                    } finally {
+                        ch.close()
+                        if (channel === ch) channel = null
                     }
-                    ch.close()
-                    if (channel === ch) channel = null
                     when (out) {
                         is HostOutcome.Started -> {
                             stopHosting()
