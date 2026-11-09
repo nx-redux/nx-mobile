@@ -82,6 +82,9 @@ static uint32_t core_frame;
 static int port_bad;	   /* np_input(2/3) was ever non-zero while running */
 static int saw_nonzero;	   /* P1 and P2 words were non-zero at least once */
 static int saw_analog;     /* P1 and P2 left sticks were non-zero at least once */
+static int unser_calls;	   /* f_unser calls (the state sync, then each resync) */
+static uint32_t unser_frame; /* core_frame at the last f_unser */
+static uint32_t corrupt_at[4]; /* after these frames the state flips a byte: a drift (0 = unused) */
 
 static size_t f_size(void) { return core_size_reported; }
 static bool f_ser(void* d, size_t n) {
@@ -94,6 +97,8 @@ static bool f_unser(const void* d, size_t n) {
 	if (n != CORE_SIZE)
 		return false;
 	memcpy(core_buf, d, CORE_SIZE);
+	unser_calls++;
+	unser_frame = core_frame;
 	return true;
 }
 
@@ -102,6 +107,9 @@ static void core_reset(int randomise) {
 	port_bad = 0;
 	saw_nonzero = 0;
 	saw_analog = 0;
+	unser_calls = 0;
+	unser_frame = 0;
+	memset(corrupt_at, 0, sizeof(corrupt_at));
 	core_size_reported = CORE_SIZE;
 	uint32_t x = 0x9E3779B9u;
 	for (size_t i = 0; i < CORE_SIZE; i++) {
@@ -126,6 +134,9 @@ static void core_run(uint16_t p1, uint16_t p2) {
 	for (size_t i = 0; i < CORE_SIZE; i++)
 		core_buf[i] ^= (uint8_t)(mix + core_frame + (uint32_t)i);
 	core_frame++;
+	for (int k = 0; k < 4; k++)
+		if (corrupt_at[k] && corrupt_at[k] == core_frame)
+			core_buf[0] ^= 0xFF;
 }
 
 static uint32_t core_checksum(void) {
@@ -136,6 +147,9 @@ static uint32_t core_checksum(void) {
 	}
 	return h ^ core_frame;
 }
+
+/* The pair hash: the whole state and the frame count. */
+static uint64_t f_hash(void) { return ((uint64_t)core_checksum() << 32) | core_frame; }
 
 static uint16_t word_for(uint32_t seed, uint32_t frame) {
 	uint32_t x = (frame + 1u) * 2654435761u ^ seed;
@@ -664,8 +678,95 @@ static int expect_bytes(int fd, const uint8_t* want, size_t n) {
 	return 0;
 }
 
-/* Raw client side of the state sync, checking the handheld's exact bytes. */
-static int raw_sync(int fd) {
+/* ---------------------------------------------------------------- wire capture */
+
+typedef struct {
+	uint8_t* b;
+	size_t n, cap;
+} capture;
+
+static void cap_add(capture* c, const void* d, size_t n) {
+	if (!c || n == 0)
+		return;
+	if (c->n + n > c->cap) {
+		size_t want = c->cap ? c->cap * 2 : 16384;
+		while (want < c->n + n)
+			want *= 2;
+		c->b = (uint8_t*)realloc(c->b, want);
+		c->cap = want;
+	}
+	memcpy(c->b + c->n, d, n);
+	c->n += n;
+}
+
+/* Everything the engine has written so far (never blocks). */
+static void cap_drain(int fd, capture* c) {
+	uint8_t buf[4096];
+	for (;;) {
+		struct pollfd p = {fd, POLLIN, 0};
+		if (poll(&p, 1, 0) <= 0)
+			return;
+		ssize_t n = recv(fd, buf, sizeof(buf), 0);
+		if (n <= 0)
+			return;
+		cap_add(c, buf, (size_t)n);
+	}
+}
+
+/* Everything until the engine closes the connection. */
+static int cap_until_eof(int fd, capture* c, int timeout_ms) {
+	uint8_t buf[4096];
+	uint64_t t0 = real_ms();
+	for (;;) {
+		int left = timeout_ms - (int)(real_ms() - t0);
+		struct pollfd p = {fd, POLLIN, 0};
+		if (left <= 0 || poll(&p, 1, left) <= 0)
+			return -1;
+		ssize_t n = recv(fd, buf, sizeof(buf), 0);
+		if (n == 0)
+			return 0;
+		if (n < 0)
+			return errno == ECONNRESET ? 0 : -1;
+		cap_add(c, buf, (size_t)n);
+	}
+}
+
+/* Golden files live in golden/ next to this source (run.sh runs from there). NP_WRITE_GOLDEN=1 rewrites them. */
+static int golden_check(const char* name, const capture* c) {
+	char path[256];
+	snprintf(path, sizeof(path), "golden/%s", name);
+	if (getenv("NP_WRITE_GOLDEN")) {
+		FILE* f = fopen(path, "wb");
+		if (!f || fwrite(c->b, 1, c->n, f) != c->n) {
+			if (f)
+				fclose(f);
+			return -1;
+		}
+		fclose(f);
+		fprintf(stderr, "  wrote %s (%zu bytes)\n", path, c->n);
+		return 0;
+	}
+	FILE* f = fopen(path, "rb");
+	if (!f) {
+		fprintf(stderr, "  missing %s\n", path);
+		return -1;
+	}
+	uint8_t* want = (uint8_t*)malloc(c->n + 1);
+	size_t got = fread(want, 1, c->n + 1, f);
+	fclose(f);
+	int same = got == c->n && memcmp(want, c->b, c->n) == 0;
+	if (!same) {
+		size_t i = 0;
+		while (i < got && i < c->n && want[i] == c->b[i])
+			i++;
+		fprintf(stderr, "  %s: %zu bytes on the wire, golden %zu; first difference at %zu\n", name, c->n, got, i);
+	}
+	free(want);
+	return same ? 0 : -1;
+}
+
+/* Raw client side of the state sync, checking the handheld's exact bytes; what the host sent goes to c (may be NULL). */
+static int raw_sync_cap(int fd, capture* c) {
 	/* Drive the host's GL-thread pre_frame until it has serialised (it returns 0 throughout SYNCING). */
 	for (int i = 0; i < 5; i++) {
 		if (step(0) != 0)
@@ -675,15 +776,22 @@ static int raw_sync(int fd) {
 	const uint8_t hdr[11] = {0x03, 0, 0, 0, 0, 0x00, 0x04, 0x00, 0x00, 0x10, 0x00}; /* STATE_HDR f0 size4, u32 4096 */
 	if (expect_bytes(fd, hdr, sizeof(hdr)) != 0)
 		return -1;
+	cap_add(c, hdr, sizeof(hdr));
 	static uint8_t state[CORE_SIZE];
 	if (raw_read(fd, state, CORE_SIZE, 3000) != 0 || memcmp(state, core_buf, CORE_SIZE) != 0)
 		return -1;
+	cap_add(c, state, CORE_SIZE);
 	if (raw_pkt(fd, 0x05, 0, NULL, 0) != 0) /* STATE_ACK */
 		return -1;
 	const uint8_t ready[7] = {0x09, 0, 0, 0, 0, 0, 0};
 	if (expect_bytes(fd, ready, sizeof(ready)) != 0)
 		return -1;
+	cap_add(c, ready, sizeof(ready));
 	return wait_state(NP_RUNNING, 3000, 0);
+}
+
+static int raw_sync(int fd) {
+	return raw_sync_cap(fd, NULL);
 }
 
 /* PAUSE then RESUME: once the host reports PEER_PAUSED, every packet sent before it has been processed. */
@@ -1088,6 +1196,408 @@ static int case_local_pause_sends_pause_and_stops_input(void) {
 	return 0;
 }
 
+/* The peer's 10-byte INPUT for a frame: its word plus sticks derived from it. */
+static int raw_input10(int fd, uint32_t frame, uint16_t word) {
+	int16_t a[4];
+	axes_for(word, a);
+	uint8_t b[10] = {(uint8_t)(word >> 8), (uint8_t)word};
+	for (int i = 0; i < 4; i++) {
+		b[2 + 2 * i] = (uint8_t)((uint16_t)a[i] >> 8);
+		b[3 + 2 * i] = (uint8_t)a[i];
+	}
+	return raw_pkt(fd, 0x01, frame, b, sizeof(b));
+}
+
+/* The raw peer sends its input for exactly the next frames, then the engine runs them. */
+static int raw_feed_and_run(int fd, uint32_t* peer_sent, uint32_t frames, uint32_t seed, capture* c, uint32_t ms_per_frame) {
+	for (uint32_t done = 0; done < frames;) {
+		uint32_t batch = frames - done < 30 ? frames - done : 30;
+		while (*peer_sent + 1 < core_frame + batch) {
+			(*peer_sent)++;
+			CHECK(raw_input10(fd, *peer_sent, word_for(seed ^ 0xFFFF, *peer_sent)) == 0);
+		}
+		CHECK(raw_barrier(fd) == 0);
+		for (uint32_t i = 0; i < batch; i++) {
+			fake_set(fake_clock() + ms_per_frame);
+			CHECK(step(word_for(seed, core_frame)) == 1);
+		}
+		done += batch;
+		cap_drain(fd, c);
+	}
+	return 0;
+}
+
+/* After the frames: one stall with a KEEPALIVE, a local pause and resume, then leave. */
+static int wire_tail(int fd, capture* c) {
+	CHECK(step(0x0F0F) == 0);
+	CHECK(np_get_state(NULL, NULL) == NP_STALLED);
+	fake_set(fake_clock() + 600u);
+	CHECK(step(0x0F0F) == 0);
+	np_pause();
+	np_resume();
+	np_leave();
+	np_shutdown();
+	CHECK(cap_until_eof(fd, c, 3000) == 0);
+	return 0;
+}
+
+/* Pair mode off: a 300-frame host session puts exactly the bytes the engine sent before pair mode existed. */
+static int case_pair_off_wire_unchanged_host(void) {
+	uint16_t port = next_port++;
+	fake_set(1000000);
+	core_reset(1);
+	capture c = {0};
+	CHECK(np_start(NP_ROLE_HOST, "127.0.0.1", port, fake_clock) == 0);
+	int fd = raw_connect(port);
+	CHECK(fd >= 0);
+	CHECK(raw_sync_cap(fd, &c) == 0);
+	uint32_t peer_sent = 1;
+	CHECK(raw_feed_and_run(fd, &peer_sent, 300, 0x600D, &c, 0) == 0);
+	CHECK(wire_tail(fd, &c) == 0);
+	close(fd);
+	int rc = golden_check("pair_off_host.bin", &c);
+	free(c.b);
+	return rc;
+}
+
+/* The same for a client: STATE_ACK, its inputs, the stall, pause, resume and DISCONNECT. */
+static int case_pair_off_wire_unchanged_client(void) {
+	uint16_t port = next_port++;
+	fake_set(1000000);
+	core_reset(0);
+	capture c = {0};
+	int lfd = -1;
+	int fd = raw_host_with_client(port, &lfd);
+	CHECK(fd >= 0);
+	static uint8_t state[CORE_SIZE];
+	for (size_t i = 0; i < CORE_SIZE; i++)
+		state[i] = (uint8_t)(i * 7u + 3u);
+	const uint8_t hdr[11] = {0x03, 0, 0, 0, 0, 0x00, 0x04, 0x00, 0x00, 0x10, 0x00};
+	CHECK(raw_send(fd, hdr, sizeof(hdr)) == 0);
+	CHECK(raw_send(fd, state, CORE_SIZE) == 0);
+	const uint8_t ack[7] = {0x05, 0, 0, 0, 0, 0, 0};
+	uint64_t t0 = real_ms();
+	for (;;) { /* the client unserialises on its GL thread, then acks */
+		CHECK(step(0) == 0);
+		struct pollfd p = {fd, POLLIN, 0};
+		if (poll(&p, 1, 2) > 0)
+			break;
+		CHECK(real_ms() - t0 < 3000);
+	}
+	CHECK(expect_bytes(fd, ack, sizeof(ack)) == 0);
+	cap_add(&c, ack, sizeof(ack));
+	CHECK(memcmp(core_buf, state, CORE_SIZE) == 0);
+	CHECK(raw_pkt(fd, 0x09, 0, NULL, 0) == 0); /* READY */
+	CHECK(wait_state(NP_RUNNING, 3000, 0) == 0);
+	uint32_t peer_sent = 1;
+	CHECK(raw_feed_and_run(fd, &peer_sent, 300, 0xD00D, &c, 0) == 0);
+	CHECK(wire_tail(fd, &c) == 0);
+	close(fd);
+	close(lfd);
+	int rc = golden_check("pair_off_client.bin", &c);
+	free(c.b);
+	return rc;
+}
+
+/* ---------------------------------------------------------------- pair mode */
+
+/* The next packet of cmd in a captured stream of plain packets (no raw state), from *pos on. 0 found. */
+static int cap_find(const capture* c, size_t* pos, uint8_t cmd, uint32_t* frame, const uint8_t** payload, uint16_t* size) {
+	while (*pos + 7 <= c->n) {
+		const uint8_t* h = c->b + *pos;
+		uint16_t sz = (uint16_t)((h[5] << 8) | h[6]);
+		if (*pos + 7 + sz > c->n)
+			return -1;
+		*pos += 7u + sz;
+		if (h[0] == cmd) {
+			*frame = ((uint32_t)h[1] << 24) | ((uint32_t)h[2] << 16) | ((uint32_t)h[3] << 8) | h[4];
+			*payload = h + 7;
+			*size = sz;
+			return 0;
+		}
+	}
+	return -1;
+}
+
+static uint64_t get_be64(const uint8_t* b) {
+	uint64_t v = 0;
+	for (int i = 0; i < 8; i++)
+		v = (v << 8) | b[i];
+	return v;
+}
+
+static int raw_hash(int fd, uint32_t frame, uint64_t h) {
+	uint8_t b[8];
+	for (int i = 0; i < 8; i++)
+		b[i] = (uint8_t)(h >> (56 - 8 * i));
+	return raw_pkt(fd, 0x0D, frame, b, sizeof(b));
+}
+
+/* Waits for the engine's HASH for frame want (reading the stream into c). */
+static int wait_hash(int fd, capture* c, size_t* pos, uint32_t want, uint64_t* h) {
+	uint64_t t0 = real_ms();
+	for (;;) {
+		cap_drain(fd, c);
+		uint32_t frame = 0;
+		const uint8_t* pl = NULL;
+		uint16_t sz = 0;
+		size_t at = *pos;
+		while (cap_find(c, &at, 0x0D, &frame, &pl, &sz) == 0) {
+			*pos = at;
+			if (frame == want && sz == 8) {
+				*h = get_be64(pl);
+				return 0;
+			}
+		}
+		if (real_ms() - t0 > 3000)
+			return -1;
+		nap_ms(2);
+	}
+}
+
+static int start_pair_host(uint16_t port, int* fd) {
+	np_set_pair_mode(true, f_hash);
+	if (np_start(NP_ROLE_HOST, "127.0.0.1", port, fake_clock) != 0)
+		return -1;
+	*fd = raw_connect(port);
+	if (*fd < 0)
+		return -1;
+	return raw_sync(*fd);
+}
+
+/* Equal hashes: HASH goes out every 120 frames (frame = the frames run, u64 BE) and the peer's equal one verifies it. */
+static int case_pair_hash_match_advances_verified(void) {
+	uint16_t port = next_port++;
+	fake_set(1000000);
+	core_reset(1);
+	int fd = -1;
+	CHECK(start_pair_host(port, &fd) == 0);
+	CHECK(np_last_verified_frame() == -1);
+	capture c = {0};
+	size_t pos = 0;
+	uint32_t peer_sent = 1;
+	for (uint32_t check = 120; check <= 240; check += 120) {
+		CHECK(raw_feed_and_run(fd, &peer_sent, 120, 0x1A1A, &c, 16) == 0);
+		uint64_t h = 0;
+		CHECK(wait_hash(fd, &c, &pos, check, &h) == 0);
+		CHECK(core_frame == check && h == f_hash());
+		CHECK(np_last_verified_frame() == (check == 120 ? -1 : 120));
+		CHECK(raw_hash(fd, check, h) == 0);
+		CHECK(raw_barrier(fd) == 0);
+		CHECK(np_last_verified_frame() == (int64_t)check);
+	}
+	/* a hash for a frame never checked is ignored */
+	CHECK(raw_hash(fd, 300, 1) == 0);
+	CHECK(raw_barrier(fd) == 0);
+	CHECK(np_last_verified_frame() == 240 && np_get_state(NULL, NULL) == NP_RUNNING);
+	free(c.b);
+	np_shutdown();
+	close(fd);
+	return 0;
+}
+
+/* Fork pair, both in pair mode: one checksum and the client's state numbers come back over the pipe. */
+static int pair_meet_host(uint32_t frames, int out, int in, uint32_t* theirs, int64_t* their_verified) {
+	CHECK(run_frames(frames, 0x7171, 15000, 1) == 0);
+	CHECK(pipe_get(in, theirs, sizeof(*theirs), 15000) == 0);
+	CHECK(pipe_get(in, their_verified, sizeof(*their_verified), 5000) == 0);
+	return put_byte(out, 'D');
+}
+static int pair_meet_client(uint32_t frames, int out, int in) {
+	CHECK(run_frames(frames, 0x7272, 15000, 1) == 0);
+	uint32_t sum = core_checksum();
+	int64_t v = np_last_verified_frame();
+	CHECK(pipe_put(out, &sum, sizeof(sum)) == 0);
+	CHECK(pipe_put(out, &v, sizeof(v)) == 0);
+	return expect_byte(in, 'D', 15000);
+}
+
+static int resync_host(uint16_t port, int out, int in) {
+	np_set_pair_mode(true, f_hash);
+	CHECK(start_host(port, out) == 0);
+	uint32_t theirs = 0;
+	int64_t their_verified = -2;
+	CHECK(pair_meet_host(300, out, in, &theirs, &their_verified) == 0);
+	if (theirs != core_checksum()) {
+		fprintf(stderr, "  checksum host %08x client %08x\n", core_checksum(), theirs);
+		return -1;
+	}
+	CHECK(unser_calls == 0);
+	CHECK(np_last_verified_frame() == 240 && their_verified == 240);
+	return 0;
+}
+static int resync_client(uint16_t port, int out, int in) {
+	corrupt_at[0] = 50; /* the check at 120 differs */
+	np_set_pair_mode(true, f_hash);
+	CHECK(start_client(port, in) == 0);
+	CHECK(pair_meet_client(300, out, in) == 0);
+	/* the state sync, then the host's state at the agreed frame: past the check, inside the lead */
+	if (unser_calls != 2 || unser_frame <= 120 || unser_frame > 150) {
+		fprintf(stderr, "  unserialised %d times, last at frame %u\n", unser_calls, unser_frame);
+		return -1;
+	}
+	return 0;
+}
+
+/* Each side runs until the session ends; the client reports its reason, resyncs and verified frame. */
+static int drift_side(int host, int out, int in) {
+	uint64_t t0 = real_ms();
+	while (!is_over()) {
+		CHECK(real_ms() - t0 < 15000);
+		step(word_for(host ? 0x3131u : 0x3232u, core_frame));
+		nap_ms(1);
+	}
+	np_reason why = NP_REASON_NONE;
+	CHECK(np_get_state(NULL, &why) == NP_ENDED);
+	if (host) {
+		uint8_t theirs[3] = {0, 0, 0};
+		CHECK(pipe_get(in, theirs, sizeof(theirs), 15000) == 0);
+		if (why != NP_REASON_DRIFT || theirs[0] != NP_REASON_DRIFT) {
+			fprintf(stderr, "  reasons host %d client %d\n", why, theirs[0]);
+			return -1;
+		}
+		CHECK(theirs[1] == 3);	/* the state sync and two resyncs */
+		CHECK(theirs[2] == 1);	/* never verified */
+		CHECK(np_last_verified_frame() == -1);
+		CHECK(core_frame >= 360 && core_frame < 400);
+		return put_byte(out, 'D');
+	}
+	uint8_t mine[3] = {(uint8_t)why, (uint8_t)unser_calls, (uint8_t)(np_last_verified_frame() == -1)};
+	CHECK(pipe_put(out, mine, sizeof(mine)) == 0);
+	return expect_byte(in, 'D', 15000);
+}
+static int drift_host(uint16_t port, int out, int in) {
+	np_set_pair_mode(true, f_hash);
+	CHECK(start_host(port, out) == 0);
+	return drift_side(1, out, in);
+}
+static int drift_client(uint16_t port, int out, int in) {
+	/* each lands after the resync before it: the checks at 120, 240 and 360 all differ */
+	corrupt_at[0] = 50;
+	corrupt_at[1] = 170;
+	corrupt_at[2] = 290;
+	np_set_pair_mode(true, f_hash);
+	CHECK(start_client(port, in) == 0);
+	return drift_side(0, out, in);
+}
+
+/* A stall raises the delay at once (to 8 at most); 10 s without one lowers it by 1 (to 1 at least). */
+static int case_adaptive_delay_rises_on_stall_and_eases(void) {
+	uint16_t port = next_port++;
+	fake_set(1000000);
+	core_reset(1);
+	np_set_delay_pin(0);
+	int fd = -1;
+	CHECK(start_pair_host(port, &fd) == 0);
+	CHECK(np_current_delay() == 2);
+	uint32_t ps = 1;
+	CHECK(raw_feed_and_run(fd, &ps, 30, 0x2B2B, NULL, 16) == 0);
+	CHECK(np_current_delay() == 2);
+	CHECK(raw_feed_and_run(fd, &ps, 600, 0x2B2B, NULL, 16) == 0); /* 10.08 s calm */
+	CHECK(np_current_delay() == 1);
+	CHECK(raw_feed_and_run(fd, &ps, 660, 0x2B2B, NULL, 16) == 0);
+	CHECK(np_current_delay() == 1); /* the floor */
+	for (int want = 2; want <= 8; want++) {
+		CHECK(step(0x0101) == 0); /* the peer's input is late: a stall */
+		CHECK(np_get_state(NULL, NULL) == NP_STALLED);
+		CHECK(np_current_delay() == want);
+		CHECK(raw_feed_and_run(fd, &ps, 5, 0x2B2B, NULL, 16) == 0);
+	}
+	CHECK(step(0x0101) == 0);
+	CHECK(np_current_delay() == 8); /* the ceiling */
+	CHECK(raw_feed_and_run(fd, &ps, 600, 0x2B2B, NULL, 16) == 0);
+	CHECK(np_current_delay() == 8); /* 9.6 s since the stall */
+	CHECK(raw_feed_and_run(fd, &ps, 30, 0x2B2B, NULL, 16) == 0);
+	CHECK(np_current_delay() == 7);
+	CHECK(np_get_state(NULL, NULL) == NP_RUNNING);
+	np_shutdown();
+	close(fd);
+	return 0;
+}
+
+/* Pinned at 3: the first frame sends input for frames 2 and 3, and stalls or calm never move it. */
+static int case_delay_pin_holds(void) {
+	uint16_t port = next_port++;
+	fake_set(1000000);
+	core_reset(1);
+	np_set_delay_pin(3);
+	int fd = -1;
+	int rc = start_pair_host(port, &fd);
+	if (rc == 0) {
+		rc = -1;
+		capture c = {0};
+		uint32_t ps = 1;
+		do {
+			CHECK(np_current_delay() == 3);
+			CHECK(raw_feed_and_run(fd, &ps, 1, 0x3C3C, &c, 16) == 0);
+			uint64_t t0 = real_ms();
+			while (c.n < 34 && real_ms() - t0 < 3000)
+				cap_drain(fd, &c);
+			CHECK(c.n >= 34 && c.b[0] == 0x01 && c.b[4] == 2 && c.b[17] == 0x01 && c.b[21] == 3);
+			for (int i = 0; i < 3; i++) {
+				CHECK(raw_feed_and_run(fd, &ps, 10, 0x3C3C, NULL, 16) == 0);
+				CHECK(step(0x0101) == 0);
+				CHECK(np_current_delay() == 3);
+			}
+			CHECK(raw_feed_and_run(fd, &ps, 700, 0x3C3C, NULL, 16) == 0);
+			CHECK(np_current_delay() == 3);
+			rc = 0;
+		} while (0);
+		free(c.b);
+	}
+	np_set_delay_pin(0);
+	np_shutdown();
+	if (fd >= 0)
+		close(fd);
+	return rc;
+}
+
+/* The frame thread manages 30 frames a second while the peer's input is always there: after 10 s the session ends,
+ * PAIR_END (reason 2) then DISCONNECT on the wire. */
+static int case_too_slow_ends_with_reason(void) {
+	uint16_t port = next_port++;
+	fake_set(1000000);
+	core_reset(1);
+	int fd = -1;
+	CHECK(start_pair_host(port, &fd) == 0);
+	uint64_t t0 = fake_clock();
+	uint32_t ps = 1;
+	capture c = {0};
+	CHECK(raw_feed_and_run(fd, &ps, 270, 0x4D4D, &c, 33) == 0); /* 8.9 s */
+	CHECK(np_get_state(NULL, NULL) == NP_RUNNING);
+	while (!is_over() && fake_clock() - t0 < 15000) {
+		while (ps + 1 < core_frame + 10) {
+			ps++;
+			CHECK(raw_input10(fd, ps, 0x1111) == 0);
+		}
+		if (raw_barrier(fd) != 0)
+			break;
+		for (int i = 0; i < 10 && !is_over(); i++) {
+			fake_set(fake_clock() + 33u);
+			step(0x0202);
+		}
+	}
+	np_reason why = NP_REASON_NONE;
+	CHECK(np_get_state(NULL, &why) == NP_ENDED && why == NP_REASON_TOO_SLOW);
+	uint64_t took = fake_clock() - t0;
+	if (took <= 10000 || took > 12000) {
+		fprintf(stderr, "  ended after %llu ms\n", (unsigned long long)took);
+		return -1;
+	}
+	np_shutdown();
+	CHECK(cap_until_eof(fd, &c, 3000) == 0);
+	size_t pos = 0;
+	uint32_t frame = 1;
+	const uint8_t* pl = NULL;
+	uint16_t sz = 0;
+	CHECK(cap_find(&c, &pos, 0x0F, &frame, &pl, &sz) == 0);
+	CHECK(frame == 0 && sz == 1 && pl[0] == 2);
+	CHECK(pos + 7 <= c.n && c.b[pos] == 0x08); /* DISCONNECT next */
+	free(c.b);
+	close(fd);
+	return 0;
+}
+
 /* ---------------------------------------------------------------- reader unit case */
 
 static int case_reader_split(void) {
@@ -1186,6 +1696,14 @@ int main(void) {
 	local_case("input_10_bytes_and_legacy_2_bytes", case_input_10_bytes_and_legacy_2_bytes);
 	local_case("local_pause_sends_pause_and_stops_input", case_local_pause_sends_pause_and_stops_input);
 	run_pair("client_connects_once_the_host_listens", late_host, late_client);
+	local_case("pair_off_wire_unchanged_host", case_pair_off_wire_unchanged_host);
+	local_case("pair_off_wire_unchanged_client", case_pair_off_wire_unchanged_client);
+	local_case("pair_hash_match_advances_verified", case_pair_hash_match_advances_verified);
+	run_pair("pair_hash_mismatch_resyncs", resync_host, resync_client);
+	run_pair("pair_resync_then_drift_again_ends_drift", drift_host, drift_client);
+	local_case("adaptive_delay_rises_on_stall_and_eases", case_adaptive_delay_rises_on_stall_and_eases);
+	local_case("delay_pin_holds", case_delay_pin_holds);
+	local_case("too_slow_ends_with_reason", case_too_slow_ends_with_reason);
 
 	if (fails) {
 		printf("%d test(s) failed\n", fails);

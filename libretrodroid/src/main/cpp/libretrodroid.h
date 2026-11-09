@@ -90,6 +90,9 @@ public:
     std::pair<StateBuffer, size_t> serializeState();
     bool unserializeState(int8_t *data, size_t size);
 
+    // Netplay pair mode for the next session (netplay::setPairMode). False when on and the core cannot hash its pair.
+    bool setNetplayPairMode(bool on);
+
     std::pair<int8_t *, size_t> serializeSRAM();
     jboolean unserializeSRAM(int8_t *data, size_t size);
 

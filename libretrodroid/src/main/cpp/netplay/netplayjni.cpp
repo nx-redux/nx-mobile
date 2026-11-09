@@ -20,6 +20,7 @@
 #include <exception>
 #include <string>
 
+#include "../libretrodroid.h"
 #include "../log.h"
 #include "../errorcodes.h"
 #include "../utils/javautils.h"
@@ -58,6 +59,42 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_setPresy
     jint frames
 ) {
     np_set_presync_frames((int) frames);
+}
+
+JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_setPairMode(
+    JNIEnv* env,
+    jclass obj,
+    jboolean on
+) {
+    try {
+        return LibretroDroid::getInstance().setNetplayPairMode(on == JNI_TRUE) ? JNI_TRUE : JNI_FALSE;
+    } catch (std::exception &exception) {
+        LOGE("Error in netplay setPairMode: %s", exception.what());
+        JavaUtils::throwRetroException(env, ERROR_GENERIC);
+        return JNI_FALSE;
+    }
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_setDelayPin(
+    JNIEnv* env,
+    jclass obj,
+    jint frames
+) {
+    np_set_delay_pin((int) frames);
+}
+
+JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_currentDelay(
+    JNIEnv* env,
+    jclass obj
+) {
+    return (jint) np_current_delay();
+}
+
+JNIEXPORT jlong JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_lastVerifiedFrame(
+    JNIEnv* env,
+    jclass obj
+) {
+    return (jlong) np_last_verified_frame();
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_pause(

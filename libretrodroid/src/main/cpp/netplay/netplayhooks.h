@@ -30,6 +30,9 @@ namespace libretrodroid::netplay {
     void postFrame();                             // after a frame preFrame allowed
     int16_t inputState(unsigned port, unsigned device, unsigned index, unsigned id);
     void shutdown();                              // can block ~0.75 s: never from step()
+    // Pair mode for the next np_start, hashing with the core's nx_pair_hash. False (and off) when on and the core is
+    // missing or does not export it.
+    bool setPairMode(Core* core, bool on);
 }
 
 #endif //LIBRETRODROID_NETPLAYHOOKS_H
