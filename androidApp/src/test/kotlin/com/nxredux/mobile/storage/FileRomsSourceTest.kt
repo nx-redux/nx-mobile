@@ -110,6 +110,17 @@ class FileRomsSourceTest {
         assertTrue(MirrorRules.isTransient(part))
     }
 
+    @Test fun a_write_deletes_its_own_old_parts_but_not_fresh_ones_or_other_files_parts() = runBlocking {
+        val dir = tmp.newFolder("stale")
+        val old = File(dir, "map.txt.1a2b.part").apply { writeText("x"); setLastModified(System.currentTimeMillis() - 3_600_000) }
+        val fresh = File(dir, "map.txt.3c4d.part").apply { writeText("y") }
+        val other = File(dir, "systems.txt.5e6f.part").apply { writeText("z"); setLastModified(System.currentTimeMillis() - 3_600_000) }
+        val lookalike = File(dir, "map.txt.backup.part").apply { writeText("w"); setLastModified(System.currentTimeMillis() - 3_600_000) }
+        assertTrue(source.writeText(ref(dir), "map.txt", "a\tb\n"))
+        assertTrue(!old.exists())
+        assertTrue(fresh.exists() && other.exists() && lookalike.exists())
+    }
+
     @Test fun write_text_and_read_text_round_trip() = runBlocking {
         val dir = tmp.newFolder("Roms")
         assertTrue(source.writeText(ref(dir), "map.txt", "Tetris.gb\tTetris\n"))

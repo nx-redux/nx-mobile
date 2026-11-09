@@ -10,6 +10,8 @@ import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.library.volumeOffline
 import com.nxredux.mobile.runner.ContentRef
+import com.nxredux.mobile.runner.STALE_TEMP_MILLIS
+import com.nxredux.mobile.runner.isUniqueTempName
 import com.nxredux.mobile.runner.uniqueTempName
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -171,6 +173,14 @@ class SafRomsSource(private val resolver: ContentResolver, private val storage: 
         try {
             val find = saf.lookup(parent)
             find("$name${Names.PART}")?.let { saf.delete(it.uri) }   // the fixed part name older versions left behind
+            // Parts killed writes of [name] left, where the folder was listed anyway; on the external-storage provider that
+            // would take a listing of a whole ROM folder per write, so there they stay (hidden from scans, never synced).
+            find.listedEntries()?.forEach { e ->
+                val mtime = e.lastModified ?: return@forEach
+                if (!e.isDirectory && isUniqueTempName(e.name, name, Names.PART) && System.currentTimeMillis() - mtime > STALE_TEMP_MILLIS) {
+                    saf.delete(e.uri)
+                }
+            }
             part = saf.createNew(parent, partName) ?: return Replace.FAILED
             // Asked before anything is deleted: a provider that reports no rename support would lose the old name.
             if (flags(part)?.let { (it and DocumentsContract.Document.FLAG_SUPPORTS_RENAME) == 0 } == true) {

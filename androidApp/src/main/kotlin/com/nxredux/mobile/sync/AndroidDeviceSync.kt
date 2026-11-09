@@ -11,6 +11,7 @@ import com.nxredux.mobile.netplay.Rsync
 import com.nxredux.mobile.netplay.WifiNetworks
 import com.nxredux.mobile.netplay.usb.UsbCable
 import com.nxredux.mobile.netplay.usb.UsbCables
+import com.nxredux.mobile.runner.deleteStaleTempSiblings
 import com.nxredux.mobile.runner.writeAtomically
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.storage.AndroidHomeLocator
@@ -249,7 +250,9 @@ class AndroidDeviceSync(
         runCatching {
             // A synced part of its own: two overlapping writes of one sidecar never mix, and a cut-short one is a `.part`
             // that scans and the ROM sync skip.
-            File(homeRoms(), path).writeAtomically(text.encodeToByteArray(), Names.PART)
+            val file = File(homeRoms(), path)
+            file.deleteStaleTempSiblings(Names.PART)
+            file.writeAtomically(text.encodeToByteArray(), Names.PART)
             true
         }.onFailure { NxLog.w(TAG, "device sync write of $path failed", it) }.getOrDefault(false)
     }

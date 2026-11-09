@@ -31,6 +31,30 @@ fun File.writeAtomically(bytes: ByteArray, suffix: String = ".tmp") {
  */
 fun uniqueTempName(name: String, suffix: String): String = "$name.${Random.nextInt().toUInt().toString(16)}$suffix"
 
+/** Whether [candidate] is a [uniqueTempName] of [name] with [suffix]. */
+fun isUniqueTempName(candidate: String, name: String, suffix: String): Boolean {
+    if (!candidate.startsWith("$name.") || !candidate.endsWith(suffix)) return false
+    val hex = candidate.substring(name.length + 1, (candidate.length - suffix.length).coerceAtLeast(name.length + 1))
+    return hex.length in 1..8 && hex.all { it in '0'..'9' || it in 'a'..'f' }
+}
+
+/**
+ * An age past which a [uniqueTempName] sibling is a killed write's leftover, not a write in flight: a sidecar write takes
+ * well under a second, and deleting a live writer's temp would fail its rename.
+ */
+const val STALE_TEMP_MILLIS = 10 * 60 * 1000L
+
+/**
+ * Deletes this file's [uniqueTempName] siblings with [suffix] older than [STALE_TEMP_MILLIS] (only this name's, so a write
+ * never touches another file's temps). Each killed write leaves its own name, which nothing else would ever reuse.
+ */
+fun File.deleteStaleTempSiblings(suffix: String, now: Long = System.currentTimeMillis()) {
+    val dir = parentFile ?: return
+    dir.listFiles { _, n -> isUniqueTempName(n, name, suffix) }?.forEach { f ->
+        if (f.isFile && now - f.lastModified() > STALE_TEMP_MILLIS) f.delete()
+    }
+}
+
 /**
  * A stamp that changes when the file is rewritten, for an image ref's version ([com.nxredux.mobile.storage.FileRefs.versioned]):
  * the modification time and the size together. A save state's screenshot (`.bmp`) renamed over the old one on shared storage

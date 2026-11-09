@@ -88,10 +88,21 @@ class SafTree(private val resolver: ContentResolver) {
      * query ([child]); elsewhere [dir] is listed once, on the first lookup, and every name is found in that listing (a
      * snapshot: a document made after it is not seen). Provider errors propagate.
      */
-    fun lookup(dir: Uri): (String) -> SafEntry? {
-        if (dir.authority == EXTERNAL_STORAGE) return { name -> child(dir, name) }
-        val listed by lazy(LazyThreadSafetyMode.NONE) { listChildren(dir).associateBy { it.name } }
-        return { name -> listed[name] }
+    fun lookup(dir: Uri): Lookup =
+        if (dir.authority == EXTERNAL_STORAGE) Lookup(one = { name -> child(dir, name) }, listing = null)
+        else Lookup(one = null, listing = { listChildren(dir).associateBy { it.name } })
+
+    /** [lookup]'s answer: call it with a name. */
+    class Lookup internal constructor(private val one: ((String) -> SafEntry?)?, listing: (() -> Map<String, SafEntry>)?) {
+        private val listed by lazy(LazyThreadSafetyMode.NONE) { listing?.invoke() }
+
+        operator fun invoke(name: String): SafEntry? = one?.invoke(name) ?: listed?.get(name)
+
+        /**
+         * The folder's entries when a lookup already listed it (providers without path ids); null on the external-storage
+         * provider, where each lookup is one query and nothing was listed.
+         */
+        fun listedEntries(): Collection<SafEntry>? = if (one != null) null else listed?.values
     }
 
     /**

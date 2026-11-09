@@ -4,6 +4,7 @@ import com.nxredux.mobile.library.Entry
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.runner.ContentRef
+import com.nxredux.mobile.runner.deleteStaleTempSiblings
 import com.nxredux.mobile.runner.writeAtomically
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -113,13 +114,15 @@ class FileRomsSource(
     /**
      * A part of its own (`<name>.<hex>.part`, so two overlapping writes of one sidecar never share it), synced, then
      * renamed over [name] (a replacing rename: atomic). A failure deletes the part; [name] is untouched. A part a killed
-     * write leaves is skipped by scans and sync like any `.part` ([Names.isHidden]).
+     * write leaves is skipped by scans and sync like any `.part` ([Names.isHidden]), and the next write of [name] deletes it
+     * once it is old enough not to be a write in flight.
      */
     override suspend fun writeBytes(dir: ContentRef, name: String, bytes: ByteArray): Boolean = withContext(Dispatchers.IO) {
         val target = childOf(dir, name) ?: return@withContext false
         if (target.isDirectory || target.parentFile?.isDirectory != true) return@withContext false
         try {
             File(target.parentFile, name + Names.PART).delete()   // the fixed part name older versions left behind
+            target.deleteStaleTempSiblings(Names.PART)
             target.writeAtomically(bytes, Names.PART)
             true
         } catch (e: IOException) {
