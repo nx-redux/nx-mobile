@@ -35,6 +35,7 @@ import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.OverlayResolver
 import com.nxredux.mobile.options.PadOptions
+import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.options.Ps2Options
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.VulkanFallback
@@ -57,6 +58,7 @@ import com.nxredux.mobile.settings.GameRumble
 import com.nxredux.mobile.settings.Prefs
 import com.nxredux.mobile.shortcuts.Shortcuts
 import com.nxredux.mobile.skin.GlassScreen
+import com.nxredux.mobile.skin.SkinPlacement
 import com.nxredux.mobile.storage.AndroidHomeLocator
 import com.nxredux.mobile.storage.AndroidRefs
 import com.nxredux.mobile.storage.AndroidRomsSources
@@ -905,14 +907,25 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         host.lifecycleScope.launch {
             val bmp = withContext(Dispatchers.IO) { ResumeCover.decode(file) } ?: return@launch
             if (!saves.resumePending || host.activity.isFinishing) return@launch
-            // Where the picture is drawn: as last laid out, else (before the game view) a pad skin's screen glass.
-            val picture = { host.renderer.thumbnailPicture() ?: host.padLayout.takeIf { it.skinShown }?.skinPlacement()?.glass(GlassScreen.PICTURE)?.rect }
+            // Where the picture is drawn: as last laid out, else (before the game view, or a DS / 3DS before its first
+            // frame) the pad skin's glass for the picture the screenshot holds.
+            val picture = { host.renderer.thumbnailPicture() ?: host.padLayout.takeIf { it.skinShown }?.skinPlacement()?.let(::coverGlass) }
             resumeCover = ResumeCover(host.activity, host.activity.findViewById(R.id.gameContainer), picture).also { cover ->
                 host.renderer.onPictureLaidOut = { resumeCover?.place() }
                 cover.show(bmp)
                 host.retroView?.let(cover::follow)   // the game view came first
             }
         }
+    }
+
+    /**
+     * The skin glass a resume screenshot belongs on: a one-screen game's picture glass, else the DS / 3DS top screen
+     * (the screenshot is that screen alone): its own glass, or the top half of a stacked one.
+     */
+    private fun coverGlass(placement: SkinPlacement): PxRect? {
+        placement.glass(GlassScreen.PICTURE)?.let { return it.rect }
+        placement.glass(GlassScreen.TOP)?.let { return it.rect }
+        return placement.glass(GlassScreen.STACK)?.rect?.let { it.copy(height = it.height / 2f) }
     }
 
     /**
