@@ -59,11 +59,11 @@ private fun label(key: Key, entry: TextEntry): String = when (key) {
 }
 
 /**
- * The NX keyboard: [entry]'s page of keys, the pad's highlight lit while it is on a key, a tap typing a key ([onKey]);
+ * The NX keyboard: [entry]'s page of keys, the pad's highlight lit while it is on a key, a tap moving it there and typing ([onKey]);
  * its hint row under the keys, a tapped hint sent as its button ([onHint]).
  */
 @Composable
-fun NxKeyboard(entry: TextEntry, onKey: (Key) -> Unit, onHint: (NxButton) -> Unit, confirmLabel: String, modifier: Modifier = Modifier) {
+fun NxKeyboard(entry: TextEntry, onKey: (KeyPos) -> Unit, onHint: (NxButton) -> Unit, confirmLabel: String, modifier: Modifier = Modifier) {
     val colors = LocalNxColors.current
     val rows = NxKeys.rows(entry.page, entry.twoFields)
     val lit = (entry.focus as? EntryFocus.Keys)?.at
@@ -77,7 +77,7 @@ fun NxKeyboard(entry: TextEntry, onKey: (Key) -> Unit, onHint: (NxButton) -> Uni
                         Box(
                             Modifier.weight(NxKeys.width(key)).height(keyHeight)
                                 .background(if (on) colors.main else colors.fieldGround, RoundedCornerShape(8.dp))
-                                .pointerInput(key, entry) { detectTapGestures { onKey(key) } },
+                                .pointerInput(r, c) { detectTapGestures { onKey(KeyPos(r, c)) } },
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(

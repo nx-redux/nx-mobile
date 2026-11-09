@@ -150,7 +150,7 @@ import com.nxredux.mobile.storage.SidecarStore
 import com.nxredux.mobile.storage.ToolPins
 import com.nxredux.mobile.storage.UserDataStore
 import com.nxredux.mobile.ui.keyboard.EntryField
-import com.nxredux.mobile.ui.keyboard.Key
+import com.nxredux.mobile.ui.keyboard.KeyPos
 import com.nxredux.mobile.ui.keyboard.PromptSpec
 import com.nxredux.mobile.ui.keyboard.TextEntry
 import com.nxredux.mobile.ui.keyboard.TextEntryController
@@ -5905,8 +5905,8 @@ class AppState(
     /** The keyboard follows a change it was not told of (the keyboard setting, the prompt moving to another display). */
     fun refreshKeyboard() = keyboard.sync()
 
-    /** A tap on the keyboard's [key]. */
-    fun keyboardTapKey(key: Key) { keyboard.tapKey(key)?.let(::promptAnswer) }
+    /** A tap on the keyboard's key at [at]: the highlight moves there and it types. */
+    fun keyboardTapKey(at: KeyPos) { keyboard.tapKeyAt(at)?.let(::promptAnswer) }
 
     /** A tap on the open prompt's field [index]: it becomes the one typed in. */
     fun keyboardTapField(index: Int) = keyboard.tapField(index)

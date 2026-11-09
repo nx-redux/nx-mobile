@@ -143,6 +143,12 @@ fun TextEntry.tapKey(key: Key): EntryStep = when (key) {
     Key.Done -> done()
 }
 
+/** A tap on the key at [at]: the highlight moves onto it (the pad carries on from there), then it types. */
+fun TextEntry.tapKeyAt(at: KeyPos): EntryStep {
+    val key = NxKeys.rows(page, twoFields).getOrNull(at.row)?.getOrNull(at.col) ?: return none()
+    return copy(focus = EntryFocus.Keys(at), keyAt = at).tapKey(key)
+}
+
 /** A tap on field [index]: it becomes the active one, the cursor at its end. */
 fun TextEntry.tapField(index: Int): TextEntry = toField(index.coerceIn(0, fields.lastIndex), EntryFocus.Field)
 

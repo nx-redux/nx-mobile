@@ -39,8 +39,8 @@ internal class TextEntryController(private val spec: () -> PromptSpec?, private 
         return apply(e.press(button, repeat))
     }
 
-    /** A tap on [key]; the button the prompt hears, as [press]. */
-    fun tapKey(key: Key): NxButton? = _entry.value?.let { apply(it.tapKey(key)) }
+    /** A tap on the key at [at]; the button the prompt hears, as [press]. */
+    fun tapKeyAt(at: KeyPos): NxButton? = _entry.value?.let { apply(it.tapKeyAt(at)) }
 
     fun tapField(index: Int) { _entry.value?.let { _entry.value = it.tapField(index) } }
 

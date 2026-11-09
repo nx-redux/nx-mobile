@@ -146,4 +146,11 @@ class TextEntryTest {
         assertFalse(key.toString().contains("sgdb-secret-key"))
         assertFalse(key.press(NxButton.A).toString().contains("sgdb-secret-key"))
     }
+
+    @Test fun tapMovesHighlightToTheTappedKey() {
+        val step = one("").tapKeyAt(KeyPos(1, 0))
+        assertEquals(EntryOutcome.Edit(0, "q"), step.outcome)
+        assertEquals(EntryFocus.Keys(KeyPos(1, 0)), step.entry.focus)
+        assertEquals(EntryFocus.Keys(KeyPos(1, 1)), step.entry.press(NxButton.RIGHT).entry.focus)
+    }
 }

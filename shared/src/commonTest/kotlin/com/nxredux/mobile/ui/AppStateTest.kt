@@ -2,6 +2,8 @@ package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.ui.keyboard.EntryFocus
 import com.nxredux.mobile.ui.keyboard.Key
+import com.nxredux.mobile.ui.keyboard.KeyPage
+import com.nxredux.mobile.ui.keyboard.KeyPos
 import com.nxredux.mobile.ui.keyboard.NxKeys
 
 import com.nxredux.mobile.library.IndexedSystem
@@ -13854,7 +13856,7 @@ class AppStateTest {
     @Test fun keyboard_paste_inserts_clipboard_text() = runTest {
         val state = AppState(AppDeps(MemorySettings(ContentRef("Home")), searchSource(), RecordingRunner(), NoopPicker(), ownKeyboard = true, pasteText = { "te\ntris" }, compute = UnconfinedTestDispatcher(testScheduler)), CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { it.load() }
         state.onButton(NxButton.START)
-        state.keyboardTapKey(Key.Paste)
+        state.keyboardTapKey(KeyPos(4, NxKeys.rows(KeyPage.LETTERS, twoFields = false)[4].indexOf(Key.Paste)))
         assertEquals("tetris", assertIs<Screen.Systems>(state.screen.value).search)
     }
 
