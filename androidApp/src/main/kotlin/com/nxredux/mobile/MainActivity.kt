@@ -672,7 +672,9 @@ class MainActivity : ComponentActivity(), FolderPicker {
         asHome = true
         closeOtherInstances()
         hideTaskFromRecents()
-        if (::state.isInitialized && !intent.getBooleanExtra(EXTRA_KEEP_PLACE, false)) state.goHome()
+        if (intent.getBooleanExtra(EXTRA_KEEP_PLACE, false)) return
+        TopScreenHost.reclaim(this)
+        if (::state.isInitialized) state.goHome()
     }
 
     /** The menu's window has focus again: [TopScreenHost.recheck], as on resume (no resume when only the focus moved). */
