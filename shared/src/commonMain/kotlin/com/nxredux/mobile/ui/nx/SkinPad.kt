@@ -113,22 +113,24 @@ fun SkinArt(placement: SkinPlacement, picture: ImageBitmap, parts: ImageBitmap?,
         Path().apply { for (g in placement.glasses) addRect(Rect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height)) }
     }
     Canvas(modifier) {
-        // the screens are holes: what is under them shows through (the background runs under them otherwise)
+        // the screens are holes in the background: what is under them shows through (it runs under them otherwise)
         clipPath(holes, ClipOp.Difference) {
             for (c in placement.cells) drawCell(picture, c, placement.k)
-            if (parts != null) for (p in placement.pieces) drawPiece(parts, p)
-            // the labels under the buttons (written here, not in the picture): cap height labelH, centred labelDy below
-            for (c in placement.controls) {
-                val text = c.spec.label ?: continue
-                if (c.spec.labelH <= 0f) continue
-                val style = TextStyle(color = Color(SKIN_LABEL_GREY), fontFamily = labelFont, fontWeight = FontWeight.SemiBold,
-                    fontSize = (c.spec.labelH / SKIN_LABEL_CAP).toSp())   // role: a printed button label
-                val m = measurer.measure(text, style)
-                val capTop = c.y + c.spec.labelDy - c.spec.labelH / 2f
-                val dx = c.spec.labelDx   // beside the button: right-aligned left of it, left-aligned right of it
-                val left = if (dx < 0f) c.x + dx - m.size.width else if (dx > 0f) c.x + dx else c.x - m.size.width / 2f
-                drawText(m, topLeft = Offset(left, capTop + c.spec.labelH - m.firstBaseline))
-            }
+        }
+        // the pieces and labels whole, over the screens as the game draws them: a button moved onto a screen's edge stays
+        // on top (the frame's own hole is cut round in its art)
+        if (parts != null) for (p in placement.pieces) drawPiece(parts, p)
+        // the labels under the buttons (written here, not in the picture): cap height labelH, centred labelDy below
+        for (c in placement.controls) {
+            val text = c.spec.label ?: continue
+            if (c.spec.labelH <= 0f) continue
+            val style = TextStyle(color = Color(SKIN_LABEL_GREY), fontFamily = labelFont, fontWeight = FontWeight.SemiBold,
+                fontSize = (c.spec.labelH / SKIN_LABEL_CAP).toSp())   // role: a printed button label
+            val m = measurer.measure(text, style)
+            val capTop = c.y + c.spec.labelDy - c.spec.labelH / 2f
+            val dx = c.spec.labelDx   // beside the button: right-aligned left of it, left-aligned right of it
+            val left = if (dx < 0f) c.x + dx - m.size.width else if (dx > 0f) c.x + dx else c.x - m.size.width / 2f
+            drawText(m, topLeft = Offset(left, capTop + c.spec.labelH - m.firstBaseline))
         }
     }
 }
