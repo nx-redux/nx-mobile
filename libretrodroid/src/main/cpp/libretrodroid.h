@@ -410,7 +410,9 @@ private:
 
     std::unique_ptr<Core> core;
     bool coreInitialized = false;
-    bool gameLoaded = false;
+    // Set on the GL thread once retro_load_game returns; read under coreLock by the off-thread state and memory paths,
+    // which a stale view may call between create()'s retro_init and the load.
+    std::atomic<bool> gameLoaded { false };
     std::unique_ptr<Audio> audio;
     std::unique_ptr<Video> video;
     std::unique_ptr<FPSSync> fpsSync;

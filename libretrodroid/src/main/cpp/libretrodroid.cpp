@@ -186,7 +186,7 @@ void LibretroDroid::setPointerVelocity(unsigned int port, float vx, float vy) {
 bool LibretroDroid::unserializeState(int8_t *data, size_t size) {
     std::lock_guard<std::mutex> lock(coreLock);
 
-    if (core == nullptr) return false;
+    if (core == nullptr || !gameLoaded) return false;
     // A core may run emulation (and GL) inside it (Azahar drains its async work with RunLoop): the paused view's context.
     TeardownContext context;
     if (!core->retro_unserialize(data, size)) return false;
@@ -198,7 +198,7 @@ bool LibretroDroid::unserializeState(int8_t *data, size_t size) {
 jboolean LibretroDroid::unserializeMemory(unsigned id, int8_t* data, size_t size) {
     std::lock_guard<std::mutex> lock(coreLock);
 
-    if (core == nullptr) return false;
+    if (core == nullptr || !gameLoaded) return false;
 
     size_t memorySize = core->retro_get_memory_size(id);
     void *memory = core->retro_get_memory_data(id);
@@ -226,8 +226,9 @@ jboolean LibretroDroid::unserializeMemory(unsigned id, int8_t* data, size_t size
 bool LibretroDroid::serializeMemory(unsigned id, const MemoryReader& read) {
     std::lock_guard<std::mutex> lock(coreLock);
 
-    // Nothing when there is no core (quit racing the native destroy) or no such memory.
-    if (core == nullptr) return false;
+    // Nothing when there is no game (a quit racing the native destroy, a stale view racing the next game's load) or no
+    // such memory.
+    if (core == nullptr || !gameLoaded) return false;
 
     void* memory = core->retro_get_memory_data(id);
     size_t size = memory != nullptr ? core->retro_get_memory_size(id) : 0;
@@ -399,7 +400,8 @@ void LibretroDroid::create(
 
     // Held until the new core is initialised: a previous view that was only stopped (never destroyed) may still save
     // SRAM, RTC or a state through coreLock, and must never see the old core mid-teardown or the new one before
-    // retro_init. Nothing below takes coreLock again; videoViewsLock nests inside it, as in step().
+    // retro_init. Released before the game loads, so those paths also check gameLoaded: a new core with no game yet is
+    // never read. Nothing below takes coreLock again; videoViewsLock nests inside it, as in step().
     std::unique_lock<std::mutex> lock(coreLock);
 
     // Achievements is a process-wide singleton that outlives a session: a previous view that was only stopped
@@ -1266,7 +1268,7 @@ void LibretroDroid::reset() {
 bool LibretroDroid::serializeState(const StateSink& sink) {
     std::lock_guard<std::mutex> lock(coreLock);
 
-    if (core == nullptr) return false;
+    if (core == nullptr || !gameLoaded) return false;
 
     // A core may run emulation (and GL) inside retro_serialize_size (Azahar drains its async work with RunLoop): on
     // the GL thread while the view is paused (onStop's auto state), the paused view's context is made current for it.
