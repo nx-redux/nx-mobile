@@ -6,6 +6,7 @@ import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.GamePath
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.yield
 
 /** Routes by URL substring (first match in insertion order); each route's last result repeats. Unrouted → 404. */
 class FakeHttp(private val routes: MutableMap<String, ArrayDeque<HttpResult>> = linkedMapOf()) : ScraperHttp {
@@ -74,13 +75,19 @@ class FakeSource(
     override val enabled get() = on
     val asked = mutableListOf<Pair<String, Set<ArtSlot>>>()
     var starts = 0
+    var ends = 0
     var fail: (LibraryGameRef) -> Exception? = { null }
     private val hits = mutableMapOf<String, List<ArtHit>>()
     fun offer(file: String, slot: ArtSlot, url: String, assetId: String = url, thumb: String? = null) {
         hits[file] = hits[file].orEmpty() + ArtHit(slot, url, ArtOrigin(id, file, assetId), thumb = thumb)
     }
     override fun knows(ref: LibraryGameRef) = knowsGame(ref)
-    override suspend fun startJob() { starts++ }
+    /** "start" and "end" per [startJob] and [endJob], in order. */
+    val events = mutableListOf<String>()
+    /** Run inside [endJob] (a slow wind-down, or a test acting as a run ends). */
+    var onEnd: suspend () -> Unit = {}
+    override suspend fun startJob() { starts++; events += "start" }
+    override suspend fun endJob() { ends++; events += "end"; onEnd() }
     override suspend fun find(ref: LibraryGameRef, wanted: Set<ArtSlot>): List<ArtHit> {
         asked += ref.fileName to wanted
         fail(ref)?.let { throw it }
@@ -193,7 +200,9 @@ class FakeHost(var games: List<LibraryGameRef>, var hidden: List<LibraryGameRef>
     /** When true, [readPrivate] throws (an unreadable file). */
     var failRead = false
     override suspend fun readPrivate(name: String): String? { if (failRead) error("unreadable"); return files[name] }
-    override suspend fun writePrivate(name: String, text: String) { files[name] = text; writes += name to text }
+    /** When true, [writePrivate] suspends first, as a real file write may: other coroutines run meanwhile. */
+    var yieldOnWrite = false
+    override suspend fun writePrivate(name: String, text: String) { if (yieldOnWrite) yield(); files[name] = text; writes += name to text }
     override suspend fun appendPrivate(name: String, text: String): Boolean {
         if (!appendable) return false
         files[name] = files[name].orEmpty() + text; appends += name to text

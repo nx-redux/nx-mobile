@@ -83,25 +83,30 @@ public:
     /** RetroArch RAM-patch cheats (handler 1), applied to the core's system RAM before every retro_run; empty = none. */
     void setMemoryCheats(std::vector<CheatMemPatch> patches);
 
-    // serializeSRAM/serializeRTC/serializeMemory return a new[] buffer the caller must delete[], and serializeState an
-    // owned one, or (nullptr, 0) when there is nothing to save (no core, no SRAM, or the core refused to serialize).
-    struct FreeDeleter { void operator()(int8_t* p) const { std::free(p); } };
-    using StateBuffer = std::unique_ptr<int8_t[], FreeDeleter>;
-    std::pair<StateBuffer, size_t> serializeState();
+    // The buffer serializeState writes into: [size] bytes, zeroed (a core may write less than the size it reported, and
+    // the rest is saved too), or nullptr when none can be had. Called under coreLock.
+    using StateSink = std::function<int8_t*(size_t size)>;
+    // True when the core filled sink's buffer. False when there is nothing to save: no core (quit racing the native
+    // destroy), a core reporting no size or refusing retro_serialize (mupen64plus/ppsspp while booting), or no buffer
+    // from sink. A buffer the core did not fill must never be written as a save state.
+    bool serializeState(const StateSink& sink);
     bool unserializeState(int8_t *data, size_t size);
 
     // Netplay pair mode for the next session (netplay::setPairMode). False when on and the core cannot hash its pair.
     bool setNetplayPairMode(bool on);
 
-    std::pair<int8_t *, size_t> serializeSRAM();
+    // read(data, size) gets the core's memory while coreLock holds the core still; it must copy what it keeps. False
+    // (read not called) when there is no core or no such memory.
+    using MemoryReader = std::function<void(const int8_t* data, size_t size)>;
+    bool serializeSRAM(const MemoryReader& read);
     jboolean unserializeSRAM(int8_t *data, size_t size);
 
     // The clock (RETRO_MEMORY_RTC). Like the battery save (and minarch), a longer file loads only the core's size;
     // unserializeRTC is quiet when a core has no clock, which most cores don't.
-    std::pair<int8_t *, size_t> serializeRTC();
+    bool serializeRTC(const MemoryReader& read);
     jboolean unserializeRTC(int8_t *data, size_t size);
 
-    std::pair<int8_t *, size_t> serializeMemory(unsigned id);
+    bool serializeMemory(unsigned id, const MemoryReader& read);
     jboolean unserializeMemory(unsigned id, int8_t *data, size_t size);
 
     // GL thread, on every new EGL context (GLSurfaceView only calls it for one): (re)creates the Video and resets a GL

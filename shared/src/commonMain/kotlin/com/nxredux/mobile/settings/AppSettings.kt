@@ -341,6 +341,15 @@ interface AppSettings {
     var skinTweaks: String
         get() = ""
         set(@Suppress("UNUSED_PARAMETER") value) {}
+
+    /**
+     * The same nudges for the overlay (Pad skin Off), a layout of its own: a group edited there replaces the skin's
+     * tweak of that group. Empty: none. Defaulted, like [skinTweaks].
+     */
+    var overlayTweaks: String
+        get() = ""
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
     /**
      * Settings → System → Debug log (default off): off, only errors reach logcat. Defaulted so a platform or fake
      * without it stores nothing.

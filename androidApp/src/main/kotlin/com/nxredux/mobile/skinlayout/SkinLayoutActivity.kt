@@ -24,6 +24,7 @@ import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.runner.Console
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.runner.MIN_TOUCH_DP
 import com.nxredux.mobile.runner.PadSkinPack
 import com.nxredux.mobile.runner.SystemButtonKeys
 import com.nxredux.mobile.runner.WiiPad
@@ -67,7 +68,6 @@ class SkinLayoutActivity : ComponentActivity() {
         val pack = settings.padTheme.skin?.let { PadSkinPack.builtIn(this, it) } ?: PadSkinPack.builtIn(this, PadTheme.NX_CARBON.skin!!)
             ?: return noLayout()
         val tag = console.defaultTagFor(settings.defaultTags[console.id])
-        val bare = !settings.padSkin
         setContent {
             val colors = remember { nxColorsFor(settings.accent, settings.secondaryAccent) }
             NxTheme(colors = colors) {
@@ -83,8 +83,8 @@ class SkinLayoutActivity : ComponentActivity() {
                     val (state, spec) = made
                     SideEffect { editor = state }
                     SkinLayoutEditor(
-                        state, spec.picture, spec.parts, bare, backdrop = null, title = title,
-                        onSave = { tweaks -> SkinLayoutEdit.save(AndroidAppSettings(this@SkinLayoutActivity), console.id, spec.layoutId, tweaks); setResult(RESULT_OK); finish() },
+                        state, spec.picture, spec.parts, spec.bare, backdrop = null, title = title,
+                        onSave = { saved -> SkinLayoutEdit.save(AndroidAppSettings(this@SkinLayoutActivity), console.id, spec.layoutId, saved); setResult(RESULT_OK); finish() },
                         onClose = ::finish,
                     )
                 }
@@ -92,13 +92,14 @@ class SkinLayoutActivity : ComponentActivity() {
         }
     }
 
-    /** The placed layout's pictures and id, beside the editor's state. */
-    private class Placed(val layoutId: String, val picture: ImageBitmap, val parts: ImageBitmap?)
+    /** The placed layout's pictures and id, beside the editor's state; [bare]: its bare buttons, as the game draws them. */
+    private class Placed(val layoutId: String, val picture: ImageBitmap, val parts: ImageBitmap?, val bare: Boolean)
 
     /**
-     * [console]'s layout for a [w] x [h] window as the game places it ([SkinChoice.placeClosest], so a tight window still
-     * opens), its stick or d-pad as the game starts it, with the stored tweaks for it; null when none fits or its picture
-     * can't be read.
+     * [console]'s layout for a [w] x [h] window as the game places it, its stick or d-pad as the game starts it, with
+     * the stored tweaks for it: with Pad skin On the skin where one of its layouts fits ([SkinChoice.place]), else its
+     * bare buttons from the closest layout ([SkinChoice.placeClosest], so a tight window still opens), their own
+     * (overlay) layout; null when none fits or its picture can't be read.
      */
     private fun place(pack: PadSkinPack, console: Console, tag: String, wiiPad: WiiPad?, n3dsNew: Boolean, w: Int, h: Int, settings: AppSettings): Pair<SkinEditorState, Placed>? {
         val base = CoreRegistry.baseTag(tag)
@@ -110,14 +111,21 @@ class SkinLayoutActivity : ComponentActivity() {
         // a one-screen console's glass at 4:3, as the game places it before its first frame (the shape never changes
         // which layout a window gets, SkinPictureAspectTest)
         val picture = if (ds) null else (4f / 3f * 240f) to 240f
-        val placed: SkinPlacement = SkinChoice.placeClosest(
-            pack.manifest, w, h, resources.displayMetrics.densityDpi, windowShape().screenClass.isTablet, ds, picture,
-            hingeY = null, topInset = 0, foldable = DeviceTraits.canHalfFold, variant = variant,
+        val dpi = resources.displayMetrics.densityDpi
+        val tablet = windowShape().screenClass.isTablet
+        val skin = if (!settings.padSkin) null else SkinChoice.place(
+            pack.manifest, w, h, dpi, tablet, ds, picture, hingeY = null, topInset = 0, foldable = DeviceTraits.canHalfFold, variant = variant,
+        )
+        // the game's rule: the bare buttons wherever the skin is not drawn
+        val bare = skin == null
+        val placed: SkinPlacement = skin ?: SkinChoice.placeClosest(
+            pack.manifest, w, h, dpi, tablet, ds, picture, hingeY = null, topInset = 0, foldable = DeviceTraits.canHalfFold, variant = variant,
         ) ?: return null
         val stick = profile.stickByDefault || DcGames.stickFirst(base, arcadeSet = false) || profile.kind == PadProfile.Kind.GC
         val image = pack.picture(placed.spec.image)?.asImageBitmap() ?: return null
         val parts = placed.spec.parts?.let { pack.picture(it) }?.asImageBitmap()
-        return SkinLayoutEdit.state(settings, console.id, placed.forStick(stick), w, h) to Placed(placed.spec.id, image, parts)
+        val minTouchPx = resources.displayMetrics.density * MIN_TOUCH_DP
+        return SkinLayoutEdit.state(settings, console.id, placed.forStick(stick), w, h, overlay = bare, minTouchPx = minTouchPx) to Placed(placed.spec.id, image, parts, bare)
     }
 
     /** No layout fits this window (or the pack can't be read): say so and leave. */

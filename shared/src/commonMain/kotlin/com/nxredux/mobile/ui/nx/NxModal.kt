@@ -3,7 +3,6 @@ package com.nxredux.mobile.ui.nx
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,13 +14,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,7 +29,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.SetupButtons
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.launch
 
 /**
  * The one modal frame: scrim, a dark panel holding a lighter card (a small caption and [content]), and below the card
@@ -53,17 +48,16 @@ fun NxModal(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = LocalNxColors.current
-    val scroll = rememberScrollState()
+    val stepPx = with(LocalDensity.current) { SCROLL_STEP.toPx() }
+    val steps = rememberStepScroll(stepPx, steps = scrollSteps)
+    val scroll = steps.state
     val base = modalFooter(kind, LocalFooterMode.current, confirmLabel, cancelLabel)
     val footer = if (scrollSteps != null && base is ModalFooter.Hints && scroll.maxValue > 0) ModalFooter.Hints(listOf(Hint(NxButton.DOWN, "Scroll")) + base.hints) else base
     val dismiss = if (kind == ModalKind.INFO) NxButton.A else NxButton.B
     val padVisible = LocalPadBelow.current
-    val stepPx = with(LocalDensity.current) { SCROLL_STEP.toPx() }
-    LaunchedEffect(scrollSteps) { scrollSteps?.collect { scroll.animateScrollBy(it * stepPx) } }
-    val tapScope = rememberCoroutineScope()
     // The Scroll hint's tap is the modal's own: a host maps every button but B to confirm.
     val onFooter: (NxButton) -> Unit = { b ->
-        if (b == NxButton.DOWN) tapScope.launch { if (scroll.canScrollForward) scroll.animateScrollBy(stepPx) else scroll.animateScrollTo(0) }
+        if (b == NxButton.DOWN) steps.onScrollHint()
         else onButton(b)
     }
     // Landscape (no pad): the screen slot is the whole window, so imePadding lifts the panel exactly above the keyboard.

@@ -517,28 +517,35 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private fun routeNdsHat(view: GLRetroView, event: MotionEvent) {
         val x = ndsHotkeys.joystickDirection(event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_X))
         val y = ndsHotkeys.joystickDirection(event.getAxisValue(MotionEvent.AXIS_HAT_Y), event.getAxisValue(MotionEvent.AXIS_Y))
-        routeHat(view, ndsHatX, ndsHatY, x, y) { b, down -> routeNds(b, down) }
+        routeHat(view, ndsHatX, ndsHatY, x, y, n3ds = false)
         ndsHatX = x
         ndsHatY = y
     }
 
     /**
-     * The hat's edges from ([oldX], [oldY]) to ([x], [y]) as direction presses and releases through [route] (true: forward
-     * it); the forwarded ones reach the core as its d-pad.
+     * The hat's edges from ([oldX], [oldY]) to ([x], [y]) as direction presses and releases through the DS or the 3DS
+     * hotkeys ([n3ds]; true from them: forward it); the forwarded ones reach the core as its d-pad. No lambda: this runs
+     * for every joystick event.
      */
-    private fun routeHat(view: GLRetroView, oldX: Int, oldY: Int, x: Int, y: Int, route: (NxButton, Boolean) -> Boolean) {
-        var changed = false
-        fun edge(old: Int, new: Int, negative: NxButton, positive: NxButton) {
-            if (old == new) return
-            val released = when (old) { -1 -> negative; 1 -> positive; else -> null }
-            val pressed = when (new) { -1 -> negative; 1 -> positive; else -> null }
-            if (released != null && route(released, false)) changed = ndsHat.release(released) || changed
-            if (pressed != null && route(pressed, true)) changed = ndsHat.press(pressed) || changed
-        }
-        edge(oldX, x, NxButton.LEFT, NxButton.RIGHT)
-        edge(oldY, y, NxButton.UP, NxButton.DOWN)
+    private fun routeHat(view: GLRetroView, oldX: Int, oldY: Int, x: Int, y: Int, n3ds: Boolean) {
+        // `or`, not `||`: both axes' edges are routed.
+        val changed = hatEdge(oldX, x, NxButton.LEFT, NxButton.RIGHT, n3ds) or hatEdge(oldY, y, NxButton.UP, NxButton.DOWN, n3ds)
         if (changed) view.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, ndsHat.x.toFloat(), ndsHat.y.toFloat(), 0)
     }
+
+    /** One hat axis' edge ([routeHat]); true when the d-pad the core gets changed. */
+    private fun hatEdge(old: Int, new: Int, negative: NxButton, positive: NxButton, n3ds: Boolean): Boolean {
+        if (old == new) return false
+        var changed = false
+        val released = when (old) { -1 -> negative; 1 -> positive; else -> null }
+        val pressed = when (new) { -1 -> negative; 1 -> positive; else -> null }
+        if (released != null && routeHatButton(released, false, n3ds)) changed = ndsHat.release(released)
+        if (pressed != null && routeHatButton(pressed, true, n3ds)) changed = ndsHat.press(pressed) || changed
+        return changed
+    }
+
+    private fun routeHatButton(button: NxButton, down: Boolean, n3ds: Boolean): Boolean =
+        if (n3ds) routeN3ds(button, down) else routeNds(button, down)
 
     /** Picks the 3DS hotkeys' core values out of [values] (launch, a menu change, a restore); other keys are ignored. */
     fun n3dsCoreValues(values: Map<String, String>) {
@@ -625,7 +632,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private fun routeN3dsHat(view: GLRetroView, event: MotionEvent) {
         val x = n3dsHotkeys.joystickDirection(event.getAxisValue(MotionEvent.AXIS_HAT_X))
         val y = n3dsHotkeys.joystickDirection(event.getAxisValue(MotionEvent.AXIS_HAT_Y))
-        routeHat(view, n3dsHatX, n3dsHatY, x, y) { b, down -> routeN3ds(b, down) }
+        routeHat(view, n3dsHatX, n3dsHatY, x, y, n3ds = true)
         n3dsHatX = x
         n3dsHatY = y
     }
@@ -637,7 +644,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
      * Dreamcast, whose triggers are analog.
      */
     private fun routeTriggerAxes(event: MotionEvent, port: Int = 0) {
-        for ((button, down) in inputs[port].triggers.onAxes(leftTrigger(event), rightTrigger(event))) sendAxisTrigger(button, down, port)
+        TriggerAxes.forEachChange(inputs[port].triggers.onAxes(leftTrigger(event), rightTrigger(event))) { button, down -> sendAxisTrigger(button, down, port) }
     }
 
     // Some pads report the triggers as LTRIGGER/RTRIGGER, others as BRAKE/GAS.
@@ -662,7 +669,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         val t = inputs[port].triggers
         if (!down) { t.untake(button); return }
         val pressed = t.take(button)
-        if (isDc || gcPad) retroView?.let { v -> t.analogNow().let { (l, r) -> v.sendTriggers(port, l, r) } }
+        if (isDc || gcPad) retroView?.sendTriggers(port, t.analogLeft, t.analogRight)
         else if (pressed) sendAxisTrigger(button, false, port)
     }
 
@@ -879,7 +886,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
             val inp = inputs[port]
             // Dreamcast triggers are analog (flycast reads RETRO_DEVICE_INDEX_ANALOG_BUTTON).
             if (isDc || gcPad) {   // GameCube triggers too: Dolphin reads them as analog buttons
-                inp.triggers.analog(leftTrigger(event), rightTrigger(event)).let { (al, ar) -> view.sendTriggers(port, al, ar) }   // a shortcut's pull reads at rest
+                val t = inp.triggers
+                t.analog(leftTrigger(event), rightTrigger(event))
+                view.sendTriggers(port, t.analogLeft, t.analogRight)   // a shortcut's pull reads at rest
             } else {
                 routeTriggerAxes(event, port)   // a digital L2/R2 from a pad that reports its triggers only as axes
             }
@@ -901,8 +910,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
             val ry = event.getAxisValue(MotionEvent.AXIS_RZ)
             if (isWii && wiiPad != null && wiiPad != WiiPad.CLASSIC) {
                 // Wiimote types: the right stick aims the IR pointer (Dolphin's pointer reads POINTER, ir_mode 2).
-                val (vx, vy) = WiiPointer.velocity(rx, ry)
-                view.setPointerVelocity(port, vx, vy)
+                view.setPointerVelocity(port, WiiPointer.velocity(rx), WiiPointer.velocity(ry))
             } else {
                 view.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, rx, ry, port)
             }

@@ -71,6 +71,7 @@ internal class SaveSession(
     val slotsUi = mutableStateOf<List<SlotUi>>(emptyList())
     @Volatile var lastSlotCache: Int? = null   // SaveStates.lastSlot(); null until the first read
     private var slotsJob: Job? = null   // the newest strip refresh (main thread only); a newer one cancels it
+    private val lastSlotWaiters = LastSlotWaiters()   // callbacks of cancelled refreshes too: the next one to land runs them
     var saveStates: SaveStates? = null
         private set
     private var batterySaves: BatterySaves? = null
@@ -360,11 +361,13 @@ internal class SaveSession(
                         bytes == null || bytes.isFailure -> false
                         bytes.getOrThrow().isEmpty() -> null
                         else -> runCatching {
-                            // A queued Home write must land first: it writes the same files and is older.
-                            awaitAutoWrites()
-                            if (bmp != null) ss.writeAutoThumb(bmp)
-                            ss.writeAuto(bytes.getOrThrow())
-                            ss.markAuto(onlyIfNotManual = !chosen)
+                            // On [autoWriter], as every slot-9 write: behind a queued Home write (older, same files), and
+                            // nothing queued later can land between the thumb, the state and the pointer.
+                            autoWriter.submit {
+                                if (bmp != null) ss.writeAutoThumb(bmp)
+                                ss.writeAuto(bytes.getOrThrow())
+                                ss.markAuto(onlyIfNotManual = !chosen)
+                            }.get()
                             true
                         }.onFailure { NxLog.e("GameActivity", "auto-resume state failed", it) }.getOrDefault(false)
                     }
@@ -387,9 +390,11 @@ internal class SaveSession(
      * Re-reads the slot strip (and the last-used slot) on IO and publishes it to [slotsUi]; main thread. The listing and
      * the thumbnails' bounds stay off the main thread: the previous strip shows until this lands (it differs only after
      * a write, which refreshes it too), and a newer refresh cancels an older one so a stale read never lands last.
+     * [onLast] gets the last-used slot once a refresh lands (main), this one or a newer one that cancelled it.
      */
-    fun refreshSlots() {
+    fun refreshSlots(onLast: ((Int) -> Unit)? = null) {
         val ss = saveStates ?: run { slotsUi.value = emptyList(); return }
+        lastSlotWaiters.add(onLast)
         slotsJob?.cancel()
         slotsJob = host.lifecycleScope.launch {
             val (slots, last) = withContext(Dispatchers.IO) {
@@ -398,18 +403,19 @@ internal class SaveSession(
             } ?: return@launch
             slotsUi.value = slots
             lastSlotCache = last
+            lastSlotWaiters.takeAll().forEach { it(last) }
         }
     }
 
     /**
-     * netplay link: the game became a local one: its save states from now, the last-used slot read now, as openMenu does
-     * for a menu opened before the first read, so an open menu shows this slot.
+     * netplay link: the game became a local one: its save states from now. The last-used slot is read with the strip,
+     * off the main thread; [onLast] gets it when it lands, so an open menu can show that slot. Until then a menu or a
+     * shortcut reads it as on a cold start (the cache is empty).
      */
-    fun openLocal(dataRoot: File, paths: NxPaths) {
-        saveStates = SaveStates(dataRoot, paths).also { ss ->
-            lastSlotCache = ss.lastSlot()
-        }
-        refreshSlots()
+    fun openLocal(dataRoot: File, paths: NxPaths, onLast: (Int) -> Unit) {
+        saveStates = SaveStates(dataRoot, paths)
+        lastSlotCache = null
+        refreshSlots(onLast)
     }
 
     /** The slot strip for [ss]: file listings and thumbnail bounds. Blocking I/O. */
@@ -447,6 +453,8 @@ internal class SaveSession(
      * pointer to it), and a Load would be overwritten by the resume's unserialize while the pointer says the loaded slot.
      */
     private fun slotsBusy(): Boolean {
+        // A quit is serializing its resume point: a Load would move the pointer off it, a Save race its read of the core.
+        if (host.quitting) return true
         if (host.gameReady && !resumePending) return false
         host.toast("Still loading")
         return true
@@ -573,4 +581,13 @@ internal suspend fun joinSlotJobs(jobs: List<Job>) {
         if (running.isEmpty()) return
         running.forEach { it.join() }
     }
+}
+
+/** Last-used slot callbacks waiting for a strip refresh to land; main thread only. */
+internal class LastSlotWaiters {
+    private val waiting = mutableListOf<(Int) -> Unit>()
+
+    fun add(onLast: ((Int) -> Unit)?) { if (onLast != null) waiting += onLast }
+
+    fun takeAll(): List<(Int) -> Unit> = waiting.toList().also { waiting.clear() }
 }

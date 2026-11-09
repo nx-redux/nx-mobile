@@ -1,5 +1,6 @@
 package com.nxredux.mobile.gametime
 
+import com.nxredux.mobile.tryQuietly
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 
@@ -22,8 +23,14 @@ interface GameTimeData {
     suspend fun playedPaths(sinceMs: Long, nowMs: Long): Set<String>
 }
 
+/**
+ * [GameTimeStore] on [io]. The reads a screen opens with (Game Time's list, Home's window on the menu's return, the
+ * library's per-game times) first close what a crashed game left open ([GameTimeStore.closeLeft]).
+ */
 class StoreGameTimeData(private val store: GameTimeStore, private val io: CoroutineDispatcher) : GameTimeData {
-    override suspend fun totals() = withContext(io) { store.totals() }
+    /** A failed close (a write) leaves the left sessions open for the next read; the read itself still answers. */
+    private fun closeLeft() = tryQuietly { store.closeLeft() }
+    override suspend fun totals() = withContext(io) { closeLeft(); store.totals() }
     override suspend fun grandTotal() = withContext(io) { store.grandTotal() }
     override suspend fun members(target: Long) = withContext(io) { store.members(target) }
     override suspend fun sessions(target: Long) = withContext(io) { store.sessions(target) }
@@ -31,9 +38,9 @@ class StoreGameTimeData(private val store: GameTimeStore, private val io: Corout
     override suspend fun merge(from: Long, into: Long, name: String) = withContext(io) { store.merge(from, into, name) }
     override suspend fun unmerge(gameId: Long) = withContext(io) { store.unmerge(gameId) }
     override suspend fun delete(target: Long) = withContext(io) { store.delete(target) }
-    override suspend fun window(sinceMs: Long, nowMs: Long) = withContext(io) { store.window(sinceMs, nowMs) }
+    override suspend fun window(sinceMs: Long, nowMs: Long) = withContext(io) { closeLeft(); store.window(sinceMs, nowMs) }
     override suspend fun playedPaths(sinceMs: Long, nowMs: Long) = withContext(io) { store.playedPaths(sinceMs, nowMs) }
-    override suspend fun byPath() = withContext(io) { store.byPath() }
+    override suspend fun byPath() = withContext(io) { closeLeft(); store.byPath() }
 }
 
 /**

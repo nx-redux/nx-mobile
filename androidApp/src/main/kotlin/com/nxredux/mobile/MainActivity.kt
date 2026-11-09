@@ -14,7 +14,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.DocumentsContract
-import android.provider.Settings
 import android.view.Display
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -55,6 +54,7 @@ import com.nxredux.mobile.achievements.AchievementsService
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.gametime.LazyGameTimeData
 import com.nxredux.mobile.launcher.AndroidAppLauncher
+import com.nxredux.mobile.launcher.EXTRA_KEEP_PLACE
 import com.nxredux.mobile.launcher.TopScreenHost
 import com.nxredux.mobile.launcher.currentDisplayId
 import com.nxredux.mobile.launcher.hideTaskFromRecents
@@ -447,8 +447,6 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 connectedPads = { SystemButtonKeys.connected(this) },
                 homes = AndroidHomeLocator(this),
                 storageUpgrade = AndroidStorageUpgrade(this),
-                // Settings → Developer options → Remove animations (animator scale 0); read per call, so a change applies next launch.
-                reducedMotion = { Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f },
                 switcherReturns = LaunchRecords.of(this),
             ),
             scope,
@@ -657,14 +655,14 @@ class MainActivity : ComponentActivity(), FolderPicker {
         tracker.start()
     }
 
-    /** singleTask: Home (the HOME alias) while running brings the menu back to its first tab. */
+    /** singleTask: Home (the HOME alias) while running brings the menu back to its first tab; a quitting game's doesn't. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (!intent.hasCategory(Intent.CATEGORY_HOME)) return
         asHome = true
         closeOtherInstances()
         hideTaskFromRecents()
-        if (::state.isInitialized) state.goHome()
+        if (::state.isInitialized && !intent.getBooleanExtra(EXTRA_KEEP_PLACE, false)) state.goHome()
     }
 
     /** The menu's window has focus again: [TopScreenHost.recheck], as on resume (no resume when only the focus moved). */

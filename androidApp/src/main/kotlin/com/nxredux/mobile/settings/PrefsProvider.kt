@@ -35,6 +35,11 @@ class PrefsProvider : ContentProvider() {
                 return encode(mapOf(RESULT_OK to true))
             }
         }
+        if (method == METHOD_GET_ALL_FILES) {
+            @Suppress("UNCHECKED_CAST")
+            val names = decode(extras ?: Bundle())[ARG_NAMES] as? List<String> ?: return null
+            return encode(mapOf(RESULT_FILES to names.associateWith { HashMap(context.getSharedPreferences(it, Context.MODE_PRIVATE).all) }))
+        }
         val name = arg ?: return null
         val prefs = context.getSharedPreferences(name, Context.MODE_PRIVATE)
         return when (method) {
@@ -79,6 +84,10 @@ class PrefsProvider : ContentProvider() {
         /** Every entry of the file `arg` as this process holds it now; result [RESULT_ENTRIES] (key to value). */
         const val METHOD_GET_ALL = "getAll"
         const val RESULT_ENTRIES = "entries"
+        /** [METHOD_GET_ALL] for each file named in [ARG_NAMES], in one call; result [RESULT_FILES] (name to entries). The `arg` name is unused. */
+        const val METHOD_GET_ALL_FILES = "getAllFiles"
+        const val ARG_NAMES = "names"
+        const val RESULT_FILES = "files"
         /** The data root as [DataRoot.settled] answers in the main process; result [RESULT_PATH]. The `arg` name is unused. */
         const val METHOD_DATA_ROOT_SETTLED = "dataRootSettled"
         /** [ARG_BEGIN] true: [DataRoot.useBegin], false: [DataRoot.useEnd]; the game process holds off the data move through it. */

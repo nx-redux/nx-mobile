@@ -15,6 +15,7 @@ import com.nxredux.mobile.cheats.CheatSet
 import com.nxredux.mobile.cheats.DolphinCheats
 import com.nxredux.mobile.gametime.GameTimeRecorder
 import com.nxredux.mobile.gametime.GameTimeService
+import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.library.ArcadeCompanions
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.NaomiSets
@@ -26,7 +27,6 @@ import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.netplay.cablelink.PairSaveCheckpoint
-import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.CoreConfig
 import com.nxredux.mobile.options.FrontendOptions
@@ -57,6 +57,7 @@ import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.GameRumble
 import com.nxredux.mobile.settings.Prefs
 import com.nxredux.mobile.shortcuts.Shortcuts
+import com.nxredux.mobile.skin.GlassScreen
 import com.nxredux.mobile.storage.AndroidHomeLocator
 import com.nxredux.mobile.storage.AndroidRefs
 import com.nxredux.mobile.storage.AndroidRomsSources
@@ -165,8 +166,6 @@ internal interface LaunchHost : GameScreenHost {
     fun startCoreWatchdog(stalledMillis: () -> Long)
     /** Game time's session for this launch, as onStart and onStop keep it from here. */
     fun startGameTime(rec: GameTimeRecorder)
-    /** The launch name's hold fades now, or once its minimum is up. */
-    fun releaseNameHold()
 
     fun fail(message: String, title: String = GameActivity.START_FAILED)
     fun relaunchOnGles()
@@ -750,6 +749,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // without a resume state, since the game has stopped itself by then. The resume point is HOME's ([WiiDolphinController.pressHome]).
             lifecycleScope.launch {
                 view.getShutdownRequests().first()
+                wii.endedByCore = true   // before the drop suspends: no slot 9 may queue behind it
                 // Left without HOME this session (a game's own "Wii Menu", a channel launch): the resume point on disk is an
                 // older session's, behind the game's own save on the NAND. Dropped, so the next launch boots fresh.
                 if (!wii.homeSaved) saves.dropAutoInOrder()
@@ -868,8 +868,6 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     }
                 }
             }
-            // The launch name's hold fades now (or once its minimum is up); the resume cover under it goes on its own frames.
-            releaseNameHold()
             // A frame means the core loaded the game (a load error aborts the view before any): the launcher may record it.
             if (launchRecords.started(launchId)) {
                 activity.sendBroadcast(Intent(LaunchRecords.action(activity)).setPackage(activity.packageName))   // the menu records it
@@ -918,7 +916,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         host.lifecycleScope.launch {
             val bmp = withContext(Dispatchers.IO) { ResumeCover.decode(file) } ?: return@launch
             if (!saves.resumePending || host.activity.isFinishing) return@launch
-            resumeCover = ResumeCover(host.activity, host.activity.findViewById(R.id.gameContainer)).also { cover ->
+            // Where the picture is drawn: as last laid out, else (before the game view) a pad skin's screen glass.
+            val picture = { host.renderer.thumbnailPicture() ?: host.padLayout.takeIf { it.skinShown }?.skinPlacement()?.glass(GlassScreen.PICTURE)?.rect }
+            resumeCover = ResumeCover(host.activity, host.activity.findViewById(R.id.gameContainer), picture).also { cover ->
+                host.renderer.onPictureLaidOut = { resumeCover?.place() }
                 cover.show(bmp)
                 host.retroView?.let(cover::follow)   // the game view came first
             }

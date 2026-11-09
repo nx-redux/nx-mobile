@@ -102,4 +102,41 @@ class ScrapeEngineCostTest {
         }
         assertEquals(listOf(ItemStatus.SKIPPED, ItemStatus.SKIPPED, ItemStatus.WAITING), states.last().items.map { it.status })
     }
+
+    // A Reset of another console's art empties and removes a folder this run had found: the next write makes it again.
+    @Test fun a_folder_a_reset_removed_mid_run_is_made_again_not_a_storage_pause() = runTest {
+        val files = listOf("G1.gb", "G2.gb")
+        val fs = gbTree(files)
+        val src = FakeSource("a", slots = setOf(ArtSlot.SCREENSHOT))
+        for (f in files) src.offer(f, ArtSlot.SCREENSHOT, "https://m/$f-ss.png")
+        val http = FakeHttp().apply { on("https://m/", OK_PNG) }
+        val shot = "Roms/GB/.media/screenshot/G1.png"
+        lateinit var engine: ScrapeEngine
+        engine = ScrapeEngine(http, FakeFitter(), fs, Scrape.home, listOf(src), { p, _ ->
+            if (p.endsWith("G1.gb")) {
+                assertEquals(ScrapeEngine.Deleted.DELETED, engine.deleteArt(shot))
+                engine.removeEmptyArtDirs(listOf(shot))
+            }
+        }, {}, clock = { 0L })
+        val games = files.map { Scrape.homeGame(it) }
+        val end = engine.run(ScrapeState(items = games.map { Scrape.item(it) }), { p -> games.firstOrNull { it.gamePath == p } }) {}
+        assertEquals(JobPhase.DONE, end.phase, end.pauseReason)
+        assertTrue(fs.bytesAt("Home/Roms/GB/.media/screenshot/G2.png") != null)
+    }
+
+    // The sources' per-run state (kept answers) is let go when the run ends, however it ends; a run that did not start
+    // them leaves them.
+    @Test fun a_run_ends_the_sources_it_started() = runTest {
+        val tetris = Scrape.homeGame("Tetris.gb")
+        val src = FakeSource("a")
+        val engine = ScrapeEngine(FakeHttp(), FakeFitter(), Scrape.homeTree(), Scrape.home, listOf(src), { _, _ -> }, {}, clock = { 0L })
+        val one = ScrapeState(items = listOf(Scrape.item(tetris)))
+        engine.run(one, { tetris }) {}
+        assertEquals(1 to 1, src.starts to src.ends)
+        engine.run(one, { tetris }, startSources = false) {}
+        assertEquals(1 to 1, src.starts to src.ends)
+        src.fail = { IllegalStateException("provider") }
+        assertFailsWith<IllegalStateException> { engine.run(one, { tetris }) {} }
+        assertEquals(2 to 2, src.starts to src.ends)
+    }
 }

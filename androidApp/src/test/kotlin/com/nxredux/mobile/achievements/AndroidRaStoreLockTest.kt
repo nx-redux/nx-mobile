@@ -54,10 +54,63 @@ class AndroidRaStoreLockTest {
         assertEquals(listOf("a", "b"), order)
     }
 
+    // A caller cancelled while it waits on another process's lock lets go of the lock it gets later: the next caller in
+    // this process still locks, rather than meeting an overlapping lock it can never take.
+    @Test fun aCallerCancelledWhileWaitingLeavesNoLockBehind() = runBlocking {
+        val private = tmp.newFolder("sd"); val home = tmp.newFolder("home")
+        val store = AndroidRaStore({ private }, { home })
+        store.append(RaPaths.JOURNAL, "a\n".encodeToByteArray())
+        val lockFile = File(private, "${RaPaths.ROOT}/${RaPaths.JOURNAL}.lock")
+        val child = holdLock(lockFile)
+        try {
+            assertEquals("locked", child.inputStream.bufferedReader().readLine())
+            var ran = false
+            // Off the IO pool, as a menu caller is: the hop back from the lock is where a cancel used to land.
+            val waiting = launch(Dispatchers.Default) { store.locked(RaPaths.JOURNAL) { ran = true } }
+            Thread.sleep(500)
+            waiting.cancel()
+            child.outputStream.apply { write('\n'.code); flush() }
+            withTimeout(10_000) { waiting.join() }
+            assertFalse("ran after its caller was cancelled", ran)
+            // The next caller really holds the OS lock (not run unlocked past an overlap): another process waits for it.
+            val other = withTimeout(10_000) {
+                store.locked(RaPaths.JOURNAL) {
+                    holdLock(lockFile).also { o ->
+                        Thread.sleep(500)
+                        assertEquals("another process locked while this one held it", 0, o.inputStream.available())
+                    }
+                }
+            }
+            try {
+                assertEquals("locked", other.inputStream.bufferedReader().readLine())
+            } finally {
+                other.destroyForcibly()
+            }
+        } finally {
+            child.destroyForcibly()
+        }
+    }
+
+    // The menu's sync removes one entry and the game process appends one of the same length: the file has its old size,
+    // but the game's journal still sees it changed, so it never appends a second copy.
+    @Test fun aSameSizeRewriteChangesTheStamp() = runBlocking {
+        val private = tmp.newFolder("sd"); val home = tmp.newFolder("home")
+        val gameStore = AndroidRaStore({ private }, { home }); val menuStore = AndroidRaStore({ private }, { home })
+        val game = RaJournal(gameStore, RaPaths.JOURNAL); val menu = RaJournal(menuStore, RaPaths.JOURNAL)
+        val e1 = RaUnlock("me", 1, "aaaa", 100L); val e2 = RaUnlock("me", 2, "aaaa", 101L)
+        game.append(e1)
+        val before = gameStore.stamp(RaPaths.JOURNAL)
+        menu.remove(listOf(e1)); menu.append(e2)
+        assertTrue(before != gameStore.stamp(RaPaths.JOURNAL))
+        assertFalse(game.append(e2))
+        assertEquals(listOf(e2), game.entries())
+        assertEquals(null, gameStore.stamp("${RaPaths.PENDING}/absent.jsonl"))
+    }
+
     /** A JVM that locks [file], prints "locked" and lets go when it reads a line. */
     private fun holdLock(file: File): Process {
         file.parentFile.mkdirs()
-        val src = File(tmp.newFolder("locker"), "Locker.java")
+        val src = File(tmp.newFolder(), "Locker.java")
         src.writeText(
             """
             import java.io.RandomAccessFile;

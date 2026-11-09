@@ -72,6 +72,30 @@ class GameTimeStoreRecordingTest {
         assertEquals(GameTimeStore.TOUCH_MS, q.sessionByUuid(id).executeAsOne().duration)
     }
 
+    // The menu process opened the store long before a game in the game process crashed: its prepare() ran too early,
+    // so the screens' reads close the left session, or Game Time's totals (closed sessions only) would miss it.
+    @Test fun aLongLivedMenuClosesASessionLeftByACrashedGame() = kotlinx.coroutines.test.runTest {
+        val menu = GameTimeStore(pair.second, "dev-1", "Fold", { clock }) { "menu" }.also { it.prepare() }
+        val data = StoreGameTimeData(menu, kotlinx.coroutines.Dispatchers.Unconfined)
+        val id = store.start("/Roms/GB/Tetris.gb", "GB", "Tetris")
+        clock += GameTimeStore.TOUCH_MS; store.touch(id)
+        clock += GameTimeStore.TOUCH_MS - 1_000   // still playing: a read leaves it open
+        assertEquals(emptyList(), data.totals())
+        clock += GameTimeStore.STALE_MS            // the game died without end()
+        assertEquals(listOf(GameTimeStore.TOUCH_MS), data.totals().map { it.totalMs })
+        assertEquals(GameTimeStore.TOUCH_MS, q.sessionByUuid(id).executeAsOne().duration)
+    }
+
+    @Test fun aWindowReadClosesALeftSessionToo() = kotlinx.coroutines.test.runTest {
+        val menu = GameTimeStore(pair.second, "dev-1", "Fold", { clock }) { "menu" }.also { it.prepare() }
+        val data = StoreGameTimeData(menu, kotlinx.coroutines.Dispatchers.Unconfined)
+        val id = store.start("/Roms/GB/Tetris.gb", "GB", "Tetris")
+        clock += GameTimeStore.TOUCH_MS; store.touch(id)
+        clock += GameTimeStore.STALE_MS + 1
+        data.window(0L, clock)
+        assertEquals(GameTimeStore.TOUCH_MS, q.sessionByUuid(id).executeAsOne().duration)
+    }
+
     @Test fun startClosesAnOpenSessionFirst() {
         val a = store.start("/Roms/GB/Tetris.gb", "GB", "Tetris"); clock += 30_000; store.touch(a)
         clock += 10_000

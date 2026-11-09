@@ -75,23 +75,27 @@ class PacedGet(
 
 /**
  * A job's API answers by request, so games that send the same one (regional variants and a multi-disc set's discs share
- * a search term, and often the match) ask once: an allowance is spent per request. Only 200 bodies are kept (a failed
- * or empty answer is asked again), at most [max], the oldest dropped first: a job's games come in library order, so
- * the requests that repeat come close together. Cleared when a job starts.
+ * a search term, and often the match) ask once: an allowance is spent per request. Only non-empty 200 bodies are kept (a
+ * failed or empty answer is asked again), at most [max] of them and [maxChars] characters in all, the oldest dropped
+ * first: a job's games come in library order, so the requests that repeat come close together. Cleared when a job
+ * starts and when it ends.
  */
-class JobAnswers(private val max: Int = 128) {
+class JobAnswers(private val max: Int = 128, private val maxChars: Int = 2_000_000) {
     private val lock = Mutex()
     private val map = LinkedHashMap<String, String>()
+    private var chars = 0
 
-    suspend fun clear() { lock.withLock { map.clear() } }
+    suspend fun clear() { lock.withLock { map.clear(); chars = 0 } }
 
     /** The kept answer to the request [key] (true: it was kept), else [fetch]'s answer to it (false), kept when it has a body. */
     suspend fun get(key: String, fetch: suspend (String) -> String?): Pair<String?, Boolean> {
         lock.withLock { map[key] }?.let { return it to true }
         val body = fetch(key) ?: return null to false
+        if (body.isEmpty() || body.length > maxChars) return body to false
         lock.withLock {
-            map.remove(key); map[key] = body
-            while (map.size > max) map.remove(map.keys.first())
+            map.remove(key)?.let { chars -= it.length }
+            map[key] = body; chars += body.length
+            while (map.size > max || chars > maxChars) chars -= map.remove(map.keys.first())!!.length
         }
         return body to false
     }
@@ -146,6 +150,8 @@ interface ArtSource {
     fun knows(ref: LibraryGameRef): Boolean
     /** Once at the start of each job run, before any [find] (per-job state, an up-front quota read). Throws as [find]. */
     suspend fun startJob() {}
+    /** Once at the end of each run that called [startJob], however it ended: per-job state is let go. Never throws. */
+    suspend fun endJob() {}
     /** Ranked hits for [wanted]; empty = not found. Throws [SourceStop] or [JobPause]. */
     suspend fun find(ref: LibraryGameRef, wanted: Set<ArtSlot>): List<ArtHit>
 }

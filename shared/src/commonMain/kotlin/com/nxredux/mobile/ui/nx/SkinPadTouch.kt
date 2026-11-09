@@ -3,6 +3,7 @@ package com.nxredux.mobile.ui.nx
 import com.nxredux.mobile.skin.ControlShape
 import com.nxredux.mobile.skin.PlacedControl
 import com.nxredux.mobile.skin.SkinPlacement
+import com.nxredux.mobile.skin.TouchSlop
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -70,9 +71,9 @@ class SkinPadTouch(
         val p = placement ?: return null
         // the sticks first, over a touch area a little larger than their rings: one wins a touch on the d-pad's edge (the
         // nearest, if two reach)
-        p.controls.filter { it.spec.shape == ControlShape.STICK && hypot(x - it.x, y - it.y) <= it.spec.r * STICK_SLOP }
+        p.controls.filter { it.spec.shape == ControlShape.STICK && hypot(x - it.x, y - it.y) <= it.spec.r * TouchSlop.STICK }
             .minByOrNull { hypot(x - it.x, y - it.y) }?.let { return Stick(it) }
-        val slop = 22f * p.k
+        val slop = TouchSlop.RECT * p.k
         for (c in p.controls) {
             val hit = when (c.spec.shape) {
                 ControlShape.DPAD -> abs(x - c.x) <= c.spec.r + slop && abs(y - c.y) <= c.spec.r + slop
@@ -233,8 +234,6 @@ class SkinPadTouch(
 
     private companion object {
         const val ARM_CORNER = 10f
-        /** The stick's touch area: its ring's radius times this. */
-        const val STICK_SLOP = 1.25f
         /** The face buttons: the diamond, and on the N64 its C buttons (in the diamond's places) with B / A beside them. */
         val FACE = setOf("A", "B", "X", "Y", "CU", "CL", "CR", "CD")
         /** The stick control ids: the stick (the Circle Pad on a 3DS) and the 3DS C-stick nub. */

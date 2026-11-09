@@ -86,7 +86,10 @@ internal class GameNetplay(private val host: GameNetplayHost) {
     /** netplay: the engine session; set just before it starts, so onDestroy always shuts down what was started. */
     var run: NetplayRun? = null
         private set
-    /** A Wi-Fi session's radio out of power save for the screen's life: a delayed frame's input stalls both players. */
+    /**
+     * A Wi-Fi session's radio out of power save while its engine runs: a delayed frame's input stalls both players. Held
+     * from the engine's start to the session's end, not for a session that never starts (restored after a kill).
+     */
     private var wifi: android.net.wifi.WifiManager.WifiLock? = null
     private var pillShown = false   // the countdown pill is the session's (hidden again on Clear)
     /** netplay: the session ended and the game plays on alone (the menu is then Continue / Quit). */
@@ -130,7 +133,6 @@ internal class GameNetplay(private val host: GameNetplayHost) {
         restored = session != null && savedInstanceState != null
         // The cable is the menu process's: never instantiated here (a fresh, unstarted one would stop the menu's VPN).
         if (session?.overUsb == true) usbToken = intent.getLongExtra(GameActivity.EXTRA_NETPLAY_USB_TOKEN, -1L).takeIf { it >= 0 }
-        if (session?.overUsb == false) wifi = lowLatencyWifiLock(host.activity, "nxredux:netplay")?.also { runCatching { it.acquire() } }
     }
 
     fun onSaveInstanceState(outState: Bundle) {
@@ -142,8 +144,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
      * Only this screen's own claim is deleted: a newer launch's copy (committed before this teardown) is kept.
      */
     fun onDestroyed() {
-        wifi?.let { runCatching { if (it.isHeld) it.release() } }
-        wifi = null
+        releaseWifi()
         // Cable Link ended by the screen going (a quit, the system): the last verified checkpoint becomes the real save. A
         // verdict still in flight is lost with the engine, which the native destroy already shut down.
         pairSaves?.end(null)
@@ -231,24 +232,41 @@ internal class GameNetplay(private val host: GameNetplayHost) {
      * what started). A GBA link's engine started before the load ([connectLink]); its status ticks from now. GB link has
      * no engine: gambatte runs it.
      */
-    private suspend fun start(np: NetplaySession): Boolean = when (np.linkKind) {
-        null -> {
-            val settings = AndroidAppSettings(host.activity)
-            val overlay = np.cableLink && settings.cableLinkDelayOverlay
-            NetplayGame(
-                np, host.lifecycleScope, SystemClock::elapsedRealtime, ::onNotice,
-                delayPin = if (np.cableLink) settings.cableLinkDelayPin else 0,
-                onDelay = if (overlay) ::showDelay else null,
-                onEnding = { verified -> pairSaves?.end(verified) },
-            ).also { run = it }.start()
+    private suspend fun start(np: NetplaySession): Boolean {
+        holdWifi(np)
+        return when (np.linkKind) {
+            null -> {
+                val settings = AndroidAppSettings(host.activity)
+                val overlay = np.cableLink && settings.cableLinkDelayOverlay
+                NetplayGame(
+                    np, host.lifecycleScope, SystemClock::elapsedRealtime, ::onNotice,
+                    delayPin = if (np.cableLink) settings.cableLinkDelayPin else 0,
+                    onDelay = if (overlay) ::showDelay else null,
+                    onEnding = { verified -> pairSaves?.end(verified) },
+                ).also { run = it }.start()
+            }
+            NetplayLinkKind.NETPACKET -> (run as? NetplayLinkGame)?.let { it.begin(); it.live } ?: false
+            NetplayLinkKind.GBLINK -> true
         }
-        NetplayLinkKind.NETPACKET -> (run as? NetplayLinkGame)?.let { it.begin(); it.live } ?: false
-        NetplayLinkKind.GBLINK -> true
     }
 
     /** netplay link: the GBA link engine, started before the core loads; the raw link mode the core runs with, or null. */
-    suspend fun connectLink(np: NetplaySession, ownSerial: String?): String? =
-        NetplayLinkGame(np, host.lifecycleScope, SystemClock::elapsedRealtime, ::onNotice).also { run = it }.connect(ownSerial)
+    suspend fun connectLink(np: NetplaySession, ownSerial: String?): String? {
+        holdWifi(np)
+        return NetplayLinkGame(np, host.lifecycleScope, SystemClock::elapsedRealtime, ::onNotice).also { run = it }.connect(ownSerial)
+    }
+
+    /** The low-latency Wi-Fi lock for a session over Wi-Fi; once (the link engine's connect comes before its start). */
+    private fun holdWifi(np: NetplaySession) {
+        if (np.overUsb || wifi != null) return
+        wifi = lowLatencyWifiLock(host.activity, "nxredux:netplay")?.also { runCatching { it.acquire() } }
+    }
+
+    /** The session is over (or the screen is): the radio may save power again. */
+    private fun releaseWifi() {
+        wifi?.let { runCatching { if (it.isHeld) it.release() } }
+        wifi = null
+    }
 
     /** netplay: a status notice from [NetplayGame]'s ticker (main thread). */
     private fun onNotice(notice: NetplayNotice) {
@@ -266,6 +284,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
             }
             is NetplayNotice.Ended -> {
                 showDelay(null)
+                releaseWifi()
                 if (pillShown) notifications.hideProgress()
                 pillShown = false
                 notifications.push(notice.text, null, NETPLAY_NOTICE_MS, now)
@@ -319,13 +338,13 @@ internal class GameNetplay(private val host: GameNetplayHost) {
      * normal root on the slot a normal launch shows.
      */
     private fun linkEnded() {
+        releaseWifi()
         // The link holds no frames now: an open menu pauses the game as for any other launch.
         if (host.menuOpen || host.focusPaused) host.retroView?.frameSpeed = 0
         ended = true
         playLocally()
         host.withMenu {
             it.cheatsAvailable = host.cheatsSupported
-            host.lastSlotCache?.let { slot -> it.showSlot(slot - 1) }
             it.endNetplay(local = true)
         }
     }

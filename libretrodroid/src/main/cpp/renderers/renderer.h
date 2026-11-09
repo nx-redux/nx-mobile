@@ -42,7 +42,11 @@ public:
     virtual void updateRenderedResolution(unsigned width, unsigned height) = 0;
     virtual void setPixelFormat(int pixelFormat) = 0;
     virtual void onNewFrame(const void *data, unsigned width, unsigned height, size_t pitch);
+    // The frame is drawn from inside the core's video callback (frame timing), not the frontend's own draw.
     virtual bool rendersInVideoCallback() = 0;
+    // The core draws with this GL context (a GL hw core), so a draw has to shield the state it leaves bound. A
+    // Vulkan core never touches this context: its frames arrive as buffers, like a software frame's.
+    virtual bool hasCoreGlState() { return false; }
     virtual void setShaders(ShaderManager::Chain shaders) = 0;
     virtual PassData getPassData(unsigned int layer) = 0;
     // The texture's size in texels. A GL core's framebuffer is sized to the largest frame it has delivered (at least its

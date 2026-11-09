@@ -1096,15 +1096,14 @@ class InGameMenuModelTest {
     @Test fun root_rows_beside_the_panel_lead_with_a_panel_hint() {
         val m = model()
         m.setDiscs(current = 0, count = 2)
-        fun hints() = hintsFor(m.state.page, m.state.page.rows[m.state.page.selected], panelFocus = m.state.panelFocus, panelTab = m.state.panelTab, panel = true)
+        fun hints() = hintsFor(m.state.page, m.state.page.rows[m.state.page.selected], panelFocus = m.state.panelFocus, panelTab = m.state.panelTab)
         assertEquals(listOf(Hint(NxButton.A, "Select"), Hint(NxButton.B, "Resume")), hints())   // Continue: no tiles to enter
         m.press(NxButton.DOWN)                               // Disc: ◄► changes the disc
         assertEquals(Hint(NxButton.LEFT, "Change"), hints().first())
         m.press(NxButton.DOWN)                               // Save: the slot card
         assertEquals(Hint(NxButton.LEFT, "Slot"), hints().first())
         m.press(NxButton.UP); m.press(NxButton.UP)           // Continue again
-        assertEquals(listOf(Hint(NxButton.A, "Select"), Hint(NxButton.B, "Resume")),
-            hintsFor(m.state.page, m.state.page.rows[0]))     // no panel drawn: no hint
+        assertEquals(listOf(Hint(NxButton.A, "Select"), Hint(NxButton.B, "Resume")), hints())
     }
 
     @Test fun the_options_row_previews_the_options_page() {
@@ -1151,9 +1150,9 @@ class InGameMenuModelTest {
         val m = model()
         m.select(m.labels().indexOf("Options"))
         assertEquals(listOf(Hint(NxButton.A, "Open"), Hint(NxButton.B, "Resume")),
-            hintsFor(m.state.page, m.state.page.rows[m.state.page.selected], panelFocus = m.state.panelFocus, panelTab = m.state.panelTab, panel = true))
+            hintsFor(m.state.page, m.state.page.rows[m.state.page.selected], panelFocus = m.state.panelFocus, panelTab = m.state.panelTab))
         m.press(NxButton.A)
-        assertEquals(Hint(NxButton.B, "Back"), hintsFor(m.state.page, m.state.page.rows[0], panel = true).last())
+        assertEquals(Hint(NxButton.B, "Back"), hintsFor(m.state.page, m.state.page.rows[0]).last())
     }
 
     @Test fun the_panel_state_is_reused_until_an_input_changes() {
@@ -2008,8 +2007,8 @@ class InGameMenuModelTest {
         assertNull(m.state.panelFocus)
         m.press(NxButton.R1); m.press(NxButton.L1)
         assertEquals(tab, m.state.panelTab)                  // no tabs to switch
-        // The UI passes panel = panelBeside: no ◄► Panel hint.
-        val hints = hintsFor(m.state.page, m.state.page.rows[0], panelFocus = m.state.panelFocus, panelTab = m.state.panelTab, panel = m.panelBeside)
+        // No ◄► Panel hint.
+        val hints = hintsFor(m.state.page, m.state.page.rows[0], panelFocus = m.state.panelFocus, panelTab = m.state.panelTab)
         assertTrue(hints.none { it.button == NxButton.RIGHT })
         // Once the session ended (Continue / Quit): still no panel.
         m.netplayEnded = true

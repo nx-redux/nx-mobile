@@ -59,6 +59,16 @@ class RaJournalTest {
         assertFalse(j.append(e2))
         assertEquals(listOf(e1, e2), j.entries())
     }
+    // The other process removed one entry and appended one of the same length: the size alone matches what this
+    // journal last saw, yet the file is another.
+    @Test fun a_same_size_change_behind_the_journal_is_read_again() = runTest {
+        val store = FakeRaStore()
+        val game = RaJournal(store, RaPaths.JOURNAL); val menu = RaJournal(store, RaPaths.JOURNAL)
+        game.append(e1)
+        menu.remove(listOf(e1)); menu.append(e2)
+        assertFalse(game.append(e2))
+        assertEquals(listOf(e2), game.entries())
+    }
     @Test fun a_removed_entry_can_be_appended_again() = runTest {
         val store = FakeRaStore(); val j = RaJournal(store, RaPaths.JOURNAL)
         j.append(e1); j.append(e2); j.remove(listOf(e1))

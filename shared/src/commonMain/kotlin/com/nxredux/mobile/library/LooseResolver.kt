@@ -102,26 +102,33 @@ private val DISC_EXTENSIONS = setOf("iso", "bin", "img", "cue", "gdi", "chd", "m
 /**
  * A scan's disc probes, each file's answer reused from [previous] while its size and modified time (and a sheet's data
  * file's) are unchanged; every readable answer this scan used is in [used], for the next index. An answer from a failed
- * read (or a sheet whose data file is missing) is not kept, so the next scan asks again.
+ * read (or a sheet whose data file is missing) is not kept, so the next scan asks again; neither is one for a file (or
+ * data file) whose provider reports no modified time, as in [HeadReads].
  */
 internal class DiscProbes(private val probe: com.nxredux.mobile.library.disc.DiscProbe, previous: List<IndexedProbe>) {
     private val before = previous.associateBy { it.ref }
-    val used = ArrayList<IndexedProbe>()
+    private val kept = LinkedHashMap<String, IndexedProbe>()   // by ref: a folder reached twice keeps one
+
+    val used: List<IndexedProbe> get() = kept.values.toList()
 
     suspend fun consoleOf(file: Entry, siblings: List<Entry>): String? {
+        val modified = file.lastModified
         val known = before[file.ref.value]?.takeIf { p ->
-            p.size == file.sizeBytes && p.modified == file.lastModified && dataUnchanged(p, siblings)
+            modified != null && p.size == file.sizeBytes && p.modified == modified && dataUnchanged(p, siblings)
         }
-        if (known != null) { used += known; return known.console }
+        if (known != null) { kept[known.ref] = known; return known.console }
         val r = probe.probe(file, siblings)
-        if (r.read) used += IndexedProbe(file.ref.value, file.sizeBytes, file.lastModified, r.console, r.data?.ref?.value, r.data?.sizeBytes, r.data?.lastModified)
+        if (r.read && modified != null && (r.data == null || r.data.lastModified != null)) {
+            kept[file.ref.value] = IndexedProbe(file.ref.value, file.sizeBytes, modified, r.console, r.data?.ref?.value, r.data?.sizeBytes, r.data?.lastModified)
+        }
         return r.console
     }
 
     /** A sheet's data file is still there as it was probed; true for a probe with none. */
     private fun dataUnchanged(p: IndexedProbe, siblings: List<Entry>): Boolean {
         val ref = p.data ?: return true
-        return siblings.any { it.ref.value == ref && it.sizeBytes == p.dataSize && it.lastModified == p.dataModified }
+        val modified = p.dataModified ?: return false
+        return siblings.any { it.ref.value == ref && it.sizeBytes == p.dataSize && it.lastModified == modified }
     }
 }
 
@@ -140,7 +147,7 @@ internal class HeadReads(private val source: RomsSource, previous: List<IndexedH
 
     /** What sheet [file] names, or null when it cannot be read. */
     suspend fun sheetNames(file: Entry): List<String>? =
-        names(file) { source.readHead(file.ref, DiscSheet.HEAD_BYTES)?.let { DiscSheet.references(file.name, DiscSheet.decode(it)) } }
+        names(file) { source.readHead(file.ref, DiscSheet.HEAD_BYTES)?.let { DiscSheet.references(file.name, DiscSheet.decodeHead(it)) } }
 
     /** Zip [file]'s first entry name; null when it cannot be read or names none (a folder entry, not a zip). */
     suspend fun zipEntry(file: Entry): String? =

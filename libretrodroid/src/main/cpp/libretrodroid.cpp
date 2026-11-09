@@ -225,28 +225,26 @@ jboolean LibretroDroid::unserializeMemory(unsigned id, int8_t* data, size_t size
     return true;
 }
 
-std::pair<int8_t*, size_t> LibretroDroid::serializeMemory(unsigned id) {
+bool LibretroDroid::serializeMemory(unsigned id, const MemoryReader& read) {
     std::lock_guard<std::mutex> lock(coreLock);
 
-    // Empty (nullptr, 0) when there is no core (quit racing the native destroy) or no such memory.
-    if (core == nullptr) return std::pair<int8_t*, size_t>(nullptr, 0);
+    // Nothing when there is no core (quit racing the native destroy) or no such memory.
+    if (core == nullptr) return false;
 
     void* memory = core->retro_get_memory_data(id);
     size_t size = memory != nullptr ? core->retro_get_memory_size(id) : 0;
-    if (size == 0) return std::pair<int8_t*, size_t>(nullptr, 0);
+    if (size == 0) return false;
 
-    auto* data = new int8_t[size];
-    memcpy(data, memory, size);
-
-    return std::pair(data, size);
+    read(static_cast<const int8_t*>(memory), size);
+    return true;
 }
 
-JNIEXPORT jboolean JNICALL LibretroDroid::unserializeSRAM(int8_t* data, size_t size) { return unserializeMemory(RETRO_MEMORY_SAVE_RAM, data, size); }
-std::pair<int8_t*, size_t> LibretroDroid::serializeSRAM() { return serializeMemory(RETRO_MEMORY_SAVE_RAM); }
+jboolean LibretroDroid::unserializeSRAM(int8_t* data, size_t size) { return unserializeMemory(RETRO_MEMORY_SAVE_RAM, data, size); }
+bool LibretroDroid::serializeSRAM(const MemoryReader& read) { return serializeMemory(RETRO_MEMORY_SAVE_RAM, read); }
 
 // The clock (gambatte, mGBA, ...): minarch keeps it in Saves/<TAG>/<rom.ext>.rtc (ma_saves.c RTC_read/RTC_write).
 jboolean LibretroDroid::unserializeRTC(int8_t* data, size_t size) { return unserializeMemory(RETRO_MEMORY_RTC, data, size); }
-std::pair<int8_t*, size_t> LibretroDroid::serializeRTC() { return serializeMemory(RETRO_MEMORY_RTC); }
+bool LibretroDroid::serializeRTC(const MemoryReader& read) { return serializeMemory(RETRO_MEMORY_RTC, read); }
 
 void LibretroDroid::onSurfaceChanged(unsigned int width, unsigned int height) {
     LOGD("Performing libretrodroid onSurfaceChanged");
@@ -736,7 +734,10 @@ void LibretroDroid::step() {
 
     // Read once: the UI thread can change it mid-step, and the run loop and the paused redraw must agree.
     unsigned int speed = frameSpeed;
-    // Here, not in setFrameSpeed: audio belongs to the GL thread, which frees it in destroy(). A paused step runs too.
+    // Here, not in setFrameSpeed: the GL thread creates audio (loadGame) and frees it (destroy()), and a speed can be
+    // set at any point of the view's life, so it is applied on that thread. pause() and resume() reach audio from the
+    // lifecycle thread: ON_PAUSE and ON_RESUME come before ON_DESTROY, which waits for the GL thread's destroy, so it is
+    // never freed under them. A paused step runs too.
     if (audio) audio->setPlaybackSpeed(speed);
     const bool lk = gbalink::active();               // GBA link: speed 1, held while either side pauses
     const bool npSession = netplay::active();
@@ -1238,31 +1239,26 @@ void LibretroDroid::reset() {
     if (fpsSync) fpsSync->reset();
 }
 
-std::pair<LibretroDroid::StateBuffer, size_t> LibretroDroid::serializeState() {
+bool LibretroDroid::serializeState(const StateSink& sink) {
     std::lock_guard<std::mutex> lock(coreLock);
 
-    // An empty result (nullptr, 0) means "no state": no core (quit racing the native destroy), or a core that
-    // reports no size or refuses retro_serialize (mupen64plus/ppsspp while booting). Never hand back a buffer
-    // the core did not fill, or it would be written as a save state.
-    if (core == nullptr) return { nullptr, 0 };
+    if (core == nullptr) return false;
 
     // A core may run emulation (and GL) inside retro_serialize_size (Azahar drains its async work with RunLoop): on
     // the GL thread while the view is paused (onStop's auto state), the paused view's context is made current for it.
     TeardownContext context;
     size_t size = core->retro_serialize_size();
-    if (size == 0) return { nullptr, 0 };
+    if (size == 0) return false;
 
-    // Zeroed: a core may write less than the size it reported (PPSSPP rounds it up to 8 MB), and the rest is saved
-    // too. calloc, not new[](): fresh pages from the system are zero already, so a large state is not cleared twice.
-    StateBuffer data(static_cast<int8_t*>(std::calloc(size, 1)));
-    if (!data) throw std::bad_alloc();
+    // Zeroed by the sink: a core may write less than the size it reported (PPSSPP rounds it up to 8 MB).
+    int8_t* data = sink(size);
+    if (data == nullptr) return false;
 
-    if (!core->retro_serialize(data.get(), size)) {
+    if (!core->retro_serialize(data, size)) {
         LOGE("Cannot save state: retro_serialize refused");
-        return { nullptr, 0 };
+        return false;
     }
-
-    return { std::move(data), size };
+    return true;
 }
 
 void LibretroDroid::resetCheat() {

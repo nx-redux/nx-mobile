@@ -3,6 +3,13 @@
         <item name="android:windowBackground">@android:color/black</item>
     </style>
 
+    <!-- GameActivity's: no starting window. The game starts its own process, so Android would otherwise show the app's
+         splash (the icon) between the menu and the game screen; without it the menu stays up until the game screen's
+         first frame. -->
+    <style name="Theme.NxMobile.Game">
+        <item name="android:windowDisablePreview">true</item>
+    </style>
+
     <!-- MainActivity's launch theme; installSplashScreen() swaps to postSplashScreenTheme. -->
     <style name="Theme.NxMobile.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@android:color/black</item>

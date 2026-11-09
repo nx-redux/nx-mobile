@@ -2,6 +2,7 @@ package com.nxredux.mobile.library
 
 import com.nxredux.mobile.runner.Companion
 import com.nxredux.mobile.runner.ContentRef
+import com.nxredux.mobile.storage.TextLines
 
 /** A file a sheet names, and the sheet that named it (for "Missing <name> next to <sheet>"). */
 data class SheetRef(val name: String, val sheet: String)
@@ -24,11 +25,8 @@ object DiscSheet {
 
     fun isSheet(fileName: String): Boolean = Names.extensionOf(fileName) in EXTENSIONS
 
-    /** The same-folder names [fileName]'s [text] refers to, in order, each once. */
-    fun references(fileName: String, text: String): List<String> = referencesIn(fileName, text.removePrefix("\uFEFF"))
-
-    // [text] has its leading BOM stripped once for every sheet type; the m3u branch still strips one per line.
-    private fun referencesIn(fileName: String, text: String): List<String> = when (Names.extensionOf(fileName)) {
+    /** The same-folder names [fileName]'s [text] (read by [decode] or [readSheet]) refers to, in order, each once. */
+    fun references(fileName: String, text: String): List<String> = when (Names.extensionOf(fileName)) {
         "cue" -> text.lineSequence().mapNotNull(::cueFile).mapNotNull(::sibling).distinct().toList()
         "m3u" -> text.lineSequence().map { it.trim().removePrefix("\uFEFF").trim() }
             .filter { it.isNotEmpty() && !it.startsWith("#") }.mapNotNull(::sibling).distinct().toList()
@@ -61,7 +59,7 @@ object DiscSheet {
      * m3u is read at most once, through [head] (the first [HEAD_BYTES]).
      */
     suspend fun hiddenIn(files: List<Entry>, head: suspend (Entry) -> ByteArray?): Set<String> =
-        hiddenNamed(files) { e -> head(e)?.let { references(e.name, decode(it)) } }
+        hiddenNamed(files) { e -> head(e)?.let { references(e.name, decodeHead(it)) } }
 
     /**
      * [hiddenIn] with each read sheet's names from [named]: the [references] of its head read as its own type, null when
@@ -93,17 +91,22 @@ object DiscSheet {
     }
 
     /**
-     * A sheet's text: UTF-8 when the bytes are valid UTF-8 (a multi-byte character cut by the end of a head read
-     * dropped), else Windows-1252, which most legacy sheets were written in (ISO-8859-1 where it does not differ).
+     * A sheet's text, without a leading UTF-8 byte order mark: UTF-8 when the bytes are valid UTF-8, else Windows-1252,
+     * which most legacy sheets were written in (ISO-8859-1 where it does not differ). [truncated]: the bytes are a head
+     * read cut short, so a multi-byte character the cut split is dropped instead of failing the UTF-8 read.
      */
-    fun decode(bytes: ByteArray): String {
-        val whole = bytes.size - cutTail(bytes)
+    fun decode(bytes: ByteArray, truncated: Boolean = false): String {
+        val from = if (bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()) 3 else 0
+        val whole = bytes.size - if (truncated) cutTail(bytes) else 0
         return try {
-            bytes.decodeToString(0, whole, throwOnInvalidSequence = true)
+            bytes.decodeToString(from, maxOf(from, whole), throwOnInvalidSequence = true)
         } catch (e: CharacterCodingException) {
-            buildString(bytes.size) { for (b in bytes) append(cp1252(b.toInt() and 0xFF)) }
+            buildString(bytes.size) { for (i in from until bytes.size) append(cp1252(bytes[i].toInt() and 0xFF)) }
         }
     }
+
+    /** [decode] of a [HEAD_BYTES] head read: cut short when it filled the buffer. */
+    internal fun decodeHead(bytes: ByteArray): String = decode(bytes, truncated = bytes.size >= HEAD_BYTES)
 
     /** How many trailing bytes are the start of a UTF-8 sequence the buffer ends inside of (0 when none). */
     private fun cutTail(bytes: ByteArray): Int {
@@ -188,7 +191,7 @@ object DiscSheet {
 
     /** A sheet's text as the scanner and a launch read it: its head, [decode]d. */
     suspend fun readSheet(source: RomsSource, file: ContentRef): String? =
-        source.readHead(file, HEAD_BYTES)?.let(::decode) ?: source.readText(file)
+        source.readHead(file, HEAD_BYTES)?.let(::decodeHead) ?: source.readText(file)?.let(TextLines::stripBom)
 
     /** [companions]'s lookup: each name as spelled with the entry found for it, and the first needed one not found. */
     private class Resolved(val found: List<Pair<String, Entry>>, val missing: SheetRef?)
@@ -202,7 +205,7 @@ object DiscSheet {
             val image = out.any { Names.extensionOf(it.first) == "img" || Names.extensionOf(it.first) == "bin" }
             return Resolved(out, if (image) null else SheetRef("${Names.stripExtension(fileName)}.img", fileName))
         }
-        val read: suspend (String) -> String? = { name -> files.find(name)?.let { source.readHead(it.ref, HEAD_BYTES) }?.let(::decode) }
+        val read: suspend (String) -> String? = { name -> files.find(name)?.let { source.readHead(it.ref, HEAD_BYTES) }?.let(::decodeHead) }
         for (r in expand(fileName, read)) {
             if (r.name.equals(fileName, ignoreCase = true)) continue
             val entry = files.find(r.name)

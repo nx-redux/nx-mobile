@@ -70,7 +70,6 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
             .apply { session.resumeSlot?.let { putExtra(GameActivity.EXTRA_RESUME_SLOT, it) } }
             .apply { session.gamePath?.let { putExtra(GameActivity.EXTRA_GAME_PATH, it) } }
             .apply { session.artPath?.let { putExtra(GameActivity.EXTRA_ART_PATH, it) } }
-            .apply { session.launchName?.let { putExtras(launchNameExtras(it)) } }   // the hold's name (LaunchNameHold)
             .putExtras(postureSeedExtras())   // the game's process has no PostureHint of its own
             .apply {
                 session.netplay?.let {
@@ -96,7 +95,7 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
             .addFlags(gameLaunchFlags(ownTask()))
             .putExtra(GameActivity.EXTRA_OWN_TASK, ownTask())
         try {
-            context.startActivity(intent, gameOpenAnimation(session.launchName != null))
+            context.startActivity(intent, gameOpenAnimation())
         } catch (e: Throwable) {
             LaunchRecords.of(context).drop(launchId)
             launchFailed()
@@ -107,15 +106,11 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
     /**
      * The game's open animation, given with the start: the game runs in its own process ([GameActivity] in `:game`), so
      * the system picks the animation while that process is still starting, before GameActivity.onCreate could override
-     * it, and falls back to the default slide. A launch sequence's ([launchSequence]) opens with none (the menu's black
-     * meets the game screen's black and the name hold); else a cross-fade. Null in launcher mode: Android ignores an
-     * app's animation for a task change.
+     * it, and falls back to the default slide. A cross-fade; null in launcher mode: Android ignores an app's animation
+     * for a task change.
      */
-    private fun gameOpenAnimation(launchSequence: Boolean): android.os.Bundle? {
-        if (ownTask()) return null
-        return if (launchSequence) ActivityOptions.makeCustomAnimation(context, R.anim.launch_hold, R.anim.launch_hold).toBundle()
-        else ActivityOptions.makeCustomAnimation(context, android.R.anim.fade_in, android.R.anim.fade_out).toBundle()
-    }
+    private fun gameOpenAnimation(): android.os.Bundle? =
+        if (ownTask()) null else ActivityOptions.makeCustomAnimation(context, android.R.anim.fade_in, android.R.anim.fade_out).toBundle()
 
     private companion object {
         const val TAG = "NXAPP"
@@ -127,7 +122,9 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
  * suspended in its own task; a new launch replaces a suspended game (its auto-state was written on stop). Otherwise
  * the game shares the menu's task (no NEW_TASK, so the manifest taskAffinity is ignored), the only way GameActivity's
  * cross-fade can run: Android ignores an app's custom animation (ActivityOptions or overrideActivityTransition) for a
- * task change.
+ * task change. Android does animate that task change (a slide), so it opens with NO_ANIMATION, the one switch it honours
+ * there: the menu stays up until the game screen's first frame covers it (the pad sits on the same pixels in both, so only
+ * the top changes).
  */
 internal fun gameLaunchFlags(ownTask: Boolean): Int =
-    if (ownTask) Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK else 0
+    if (ownTask) Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION else 0

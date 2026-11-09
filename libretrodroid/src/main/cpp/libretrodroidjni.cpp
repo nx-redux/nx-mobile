@@ -22,6 +22,8 @@
 
 #include <algorithm>
 #include <initializer_list>
+#include <limits>
+#include <unistd.h>
 #include <memory>
 #include <string>
 #include <vector>
@@ -74,10 +76,6 @@ std::vector<std::string> javaStrings(JNIEnv* env, jobjectArray array) {
     jsize length = javaArrayLength(env, array);
     for (jsize i = 0; i < length; i++) {
         auto value = (jstring) env->GetObjectArrayElement(array, i);
-        if (value == nullptr) {
-            result.emplace_back();
-            continue;
-        }
         result.push_back(JniString(env, value).stdString());
         env->DeleteLocalRef(value);
     }
@@ -116,31 +114,98 @@ jboolean withBytes(JNIEnv* env, jbyteArray array, Fn&& fn) {
     return fn(reinterpret_cast<int8_t*>(data), (size_t) env->GetArrayLength(array)) ? JNI_TRUE : JNI_FALSE;
 }
 
-jbyteArray toJByteArray(JNIEnv* env, const int8_t* data, size_t size) {
-    jbyteArray result = env->NewByteArray((jsize) size);
-    if (result != nullptr && size > 0) env->SetByteArrayRegion(result, 0, (jsize) size, data);
-    return result;
+bool fitsJavaArray(size_t size) {
+    return size <= (size_t) std::numeric_limits<jsize>::max();
 }
 
-// Takes the new[] buffer of LibretroDroid::serializeMemory and friends.
-jbyteArray toJByteArray(JNIEnv* env, std::pair<int8_t*, size_t> buffer) {
-    std::unique_ptr<int8_t[]> owned(buffer.first);
-    return toJByteArray(env, owned.get(), buffer.second);
+// A copy of the memory a serializeSRAM-like call reads inside its lock, as a Java array: empty when there is none, null
+// with an OutOfMemoryError pending.
+template <typename Serialize>
+jbyteArray memoryToJava(JNIEnv* env, Serialize&& serialize) {
+    jbyteArray result = nullptr;
+    serialize([&](const int8_t* data, size_t size) {
+        if (!fitsJavaArray(size)) {
+            LOGE("Memory of %zu bytes does not fit a Java array", size);
+            return;
+        }
+        result = env->NewByteArray((jsize) size);
+        if (result != nullptr) env->SetByteArrayRegion(result, 0, (jsize) size, data);
+    });
+    if (result != nullptr || env->ExceptionCheck()) return result;
+    return env->NewByteArray(0);
 }
 
-// Each DetachedVirtualFile of list as File(virtual path, file descriptor).
+// The Java byte[] a save state is serialized straight into, so a state of tens of MB (PS2, Wii) is never held twice.
+// NewByteArray zeroes it, as serializeState's sink must. GetByteArrayElements, not GetPrimitiveArrayCritical: a core
+// may run emulation inside retro_serialize (Azahar drains its async work), calling into Java or waiting on threads that
+// allocate, which a critical region forbids. ART keeps an array this large in its non-moving large-object space, so the
+// elements are the array itself; a small one may be a copy, written back on release.
+class StateArray {
+public:
+    explicit StateArray(JNIEnv* env) : env(env) {}
+    ~StateArray() { release(JNI_ABORT); }
+
+    StateArray(const StateArray&) = delete;
+    StateArray& operator=(const StateArray&) = delete;
+
+    int8_t* take(size_t size) {
+        if (!fitsJavaArray(size)) {
+            LOGE("Cannot save state: %zu bytes do not fit a Java array", size);
+            return nullptr;
+        }
+        array = env->NewByteArray((jsize) size);
+        if (array == nullptr) return nullptr;   // OutOfMemoryError pending
+        elements = env->GetByteArrayElements(array, nullptr);
+        return reinterpret_cast<int8_t*>(elements);
+    }
+
+    // The filled array, else an empty one (no state). Null with a Java exception pending.
+    jbyteArray finish(bool filled) {
+        if (filled && elements != nullptr) {
+            release(0);
+            return array;
+        }
+        release(JNI_ABORT);
+        if (array != nullptr) env->DeleteLocalRef(array);
+        array = nullptr;
+        return env->ExceptionCheck() ? nullptr : env->NewByteArray(0);
+    }
+
+private:
+    void release(jint mode) {
+        if (elements == nullptr) return;
+        env->ReleaseByteArrayElements(array, elements, mode);
+        elements = nullptr;
+    }
+
+    JNIEnv* env;
+    jbyteArray array = nullptr;
+    jbyte* elements = nullptr;
+};
+
+// Each DetachedVirtualFile of list as File(virtual path, file descriptor). Stops at a Java exception, which it leaves
+// pending: the caller checks ExceptionCheck() and closes the files read so far. Each item read is marked taken, so the
+// Java side closes only the fds of the items never reached.
 template <typename File>
 std::vector<File> virtualFilesFromJava(JNIEnv* env, jobject list) {
-    jclass dvf = env->FindClass("com/swordfish/libretrodroid/DetachedVirtualFile");
-    jmethodID getPath = env->GetMethodID(dvf, "getVirtualPath", "()Ljava/lang/String;");
-    jmethodID getFd = env->GetMethodID(dvf, "getFileDescriptor", "()I");
     std::vector<File> files;
-    JavaUtils::forEachOnJavaIterable(env, list, [&](jobject item) {
-        auto path = (jstring) env->CallObjectMethod(item, getPath);
-        std::string virtualPath = JniString(env, path).stdString();
-        env->DeleteLocalRef(path);
-        files.emplace_back(std::move(virtualPath), (int) env->CallIntMethod(item, getFd));
-    });
+    jclass dvf = env->FindClass("com/swordfish/libretrodroid/DetachedVirtualFile");
+    if (dvf == nullptr) return files;
+    jmethodID getPath = env->GetMethodID(dvf, "getVirtualPath", "()Ljava/lang/String;");
+    jmethodID getFd = getPath != nullptr ? env->GetMethodID(dvf, "getFileDescriptor", "()I") : nullptr;
+    jfieldID taken = getFd != nullptr ? env->GetFieldID(dvf, "taken", "Z") : nullptr;
+    if (taken != nullptr) {
+        JavaUtils::forEachOnJavaIterable(env, list, [&](jobject item) {
+            auto path = (jstring) env->CallObjectMethod(item, getPath);
+            if (env->ExceptionCheck()) return;
+            std::string virtualPath = JniString(env, path).stdString();
+            env->DeleteLocalRef(path);
+            auto fd = (int) env->CallIntMethod(item, getFd);
+            if (env->ExceptionCheck()) return;
+            files.emplace_back(std::move(virtualPath), fd);
+            env->SetBooleanField(item, taken, JNI_TRUE);
+        });
+    }
     env->DeleteLocalRef(dvf);
     return files;
 }
@@ -493,6 +558,11 @@ JNIEXPORT jstring JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_achieve
     jobject fileList
 ) {
     auto files = virtualFilesFromJava<std::pair<std::string, int>>(env, fileList);
+    if (env->ExceptionCheck()) {
+        // hash() closes the fds it is given; these never reach it.
+        for (auto& file : files) close(file.second);
+        return nullptr;
+    }
     std::string hash = AchievementsHash::hash((uint32_t) consoleId, std::move(files));
     return hash.empty() ? nullptr : env->NewStringUTF(hash.c_str());
 }
@@ -551,8 +621,9 @@ JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_seri
     jclass obj
 ) {
     try {
-        auto [data, size] = LibretroDroid::getInstance().serializeState();
-        return toJByteArray(env, data.get(), size);
+        StateArray state(env);
+        bool filled = LibretroDroid::getInstance().serializeState([&](size_t size) { return state.take(size); });
+        return state.finish(filled);
     } catch (std::exception &exception) {
         LOGE("Error in serializeState: %s", exception.what());
         JavaUtils::throwRetroException(env, ERROR_SERIALIZATION);
@@ -643,7 +714,9 @@ JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_seri
     jclass obj
 ) {
     try {
-        return toJByteArray(env, LibretroDroid::getInstance().serializeSRAM());
+        return memoryToJava(env, [](const LibretroDroid::MemoryReader& read) {
+            return LibretroDroid::getInstance().serializeSRAM(read);
+        });
     } catch (std::exception &exception) {
         LOGE("Error in serializeSRAM: %s", exception.what());
         JavaUtils::throwRetroException(env, ERROR_SERIALIZATION);
@@ -673,7 +746,9 @@ JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_seri
     jclass obj
 ) {
     try {
-        return toJByteArray(env, LibretroDroid::getInstance().serializeRTC());
+        return memoryToJava(env, [](const LibretroDroid::MemoryReader& read) {
+            return LibretroDroid::getInstance().serializeRTC(read);
+        });
     } catch (std::exception &exception) {
         LOGE("Error in serializeRTC: %s", exception.what());
         JavaUtils::throwRetroException(env, ERROR_SERIALIZATION);
@@ -876,7 +951,14 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_addVirtual
         jclass obj,
         jobject virtualFileList
 ) {
-    LibretroDroid::getInstance().addVirtualFiles(virtualFilesFromJava<VFSFile>(env, virtualFileList));
+    try {
+        auto files = virtualFilesFromJava<VFSFile>(env, virtualFileList);
+        if (env->ExceptionCheck()) return;
+        LibretroDroid::getInstance().addVirtualFiles(std::move(files));
+    } catch (std::exception &exception) {
+        LOGE("Error in addVirtualFiles: %s", exception.what());
+        JavaUtils::throwRetroException(env, ERROR_LOAD_GAME);
+    }
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_loadGameFromVirtualFiles(
@@ -886,7 +968,9 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_loadGameFr
 ) {
 
     try {
-        LibretroDroid::getInstance().loadGameFromVirtualFiles(virtualFilesFromJava<VFSFile>(env, virtualFileList));
+        auto files = virtualFilesFromJava<VFSFile>(env, virtualFileList);
+        if (env->ExceptionCheck()) return;
+        LibretroDroid::getInstance().loadGameFromVirtualFiles(std::move(files));
     } catch (std::exception &exception) {
         LOGE("Error in loadGameFromDescriptors: %s", exception.what());
         JavaUtils::throwRetroException(env, ERROR_LOAD_GAME);

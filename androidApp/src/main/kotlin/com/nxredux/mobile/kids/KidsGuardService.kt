@@ -46,22 +46,36 @@ class KidsGuardService : Service() {
     private lateinit var look: Handler
     private lateinit var settings: AndroidAppSettings
     private lateinit var kids: KidsController
-    /** The resume event last sent back, so one event is bounced once (the next poll may still see it). Set on main. */
+    /** The resume event last sent back, so one event is bounced once (the next poll may still see it). Set on main; a new run clears it on [look]'s thread. */
     @Volatile private var bounced: GuardEvent? = null
     /** The first look of this guard (a long one) is still to come. [look]'s thread only, as are the two below. */
     private var firstLook = true
     private var allowedFrom: Set<String>? = null
     private var allowedPkgs: Set<String> = emptySet()
 
-    /** Cleared on main by a stop, so a look already under way does not post the next one. */
-    @Volatile private var polling = false
+    /**
+     * The current poll chain's number; a stop or a new start moves it on (main), so a chain whose look is under way when
+     * removeCallbacks runs ends there instead of reposting beside the new one.
+     */
+    @Volatile private var generation = 0
+    private var poll: Runnable? = null   // the current chain, for removeCallbacks (main)
 
-    private val poll = object : Runnable {
+    /** A new poll chain [gen]; its first run starts a new guard run: the long first look again, nothing bounced yet. */
+    private fun pollChain(gen: Int): Runnable = object : Runnable {
+        private var fresh = true
         override fun run() {
-            if (!polling) return
+            if (generation != gen) return
+            if (fresh) { fresh = false; firstLook = true; bounced = null }
             check()
-            if (polling) look.postDelayed(this, POLL_MS)
+            if (generation == gen) look.postDelayed(this, POLL_MS)
         }
+    }
+
+    /** Main: ends the current poll chain, the look under way included (it does not post again). */
+    private fun stopPolling() {
+        generation++
+        poll?.let(look::removeCallbacks)
+        poll = null
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -88,25 +102,22 @@ class KidsGuardService : Service() {
         }
         if (running !== this) {
             running = this
-            polling = true
-            look.removeCallbacks(poll)
-            look.post(poll)
+            stopPolling()
+            poll = pollChain(generation).also(look::post)
         }
         if (!wanted) stop()
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
-        polling = false
-        look.removeCallbacks(poll)
+        stopPolling()
         looks.quitSafely()
         if (running === this) running = null
         super.onDestroy()
     }
 
     private fun stop() {
-        polling = false
-        look.removeCallbacks(poll)
+        stopPolling()
         if (running === this) running = null
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
