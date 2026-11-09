@@ -28,7 +28,10 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.nxredux.mobile.ui.GridTile
+import com.nxredux.mobile.ui.TOOL_APPS_ICON_MAX
+import com.nxredux.mobile.ui.TOOL_APPS_ICON_SHARE
 import org.jetbrains.compose.resources.painterResource
 import kotlin.math.min
 import kotlin.math.sqrt
@@ -50,9 +53,6 @@ private const val MARK_EDGE_ALPHA = 0.12f   // role: a Grid mark tile's edge
 private const val CONSOLE_LOGO_AREA = 0.15f
 private const val CONSOLE_LOGO_MAX_W = 0.82f
 private const val CONSOLE_LOGO_MAX_H = 0.5f
-
-/** A tool's name's gap under its icon. */
-private val TOOL_NAME_GAP = 6.dp
 
 /** A name's room from the tile's left and right edges (a tool's, a collection's), so a long line wraps clear of them. */
 private val MARK_NAME_INSET = 12.dp
@@ -84,7 +84,6 @@ internal fun MenuMarkCell(tile: GridTile, lit: Boolean, cellW: Float, cellH: Flo
     val dim = colors.main.copy(alpha = CONSOLE_DIM_ALPHA)   // role: an unselected console logo
     val ink = lerp(dim, colors.accent, litness())
     val edge = colors.main.copy(alpha = MARK_EDGE_ALPHA)   // role: a Grid mark tile's edge
-    val small = nxDescSize()   // a Settings row's description size
     // A name broken only between words ([markNameLines]), each line on its own: one wider than the tile ends in "…".
     val nameStyle = TextStyle(fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = nxListLabel(), textAlign = TextAlign.Center)
     val measurer = rememberTextMeasurer()
@@ -97,6 +96,31 @@ internal fun MenuMarkCell(tile: GridTile, lit: Boolean, cellW: Float, cellH: Flo
             lines.forEach { Text(it, color = ink, style = nameStyle, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) }
         }
     }
+    if (tile is GridTile.Tool) {
+        // The app drawer's tile: the icon at a fixed spot from the top, two lines kept for the name whatever it needs, so
+        // every tool's icon lines up across a row.
+        Column(
+            modifier.fillMaxSize().border(1.dp, edge, RoundedCornerShape(NX_TILE_CORNER.dp))
+                .padding(horizontal = MARK_NAME_INSET, vertical = TOOL_TILE_PAD_V.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            // Weighted, so the name's two lines are measured first: a tile short of its height shrinks the icon, never the name.
+            val icon = min(cellW * TOOL_APPS_ICON_SHARE, TOOL_APPS_ICON_MAX).dp
+            ToolIcon(
+                tile.icon, tile.appId, ink,
+                Modifier.weight(1f, fill = false).sizeIn(maxWidth = icon, maxHeight = icon).aspectRatio(1f, matchHeightConstraintsFirst = true),
+            )
+            Spacer(Modifier.height(TOOL_TILE_NAME_GAP.dp))
+            Text(
+                tile.lines.joinToString("\n"), color = ink, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis,
+                style = TextStyle(
+                    fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = TOOL_TILE_NAME_SP.sp,
+                    lineHeight = (TOOL_TILE_NAME_SP * TOOL_TILE_LINE).sp, textAlign = TextAlign.Center,
+                ),
+            )
+        }
+        return
+    }
     Column(
         modifier.fillMaxSize().border(1.dp, edge, RoundedCornerShape(NX_TILE_CORNER.dp)).wrapContentHeight(Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -107,23 +131,7 @@ internal fun MenuMarkCell(tile: GridTile, lit: Boolean, cellW: Float, cellH: Flo
                 Image(painterResource(res), contentDescription = tile.name, contentScale = ContentScale.Fit, colorFilter = ColorFilter.tint(ink), modifier = Modifier.size(w.dp, h.dp))
             } ?: name(tile.name)
             is GridTile.Collection -> name(tile.name)
-            is GridTile.Tool -> {
-                // At most [TOOL_ICON_SHARE]; weighted, so its name is measured first and a short cell shrinks the icon,
-                // never the name's two lines.
-                val icon = (min(cellW, cellH) * TOOL_ICON_SHARE).dp
-                ToolIcon(
-                    tile.icon, tile.appId, ink,
-                    Modifier.weight(1f, fill = false).sizeIn(maxWidth = icon, maxHeight = icon).aspectRatio(1f, matchHeightConstraintsFirst = true),
-                )
-                Spacer(Modifier.height(TOOL_NAME_GAP))
-                // Its own lines ("Retro / Achievements"), so a long name in an outer column keeps off the screen's edge;
-                // the icon and the lines it has centred in the tile together.
-                Text(
-                    tile.lines.joinToString("\n"), color = ink, fontFamily = LocalNxFont.current, fontWeight = FontWeight.Medium,
-                    fontSize = small, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                    lineHeight = small * 1.3f, modifier = Modifier.padding(horizontal = MARK_NAME_INSET),
-                )
-            }
+            is GridTile.Tool -> Unit   // drawn above
             is GridTile.Game -> Unit
         }
     }
@@ -147,9 +155,6 @@ internal fun markNameLines(name: String, max: Int, fits: (String) -> Boolean): L
     if (line.isNotEmpty()) lines += line
     return lines
 }
-
-/** A tool's icon, as a share of its cell's shorter side. */
-private const val TOOL_ICON_SHARE = 0.4f
 
 /** The Grid's title for its selected [tile]: a console's or collection's name over its game count (null while unknown); null for anything else. */
 internal fun gridTitle(tile: GridTile?): Pair<String, Int?>? = when (tile) {
