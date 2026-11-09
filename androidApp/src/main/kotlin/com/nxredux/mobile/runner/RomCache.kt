@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * The ROM cache, `cacheDir/roms/`: one top-level entry per archive extraction (`<archive name>.<length>/<inner ROM>`,
- * [Archives]) or real-path copy (`<file name>`, GameActivity.copyToCache). An entry's mtime is its last use (touched on
+ * [Archives]) or real-path copy (`<file name>`, LaunchPipeline.copyToCache). An entry's mtime is its last use (touched on
  * creation and on every reuse), and [sweep] trims the cache by [CacheSweep]'s policy. Each entry has one lock
  * (unpack/copy and delete of one entry never overlap) and a hold count: a held entry (the running game's, one being
  * hashed) is never deleted. The lock spans both processes ([withEntryLock]: the menu's RA hashing and a game launch may

@@ -9,7 +9,6 @@ import com.nxredux.mobile.skin.menuRoom
 import com.nxredux.mobile.ui.nx.LocalInSkin
 import kotlin.math.roundToInt
 import android.widget.FrameLayout
-import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -27,7 +26,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.R
 import com.nxredux.mobile.cheats.CheatSet
@@ -80,11 +78,8 @@ import java.io.File
  * owned there; the menu reads and sets them through this, and pausing or resuming the game around the menu (which the
  * focus pause shares) is the activity's ([pauseForMenu], [resumeAfterMenu]).
  */
-internal interface InGameMenuHost : LifecycleOwner {
-    val activity: ComponentActivity
-    val retroView: GLRetroView?
+internal interface InGameMenuHost : GameScreenHost {
     var menuOpen: Boolean
-    val quitting: Boolean
     val gameReady: Boolean
     val gameTag: String
     val isN3ds: Boolean
@@ -140,7 +135,6 @@ internal interface InGameMenuHost : LifecycleOwner {
     fun pauseForMenu()
     /** The menu closed: the game plays on (unless the focus pause holds it, or a failed netplay start). */
     fun resumeAfterMenu()
-    fun toast(msg: String): android.widget.Toast
     /** This console's or game's shortcut overrides in effect (the Shortcuts page's live edits included): what Save Changes writes. */
     val shortcutOverrides: ShortcutOverrides
     /** The overrides changed (the Shortcuts page, Restore defaults): the bound keys follow now. */
@@ -282,7 +276,7 @@ internal class InGameMenuController(
         val model = InGameMenuModel(
             gameTitle = intent.getStringExtra(EXTRA_TITLE) ?: "Paused",
             slotCount = SaveStates.SLOT_COUNT,
-            // The cached pointer. Only a menu opened before startEmulator's first read lands reads it here: a
+            // The cached pointer. Only a menu opened before the launch's first read lands reads it here: a
             // one-line file, and the model takes its slot only at construction.
             initialSlot = (lastSlotCache ?: saveStates?.lastSlot()?.also { lastSlotCache = it } ?: 1) - 1,
         ).also {
