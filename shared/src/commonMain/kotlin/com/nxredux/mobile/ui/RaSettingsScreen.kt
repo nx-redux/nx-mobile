@@ -6,7 +6,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import com.nxredux.mobile.ui.nx.LocalWindowSize
 import com.nxredux.mobile.ui.nx.NX_EDIT_HINTS
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.ui.nx.NxButton
@@ -15,6 +14,7 @@ import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.NxSettingsPage
 import com.nxredux.mobile.ui.nx.NxSignInPrompt
+import com.nxredux.mobile.ui.nx.splitWindow
 
 /**
  * Tools -> RetroAchievements -> Settings: the account (Sign in or Sign out with the status under it), game data
@@ -43,7 +43,7 @@ fun RaSettingsScreen(
     Box(modifier.fillMaxSize()) {
         NxSettingsPage(
             toolPageTitle(screen, split), rows, selectedIndex,
-            hints = if (editing >= 0) NX_EDIT_HINTS else raSettingsHints(screen.rows.getOrNull(selectedIndex), touch, touch != null && nxShowsInfo(touch, truncated), rowEditTwoPane(screen, settingsSplit(LocalWindowSize.current))),
+            hints = if (editing >= 0) NX_EDIT_HINTS else raSettingsHints(screen.rows.getOrNull(selectedIndex), touch, touch != null && nxShowsInfo(touch, truncated), rowEditTwoPane(screen, settingsSplit(splitWindow()))),
             onSelect = onSelect, onOpen = onOpen, onEvent = onSetting, onTruncated = onTruncated, onHint = onHint,
         )
         if (!split) RaSettingsDialogs(screen, state, onHint)

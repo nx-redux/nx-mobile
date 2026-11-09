@@ -113,7 +113,6 @@ import com.nxredux.mobile.ui.nx.LocalAppIcons
 import com.nxredux.mobile.ui.nx.LocalDialogFocus
 import com.nxredux.mobile.ui.nx.LocalPadBelow
 import com.nxredux.mobile.ui.nx.LocalPortrait
-import com.nxredux.mobile.ui.nx.LocalWindowSize
 import com.nxredux.mobile.ui.nx.NxDefaults
 import com.nxredux.mobile.ui.nx.NxBackdropPicture
 import com.nxredux.mobile.ui.nx.backdropPictureTarget
@@ -141,6 +140,7 @@ import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.background
 import org.jetbrains.compose.resources.painterResource
 import kotlinx.coroutines.delay
+import com.nxredux.mobile.ui.nx.splitWindow
 
 /**
  * The image loader every picture uses, the game screen's too: the generated abstract art's fetcher ([abstractArtFetcher])
@@ -224,7 +224,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                             val toolAbove = DualMenu.bottom(screen, dualMenu, toolOnTop) == BottomContent.Menu
                             // The window decides whether Settings splits; AppState needs it for RIGHT on a category. A tool on
                             // the top screen is laid out there, which reports its own.
-                            val split = settingsSplit(LocalWindowSize.current)
+                            val split = settingsSplit(splitWindow())
                             LaunchedEffect(split, toolAbove) { if (!toolAbove) state.onSettingsSplit(split) }
                             // Into, inside and out of a tool on the top screen the pages here do not slide: it is the same menu
                             // throughout, and the tool's page must not show here on its way out.
@@ -608,7 +608,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                 if (gameSettingsModal(s)) Unit   // no list to draw under it: the modal alone (below)
                 // Its bars' hints start on the section words' edge, in line with the text above them.
                 else CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart()) {
-                    if (settingsSplitView(LocalWindowSize.current, s)) SettingsSplitScreen(state, s, selection) { SettingsPage(state, s, selection, titled = true) }
+                    if (settingsSplitView(splitWindow(), s)) SettingsSplitScreen(state, s, selection) { SettingsPage(state, s, selection, titled = true) }
                     else NarrowSettingsPage(state, s, selection)
                 }
             // Cheats & Patches and RetroAchievements: the Settings root's look, so the Settings hint bar rules too.
@@ -625,12 +625,12 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.GameTime -> WithIndex(selection) { GameTimeScreen(s, it, state::select, { state.openSelected() }, state::gameTimeSelectModal, onHint = state::onButton) }
             // A game's sessions: on a split window beside the tracker list (the RetroAchievements column browser's rule); else one page.
             is Screen.GameTimeSessions ->
-                if (gameTimeSplitView(LocalWindowSize.current, s)) GameTimeSplitScreen(state, s, selection)
+                if (gameTimeSplitView(splitWindow(), s)) GameTimeSplitScreen(state, s, selection)
                 else WithIndex(selection) { GameTimeSessionsScreen(s, it, state::select, onHint = state::onButton) }
             // The RetroAchievements levels: on a split window a column browser, the level it came from on the left (the
             // same rule as the two-pane Settings); else one page.
             is Screen.RaGames, is Screen.RaGame, is Screen.RaAchievement, is Screen.RaSettings ->
-                if (raSplitView(LocalWindowSize.current, s)) RaSplitScreen(state, s) { RaLevelPage(state, s, selection, split = true) }
+                if (raSplitView(splitWindow(), s)) RaSplitScreen(state, s) { RaLevelPage(state, s, selection, split = true) }
                 else if (s is Screen.RaAchievement) RaLevelPage(state, s, selection, split = false)   // its own detail page
                 else SettingsHintBar { NarrowRaPage(state, s, selection) }
             // Artwork and its pages: on a split window Settings' wide stage (its words on the left, the page or the
@@ -638,7 +638,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             // look: the hint bar follows Layouts → Button hints and starts at the words' edge, as Settings'.
             is Screen.Artwork, is Screen.ArtworkConsoles, is Screen.ArtworkProgress, is Screen.ArtworkSettings,
             is Screen.ArtworkReset ->
-                if (artworkSplitView(LocalWindowSize.current, s)) CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart()) {
+                if (artworkSplitView(splitWindow(), s)) CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart()) {
                     ArtworkStageScreen(state, s, selection)
                 }
                 else SettingsHintBar {
@@ -853,7 +853,7 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
         is Screen.RetroAchievements, is Screen.CheatDb, Screen.DeviceSync -> SettingsBackground()
         // RetroAchievements' levels drawn as the rows block (a narrow window; its detail page keeps its own).
         is Screen.RaGames, is Screen.RaGame, is Screen.RaSettings ->
-            if (raSplitView(LocalWindowSize.current, s)) MarkBackground(s) else SettingsBackground()
+            if (raSplitView(splitWindow(), s)) MarkBackground(s) else SettingsBackground()
         else -> if (settingsPane(s) != null) SettingsBackground() else MarkBackground(s)
     }
 }
@@ -862,7 +862,7 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
 @Composable
 private fun MarkBackground(s: Screen) = NxScreenBackground(
     url = null, fallback = Res.drawable.background, fade = false, modifier = Modifier.fillMaxSize().clipToBounds(), centred = true,
-    markShift = settingsMarkShift(twoPaneView(LocalWindowSize.current, s)),
+    markShift = settingsMarkShift(twoPaneView(splitWindow(), s)),
 )
 
 /**

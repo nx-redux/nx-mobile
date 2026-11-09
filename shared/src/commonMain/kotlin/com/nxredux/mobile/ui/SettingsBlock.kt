@@ -59,13 +59,13 @@ import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.nx_logo
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxFont
-import com.nxredux.mobile.ui.nx.LocalWindowSize
 import com.nxredux.mobile.ui.nx.NxTextSizes
 import com.nxredux.mobile.ui.nx.nxListInset
 import com.nxredux.mobile.ui.nx.nxTextScale
 import com.nxredux.mobile.ui.nx.pinned
 import org.jetbrains.compose.resources.painterResource
 import com.nxredux.mobile.ui.nx.nxDescSize
+import com.nxredux.mobile.ui.nx.splitWindow
 
 /** The window classes the Settings block's geometry follows. */
 enum class SettingsSizeClass { PHONE_UPRIGHT, PHONE_LANDSCAPE, TABLET }
@@ -148,9 +148,9 @@ private const val SETTINGS_SECTION_LINE = 1.2f
 @Composable
 internal fun settingsSectionStart(): Dp = nxPageInset().start
 
-/** The size class of the window the screen is in ([LocalWindowSize]). */
+/** The size class of the screen's area ([splitWindow]: a skin's glass, else the window). */
 @Composable
-internal fun settingsSizeClass(): SettingsSizeClass = LocalWindowSize.current.let { settingsSizeClass(it.width.value, it.height.value) }
+internal fun settingsSizeClass(): SettingsSizeClass = splitWindow().let { settingsSizeClass(it.width.value, it.height.value) }
 
 /**
  * The Settings section block: [SettingsWordBlock] titled "Settings" ([SETTINGS_TITLE]) over the [sections]' labels.
