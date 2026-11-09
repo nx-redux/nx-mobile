@@ -396,7 +396,8 @@ static void run_case(const char* name, int (*fn)(uint16_t)) {
 
 int main(void) {
 	setvbuf(stdout, NULL, _IOLBF, 0);
-	next_port = (uint16_t)(46000 + (getpid() % 2000) * 8);
+	/* Below the ephemeral range (49152): a listen port there can collide with this test's own outgoing sockets. */
+	next_port = (uint16_t)(40000 + (getpid() % 180) * 50);
 
 	run_case("outq_grows_compacts_and_caps", case_outq_grows_compacts_and_caps);
 	run_case("parse_peer", case_parse_peer);

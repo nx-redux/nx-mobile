@@ -77,19 +77,22 @@
  * handheld's 10 s state waits start late enough.
  *
  * Pair mode (phones only, both sides set it; off, nothing below happens and the wire is unchanged):
- * - drift check: after every 120th frame both sides send HASH (frame = frames run, u64 BE hash of the core) and
+ * - drift check: after every NP_PAIR_CHECK_INTERVAL (120th) frame both sides send HASH (frame = frames run, u64 BE hash of the core) and
  *   compare it with the peer's; equal hashes make that frame the verified checkpoint;
  * - resync: on a mismatch the host sends RESYNC (frame R = its run frame + 16, past any frame the client can have
  *   reached). Both run up to R and hold; the host serialises there and sends STATE_HDR (frame R) + raw bytes, the
  *   client unserialises them at R and acks (STATE_ACK, frame R), and both carry on. Inputs keep flowing: frame
  *   numbers and the ring are untouched, only the client's core state is replaced. Checks up to R are void;
- * - drift: the host's third mismatch within 60 s ends the session with PAIR_END (reason byte) and DISCONNECT;
+ * - drift: the first two mismatches within 60 s resync; the host's third ends the session with PAIR_END (reason byte)
+ *   and DISCONNECT;
  * - input delay: each side sends its own input `delay` frames ahead of its run frame, from 2, one more at once on a
  *   stall (8 at most), one less after 10 s without one (1 at least), or pinned. Raising sends the extra frames in the
  *   same pre_frame; lowering skips sending until the run frame catches up, so every frame still gets exactly one
  *   input from each side and the delay never goes on the wire;
  * - too slow: when the frame thread ran fewer than 90% of the frames a 17 ms budget allows in each 1 s window,
- *   without once waiting on the peer, for more than 10 s, the session ends with PAIR_END too.
+ *   without once waiting on the peer, for more than 10 s, the session ends with PAIR_END too. A pause restarts the
+ *   windows, and a window over twice its length is a frame thread that stopped (the peer's stall countdown covers
+ *   that), never a slow one.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -144,7 +147,6 @@ enum {
 enum { PAIR_END_DRIFT = 1, PAIR_END_TOO_SLOW = 2 };
 
 // Pair mode
-#define NP_HASH_INTERVAL 120		// frames between drift checks (~2 s)
 #define NP_RESYNC_LEAD 16			// RESYNC frame past the host's run frame: the client is at most NP_DELAY_MAX + 1 ahead
 #define NP_DRIFT_LIMIT 3			// mismatches within NP_DRIFT_WINDOW_MS end the session
 #define NP_DRIFT_WINDOW_MS 60000
@@ -517,6 +519,13 @@ static void pair_end(np_reason why) {
 	end_session(NP_ENDED, why, true);
 }
 
+// After a pause or a resync hold: neither the too-slow windows nor the calm period may span the gap.
+static void restart_pair_clocks(uint64_t now) {
+	np.win_open = false;
+	np.slow = false;
+	np.calm_t0 = now;
+}
+
 static void forget_hashes(void) {
 	np.have_local_hash = false;
 	np.have_remote_hash = false;
@@ -578,7 +587,8 @@ static bool slow_track(uint64_t now, bool ran) {
 	if (span < NP_SLOW_WINDOW_MS)
 		return false;
 	// A window where we waited even once was the peer's (or the network's) doing, not ours.
-	bool slow = !np.win_waited && (uint64_t)np.win_frames * NP_FRAME_BUDGET_MS * 100u < span * NP_SLOW_RATE_PCT;
+	bool slow = !np.win_waited && span <= 2u * NP_SLOW_WINDOW_MS &&
+				(uint64_t)np.win_frames * NP_FRAME_BUDGET_MS * 100u < span * NP_SLOW_RATE_PCT;
 	if (!slow) {
 		np.slow = false;
 	} else if (!np.slow) {
@@ -688,6 +698,7 @@ static void handle_packet(const np_packet* p, uint64_t now) {
 			p->frame == np.resync_frame) {
 			np.resync = RESYNC_NONE;
 			np.resync_timer = false;
+			restart_pair_clocks(now);
 			NP_LOG("pair: resync done at frame %u", np.resync_frame);
 			return;
 		}
@@ -979,6 +990,9 @@ int np_start(np_role role, const char* peer_ip, uint16_t port, np_clock_fn clock
 	np.phase = NP_CONNECTING;
 	np.started = true;
 	np.thread_started = true;
+	// Consumed: a later session is in pair mode only when asked again (the hash belongs to this session's core).
+	np_pair_wanted = false;
+	np_hash_wanted = NULL;
 	NP_LOG(role == NP_ROLE_HOST ? "hosting on port %u" : "joining on port %u", port);
 	pthread_mutex_unlock(&np_mutex);
 	return 0;
@@ -994,6 +1008,7 @@ void np_pause(void) {
 		// (the peer runs it too).
 		send_packet(CMD_PAUSE, 0, NULL, 0);
 		update_countdown(now_ms());
+		restart_pair_clocks(now_ms());
 	}
 	pthread_mutex_unlock(&np_mutex);
 }
@@ -1009,6 +1024,7 @@ void np_resume(void) {
 			np.cd_active = false;
 		}
 		update_countdown(now_ms());
+		restart_pair_clocks(now_ms());
 	}
 	pthread_mutex_unlock(&np_mutex);
 }
@@ -1138,6 +1154,7 @@ static bool client_load_resync(np_unser_fn unser) {
 	send_packet(CMD_STATE_ACK, np.resync_frame, NULL, 0);
 	np.resync = RESYNC_NONE;
 	np.resync_timer = false;
+	restart_pair_clocks(now_ms());
 	NP_LOG("pair: resync done at frame %u", np.resync_frame);
 	return true;
 }
@@ -1323,7 +1340,7 @@ void np_post_frame(void) {
 	uint32_t at = 0;
 	if (np.frame_armed && np.phase == NP_RUNNING) {
 		np.run_frame++;
-		if (np.pair && np.hash && np.run_frame % NP_HASH_INTERVAL == 0 && (int64_t)np.run_frame > np.hash_floor) {
+		if (np.pair && np.hash && np.run_frame % NP_PAIR_CHECK_INTERVAL == 0 && (int64_t)np.run_frame > np.hash_floor) {
 			hash = np.hash;
 			at = np.run_frame;
 		}
@@ -1367,6 +1384,13 @@ int np_current_delay(void) {
 	int d = np.delay;
 	pthread_mutex_unlock(&np_mutex);
 	return d;
+}
+
+int64_t np_run_frame(void) {
+	pthread_mutex_lock(&np_mutex);
+	int64_t f = np.started ? (int64_t)np.run_frame : -1;
+	pthread_mutex_unlock(&np_mutex);
+	return f;
 }
 
 int64_t np_last_verified_frame(void) {
@@ -1420,7 +1444,5 @@ void np_shutdown(void) {
 	np_tcp_release(&np.sock, &np.listen_fd, &np.wake, &np.out);
 	free(np.state_buf);
 	reset_fields();
-	np_pair_wanted = false; // one session: the hash belongs to the core that was loaded for it
-	np_hash_wanted = NULL;
 	pthread_mutex_unlock(&np_mutex);
 }

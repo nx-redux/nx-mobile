@@ -98,18 +98,27 @@ uint16_t np_input(unsigned port); /* port 0 -> P1 word, 1 -> P2 word, >= 2 -> 0,
 int16_t np_analog(unsigned port, unsigned index, unsigned id);
 void np_shutdown(void);			  /* join the thread, close sockets, reset to IDLE (safe to call twice) */
 
-/* Pair mode (two emulated consoles on each device, e.g. two linked GBAs): both sides hash the core every 120 frames
- * and compare; on a mismatch the host's state replaces the client's at an agreed frame (NP_RESYNCING meanwhile); the
- * third mismatch within 60 s ends the session (NP_REASON_DRIFT). The input delay adapts (or is pinned), and a frame
- * thread that cannot keep the frame rate ends it (NP_REASON_TOO_SLOW). Both peers must be in pair mode: it adds
- * commands to the wire. Off, the wire is exactly the handheld's protocol 3. */
+/* Pair mode (two emulated consoles on each device, e.g. two linked GBAs): both sides hash the core every
+ * NP_PAIR_CHECK_INTERVAL frames and compare; on a mismatch the host's state replaces the client's at an agreed frame
+ * (NP_RESYNCING meanwhile). The first two mismatches within 60 s resync; the third ends the session
+ * (NP_REASON_DRIFT). The input delay adapts (or is pinned), and a frame thread that cannot keep the frame rate ends it
+ * (NP_REASON_TOO_SLOW). Both peers must be in pair mode: it adds commands to the wire. Off, the wire is exactly the
+ * handheld's protocol 3. */
+#define NP_PAIR_CHECK_INTERVAL 120
 typedef uint64_t (*np_hash_fn)(void); /* called on the frame thread, after a frame */
-/* Before np_start; np_shutdown turns it off again. on with a NULL hash is off. */
+/* Asks for pair mode in the next np_start, which consumes the request (a later session is in pair mode only when asked
+ * again); np_shutdown leaves it alone. on with a NULL hash is off. */
 void np_set_pair_mode(bool on, np_hash_fn hash);
 /* 0 = adaptive; 1..8 = pinned input delay in frames (Developer setting). Any time; kept across sessions. */
 void np_set_delay_pin(int frames);
 /* This device's input delay in frames (always 2 outside pair mode). */
 int np_current_delay(void);
+/* Frames the session has run (-1 when not started). Frame thread, right after np_post_frame: a value that is a non-zero
+ * multiple of NP_PAIR_CHECK_INTERVAL is a drift-check frame, and the core state now is the one both sides hash. Save
+ * checkpoints: snapshot the local save there, keyed by that frame; once np_last_verified_frame() equals that frame the
+ * snapshot is verified and may become the real save. A snapshot whose frame is passed over (np_last_verified_frame()
+ * moves beyond it, or a mismatch or resync voids it) is never verified: drop it. */
+int64_t np_run_frame(void);
 /* The last frame both sides' hashes matched (-1 none) — the save checkpoint. Still readable once the session ended,
  * until np_shutdown. */
 int64_t np_last_verified_frame(void);

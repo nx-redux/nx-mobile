@@ -47,15 +47,23 @@ object LibretroNetplay {
     /** Frames each side runs on its own before the state sync (a core that takes no state until it ran); call before [start]. */
     @JvmStatic external fun setPresyncFrames(frames: Int)
     /**
-     * Pair mode (Cable Link over Wi-Fi: both sides must set it) for the next [start]: drift checks with resync, adaptive
-     * input delay and the too-slow end. Call after the core has loaded, before [start]; [shutdown] turns it off. False
-     * when [on] and the loaded core does not export `nx_pair_hash` (pair mode stays off).
+     * Pair mode (Cable Link over Wi-Fi: both sides must set it) for the next [start], which consumes it: drift checks
+     * with resync, adaptive input delay and the too-slow end. Call after the core has loaded, before [start] ([shutdown]
+     * in between keeps it). False when [on] and the loaded core does not export `nx_pair_hash` (pair mode stays off).
      */
     @JvmStatic external fun setPairMode(on: Boolean): Boolean
     /** 0 = adaptive; 1..8 = pinned input delay in frames (Developer setting). Any time; kept across sessions. */
     @JvmStatic external fun setDelayPin(frames: Int)
     /** This device's input delay in frames (2 outside pair mode). */
     @JvmStatic external fun currentDelay(): Int
+    /** Frames between pair-mode drift checks. */
+    const val PAIR_CHECK_INTERVAL = 120
+    /**
+     * Frames the session has run (-1 when not started). Read on the GL thread right after a lockstep frame: a non-zero
+     * multiple of [PAIR_CHECK_INTERVAL] is a drift-check frame, so snapshot the local save there keyed by it; once
+     * [lastVerifiedFrame] equals that frame the snapshot is verified. A snapshot it passes over is never verified.
+     */
+    @JvmStatic external fun runFrame(): Long
     /**
      * The last frame both phones' drift hashes matched (-1 none): the save checkpoint. Poll it; it stays readable after
      * the session ended until [shutdown].

@@ -90,6 +90,13 @@ JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_currentD
     return (jint) np_current_delay();
 }
 
+JNIEXPORT jlong JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_runFrame(
+    JNIEnv* env,
+    jclass obj
+) {
+    return (jlong) np_run_frame();
+}
+
 JNIEXPORT jlong JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_lastVerifiedFrame(
     JNIEnv* env,
     jclass obj

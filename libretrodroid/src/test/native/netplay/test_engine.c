@@ -1333,26 +1333,48 @@ static int raw_hash(int fd, uint32_t frame, uint64_t h) {
 	return raw_pkt(fd, 0x0D, frame, b, sizeof(b));
 }
 
-/* Waits for the engine's HASH for frame want (reading the stream into c). */
-static int wait_hash(int fd, capture* c, size_t* pos, uint32_t want, uint64_t* h) {
+/* Waits for the engine's next cmd packet after *pos (reading the stream into c); *pos ends past it. Its payload is
+ * copied to pl (up to 64 bytes). A STATE_HDR's raw state is not skipped: the caller reads it at *pos. */
+static int wait_pkt(int fd, capture* c, size_t* pos, uint8_t cmd, uint32_t* frame, uint8_t* pl, uint16_t* sz) {
 	uint64_t t0 = real_ms();
 	for (;;) {
 		cap_drain(fd, c);
-		uint32_t frame = 0;
-		const uint8_t* pl = NULL;
-		uint16_t sz = 0;
+		const uint8_t* p = NULL;
 		size_t at = *pos;
-		while (cap_find(c, &at, 0x0D, &frame, &pl, &sz) == 0) {
+		if (cap_find(c, &at, cmd, frame, &p, sz) == 0) {
 			*pos = at;
-			if (frame == want && sz == 8) {
-				*h = get_be64(pl);
-				return 0;
-			}
+			memcpy(pl, p, *sz < 64 ? *sz : 64);
+			return 0;
 		}
 		if (real_ms() - t0 > 3000)
 			return -1;
 		nap_ms(2);
 	}
+}
+
+/* Waits for the engine's HASH for frame want. */
+static int wait_hash(int fd, capture* c, size_t* pos, uint32_t want, uint64_t* h) {
+	uint32_t frame = 0;
+	uint8_t pl[64];
+	uint16_t sz = 0;
+	do {
+		if (wait_pkt(fd, c, pos, 0x0D, &frame, pl, &sz) != 0)
+			return -1;
+	} while (frame != want || sz != 8);
+	*h = get_be64(pl);
+	return 0;
+}
+
+/* The highest frame the engine sent INPUT for, in everything captured so far. */
+static uint32_t max_input_frame(const capture* c) {
+	size_t at = 0;
+	uint32_t frame = 0, best = 0;
+	const uint8_t* p = NULL;
+	uint16_t sz = 0;
+	while (cap_find(c, &at, 0x01, &frame, &p, &sz) == 0)
+		if (frame > best)
+			best = frame;
+	return best;
 }
 
 static int start_pair_host(uint16_t port, int* fd) {
@@ -1380,7 +1402,7 @@ static int case_pair_hash_match_advances_verified(void) {
 		CHECK(raw_feed_and_run(fd, &peer_sent, 120, 0x1A1A, &c, 16) == 0);
 		uint64_t h = 0;
 		CHECK(wait_hash(fd, &c, &pos, check, &h) == 0);
-		CHECK(core_frame == check && h == f_hash());
+		CHECK(core_frame == check && h == f_hash() && np_run_frame() == (int64_t)check);
 		CHECK(np_last_verified_frame() == (check == 120 ? -1 : 120));
 		CHECK(raw_hash(fd, check, h) == 0);
 		CHECK(raw_barrier(fd) == 0);
@@ -1598,6 +1620,200 @@ static int case_too_slow_ends_with_reason(void) {
 	return 0;
 }
 
+/* A local pause of 15 s with no frames at all, or frames that keep returning 0, is not "too slow"; nor is a frame
+ * thread that stopped for 15 s without a pause (the peer's stall countdown handles that). */
+static int case_pair_pause_gap_not_too_slow(void) {
+	uint16_t port = next_port++;
+	fake_set(1000000);
+	core_reset(1);
+	int fd = -1;
+	CHECK(start_pair_host(port, &fd) == 0);
+	uint32_t ps = 1;
+	CHECK(raw_feed_and_run(fd, &ps, 30, 0x5E5E, NULL, 16) == 0);
+	np_pause();
+	fake_set(fake_clock() + 15000u);
+	np_resume();
+	CHECK(raw_feed_and_run(fd, &ps, 30, 0x5E5E, NULL, 16) == 0);
+	CHECK(np_get_state(NULL, NULL) == NP_RUNNING);
+	np_pause();
+	for (int i = 0; i < 450; i++) {
+		fake_set(fake_clock() + 33u);
+		CHECK(step(1) == 0);
+	}
+	np_resume();
+	CHECK(raw_feed_and_run(fd, &ps, 30, 0x5E5E, NULL, 16) == 0);
+	CHECK(np_get_state(NULL, NULL) == NP_RUNNING);
+	fake_set(fake_clock() + 15000u); /* no pause: the frame thread just stopped */
+	CHECK(raw_feed_and_run(fd, &ps, 30, 0x5E5E, NULL, 16) == 0);
+	CHECK(np_get_state(NULL, NULL) == NP_RUNNING);
+	np_shutdown();
+	close(fd);
+	return 0;
+}
+
+/* 15 s waiting on the peer's input at 30 calls a second is a stall (counting down), never "too slow". */
+static int case_pair_peer_stall_not_too_slow(void) {
+	uint16_t port = next_port++;
+	fake_set(1000000);
+	core_reset(1);
+	int fd = -1;
+	CHECK(start_pair_host(port, &fd) == 0);
+	uint32_t ps = 1;
+	CHECK(raw_feed_and_run(fd, &ps, 30, 0x6F6F, NULL, 16) == 0);
+	for (int i = 0; i < 450; i++) {
+		fake_set(fake_clock() + 33u);
+		CHECK(step(1) == 0);
+	}
+	int secs = 0;
+	CHECK(np_get_state(&secs, NULL) == NP_STALLED && secs == 16); /* 14.85 s into the 30 s countdown */
+	CHECK(raw_feed_and_run(fd, &ps, 30, 0x6F6F, NULL, 16) == 0);
+	CHECK(np_get_state(NULL, NULL) == NP_RUNNING);
+	np_shutdown();
+	close(fd);
+	return 0;
+}
+
+/* A resync survives the peer pausing and a stall before the resync frame, and our own pause while the host waits for
+ * the ack; the calm period restarts after a pause, so the delay does not drop on the first frame back. */
+static int case_pair_resync_across_pause_and_stall(void) {
+	uint16_t port = next_port++;
+	fake_set(1000000);
+	core_reset(1);
+	np_set_delay_pin(0);
+	int fd = -1;
+	CHECK(start_pair_host(port, &fd) == 0);
+	capture c = {0};
+	size_t pos = 0;
+	uint32_t ps = 1;
+	CHECK(raw_feed_and_run(fd, &ps, 120, 0x7E7E, &c, 16) == 0);
+	uint64_t h = 0;
+	CHECK(wait_hash(fd, &c, &pos, 120, &h) == 0);
+	CHECK(raw_hash(fd, 120, h ^ 1u) == 0);
+	uint32_t r = 0;
+	uint8_t pl[64];
+	uint16_t sz = 0;
+	CHECK(wait_pkt(fd, &c, &pos, 0x0E, &r, pl, &sz) == 0); /* RESYNC */
+	CHECK(sz == 0 && r > 120 && r <= 120 + 16 + 9);
+	CHECK(np_get_state(NULL, NULL) == NP_RESYNCING);
+
+	/* the peer pauses for 5 s */
+	CHECK(raw_pkt(fd, 0x0A, 0, NULL, 0) == 0);
+	CHECK(wait_state(NP_PEER_PAUSED, 3000, 0) == 0);
+	for (int i = 0; i < 5; i++) {
+		fake_set(fake_clock() + 1000u);
+		CHECK(step(1) == 0);
+	}
+	CHECK(raw_pkt(fd, 0x0B, 0, NULL, 0) == 0);
+	CHECK(wait_state(NP_RESYNCING, 3000, 0) == 0);
+	/* then its input is late for 2 s */
+	CHECK(step(1) == 0);
+	fake_set(fake_clock() + 2000u);
+	CHECK(step(1) == 0);
+	CHECK(np_get_state(NULL, NULL) == NP_RESYNCING);
+	int delay = np_current_delay();
+	CHECK(delay == 3);
+
+	/* up to the resync frame, where the host holds and sends its state */
+	CHECK(raw_feed_and_run(fd, &ps, r - core_frame, 0x7E7E, &c, 16) == 0);
+	CHECK(core_frame == r);
+	CHECK(step(1) == 0);
+	uint32_t frame = 0;
+	CHECK(wait_pkt(fd, &c, &pos, 0x03, &frame, pl, &sz) == 0); /* STATE_HDR */
+	CHECK(frame == r && sz == 4 && pl[2] == 0x10 && pl[3] == 0);
+	uint64_t t0 = real_ms();
+	while (c.n < pos + CORE_SIZE && real_ms() - t0 < 3000)
+		cap_drain(fd, &c);
+	CHECK(c.n >= pos + CORE_SIZE && memcmp(c.b + pos, core_buf, CORE_SIZE) == 0);
+	pos += CORE_SIZE;
+	CHECK(step(1) == 0); /* holding for the ack */
+	CHECK(np_get_state(NULL, NULL) == NP_RESYNCING);
+
+	/* our pause while the ack comes in, 11 s long */
+	np_pause();
+	CHECK(raw_pkt(fd, 0x05, r, NULL, 0) == 0); /* STATE_ACK, frame R */
+	CHECK(raw_barrier(fd) == 0);
+	CHECK(np_get_state(NULL, NULL) == NP_RUNNING);
+	fake_set(fake_clock() + 11000u);
+	np_resume();
+	CHECK(raw_feed_and_run(fd, &ps, 1, 0x7E7E, &c, 16) == 0);
+	CHECK(np_current_delay() == delay);
+
+	/* the next check matches */
+	CHECK(raw_feed_and_run(fd, &ps, 240 - core_frame, 0x7E7E, &c, 16) == 0);
+	CHECK(wait_hash(fd, &c, &pos, 240, &h) == 0);
+	CHECK(raw_hash(fd, 240, h) == 0);
+	CHECK(raw_barrier(fd) == 0);
+	CHECK(np_last_verified_frame() == 240 && np_run_frame() == 240);
+	free(c.b);
+	np_shutdown();
+	close(fd);
+	return 0;
+}
+
+/* Pinning mid-session moves the delay at once (the next pre_frame sends the frames up to it); unpinning resumes
+ * adapting from there. */
+static int case_pair_delay_pin_changes_mid_session(void) {
+	uint16_t port = next_port++;
+	fake_set(1000000);
+	core_reset(1);
+	np_set_delay_pin(0);
+	int fd = -1;
+	int rc = start_pair_host(port, &fd);
+	capture c = {0};
+	if (rc == 0) {
+		rc = -1;
+		do {
+			uint32_t ps = 1;
+			CHECK(raw_feed_and_run(fd, &ps, 10, 0x8F8F, &c, 16) == 0);
+			CHECK(np_current_delay() == 2);
+			np_set_delay_pin(5);
+			CHECK(np_current_delay() == 5);
+			CHECK(step(1) == 0); /* frame 10 waits for the peer; our input goes out up to 10 + 5 */
+			uint64_t t0 = real_ms();
+			while (max_input_frame(&c) < 15 && real_ms() - t0 < 3000)
+				cap_drain(fd, &c);
+			nap_ms(50);
+			cap_drain(fd, &c);
+			CHECK(max_input_frame(&c) == 15);
+			CHECK(np_current_delay() == 5); /* a stall does not move a pin */
+			np_set_delay_pin(0);
+			CHECK(np_current_delay() == 5);
+			CHECK(raw_feed_and_run(fd, &ps, 5, 0x8F8F, &c, 16) == 0);
+			CHECK(step(1) == 0);
+			CHECK(np_current_delay() == 6);
+			rc = 0;
+		} while (0);
+	}
+	free(c.b);
+	np_set_delay_pin(0);
+	np_shutdown();
+	if (fd >= 0)
+		close(fd);
+	return rc;
+}
+
+/* np_set_pair_mode then np_shutdown of the previous session (the app shuts down before every start) keeps the request; np_start consumes it, so
+ * the next session without a request is not in pair mode. A pinned delay shows which mode a session is in. */
+static int case_pair_request_survives_shutdown_and_is_consumed(void) {
+	uint16_t port = next_port++;
+	int rc = -1;
+	np_set_delay_pin(3);
+	do {
+		CHECK(np_start(NP_ROLE_HOST, "127.0.0.1", port, fake_clock) == 0); /* the previous session */
+		np_set_pair_mode(true, f_hash);
+		np_shutdown();
+		CHECK(np_start(NP_ROLE_HOST, "127.0.0.1", port, fake_clock) == 0);
+		CHECK(np_current_delay() == 3); /* pair mode */
+		np_shutdown();
+		CHECK(np_start(NP_ROLE_HOST, "127.0.0.1", port, fake_clock) == 0);
+		CHECK(np_current_delay() == 2); /* not inherited */
+		rc = 0;
+	} while (0);
+	np_set_delay_pin(0);
+	np_shutdown();
+	return rc;
+}
+
 /* ---------------------------------------------------------------- reader unit case */
 
 static int case_reader_split(void) {
@@ -1670,7 +1886,9 @@ static void local_case(const char* name, int (*fn)(void)) {
 
 int main(void) {
 	setvbuf(stdout, NULL, _IOLBF, 0);
-	next_port = (uint16_t)(40000 + (getpid() % 2000) * 10);
+	/* Below the ephemeral range (49152 on macOS and most Linux setups): a listen port there can collide with the
+	 * outgoing sockets these tests open themselves. 50 ports per run covers every case below. */
+	next_port = (uint16_t)(40000 + (getpid() % 180) * 50);
 
 	local_case("reader_split_header_and_raw", case_reader_split);
 	local_case("shutdown_idempotent", case_shutdown_idempotent);
@@ -1704,6 +1922,11 @@ int main(void) {
 	local_case("adaptive_delay_rises_on_stall_and_eases", case_adaptive_delay_rises_on_stall_and_eases);
 	local_case("delay_pin_holds", case_delay_pin_holds);
 	local_case("too_slow_ends_with_reason", case_too_slow_ends_with_reason);
+	local_case("pair_pause_gap_not_too_slow", case_pair_pause_gap_not_too_slow);
+	local_case("pair_peer_stall_not_too_slow", case_pair_peer_stall_not_too_slow);
+	local_case("pair_resync_across_pause_and_stall", case_pair_resync_across_pause_and_stall);
+	local_case("pair_delay_pin_changes_mid_session", case_pair_delay_pin_changes_mid_session);
+	local_case("pair_request_survives_shutdown_and_is_consumed", case_pair_request_survives_shutdown_and_is_consumed);
 
 	if (fails) {
 		printf("%d test(s) failed\n", fails);
