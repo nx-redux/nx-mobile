@@ -10418,6 +10418,7 @@ class AppStateTest {
         val t = mapOf("face" to SkinTweak(dx = 4f))
         val settings = freshSettings().apply {
             skinTweaks = SkinTweaks.encode(mapOf("gba" to mapOf("grip" to t, "stack" to t), "gb" to mapOf("grip" to t)))
+            overlayTweaks = SkinTweaks.encode(mapOf("gba" to mapOf("grip" to t), "gb" to mapOf("stack" to t)))
         }
         val state = state(settings)
         state.load()
@@ -10428,6 +10429,7 @@ class AppStateTest {
         assertEquals("Reset button layout?", settingsResetAsk(assertIs<Screen.Settings>(state.screen.value), 3)?.title)
         state.onButton(NxButton.A)
         assertEquals(mapOf("gb" to mapOf("grip" to t)), SkinTweaks.decode(settings.skinTweaks))   // every gba layout, gb kept
+        assertEquals(mapOf("gb" to mapOf("stack" to t)), SkinTweaks.decode(settings.overlayTweaks))   // the overlay's too
         assertEquals(SettingsKind.BUTTON_LAYOUT_RESET, assertIs<Screen.Settings>(state.screen.value).rows[state.selection.value.index].kind)
     }
 
@@ -10440,6 +10442,18 @@ class AppStateTest {
         state.select(6)
         state.onButton(NxButton.A); state.onButton(NxButton.A)   // asks, then Reset
         assertEquals("", settings.skinTweaks)
+        assertEquals("Default", assertIs<Screen.Settings>(state.screen.value).rows[5].secondary)
+    }
+
+    @Test fun overlay_tweaks_alone_read_custom_and_appearance_reset_clears_them() = runTest {
+        val settings = freshSettings().apply { overlayTweaks = SkinTweaks.encode(mapOf("gba" to mapOf("grip" to mapOf("face" to SkinTweak(dx = 4f))))) }
+        val state = state(settings)
+        state.load()
+        state.openSettings(SettingsSection.APPEARANCE)
+        assertEquals("Custom", assertIs<Screen.Settings>(state.screen.value).rows[5].secondary)
+        state.select(6)
+        state.onButton(NxButton.A); state.onButton(NxButton.A)
+        assertEquals("", settings.overlayTweaks)
         assertEquals("Default", assertIs<Screen.Settings>(state.screen.value).rows[5].secondary)
     }
 

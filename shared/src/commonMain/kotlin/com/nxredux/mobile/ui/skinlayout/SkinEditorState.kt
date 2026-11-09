@@ -22,11 +22,16 @@ import kotlin.math.abs
  * It edits the skin's layout ([TweakRules.SKIN]) or the overlay's ([TweakRules.OVERLAY], Pad skin Off). The overlay
  * starts from the skin's tweaks ([skinBase]) and keeps a tweak of its own only for the groups the player edited there
  * ([owned]); the rest keep following the skin. [minTouchPx] is the smallest a control's hit box may be shrunk to.
+ *
+ * [placement] carries both of a stick / d-pad swap's sets, as the game tweaks it: a group's room is then measured the
+ * same way here and in the game (the hidden set's touch area counts), so where the editor lets a group go is where the
+ * game puts it. [useStick] picks the set drawn and picked ([SkinPlacement.forStick]); null shows the placement as it is.
  */
 class SkinEditorState(
     private val placement: SkinPlacement, initial: Map<String, SkinTweak>, private val windowW: Float, private val windowH: Float,
     val rules: TweakRules = TweakRules.SKIN, private val minTouchPx: Float = 0f,
     private val skinBase: Map<String, SkinTweak> = emptyMap(), owned: Set<String> = emptySet(),
+    private val useStick: Boolean? = null,
 ) {
     val groups: List<SkinGroup> = SkinGroups.of(placement.spec)
 
@@ -63,11 +68,15 @@ class SkinEditorState(
 
     private var cache: Pair<Pair<Map<String, SkinTweak>, Set<String>>, SkinPlacement>? = null
 
-    /** [placement] with [tweaks] applied: what the editor draws and the game will ([owned] groups kept, as the game keeps them). */
+    /**
+     * [placement] with [tweaks] applied, then its stick or d-pad picked ([useStick]): what the editor draws and the game
+     * will ([owned] groups kept, as the game keeps them).
+     */
     fun placed(): SkinPlacement {
         val key = tweaks to owned
         cache?.let { (k, p) -> if (k == key) return p }
-        return SkinTweaks.apply(placement, tweaks, windowW, windowH, rules, minTouchPx, keep = owned).also { cache = key to it }
+        val tweaked = SkinTweaks.apply(placement, tweaks, windowW, windowH, rules, minTouchPx, keep = owned)
+        return (useStick?.let(tweaked::forStick) ?: tweaked).also { cache = key to it }
     }
 
     /** Each group's box as drawn now (pieces and controls' hit areas), window px. */

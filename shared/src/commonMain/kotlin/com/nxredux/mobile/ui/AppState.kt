@@ -3773,8 +3773,9 @@ class AppState(
 
     private fun n3dsPadLabel(new: Boolean): String = if (new) "New" else "Regular"
 
-    /** Any console has a tweak stored: Appearance's Button layout row reads Custom. */
-    private fun buttonLayoutCustom(): Boolean = SkinTweaks.decode(deps.settings.skinTweaks).values.any { c -> c.values.any { it.isNotEmpty() } }
+    /** Any console has a tweak stored, skin or overlay: Appearance's Button layout row reads Custom. */
+    private fun buttonLayoutCustom(): Boolean = listOf(deps.settings.skinTweaks, deps.settings.overlayTweaks)
+        .any { stored -> SkinTweaks.decode(stored).values.any { c -> c.values.any { it.isNotEmpty() } } }
 
     private fun buttonLayoutRows(): List<SettingsRow> {
         val console = buttonLayoutConsole()
@@ -3809,9 +3810,11 @@ class AppState(
         if (_screen.value is Screen.Settings) settingsUi.refreshSettings()
     }
 
-    /** Reset console: the page's console's tweaks go, every layout of it; other consoles keep theirs. */
+    /** Reset console: the page's console's tweaks go, every layout of it, skin and overlay; other consoles keep theirs. */
     private fun resetButtonLayoutConsole() {
-        deps.settings.skinTweaks = SkinTweaks.encode(SkinTweaks.decode(deps.settings.skinTweaks) - buttonLayoutConsole().id)
+        val id = buttonLayoutConsole().id
+        deps.settings.skinTweaks = SkinTweaks.encode(SkinTweaks.decode(deps.settings.skinTweaks) - id)
+        deps.settings.overlayTweaks = SkinTweaks.encode(SkinTweaks.decode(deps.settings.overlayTweaks) - id)
         settingsUi.showSettingsOn(SettingsSection.BUTTON_LAYOUT, SettingsKind.BUTTON_LAYOUT_RESET)
     }
 

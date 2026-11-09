@@ -380,6 +380,7 @@ internal class SettingsController(
             s.secondaryAccent = SecondaryAccent.DEFAULT
             s.optionTextSize = OptionTextSize.DEFAULT
             s.skinTweaks = ""
+            s.overlayTweaks = ""
         } else if (section == SettingsSection.MAIN_MENU) {
             s.menuStyles = emptyMap()
             s.menuOrientations = emptyMap()
