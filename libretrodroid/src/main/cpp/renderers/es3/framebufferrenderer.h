@@ -42,6 +42,7 @@ public:
     void updateRenderedResolution(unsigned int width, unsigned int height) override;
 
     bool rendersInVideoCallback() override;
+    bool hasCoreGlState() override { return true; }
 
     void setShaders(ShaderManager::Chain shaders) override;
     PassData getPassData(unsigned int layer) override;
