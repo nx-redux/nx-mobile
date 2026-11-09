@@ -1,11 +1,18 @@
 package com.nxredux.mobile.netplay.wizard
 
+import com.nxredux.mobile.netplay.cablelink.LinkRomCache
+import com.nxredux.mobile.ui.nowMs
+
 /**
  * What this device hosts: its game token, folder [tag], the core it runs ([pick] or the tag's default) and the Emulator
  * pick (null = Auto); [usb]: over the USB cable (the sheet's Connection), which cable-only cores need; [wl]: the GBA
- * game's link mode token ([com.nxredux.mobile.netplay.GbaWifiLink]), null for other games.
+ * game's link mode token ([com.nxredux.mobile.netplay.GbaWifiLink]), null for other games; [cableLink]: this side picked
+ * Cable Link over Wi-Fi (null for every other connection).
  */
-data class HostOffer(val game: String, val tag: String, val core: String, val pick: String?, val usb: Boolean, val wl: String? = null)
+data class HostOffer(
+    val game: String, val tag: String, val core: String, val pick: String?, val usb: Boolean, val wl: String? = null,
+    val cableLink: CableLinkOffer? = null,
+)
 
 /**
  * What this device joins with; [usb]: over the USB cable; [mayRetry]: a `REJECT core-<c>` may still be answered by one
@@ -13,7 +20,7 @@ data class HostOffer(val game: String, val tag: String, val core: String, val pi
  */
 data class ClientOffer(
     val game: String, val any: Boolean, val tag: String, val core: String, val pick: String?, val usb: Boolean,
-    val mayRetry: Boolean = true, val wl: String? = null,
+    val mayRetry: Boolean = true, val wl: String? = null, val cableLink: CableLinkOffer? = null,
 )
 
 /** How a host handshake ended. */
@@ -25,6 +32,7 @@ sealed interface HostOutcome {
      */
     data class Started(
         val core: String, val peer: String, val emptySaves: Boolean, val mixed: Boolean = false, val peerWl: String? = null,
+        val cableLink: CableLinkSetup? = null,
     ) : HostOutcome
 
     /**
@@ -33,7 +41,8 @@ sealed interface HostOutcome {
      * null for an I/O or protocol failure. [joinerCore] is the joiner's core for `core` and `link`; [noWifiModes]: refused
      * because mGBA would run off the cable against a side without the Wi-Fi modes
      * ([com.nxredux.mobile.netplay.NetplayCores.needsPeerWl]). For `link` (both games in Wi-Fi modes that can't link),
-     * [ownWl] and [joinerWl] are the two games' modes.
+     * [ownWl] and [joinerWl] are the two games' modes. `cablelink`: one side offered Cable Link over Wi-Fi and the other
+     * did not; a failed Cable Link ROM or save exchange reads as `sync`.
      */
     data class Turned(
         val reason: String?, val joinerCore: String? = null, val noWifiModes: Boolean = false,
@@ -51,6 +60,7 @@ sealed interface ClientOutcome {
      */
     data class Started(
         val core: String, val player: Int, val emptySaves: Boolean, val mixed: Boolean = false, val peerWl: String? = null,
+        val cableLink: CableLinkSetup? = null,
     ) : ClientOutcome
 
     /** The join failed; [message] is the user-facing text. */
@@ -83,4 +93,61 @@ interface HostSaves {
     val canServe: Boolean
     suspend fun start(joinerIp: String): Boolean
     fun close()
+}
+
+/**
+ * This side's Cable Link over Wi-Fi offer: its game's ROM ([romHash], SHA-1 of the ROM bytes, and [romSize]) and its GBA
+ * BIOS hash ([biosHash], null when it has none). [clock] is the wall clock in epoch seconds; the host's goes to the
+ * guest so both phones run one RTC.
+ */
+class CableLinkOffer(
+    val romHash: String,
+    val romSize: Long,
+    val biosHash: String?,
+    val files: CableLinkFiles,
+    val clock: () -> Long = { nowMs() / 1000 },
+)
+
+/** The platform's files for a Cable Link exchange. */
+interface CableLinkFiles {
+    /** Where a ROM from the other side lands, verified against its hash. */
+    val cache: LinkRomCache
+
+    /**
+     * A filesystem path a core can open for the ROM [hash] of [sizeBytes] already on this device (the library or [cache]),
+     * or null when there is none. A library ROM reachable only as a document ref is copied into [cache] first
+     * ([LinkRomCache.put] verifies it), so the answer is never a content URI.
+     */
+    suspend fun findRom(hash: String, sizeBytes: Long): String?
+
+    /** Streams this side's own ROM to [chunk] in order (`chunk(buffer, length)`). */
+    suspend fun readOwnRom(chunk: suspend (ByteArray, Int) -> Unit)
+
+    /** This side's battery save as the core would load it; null when the game has none yet. */
+    suspend fun ownSave(): ByteArray?
+
+    /** Writes the other side's save as `other.sav` in a fresh session dir (never the user's saves); returns its path. */
+    suspend fun writeOtherSave(bytes: ByteArray): String
+}
+
+/** A ROM transfer under way: [sending] (else receiving) [done] of [total] bytes. */
+data class CableLinkProgress(val sending: Boolean, val done: Long, val total: Long)
+
+/**
+ * What a Cable Link handshake settled, for the launch. [otherRomPath]: the other player's ROM, a filesystem path (the
+ * library's file, or the link ROM cache); [otherSavePath]: the other player's save in a session dir, null when it has
+ * none; [localSlot]: 1 on the host, 2 on the guest; [biosMode]: [BIOS_REAL] only when both sides sent the same BIOS
+ * hash, else [BIOS_HLE]; [rtcEpoch]: the host's clock in epoch seconds, the same on both phones.
+ */
+data class CableLinkSetup(
+    val otherRomPath: String,
+    val otherSavePath: String?,
+    val localSlot: Int,
+    val biosMode: String,
+    val rtcEpoch: Long,
+) {
+    companion object {
+        const val BIOS_REAL = "real"
+        const val BIOS_HLE = "hle"
+    }
 }

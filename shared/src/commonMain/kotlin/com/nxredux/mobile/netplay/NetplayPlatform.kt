@@ -2,6 +2,7 @@ package com.nxredux.mobile.netplay
 
 import com.nxredux.mobile.netplay.usb.NetplayLink
 import com.nxredux.mobile.netplay.usb.UsbCable
+import com.nxredux.mobile.netplay.wizard.CableLinkSetup
 import com.nxredux.mobile.netplay.wizard.HostSaves
 import com.nxredux.mobile.netplay.wizard.SaveSink
 import com.nxredux.mobile.runner.ContentRef
@@ -58,6 +59,10 @@ interface NetplayPlatform {
  * [overUsb]: the session runs over the USB cable; the game screen stops the cable when it releases the session.
  * [mixed]: a GBA link whose caps named gpSP on one side and mGBA on the other (the wizard outcome's `mixed`); [peerWl]:
  * the other side's game link mode from its caps (null: it sent none, a build without the Wi-Fi modes).
+ * [cableLink]: a Cable Link over Wi-Fi session (each phone runs both GBAs); the rest is what its handshake settled
+ * ([com.nxredux.mobile.netplay.wizard.CableLinkSetup]): [otherRomPath] the other player's ROM as a filesystem path,
+ * [otherSavePath] its save in a session dir (null: none), [localSlot] 1 on the host and 2 on the guest, [biosMode]
+ * `real` or `hle`, [rtcEpoch] the host's clock in epoch seconds. Unused outside Cable Link.
  */
 data class NetplaySession(
     val role: NetplayRole,
@@ -68,7 +73,23 @@ data class NetplaySession(
     val overUsb: Boolean = false,
     val mixed: Boolean = false,
     val peerWl: String? = null,
+    val cableLink: Boolean = false,
+    val otherRomPath: String = "",
+    val otherSavePath: String? = null,
+    val localSlot: Int = if (role == NetplayRole.HOST) 1 else 2,
+    val biosMode: String = CableLinkSetup.BIOS_HLE,
+    val rtcEpoch: Long = 0L,
 ) {
+    /** This session with what a Cable Link handshake settled. */
+    fun withCableLink(setup: CableLinkSetup): NetplaySession = copy(
+        cableLink = true,
+        otherRomPath = setup.otherRomPath,
+        otherSavePath = setup.otherSavePath,
+        localSlot = setup.localSlot,
+        biosMode = setup.biosMode,
+        rtcEpoch = setup.rtcEpoch,
+    )
+
     /** A link session (GB/GBC/GBA) never plays on a copy: each player keeps their own save, which a trade needs. */
     val onCopy: Boolean get() = !NetplayCores.isLink(coreId) && (emptySaves || NetplaySaves.playsOnCopy(role, coreId, folderCoreId))
 

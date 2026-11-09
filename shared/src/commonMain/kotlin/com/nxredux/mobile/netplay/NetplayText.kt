@@ -36,6 +36,12 @@ object NetplayText {
     /** The Hosting page's one-line status after a joiner's save copy failed (the handheld's two-line notice, on one line). */
     const val SAVE_TRANSFER_FAILED = "Save transfer failed - waiting for another player"
     const val WIFI_LOST = "Wi-Fi disconnected."
+    /** One side picked Cable Link over Wi-Fi and the other did not send the capability; both screens show it. */
+    const val CABLE_LINK_NEEDS_UPDATE = "Cable Link over Wi-Fi needs the other phone on the latest NX Redux."
+    const val SENDING_GAME = "Sending game…"
+    const val RECEIVING_GAME = "Receiving game…"
+    const val CABLE_LINK_COPY_FAILED = "Could not swap games and saves\nwith the other phone.\n\nPlease try again."
+    const val GAME_DAMAGED = "The other phone's game\narrived damaged.\n\nPlease try again."
     const val CONNECTION = "Connection"
     const val WIFI = "Wi-Fi"
     const val USB_CABLE = "USB Cable"
@@ -121,6 +127,7 @@ object NetplayText {
         RejectReason.GAME -> "The host is running a\ndifferent game."
         RejectReason.ROLE -> "Both devices are hosting.\n\nOne of them must join instead."
         RejectReason.SYNC -> "The host could not share\nits saves."
+        RejectReason.CABLE_LINK -> CABLE_LINK_NEEDS_UPDATE
         RejectReason.CORE, RejectReason.LINK, RejectReason.OTHER -> "The host refused the connection."
     }
     /** Titles in prompts are cut to 40 characters plus "..." (the handheld's PROMPT_TITLE_MAX). */

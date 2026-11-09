@@ -18,6 +18,20 @@ interface NetplayChannel {
     /** Writes [line] followed by "\n". */
     suspend fun writeLine(line: String)
 
+    /**
+     * Reads exactly [length] raw bytes into [into] at [offset], within [timeoutMs]: bytes already buffered after the last
+     * line come first. Only the Cable Link exchange sends raw bytes (a ROM or a save after a line that announces its size),
+     * so a channel that never carries one may leave this unimplemented.
+     */
+    suspend fun readBytes(into: ByteArray, offset: Int, length: Int, timeoutMs: Long) {
+        throw NetplayIoException("raw bytes unsupported")
+    }
+
+    /** Writes [length] raw bytes of [bytes] from [offset] (see [readBytes]). */
+    suspend fun writeBytes(bytes: ByteArray, offset: Int, length: Int) {
+        throw NetplayIoException("raw bytes unsupported")
+    }
+
     /** Closes the stream; idempotent. */
     fun close()
 }

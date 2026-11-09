@@ -350,6 +350,7 @@ class NetplayController(
 
     private fun turnedAwayText(out: HostOutcome.Turned, usb: Boolean): String? = if (out.noWifiModes) NetplayText.NO_WIFI_MODES else when (out.reason) {
         RejectReason.SYNC.wire -> NetplayText.SAVE_TRANSFER_FAILED
+        RejectReason.CABLE_LINK.wire -> NetplayText.CABLE_LINK_NEEDS_UPDATE
         RejectReason.CORE.wire -> out.joinerCore?.let { NetplayText.coreTurnedAway(NetplayCores.name(it)) }
         // As the handheld host: one line while Wi-Fi keeps waiting for others, the full reason for the cable's one peer.
         RejectReason.LINK.wire -> if (!usb) NetplayText.LINK_TURNED_AWAY else NetplayText.linkModes(theirs = out.joinerWl, ours = out.ownWl)

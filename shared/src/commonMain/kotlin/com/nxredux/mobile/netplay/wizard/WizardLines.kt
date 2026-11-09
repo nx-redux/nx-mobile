@@ -11,7 +11,9 @@ import com.nxredux.mobile.runner.CoreRegistry
  * The handheld's capability token (nx-redux wiz_caps.c at 8f5a760b): the HELLO field `caps=<token>` after the four fixed
  * fields, `[A-Za-z0-9._=,-]`, 1..63 chars, comma-separated `key=value` elements. This device always sends
  * `core=<core id>,tag=<TAG>`; gpSP and mGBA add the game's link mode `,wl=<token>` (netplay-prelaunch.sh), a joiner on
- * Auto adds `,auto=1`.
+ * Auto adds `,auto=1`. A Cable Link over Wi-Fi offer sends `core=mgba,tag=<TAG>,cl=1` instead (no `wl` or `auto`: that
+ * session always runs mGBA's own cable inside each phone). Its ROM and BIOS hashes would not fit in [MAX] chars, so
+ * they follow the HELLO in a `CABLE` line ([CableLinkExchange]).
  */
 object Caps {
     const val MAX = 63
@@ -53,8 +55,9 @@ object Caps {
      * The `auto` element, then `wl`, is dropped when it would not fit. The handheld reads caps by key (wiz_caps.c
      * WizCaps_value), so elements it does not know are safe there.
      */
-    fun of(core: String, tag: String, auto: Boolean = false, wl: String? = null): String {
+    fun of(core: String, tag: String, auto: Boolean = false, wl: String? = null, cableLink: Boolean = false): String {
         val base = "core=$core,tag=${CoreRegistry.handheldTag(tag)}"
+        if (cableLink) return "$base,cl=1".takeIf { isValid(it) } ?: ""
         val withWl = if (wl != null && NetplayCores.link(core) == NetplayLinkKind.NETPACKET) "$base,wl=$wl" else base
         if (auto) "$withWl,auto=1".takeIf { isValid(it) }?.let { return it }
         withWl.takeIf { isValid(it) }?.let { return it }
@@ -84,6 +87,9 @@ data class Hello(
 
     /** A phone joiner on Auto (`auto=1`): it switches to the host's core, so a phone host on Auto keeps its own. */
     val auto: Boolean get() = Caps.value(caps, "auto") == "1"
+
+    /** A phone that picked Cable Link over Wi-Fi (`cl=1`); older builds and the handheld never send it. */
+    val cableLink: Boolean get() = Caps.value(caps, "cl") == "1"
 
     companion object {
         const val CLIENT = "client"
