@@ -9539,6 +9539,22 @@ class AppStateTest {
         assertEquals("NX Redux", menu.caption)
     }
 
+    @Test fun an_app_on_the_top_screen_adds_use_top_screen_to_the_main_menus_menu() = runTest {
+        val state = hiddenTabsState(MenuCategory.CONSOLES, data = FakeUserData(recents = listOf(Recent(tetris))))
+        var taken = 0
+        state.takeTopScreen = { taken++ }
+        state.onAppOnTop(true)
+        state.select(0); state.onButton(NxButton.MENU)                        // Continue: Pin, the hidden tab, then Use top screen
+        assertEquals(listOf(ContextKind.PIN, ContextKind.OPEN_CONSOLES, ContextKind.USE_TOP_SCREEN), menuKinds(state))
+        state.onButton(NxButton.B)
+        choose(state, ContextKind.USE_TOP_SCREEN)
+        assertEquals(1, taken)
+        assertNull(assertIs<Screen.Systems>(state.screen.value).menu)
+        state.onAppOnTop(false)
+        state.onButton(NxButton.MENU)
+        assertEquals(listOf(ContextKind.PIN, ContextKind.OPEN_CONSOLES), menuKinds(state))
+    }
+
     @Test fun a_long_press_on_pick_a_game_with_tools_hidden_offers_tools() = runTest {
         val state = hiddenTabsState(MenuCategory.TOOLS)                       // no recents: Home's first item is Pick a game
         val pick = assertIs<Screen.Systems>(state.screen.value).rows.indexOf(MainRow.PickAGame)

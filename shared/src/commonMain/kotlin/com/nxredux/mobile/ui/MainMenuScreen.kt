@@ -54,6 +54,7 @@ import com.nxredux.mobile.ui.nx.HomeMinimalScreen
 import com.nxredux.mobile.ui.nx.MinimalScreen
 import com.nxredux.mobile.ui.nx.MinimalSelected
 import androidx.compose.ui.zIndex
+import com.nxredux.mobile.ui.nx.LocalHasTouchscreen
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.HOME_HEADER_ICONS_ROOM
 import com.nxredux.mobile.ui.nx.GridTitleLines
@@ -381,7 +382,8 @@ fun MainMenuScreen(
                     .nxListTopCut(topCut),
             )
         }
-        onTopScreen?.let {
+        // Touch only: without a touchscreen the context menu's Use top screen does it.
+        onTopScreen?.takeIf { LocalHasTouchscreen.current }?.let {
             TopScreenButton(it, Modifier.align(Alignment.BottomEnd).pageFixed().padding(end = nxPageInset().end, bottom = MENU_TAB_ROW_HEIGHT + 24.dp))
         }
     }

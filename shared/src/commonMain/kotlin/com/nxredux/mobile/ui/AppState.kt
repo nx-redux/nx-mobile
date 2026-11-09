@@ -5505,6 +5505,8 @@ class AppState(
             override fun playFromStart(entry: Listed) = launches.playFromStart(entry)
             override fun hiddenTabs(): List<MenuCategory> = this@AppState.hiddenTabs()
             override fun openHiddenTab(category: MenuCategory) = this@AppState.openHiddenTab(category)
+            override val appOnTop: Boolean get() = _appOnTop.value
+            override fun takeTopScreen() = this@AppState.takeTopScreen()
         },
     )
 
