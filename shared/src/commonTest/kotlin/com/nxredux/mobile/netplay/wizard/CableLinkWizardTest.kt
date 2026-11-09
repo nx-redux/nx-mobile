@@ -36,6 +36,8 @@ class CableLinkWizardTest {
         override val cache = LinkRomCache(store)
         var romReads = 0
         val otherSaves = ArrayList<ByteArray>()
+        val logged = ArrayList<String>()
+        override fun log(message: String) { logged += message }
         override suspend fun findRom(hash: String, sizeBytes: Long): String? = library[hash] ?: cache.find(hash)
         override suspend fun readOwnRom(chunk: suspend (ByteArray, Int) -> Unit) {
             romReads++
@@ -72,12 +74,12 @@ class CableLinkWizardTest {
         val hostFiles = FakeFiles(ruby, null)
         val a = play(hostOffer(offer(ruby, hostFiles)), clientOffer(null))
         assertEquals(HostOutcome.Turned("cablelink"), a.host)
-        assertEquals(ClientOutcome.Refused(NetplayText.CABLE_LINK_NEEDS_UPDATE), a.client)
+        assertEquals(ClientOutcome.Refused(NetplayText.CABLE_LINK_NOT_PICKED), a.client)
 
         // The joiner offers it, the host does not.
         val b = play(hostOffer(null), clientOffer(offer(ruby, FakeFiles(ruby, null))))
         assertEquals(HostOutcome.Turned("cablelink"), b.host)
-        assertEquals(ClientOutcome.Refused(NetplayText.CABLE_LINK_NEEDS_UPDATE), b.client)
+        assertEquals(ClientOutcome.Refused(NetplayText.CABLE_LINK_NOT_PICKED), b.client)
 
         // An older peer (no cl=1) joining a Cable Link host gets the new reason.
         val (h, c) = PipeChannel.pair()
@@ -91,7 +93,7 @@ class CableLinkWizardTest {
         val joinJob = async { Wizard.client(c2, clientOffer(offer(ruby, FakeFiles(ruby, null))), FakeSaveSink()) }
         assertEquals("core=mgba,tag=GBA,cl=1", HelloCodec.parse(h2.readLine(1000))!!.caps)
         h2.writeLine("HELLO 2 $rubyEsc host 2 caps=core=gpsp,tag=GBA,wl=poke")
-        assertEquals(ClientOutcome.Refused(NetplayText.CABLE_LINK_NEEDS_UPDATE), joinJob.await())
+        assertEquals(ClientOutcome.Refused(NetplayText.CABLE_LINK_NOT_PICKED), joinJob.await())
         assertEquals("REJECT cablelink", h2.readLine(1000))
     }
 
@@ -231,5 +233,115 @@ class CableLinkWizardTest {
         assertEquals("REJECT cablelink", Reject(com.nxredux.mobile.netplay.RejectReason.CABLE_LINK).format())
         assertTrue("cablelink".length <= Reject.REASON_MAX)
         assertEquals(Reject(com.nxredux.mobile.netplay.RejectReason.CABLE_LINK), Reject.parse("REJECT cablelink"))
+    }
+
+    /** A raw Cable Link host for [files]'s joiner (playing Sapphire): HELLO, then its CABLE line for [romHash]/[romSize]. */
+    private suspend fun kotlinx.coroutines.test.TestScope.rawHost(
+        files: FakeFiles, romHash: String = rubyHash, romSize: Long = ruby.size.toLong(),
+    ): Pair<PipeChannel, kotlinx.coroutines.Deferred<ClientOutcome>> {
+        val (h, c) = PipeChannel.pair()
+        val join = async { Wizard.client(c, clientOffer(offer(sapphire, files), game = "x", any = true), FakeSaveSink()) }
+        h.readLine(1000)
+        h.writeLine("HELLO 2 $rubyEsc host 2 caps=core=mgba,tag=GBA,cl=1")
+        h.writeLine("CABLE $romHash $romSize none")
+        return h to join
+    }
+
+    @Test fun an_old_host_refusing_on_its_core_or_link_gate_reads_as_not_on_cable_link() = runTest {
+        for (reject in listOf("REJECT core-gpsp.GBA", "REJECT link-gpsp.rfu.none", "REJECT link-gpsp.rfu.poke", "REJECT", "REJECT whatever")) {
+            val (h, c) = PipeChannel.pair()
+            val join = async { Wizard.client(c, clientOffer(offer(ruby, FakeFiles(ruby, null))), FakeSaveSink()) }
+            h.readLine(1000)
+            h.writeLine(reject)
+            assertEquals(ClientOutcome.Refused(NetplayText.CABLE_LINK_NOT_PICKED), join.await(), reject)
+        }
+        val (h, c) = PipeChannel.pair()
+        val join = async { Wizard.client(c, clientOffer(offer(ruby, FakeFiles(ruby, null))), FakeSaveSink()) }
+        h.readLine(1000)
+        h.writeLine("REJECT game")
+        assertEquals(ClientOutcome.Refused(NetplayText.reject(com.nxredux.mobile.netplay.RejectReason.GAME)), join.await())
+    }
+
+    @Test fun over_cap_rom_and_save_sizes_are_refused_without_reading() = runTest {
+        val files = FakeFiles(sapphire, null)
+        val (_, join) = rawHost(files, romSize = 32L * 1024 * 1024 + 1)
+        assertEquals(ClientOutcome.Refused(NetplayText.UNEXPECTED), join.await())
+        assertTrue(files.store.files.isEmpty())
+
+        val files2 = FakeFiles(sapphire, null, library = mapOf(rubyHash to "/roms/Ruby.gba"))
+        val (h2, join2) = rawHost(files2)
+        h2.readLine(1000); h2.readLine(1000)   // CABLE, NEED none
+        h2.writeLine("NEED none")
+        h2.writeLine("SAVE ${1024 * 1024 + 1}")
+        assertEquals(ClientOutcome.Refused(NetplayText.UNEXPECTED), join2.await())
+        assertTrue(files2.otherSaves.isEmpty())
+    }
+
+    @Test fun need_naming_a_foreign_hash_is_refused() = runTest {
+        val files = FakeFiles(sapphire, null, library = mapOf(rubyHash to "/roms/Ruby.gba"))
+        val (h, join) = rawHost(files)
+        h.readLine(1000); h.readLine(1000)
+        h.writeLine("NEED ${"c".repeat(40)}")
+        assertEquals(ClientOutcome.Refused(NetplayText.UNEXPECTED), join.await())
+        assertEquals(0, files.romReads)
+    }
+
+    @Test fun a_reject_mid_exchange_ends_it_with_its_text() = runTest {
+        val files = FakeFiles(sapphire, null, library = mapOf(rubyHash to "/roms/Ruby.gba"))
+        val (h, join) = rawHost(files)
+        h.readLine(1000); h.readLine(1000)
+        h.writeLine("REJECT sync")
+        assertEquals(ClientOutcome.Refused(NetplayText.reject(com.nxredux.mobile.netplay.RejectReason.SYNC)), join.await())
+        assertTrue(files.logged.single().startsWith("Cable Link exchange failed (guest, game)"))
+    }
+
+    @Test fun a_disconnect_mid_rom_leaves_the_cache_empty() = runTest {
+        val files = FakeFiles(sapphire, null)
+        val (h, join) = rawHost(files)
+        h.readLine(1000); h.readLine(1000)
+        h.writeLine("NEED none")
+        h.writeLine("ROM ${ruby.size}")
+        h.writeBytes(ruby, 0, ruby.size / 2)
+        h.close()
+        assertEquals(ClientOutcome.Refused(NetplayText.CABLE_LINK_COPY_FAILED), join.await())
+        assertTrue(files.store.files.isEmpty())
+    }
+
+    @Test fun a_rom_line_with_another_size_is_refused() = runTest {
+        val files = FakeFiles(sapphire, null)
+        val (h, join) = rawHost(files)
+        h.readLine(1000); h.readLine(1000)
+        h.writeLine("NEED none")
+        h.writeLine("ROM ${ruby.size - 1}")
+        assertEquals(ClientOutcome.Refused(NetplayText.UNEXPECTED), join.await())
+        assertTrue(files.store.files.isEmpty())
+    }
+
+    @Test fun the_host_tells_a_failed_game_from_a_failed_save() = runTest {
+        // A joiner that says the host's ROM arrived damaged.
+        val (h, c) = PipeChannel.pair()
+        val hostFiles = FakeFiles(ruby, null, library = mapOf(sapphireHash to "/roms/Sapphire.gba"))
+        val hostJob = async { Wizard.host(h, hostOffer(offer(ruby, hostFiles)), saves = { error("none") }) }
+        c.writeLine("HELLO 2 $rubyEsc client caps=core=mgba,tag=GBA,cl=1")
+        c.readLine(1000); c.readLine(1000)   // HELLO, CABLE
+        c.writeLine("CABLE $sapphireHash ${sapphire.size} none")
+        c.writeLine("NEED $rubyHash")
+        assertEquals("NEED none", c.readLine(1000))
+        assertEquals("ROM ${ruby.size}", c.readLine(1000))
+        c.readBytes(ByteArray(ruby.size), 0, ruby.size, 1000)
+        c.writeLine("ROM-BAD")
+        assertEquals(HostOutcome.Turned(Wizard.GAME_COPY_FAILED), hostJob.await())
+
+        // A joiner whose save line is wrong.
+        val (h2, c2) = PipeChannel.pair()
+        val hostJob2 = async { Wizard.host(h2, hostOffer(offer(ruby, FakeFiles(ruby, null, library = mapOf(rubyHash to "/roms/Ruby.gba")))), saves = { error("none") }) }
+        c2.writeLine("HELLO 2 $rubyEsc client caps=core=mgba,tag=GBA,cl=1")
+        c2.readLine(1000); c2.readLine(1000)
+        c2.writeLine("CABLE $rubyHash ${ruby.size} none")
+        c2.writeLine("NEED none")
+        assertEquals("NEED none", c2.readLine(1000))
+        assertEquals("SAVE none", c2.readLine(1000))
+        c2.writeLine("SAVE lots")
+        assertEquals(HostOutcome.Turned("sync"), hostJob2.await())
     }
 }

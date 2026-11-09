@@ -36,6 +36,9 @@ object Wizard {
     /** A Cable Link session runs both GBAs on mGBA, whatever either side's Emulator row says. */
     const val CABLE_LINK_CORE = "mgba"
 
+    /** [HostOutcome.Turned.reason] for a Cable Link exchange that failed before the saves (hashes or a ROM); never sent. */
+    const val GAME_COPY_FAILED = "game"
+
     /**
      * Answers one joiner. [saves] is asked once the HELLO is answered, never for a link session (when it throws, the
      * joiner gets `REJECT sync`). [onTransfer] follows a Cable Link ROM transfer.
@@ -111,7 +114,7 @@ object Wizard {
         ch.writeLine(HelloCodec.format(Hello.host(wireGame(offer.game), 2, Caps.of(CABLE_LINK_CORE, offer.tag, cableLink = true))))
         val setup = when (val r = CableLinkExchange.run(ch, cl, host = true, onTransfer)) {
             is CableLinkExchange.Result.Done -> r.setup
-            is CableLinkExchange.Result.Failed -> return HostOutcome.Turned(RejectReason.SYNC.wire)
+            is CableLinkExchange.Result.Failed -> return HostOutcome.Turned(if (r.beforeSaves) GAME_COPY_FAILED else RejectReason.SYNC.wire)
         }
         ch.writeLine("START 2")
         if (ch.readLine(RECV_MS) != "START") return HostOutcome.Turned(null)
@@ -247,12 +250,17 @@ object Wizard {
         try {
             ch.writeLine(HelloCodec.format(Hello.client(wireGame(offer.game), offer.any, Caps.of(CABLE_LINK_CORE, offer.tag, cableLink = true))))
             val reply = ch.readLine(RECV_MS)
-            Reject.parse(reply)?.let { return ClientOutcome.Refused(rejectText(it, offer)) }
+            // A host that knows Cable Link checks `cl=1` right after version, game and role, so any other refusal here
+            // (an older phone's or the handheld's core or link-mode gate) means the host is not on Cable Link.
+            Reject.parse(reply)?.let { r ->
+                val gate = r.reason == RejectReason.VERSION || r.reason == RejectReason.GAME || r.reason == RejectReason.ROLE
+                return ClientOutcome.Refused(if (gate) NetplayText.reject(r.reason) else NetplayText.CABLE_LINK_NOT_PICKED)
+            }
             val h = HelloCodec.parse(reply) ?: return ClientOutcome.Refused(NetplayText.NOT_WAITING)
             HelloCodec.mismatch(h, offer.game, Hello.HOST, offer.any)?.let { return ClientOutcome.Refused(NetplayText.reject(it)) }
             if (!h.cableLink) {
                 sendQuietly(ch, Reject(RejectReason.CABLE_LINK).format())
-                return ClientOutcome.Refused(NetplayText.CABLE_LINK_NEEDS_UPDATE)
+                return ClientOutcome.Refused(NetplayText.CABLE_LINK_NOT_PICKED)
             }
             onWaiting(h.player)
             val setup = when (val r = CableLinkExchange.run(ch, cl, host = false, onTransfer)) {

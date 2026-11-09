@@ -1,7 +1,6 @@
 package com.nxredux.mobile.netplay.wizard
 
 import com.nxredux.mobile.netplay.cablelink.LinkRomCache
-import com.nxredux.mobile.ui.nowMs
 
 /**
  * What this device hosts: its game token, folder [tag], the core it runs ([pick] or the tag's default) and the Emulator
@@ -42,7 +41,7 @@ sealed interface HostOutcome {
      * because mGBA would run off the cable against a side without the Wi-Fi modes
      * ([com.nxredux.mobile.netplay.NetplayCores.needsPeerWl]). For `link` (both games in Wi-Fi modes that can't link),
      * [ownWl] and [joinerWl] are the two games' modes. `cablelink`: one side offered Cable Link over Wi-Fi and the other
-     * did not; a failed Cable Link ROM or save exchange reads as `sync`.
+     * did not; a failed Cable Link exchange reads as [Wizard.GAME_COPY_FAILED] up to the ROMs and `sync` from the saves on.
      */
     data class Turned(
         val reason: String?, val joinerCore: String? = null, val noWifiModes: Boolean = false,
@@ -105,7 +104,7 @@ class CableLinkOffer(
     val romSize: Long,
     val biosHash: String?,
     val files: CableLinkFiles,
-    val clock: () -> Long = { nowMs() / 1000 },
+    val clock: () -> Long,
 )
 
 /** The platform's files for a Cable Link exchange. */
@@ -128,6 +127,9 @@ interface CableLinkFiles {
 
     /** Writes the other side's save as `other.sav` in a fresh session dir (never the user's saves); returns its path. */
     suspend fun writeOtherSave(bytes: ByteArray): String
+
+    /** A diagnostic line (NxLog on a device: only with Settings → System → Debug log on). */
+    fun log(message: String) {}
 }
 
 /** A ROM transfer under way: [sending] (else receiving) [done] of [total] bytes. */

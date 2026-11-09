@@ -1,7 +1,6 @@
 package com.nxredux.mobile.netplay.wizard
 
 import com.nxredux.mobile.netplay.NetplayChannel
-import com.nxredux.mobile.netplay.NetplayIoException
 import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.netplay.cablelink.LinkRomHashMismatch
 import com.nxredux.mobile.netplay.cablelink.RomHash
@@ -35,26 +34,31 @@ internal object CableLinkExchange {
 
     sealed interface Result {
         data class Done(val setup: CableLinkSetup) : Result
-        data class Failed(val message: String) : Result
+        /** [beforeSaves]: it failed on the hashes or a ROM, before any save moved. */
+        data class Failed(val message: String, val beforeSaves: Boolean) : Result
     }
 
     private class Fail(val text: String) : Exception(text)
 
     private data class Peer(val romHash: String, val romSize: Long, val biosHash: String?)
 
-    suspend fun run(ch: NetplayChannel, offer: CableLinkOffer, host: Boolean, onProgress: (CableLinkProgress) -> Unit): Result = try {
-        Result.Done(exchange(ch, offer, host, onProgress))
-    } catch (e: Fail) {
-        Result.Failed(e.text)
-    } catch (e: NetplayIoException) {
-        Result.Failed(NetplayText.CABLE_LINK_COPY_FAILED)
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {   // the platform's file I/O
-        Result.Failed(NetplayText.CABLE_LINK_COPY_FAILED)
+    suspend fun run(ch: NetplayChannel, offer: CableLinkOffer, host: Boolean, onProgress: (CableLinkProgress) -> Unit): Result {
+        val step = Step()
+        return try {
+            Result.Done(exchange(ch, offer, host, onProgress, step))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {   // Fail, NetplayIoException, or the platform's file I/O
+            offer.files.log("Cable Link exchange failed (${if (host) "host" else "guest"}, ${if (step.saves) "saves" else "game"}): ${e::class.simpleName}: ${e.message}")
+            Result.Failed((e as? Fail)?.text ?: NetplayText.CABLE_LINK_COPY_FAILED, beforeSaves = !step.saves)
+        }
     }
 
-    private suspend fun exchange(ch: NetplayChannel, offer: CableLinkOffer, host: Boolean, onProgress: (CableLinkProgress) -> Unit): CableLinkSetup {
+    private class Step { var saves = false }
+
+    private suspend fun exchange(
+        ch: NetplayChannel, offer: CableLinkOffer, host: Boolean, onProgress: (CableLinkProgress) -> Unit, step: Step,
+    ): CableLinkSetup {
         val files = offer.files
         ch.writeLine("CABLE ${offer.romHash} ${offer.romSize} ${offer.biosHash ?: NONE}")
         val peer = parseCable(readLine(ch))
@@ -77,6 +81,7 @@ internal object CableLinkExchange {
             if (peerNeedsMine) sendRom(ch, offer, onProgress)
         }
 
+        step.saves = true
         val otherSave: String?
         if (host) {
             sendSave(ch, files.ownSave())
