@@ -15,6 +15,7 @@ import com.nxredux.mobile.cheats.CheatSet
 import com.nxredux.mobile.cheats.DolphinCheats
 import com.nxredux.mobile.gametime.GameTimeRecorder
 import com.nxredux.mobile.gametime.GameTimeService
+import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.library.ArcadeCompanions
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.NaomiSets
@@ -25,7 +26,6 @@ import com.nxredux.mobile.netplay.NetplayPads
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.NetplayText
-import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.CoreConfig
 import com.nxredux.mobile.options.FrontendOptions
@@ -56,6 +56,7 @@ import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.GameRumble
 import com.nxredux.mobile.settings.Prefs
 import com.nxredux.mobile.shortcuts.Shortcuts
+import com.nxredux.mobile.skin.GlassScreen
 import com.nxredux.mobile.storage.AndroidHomeLocator
 import com.nxredux.mobile.storage.AndroidRefs
 import com.nxredux.mobile.storage.AndroidRomsSources
@@ -904,7 +905,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         host.lifecycleScope.launch {
             val bmp = withContext(Dispatchers.IO) { ResumeCover.decode(file) } ?: return@launch
             if (!saves.resumePending || host.activity.isFinishing) return@launch
-            resumeCover = ResumeCover(host.activity, host.activity.findViewById(R.id.gameContainer)).also { cover ->
+            // Where the picture is drawn: as last laid out, else (before the game view) a pad skin's screen glass.
+            val picture = { host.renderer.thumbnailPicture() ?: host.padLayout.takeIf { it.skinShown }?.skinPlacement()?.glass(GlassScreen.PICTURE)?.rect }
+            resumeCover = ResumeCover(host.activity, host.activity.findViewById(R.id.gameContainer), picture).also { cover ->
+                host.renderer.onPictureLaidOut = { resumeCover?.place() }
                 cover.show(bmp)
                 host.retroView?.let(cover::follow)   // the game view came first
             }
