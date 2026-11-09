@@ -82,8 +82,12 @@ class FakeSource(
         hits[file] = hits[file].orEmpty() + ArtHit(slot, url, ArtOrigin(id, file, assetId), thumb = thumb)
     }
     override fun knows(ref: LibraryGameRef) = knowsGame(ref)
-    override suspend fun startJob() { starts++ }
-    override suspend fun endJob() { ends++ }
+    /** "start" and "end" per [startJob] and [endJob], in order. */
+    val events = mutableListOf<String>()
+    /** Run inside [endJob] (a slow wind-down, or a test acting as a run ends). */
+    var onEnd: suspend () -> Unit = {}
+    override suspend fun startJob() { starts++; events += "start" }
+    override suspend fun endJob() { ends++; events += "end"; onEnd() }
     override suspend fun find(ref: LibraryGameRef, wanted: Set<ArtSlot>): List<ArtHit> {
         asked += ref.fileName to wanted
         fail(ref)?.let { throw it }

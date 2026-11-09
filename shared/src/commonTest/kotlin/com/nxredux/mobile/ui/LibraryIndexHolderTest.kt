@@ -95,22 +95,43 @@ class LibraryIndexHolderTest {
     }
 
     @Test
-    fun rebuildRunsOutsideTheLockAndKeepsAChangeThatLandedMeanwhile() = runTest {
+    fun rebuildRunsOutsideTheLockAndKeepsArtThatLandedMeanwhileWithoutBuildingAgain() = runTest {
+        val store = MemoryLibraryIndexStore()
+        val h = holder(backgroundScope, store, Shown())
+        h.mutate { index(2) }
+        var builds = 0
+        val next = h.rebuild { from ->
+            builds++
+            // An art result during the build: it would wait forever were the lock held.
+            h.applyArt(GameRef("home", "Roms/GB", "g0.gb"), ArtRefs(boxart = "b"))
+            h.applyArt(GameRef("home", "Roms/GB", "gone.gb"), ArtRefs(boxart = "x"))   // in neither index: ignored
+            index(3).copy(scannedAt = 7)   // the scan found a third game
+        }
+        assertEquals(1, builds)   // the art went onto the fresh index; no second scan
+        assertSame(next, h.snapshot)
+        assertEquals("b", next!!.systems[0].games[0].boxart)
+        assertEquals(3, next.systems[0].games.size)
+        assertEquals(7L, next.scannedAt)
+        assertEquals("b", LibraryIndexCodec.decode(store.text!!)!!.systems[0].games[0].boxart)   // written with it
+    }
+
+    @Test
+    fun rebuildBuildsAgainOnAnotherChangeThatLandedMeanwhile() = runTest {
         val store = MemoryLibraryIndexStore()
         val h = holder(backgroundScope, store, Shown())
         h.mutate { index(2) }
         val seen = ArrayList<LibraryIndex?>()
         val next = h.rebuild { from ->
             seen += from
-            // An art result during the first build: it would wait forever were the lock held.
-            if (seen.size == 1) h.applyArt(GameRef("home", "Roms/GB", "g0.gb"), ArtRefs(boxart = "b"))
-            from!!.copy(scannedAt = seen.size.toLong())
+            // Not an art result (a rename, a move): only a build on the changed index keeps it.
+            if (seen.size == 1) h.mutate { it!!.copy(scannedAt = 9) }
+            from!!.copy(systems = from.systems.map { it.copy(displayName = "built ${seen.size}") })
         }
-        assertEquals(2, seen.size)   // built again on the changed index
-        assertEquals("b", seen[1]!!.systems[0].games[0].boxart)
+        assertEquals(2, seen.size)
+        assertEquals(9L, seen[1]!!.scannedAt)
         assertSame(next, h.snapshot)
-        assertEquals("b", next!!.systems[0].games[0].boxart)
-        assertEquals(2L, next.scannedAt)
+        assertEquals(9L, next!!.scannedAt)
+        assertEquals("built 2", next.systems[0].displayName)
     }
 
     @Test

@@ -889,7 +889,14 @@ class AppState(
     private var systemsCache: List<SystemFolder> = emptyList()
     private var reindexJob: Job? = null   // [removeExtra]'s background re-index
     private var lateMountHere: List<String> = emptyList()   // [LibraryIndex.lateMount] of this run's last scan (a stored one is stale)
-    private var systemsIndex: LibraryIndex? = null   // the index [afterIndexChange] last set [systemsCache] from; null when set otherwise
+    /**
+     * [systemsCache]'s writers take a generation before computing it ([takeSystemsGen]) and write only when it is newer than
+     * the one shown ([offerSystems]): passes run side by side, and an older one landing late never puts back what a newer
+     * one (a hide, a refresh) changed. Under [systemsLock].
+     */
+    private val systemsLock = Mutex()
+    private var systemsTaken = 0L
+    private var systemsWritten = 0L
     /** The last search confirmed this run (START's prompt opens on it); not saved. */
     internal var lastSearch: String = ""
         private set
@@ -1560,14 +1567,12 @@ class AppState(
 
     private suspend fun afterIndexChange(index: LibraryIndex, r: IndexRefresh) {
         // Both are a pass over every game: built on [AppDeps.compute], so an art flush or a rename never walks the library on
-        // the main thread; the lookup is cached for the systems list, so the rows built next find it ready.
+        // the main thread; the lookup is cached for the systems list taken, so the rows built next find it ready.
+        val gen = takeSystemsGen()
         val hidden = hiddenPaths.toSet()
         val systems = withContext(deps.compute) { index.playableSystems(hidden) }
-        libraryIndex.playableOffMain(systems)
         suspend fun steps() {
-            // Two refreshes run their passes side by side: an older one landing after a newer one keeps the newer systems.
-            val newerShown = index !== libraryIndex.snapshot && systemsIndex != null && systemsIndex === libraryIndex.snapshot
-            if (!newerShown) { systemsCache = systems; systemsIndex = index }
+            if (offerSystems(gen, systems)) libraryIndex.playableOffMain(systems)
             if (r.counts) invalidateCollectionCounts()
             if (r.rows) rebuildMainRows()
             if (r.openList) refreshOpenList(select = (_screen.value as? Screen.Games)?.entries?.getOrNull(_selection.value.index)?.game?.path)
@@ -2031,9 +2036,16 @@ class AppState(
         return hiddenPaths.toSet()
     }
 
+    /** A generation for a [systemsCache] about to be computed (see [systemsLock]). */
+    private suspend fun takeSystemsGen(): Long = systemsLock.withLock { ++systemsTaken }
+
+    /** [systems], computed under [gen], becomes [systemsCache] unless a newer computation's is shown; true when it did. */
+    private suspend fun offerSystems(gen: Long, systems: List<SystemFolder>): Boolean = systemsLock.withLock {
+        (gen > systemsWritten).also { if (it) { systemsWritten = gen; systemsCache = systems } }
+    }
+
     private suspend fun showSystems(playable: List<SystemFolder>) {
-        systemsCache = playable
-        systemsIndex = null
+        offerSystems(takeSystemsGen(), playable)
         invalidateCollectionCounts()
         rebuildMainRows()
         when {
@@ -5556,7 +5568,10 @@ class AppState(
         hiddenPaths = next
         libraryDirty = true
         val hiddenSet = next.toSet()
-        libraryIndex.current()?.let { ix -> systemsCache = withContext(deps.compute) { ix.playableSystems(hiddenSet) }; systemsIndex = null }
+        libraryIndex.current()?.let { ix ->
+            val gen = takeSystemsGen()
+            offerSystems(gen, withContext(deps.compute) { ix.playableSystems(hiddenSet) })
+        }
         invalidateCollectionCounts()   // a hidden game leaves the counts
         rebuildMainRows()
         if (closeMenu) closeContextMenu()

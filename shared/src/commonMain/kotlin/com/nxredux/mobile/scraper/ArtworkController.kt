@@ -100,6 +100,12 @@ class ArtworkController(
     /** Games queued while running; the run loop chains onto them when the engine's run ends. */
     private var pending: List<ScrapeItem> = emptyList()
     private var replace = false
+    /**
+     * The engine's end state of the live run, from its return until the loop merges it under [lock]. A stop landing in
+     * between (the merge's lock wait is cancellable) leaves it here for [halt] to record after its join, so the games
+     * finished since the run's last emission are never lost to the stop.
+     */
+    @Volatile private var runEnd: ScrapeState? = null
     /** The game a [fetchGame] is scraping outside the job (never queued meanwhile). */
     private var single: String? = null
     private val singleLock = Mutex()
@@ -161,6 +167,7 @@ class ArtworkController(
         val start = s.copy(phase = JobPhase.RUNNING, pauseReason = null, notes = emptyMap())   // stopped sources are asked again
         _state.value = start
         persist(start)   // a process killed before the first game finishes still finds this queue (not the last job's)
+        runEnd = null
         job = scope.launch(work) { runLoop(start) }
     }
 
@@ -180,15 +187,14 @@ class ArtworkController(
                 singleLock.withLock {}   // a fetchGame in flight finishes first: its game is never scraped twice at once
                 val refs = host.libraryGames().associateBy { it.gamePath }
                 // Bulk jobs save the options found on the way, never the wide pass.
-                val end = engine.run(start, { refs[it] }, lock.withLock { replace }, wide = false) { publish(it) }
+                runEnd = engine.run(start, { refs[it] }, lock.withLock { replace }, wide = false) { publish(it) }
                 start = lock.withLock {
+                    // Stopped since the run returned: [halt] records the phase from [runEnd] once this job is gone.
+                    currentCoroutineContext().ensureActive()
+                    val end = runEnd!!
+                    runEnd = null
                     val merged = end.copy(items = end.items + pending)
                     pending = emptyList()
-                    // Stopped after this run's last emission: [halt] records the phase from what it finished.
-                    if (!currentCoroutineContext().isActive) {
-                        _state.value = merged.copy(phase = JobPhase.RUNNING)
-                        currentCoroutineContext().ensureActive()
-                    }
                     if (merged.phase == JobPhase.DONE && merged.items.any { it.status == ItemStatus.WAITING }) return@withLock merged.copy(phase = JobPhase.RUNNING)
                     finishLocked(merged)
                     null
@@ -205,11 +211,22 @@ class ArtworkController(
             // write failures are the engine's own pause; anything here is not one of them.
             val reason = (t as? JobPause)?.reason ?: ScrapeEngine.FAILED
             withContext(NonCancellable) {
-                lock.withLock { finishLocked(_state.value.inFlightToWaiting().copy(phase = JobPhase.PAUSED, pauseReason = reason)) }
+                lock.withLock { finishLocked(takeShownLocked().inFlightToWaiting().copy(phase = JobPhase.PAUSED, pauseReason = reason)) }
             }
         } finally {
             flushArt()   // done, paused or cancelled: the art fetched so far reaches the index file and the menu
         }
+    }
+
+    /**
+     * Under [lock], for a job that ends without the loop's merge: the job as last known, which is the run's end state
+     * ([runEnd], with the games queued meanwhile) when the run had returned, as it holds the games never emitted.
+     */
+    private fun takeShownLocked(): ScrapeState {
+        val shown = runEnd?.let { it.copy(items = it.items + pending) } ?: _state.value
+        runEnd = null
+        pending = emptyList()   // in the shown items either way
+        return shown
     }
 
     private suspend fun finishLocked(s: ScrapeState) {
@@ -265,7 +282,8 @@ class ArtworkController(
      * Stops a running job (its in-flight item goes back to waiting) and records [phase]; a paused job can be cancelled.
      * [only] (checked under the lock) limits it to a running job it accepts. True when it stopped or cancelled a job.
      * The job is waited for outside [lock]: its cancellation emits the games it finished since its last emission
-     * ([publish] takes [lock]), and those are in the phase recorded.
+     * ([publish] takes [lock]), and those are in the phase recorded; a run that had already returned left them in
+     * [runEnd] instead.
      */
     private suspend fun halt(phase: JobPhase, only: ((ScrapeState) -> Boolean)? = null): Boolean = haltLock.withLock {
         var running: Job? = null
@@ -281,8 +299,7 @@ class ArtworkController(
         withContext(NonCancellable) {
             running?.join()
             lock.withLock {
-                pending = emptyList()   // already in the shown items
-                val s = _state.value.inFlightToWaiting().copy(phase = phase, pauseReason = null)
+                val s = takeShownLocked().inFlightToWaiting().copy(phase = phase, pauseReason = null)
                 _state.value = s
                 persist(s)
             }
@@ -332,11 +349,13 @@ class ArtworkController(
         var notes: Map<String, String> = emptyMap()
         singleLock.withLock {
             // A job started after this check waits for [singleLock] before its run: the two never start the sources at once.
+            // [haltLock]: a stopped job still winding down (its in-flight game, its sources' end) is waited for, so this
+            // run never starts the shared sources under it.
             var jobLive = false
-            val inJob = lock.withLock {
+            val inJob = haltLock.withLock { lock.withLock {
                 jobLive = job != null
                 (jobLive && _state.value.items.any { it.gamePath == gamePath && it.status.inFlightOrWaiting }).also { if (!it) single = gamePath }
-            }
+            } }
             if (!inJob) try {
                 val one = ScrapeState(items = listOf(ScrapeItem(ref.gamePath, ref.tag, ref.name)))
                 val end = engine.run(one, { if (it == gamePath) ref else null }, replace = replaceExisting, startSources = !jobLive, wide = wide, found = { _, o -> found(o) }) {}

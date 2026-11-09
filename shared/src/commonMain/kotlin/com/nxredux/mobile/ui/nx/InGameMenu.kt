@@ -283,7 +283,7 @@ private fun InGameMenuContent(
             if (offMenuTab && beside != null) {
                 MenuGamePanel(beside, Modifier.weight(1f).fillMaxWidth())
             } else if (split?.wide == true) {
-                SplitBody(state, split, beside, slots, rowHeight, slotTextSize, onSelect, onActivate, onChange, detail, onInfoTruncated, onOption, Modifier.weight(1f))
+                SplitBody(state, split, slots, rowHeight, slotTextSize, onSelect, onActivate, onChange, detail, onInfoTruncated, onOption, Modifier.weight(1f))
             } else if (split != null) {
                 RootBody(state, split, beside, slots, rowHeight, slotTextSize, onSelect, onActivate, onChange, detail, onInfoTruncated, onOption, Modifier.weight(1f))
             } else when (page.kind) {
@@ -355,7 +355,7 @@ private fun RootBody(
             Column(Modifier.fillMaxSize()) {
                 // The words keep [StackedRightMin] clear under them (they scroll past it), so the slot card or the page still shows.
                 list(Modifier.fillMaxWidth().heightIn(max = wordsMax))
-                MenuRightPane(state, split, panel, slots, rowHeight, slotTextSize, onSelect, onActivate, onChange, detail, onInfoTruncated, onOption,
+                MenuRightPane(state, split, slots, rowHeight, slotTextSize, onSelect, onActivate, onChange, detail, onInfoTruncated, onOption,
                     Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp))
             }
         } else {
@@ -363,7 +363,7 @@ private fun RootBody(
                 list(Modifier.width(words).fillMaxHeight())
                 // Always reserve the right column so the list keeps a fixed width and doesn't shift
                 // when Save/Load (which shows the slot preview in place of the panel) is selected.
-                MenuRightPane(state, split, panel, slots, rowHeight, slotTextSize, onSelect, onActivate, onChange, detail, onInfoTruncated, onOption,
+                MenuRightPane(state, split, slots, rowHeight, slotTextSize, onSelect, onActivate, onChange, detail, onInfoTruncated, onOption,
                     Modifier.weight(1f).fillMaxHeight().padding(start = RootColumnGap))
             }
         }
@@ -437,7 +437,7 @@ private fun rememberWordListWidth(page: MenuPage, size: TextUnit, opened: Boolea
 }
 
 /**
- * The right pane (the root's columns: beside or below the words): the panel, the slot card ([slotModifier]; full
+ * The right pane (the root's columns: beside or below the words): empty in the panel's place, the slot card ([slotModifier]; full
  * brightness, unlike a page preview: the card is swiped and tapped itself), or a page (the Options preview, or the
  * focused page: touch rows, the dimmed parent on the left keeping its pills).
  */
@@ -445,7 +445,6 @@ private fun rememberWordListWidth(page: MenuPage, size: TextUnit, opened: Boolea
 private fun MenuRightPane(
     state: MenuState,
     split: SplitUi,
-    panel: PanelUi?,
     slots: List<SlotUi>,
     rowHeight: Dp,
     slotTextSize: TextUnit,
@@ -469,9 +468,8 @@ private fun MenuRightPane(
             onChange = onChange,
             modifier = slotModifier,
         )
-        // The Menu tab's panel body is its shortcut grid, which the menu's own panel never has (its words stand in for it).
-        MenuPaneContent.Panel -> if (panel != null && panel.state.shortcuts.isNotEmpty()) MenuGamePanel(panel, modifier) else Spacer(modifier)
-        MenuPaneContent.Empty -> Spacer(modifier)
+        // The Menu tab's panel body would be its shortcut grid, which the menu's own panel never has (its words stand in for it).
+        MenuPaneContent.Panel, MenuPaneContent.Empty -> Spacer(modifier)
         is MenuPaneContent.Page -> PagePane(content.page, !panes.focusLeft, split, rowHeight, onSelect, onActivate, detail, onInfoTruncated, onOption, modifier)
     }
 }
@@ -644,7 +642,6 @@ private val MENU_WORD_SIZE = 22.sp
 private fun SplitBody(
     state: MenuState,
     split: SplitUi,
-    panel: PanelUi?,
     slots: List<SlotUi>,
     rowHeight: Dp,
     slotTextSize: TextUnit,
@@ -667,7 +664,7 @@ private fun SplitBody(
             },
             right = {
                 MenuRightPane(
-                    state, split, panel, slots, rowHeight, slotTextSize, onSelect, onActivate, onChange, detail, onInfoTruncated, onOption,
+                    state, split, slots, rowHeight, slotTextSize, onSelect, onActivate, onChange, detail, onInfoTruncated, onOption,
                     Modifier.fillMaxSize(),
                     slotModifier = Modifier.fillMaxSize().padding(start = 16.dp, end = nxListInset(), top = 8.dp, bottom = 8.dp),   // its end on the page inset
                 )
