@@ -112,8 +112,13 @@ class ArtLogStore(private val host: ArtworkHost, private val name: String) : Log
     private suspend fun load(): WrittenArtLog = log ?: run {
         val text = host.readPrivate(name)   // a throw: not cached
         val torn = text != null && text.isNotEmpty() && !text.endsWith("\n")
-        rewrite = torn; appended = 0
-        WrittenArtLog.decode(if (torn) text!!.substringBeforeLast('\n', "") else text).also { log = it }
+        val kept = if (torn) text!!.substringBeforeLast('\n', "") else text
+        rewrite = torn
+        WrittenArtLog.decode(kept).also { l ->
+            // Earlier sessions' appends are still in the file: they count toward the next compaction.
+            appended = maxOf(0, kept.orEmpty().lineSequence().count { it.isNotBlank() } - l.size)
+            log = l
+        }
     }
 
     /** Adds (path, origin) entries; appended (or saved) when anything changed. */

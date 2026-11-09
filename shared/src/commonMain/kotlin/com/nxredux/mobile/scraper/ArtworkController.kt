@@ -9,8 +9,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -90,6 +90,11 @@ class ArtworkController(
 
     /** Guards [job], [pending], [replace], [single] and every phase change. */
     private val lock = Mutex()
+    /**
+     * Held by [halt] from its check to the phase it records, taken before [lock]. The stopped job winds down meanwhile
+     * with [lock] free (its last emission takes it), so what would start, restore or forget a job waits here instead.
+     */
+    private val haltLock = Mutex()
     /** Non-null exactly while a run loop is live: the only gate for starting one. */
     private var job: Job? = null
     /** Games queued while running; the run loop chains onto them when the engine's run ends. */
@@ -131,7 +136,7 @@ class ArtworkController(
         return scope.launch(work) {
             val picked = host.libraryGames().filter { fetchable(it) && pick(it) }
                 .distinctBy { it.gamePath }.map { ScrapeItem(it.gamePath, it.tag, it.name) }
-            lock.withLock {
+            haltLock.withLock { lock.withLock {
                 if (job == null && _state.value.phase == JobPhase.IDLE) {
                     tryQuietly { restoreLocked() }   // unreadable: a new job
                 }
@@ -148,7 +153,7 @@ class ArtworkController(
                     s.phase == JobPhase.PAUSED -> { replace = replace || replaceExisting; startLocked(s.copy(items = s.items + add)) }
                     add.isNotEmpty() -> { replace = replaceExisting; startLocked(ScrapeState(JobPhase.RUNNING, add, quota = s.quota, tgdbLeft = s.tgdbLeft)) }
                 }
-            }
+            } }
         }
     }
 
@@ -179,17 +184,21 @@ class ArtworkController(
                 start = lock.withLock {
                     val merged = end.copy(items = end.items + pending)
                     pending = emptyList()
+                    // Stopped after this run's last emission: [halt] records the phase from what it finished.
+                    if (!currentCoroutineContext().isActive) {
+                        _state.value = merged.copy(phase = JobPhase.RUNNING)
+                        currentCoroutineContext().ensureActive()
+                    }
                     if (merged.phase == JobPhase.DONE && merged.items.any { it.status == ItemStatus.WAITING }) return@withLock merged.copy(phase = JobPhase.RUNNING)
                     finishLocked(merged)
                     null
                 } ?: break
             }
         } catch (e: CancellationException) {
-            withContext(NonCancellable) { keepAlive(null) }   // halt() holds the lock meanwhile: no new job can start
+            withContext(NonCancellable) { keepAlive(null) }   // halt() holds [haltLock] meanwhile: no new job can start
             throw e
         } catch (t: Throwable) {
-            // Thrown while being cancelled (an Error met in non-cancellable work): halt() holds the lock while it waits
-            // for this job and records the phase itself, so waiting for the lock here would never end.
+            // Thrown while being cancelled (an Error met in non-cancellable work): halt() records the phase itself.
             if (!currentCoroutineContext().isActive) { withContext(NonCancellable) { keepAlive(null) }; return }
             // A host or provider failure outside the engine's handling, or an Error (out of memory): keep the queue,
             // paused, with the job cleared and keep-alive stopped so Resume can start it again. The library folder's
@@ -242,42 +251,54 @@ class ArtworkController(
 
     /** Forgets a finished (done or cancelled) job, stored copy included: no Progress until the next fetch. */
     suspend fun clear() = withContext(work) {
-        lock.withLock {
+        haltLock.withLock { lock.withLock {
             val s = _state.value
             if (job != null || (s.phase != JobPhase.DONE && s.phase != JobPhase.CANCELLED)) return@withLock
             val idle = ScrapeState(quota = s.quota, tgdbLeft = s.tgdbLeft)
             _state.value = idle
             persist(idle)
-        }
+        } }
     }
     fun cancel() { scope.launch(work) { halt(JobPhase.CANCELLED) } }
 
     /**
      * Stops a running job (its in-flight item goes back to waiting) and records [phase]; a paused job can be cancelled.
      * [only] (checked under the lock) limits it to a running job it accepts. True when it stopped or cancelled a job.
+     * The job is waited for outside [lock]: its cancellation emits the games it finished since its last emission
+     * ([publish] takes [lock]), and those are in the phase recorded.
      */
-    private suspend fun halt(phase: JobPhase, only: ((ScrapeState) -> Boolean)? = null): Boolean = lock.withLock {
-        val running = job
-        if (running == null && !(phase == JobPhase.CANCELLED && _state.value.phase == JobPhase.PAUSED)) return@withLock false
-        if (running != null && only != null && !only(_state.value)) return@withLock false
-        job = null
-        running?.cancelAndJoin()
-        pending = emptyList()   // already in the shown items
-        val s = _state.value.inFlightToWaiting().copy(phase = phase, pauseReason = null)
-        _state.value = s
-        persist(s)
+    private suspend fun halt(phase: JobPhase, only: ((ScrapeState) -> Boolean)? = null): Boolean = haltLock.withLock {
+        var running: Job? = null
+        val stop = lock.withLock {
+            running = job
+            when {
+                job == null -> phase == JobPhase.CANCELLED && _state.value.phase == JobPhase.PAUSED
+                only != null && !only(_state.value) -> false
+                else -> { job = null; running?.cancel(); true }
+            }
+        }
+        if (!stop) return@withLock false
+        withContext(NonCancellable) {
+            running?.join()
+            lock.withLock {
+                pending = emptyList()   // already in the shown items
+                val s = _state.value.inFlightToWaiting().copy(phase = phase, pauseReason = null)
+                _state.value = s
+                persist(s)
+            }
+        }
         true
     }
 
     fun resume() {
         scope.launch(work) {
-            lock.withLock { if (_state.value.phase == JobPhase.PAUSED && job == null && available) startLocked(_state.value) }
+            haltLock.withLock { lock.withLock { if (_state.value.phase == JobPhase.PAUSED && job == null && available) startLocked(_state.value) } }
         }
     }
 
     /** Reads the persisted job; true when a paused job with waiting games can be resumed. */
     suspend fun restorePending(): Boolean = withContext(work) {
-        lock.withLock { job == null && restoreLocked() }
+        haltLock.withLock { lock.withLock { job == null && restoreLocked() } }
     }
 
     /** Under [lock] with no job: loads the persisted job when it is paused with waiting games; true when it did. */

@@ -19,7 +19,14 @@ class DiscSheetTest {
         assertEquals(listOf("FF7 (Disc 1).cue", "FF7 (Disc 2).chd"), DiscSheet.references("FF7.M3U", m3u))
     }
     @Test fun a_cue_starting_with_a_bom_keeps_its_first_file() {
-        assertEquals(listOf("a.bin"), DiscSheet.references("x.cue", "\uFEFFFILE \"a.bin\" BINARY\n"))
+        val bom = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
+        assertEquals(listOf("a.bin"), DiscSheet.references("x.cue", DiscSheet.decode(bom + "FILE \"a.bin\" BINARY\n".encodeToByteArray())))
+        // A legacy sheet behind a BOM: the BOM is not read as Windows-1252 text.
+        assertEquals("FILE \"\u00e9.bin\"\n", DiscSheet.decode(bom + byteArrayOf(*"FILE \"".encodeToByteArray(), 0xE9.toByte(), *".bin\"\n".encodeToByteArray())))
+    }
+    @Test fun a_bom_is_stripped_once_by_the_sheet_read() = runTest {
+        val src = FakeRomsSource(mapOf("d" to listOf("x.cue")), texts = mapOf("d/x.cue" to "\uFEFFFILE \"a.bin\" BINARY\n"))
+        assertEquals("FILE \"a.bin\" BINARY\n", DiscSheet.readSheet(src, ContentRef("d/x.cue")))
     }
     @Test fun references_outside_the_folder_are_ignored() {
         assertEquals(emptyList(), DiscSheet.references("x.cue", "FILE \"../x.bin\" BINARY\nFILE \"sub/x.bin\" BINARY\nFILE \"disc\\x.bin\" BINARY\n"))
@@ -163,7 +170,9 @@ class DiscSheetTest {
         assertEquals("FILE \"Pokémon.bin\" BINARY\n", DiscSheet.decode(utf8))
         // A head read can end inside a multi-byte character: still UTF-8, not a legacy sheet.
         val cut = "FILE \"a.bin\" BINARY\nREM é".encodeToByteArray().let { it.copyOfRange(0, it.size - 1) }
-        assertEquals("FILE \"a.bin\" BINARY\nREM ", DiscSheet.decode(cut))
+        assertEquals("FILE \"a.bin\" BINARY\nREM ", DiscSheet.decode(cut, truncated = true))
+        // A whole file ending in a lead byte is not valid UTF-8: a legacy sheet, its last character kept.
+        assertEquals("FILE \"a.bin\" BINARY\nREM \u00c3", DiscSheet.decode(cut))
     }
     @Test fun a_legacy_sheet_finds_and_hides_its_files() = runTest {
         val cue = byteArrayOf(*"FILE \"Pok".encodeToByteArray(), 0xE9.toByte(), *"mon.bin\" BINARY\n".encodeToByteArray())

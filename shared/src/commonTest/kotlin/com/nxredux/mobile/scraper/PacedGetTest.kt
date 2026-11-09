@@ -93,6 +93,19 @@ class PacedGetTest {
         assertEquals(false, p.held())
     }
 
+    @Test fun jobAnswersKeepNoEmptyBodyAndStayUnderTheirCharacterCap() = runTest {
+        val answers = JobAnswers(max = 10, maxChars = 10)
+        var fetches = 0
+        val fetch: suspend (String) -> String? = { k -> fetches++; if (k == "empty") "" else "x".repeat(4) }
+        answers.get("empty", fetch); answers.get("empty", fetch)
+        assertEquals(2, fetches)
+        for (k in listOf("a", "b", "c")) answers.get(k, fetch)   // 12 characters: the oldest goes
+        assertEquals(false, answers.get("a", fetch).second)
+        assertEquals(true, answers.get("c", fetch).second)
+        assertEquals(false, answers.get("big") { "y".repeat(11) }.second)
+        assertEquals(false, answers.get("big") { "y".repeat(11) }.second)   // larger than the cap: never kept
+    }
+
     @Test fun percentEncodeSpaces() {
         assertEquals("a+b%2Fc%C3%A9~", percentEncode("a b/cé~", spaceAsPlus = true))
         assertEquals("a%20b%2Fc%C3%A9~", percentEncode("a b/cé~", spaceAsPlus = false))

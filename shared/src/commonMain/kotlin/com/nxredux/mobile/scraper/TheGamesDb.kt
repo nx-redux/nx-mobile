@@ -224,6 +224,8 @@ class TheGamesDbSource(
         allowance()
     }
 
+    override suspend fun endJob() { answers.clear() }
+
     /** Reads the allowance with the free `API/Limit` (paced); null when it could not be read. */
     suspend fun allowance(): Int? {
         val k = key().ifEmpty { return null }
