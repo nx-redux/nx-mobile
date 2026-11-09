@@ -553,12 +553,14 @@ internal class SaveSession(
     /**
      * onPause: synchronous (the process may be killed once backgrounded), unless a save state's serialize or unserialize
      * holds the core's lock (a resume still loading, a Save / Load, a Wii HOME write, the last stop's auto state; a big
-     * PS2 or Wii state takes seconds): the SRAM read would wait for it on the main thread. Then it goes on [autoWriter],
-     * which the process end waits for, and only while the core lives. Main thread.
+     * PS2 or Wii state takes seconds): the SRAM read would wait for it on the main thread. Then it goes on the GL thread's
+     * queue, where those serializes run too: it follows them without blocking main, and it always runs before the native
+     * destroy queued behind it, so a game screen destroyed without a quit still writes it. Main thread.
      */
     fun writeBatterySaveOnPause() {
-        if (!resumePending && !host.speed.inState && stopSerializes.get() == 0) { writeBatterySave(notify = false); return }
-        autoWriter.execute { withLiveCore { writeBatterySave(notify = false) } }
+        val busy = resumePending || host.speed.inState || stopSerializes.get() > 0
+        val view = host.retroView
+        writeBatterySaveOnPause(busy, write = { writeBatterySave(notify = false) }, queueBeforeDestroy = { view?.queueBeforeDestroy(it) == true })
     }
 
     /**
@@ -589,6 +591,15 @@ internal class SaveSession(
                 if (notify) host.activity.runOnUiThread { host.toast("Battery save failed") }
             }.getOrDefault(false)
     }
+}
+
+/**
+ * The pause's battery save: [write] now, unless the core is [busy] with a save state; then it is handed to
+ * [queueBeforeDestroy] (the GL thread, ahead of the native destroy). Written now when that refuses: never lost.
+ */
+internal fun writeBatterySaveOnPause(busy: Boolean, write: () -> Unit, queueBeforeDestroy: (() -> Unit) -> Boolean) {
+    if (busy && queueBeforeDestroy(write)) return
+    write()
 }
 
 /**

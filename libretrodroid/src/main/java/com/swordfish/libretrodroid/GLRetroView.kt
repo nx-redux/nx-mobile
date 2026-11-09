@@ -505,6 +505,21 @@ class GLRetroView(
     // Set by whichever runs the native destroy first: the queued one, or the caller after a timeout.
     private val nativeDestroyed = AtomicBoolean(false)
 
+    /**
+     * Queues [block] on the GL thread without waiting for it. The destroy is queued there too, so [block] runs ahead of it
+     * (and behind whatever was queued before, such as a serialize), and the destroy's own wait covers it. Skipped if the
+     * core was destroyed elsewhere first (a wedged GL thread's fallback): it must never reach the next game's core. False
+     * when it could not be queued (the GL thread is gone); the caller then does the work itself.
+     */
+    fun queueBeforeDestroy(block: () -> Unit): Boolean {
+        if (emulationThreadGone || nativeDestroyed.get()) return false
+        return runCatching {
+            queueEvent {
+                if (!nativeDestroyed.get()) runCatching(block).onFailure { NxLog.e(TAG_LOG, "queued work before destroy failed", it) }
+            }
+        }.isSuccess
+    }
+
     private fun destroyNative() {
         if (nativeDestroyed.compareAndSet(false, true)) LibretroDroid.destroy()
     }
