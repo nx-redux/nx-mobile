@@ -35,10 +35,10 @@ class SkinEditorState(
 
     private val home = SkinTweaks.boxes(placement)
 
-    var tweaks: Map<String, SkinTweak> by mutableStateOf(achieved(initial)); private set
-
-    /** The overlay groups with a tweak of their own (always empty for the skin). */
+    /** The overlay groups with a tweak of their own (always empty for the skin). Set before [tweaks]: placing them keeps these. */
     var owned: Set<String> by mutableStateOf(if (rules == TweakRules.OVERLAY) owned else emptySet()); private set
+
+    var tweaks: Map<String, SkinTweak> by mutableStateOf(achieved(initial)); private set
 
     /** What a save stores: the skin's [tweaks]; the overlay's only for the [owned] groups (one sitting at home stores an identity tweak, so it stops following the skin). */
     fun saved(): Map<String, SkinTweak> =
@@ -54,12 +54,13 @@ class SkinEditorState(
     /** Something changed since [initial] (read back from the drawing, so equal within float noise). */
     val dirty: Boolean get() = saved().let { now -> now.keys != initialSaved.keys || now.any { (id, t) -> !t.near(initialSaved.getValue(id)) } }
 
-    private var cache: Pair<Map<String, SkinTweak>, SkinPlacement>? = null
+    private var cache: Pair<Pair<Map<String, SkinTweak>, Set<String>>, SkinPlacement>? = null
 
-    /** [placement] with [tweaks] applied: what the editor draws and the game will. */
+    /** [placement] with [tweaks] applied: what the editor draws and the game will ([owned] groups kept, as the game keeps them). */
     fun placed(): SkinPlacement {
-        cache?.let { (t, p) -> if (t == tweaks) return p }
-        return SkinTweaks.apply(placement, tweaks, windowW, windowH, rules, minTouchPx).also { cache = tweaks to it }
+        val key = tweaks to owned
+        cache?.let { (k, p) -> if (k == key) return p }
+        return SkinTweaks.apply(placement, tweaks, windowW, windowH, rules, minTouchPx, keep = owned).also { cache = key to it }
     }
 
     /** Each group's box as drawn now (pieces and controls' hit areas), window px. */
@@ -83,19 +84,21 @@ class SkinEditorState(
         val id = selected ?: return
         val k = placement.k.takeIf { it > 0f } ?: return
         if (by.x == 0f && by.y == 0f) return
-        var t = tweaks
-        if (by.x != 0f) t = achieved(t.with(id) { it.copy(dx = it.dx + by.x / k) })
-        if (by.y != 0f) t = achieved(t.with(id) { it.copy(dy = it.dy + by.y / k) })
+        val before = tweaks
+        var t = before
+        if (by.x != 0f) t = achieved(t.with(id) { it.copy(dx = it.dx + by.x / k) }, id, t)
+        if (by.y != 0f) t = achieved(t.with(id) { it.copy(dy = it.dy + by.y / k) }, id, t)
         tweaks = t
-        own(id)
+        own(id, before)
     }
 
     /** The selected group's size times [factor], held to the room round it. */
     fun resize(factor: Float) {
         val id = selected ?: return
         if (!factor.isFinite() || factor <= 0f) return
-        tweaks = achieved(tweaks.with(id) { it.copy(scale = it.scale * factor) })
-        own(id)
+        val before = tweaks
+        tweaks = achieved(before.with(id) { it.copy(scale = it.scale * factor) }, id, before)
+        own(id, before)
     }
 
     /** The selected group's size now (1: as the layout has it). */
@@ -105,18 +108,25 @@ class SkinEditorState(
     fun resetGroup() {
         val id = selected ?: return
         val back = skinBase[id]
-        tweaks = achieved(if (rules == TweakRules.OVERLAY && back != null) tweaks + (id to back) else tweaks - id)
+        val before = tweaks
         owned = owned - id
+        tweaks = achieved(if (rules == TweakRules.OVERLAY && back != null) before + (id to back) else before - id, id, before)
     }
 
     /** Every group back to the skin layout's own (the overlay: the skin's tweaks, none of its own). */
     fun resetAll() {
-        tweaks = if (rules == TweakRules.OVERLAY) achieved(skinBase) else emptyMap()
         owned = emptySet()
+        tweaks = if (rules == TweakRules.OVERLAY) achieved(skinBase) else emptyMap()
     }
 
-    /** An edited group is the overlay's own from now on. */
-    private fun own(id: String) { if (rules == TweakRules.OVERLAY) owned = owned + id }
+    /**
+     * A group whose place or size the edit changed (from [before]) is the overlay's own from now on; one that did not
+     * move (a drag it could not take, a resize by 1) stays as it was, so it neither asks to be discarded nor freezes.
+     */
+    private fun own(id: String, before: Map<String, SkinTweak>) {
+        if (rules != TweakRules.OVERLAY) return
+        if (!(tweaks[id] ?: SkinTweak()).near(before[id] ?: SkinTweak())) owned = owned + id
+    }
 
     /**
      * Cancel / Back: true to leave now (nothing changed); else shows "Discard changes?" and returns false. While the
@@ -136,17 +146,20 @@ class SkinEditorState(
 
     /**
      * [t] as [SkinTweaks.apply] lands it: each group's move and size read back from where it is drawn (picture px), an
-     * untouched group left out. Groups not in this layout are dropped.
+     * untouched group left out. Groups not in this layout are dropped. With [moving] (the group being edited, [now] the
+     * tweaks before the edit) the rest are kept where they are and it is the one that stops, walked from where it
+     * stood; else as the game places them, the [owned] groups kept.
      */
-    private fun achieved(t: Map<String, SkinTweak>): Map<String, SkinTweak> {
+    private fun achieved(t: Map<String, SkinTweak>, moving: String? = null, now: Map<String, SkinTweak> = emptyMap()): Map<String, SkinTweak> {
         if (t.isEmpty()) return emptyMap()
-        val now = SkinTweaks.boxes(SkinTweaks.apply(placement, t, windowW, windowH, rules, minTouchPx))
+        val keep = if (moving == null) owned else groups.map { it.id }.toSet() - moving
+        val landed = SkinTweaks.boxes(SkinTweaks.apply(placement, t, windowW, windowH, rules, minTouchPx, keep, now))
         val k = placement.k
         val out = LinkedHashMap<String, SkinTweak>()
         for (g in groups) {
             if (g.id !in t) continue
             val a = home[g.id] ?: continue
-            val b = now[g.id] ?: continue
+            val b = landed[g.id] ?: continue
             // the box scales about its mid's centre, then moves: read the scale off its width, the move off its centre
             val s = if (a.box.width > 0f) b.box.width / a.box.width else 1f
             val mx = a.mid.x + a.mid.width / 2f; val my = a.mid.y + a.mid.height / 2f

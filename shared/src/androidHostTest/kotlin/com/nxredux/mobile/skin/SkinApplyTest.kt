@@ -1,6 +1,7 @@
 package com.nxredux.mobile.skin
 
 import com.nxredux.mobile.options.PxRect
+import com.nxredux.mobile.ui.nx.SkinPadTouch
 import java.io.File
 import kotlin.math.abs
 import kotlin.test.Test
@@ -227,8 +228,10 @@ class SkinApplyTest {
                 val before = box(p, g); val after = box(out, g)
                 for (z in zones) assertTrue(overlap(after, z) <= overlap(before, z) + 0.5f, "${p.spec.id} ${g.id} ($ux,$uy): $after in $z")
                 val h0 = hits(p, g); val h1 = hits(out, g)
-                assertTrue(h1.x >= minOf(h0.x, 0f) - 0.01f && h1.x + h1.width <= maxOf(h0.x + h0.width, w.toFloat()) + 0.01f, "${p.spec.id} ${g.id} x $h1")
-                assertTrue(h1.y >= minOf(h0.y, 0f) - 0.01f && h1.y + h1.height <= maxOf(h0.y + h0.height, h.toFloat()) + 0.01f, "${p.spec.id} ${g.id} y $h1")
+                // past the window's edge by no more than float noise
+                val e = 0.05f
+                assertTrue(h1.x >= minOf(h0.x, 0f) - e && h1.x + h1.width <= maxOf(h0.x + h0.width, w.toFloat()) + e, "${p.spec.id} ${g.id} x $h1")
+                assertTrue(h1.y >= minOf(h0.y, 0f) - e && h1.y + h1.height <= maxOf(h0.y + h0.height, h.toFloat()) + e, "${p.spec.id} ${g.id} y $h1")
                 for (o in groups) if (o != g) assertTrue(touching(out, g, b = o) <= touching(p, g, b = o) + 0.5f, "${p.spec.id} ${g.id} on ${o.id}")
             }
         }
@@ -326,7 +329,21 @@ class SkinApplyTest {
         val n64 = assertNotNull(SkinChoice.place(carbon, 2420, 1080, 420, tablet = false, ds = false, picture = 320f to 240f, variant = SkinVariant.N64))
         val shapes = (n64.controls + menu().controls).map { it.spec.shape }.toSet()
         assertEquals(ControlShape.entries.toSet(), shapes, "every shape tried")
-        for (c in n64.controls + menu().controls) assertEquals(zone(c, n64.k), SkinTweaks.touchZone(c, n64.k), c.spec.id)
+        // probed with the game's own hit test, each control alone: just inside each edge of the zone is the control's,
+        // just past it is not (on the axes through its centre, where a round button's circle meets its square)
+        val touch = SkinPadTouch({}, { _, _ -> }, {})
+        for ((p, c) in n64.controls.map { n64 to it } + menu().let { m -> m.controls.map { m to it } }) {
+            touch.placement = p.copy(controls = listOf(c))
+            if (!touch.hits(c.x, c.y)) continue   // a control the game takes no touch on
+            val z = SkinTweaks.touchZone(c, p.k)
+            val e = 0.5f
+            for ((x, y) in listOf(z.x to c.y, z.x + z.width to c.y, c.x to z.y, c.x to z.y + z.height)) {
+                val inX = x + (if (x < c.x) e else if (x > c.x) -e else 0f); val inY = y + (if (y < c.y) e else if (y > c.y) -e else 0f)
+                val outX = x + (if (x < c.x) -e else if (x > c.x) e else 0f); val outY = y + (if (y < c.y) -e else if (y > c.y) e else 0f)
+                assertTrue(touch.hits(inX, inY), "${c.spec.id} ($inX, $inY) in $z")
+                assertTrue(!touch.hits(outX, outY), "${c.spec.id} ($outX, $outY) past $z")
+            }
+        }
     }
 
     @Test
@@ -389,13 +406,13 @@ class SkinApplyTest {
 
     @Test
     fun old_tweaks_land_where_they_did() {
-        // tweaks a player could save before (within half the group's size, scale 0.8..1.25) that went in full then
+        // a tweak within half the group's size and scale 0.8..1.25, clear of everything, lands in full
         val cases = listOf(
             menu() to mapOf("MENU" to SkinTweak(dx = 0.3f * 116f), "SELECT+START" to SkinTweak(dy = -0.3f * 252f, scale = 1.1f)),
             grip() to mapOf("R" to SkinTweak(dy = -0.3f * 160f), "DPAD" to SkinTweak(dy = 40f, scale = 0.9f)),
         )
         for ((p, t) in cases) {
-            val out = SkinTweaks.apply(p, t, if (p.spec.id == "grip_gba") 2420f else 1080f, if (p.spec.id == "grip_gba") 1080f else 2520f)
+            val out = SkinTweaks.apply(p, t, if (p.spec.id == "grip_gba") 2420f else 1080f, if (p.spec.id == "grip_gba") 1080f else 2520f, minTouchPx = phoneFloor)
             for ((id, tw) in t) {
                 val g = SkinGroups.of(p.spec).single { it.id == id }
                 val m = union(pieces(p, g).map { it.dst })
@@ -415,9 +432,88 @@ class SkinApplyTest {
         val out = SkinTweaks.apply(p, mapOf(face.id to SkinTweak(scale = 0.05f)), 1080f, 2520f, minTouchPx = 84f)
         val side = controls(out, face).minOf { minOf(hit(it).width, hit(it).height) }
         assertTrue(side >= 84f - 1f && side < 84f + 1f, "smallest side $side")
-        // a group already under the floor does not shrink
+        // a group already under the floor shrinks no further than 0.8, the smallest a tweak could always take
         val under = SkinTweaks.apply(p, mapOf(face.id to SkinTweak(scale = 0.5f)), 1080f, 2520f, minTouchPx = 1000f)
-        assertEquals(controls(p, face), controls(under, face))
+        for ((a, b) in controls(p, face).zip(controls(under, face))) near(b.spec.r, a.spec.r * 0.8f, "${a.spec.id} r")
+    }
+
+    /** 32 dp in window px on a 420 dpi phone, as the game passes it. */
+    private val phoneFloor = 32f * 420f / 160f
+
+    @Test
+    fun the_touch_floor_is_on_the_touch_area() {
+        // a shoulder's touch area is its hit box and its slop: the floor holds that, so the shoulder still shrinks
+        val p = grip()
+        val r = group(p, "R")
+        val out = SkinTweaks.apply(p, mapOf(r.id to SkinTweak(scale = 0.05f)), 2420f, 1080f, minTouchPx = phoneFloor)
+        val z = controls(out, r).map { zone(it, out.k) }
+        val side = z.minOf { minOf(it.width, it.height) }
+        assertTrue(abs(side - phoneFloor) < 1f, "smallest touch side $side vs $phoneFloor")
+        assertTrue(controls(out, r).first().spec.hh < controls(p, r).first().spec.hh * 0.8f, "shrank past 0.8")
+    }
+
+    @Test
+    fun old_shrinks_keep_their_size_under_the_game_floor() {
+        // a shoulder at 0.8, as the old cap let a player save it, with the floor the game uses
+        val p = grip()
+        for (id in listOf("R", "L2")) {
+            val g = group(p, id)
+            val out = SkinTweaks.apply(p, mapOf(g.id to SkinTweak(scale = 0.8f)), 2420f, 1080f, minTouchPx = phoneFloor)
+            for ((a, b) in controls(p, g).zip(controls(out, g))) near(b.spec.hh, a.spec.hh * 0.8f, "$id ${a.spec.id} hh")
+        }
+    }
+
+    @Test
+    fun a_tweak_past_a_neighbour_lands_there_when_the_spot_is_free() {
+        // MENU up past SELECT START to just above them (the screen's edge, clear of its middle): it goes there whole
+        val p = menu()
+        val g = group(p, "MENU")
+        val ss = group(p, "SELECT", "START")
+        val top = union(zones(p, ss)).y
+        val dy = top - 4f - (box(p, g).y + box(p, g).height)
+        val out = SkinTweaks.apply(p, mapOf(g.id to SkinTweak(dy = dy / p.k)), 1080f, 2520f)
+        near(box(out, g).y, box(p, g).y + dy, "MENU above SELECT START")
+        assertEquals(0f, touching(out, g, b = ss))
+    }
+
+    @Test
+    fun a_kept_group_never_gives_way() {
+        // the d-pad (earlier in the layout) kept where its tweak puts it; the face buttons' tweak onto it stops short
+        val p = menu()
+        val dpad = group(p, "DPAD"); val face = group(p, "A", "B", "X", "Y")
+        val t = mapOf(dpad.id to SkinTweak(dx = 150f), face.id to SkinTweak(dx = -100f))
+        val out = SkinTweaks.apply(p, t, 1080f, 2520f, TweakRules.OVERLAY, keep = setOf(dpad.id))
+        near(box(out, dpad).x, box(p, dpad).x + 150f * p.k, "the d-pad where its tweak puts it")
+        val d = union(zones(out, dpad)); val f = union(zones(out, face))
+        near(f.x, d.x + d.width, "the face buttons against it", e = 0.5f)
+        // kept or not, never on each other
+        assertTrue(touching(out, dpad, b = face) < 0.5f)
+    }
+
+    @Test
+    fun a_walk_starts_from_where_the_group_stands() {
+        // MENU above SELECT START, pushed on up: it goes from there to the screen's middle, not from home into SELECT START
+        val p = menu()
+        val g = group(p, "MENU")
+        val ss = group(p, "SELECT", "START")
+        val dy = union(zones(p, ss)).y - 4f - (box(p, g).y + box(p, g).height)
+        val now = mapOf(g.id to SkinTweak(dy = dy / p.k))
+        val out = SkinTweaks.apply(p, mapOf(g.id to SkinTweak(dy = -10000f)), 1080f, 2520f, from = now)
+        near(box(out, g).y, inner(p.glasses.first()).let { it.y + it.height }, "stopped at the screen's middle", e = 0.5f)
+    }
+
+    @Test
+    fun a_very_long_move_never_passes_over_a_group() {
+        // a stored move far past the window is walked in small steps all the same
+        val p = menu()
+        val g = group(p, "MENU")
+        val ss = group(p, "SELECT", "START")
+        val out = SkinTweaks.apply(p, mapOf(g.id to SkinTweak(dy = -1e7f)), 1080f, 2520f, TweakRules.OVERLAY)
+        assertTrue(union(zones(out, g)).y >= union(zones(p, ss)).let { it.y + it.height } - 0.5f, "${union(zones(out, g))} passed SELECT START")
+        assertTrue(touching(out, g, b = ss) < 0.5f)
+        // nor does a kept group: only its end spot is held against the kept groups alone
+        val kept = SkinTweaks.apply(p, mapOf(g.id to SkinTweak(dy = -1e7f)), 1080f, 2520f, TweakRules.OVERLAY, keep = setOf(g.id))
+        assertTrue(union(zones(kept, g)).y >= union(zones(p, ss)).let { it.y + it.height } - 0.5f, "kept: ${union(zones(kept, g))} passed SELECT START")
     }
 
     @Test

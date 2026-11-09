@@ -210,6 +210,79 @@ class SkinEditorStateTest {
         // an owned group dragged back home stores an identity tweak: it no longer follows the skin
         s.drag(Offset(0f, 20f))
         assertEquals(SkinTweak(), s.saved()["DPAD"]?.let { SkinTweak(if (abs(it.dx) < 0.01f) 0f else it.dx, if (abs(it.dy) < 0.01f) 0f else it.dy, it.scale) })
+        assertEquals(setOf("DPAD"), s.owned)
+        assertTrue(s.dirty, "owned now, where it was following the skin")
+    }
+
+    @Test
+    fun overlay_reset_of_a_group_with_no_skin_tweak_goes_home() {
+        val p = menu()
+        val s = overlayState(p, mapOf("MENU" to SkinTweak(dx = 30f)), mapOf("DPAD" to SkinTweak(dy = 15f)))
+        s.select(centre(box(s.placed(), "DPAD")))
+        s.resetGroup()
+        assertNull(s.tweaks["DPAD"])
+        assertTrue(s.owned.isEmpty())
+        assertEquals(box(p, "DPAD"), box(s.placed(), "DPAD"))
+        near(assertNotNull(s.tweaks["MENU"]).dx, 30f, "the other keeps the skin's")
+    }
+
+    @Test
+    fun a_drag_past_a_neighbour_lands_where_it_is_free() {
+        // MENU dragged up past SELECT START to just above them: it goes there, not stopped under them
+        val p = menu()
+        val s = SkinEditorState(p, emptyMap(), 1080f, 2520f)
+        val ssTop = p.controls.filter { it.spec.id == "SELECT" || it.spec.id == "START" }.minOf { it.y - it.spec.r }
+        val dy = ssTop - 4f - (box(p, "MENU").y + box(p, "MENU").height)
+        s.select(centre(box(p, "MENU"))); s.drag(Offset(0f, dy))
+        near(box(s.placed(), "MENU").y, box(p, "MENU").y + dy, "above SELECT START", e = 0.5f)
+        // pushed on up, it stops at the screen's middle from there: not back under SELECT START
+        s.drag(Offset(0f, -10000f))
+        val g = p.glasses.first().rect
+        near(box(s.placed(), "MENU").y, g.y + 0.8f * g.height, "at the screen's middle", e = 0.5f)
+    }
+
+    @Test
+    fun a_drag_onto_another_group_stops_and_leaves_it() {
+        // the d-pad (earlier in the layout) moved right; the face buttons dragged onto it stop against it
+        val p = menu()
+        val s = SkinEditorState(p, mapOf("DPAD" to SkinTweak(dx = 150f)), 1080f, 2520f)
+        val face = p.controls.filter { it.spec.id in setOf("A", "B", "X", "Y") }
+        s.select(centre(box(p, "A+B+X+Y"))); s.drag(Offset(-100f, 0f))
+        near(assertNotNull(s.tweaks["DPAD"]).dx, 150f, "the d-pad stays")
+        val pad = s.placed().controls.single { it.spec.id == "DPAD" }
+        val padRight = pad.x + pad.spec.r + 22f * p.k
+        near(s.placed().controls.filter { it.spec.id in setOf("A", "B", "X", "Y") }.minOf { it.x - it.spec.r }, padRight, "the face buttons against it", e = 0.5f)
+        assertTrue(assertNotNull(s.tweaks["A+B+X+Y"]).dx > -100f + 1f, "stopped short")
+        assertTrue(face.isNotEmpty())
+    }
+
+    @Test
+    fun a_change_that_changes_nothing_is_no_edit() {
+        // the face buttons against the d-pad in the skin's layout: in the overlay a drag onto it, or a resize by 1, owns nothing
+        val p = menu()
+        val face = p.controls.filter { it.spec.id in setOf("A", "B", "X", "Y") }
+        val pad = p.controls.single { it.spec.id == "DPAD" }
+        val gap = face.minOf { it.x - it.spec.r } - (pad.x + pad.spec.r + 22f * p.k)
+        val s = overlayState(p, mapOf("A+B+X+Y" to SkinTweak(dx = -gap / p.k)), emptyMap())
+        s.select(centre(box(s.placed(), "A+B+X+Y")))
+        s.drag(Offset(-10f, 0f))
+        s.resize(1f)
+        assertTrue(s.owned.isEmpty(), "${s.owned}")
+        assertFalse(s.dirty)
+    }
+
+    @Test
+    fun drags_stay_quick() {
+        // one drag event is what a finger sends each frame: report what a long drag costs on the JVM
+        val p = grip()
+        val s = SkinEditorState(p, emptyMap(), 2420f, 1080f, minTouchPx = 84f)
+        s.select(centre(box(p, "A+B+X+Y")))
+        repeat(20) { s.drag(Offset(-3f, 1f)); s.placed() }   // warm up
+        val t0 = System.nanoTime()
+        repeat(100) { s.drag(Offset(if (it < 50) -6f else 6f, if (it % 2 == 0) 2f else -2f)); s.placed() }
+        val ms = (System.nanoTime() - t0) / 1e6
+        println("100 drag events: $ms ms")
+        assertTrue(ms < 5000.0, "100 drag events took $ms ms")
     }
 
     @Test

@@ -187,9 +187,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         set(value) { field = value; skinView?.underMenu = value }
     /** The last [skinPlacement] / [barePlacement] worked out, and what it was worked out for. */
     private var skinCache: Pair<SkinKey, SkinPlacement?>? = null
-    private var bareCache: Pair<SkinKey, BarePlaced?>? = null
-    /** The bare buttons as drawn ([placement], the overlay's tweaks) and the portrait band they take ([band], the skin's). */
-    private class BarePlaced(val placement: SkinPlacement, val band: Int)
+    private var bareCache: Pair<SkinKey, BareLayout?>? = null
     /**
      * [variant]: the layout set (a Wii pad resolving changes it); [tweaks] / [overlayTweaks]: the stored player tweaks
      * for the skin and for its bare buttons ([SkinTweaks.decode]).
@@ -376,10 +374,10 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
 
     /**
      * The skin's bare buttons laid out for this window ([bare]): the closest layout ([SkinChoice.placeClosest]) with the
-     * console's overlay tweaks ([SkinTweaks.overlayOf], [TweakRules.OVERLAY]), or null with a controller in the layout
+     * console's overlay tweaks ([bareLayout]), or null with a controller in the layout
      * ([names]), no readable skin, or a window too small even for that. Shows it in the bare view as well, and in
      * portrait sets the band it takes ([overlayHeight]) from the skin's tweaks, so the picture keeps its size however
-     * the overlay's buttons are moved ([overlayBandSource]).
+     * the overlay's buttons are moved ([bareLayout]).
      */
     fun barePlacement(names: List<String> = layoutControllerNames()): SkinPlacement? {
         val pack = skinPack ?: return null
@@ -419,34 +417,24 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             else SkinChoice.place(pack.manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, key.top, DeviceTraits.canHalfFold, variant)
     }
 
-    /**
-     * [placed] with the console's tweaks for its layout from [tweaksFor] (console id, layout id) applied under [rules]
-     * ([SkinTweaks.apply]), no hit box shrunk under [MIN_TOUCH_DP].
-     */
-    private fun tweaked(placed: SkinPlacement, key: SkinKey, rules: TweakRules, tweaksFor: (String, String) -> Map<String, SkinTweak>): SkinPlacement {
+    /** The smallest a control's touch area may be shrunk to here, window px. */
+    private val minTouchPx: Float get() = resources.displayMetrics.density * MIN_TOUCH_DP
+
+    /** [pack]'s layout for [key] ([placeUntweaked]) with the console's skin tweaks for it applied ([SkinTweaks.apply]). */
+    private fun placeSkin(pack: PadSkinPack, key: SkinKey, ds: Boolean, closest: Boolean): SkinPlacement? {
+        val placed = placeUntweaked(pack, key, ds, closest) ?: return null
         val console = CoreRegistry.consoleOf(key.tag)?.id ?: return placed
-        return SkinTweaks.apply(placed, tweaksFor(console, placed.spec.id), key.w.toFloat(), key.h.toFloat(), rules, resources.displayMetrics.density * MIN_TOUCH_DP)
+        return SkinTweaks.apply(placed, SkinTweaks.of(key.tweaks, console, placed.spec.id), key.w.toFloat(), key.h.toFloat(), TweakRules.SKIN, minTouchPx)
     }
 
-    /**
-     * [pack]'s layout for [key] ([placeUntweaked]) with the console's tweaks applied ([tweaked]): the skin's by default,
-     * [rules] and [tweaksFor] for another set.
-     */
-    private fun placeSkin(
-        pack: PadSkinPack, key: SkinKey, ds: Boolean, closest: Boolean, rules: TweakRules = TweakRules.SKIN,
-        tweaksFor: (String, String) -> Map<String, SkinTweak> = { c, l -> SkinTweaks.of(key.tweaks, c, l) },
-    ): SkinPlacement? = placeUntweaked(pack, key, ds, closest)?.let { tweaked(it, key, rules, tweaksFor) }
-
-    /**
-     * The bare buttons for [key]: the closest layout with the overlay's tweaks (a group the player never moved there
-     * follows the skin's), and the portrait band from the same layout with the skin's tweaks alone.
-     */
-    private fun placeBare(pack: PadSkinPack, key: SkinKey, ds: Boolean): BarePlaced? {
+    /** The bare buttons for [key] ([bareLayout]) from the closest layout and the console's skin and overlay tweaks for it. */
+    private fun placeBare(pack: PadSkinPack, key: SkinKey, ds: Boolean): BareLayout? {
         val placed = placeUntweaked(pack, key, ds, closest = true) ?: return null
-        val overlay = tweaked(placed, key, TweakRules.OVERLAY) { c, l -> SkinTweaks.overlayOf(key.tweaks, key.overlayTweaks, c, l) }.bare()
-        val skin = tweaked(placed, key, TweakRules.SKIN) { c, l -> SkinTweaks.of(key.tweaks, c, l) }.bare()
-        val band = overlayBandSource(skin, overlay)?.let { skinBandHeight(it, key.h) } ?: 0
-        return BarePlaced(overlay, band)
+        val console = CoreRegistry.consoleOf(key.tag)?.id
+        val id = placed.spec.id
+        val skin = console?.let { SkinTweaks.of(key.tweaks, it, id) }.orEmpty()
+        val overlay = console?.let { SkinTweaks.of(key.overlayTweaks, it, id) }.orEmpty()
+        return bareLayout(placed, skin, overlay, key.w, key.h, minTouchPx)
     }
 
     /**
@@ -783,12 +771,20 @@ internal fun skinBandHeight(p: SkinPlacement, windowH: Int): Int {
     return (windowH - top).roundToInt().coerceIn(0, windowH)
 }
 
+/** The bare buttons as drawn ([placement], the overlay's tweaks) and the portrait band they take ([band], the skin's). */
+internal class BareLayout(val placement: SkinPlacement, val band: Int)
+
 /**
- * Which placement portrait's band under the picture is measured from: the skin's ([skin]), never the [overlay]'s, so
- * an overlay button moved up over the picture doesn't shrink it; the overlay's buttons just sit over the game there.
+ * The bare buttons of [untweaked] (a layout as placed for a [w] x [h] window, no tweaks): per group the [overlay] tweak
+ * where the player edited it there, else the [skin] one ([TweakRules.OVERLAY]), the edited groups kept where they put
+ * them. The portrait band is measured with the [skin] tweaks alone, so an overlay button moved up over the picture
+ * never shrinks it; it just sits over the game there.
  */
-@Suppress("UNUSED_PARAMETER")
-internal fun overlayBandSource(skin: SkinPlacement?, overlay: SkinPlacement?): SkinPlacement? = skin
+internal fun bareLayout(untweaked: SkinPlacement, skin: Map<String, SkinTweak>, overlay: Map<String, SkinTweak>, w: Int, h: Int, minTouchPx: Float): BareLayout {
+    val drawn = SkinTweaks.apply(untweaked, skin + overlay, w.toFloat(), h.toFloat(), TweakRules.OVERLAY, minTouchPx, keep = overlay.keys).bare()
+    val banded = SkinTweaks.apply(untweaked, skin, w.toFloat(), h.toFloat(), TweakRules.SKIN, minTouchPx).bare()
+    return BareLayout(drawn, skinBandHeight(banded, h))
+}
 
 /**
  * The skin's right stick goes to the game's right analog ([GameInputRouter.onWiiRightStick]): the GameCube's C-stick

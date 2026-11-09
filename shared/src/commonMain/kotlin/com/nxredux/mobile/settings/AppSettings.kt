@@ -349,6 +349,7 @@ interface AppSettings {
     var overlayTweaks: String
         get() = ""
         set(@Suppress("UNUSED_PARAMETER") value) {}
+
     /**
      * Settings → System → Debug log (default off): off, only errors reach logcat. Defaulted so a platform or fake
      * without it stores nothing.

@@ -8,8 +8,10 @@ Device checks still owed:
 - [ ] Resize a button very large and very small (floor/ceiling hold); two buttons can overlap visually but their touch areas never stack.
 - [ ] Pad skin Off: Adjust buttons edits the overlay; untouched overlay buttons start at the skin positions; moving them doesn't change the skin; Pad skin On again shows the skin layout unchanged.
 - [ ] Existing skin tweaks from before the upgrade still land where they were.
-- [ ] Frame layouts' touch-shortcut strips may now enter the bottom 20% of the screen above them
-- [ ] Editor drag stays smooth on a slow device (AYANEO) with long drags
+- [ ] Frame layouts' touch-shortcut strips may now enter the bottom 20% of the screen above them.
+- [ ] Editor drag stays smooth on a slow device (AYANEO) with long drags.
+- [ ] An owned overlay button stays put after a later skin edit.
+- [ ] A shoulder shrunk before the upgrade keeps its size.
 
 ## Dolphin (GameCube / Wii) multiplayer: untested
 
