@@ -134,7 +134,7 @@ class SyncCommandsTest {
               path = /r/Saves
               read only = false
               list = false
-              exclude = ._* .DS_Store
+              exclude = ._* .DS_Store *.tmp *.part
 
             """.trimIndent(),
             conf,
