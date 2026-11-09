@@ -19,6 +19,7 @@ object NetplayCores {
         "32X" to listOf("picodrive"),
         "PS" to listOf("pcsx_rearmed", "swanstation"), "PSX" to listOf("swanstation", "pcsx_rearmed"),
         "FBN" to listOf("fbneo"),
+        "N64" to listOf("mupen64plus_next"),   // two players, the session's emulation options forced (NetplayPads)
         "GB" to listOf("gambatte"), "GBC" to listOf("gambatte"),   // GB link: gambatte's own network serial (TCP 56400)
         // GBA link: the netpacket interface over TCP 55437. Both folders run either core (the same raw flash save).
         "GBA" to listOf("gpsp", "mgba"), "MGBA" to listOf("mgba", "gpsp"),
@@ -35,6 +36,12 @@ object NetplayCores {
 
     /** The handheld pak's core for [tag]; null for a tag without netplay. */
     fun defaultCore(tag: String): String? = offered(tag).firstOrNull()
+
+    /** Frames each side runs on its own before the state sync: mupen64plus-next takes no state until it has run. */
+    fun presyncFrames(core: String): Int = if (core == "mupen64plus_next") 30 else 0
+
+    /** A session on [core] runs OpenGL ES: mupen64plus-next on Vulkan swaps in parallel RSP, which changes the emulation. */
+    fun forcesGles(core: String?): Boolean = core == "mupen64plus_next"
 
     /** The display name (CoreRegistry's), the id for a core this device does not know. */
     fun name(core: String): String = CoreRegistry.forId(core)?.name ?: core

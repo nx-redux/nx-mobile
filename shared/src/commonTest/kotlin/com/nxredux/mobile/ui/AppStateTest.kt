@@ -1232,10 +1232,10 @@ class AppStateTest {
         val src = FakeRomsSource(
             dirs = mapOf(
                 "Home" to listOf("Roms"),
-                "Home/Roms" to listOf("Super Nintendo (SFC)", "Game Boy Advance (MGBA)", "Nintendo 64 (N64)"),
+                "Home/Roms" to listOf("Super Nintendo (SFC)", "Game Boy Advance (MGBA)", "Nintendo DS (NDS)"),
                 "Home/Roms/Super Nintendo (SFC)" to listOf("Super Mario Kart (USA).sfc"),
                 "Home/Roms/Game Boy Advance (MGBA)" to listOf("Pokemon Emerald (USA).gba"),
-                "Home/Roms/Nintendo 64 (N64)" to listOf("Super Mario 64 (USA).z64"),
+                "Home/Roms/Nintendo DS (NDS)" to listOf("Mario Kart DS (USA).nds"),
             ),
         )
         val runner = RecordingRunner()
@@ -1257,7 +1257,7 @@ class AppStateTest {
         state.onButton(NxButton.B)
         state.back()
 
-        state.openSystem(systems.first { it.tag == "N64" })   // no netplay for Nintendo 64 at all: Y does nothing
+        state.openSystem(systems.first { it.tag == "NDS" })   // no netplay for Nintendo DS at all: Y does nothing
         state.onButton(NxButton.Y)
         assertNull(controller.page.value)
         assertIs<Screen.Games>(state.screen.value)

@@ -616,7 +616,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     // Display → Graphics API: the core options for the API and whether the runner offers Vulkan.
                     // Vulkan that could not start here before, or this is the relaunch after it did: OpenGL ES (VulkanFallback).
                     val vulkanFailed = activity.intent.getBooleanExtra(EXTRA_FORCE_GLES, false) ||
-                        cfg.descriptor?.id in settings.vulkanFailedCores
+                        cfg.descriptor?.id in settings.vulkanFailedCores || (cfg.np != null && NetplayCores.forcesGles(cfg.descriptor?.id))
                     val graphics = GraphicsApiOptions.resolve(frontendValues[GraphicsApiOptions.KEY], cfg.descriptor?.vulkan, { LibretroDroid.isVulkanSupported() }, vulkanFailed)
                     launchedOnVulkan = graphics.preferVulkan
                     launchEnv = graphics.env

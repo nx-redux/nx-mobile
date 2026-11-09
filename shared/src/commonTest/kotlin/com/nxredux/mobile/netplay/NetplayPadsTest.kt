@@ -45,6 +45,25 @@ class NetplayPadsTest {
         assertNull(NetplayPads.forSession("MD", null))
     }
 
+    @Test fun mupen64plus_next_gets_the_handhelds_n64_option_set() {
+        // nx-redux minarch ma_config.c np_n64_options, value for value
+        val want = mapOf(
+            "mupen64plus-cpucore" to "dynamic_recompiler", "mupen64plus-rsp-plugin" to "hle",
+            "mupen64plus-Framerate" to "Original", "mupen64plus-virefresh" to "Auto",
+            "mupen64plus-CountPerOp" to "0", "mupen64plus-CountPerOpDenomPot" to "0",
+            "mupen64plus-ForceDisableExtraMem" to "False", "mupen64plus-IgnoreTLBExceptions" to "False",
+            "mupen64plus-alt-map" to "True", "mupen64plus-astick-deadzone" to "15", "mupen64plus-astick-sensitivity" to "100",
+            "mupen64plus-r-cbutton" to "C1", "mupen64plus-l-cbutton" to "C2", "mupen64plus-d-cbutton" to "C3", "mupen64plus-u-cbutton" to "C4",
+            "mupen64plus-pak1" to "memory", "mupen64plus-pak2" to "none", "mupen64plus-pak3" to "none", "mupen64plus-pak4" to "none",
+            "mupen64plus-EnableCopyColorToRDRAM" to "Off", "mupen64plus-EnableCopyDepthToRDRAM" to "Off",
+            "mupen64plus-ThreadedRenderer" to "False",
+        )
+        val pad = assertNotNull(NetplayPads.forSession("N64", "mupen64plus_next"))
+        assertEquals(want, pad.options)
+        assertEquals(mapOf(0 to 1, 1 to 1), pad.ports)
+        assertNull(pad.pad)
+    }
+
     @Test fun the_tag_is_case_insensitive() {
         assertEquals(NetplayPads.forSession("MD", pico), NetplayPads.forSession(" md ", pico))
     }

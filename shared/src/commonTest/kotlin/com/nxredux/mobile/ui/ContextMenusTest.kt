@@ -99,7 +99,7 @@ class ContextMenusTest {
         val sfc = entry("SFC", file = "Super Mario Kart (USA).sfc")
         val gba = entry("GBA")
         val gg = entry("GG", file = "Sonic.gg")
-        val n64 = entry("N64", file = "Super Mario 64.z64")
+        val nds = entry("NDS", file = "Mario Kart DS.nds")
         fun netplay(e: Listed, source: ListSource = ListSource.Console(e.system), on: Boolean = true) =
             ContextMenus.itemsFor(source, e, false, netplay = on).filter { it.kind == ContextKind.NETPLAY }
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(sfc))
@@ -108,7 +108,7 @@ class ContextMenusTest {
             .map { it.kind }.let { it[it.indexOf(ContextKind.GAME_SETTINGS) + 1] })   // right after Game Settings
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(gba))   // GBA link
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(gg))   // GG lockstep, as the handheld's GG.pak
-        assertTrue(netplay(n64).isEmpty())
+        assertTrue(netplay(nds).isEmpty())
         assertTrue(netplay(sfc, on = false).isEmpty())   // a platform without netplay
         assertTrue(netplay(sfc, ListSource.Recent).isEmpty())
         val u = entry("SFC", unassigned = true, file = "thing.sfc")
@@ -211,8 +211,8 @@ class ContextMenusTest {
         assertEquals(listOf(ContextKind.PLAY_FROM_START, ContextKind.NETPLAY, ContextKind.PIN), lead(src, e).map { it.kind }.take(3))
         assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), lead(src, e, canResume = false).map { it.kind }.take(2))
         assertEquals(listOf(ContextKind.PLAY_FROM_START, ContextKind.PIN), lead(src, e, netplay = false).map { it.kind }.take(2))
-        val nes = entry("N64", file = "Mario.z64")   // a tag without netplay: never Netplay
-        assertTrue(ContextKind.NETPLAY !in lead(ListSource.Console(nes.system), nes).map { it.kind })
+        val nds = entry("NDS", file = "Mario.nds")   // a tag without netplay: never Netplay
+        assertTrue(ContextKind.NETPLAY !in lead(ListSource.Console(nds.system), nds).map { it.kind })
     }
 
     @Test fun collection_and_search_menus_list_netplay_once() {

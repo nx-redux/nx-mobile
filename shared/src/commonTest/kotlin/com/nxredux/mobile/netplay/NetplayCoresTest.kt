@@ -19,19 +19,30 @@ class NetplayCoresTest {
             "GPGX" to listOf(gpgx, pico), "32X" to listOf(pico),
             "PS" to listOf("pcsx_rearmed", "swanstation"), "PSX" to listOf("swanstation", "pcsx_rearmed"),
             "FBN" to listOf("fbneo"),
+            "N64" to listOf("mupen64plus_next"),
             "GB" to listOf("gambatte"), "GBC" to listOf("gambatte"), "GBA" to listOf("gpsp", "mgba"), "MGBA" to listOf("mgba", "gpsp"),
         )
         want.forEach { (tag, cores) ->
             assertEquals(cores, NetplayCores.offered(tag), tag)
             assertEquals(cores.first(), NetplayCores.defaultCore(tag), tag)
         }
-        for (tag in listOf("N64", "SGB", "DC")) assertFalse(NetplayCores.supported(tag), tag)
+        for (tag in listOf("NDS", "SGB", "DC")) assertFalse(NetplayCores.supported(tag), tag)
         assertTrue(NetplayCores.supported("sfc"))
-        assertNull(NetplayCores.defaultCore("N64"))
+        assertNull(NetplayCores.defaultCore("NDS"))
+    }
+
+    @Test fun only_mupen64plus_next_runs_frames_before_the_state_sync() {
+        assertEquals(30, NetplayCores.presyncFrames("mupen64plus_next"))
+        for (core in listOf("snes9x", "fbneo", "pcsx_rearmed", "picodrive")) assertEquals(0, NetplayCores.presyncFrames(core), core)
+    }
+
+    @Test fun only_an_n64_session_is_kept_off_vulkan() {
+        assertTrue(NetplayCores.forcesGles("mupen64plus_next"))
+        for (core in listOf("swanstation", "pcsx_rearmed", null)) assertFalse(NetplayCores.forcesGles(core), core.toString())
     }
 
     @Test fun every_offered_core_is_registered() {
-        listOf("FC", "SFC", "SUPA", "MD", "GG", "GPGX", "32X", "PS", "PSX", "FBN", "GB", "GBC", "GBA", "MGBA").flatMap(NetplayCores::offered).forEach {
+        listOf("FC", "SFC", "SUPA", "MD", "GG", "GPGX", "32X", "PS", "PSX", "FBN", "N64", "GB", "GBC", "GBA", "MGBA").flatMap(NetplayCores::offered).forEach {
             assertTrue(CoreRegistry.forId(it) != null, it)
         }
     }

@@ -703,6 +703,30 @@ static int raw_barrier(int fd) {
 
 /* ---------------------------------------------------------------- raw peer cases */
 
+/* A presync host runs its first frames on its own: no serialize, nothing on the wire, then the usual state sync. */
+static int case_presync_runs_before_state_sync(void) {
+	uint16_t port = next_port++;
+	fake_set(1000000);
+	core_reset(1);
+	np_set_presync_frames(3);
+	CHECK(np_start(NP_ROLE_HOST, "127.0.0.1", port, fake_clock) == 0);
+	np_set_presync_frames(0);
+	int fd = raw_connect(port);
+	CHECK(fd >= 0);
+	CHECK(wait_state(NP_SYNCING, 3000, 0) == 0);
+	for (int i = 0; i < 3; i++) {
+		CHECK(np_pre_frame(0, NULL, f_size, f_ser, f_unser) == 1);
+		np_post_frame();
+	}
+	struct pollfd pfd = {fd, POLLIN, 0};
+	CHECK(poll(&pfd, 1, 100) == 0);
+	CHECK(np_get_state(NULL, NULL) == NP_SYNCING);
+	CHECK(raw_sync(fd) == 0);
+	np_shutdown();
+	close(fd);
+	return 0;
+}
+
 static int case_wire_and_keepalive(void) {
 	uint16_t port = next_port++;
 	fake_set(1000000);
@@ -1157,6 +1181,7 @@ int main(void) {
 	run_pair("state_size_mismatch_fails", mismatch_host, mismatch_client);
 	run_pair("leave_ends_peer", leave_host, leave_client);
 	local_case("oversize_header_ends_session", case_oversize_header);
+	local_case("presync_runs_before_state_sync", case_presync_runs_before_state_sync);
 	local_case("wire_bytes_and_keepalive_countdown", case_wire_and_keepalive);
 	local_case("input_10_bytes_and_legacy_2_bytes", case_input_10_bytes_and_legacy_2_bytes);
 	local_case("local_pause_sends_pause_and_stops_input", case_local_pause_sends_pause_and_stops_input);
