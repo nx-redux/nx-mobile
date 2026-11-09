@@ -116,7 +116,7 @@ fun MainMenuScreen(
     canNetplay: () -> Boolean = { false },   // Home: the selected game has Netplay here (Y opens its sheet): its hint beside the tabs
     onTabMenu: (() -> Unit)? = null,      // a long press on the tab row or the single-tab title: the hidden-tab menu
     tabMenu: Boolean = false,             // a hidden tab can be opened from MENU: every row's MENU offers Options, every Home row takes a long press
-    minimalOpening: MinimalOpening? = null,   // Minimal: this tab's selected folder being opened: the others fade (a launch runs App's [LaunchOverlay])
+    minimalOpening: MinimalOpening? = null,   // Minimal: this tab's selected folder being opened: the others fade
 ) {
     val rows = screen.rows
     val home = screen.category == MenuCategory.HOME   // the Home tab: [HomeListScreen], [HomeScreen] (Grid), [HomeCarouselScreen] or [HomeMinimalScreen] by its own style

@@ -5,8 +5,6 @@ import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.EmulatorRunner
 import com.nxredux.mobile.runner.GameSession
-import com.nxredux.mobile.runner.LaunchLine
-import com.nxredux.mobile.runner.LaunchName
 import com.nxredux.mobile.settings.AccentPreset
 import com.nxredux.mobile.settings.AppSettings
 import com.nxredux.mobile.settings.ExtraFolder
@@ -26,13 +24,11 @@ import com.nxredux.mobile.storage.Shortcut
 import com.nxredux.mobile.storage.StateFormat
 import com.nxredux.mobile.storage.ToolPins
 import com.nxredux.mobile.storage.UserDataStore
-import com.nxredux.mobile.ui.nx.LaunchTimeline
 import com.nxredux.mobile.ui.nx.NxButton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -41,7 +37,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** The launch sequence on Minimal pages ([AppState.launchSequence]): spread, hand-off, return, retreat. */
+/** A on a Minimal page's game or tool opens it at once, as on any other page; a folder still fades first. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppStateLaunchTest {
     private class MemorySettings(override var treeRef: ContentRef? = null) : AppSettings {
@@ -116,19 +112,17 @@ class AppStateLaunchTest {
             "Home/Roms/Game Boy Advance (GBA)" to listOf("Mario.gba"),
         ),
     )
-    private val name = LaunchName(listOf(LaunchLine("Tetris", 24f, 300f)), 40f, 0.5f, bold = true, argb = 0xFFE4E4E7.toInt())
 
     private class Rig(val state: AppState, val runner: RecordingRunner, val data: FakeUserData)
 
-    /** Minimal Home with Continue (Tetris) and Settings pinned; the name provider set, as the menu sets it. */
-    private fun TestScope.rig(reduced: Boolean = false): Rig {
+    /** Minimal Home with Continue (Tetris) and Settings pinned. */
+    private fun TestScope.rig(): Rig {
         val runner = RecordingRunner()
         val data = FakeUserData(recents = listOf(Recent(tetris)))
         val files = MemoryPrivateFiles().apply { files[ToolPins.FILE] = ToolPins.encode(listOf("SETTINGS")) }
         val deps = AppDeps(MemorySettings(ContentRef("Home")), source, runner, NoopPicker(), data, privateFiles = files,
-            now = { testScheduler.currentTime }, compute = UnconfinedTestDispatcher(testScheduler), reducedMotion = { reduced })
+            now = { testScheduler.currentTime }, compute = UnconfinedTestDispatcher(testScheduler))
         val state = AppState(deps, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { it.load(); advanceUntilIdle() }
-        state.launchNameProvider = { name }
         return Rig(state, runner, data)
     }
 
@@ -141,41 +135,13 @@ class AppStateLaunchTest {
         return at
     }
 
-    private fun AppState.phase() = launchSequence.value?.phase
-
-    @Test fun a_on_a_minimal_game_spreads_then_launches_with_the_name() = runTest {
+    @Test fun a_on_a_minimal_game_launches_at_once() = runTest {
         val r = rig()
-        val at = r.state.selectRow { it is MainRow.Continue }
-        val t0 = testScheduler.currentTime
+        r.state.selectRow { it is MainRow.Continue }
         r.state.onButton(NxButton.A)
-        val seq = r.state.launchSequence.value
-        assertEquals(LaunchPhase.SPREAD, seq?.phase)
-        assertEquals(at, seq?.index)
-        assertEquals(MenuCategory.HOME, seq?.page)
-        assertEquals(false, seq?.tool)
-        assertEquals(t0, seq?.startedAtMs)
-        assertNull(r.state.minimalOpening.value)   // no band
-        advanceTimeBy(LaunchTimeline.SPREAD_MS - 1)
-        assertTrue(r.runner.launched.isEmpty())
-        advanceTimeBy(2)
-        assertEquals(name, r.runner.launched.single().launchName)
-        assertEquals(LaunchPhase.HANDED_OFF, r.state.phase())
-    }
-
-    @Test fun input_is_ignored_until_the_game_has_the_screen() = runTest {
-        val r = rig()
-        val at = r.state.selectRow { it is MainRow.Continue }
-        r.state.onButton(NxButton.A)
-        r.state.onButton(NxButton.A)
-        r.state.onButton(NxButton.B)
-        r.state.onButton(NxButton.DOWN)
-        assertEquals(at, r.state.selection.value.index)
-        advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
-        assertEquals(1, r.runner.launched.size)
-        assertEquals(at, r.state.selection.value.index)
-        r.state.onButton(NxButton.A)   // handed off: the menu is behind the game
-        advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
-        assertEquals(1, r.runner.launched.size)
+        advanceUntilIdle()
+        assertEquals("Tetris.gb", r.runner.launched.single().fileName)
+        assertNull(r.state.minimalOpening.value)   // no fade
     }
 
     @Test fun a_second_pick_is_refused_while_the_runner_still_waits() = runTest {
@@ -183,124 +149,37 @@ class AppStateLaunchTest {
         val gate = kotlinx.coroutines.CompletableDeferred<Unit>().also { r.runner.gate = it }
         r.state.selectRow { it is MainRow.Continue }
         r.state.onButton(NxButton.A)
-        advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
+        advanceUntilIdle()
         assertEquals(1, r.runner.launched.size)
         r.state.onForeground()   // the menu is in front again while the runner still waits
-        advanceTimeBy(LaunchTimeline.RETURN_FADE_MS + 1)
+        advanceUntilIdle()
         r.state.selectRow { it is MainRow.Continue }
         r.state.onButton(NxButton.A)
-        advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
+        advanceUntilIdle()
         assertEquals(1, r.runner.launched.size)   // still in flight: no second launch
         gate.complete(Unit)
         r.state.onForeground()
-        advanceTimeBy(LaunchTimeline.RETURN_FADE_MS + 1)
+        advanceUntilIdle()
         r.state.selectRow { it is MainRow.Continue }
         r.state.onButton(NxButton.A)
-        advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
+        advanceUntilIdle()
         assertEquals(2, r.runner.launched.size)
     }
 
-    @Test fun back_from_the_game_fades_the_overlay_out() = runTest {
-        val r = rig()
-        r.state.selectRow { it is MainRow.Continue }
-        r.state.onButton(NxButton.A)
-        advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
-        assertEquals(LaunchPhase.HANDED_OFF, r.state.phase())
-        r.state.onForeground()
-        assertEquals(LaunchPhase.RETURNING, r.state.phase())
-        advanceTimeBy(LaunchTimeline.RETURN_FADE_MS + 1)
-        assertNull(r.state.launchSequence.value)
-        r.state.selectRow { it is MainRow.Continue }
-        r.state.onButton(NxButton.A)   // A works again
-        assertEquals(LaunchPhase.SPREAD, r.state.phase())
-        advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
-        assertEquals(2, r.runner.launched.size)
-    }
-
-    @Test fun a_vanished_row_retreats_instead_of_launching() = runTest {
-        val r = rig()
-        r.state.selectRow { it is MainRow.Continue }
-        r.state.onButton(NxButton.A)
-        r.data.recents = emptyList()
-        r.state.onForeground()   // Home's rows rebuilt: Continue is gone
-        advanceTimeBy(100)
-        assertTrue(assertIs<Screen.Systems>(r.state.screen.value).rows.none { it is MainRow.Continue })
-        advanceTimeBy(LaunchTimeline.SPREAD_MS)
-        assertEquals(LaunchPhase.RETREAT, r.state.phase())
-        assertTrue(r.runner.launched.isEmpty())
-        advanceTimeBy(LaunchTimeline.RETREAT_MS + 1)
-        assertNull(r.state.launchSequence.value)
-        assertTrue(r.runner.launched.isEmpty())
-    }
-
-    @Test fun a_refused_launch_retreats_then_shows_the_problem() = runTest {
+    @Test fun a_refused_launch_shows_the_problem_at_once() = runTest {
         val r = rig()
         r.state.selectRow { it is MainRow.Continue }
         source.moveFile(ContentRef("Home/Roms/Game Boy (GB)"), "Tetris.gb", ContentRef("Home"))   // gone since the scan
         r.state.onButton(NxButton.A)
-        advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
-        assertEquals(LaunchPhase.RETREAT, r.state.phase())
-        assertNull(r.state.error.value)
-        advanceTimeBy(LaunchTimeline.RETREAT_MS - 2)
-        assertNull(r.state.error.value)   // not over the black
-        advanceTimeBy(2)
-        assertNull(r.state.launchSequence.value)
+        advanceUntilIdle()
         assertTrue(r.state.error.value!!.startsWith("Could not find Tetris.gb"))
         assertTrue(r.runner.launched.isEmpty())
     }
 
-    @Test fun a_minimal_tool_opens_its_screen_on_black() = runTest {
+    @Test fun a_minimal_tool_opens_at_once() = runTest {
         val r = rig()
         r.state.selectRow { it is MainRow.PinnedTool && it.row.kind == ToolKind.SETTINGS }
         r.state.onButton(NxButton.A)
-        assertEquals(true, r.state.launchSequence.value?.tool)
-        assertIs<Screen.Systems>(r.state.screen.value)   // not yet
-        advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
         assertIs<Screen.SettingsMenu>(r.state.screen.value)
-        assertEquals(LaunchPhase.RETURNING, r.state.phase())
-        advanceTimeBy(LaunchTimeline.RETURN_FADE_MS + 1)
-        assertNull(r.state.launchSequence.value)
-    }
-
-    @Test fun reduced_motion_waits_150_not_450() = runTest {
-        val r = rig(reduced = true)
-        r.state.selectRow { it is MainRow.Continue }
-        r.state.onButton(NxButton.A)
-        advanceTimeBy(LaunchTimeline.REDUCED_FADE_MS - 1)
-        assertTrue(r.runner.launched.isEmpty())
-        advanceTimeBy(2)
-        assertEquals(1, r.runner.launched.size)
-    }
-
-    @Test fun a_launch_that_never_returns_clears_after_10_s() = runTest {
-        val r = rig()
-        r.state.selectRow { it is MainRow.Continue }
-        r.state.onButton(NxButton.A)
-        advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
-        assertEquals(LaunchPhase.HANDED_OFF, r.state.phase())
-        advanceTimeBy(LaunchTimeline.GIVE_UP_MS - 2)
-        assertEquals(LaunchPhase.HANDED_OFF, r.state.phase())
-        advanceTimeBy(2)
-        assertNull(r.state.launchSequence.value)
-        r.state.onButton(NxButton.A)   // input is free again
-        assertEquals(LaunchPhase.SPREAD, r.state.phase())
-    }
-
-    @Test fun a_long_session_still_fades_back_in() = runTest {
-        val r = rig()
-        r.state.selectRow { it is MainRow.Continue }
-        r.state.onButton(NxButton.A)
-        advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
-        assertEquals(LaunchPhase.HANDED_OFF, r.state.phase())
-        r.state.onBackground()   // the game is in front
-        advanceTimeBy(LaunchTimeline.GIVE_UP_MS * 3)
-        assertEquals(LaunchPhase.HANDED_OFF, r.state.phase())
-        r.state.onForeground()
-        assertEquals(LaunchPhase.RETURNING, r.state.phase())
-        advanceTimeBy(LaunchTimeline.RETURN_FADE_MS + 1)
-        assertNull(r.state.launchSequence.value)
-        r.state.selectRow { it is MainRow.Continue }
-        r.state.onButton(NxButton.A)   // input works
-        assertEquals(LaunchPhase.SPREAD, r.state.phase())
     }
 }

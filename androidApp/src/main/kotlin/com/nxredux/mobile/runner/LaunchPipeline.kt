@@ -164,8 +164,6 @@ internal interface LaunchHost : GameScreenHost {
     fun startCoreWatchdog(stalledMillis: () -> Long)
     /** Game time's session for this launch, as onStart and onStop keep it from here. */
     fun startGameTime(rec: GameTimeRecorder)
-    /** The launch name's hold fades now, or once its minimum is up. */
-    fun releaseNameHold()
 
     fun fail(message: String, title: String = GameActivity.START_FAILED)
     fun relaunchOnGles()
@@ -858,8 +856,6 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     }
                 }
             }
-            // The launch name's hold fades now (or once its minimum is up); the resume cover under it goes on its own frames.
-            releaseNameHold()
             // A frame means the core loaded the game (a load error aborts the view before any): the launcher may record it.
             if (launchRecords.started(launchId)) {
                 activity.sendBroadcast(Intent(LaunchRecords.action(activity)).setPackage(activity.packageName))   // the menu records it

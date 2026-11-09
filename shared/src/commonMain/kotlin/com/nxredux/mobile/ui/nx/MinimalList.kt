@@ -59,7 +59,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -85,8 +84,7 @@ import kotlin.math.roundToInt
  * outlines in the ink, one line each, fading by distance to the band's edges ([minimalOutlineAlpha]), cut by a mask at
  * them ([MINIMAL_EDGE_MASK]): nothing shows under the stats row, the title or the tab row. A short band (the cover screen
  * with the pad) uses a smaller size ([minimalNameSize]). Home adds its stats
- * strip and the tags of its rows ([HomeMinimalScreen]); the tabs and the game lists show the names alone. A on a game or
- * a tool runs the launch sequence from the selected name ([LaunchOverlay], which it reports: [LocalLaunchTargets]). Between two
+ * strip and the tags of its rows ([HomeMinimalScreen]); the tabs and the game lists show the names alone. Between two
  * Minimal pages a folder morphs ([MinimalFlight]): its name flies into the list's title as the list's names rise in, and
  * B drops the title back into its row as the other names fade in.
  */
@@ -373,7 +371,6 @@ private fun MinimalNames(
     val colors = LocalNxColors.current
     val density = LocalDensity.current
     val font = LocalNxFont.current
-    val launchTargets = LocalLaunchTargets.current
     val pitch = size + 2f
     val pitchPx = with(density) { pitch.dp.toPx() }
     // The selection's line a third of the way down the band, and the top of its row.
@@ -519,20 +516,16 @@ private fun MinimalNames(
                     MinimalName(text, outline, nameW, badge)
                 }
                 if (lit || i in near) {
-                    val laid = remember { arrayOfNulls<TextLayoutResult>(1) }
-                    // The selected name as drawn (its own box, at the text's left): where B's morph lands, where a folder's
-                    // morph starts and, on the page showing, where a launch starts (its full name, at the selection's grow).
+                    // The selected name as drawn (its own box, at the text's left): where B's morph lands and where a folder's
+                    // morph starts.
                     Box(
                         Modifier.graphicsLayer { alpha = fill(i); compositingStrategy = CompositingStrategy.ModulateAlpha }
                             .then(if (lit) Modifier.onGloballyPositioned { c ->
                                 selected.coords = c; selected.style = solid; selected.label = row.label
-                                if (page?.live?.value != false) launchTargets.report(
-                                    LaunchTarget(AnnotatedString(row.label), { laid[0] }, { c }, solid, colors.accent, { 1f + (MINIMAL_SELECTED_SCALE - 1f) * fill(i) }),
-                                )
                                 if (page?.live?.value == true) morphPlace(c).let { (at, s) -> page.morph.name = MorphText(row.label, at, c.size.width.toFloat(), s, solid) }
                             } else Modifier),
                     ) {
-                        MinimalName(text, solid, nameW, badge, onTextLayout = if (lit) { r -> laid[0] = r } else null)
+                        MinimalName(text, solid, nameW, badge)
                     }
                 }
             }
@@ -561,14 +554,12 @@ private fun minimalText(label: String, tag: String?): AnnotatedString = buildAnn
     tag?.let { append(" "); appendInlineContent(MINIMAL_TAG_INLINE, it) }
 }
 
-/** One name (with its tag's [inline] content) on one line at most [width] wide, an ellipsis where it is cut; its layout to [onTextLayout]. */
+/** One name (with its tag's [inline] content) on one line at most [width] wide, an ellipsis where it is cut. */
 @Composable
-private fun MinimalName(
-    text: AnnotatedString, style: TextStyle, width: Dp, inline: Map<String, InlineTextContent>, onTextLayout: ((TextLayoutResult) -> Unit)? = null,
-) {
+private fun MinimalName(text: AnnotatedString, style: TextStyle, width: Dp, inline: Map<String, InlineTextContent>) {
     // Unbounded: its line runs a little taller than the rows' pitch, and a height limit would clip it.
     Text(
-        text, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis, inlineContent = inline, onTextLayout = onTextLayout ?: {},
+        text, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis, inlineContent = inline,
         modifier = Modifier.widthIn(max = width).wrapContentHeight(Alignment.Top, unbounded = true),
     )
 }
