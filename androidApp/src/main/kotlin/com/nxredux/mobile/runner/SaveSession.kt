@@ -88,6 +88,8 @@ internal class SaveSession(
     @Volatile var resumePending = false
         private set
     private var autoWrittenOnStop = false   // onStop queued an auto state's serialize and write since the last onStart
+    // onStop's serializes queued on the GL thread and not yet run: each holds the core's lock while it runs.
+    private val stopSerializes = java.util.concurrent.atomic.AtomicInteger()
     // Home screenshot for the switcher (main thread only): onPause starts a PixelCopy; its bitmap is written as
     // the slot-9 thumb once onStop has queued the auto state. [homeThumbGen] drops callbacks from an older pause.
     private var homeThumb: Bitmap? = null
@@ -218,19 +220,22 @@ internal class SaveSession(
         // sees the previous state or the new one.
         val t0 = SystemClock.elapsedRealtime()
         val serialized = HandedOffResult<ByteArray>()
+        stopSerializes.incrementAndGet()
         val queued = host.speed.aroundStateNow {
             runCatching {
                 view.queueEvent {
-                    serialized.run {
-                        val bytes = runCatching { view.serializeState() }
-                            .onFailure { NxLog.e("GameActivity", "auto-resume state on stop failed", it) }.getOrNull()
-                        NxLog.i("GameActivity", "auto-state on stop: serialize=${SystemClock.elapsedRealtime() - t0}ms")
-                        bytes
-                    }
+                    try {
+                        serialized.run {
+                            val bytes = runCatching { view.serializeState() }
+                                .onFailure { NxLog.e("GameActivity", "auto-resume state on stop failed", it) }.getOrNull()
+                            NxLog.i("GameActivity", "auto-state on stop: serialize=${SystemClock.elapsedRealtime() - t0}ms")
+                            bytes
+                        }
+                    } finally { stopSerializes.decrementAndGet() }
                 }
             }.onFailure { NxLog.e("GameActivity", "auto-resume state on stop failed", it) }.isSuccess
         }
-        if (!queued) return
+        if (!queued) { stopSerializes.decrementAndGet(); return }
         autoWrittenOnStop = true
         val ok = AtomicBoolean(false).also { autoWriteOk = it }
         val failed = AtomicBoolean(false).also { autoWriteFailed = it }
@@ -322,9 +327,11 @@ internal class SaveSession(
      * the wait (a queued Home write), so a destroy during the wait never finds the serialize still ahead of it. [chosen]:
      * the player picked Quit, so the slot file points at the auto state as minarch does; a quit nobody chose (a newer game
      * screen took the session) leaves the player's manual slot pointer alone, as leaving via Home does
-     * ([writeAutoStateOnStop]). The game must be running ([view] up, its first frame drawn).
+     * ([writeAutoStateOnStop]). The game must be running ([view] up, its first frame drawn). [release] runs off the main
+     * thread once the core is read (true), or with the core already destroyed (false): what else takes the core's lock
+     * (the achievements' unload) waits there, not on the main thread behind a queued serialize.
      */
-    fun writeOnQuit(view: GLRetroView, chosen: Boolean, autoState: Boolean, finish: () -> Unit) {
+    fun writeOnQuit(view: GLRetroView, chosen: Boolean, autoState: Boolean, release: (live: Boolean) -> Unit, finish: () -> Unit) {
         val ss = saveStates
         // While a resume is still loading, the running state is the fresh boot: keep the resume point as is. Without
         // [autoState] (the core asked to end) the running state is not worth resuming: keep it as is too.
@@ -334,7 +341,8 @@ internal class SaveSession(
                 // before the destroy, which waits only for the auto writes.
                 joinSlotJobs(slotJobs)
                 withContext(Dispatchers.IO) {
-                    withLiveCore { writeBatterySave(notify = true) }
+                    val live = withLiveCore { writeBatterySave(notify = true); release(true) } != null
+                    if (!live) release(false)
                 }
                 finish()
             }
@@ -354,9 +362,11 @@ internal class SaveSession(
                             val state = runCatching { view.serializeState() }
                                 .onFailure { NxLog.e("GameActivity", "auto-resume state failed", it) }
                             writeBatterySave(notify = true)   // local: always completes, before the native destroy
+                            release(true)
                             state
                         }
                     }
+                    if (bytes == null) release(false)
                     val ok = when {
                         bytes == null || bytes.isFailure -> false
                         bytes.getOrThrow().isEmpty() -> null
@@ -538,6 +548,17 @@ internal class SaveSession(
             bmp.recycle()
             cb(null)
         }
+    }
+
+    /**
+     * onPause: synchronous (the process may be killed once backgrounded), unless a save state's serialize or unserialize
+     * holds the core's lock (a resume still loading, a Save / Load, a Wii HOME write, the last stop's auto state; a big
+     * PS2 or Wii state takes seconds): the SRAM read would wait for it on the main thread. Then it goes on [autoWriter],
+     * which the process end waits for, and only while the core lives. Main thread.
+     */
+    fun writeBatterySaveOnPause() {
+        if (!resumePending && !host.speed.inState && stopSerializes.get() == 0) { writeBatterySave(notify = false); return }
+        autoWriter.execute { withLiveCore { writeBatterySave(notify = false) } }
     }
 
     /**

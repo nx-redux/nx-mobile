@@ -126,6 +126,9 @@ internal class SpeedController(
         try { return block() } finally { exitState() }
     }
 
+    /** A save state's serialize or unserialize is under way ([aroundState]): it holds the core's lock. Main thread. */
+    val inState: Boolean get() = stateDepth > 0
+
     private fun enterState() { stateDepth++; apply() }
 
     private fun exitState() { stateDepth--; apply() }

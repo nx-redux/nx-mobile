@@ -638,9 +638,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun onPause() {
         rumbles.forEach { it.pause() }   // no rumble in the background; onResume picks the core's state up again
-        // The battery save is written synchronously (the process may be killed once backgrounded).
-        // A quit writes it once itself, off the main thread (quitWithAutoState), so nothing here then.
-        if (!quitting) saves.writeBatterySave(notify = false)
+        // A quit writes the battery save once itself, off the main thread (quitWithAutoState), so nothing here then.
+        if (!quitting) saves.writeBatterySaveOnPause()
         gameNetplay.run?.pause()   // netplay: backgrounded: no input goes out; the other side stalls, 30 s ends the session
         wii.syncMotionSensors(foreground = false)
         // Closes the phone mic at once (the paused core stops reading it); the toggle stays as it is for onResume.
@@ -1330,9 +1329,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         endGameTime()
         val view = retroView
         input.gcClearTriggers()   // a latched soft press never outlives the game
-        stopAchievements()
-        if (view == null || !gameReady) { finish(); return }   // not running yet: no save to write
-        saves.writeOnQuit(view, chosen, autoState, ::finish)
+        // Detached now (no achievement event shows during the quit); its native unload takes the core's lock, so it waits
+        // off the main thread for the quit's read of the core.
+        val ach = achievements
+        achievements = null
+        if (view == null || !gameReady) { ach?.stop(); finish(); return }   // not running yet: no save to write
+        saves.writeOnQuit(view, chosen, autoState, release = { live -> ach?.stop(native = live) }, finish = ::finish)
     }
 
     override fun refreshSlots() = saves.refreshSlots()
@@ -1407,7 +1409,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         achievements = AchievementsBridge(controller, settings, lifecycleScope).also { it.prepare(consoleId, hashJob, pointer, launch) }
     }
 
-    /** Idempotent; onDestroy, a finishing onStop and the quit path all reach it. */
+    /** Idempotent; onDestroy and a finishing onStop both reach it (a quit detaches it itself: quitWithAutoState). */
     private fun stopAchievements() {
         achievements?.stop()
         achievements = null

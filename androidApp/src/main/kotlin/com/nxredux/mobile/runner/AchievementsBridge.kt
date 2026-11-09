@@ -249,12 +249,15 @@ class AchievementsBridge(private val controller: RaController, private val setti
         return muted
     }
 
-    /** Idempotent: cancels everything the bridge started and disables the native client. */
-    fun stop() {
+    /**
+     * Idempotent: cancels everything the bridge started and disables the native client. [native] false: the core is
+     * already destroyed, whose destroy reset the native session itself.
+     */
+    fun stop(native: Boolean = true) {
         if (stopped) return
         stopped = true
         scope.cancel()
-        if (prepared) runCatching { LibretroDroid.achievementsUnloadGame(); LibretroDroid.achievementsEnable(false) }
+        if (prepared && native) runCatching { LibretroDroid.achievementsUnloadGame(); LibretroDroid.achievementsEnable(false) }
             .onFailure { NxLog.w(TAG, "stopping the native client failed", it) }
     }
 
