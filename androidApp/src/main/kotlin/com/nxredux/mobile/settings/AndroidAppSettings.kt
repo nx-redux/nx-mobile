@@ -10,9 +10,11 @@ import com.nxredux.mobile.runner.BottomScreen
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.SaveFormat
 import com.nxredux.mobile.storage.StateFormat
+import com.nxredux.mobile.DebugLogFile
 import com.swordfish.libretrodroid.NxLog
 
 class AndroidAppSettings(context: Context) : AppSettings {
+    private val app = context.applicationContext
     private val prefs = Prefs.open(context, PREFS_NAME)
 
     override var treeRef: ContentRef?
@@ -262,6 +264,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         set(value) {
             prefs.edit { putBoolean(KEY_DEBUG_LOG, value) }
             NxLog.enabled = value   // at once: the app, the runner and the cores in this process
+            if (value) DebugLogFile.start(app) else DebugLogFile.stop()
         }
 
     override var kidsEnabled: Boolean
