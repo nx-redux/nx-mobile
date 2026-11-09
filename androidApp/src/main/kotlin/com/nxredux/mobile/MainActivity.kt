@@ -14,7 +14,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.DocumentsContract
-import android.provider.Settings
 import android.view.Display
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -447,8 +446,6 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 connectedPads = { SystemButtonKeys.connected(this) },
                 homes = AndroidHomeLocator(this),
                 storageUpgrade = AndroidStorageUpgrade(this),
-                // Settings → Developer options → Remove animations (animator scale 0); read per call, so a change applies next launch.
-                reducedMotion = { Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f },
                 switcherReturns = LaunchRecords.of(this),
             ),
             scope,

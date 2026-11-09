@@ -12,11 +12,7 @@ import coil3.compose.setSingletonImageLoaderFactory
 import coil3.request.addLastModifiedToFileCacheKey
 import com.nxredux.mobile.kids.KidsMode
 import com.nxredux.mobile.update.AppRelease
-import com.nxredux.mobile.ui.nx.LaunchOverlay
-import com.nxredux.mobile.ui.nx.LaunchTargets
-import com.nxredux.mobile.ui.nx.LocalLaunchTargets
 import com.nxredux.mobile.ui.nx.LocalMinimalPage
-import com.nxredux.mobile.ui.nx.toLaunchName
 import com.nxredux.mobile.ui.nx.MinimalMorph
 import com.nxredux.mobile.ui.nx.MinimalPage
 import com.nxredux.mobile.ui.nx.abstractArtFetcher
@@ -34,7 +30,6 @@ import androidx.compose.ui.zIndex
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.key
 import com.nxredux.mobile.ui.nx.settleTo
-import com.nxredux.mobile.ui.nx.GatedLaunchTargets
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -62,7 +57,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
@@ -198,16 +192,6 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     val controllerConnected = rememberControllerConnected()   // once, above the shell: survives rotation and pad/no-pad flips
     LaunchedEffect(controllerConnected) { state.onControllerConnected(controllerConnected) }   // a Shortcuts bind row's line
     val touchscreen = rememberHasTouchscreen()   // for a game list's Recent, Search and Layout icons
-    // A launch: the page showing reports its selected name ([LocalLaunchTargets]); the overlay spreads from it, and the
-    // game carries it (in the accent it ends on) to draw again on the same pixels.
-    val launchSequence by state.launchSequence.collectAsState()
-    val launchTargets = remember { LaunchTargets() }
-    val launchAccent = rememberUpdatedState(look.colors.accent)
-    DisposableEffect(state) {
-        val provider = { launchTargets.current?.toLaunchName(launchAccent.value) }
-        state.launchNameProvider = provider
-        onDispose { if (state.launchNameProvider === provider) state.launchNameProvider = null }
-    }
     // Bars and the cutout above and below only (the side cutout is in each page's inset: [nxPageInset]), never the IME: the shell must not shrink for the keyboard (NxModal pads for it where needed).
     Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).onAnyTouch(state::onTouch).windowInsetsPadding(nxScreenInsets())) {
         HandheldShell(
@@ -231,7 +215,6 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                     val separate = rememberSeparateController()
                     LaunchedEffect(portrait, separate) { state.onPadContext(portrait, separate) }
                     MenuLocals(state, look, footer, touchscreen) {
-                        CompositionLocalProvider(LocalLaunchTargets provides launchTargets) {
                         // A parent with the full menu while Kids Mode is on: the bar above every page, its button back to Kids Mode.
                         val kidsMode by state.kidsModeState.collectAsState()
                         Column(m) {
@@ -266,7 +249,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                                 val minimalPage = remember { MinimalPage(minimalMorph, isLive, nav.motion) }
                                 CompositionLocalProvider(LocalMinimalPage provides minimalPage, LocalTabSwipe provides tabSwipe) {
                                     // The main menu's tabs side by side for a sideways swipe ([TabPager]); the info is the current map for both pages.
-                                    if (live && page is Screen.Systems && tabPaged(page)) TabPager(state, page, pageSelection, pageResume, gameInfo, isLive, tabSwipe, launchTargets)
+                                    if (live && page is Screen.Systems && tabPaged(page)) TabPager(state, page, pageSelection, pageResume, gameInfo, isLive, tabSwipe)
                                     else page?.let { PageContent(state, it, pageSelection, pageResume, gameInfo, isLive) }
                                 }
                                 // The page sliding out takes no taps: they would act on the page sliding in.
@@ -276,8 +259,6 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                             // menu on the second display it goes with the game list, to the top screen ([MenuTopScreen]).
                             val bottom = DualMenu.bottom(screen, dualMenu, toolOnTop)
                             if (bottom == BottomContent.Normal) netplayPage?.value?.let { p -> NetplayOverlay(state, p) }
-                            // Over the whole screen (tabs, stats, icons, content), before a tool on the top screen returns.
-                            LaunchOverlay(launchSequence, launchTargets, reducedMotion = state.reducedMotion)
                             if (bottom == BottomContent.Menu) return@Box   // a tool on the top screen: its loading, dialogs and notices are there ([MenuTopScreen])
                             if (loading) NxLoadingOverlay(loadingMessage)
                             // An installed library's Android games question over the menu (first setup asks it as a step). A one-time
@@ -292,7 +273,6 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                                     onCancel = { state.answerUpdate(false) }, cancelLabel = "Not now", scrimDismisses = false, scrollSteps = state.updateScroll)
                             }
                             PageOverlays(state, chooser, error, notice)
-                        }
                         }
                         }
                     }
@@ -405,15 +385,15 @@ private fun tabPaged(s: Screen.Systems): Boolean = !s.pushed && s.tabs.size > 1
  * The main menu's tabs side by side: the tab showing ([screen]'s) and the ones either side of it, each tab's page its
  * own composition (keyed by its tab), so the page a swipe uncovers is the page that stays when it commits: nothing is
  * built at the start of a drag or at its end. The pages shift together by [swipe]'s drag, the next tab's just right of
- * the showing one and the previous one's just left; a page beside is drawn only while it is in view, takes no taps and
- * reports nothing ([GatedLaunchTargets]; the others report only for the screen showing). Its fixed parts ([pageFixed])
+ * the showing one and the previous one's just left; a page beside is drawn only while it is in view and takes no taps.
+ * Its fixed parts ([pageFixed])
  * show only on the tab showing. A committed swipe ([TabSwipe.pending]) lands here when the new tab shows: the pages
  * shift by a page so nothing jumps, then settle to rest.
  */
 @Composable
 private fun TabPager(
     state: AppState, screen: Screen.Systems, selection: State<ListSelection>, resume: State<ResumeInfo>,
-    gameInfo: State<Map<String, GameInfo>>, live: State<Boolean>, swipe: TabSwipe, targets: LaunchTargets,
+    gameInfo: State<Map<String, GameInfo>>, live: State<Boolean>, swipe: TabSwipe,
 ) {
     val n = screen.tabs.size
     val scope = rememberCoroutineScope()
@@ -445,11 +425,10 @@ private fun TabPager(
                     width = { swipe.width },
                 )
             }
-            val gated = remember(targets) { GatedLaunchTargets(targets) { isCurrent.value } }
             // A page beside: as AppState would show that tab, on its remembered row.
             val beside = if (current) null else remember(screen, i) { state.tabPage(i) }
             val pageSelection = if (beside == null) selection else remember(beside) { mutableStateOf(beside.second) }
-            CompositionLocalProvider(LocalPageSlide provides slide, LocalLaunchTargets provides gated) {
+            CompositionLocalProvider(LocalPageSlide provides slide) {
                 Box(
                     Modifier.fillMaxSize().zIndex(if (current) 1f else 0f)
                         .graphicsLayer { translationX = slide.shift(size.width) }
