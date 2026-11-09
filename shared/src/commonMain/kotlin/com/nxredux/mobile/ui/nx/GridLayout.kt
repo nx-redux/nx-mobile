@@ -87,10 +87,13 @@ enum class GridTileKind(val minW: Float, val aspect: Float) {
  * rows of that width's shape as fill the box under a gap at its top, at least [GRID_MIN_ROWS], each stretched so whole
  * rows fill it exactly. [GridGeometry.rows] is the rows in view.
  */
-internal fun gridVertical(bodyW: Float, bodyH: Float, kind: GridTileKind, landscape: Boolean, gutter: Float, gutterEnd: Float = gutter): GridGeometry {
+internal fun gridVertical(
+    bodyW: Float, bodyH: Float, kind: GridTileKind, landscape: Boolean, gutter: Float, gutterEnd: Float = gutter,
+    minColumns: Int = if (landscape) GRID_MIN_COLUMNS_SIDEWAYS else 1,
+): GridGeometry {
     val room = bodyW - gutter - gutterEnd
     val fit = floor((room + GRID_GAP) / (kind.minW + GRID_GAP)).toInt()
-    val columns = max(if (landscape) GRID_MIN_COLUMNS_SIDEWAYS else 1, fit)
+    val columns = max(minColumns, fit)
     val tileW = (room - (columns - 1) * GRID_GAP) / columns
     val band = bodyH - GRID_GAP
     val rows = max(GRID_MIN_ROWS, floor(band / (tileW / kind.aspect + GRID_GAP)).toInt())
@@ -113,19 +116,17 @@ internal fun gridMatched(
     insetStart: Float = pageInset(portrait), insetEnd: Float = insetStart, skin: Boolean = false,
 ): GridGeometry {
     if (!portrait) {
-        val g = gridVertical(bodyW, bodyH, kind, landscape = true, gutter = insetStart, gutterEnd = insetEnd)
-        // A skin's small wide glass (the unfolded Fold's bottom screen upright): three rows would squash the tiles to a
-        // strip, so tiles nearer their own shape, two rows' room, the rest scrolls.
-        val natural = g.tileW / kind.aspect
-        if (!skin || g.tileH >= natural * GRID_SKIN_MIN_SHAPE) return g
-        val band = bodyH - GRID_GAP
-        val tileH = min(natural, band / GRID_PAD_MIN_ROWS - GRID_GAP)
-        return g.copy(tileH = tileH, rows = max(GRID_PAD_MIN_ROWS, floor(band / (tileH + GRID_GAP)).toInt()))
+        // A skin's near-square glass (the folded Fold upright) is not a phone held sideways: [GRID_SKIN_SQUARE_COLUMNS]
+        // across at least, not [GRID_MIN_COLUMNS_SIDEWAYS] (three screenshots across it are thumbnails, one a banner).
+        val square = skin && windowW < windowH * GRID_SKIN_SIDEWAYS_ASPECT
+        val g = gridVertical(bodyW, bodyH, kind, landscape = true, gutter = insetStart, gutterEnd = insetEnd, minColumns = if (square) GRID_SKIN_SQUARE_COLUMNS else GRID_MIN_COLUMNS_SIDEWAYS)
+        return if (skin) skinShaped(g, bodyH, kind) else g
     }
     val side = gridVertical(
         max(windowW, windowH) - (windowW - bodyW), min(windowW, windowH) - (windowH - bodyH), kind, landscape = true, gutter = pageInset(false),
     )
-    val own = gridVertical(bodyW, bodyH, kind, landscape = false, gutter = insetStart, gutterEnd = insetEnd)
+    // A skin's tall glass (the folded Fold sideways) is a small screen: two across at least, not one banner a row.
+    val own = gridVertical(bodyW, bodyH, kind, landscape = false, gutter = insetStart, gutterEnd = insetEnd, minColumns = if (skin) GRID_SKIN_SQUARE_COLUMNS else 1)
     // The page keeping more than the window turned can spare (the on-screen pad under it upright): no sideways twin to
     // match. At most [gridPadMaxColumns] across, its tiles keep their own shape at their width, a fixed height, held
     // to two rows' room (three would be too short to read; one alone would be the faded edge row); as many whole rows as
@@ -139,7 +140,20 @@ internal fun gridMatched(
     }
     val band = bodyH - GRID_GAP
     val rows = max(GRID_MIN_ROWS, (band / (side.tileH + side.gap)).roundToInt())
-    return own.copy(tileH = band / rows - GRID_GAP, rows = rows)
+    val matched = own.copy(tileH = band / rows - GRID_GAP, rows = rows)
+    return if (skin) skinShaped(matched, bodyH, kind) else matched
+}
+
+/**
+ * In a skin's small glass, [g]'s tiles kept to at least [GRID_SKIN_MIN_SHAPE] of their own shape's height: fewer rows in
+ * view (two at least), each its shape's height or the two rows' room, the rest scrolls; [g] itself when already that tall.
+ */
+private fun skinShaped(g: GridGeometry, bodyH: Float, kind: GridTileKind): GridGeometry {
+    val natural = g.tileW / kind.aspect
+    if (g.tileH >= natural * GRID_SKIN_MIN_SHAPE) return g
+    val band = bodyH - GRID_GAP
+    val tileH = min(natural, band / GRID_PAD_MIN_ROWS - GRID_GAP)
+    return g.copy(tileH = tileH, rows = max(GRID_PAD_MIN_ROWS, floor(band / (tileH + GRID_GAP)).toInt()))
 }
 
 /**
@@ -173,6 +187,12 @@ internal fun gridFixedTools(bodyW: Float, bodyH: Float, insetStart: Float, inset
     val rows = max(1, floor((bodyH - TOOL_APPS_GAP) / (tileH + TOOL_APPS_GAP)).toInt())
     return GridGeometry(tileW = tileW, tileH = tileH, gap = TOOL_APPS_GAP, gutter = insetStart, columns = columns, rows = rows, gutterEnd = insetEnd)
 }
+
+/** A skin's glass at least this wide for its height counts as held sideways ([GRID_MIN_COLUMNS_SIDEWAYS]); narrower, near square. */
+internal const val GRID_SKIN_SIDEWAYS_ASPECT = 1.3f
+
+/** The fewest columns in a skin's near-square glass ([gridMatched]). */
+internal const val GRID_SKIN_SQUARE_COLUMNS = 2
 
 /** In a skin's wide glass, the least height of a Grid tile as a share of its own shape's ([gridMatched]). */
 internal const val GRID_SKIN_MIN_SHAPE = 0.75f

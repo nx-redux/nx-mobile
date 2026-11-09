@@ -106,4 +106,24 @@ class GridVerticalTest {
         // The icon is capped, so a wider tile is no taller past the cap.
         assertEquals(toolTileHeight(200f, 1f), toolTileHeight(300f, 1f))
     }
+
+    // The folded Fold upright with a skin: a near-square glass (about 475 x 405 dp). Screenshots two across, not forced to
+    // three thumbnails; a phone held sideways (no skin) still gets three.
+    @Test fun aSkinsNearSquareGlassIsNotForcedToThreeColumns() {
+        val g = gridMatched(475f, 265f, 475f, 405f, GridTileKind.SCREENSHOT, portrait = false, insetStart = 20f, skin = true)
+        assertEquals(2, g.columns)
+        assertTrue(g.tileH >= g.tileW / GridTileKind.SCREENSHOT.aspect * GRID_SKIN_MIN_SHAPE, "${g.tileW} x ${g.tileH}")
+        assertEquals(GRID_MIN_COLUMNS_SIDEWAYS, gridMatched(475f, 265f, 475f, 405f, GridTileKind.SCREENSHOT, portrait = false, insetStart = 20f).columns)
+        // The cover's real glass (about 457 dp wide, a wider skin inset): one screenshot fits by width, two are kept.
+        assertEquals(2, gridMatched(457f, 270f, 457f, 400f, GridTileKind.SCREENSHOT, portrait = false, insetStart = 30f, skin = true).columns)
+    }
+
+    // The folded Fold sideways with a skin: a tall glass about 370 dp wide. Two screenshots across, near their shape.
+    @Test fun aSkinsTallSmallGlassShowsTwoAcross() {
+        val g = gridMatched(370f, 300f, 370f, 420f, GridTileKind.SCREENSHOT, portrait = true, insetStart = 30f, skin = true)
+        assertEquals(2, g.columns)
+        assertTrue(g.tileH >= g.tileW / GridTileKind.SCREENSHOT.aspect * GRID_SKIN_MIN_SHAPE, "${g.tileW} x ${g.tileH}")
+        // A phone held upright (no skin) keeps its one wide tile a row.
+        assertEquals(1, gridMatched(370f, 600f, 370f, 780f, GridTileKind.SCREENSHOT, portrait = true, insetStart = 20f).columns)
+    }
 }
