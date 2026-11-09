@@ -3,7 +3,7 @@ package com.nxredux.mobile.sync
 /**
  * What Device Sync carries in `.userdata/shared`: save states (`<TAG>-<core>/`) and slot pictures/markers
  * (`.minui/<TAG>/`), by the handheld's own rule list, copied verbatim and in order, since rsync takes the first rule
- * that matches. `Saves/` travels whole, minus macOS metadata. Export/Import use the same rule
+ * that matches. `Saves/` travels whole, minus macOS metadata and interrupted writes' temp files. Export/Import use the same rule
  * ([com.nxredux.mobile.storage.SaveArchive.areaOf]).
  */
 object SyncAreas {
@@ -27,8 +27,8 @@ object SyncAreas {
         "+ /*-*/**",
         "- *",
     )
-    /** The `Saves/` exclude patterns: macOS metadata only ([isJunk]). */
-    val SAVES_EXCLUDES: List<String> = listOf("._*", ".DS_Store")
+    /** The `Saves/` exclude patterns, the rsync side of [isJunk]. */
+    val SAVES_EXCLUDES: List<String> = listOf("._*", ".DS_Store", "*.tmp", "*.part")
 
     /** [SHARED_RULES] as rsync client arguments, one `--filter=` each, in order. */
     fun sharedFilterArgs(): List<String> = SHARED_RULES.map { "--filter=$it" }
@@ -87,6 +87,11 @@ object SyncAreas {
         return true
     }
 
-    /** macOS metadata a card picks up on a Mac (`._*`, `.DS_Store`): never synced, never exported. */
-    fun isJunk(path: String): Boolean = path.substringAfterLast('/').let { it == ".DS_Store" || it.startsWith("._") }
+    /**
+     * Never synced, never exported: macOS metadata a card picks up on a Mac (`._*`, `.DS_Store`), and the temp file of a
+     * write that was cut short (`<name>.<hex>.tmp`, `<name>.part`), whose bytes are a partial save.
+     */
+    fun isJunk(path: String): Boolean = path.substringAfterLast('/').let {
+        it == ".DS_Store" || it.startsWith("._") || it.endsWith(".tmp") || it.endsWith(".part")
+    }
 }

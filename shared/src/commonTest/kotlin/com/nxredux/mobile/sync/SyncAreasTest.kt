@@ -19,9 +19,9 @@ class SyncAreasTest {
             SyncAreas.SHARED_RULES,
         )
         assertEquals(SyncAreas.SHARED_RULES.map { "--filter=$it" }, SyncAreas.sharedFilterArgs())
-        assertEquals(listOf("--exclude=._*", "--exclude=.DS_Store"), SyncAreas.savesExcludeArgs())
+        assertEquals(listOf("--exclude=._*", "--exclude=.DS_Store", "--exclude=*.tmp", "--exclude=*.part"), SyncAreas.savesExcludeArgs())
         assertEquals(SyncAreas.SHARED_RULES.joinToString(" "), SyncAreas.daemonSharedFilter())
-        assertEquals("._* .DS_Store", SyncAreas.daemonSavesExclude())
+        assertEquals("._* .DS_Store *.tmp *.part", SyncAreas.daemonSavesExclude())
     }
 
     /** The response's cases, plus file names with glob and regex characters. */
@@ -43,10 +43,14 @@ class SyncAreasTest {
         assertFalse(SyncAreas.inShared("GB-gambatte//x"))
     }
 
-    @Test fun junk_is_macos_metadata_only() {
+    @Test fun junk_is_macos_metadata_and_cut_short_writes() {
         assertTrue(SyncAreas.isJunk("GB/._Tetris.srm"))
         assertTrue(SyncAreas.isJunk(".DS_Store"))
+        assertTrue(SyncAreas.isJunk("GB/Tetris.srm.1a2b3c4d.tmp"))
+        assertTrue(SyncAreas.isJunk("GB/Tetris.srm.part"))
         assertFalse(SyncAreas.isJunk("GB/Tetris.srm"))
+        assertFalse(SyncAreas.isJunk("GB/Tetris.part.srm"))
+        assertNull(SaveArchive.areaOf("Saves/GB/Tetris.srm.1a2b3c4d.tmp"))
     }
 
     @Test fun export_and_import_use_the_same_areas() {
