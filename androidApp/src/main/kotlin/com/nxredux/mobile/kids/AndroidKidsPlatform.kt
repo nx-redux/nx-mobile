@@ -22,6 +22,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.nxredux.mobile.LaunchActivity
 import com.nxredux.mobile.NotificationIds
+import com.nxredux.mobile.launcher.TopScreenHost
 import com.nxredux.mobile.runner.LiveGameStore
 import com.nxredux.mobile.runner.kidsLockIntent
 import com.nxredux.mobile.settings.AndroidAppSettings
@@ -178,7 +179,7 @@ object AndroidKids {
         KidsAlarms.reschedule(app, mode, c.now().epochMs)
     }
 
-    /** The menus between their onStart and onStop ([menuShown]): while one is shown the guard has nothing to watch. */
+    /** The menus between their onStart and onStop ([menuShown]): while one is shown the guard has nothing to watch, unless an app is on the top screen. */
     private val shownMenus = HashSet<Any>()
 
     /**
@@ -190,11 +191,20 @@ object AndroidKids {
         syncGuard(context)
     }
 
-    /** The guard on while [guardRuns] holds: Locked, Usage access, no menu shown. */
+    /** [TopScreenHost.active] as [syncGuard] last read it. */
+    private var appOnTopSeen = false
+
+    /** The menu re-synced its windows: an app taking dual mode's top screen or leaving it moves the guard ([syncGuard]). */
+    fun topScreenChanged(context: Context) {
+        if (TopScreenHost.active != appOnTopSeen) syncGuard(context)
+    }
+
+    /** The guard on while [guardRuns] holds: Locked, Usage access, no menu shown or an app on the top screen. */
     private fun syncGuard(context: Context) {
         val c = controller ?: return
         val p = platform ?: return
-        KidsGuardService.update(context, guardRuns(c.mode.value, p.hasUsageAccess(), shownMenus.isNotEmpty()))
+        appOnTopSeen = TopScreenHost.active
+        KidsGuardService.update(context, guardRuns(c.mode.value, p.hasUsageAccess(), shownMenus.isNotEmpty(), appOnTopSeen))
     }
 
     fun get(context: Context): KidsController = controller ?: run {
@@ -206,11 +216,11 @@ object AndroidKids {
         controller = c
         // The boot / clock receiver as the setting says (the manifest has it off; on and off follow turnOn / turnOff).
         setStartReceiver(app, settings.kidsEnabled)
-        // Screen off ends Parent mode (a timed unlock stays); screen on reads the clock again. Only dynamic receivers get these.
+        // Screen off ends Parent mode (a timed unlock stays) and closes the unlock PIN and sheet; screen on reads the clock again. Only dynamic receivers get these.
         val screen = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 when (intent.action) {
-                    Intent.ACTION_SCREEN_OFF -> c.endParent()
+                    Intent.ACTION_SCREEN_OFF -> c.screenOff()
                     Intent.ACTION_SCREEN_ON -> { c.refresh(); warnOnScreenOn(app, c) }
                 }
             }

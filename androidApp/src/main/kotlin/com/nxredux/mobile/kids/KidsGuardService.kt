@@ -20,12 +20,13 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.nxredux.mobile.LaunchActivity
 import com.nxredux.mobile.NotificationIds
+import com.nxredux.mobile.launcher.TopScreenHost
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.swordfish.libretrodroid.NxLog
 
 /**
  * Kids Mode's guard (foreground service, type specialUse "parental controls"): while Locked and no menu is shown
- * ([guardRuns], driven by [AndroidKids]), it finds the activity in front ([guardFront]) once every [POLL_MS] and sends
+ * ([guardRuns], driven by [AndroidKids]), it finds the activity in front ([guardFronts]) once every [POLL_MS] and sends
  * one not allowed ([guardShouldBounce]) back to the tiles screen through [LaunchActivity], as the lock does. The first
  * look goes back [FIRST_WINDOW_MS] (a cold lock alarm with an Android game or another app long in front); later looks
  * go back [WINDOW_MS]. Our own game screen in front (resumed from Recents while Locked) is locked as the lock does it:
@@ -46,8 +47,8 @@ class KidsGuardService : Service() {
     private lateinit var look: Handler
     private lateinit var settings: AndroidAppSettings
     private lateinit var kids: KidsController
-    /** The resume event last sent back, so one event is bounced once (the next poll may still see it). Set on main; a new run clears it on [look]'s thread. */
-    @Volatile private var bounced: GuardEvent? = null
+    /** The resume events sent back this run, so one event is bounced once (the next poll may still see it). Set on main; a new run clears it on [look]'s thread. */
+    @Volatile private var bounced: Set<GuardEvent> = emptySet()
     /** The first look of this guard (a long one) is still to come. [look]'s thread only, as are the two below. */
     private var firstLook = true
     private var allowedFrom: Set<String>? = null
@@ -65,7 +66,7 @@ class KidsGuardService : Service() {
         private var fresh = true
         override fun run() {
             if (generation != gen) return
-            if (fresh) { fresh = false; firstLook = true; bounced = null }
+            if (fresh) { fresh = false; firstLook = true; bounced = emptySet() }
             check()
             if (generation == gen) look.postDelayed(this, POLL_MS)
         }
@@ -128,11 +129,11 @@ class KidsGuardService : Service() {
         if (getSystemService(PowerManager::class.java)?.isInteractive == false) return   // nobody is using another app
         val window = if (firstLook) FIRST_WINDOW_MS else WINDOW_MS
         firstLook = false
-        val front = front(window) ?: return
-        if (front == bounced) return
+        val fronts = fronts(window).filter { it !in bounced }
+        if (fronts.isEmpty()) return
         val ime = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
         val allowed = allowedPackages()
-        main.post { decide(front, ime, allowed) }
+        main.post { decide(fronts, ime, allowed) }
     }
 
     /** The allowed apps' packages, worked out again only when the list changed. */
@@ -145,29 +146,31 @@ class KidsGuardService : Service() {
         return allowedPkgs
     }
 
-    /** Main thread: sends [front] back unless it may stay. A look that lands after the guard stopped does nothing. */
-    private fun decide(front: GuardEvent, ime: String?, allowed: Set<String>) {
-        if (running !== this || front == bounced) return
-        val pkg = front.pkg
+    /** Main thread: sends back the newest of [fronts] that may not stay. A look that lands after the guard stopped does nothing. */
+    private fun decide(fronts: List<GuardEvent>, ime: String?, allowed: Set<String>) {
+        if (running !== this) return
         val exempt = guardExempt(ime, kids.granting)
         val game = com.nxredux.mobile.runner.GameActivity::class.java.name
-        if (!guardShouldBounce(pkg, front.cls, packageName, game, allowed, exempt)) return
-        bounced = front
+        val front = fronts.lastOrNull { it !in bounced && guardShouldBounce(it.pkg, it.cls, packageName, game, allowed, exempt) } ?: return
+        val pkg = front.pkg
+        bounced = bounced + front
         if (pkg == packageName) {   // our game screen while Locked: it quits as at the lock, then the tiles
             NxLog.i(TAG, "guard: the game screen locked")
             AndroidKids.quitGameThenShowMenu(this)
             return
         }
         NxLog.i(TAG, "guard: $pkg sent back")
+        // The app may be on the top screen, where the menu below would not cover it.
+        if (TopScreenHost.takeBack(this)) NxLog.i(TAG, "guard: the top screen taken back")
         runCatching { startActivity(Intent(this, LaunchActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             .onFailure { NxLog.w(TAG, "guard: menu not brought forward (${it::class.java.simpleName})") }
     }
 
-    /** The activity in front from the usage events of the past [windowMs] ([guardFront]); null when none (or no Usage access). */
-    private fun front(windowMs: Long): GuardEvent? {
-        val usm = getSystemService(UsageStatsManager::class.java) ?: return null
+    /** The activities in front from the usage events of the past [windowMs] ([guardFronts]); none without Usage access. */
+    private fun fronts(windowMs: Long): List<GuardEvent> {
+        val usm = getSystemService(UsageStatsManager::class.java) ?: return emptyList()
         val now = System.currentTimeMillis()
-        val events = runCatching { usm.queryEvents(now - windowMs, now) }.getOrNull() ?: return null
+        val events = runCatching { usm.queryEvents(now - windowMs, now) }.getOrNull() ?: return emptyList()
         // ACTIVITY_RESUMED / _PAUSED are MOVE_TO_FOREGROUND / _BACKGROUND's values (1, 2) below API 29; STOPPED is 29+.
         @Suppress("DEPRECATION") val resumed = UsageEvents.Event.MOVE_TO_FOREGROUND
         @Suppress("DEPRECATION") val paused = UsageEvents.Event.MOVE_TO_BACKGROUND
@@ -184,7 +187,7 @@ class KidsGuardService : Service() {
             }
             list += GuardEvent(type, e.packageName, e.className, e.timeStamp)
         }
-        return guardFront(list)
+        return guardFronts(list)
     }
 
     private fun notice(): Notification {

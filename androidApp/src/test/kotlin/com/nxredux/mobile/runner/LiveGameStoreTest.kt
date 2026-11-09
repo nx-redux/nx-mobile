@@ -28,6 +28,17 @@ class LiveGameStoreTest {
         assertFalse(File(tmp.root, "game-process/live").exists())
     }
 
+    @Test fun markClosingOnlyOwnLaunch() {
+        val s = store()
+        s.write(game)
+        s.markClosing(42, 8L)
+        assertFalse(s.current()!!.closing)
+        s.markClosing(99, 7L)
+        assertFalse(s.current()!!.closing)
+        s.markClosing(42, 7L)
+        assertEquals(game.copy(closing = true), s.current())
+    }
+
     @Test fun clearOnlyOwnPid() {
         val s = store()
         s.write(game)

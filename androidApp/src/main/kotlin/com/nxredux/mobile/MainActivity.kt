@@ -550,6 +550,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         val active = inFront && settings.secondScreen && display != null && bottomScreenPrompt == null
         if (TopScreenHost.active && inFront && (!settings.secondScreen || display?.displayId != TopScreenHost.heldDisplay)) TopScreenHost.release(this)
         val appOnTop = TopScreenHost.active
+        if (::kids.isInitialized) AndroidKids.topScreenChanged(this)   // the menu stays shown under an app on top: the guard watches it
         val wanted = display.takeIf { active && !launching && !appOnTop }
         if (wanted == null) cancelMenuRetry()
         if (menuScreen?.display?.displayId != wanted?.displayId) {

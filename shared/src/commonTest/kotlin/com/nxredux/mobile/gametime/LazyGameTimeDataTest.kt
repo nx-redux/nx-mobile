@@ -19,6 +19,7 @@ class LazyGameTimeDataTest {
         override suspend fun byPath() = error("unused")
         override suspend fun window(sinceMs: Long, nowMs: Long) = error("unused")
         override suspend fun playedPaths(sinceMs: Long, nowMs: Long) = error("unused")
+        override suspend fun renamePaths(map: Map<String, String>) = error("unused")
     }
 
     @Test

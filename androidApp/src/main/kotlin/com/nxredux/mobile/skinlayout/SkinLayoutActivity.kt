@@ -83,7 +83,7 @@ class SkinLayoutActivity : ComponentActivity() {
                     val (state, spec) = made
                     SideEffect { editor = state }
                     SkinLayoutEditor(
-                        state, spec.picture, spec.parts, spec.bare, backdrop = null, title = title,
+                        state, spec.picture, spec.parts, spec.bare, backdrop = null, title = SkinLayoutEdit.title(title, spec.bare),
                         onSave = { saved -> SkinLayoutEdit.save(AndroidAppSettings(this@SkinLayoutActivity), console.id, spec.layoutId, saved); setResult(RESULT_OK); finish() },
                         onClose = ::finish,
                     )
@@ -113,6 +113,9 @@ class SkinLayoutActivity : ComponentActivity() {
         val picture = if (ds) null else (4f / 3f * 240f) to 240f
         val dpi = resources.displayMetrics.densityDpi
         val tablet = windowShape().screenClass.isTablet
+        // The game's own checks that this can't make are left out: a game starts every Dual screen mode with the skin
+        // allowed ([com.nxredux.mobile.skin.SkinDual.skinAllowed]; only flipping the panel up drops it), and its hinge
+        // is placed only while half-folded in a game. The title says which layout this is ([SkinLayoutEdit.title]).
         val skin = if (!settings.padSkin) null else SkinChoice.place(
             pack.manifest, w, h, dpi, tablet, ds, picture, hingeY = null, topInset = 0, foldable = DeviceTraits.canHalfFold, variant = variant,
         )
@@ -125,7 +128,7 @@ class SkinLayoutActivity : ComponentActivity() {
         val image = pack.picture(placed.spec.image)?.asImageBitmap() ?: return null
         val parts = placed.spec.parts?.let { pack.picture(it) }?.asImageBitmap()
         val minTouchPx = resources.displayMetrics.density * MIN_TOUCH_DP
-        return SkinLayoutEdit.state(settings, console.id, placed.forStick(stick), w, h, overlay = bare, minTouchPx = minTouchPx) to Placed(placed.spec.id, image, parts, bare)
+        return SkinLayoutEdit.state(settings, console.id, placed, w, h, overlay = bare, minTouchPx = minTouchPx, useStick = stick) to Placed(placed.spec.id, image, parts, bare)
     }
 
     /** No layout fits this window (or the pack can't be read): say so and leave. */

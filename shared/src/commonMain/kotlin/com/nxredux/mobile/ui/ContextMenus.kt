@@ -131,6 +131,22 @@ object ContextMenus {
         }
     }
 
+    /**
+     * What a kid may pick while Kids Mode limits the menu to play (a play window or a timed unlock): starting a game,
+     * pins and recents, achievements and the hidden tabs. Hide, Rename, art, collection edits, Game Settings and the
+     * Emulator / Console switch change the library or the games' setup, which is a parent's.
+     */
+    private val kidsPlayKinds: Set<ContextKind> = setOf(
+        ContextKind.PLAY_FROM_START, ContextKind.NETPLAY, ContextKind.PIN, ContextKind.UNPIN, ContextKind.REMOVE_RECENT,
+        ContextKind.ACHIEVEMENTS, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS,
+    )
+
+    /** [items] as a kid may see them ([kidsPlayKinds]). */
+    fun kidsPlayItems(items: List<ContextItem>): List<ContextItem> = items.filter { it.kind in kidsPlayKinds }
+
+    /** [kind] is one a kid may pick ([kidsPlayKinds]). */
+    fun kidsMayPick(kind: ContextKind): Boolean = kind in kidsPlayKinds
+
     /** [art]'s menu item: Fetch art, Change art, or none. */
     private fun artItem(art: ArtMenuItem): ContextItem? = when (art) {
         ArtMenuItem.NONE -> null

@@ -1572,6 +1572,7 @@ class AppState(
 
     /** The app left the foreground: art results still waiting are written now, not left to a debounce a kill would lose. */
     fun onBackground() {
+        kidsUi.kidsCloseUnlock()   // the unlock PIN or sheet never waits behind another app for the kid to come back to
         if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) { closeShortcuts(); settingsUi.refreshSettings() }
         scope.launch { flushArt() }
     }
@@ -3757,8 +3758,9 @@ class AppState(
 
     private fun n3dsPadLabel(new: Boolean): String = if (new) "New" else "Regular"
 
-    /** Any console has a tweak stored: Appearance's Button layout row reads Custom. */
-    private fun buttonLayoutCustom(): Boolean = SkinTweaks.decode(deps.settings.skinTweaks).values.any { c -> c.values.any { it.isNotEmpty() } }
+    /** Any console has a tweak stored, skin or overlay: Appearance's Button layout row reads Custom. */
+    private fun buttonLayoutCustom(): Boolean = listOf(deps.settings.skinTweaks, deps.settings.overlayTweaks)
+        .any { stored -> SkinTweaks.decode(stored).values.any { c -> c.values.any { it.isNotEmpty() } } }
 
     private fun buttonLayoutRows(): List<SettingsRow> {
         val console = buttonLayoutConsole()
@@ -3793,9 +3795,11 @@ class AppState(
         if (_screen.value is Screen.Settings) settingsUi.refreshSettings()
     }
 
-    /** Reset console: the page's console's tweaks go, every layout of it; other consoles keep theirs. */
+    /** Reset console: the page's console's tweaks go, every layout of it, skin and overlay; other consoles keep theirs. */
     private fun resetButtonLayoutConsole() {
-        deps.settings.skinTweaks = SkinTweaks.encode(SkinTweaks.decode(deps.settings.skinTweaks) - buttonLayoutConsole().id)
+        val id = buttonLayoutConsole().id
+        deps.settings.skinTweaks = SkinTweaks.encode(SkinTweaks.decode(deps.settings.skinTweaks) - id)
+        deps.settings.overlayTweaks = SkinTweaks.encode(SkinTweaks.decode(deps.settings.overlayTweaks) - id)
         settingsUi.showSettingsOn(SettingsSection.BUTTON_LAYOUT, SettingsKind.BUTTON_LAYOUT_RESET)
     }
 
@@ -5448,6 +5452,7 @@ class AppState(
             override val pins: List<Shortcut> get() = this@AppState.pins
             override val toolPins: List<String> get() = this@AppState.toolPins
             override val kidsOn: Boolean get() = kidsUi.kidsMode != KidsMode.Off
+            override val kidsRestricted: Boolean get() = !kidsUi.kidsToolsAllowed
             override suspend fun writeToolPins(keys: List<String>): Boolean = this@AppState.writeToolPins(keys)
             override fun select(index: Int) = this@AppState.select(index)
             override fun showNotice(text: String) = this@AppState.showNotice(text)
@@ -6263,7 +6268,7 @@ class AppState(
 
     init {
         // Last in the class: every property [KidsScreensController.onKidsMode] reads is set by now.
-        kids?.let { k -> scope.launch { k.mode.collect { kidsUi.onKidsMode(it) } } }
+        kids?.let { k -> scope.launch { k.mode.collect { kidsUi.onKidsMode(it); contextMenus.onKidsRestricted() } } }
     }
 }
 

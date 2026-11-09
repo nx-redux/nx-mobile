@@ -321,8 +321,12 @@ private:
     void loadGame(const retro_game_info& gameInfo);
     void afterGameLoad();
     void releaseCore();
-    // The input state, replaced by a fresh one when pause()/resume() asked for it. GL thread.
+    // The input state, replaced by a fresh one when pause()/resume() asked for it. Caller holds inputLock, and the
+    // pointer is good only while it does.
     Input* currentInput();
+    // A copy of the input state, for code that must not run under inputLock (netplay's preFrame may block on the
+    // peer or the core's own threads).
+    Input inputSnapshot();
 
 protected:
     static void callback_hw_video_refresh(const void *data, unsigned width, unsigned height, size_t pitch);
@@ -406,7 +410,9 @@ private:
 
     std::unique_ptr<Core> core;
     bool coreInitialized = false;
-    bool gameLoaded = false;
+    // Set on the GL thread once retro_load_game returns; read under coreLock by the off-thread state and memory paths,
+    // which a stale view may call between create()'s retro_init and the load.
+    std::atomic<bool> gameLoaded { false };
     std::unique_ptr<Audio> audio;
     std::unique_ptr<Video> video;
     std::unique_ptr<FPSSync> fpsSync;
@@ -463,11 +469,15 @@ private:
     unsigned rewindTick = 0;
     // Read by the audio callback, like fastForwardDropAudio.
     std::atomic<bool> rewindDropAudio { false };
+    // Guards input and stickyPointers: key/motion events (UI or GL thread), the GL thread's frame and a threaded
+    // core's own thread (input_state) all reach them. A leaf lock: nothing else is taken while it is held, so it nests
+    // inside coreLock (input_state from retro_run) without an order to keep.
+    std::mutex inputLock;
     std::unique_ptr<Input> input;
     std::array<bool, 4> stickyPointers {};   // survive an input reset (pause/resume), see currentInput()
     std::unique_ptr<Rumble> rumble;
 
-    // Set by pause()/resume() (UI thread): the GL thread drops every held key on its next input access.
+    // Set by pause()/resume() (UI thread): every held key is dropped on the next input access (under inputLock).
     std::atomic<bool> inputResetPending { false };
     // Set by resume() (UI thread): the GL thread pushes geometryAspect to the Video on its next step.
     std::atomic<bool> aspectRatioPending { false };

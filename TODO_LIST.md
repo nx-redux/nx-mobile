@@ -1,5 +1,19 @@
 # TODO list
 
+## Review round 3: device checks owed
+
+- [ ] Kids: unlock sheet on the tiles, screen off then on → tiles, not the sheet; same from Open mode's lock icon → menu; sheet left 60 s closes; Home over it, back → gone.
+- [ ] Kids: Open mode, MENU on a game shows only play items (no Hide, Rename, art, Game Settings, Emulator, collections); Parent mode shows them all; a Rename prompt open when Parent ends closes.
+- [x] Kids, dual screen (Nova + second screen): blocked app opened from a top-screen app is covered and stopped; reopened from Recents → sent back (Nova 2026-11-09).
+- [ ] RA: revoke/sign out mid-game, unlock, sign in, sync → the unlock arrives; quit right after an unlock → no toast during the quit.
+- [ ] Merge a split console in the home summary → play time follows the games.
+- [ ] Device Sync: stray `.tmp` in Saves and a stale `.part` in Roms are not sent; SAF home scrape/sync sidecars still write.
+- [ ] gpSP Wireless Adapter phone↔Brick (Union Room trade), phone host then Brick host; patched phone with an older Brick build still connects.
+- [ ] Controls editor: d-pad mode on DC/GC/N64, drag the d-pad toward the face buttons, save → lands where the editor showed (in game and from Settings); title shows "Pad skin"/"Overlay"; Reset console and Appearance reset put overlay positions back.
+- [ ] Game screen: Second screen toggle in launcher mode with the menu process killed doesn't stall; Vulkan→GLES fallback relaunches cleanly.
+- [ ] Home during a slow PS2/Wii quit, tap the same game → starts fresh; Home during a big PS2 state resume → no ANR; then clear it from the launcher icon → SRAM survived.
+- [ ] Threaded cores across pause/resume (input lock): Dolphin GC/Wii incl. Wii pointer, Azahar, ARMSX2, PPSSPP; N64 netplay input still arrives; a game from a picked file still opens.
+
 ## Controls editor: skin and overlay layouts
 
 Device checks still owed:

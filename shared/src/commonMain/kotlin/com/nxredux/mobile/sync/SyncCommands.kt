@@ -26,6 +26,12 @@ object SyncCommands {
     private const val VMU_CARDS = "vmu_save_*.bin"
     /** `map.txt` (a collections folder's alias map, not a collection) in any case, as an rsync pattern. */
     private const val MAP_TXT = "[mM][aA][pP].[tT][xX][tT]"
+    /**
+     * macOS junk plus write temps (`*.tmp`, and the `<name>.<hex>.part` a killed sidecar write leaves): never a game, BIOS
+     * or art file, so no ROM, BIOS or art run carries one either way.
+     */
+    private val JUNK: List<String> = SyncAreas.SAVES_EXCLUDES
+    private val JUNK_CONF = JUNK.joinToString(" ")
 
     /**
      * The handheld's options minus `--inplace`, plus timeouts so a vanished peer fails a step instead of hanging it. The
@@ -80,7 +86,7 @@ object SyncCommands {
         val limited = filesFromFile != null || filterFile != null || run.ignoreExisting
         return listOf(binary) + OPTIONS +
             listOfNotNull("--ignore-existing".takeIf { run.ignoreExisting }, "--ignore-missing-args".takeIf { limited }) +
-            listOf("--exclude=._*", "--exclude=.DS_Store") +
+            JUNK.map { "--exclude=$it" } +
             // Dreamcast memory cards are saves (Saves/DC), never BIOS: an old copy in a BIOS folder must not travel.
             listOf("--exclude=$VMU_CARDS").filter { run.from is RomEnd.Bios || run.to is RomEnd.Bios } +
             listOfNotNull(filesFromFile?.let { "--files-from=$it" }, excludeFile?.let { "--exclude-from=$it" },
@@ -236,7 +242,7 @@ object SyncCommands {
                 append("  path = ").append(bios).append('\n')
                 append("  read only = false\n")
                 append("  list = false\n")
-                append("  exclude = ._* .DS_Store ").append(VMU_CARDS).append('\n')
+                append("  exclude = ").append(JUNK_CONF).append(' ').append(VMU_CARDS).append('\n')
             }
             if (collections != null) {
                 append("[collections]\n")
@@ -250,19 +256,19 @@ object SyncCommands {
                 append("  path = ").append(roms.roms).append('\n')
                 append("  read only = false\n")
                 append("  list = false\n")
-                append("  exclude = ._* .DS_Store /.sources/\n")
+                append("  exclude = ").append(JUNK_CONF).append(" /.sources/\n")
                 roms.extras.forEachIndexed { n, path ->
                     append("[extra-").append(n).append("]\n")
                     append("  path = ").append(path).append('\n')
                     append("  read only = true\n")
                     append("  list = false\n")
-                    append("  exclude = ._* .DS_Store\n")
+                    append("  exclude = ").append(JUNK_CONF).append('\n')
                 }
                 append("[nx-art]\n")
                 append("  path = ").append(roms.roms.trimEnd('/')).append("/.sources\n")
                 append("  read only = true\n")
                 append("  list = false\n")
-                append("  exclude = ._* .DS_Store\n")
+                append("  exclude = ").append(JUNK_CONF).append('\n')
                 append("[nx-extras]\n")
                 append("  path = ").append(roms.manifestDir).append('\n')
                 append("  read only = true\n")

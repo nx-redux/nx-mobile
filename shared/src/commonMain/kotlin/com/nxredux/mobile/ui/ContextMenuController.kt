@@ -46,6 +46,9 @@ internal interface ContextMenuHost {
     /** Kids Mode is on: nothing is pinned on Home (its pinned tools are hidden), so no menu offers Pin. */
     val kidsOn: Boolean get() = false
 
+    /** Kids Mode limits the menu to play (a play window or a timed unlock): game menus offer only [ContextMenus.kidsPlayItems]. */
+    val kidsRestricted: Boolean get() = false
+
     /** Writes [keys] ([pinKey]s) as the tool pins off the main thread, then keeps them in memory; false (nothing changed) when the write fails. */
     suspend fun writeToolPins(keys: List<String>): Boolean
 
@@ -192,9 +195,9 @@ internal class ContextMenuController(
                 val row = s.rows.getOrNull(i)
                 // The hidden tabs after the item's own items; a row without a menu (a console, Pick a game, "+N", an empty
                 // tab) gets one holding just these. A pushed tab never offers them again.
-                val tabs = if (s.pushed) emptyList() else ContextMenus.hiddenTabItems(host.hiddenTabs())
+                val tabs = if (s.pushed) emptyList() else hiddenTabItems()
                 fun show(fromStart: Boolean) {
-                    val own = rowMenu(row, fromStart, s.category)
+                    val own = rowMenu(row, fromStart, s.category)?.let(::forKids)
                     val menu = when {
                         own != null -> own.copy(items = own.items + tabs)
                         tabs.isNotEmpty() -> ContextMenu(null, tabs, title = APP_NAME)
@@ -232,10 +235,23 @@ internal class ContextMenuController(
     fun openTabMenu(): Boolean {
         val s = _screen.value as? Screen.Systems ?: return false
         if (s.menu != null || s.pushed || s.search != null) return false
-        val items = ContextMenus.hiddenTabItems(host.hiddenTabs())
+        val items = hiddenTabItems()
         if (items.isEmpty()) return false
         _screen.value = s.copy(menu = ContextMenu(null, items, title = APP_NAME))
         return true
+    }
+
+    /** The hidden-tab items, only a kid's ([ContextMenus.kidsPlayItems]) while Kids Mode limits the menu. */
+    private fun hiddenTabItems(): List<ContextItem> =
+        ContextMenus.hiddenTabItems(host.hiddenTabs()).let { if (host.kidsRestricted) ContextMenus.kidsPlayItems(it) else it }
+
+    /**
+     * Kids Mode began limiting the menu: a submenu (Emulator, Console, Add to Collection) or text prompt a parent left open
+     * closes, since none of them is a kid's. A top-level menu stays; [act] refuses its library items.
+     */
+    fun onKidsRestricted() {
+        val m = _screen.value.contextMenu ?: return
+        if (host.kidsRestricted && (m.sub != null || m.prompt != null)) closeContextMenu()
     }
 
     /** Opens [s]'s menu on [e]; [canResume]: it has a save state, so Play from start leads. */
@@ -245,7 +261,8 @@ internal class ContextMenuController(
             canResume = canResume, netplayLeads = host.netplayInMenu,
         )
         // The achievements panel, last, while Layouts hides its icon and hint.
-        val all = if (host.achievementsInMenu) items + ContextItem(ContextKind.ACHIEVEMENTS, "Achievements") else items
+        val all = (if (host.achievementsInMenu) items + ContextItem(ContextKind.ACHIEVEMENTS, "Achievements") else items)
+            .let { if (host.kidsRestricted) ContextMenus.kidsPlayItems(it) else it }
         if (all.isEmpty()) return
         _screen.value = s.copy(menu = ContextMenu(e, all))
     }
@@ -256,6 +273,10 @@ internal class ContextMenuController(
 
     /** A hidden Netplay hint (alone or with the bar) puts Y's Netplay in a Home game's menu. */
     private fun homeNetplay(e: Listed): Boolean = host.netplayInMenu && host.netplayOffered(e) && ContextMenus.hasNetplay(e)
+
+    /** [m] with only a kid's items while Kids Mode limits the menu ([ContextMenuHost.kidsRestricted]); null when none is left. */
+    private fun forKids(m: ContextMenu): ContextMenu? =
+        if (!host.kidsRestricted) m else ContextMenus.kidsPlayItems(m.items).takeIf { it.isNotEmpty() }?.let { m.copy(items = it) }
 
     /** A main-menu row's menu on [category]'s tab; null for a row without one (a console, Pick a game, "+N", Kids Mode's Apps). */
     private fun rowMenu(row: MainRow?, fromStart: Boolean, category: MenuCategory?): ContextMenu? = when (row) {
@@ -289,6 +310,8 @@ internal class ContextMenuController(
 
     fun onMenuButton(m: ContextMenu, button: NxButton) {
         if (m.busy) return   // a choice is being applied; rebuilding the screen ends this
+        // A submenu or prompt that opened as Parent mode ended (an async collection picker) is no kid's either.
+        if (host.kidsRestricted && (m.sub != null || m.prompt != null)) { closeContextMenu(); return }
         m.prompt?.let { p -> onPromptButton(m, p, button); return }
         m.sub?.let { sub ->
             when (button) {
@@ -312,7 +335,7 @@ internal class ContextMenuController(
 
     /** The text prompt's live text (the composable reports every change), so A can confirm with it. */
     fun menuDraft(text: String) {
-        val m = _screen.value.contextMenu?.takeIf { !it.busy } ?: return
+        val m = _screen.value.contextMenu?.takeIf { !it.busy && !host.kidsRestricted } ?: return
         when (val p = m.prompt) {
             is MenuPrompt.Rename -> setMenu(m.copy(prompt = p.copy(draft = text)))
             is MenuPrompt.NewCollection -> setMenu(m.copy(prompt = p.copy(draft = text)))
@@ -354,6 +377,8 @@ internal class ContextMenuController(
 
     /** A on a menu item. Emulator, Console and Add to Collection open their submenus; Rename opens the text prompt. */
     private fun act(m: ContextMenu, kind: ContextKind) {
+        // A menu a parent opened stays up when Parent mode ends under it: its library items no longer act.
+        if (host.kidsRestricted && !ContextMenus.kidsMayPick(kind)) { closeContextMenu(); return }
         when (kind) {
             ContextKind.PIN_TOOL -> { m.tool?.let { setToolPinned(m, it.pinKey, true) } ?: closeContextMenu(); return }
             ContextKind.UNPIN_TOOL -> { m.tool?.let { setToolPinned(m, it.pinKey, false) } ?: closeContextMenu(); return }

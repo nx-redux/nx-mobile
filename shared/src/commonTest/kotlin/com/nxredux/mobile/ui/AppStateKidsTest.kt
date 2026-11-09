@@ -776,6 +776,157 @@ class AppStateKidsTest {
         assertEquals(KidsMode.Parent, kids.mode.value)
     }
 
+    /** The screen going off closes the unlock sheet: a kid waking the phone finds the tiles, not Kids Mode settings. */
+    @Test fun screenOffClosesTheUnlockSheet() = runTest {
+        val (st, kids) = lockedState()
+        st.kidsLockPressed(); st.typePin("123456")
+        assertSame(Screen.KidsUnlock, st.screen.value)
+        kids.screenOff()
+        assertSame(Screen.KidsHome, st.screen.value)
+        assertIs<KidsMode.Locked>(kids.mode.value)
+    }
+
+    @Test fun screenOffClosesAHalfTypedUnlockPin() = runTest {
+        val (st, kids) = lockedState()
+        st.kidsLockPressed(); st.kidsPinDigit(1); st.kidsPinDigit(2)
+        kids.screenOff()
+        assertSame(Screen.KidsHome, st.screen.value)
+    }
+
+    /** Open mode's lock icon: the sheet over the menu goes when the app leaves the front, back to the kid's menu. */
+    @Test fun backgroundClosesTheUnlockSheetOverTheMenu() = runTest {
+        val settings = MemorySettings()
+        val kids = KidsController(settings, Platform(SAT, 10 * 60))
+        val st = state(settings, kids)
+        st.load()
+        st.kidsParentPressed(); st.typePin("123456")
+        assertSame(Screen.KidsUnlock, st.screen.value)
+        st.onBackground()
+        assertIs<Screen.Systems>(st.screen.value)
+        assertIs<KidsMode.Open>(kids.mode.value)
+    }
+
+    @Test fun screenOffLeavesOtherScreensAlone() = runTest {
+        val (st, kids) = lockedState()
+        kids.screenOff()
+        assertSame(Screen.KidsHome, st.screen.value)
+        st.kidsLockPressed(); st.typePin("123456"); st.kidsOpenFullMenu()
+        val menu = st.screen.value
+        assertIs<Screen.Systems>(menu)
+        st.onBackground()
+        assertSame(menu, st.screen.value)
+    }
+
+    /** The sheet left alone closes after [KIDS_UNLOCK_IDLE_MS]; a press on it starts that time again. */
+    @Test fun unlockSheetClosesWhenIdle() = runTest {
+        val (st) = lockedState()
+        st.kidsLockPressed(); st.typePin("123456")
+        testScheduler.advanceTimeBy(KIDS_UNLOCK_IDLE_MS - 1_000L)
+        assertSame(Screen.KidsUnlock, st.screen.value)
+        st.onButton(NxButton.RIGHT)
+        testScheduler.advanceTimeBy(KIDS_UNLOCK_IDLE_MS - 1_000L)
+        assertSame(Screen.KidsUnlock, st.screen.value)
+        testScheduler.advanceTimeBy(2_000L)
+        assertSame(Screen.KidsHome, st.screen.value)
+    }
+
+    /** A kid's MENU on a game in a play window: play items only, nothing that edits the library or the game's setup. */
+    @Test fun gameMenuWhileOpenOffersOnlyPlayItems() = runTest {
+        val settings = MemorySettings()
+        val kids = KidsController(settings, Platform(SAT, 10 * 60))
+        val st = state(settings, kids)
+        st.load()
+        val sys = assertIs<Screen.Systems>(st.screen.value).tabs.flatMap { it.rows }
+            .flatMap { (it as? MainRow.System)?.systems.orEmpty() }.first { it.tag == "GB" }
+        st.openSystem(sys)
+        st.openContextMenu(0)
+        val kinds = assertIs<Screen.Games>(st.screen.value).menu!!.items.map { it.kind }
+        val parentOnly = setOf(
+            ContextKind.HIDE, ContextKind.RENAME, ContextKind.ADD_TO_COLLECTION, ContextKind.GAME_SETTINGS, ContextKind.EMULATOR,
+            ContextKind.CONSOLE, ContextKind.FETCH_ART, ContextKind.CHANGE_ART, ContextKind.REMOVE_FROM_COLLECTION,
+        )
+        assertTrue(kinds.none { it in parentOnly }, "$kinds")
+        assertTrue(ContextKind.PIN in kinds || ContextKind.UNPIN in kinds)
+    }
+
+    @Test fun gameMenuInParentModeOffersEverything() = runTest {
+        val settings = MemorySettings()
+        val platform = Platform(SAT, 10 * 60)
+        val kids = KidsController(settings, platform)
+        val st = state(settings, kids)
+        st.load()
+        kids.enterParent(platform.epochMs)
+        val sys = assertIs<Screen.Systems>(st.screen.value).tabs.flatMap { it.rows }
+            .flatMap { (it as? MainRow.System)?.systems.orEmpty() }.first { it.tag == "GB" }
+        st.openSystem(sys)
+        st.openContextMenu(0)
+        val kinds = assertIs<Screen.Games>(st.screen.value).menu!!.items.map { it.kind }
+        assertTrue(ContextKind.HIDE in kinds && ContextKind.RENAME in kinds && ContextKind.GAME_SETTINGS in kinds, "$kinds")
+    }
+
+    /** A Rename prompt a parent left open goes when Parent mode ends under it, before its A could rename anything. */
+    @Test fun parentEndingClosesAnOpenRenamePrompt() = runTest {
+        val settings = MemorySettings()
+        val platform = Platform(SAT, 10 * 60)
+        val kids = KidsController(settings, platform)
+        val st = state(settings, kids)
+        st.load()
+        kids.enterParent(platform.epochMs)
+        val sys = assertIs<Screen.Systems>(st.screen.value).tabs.flatMap { it.rows }
+            .flatMap { (it as? MainRow.System)?.systems.orEmpty() }.first { it.tag == "GB" }
+        st.openSystem(sys)
+        st.openContextMenu(0)
+        val items = assertIs<Screen.Games>(st.screen.value).menu!!.items
+        st.menuSelect(items.indexOfFirst { it.kind == ContextKind.RENAME })
+        st.menuOpen()
+        assertIs<MenuPrompt.Rename>(assertIs<Screen.Games>(st.screen.value).menu?.prompt)
+        st.kidsEndParent()
+        assertIs<KidsMode.Open>(kids.mode.value)
+        assertNull((st.screen.value as? Screen.Games)?.menu)
+    }
+
+    /** The main menu's hidden-tab items while Open: only the kid's (Consoles, Collections), never Tools. */
+    @Test fun hiddenTabItemsWhileOpenAreOnlyTheKids() = runTest {
+        val settings = MemorySettings().apply { showConsolesTab = false; showCollectionsTab = false; showToolsTab = false }
+        val st = state(settings, KidsController(settings, Platform(SAT, 10 * 60)))
+        st.load()
+        st.openContextMenu(0)
+        val kinds = assertIs<Screen.Systems>(st.screen.value).menu?.items.orEmpty().map { it.kind }
+        assertTrue(ContextKind.OPEN_CONSOLES in kinds, "$kinds")
+        assertTrue(kinds.all { ContextMenus.kidsMayPick(it) }, "$kinds")
+    }
+
+    @Test fun kidsPlayItemsKeepPlayAndDropLibraryEdits() {
+        val all = ContextKind.entries.map { ContextItem(it, it.name) }
+        assertEquals(
+            setOf(ContextKind.PLAY_FROM_START, ContextKind.NETPLAY, ContextKind.PIN, ContextKind.UNPIN, ContextKind.REMOVE_RECENT,
+                ContextKind.ACHIEVEMENTS, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS),
+            ContextMenus.kidsPlayItems(all).map { it.kind }.toSet(),
+        )
+    }
+
+    /** Deleting the flag (Forgot PIN?) clears a same-day unlock and the flag's home, as switching off does. */
+    @Test fun flagMissingClearsTheUnlockAndHome() = runTest {
+        val settings = MemorySettings()
+        val platform = Platform(MON, 10 * 60)
+        val kids = KidsController(settings, platform)
+        kids.unlock(UnlockChip.entries.first())
+        assertIs<KidsMode.Open>(kids.mode.value)
+        platform.flag.seen = FlagSeen.MISSING
+        kids.refresh()
+        assertEquals(0L, settings.kidsUnlockUntil)
+        assertNull(settings.kidsFlagHome)
+    }
+
+    /** A re-setup the same day comes up Locked on a locked day, whatever unlock was left before. */
+    @Test fun turnOnDropsALeftoverUnlock() = runTest {
+        val settings = MemorySettings().apply { kidsEnabled = false; kidsUnlockUntil = 1L * DAY }
+        val kids = KidsController(settings, Platform(MON, 10 * 60))
+        kids.turnOn()
+        assertEquals(0L, settings.kidsUnlockUntil)
+        assertIs<KidsMode.Locked>(kids.mode.value)
+    }
+
     private companion object {
         const val DAY = 86_400_000L
         const val MON = 1

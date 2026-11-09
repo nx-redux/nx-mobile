@@ -636,6 +636,27 @@ class AppStateTest {
         assertEquals("$new\n/Roms/Game Boy Advance (GBA)/A.gba\n", src.readText(ContentRef("S/Collections/Favs.txt")))
     }
 
+    // Play time is keyed by the game's path too: the merge moves it with the game.
+    @Test fun the_home_page_merge_moves_the_play_time_of_moved_games() = runTest {
+        val gba = "S/Roms/Game Boy Advance (GBA)"; val mgba = "S/Roms/Game Boy Advance (MGBA)"
+        val src = FakeRomsSource(
+            dirs = mapOf("S" to listOf("Roms"), "S/Roms" to listOf("Game Boy Advance (GBA)", "Game Boy Advance (MGBA)"),
+                gba to listOf("A.gba"), mgba to listOf("K.gba")),
+            bytes = mapOf("$mgba/K.gba" to ByteArray(4)),
+        )
+        val renamed = mutableMapOf<String, String>()
+        val gameTime = object : GameTimeData by NoGameTime {
+            override suspend fun renamePaths(map: Map<String, String>) { renamed += map }
+        }
+        val state = state(freshInstall(), src = src, gameTime = gameTime)
+        state.load(); state.getStarted()
+        state.setHome(ContentRef("S")); advanceUntilIdle()
+        val s = assertIs<Screen.FolderSummary>(state.screen.value)
+        state.select(folderSummaryRows(s).lastIndex); state.onButton(NxButton.A)
+        state.onButton(NxButton.A); advanceUntilIdle()   // the move's confirmation: Move
+        assertEquals(mapOf("/Roms/Game Boy Advance (MGBA)/K.gba" to "/Roms/Game Boy Advance (GBA)/K.gba"), renamed)
+    }
+
     // A long merge rewrites the lines of the games already moved every few seconds, so a process killed mid-merge does not
     // leave every moved game's Recents, pins and collection lines at the old paths.
     @Test fun a_merge_still_running_has_already_rewritten_the_lines_of_moved_games() = runTest {
@@ -10382,6 +10403,7 @@ class AppStateTest {
         val t = mapOf("face" to SkinTweak(dx = 4f))
         val settings = freshSettings().apply {
             skinTweaks = SkinTweaks.encode(mapOf("gba" to mapOf("grip" to t, "stack" to t), "gb" to mapOf("grip" to t)))
+            overlayTweaks = SkinTweaks.encode(mapOf("gba" to mapOf("grip" to t), "gb" to mapOf("stack" to t)))
         }
         val state = state(settings)
         state.load()
@@ -10392,6 +10414,7 @@ class AppStateTest {
         assertEquals("Reset button layout?", settingsResetAsk(assertIs<Screen.Settings>(state.screen.value), 3)?.title)
         state.onButton(NxButton.A)
         assertEquals(mapOf("gb" to mapOf("grip" to t)), SkinTweaks.decode(settings.skinTweaks))   // every gba layout, gb kept
+        assertEquals(mapOf("gb" to mapOf("stack" to t)), SkinTweaks.decode(settings.overlayTweaks))   // the overlay's too
         assertEquals(SettingsKind.BUTTON_LAYOUT_RESET, assertIs<Screen.Settings>(state.screen.value).rows[state.selection.value.index].kind)
     }
 
@@ -10404,6 +10427,18 @@ class AppStateTest {
         state.select(6)
         state.onButton(NxButton.A); state.onButton(NxButton.A)   // asks, then Reset
         assertEquals("", settings.skinTweaks)
+        assertEquals("Default", assertIs<Screen.Settings>(state.screen.value).rows[5].secondary)
+    }
+
+    @Test fun overlay_tweaks_alone_read_custom_and_appearance_reset_clears_them() = runTest {
+        val settings = freshSettings().apply { overlayTweaks = SkinTweaks.encode(mapOf("gba" to mapOf("grip" to mapOf("face" to SkinTweak(dx = 4f))))) }
+        val state = state(settings)
+        state.load()
+        state.openSettings(SettingsSection.APPEARANCE)
+        assertEquals("Custom", assertIs<Screen.Settings>(state.screen.value).rows[5].secondary)
+        state.select(6)
+        state.onButton(NxButton.A); state.onButton(NxButton.A)
+        assertEquals("", settings.overlayTweaks)
         assertEquals("Default", assertIs<Screen.Settings>(state.screen.value).rows[5].secondary)
     }
 
@@ -13775,4 +13810,5 @@ private object NoGameTime : GameTimeData {
     override suspend fun byPath(): Map<String, GameTotal> = emptyMap()
     override suspend fun window(sinceMs: Long, nowMs: Long): WindowTotals = WindowTotals(0L, null)
     override suspend fun playedPaths(sinceMs: Long, nowMs: Long): Set<String> = emptySet()
+    override suspend fun renamePaths(map: Map<String, String>): Unit = error("unused")
 }

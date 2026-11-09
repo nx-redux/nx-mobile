@@ -158,6 +158,15 @@
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|keyboard|keyboardHidden|navigation|uiMode"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Kids Mode: stops an app sent back from the top screen, in front of it there (TopScreenCover). Never in Recents. -->
+        <activity
+            android:name=".launcher.TopScreenCover"
+            android:exported="false"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|keyboard|keyboardHidden|navigation|uiMode"
+            android:theme="@android:style/Theme.Black.NoTitleBar" />
+
         <!-- Appearance → Button layout's editor: holds the asked orientation (SkinLayoutActivity). -->
         <activity
             android:name=".skinlayout.SkinLayoutActivity"

@@ -489,15 +489,36 @@ class GLRetroView(
         LibretroDroid.takeShaderError()?.let { message -> post { onShaderError?.invoke(message) } }
     }
 
+    /**
+     * Not [catchExceptions]: that skips everything once an earlier GL callback aborted (a Vulkan init that failed), and the
+     * native core and its session must still be released, above all for the GLES relaunch in this same process. Each
+     * step's failure is logged only: nothing is left to report it to.
+     */
     @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-    fun onDestroy() = catchExceptions {
-        LibretroNetplay.linkUnblock()   // a held GBA link cable must not block the GL thread destroy waits on
-        destroyOnEmulationThread()
+    fun onDestroy() {
+        runCatching { LibretroNetplay.linkUnblock() }   // a held GBA link cable must not block the GL thread destroy waits on
+            .onFailure { NxLog.e(TAG_LOG, "link unblock on destroy failed", it) }
+        runCatching { destroyOnEmulationThread() }.onFailure { NxLog.e(TAG_LOG, "native destroy failed", it) }
         lifecycle = null
     }
 
     // Set by whichever runs the native destroy first: the queued one, or the caller after a timeout.
     private val nativeDestroyed = AtomicBoolean(false)
+
+    /**
+     * Queues [block] on the GL thread without waiting for it. The destroy is queued there too, so [block] runs ahead of it
+     * (and behind whatever was queued before, such as a serialize), and the destroy's own wait covers it. Skipped if the
+     * core was destroyed elsewhere first (a wedged GL thread's fallback): it must never reach the next game's core. False
+     * when it could not be queued (the GL thread is gone); the caller then does the work itself.
+     */
+    fun queueBeforeDestroy(block: () -> Unit): Boolean {
+        if (emulationThreadGone || nativeDestroyed.get()) return false
+        return runCatching {
+            queueEvent {
+                if (!nativeDestroyed.get()) runCatching(block).onFailure { NxLog.e(TAG_LOG, "queued work before destroy failed", it) }
+            }
+        }.isSuccess
+    }
 
     private fun destroyNative() {
         if (nativeDestroyed.compareAndSet(false, true)) LibretroDroid.destroy()

@@ -21,6 +21,8 @@ interface GameTimeData {
     suspend fun window(sinceMs: Long, nowMs: Long): WindowTotals
     /** The rom paths of every game in each group [window] counts (merge targets and their members). */
     suspend fun playedPaths(sinceMs: Long, nowMs: Long): Set<String>
+    /** Moves games to new rom paths ([map]: old to new), as [GameTimeStore.renamePaths]. */
+    suspend fun renamePaths(map: Map<String, String>)
 }
 
 /**
@@ -41,6 +43,7 @@ class StoreGameTimeData(private val store: GameTimeStore, private val io: Corout
     override suspend fun window(sinceMs: Long, nowMs: Long) = withContext(io) { closeLeft(); store.window(sinceMs, nowMs) }
     override suspend fun playedPaths(sinceMs: Long, nowMs: Long) = withContext(io) { store.playedPaths(sinceMs, nowMs) }
     override suspend fun byPath() = withContext(io) { closeLeft(); store.byPath() }
+    override suspend fun renamePaths(map: Map<String, String>) = withContext(io) { store.renamePaths(map) }
 }
 
 /**
@@ -58,6 +61,7 @@ class LazyGameTimeData(private val open: suspend () -> GameTimeData?) : GameTime
     override suspend fun unmerge(gameId: Long) = d().unmerge(gameId)
     override suspend fun delete(target: Long) = d().delete(target)
     override suspend fun byPath() = d().byPath()
+    override suspend fun renamePaths(map: Map<String, String>) = d().renamePaths(map)
     override suspend fun window(sinceMs: Long, nowMs: Long) = d().window(sinceMs, nowMs)
     override suspend fun playedPaths(sinceMs: Long, nowMs: Long) = d().playedPaths(sinceMs, nowMs)
 }
