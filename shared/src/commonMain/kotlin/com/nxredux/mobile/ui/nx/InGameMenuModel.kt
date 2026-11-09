@@ -996,15 +996,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /**
      * What the root's game panel draws: the header (the achievement count from [setAchievements] while there is a set),
-     * the tabs that apply, the Shortcuts (Swap disc, Second screen, Fast forward, Rewind, Reset), the achievements in the chosen
-     * order, the cheats, the Players page's rows, and the controller's [MenuState.panelFocus].
+     * the tabs that apply (the Menu tab has no tiles: the menu's words stand there), the achievements in the chosen order,
+     * the cheats, the Players page's rows, and the controller's [MenuState.panelFocus].
      */
     fun panelState(): GamePanelState {
         // Asked on every recomposition of the menu: rebuilt (the achievements sorted again) only when an input changed.
         val key = listOf(
             state.panelTab, state.panelFocus, panelHeader, achievements, achievementsAvailable, achievementSummary, achievementOrder,
-            badges, playerSlots, playerPads, discCount, discIndex, secondConnected, secondOn, speedFf, speedRewind, micTile, netplay, frontendTag, cheats, cheatsAvailable,
-            cheatsFolder, cheatsExpected,
+            badges, playerSlots, playerPads, netplay, frontendTag, cheats, cheatsAvailable, cheatsFolder, cheatsExpected,
         )
         panelCache?.takeIf { it.first == key }?.let { return it.second }
         return buildPanelState().also { panelCache = key to it }
@@ -1092,7 +1091,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private fun panelItemCount(tab: GamePanelTab): Int = when (tab) {
         GamePanelTab.SHORTCUTS -> 0   // the Menu tab: its words, no items
-        GamePanelTab.ACHIEVEMENTS -> panelAchievements().size
+        GamePanelTab.ACHIEVEMENTS -> achievements.orEmpty().size
         GamePanelTab.CHEATS -> cheats.size
         GamePanelTab.PLAYERS -> playerSlots.size
     }
@@ -1138,7 +1137,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /**
      * L1/R1 (and LEFT/RIGHT on the tab row): the previous/next shown tab, wrapping. Focus on an item lands on the new tab's
-     * first (its tab row if empty; on the Menu tab the words when the shortcuts are not shown); otherwise on the tab row.
+     * first (its tab row if empty; on the Menu tab its words); otherwise on the tab row.
      */
     private fun stepTab(delta: Int) {
         val tabs = panelTabs()
