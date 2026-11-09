@@ -1587,6 +1587,7 @@ class AppState(
     fun onBackground() {
         // The game (or app) a Minimal launch handed off to is in front: no give-up now, the next onForeground fades it.
         launches.onBackground()
+        kidsUi.kidsCloseUnlock()   // the unlock PIN or sheet never waits behind another app for the kid to come back to
         if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) { closeShortcuts(); settingsUi.refreshSettings() }
         scope.launch { flushArt() }
     }
@@ -5464,6 +5465,7 @@ class AppState(
             override val pins: List<Shortcut> get() = this@AppState.pins
             override val toolPins: List<String> get() = this@AppState.toolPins
             override val kidsOn: Boolean get() = kidsUi.kidsMode != KidsMode.Off
+            override val kidsRestricted: Boolean get() = !kidsUi.kidsToolsAllowed
             override suspend fun writeToolPins(keys: List<String>): Boolean = this@AppState.writeToolPins(keys)
             override fun select(index: Int) = this@AppState.select(index)
             override fun showNotice(text: String) = this@AppState.showNotice(text)

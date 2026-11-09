@@ -97,4 +97,12 @@ class GuardDecisionTest {
         assertFalse(guardRuns(locked, usageAccess = true, menuShown = true))
         for (m in listOf(KidsMode.Off, KidsMode.Parent, KidsMode.Open(1L))) assertFalse(guardRuns(m, usageAccess = true, menuShown = false))
     }
+
+    /** Dual mode: an app on the top screen keeps the menu shown below it, and the guard still watches what opens there. */
+    @Test fun runsWithTheMenuShownWhileAnAppIsOnTheOtherDisplay() {
+        val locked = KidsMode.Locked(null)
+        assertTrue(guardRuns(locked, usageAccess = true, menuShown = true, appOnOtherDisplay = true))
+        assertFalse(guardRuns(locked, usageAccess = false, menuShown = true, appOnOtherDisplay = true))
+        assertFalse(guardRuns(KidsMode.Open(1L), usageAccess = true, menuShown = true, appOnOtherDisplay = true))
+    }
 }

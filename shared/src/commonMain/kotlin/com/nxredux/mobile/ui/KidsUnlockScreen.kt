@@ -42,6 +42,9 @@ internal const val KIDS_UNLOCK_FULL_MENU = 4
 internal const val KIDS_UNLOCK_SETTINGS = 5
 internal const val KIDS_UNLOCK_ROWS = 6
 
+/** The unlock PIN and sheet close after this long without input (the sheet opens Parent mode and Kids Mode's settings). */
+internal const val KIDS_UNLOCK_IDLE_MS = 60_000L
+
 /** The chips per row on a sheet [widthDp] wide: a 2 x 2 grid below 480 dp, so no label wraps mid-word; else one row of four. */
 internal fun kidsUnlockChipColumns(widthDp: Float): Int = if (widthDp < 480f) 2 else UnlockChip.entries.size
 

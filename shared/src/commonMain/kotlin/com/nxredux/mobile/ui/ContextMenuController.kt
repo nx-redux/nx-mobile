@@ -46,6 +46,9 @@ internal interface ContextMenuHost {
     /** Kids Mode is on: nothing is pinned on Home (its pinned tools are hidden), so no menu offers Pin. */
     val kidsOn: Boolean get() = false
 
+    /** Kids Mode limits the menu to play (a play window or a timed unlock): game menus offer only [ContextMenus.kidsPlayItems]. */
+    val kidsRestricted: Boolean get() = false
+
     /** Writes [keys] ([pinKey]s) as the tool pins off the main thread, then keeps them in memory; false (nothing changed) when the write fails. */
     suspend fun writeToolPins(keys: List<String>): Boolean
 
@@ -194,7 +197,7 @@ internal class ContextMenuController(
                 // tab) gets one holding just these. A pushed tab never offers them again.
                 val tabs = if (s.pushed) emptyList() else ContextMenus.hiddenTabItems(host.hiddenTabs())
                 fun show(fromStart: Boolean) {
-                    val own = rowMenu(row, fromStart, s.category)
+                    val own = rowMenu(row, fromStart, s.category)?.let(::forKids)
                     val menu = when {
                         own != null -> own.copy(items = own.items + tabs)
                         tabs.isNotEmpty() -> ContextMenu(null, tabs, title = APP_NAME)
@@ -245,7 +248,8 @@ internal class ContextMenuController(
             canResume = canResume, netplayLeads = host.netplayInMenu,
         )
         // The achievements panel, last, while Layouts hides its icon and hint.
-        val all = if (host.achievementsInMenu) items + ContextItem(ContextKind.ACHIEVEMENTS, "Achievements") else items
+        val all = (if (host.achievementsInMenu) items + ContextItem(ContextKind.ACHIEVEMENTS, "Achievements") else items)
+            .let { if (host.kidsRestricted) ContextMenus.kidsPlayItems(it) else it }
         if (all.isEmpty()) return
         _screen.value = s.copy(menu = ContextMenu(e, all))
     }
@@ -256,6 +260,10 @@ internal class ContextMenuController(
 
     /** A hidden Netplay hint (alone or with the bar) puts Y's Netplay in a Home game's menu. */
     private fun homeNetplay(e: Listed): Boolean = host.netplayInMenu && host.netplayOffered(e) && ContextMenus.hasNetplay(e)
+
+    /** [m] with only a kid's items while Kids Mode limits the menu ([ContextMenuHost.kidsRestricted]); null when none is left. */
+    private fun forKids(m: ContextMenu): ContextMenu? =
+        if (!host.kidsRestricted) m else ContextMenus.kidsPlayItems(m.items).takeIf { it.isNotEmpty() }?.let { m.copy(items = it) }
 
     /** A main-menu row's menu on [category]'s tab; null for a row without one (a console, Pick a game, "+N", Kids Mode's Apps). */
     private fun rowMenu(row: MainRow?, fromStart: Boolean, category: MenuCategory?): ContextMenu? = when (row) {
@@ -354,6 +362,8 @@ internal class ContextMenuController(
 
     /** A on a menu item. Emulator, Console and Add to Collection open their submenus; Rename opens the text prompt. */
     private fun act(m: ContextMenu, kind: ContextKind) {
+        // A menu a parent opened stays up when Parent mode ends under it: its library items no longer act.
+        if (host.kidsRestricted && !ContextMenus.kidsMayPick(kind)) { closeContextMenu(); return }
         when (kind) {
             ContextKind.PIN_TOOL -> { m.tool?.let { setToolPinned(m, it.pinKey, true) } ?: closeContextMenu(); return }
             ContextKind.UNPIN_TOOL -> { m.tool?.let { setToolPinned(m, it.pinKey, false) } ?: closeContextMenu(); return }

@@ -67,8 +67,9 @@ fun guardExempt(defaultIme: String?, granting: Boolean): Set<String> = buildSet 
 }
 
 /**
- * The guard runs only while Locked, with Usage access (it cannot see the front app without it), and while no menu is
- * shown (the tiles screen is in front, nothing to watch).
+ * The guard runs only while Locked, with Usage access (it cannot see the front app without it), and while something
+ * other than the menu may be in front: no menu shown, or an app open on the other display ([appOnOtherDisplay], dual
+ * mode's top screen), where a link out of it opens beside the shown menu.
  */
-fun guardRuns(mode: KidsMode, usageAccess: Boolean, menuShown: Boolean): Boolean =
-    mode is KidsMode.Locked && usageAccess && !menuShown
+fun guardRuns(mode: KidsMode, usageAccess: Boolean, menuShown: Boolean, appOnOtherDisplay: Boolean = false): Boolean =
+    mode is KidsMode.Locked && usageAccess && (!menuShown || appOnOtherDisplay)
