@@ -5906,19 +5906,25 @@ class AppState(
     fun refreshKeyboard() = keyboard.sync()
 
     /** A tap on the keyboard's key at [at]: the highlight moves there and it types. */
-    fun keyboardTapKey(at: KeyPos) { keyboard.tapKeyAt(at)?.let(::promptAnswer) }
+    fun keyboardTapKey(at: KeyPos) { if (!keyboardWaits()) keyboard.tapKeyAt(at)?.let(::promptAnswer) }
+
+    /** An error over the prompt has the input until it is dismissed: the keyboard's taps and a physical keyboard wait. */
+    private fun keyboardWaits(): Boolean = _error.value != null
 
     /** A tap on the open prompt's field [index]: it becomes the one typed in. */
-    fun keyboardTapField(index: Int) = keyboard.tapField(index)
+    fun keyboardTapField(index: Int) { if (!keyboardWaits()) keyboard.tapField(index) }
 
     /** The open prompt's password shown as typed, or as dots again (its field's Show / Hide). */
-    fun keyboardToggleReveal() = keyboard.toggleReveal()
+    fun keyboardToggleReveal() { if (!keyboardWaits()) keyboard.toggleReveal() }
 
     /** A physical keyboard's printable [text], at the cursor. */
-    fun keyboardType(text: String) { keyboard.type(text)?.let(::promptAnswer) }
+    fun keyboardType(text: String) { if (!keyboardWaits()) keyboard.type(text)?.let(::promptAnswer) }
 
-    /** A physical keyboard's Backspace: as B on the keyboard. */
-    fun keyboardBackspace() = onButton(NxButton.B)
+    /** A physical keyboard's Ctrl+V: as the keyboard's Paste. */
+    fun keyboardPaste() { if (!keyboardWaits()) keyboard.paste()?.let(::promptAnswer) }
+
+    /** A physical keyboard's Backspace: as B on the keyboard; held ([repeat]), it clears but never cancels. */
+    fun keyboardBackspace(repeat: Boolean = false) = onButton(NxButton.B, repeat)
 
     /** The prompt hears [button] (A confirm, B cancel) past the keyboard: a tap on the box's buttons, or a keyboard outcome. */
     fun promptAnswer(button: NxButton) {

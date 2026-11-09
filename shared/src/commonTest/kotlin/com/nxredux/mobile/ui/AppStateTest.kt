@@ -13860,6 +13860,26 @@ class AppStateTest {
         assertEquals("tetris", assertIs<Screen.Systems>(state.screen.value).search)
     }
 
+    @Test fun keyboard_taps_wait_under_an_error() = runTest {
+        val state = keyboardSearchState()
+        state.onButton(NxButton.START)
+        state.showError("Something went wrong")
+        state.keyboardTapKey(NxKeys.HOME)
+        state.keyboardType("x")
+        assertEquals("", assertIs<Screen.Systems>(state.screen.value).search)
+    }
+
+    @Test fun keyboard_prompt_leaving_the_second_display_follows_the_setting_again() = runTest {
+        var onSecond = true
+        val settings = MemorySettings(ContentRef("Home")).apply { androidKeyboard = true }
+        val state = keyboardSearchState(settings, onSecond = { onSecond })
+        state.onButton(NxButton.START)
+        assertNotNull(state.textEntry.value)
+        onSecond = false
+        state.refreshKeyboard()
+        assertNull(state.textEntry.value)
+    }
+
     @Test fun keyboard_onboarding_art_prompts_count_as_text_entry() =
         assertTrue(textEntryOpen(Screen.Onboarding(OnboardingStep.entries.first(), "", emptyList(), emptyList(), artSignIn = true)))
 

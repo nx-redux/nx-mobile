@@ -566,6 +566,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
             }
         }
         state.onDualMenu(active && (launching || (appOnTop && state.screen.value !is Screen.Games) || menuScreen != null))
+        // No window on the second display: no prompt is there, so the keyboard setting rules again.
+        if (menuScreen == null && promptOnSecond) { promptOnSecond = false; state.refreshKeyboard() }
         val shown = menuScreen ?: return
         val onSecond = menuOnSecondFor(shown.display)
         if (onSecond != menuOnSecond.value) {
@@ -872,12 +874,13 @@ class MainActivity : ComponentActivity(), FolderPicker {
         // The NX keyboard types: a physical keyboard's characters, Backspace, Enter and Tab go to it; the pad's keys go to
         // the pad as when no prompt is open (no text field needs them first).
         if (::state.isInitialized && state.textEntry.value != null && keyToButton(event.keyCode) == null) {
-            when (val a = keyboardKeyAction(event.keyCode, event.unicodeChar)) {
+            when (val a = keyboardKeyAction(event.keyCode, event.unicodeChar, chord = event.isCtrlPressed || event.isAltPressed || event.isMetaPressed)) {
                 KeyboardKeyAction.Pass -> Unit
                 else -> {
                     if (event.action == KeyEvent.ACTION_DOWN) when (a) {
                         is KeyboardKeyAction.Type -> state.keyboardType(a.text)
-                        KeyboardKeyAction.Backspace -> state.keyboardBackspace()
+                        KeyboardKeyAction.Backspace -> state.keyboardBackspace(repeat = event.repeatCount > 0)
+                        KeyboardKeyAction.Paste -> state.keyboardPaste()
                         is KeyboardKeyAction.Press -> state.onButton(a.button)
                         KeyboardKeyAction.Pass -> Unit
                     }

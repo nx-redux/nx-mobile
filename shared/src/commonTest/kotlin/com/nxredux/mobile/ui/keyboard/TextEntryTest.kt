@@ -168,4 +168,16 @@ class TextEntryTest {
         assertTrue(e.reveal)
         assertFalse(e.toString().contains("hunter2"))
     }
+
+    @Test fun leftIsConfirmRightIsCancelOnTheButtons() {
+        val onCancel = signIn.copy(focus = EntryFocus.Button(1))
+        assertEquals(EntryFocus.Button(0), onCancel.press(NxButton.LEFT).entry.focus)
+        assertEquals(EntryFocus.Button(0), onCancel.press(NxButton.LEFT).entry.press(NxButton.LEFT).entry.focus)
+        assertEquals(EntryFocus.Button(1), onCancel.press(NxButton.RIGHT).entry.focus)
+    }
+
+    @Test fun aHeldBackspaceNeverCancels() {
+        assertEquals(EntryOutcome.None, one("").press(NxButton.B, repeat = true).outcome)
+        assertEquals(EntryOutcome.Edit(0, "a"), one("ab").press(NxButton.B, repeat = true).outcome)
+    }
 }

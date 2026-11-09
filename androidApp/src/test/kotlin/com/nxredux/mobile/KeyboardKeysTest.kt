@@ -20,4 +20,9 @@ class KeyboardKeysTest {
         assertEquals(KeyboardKeyAction.Pass, keyboardKeyAction(KeyEvent.KEYCODE_VOLUME_UP, 0))
         assertEquals(KeyboardKeyAction.Pass, keyboardKeyAction(KeyEvent.KEYCODE_FORWARD_DEL, 127))
     }
+
+    @Test fun ctrlVPastesOtherChordsPass() {
+        assertEquals(KeyboardKeyAction.Paste, keyboardKeyAction(KeyEvent.KEYCODE_V, 'v'.code, chord = true))
+        assertEquals(KeyboardKeyAction.Pass, keyboardKeyAction(KeyEvent.KEYCODE_A, 'a'.code, chord = true))
+    }
 }

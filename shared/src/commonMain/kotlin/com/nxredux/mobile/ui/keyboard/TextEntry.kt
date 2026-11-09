@@ -92,7 +92,7 @@ private fun TextEntry.cursorBy(d: Int) = copy(cursor = (cursor + d).coerceIn(0, 
 fun TextEntry.press(button: NxButton, repeat: Boolean = false): EntryStep {
     when (button) {
         NxButton.MENU -> return EntryStep(this, EntryOutcome.Cancel)
-        NxButton.B -> return backspace()
+        NxButton.B -> return if (repeat && text.isEmpty()) none() else backspace()   // a held delete clears, never cancels
         NxButton.Y -> return insert(" ")
         NxButton.X -> return EntryStep(copy(shift = !shift), EntryOutcome.None)
         NxButton.L1 -> return EntryStep(cursorBy(-1), EntryOutcome.None)
@@ -123,7 +123,9 @@ fun TextEntry.press(button: NxButton, repeat: Boolean = false): EntryStep {
             else -> none()
         }
         is EntryFocus.Button -> if (repeat && button.isDirection) none() else when (button) {
-            NxButton.LEFT, NxButton.RIGHT -> EntryStep(copy(focus = EntryFocus.Button(1 - f.index)), EntryOutcome.None)
+            // As every dialog's buttons: LEFT is the confirm button, RIGHT Cancel.
+            NxButton.LEFT -> EntryStep(copy(focus = EntryFocus.Button(0)), EntryOutcome.None)
+            NxButton.RIGHT -> EntryStep(copy(focus = EntryFocus.Button(1)), EntryOutcome.None)
             NxButton.DOWN -> EntryStep(toField(0, EntryFocus.Field), EntryOutcome.None)
             NxButton.A -> EntryStep(this, if (f.index == 0) EntryOutcome.Confirm else EntryOutcome.Cancel)
             else -> none()

@@ -39,7 +39,7 @@ fun NxTextPrompt(title: String, value: String, onValueChange: (String) -> Unit, 
     val keyboard = LocalPromptKeyboard.current
     keyboard.entry?.let { entry ->
         // The NX keyboard types: the field is drawn from its entry, and the box's buttons answer past the keyboard.
-        NxModal(caption = title, kind = ModalKind.PROMPT, onButton = { keyboard.answer(if (it == NxButton.B) NxButton.B else NxButton.A) }, buttonFocus = entry.buttonFocus()) {
+        NxModal(caption = title, kind = ModalKind.PROMPT, confirmLabel = keyboard.confirmLabel, onButton = { keyboard.answer(if (it == NxButton.B) NxButton.B else NxButton.A) }, buttonFocus = entry.buttonFocus()) {
             NxEntryField(entry.fields[0].value, entry.fields[0].password, entry.cursor, entry.focus == EntryFocus.Field, onTap = { keyboard.tapField(0) })
         }
         return

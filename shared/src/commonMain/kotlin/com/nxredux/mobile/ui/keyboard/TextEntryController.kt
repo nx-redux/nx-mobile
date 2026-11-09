@@ -44,6 +44,9 @@ internal class TextEntryController(private val spec: () -> PromptSpec?, private 
 
     fun tapField(index: Int) { _entry.value?.let { _entry.value = it.tapField(index) } }
 
+    /** The clipboard at the cursor, as the Paste key. */
+    fun paste(): NxButton? = _entry.value?.let { apply(it.tapKey(Key.Paste)) }
+
     fun toggleReveal() { _entry.value?.let { _entry.value = it.toggleReveal() } }
 
     /** A physical keyboard's printable [text]. */

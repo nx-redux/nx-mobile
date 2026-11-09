@@ -44,7 +44,11 @@ import com.nxredux.mobile.ui.nx.nxModalText
  * keep their text fields), a tap on a field ([tapField]), the box's own buttons answering past the keyboard ([answer])
  * and a password's Show / Hide ([toggleReveal]).
  */
-class PromptKeyboard(val entry: TextEntry?, val tapField: (Int) -> Unit, val answer: (NxButton) -> Unit, val toggleReveal: () -> Unit = {})
+class PromptKeyboard(
+    val entry: TextEntry?, val tapField: (Int) -> Unit, val answer: (NxButton) -> Unit, val toggleReveal: () -> Unit = {},
+    /** The box's confirm word, as the keyboard's hints say it ("Search", "Sign in", "OK"). */
+    val confirmLabel: String = "OK",
+)
 
 /** The app's [PromptKeyboard]; none outside the menu. */
 val LocalPromptKeyboard = compositionLocalOf { PromptKeyboard(null, {}, {}) }
@@ -66,7 +70,8 @@ fun NxEntryField(
     val shown = if (password && !revealed) PASSWORD_DOT.toString().repeat(value.length) else value
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val scroll = rememberScrollState()
-    val blink by rememberInfiniteTransition(label = "caret").animateFloat(
+    // Read in the draw only, so the blink redraws the caret and never recomposes the field; no caret, no blink.
+    val blink = if (cursor == null) null else rememberInfiniteTransition(label = "caret").animateFloat(
         1f, 0f, infiniteRepeatable(tween(530, easing = LinearEasing), RepeatMode.Reverse), label = "caret",
     )
     val shape = RoundedCornerShape(12.dp)
@@ -97,10 +102,10 @@ fun NxEntryField(
                 modifier = Modifier.padding(end = 8.dp).drawWithContent {
                     drawContent()
                     val l = layout
-                    if (cursor != null && l != null) {
+                    if (cursor != null && l != null && blink != null) {
                         val r = l.getCursorRect(cursor.coerceIn(0, shown.length))
                         // role: the caret's blink, the field text's colour fading in and out
-                        drawLine(colors.listText.copy(alpha = blink), Offset(r.left, r.top), Offset(r.left, r.bottom), strokeWidth = 2f)
+                        drawLine(colors.listText.copy(alpha = blink.value), Offset(r.left, r.top), Offset(r.left, r.bottom), strokeWidth = 2f)
                     }
                 },
             )
