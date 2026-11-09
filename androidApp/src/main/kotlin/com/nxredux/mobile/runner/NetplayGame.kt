@@ -1,6 +1,7 @@
 package com.nxredux.mobile.runner
 
 import com.nxredux.mobile.netplay.NetplayAddress
+import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.netplay.NetplayRole
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplayText
@@ -145,6 +146,7 @@ internal class NetplayGame(
         val ok = withContext(NetplayEngine.dispatcher) {
             runCatching {
                 LibretroNetplay.shutdown()
+                LibretroNetplay.setPresyncFrames(NetplayCores.presyncFrames(session.coreId))
                 LibretroNetplay.start(role, peer, NetplayWire.ENGINE_PORT)
             }.onFailure { NxLog.w(TAG, "netplay start failed", it) }.getOrDefault(false)
         }

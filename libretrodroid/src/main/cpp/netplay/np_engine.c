@@ -197,6 +197,8 @@ static struct {
 	size_t state_len;
 	bool have_local_size;
 	size_t local_size; // client: its own size(), recorded by np_pre_frame
+	int presync_frames; // frames run on our own before the state sync (mupen64plus-next takes no state until it ran)
+	int presync_done;
 
 	// Frame synchronization
 	uint32_t self_frame; // Our current frame
@@ -681,6 +683,8 @@ static void* engine_thread(void* arg) {
 // Public API
 //////////////////////////////////////////////////////////////////////////////
 
+static int np_presync_wanted;
+
 int np_start(np_role role, const char* peer_ip, uint16_t port, np_clock_fn clock) {
 	pthread_mutex_lock(&np_mutex);
 	if (np.started) {
@@ -688,6 +692,8 @@ int np_start(np_role role, const char* peer_ip, uint16_t port, np_clock_fn clock
 		return -1;
 	}
 	reset_fields();
+	np.presync_frames = np_presync_wanted;
+	np.presync_done = 0;
 	np.role = role;
 	np.port = port;
 	np.clock = clock;
@@ -861,6 +867,11 @@ int np_pre_frame(uint16_t local, const int16_t* local_analog, np_size_fn size, n
 	check_timers(now);
 
 	if (np.phase == NP_SYNCING) {
+		if (np.presync_done < np.presync_frames) {
+			np.presync_done++;
+			pthread_mutex_unlock(&np_mutex);
+			return 1; // run on our own (not armed: no lockstep frame); the host's state replaces it at the sync
+		}
 		if (np.role == NP_ROLE_HOST) {
 			if (np.sync == SYNC_HOST_SERIALIZE)
 				host_send_state(size, ser);
@@ -920,6 +931,12 @@ int np_pre_frame(uint16_t local, const int16_t* local_analog, np_size_fn size, n
 	update_countdown(now);
 	pthread_mutex_unlock(&np_mutex);
 	return 0;
+}
+
+void np_set_presync_frames(int frames) {
+	pthread_mutex_lock(&np_mutex);
+	np_presync_wanted = frames > 0 ? frames : 0;
+	pthread_mutex_unlock(&np_mutex);
 }
 
 void np_post_frame(void) {

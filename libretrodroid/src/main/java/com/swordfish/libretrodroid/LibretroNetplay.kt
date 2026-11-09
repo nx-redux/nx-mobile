@@ -38,6 +38,8 @@ object LibretroNetplay {
      * connect to [peerIp]:[port]. False when already started (until [shutdown]) or on a missing or bad address.
      */
     @JvmStatic external fun start(role: Int, peerIp: String, port: Int): Boolean
+    /** Frames each side runs on its own before the state sync (a core that takes no state until it ran); call before [start]. */
+    @JvmStatic external fun setPresyncFrames(frames: Int)
     @JvmStatic external fun pause()
     @JvmStatic external fun resume()
     @JvmStatic external fun leave()

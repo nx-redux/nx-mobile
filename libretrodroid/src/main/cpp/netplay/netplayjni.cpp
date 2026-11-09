@@ -52,6 +52,14 @@ JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_star
     }
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_setPresyncFrames(
+    JNIEnv* env,
+    jclass obj,
+    jint frames
+) {
+    np_set_presync_frames((int) frames);
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_pause(
     JNIEnv* env,
     jclass obj

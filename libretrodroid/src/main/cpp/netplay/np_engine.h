@@ -72,6 +72,9 @@ typedef bool (*np_unser_fn)(const void*, size_t);
  * connects to peer_ip:port. Fails (-1) when already started, on a missing or bad address (either role), or when the
  * host cannot bind the port. */
 int np_start(np_role role, const char* peer_ip, uint16_t port, np_clock_fn clock);
+/* Frames each side runs on its own before the state sync, for a core that takes no state until it ran; set before
+ * np_start (0 = none). */
+void np_set_presync_frames(int frames);
 /* Local pause (menu, background): this device stops sending input and running frames. Nothing goes on the wire: nx-redux
  * main free-runs when it opens and closes its own menu while its peer is paused, so the peer just stalls and counts down.
  * A local pause counts down 30 s itself, then ends the session. */
