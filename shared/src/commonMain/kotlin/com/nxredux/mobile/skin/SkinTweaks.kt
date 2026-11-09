@@ -23,28 +23,47 @@ object SkinTweaks {
      */
     fun limit(t: SkinTweak): SkinTweak = if (t.scale.isFinite() && t.scale > 0f) t else t.copy(scale = 1f)
 
-    /** How much of a screen's width (left and right) and height (top and bottom) a group may cover from its edges. */
-    private const val SCREEN_EDGE = 0.2f
+    /** How much of a screen area's width (left and right) and height (top and bottom) a group may cover from its edges. */
+    private const val SCREEN_OVERLAP = 0.10f
 
     /**
-     * Where no group may go in [p] (window px) under [rules]. [TweakRules.SKIN]: each screen's middle (all but
-     * [SCREEN_EDGE] of it from each edge), so a button may cover a screen's edge but never what the game shows in the
+     * Where no group may go in [p] (window px) under [rules]. [TweakRules.SKIN]: each [screenAreas] middle (all but
+     * [SCREEN_OVERLAP] of it from each edge), so a button may cover a screen's edge but never what the game shows in the
      * middle; and on a layout made for half-folding the band from the screen frame's bottom past the fold (the pieces
      * keep [FrameSpec.hinge] below it), where a button on the crease is hard to press. [TweakRules.OVERLAY]: nowhere.
      */
     fun noGo(p: SkinPlacement, rules: TweakRules = TweakRules.SKIN): List<PxRect> {
         if (rules == TweakRules.OVERLAY) return emptyList()
-        val out = p.glasses.mapTo(ArrayList()) {
-            val r = it.rect
-            val keep = 1f - 2f * SCREEN_EDGE
-            PxRect(r.x + SCREEN_EDGE * r.width, r.y + SCREEN_EDGE * r.height, keep * r.width, keep * r.height)
+        val out = screenAreas(p).mapTo(ArrayList()) { r ->
+            val keep = 1f - 2f * SCREEN_OVERLAP
+            PxRect(r.x + SCREEN_OVERLAP * r.width, r.y + SCREEN_OVERLAP * r.height, keep * r.width, keep * r.height)
         }
         hinge(p)?.let { out += it }
         return out
     }
 
+    /**
+     * Each of [p]'s screens (window px) as the player sees it: its glass less the touch shortcut row drawn over it (the
+     * strip's buttons and labels), which is no part of the game's picture. A glass with no strip over it is whole.
+     */
+    fun screenAreas(p: SkinPlacement): List<PxRect> {
+        val ids = (listOfNotNull(p.spec.frame?.strip) + p.spec.pieces.mapNotNull { it.strip }).flatMap { s -> s.labels.map { it.id } }.toSet()
+        val rows = p.controls.filter { it.spec.id in ids }.map { hit(it) } + p.pieces.filter { it.strip }.map { it.dst }
+        return p.glasses.map { g ->
+            val r = g.rect
+            val mine = rows.filter { s ->
+                val cx = s.x + s.width / 2f; val cy = s.y + s.height / 2f
+                cx > r.x && cx < r.x + r.width && cy > r.y && cy < r.y + r.height
+            }
+            val band = union(mine) ?: return@map r
+            // the row sits along the glass's bottom (or its top): what is left is the glass on the far side of it
+            if (band.y + band.height / 2f >= r.y + r.height / 2f) PxRect(r.x, r.y, r.width, maxOf(0f, band.y - r.y))
+            else (band.y + band.height).let { b -> PxRect(r.x, b, r.width, maxOf(0f, r.y + r.height - b)) }
+        }
+    }
+
     /** The band [noGo] keeps clear round a half-fold's crease in [p], window px; none on a layout not made for half-folding. */
-    private fun hinge(p: SkinPlacement): PxRect? {
+    internal fun hinge(p: SkinPlacement): PxRect? {
         val f = p.spec.frame ?: return null
         val g = p.glasses.firstOrNull() ?: return null   // the frame's screen comes first
         if (f.hinge < 0) return null
@@ -89,7 +108,7 @@ object SkinTweaks {
      * from where the group stands in [from] (what [apply] landed it at before) when that is clear, else from the layout's
      * own place. A shrink stops where a control's touch area would be under [minTouchPx] (window px) on its shorter
      * side, but any group may always shrink to [OLD_MIN_SCALE]. Groups in [keep] never give way: they go first, their end
-     * spots against each other alone (a walk, against every group), and the rest go against them where they ended. Otherwise groups go in [SkinGroups.of]'s order,
+     * spots against each other and the groups with no tweak alone (a walk, against every group), and the rest go against them where they ended. Otherwise groups go in [SkinGroups.of]'s order,
      * each against the groups before it where they ended and the groups after it where they are going (so a group may
      * move into the room a later one leaves); a later group that gets less far than that is tried again where it got
      * to, and should that still leave two groups on each other, each group goes against the later ones where they
@@ -199,9 +218,10 @@ object SkinTweaks {
                     }
                 } + listOf(loose)
                 val all = others { false }
-                // a kept group's end spot is held against the other kept groups alone, so it never gives way to the
-                // rest; a walk still goes against every group, so it never passes over one
-                val (sc, dx, dy) = (if (kept[gi]) land(gi, all, others { !kept[it] }) else land(gi, all)) ?: continue
+                // a kept group's end spot is held against the groups that never give way (the other kept ones, and those
+                // with no tweak, which stay at home) alone, so it never gives way to the rest; a walk still goes against
+                // every group, so it never passes over one
+                val (sc, dx, dy) = (if (kept[gi]) land(gi, all, others { !kept[it] && ts[it] != null }) else land(gi, all)) ?: continue
                 val mid = mids[gi] ?: continue
                 val cx = mid.x + mid.width / 2f; val cy = mid.y + mid.height / 2f
                 fun mx(x: Float) = cx + (x - cx) * sc + dx

@@ -64,7 +64,26 @@ class SkinApplyTest {
     private fun touching(p: SkinPlacement, a: SkinGroup, q: SkinPlacement = p, b: SkinGroup) =
         zones(p, a).sumOf { x -> zones(q, b).sumOf { y -> overlap(x, y).toDouble() } }.toFloat()
 
-    private fun inner(g: PlacedGlass) = PxRect(g.rect.x + 0.2f * g.rect.width, g.rect.y + 0.2f * g.rect.height, 0.6f * g.rect.width, 0.6f * g.rect.height)
+    /** A screen area's middle, off-limits on the skin: all but 10% of it from each edge. */
+    private fun inner(r: PxRect) = PxRect(r.x + 0.1f * r.width, r.y + 0.1f * r.height, 0.8f * r.width, 0.8f * r.height)
+
+    /** [p]'s [i]th screen area ([SkinTweaks.screenAreas]). */
+    private fun area(p: SkinPlacement, i: Int = 0) = SkinTweaks.screenAreas(p)[i]
+
+    /** [p] with its frame strip (its buttons and labels) moved up by [up] window px. */
+    private fun stripUp(p: SkinPlacement, up: Float): SkinPlacement {
+        val ids = assertNotNull(p.spec.frame?.strip).labels.map { it.id }.toSet()
+        return p.copy(
+            controls = p.controls.map { if (it.spec.id in ids) it.copy(y = it.y - up) else it },
+            pieces = p.pieces.map { if (it.strip) it.copy(dst = it.dst.copy(y = it.dst.y - up)) else it },
+        )
+    }
+
+    /** The top of [p]'s frame strip's touch row, window px. */
+    private fun stripTop(p: SkinPlacement): Float {
+        val ids = assertNotNull(p.spec.frame?.strip).labels.map { it.id }.toSet()
+        return p.controls.filter { it.spec.id in ids }.minOf { it.y - it.spec.hh }
+    }
 
     private fun grip() = assertNotNull(SkinChoice.place(carbon, 2420, 1080, 420, tablet = false, ds = false, picture = 240f to 160f, variant = SkinVariant.GBA))
 
@@ -173,7 +192,7 @@ class SkinApplyTest {
         }
         // nor into the middle of the screen above it
         val up = box(SkinTweaks.apply(p, mapOf(strip.id to SkinTweak(dy = -2000f)), 1080f, 2520f), strip)
-        assertTrue(!hits(up, inner(p.glasses.first())), "$up in the screen's middle")
+        assertTrue(!hits(up, inner(area(p))), "$up in the screen's middle")
     }
 
     @Test
@@ -293,7 +312,7 @@ class SkinApplyTest {
         assertTrue(frames.isNotEmpty(), "large_ds draws a screen piece")
         val top = assertNotNull(p.glass(GlassScreen.TOP))
         val l = group(p, "L")
-        val mid = inner(top)
+        val mid = inner(area(p, p.glasses.indexOf(top)))
         val out = SkinTweaks.apply(p, mapOf(l.id to SkinTweak(dx = 2000f, dy = -10000f)), 1248f, 1972f)
         val after = box(out, l)
         assertTrue(after.x + after.width > mid.x + 1f, "$after under the middle $mid")
@@ -316,10 +335,10 @@ class SkinApplyTest {
     @Test
     fun no_go_is_each_screens_middle_and_the_hinge() {
         val ds = assertNotNull(SkinChoice.place(carbon, 1248, 1972, 420, tablet = false, ds = true))
-        assertEquals(ds.glasses.map { inner(it) }, SkinTweaks.noGo(ds))
+        assertEquals(ds.glasses.map { inner(it.rect) }, SkinTweaks.noGo(ds))
         val fold = assertNotNull(SkinChoice.place(carbon, 1080, 2520, 420, tablet = false, ds = false, picture = 240f to 160f, hingeY = 1200f, variant = SkinVariant.GBA))
         val z = SkinTweaks.noGo(fold)
-        assertEquals(fold.glasses.map { inner(it) }, z.dropLast(1))
+        assertEquals(fold.glasses.map { inner(it.rect) }, z.dropLast(1))
         assertTrue(z.last().y < 1200f && z.last().y + z.last().height > 1200f, "the hinge band ${z.last()}")
         assertEquals(emptyList(), SkinTweaks.noGo(fold, TweakRules.OVERLAY))
     }
@@ -355,13 +374,67 @@ class SkinApplyTest {
     }
 
     @Test
-    fun a_button_enters_a_screen_up_to_twenty_percent() {
+    fun a_button_enters_a_screen_up_to_ten_percent() {
         val p = grip()
-        val glass = p.glasses.first().rect
+        val r = area(p)
         val face = group(p, "A", "B", "X", "Y")
-        assertTrue(box(p, face).x > glass.x + glass.width, "starts right of the screen")
+        assertTrue(box(p, face).x > r.x + r.width, "starts right of the screen")
         val out = SkinTweaks.apply(p, mapOf(face.id to SkinTweak(dx = -10000f)), 2420f, 1080f)
-        assertTrue(abs(box(out, face).x - (glass.x + glass.width - 0.2f * glass.width)) <= 1f, "${box(out, face)} vs $glass")
+        assertTrue(abs(box(out, face).x - (r.x + r.width - 0.1f * r.width)) <= 1f, "${box(out, face)} vs $r")
+    }
+
+    @Test
+    fun a_button_on_a_screens_edge_takes_its_touch_before_the_game() {
+        // the face buttons moved onto the screen's edge: a touch on a button there presses it and never reaches the game
+        val p = grip()
+        val r = area(p)
+        val face = group(p, "A", "B", "X", "Y")
+        val out = SkinTweaks.apply(p, mapOf(face.id to SkinTweak(dx = -10000f)), 2420f, 1080f)
+        val onGlass = controls(out, face).filter { it.x > r.x && it.x < r.x + r.width && it.y > r.y && it.y < r.y + r.height }
+        assertTrue(onGlass.isNotEmpty(), "a face button over the screen")
+        val pressed = mutableListOf<com.nxredux.mobile.ui.nx.PadEvent>()
+        val touch = SkinPadTouch({ pressed += it }, { _, _ -> }, {})
+        touch.placement = out
+        val sent = mutableListOf<String>()
+        val pass = com.nxredux.mobile.ui.nx.SkinGlassPass { x, y, down -> sent += "$x,$y,$down" }
+        for ((n, c) in onGlass.withIndex()) {
+            pass.down(n.toLong(), c.x, c.y, onCap = touch.press(n.toLong(), c.x, c.y))
+            pass.up(n.toLong()); touch.release(n.toLong())
+        }
+        assertTrue(pressed.isNotEmpty(), "pressed")
+        assertEquals(emptyList(), sent, "none passed to the game")
+        // a touch on the screen off every button still reaches it
+        val mid = r.x + r.width / 2f to r.y + r.height / 2f
+        pass.down(9, mid.first, mid.second, onCap = touch.press(9, mid.first, mid.second))
+        assertEquals(listOf("${mid.first},${mid.second},true"), sent)
+    }
+
+    @Test
+    fun a_screen_area_is_its_glass_less_the_strip_row_over_it() {
+        // the Fold's cover, arcade: NX Carbon's strip sits under the glass, so the area is the glass whole
+        for ((w, h) in listOf(1248 to 1972, 1972 to 1248)) {
+            val p = assertNotNull(SkinChoice.place(carbon, w, h, 420, tablet = false, ds = false, picture = 320f to 224f, variant = SkinVariant.ARCADE))
+            assertEquals(p.glasses.map { it.rect }, SkinTweaks.screenAreas(p), "${w}x$h")
+            assertTrue(stripTop(p) >= p.glasses.first().rect.let { it.y + it.height }, "${w}x$h: the strip under the glass")
+        }
+        // a strip drawn over the glass's foot: the area stops at its top, and the 10% is of the area, not the glass
+        val p0 = assertNotNull(SkinChoice.place(carbon, 1248, 1972, 420, tablet = false, ds = false, picture = 320f to 224f, variant = SkinVariant.ARCADE))
+        val g = p0.glasses.first().rect
+        val p = stripUp(p0, stripTop(p0) - (g.y + g.height - 80f))
+        val r = area(p)
+        near(r.y + r.height, stripTop(p), "the area's foot at the strip's top", e = 1f)
+        assertEquals(PxRect(g.x, g.y, g.width, r.height), r)
+        assertTrue(r.height < g.height - 70f, "$r less the strip")
+        assertEquals(inner(r), SkinTweaks.noGo(p).first())
+        // a group sent into it from the side still stops at 10% of the area's width
+        val q0 = grip()
+        val qg = q0.glasses.first().rect
+        val q = stripUp(q0, stripTop(q0) - (qg.y + qg.height - 80f))
+        val qa = area(q)
+        val face = group(q, "A", "B", "X", "Y")
+        assertTrue(box(q, face).let { it.y + it.height < inner(qa).let { m -> m.y + m.height } }, "the face buttons level with the area's middle")
+        val moved = box(SkinTweaks.apply(q, mapOf(face.id to SkinTweak(dx = -10000f)), 2420f, 1080f), face)
+        near(moved.x, qa.x + qa.width - 0.1f * qa.width, "stopped 10% in", e = 1f)
     }
 
     @Test
@@ -380,7 +453,7 @@ class SkinApplyTest {
         // a layout that puts MENU in the screen's middle, and L's and L2's touch areas on each other (as the grip does)
         val p0 = grip()
         val menuG = group(p0, "MENU")
-        val mid = inner(p0.glasses.first())
+        val mid = inner(area(p0))
         val b0 = box(p0, menuG)
         val sx = mid.x + mid.width / 2f - (b0.x + b0.width / 2f); val sy = mid.y + mid.height / 2f - (b0.y + b0.height / 2f)
         val p = p0.copy(
@@ -395,8 +468,10 @@ class SkinApplyTest {
         assertEquals(controls(p, menuG), controls(others, menuG))
         assertEquals(controls(p, l) + controls(p, l2), controls(others, l) + controls(others, l2))
         // each moves away in full
-        val away = SkinTweaks.apply(p, mapOf(menuG.id to SkinTweak(dx = 600f), l.id to SkinTweak(dy = -60f)), 2420f, 1080f)
-        for ((a, b) in controls(p, menuG).zip(controls(away, menuG))) near(b.x, a.x + 600f * p.k, "MENU x")
+        // just past the middle's right edge
+        val out = (mid.x + mid.width - box(p, menuG).x + 4f) / p.k
+        val away = SkinTweaks.apply(p, mapOf(menuG.id to SkinTweak(dx = out), l.id to SkinTweak(dy = -60f)), 2420f, 1080f)
+        for ((a, b) in controls(p, menuG).zip(controls(away, menuG))) near(b.x, a.x + out * p.k, "MENU x")
         assertEquals(0f, overlap(box(away, menuG), mid), "MENU left the middle")
         for ((a, b) in controls(p, l).zip(controls(away, l))) near(b.y, a.y - 60f * p.k, "L y")
         // and L goes no further onto L2
@@ -499,7 +574,7 @@ class SkinApplyTest {
         val dy = union(zones(p, ss)).y - 4f - (box(p, g).y + box(p, g).height)
         val now = mapOf(g.id to SkinTweak(dy = dy / p.k))
         val out = SkinTweaks.apply(p, mapOf(g.id to SkinTweak(dy = -10000f)), 1080f, 2520f, from = now)
-        near(box(out, g).y, inner(p.glasses.first()).let { it.y + it.height }, "stopped at the screen's middle", e = 0.5f)
+        near(box(out, g).y, inner(area(p)).let { it.y + it.height }, "stopped at the screen's middle", e = 0.5f)
     }
 
     @Test
@@ -514,6 +589,20 @@ class SkinApplyTest {
         // nor does a kept group: only its end spot is held against the kept groups alone
         val kept = SkinTweaks.apply(p, mapOf(g.id to SkinTweak(dy = -1e7f)), 1080f, 2520f, TweakRules.OVERLAY, keep = setOf(g.id))
         assertTrue(union(zones(kept, g)).y >= union(zones(p, ss)).let { it.y + it.height } - 0.5f, "kept: ${union(zones(kept, g))} passed SELECT START")
+    }
+
+    @Test
+    fun a_kept_groups_end_spot_never_lands_on_an_untweaked_group() {
+        // MENU kept and sent straight onto SELECT START, which has no tweak and so never gives way: it stops short
+        val p = menu()
+        val g = group(p, "MENU")
+        val ss = group(p, "SELECT", "START")
+        val a = union(zones(p, g)); val b = union(zones(p, ss))
+        val dx = b.x + b.width / 2f - (a.x + a.width / 2f); val dy = b.y + b.height / 2f - (a.y + a.height / 2f)
+        val out = SkinTweaks.apply(p, mapOf(g.id to SkinTweak(dx = dx / p.k, dy = dy / p.k)), 1080f, 2520f, TweakRules.OVERLAY, keep = setOf(g.id))
+        assertEquals(controls(p, ss), controls(out, ss), "SELECT START stays at home")
+        assertTrue(touching(out, g, b = ss) < 0.5f, "touch areas on each other: ${touching(out, g, b = ss)}")
+        assertTrue(box(out, g) != box(p, g), "MENU moved some")
     }
 
     @Test

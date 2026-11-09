@@ -33,6 +33,13 @@ class SkinEditorState(
     /** Where no group may go ([SkinTweaks.noGo]), window px. */
     val noGo: List<PxRect> = SkinTweaks.noGo(placement, rules)
 
+    /**
+     * What the editor marks in red, window px: each screen whole ([SkinTweaks.screenAreas]; a group may still cover its
+     * edges, but the player reads the mark as the screen) and a half-fold's hinge band. None for the overlay.
+     */
+    val screenAreas: List<PxRect> =
+        if (rules == TweakRules.SKIN) SkinTweaks.screenAreas(placement) + listOfNotNull(SkinTweaks.hinge(placement)) else emptyList()
+
     private val home = SkinTweaks.boxes(placement)
 
     /** The overlay groups with a tweak of their own (always empty for the skin). Set before [tweaks]: placing them keeps these. */

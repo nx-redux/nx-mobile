@@ -63,6 +63,7 @@ import com.nxredux.mobile.ui.nx.ModalKind
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxModal
 import com.nxredux.mobile.ui.nx.SkinArt
+import com.nxredux.mobile.ui.nx.SKIN_LABEL_CAP
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -156,8 +157,8 @@ fun SkinLayoutEditor(
                 },
         ) {
             val stroke = 2.dp.toPx()
-            for (z in state.noGo) {
-                drawRect(colors.editorOverlap.copy(alpha = 0.18f), Offset(z.x, z.y), Size(z.width, z.height))   // role: where no group may go, faint
+            for (z in state.screenAreas) {
+                drawRect(colors.editorOverlap.copy(alpha = 0.18f), Offset(z.x, z.y), Size(z.width, z.height))   // role: the screens a group may only edge onto, faint
                 drawRect(colors.editorOverlap, Offset(z.x, z.y), Size(z.width, z.height), style = Stroke(width = stroke))
             }
             state.selected?.let(state::boxOf)?.let { r ->
@@ -276,8 +277,10 @@ private fun StripPlaceholders(placed: SkinPlacement, modifier: Modifier = Modifi
             // as large as fits the slot: about 0.6 of the size per letter across, 0.9 of the height up
             val px = minOf(hh * 0.9f, hw * 2f * 0.85f / (text.length * 0.6f))
             val m = measurer.measure(text, TextStyle(color = ink.copy(alpha = 0.7f),   // role: its word
-                 fontSize = (px / density).sp))
-            drawText(m, topLeft = Offset(c.x - m.size.width / 2f, c.y + c.spec.labelDy - m.size.height / 2f))   // where the slot's words go
+                 fontSize = px.toSp()))
+            // its capitals' middle on the pill's (the slot's middle, not its word line): the line box keeps room above
+            // and below the capitals, so its own middle is off
+            drawText(m, topLeft = Offset(c.x - m.size.width / 2f, c.y + px * SKIN_LABEL_CAP / 2f - m.firstBaseline))
         }
     }
 }

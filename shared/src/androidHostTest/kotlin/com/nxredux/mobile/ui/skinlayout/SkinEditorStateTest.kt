@@ -237,8 +237,8 @@ class SkinEditorStateTest {
         near(box(s.placed(), "MENU").y, box(p, "MENU").y + dy, "above SELECT START", e = 0.5f)
         // pushed on up, it stops at the screen's middle from there: not back under SELECT START
         s.drag(Offset(0f, -10000f))
-        val g = p.glasses.first().rect
-        near(box(s.placed(), "MENU").y, g.y + 0.8f * g.height, "at the screen's middle", e = 0.5f)
+        val g = SkinTweaks.screenAreas(p).first()
+        near(box(s.placed(), "MENU").y, g.y + 0.9f * g.height, "at the screen's middle", e = 0.5f)
     }
 
     @Test
@@ -315,6 +315,17 @@ class SkinEditorStateTest {
         val again = SkinLayoutEdit.state(settings, "gba", p, 1080, 2520, overlay = true, minTouchPx = 0f)
         assertEquals(setOf("DPAD"), again.owned)
         assertFalse(again.dirty)
+    }
+
+    @Test
+    fun the_red_area_is_each_screen_whole() {
+        // what the editor marks is the screen as seen (its area), not the smaller middle that is off-limits
+        val p = grip()
+        val s = SkinEditorState(p, emptyMap(), 2420f, 1080f)
+        assertEquals(SkinTweaks.screenAreas(p), s.screenAreas)
+        val a = s.screenAreas.first(); val z = s.noGo.first()
+        assertTrue(a.x < z.x && a.y < z.y && a.x + a.width > z.x + z.width && a.y + a.height > z.y + z.height, "$a round $z")
+        assertTrue(overlayState(p, emptyMap(), emptyMap(), 2420f, 1080f).screenAreas.isEmpty())
     }
 
     @Test
