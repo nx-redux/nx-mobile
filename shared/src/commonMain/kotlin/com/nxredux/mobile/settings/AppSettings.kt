@@ -358,6 +358,11 @@ interface AppSettings {
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
+    /** Settings → System → Keyboard: Android's keyboard instead of NX's (default off). Defaulted, like [debugLog]. */
+    var androidKeyboard: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
     /** Kids Mode (default off) and its state; all defaulted, like [debugLog]. */
     var kidsEnabled: Boolean
         get() = false

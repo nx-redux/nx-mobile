@@ -247,6 +247,11 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "the app or a game starts, so you can attach it to a bug report. Off, only errors reach Android's system " +
             "log and no file is written. It takes effect at once.",
     )
+    SettingsKind.KEYBOARD -> quiet(
+        "NX: type with the pad or touch. Android: your phone's keyboard",
+        "NX: a keyboard you can use with the pad or touch. Android: your phone's keyboard (password managers, swipe " +
+            "typing). A field on the top screen always uses NX.",
+    )
     SettingsKind.LICENSES_LINK -> quiet(row.secondary.orEmpty())   // the URL behind the icon; A opens it
     // Settings -> Kids Mode.
     SettingsKind.KIDS_ENABLE -> quiet(
