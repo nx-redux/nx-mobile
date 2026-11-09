@@ -4,7 +4,8 @@ import com.nxredux.mobile.ui.nx.NxButton
 
 /** One field of a prompt: its [label], its text and whether it is a [password] (drawn as dots, never printed). */
 data class EntryField(val label: String, val value: String, val password: Boolean = false) {
-    override fun toString(): String = "EntryField(label=$label, value=${if (password) "***" else value}, password=$password)"
+    // Never the value: a password or an art-site key would reach a log or a test failure.
+    override fun toString(): String = "EntryField(label=$label, value=***, password=$password)"
 }
 
 /** Where the pad's highlight is: on a key, in the active field (moving its cursor), or on the box's buttons (0 confirm, 1 Cancel). */
@@ -16,7 +17,9 @@ sealed interface EntryFocus {
 
 /** What a press asks of the prompt's host: an [Edit] of a field's text, [Confirm], [Cancel], the clipboard ([Paste]), or nothing. */
 sealed interface EntryOutcome {
-    data class Edit(val field: Int, val text: String) : EntryOutcome
+    data class Edit(val field: Int, val text: String) : EntryOutcome {
+        override fun toString(): String = "Edit(field=$field, text=***)"
+    }
     data object Confirm : EntryOutcome
     data object Cancel : EntryOutcome
     data object Paste : EntryOutcome
@@ -79,8 +82,12 @@ private fun TextEntry.next(): EntryStep = if (!twoFields) none() else EntryStep(
 
 private fun TextEntry.cursorBy(d: Int) = copy(cursor = (cursor + d).coerceIn(0, text.length))
 
-/** A pad press: the keyboard's mapping (spec), the d-pad moving the highlight on keys, the field or the box's buttons. */
-fun TextEntry.press(button: NxButton): EntryStep {
+/**
+ * A pad press: the keyboard's mapping (spec), the d-pad moving the highlight on keys, the field or the box's buttons. A
+ * held direction's [repeat] moves within where the highlight is, never across into the field or onto the buttons: an
+ * overshoot there would leave A confirming half-typed text.
+ */
+fun TextEntry.press(button: NxButton, repeat: Boolean = false): EntryStep {
     when (button) {
         NxButton.MENU -> return EntryStep(this, EntryOutcome.Cancel)
         NxButton.B -> return backspace()
@@ -97,18 +104,22 @@ fun TextEntry.press(button: NxButton): EntryStep {
             NxButton.A -> tapKey(NxKeys.rows(page, twoFields)[f.at.row][f.at.col])
             NxButton.UP, NxButton.DOWN, NxButton.LEFT, NxButton.RIGHT -> {
                 val to = NxKeys.move(page, twoFields, f.at, button)
-                EntryStep(if (to == null) copy(focus = EntryFocus.Field, keyAt = f.at) else copy(focus = EntryFocus.Keys(to), keyAt = to), EntryOutcome.None)
+                when {
+                    to != null -> EntryStep(copy(focus = EntryFocus.Keys(to), keyAt = to), EntryOutcome.None)
+                    repeat -> none()
+                    else -> EntryStep(copy(focus = EntryFocus.Field, keyAt = f.at), EntryOutcome.None)
+                }
             }
             else -> none()
         }
-        EntryFocus.Field -> when (button) {
+        EntryFocus.Field -> if (repeat && (button == NxButton.UP || button == NxButton.DOWN)) none() else when (button) {
             NxButton.LEFT -> EntryStep(cursorBy(-1), EntryOutcome.None)
             NxButton.RIGHT -> EntryStep(cursorBy(1), EntryOutcome.None)
             NxButton.DOWN -> EntryStep(copy(focus = EntryFocus.Keys(keyAt)), EntryOutcome.None)
             NxButton.UP -> EntryStep(if (active > 0) toField(active - 1) else copy(focus = EntryFocus.Button(0)), EntryOutcome.None)
             else -> none()
         }
-        is EntryFocus.Button -> when (button) {
+        is EntryFocus.Button -> if (repeat && button.isDirection) none() else when (button) {
             NxButton.LEFT, NxButton.RIGHT -> EntryStep(copy(focus = EntryFocus.Button(1 - f.index)), EntryOutcome.None)
             NxButton.DOWN -> EntryStep(toField(0, EntryFocus.Field), EntryOutcome.None)
             NxButton.A -> EntryStep(this, if (f.index == 0) EntryOutcome.Confirm else EntryOutcome.Cancel)

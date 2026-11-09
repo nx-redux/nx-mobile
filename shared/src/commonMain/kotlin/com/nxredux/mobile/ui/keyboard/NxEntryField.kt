@@ -85,7 +85,8 @@ fun NxEntryField(value: String, password: Boolean, cursor: Int?, focused: Boolea
             Text(
                 shown, color = colors.listText, fontFamily = LocalNxFont.current, fontSize = nxModalText(), maxLines = 1, softWrap = false,
                 onTextLayout = { layout = it },
-                modifier = Modifier.drawWithContent {
+                // Room past the last character, so a caret at the end can scroll inside the field's edge, not onto it.
+                modifier = Modifier.padding(end = 8.dp).drawWithContent {
                     drawContent()
                     val l = layout
                     if (cursor != null && l != null) {

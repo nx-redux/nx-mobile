@@ -131,4 +131,19 @@ class TextEntryTest {
 
     @Test fun dpadMovesHighlightOnKeys() =
         assertEquals(EntryFocus.Keys(KeyPos(NxKeys.HOME.row, NxKeys.HOME.col + 1)), one("").press(NxButton.RIGHT).entry.focus)
+
+    @Test fun heldDirectionNeverLeavesTheKeyboard() {
+        val top = one("ab").copy(focus = EntryFocus.Keys(KeyPos(0, 3)))
+        assertEquals(EntryFocus.Keys(KeyPos(0, 3)), top.press(NxButton.UP, repeat = true).entry.focus)
+        val field = signIn.copy(focus = EntryFocus.Field)
+        assertEquals(EntryFocus.Field, field.press(NxButton.UP, repeat = true).entry.focus)
+        assertEquals(EntryFocus.Keys(KeyPos(1, 3)), one("").copy(focus = EntryFocus.Keys(KeyPos(2, 3))).press(NxButton.UP, repeat = true).entry.focus)
+    }
+
+    @Test fun editAndKeyNeverPrinted() {
+        assertFalse(EntryOutcome.Edit(1, "hunter2").toString().contains("hunter2"))
+        val key = TextEntry(listOf(EntryField("Key", "sgdb-secret-key")))
+        assertFalse(key.toString().contains("sgdb-secret-key"))
+        assertFalse(key.press(NxButton.A).toString().contains("sgdb-secret-key"))
+    }
 }

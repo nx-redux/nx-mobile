@@ -5778,7 +5778,7 @@ class AppState(
         if (updatePopupShows()) { onUpdateDialogButton(button, ::answerUpdate); return }   // the update dialog: A Update, B Not now
         // An open prompt with the NX keyboard: the keyboard has every press first; the prompt hears only its confirm (A) or
         // cancel (B), so its own handling below runs as it always has.
-        if (!answering && keyboard.entry.value != null) button = keyboard.press(button) ?: return
+        if (!answering && keyboard.entry.value != null) button = keyboard.press(button, repeat) ?: return
         // Setup's two buttons side by side ([setupButtons]), the selection on one: LEFT takes the first, RIGHT the second.
         if (button == NxButton.LEFT || button == NxButton.RIGHT) setupButtonPair()?.takeIf { _selection.value.index >= it }?.let { first ->
             _selection.value = _selection.value.copy(index = if (button == NxButton.LEFT) first else first + 1)

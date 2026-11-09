@@ -33,10 +33,10 @@ internal class TextEntryController(private val spec: () -> PromptSpec?, private 
     }
 
     /** A pad press: null when the keyboard used it, else the button the prompt hears (A to confirm, B to cancel). */
-    fun press(button: NxButton): NxButton? {
+    fun press(button: NxButton, repeat: Boolean = false): NxButton? {
         sync()
         val e = _entry.value ?: return button
-        return apply(e.press(button))
+        return apply(e.press(button, repeat))
     }
 
     /** A tap on [key]; the button the prompt hears, as [press]. */
