@@ -355,9 +355,10 @@ gpsp_LICENSE = COPYING
 gpsp_KIND = ndkbuild
 gpsp_BUILD_PATH = .
 gpsp_ARTIFACT = libs/$(ABI)/libretro.so
-# Link (netplay stage 2c): patches/gpsp/ holds nx-redux's 001 (RFU disconnect), 002 (RFU queue) and 004 (real link
-# cable, gpsp_serial "lockstep"/"auto_cable"); its 003 (JIT cache) is left out, patches/gpsp.patch covers it. 004 compiles
-# in cores/sio_lockstep through NX_SIOLS_DIR (its Makefile.common default is nx-redux's layout).
+# Link (netplay stage 2c): patches/gpsp/ holds nx-redux's 001 (RFU disconnect), 002 (RFU queue), 004 (real link
+# cable, gpsp_serial "lockstep"/"auto_cable") and 007 (rfu_net_receive bounds-checks a peer's broadcast and client
+# packets); its 003 (JIT cache) is left out, patches/gpsp.patch covers it. 004 compiles in cores/sio_lockstep through
+# NX_SIOLS_DIR (its Makefile.common default is nx-redux's layout).
 gpsp_FLAGS = NX_SIOLS_DIR=$(CURDIR)/sio_lockstep
 gpsp_LICENSE_EXTRA = sio_lockstep/NOTICE.txt
 
