@@ -19,14 +19,10 @@ import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.control
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-
-/** The details pane's achievements download only after the highlight has stayed on a game this long. */
-private const val DETAIL_RA_REST_MS = 500L
 
 /** What the RetroAchievements screens need from [AppState]: its notice, the Tools page, the menus' game info, the chooser. */
 internal interface RaScreenHost {
@@ -44,8 +40,7 @@ internal interface RaScreenHost {
 }
 
 /**
- * RetroAchievements in the launcher: the achievements panel over a game list and the second display's details pane
- * ([raPanel], [gameDetailRa]), and the Tools pages (the main page, the game data download, the games browser, a game's
+ * RetroAchievements in the launcher: the achievements panel over a game list ([raPanel]), and the Tools pages (the main page, the game data download, the games browser, a game's
  * achievements, one achievement, and the settings page). [achievements] null: a platform without it.
  */
 internal class RaScreenController(
@@ -71,14 +66,6 @@ internal class RaScreenController(
     /** The achievements panel over a game list; null while closed. */
     val raPanel: StateFlow<RaPanel?> = _raPanel.asStateFlow()
     private var raPanelJob: Job? = null
-    private val _gameDetailRa = MutableStateFlow<RaPanel?>(null)
-    /**
-     * While [dualMenu] on a game list and signed in: the highlighted game's achievements, for the details pane on the second
-     * display (the panel's contents, without its row or detail state); else null. A game with no cached data downloads only
-     * once the highlight has rested on it for [DETAIL_RA_REST_MS], so scrolling past games requests nothing.
-     */
-    val gameDetailRa: StateFlow<RaPanel?> = _gameDetailRa.asStateFlow()
-    private var raDetailJob: Job? = null
 
     // --- The achievements panel over a game list ---
 
@@ -90,7 +77,7 @@ internal class RaScreenController(
 
     /**
      * X (or the trophy icon) on a game list: the panel on its highlighted game. Not over its menu, search or Layout
-     * dropdown, nor while [dualMenu] (the second display's details pane shows the game's achievements).
+     * dropdown, nor while [dualMenu] (the top screen shows the game's details).
      */
     fun openRaPanel() {
         val s = screen.value as? Screen.Games ?: return
@@ -110,59 +97,37 @@ internal class RaScreenController(
      * read again. Signed out or no game: a message instead. A game with no cached data downloads in the background
      * ([RaController.fetchGame], not cancelled by the panel moving on); the panel shows it once it is cached.
      */
-    fun followRaPanel(force: Boolean = false) = followRa(false, force)
-
-    /** [followRaPanel] for the details pane ([gameDetailRa]): off unless [dualMenu] on a game list, signed in, with a highlighted game. */
-    fun followRaDetails(force: Boolean = false) = followRa(true, force)
-
-    /** One feed for both: the panel's ([details] false) or the details pane's. The pane waits [DETAIL_RA_REST_MS] before starting a download. */
-    private fun followRa(details: Boolean, force: Boolean, rested: Boolean = false) {
-        val target = if (details) _gameDetailRa else _raPanel
+    fun followRaPanel(force: Boolean = false) {
         val s = screen.value as? Screen.Games
         val entry = s?.entries?.getOrNull(selection.value.index)
-        if (details && (!dualMenu.value || entry == null || achievements == null || settings.raUsername.isBlank())) {
-            raDetailJob?.cancel(); raDetailJob = null
-            target.value = null
-            return
-        }
-        val p = target.value ?: (if (details) RaPanel(null, "", RaPanelContent.Loading) else return)
+        val p = _raPanel.value ?: return
         if (s == null) return
         val c = achievements ?: return
         val path = entry?.game?.path
         if (!force && p.path == path) return
-        if (details && !rested && path != null) {
-            if (force && raDetailJob?.isActive == true && p.path == path && path !in raFetches) return   // still resting on it: keep the window
-            if (!force && raFetches[path] is RaGameFetch.Failed) raFetches.remove(path)   // the highlight came back: a failed download is tried once more
-        }
-        (if (details) raDetailJob else raPanelJob)?.cancel()
+        raPanelJob?.cancel()
         val title = entry?.shown.orEmpty()
         val keep = { content: RaPanelContent -> RaPanel(path, title, content) }
-        if (entry == null) { target.value = keep(RaPanelContent.NoData); return }
-        if (settings.raUsername.isBlank()) { target.value = keep(RaPanelContent.SignedOut); return }
+        if (entry == null) { _raPanel.value = keep(RaPanelContent.NoData); return }
+        if (settings.raUsername.isBlank()) { _raPanel.value = keep(RaPanelContent.SignedOut); return }
         val hash = raHashes[path] ?: (raFetches[path] as? RaGameFetch.Cached)?.hash ?: run {
-            if (details && !rested && entry.game.path !in raFetches) {
-                // Not asked for yet: the highlight must rest on this game before it is downloaded.
-                target.value = keep(RaPanelContent.Loading)
-                raDetailJob = scope.launch { delay(DETAIL_RA_REST_MS); followRa(true, force = true, rested = true) }
-                return
-            }
-            val content = raFetchContent(c, entry.game.path) ?: return followRa(details, force = true, rested = true)   // cached at once: read it
-            target.value = keep(content)
+            val content = raFetchContent(c, entry.game.path) ?: return followRaPanel(force = true)   // cached at once: read it
+            _raPanel.value = keep(content)
             return
         }
         // A re-read of the game shown keeps its rows (no Loading flash); a new game starts on its first achievement.
         val same = p.path == path && p.content is RaPanelContent.Game
-        if (!same) target.value = keep(RaPanelContent.Loading)
+        if (!same) _raPanel.value = keep(RaPanelContent.Loading)
         val job = scope.launch {
             val list = tryOr({ emptyList() }) { c.achievements(hash).sortedBy(settings.raSortOrder) }
             val badges = tryOr({ emptyMap() }) { c.badgeListing(hash) }
-            val now = target.value ?: return@launch
+            val now = _raPanel.value ?: return@launch
             if (now.path != path) return@launch   // the selection moved on meanwhile
             val content = RaPanelContent.Game(hash, list, badges)
-            target.value = if (same) now.copy(content = content).let { it.copy(row = it.row.coerceAtMost((it.visible.size - 1).coerceAtLeast(0))) }
+            _raPanel.value = if (same) now.copy(content = content).let { it.copy(row = it.row.coerceAtMost((it.visible.size - 1).coerceAtLeast(0))) }
                 else now.copy(content = content, row = 0, detail = false)
         }
-        if (details) raDetailJob = job else raPanelJob = job
+        raPanelJob = job
     }
 
     /**
@@ -178,7 +143,6 @@ internal class RaScreenController(
                 raFetches[path] = o
                 if (o is RaGameFetch.Cached) { raHashes = raHashes + (path to o.hash); host.refreshGameInfo() }   // its progress in the menus too
                 if (started && _raPanel.value?.path == path) followRaPanel(force = true)
-                if (started && _gameDetailRa.value?.path == path) followRaDetails(force = true)
             }
             started = true
         }

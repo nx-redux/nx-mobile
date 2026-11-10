@@ -105,8 +105,6 @@ data class NxColors(
     val scrimBackdrop: Color = Color(0xBF000000)
     /** A notice's backing: App's notice line and NxNotifications' toasts. */
     val scrimNotice: Color = Color(0xCC000000)
-    /** Over the menu kept still under a tool that has the focus on the top screen (App's PageContent). */
-    val scrimUnder: Color = Color(0x66000000)
     /** The in-game menu's wash over the paused frame behind its pages (InGameMenu): the game shows only faintly. */
     val scrimMenuWash: Color = Color(0xF5000000)
     /** The in-game menu's adjust strip over the paused frame (InGameMenu's AdjustContent). */

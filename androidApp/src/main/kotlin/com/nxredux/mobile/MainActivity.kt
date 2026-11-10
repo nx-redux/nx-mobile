@@ -592,11 +592,9 @@ class MainActivity : ComponentActivity(), FolderPicker {
             menuOnSecond.value = onSecond
             shown.showPanel(if (onSecond) ({ CompositionLocalProvider(LocalSkinPacks provides ::menuSkinPack) { App(state, ::pad) } }) else ({ MenuTopScreen(state) }))
         }
-        // The focused screen: the top screen's list on a game list, the menu everywhere else.
-        val screen = state.screen.value
-        val hostsFocus = if (onSecond) screen !is Screen.Games else screen is Screen.Games
+        // The menu has the focus on every screen, so a prompt is on the second display only when the menu is there.
         // A prompt drawn there: Android's keyboard won't open on that display, so NX's types it, from this window.
-        val promptThere = hostsFocus && state.textEntryOpen
+        val promptThere = onSecond && state.textEntryOpen
         if (promptThere != promptOnSecond) { promptOnSecond = promptThere; state.refreshKeyboard() }
         val focusable = promptThere && !state.nxKeyboard   // the NX keyboard needs no key focus there
         val handBack = shown.focusable && !focusable

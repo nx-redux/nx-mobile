@@ -587,8 +587,7 @@ class AppStateKidsTest {
     }
 
     @Test fun lockedSecondScreenShowsTheBackdrop() {
-        assertEquals(TopContent.Backdrop, DualMenu.top(Screen.KidsHome, null, tool = true))
-        assertEquals(BottomContent.Normal, DualMenu.bottom(Screen.KidsHome, active = true, tool = true))
+        assertEquals(TopContent.Backdrop, DualMenu.top(Screen.KidsHome, 0))
     }
 
     // --- The kid-facing screens: the tiles, the PIN pad and the unlock sheet ---
@@ -692,7 +691,6 @@ class AppStateKidsTest {
         st.select(0); st.openSelected()
         assertIs<KidsMode.Locked>(kids.mode.value)
         assertSame(Screen.KidsHome, st.screen.value)
-        assertFalse(st.toolOnTop.value)
     }
 
     @Test fun noLockRowWhenKidsModeIsOff() = runTest {

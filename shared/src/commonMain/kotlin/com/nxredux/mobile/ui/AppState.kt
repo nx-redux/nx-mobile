@@ -1026,7 +1026,6 @@ class AppState(
             override fun openSelected() = this@AppState.openSelected()
             override fun openContextMenu() = this@AppState.openContextMenu()
             override fun drawerRows(apps: List<InstalledApp>): List<ToolAppRow> = this@AppState.drawerRows(apps)
-            override fun toolOnTop() { _toolOnTop.value = true }
             override suspend fun rebuildMainRows() = this@AppState.rebuildMainRows()
             override fun swapMainRows() = this@AppState.swapMainRows()
             override suspend fun moveToolPinsToAndroid(ids: List<String>) = this@AppState.moveToolPinsToAndroid(ids)
@@ -1040,7 +1039,7 @@ class AppState(
         host = object : KidsHost {
             override fun showNotice(text: String) = this@AppState.showNotice(text)
             override fun showSystemsNow(category: MenuCategory?) = this@AppState.showSystemsNow(category)
-            override fun clearMenuTop() { _toolOnTop.value = false; pushedTab = null }
+            override fun clearMenuTop() { pushedTab = null }
             override fun select(index: Int) = this@AppState.select(index)
             override fun back(): Boolean = this@AppState.back()
             override fun openSettings(section: SettingsSection) = settingsUi.openSettings(section)
@@ -1076,21 +1075,6 @@ class AppState(
     /** The menu skin shows its two screens ([onSkinDualMenu]); the pad's visibility depends on it ([menuPadShown]). */
     val skinDualMenu: StateFlow<Boolean> = _skinDualMenu.asStateFlow()
 
-    private val _secondList = MutableStateFlow<SecondList?>(null)
-    /** While [dualMenu]: the highlighted console's or collection's games (the list A would open), for the second display; else null. */
-    val secondList: StateFlow<SecondList?> = _secondList.asStateFlow()
-    private var secondListJob: Job? = null
-
-
-    private val _toolOnTop = MutableStateFlow(false)
-    /**
-     * A tool opened from the main menu ([openTool]: Tools or a Home pin) has the focus, through all its pages, until the
-     * menu shows again ([showMenu]). While [dualMenu] it is drawn on the top screen, the menu staying below ([toolUnder]).
-     */
-    val toolOnTop: StateFlow<Boolean> = _toolOnTop.asStateFlow()
-    private var toolUnderRow: MainRow? = null   // the menu row the tool was opened from, kept highlighted below it
-    private var toolUnderIndex = 0
-
     private val _appOnTop = MutableStateFlow(false)
     /** An app the player opened holds the top screen: the main menu shows the button that takes it back ([takeTopScreen]). */
     val appOnTop: StateFlow<Boolean> = _appOnTop.asStateFlow()
@@ -1117,66 +1101,7 @@ class AppState(
         val active = _displayDualMenu.value || _skinDualMenu.value
         if (_dualMenu.value == active) return
         _dualMenu.value = active
-        if (active) ra.closeRaPanel()   // the panel is a single-screen overlay: dual mode shows the details pane instead
-        followSecondList()
-        ra.followRaDetails()
-    }
-
-    /** What the shown [secondList] was built from: the source, the library snapshot, and for a collection its row (name and count). */
-    private data class SecondKey(val source: ListSource, val library: List<SystemFolder>, val row: MainRow?)
-    private var secondKey: SecondKey? = null
-    /** How many times the preview was built (test hook): a same-source, same-content republish must not add one. */
-    internal var secondListBuilds = 0
-        private set
-
-    /**
-     * Recomputes [secondList] from the screen and the highlighted row: a console's list at once (no I/O), a collection's
-     * after its file is read. A newer call cancels an older read. The same source over the same library snapshot (and,
-     * for a collection, the same row) keeps the shown list untouched: a rescan or a collection edit changes one of those.
-     */
-    private fun followSecondList() {
-        val source = highlightedSecondSource()
-        val row = if (source is ListSource.Collection) (_screen.value as? Screen.Systems)?.rows?.getOrNull(_selection.value.index) else null
-        val key = source?.let { SecondKey(it, systemsCache, row) }
-        if (key != null && _secondList.value?.source == source) {
-            val k = secondKey
-            if (k != null && k.source == key.source && k.library === key.library && k.row == key.row) return
-        }
-        secondListJob?.cancel()
-        secondKey = null
-        if (source == null) { _secondList.value = null; return }
-        if (source is ListSource.Console) {
-            secondListBuilds++
-            _secondList.value = SecondList(source, consoleEntries(source.systems), 0)
-            secondKey = key
-            return
-        }
-        if (_secondList.value?.source != source) _secondList.value = null
-        secondListJob = scope.launch {
-            val entries = entriesFor(source)
-            ensureActive()
-            if (highlightedSecondSource() == source) { secondListBuilds++; _secondList.value = SecondList(source, entries, 0); secondKey = key }
-        }
-    }
-
-    /**
-     * While a tool is on the second display ([toolOnTop]): the main menu it was opened from, on the row it was opened
-     * from (found again when the rows moved), drawn on the bottom screen as it stays; null otherwise. A game list
-     * reached from a tool takes both screens as any game list does.
-     */
-    fun toolUnder(): Pair<Screen.Systems, ListSelection>? {
-        val s = _screen.value
-        if (!_dualMenu.value || !_toolOnTop.value || s is Screen.Systems || s is Screen.Games) return null
-        val menu = menuScreen()
-        val at = toolUnderRow?.let { menu.rows.indexOf(it) }?.takeIf { it >= 0 } ?: toolUnderIndex
-        return menu to ListSelection(at, menu.rows.size).clampedTo(menu.rows.size)
-    }
-
-    /** The highlighted menu row is the one a tool opens from: kept for [toolUnder]. */
-    private fun noteToolOrigin() {
-        val s = _screen.value as? Screen.Systems ?: return
-        toolUnderIndex = _selection.value.index
-        toolUnderRow = s.rows.getOrNull(toolUnderIndex)
+        if (active) ra.closeRaPanel()   // the panel is a single-screen overlay: dual mode shows the details on the top screen instead
     }
 
     /** The drawer's apps: every installed app but the Android games console's, marked when it is in Tools. */
@@ -1184,43 +1109,6 @@ class AppState(
         val console = deps.settings.androidConsoleApps.toSet()
         val inTools = deps.settings.toolApps.toSet()
         return apps.filter { it.id !in console }.map { ToolAppRow(it.id, it.label, it.id in inTools) }
-    }
-
-    /** The list the highlighted row previews while [dualMenu] on Consoles / Collections; null for any other row, tab or screen. */
-    private fun highlightedSecondSource(): ListSource? {
-        val s = _screen.value as? Screen.Systems ?: return null
-        if (!_dualMenu.value || (s.category != MenuCategory.CONSOLES && s.category != MenuCategory.COLLECTIONS)) return null
-        return when (val row = s.rows.getOrNull(_selection.value.index)) {
-            is MainRow.System -> ListSource.Console(consoleGroup(row.system) ?: listOf(row.system))
-            is MainRow.Collection -> ListSource.Collection(row.name)
-            else -> null
-        }
-    }
-
-    /** A tap on game [index] of the second display's preview: opens that list as A would (B returns to the same row) on it. */
-    fun openSecondListGame(index: Int) {
-        val list = _secondList.value ?: return
-        val s = _screen.value as? Screen.Systems ?: return
-        if (loader.active || launches.minimalPending || highlightedSecondSource() != list.source) return   // a stale preview: ignore the tap
-        when (val row = s.rows.getOrNull(_selection.value.index)) {
-            is MainRow.System -> { intendNav(NavMotion.FORWARD); openSystem(row.system, select = list.entries.getOrNull(index)?.game?.path) }
-            else -> { intendNav(NavMotion.FORWARD); rememberSelection(); showList(list.source, list.entries, index) }
-        }
-    }
-
-    /**
-     * A tap on main menu row [index]: selects it. A console or collection already opens on one tap in every style but
-     * Minimal (the UI's [com.nxredux.mobile.ui.nx.nxTap] calls [openSelected] after this), and Minimal's names take two;
-     * so on the second display's Consoles and Collections a Minimal console or collection opens here at once, highlighted
-     * or not (as A, so focus moves to the preview list). Opening here in any other style would open twice (the list,
-     * then its first game).
-     */
-    fun tapMainRow(index: Int) {
-        val s = _screen.value as? Screen.Systems
-        val opens = _dualMenu.value && s != null && (s.category == MenuCategory.CONSOLES || s.category == MenuCategory.COLLECTIONS) &&
-            styleOf(s) == MenuStyle.MINIMAL && s.rows.getOrNull(index).let { it is MainRow.System || it is MainRow.Collection }
-        select(index)
-        if (opens) openSelected()
     }
 
     /** The screen's footer mode as App last reported it ([onFooterMode]); HINTS until then, as [LocalFooterMode]'s default. */
@@ -1249,7 +1137,7 @@ class AppState(
     /** Every game's play time and RetroAchievements progress by library path (menus show the selected one's). */
     val gameInfo: StateFlow<Map<String, GameInfo>> = _gameInfo.asStateFlow()
     private var gameInfoJob: Job? = null
-    /** The RetroAchievements panel, details pane and screens; it reaches back into this state only through [RaScreenHost]. */
+    /** The RetroAchievements panel and screens; it reaches back into this state only through [RaScreenHost]. */
     private val ra = RaScreenController(
         scope, _screen, _selection, _error, deps.settings, loader, deps.achievements, _dualMenu,
         host = object : RaScreenHost {
@@ -1265,8 +1153,6 @@ class AppState(
     )
     /** The achievements panel over a game list; null while closed. */
     val raPanel: StateFlow<RaPanel?> = ra.raPanel
-    /** The second display's details pane's achievements ([RaScreenController.gameDetailRa]); null unless [dualMenu] on a game list. */
-    val gameDetailRa: StateFlow<RaPanel?> = ra.gameDetailRa
     private var gameInfoDirty = false   // a refresh was asked for while one ran: it runs once more
     private val shelvesCache = HomeShelvesCache()   // Home's shelves while their inputs hold ([shelvesFor])
     private var gameInfoRead = false    // a [refreshGameInfo] pass has read play time: the shelves can go by play time
@@ -1408,11 +1294,10 @@ class AppState(
             }
         }
         // The achievements panel follows the game list's selection, and closes off the game list.
-        scope.launch { _selection.collect { ra.followRaPanel(); ra.followRaDetails(); followSecondList() } }
+        scope.launch { _selection.collect { ra.followRaPanel() } }
         scope.launch {
             _screen.collect {
-                if (setupScreen(it)) _toolOnTop.value = false   // a tool's page no more: setup takes the menu's screen
-                if (it !is Screen.Games) { ra.closeRaPanel() } else { ra.followRaPanel() }; ra.followRaDetails(); followSecondList()
+                if (it !is Screen.Games) { ra.closeRaPanel() } else { ra.followRaPanel() }
                 if (it !is Screen.Games) closeArtPanel()   // as the achievements panel: only over a game list
             }
         }
@@ -1908,18 +1793,7 @@ class AppState(
      * Shows [screen] with its tab's remembered row, clamped. Over START's open prompt (a rebuild in place: a foreground,
      * a new Home frame, counts landing) the prompt and its draft stay; closing it is the prompt's own keys.
      */
-    /**
-     * A load or scan shows the menu again ([showSystems]), which takes a tool off the top screen; when [block] goes back to
-     * a tool's page (Settings after a rescan, a reload or a folder change), that page stays on the top screen.
-     */
-    private inline fun keepingToolOnTop(block: () -> Unit) {
-        val onTop = _toolOnTop.value
-        block()
-        val s = _screen.value
-        if (onTop && s !is Screen.Systems && s !is Screen.Games && s !is Screen.Loading && s !is Screen.Switcher && !setupScreen(s)) _toolOnTop.value = true
-    }
-
-    /** First setup's steps and onboarding (a folder change in Settings may resume them): never a tool on the top screen. */
+    /** First setup's steps and onboarding (a folder change in Settings may resume them). */
     private fun setupScreen(s: Screen): Boolean = when (s) {
         is Screen.PermissionsStep, Screen.PickFolder, Screen.AddFirstExtra, is Screen.FolderSummary, is Screen.AndroidGamesStep, is Screen.Onboarding, is Screen.StorageUpgrade -> true
         else -> false
@@ -1928,7 +1802,6 @@ class AppState(
     private fun showMenu(menu: Screen.Systems, at: Int = -1) {
         if (kidsUi.kidsLocked) return kidsUi.showKidsHome()   // Kids Mode while Locked: the tiles screen is the main menu
         val prev = _screen.value
-        _toolOnTop.value = false   // back on the menu: it has the focus again
         val screen = (prev as? Screen.Systems)?.search?.let { menu.copy(search = it) } ?: menu
         // Another tab (or the menu from another screen): its grid reports its own columns on its first layout. The same
         // tab rebuilt in place keeps them, as its grid stays laid out.
@@ -2097,9 +1970,8 @@ class AppState(
             else -> Unit
         }
         // First setup between the welcome and HANDHELD (the folder steps and their pickers): not asked yet.
-        // A tool opened from the menu while the skin shows two screens: it is on the top screen, the menu (and its pad) below.
         val step = onboarding.step ?: return deps.settings.padSkin && deps.settings.onboardingDone != false &&
-            (padScreen(_screen.value) || (_skinDualMenu.value && _toolOnTop.value))
+            padScreen(_screen.value)
         // Setup shows it on its own page only (the choice, live); every other page keeps the full height.
         return step == OnboardingStep.PAD && deps.settings.padSkin
     }
@@ -3000,7 +2872,6 @@ class AppState(
                 val raRead = tryOrNull { deps.achievements?.progressByPath().orEmpty() }
                 tryQuietly { deps.achievements?.hashesByPath()?.let { ra.raHashes = it } }
                 ra.followRaPanel(force = true)   // the panel's game may have data now (a download just ended)
-                ra.followRaDetails(force = true)
                 val times = read?.also { lastTimes = it } ?: lastTimes
                 val raByPath = raRead?.also { lastRa = it } ?: lastRa
                 _gameInfo.value = (times.keys + raByPath.keys).associateWith { p -> GameInfo(times[p]?.lastPlayedAt, times[p]?.totalMs, raByPath[p]) }
@@ -3123,10 +2994,8 @@ class AppState(
                 refreshInstalled()   // the Android games console: its row joins the menu once the apps are listed
                 return@launch
             }
-            keepingToolOnTop {
-                showSystems(usable.playableSystems(readHidden()))
-                then?.invoke(systemsCache)
-            }
+            showSystems(usable.playableSystems(readHidden()))
+            then?.invoke(systemsCache)
             refreshInstalled()
             afterIndexStart(root)
         }
@@ -3204,10 +3073,8 @@ class AppState(
                 libraryDirty = false   // the index is this scan's
                 homeReadable()
                 refreshCollectionsFlag()   // the scan just walked the tree, so the first show can carry the row
-                keepingToolOnTop {
-                    showSystems(it.playableSystems(readHidden()))
-                    then?.invoke(systemsCache)
-                }
+                showSystems(it.playableSystems(readHidden()))
+                then?.invoke(systemsCache)
             }
             .onFailure { e ->
                 if (e is CancellationException) throw e   // a cancelled scan is not a failed one: no error, no picker
@@ -3231,10 +3098,8 @@ class AppState(
                     val index = fittingIndex(root)
                     if (index != null) {
                         _error.value = homeAwayError(root, "Insert it, then use Rescan in Settings → Library.")
-                        keepingToolOnTop {
-                            showSystems(index.playableSystems(readHidden()))
-                            kept?.invoke()
-                        }
+                        showSystems(index.playableSystems(readHidden()))
+                        kept?.invoke()
                         return
                     }
                     _error.value = homeAwayError(root, "Insert it, then reopen the app.")
@@ -3340,10 +3205,8 @@ class AppState(
         skeletonFor = null   // a skeleton pass cut short by the same fault runs again next scan
         val index = fittingIndex(root)
         if (index != null) {
-            keepingToolOnTop {
-                if (!indexShown) showSystems(index.playableSystems(readHidden()))
-                kept?.invoke()
-            }
+            if (!indexShown) showSystems(index.playableSystems(readHidden()))
+            kept?.invoke()
             showNotice(LISTING_HIDDEN)
         } else {
             _error.value = LISTING_HIDDEN_NO_INDEX
@@ -4871,7 +4734,7 @@ class AppState(
     /** Signed in to RetroAchievements, for Home's stats strip: a token and a user name. */
     private fun raSignedIn(): Boolean = deps.settings.raToken != null && deps.settings.raUsername.isNotBlank()
 
-    // --- RetroAchievements: the panel, the details pane and the Tools pages live in RaScreenController ---
+    // --- RetroAchievements: the panel and the Tools pages live in RaScreenController ---
 
     /** The platform has RetroAchievements and the user is signed in: a game list offers the panel (the trophy icon, X, the game's menu). */
     val hasAchievements: Boolean get() = ra.hasAchievements
@@ -4939,12 +4802,10 @@ class AppState(
         return deps.settings.toolApps.filter { it !in inConsole }
     }
 
-    /** [row]'s tool opened; any but an app ([ToolKind.APP], which launches) then has the focus ([toolOnTop]). */
+    /** [row]'s tool opened (an app, [ToolKind.APP], launches). */
     private fun openTool(row: ToolRow) {
         if (row.kind == ToolKind.KIDS_LOCK) return kidsUi.kidsLockNow()   // not a tool page: the tiles screen (or the menu, in a window)
-        noteToolOrigin()
         openToolNow(row)
-        if (row.kind != ToolKind.APP && _screen.value !is Screen.Systems) _toolOnTop.value = true
     }
 
     private fun openToolNow(row: ToolRow) {

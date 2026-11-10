@@ -111,7 +111,7 @@ internal class KidsScreensController(
         return rows
     }
 
-    /** The tiles screen; the second screen has no tool on it ([AppState.toolOnTop] off), so it shows the backdrop ([DualMenu]). */
+    /** The tiles screen; the second screen shows the backdrop ([DualMenu]). */
     fun showKidsHome() {
         host.clearMenuTop()
         screen.value = Screen.KidsHome
