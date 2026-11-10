@@ -1206,26 +1206,39 @@ index 0000000..0e6cf75
 +} // namespace LibRetro
 diff --git a/src/citra_libretro/room_link.cpp b/src/citra_libretro/room_link.cpp
 new file mode 100644
-index 0000000..9069bd5
+index 0000000..9529c7a
 --- /dev/null
 +++ b/src/citra_libretro/room_link.cpp
-@@ -0,0 +1,205 @@
+@@ -0,0 +1,464 @@
 +// Copyright Citra Emulator Project / Azahar Emulator Project
 +// Licensed under GPLv2 or any later version
 +// Refer to the license.txt file included.
 +
++#include <array>
 +#include <atomic>
 +#include <chrono>
++#include <cstring>
 +#include <deque>
 +#include <memory>
 +#include <mutex>
++#include <optional>
++#include <random>
 +#include <string>
 +#include <thread>
++
++#include <arpa/inet.h>
++#include <netinet/in.h>
++#include <sys/socket.h>
++#include <sys/time.h>
++#include <unistd.h>
 +
 +#include "citra_libretro/environment.h"
 +#include "citra_libretro/room_link.h"
 +#include "common/common_types.h"
 +#include "common/logging/log.h"
++#include "core/core.h"
++#include "core/hle/service/cfg/cfg.h"
++#include "core/hle/service/nwm/uds_wireless_hook.h"
 +#include "network/network.h"
 +#include "network/room.h"
 +#include "network/room_member.h"
@@ -1235,7 +1248,9 @@ index 0000000..9069bd5
 +
 +namespace {
 +
++using Clock = std::chrono::steady_clock;
 +using Network::RoomMember;
++using Service::NWM::WirelessState;
 +
 +// The frontend sets these for one launch; they are not declared core options.
 +constexpr char MODE_KEY[] = "nx_3ds_link";
@@ -1247,14 +1262,38 @@ index 0000000..9069bd5
 +// The joiner's game can be up before the host's room is: keep knocking for about half a minute.
 +constexpr int JOIN_ATTEMPTS = 30;
 +
++// Auto mode's room search: a question broadcast on the local network, answered by the device
++// that holds a room with its room id (the lower of two rooms started at once is the one kept).
++constexpr u16 SEARCH_PORT = 24873;
++constexpr char SEARCH_ASK[] = "NXR3DS?1";
++constexpr char SEARCH_ANSWER[] = "NXR3DS!1";
++constexpr std::size_t SEARCH_TAG = 8;
++constexpr int SEARCH_WAIT_MS = 300;
++// A game drops and restarts its wireless between its own menus: the room outlives those gaps.
++constexpr auto LINGER = std::chrono::seconds(10);
++constexpr auto ALONE_SEARCH_EVERY = std::chrono::seconds(2);
++
++enum class Mode { Off, Session, Auto };
++
++Mode mode = Mode::Off;
 +bool network_up = false;
-+bool active = false;
 +std::thread worker;
++std::thread answerer;
 +std::atomic<bool> cancel{false};
++std::atomic<bool> answering{false};
 +std::atomic<bool> refused{false};
 +std::atomic<bool> joined_once{false};
++std::atomic<bool> random_mac{false};
 +RoomMember::CallbackHandle<RoomMember::State> state_handle;
 +RoomMember::CallbackHandle<RoomMember::Error> error_handle;
++
++// Auto mode: what the game's wireless asks for, set from the emulation thread.
++std::atomic<bool> wireless_on{false};
++std::atomic<bool> wireless_hosting{false};
++std::atomic<Clock::rep> wireless_off_at{0};
++u64 room_id = 0;
++u16 room_port = Network::DefaultRoomPort;
++std::string player_name;
 +
 +std::mutex notice_mutex;
 +std::deque<std::string> notices;
@@ -1287,21 +1326,227 @@ index 0000000..9069bd5
 +    return !cancel;
 +}
 +
-+void JoinLoop(std::string name, std::string ip, u16 port) {
++bool InRoom(const RoomMember& member) {
++    return member.GetState() != RoomMember::State::Idle &&
++           member.GetState() != RoomMember::State::Uninitialized;
++}
++
++/// Joins and waits for the room's answer, which arrives on the member's own thread.
++bool Join(RoomMember& member, const std::string& ip, u16 port) {
++    // The console keeps its own MAC address in the room when it is free there: a game's network
++    // then carries the same address before and after the join.
++    Network::MacAddress mac = Network::NoPreferredMac;
++    if (!random_mac && Core::System::GetInstance().IsPoweredOn())
++        mac = Service::CFG::GetConsoleMacAddress(Core::System::GetInstance());
++    // The console id only has to differ between the room's members, as the name does.
++    member.Join(player_name, player_name, ip.c_str(), port, 0, mac);
++    for (int i = 0; i < 100 && !cancel && member.GetState() == RoomMember::State::Joining; ++i)
++        std::this_thread::sleep_for(std::chrono::milliseconds(50));
++    return member.IsConnected();
++}
++
++void JoinLoop(std::string ip, u16 port) {
 +    auto member = Network::GetRoomMember().lock();
 +    if (!member)
 +        return;
 +    for (int attempt = 0; attempt < JOIN_ATTEMPTS && !cancel && !refused; ++attempt) {
-+        // The console id only has to differ between the room's members, as the name does.
-+        member->Join(name, name, ip.c_str(), port);
-+        // Connected: the room's answer to the join request arrives on the member's own thread.
-+        for (int i = 0; i < 100 && !cancel && member->GetState() == RoomMember::State::Joining; ++i)
-+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-+        if (member->IsConnected() || !Sleep(1000))
++        if (Join(*member, ip, port) || !Sleep(1000))
 +            return;
 +    }
 +    if (!cancel && !refused)
 +        Notice("Local wireless: could not reach the host");
++}
++
++struct Found {
++    std::string ip;
++    u16 port;
++    u64 id;
++};
++
++void SetTimeout(int fd, int ms) {
++    timeval tv{};
++    tv.tv_sec = ms / 1000;
++    tv.tv_usec = (ms % 1000) * 1000;
++    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
++}
++
++/// Asks the local network for a room; another device's answer, or nothing within the wait.
++std::optional<Found> Search() {
++    const int fd = socket(AF_INET, SOCK_DGRAM, 0);
++    if (fd < 0)
++        return std::nullopt;
++    const int on = 1;
++    setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on));
++    SetTimeout(fd, SEARCH_WAIT_MS);
++    sockaddr_in to{};
++    to.sin_family = AF_INET;
++    to.sin_port = htons(SEARCH_PORT);
++    to.sin_addr.s_addr = htonl(INADDR_BROADCAST);
++    sendto(fd, SEARCH_ASK, SEARCH_TAG, 0, reinterpret_cast<sockaddr*>(&to), sizeof(to));
++
++    std::optional<Found> found;
++    const auto until = Clock::now() + std::chrono::milliseconds(SEARCH_WAIT_MS);
++    while (Clock::now() < until && !cancel) {
++        std::array<u8, 32> answer{};
++        sockaddr_in from{};
++        socklen_t from_size = sizeof(from);
++        const auto size = recvfrom(fd, answer.data(), answer.size(), 0,
++                                   reinterpret_cast<sockaddr*>(&from), &from_size);
++        if (size < static_cast<ssize_t>(SEARCH_TAG + sizeof(u64) + sizeof(u16)) ||
++            std::memcmp(answer.data(), SEARCH_ANSWER, SEARCH_TAG) != 0)
++            continue;
++        u64 id;
++        u16 port;
++        std::memcpy(&id, answer.data() + SEARCH_TAG, sizeof(id));
++        std::memcpy(&port, answer.data() + SEARCH_TAG + sizeof(id), sizeof(port));
++        if (id == room_id)
++            continue; // this device's own room
++        char ip[INET_ADDRSTRLEN] = {};
++        inet_ntop(AF_INET, &from.sin_addr, ip, sizeof(ip));
++        // Two rooms answering: every device settles on the lower id.
++        if (!found || id < found->id)
++            found = Found{ip, ntohs(port), id};
++    }
++    close(fd);
++    return found;
++}
++
++/// Answers other devices' searches while this one holds the room.
++void AnswerLoop() {
++    const int fd = socket(AF_INET, SOCK_DGRAM, 0);
++    if (fd < 0)
++        return;
++    const int on = 1;
++    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
++    SetTimeout(fd, 200);
++    sockaddr_in at{};
++    at.sin_family = AF_INET;
++    at.sin_port = htons(SEARCH_PORT);
++    at.sin_addr.s_addr = htonl(INADDR_ANY);
++    if (bind(fd, reinterpret_cast<sockaddr*>(&at), sizeof(at)) != 0) {
++        LOG_WARNING(Frontend, "3DS link: the room search port is taken");
++        close(fd);
++        return;
++    }
++    std::array<u8, SEARCH_TAG + sizeof(u64) + sizeof(u16)> answer{};
++    const u16 port = htons(room_port);
++    std::memcpy(answer.data(), SEARCH_ANSWER, SEARCH_TAG);
++    std::memcpy(answer.data() + SEARCH_TAG, &room_id, sizeof(room_id));
++    std::memcpy(answer.data() + SEARCH_TAG + sizeof(room_id), &port, sizeof(port));
++    while (answering) {
++        std::array<u8, 32> ask{};
++        sockaddr_in from{};
++        socklen_t from_size = sizeof(from);
++        const auto size = recvfrom(fd, ask.data(), ask.size(), 0,
++                                   reinterpret_cast<sockaddr*>(&from), &from_size);
++        if (size >= static_cast<ssize_t>(SEARCH_TAG) &&
++            std::memcmp(ask.data(), SEARCH_ASK, SEARCH_TAG) == 0)
++            sendto(fd, answer.data(), answer.size(), 0, reinterpret_cast<sockaddr*>(&from),
++                   from_size);
++    }
++    close(fd);
++}
++
++void StopAnswering() {
++    answering = false;
++    if (answerer.joinable())
++        answerer.join();
++}
++
++bool RoomOpen() {
++    auto room = Network::GetRoom().lock();
++    return room && room->GetState() == Network::Room::State::Open;
++}
++
++bool OpenRoom() {
++    auto room = Network::GetRoom().lock();
++    return room && room->Create("NX Redux", "", "", room_port, "", MAX_PLAYERS, player_name, "", 0,
++                                std::make_unique<Network::VerifyUser::NullBackend>(), {});
++}
++
++/// Leaves the room this device is in and closes the one it holds.
++void LeaveAndClose() {
++    StopAnswering();
++    if (auto member = Network::GetRoomMember().lock(); member && InRoom(*member))
++        member->Leave();
++    if (auto room = Network::GetRoom().lock(); room && RoomOpen())
++        room->Destroy();
++}
++
++bool WirelessWanted() {
++    if (wireless_on)
++        return true;
++    const auto off_at = Clock::time_point(Clock::duration(wireless_off_at.load()));
++    return wireless_off_at.load() != 0 && Clock::now() - off_at < LINGER;
++}
++
++/// Auto mode: in a room while the game's wireless is on. A game that hosts opens the room when
++/// the network has none; a game that only looks for others joins the room it finds.
++void AutoLoop() {
++    auto member = Network::GetRoomMember().lock();
++    if (!member)
++        return;
++    auto next_alone_search = Clock::now();
++    while (!cancel) {
++        if (!WirelessWanted()) {
++            if (InRoom(*member) || RoomOpen()) {
++                LeaveAndClose();
++                LOG_INFO(Frontend, "3DS link: wireless off, left the room");
++            }
++            Sleep(200);
++            continue;
++        }
++        if (member->IsConnected()) {
++            // Two devices that hosted at once each hold a room: alone in this one, the lower id's
++            // is the one to be in.
++            if (RoomOpen() && Clock::now() >= next_alone_search) {
++                next_alone_search = Clock::now() + ALONE_SEARCH_EVERY;
++                auto room = Network::GetRoom().lock();
++                if (room && room->GetRoomMemberList().size() <= 1) {
++                    if (const auto other = Search(); other && other->id < room_id) {
++                        LeaveAndClose();
++                        Join(*member, other->ip, other->port);
++                    }
++                }
++            }
++            Sleep(100);
++            continue;
++        }
++        if (RoomOpen()) {
++            // The room is this device's but its own member dropped out: start over.
++            LeaveAndClose();
++        }
++        if (const auto found = Search()) {
++            Join(*member, found->ip, found->port);
++        } else if (wireless_hosting && !cancel) {
++            if (OpenRoom()) {
++                answering = true;
++                answerer = std::thread(AnswerLoop);
++                Join(*member, "127.0.0.1", room_port);
++            } else {
++                Sleep(1000);
++            }
++        } else {
++            Sleep(700);
++        }
++    }
++}
++
++void OnWireless(WirelessState state) {
++    switch (state) {
++    case WirelessState::On:
++        wireless_on = true;
++        break;
++    case WirelessState::Hosting:
++        wireless_on = true;
++        wireless_hosting = true;
++        break;
++    case WirelessState::Off:
++        wireless_on = false;
++        wireless_hosting = false;
++        wireless_off_at = Clock::now().time_since_epoch().count();
++        break;
++    }
 +}
 +
 +void StopWorker() {
@@ -1312,6 +1557,9 @@ index 0000000..9069bd5
 +}
 +
 +void LeaveRoom() {
++    Service::NWM::wireless_hook = nullptr;
++    wireless_on = false;
++    wireless_hosting = false;
 +    StopWorker();
 +    if (auto member = Network::GetRoomMember().lock()) {
 +        // Both callbacks would report this leave as a lost connection.
@@ -1321,35 +1569,31 @@ index 0000000..9069bd5
 +            member->Unbind(error_handle);
 +        state_handle.reset();
 +        error_handle.reset();
-+        if (member->GetState() != RoomMember::State::Idle &&
-+            member->GetState() != RoomMember::State::Uninitialized)
-+            member->Leave();
 +    }
-+    if (auto room = Network::GetRoom().lock()) {
-+        if (room->GetState() == Network::Room::State::Open)
-+            room->Destroy();
-+    }
-+    active = false;
++    LeaveAndClose();
++    mode = Mode::Off;
 +}
 +
 +} // namespace
 +
 +void Start() {
-+    const std::string mode = FetchVariable(MODE_KEY, "off");
-+    if (active || (mode != "host" && mode != "join"))
++    const std::string wanted = FetchVariable(MODE_KEY, "off");
++    if (mode != Mode::Off || (wanted != "host" && wanted != "join" && wanted != "auto"))
 +        return;
-+    const bool host = mode == "host";
-+    const std::string ip = host ? "127.0.0.1" : FetchVariable(IP_KEY, "");
-+    const std::string name = FetchVariable(NAME_KEY, host ? "Host" : "Player");
-+    u16 port = Network::DefaultRoomPort;
++    const bool host = wanted == "host";
++    const bool automatic = wanted == "auto";
++    const std::string ip = wanted == "join" ? FetchVariable(IP_KEY, "") : "127.0.0.1";
++    player_name = FetchVariable(NAME_KEY, host ? "Host" : "Player");
++    room_port = Network::DefaultRoomPort;
 +    try {
-+        port = static_cast<u16>(std::stoi(FetchVariable(PORT_KEY, "")));
++        room_port = static_cast<u16>(std::stoi(FetchVariable(PORT_KEY, "")));
 +    } catch (...) {
 +    }
 +    if (ip.empty()) {
 +        Notice("Local wireless: no host address");
 +        return;
 +    }
++    // No socket opens here: the room and its member are only made ready.
 +    if (!network_up && !Network::Init()) {
 +        Notice("Local wireless: the network could not start");
 +        return;
@@ -1357,36 +1601,51 @@ index 0000000..9069bd5
 +    network_up = true;
 +
 +    auto member = Network::GetRoomMember().lock();
-+    auto room = Network::GetRoom().lock();
-+    if (!member || !room)
++    if (!member)
 +        return;
-+    if (host && !room->Create("NX Redux", "", "", port, "", MAX_PLAYERS, name, "", 0,
-+                              std::make_unique<Network::VerifyUser::NullBackend>(), {})) {
++    if (host && !OpenRoom()) {
 +        Notice("Local wireless: the room could not open");
 +        return;
 +    }
 +
 +    refused = false;
 +    joined_once = false;
-+    state_handle = member->BindOnStateChanged([host](const RoomMember::State& state) {
++    random_mac = false;
++    state_handle = member->BindOnStateChanged([](const RoomMember::State& state) {
 +        if (state == RoomMember::State::Joined || state == RoomMember::State::Moderator) {
 +            joined_once = true;
-+            Notice(host ? "Local wireless: room open" : "Local wireless: connected to the host");
++            Notice(RoomOpen() ? "Local wireless: room open" : "Local wireless: connected");
 +        }
 +    });
-+    error_handle = member->BindOnError([](const RoomMember::Error& error) {
++    error_handle = member->BindOnError([automatic](const RoomMember::Error& error) {
 +        if (error == RoomMember::Error::CouldNotConnect)
-+            return; // the join loop tries again
++            return; // the worker tries again
++        if (error == RoomMember::Error::MacCollision) {
++            random_mac = true; // another console carries this address: take one from the room
++            return;
++        }
 +        if (error == RoomMember::Error::LostConnection && joined_once) {
 +            Notice("Local wireless: connection lost");
 +            return;
 +        }
-+        refused = true;
++        if (!automatic)
++            refused = true;
 +        Notice(std::string("Local wireless: ") + Reason(error));
 +    });
 +
-+    active = true;
-+    worker = std::thread(JoinLoop, name, ip, port);
++    if (automatic) {
++        std::random_device random;
++        room_id = (static_cast<u64>(random()) << 32) | random();
++        wireless_on = false;
++        wireless_hosting = false;
++        wireless_off_at = 0;
++        mode = Mode::Auto;
++        Service::NWM::wireless_hook = OnWireless;
++        worker = std::thread(AutoLoop);
++    } else {
++        mode = Mode::Session;
++        worker = std::thread(JoinLoop, ip, room_port);
++    }
 +}
 +
 +void Poll() {
@@ -1400,7 +1659,7 @@ index 0000000..9069bd5
 +}
 +
 +void OnOptionsChanged() {
-+    if (active && FetchVariable(MODE_KEY, "off") == "off") {
++    if (mode != Mode::Off && FetchVariable(MODE_KEY, "off") == "off") {
 +        LeaveRoom();
 +        LOG_INFO(Frontend, "3DS link: left the room");
 +    }
@@ -1804,10 +2063,45 @@ index 003b3fd..b8b7ee4 100644
  };
  
 diff --git a/src/core/hle/service/nwm/nwm_uds.cpp b/src/core/hle/service/nwm/nwm_uds.cpp
-index e602bd3..084c5a1 100644
+index e602bd3..7e9f5c5 100644
 --- a/src/core/hle/service/nwm/nwm_uds.cpp
 +++ b/src/core/hle/service/nwm/nwm_uds.cpp
-@@ -1735,7 +1735,13 @@ NWM_UDS::NWM_UDS(Core::System& system) : ServiceFramework("nwm::UDS"), system(sy
+@@ -22,6 +22,7 @@
+ #include "core/hle/service/cfg/cfg.h"
+ #include "core/hle/service/cfg/cfg_u.h"
+ #include "core/hle/service/nwm/nwm_uds.h"
++#include "core/hle/service/nwm/uds_wireless_hook.h"
+ #include "core/hle/service/nwm/uds_beacon.h"
+ #include "core/hle/service/nwm/uds_connection.h"
+ #include "core/hle/service/nwm/uds_data.h"
+@@ -598,6 +599,8 @@ boost::optional<Network::MacAddress> NWM_UDS::GetNodeMacAddress(u16 dest_node_id
+ 
+ void NWM_UDS::ShutdownHLE() {
+     initialized = false;
++    if (wireless_hook)
++        wireless_hook(WirelessState::Off);
+ 
+     for (auto& bind_node : channel_data) {
+         SignalEventAsync(bind_node.second.event);
+@@ -698,6 +701,8 @@ ResultVal<std::shared_ptr<Kernel::Event>> NWM_UDS::Initialize(
+ 
+     current_node = node;
+     initialized = true;
++    if (wireless_hook)
++        wireless_hook(WirelessState::On);
+ 
+     recv_buffer_memory = std::move(sharedmem);
+     ASSERT_MSG(recv_buffer_memory->GetSize() == sharedmem_size, "Invalid shared memory size.");
+@@ -939,6 +944,8 @@ void NWM_UDS::Unbind(Kernel::HLERequestContext& ctx) {
+ Result NWM_UDS::BeginHostingNetwork(std::span<const u8> network_info_buffer,
+                                     std::vector<u8> passphrase) {
+     // TODO(Subv): Store the passphrase and verify it when attempting a connection.
++    if (wireless_hook)
++        wireless_hook(WirelessState::Hosting);
+ 
+     {
+         std::scoped_lock lock(connection_status_mutex);
+@@ -1735,7 +1742,13 @@ NWM_UDS::NWM_UDS(Core::System& system) : ServiceFramework("nwm::UDS"), system(sy
          wifi_packet_received = room_member->BindOnWifiPacketReceived(
              [this](const Network::WifiPacket& packet) { OnWifiPacketReceived(packet); });
      } else {
@@ -1821,6 +2115,30 @@ index e602bd3..084c5a1 100644
      }
  }
  
+diff --git a/src/core/hle/service/nwm/uds_wireless_hook.h b/src/core/hle/service/nwm/uds_wireless_hook.h
+new file mode 100644
+index 0000000..ce2badf
+--- /dev/null
++++ b/src/core/hle/service/nwm/uds_wireless_hook.h
+@@ -0,0 +1,18 @@
++// Copyright Citra Emulator Project / Azahar Emulator Project
++// Licensed under GPLv2 or any later version
++// Refer to the license.txt file included.
++
++#pragma once
++
++#include <functional>
++
++namespace Service::NWM {
++
++/// What a game does with local wireless: turns it on, starts hosting a network, turns it off.
++enum class WirelessState { On, Hosting, Off };
++
++/// Called on the emulation thread at each change, for a frontend that brings its multiplayer
++/// room up only while a game uses local wireless. Empty: nobody listens.
++inline std::function<void(WirelessState)> wireless_hook;
++
++} // namespace Service::NWM
 diff --git a/src/core/savestate.cpp b/src/core/savestate.cpp
 index 16c3db6..6f878d6 100644
 --- a/src/core/savestate.cpp

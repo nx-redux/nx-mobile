@@ -446,13 +446,13 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // Outside a session mGBA gets the real cable (NetplayLinkOptions.forSolo). Cable Link: the pair core's variables
             // (both GBAs on this phone, NetplayLinkOptions.forPair), session-only like the others.
             val linkKind = np?.linkKind
-            val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId) else when (linkKind) {
+            val n3dsRoomName = if (coreId != "azahar") null else NetplayLinkOptions.n3dsRoomName(
+                PlayerName.resolve(AndroidAppSettings(activity).playerName, AndroidDeviceInfo.deviceName(activity)), kotlin.random.Random.nextInt(10000),
+            )
+            val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsRoomName) else when (linkKind) {
                 null -> NetplayLinkOptions.forPair(np)
                 NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)
-                NetplayLinkKind.N3DSLINK -> NetplayLinkOptions.forSession(
-                    np, null,
-                    NetplayLinkOptions.n3dsRoomName(PlayerName.resolve(AndroidAppSettings(activity).playerName, AndroidDeviceInfo.deviceName(activity)), kotlin.random.Random.nextInt(10000)),
-                )
+                NetplayLinkKind.N3DSLINK -> NetplayLinkOptions.forSession(np, null, n3dsRoomName)
                 NetplayLinkKind.NETPACKET -> {
                     val own = NetplayLinkOptions.modeKey(np.coreId)?.let { key -> options.firstOrNull { it.key == key }?.value }
                     val mode = gameNetplay.connectLink(np, own) ?: return refuse(NetplayText.FAILED_CONNECT, NetplayText.FAILED)

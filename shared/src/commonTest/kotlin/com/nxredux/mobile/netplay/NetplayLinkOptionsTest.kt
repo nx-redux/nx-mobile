@@ -110,6 +110,15 @@ class NetplayLinkOptionsTest {
         assertEquals("KotakNova-0042", NetplayLinkOptions.forSession(session(NetplayRole.HOST, "azahar"), null, "KotakNova-0042")["nx_3ds_link_name"])
     }
 
+    @Test fun a_solo_3ds_game_gets_automatic_local_wireless_under_its_room_name() {
+        assertEquals(
+            mapOf("nx_3ds_link" to "auto", "nx_3ds_link_name" to "KotakNova-0042", "nx_3ds_link_port" to "24872"),
+            NetplayLinkOptions.forSolo("azahar", "KotakNova-0042"),
+        )
+        assertEquals(emptyMap(), NetplayLinkOptions.forSolo("azahar"))
+        assertEquals(mapOf("mgba_link_mode" to "cable"), NetplayLinkOptions.forSolo("mgba", "x"))
+    }
+
     @Test fun gpsp_and_mgba_run_the_agreed_mode_for_the_transport() {
         assertEquals(mapOf("gpsp_serial" to "auto_cable"), NetplayLinkOptions.forSession(session(NetplayRole.HOST, "gpsp", usb = true), "auto"))
         assertEquals(mapOf("gpsp_serial" to "auto"), NetplayLinkOptions.forSession(session(NetplayRole.CLIENT, "gpsp"), "lockstep"))

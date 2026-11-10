@@ -27,6 +27,7 @@ object NetplayLinkOptions {
     const val N3DS_NAME = "nx_3ds_link_name"
     const val N3DS_HOST = "host"
     const val N3DS_JOIN = "join"
+    const val N3DS_AUTO = "auto"
     /** Leave in a 3DS link session: the core leaves the room and the game plays on. */
     const val N3DS_OFF = "off"
     /** Azahar's default room port. */
@@ -70,9 +71,15 @@ object NetplayLinkOptions {
 
     /**
      * gbalink_serial_option outside a session: mGBA's mode matters only in one, and `cable` keeps the core from scanning
-     * the ROM for it on every load. Never saved, like [forSession]'s.
+     * the ROM for it on every load. Azahar gets its automatic local wireless under [roomName] (null: none). Never saved,
+     * like [forSession]'s.
      */
-    fun forSolo(coreId: String): Map<String, String> = if (coreId == "mgba") mapOf(MGBA_LINK to MGBA_DEFAULT) else emptyMap()
+    fun forSolo(coreId: String, roomName: String? = null): Map<String, String> = when (coreId) {
+        "mgba" -> mapOf(MGBA_LINK to MGBA_DEFAULT)
+        // 3DS local wireless with no session: Azahar finds or opens a room itself once the game turns its wireless on.
+        "azahar" -> if (roomName == null) emptyMap() else mapOf(N3DS_MODE to N3DS_AUTO, N3DS_NAME to roomName, N3DS_PORT_KEY to N3DS_PORT.toString())
+        else -> emptyMap()
+    }
 
     /** gbalink_link_mode_key: the core option that holds [coreId]'s link mode; null for a core without one. */
     fun modeKey(coreId: String): String? = when (coreId) {
