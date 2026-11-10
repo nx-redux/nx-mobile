@@ -61,6 +61,11 @@ import com.nxredux.mobile.ui.nx.NxTheme
 import com.nxredux.mobile.ui.nx.PadProfile
 import com.nxredux.mobile.ui.nx.SlotUi
 import com.nxredux.mobile.ui.nx.nxColorsFor
+import com.nxredux.mobile.ui.nx.LocalNxColors
+import com.nxredux.mobile.ui.nx.livePreviewRow
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.NxLog
 import com.swordfish.libretrodroid.Variable
@@ -238,8 +243,10 @@ internal class InGameMenuController(
     var menuView: ComposeView? = null
     // The open menu's content, hosted here or on the second display ([placeMenu]): (on the second, its window size there).
     private var menuContent: (@Composable (Boolean, DpSize?) -> Unit)? = null
-    private var menuShownOnSecond = false
-        private set
+    // The picture's dim while the menu is in the dual-screen panel ([placeMenu]).
+    private var menuDim: (@Composable () -> Unit)? = null
+    // Where the open menu was last put: (on the second display, in the panel); null while closed.
+    private var menuPlacement: Pair<Boolean, Boolean>? = null
     var menuModel: InGameMenuModel? = null
         private set
     val menuState = mutableStateOf<MenuState?>(null)
@@ -408,7 +415,7 @@ internal class InGameMenuController(
                         // Not in netplay: the header over Continue / Leave only.
                         panelBeside = menuModel?.panelBeside ?: true,
                         // In the dual-screen panel's place: opaque, as the panel it replaces.
-                        opaque = !onSecond && dual.mainPanel.value != null,
+                        opaque = menuModel?.inPanel == true || (!onSecond && dual.mainPanel.value != null),
                         // An options row's switch, segment, picker or info icon, and the popup over it.
                         onOption = { ev -> if (!quitting) menuModel?.let { m -> val e = m.optionEvent(ev); menuState.value = m.state; handle(e) } },
                     )
@@ -417,37 +424,55 @@ internal class InGameMenuController(
                 }
             }
         }
+        // The menu's own wash over the paused picture, lifted while a row that changes the picture is highlighted.
+        menuDim = {
+            NxTheme(colors = colors) {
+                val dimmed = menuState.value?.let { !livePreviewRow(it) } ?: true
+                Box(Modifier.fillMaxSize().then(if (dimmed) Modifier.background(LocalNxColors.current.scrimMenuWash) else Modifier)
+                    .pointerInput(Unit) { detectTapGestures { /* swallow */ } })
+            }
+        }
         padLayout.skinStripHidden = true   // the skin's strip shortcuts (SAVE, LOAD, ...) go while the menu is up
         placeMenu()
     }
 
     /**
-     * Puts the open menu on the display it belongs on: on dual screen the top display ([DualScreenController.menuOnSecond]),
-     * else over the game here (in a pad skin's glass, its frame round it). Called on open and whenever the second display
-     * or the picture's place changes.
+     * Puts the open menu where it belongs ([DualScreenController.menuHost]): with the dual-screen panel on its own display,
+     * in the panel's place under its header, the picture's display only dimmed; else over the picture, on the second
+     * display when the picture is there, or over the game here (in a pad skin's glass, its frame round it). Called on
+     * open and whenever the second display, the panel or the picture's place changes.
      */
     fun placeMenu() {
         val content = menuContent ?: return
         if (!menuOpen) return
+        val inPanel = dual.menuHost() == MenuHost.PANEL
         val second = dual.menuOnSecond()
-        if (second == menuShownOnSecond && (second || menuView != null)) return
+        if (menuPlacement == (second to inPanel)) return
+        menuModel?.takeIf { it.inPanel != inPanel }?.let { it.setInPanel(inPanel); menuState.value = it.state }
         val root = findViewById<FrameLayout>(R.id.root)
+        menuView?.let { root.removeView(it) }
+        menuView = null
+        padLayout.skinUnderMenu = false
         if (second) {
-            menuView?.let { root.removeView(it) }
-            menuView = null
-            padLayout.skinUnderMenu = false
             // The second display's window is its own size (and scaled density): the menu's window is what it gets there.
             dual.showMenuOnSecond { BoxWithConstraints(Modifier.fillMaxSize()) { content(true, DpSize(maxWidth, maxHeight)) } }
+            // the picture here, under the menu's wash
+            if (inPanel) menuDim?.let { addMenuView(root, it) }
         } else {
-            dual.showMenuOnSecond(null)
-            val overlay = ComposeView(activity).apply { setContent { content(false, null) } }
-            menuView = overlay
-            padLayout.skinUnderMenu = !dual.mainPanelCoversWindow()   // in the skin (not over the dual-screen panel): its frame round the menu
-            root.addView(overlay, menuLayoutParams(resources.configuration.orientation, overPanel = dual.mainPanelCoversWindow(), glass = true))
+            dual.showMenuOnSecond(menuDim.takeIf { inPanel })
+            addMenuView(root) { content(false, null) }
         }
-        menuShownOnSecond = second
+        menuPlacement = second to inPanel
         dual.syncMainPanelHost()
         padLayout.updatePadVisibility()
+    }
+
+    /** [content] as [menuView] over the game here, where the menu would sit (in the skin: its frame round it). */
+    private fun addMenuView(root: FrameLayout, content: @Composable () -> Unit) {
+        val overlay = ComposeView(activity).apply { setContent { content() } }
+        menuView = overlay
+        padLayout.skinUnderMenu = !dual.mainPanelCoversWindow()   // in the skin (not over the dual-screen panel): its frame round the menu
+        root.addView(overlay, menuLayoutParams(resources.configuration.orientation, overPanel = dual.mainPanelCoversWindow(), glass = true))
     }
 
     /**
@@ -501,7 +526,8 @@ internal class InGameMenuController(
         menuView = null
         dual.showMenuOnSecond(null)
         menuContent = null
-        menuShownOnSecond = false
+        menuDim = null
+        menuPlacement = null
         padLayout.skinStripHidden = false   // the skin's strip shortcuts back
         padLayout.skinUnderMenu = false
         dual.syncMainPanelHost()

@@ -261,11 +261,14 @@ internal class DualScreenController(
     private fun secondDraws(mode: DualMode = dualMode, picture: PictureOn = pictureOn): Boolean =
         mode == DualMode.SPLIT || (picture == PictureOn.SECOND && (mode == DualMode.PANEL || mode == DualMode.PANEL_UP))
 
+    /** Where the open in-game menu draws: in the panel while it is up on the other display from the picture ([DualMenu]). */
+    fun menuHost(): MenuHost = DualMenu.menuHost(dualMode, pictureOn, panelShown())
+
     /**
-     * On dual screen the in-game menu is on the top display: the one with the picture (the DS / 3DS picture screen while
-     * split). The other display is left to what it shows.
+     * The in-game menu draws on the second display: in the panel there (the picture here), or over the picture there
+     * (the DS / 3DS picture screen while split).
      */
-    fun menuOnSecond(): Boolean = presentation != null && dualMode != DualMode.OFF && pictureOn == PictureOn.SECOND
+    fun menuOnSecond(): Boolean = DualMenu.menuOnSecond(menuHost(), dualMode, pictureOn, presentation != null)
 
     /** Shows [content] as the in-game menu on the second display; null takes it away. */
     fun showMenuOnSecond(content: (@Composable () -> Unit)?) { presentation?.showMenu(content) }
