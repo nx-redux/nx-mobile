@@ -1,0 +1,29 @@
+package com.nxredux.mobile.runner
+
+/** Where the open in-game menu draws: over the game picture, or in the game panel's content area under its header. */
+enum class MenuHost { PICTURE, PANEL }
+
+/**
+ * The in-game menu on dual screen. The bottom screen is where you act and the top one only informs: with the panel on
+ * its own display the menu takes the panel's place, the picture left to show the paused game.
+ */
+object DualMenu {
+    /**
+     * [MenuHost.PANEL] while the panel is up beside the picture on another display (PANEL, PANEL_UP); else over the
+     * picture, as on one screen (a DS / 3DS split has no panel, a skin's panel glass with no second display is one screen).
+     */
+    fun menuHost(mode: DualMode, pictureOn: PictureOn, panelShown: Boolean): MenuHost =
+        if (panelShown && (mode == DualMode.PANEL || mode == DualMode.PANEL_UP)) MenuHost.PANEL else MenuHost.PICTURE
+
+    /**
+     * The menu draws on the second display: the picture's display for [MenuHost.PICTURE], the other one for
+     * [MenuHost.PANEL]. Never without a window there ([secondWindow]) or a dual mode.
+     */
+    fun menuOnSecond(host: MenuHost, mode: DualMode, pictureOn: PictureOn, secondWindow: Boolean): Boolean {
+        if (!secondWindow || mode == DualMode.OFF) return false
+        return when (host) {
+            MenuHost.PICTURE -> pictureOn == PictureOn.SECOND
+            MenuHost.PANEL -> pictureOn == PictureOn.MAIN
+        }
+    }
+}

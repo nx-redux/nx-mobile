@@ -180,6 +180,16 @@ data class MenuState(
         get() = selectedInfoTruncated || (page.kind != PageKind.Root && page.rows.getOrNull(page.selected)?.hasMoreInfo == true)
 }
 
+/**
+ * The top page's highlighted row changes the picture live (a visual option, or its preview strip): on dual screen the
+ * picture's display lifts its dim meanwhile, so the change shows there as it is made.
+ */
+fun livePreviewRow(state: MenuState): Boolean {
+    val page = state.page
+    if (page.kind is PageKind.Adjust) return true
+    return (page.rows.getOrNull(page.selected) as? MenuRow.Option)?.visual == true
+}
+
 /** What the host must do in response to input; the model never touches the platform or the core. */
 sealed interface MenuEffect {
     data object Close : MenuEffect
@@ -1071,7 +1081,25 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * Whether the root draws the game panel beside its list: not in netplay ([netplay], also once it ended), where the
      * menu is the game header over Continue / Leave (or Quit) and an empty right side.
      */
-    val panelBeside: Boolean get() = !netplay
+    val panelBeside: Boolean get() = !netplay && !inPanel
+
+    /** Hosted in the dual-screen panel ([setInPanel]): under the panel's header, no tabs, and visual rows change in place. */
+    var inPanel: Boolean = false
+        private set
+
+    /**
+     * The menu moves into the dual-screen panel (or out of it). The picture is on the other display there, so a visual
+     * row's change shows on it as it is; a live preview strip already up gives way to its page.
+     */
+    fun setInPanel(on: Boolean) {
+        inPanel = on
+        if (on) {
+            val i = state.stack.indexOfLast { it.kind !is PageKind.Adjust }
+            if (i >= 0 && i < state.stack.size - 1) state = state.copy(stack = state.stack.take(i + 1), editing = false)
+            if (state.panelFocus != null) state = state.copy(panelFocus = null)
+        }
+        fixPanel()
+    }
 
     /** The menu's tab row is up and live: the root on top with the panel ([panelBeside]); see [menuTabsShown]. */
     private fun tabsShown(): Boolean = panelBeside && state.stack.size == 1 && state.page.kind == PageKind.Root
@@ -1197,7 +1225,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /** Row [index] of the top page when it is a visual option (it changes the picture) on a page that isn't its strip. */
     private fun visualRow(index: Int): MenuRow.Option? =
-        (state.page.rows.getOrNull(index) as? MenuRow.Option)?.takeIf { it.visual && state.page.kind !is PageKind.Adjust }
+        (state.page.rows.getOrNull(index) as? MenuRow.Option)?.takeIf { it.visual && !inPanel && state.page.kind !is PageKind.Adjust }
 
     /**
      * Every change to a visual row happens in its live preview: LEFT/RIGHT, a tap on its control, A. When row [index] is
