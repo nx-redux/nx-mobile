@@ -587,7 +587,7 @@ class AppStateKidsTest {
     }
 
     @Test fun lockedSecondScreenShowsTheBackdrop() {
-        assertEquals(TopContent.Backdrop, DualMenu.top(Screen.KidsHome, null, emptyList(), tool = true))
+        assertEquals(TopContent.Backdrop, DualMenu.top(Screen.KidsHome, null, tool = true))
         assertEquals(BottomContent.Normal, DualMenu.bottom(Screen.KidsHome, active = true, tool = true))
     }
 

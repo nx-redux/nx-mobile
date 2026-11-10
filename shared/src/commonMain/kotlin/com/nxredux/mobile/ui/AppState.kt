@@ -1081,10 +1081,6 @@ class AppState(
     val secondList: StateFlow<SecondList?> = _secondList.asStateFlow()
     private var secondListJob: Job? = null
 
-    private val _drawerPreview = MutableStateFlow<List<ToolAppRow>?>(null)
-    /** While [dualMenu] with the Apps tile highlighted: the drawer's apps (what A would open), for the second display; else null. */
-    val drawerPreview: StateFlow<List<ToolAppRow>?> = _drawerPreview.asStateFlow()
-    private var drawerPreviewJob: Job? = null
 
     private val _toolOnTop = MutableStateFlow(false)
     /**
@@ -1123,7 +1119,6 @@ class AppState(
         _dualMenu.value = active
         if (active) ra.closeRaPanel()   // the panel is a single-screen overlay: dual mode shows the details pane instead
         followSecondList()
-        followDrawerPreview()
         ra.followRaDetails()
     }
 
@@ -1165,35 +1160,6 @@ class AppState(
     }
 
     /**
-     * Recomputes [drawerPreview]: the installed apps, read once when the Apps tile is highlighted on the second display,
-     * kept while it stays so; dropped (a read under way cancelled) when it is not.
-     */
-    private fun followDrawerPreview() {
-        val s = _screen.value as? Screen.Systems
-        val l = deps.launcher
-        val on = l != null && _dualMenu.value && s != null && s.menu == null && s.search == null && isAppsTile(s.rows.getOrNull(_selection.value.index))
-        if (!on) { drawerPreviewJob?.cancel(); drawerPreviewJob = null; _drawerPreview.value = null; return }
-        if (_drawerPreview.value != null || drawerPreviewJob?.isActive == true) return
-        drawerPreviewJob = scope.launch {
-            val apps = tryOr({ return@launch }) { l!!.installedApps() }
-            installedCache = apps
-            _drawerPreview.value = drawerRows(apps)
-        }
-    }
-
-    /** A tap on app [index] of the second display's drawer preview: opens the drawer there on it, as A would (B returns). */
-    fun openDrawerPreviewApp(index: Int) {
-        val s = _screen.value as? Screen.Systems ?: return
-        val app = _drawerPreview.value?.getOrNull(index) ?: return
-        if (!kidsUi.kidsToolsAllowed) return   // Kids Mode: the Apps drawer only for a parent
-        if (loader.active || s.menu != null || s.search != null || !isAppsTile(s.rows.getOrNull(_selection.value.index))) return
-        intendNav(NavMotion.FORWARD)
-        rememberMenuSelection()
-        noteToolOrigin()
-        openToolApps(AppPick.TOOLS, selectId = app.id)
-    }
-
-    /**
      * While a tool is on the second display ([toolOnTop]): the main menu it was opened from, on the row it was opened
      * from (found again when the rows moved), drawn on the bottom screen as it stays; null otherwise. A game list
      * reached from a tool takes both screens as any game list does.
@@ -1219,10 +1185,6 @@ class AppState(
         val inTools = deps.settings.toolApps.toSet()
         return apps.filter { it.id !in console }.map { ToolAppRow(it.id, it.label, it.id in inTools) }
     }
-
-    /** The Apps tile, in Tools or pinned on Home. */
-    private fun isAppsTile(row: MainRow?): Boolean =
-        (row is MainRow.Tool && row.row.kind == ToolKind.APPS) || (row is MainRow.PinnedTool && row.row.kind == ToolKind.APPS)
 
     /** The list the highlighted row previews while [dualMenu] on Consoles / Collections; null for any other row, tab or screen. */
     private fun highlightedSecondSource(): ListSource? {
@@ -1446,11 +1408,11 @@ class AppState(
             }
         }
         // The achievements panel follows the game list's selection, and closes off the game list.
-        scope.launch { _selection.collect { ra.followRaPanel(); ra.followRaDetails(); followSecondList(); followDrawerPreview() } }
+        scope.launch { _selection.collect { ra.followRaPanel(); ra.followRaDetails(); followSecondList() } }
         scope.launch {
             _screen.collect {
                 if (setupScreen(it)) _toolOnTop.value = false   // a tool's page no more: setup takes the menu's screen
-                if (it !is Screen.Games) { ra.closeRaPanel() } else { ra.followRaPanel() }; ra.followRaDetails(); followSecondList(); followDrawerPreview()
+                if (it !is Screen.Games) { ra.closeRaPanel() } else { ra.followRaPanel() }; ra.followRaDetails(); followSecondList()
                 if (it !is Screen.Games) closeArtPanel()   // as the achievements panel: only over a game list
             }
         }
