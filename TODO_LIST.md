@@ -14,6 +14,18 @@
 - [ ] Home during a slow PS2/Wii quit, tap the same game → starts fresh; Home during a big PS2 state resume → no ANR; then clear it from the launcher icon → SRAM survived.
 - [ ] Threaded cores across pause/resume (input lock): Dolphin GC/Wii incl. Wii pointer, Azahar, ARMSX2, PPSSPP; N64 netplay input still arrives; a game from a picked file still opens.
 
+## Dual screen: bottom acts, top informs
+
+Device checks still owed:
+
+- [ ] Nova: every menu screen — d-pad and buttons never reach the top; tools, Settings, Apps drawer and game lists open on the bottom; the top shows details / stats / backdrop as the spec table says.
+- [ ] Nova: text prompts (search, rename, sign-in) show box and keyboard together on the bottom; the top keeps details/backdrop.
+- [ ] Nova: a tap on a Most played / Newest added cover launches; quitting lands on that console/collection row; a drag, a long press, or a tap while a context menu / prompt is open doesn't launch.
+- [ ] Nova: details follow fast scrolling without showing another game's page; a game with save states + achievements, each alone, an Android game, a never-played console; no RetroAchievements chip on a played homebrew without a set.
+- [ ] Fold cover display and the menu skin's two glasses (small top): details and stats fit without clipping; the stats shelf hides cleanly when too short.
+- [ ] Menu on the second display (Bottom screen set to the other display): prompts and keyboard follow the bottom.
+- [ ] Thor / Duo (both screens touch): top-screen taps act once, never move focus.
+
 ## Controls editor: skin and overlay layouts
 
 Device checks still owed:
