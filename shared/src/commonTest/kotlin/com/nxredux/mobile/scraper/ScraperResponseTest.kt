@@ -96,4 +96,44 @@ class ScraperResponseTest {
         assertEquals(listOf("u2", "u1"), ScraperMedia.rank(m, ArtSlot.MIX).map { it.url })
         assertEquals("u2", ScraperMedia.choose(m)[ArtSlot.MIX]!!.url)
     }
+
+    private fun info(jeu: String): SsGameInfo? {
+        val g = assertIs<GameLookup.Found>(ScraperResponse.parseGame(200, """{"response":{"jeu":{"id":"1",$jeu}}}"""))
+        return g.info
+    }
+
+    @Test fun info_prefers_english_then_french_then_japanese() {
+        val fr = """{"langue":"fr","text":"Bonjour"}"""; val ja = """{"langue":"ja","text":"Konnichiwa"}"""
+        val en = """{"langue":"en","text":"Hello"}"""; val de = """{"langue":"de","text":"Hallo"}"""
+        assertEquals("Hello", info(""""synopsis":[$ja,$fr,$en]""")!!.synopsis)
+        assertEquals("en", info(""""synopsis":[$ja,$fr,$en]""")!!.lang)
+        assertEquals("Bonjour", info(""""synopsis":[$ja,$fr,$de]""")!!.synopsis)
+        assertEquals("Konnichiwa", info(""""synopsis":[$de,$ja]""")!!.synopsis)
+        assertEquals("Hallo", info(""""synopsis":[$de]""")!!.synopsis)
+        assertEquals("de", info(""""synopsis":[$de]""")!!.lang)
+    }
+
+    @Test fun missing_fields_are_null_and_all_missing_is_no_info() {
+        val i = info(""""editeur":{"id":"3","text":"Nintendo"},"synopsis":null,"genres":[],"dates":null""")!!
+        assertNull(i.synopsis); assertNull(i.genre); assertNull(i.year); assertEquals("Nintendo", i.publisher)
+        assertNull(info(""""synopsis":[],"genres":null,"editeur":{}"""))
+        assertNull(info(""""synopsis":[{"langue":"en","text":"  "}]"""))
+    }
+
+    @Test fun html_entities_and_crlf_are_cleaned() {
+        val i = info(""""synopsis":[{"langue":"en","text":"Link&#039;s &amp; Zelda\r\n"}],"editeur":{"text":"A&#x27;B &lt;&gt; &quot;C&quot; &apos;D&apos;&nbsp;E"}""")!!
+        assertEquals("Link's & Zelda", i.synopsis)
+        assertEquals("A'B <> \"C\" 'D' E", i.publisher)
+        assertEquals("a\nb", info(""""synopsis":[{"langue":"en","text":"a\r\nb"}]""")!!.synopsis)
+    }
+
+    @Test fun year_is_the_earliest_date() {
+        val d = """"dates":[{"region":"eu","text":"1994-03-01"},{"region":"jp","text":"1993"},{"region":"us","text":"1993-06-06"}]"""
+        assertEquals("1993", info(d)!!.year)
+    }
+
+    @Test fun genre_takes_the_first_genres_english_name() {
+        val g = """"genres":[{"id":"5","noms":[{"langue":"fr","text":"Aventure"},{"langue":"en","text":"Adventure"}]},{"id":"6","noms":[{"langue":"en","text":"RPG"}]}]"""
+        assertEquals("Adventure", info(g)!!.genre)
+    }
 }

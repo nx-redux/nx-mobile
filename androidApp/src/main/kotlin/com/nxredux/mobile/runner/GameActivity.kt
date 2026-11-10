@@ -329,7 +329,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     override var focusPaused = false
         private set
-    private val saves = SaveSession(this, renderer, menu)
+    private val saves = SaveSession(this, renderer, menu, dual)
     private val wii = WiiDolphinController(this, input, saves)
     private val launchPipeline = LaunchPipeline(LaunchState())
     override val slotsUi: androidx.compose.runtime.State<List<SlotUi>> get() = saves.slotsUi

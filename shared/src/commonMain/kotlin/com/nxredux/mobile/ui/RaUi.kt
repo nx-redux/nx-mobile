@@ -6,6 +6,7 @@ import com.nxredux.mobile.achievements.RaBadgeFolders
 import com.nxredux.mobile.achievements.RaDownload
 import com.nxredux.mobile.achievements.RaDownloadItem
 import com.nxredux.mobile.achievements.RaDownloadPhase
+import com.nxredux.mobile.achievements.RaConsoleView
 import com.nxredux.mobile.achievements.RaGameView
 import com.nxredux.mobile.achievements.RaItemStatus
 import com.nxredux.mobile.achievements.RaState
@@ -194,6 +195,10 @@ fun RaTone.toNxTone(): NxTone = when (this) {
 fun raGameSubtitle(g: RaGameView): RaSubtitle =
     if (g.pending > 0) RaSubtitle("${g.unlocked}/${g.total} unlocked · ${g.pending} pending sync", RaTone.PENDING)
     else RaSubtitle("${g.unlocked}/${g.total} unlocked", RaTone.LOCKED)
+
+/** A console row: "n games · u of t unlocked". */
+fun raConsoleSubtitle(c: RaConsoleView): String =
+    "${c.games.size} ${if (c.games.size == 1) "game" else "games"} · ${c.unlocked} of ${c.total} unlocked"
 
 /** The badge image model for [a] from its game's listing: the greyed variant while locked; null until downloaded. */
 fun raBadgeModel(badges: Map<String, String>, a: RaAchievement): String? =

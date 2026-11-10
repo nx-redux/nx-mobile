@@ -29,7 +29,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nxredux.mobile.ui.GridTile
 import com.nxredux.mobile.ui.InfoLine
-import com.nxredux.mobile.ui.SETTINGS_ROWS_FADE_ROWS
 import com.nxredux.mobile.ui.TOOL_APPS_GAP
 
 /** Below this tile height (dp) the grid neither draws nor reports its columns: a layout pass not yet at its size. */
@@ -42,8 +41,7 @@ internal fun gridDrawable(widthDp: Float, heightDp: Float, g: GridGeometry): Boo
 /**
  * The Grid style (main menu tabs, game lists), held either way: [tiles] row by row, scrolling up and down only
  * ([gridVertical]: columns from the width and the tiles' least width, at least 3 rows filling the box, a gap under its top). It rests on a
- * row; while more rows are beyond an edge it fades over List's fade ([SETTINGS_ROWS_FADE_ROWS] List rows, [homeListPitch]),
- * not by whole rows, a Grid row being several List rows tall; the selection stops on the second
+ * row; while more rows are beyond an edge it fades a short fixed height ([TILE_GRID_FADE]), never a whole row; the selection stops on the second
  * row from an edge so it is never in it ([homeListScroll]). A grid that fits sits on the box's bottom, its last row a gap
  * over what is under it. Sideways swipes are the main menu's (they switch tabs); Carousels alone scroll sideways.
  * Reports its columns through [onColumns], so the d-pad steps by whole rows ([gridStep]).
@@ -131,16 +129,13 @@ fun NxTileGrid(
             placed[0] = true
             if (target != current) { if (animate) state.animateScrollToItem(index, offset) else state.scrollToItem(index, offset) }
         }
-        // The pad case's edge fade: a quarter row at each edge, so the half rows either side of the selection still read.
-        val edgeFade = with(density) { (pitchPx / 4).toDp() }
-        // Roomy: as deep as List's two faded rows, not a whole Grid row; eased, so the dim tiles at the edge read faded.
-        val listFade = homeListPitch() * SETTINGS_ROWS_FADE_ROWS
         LazyColumn(
             // A grid that fits sits on the box's bottom; Tools' fixed tiles start at its top, as the app drawer's.
             Modifier.align(if (fits && !fixed) Alignment.BottomStart else Alignment.TopStart)
                 .padding(top = if (fits && !fixed) 0.dp else with(density) { topPx.toDp() }, bottom = if (fits && !fixed) with(density) { tabGapPx.toDp() } else 0.dp)
                 .fillMaxWidth().height(with(density) { viewport.toDp() })
-                .nxEdgeFade({ state.canScrollBackward }, { state.canScrollForward }, if (roomy) listFade else edgeFade, strong = roomy),
+                // A short fixed fade: enough to show more tiles are there without dimming a whole row of them.
+                .nxEdgeFade({ state.canScrollBackward }, { state.canScrollForward }, TILE_GRID_FADE, strong = roomy),
             state = state, verticalArrangement = if (fixed) Arrangement.Top else Arrangement.Bottom,
             flingBehavior = if (roomy) rememberNxRowSnapFling(state) else rememberSnapFlingBehavior(state, SnapPosition.Center),
         ) {
@@ -185,3 +180,5 @@ fun NxTileGrid(
  */
 internal fun gridCentredScroll(row: Int, rows: Int, pitch: Int, viewport: Int): Int =
     (row * pitch - (viewport - pitch) / 2).coerceIn(0, (rows * pitch - viewport).coerceAtLeast(0))
+
+private val TILE_GRID_FADE = 24.dp

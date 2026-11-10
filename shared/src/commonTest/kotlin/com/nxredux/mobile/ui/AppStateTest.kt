@@ -17,6 +17,9 @@ import com.nxredux.mobile.achievements.FakeRaStore
 import com.nxredux.mobile.achievements.RaController
 import com.nxredux.mobile.achievements.RaHomeTree
 import com.nxredux.mobile.achievements.RaPaths
+import com.nxredux.mobile.achievements.RaConsoles
+import com.nxredux.mobile.achievements.RaGamesCache
+import com.nxredux.mobile.achievements.RaGamesSnapshotCodec
 import com.nxredux.mobile.achievements.RaGamePointer
 import com.nxredux.mobile.achievements.RaGamePointers
 import com.nxredux.mobile.achievements.RaProgress
@@ -152,6 +155,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.delay
@@ -160,6 +164,8 @@ import kotlin.coroutines.ContinuationInterceptor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 /** Every styled main menu tab on List ([AppStateTest]'s settings fixture); a test sets a tab with `LIST_TABS + mapOf(tab to style)`. */
 private val LIST_TABS = mapOf(MenuCategory.HOME to MenuStyle.GRID, MenuCategory.CONSOLES to MenuStyle.LIST, MenuCategory.COLLECTIONS to MenuStyle.LIST, MenuCategory.TOOLS to MenuStyle.LIST)
@@ -2132,8 +2138,8 @@ class AppStateTest {
         assertEquals(2, runner.launched.size)
     }
 
-    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, skinEditor: SkinEditorLauncher? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }, ownKeyboard: Boolean = false, onSecond: () -> Boolean = { false }) =
-        AppState(AppDeps(settings, src, runner, picker, data, ownKeyboard = ownKeyboard, promptOnSecondDisplay = onSecond, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, skinEditor = skinEditor, saveTransfer = saveTransfer, allFilesAccess = allFiles, micAccess = mic, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, skinEditor: SkinEditorLauncher? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }, ownKeyboard: Boolean = false, onSecond: () -> Boolean = { false }, topFacts: TopFactsPlatform? = null) =
+        AppState(AppDeps(settings, src, runner, picker, data, topFacts = topFacts, ownKeyboard = ownKeyboard, promptOnSecondDisplay = onSecond, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, skinEditor = skinEditor, saveTransfer = saveTransfer, allFilesAccess = allFiles, micAccess = mic, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
 
     /** What a scan of [src] for [settings] stores, built without an AppState (so without the skeleton). */
     private suspend fun scannedIndex(settings: MemorySettings, src: RomsSource = source): LibraryIndex =
@@ -4576,6 +4582,89 @@ class AppStateTest {
         assertEquals(2, state.selection.value.index)
     }
 
+    // Dual screen: the top screen has the game's details, so a game list never draws Backdrop or a vertical Carousel.
+    @Test fun a_dual_screen_game_list_draws_backdrop_and_a_vertical_carousel_as_a_horizontal_carousel() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), settings)
+        state.onConsoles()
+        settings.gameListStyle = MenuStyle.BACKDROP
+        settings.gameListOrientation = MenuOrientation.VERTICAL
+        state.openSelected()
+        val list = assertIs<Screen.Games>(state.screen.value)
+        assertEquals(MenuStyle.BACKDROP, state.styleOf(list))
+        assertEquals(MenuOrientation.VERTICAL, state.orientationOf(list))
+        state.onDualMenu(true)
+        assertEquals(MenuStyle.CAROUSEL, state.styleOf(list))
+        assertEquals(MenuOrientation.HORIZONTAL, state.orientationOf(list))
+        settings.gameListStyle = MenuStyle.CAROUSEL
+        assertEquals(MenuOrientation.HORIZONTAL, state.orientationOf(list))
+        settings.gameListStyle = MenuStyle.GRID
+        assertEquals(MenuStyle.GRID, state.styleOf(list))
+        settings.gameListStyle = MenuStyle.BACKDROP
+        assertEquals(MenuStyle.CAROUSEL, state.styleOf(list))
+        assertEquals(MenuStyle.LIST, state.styleOf(Screen.Systems(emptyList())))   // the main menu tabs are not game lists
+        state.onDualMenu(false)
+        assertEquals(MenuStyle.BACKDROP, state.styleOf(list))   // the saved layout was never changed
+        assertEquals(MenuOrientation.VERTICAL, state.orientationOf(list))
+        assertEquals(MenuStyle.BACKDROP, settings.gameListStyle)
+        assertEquals(MenuOrientation.VERTICAL, settings.gameListOrientation)
+    }
+
+    @Test fun dual_screen_layouts_hide_backdrop_and_the_vertical_carousel_for_game_lists() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings)
+        state.load()
+        fun row(kind: SettingsKind) = state.layoutsRows().firstOrNull { it.kind == kind }
+        for (dual in listOf(false, true)) for (style in MenuStyle.entries) for (o in MenuOrientation.entries) {
+            state.onDualMenu(dual)
+            settings.gameListStyle = style; settings.gameListOrientation = o
+            state.openSettings(SettingsSection.LAYOUT_GAME_LISTS)
+            val turns = !dual && (style == MenuStyle.CAROUSEL || style == MenuStyle.BACKDROP)
+            assertEquals(turns, row(SettingsKind.GAME_LIST_ORIENTATION) != null, "dual=$dual $style $o")
+            assertEquals(turns && o == MenuOrientation.VERTICAL, row(SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT) != null, "dual=$dual $style $o")
+            val shown = if (dual && style == MenuStyle.BACKDROP) MenuStyle.CAROUSEL else style
+            assertEquals(menuStyleLabel(shown), row(SettingsKind.GAME_LIST_STYLE)?.secondary, "dual=$dual $style $o")
+            val vertical = !dual && turns && o == MenuOrientation.VERTICAL
+            assertEquals(LayoutShot.Games(shown, vertical), assertIs<Screen.Settings>(state.screen.value).shot, "dual=$dual $style $o")
+            assertEquals(style, settings.gameListStyle); assertEquals(o, settings.gameListOrientation)   // showing never saves
+        }
+        // Stepping the layout in dual skips Backdrop: from a saved Backdrop (shown as Carousel) RIGHT is Minimal.
+        state.onDualMenu(true)
+        settings.gameListStyle = MenuStyle.GRID
+        state.openSettings(SettingsSection.LAYOUT_GAME_LISTS)
+        state.select(state.layoutsRows().indexOfFirst { it.kind == SettingsKind.GAME_LIST_STYLE }); state.onButton(NxButton.RIGHT)
+        assertEquals(MenuStyle.CAROUSEL, settings.gameListStyle)
+        state.onButton(NxButton.RIGHT)
+        assertEquals(MenuStyle.MINIMAL, settings.gameListStyle)
+        settings.gameListStyle = MenuStyle.BACKDROP
+        state.openSettings(SettingsSection.LAYOUT_GAME_LISTS)
+        state.select(state.layoutsRows().indexOfFirst { it.kind == SettingsKind.GAME_LIST_STYLE }); state.onButton(NxButton.RIGHT)
+        assertEquals(MenuStyle.MINIMAL, settings.gameListStyle)
+        // Back on one screen the Backdrop choice returns.
+        state.onDualMenu(false)
+        settings.gameListStyle = MenuStyle.CAROUSEL
+        state.openSettings(SettingsSection.LAYOUT_GAME_LISTS)
+        state.select(state.layoutsRows().indexOfFirst { it.kind == SettingsKind.GAME_LIST_STYLE }); state.onButton(NxButton.RIGHT)
+        assertEquals(MenuStyle.BACKDROP, settings.gameListStyle)
+    }
+
+    @Test fun the_dual_screen_layout_dropdown_offers_no_backdrop_or_vertical_carousel() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { gameListStyle = MenuStyle.BACKDROP; gameListOrientation = MenuOrientation.VERTICAL }
+        val state = searchState(settings)
+        state.onDualMenu(true)
+        state.openSystem(assertIs<Screen.Systems>(state.screen.value).systems.first { it.tag == "SFC" })
+        state.toggleLayoutMenu()
+        assertEquals(2, assertIs<Screen.Games>(state.screen.value).layoutMenu)   // on the Carousel the list is drawn as
+        repeat(5) { state.onButton(NxButton.DOWN) }
+        assertEquals(3, assertIs<Screen.Games>(state.screen.value).layoutMenu)   // Minimal, the last of four
+        state.onButton(NxButton.A)
+        assertEquals(MenuStyle.MINIMAL, settings.gameListStyle)
+        state.toggleLayoutMenu()
+        state.pickLayout(2)
+        assertEquals(MenuStyle.CAROUSEL, settings.gameListStyle)
+        assertEquals(MenuOrientation.HORIZONTAL, settings.gameListOrientation)
+    }
+
     @Test fun style_of_follows_the_screen() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), settings)
@@ -6386,7 +6475,7 @@ class AppStateTest {
         val tap = { i: Int -> state.raParentTap(Screen.RetroAchievements(), i) }
         nxTap(0, selected = false, opens = true, tap, tap)               // Achievements on the dimmed left
         advanceUntilIdle()
-        assertIs<Screen.RaGames>(state.screen.value)
+        assertIs<Screen.RaConsoles>(state.screen.value)
     }
 
     private fun TestScope.splitSettings(): Pair<AppState, MemorySettings> {
@@ -6863,12 +6952,16 @@ class AppStateTest {
     private class RaFixture(val state: AppState, val store: FakeRaStore, val http: FakeRaHttp, val controller: RaController, val hasher: FakeRaHasher = FakeRaHasher())
 
     /** The Tools setup plus an achievements controller on fakes (no cheat DB controller). */
-    private fun TestScope.raFixture(home: RaHomeTree? = null, index: LibraryIndex? = null, hasher: FakeRaHasher = FakeRaHasher(), roms: FakeRomsSource = source, ownKeyboard: Boolean = false): RaFixture {
-        val store = FakeRaStore(); val http = FakeRaHttp()
-        val settings = MemorySettings(ContentRef("Home"))   // a home, so the main menu (and its Tools tab) is built
+    private fun TestScope.raFixture(
+        home: RaHomeTree? = null, index: LibraryIndex? = null, hasher: FakeRaHasher = FakeRaHasher(), roms: FakeRomsSource = source, ownKeyboard: Boolean = false,
+        store: FakeRaStore = FakeRaStore(), settings: MemorySettings = MemorySettings(ContentRef("Home")),   // a home, so the main menu (and its Tools tab) is built
+        files: PrivateFiles = MemoryPrivateFiles(), log: (String) -> Unit = {},
+    ): RaFixture {
+        val http = FakeRaHttp()
         val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
         val controller = RaController(if (home == null) fakePlatform(store, http, hasher) else fakePlatform(store, http, hasher, home = home), settings, { index }, scope, now = { 0L })
-        return RaFixture(AppState(AppDeps(settings, roms, RecordingRunner(), NoopPicker(), achievements = controller, ownKeyboard = ownKeyboard, compute = UnconfinedTestDispatcher(testScheduler)), scope).also { it.load() }, store, http, controller, hasher)
+        val deps = AppDeps(settings, roms, RecordingRunner(), NoopPicker(), achievements = controller, ownKeyboard = ownKeyboard, compute = UnconfinedTestDispatcher(testScheduler), privateFiles = files, log = log)
+        return RaFixture(AppState(deps, scope).also { it.load() }, store, http, controller, hasher)
     }
     private fun TestScope.stateWithAchievements(): Pair<AppState, FakeRaStore> = raFixture().let { it.state to it.store }
 
@@ -7021,20 +7114,54 @@ class AppStateTest {
         assertEquals(1, state.selection.value.index)   // RetroAchievements stays highlighted
     }
 
-    /** Two cached games (Alpha, Beta), two achievements each; on the RetroAchievements page. */
-    private fun TestScope.raBrowser(): AppState {
+    /**
+     * Three cached games, two achievements each: Alpha and Beta on Game Boy Advance, Gamma on Super Nintendo ES (by their
+     * RetroAchievements consoles: no library pointer); on the RetroAchievements page.
+     */
+    private fun TestScope.raBrowser(): AppState = raBrowserWithStore().first
+    private fun TestScope.raBrowserWithStore(): Pair<AppState, FakeRaStore> {
         val (state, store) = stateWithAchievements()
-        for ((c, t) in listOf('a' to "Alpha", 'b' to "Beta")) {
-            store.put(RaPaths.sets(c.toString().repeat(32)), setsJson(c.code, title = t, achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"},{"ID":2,"Title":"Second","Points":5,"BadgeName":"2"}"""))
+        for ((c, t, console) in listOf(Triple('a', "Alpha", RaConsoles.GBA), Triple('b', "Beta", RaConsoles.GBA), Triple('c', "Gamma", RaConsoles.SNES))) {
+            store.put(RaPaths.sets(c.toString().repeat(32)), setsJson(c.code, title = t, consoleId = console, achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"},{"ID":2,"Title":"Second","Points":5,"BadgeName":"2"}"""))
         }
         openRa(state)
         assertIs<Screen.RetroAchievements>(state.screen.value)
-        return state
+        return state to store
+    }
+
+    @Test fun achievements_lists_consoles_then_a_consoles_games_then_a_games_achievements() = runTest {
+        val (state, store) = raBrowserWithStore()
+        state.openSelected()                                                              // Achievements
+        val consoles = assertIs<Screen.RaConsoles>(state.screen.value)
+        assertEquals(listOf("Game Boy Advance", "Super Nintendo ES"), consoles.consoles.map { it.name })
+        assertEquals(listOf(2, 1), consoles.consoles.map { it.games.size })
+        assertEquals(0, state.selection.value.index)
+        state.onButton(NxButton.DOWN)
+        store.reads.clear(); store.beforeList = { error("no read opening a console") }
+        state.openSelected()                                                              // Super Nintendo ES: from what was read
+        val snes = assertIs<Screen.RaGames>(state.screen.value)
+        assertEquals("Super Nintendo ES", snes.console); assertEquals(listOf("Gamma"), snes.games.map { it.title })
+        assertTrue(store.reads.isEmpty()); assertFalse(state.loading.value)
+        store.beforeList = {}
+        state.openSelected()                                                              // Gamma
+        assertEquals("Gamma", assertIs<Screen.RaGame>(state.screen.value).game.title)
+        // B steps up one level at a time, each landing on the row it left.
+        assertTrue(state.back()); assertEquals(snes, state.screen.value); assertEquals(0, state.selection.value.index)
+        assertTrue(state.back()); assertIs<Screen.RaConsoles>(state.screen.value); assertEquals(1, state.selection.value.index)
+        assertTrue(state.back()); assertIs<Screen.RetroAchievements>(state.screen.value)
+        assertEquals(RaAction.entries.indexOf(RaAction.ACHIEVEMENTS), state.selection.value.index)
+    }
+
+    @Test fun no_cached_games_lists_no_consoles() = runTest {
+        val (state, _) = stateWithAchievements()
+        openRa(state); state.openSelected()
+        assertEquals(emptyList(), assertIs<Screen.RaConsoles>(state.screen.value).consoles)
+        assertTrue(state.back()); assertIs<Screen.RetroAchievements>(state.screen.value)
     }
 
     @Test fun a_on_a_game_page_opens_the_achievement_on_every_window() = runTest {
         val state = raBrowser()
-        state.openSelected(); state.openSelected()   // Achievements → Alpha
+        state.openSelected(); state.openSelected(); state.openSelected()   // Achievements → Game Boy Advance → Alpha
         assertIs<Screen.RaGame>(state.screen.value)
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)   // A opens the detail
         assertEquals("Second", assertIs<Screen.RaAchievement>(state.screen.value).achievement.title)
@@ -7044,8 +7171,11 @@ class AppStateTest {
         val state = raBrowser()
         assertNull(state.raParent(state.screen.value))                                   // the page: whole
         state.openSelected()                                                              // Achievements
+        val consoles = assertIs<Screen.RaConsoles>(state.screen.value)
+        assertEquals(RaParent(Screen.RetroAchievements(), RaAction.entries.indexOf(RaAction.ACHIEVEMENTS)), state.raParent(consoles))
+        state.openSelected()                                                              // Game Boy Advance
         val games = assertIs<Screen.RaGames>(state.screen.value)
-        assertEquals(RaParent(Screen.RetroAchievements(), RaAction.entries.indexOf(RaAction.ACHIEVEMENTS)), state.raParent(games))
+        assertEquals(RaParent(consoles, 0), state.raParent(games))                        // the consoles, Game Boy Advance lit
         state.onButton(NxButton.DOWN); state.openSelected()                               // Beta
         val beta = assertIs<Screen.RaGame>(state.screen.value)
         assertEquals(RaParent(games, 1), state.raParent(beta))                            // the games list, Beta lit
@@ -7056,8 +7186,10 @@ class AppStateTest {
         // B steps back one level each time, the columns shifting right; the page is whole again at the end.
         assertTrue(state.back()); assertEquals(beta.copy(lockedOnly = true), state.screen.value); assertEquals(1, state.selection.value.index)
         assertTrue(state.back()); assertIs<Screen.RaGames>(state.screen.value); assertEquals(1, state.selection.value.index)
+        assertTrue(state.back()); assertIs<Screen.RaConsoles>(state.screen.value); assertEquals(0, state.selection.value.index)
         assertTrue(state.back()); assertIs<Screen.RetroAchievements>(state.screen.value); assertNull(state.raParent(state.screen.value))
         // LEFT never leaves the focused pane.
+        state.openSelected(); state.onButton(NxButton.LEFT); assertIs<Screen.RaConsoles>(state.screen.value)
         state.openSelected(); state.onButton(NxButton.LEFT); assertIs<Screen.RaGames>(state.screen.value)
         state.openSelected(); state.onButton(NxButton.LEFT); assertIs<Screen.RaGame>(state.screen.value)
         state.openSelected(); state.onButton(NxButton.LEFT); assertIs<Screen.RaAchievement>(state.screen.value)
@@ -7065,7 +7197,7 @@ class AppStateTest {
 
     @Test fun one_tap_on_the_dimmed_left_pane_opens_that_row_in_place() = runTest {
         val state = raBrowser()
-        state.openSelected(); state.openSelected()                                        // Achievements → Alpha
+        state.openSelected(); state.openSelected(); state.openSelected()                  // Achievements → Game Boy Advance → Alpha
         val games = assertNotNull(state.raParent(state.screen.value)).screen
         val onGames = { i: Int -> state.raParentTap(games, i) }
         val seen = mutableListOf<Screen>()
@@ -7089,12 +7221,18 @@ class AppStateTest {
         assertEquals(1, assertNotNull(state.raParent(state.screen.value)).row)
         onGames(0); assertIs<Screen.RaAchievement>(state.screen.value)                     // a pane no longer beside it: nothing
         state.back(); state.back()                                                        // the games list
+        val consoles = assertNotNull(state.raParent(state.screen.value)).screen
+        val onConsoles = { i: Int -> state.raParentTap(consoles, i) }
+        nxTap(1, selected = false, opens = true, onConsoles, onConsoles)                   // Super Nintendo ES on the left
+        assertEquals("Super Nintendo ES", assertIs<Screen.RaGames>(state.screen.value).console)
+        assertEquals(1, assertNotNull(state.raParent(state.screen.value)).row)
+        state.back()                                                                      // the consoles
         val page = { i: Int -> state.raParentTap(Screen.RetroAchievements(), i) }
         nxTap(raPageRow(Screen.RaSettings(emptyList()))!!, selected = false, opens = true, page, page)   // Settings on the page
         assertIs<Screen.RaSettings>(state.screen.value)                                   // RetroAchievements Settings, split
         nxTap(0, selected = false, opens = true, page, page)                               // Achievements again
         advanceUntilIdle()
-        assertIs<Screen.RaGames>(state.screen.value)
+        assertIs<Screen.RaConsoles>(state.screen.value)
     }
 
     @Test fun achievements_browser_shows_cached_games_then_their_achievements() = runTest {
@@ -7108,6 +7246,8 @@ class AppStateTest {
         store.put(RaPaths.sets(h), setsJson(42, title = "Game", achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"}"""))
         store.put(RaPaths.game(h), """{"tag":"GBA","source":"home","dir":"Roms/$gba","file":"g.gba","title":"Game"}""")
         openRa(state); state.openSelected()   // Achievements
+        assertEquals(listOf("Game Boy Advance"), assertIs<Screen.RaConsoles>(state.screen.value).consoles.map { it.name })
+        state.openSelected()
         val games = assertIs<Screen.RaGames>(state.screen.value); assertEquals("Game", games.games.single().title)
         state.openSelected()
         val game = assertIs<Screen.RaGame>(state.screen.value); assertEquals("First", game.achievements.single().title)
@@ -7118,22 +7258,136 @@ class AppStateTest {
         state.onButton(NxButton.Y); assertTrue((state.screen.value as Screen.RaGame).lockedOnly)
         state.openSelected(); assertEquals(game.badges, assertIs<Screen.RaAchievement>(state.screen.value).badges)
         assertTrue(state.back()); assertTrue(state.back()); assertIs<Screen.RaGames>(state.screen.value)
+        assertTrue(state.back()); assertIs<Screen.RaConsoles>(state.screen.value)
         assertTrue(state.back()); assertIs<Screen.RetroAchievements>(state.screen.value)
         assertEquals(0, state.selection.value.index)   // Achievements stays highlighted
     }
 
-    @Test fun the_games_list_reloads_on_return_and_keeps_its_row() = runTest {
+    // --- The Achievements snapshot: shown at once, refreshed quietly ---
+
+    /** Alpha and Beta on Game Boy Advance, Gamma on Super Nintendo ES, signed in as "me"; on the RetroAchievements page. */
+    private fun TestScope.raSnapshotFixture(
+        store: FakeRaStore = FakeRaStore(), files: PrivateFiles = MemoryPrivateFiles(), user: String = "me", log: (String) -> Unit = {},
+    ): RaFixture {
+        val settings = MemorySettings(ContentRef("Home")).apply { raToken = "tok"; raUsername = user }
+        val f = raFixture(store = store, settings = settings, files = files, log = log)
+        for ((c, t, console) in listOf(Triple('a', "Alpha", RaConsoles.GBA), Triple('b', "Beta", RaConsoles.GBA), Triple('c', "Gamma", RaConsoles.SNES))) {
+            if (RaPaths.sets(c.toString().repeat(32)) !in store.files) store.put(RaPaths.sets(c.toString().repeat(32)), setsJson(c.code, title = t, consoleId = console, achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"}"""))
+        }
+        openRa(f.state)
+        return f
+    }
+    private fun FakeRaStore.hold(): CompletableDeferred<Unit> = CompletableDeferred<Unit>().also { held -> beforeList = { held.await() } }
+    private fun RaFixture.openAchievements() { state.select(RaAction.entries.indexOf(RaAction.ACHIEVEMENTS)); state.openSelected() }
+
+    @Test fun achievements_with_a_snapshot_opens_at_once_and_the_refresh_keeps_the_row_by_console_and_game() = runTest {
+        val lines = mutableListOf<String>()
+        val f = raSnapshotFixture(log = { lines += it }); val state = f.state
+        f.openAchievements(); assertTrue(state.back())                                    // read once: the snapshot
+        f.store.put(RaPaths.sets("d".repeat(32)), setsJson('d'.code, title = "Dot", consoleId = RaConsoles.GAMEBOY, achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"}"""))   // above the GBA row
+        f.store.put(RaPaths.sets("e".repeat(32)), setsJson('e'.code, title = "Aaa", consoleId = RaConsoles.GBA, achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"}"""))
+        val held = f.store.hold()
+        f.openAchievements()
+        val shown = assertIs<Screen.RaConsoles>(state.screen.value)                       // at once, as last read
+        assertEquals(listOf("Game Boy Advance", "Super Nintendo ES"), shown.consoles.map { it.name })
+        advanceTimeBy(1_000); assertFalse(state.loading.value)                             // no overlay while it refreshes
+        state.openSelected(); state.onButton(NxButton.DOWN)                                // Game Boy Advance → Beta, from the snapshot
+        assertEquals("Beta", assertIs<Screen.RaGames>(state.screen.value).games[state.selection.value.index].title)
+        held.complete(Unit); advanceUntilIdle()
+        val games = assertIs<Screen.RaGames>(state.screen.value)                           // refreshed in place
+        assertEquals(listOf("Aaa", "Alpha", "Beta"), games.games.map { it.title })
+        assertEquals("Beta", games.games[state.selection.value.index].title)               // the same game, not the same row
+        assertTrue(state.back())
+        val consoles = assertIs<Screen.RaConsoles>(state.screen.value)
+        assertEquals(listOf("Game Boy", "Game Boy Advance", "Super Nintendo ES"), consoles.consoles.map { it.name })
+        assertEquals(1, state.selection.value.index)                                       // still Game Boy Advance
+        assertTrue(lines.any { "RA games refresh" in it && "5 games" in it }, "$lines")
+    }
+
+    @Test fun a_refresh_that_finds_nothing_new_leaves_the_rows_alone() = runTest {
+        val f = raSnapshotFixture(); val state = f.state
+        f.openAchievements(); state.onButton(NxButton.DOWN); assertTrue(state.back())
+        val held = f.store.hold()
+        f.openAchievements(); state.onButton(NxButton.DOWN)
+        val shown = state.screen.value
+        val seen = mutableListOf<Screen>()
+        val watch = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { state.screen.drop(1).collect { seen += it } }
+        held.complete(Unit); advanceUntilIdle(); watch.cancel()
+        assertTrue(seen.isEmpty(), "$seen")                                                 // no new screen: no flicker
+        assertSame(shown, state.screen.value); assertEquals(1, state.selection.value.index)
+    }
+
+    @Test fun achievements_with_no_snapshot_reads_under_the_overlay() = runTest {
+        val f = raSnapshotFixture(); val state = f.state
+        val held = f.store.hold()
+        f.openAchievements()
+        assertIs<Screen.RetroAchievements>(state.screen.value)
+        advanceTimeBy(1_000); assertTrue(state.loading.value)
+        held.complete(Unit); advanceUntilIdle()
+        assertFalse(state.loading.value); assertEquals(2, assertIs<Screen.RaConsoles>(state.screen.value).consoles.size)
+    }
+
+    @Test fun the_snapshot_outlives_the_app_for_its_own_user_only() = runTest {
+        val store = FakeRaStore(); val files = MemoryPrivateFiles()
+        raSnapshotFixture(store, files).run { openAchievements(); advanceUntilIdle() }
+        assertNotNull(files.files[RaGamesCache.FILE])
+        val again = raSnapshotFixture(store, files)                                        // the next app start
+        val held = store.hold()
+        again.openAchievements()
+        assertEquals(2, assertIs<Screen.RaConsoles>(again.state.screen.value).consoles.size)   // at once from the file
+        held.complete(Unit); advanceUntilIdle()
+        store.beforeList = {}
+        val other = raSnapshotFixture(store, files, user = "someone")                     // another account on this phone
+        val heldOther = store.hold()
+        other.openAchievements()
+        assertIs<Screen.RetroAchievements>(other.state.screen.value)                       // never the first user's list
+        heldOther.complete(Unit); advanceUntilIdle()
+        assertIs<Screen.RaConsoles>(other.state.screen.value)
+    }
+
+    @Test fun signing_out_drops_the_snapshot() = runTest {
+        val store = FakeRaStore(); val files = MemoryPrivateFiles()
+        val f = raSnapshotFixture(store, files); val state = f.state
+        f.openAchievements(); assertTrue(state.back())
+        state.select(RaAction.entries.indexOf(RaAction.SETTINGS)); state.openSelected()
+        state.select(state.raSettings().rows.indexOfFirst { it.kind == RaSettingKind.SIGN_OUT })
+        state.onButton(NxButton.A); state.onButton(NxButton.A)                              // Sign out, confirmed
+        advanceUntilIdle()
+        assertNull(state.settings.raToken)
+        assertNull(RaGamesSnapshotCodec.decode(files.files[RaGamesCache.FILE], "me"))
+        state.settings.raToken = "tok"                                                      // the same user signs in again
+        assertTrue(state.back())
+        val held = store.hold()
+        f.openAchievements()
+        assertIs<Screen.RetroAchievements>(state.screen.value)                             // read afresh, under the overlay
+        held.complete(Unit); advanceUntilIdle()
+        assertIs<Screen.RaConsoles>(state.screen.value)
+    }
+
+    // Back from a game shows the list as read, at once, the game's row counting the unlocks its page read; a game cached
+    // meanwhile shows on the next Achievements.
+    @Test fun the_games_list_returns_without_a_read_and_keeps_its_row() = runTest {
         val (state, store) = stateWithAchievements()
         for (c in listOf('a', 'b')) {
             store.put(RaPaths.sets(c.toString().repeat(32)), setsJson(c.code, title = "Game $c", achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"}"""))
         }
-        openRa(state); state.openSelected()
-        state.onButton(NxButton.DOWN); state.openSelected()
+        openRa(state); state.openSelected(); state.openSelected()
+        state.onButton(NxButton.DOWN)
+        store.put(RaPaths.session('b'.code), """{"Success":true,"Unlocks":[{"ID":1,"When":100}]}""")   // unlocked since the list was read
+        state.openSelected()
         assertEquals("Game b", assertIs<Screen.RaGame>(state.screen.value).game.title)
         store.put(RaPaths.sets("c".repeat(32)), setsJson(99, title = "Game c", achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"}"""))
+        store.beforeList = { error("no read going back") }
         assertTrue(state.back())
-        assertEquals(3, assertIs<Screen.RaGames>(state.screen.value).games.size)   // reloaded
+        val games = assertIs<Screen.RaGames>(state.screen.value)
+        assertEquals(listOf("Game a", "Game b"), games.games.map { it.title })
+        assertEquals(1, games.games[1].unlocked)                                          // as its page showed
         assertEquals(1, state.selection.value.index)
+        assertTrue(state.back())
+        assertEquals(1, assertIs<Screen.RaConsoles>(state.screen.value).consoles.single().unlocked)   // the console's sum too
+        store.beforeList = {}
+        assertTrue(state.back()); state.openSelected()                                    // Achievements again: read afresh
+        assertEquals(3, assertIs<Screen.RaConsoles>(state.screen.value).consoles.single().games.size)
     }
 
     // Game data cached by a RetroAchievements job (Download all, here a sign-out's reset) shows in the menus'
@@ -7192,22 +7446,13 @@ class AppStateTest {
         assertNull(f.state.raPanel.value)
     }
 
-    // --- The details pane's achievements (the main menu on the second display) ---
-
-    @Test fun the_details_show_the_highlighted_games_cached_achievements() = runTest {
-        val f = panelFixture()
-        f.state.onDualMenu(true)
-        f.state.openConsole("GB"); runCurrent()   // no time advanced: cached data is read at once
-        assertEquals(listOf("First", "Second"), f.state.gameDetailRa.value?.visible?.map { it.title })
-    }
+    // --- The menu on the second display ---
 
     @Test fun skinDualMenuTurnsTheDualMenuOn() = runTest {
         val f = panelFixture()
         f.state.onSkinDualMenu(true)
         assertTrue(f.state.dualMenu.value)
         assertFalse(f.state.displayDualMenu.value)
-        f.state.openConsole("GB"); runCurrent()   // the details pane's feed runs as with a second display
-        assertEquals(listOf("First", "Second"), f.state.gameDetailRa.value?.visible?.map { it.title })
     }
 
     @Test fun displayOffKeepsSkinDual() = runTest {
@@ -7219,6 +7464,40 @@ class AppStateTest {
         assertTrue(f.state.displayDualMenu.value)
         f.state.onDualMenu(false); f.state.onSkinDualMenu(false)
         assertFalse(f.state.dualMenu.value)
+    }
+
+    // --- The top screen's details: achievements ---
+
+    private fun topBlock(state: AppState) = state.topDetails.value?.let { com.nxredux.mobile.ui.nx.detailsAchievements(it.achievements, it.info?.ra) }
+
+    private fun topTitles(state: AppState): List<String>? =
+        (state.topDetails.value?.achievements as? com.nxredux.mobile.ui.nx.DetailsBody.Rows)?.achievements?.map { it.title }
+
+    @Test fun the_details_show_the_highlighted_games_cached_achievements() = runTest {
+        val f = panelFixture()
+        f.state.onDualMenu(true)
+        f.state.openConsole("GB"); runCurrent()   // no time advanced: cached data is read at once
+        assertEquals(listOf("First", "Second"), topTitles(f.state))
+        assertEquals(com.nxredux.mobile.ui.nx.DetailsAchievements(0, 2, "First"), topBlock(f.state))
+    }
+
+    // A played game with no achievement set (homebrew, a hack) still gets a pointer folder: not a set.
+    @Test fun a_pointer_without_set_data_is_no_retroachievements_set() = runTest {
+        val f = raFixture()
+        f.state.settings.raUsername = "me"; f.state.settings.raToken = "t"
+        kotlinx.coroutines.runBlocking { RaGamePointers.write(f.store, "a".repeat(32), RaGamePointer("GB", "home", "Roms/Game Boy (GB)", "Tetris.gb", "Tetris")) }
+        f.state.onForeground(); advanceUntilIdle()
+        f.state.onDualMenu(true)
+        f.state.openConsole("GB"); runCurrent()
+        assertNotNull(f.state.topDetails.value)
+        assertNull(topBlock(f.state))
+    }
+
+    @Test fun the_skins_two_screens_feed_the_details_too() = runTest {
+        val f = panelFixture()
+        f.state.onSkinDualMenu(true)
+        f.state.openConsole("GB"); runCurrent()
+        assertEquals(listOf("First", "Second"), topTitles(f.state))
     }
 
     private val threeGbaRoms = FakeRomsSource(dirs = mapOf(
@@ -7240,7 +7519,7 @@ class AppStateTest {
         f.state.openConsole("GBA"); runCurrent()
         f.state.onDualMenu(false); advanceTimeBy(600); runCurrent()
         assertTrue(f.hasher.calls.isEmpty())
-        assertNull(f.state.gameDetailRa.value)
+        assertNull(f.state.topDetails.value)
     }
 
     @Test fun a_failed_details_download_is_tried_again_when_the_highlight_rests_on_it_again() = runTest {
@@ -7251,7 +7530,6 @@ class AppStateTest {
         f.hasher.calls.clear()
         advanceTimeBy(600); runCurrent()
         assertEquals(listOf("A.gba"), f.hasher.calls.toList())
-        assertIs<RaPanelContent.Failed>(f.state.gameDetailRa.value?.content)
         advanceTimeBy(2000); runCurrent()
         assertEquals(1, f.hasher.calls.size)   // no retry loop while it rests
         f.http.offline = false
@@ -7262,11 +7540,7 @@ class AppStateTest {
     }
 
     @Test fun scrolling_past_games_downloads_only_where_the_highlight_rests() = runTest {
-        val games = listOf("A", "B", "C").map { IndexedGame("home", "Roms/Game Boy Advance (GBA)", "$it.gba", "r$it", "f", it) }
-        val index = LibraryIndex(2, "home", emptyList(), emptyMap(), listOf(IndexedSystem("GBA", "GBA", games = games)))
-        val hasher = FakeRaHasher().apply { hashes["A.gba"] = "1".repeat(32); hashes["B.gba"] = "2".repeat(32); hashes["C.gba"] = "3".repeat(32) }
-        val roms = threeGbaRoms
-        val f = panelFixture(index = index, hasher = hasher, roms = roms)
+        val f = panelFixture(index = threeGbaIndex, hasher = threeGbaHasher(), roms = threeGbaRoms)
         f.http.on("gameid", body = """{"Success":true,"GameID":0}""")
         f.state.onDualMenu(true)
         f.state.openConsole("GBA"); advanceUntilIdle()
@@ -7282,16 +7556,17 @@ class AppStateTest {
         val f = panelFixture(signedIn = false)
         f.state.onDualMenu(true)
         f.state.openConsole("GB"); advanceUntilIdle()
-        assertNull(f.state.gameDetailRa.value)
+        assertNotNull(f.state.topDetails.value)
+        assertEquals(com.nxredux.mobile.ui.nx.DetailsBody.None, f.state.topDetails.value?.achievements)
     }
 
     @Test fun the_details_clear_off_the_game_list() = runTest {
         val f = panelFixture()
         f.state.onDualMenu(true)
         f.state.openConsole("GB"); advanceUntilIdle()
-        assertNotNull(f.state.gameDetailRa.value)
+        assertNotNull(f.state.topDetails.value)
         assertTrue(f.state.back())
-        assertNull(f.state.gameDetailRa.value)
+        assertNull(f.state.topDetails.value)   // a console row: its stats, not a game
     }
 
     /** The library index with Mario.gba (the test library's GBA game), hashed as [MARIO_HASH]. */
@@ -7420,7 +7695,7 @@ class AppStateTest {
     private fun FakeRaStore.putGame(c: Char) =
         put(RaPaths.sets(c.toString().repeat(32)), setsJson(c.code, title = "Game $c", achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"}"""))
 
-    @Test fun the_loading_overlay_shows_after_its_grace_period_and_clears_when_the_games_list_opens() = runTest {
+    @Test fun the_loading_overlay_shows_after_its_grace_period_and_clears_when_the_consoles_open() = runTest {
         val (state, store) = stateWithAchievements()
         store.putGame('a')
         val gate = CompletableDeferred<Unit>()
@@ -7432,7 +7707,7 @@ class AppStateTest {
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A); state.openSelected()   // ignored while loading
         assertEquals(0, state.selection.value.index)
         gate.complete(Unit); runCurrent()
-        assertIs<Screen.RaGames>(state.screen.value)
+        assertIs<Screen.RaConsoles>(state.screen.value)
         assertFalse(state.loading.value)
     }
 
@@ -7467,7 +7742,7 @@ class AppStateTest {
     @Test fun a_games_achievements_load_under_the_overlay_and_back_cancels_it() = runTest {
         val (state, store) = stateWithAchievements()
         store.putGame('a')
-        openRa(state); state.openSelected()
+        openRa(state); state.openSelected(); state.openSelected()   // Achievements → its console
         assertIs<Screen.RaGames>(state.screen.value)
         val gate = CompletableDeferred<Unit>()
         store.beforeRead = { gate.await() }
@@ -8057,10 +8332,19 @@ class AppStateTest {
         val data = object : GameTimeData by NoGameTime { override suspend fun byPath() = mapOf(path to total) }
         val state = state(MemorySettings(ContentRef("Home")), data = FakeUserData(pins = listOf(Shortcut(mario, "Mario"))), gameTime = data)
         state.load(); advanceUntilIdle()
-        assertEquals(GameInfo(123L, 7_200_000, null), state.gameInfo.value[path])
+        assertEquals(GameInfo(123L, 7_200_000, null, 3L), state.gameInfo.value[path])
         total = total.copy(totalMs = 9_000_000, plays = 4, lastPlayedAt = 456L)
         state.selectHome { it is MainRow.Pin }; state.onButton(NxButton.A); advanceUntilIdle()   // the pin launches Mario: recorded
-        assertEquals(GameInfo(456L, 9_000_000, null), state.gameInfo.value[path])
+        assertEquals(GameInfo(456L, 9_000_000, null, 4L), state.gameInfo.value[path])
+    }
+
+    @Test fun game_info_carries_play_counts() = runTest {
+        val path = mario
+        val total = GameTotal(1, "Mario", "GBA", path, totalMs = 1_000, plays = 23, lastPlayedAt = 1L)
+        val data = object : GameTimeData by NoGameTime { override suspend fun byPath() = mapOf(path to total) }
+        val state = state(MemorySettings(ContentRef("Home")), gameTime = data)
+        state.load(); advanceUntilIdle()
+        assertEquals(23L, state.gameInfo.value[path]?.plays)
     }
 
     @Test fun a_game_info_refresh_asked_for_during_one_runs_once_after_it_not_in_parallel() = runTest {
@@ -8087,7 +8371,7 @@ class AppStateTest {
         gate.complete(Unit); advanceUntilIdle()
         assertEquals(2, calls)                                           // one re-run for both asks, not lost
         assertEquals(1, maxActive)
-        assertEquals(GameInfo(2L, 2_000, null), state.gameInfo.value[path])   // the re-run's (newer) answer
+        assertEquals(GameInfo(2L, 2_000, null, 1L), state.gameInfo.value[path])   // the re-run's (newer) answer
     }
 
     @Test fun y_remove_in_the_switcher_moves_continue_past_the_game_on_close() = runTest {
@@ -12375,9 +12659,9 @@ class AppStateTest {
         testScheduler.advanceUntilIdle()
     }
 
-    // Dual screen: a tool opened from Tools has the focus on the top screen, the menu staying below on its row; B on the
-    // tool gives the focus back. An app tool only launches.
-    @Test fun a_tool_takes_the_focus_on_the_top_screen_until_b() = runTest {
+    // Dual screen: a tool opened from Tools is the bottom screen's page; the top screen shows the backdrop; B returns to
+    // the tool's row. An app tool only launches.
+    @Test fun on_dual_a_tool_opens_on_the_bottom() = runTest {
         val settings = MemorySettings(ContentRef("Home")).apply { toolApps = listOf("a/A") }
         val launcher = FakeLauncher(listOf(alpha, beta))
         val state = state(settings, launcher = launcher)
@@ -12387,20 +12671,29 @@ class AppStateTest {
         val settingsAt = state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.SETTINGS }
         state.select(settingsAt); state.onButton(NxButton.A)
         assertIs<Screen.SettingsMenu>(state.screen.value)
-        assertTrue(state.toolOnTop.value)
-        val (menu, at) = assertNotNull(state.toolUnder())
-        assertEquals(MenuCategory.TOOLS, menu.category)
-        assertEquals(settingsAt, at.index)                                    // the menu below stays on Settings
+        assertEquals(TopContent.Backdrop, DualMenu.top(state.screen.value, state.selection.value.index))
         state.onButton(NxButton.B)
         assertIs<Screen.Systems>(state.screen.value)
-        assertFalse(state.toolOnTop.value); assertNull(state.toolUnder())
-        state.select(0); state.onButton(NxButton.A)                           // Alpha, an app: launched, no focus moves
+        assertEquals(settingsAt, state.selection.value.index)                 // B lands on the Settings row
+        state.select(0); state.onButton(NxButton.A)                           // Alpha, an app: launched
         assertEquals(listOf("a/A"), launcher.launched)
-        assertFalse(state.toolOnTop.value)
     }
 
-    // The skin's two screens: a tool opened from the menu keeps the menu pad (the skin) shown, so it stays in the top glass
-    // with the menu below, through its pages, until B.
+    // Dual screen: opening a console lists its games on the bottom; the top screen has the highlighted game's details.
+    @Test fun on_dual_a_console_opens_its_list_on_the_bottom_with_details_on_top() = runTest {
+        val state = dualState()
+        state.openConsolesTab(); advanceUntilIdle()
+        val gb = state.consoleRows().indexOfFirst { it.system.tag == "GB" }
+        state.select(gb)
+        assertEquals(TopContent.ConsoleStats(state.consoleRows()[gb].systems), DualMenu.top(state.screen.value, state.selection.value.index))
+        state.onButton(NxButton.A); advanceUntilIdle()
+        val games = assertIs<Screen.Games>(state.screen.value)
+        assertEquals(TopContent.GameDetails(games.entries[0]), DualMenu.top(games, state.selection.value.index))
+        state.onButton(NxButton.DOWN)
+        assertEquals(TopContent.GameDetails(games.entries[1]), DualMenu.top(games, state.selection.value.index))
+    }
+
+    // The skin's two screens: a tool opened from the menu keeps the menu pad (the skin) shown.
     @Test fun a_tool_keeps_the_skin_two_screens_through_its_pages() = runTest {
         val settings = MemorySettings(ContentRef("Home")).apply { padSkin = true; onboardingDone = true }
         val state = state(settings, launcher = FakeLauncher(listOf(alpha, beta)))
@@ -12409,18 +12702,16 @@ class AppStateTest {
         assertTrue(state.menuPadShown())
         state.openTools()
         state.select(state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.SETTINGS }); state.onButton(NxButton.A)
-        assertTrue(state.toolOnTop.value)
         assertTrue(state.menuPadShown())                                     // Settings' root: the skin stays
         state.onButton(NxButton.B)
-        assertFalse(state.toolOnTop.value)
         state.onSkinDualMenu(false)
         state.openTools()
         state.select(state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.SETTINGS }); state.onButton(NxButton.A)
         assertTrue(state.menuPadShown())                                     // one screen: the skin round the tool too
     }
 
-    // Dual screen: Settings opened from Tools stays on the top screen through a Library rescan, the menu below on its row.
-    @Test fun a_rescan_from_settings_keeps_settings_on_the_top_screen() = runTest {
+    // Dual screen: Settings opened from Tools stays through a Library rescan.
+    @Test fun a_rescan_from_settings_keeps_settings_on_the_bottom() = runTest {
         val state = state(MemorySettings(ContentRef("Home")))
         state.load()
         state.onDualMenu(true)
@@ -12428,19 +12719,14 @@ class AppStateTest {
         val settingsAt = state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.SETTINGS }
         state.select(settingsAt); state.onButton(NxButton.A)
         val row = openLibraryOn(state, SettingsKind.RESCAN)
-        assertTrue(state.toolOnTop.value)
         state.onButton(NxButton.A)                                                                  // rescan
         advanceUntilIdle()
         assertEquals(SettingsSection.LIBRARY, assertIs<Screen.Settings>(state.screen.value).section)
         assertEquals(row, state.selection.value.index)
-        assertTrue(state.toolOnTop.value)
-        val (menu, at) = assertNotNull(state.toolUnder())
-        assertEquals(MenuCategory.TOOLS, menu.category)
-        assertEquals(settingsAt, at.index)
     }
 
-    // Dual screen: leaving a Settings page over a stale library reloads it; Settings stays on the top screen after.
-    @Test fun a_reload_on_leaving_a_settings_page_keeps_settings_on_the_top_screen() = runTest {
+    // Dual screen: leaving a Settings page over a stale library reloads it; Settings stays after.
+    @Test fun a_reload_on_leaving_a_settings_page_keeps_settings() = runTest {
         val state = state(MemorySettings(ContentRef("Home")))
         state.load()
         state.onDualMenu(true)
@@ -12450,31 +12736,14 @@ class AppStateTest {
         state.openSettings(SettingsSection.DEFAULT_EMULATORS)
         state.cycleDefaultTag("gba")                                                             // the index no longer fits
         state.openSettingsMenu(); state.openSettings(SettingsSection.EMULATORS)
-        assertTrue(state.toolOnTop.value)
         state.onButton(NxButton.B)                                                               // reloads, back on Settings
         advanceUntilIdle()
         assertIs<Screen.SettingsMenu>(state.screen.value)
-        assertTrue(state.toolOnTop.value)
-        assertEquals(settingsAt, assertNotNull(state.toolUnder()).second.index)
     }
 
-    // A scan that ends on the main menu leaves no tool on the top screen.
-    @Test fun a_rescan_that_ends_on_the_menu_takes_the_tool_off_the_top_screen() = runTest {
-        val state = state(MemorySettings(ContentRef("Home")))
-        state.load()
-        state.onDualMenu(true)
-        state.openTools()
-        state.select(state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.SETTINGS }); state.onButton(NxButton.A)
-        assertTrue(state.toolOnTop.value)
-        state.rescan()
-        advanceUntilIdle()
-        assertIs<Screen.Systems>(state.screen.value)
-        assertFalse(state.toolOnTop.value)
-    }
-
-    // Dual screen: highlighting the Apps tile shows nothing of the drawer on the top screen; A opens it there. An app
-    // added meanwhile sorts before Apps: the menu below still shows Apps highlighted, and B lands on it.
-    @Test fun the_drawer_opens_on_the_top_screen_only_with_a() = runTest {
+    // Dual screen: highlighting the Apps tile shows the backdrop on top; A opens the drawer on the bottom. An app added
+    // meanwhile sorts before Apps: B still lands on Apps.
+    @Test fun the_drawer_opens_on_the_bottom_only_with_a() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = state(settings, launcher = FakeLauncher(listOf(alpha, beta)))
         state.load()
@@ -12482,15 +12751,11 @@ class AppStateTest {
         state.openTools()
         state.select(state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.APPS }); advanceUntilIdle()
         assertIs<Screen.Systems>(state.screen.value)
-        assertEquals(TopContent.Backdrop, menuTop(true, state.screen.value, state.secondList.value, state.toolOnTop.value))
+        assertEquals(TopContent.Backdrop, DualMenu.top(state.screen.value, state.selection.value.index))
         state.onButton(NxButton.A); advanceUntilIdle()
         assertIs<Screen.ToolApps>(state.screen.value)
-        assertTrue(state.toolOnTop.value)
         state.select(0); choose(state, ContextKind.ADD_TO_TOOLS); advanceUntilIdle()   // Alpha into Tools, before Apps
-        val (menu, at) = assertNotNull(state.toolUnder())
-        assertEquals(ToolKind.APPS, (menu.rows[at.index] as MainRow.Tool).row.kind)
         state.onButton(NxButton.B)
-        assertFalse(state.toolOnTop.value)
         assertEquals(ToolKind.APPS, state.screen.value.toolRows()[state.selection.value.index].kind)
     }
 
@@ -13527,7 +13792,7 @@ class AppStateTest {
         assertEquals("", state.lastSearch)
     }
 
-    // --- The main menu on the second screen: dual mode and the preview ---
+    // --- The main menu on the second screen: dual mode ---
 
     private fun bigSource() = FakeRomsSource(
         dirs = mapOf(
@@ -13543,6 +13808,137 @@ class AppStateTest {
 
     private fun TestScope.dualState(): AppState =
         state(MemorySettings(ContentRef("Home")), src = bigSource()).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
+
+    // The top screen's details: entry 0's slow resume read lands after the highlight moved on; entry 1 stays.
+    @Test fun details_follow_the_highlight_and_never_paint_a_stale_game() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val data = object : UserDataStore by NoUserData {
+            override suspend fun resumeInfo(tag: String, fileName: String): ResumeInfo {
+                if (fileName == "Alleyway.gb") withContext(NonCancellable) { gate.await() }   // ignores the move's cancel: only the sameGame guard stops it
+                return ResumeInfo(0, "file:///$fileName.png", 1L)
+            }
+        }
+        val state = state(MemorySettings(ContentRef("Home")), src = bigSource(), data = data).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
+        state.openConsolesTab(); advanceUntilIdle()
+        state.select(state.consoleRows().indexOfFirst { it.system.tag == "GB" }); state.onButton(NxButton.A); advanceUntilIdle()
+        val games = assertIs<Screen.Games>(state.screen.value)
+        assertEquals("Alleyway.gb", games.entries[0].game.fileName)
+        assertEquals(games.entries[0].game, state.topDetails.value?.entry?.game)   // its page at once; the pictures still reading
+        state.onButton(NxButton.DOWN); advanceUntilIdle()
+        val entry1 = games.entries[1]
+        assertEquals(entry1.game, state.topDetails.value?.entry?.game)
+        assertEquals("file:///Tetris.gb.png", state.topDetails.value?.resume?.previewPath)
+        gate.complete(Unit); advanceUntilIdle()
+        assertEquals(entry1.game, state.topDetails.value?.entry?.game)
+        assertEquals("file:///Tetris.gb.png", state.topDetails.value?.resume?.previewPath)
+        state.onDualMenu(false)
+        assertNull(state.topDetails.value)   // one screen: no top page
+    }
+
+    // --- The top screen's stats ---
+
+    private fun AppState.selectConsole(tag: String) =
+        select(assertIs<Screen.Systems>(screen.value).rows.indexOfFirst { it is MainRow.System && it.system.tag == tag })
+
+    @Test fun stats_refresh_after_a_game_is_played() = runTest {
+        val tetris = "/Roms/Game Boy (GB)/Tetris.gb"
+        var total = GameTotal(1, "Tetris", "GB", tetris, totalMs = 3_600_000, plays = 2, lastPlayedAt = 1L)
+        val data = object : GameTimeData by NoGameTime { override suspend fun byPath() = mapOf(tetris to total) }
+        val state = state(MemorySettings(ContentRef("Home")), src = bigSource(), gameTime = data).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
+        state.openConsolesTab(); advanceUntilIdle()
+        state.selectConsole("GB"); advanceUntilIdle()
+        assertEquals("Game Boy", state.topStats.value!!.title)
+        assertEquals(3, state.topStats.value!!.games)
+        assertEquals(3_600_000L, state.topStats.value!!.playedMs)
+        total = total.copy(totalMs = 7_200_000, plays = 3)
+        state.onForeground(); advanceUntilIdle()   // back from the game: play time read again
+        assertEquals(7_200_000L, state.topStats.value!!.playedMs)
+    }
+
+    @Test fun collection_stats_follow_the_highlighted_collection() = runTest {
+        val state = dualState()
+        state.selectTab(assertIs<Screen.Systems>(state.screen.value).tabs.indexOfFirst { it.category == MenuCategory.COLLECTIONS }); advanceUntilIdle()
+        state.select(assertIs<Screen.Systems>(state.screen.value).rows.indexOfFirst { it is MainRow.Collection && it.name == "RPGs" }); advanceUntilIdle()
+        val s = assertNotNull(state.topStats.value)
+        assertEquals("RPGs", s.title)
+        assertEquals(2, s.games)
+        assertEquals(1, s.consoles)
+        state.onDualMenu(false)
+        assertNull(state.topStats.value)   // one screen: no top page
+    }
+
+    @Test fun console_stats_read_the_bios_from_the_platform() = runTest {
+        val facts = object : TopFactsPlatform {
+            override suspend fun biosMissing(tag: String) = BiosMissing.REQUIRED.takeIf { tag == "GB" }
+        }
+        val state = state(MemorySettings(ContentRef("Home")), src = bigSource(), topFacts = facts).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
+        state.openConsolesTab(); advanceUntilIdle()
+        state.selectConsole("GB"); advanceUntilIdle()
+        assertEquals(BiosMissing.REQUIRED, state.topStats.value?.bios)
+    }
+
+    @Test fun shelf_games_carry_their_resume_pictures() = runTest {
+        val data = object : UserDataStore by NoUserData {
+            override suspend fun resumeInfo(tag: String, fileName: String) = if (fileName == "Tetris.gb") ResumeInfo(9, "file:///tetris.png") else ResumeInfo.NONE
+        }
+        val state = state(MemorySettings(ContentRef("Home")), src = bigSource(), data = data).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
+        state.openConsolesTab(); advanceUntilIdle()
+        state.selectConsole("GB"); advanceUntilIdle()
+        val shelf = assertNotNull(state.topStats.value).shelf.associate { it.entry.game.fileName to it.resume }
+        assertEquals(mapOf("Alleyway.gb" to null, "Tetris.gb" to "file:///tetris.png", "Wario Land.gb" to null), shelf)
+    }
+
+    private fun TestScope.dualConsoleState(runner: RecordingRunner): AppState {
+        val state = state(MemorySettings(ContentRef("Home")), src = bigSource(), runner = runner).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
+        state.openConsolesTab(); advanceUntilIdle()
+        state.selectConsole("GB"); advanceUntilIdle()
+        return state
+    }
+
+    @Test fun a_top_tap_launches_and_quit_returns_to_the_console_row() = runTest {
+        val runner = RecordingRunner()
+        val state = dualConsoleState(runner)
+        val row = state.selection.value.index
+        val tile = assertNotNull(state.topStats.value).shelf.first().entry
+        assertNotNull(state.launchFromTop(tile)); advanceUntilIdle()
+        assertEquals(listOf(tile.game.path), runner.launched.map { it.gamePath })
+        state.onForeground(); advanceUntilIdle()   // the game quit
+        val back = assertIs<Screen.Systems>(state.screen.value)
+        assertEquals(row, state.selection.value.index)
+        assertEquals("GB", assertIs<MainRow.System>(back.rows[row]).system.tag)
+    }
+
+    @Test fun a_top_tap_does_nothing_while_a_context_menu_or_prompt_is_open() = runTest {
+        val runner = RecordingRunner()
+        val state = dualConsoleState(runner)
+        val tile = assertNotNull(state.topStats.value).shelf.first().entry
+        state.openSearch(); advanceUntilIdle()
+        assertTrue(state.textEntryOpen)
+        assertNull(state.launchFromTop(tile)); advanceUntilIdle()
+        assertTrue(runner.launched.isEmpty())
+        state.back()
+        state.selectConsole("GBA"); advanceUntilIdle()   // the shelf shown belongs to another console now
+        assertNull(state.launchFromTop(tile)); advanceUntilIdle()
+        assertTrue(runner.launched.isEmpty())
+    }
+
+    // GB's BIOS read finishes after the highlight moved to GBA, ignoring the move's cancel: GBA's page must stay.
+    @Test fun stats_never_paint_a_console_the_highlight_left() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val facts = object : TopFactsPlatform {
+            override suspend fun biosMissing(tag: String): BiosMissing? {
+                if (tag == "GB") withContext(NonCancellable) { gate.await() }
+                return null
+            }
+        }
+        val state = state(MemorySettings(ContentRef("Home")), src = bigSource(), topFacts = facts).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
+        state.openConsolesTab(); advanceUntilIdle()
+        state.selectConsole("GB"); advanceUntilIdle()
+        state.selectConsole("GBA"); advanceUntilIdle()
+        assertEquals("Game Boy Advance", state.topStats.value?.title)
+        gate.complete(Unit); advanceUntilIdle()
+        assertEquals("Game Boy Advance", state.topStats.value?.title)
+    }
 
     // App moving to the other display (a new App instance) must not load again: the open list and its highlight stay.
     @Test fun a_second_load_once_leaves_the_open_list_alone() = runTest {
@@ -13560,33 +13956,6 @@ class AppStateTest {
     private fun AppState.consoleRows() = assertIs<Screen.Systems>(screen.value).rows.filterIsInstance<MainRow.System>()
     private fun AppState.openConsolesTab() = selectTab(assertIs<Screen.Systems>(screen.value).tabs.indexOfFirst { it.category == MenuCategory.CONSOLES })
 
-    @Test fun the_preview_follows_the_highlighted_console() = runTest {
-        val state = dualState()
-        state.openConsolesTab(); advanceUntilIdle()
-        val rows = assertIs<Screen.Systems>(state.screen.value).rows
-        val first = assertIs<MainRow.System>(rows[state.selection.value.index])
-        val preview = assertNotNull(state.secondList.value)
-        assertEquals(ListSource.Console(first.system), preview.source)
-        state.openSystem(first.system)
-        assertEquals(assertIs<Screen.Games>(state.screen.value).entries, preview.entries)
-        assertTrue(state.back()); advanceUntilIdle()
-        state.onButton(NxButton.DOWN); advanceUntilIdle()
-        val second = assertIs<MainRow.System>(rows[state.selection.value.index])
-        assertEquals(ListSource.Console(second.system), state.secondList.value?.source)
-    }
-
-    @Test fun the_preview_is_not_rebuilt_for_the_same_console_and_library_but_is_after_a_rescan() = runTest {
-        val state = dualState()
-        state.openConsolesTab(); advanceUntilIdle()
-        val preview = assertNotNull(state.secondList.value)
-        val builds = state.secondListBuilds
-        state.openConsolesTab(); advanceUntilIdle()   // the same screen published again
-        assertSame(preview, state.secondList.value)
-        assertEquals(builds, state.secondListBuilds)
-        state.rescan(); advanceUntilIdle()
-        assertTrue(state.secondListBuilds > builds)
-    }
-
     @Test fun an_open_achievements_panel_closes_when_dual_mode_turns_on() = runTest {
         val f = panelFixture()
         f.state.openConsole("GB")
@@ -13596,122 +13965,8 @@ class AppStateTest {
         assertNull(f.state.raPanel.value)
     }
 
-    @Test fun no_preview_off_dual_or_on_home() = runTest {
-        val state = dualState()
-        state.openConsolesTab(); advanceUntilIdle()
-        assertNotNull(state.secondList.value)
-        state.selectTab(assertIs<Screen.Systems>(state.screen.value).tabs.indexOfFirst { it.category == MenuCategory.HOME }); advanceUntilIdle()
-        assertNull(state.secondList.value)
-        state.selectTab(assertIs<Screen.Systems>(state.screen.value).tabs.indexOfFirst { it.category == MenuCategory.TOOLS }); advanceUntilIdle()
-        assertNull(state.secondList.value)
-        state.openConsolesTab(); advanceUntilIdle()
-        assertNotNull(state.secondList.value)
-        state.onDualMenu(false)
-        assertNull(state.secondList.value)
-    }
-
-    @Test fun a_collection_previews_its_games() = runTest {
-        val state = dualState()
-        state.selectTab(assertIs<Screen.Systems>(state.screen.value).tabs.indexOfFirst { it.category == MenuCategory.COLLECTIONS }); advanceUntilIdle()
-        val preview = assertNotNull(state.secondList.value)
-        assertEquals(ListSource.Collection("RPGs"), preview.source)
-        assertEquals(listOf("Tetris", "Wario Land"), preview.entries.map { it.game.shownName })
-        assertEquals(0, preview.index)
-    }
-
-    @Test fun the_preview_follows_the_last_highlight_only() = runTest {
-        val state = dualState()
-        state.openConsolesTab(); advanceUntilIdle()
-        val rows = assertIs<Screen.Systems>(state.screen.value).rows
-        state.select(0)
-        repeat(2) { state.onButton(NxButton.DOWN) }
-        advanceUntilIdle()
-        val third = assertIs<MainRow.System>(rows[state.selection.value.index])
-        assertEquals(2, state.selection.value.index)
-        assertEquals(ListSource.Console(third.system), state.secondList.value?.source)
-    }
-
-    @Test fun the_preview_follows_the_last_collection_highlight_only() = runTest {
-        val state = dualState()
-        state.selectTab(assertIs<Screen.Systems>(state.screen.value).tabs.indexOfFirst { it.category == MenuCategory.COLLECTIONS }); advanceUntilIdle()
-        state.select(0)
-        state.onButton(NxButton.DOWN); state.onButton(NxButton.UP); state.onButton(NxButton.DOWN)   // RPGs, Zeta, RPGs, Zeta: no advance between
-        advanceUntilIdle()
-        val names = state.screen.value.collectionNames()
-        assertEquals(ListSource.Collection(names[state.selection.value.index]), state.secondList.value?.source)
-        assertEquals(listOf("Alleyway"), state.secondList.value?.entries?.map { it.game.shownName })
-        // collection -> console without advancing: the console's list wins
-        state.openConsolesTab()
-        state.select(0)
-        state.selectTab(assertIs<Screen.Systems>(state.screen.value).tabs.indexOfFirst { it.category == MenuCategory.COLLECTIONS })
-        state.openConsolesTab()
-        advanceUntilIdle()
-        assertTrue(state.secondList.value?.source is ListSource.Console)
-    }
-
-    @Test fun a_tap_on_a_preview_game_opens_the_list_on_it() = runTest {
-        val state = dualState()
-        state.openConsolesTab(); advanceUntilIdle()
-        val gb = state.consoleRows().indexOfFirst { it.system.tag == "GB" }
-        state.select(gb); advanceUntilIdle()
-        state.openSecondListGame(2)
-        val list = assertIs<Screen.Games>(state.screen.value)
-        assertEquals("GB", (list.source as ListSource.Console).system.tag)
-        assertEquals(2, state.selection.value.index)
-        assertTrue(state.back()); advanceUntilIdle()
-        assertIs<Screen.Systems>(state.screen.value)
-        assertEquals(gb, state.selection.value.index)
-        // a collection's preview game too
-        state.selectTab(assertIs<Screen.Systems>(state.screen.value).tabs.indexOfFirst { it.category == MenuCategory.COLLECTIONS }); advanceUntilIdle()
-        state.openSecondListGame(1)
-        assertEquals(ListSource.Collection("RPGs"), assertIs<Screen.Games>(state.screen.value).source)
-        assertEquals(1, state.selection.value.index)
-        assertTrue(state.back())
-        assertEquals(0, state.selection.value.index)
-    }
-
-    // Minimal's names take two taps, so in dual mode tapMainRow itself opens the console there.
-    @Test fun a_tap_on_a_minimal_console_opens_it_in_dual_mode() = runTest {
-        val settings = MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + (MenuCategory.CONSOLES to MenuStyle.MINIMAL) }
-        val runner = RecordingRunner()
-        val state = state(settings, src = bigSource(), runner = runner).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
-        state.openConsolesTab(); advanceUntilIdle()
-        val rows = assertIs<Screen.Systems>(state.screen.value).rows
-        state.tapMainRow(1); advanceUntilIdle()
-        val list = assertIs<Screen.Games>(state.screen.value)
-        assertEquals((rows[1] as MainRow.System).system.tag, (list.source as ListSource.Console).system.tag)
-        assertTrue(runner.launched.isEmpty())
-        val off = state(MemorySettings(ContentRef("Home")).apply { menuStyles = settings.menuStyles }, src = bigSource()).also { it.load(); advanceUntilIdle() }
-        off.openConsolesTab(); advanceUntilIdle()
-        off.tapMainRow(1); advanceUntilIdle()
-        assertEquals(1, off.selection.value.index)
-        assertIs<Screen.Systems>(off.screen.value)
-    }
-
-    // A Minimal swipe's release goes through select (MainMenuScreen's onSwipeSelect), never tapMainRow: it only moves the
-    // highlight, on Consoles and on Collections, dual mode on. The tap (tapMainRow) is what opens, once; the UI side of
-    // that rule is Minimal's NxTapNeverOpens (nxTap would not open it), so tapMainRow is the only opener.
-    @Test fun a_minimal_swipe_release_only_moves_the_highlight_in_dual_mode() = runTest {
-        val settings = MemorySettings(ContentRef("Home")).apply {
-            menuStyles = LIST_TABS + (MenuCategory.CONSOLES to MenuStyle.MINIMAL) + (MenuCategory.COLLECTIONS to MenuStyle.MINIMAL)
-        }
-        val runner = RecordingRunner()
-        val state = state(settings, src = bigSource(), runner = runner).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
-        state.openConsolesTab(); advanceUntilIdle()
-        state.select(1); advanceUntilIdle()
-        assertEquals(1, state.selection.value.index)
-        assertIs<Screen.Systems>(state.screen.value)
-        state.selectTab(assertIs<Screen.Systems>(state.screen.value).tabs.indexOfFirst { it.category == MenuCategory.COLLECTIONS }); advanceUntilIdle()
-        state.select(1); advanceUntilIdle()
-        assertEquals(1, state.selection.value.index)
-        assertIs<Screen.Systems>(state.screen.value)
-        assertTrue(runner.launched.isEmpty())
-        state.tapMainRow(1); advanceUntilIdle()   // a real tap still opens, once
-        assertEquals(ListSource.Collection("Zeta"), assertIs<Screen.Games>(state.screen.value).source)
-    }
-
-    // Every other style's console and collection opens on one tap through nxTap (tapMainRow, then openSelected): dual
-    // mode must not open it a second time (the list's first game would launch).
+    // A console and a collection open on one tap through nxTap (select, then openSelected): dual mode must not open it a
+    // second time (the list's first game would launch).
     @Test fun a_one_tap_console_or_collection_opens_once_in_dual_mode() = runTest {
         for (style in listOf(MenuStyle.LIST, MenuStyle.GRID, MenuStyle.CAROUSEL, MenuStyle.BACKDROP)) {
             val settings = MemorySettings(ContentRef("Home")).apply {
@@ -13721,43 +13976,39 @@ class AppStateTest {
             val state = state(settings, src = bigSource(), runner = runner).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
             state.openConsolesTab(); advanceUntilIdle()
             val rows = assertIs<Screen.Systems>(state.screen.value).rows
-            state.tapMainRow(1); state.openSelected(); advanceUntilIdle()
+            state.select(1); state.openSelected(); advanceUntilIdle()
             val list = assertIs<Screen.Games>(state.screen.value, "$style")
             assertEquals((rows[1] as MainRow.System).system.tag, (list.source as ListSource.Console).system.tag, "$style")
             assertTrue(runner.launched.isEmpty(), "$style launched ${runner.launched}")
             assertTrue(state.back()); advanceUntilIdle()
             state.selectTab(assertIs<Screen.Systems>(state.screen.value).tabs.indexOfFirst { it.category == MenuCategory.COLLECTIONS }); advanceUntilIdle()
-            state.tapMainRow(1); state.openSelected(); advanceUntilIdle()
+            state.select(1); state.openSelected(); advanceUntilIdle()
             assertEquals(ListSource.Collection("Zeta"), assertIs<Screen.Games>(state.screen.value, "$style").source, "$style")
             assertTrue(runner.launched.isEmpty(), "$style launched ${runner.launched}")
         }
     }
 
-    // Dual: the panel never opens over the top list (the trophy icon, the game's menu item), Achievements panel Hide or not.
-    @Test fun the_dual_game_list_offers_no_achievements_panel() = runTest {
-        val f = panelFixture()
-        f.state.settings.gameListAchievementsPanel = false   // Hide: the game's menu would carry Achievements
-        f.state.onDualMenu(true)
-        f.state.openConsole("GB")
-        f.state.openRaPanel(); advanceUntilIdle()
-        assertNull(f.state.raPanel.value)
-        f.state.openContextMenu(0)
-        assertTrue(assertNotNull(assertIs<Screen.Games>(f.state.screen.value).menu).items.none { it.kind == ContextKind.ACHIEVEMENTS })
-        f.state.closeContextMenu()
-        f.state.onDualMenu(false)
-        f.state.openContextMenu(0)
-        assertTrue(assertNotNull(assertIs<Screen.Games>(f.state.screen.value).menu).items.any { it.kind == ContextKind.ACHIEVEMENTS })
-    }
-
-    @Test fun x_does_nothing_in_the_dual_game_list() = runTest {
+    // Dual: the bottom screen's game list opens the panel as one screen does: the trophy icon, the top screen's tap, X,
+    // the game's menu (Achievements panel Hide); B closes it.
+    @Test fun the_dual_game_list_opens_the_achievements_panel() = runTest {
         val f = panelFixture()
         f.state.onDualMenu(true)
         f.state.openConsole("GB")
-        f.state.onButton(NxButton.X); advanceUntilIdle()
+        f.state.toggleRaPanel(); advanceUntilIdle()   // the trophy icon
+        assertEquals(listOf("First", "Second"), assertNotNull(f.state.raPanel.value).visible.map { it.title })
+        f.state.onButton(NxButton.B)
         assertNull(f.state.raPanel.value)
-        f.state.onDualMenu(false)
+        assertIs<Screen.Games>(f.state.screen.value)   // the list stays
+        f.state.openRaPanel(); advanceUntilIdle()   // the top screen's achievements tap
+        assertNotNull(f.state.raPanel.value)
+        f.state.onButton(NxButton.B)
         f.state.onButton(NxButton.X); advanceUntilIdle()
         assertNotNull(f.state.raPanel.value)
+        f.state.onButton(NxButton.B)
+        assertNull(f.state.raPanel.value)
+        f.state.settings.gameListAchievementsPanel = false   // Hide: the game's menu carries Achievements
+        f.state.openContextMenu(0)
+        assertTrue(assertNotNull(assertIs<Screen.Games>(f.state.screen.value).menu).items.any { it.kind == ContextKind.ACHIEVEMENTS })
     }
 
     // NX keyboard: every text prompt types through it while the app has its own keyboard (AppDeps.ownKeyboard).

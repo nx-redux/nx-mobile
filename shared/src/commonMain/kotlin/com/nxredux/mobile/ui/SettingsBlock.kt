@@ -378,19 +378,23 @@ fun settingsWideBlockPage(screen: Screen): Boolean =
  */
 @Composable
 internal fun WithSettingsSectionSize(sections: List<SettingsSection>, content: @Composable (DpSize) -> Unit) =
-    WithSettingsWordBlockSize(SETTINGS_TITLE, sections.map { it.label }, content)
+    WithSettingsWordBlockSize(SETTINGS_TITLE, sections.map { it.label }, content = content)
 
 /**
- * [content] given a word block's size ([SettingsWordBlock] for [title] and [words]): its widest word or title as
- * drawn, open marks included, and its height; measured in the same pass (no frame late).
+ * [content] given a word block's size ([SettingsWordBlock] for [title] and [words], a tool's [headline] and
+ * [description] too): its widest word, title or head line as drawn, open marks included, and its height; measured in
+ * the same pass (no frame late).
  */
 @Composable
-internal fun WithSettingsWordBlockSize(title: String, words: List<String>, content: @Composable (DpSize) -> Unit) {
+internal fun WithSettingsWordBlockSize(
+    title: String, words: List<String>, headline: String? = null, description: List<String> = emptyList(),
+    content: @Composable (DpSize) -> Unit,
+) {
     // The content slot is kept while neither the size nor [content] changes, so a remeasure does not recompose the stage.
     val slot = remember { SectionSizeSlot() }
     SubcomposeLayout { constraints ->
         val probe = subcompose("probe") {
-            SettingsWordBlock(title, words, current = 0, rowsFocused = false, onTap = {}, markAll = true)
+            SettingsWordBlock(title, words, current = 0, rowsFocused = false, onTap = {}, markAll = true, headline = headline, description = description)
         }
         val width = probe.maxOfOrNull { it.maxIntrinsicWidth(constraints.maxHeight) } ?: 0
         val height = probe.maxOfOrNull { it.minIntrinsicHeight(width) } ?: 0

@@ -1,41 +1,39 @@
 package com.nxredux.mobile.ui
 
-/** A list shown on the second display: its [source], its [entries] and the selected [index]. */
-data class SecondList(val source: ListSource, val entries: List<Listed>, val index: Int)
+import com.nxredux.mobile.library.SystemFolder
 
 /**
- * What the second display's top area shows while the menu is there: a [Backdrop], a [Preview] of a list, the [GameList],
- * or a [Tool]'s page (with the focus).
+ * What the top screen shows while the main menu is on a dual-screen setup: information about what the bottom screen
+ * highlights, never focused UI. A game's [GameDetails], a console's [ConsoleStats], a collection's [CollectionStats], or
+ * the [Backdrop].
  */
 sealed interface TopContent {
     data object Backdrop : TopContent
-    data class Preview(val list: SecondList) : TopContent
-    data object GameList : TopContent
-    data object Tool : TopContent
+    data class GameDetails(val entry: Listed) : TopContent
+    data class ConsoleStats(val systems: List<SystemFolder>) : TopContent
+    data class CollectionStats(val name: String) : TopContent
 }
 
-/** What the bottom area shows: the usual menu ([Normal]), the selected game's [Details], or the [Menu] a tool on top was opened from. */
-enum class BottomContent { Normal, Details, Menu }
-
-/** The main menu on the second display: which content goes where, from the screen alone. */
+/** The main menu on the second display: which content the top screen shows, from the screen and the bottom's highlight. */
 object DualMenu {
-    /**
-     * The game list on a game list; a tool's page while one has the focus ([tool], [AppState.toolOnTop]); on the main
-     * menu the [preview] when it has one; else the backdrop.
-     */
-    fun top(screen: Screen, preview: SecondList?, tool: Boolean = false): TopContent = when {
+    /** [index]: the bottom screen's highlighted index ([AppState.selection]). */
+    fun top(screen: Screen, index: Int): TopContent = when {
         isKidsScreen(screen) -> TopContent.Backdrop   // Kids Mode's tiles and PIN: nothing game-related up there
-        screen is Screen.Games -> TopContent.GameList
-        tool && screen !is Screen.Systems -> TopContent.Tool
-        screen is Screen.Systems && preview != null -> TopContent.Preview(preview)
+        screen is Screen.Games -> screen.entries.getOrNull(index)?.let(TopContent::GameDetails) ?: TopContent.Backdrop
+        screen is Screen.Systems -> when (val row = screen.rows.getOrNull(index)) {
+            is MainRow.Pin, is MainRow.Shelf, is MainRow.Continue -> row.listed()?.let(TopContent::GameDetails) ?: TopContent.Backdrop
+            is MainRow.System -> TopContent.ConsoleStats(row.systems)
+            is MainRow.Collection -> TopContent.CollectionStats(row.name)
+            else -> TopContent.Backdrop
+        }
+        // The switcher owns its highlight (the shared selection index is not its row).
+        screen is Screen.Switcher -> screen.entries.getOrNull(screen.index)?.let { TopContent.GameDetails(Listed(it.system, it.game)) } ?: TopContent.Backdrop
         else -> TopContent.Backdrop
     }
-
-    /** While [active]: the game's details on a game list, the menu under a tool on top ([tool]); the usual menu otherwise. */
-    fun bottom(screen: Screen, active: Boolean, tool: Boolean = false): BottomContent = when {
-        isKidsScreen(screen) -> BottomContent.Normal
-        active && screen is Screen.Games -> BottomContent.Details
-        active && tool && screen !is Screen.Systems -> BottomContent.Menu
-        else -> BottomContent.Normal
-    }
 }
+
+/**
+ * Whether a text prompt is drawn on the second display: only when the menu ([App]) is there. Android's keyboard won't
+ * open on that display, so NX's types the prompt ([AppState.nxKeyboard]).
+ */
+fun promptOnSecondWindow(menuOnSecond: Boolean, textEntryOpen: Boolean): Boolean = menuOnSecond && textEntryOpen

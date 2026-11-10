@@ -34,7 +34,7 @@ internal interface KidsHost {
     fun showNotice(text: String)
     /** The main menu on [category] (null: the tab last shown). */
     fun showSystemsNow(category: MenuCategory? = null)
-    /** The tiles screen replaces the menu: no tool on the top screen, no hidden tab pushed over the menu. */
+    /** The tiles screen replaces the menu: no hidden tab pushed over it, nothing game-related on the top screen. */
     fun clearMenuTop()
     fun select(index: Int)
     fun back(): Boolean
@@ -111,7 +111,7 @@ internal class KidsScreensController(
         return rows
     }
 
-    /** The tiles screen; the second screen has no tool on it ([AppState.toolOnTop] off), so it shows the backdrop ([DualMenu]). */
+    /** The tiles screen; the second screen shows the backdrop ([DualMenu]). */
     fun showKidsHome() {
         host.clearMenuTop()
         screen.value = Screen.KidsHome

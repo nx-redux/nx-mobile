@@ -65,6 +65,13 @@ class GridTilesTest {
         assertEquals(5, (gridTiles(listOf(MainRow.System(listOf(one, mgba)))).single() as GridTile.Logo).count)
     }
 
+    // Dual screen: the top screen shows the counts, so the carousel's items carry none.
+    @Test fun countsAreLeftOffWhenAsked() {
+        val tiles = gridTiles(listOf(MainRow.System(gba), MainRow.Collection("Co-op", count = 2)), counts = false)
+        assertNull((tiles[0] as GridTile.Logo).count)
+        assertEquals(GridTile.Collection("Co-op", count = null), tiles[1])
+    }
+
     // The Carousel's console tile carries its controller; Grid and Home pins leave it off (the default).
     @Test fun aConsoleTileCarriesItsPadOnlyWhenAsked() {
         val tiles = { art: Boolean -> gridTiles(listOf(MainRow.System(gba)), controllerArt = art).single() as GridTile.Logo }

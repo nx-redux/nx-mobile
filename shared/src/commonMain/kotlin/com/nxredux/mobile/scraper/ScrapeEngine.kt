@@ -7,6 +7,7 @@ import com.nxredux.mobile.library.ensurePath
 import com.nxredux.mobile.library.findDir
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.GamePath
+import com.nxredux.mobile.storage.PrivateFiles
 import com.nxredux.mobile.tryOrNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -15,6 +16,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.concurrent.Volatile
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.TimeSource
 
 /**
@@ -63,6 +66,10 @@ class ScrapeEngine(
     private val picked: suspend (gamePath: String) -> Set<ArtSlot> = { emptySet() },
     /** Milliseconds on a monotonic clock: the pacing of [run]'s state emissions (a test's virtual clock). */
     private val clock: () -> Long = TimeSource.Monotonic.markNow().let { start -> { start.elapsedNow().inWholeMilliseconds } },
+    /** The app-private files of the game info's miss list; null = no game info ([info]). */
+    infoFiles: PrivateFiles? = null,
+    /** Where [info]'s reads and writes run (Android: off the main thread). */
+    infoWork: CoroutineContext = EmptyCoroutineContext,
 ) {
     companion object {
         const val NO_CONNECTION = "No connection"
@@ -143,6 +150,10 @@ class ScrapeEngine(
         }
     }
 
+    private val infoTarget = InfoFiles()
+    /** Game info beside each game's art (`.media/info/<name>.json`), or null without [infoFiles]. */
+    val info: GameInfoStore? = infoFiles?.let { GameInfoStore(infoTarget, it, infoWork) }
+
     /** ScreenScraper among [sources] (its account calls and the Android games' lookup), or null. */
     val ss: ScreenScraperSource? = sources.firstNotNullOfOrNull { it as? ScreenScraperSource }
 
@@ -176,10 +187,13 @@ class ScrapeEngine(
      * still writes the slots the game lacks; the wide pass writes nothing, and a source stopping there never changes
      * the game's status. [found]: each game's options so far, each time a source's answer adds some (the art panel's
      * tiles while the run goes on; nothing is saved by it, [onOptions] still reports the game's list once at its end).
+     * Game info is only what a looked-up game's art answer carries. [retryMisses] (Fetch all, Replace): a game's
+     * remembered info miss is forgotten before its lookup, so the top screen asks again when this answer brings none;
+     * otherwise a miss stays until an answer brings info.
      */
     suspend fun run(
         start: ScrapeState, games: (String) -> LibraryGameRef?, replace: Boolean = false, startSources: Boolean = true,
-        wide: Boolean = false, found: suspend (gamePath: String, options: List<ArtOption>) -> Unit = { _, _ -> },
+        wide: Boolean = false, retryMisses: Boolean = false, found: suspend (gamePath: String, options: List<ArtOption>) -> Unit = { _, _ -> },
         update: suspend (ScrapeState) -> Unit,
     ): ScrapeState {
         var s = start.inFlightToWaiting().copy(phase = JobPhase.RUNNING, pauseReason = null)
@@ -221,9 +235,13 @@ class ScrapeEngine(
                 // request); one ScreenScraper would be asked waits while it is stopped, as any other.
                 if (known.all { it.id in stopped } && !(mixOnlyLocal(ref, known) && !replace)) { blocked = true; continue }
                 set(i, ItemStatus.SEARCHING)
+                if (retryMisses) info?.let { store -> infoTarget.path(ref)?.let { store.clearMiss(ref.gamePath) } }
                 val downloading: suspend () -> Unit = { set(i, ItemStatus.DOWNLOADING) }
-                val result = if (ref.android) scrapeAndroid(ref, stopped, replace, wide, downloading, stop, found, flush) else scrape(ref, known, stopped, replace, wide, listings, downloading, stop, found, flush)
+                var artInfo: InfoResult? = null
+                val onInfo: (InfoResult) -> Unit = { if (artInfo !is InfoResult.Found) artInfo = it }
+                val result = if (ref.android) scrapeAndroid(ref, stopped, replace, wide, downloading, stop, found, flush) else scrape(ref, known, stopped, replace, wide, listings, downloading, stop, found, flush, onInfo)
                 if (result == null) { blocked = true; set(i, ItemStatus.WAITING); continue }   // every source stopped: Resume retries it
+                artInfo?.let { keepInfo(ref, it) }
                 set(i, result.first, result.second)
             }
             s = current().copy(phase = if (blocked) JobPhase.PAUSED else JobPhase.DONE, pauseReason = if (blocked) ALL_STOPPED else null)
@@ -243,6 +261,18 @@ class ScrapeEngine(
         return s
     }
 
+    /** Stores [ref]'s game info from its art lookup's answer: found info is written, a plain not-found remembered as a miss. */
+    private suspend fun keepInfo(ref: LibraryGameRef, r: InfoResult) {
+        val store = info ?: return
+        val ss = ss ?: return
+        infoTarget.path(ref) ?: return
+        when (r) {
+            is InfoResult.Found -> { store.write(ref, StoredGameInfo.of(r.info, r.ssId, ss.now())); store.clearMiss(ref.gamePath) }
+            InfoResult.Missing -> store.markMiss(ref.gamePath)
+            InfoResult.Failed -> Unit
+        }
+    }
+
     /** What a Reset delete did: [DELETED], the file was not there ([ABSENT]), or it is still there ([FAILED]). */
     enum class Deleted { DELETED, ABSENT, FAILED }
 
@@ -258,18 +288,42 @@ class ScrapeEngine(
     } ?: Deleted.FAILED
 
     /**
-     * After a Reset of [paths] (home-relative art files): removes each slot folder of theirs (`.media/<slot>/`) that is
-     * left empty, then each of their `.media` folders left empty (NX Redux's `rmdir` after its deletes). A folder that
-     * still holds anything is never removed.
+     * After a Reset of [paths] (home-relative art and info files): removes each slot folder of theirs (`.media/<slot>/`,
+     * `.media/info/`) that is left empty, then each of their `.media` folders left empty (NX Redux's `rmdir` after its
+     * deletes). A folder that still holds anything is never removed.
      */
     suspend fun removeEmptyArtDirs(paths: Collection<String>) {
-        val slotFolders = ArtSlot.entries.map { it.folder }.toSet() + LEGACY_BOX2D_FOLDER
+        val slotFolders = ArtSlot.entries.map { it.folder }.toSet() + LEGACY_BOX2D_FOLDER + INFO_FOLDER
         val dirs = paths.map { it.split('/').dropLast(1) }.toSet()
         val slots = dirs.filter { it.size >= 2 && it[it.size - 2] == ".media" && it.last() in slotFolders }
         val medias = dirs.mapNotNull { d -> d.lastIndexOf(".media").takeIf { it >= 0 }?.let { d.take(it + 1) } }.toSet()
         for (d in slots + medias) {
             if (guard { source.findDir(home, d.dropLast(1))?.let { source.deleteEmptyDirectory(it, d.last()) } } == true) diskGeneration++
         }
+    }
+
+    /**
+     * The info files in [ref]'s art target, through a fresh [Listings] per call as [artOnDisk]: a write never bumps
+     * [diskGeneration], so a running job's listings (art folders only) are not dropped for each game's info.
+     */
+    private inner class InfoFiles : GameInfoFiles {
+        private fun target(ref: LibraryGameRef): ArtTarget? =
+            if (ref.android) null else guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) }
+
+        override fun path(ref: LibraryGameRef): String? = target(ref)?.infoPath
+
+        override suspend fun read(ref: LibraryGameRef): String? = guard {
+            val t = target(ref) ?: return@guard null
+            val dir = Listings().dir(t.infoSegments) ?: return@guard null
+            source.child(dir, t.infoName)?.takeIf { !it.isDirectory }?.let { source.readText(it.ref) }
+        }
+
+        override suspend fun write(ref: LibraryGameRef, text: String): Boolean = guard {
+            val t = target(ref) ?: return@guard false
+            val dir = Listings().ensure(t.infoSegments) ?: return@guard false
+            onWritten(listOf(t.infoPath to null))
+            source.writeText(dir, t.infoName, text)
+        } == true
     }
 
     /** Deletes the Android games console's stored pictures (and hero marks), then rebuilds the console when any went; how many. */
@@ -431,9 +485,16 @@ class ScrapeEngine(
         ref: LibraryGameRef, known: List<ArtSource>, stopped: Set<String>, replace: Boolean, wide: Boolean, ls: Listings,
         downloading: suspend () -> Unit, stop: (ArtSource, SourceStop) -> Unit,
         found: suspend (gamePath: String, options: List<ArtOption>) -> Unit, flush: suspend () -> Unit,
+        onInfo: (InfoResult) -> Unit = {},
     ): Pair<ItemStatus, String?>? {
-        /** A source's answer; the job's state is shown first, as the call may take a while. */
-        suspend fun ask(src: ArtSource, slots: Set<ArtSlot>): List<ArtHit> { flush(); return src.find(ref, slots) }
+        /** A source's answer (ScreenScraper's game info from it to [onInfo]); the job's state is shown first, as the call may take a while. */
+        suspend fun ask(src: ArtSource, slots: Set<ArtSlot>): List<ArtHit> {
+            flush()
+            if (src !is ScreenScraperSource) return src.find(ref, slots)
+            val (hits, info) = src.findWithInfo(ref, slots)
+            info?.let(onInfo)
+            return hits
+        }
         val target = guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) }
             ?: return ItemStatus.ERROR to "No place for its art"
         val ex = extras()

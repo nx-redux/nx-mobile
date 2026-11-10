@@ -5,6 +5,7 @@ import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.GamePath
+import com.nxredux.mobile.storage.PrivateFiles
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.yield
 
@@ -104,9 +105,10 @@ fun ssEngine(
     logged: LoggedArt = LoggedArt.NONE,
     onOptions: suspend (String, List<ArtOption>, Boolean) -> Unit = { _, _, _ -> }, picked: suspend (String) -> Set<ArtSlot> = { emptySet() },
     extras: () -> ArtExtras = { ArtExtras() }, pixels: PixelCodec? = null, warn: (String) -> Unit = {},
+    infoFiles: PrivateFiles? = null,
 ) = ScrapeEngine(
     http, fitter, source, home, listOf(ScreenScraperSource(http, hasher, auth, now, sleep)) + more, onArt, onWritten, androidArt, onAndroidArt, logged,
-    extras = extras, pixels = pixels, warn = warn, onOptions = onOptions, picked = picked, clock = now,
+    extras = extras, pixels = pixels, warn = warn, onOptions = onOptions, picked = picked, clock = now, infoFiles = infoFiles,
 )
 
 /** The written-art log as a set of paths; [origins]: each path's origin ([LoggedArt.origin]), a rig's writes recorded there. */

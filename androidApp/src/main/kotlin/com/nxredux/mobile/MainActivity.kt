@@ -110,6 +110,7 @@ import com.nxredux.mobile.tools.CheatDbService
 import com.nxredux.mobile.update.AppUpdates
 import com.nxredux.mobile.ui.App
 import com.nxredux.mobile.ui.MenuTopScreen
+import com.nxredux.mobile.ui.promptOnSecondWindow
 import com.nxredux.mobile.ui.AppDeps
 import com.nxredux.mobile.ui.AppState
 import com.nxredux.mobile.ui.SkinEditRequest
@@ -275,8 +276,6 @@ class MainActivity : ComponentActivity(), FolderPicker {
     @Volatile private var windowScreenClass: ScreenClass? = null
     /** This window's size in px (width to height), for Emulator Settings' DS 3D scales: read with [windowScreenClass]. */
     @Volatile private var windowPx: Pair<Int, Int>? = null
-    /** Between onResume and onPause: [reclaimKeyFocus] must not pull the task forward from behind another window. */
-    private var resumed = false
     private var inFront = false
     private lateinit var launcher: AndroidAppLauncher
     /**
@@ -431,6 +430,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 emulatorConfigs = AndroidEmulatorConfigStore { DataRoot.of(this) },
                 coreDefaults = { id -> if (id == NdsRenderer.CORE_ID_MELONDSDS) NdsRenderer.defaults(glesVersion) else emptyMap() },
                 gameTime = LazyGameTimeData { withContext(Dispatchers.IO) { GameTimeService.data(this@MainActivity) } },
+                topFacts = AndroidTopFacts(this, AndroidRomsSources.of(this)),
                 now = System::currentTimeMillis,
                 // The process's one controller; each AppState becomes its host (index writes stay in AppState).
                 artwork = { host -> artworkHost = host; ArtworkService.controller(this, host) },
@@ -464,6 +464,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 ownKeyboard = true,
                 pasteText = { AndroidDeviceInfo.clipboardText(applicationContext) },
                 promptOnSecondDisplay = { promptOnSecond },
+                log = { NxLog.i("NXAPP", it) },
             ),
             scope,
             kids,
@@ -496,7 +497,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
             BackHandler(enabled = true) { if (!state.back() && !(asHome && launcher.isHome())) finish() }
             // One App at a time: with the menu on the second display ([syncMenuScreen]) this window has the top screen.
             // This window's root gets the insets unconsumed: the pages may pad for the bars at rest ([LocalRestingBars]).
-            CompositionLocalProvider(LocalPosture provides posture.value, LocalRestingBars provides true, LocalSkinPacks provides ::menuSkinPack) { if (menuOnSecond.value) MenuTopScreen(state, keyboard = true) else App(state, ::pad, keyboard = true) }
+            CompositionLocalProvider(LocalPosture provides posture.value, LocalRestingBars provides true, LocalSkinPacks provides ::menuSkinPack) { if (menuOnSecond.value) MenuTopScreen(state) else App(state, ::pad, keyboard = true) }
         }
         collectPosture()
         // Dual mode: apps open on the top screen; one there takes our window on that display down until it leaves.
@@ -554,13 +555,12 @@ class MainActivity : ComponentActivity(), FolderPicker {
      * The main menu on both screens while the app is in front with Settings → Second screen on, a second display there and
      * no onboarding prompt on it ([AppState.onDualMenu]). The bottom screen (Settings → Bottom screen, else the shapes, as
      * a game's [DualScreen.pictureOn]) has the menu, the other the top screen: usually this window keeps [App] and the
-     * presentation shows [MenuTopScreen]; with the menu on the second display the two swap ([menuOnSecond]). The
-     * presentation takes key focus only while it has the focused screen and a text prompt is open, so the keyboard types
-     * there. Gone while a game starts ([launching]), an app opened on the top screen runs there ([TopScreenHost.active]:
-     * the presentation would cover it) or the app stops. Dual mode follows the window: on only once it is shown (a failed
-     * show leaves the menu whole on this screen), kept through [launching] so the cross-fade stays, and through an app on
-     * top so the main menu keeps its shape; any other screen (a tool, a game list) would be on the top screen, so this
-     * one shows it whole.
+     * presentation shows [MenuTopScreen]; with the menu on the second display the two swap ([menuOnSecond]). Gone while an
+     * app opened on the top screen runs there ([TopScreenHost.active]: the presentation would cover it) or the app stops
+     * (a game starting keeps it until then). Dual mode follows the window: on only once it is shown (a failed show leaves the menu
+     * whole on this screen), kept through [launching] so the cross-fade stays, and through an app on top so the main menu
+     * keeps its shape; any other screen then has dual mode off, so a game list keeps its achievements panel here (the
+     * top screen's details would sit behind the app).
      * That display gone or Second screen off lets go of the app on top ([TopScreenHost.release]).
      */
     private fun syncMenuScreen() {
@@ -571,7 +571,9 @@ class MainActivity : ComponentActivity(), FolderPicker {
         val appOnTop = TopScreenHost.active
         state.onAppOnTop(appOnTop)
         if (::kids.isInitialized) AndroidKids.topScreenChanged(this)   // the menu stays shown under an app on top: the guard watches it
-        val wanted = display.takeIf { active && !launching && !appOnTop }
+        // Kept through [launching] until the menu stops: with no window of ours there, Android mirrors the bottom screen on
+        // the top one until the game's own window shows.
+        val wanted = display.takeIf { active && !appOnTop }
         if (wanted == null) cancelMenuRetry()
         if (menuScreen?.display?.displayId != wanted?.displayId) {
             hideMenuScreen()
@@ -580,8 +582,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 if (showMenuScreen(wanted)) menuRetries = 0 else retryMenuScreen()
             }
         }
-        // Under an app on top only the main menu keeps its two-screen shape: a tool or a game list would draw on the top
-        // screen, behind the app, so they take this screen whole.
+        // Under an app on top only the main menu keeps its two-screen shape: the top screen's details are behind the app,
+        // so a game list goes dual-off and keeps its achievements panel on this screen.
         state.onDualMenu(active && (launching || (appOnTop && state.screen.value is Screen.Systems) || menuScreen != null))
         // No window on the second display: no prompt is there, so the keyboard setting rules again.
         if (menuScreen == null && promptOnSecond) { promptOnSecond = false; state.refreshKeyboard() }
@@ -590,28 +592,12 @@ class MainActivity : ComponentActivity(), FolderPicker {
         if (onSecond != menuOnSecond.value) {
             // The activity drops its App before the presentation composes one (and back): one App at a time.
             menuOnSecond.value = onSecond
-            shown.showPanel(if (onSecond) ({ CompositionLocalProvider(LocalSkinPacks provides ::menuSkinPack) { App(state, ::pad) } }) else ({ MenuTopScreen(state) }))
+            shown.showPanel(if (onSecond) ({ CompositionLocalProvider(LocalSkinPacks provides ::menuSkinPack) { App(state, ::pad, keyboard = true) } }) else ({ MenuTopScreen(state) }))
         }
-        // The focused screen: the top screen's list on a game list, the menu everywhere else.
-        val screen = state.screen.value
-        val hostsFocus = if (onSecond) screen !is Screen.Games else screen is Screen.Games
+        // The menu has the focus on every screen, so a prompt is on the second display only when the menu is there.
         // A prompt drawn there: Android's keyboard won't open on that display, so NX's types it, from this window.
-        val promptThere = hostsFocus && state.textEntryOpen
+        val promptThere = promptOnSecondWindow(onSecond, state.textEntryOpen)
         if (promptThere != promptOnSecond) { promptOnSecond = promptThere; state.refreshKeyboard() }
-        val focusable = promptThere && !state.nxKeyboard   // the NX keyboard needs no key focus there
-        val handBack = shown.focusable && !focusable
-        shown.focusable = focusable
-        if (handBack) reclaimKeyFocus()
-    }
-
-    /**
-     * The prompt on the second display closed after taking key focus there (a tap on it raised that display): this window
-     * is named focused again, but its display stays below the second one, so input gives it no key focus (keys go
-     * nowhere, then an ANR) until something raises it. Moving this task to the front raises it.
-     */
-    private fun reclaimKeyFocus() {
-        if (!resumed) return   // split screen or freeform with another app in front: leave it there
-        runCatching { ownAppTask()?.moveToFront() }.onFailure { NxLog.w("NXAPP", "menu key focus: ${it.message}") }
     }
 
     /** Whether the menu goes on [display] (the second): the main window as landscape against its real size. */
@@ -659,8 +645,6 @@ class MainActivity : ComponentActivity(), FolderPicker {
         val p = menuScreen ?: return
         forgetMenuScreen()
         p.dismiss()
-        // It had key focus, and this window stays in front (not when an app took the top screen: it keeps the focus).
-        if (p.focusable && inFront && !launching && !TopScreenHost.active) reclaimKeyFocus()
     }
 
     /** No window on the second display: this one has [App] again. */
@@ -751,7 +735,6 @@ class MainActivity : ComponentActivity(), FolderPicker {
         dataMoveStarter.execute { DataRoot.startIfDue(app) }   // a move held off by a game since killed (cheap once done)
         recordStartedLaunches()   // games that started while the menu was gone (or its process was)
         applyKeepScreenOn()
-        resumed = true
         if (launching) { launching = false; syncMenuScreen() }   // back from the game (or a launch that never left)
         TopScreenHost.recheck(this)   // an app on the top screen whose host is gone without a word
         // Back from Android's All files access page (or a revoke meanwhile): setup moves on, the row and the refs follow.
@@ -794,7 +777,6 @@ class MainActivity : ComponentActivity(), FolderPicker {
     }
 
     override fun onPause() {
-        resumed = false
         kidsTick?.cancel(); kidsTick = null
         if (AndroidKids.menuWarning === kidsWarning) AndroidKids.menuWarning = null
         // Parent mode away from the menu: its idle end comes by alarm (time elsewhere counts as idle).

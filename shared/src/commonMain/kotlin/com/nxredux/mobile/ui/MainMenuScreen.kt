@@ -128,6 +128,7 @@ fun MainMenuScreen(
     onTabMenu: (() -> Unit)? = null,      // a long press on the tab row or the single-tab title: the hidden-tab menu
     tabMenu: Boolean = false,             // a hidden tab can be opened from MENU: every row's MENU offers Options, every Home row takes a long press
     minimalOpening: MinimalOpening? = null,   // Minimal: this tab's selected folder being opened: the others fade
+    dual: Boolean = false,                // the menu is on two screens: the top one shows a console's or collection's name and count
 ) {
     val rows = screen.rows
     val home = screen.category == MenuCategory.HOME   // the Home tab: [HomeListScreen], [HomeScreen] (Grid), [HomeCarouselScreen] or [HomeMinimalScreen] by its own style
@@ -260,10 +261,11 @@ fun MainMenuScreen(
                             BoxWithConstraints(m) {
                                 // Home's stats header in the room left of Recent and Search ([homeStatsHeader], two
                                 // lines): Consoles and Collections show the selected one's name and count there
-                                // ([GridTitleLines]), Tools nothing; every tab's tiles start under it, as Home's page does.
+                                // ([GridTitleLines]), Tools and a menu on two screens (the top one shows them) nothing;
+                                // every tab's tiles start under it, as Home's page does.
                                 val whole = homeFrameHere(squareIsPortrait = true)   // Home's own frame, so the header lines up
                                 val header = whole?.let { homeStatsHeader(it, GRID_TITLE_LINES) }
-                                val title = gridTitle(tiles.getOrNull(selection()))
+                                val title = gridTitle(tiles.getOrNull(selection())).takeIf { !dual }
                                 if (whole != null && header != null && title != null) {
                                     val inset = nxPageInset()
                                     GridTitleLines(
@@ -288,7 +290,7 @@ fun MainMenuScreen(
                     // The tiles are this screen's rows, so a tab switch hands the row a new list and its selection in one
                     // composition: the row snaps instead of sliding. Vertical: the same items stood on end ([NxBackdropStack]).
                     MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> {
-                        val tiles = remember(rows, controllerArt) { gridTiles(rows, controllerArt) }   // the controllers by Layouts → Consoles background
+                        val tiles = remember(rows, controllerArt, dual) { gridTiles(rows, controllerArt, counts = !dual) }   // the controllers by Layouts → Consoles background
                         // Centred on the screen, whatever shows: half a shown tab row up, half a shown hint bar down (a
                         // hidden title's room is in the box already, [titleRoom]).
                         val shift = mainMenuCarouselShift(chrome.tabRow, barShown = !chrome.emptyBarRoom && !chrome.noBar)

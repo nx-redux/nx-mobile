@@ -3,46 +3,71 @@ package com.nxredux.mobile.ui
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.runner.ContentRef
+import com.nxredux.mobile.settings.MenuCategory
+import com.nxredux.mobile.storage.ResumeInfo
+import com.nxredux.mobile.ui.nx.HomeShelf
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class DualMenuTest {
     private val game = GameEntry(ContentRef("r/a.rom"), "a.rom", "A", folder = ContentRef("f"), sourceId = "home", relativeDir = "Roms/x")
-    private val system = SystemFolder("Console X", "X", null, listOf(game), null, null, "Console (X)", false)
+    private val game2 = GameEntry(ContentRef("r/b.rom"), "b.rom", "B", folder = ContentRef("f"), sourceId = "home", relativeDir = "Roms/x")
+    private val system = SystemFolder("Console X", "X", null, listOf(game, game2), null, null, "Console (X)", false)
     private val listed = Listed(system, game)
+    private val listed2 = Listed(system, game2)
     private val source = ListSource.Console(listOf(system))
-    private val list = SecondList(source, listOf(listed), 0)
-    private fun systems() = Screen.Systems(emptyList())
-    private fun games() = Screen.Games(source, listOf(listed))
+    private val resume = ResumeInfo(null)
+    private fun systems(vararg rows: MainRow) = Screen.Systems(listOf(MenuTab(MenuCategory.HOME, rows.toList())))
 
-    @Test fun top_is_the_preview_on_systems_with_one() {
-        assertEquals(TopContent.Preview(list), DualMenu.top(systems(), list))
-        assertEquals(TopContent.Backdrop, DualMenu.top(systems(), null))
+    @Test fun games_show_the_highlighted_games_details() {
+        val games = Screen.Games(source, listOf(listed, listed2))
+        assertEquals(TopContent.GameDetails(listed), DualMenu.top(games, 0))
+        assertEquals(TopContent.GameDetails(listed2), DualMenu.top(games, 1))
     }
 
-    @Test fun top_is_the_game_list_on_games() = assertEquals(TopContent.GameList, DualMenu.top(games(), null))
-
-    @Test fun top_is_the_backdrop_elsewhere() {
-        val settings = Screen.Settings(SettingsSection.entries.first(), emptyList())
-        assertEquals(TopContent.Backdrop, DualMenu.top(settings, null))
-        assertEquals(TopContent.Backdrop, DualMenu.top(Screen.SettingsMenu(emptyList()), null))
-        assertEquals(TopContent.Backdrop, DualMenu.top(Screen.Loading, null))
+    @Test fun an_empty_list_shows_the_backdrop() {
+        assertEquals(TopContent.Backdrop, DualMenu.top(Screen.Games(source, emptyList()), 0))
     }
 
-    @Test fun top_is_a_tool_with_the_focus_and_the_menu_stays_below() {
-        val cheats = Screen.CheatDb()
-        assertEquals(TopContent.Tool, DualMenu.top(cheats, null, tool = true))
-        assertEquals(TopContent.Backdrop, DualMenu.top(cheats, null))
-        assertEquals(TopContent.GameList, DualMenu.top(games(), null, tool = true))   // a game list from a tool: as any
-        assertEquals(TopContent.Backdrop, DualMenu.top(systems(), null, tool = true))  // back on the menu
-        assertEquals(BottomContent.Menu, DualMenu.bottom(cheats, active = true, tool = true))
-        assertEquals(BottomContent.Normal, DualMenu.bottom(cheats, active = false, tool = true))
-        assertEquals(BottomContent.Details, DualMenu.bottom(games(), active = true, tool = true))
+    @Test fun home_game_rows_show_details_other_rows_backdrop() {
+        val tool = MainRow.Tool(ToolRow(ToolKind.SETTINGS, "Settings", null))
+        val s = systems(MainRow.Pin(listed), MainRow.Shelf(listed2, HomeShelf.NEW), MainRow.Continue(listed, resume), tool, MainRow.MoreTools(2), MainRow.PickAGame)
+        assertEquals(TopContent.GameDetails(listed), DualMenu.top(s, 0))
+        assertEquals(TopContent.GameDetails(listed2), DualMenu.top(s, 1))
+        assertEquals(TopContent.GameDetails(listed), DualMenu.top(s, 2))
+        assertEquals(TopContent.Backdrop, DualMenu.top(s, 3))
+        assertEquals(TopContent.Backdrop, DualMenu.top(s, 4))
+        assertEquals(TopContent.Backdrop, DualMenu.top(s, 5))
     }
 
-    @Test fun bottom_shows_details_only_on_games_while_active() {
-        assertEquals(BottomContent.Details, DualMenu.bottom(games(), active = true))
-        assertEquals(BottomContent.Normal, DualMenu.bottom(games(), active = false))
-        assertEquals(BottomContent.Normal, DualMenu.bottom(systems(), active = true))
+    @Test fun a_console_row_shows_its_stats() {
+        val row = MainRow.System(system)
+        assertEquals(TopContent.ConsoleStats(row.systems), DualMenu.top(systems(row), 0))
+    }
+
+    @Test fun a_collection_row_shows_its_stats() {
+        assertEquals(TopContent.CollectionStats("Favourites"), DualMenu.top(systems(MainRow.Collection("Favourites", 3)), 0))
+    }
+
+    @Test fun tools_settings_and_kids_show_the_backdrop() {
+        assertEquals(TopContent.Backdrop, DualMenu.top(Screen.CheatDb(), 0))
+        assertEquals(TopContent.Backdrop, DualMenu.top(Screen.SettingsMenu(emptyList()), 0))
+        assertEquals(TopContent.Backdrop, DualMenu.top(Screen.KidsHome, 0))
+        assertEquals(TopContent.Backdrop, DualMenu.top(Screen.Loading, 0))
+    }
+
+    @Test fun the_switcher_shows_the_highlighted_games_details() {
+        val s = Screen.Switcher(listOf(SwitcherEntry(system, game, resume), SwitcherEntry(system, game2, resume)), 1)
+        assertEquals(TopContent.GameDetails(listed2), DualMenu.top(s, 0))
+        assertEquals(TopContent.Backdrop, DualMenu.top(Screen.Switcher(emptyList(), 0), 0))
+    }
+
+    @Test fun promptOnSecondWindowOnlyWhereTheMenuIs() {
+        assertTrue(promptOnSecondWindow(menuOnSecond = true, textEntryOpen = true))
+        assertFalse(promptOnSecondWindow(menuOnSecond = true, textEntryOpen = false))
+        assertFalse(promptOnSecondWindow(menuOnSecond = false, textEntryOpen = true))
+        assertFalse(promptOnSecondWindow(menuOnSecond = false, textEntryOpen = false))
     }
 }

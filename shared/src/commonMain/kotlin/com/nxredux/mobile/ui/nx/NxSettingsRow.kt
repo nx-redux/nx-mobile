@@ -50,6 +50,17 @@ import androidx.compose.ui.unit.TextUnit
  */
 
 /**
+ * The row [NxKeepSelectedInView] keeps clear of the fades: the footer ([footer]) or the selection; a selection with only
+ * group labels, spacers or paragraphs above it keeps the list at its top instead, so its first label isn't scrolled
+ * under the top fade just to clear the selection.
+ */
+internal fun nxKeepTarget(rows: List<NxSettingRow>, selected: Int, footer: Boolean): Int = when {
+    footer -> rows.size
+    selected > 0 && rows.take(selected).all { it.section || it.spacer || it.paragraph } -> 0
+    else -> selected
+}
+
+/**
  * One touch settings row. [info]: its description line (at most [SETTING_DESC_LINES] on the row); [detail]: a fuller
  * text the info popup shows when [info] is a short line of it. [choices]: every value's label in LEFT / RIGHT order
  * (empty: not a value row), [index] the current one's (-1 none). [value]: a text on the right of a row without choices
@@ -326,7 +337,7 @@ fun NxSettingsList(
             }
         }
         NxKeepSelectedInView(
-            listState, if (keep == NxFooterKeep.FOOTER) rows.size else selectedIndex, rows.size + (if (footer != null) 1 else 0),
+            listState, nxKeepTarget(rows, selectedIndex, keep == NxFooterKeep.FOOTER), rows.size + (if (footer != null) 1 else 0),
             edge = edgePx,
         )
         // A footer too tall to show whole under the last row: that row at the top under its fade edge, the picture

@@ -3,6 +3,10 @@ package com.nxredux.mobile.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.ui.Modifier
+import com.nxredux.mobile.ui.nx.nxListInset
+import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.draw.alpha
 import com.nxredux.mobile.gametime.GameSession
 import com.nxredux.mobile.gametime.GameSessions
@@ -81,10 +85,16 @@ internal fun GameTimeSplitScreen(state: AppState, s: Screen.GameTimeSessions, se
             parent?.let { p ->
                 GameTimeScreen(
                     p.screen, p.row, state::gameTimeParentTap, state::gameTimeParentTap, onModalSelect = {},
-                    modifier = Modifier.alpha(UNFOCUSED_ALPHA), onHint = {}, focused = false,   // role: an unfocused pane, dimmed
+                    // On Settings' start inset, as the tracker list's own page: the column doesn't shift when the split opens.
+                    modifier = Modifier.padding(start = settingsPlateStart()).alpha(UNFOCUSED_ALPHA), onHint = {}, focused = false,   // role: an unfocused pane, dimmed
                 )
             }
         },
-        right = { WithIndex(selection) { GameTimeSessionsScreen(s, it, state::select, onHint = state::onButton, split = true) } },
+        // The sessions' hints start on their rows' words, not the page inset the left pane already holds.
+        right = { CompositionLocalProvider(LocalNxHintBarStart provides nxListInset()) { WithIndex(selection) { GameTimeSessionsScreen(s, it, state::select, onHint = state::onButton, split = true) } } },
+        // The game titles on the left need the room more than the dated sessions on the right.
+        leftShare = GAME_TIME_SPLIT_LEFT,
     )
 }
+
+private const val GAME_TIME_SPLIT_LEFT = 0.45f

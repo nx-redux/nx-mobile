@@ -252,6 +252,10 @@ interface AppSettings {
     var artWheel: Boolean
         get() = false
         set(value) {}
+    /** Art settings → Fetch art and info when browsing: the top screen fetches a highlighted game's missing art and its info (default on). */
+    var fetchGameInfo: Boolean
+        get() = true
+        set(value) {}
     /** Art settings → Mix: fetch the mix picture, else the device makes NX Redux's screenshot + box + wheel one (default off; a game has art only with it). */
     var artMix: Boolean
         get() = false

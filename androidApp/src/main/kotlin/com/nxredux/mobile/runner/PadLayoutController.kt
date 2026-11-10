@@ -13,7 +13,9 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.window.layout.WindowMetricsCalculator
 import com.nxredux.mobile.R
 import com.nxredux.mobile.layout.CoreFrame
+import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.skin.SkinDual
+import com.nxredux.mobile.skin.menuRoom
 import com.nxredux.mobile.skin.SkinChoice
 import com.nxredux.mobile.skin.OverlayMode
 import com.nxredux.mobile.skin.SkinPlacement
@@ -618,6 +620,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
 
     /** Whether the pad skin is the layout now. */
     val skinShown: Boolean get() = skinView != null
+
+    /** The room the in-game menu takes over the shown skin ([com.nxredux.mobile.skin.menuRoom]), window px; null with none. */
+    fun skinMenuRoom(): PxRect? = if (skinShown) skinPlacement()?.menuRoom() else null
     /** The skin's view while shown: a panel in its glass sits right above it. */
     val skinViewNow: View? get() = skinView
     /** [skinShown] as state, for the notifications (top-centre over a skin). */

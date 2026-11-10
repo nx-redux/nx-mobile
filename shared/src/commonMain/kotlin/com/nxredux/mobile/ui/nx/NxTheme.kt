@@ -105,10 +105,10 @@ data class NxColors(
     val scrimBackdrop: Color = Color(0xBF000000)
     /** A notice's backing: App's notice line and NxNotifications' toasts. */
     val scrimNotice: Color = Color(0xCC000000)
-    /** Over the menu kept still under a tool that has the focus on the top screen (App's PageContent). */
-    val scrimUnder: Color = Color(0x66000000)
     /** The in-game menu's wash over the paused frame behind its pages (InGameMenu): the game shows only faintly. */
     val scrimMenuWash: Color = Color(0xF5000000)
+    /** The paused picture's display while the menu is in the dual-screen panel (PausedPictureCover): the game still seen. */
+    val scrimPaused: Color = Color(0x80000000)
     /** The in-game menu's adjust strip over the paused frame (InGameMenu's AdjustContent). */
     val scrimAdjust: Color = Color(0xD9000000)
     /** The screen under a modal: NxModal, GameSettingsModal, RaPanelView, NxTouchRows' picker. */
@@ -141,6 +141,9 @@ data class NxColors(
     val editorPanel: Color = Color(0xE6121212)
     /** The button layout editor's toolbar buttons (not the primary one, on the accent). */
     val editorButton: Color = Color(0xFF2A2A2A)
+    /** The top screen's stats page: a missing BIOS pill's word and its edge (TopStatsPage). */
+    val alertText: Color = Color(0xFFE3A0A0)
+    val alertLine: Color = Color(0xFF6B3B3B)
 }
 
 /** The Secondary accent's Auto for the accent in use: the colour its swatch shows ([NxSwatches]). */

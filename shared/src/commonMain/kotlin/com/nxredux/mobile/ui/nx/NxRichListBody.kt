@@ -1,6 +1,5 @@
 package com.nxredux.mobile.ui.nx
 
-import com.nxredux.mobile.ui.settingsRowsFade
 import com.nxredux.mobile.ui.SettingsRowsBlock
 import com.nxredux.mobile.ui.LocalSettingsBlock
 import androidx.compose.foundation.layout.Box
@@ -62,7 +61,7 @@ fun NxRichListBody(
                     val height = maxHeight / count * minOf(rows.size, count)
                     NxRichList(
                         rows, selectedIndex, onSelect, onOpen,
-                        Modifier.fillMaxWidth().height(height).nxScrollFade(listState, height = settingsRowsFade(pitch * 1.5f, 56.dp), strong = true),
+                        Modifier.fillMaxWidth().height(height).nxScrollFade(listState, height = RICH_LIST_FADE, strong = true),
                         listState = listState, onLongPress = onLongPress, labelSize = nxListLabelSize(pitch), edgeMargin = 1,
                     )
                 }
@@ -94,7 +93,7 @@ fun NxRichListBody(
                                         // capsule keeps its padding around it, so its edge lies that padding left of the image.
                                         NxRichList(
                                             rows, selectedIndex, onSelect, onOpen,
-                                            Modifier.fillMaxSize().nxScrollFade(listState, height = 56.dp, strong = true).padding(start = inset - NxRichThumbGap),
+                                            Modifier.fillMaxSize().nxScrollFade(listState, height = RICH_LIST_FADE, strong = true).padding(start = inset - NxRichThumbGap),
                                             listState = listState, onLongPress = onLongPress, labelSize = label, edgeMargin = 1,
                                         )
                                     }
@@ -112,3 +111,6 @@ fun NxRichListBody(
         }
     }
 }
+
+/** The list's edge fade: a short fixed hint that more rows are there, not rows' worth (tall art rows would leave a dark band). */
+private val RICH_LIST_FADE = 24.dp

@@ -53,5 +53,8 @@ object FileRefs {
      */
     fun artPath(model: String): String? = model.takeIf { it.startsWith(SCHEME) }?.removePrefix(SCHEME)?.replace(VERSION, "")
 
+    /** True for a file ref carrying a [versioned] stamp. */
+    fun isVersioned(model: String): Boolean = model.startsWith(SCHEME) && VERSION.containsMatchIn(model)
+
     private val VERSION = Regex("\\?v=\\d+$")
 }

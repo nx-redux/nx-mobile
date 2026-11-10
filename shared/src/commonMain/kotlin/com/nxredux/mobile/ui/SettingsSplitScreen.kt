@@ -17,7 +17,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxHintBarKeepHeight
@@ -134,7 +133,7 @@ internal fun SettingsStage(
 private fun WithCurrent(current: () -> Int, content: @Composable (Int) -> Unit) = content(current())
 
 /**
- * The two-pane frame on a wide landscape window ([settingsSplit]): [left] in [SETTINGS_SPLIT_LEFT] of the width, a 1 dp
+ * The two-pane frame on a wide landscape window ([settingsSplit]): [left] in [SETTINGS_SPLIT_LEFT] of the width, a [SPLIT_DIVIDER]
  * divider at 8%, [right] in the rest, then [over] drawn over both panes (a dialog's scrim covers the whole window).
  * Both panes' hint bars keep their height, so their rows stay level when only the focused one shows hints. Used by the
  * column browsers (RetroAchievements, Game Tracker) and the in-game menu, which passes its
@@ -150,7 +149,7 @@ internal fun SplitPanes(
         CompositionLocalProvider(LocalNxHintBarKeepHeight provides true) {
             Row(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(leftShare).fillMaxHeight()) { left() }
-                if (divider) Box(Modifier.width(1.dp).fillMaxHeight().background(colors.inkEdge))   // the divider between the panes: a hairline
+                if (divider) Box(Modifier.width(SPLIT_DIVIDER).fillMaxHeight().background(colors.inkEdge))   // the divider between the panes: a hairline
                 Box(Modifier.weight(1f - leftShare).fillMaxHeight()) { right() }
             }
         }

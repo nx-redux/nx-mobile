@@ -48,6 +48,7 @@ internal class SaveSession(
     private val host: SaveSessionHost,
     private val renderer: FrontendRenderer,
     private val menu: InGameMenuController,
+    private val dual: DualScreenController,
 ) {
     companion object {
         // Instance-state key: the slot to resume from when the system recreates this activity after a process kill.
@@ -525,25 +526,31 @@ internal class SaveSession(
      * PixelCopy the current (paused) game frame, cut to the game's own picture ([thumbnailCrop]: no bars or anything drawn
      * around it; a DS / 3DS game's top screen). Only that rect is copied, straight into a bitmap of the size the save
      * state's thumbnail is stored at ([SaveStates.thumbSize]), so a large panel never needs a full-window bitmap; with
-     * [fullSize] (a backdrop drawn over the picture) it keeps the picture's own pixel size.
+     * [fullSize] (a backdrop drawn over the picture) it keeps the picture's own pixel size. With the picture on the second
+     * display ([FrontendRenderer.thumbnailSource]) it is copied from that display's surface: main draws black under the panel.
      */
     fun captureThumbnail(fullSize: Boolean = false, cb: (Bitmap?) -> Unit) {
         val view = host.retroView ?: return cb(null)
-        val w = view.width
-        val h = view.height
+        val second = dual.drawnSecondSurface()
+        val source = renderer.thumbnailSource(secondDrawing = second != null)   // taken now: the layout it was copied from
+        val onSecond = second?.takeIf { source.display == ThumbnailDisplay.SECOND }
+        val w = onSecond?.width ?: view.width
+        val h = onSecond?.height ?: view.height
         if (w <= 0 || h <= 0) return cb(null)
-        val crop = thumbnailCrop(renderer.thumbnailPicture(), w, h)   // taken now: the layout it was copied from
+        val crop = thumbnailCrop(source.picture, w, h)
         val src = crop?.let { Rect(it.x, it.y, it.x + it.width, it.y + it.height) } ?: Rect(0, 0, w, h)
         val (bw, bh) = if (fullSize) src.width() to src.height() else SaveStates.thumbSize(src.width(), src.height())
         val bmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888)
+        val done = PixelCopy.OnPixelCopyFinishedListener { result ->
+            if (result == PixelCopy.SUCCESS) cb(bmp)
+            else {
+                bmp.recycle()
+                cb(null)
+            }
+        }
         try {
-            PixelCopy.request(view, src, bmp, { result ->
-                if (result == PixelCopy.SUCCESS) cb(bmp)
-                else {
-                    bmp.recycle()
-                    cb(null)
-                }
-            }, Handler(Looper.getMainLooper()))
+            val main = Handler(Looper.getMainLooper())
+            if (onSecond != null) PixelCopy.request(onSecond.surface, src, bmp, done, main) else PixelCopy.request(view, src, bmp, done, main)
         } catch (e: Exception) {
             bmp.recycle()
             cb(null)

@@ -50,7 +50,8 @@ fun toolPageCount(screen: Screen): String? = when (screen) {
 
 /** [toolPageTitle] without its [toolPageCount]: the part an over-long title cuts. */
 fun toolPageTitleHead(screen: Screen, split: Boolean = false): String? = when (screen) {
-    is Screen.RaGames -> subPageTitle(ToolKind.RETRO_ACHIEVEMENTS, "Achievements", split)
+    is Screen.RaConsoles -> subPageTitle(ToolKind.RETRO_ACHIEVEMENTS, "Achievements", split)
+    is Screen.RaGames -> subPageTitle(ToolKind.RETRO_ACHIEVEMENTS, screen.console, split)
     is Screen.RaGame -> subPageTitle(ToolKind.RETRO_ACHIEVEMENTS, screen.game.title, split)
     is Screen.RaAchievement -> subPageTitle(ToolKind.RETRO_ACHIEVEMENTS, screen.game.title, split)   // an achievement names its game
     is Screen.RaSettings -> subPageTitle(ToolKind.RETRO_ACHIEVEMENTS, "Settings", split)

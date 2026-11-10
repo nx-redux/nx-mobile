@@ -26,6 +26,16 @@ internal sealed interface AndroidHit {
 }
 
 /**
+ * A game's info from a `jeuInfos` lookup: [Found] (any of the facts), [Missing] (not found, or found with none of them:
+ * a miss to remember) or [Failed] (an answer that could not be read, or an unexpected status: never a miss).
+ */
+sealed interface InfoResult {
+    data class Found(val info: SsGameInfo, val ssId: String?) : InfoResult
+    data object Missing : InfoResult
+    data object Failed : InfoResult
+}
+
+/**
  * ScreenScraper as an [ArtSource] (NX Redux `scraper.c`): paced lookups (try 1 by name, try 2 with CRC + size), every
  * `box-3D`, `box-2D`, `ss` and wheel (`wheel-hd`, then `wheel`) ranked per [ScraperMedia.alternates], each with its
  * thumbnail link ([ScraperRequest.thumb]), the quota read at job start and every [QUOTA_EVERY] lookups when signed in, and the error
@@ -34,7 +44,8 @@ internal sealed interface AndroidHit {
  */
 class ScreenScraperSource(
     private val http: ScraperHttp, private val hasher: RomHasher, private val auth: () -> ScraperAuth,
-    now: () -> Long, private val sleep: suspend (Long) -> Unit,
+    /** Epoch millis: the pacing's clock and the stored info's fetch time. */
+    internal val now: () -> Long, private val sleep: suspend (Long) -> Unit,
 ) : ArtSource {
     companion object {
         const val RATE_MS = 1_200L
@@ -83,23 +94,46 @@ class ScreenScraperSource(
      */
     private val hashes = LinkedHashMap<String, Pair<RomStamp, Pair<Long, Long>>>()
 
+    /** When [quota] was read ([now]); with it, a reading from an earlier day is told from today's. */
+    @Volatile private var quotaRead: Pair<SsQuota, Long>? = null
+
     /** The last quota read (null after [forgetQuota] or before any read). */
     val lastQuota: SsQuota? get() = quota
+    /** [lastQuota] with when it was read (epoch millis). */
+    val lastQuotaRead: Pair<SsQuota, Long>? get() = quotaRead
 
     /** Drops the last known quota (sign-out): the next run reports only its own reads. */
-    fun forgetQuota() { quota = null }
+    fun forgetQuota() { quota = null; quotaRead = null }
+
+    private fun keepQuota(q: SsQuota) { quota = q; quotaRead = q to now() }
 
     override suspend fun startJob() {
         countLock.withLock { sinceQuota = 0 }
         if (auth().signedIn) checkQuota()
     }
 
-    override suspend fun find(ref: LibraryGameRef, wanted: Set<ArtSlot>): List<ArtHit> {
-        val systemId = ref.systemId() ?: return emptyList()
+    override suspend fun find(ref: LibraryGameRef, wanted: Set<ArtSlot>): List<ArtHit> = findWithInfo(ref, wanted).first
+
+    /** [find], with the game's info read from the same answer (no extra request); null info: [ref] has no system. */
+    internal suspend fun findWithInfo(ref: LibraryGameRef, wanted: Set<ArtSlot>): Pair<List<ArtHit>, InfoResult?> {
+        val systemId = ref.systemId() ?: return emptyList<ArtHit>() to null
         countLookup()
-        val found = lookup(ref, systemId) ?: return emptyList()
+        val answer = lookup(ref, systemId)
+        val found = answer.found ?: return emptyList<ArtHit>() to answer.info()
         val offered = ScraperMedia.alternates(found.medias)
-        return ScraperMedia.SLOTS.filter { it in wanted }.flatMap { s -> offered[s].orEmpty().map { ArtHit(s, it.url, origin(found.id, it), note = it.region, thumb = ScraperRequest.thumb(it.url)) } }
+        val hits = ScraperMedia.SLOTS.filter { it in wanted }.flatMap { s -> offered[s].orEmpty().map { ArtHit(s, it.url, origin(found.id, it), note = it.region, thumb = ScraperRequest.thumb(it.url)) } }
+        return hits to answer.info()
+    }
+
+    /**
+     * The game's info alone: the art's lookup ([lookup], its ROM-hash second try included) without any media download,
+     * counted and paced as one.
+     * Throws [SourceStop] / [JobPause] as [find] does; [InfoResult.Missing] when [ref] has no system.
+     */
+    internal suspend fun info(ref: LibraryGameRef): InfoResult {
+        val systemId = ref.systemId() ?: return InfoResult.Missing
+        countLookup()
+        return lookup(ref, systemId).info()
     }
 
     /** The signed-in user's quota (paced), or null when not signed in or the call failed. */
@@ -108,7 +142,7 @@ class ScreenScraperSource(
         if (!a.signedIn) return null
         return try {
             val r = api(ScraperRequest.userInfo(a))
-            ScraperResponse.parseQuota(r.status, r.body?.decodeToString())?.also { quota = it }
+            ScraperResponse.parseQuota(r.status, r.body?.decodeToString())?.also { keepQuota(it) }
         } catch (_: SourceStop) { null } catch (_: JobPause) { null }
     }
 
@@ -127,7 +161,7 @@ class ScreenScraperSource(
             }
         }
         if (r.status != 200) return SignInResult.UNAVAILABLE
-        quota = ScraperResponse.parseQuota(r.status, r.body?.decodeToString()) ?: return SignInResult.BAD_LOGIN
+        keepQuota(ScraperResponse.parseQuota(r.status, r.body?.decodeToString()) ?: return SignInResult.BAD_LOGIN)
         return SignInResult.OK
     }
 
@@ -178,7 +212,7 @@ class ScreenScraperSource(
     private suspend fun checkQuota() {
         val r = api(ScraperRequest.userInfo(auth()))
         val q = ScraperResponse.parseQuota(r.status, r.body?.decodeToString()) ?: return
-        quota = q
+        keepQuota(q)
         if (q.today >= q.max) throw SourceStop(DAILY_LIMIT)
     }
 
@@ -217,7 +251,7 @@ class ScreenScraperSource(
         if (!a.signedIn) return false
         val r = pacer.paced { http.get(ScraperRequest.userInfo(a)) }
         val q = ScraperResponse.parseQuota(r.status, r.body?.decodeToString()) ?: return false
-        quota = q
+        keepQuota(q)
         return q.today >= q.max
     }
 
@@ -226,15 +260,33 @@ class ScreenScraperSource(
      * sheet or container ([NOT_HASHED]): its CRC names no game). A console game's zip sends the ROM inside it; its 7z
      * (not read) skips try 2. An arcade set's archive is the game itself and is hashed whole.
      */
-    private suspend fun lookup(ref: LibraryGameRef, systemId: Int): GameLookup.Found? {
+    private suspend fun lookup(ref: LibraryGameRef, systemId: Int): Answer {
         val a = auth()
-        found(api(ScraperRequest.gameInfo(a, ref.fileName, systemId)))?.let { return it }
+        val first = answer(api(ScraperRequest.gameInfo(a, ref.fileName, systemId)))
+        if (first.found != null) return first
         val ext = ref.fileName.substringAfterLast('.', "").lowercase()
-        if (ext in NOT_HASHED) return null
+        if (ext in NOT_HASHED) return first
         val inside = ext == "zip" && systemId !in ARCADE_IDS
-        if (ext == "7z" && systemId !in ARCADE_IDS) return null
-        val (crc, size) = hash(ref, inside)?.takeIf { it.second <= HASH_LIMIT } ?: return null
-        return found(api(ScraperRequest.gameInfo(a, ref.fileName, systemId, crc, size)))
+        if (ext == "7z" && systemId !in ARCADE_IDS) return first
+        val (crc, size) = hash(ref, inside)?.takeIf { it.second <= HASH_LIMIT } ?: return first
+        val second = answer(api(ScraperRequest.gameInfo(a, ref.fileName, systemId, crc, size)))
+        return if (second.found != null) second else Answer(null, first.unread || second.unread)
+    }
+
+    /** A lookup's game, or none; [unread]: an answer was neither a game nor a plain not-found (its info is no miss). */
+    private class Answer(val found: GameLookup.Found?, val unread: Boolean) {
+        fun info(): InfoResult = when {
+            found != null -> found.info?.let { InfoResult.Found(it, found.id) } ?: InfoResult.Missing
+            unread -> InfoResult.Failed
+            else -> InfoResult.Missing
+        }
+    }
+
+    private fun answer(r: HttpResult): Answer {
+        val body = r.body?.decodeToString()
+        val found = ScraperResponse.parseGame(r.status, body) as? GameLookup.Found
+        val unread = found == null && r.status != 404 && !(r.status == 200 && ScraperResponse.isJson(body))
+        return Answer(found, unread)
     }
 
     /** [ref]'s ROM's CRC32 and size, reused while its [RomStamp] is unchanged; a failed hash is not kept. */

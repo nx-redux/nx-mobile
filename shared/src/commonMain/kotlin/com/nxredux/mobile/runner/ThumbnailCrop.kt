@@ -29,3 +29,33 @@ fun thumbnailCrop(picture: PxRect?, w: Int, h: Int): ThumbnailCrop? {
  */
 fun List<NdsRegion>.thumbnailPicture(): PxRect? =
     (firstOrNull { it.screen == NdsScreen.TOP } ?: firstOrNull { !it.inset } ?: firstOrNull())?.dst
+
+/** Which display's surface a save state's picture is copied from. */
+enum class ThumbnailDisplay { MAIN, SECOND }
+
+/** Where a save state's picture is copied from: the display's surface and the picture in its px (null: all of it). */
+data class ThumbnailSource(val display: ThumbnailDisplay, val picture: PxRect?)
+
+/**
+ * Where to copy a save state's picture from. Main's surface ([main] DS / 3DS screens, else [mainPicture]) unless the
+ * second display draws ([secondDrawing]) the picture: with the panel on main ([mainBlack]) main draws only black, so
+ * the second display's screens ([second]; null when it draws the whole frame, at [secondWhole]) hold it; split, the
+ * top screen is there when main shows the other one.
+ */
+fun thumbnailSource(
+    main: List<NdsRegion>,
+    mainPicture: PxRect?,
+    second: List<NdsRegion>?,
+    secondWhole: PxRect?,
+    mainBlack: Boolean,
+    secondDrawing: Boolean,
+): ThumbnailSource {
+    val onMain = ThumbnailSource(ThumbnailDisplay.MAIN, if (main.isNotEmpty()) main.thumbnailPicture() else mainPicture)
+    if (!secondDrawing) return onMain
+    if (mainBlack) {
+        return ThumbnailSource(ThumbnailDisplay.SECOND, if (second.isNullOrEmpty()) secondWhole else second.thumbnailPicture())
+    }
+    val secondTop = second?.firstOrNull { it.screen == NdsScreen.TOP }
+    if (secondTop != null && main.none { it.screen == NdsScreen.TOP }) return ThumbnailSource(ThumbnailDisplay.SECOND, secondTop.dst)
+    return onMain
+}
