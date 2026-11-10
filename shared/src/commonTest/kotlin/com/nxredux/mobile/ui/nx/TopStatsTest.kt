@@ -158,14 +158,14 @@ class TopStatsTest {
         assertEquals(ShelfImage.None, shelfImage(null, null, null))
     }
 
-    // Three 16:9 tiles over 92% of the width (two 4% gaps): 826dp wide, each 142.5dp tall. Over them a 16dp breath and
+    // Three 16:9 tiles over 92% of the width (two 4% gaps): 826dp wide, each 142.5dp tall. Over them a 24dp breath and
     // the 28dp label; under them the 52dp captions.
     @Test fun the_shelf_drops_its_captions_then_itself_on_short_screens() {
         assertEquals(ShelfFit.CAPTIONED, shelfFit(width = 826.dp, height = 400.dp))
-        assertEquals(ShelfFit.CAPTIONED, shelfFit(width = 826.dp, height = 239.dp))
-        assertEquals(ShelfFit.PICTURES, shelfFit(width = 826.dp, height = 238.dp))
-        assertEquals(ShelfFit.PICTURES, shelfFit(width = 826.dp, height = 187.dp))
-        assertEquals(ShelfFit.NONE, shelfFit(width = 826.dp, height = 186.dp))
-        assertEquals(ShelfFit.CAPTIONED, shelfFit(width = 400.dp, height = 166.dp))   // a narrower screen's smaller tiles fit sooner
+        assertEquals(ShelfFit.CAPTIONED, shelfFit(width = 826.dp, height = 247.dp))
+        assertEquals(ShelfFit.PICTURES, shelfFit(width = 826.dp, height = 246.dp))
+        assertEquals(ShelfFit.PICTURES, shelfFit(width = 826.dp, height = 195.dp))
+        assertEquals(ShelfFit.NONE, shelfFit(width = 826.dp, height = 194.dp))
+        assertEquals(ShelfFit.CAPTIONED, shelfFit(width = 400.dp, height = 174.dp))   // a narrower screen's smaller tiles fit sooner
     }
 }

@@ -31,8 +31,10 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -170,7 +172,7 @@ internal fun shelfImage(screenshot: String?, resume: String?, box: String?): She
 internal enum class ShelfFit { CAPTIONED, PICTURES, NONE }
 
 /**
- * The shelf in the [width] x [height] left under the page's line: its label over three 16:9 tiles in a row (gaps
+ * The shelf in the [width] x [height] left under the title block: its label over three 16:9 tiles in a row (gaps
  * [TS_TILE_GAP] of the width) after a [TS_BREATH] from the line, with their captions while they fit, else without.
  */
 internal fun shelfFit(width: Dp, height: Dp): ShelfFit {
@@ -187,9 +189,9 @@ private const val SHELF_MAX = 3
 
 /**
  * The top screen's console / collection stats: the title, one quiet line of facts and the BIOS pill (only when one is
- * missing) at the top; the shelf at the bottom, its label over three 16:9 pictures, each captioned with its game's name
- * and play time (or when it was added). Nothing scrolls: a short screen drops the captions, then the shelf
- * ([shelfFit]). [onLaunch]: a picture's clean tap. [prefer]: Layouts → Backdrop art, for a game whose only picture is
+ * missing) over the shelf, all anchored to the bottom; the shelf is its label over three 16:9 pictures, each captioned
+ * with its game's name and play time (or when it was added). Nothing scrolls: a short screen drops the captions, then
+ * the shelf ([shelfFit]), and the title block stays at the bottom. [onLaunch]: a picture's clean tap. [prefer]: Layouts → Backdrop art, for a game whose only picture is
  * its box.
  */
 @Composable
@@ -199,21 +201,34 @@ fun TopStatsPage(stats: TopStats, onLaunch: (Listed) -> Unit, prefer: BackdropAr
     val now = remember(stats) { nowMs() }
     BoxWithConstraints(Modifier.fillMaxSize().background(colors.background)) {
         val vPad = minOf(maxWidth * TS_PAD, maxHeight * TS_PAD_MAX_H)
-        Column(Modifier.fillMaxSize().padding(horizontal = maxWidth * TS_PAD, vertical = vPad)) {
-            Text(stats.title, color = colors.listText, fontFamily = font, fontSize = 40.sp, lineHeight = 46.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(
-                statsLine(stats, now), color = colors.hint, fontFamily = font, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            biosPill(stats.bios)?.let { pill ->
-                Text(
-                    pill, color = colors.alertText, fontFamily = font, fontSize = 13.sp, maxLines = 1,
-                    modifier = Modifier.padding(top = 12.dp).border(1.dp, colors.alertLine, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 2.dp),
-                )
-            }
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.BottomStart) {
-                val fit = shelfFit(maxWidth, maxHeight)
-                if (stats.shelf.isNotEmpty() && fit != ShelfFit.NONE) Shelf(stats, fit == ShelfFit.CAPTIONED, maxWidth * TS_TILE_GAP, now, prefer, onLaunch)
+        // The title block's height decides how much of the shelf fits, so it is measured first.
+        SubcomposeLayout(Modifier.fillMaxSize().padding(horizontal = maxWidth * TS_PAD, vertical = vPad)) { constraints ->
+            val loose = Constraints(maxWidth = constraints.maxWidth)
+            val head = subcompose("head") {
+                Column {
+                    Text(stats.title, color = colors.listText, fontFamily = font, fontSize = 40.sp, lineHeight = 46.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        statsLine(stats, now), color = colors.hint, fontFamily = font, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    biosPill(stats.bios)?.let { pill ->
+                        Text(
+                            pill, color = colors.alertText, fontFamily = font, fontSize = 13.sp, maxLines = 1,
+                            modifier = Modifier.padding(top = 12.dp).border(1.dp, colors.alertLine, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+            }.first().measure(loose)
+            val width = constraints.maxWidth.toDp()
+            val fit = if (stats.shelf.isEmpty()) ShelfFit.NONE else shelfFit(width, (constraints.maxHeight - head.height).toDp())
+            val shelf = if (fit == ShelfFit.NONE) null else subcompose("shelf") {
+                Shelf(stats, fit == ShelfFit.CAPTIONED, width * TS_TILE_GAP, now, prefer, onLaunch)
+            }.first().measure(loose)
+            val shelfTop = constraints.maxHeight - (shelf?.height ?: 0)
+            val headTop = if (shelf == null) shelfTop - head.height else shelfTop - TS_BREATH.roundToPx() - head.height
+            layout(constraints.maxWidth, constraints.maxHeight) {
+                head.place(0, headTop)
+                shelf?.place(0, shelfTop)
             }
         }
     }
@@ -267,7 +282,7 @@ private fun ShelfPicture(game: ShelfGame, prefer: BackdropArt, modifier: Modifie
 private const val TS_PAD = 0.07f            // of the width, every side
 private const val TS_PAD_MAX_H = 0.08f      // a wide, short screen's top and bottom padding: at most this of its height
 private const val TS_TILE_GAP = 0.04f       // between the shelf's tiles, of its width
-private val TS_BREATH: Dp = 16.dp           // the least room between the line (or pill) and the shelf
+private val TS_BREATH: Dp = 24.dp           // between the line (or pill) and the shelf
 private val TS_LABEL: Dp = 28.dp            // the shelf's label, its gap to the pictures included
 private val TS_CAPTIONS: Dp = 52.dp         // a tile's two caption lines, their space above included
 private val TS_BLUR: Dp = 16.dp
