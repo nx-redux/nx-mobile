@@ -23,6 +23,15 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ColorFilter
+import com.nxredux.mobile.shared.res.Res
+import com.nxredux.mobile.shared.res.nav_icon_top_screen
+import org.jetbrains.compose.resources.painterResource
 import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
@@ -45,6 +54,7 @@ import com.nxredux.mobile.ui.nx.HomeMinimalScreen
 import com.nxredux.mobile.ui.nx.MinimalScreen
 import com.nxredux.mobile.ui.nx.MinimalSelected
 import androidx.compose.ui.zIndex
+import com.nxredux.mobile.ui.nx.LocalHasTouchscreen
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.HOME_HEADER_ICONS_ROOM
 import com.nxredux.mobile.ui.nx.GridTitleLines
@@ -113,6 +123,7 @@ fun MainMenuScreen(
     bandInfo: Boolean = true,             // List: the band shows the row's info ([mainMenuListBand]: none on Consoles, Collections and Tools)
     canSearch: Boolean = false,           // the library has games: the Search icon
     onKidsLock: (() -> Unit)? = null,     // Kids Mode while games are open: the lock icon after Search (the PIN, for a parent)
+    onTopScreen: (() -> Unit)? = null,    // an app holds the top screen: the floating button that takes it back
     canNetplay: () -> Boolean = { false },   // Home: the selected game has Netplay here (Y opens its sheet): its hint beside the tabs
     onTabMenu: (() -> Unit)? = null,      // a long press on the tab row or the single-tab title: the hidden-tab menu
     tabMenu: Boolean = false,             // a hidden tab can be opened from MENU: every row's MENU offers Options, every Home row takes a long press
@@ -371,6 +382,10 @@ fun MainMenuScreen(
                     .nxListTopCut(topCut),
             )
         }
+        // Touch only: without a touchscreen the context menu's Use top screen does it.
+        onTopScreen?.takeIf { LocalHasTouchscreen.current }?.let {
+            TopScreenButton(it, Modifier.align(Alignment.BottomEnd).pageFixed().padding(end = nxPageInset().end, bottom = MENU_TAB_ROW_HEIGHT + 24.dp))
+        }
     }
     }
 }
@@ -487,3 +502,18 @@ private const val GRID_TITLE_LINES = 2
 
 /** How much of the bottom tab row's empty top the page above takes: the gap over the tab words, less this. */
 private val TAB_ROW_PULL = 8.dp
+
+/** Floats over the main menu while an app holds the top screen: a tap takes the top screen back for the menu. */
+@Composable
+private fun TopScreenButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = LocalNxColors.current
+    Box(
+        modifier.size(52.dp).clip(CircleShape).background(colors.main).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            painterResource(Res.drawable.nav_icon_top_screen), contentDescription = "Top screen",
+            modifier = Modifier.size(26.dp), colorFilter = ColorFilter.tint(colors.background),
+        )
+    }
+}

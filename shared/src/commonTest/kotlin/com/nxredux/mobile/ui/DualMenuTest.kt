@@ -40,12 +40,6 @@ class DualMenuTest {
         assertEquals(BottomContent.Details, DualMenu.bottom(games(), active = true, tool = true))
     }
 
-    @Test fun top_previews_the_drawer_on_the_menu() {
-        val apps = listOf(ToolAppRow("a/A", "Alpha", false))
-        assertEquals(TopContent.AppsPreview(apps), DualMenu.top(systems(), null, apps))
-        assertEquals(TopContent.Preview(list), DualMenu.top(systems(), list, apps))
-    }
-
     @Test fun bottom_shows_details_only_on_games_while_active() {
         assertEquals(BottomContent.Details, DualMenu.bottom(games(), active = true))
         assertEquals(BottomContent.Normal, DualMenu.bottom(games(), active = false))

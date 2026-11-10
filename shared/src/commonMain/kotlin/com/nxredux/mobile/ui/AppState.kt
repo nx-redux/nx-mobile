@@ -149,6 +149,11 @@ import com.nxredux.mobile.storage.Shortcut
 import com.nxredux.mobile.storage.SidecarStore
 import com.nxredux.mobile.storage.ToolPins
 import com.nxredux.mobile.storage.UserDataStore
+import com.nxredux.mobile.ui.keyboard.EntryField
+import com.nxredux.mobile.ui.keyboard.KeyPos
+import com.nxredux.mobile.ui.keyboard.PromptSpec
+import com.nxredux.mobile.ui.keyboard.TextEntry
+import com.nxredux.mobile.ui.keyboard.TextEntryController
 import com.nxredux.mobile.ui.nx.HomeFrame
 import com.nxredux.mobile.ui.nx.HomeShelf
 import com.nxredux.mobile.ui.nx.FooterMode
@@ -289,6 +294,12 @@ class AppDeps(
     val updater: UpdateController? = null,
     /** The switcher return kept on disk (the game runs in another process, which may outlive this one); null: memory only. */
     val switcherReturns: com.nxredux.mobile.runner.SwitcherReturnMark? = null,
+    /** The platform draws the NX keyboard ([AppState.textEntry]); off: every prompt types through the platform's own. */
+    val ownKeyboard: Boolean = false,
+    /** The clipboard's plain text for the keyboard's Paste; null when it holds none. */
+    val pasteText: () -> String? = { null },
+    /** The open prompt is drawn on the second display, where Android's keyboard does not open: NX's always types there. */
+    val promptOnSecondDisplay: () -> Boolean = { false },
 )
 
 /**
@@ -515,7 +526,7 @@ sealed interface Screen {
 /** Kids Mode's first switch-on, in order (the spec's): PIN, allowed apps, play times, then the two permissions and home. */
 enum class KidsSetupStep { PIN, APPS, TIMES, USAGE, ALARMS, HOME }
 
-enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE,
+enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
@@ -869,6 +880,7 @@ class AppState(
         if (_rowEdit.value?.key != rowEditKey(s)) _rowEdit.value = null
         if ((s as? Screen.Settings)?.section != SettingsSection.SHORTCUTS && (shortcutDraft != null || _capturingShortcut.value != null)) closeShortcuts()
         if ((s as? Screen.Settings)?.section != SettingsSection.SYSTEM_BUTTONS) systemButtonWaiting = null
+        keyboard.sync()   // a prompt opened, closed or changed
     }
     val screen: StateFlow<Screen> = _screen.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
@@ -1069,10 +1081,6 @@ class AppState(
     val secondList: StateFlow<SecondList?> = _secondList.asStateFlow()
     private var secondListJob: Job? = null
 
-    private val _drawerPreview = MutableStateFlow<List<ToolAppRow>?>(null)
-    /** While [dualMenu] with the Apps tile highlighted: the drawer's apps (what A would open), for the second display; else null. */
-    val drawerPreview: StateFlow<List<ToolAppRow>?> = _drawerPreview.asStateFlow()
-    private var drawerPreviewJob: Job? = null
 
     private val _toolOnTop = MutableStateFlow(false)
     /**
@@ -1082,6 +1090,16 @@ class AppState(
     val toolOnTop: StateFlow<Boolean> = _toolOnTop.asStateFlow()
     private var toolUnderRow: MainRow? = null   // the menu row the tool was opened from, kept highlighted below it
     private var toolUnderIndex = 0
+
+    private val _appOnTop = MutableStateFlow(false)
+    /** An app the player opened holds the top screen: the main menu shows the button that takes it back ([takeTopScreen]). */
+    val appOnTop: StateFlow<Boolean> = _appOnTop.asStateFlow()
+
+    /** The platform tells an app holds the top screen ([on]) or let it go. */
+    fun onAppOnTop(on: Boolean) { _appOnTop.value = on }
+
+    /** Takes the top screen back from the app there; set by the platform. */
+    var takeTopScreen: () -> Unit = {}
 
     /** The platform tells the menu is on the second display ([active]) or back on the main one. */
     fun onDualMenu(active: Boolean) {
@@ -1101,7 +1119,6 @@ class AppState(
         _dualMenu.value = active
         if (active) ra.closeRaPanel()   // the panel is a single-screen overlay: dual mode shows the details pane instead
         followSecondList()
-        followDrawerPreview()
         ra.followRaDetails()
     }
 
@@ -1143,35 +1160,6 @@ class AppState(
     }
 
     /**
-     * Recomputes [drawerPreview]: the installed apps, read once when the Apps tile is highlighted on the second display,
-     * kept while it stays so; dropped (a read under way cancelled) when it is not.
-     */
-    private fun followDrawerPreview() {
-        val s = _screen.value as? Screen.Systems
-        val l = deps.launcher
-        val on = l != null && _dualMenu.value && s != null && s.menu == null && s.search == null && isAppsTile(s.rows.getOrNull(_selection.value.index))
-        if (!on) { drawerPreviewJob?.cancel(); drawerPreviewJob = null; _drawerPreview.value = null; return }
-        if (_drawerPreview.value != null || drawerPreviewJob?.isActive == true) return
-        drawerPreviewJob = scope.launch {
-            val apps = tryOr({ return@launch }) { l!!.installedApps() }
-            installedCache = apps
-            _drawerPreview.value = drawerRows(apps)
-        }
-    }
-
-    /** A tap on app [index] of the second display's drawer preview: opens the drawer there on it, as A would (B returns). */
-    fun openDrawerPreviewApp(index: Int) {
-        val s = _screen.value as? Screen.Systems ?: return
-        val app = _drawerPreview.value?.getOrNull(index) ?: return
-        if (!kidsUi.kidsToolsAllowed) return   // Kids Mode: the Apps drawer only for a parent
-        if (loader.active || s.menu != null || s.search != null || !isAppsTile(s.rows.getOrNull(_selection.value.index))) return
-        intendNav(NavMotion.FORWARD)
-        rememberMenuSelection()
-        noteToolOrigin()
-        openToolApps(AppPick.TOOLS, selectId = app.id)
-    }
-
-    /**
      * While a tool is on the second display ([toolOnTop]): the main menu it was opened from, on the row it was opened
      * from (found again when the rows moved), drawn on the bottom screen as it stays; null otherwise. A game list
      * reached from a tool takes both screens as any game list does.
@@ -1197,10 +1185,6 @@ class AppState(
         val inTools = deps.settings.toolApps.toSet()
         return apps.filter { it.id !in console }.map { ToolAppRow(it.id, it.label, it.id in inTools) }
     }
-
-    /** The Apps tile, in Tools or pinned on Home. */
-    private fun isAppsTile(row: MainRow?): Boolean =
-        (row is MainRow.Tool && row.row.kind == ToolKind.APPS) || (row is MainRow.PinnedTool && row.row.kind == ToolKind.APPS)
 
     /** The list the highlighted row previews while [dualMenu] on Consoles / Collections; null for any other row, tab or screen. */
     private fun highlightedSecondSource(): ListSource? {
@@ -1424,11 +1408,11 @@ class AppState(
             }
         }
         // The achievements panel follows the game list's selection, and closes off the game list.
-        scope.launch { _selection.collect { ra.followRaPanel(); ra.followRaDetails(); followSecondList(); followDrawerPreview() } }
+        scope.launch { _selection.collect { ra.followRaPanel(); ra.followRaDetails(); followSecondList() } }
         scope.launch {
             _screen.collect {
                 if (setupScreen(it)) _toolOnTop.value = false   // a tool's page no more: setup takes the menu's screen
-                if (it !is Screen.Games) { ra.closeRaPanel() } else { ra.followRaPanel() }; ra.followRaDetails(); followSecondList(); followDrawerPreview()
+                if (it !is Screen.Games) { ra.closeRaPanel() } else { ra.followRaPanel() }; ra.followRaDetails(); followSecondList()
                 if (it !is Screen.Games) closeArtPanel()   // as the achievements panel: only over a game list
             }
         }
@@ -3961,6 +3945,7 @@ class AppState(
     private fun systemRows(): List<SettingsRow> = buildList {
         add(SettingsRow(SettingsKind.PAUSE_UNFOCUSED, "Pause when unfocused", if (deps.settings.pauseWhenUnfocused) "On" else "Off"))
         deps.launcher?.let { l -> add(SettingsRow(SettingsKind.HOME_SCREEN, "Use as home screen", if (l.isHome()) "On" else "Off")) }
+        if (deps.ownKeyboard) add(SettingsRow(SettingsKind.KEYBOARD, "Keyboard", keyboardLabel(deps.settings.androidKeyboard)))
         // Logging for a bug report; off, only errors reach logcat.
         add(SettingsRow(SettingsKind.DEBUG_LOG, "Debug log", if (deps.settings.debugLog) "On" else "Off"))
         add(SettingsRow(SettingsKind.GAP, ""))
@@ -4165,6 +4150,7 @@ class AppState(
             SettingsKind.SECOND_SCREEN_ENABLE -> flip(s.secondScreen) { s.secondScreen = it }
             SettingsKind.BOTTOM_SCREEN -> cycle(BottomScreen.entries, s.bottomScreen, ::bottomScreenLabel) { s.bottomScreen = it }   // Auto, Main screen, Second screen
             SettingsKind.DEBUG_LOG -> flip(s.debugLog) { s.debugLog = it }
+            SettingsKind.KEYBOARD -> cycle(listOf(false, true), s.androidKeyboard, ::keyboardLabel) { s.androidKeyboard = it }
             // Kids Mode On / Off: the first switch-on runs setup (another screen), so the page is republished only if still up.
             SettingsKind.KIDS_ENABLE -> kids?.let {
                 flip(s.kidsEnabled, after = { if ((_screen.value as? Screen.Settings)?.section == SettingsSection.KIDS) settingsUi.refreshSettings() }) { on -> kidsUi.kidsSetEnabled(on) }
@@ -5481,6 +5467,8 @@ class AppState(
             override fun playFromStart(entry: Listed) = launches.playFromStart(entry)
             override fun hiddenTabs(): List<MenuCategory> = this@AppState.hiddenTabs()
             override fun openHiddenTab(category: MenuCategory) = this@AppState.openHiddenTab(category)
+            override val appOnTop: Boolean get() = _appOnTop.value
+            override fun takeTopScreen() = this@AppState.takeTopScreen()
         },
     )
 
@@ -5748,7 +5736,7 @@ class AppState(
     /** A pad press. [repeat]: an auto-repeat of a held direction (the router's), not a fresh press; taps are fresh. */
     fun onButton(pressed: NxButton, repeat: Boolean = false) {
         // An open confirm dialog takes LEFT and RIGHT for its buttons and turns A on Cancel into B ([DialogFocus]).
-        val button = dialogFocus.press(pressed) ?: return
+        var button = dialogFocus.press(pressed) ?: return
         kids?.parentInput()   // Parent mode's idle time starts again
         if (launches.minimalPending) return   // a Minimal open is under way: the row opens in a moment
         launches.clearMinimalOpening()   // opened: the next press clears it
@@ -5762,6 +5750,9 @@ class AppState(
         }
         if (_updateConfirm.value != null) { onUpdateDialogButton(button, ::answerUpdateConfirm); return }   // About's confirm: A Update, B Cancel
         if (updatePopupShows()) { onUpdateDialogButton(button, ::answerUpdate); return }   // the update dialog: A Update, B Not now
+        // An open prompt with the NX keyboard: the keyboard has every press first; the prompt hears only its confirm (A) or
+        // cancel (B), so its own handling below runs as it always has.
+        if (!answering && keyboard.entry.value != null) button = keyboard.press(button, repeat) ?: return
         // Setup's two buttons side by side ([setupButtons]), the selection on one: LEFT takes the first, RIGHT the second.
         if (button == NxButton.LEFT || button == NxButton.RIGHT) setupButtonPair()?.takeIf { _selection.value.index >= it }?.let { first ->
             _selection.value = _selection.value.copy(index = if (button == NxButton.LEFT) first else first + 1)
@@ -5872,16 +5863,82 @@ class AppState(
      * key prompt, a search prompt, the picker's New folder): the platform lets the field see the d-pad first (LEFT/RIGHT
      * move its cursor) instead of routing it straight to [onButton].
      */
-    val textEntryOpen: Boolean
-        get() = when (val s = _screen.value) {
-            is Screen.RaSettings -> s.signingIn
-            is Screen.Onboarding -> s.prompt   // setup's sign-in prompt
-            is Screen.ArtworkSettings -> s.signingIn || s.editingKey
-            is Screen.FilePicker -> s.prompt != null
-            is Screen.Systems -> s.search != null || s.menu?.prompt.isTextEntry
-            is Screen.Games -> s.search != null || s.menu?.prompt.isTextEntry
-            else -> s.contextMenu?.prompt.isTextEntry
+    val textEntryOpen: Boolean get() = textEntryOpen(_screen.value)
+
+    /** The NX keyboard types the open prompt: the platform draws it, and Android's isn't chosen or can't open there. */
+    val nxKeyboard: Boolean get() = deps.ownKeyboard && (!deps.settings.androidKeyboard || deps.promptOnSecondDisplay())
+
+    private val keyboard by lazy { TextEntryController(::promptSpec, deps.pasteText) }
+
+    /** The open prompt as the NX keyboard edits it; null with none open, or while the platform's keyboard types. */
+    val textEntry: StateFlow<TextEntry?> get() = keyboard.entry
+
+    /** The open prompt's confirm word, for the keyboard's hints ("Sign in", "Search", "OK"). */
+    val textEntryConfirmLabel: String get() = keyboard.confirmLabel
+
+    /** The keyboard follows a change it was not told of (the keyboard setting, the prompt moving to another display). */
+    fun refreshKeyboard() = keyboard.sync()
+
+    /** A tap on the keyboard's key at [at]: the highlight moves there and it types. */
+    fun keyboardTapKey(at: KeyPos) { if (!keyboardWaits()) keyboard.tapKeyAt(at)?.let(::promptAnswer) }
+
+    /** An error over the prompt has the input until it is dismissed: the keyboard's taps and a physical keyboard wait. */
+    private fun keyboardWaits(): Boolean = _error.value != null
+
+    /** A tap on the open prompt's field [index]: it becomes the one typed in. */
+    fun keyboardTapField(index: Int) { if (!keyboardWaits()) keyboard.tapField(index) }
+
+    /** The open prompt's password shown as typed, or as dots again (its field's Show / Hide). */
+    fun keyboardToggleReveal() { if (!keyboardWaits()) keyboard.toggleReveal() }
+
+    /** A physical keyboard's printable [text], at the cursor. */
+    fun keyboardType(text: String) { if (!keyboardWaits()) keyboard.type(text)?.let(::promptAnswer) }
+
+    /** A physical keyboard's Ctrl+V: as the keyboard's Paste. */
+    fun keyboardPaste() { if (!keyboardWaits()) keyboard.paste()?.let(::promptAnswer) }
+
+    /** A physical keyboard's Backspace: as B on the keyboard; held ([repeat]), it clears but never cancels. */
+    fun keyboardBackspace(repeat: Boolean = false) = onButton(NxButton.B, repeat)
+
+    /** The prompt hears [button] (A confirm, B cancel) past the keyboard: a tap on the box's buttons, or a keyboard outcome. */
+    fun promptAnswer(button: NxButton) {
+        answering = true
+        try { onButton(button) } finally { answering = false }
+    }
+    private var answering = false
+
+    /** The open prompt for the keyboard: its fields, setters and confirm word; null with none open or the keyboard off. */
+    private fun promptSpec(): PromptSpec? {
+        if (!nxKeyboard) return null
+        fun signIn(id: Any, user: String, password: String, setUser: (String) -> Unit, setPassword: (String) -> Unit) =
+            PromptSpec(id, listOf(EntryField("Username", user), EntryField("Password", password, password = true)), listOf(setUser, setPassword), "Sign in")
+        fun one(id: Any, label: String, value: String, set: (String) -> Unit, confirm: String = "OK") = PromptSpec(id, listOf(EntryField(label, value)), listOf(set), confirm)
+        return when (val s = _screen.value) {
+            is Screen.RaSettings -> if (s.signingIn) signIn("ra", s.draftUser, s.draftPassword, ::raDraftUser, ::raDraftPassword) else null
+            is Screen.Onboarding -> when {
+                s.prompt -> signIn("setup-ra", s.draftUser, s.draftPassword, ::onboardingDraftUser, ::onboardingDraftPassword)
+                s.artSignIn -> signIn("setup-art", s.draftUser, s.draftPassword, ::onboardingDraftUser, ::onboardingDraftPassword)
+                s.artKey != null -> one("setup-key-${s.artKey}", "Key", s.draftKey, ::onboardingDraftKey)
+                else -> null
+            }
+            is Screen.ArtworkSettings -> when {
+                s.signingIn -> signIn("art", s.draftUser, s.draftPassword, ::artworkDraftUser, ::artworkDraftPassword)
+                s.editingKey -> one("art-key-${s.keyFor}", "Key", s.draftKey, ::artworkDraftKey)
+                else -> null
+            }
+            is Screen.FilePicker -> s.prompt?.let { one("folder", "Folder name", it, ::filePickerDraft) }
+            is Screen.Systems -> s.search?.let { one("search", "Search", it, ::searchDraft, "Search") } ?: menuPromptSpec(s.menu)
+            is Screen.Games -> s.search?.let { one("list-search", "Search", it, ::searchDraft, "Search") } ?: menuPromptSpec(s.menu)
+            else -> menuPromptSpec(s.contextMenu)
         }
+    }
+
+    private fun menuPromptSpec(menu: ContextMenu?): PromptSpec? = when (val p = menu?.prompt) {
+        is MenuPrompt.Rename -> PromptSpec("rename:${p.initial}", listOf(EntryField("Rename", p.draft)), listOf(::menuDraft), "OK")
+        is MenuPrompt.RenameCollection -> PromptSpec("rename-collection:${p.initial}", listOf(EntryField("Rename collection", p.draft)), listOf(::menuDraft), "OK")
+        is MenuPrompt.NewCollection -> PromptSpec("new-collection", listOf(EntryField("New collection name", p.draft)), listOf(::menuDraft), "OK")
+        else -> null
+    }
 
     /**
      * Leaving Library must reload: the library changed since the last load, the index no longer fits the settings, or
@@ -6397,3 +6454,16 @@ fun syncSetupIndex(page: DeviceSyncPage.Ready, focus: SyncFocus, skip: Boolean =
         SyncFocus.SKIP -> it == SyncSetupRow.Skip
     }
 }.coerceAtLeast(0)
+
+/** Whether [s] has a text field up ([AppState.textEntryOpen]). */
+internal fun textEntryOpen(s: Screen): Boolean = when (s) {
+    is Screen.RaSettings -> s.signingIn
+    is Screen.Onboarding -> s.prompt || s.artSignIn || s.artKey != null   // setup's sign-in and art prompts
+    is Screen.ArtworkSettings -> s.signingIn || s.editingKey
+    is Screen.FilePicker -> s.prompt != null
+    is Screen.Systems -> s.search != null || s.menu?.prompt.isTextEntry
+    is Screen.Games -> s.search != null || s.menu?.prompt.isTextEntry
+    else -> s.contextMenu?.prompt.isTextEntry
+}
+
+private fun keyboardLabel(android: Boolean): String = if (android) "Android" else "NX"

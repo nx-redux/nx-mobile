@@ -119,4 +119,10 @@ object AndroidDeviceInfo {
         val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
         runCatching { clipboard.setPrimaryClip(ClipData.newPlainText("NX Redux", text)) }
     }
+
+    /** The clipboard's text (the keyboard's Paste); null when it holds none. */
+    fun clipboardText(context: Context): String? {
+        val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return null
+        return runCatching { clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString() }.getOrNull()
+    }
 }

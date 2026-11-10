@@ -587,7 +587,7 @@ class AppStateKidsTest {
     }
 
     @Test fun lockedSecondScreenShowsTheBackdrop() {
-        assertEquals(TopContent.Backdrop, DualMenu.top(Screen.KidsHome, null, emptyList(), tool = true))
+        assertEquals(TopContent.Backdrop, DualMenu.top(Screen.KidsHome, null, tool = true))
         assertEquals(BottomContent.Normal, DualMenu.bottom(Screen.KidsHome, active = true, tool = true))
     }
 
@@ -900,7 +900,7 @@ class AppStateKidsTest {
         val all = ContextKind.entries.map { ContextItem(it, it.name) }
         assertEquals(
             setOf(ContextKind.PLAY_FROM_START, ContextKind.NETPLAY, ContextKind.PIN, ContextKind.UNPIN, ContextKind.REMOVE_RECENT,
-                ContextKind.ACHIEVEMENTS, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS),
+                ContextKind.ACHIEVEMENTS, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.USE_TOP_SCREEN),
             ContextMenus.kidsPlayItems(all).map { it.kind }.toSet(),
         )
     }

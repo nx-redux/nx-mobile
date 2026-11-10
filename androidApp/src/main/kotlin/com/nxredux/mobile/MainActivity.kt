@@ -56,6 +56,7 @@ import com.nxredux.mobile.gametime.LazyGameTimeData
 import com.nxredux.mobile.launcher.AndroidAppLauncher
 import com.nxredux.mobile.launcher.EXTRA_KEEP_PLACE
 import com.nxredux.mobile.launcher.TopScreenHost
+import com.nxredux.mobile.launcher.TopScreenTaken
 import com.nxredux.mobile.launcher.currentDisplayId
 import com.nxredux.mobile.launcher.hideTaskFromRecents
 import com.nxredux.mobile.launcher.ownAppTask
@@ -64,6 +65,8 @@ import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.netplay.AndroidNetplay
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.usb.UsbCables
+import com.nxredux.mobile.options.N3dsOptions
+import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.skinlayout.SkinLayoutActivity
 import com.nxredux.mobile.runner.AndroidEmulatorConfigStore
 import com.nxredux.mobile.runner.AndroidMicAccess
@@ -255,6 +258,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
     private var bottomScreenPrompt: SecondScreenPresentation? = null
     /** The main menu's window on the second display ([syncMenuScreen]): the top screen, or the menu itself; null while not shown. */
     private var menuScreen: SecondScreenPresentation? = null
+    /** The open prompt is drawn on the second display ([syncMenuScreen]): NX's keyboard always types it. */
+    private var promptOnSecond = false
     /** A failed [showMenuScreen] looks again shortly ([retryMenuScreen]): the game's own window may still be on the display. */
     private val menuRetry = Runnable { menuRetryPending = false; syncMenuScreen() }
     private var menuRetryPending = false
@@ -386,7 +391,16 @@ class MainActivity : ComponentActivity(), FolderPicker {
         kids = AndroidKids.get(this)   // the process's one: the alarms and the screen on/off hook share its Parent mode
         // Launcher mode (this instance is the home task's): games get their own task; otherwise they share this one.
         val runner = LibretroRunner(this) { asHome }
-        runner.beforeLaunch = { launching = true; syncMenuScreen() }   // GameActivity takes the display; nothing stays behind the game
+        // GameActivity takes the display; nothing stays behind the game. An app on the top screen stays there for a
+        // one-screen game (watch while playing); a DS/3DS game needs both screens, so the menu takes it back for good.
+        runner.beforeLaunch = { session ->
+            launching = true
+            TopScreenTaken.consume(this)
+            val tag = session.systemTag
+            val leave = TopScreenHost.heldDisplay.takeIf { TopScreenHost.active && !NdsOptions.appliesTo(tag) && !N3dsOptions.appliesTo(tag) }
+            if (leave != null || !TopScreenHost.reclaim(this)) syncMenuScreen()
+            leave
+        }
         runner.launchFailed = { launching = false; syncMenuScreen() }   // no game after all: the menu's second screen comes back
         val indexStore = AndroidLibraryIndexStore(this)
         val glesVersion = getSystemService(ActivityManager::class.java).deviceConfigurationInfo.reqGlEsVersion
@@ -447,6 +461,9 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 homes = AndroidHomeLocator(this),
                 storageUpgrade = AndroidStorageUpgrade(this),
                 switcherReturns = LaunchRecords.of(this),
+                ownKeyboard = true,
+                pasteText = { AndroidDeviceInfo.clipboardText(applicationContext) },
+                promptOnSecondDisplay = { promptOnSecond },
             ),
             scope,
             kids,
@@ -479,12 +496,13 @@ class MainActivity : ComponentActivity(), FolderPicker {
             BackHandler(enabled = true) { if (!state.back() && !(asHome && launcher.isHome())) finish() }
             // One App at a time: with the menu on the second display ([syncMenuScreen]) this window has the top screen.
             // This window's root gets the insets unconsumed: the pages may pad for the bars at rest ([LocalRestingBars]).
-            CompositionLocalProvider(LocalPosture provides posture.value, LocalRestingBars provides true, LocalSkinPacks provides ::menuSkinPack) { if (menuOnSecond.value) MenuTopScreen(state) else App(state, ::pad) }
+            CompositionLocalProvider(LocalPosture provides posture.value, LocalRestingBars provides true, LocalSkinPacks provides ::menuSkinPack) { if (menuOnSecond.value) MenuTopScreen(state, keyboard = true) else App(state, ::pad, keyboard = true) }
         }
         collectPosture()
         // Dual mode: apps open on the top screen; one there takes our window on that display down until it leaves.
         launcher.topDisplay = ::appTopDisplay
         TopScreenHost.onChange = topScreenChanged
+        state.takeTopScreen = { TopScreenHost.reclaim(this) }
         // Every screen change, Settings → Second screen and Bottom screen included (their rows change with them).
         scope.launch { state.screen.collect { syncSecondScreen() } }
     }
@@ -541,7 +559,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
      * there. Gone while a game starts ([launching]), an app opened on the top screen runs there ([TopScreenHost.active]:
      * the presentation would cover it) or the app stops. Dual mode follows the window: on only once it is shown (a failed
      * show leaves the menu whole on this screen), kept through [launching] so the cross-fade stays, and through an app on
-     * top so the menu keeps its shape, except on a game list: its list is on the top screen, so this one shows it whole.
+     * top so the main menu keeps its shape; any other screen (a tool, a game list) would be on the top screen, so this
+     * one shows it whole.
      * That display gone or Second screen off lets go of the app on top ([TopScreenHost.release]).
      */
     private fun syncMenuScreen() {
@@ -550,6 +569,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         val active = inFront && settings.secondScreen && display != null && bottomScreenPrompt == null
         if (TopScreenHost.active && inFront && (!settings.secondScreen || display?.displayId != TopScreenHost.heldDisplay)) TopScreenHost.release(this)
         val appOnTop = TopScreenHost.active
+        state.onAppOnTop(appOnTop)
         if (::kids.isInitialized) AndroidKids.topScreenChanged(this)   // the menu stays shown under an app on top: the guard watches it
         val wanted = display.takeIf { active && !launching && !appOnTop }
         if (wanted == null) cancelMenuRetry()
@@ -560,7 +580,11 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 if (showMenuScreen(wanted)) menuRetries = 0 else retryMenuScreen()
             }
         }
-        state.onDualMenu(active && (launching || (appOnTop && state.screen.value !is Screen.Games) || menuScreen != null))
+        // Under an app on top only the main menu keeps its two-screen shape: a tool or a game list would draw on the top
+        // screen, behind the app, so they take this screen whole.
+        state.onDualMenu(active && (launching || (appOnTop && state.screen.value is Screen.Systems) || menuScreen != null))
+        // No window on the second display: no prompt is there, so the keyboard setting rules again.
+        if (menuScreen == null && promptOnSecond) { promptOnSecond = false; state.refreshKeyboard() }
         val shown = menuScreen ?: return
         val onSecond = menuOnSecondFor(shown.display)
         if (onSecond != menuOnSecond.value) {
@@ -571,7 +595,10 @@ class MainActivity : ComponentActivity(), FolderPicker {
         // The focused screen: the top screen's list on a game list, the menu everywhere else.
         val screen = state.screen.value
         val hostsFocus = if (onSecond) screen !is Screen.Games else screen is Screen.Games
-        val focusable = hostsFocus && state.textEntryOpen   // any text field App or the top screen can show
+        // A prompt drawn there: Android's keyboard won't open on that display, so NX's types it, from this window.
+        val promptThere = hostsFocus && state.textEntryOpen
+        if (promptThere != promptOnSecond) { promptOnSecond = promptThere; state.refreshKeyboard() }
+        val focusable = promptThere && !state.nxKeyboard   // the NX keyboard needs no key focus there
         val handBack = shown.focusable && !focusable
         shown.focusable = focusable
         if (handBack) reclaimKeyFocus()
@@ -662,7 +689,9 @@ class MainActivity : ComponentActivity(), FolderPicker {
         asHome = true
         closeOtherInstances()
         hideTaskFromRecents()
-        if (::state.isInitialized && !intent.getBooleanExtra(EXTRA_KEEP_PLACE, false)) state.goHome()
+        if (intent.getBooleanExtra(EXTRA_KEEP_PLACE, false)) return
+        TopScreenHost.reclaim(this)
+        if (::state.isInitialized) state.goHome()
     }
 
     /** The menu's window has focus again: [TopScreenHost.recheck], as on resume (no resume when only the focus moved). */
@@ -707,6 +736,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
             state.onForeground()   // a card inserted while in the background: its games come back
         }
         inFront = true
+        if (TopScreenTaken.consume(this)) TopScreenHost.reclaim(this)   // the game took the app's top screen: it stays ours
         syncBottomScreenPrompt()
         secondScreens.start()
         if (::state.isInitialized) state.onSecondScreenChanged(secondScreens.current.value != null)   // what is there now, once, after the pause
@@ -861,7 +891,24 @@ class MainActivity : ComponentActivity(), FolderPicker {
         if (::state.isInitialized && systemButtonKey(raw)) return true
         val event = SystemButtonKeys.translate(this, raw)
         if (::state.isInitialized && captureKey(event)) return true
-        if (::state.isInitialized && !state.textEntryOpen && keyToButton(event.keyCode) != null) {
+        // The NX keyboard types: a physical keyboard's characters, Backspace, Enter and Tab go to it; the pad's keys go to
+        // the pad as when no prompt is open (no text field needs them first).
+        if (::state.isInitialized && state.textEntry.value != null && keyToButton(event.keyCode) == null) {
+            when (val a = keyboardKeyAction(event.keyCode, event.unicodeChar, chord = event.isCtrlPressed || event.isAltPressed || event.isMetaPressed)) {
+                KeyboardKeyAction.Pass -> Unit
+                else -> {
+                    if (event.action == KeyEvent.ACTION_DOWN) when (a) {
+                        is KeyboardKeyAction.Type -> state.keyboardType(a.text)
+                        KeyboardKeyAction.Backspace -> state.keyboardBackspace(repeat = event.repeatCount > 0)
+                        KeyboardKeyAction.Paste -> state.keyboardPaste()
+                        is KeyboardKeyAction.Press -> state.onButton(a.button)
+                        KeyboardKeyAction.Pass -> Unit
+                    }
+                    return true
+                }
+            }
+        }
+        if (::state.isInitialized && (!state.textEntryOpen || state.textEntry.value != null) && keyToButton(event.keyCode) != null) {
             when (event.action) {
                 KeyEvent.ACTION_DOWN -> { onUserInteraction(); return onKeyDown(event.keyCode, event) }
                 KeyEvent.ACTION_UP -> { onUserInteraction(); return onKeyUp(event.keyCode, event) }

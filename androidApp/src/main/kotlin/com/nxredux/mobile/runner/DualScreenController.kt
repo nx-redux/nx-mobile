@@ -35,6 +35,7 @@ import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.layout.CoreFrame
 import com.nxredux.mobile.layout.consoleScale
+import com.nxredux.mobile.launcher.TopScreenTaken
 import com.nxredux.mobile.options.BottomScreenOptions
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.N3dsOptions
@@ -160,7 +161,24 @@ internal class DualScreenController(
     private fun syncN3dsCore() = owner.syncN3dsCore()
     private fun toast(msg: String) = owner.toast(msg)
 
-    val secondScreens by lazy { SecondScreens(activity, hostDisplay = ::gameDisplayId) }
+    /** The display an app the player opened holds ([GameActivity.EXTRA_LEAVE_DISPLAY]); let go of by [useTakenScreen]. */
+    private var leave = Display.INVALID_DISPLAY
+    val secondScreens by lazy {
+        leave = intent.getIntExtra(GameActivity.EXTRA_LEAVE_DISPLAY, Display.INVALID_DISPLAY)
+        SecondScreens(activity, hostDisplay = ::gameDisplayId, taken = { it == leave })
+    }
+
+    /** An app holds a display the game would use as its second screen. */
+    fun screenTaken(): Boolean =
+        leave != Display.INVALID_DISPLAY && activity.getSystemService(android.hardware.display.DisplayManager::class.java)?.getDisplay(leave) != null
+
+    /** Use top screen: the game takes the app's display after all, and the menu takes it back once the game ends. */
+    fun useTakenScreen() {
+        if (leave == Display.INVALID_DISPLAY) return
+        leave = Display.INVALID_DISPLAY
+        TopScreenTaken.mark(activity)
+        secondScreens.refresh()
+    }
 
     /** The display the game's window is on now (a monitor or DeX: not the default one). */
     private fun gameDisplayId(): Int =

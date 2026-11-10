@@ -124,6 +124,12 @@ internal interface ContextMenuHost {
     /** The tabs Layouts hides that have content, for MENU's hidden-tab items; empty while a hidden tab is pushed. */
     fun hiddenTabs(): List<MenuCategory> = emptyList()
 
+    /** An app the player opened holds the top screen: the main menu's menus end with Use top screen ([takeTopScreen]). */
+    val appOnTop: Boolean get() = false
+
+    /** Takes the top screen back from the app there. */
+    fun takeTopScreen() {}
+
     /** Opens [category], a hidden tab, over the main menu. */
     fun openHiddenTab(category: MenuCategory) {}
 }
@@ -195,7 +201,8 @@ internal class ContextMenuController(
                 val row = s.rows.getOrNull(i)
                 // The hidden tabs after the item's own items; a row without a menu (a console, Pick a game, "+N", an empty
                 // tab) gets one holding just these. A pushed tab never offers them again.
-                val tabs = if (s.pushed) emptyList() else hiddenTabItems()
+                val tabs = (if (s.pushed) emptyList() else hiddenTabItems()) +
+                    listOfNotNull(ContextItem(ContextKind.USE_TOP_SCREEN, USE_TOP_SCREEN_LABEL).takeIf { host.appOnTop })
                 fun show(fromStart: Boolean) {
                     val own = rowMenu(row, fromStart, s.category)?.let(::forKids)
                     val menu = when {
@@ -392,11 +399,12 @@ internal class ContextMenuController(
                 return
             }
             ContextKind.ACHIEVEMENTS -> { closeContextMenu(); host.openAchievements(); return }
+            ContextKind.USE_TOP_SCREEN -> { closeContextMenu(); host.takeTopScreen(); return }
             else -> if (m.entry == null) { closeContextMenu(); return }
         }
         when (kind) {
             ContextKind.PIN_TOOL, ContextKind.UNPIN_TOOL, ContextKind.ADD_TO_TOOLS, ContextKind.REMOVE_FROM_TOOLS,
-            ContextKind.RENAME_COLLECTION, ContextKind.DELETE_COLLECTION, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS, ContextKind.ACHIEVEMENTS -> Unit   // handled above
+            ContextKind.RENAME_COLLECTION, ContextKind.DELETE_COLLECTION, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS, ContextKind.ACHIEVEMENTS, ContextKind.USE_TOP_SCREEN -> Unit   // handled above
             ContextKind.EMULATOR -> consoleOf(m)?.let { ContextMenus.emulatorMenu(it) }?.let { setMenu(m.copy(sub = it)) } ?: closeContextMenu()
             ContextKind.CONSOLE -> ContextMenus.consoleMenu(m.game.game.fileName)?.let { setMenu(m.copy(sub = it)) } ?: run {
                 closeContextMenu()
@@ -568,7 +576,7 @@ internal class ContextMenuController(
             ContextKind.REMOVE_FROM_COLLECTION, ContextKind.REMOVE_RECENT, ContextKind.GAME_SETTINGS, ContextKind.FETCH_ART, ContextKind.CHANGE_ART,
             ContextKind.PIN_TOOL, ContextKind.UNPIN_TOOL, ContextKind.ADD_TO_TOOLS, ContextKind.REMOVE_FROM_TOOLS,
             ContextKind.RENAME_COLLECTION, ContextKind.DELETE_COLLECTION, ContextKind.NETPLAY, ContextKind.PLAY_FROM_START,
-            ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS, ContextKind.ACHIEVEMENTS -> closeContextMenu()
+            ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS, ContextKind.ACHIEVEMENTS, ContextKind.USE_TOP_SCREEN -> closeContextMenu()
         }
     }
 
@@ -625,3 +633,6 @@ internal class ContextMenuController(
         const val INVALID_NAME = "Names cannot be empty, start with a dot or contain / \\ : * ? \" < > |"
     }
 }
+
+/** The main menu's menu item (and the floating button's meaning) while an app holds the top screen. */
+internal const val USE_TOP_SCREEN_LABEL = "Use top screen"
