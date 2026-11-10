@@ -167,6 +167,14 @@ class BackdropRowTest {
         }
     }
 
+    // A vertical stack's narrow caption: the time, the trophy count and the next goal each on a row of its own.
+    @Test fun a_vertical_stacks_caption_gives_every_segment_its_own_row() {
+        val time = InfoLine(InfoKind.TIME, "Today - 10m 14s"); val ach = InfoLine(InfoKind.ACHIEVEMENTS, "0 of 12"); val next = InfoLine(InfoKind.NEXT, "Next: Seven Lucky Paddles")
+        assertEquals(listOf(listOf(time), listOf(ach), listOf(next)), stackCaptionRows(listOf(time, ach, next)))
+        assertEquals(listOf(listOf(time)), stackCaptionRows(listOf(time)))
+        assertEquals(emptyList(), stackCaptionRows(emptyList()))
+    }
+
     // The handheld's two lines: the time and the trophies, then the next goal alone.
     @Test fun captionRowsAreTheTimeAndTheAchievementsThenTheNextGoal() {
         val time = InfoLine(InfoKind.TIME, "Today - 1m 31s")

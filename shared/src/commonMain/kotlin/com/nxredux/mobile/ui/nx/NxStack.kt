@@ -170,12 +170,18 @@ internal fun Modifier.nxStackEdgeFade(fade: Dp): Modifier =
     }
 
 /**
+ * A vertical stack's caption info rows: every segment on a row of its own (the time, the trophy count, the next goal).
+ * The column beside the stack is narrow, so the time and the count together would cut the count short.
+ */
+internal fun stackCaptionRows(lines: List<InfoLine>): List<List<InfoLine>> = lines.map { listOf(it) }
+
+/**
  * A game-list stack's caption (Backdrop-Vertical, Carousel-Vertical): Backdrop's three lines in the column from
  * [StackGeometry.captionX] to [bodyW] less [StackGeometry.captionRight], left-aligned ([alignment] LEFT: the text starts
  * the caption gap after the stack) or right-aligned (RIGHT, the mirror: it ends the gap before the stack, so it hugs the
  * stack rather than the screen edge), the block vertically centred on the selected item ([StackGeometry.centreY]). The
  * name ([title], [nameSp] SemiBold, up to two balanced lines, then an ellipsis), then
- * the time and trophy row and the "Next: <name>" row at 14 sp in grey ([backdropCaptionRows] via [CaptionInfoRows]: a
+ * the time, the trophy count and "Next: <name>", a row each, at 14 sp in grey ([stackCaptionRows] via [CaptionInfoRows]: a
  * row without data is left out; a next goal too long takes up to two lines, the block growing round its centre), 3 dp
  * apart. [shadow]: Backdrop's text shadow (over a picture). [splitNext] (the portrait family): "Next: <name>"
  * always on its own lines, long or not.
@@ -206,7 +212,7 @@ internal fun StackCaption(
     ) {
         Text(title, color = colors.accent, maxLines = 2, overflow = TextOverflow.Ellipsis, style = nameStyle)   // the selected game's name in the accent
         // The centred block may grow: "Next: <name>" may take its two lines whatever the body's room.
-        CaptionInfoRows(backdropCaptionRows(info), infoStyle, 12.dp, avail = width.dp, spare = bodyH.dp, alwaysSplitNext = splitNext)
+        CaptionInfoRows(stackCaptionRows(info), infoStyle, 12.dp, avail = width.dp, spare = bodyH.dp, alwaysSplitNext = splitNext)
     }
 }
 
