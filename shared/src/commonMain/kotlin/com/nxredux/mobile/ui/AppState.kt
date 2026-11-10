@@ -149,6 +149,7 @@ import com.nxredux.mobile.storage.Recents
 import com.nxredux.mobile.storage.RecentsRecorder
 import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.ui.nx.TopDetails
+import com.nxredux.mobile.scraper.StoredGameInfo
 import com.nxredux.mobile.ui.nx.TopStats
 import com.nxredux.mobile.ui.nx.collectionStats
 import com.nxredux.mobile.ui.nx.consoleStats
@@ -544,7 +545,7 @@ sealed interface Screen {
 /** Kids Mode's first switch-on, in order (the spec's): PIN, allowed apps, play times, then the two permissions and home. */
 enum class KidsSetupStep { PIN, APPS, TIMES, USAGE, ALARMS, HOME }
 
-enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
+enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, GAME_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
@@ -1205,7 +1206,6 @@ class AppState(
         if (entry == null) {
             topDetailsJob?.cancel(); topDetailsJob = null
             _topDetails.value = null
-            infoFetcher?.follow(null)
             return
         }
         val shown = _topDetails.value?.takeIf { sameGame(it.entry, entry) }
@@ -1216,7 +1216,6 @@ class AppState(
         )
         if (shown != null && !reread) return   // its reads ran or are running
         val ref = infoRef(entry)
-        if (shown == null) infoFetcher?.follow(ref)
         topDetailsJob?.cancel()
         topDetailsJob = scope.launch {
             val saves = !entry.system.android && !entry.system.unassigned
@@ -1227,14 +1226,31 @@ class AppState(
         }
     }
 
+    /**
+     * The highlighted game's stored ScreenScraper info into [gameMeta], for its caption, and the info fetch on it
+     * ([InfoFetcher.follow]: a game rested on with none stored is looked up). On one screen or two: the game is the one
+     * the top screen's details would show ([DualMenu.top]).
+     */
+    private fun followGameMeta() {
+        val entry = (DualMenu.top(_screen.value, _selection.value.index) as? TopContent.GameDetails)?.entry
+        val ref = entry?.let(::infoRef)
+        val path = ref?.gamePath
+        if (path == metaFor) return
+        metaFor = path
+        infoFetcher?.follow(ref)
+        if (ref == null || path == null || path in _gameMeta.value) return
+        scope.launch { gameInfoStore?.read(ref)?.let { _gameMeta.value += path to it } }
+    }
+
     /** [entry] as the info fetch and store name it; null for an Android or Unassigned game (no ScreenScraper info). */
     private fun infoRef(entry: Listed): LibraryGameRef? =
         if (entry.system.android || entry.system.unassigned) null else artworkRef(entry.system.tag, entry.game)
 
     /** [path]'s info was just fetched: the details page shows it when that game is still on it. */
     private suspend fun showFetchedInfo(path: String) {
-        val entry = _topDetails.value?.entry?.takeIf { it.game.path == path } ?: return
+        val entry = (DualMenu.top(_screen.value, _selection.value.index) as? TopContent.GameDetails)?.entry?.takeIf { it.game.path == path } ?: return
         val scraped = infoRef(entry)?.let { r -> gameInfoStore?.read(r) } ?: return
+        _gameMeta.value += path to scraped
         _topDetails.value = _topDetails.value?.takeIf { sameGame(it.entry, entry) }?.copy(scraped = scraped)
     }
 
@@ -1273,6 +1289,11 @@ class AppState(
     private val _gameInfo = MutableStateFlow<Map<String, GameInfo>>(emptyMap())
     /** Every game's play time and RetroAchievements progress by library path (menus show the selected one's). */
     val gameInfo: StateFlow<Map<String, GameInfo>> = _gameInfo.asStateFlow()
+
+    private val _gameMeta = MutableStateFlow<Map<String, StoredGameInfo>>(emptyMap())
+    /** Stored ScreenScraper info by game path, for the games highlighted so far ([followGameMeta]): a caption's genre and release. */
+    val gameMeta: StateFlow<Map<String, StoredGameInfo>> = _gameMeta.asStateFlow()
+    private var metaFor: String? = null   // the game path [followGameMeta] last followed
     private var gameInfoJob: Job? = null
     /** The RetroAchievements panel and screens; it reaches back into this state only through [RaScreenHost]. */
     private val ra = RaScreenController(
@@ -1446,7 +1467,7 @@ class AppState(
             }
         }
         // The achievements panel follows the game list's selection, and closes off the game list.
-        scope.launch { _selection.collect { ra.followRaPanel(); followTopDetails(); followTopStats() } }
+        scope.launch { _selection.collect { ra.followRaPanel(); followTopDetails(); followTopStats(); followGameMeta() } }
         // The top screen's details: new play time re-reads the shown game; its achievements land in place. Stats too.
         scope.launch { _gameInfo.collect { followTopDetails(reread = true); followTopStats() } }
         scope.launch {
@@ -1458,6 +1479,7 @@ class AppState(
             _screen.collect {
                 followTopDetails()
                 followTopStats()
+                followGameMeta()
                 if (it !is Screen.Games) { ra.closeRaPanel() } else { ra.followRaPanel() }
                 if (it !is Screen.Games) closeArtPanel()   // as the achievements panel: only over a game list
             }
@@ -1521,7 +1543,7 @@ class AppState(
             scope.launch { c.notices.collect { showNotice(it) } }
             // Files arrived (saves, states, their pictures): Continue's resume point and slot picture are read again. Game
             // info files may be among them: a cached absence would have the top screen fetch one and write over it.
-            scope.launch { c.received.collect { gameInfoStore?.forgetCached(); refreshMainRows() } }
+            scope.launch { c.received.collect { gameInfoStore?.forgetCached(); _gameMeta.value = emptyMap(); metaFor = null; refreshMainRows() } }
             // ROM files arrived: a plain Systems page rescans at once; anywhere else (the tool itself) waits until it is left.
             // Collections changed (merged by this phone's writer, or pushed by a peer phone into its home `Collections/`): a
             // store copy takes in a daemon-written home file, then the tab is listed again and those counts redone.
@@ -4060,6 +4082,7 @@ class AppState(
             SettingsKind.PAGE_TITLE -> flip(s.menuPageTitle, show = true, after = { settingsUi.refreshSettings() }) { s.menuPageTitle = it }
             SettingsKind.BUTTON_HINTS -> flip(s.menuButtonHints, show = true) { s.menuButtonHints = it }
             SettingsKind.EXTRA_INFO -> flip(s.menuExtraInfo, show = true) { s.menuExtraInfo = it }
+            SettingsKind.GAME_INFO -> cycle(listOf(false, true), s.menuInfoAchievements, ::gameInfoLabel) { s.menuInfoAchievements = it }
             SettingsKind.HOME_STATS -> flip(s.menuHomeStats, show = true) { s.menuHomeStats = it }   // Home's board follows through its frame
             SettingsKind.LAYOUT_OPTIONS -> flip(s.gameListLayoutOptions, show = true) { s.gameListLayoutOptions = it }   // a game list's icons
             SettingsKind.ACHIEVEMENTS_PANEL -> flip(s.gameListAchievementsPanel, show = true) { s.gameListAchievementsPanel = it }   // X's hint
@@ -4206,6 +4229,7 @@ class AppState(
             SettingsRow(SettingsKind.LAYOUT_TITLE_HINTS, SettingsSection.LAYOUT_TITLE_HINTS.label, chrome),
             SettingsRow(SettingsKind.LAYOUT_SWITCHER, SettingsSection.LAYOUT_SWITCHER.label, s.switcherLayout.label),
             SettingsRow(SettingsKind.EXTRA_INFO, "Extra info", if (s.menuExtraInfo) "Show" else "Hide"),
+            SettingsRow(SettingsKind.GAME_INFO, "Game info", gameInfoLabel(s.menuInfoAchievements)),
             SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
         )
     }

@@ -53,6 +53,9 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import com.nxredux.mobile.ui.INFO_SEPARATOR
 import com.nxredux.mobile.ui.InfoKind
+import com.nxredux.mobile.ui.ownRow
+import com.nxredux.mobile.ui.firstGenre
+import com.nxredux.mobile.ui.genreParts
 
 /*
  * A main menu List's rows (List Home, and the Consoles, Collections and Tools tabs in the List style): one continuous
@@ -267,8 +270,8 @@ private fun HomeListTag(tag: String, selected: Boolean, size: TextUnit, font: an
     }
 }
 
-/** One run of List Home's facts line ([homeCaptionParts]): a value, a label (a separator too) or the trophy. */
-internal data class CaptionPart(val text: String, val value: Boolean, val trophy: Boolean = false)
+/** One run of List Home's facts line ([homeCaptionParts]): a value, a label (a separator too), the trophy or a [genre] pill. */
+internal data class CaptionPart(val text: String, val value: Boolean, val trophy: Boolean = false, val genre: Boolean = false)
 
 /** "1h 17m", "31s": a play time ([GameTimeFormat.duration]), a value; anything else in the time segment is its label. */
 private val DURATION = Regex("""^\d+[hms]( \d+[ms])*$""")
@@ -287,7 +290,11 @@ internal fun homeCaptionParts(lines: List<InfoLine>): List<CaptionPart> = buildL
                 else add(CaptionPart(line.text, value = DURATION.matches(line.text)))
             }
             InfoKind.ACHIEVEMENTS -> { add(CaptionPart("", value = false, trophy = true)); add(CaptionPart(line.text, value = true)) }
-            InfoKind.COUNT -> add(CaptionPart(line.text, value = true))
+            InfoKind.COUNT, InfoKind.RELEASE -> add(CaptionPart(line.text, value = true))
+            InfoKind.GENRE -> genreParts(line.text).forEachIndexed { j, g ->
+                if (j > 0) add(CaptionPart(" ", value = false))
+                add(CaptionPart(g, value = true, genre = true))
+            }
             InfoKind.NEXT -> {
                 val name = line.text.removePrefix(NEXT_PREFIX)
                 if (name != line.text) add(CaptionPart(NEXT_PREFIX, value = false))
@@ -309,12 +316,14 @@ internal fun HomeFactsLine(lines: List<InfoLine>, size: TextUnit, modifier: Modi
     val colors = LocalNxColors.current
     val label = colors.hint
     val icon = with(LocalDensity.current) { size.toDp() }
-    val info = infoText(lines, label, icon)
-    Crossfade(lines, modifier, animationSpec = tween(HOME_LIST_CAPTION_MS), label = "facts") { shown ->
+    // One line, not fitted to its width: the first genre alone.
+    Crossfade(remember(lines) { firstGenre(lines) }, modifier, animationSpec = tween(HOME_LIST_CAPTION_MS), label = "facts") { shown ->
+        val info = infoText(shown, label, icon)   // per shown lines: the outgoing line keeps its own genre pill
         val text = remember(shown, colors) {
             buildAnnotatedString {
                 homeCaptionParts(shown).forEach { p ->
                     if (p.trophy) appendInlineContent(TROPHY, "[trophy]")
+                    else if (p.genre) appendInlineContent(genreId(p.text), p.text)
                     else withStyle(SpanStyle(color = if (p.value) colors.listText else label)) { append(p.text) }
                 }
             }
@@ -336,7 +345,7 @@ internal fun HomeFactsLine(lines: List<InfoLine>, size: TextUnit, modifier: Modi
 @Composable
 internal fun GameFactsLines(lines: List<InfoLine>, size: TextUnit, line: Dp, rows: Int, modifier: Modifier) {
     Column(modifier.height(line * rows).fillMaxWidth()) {
-        HomeFactsLine(if (rows > 1) lines.filter { it.kind != InfoKind.NEXT } else lines, size, Modifier.fillMaxWidth().height(line))
-        if (rows > 1) HomeFactsLine(lines.filter { it.kind == InfoKind.NEXT }, size, Modifier.fillMaxWidth().height(line))
+        HomeFactsLine(if (rows > 1) lines.filter { !it.ownRow } else lines, size, Modifier.fillMaxWidth().height(line))
+        if (rows > 1) HomeFactsLine(lines.filter { it.ownRow }, size, Modifier.fillMaxWidth().height(line))
     }
 }

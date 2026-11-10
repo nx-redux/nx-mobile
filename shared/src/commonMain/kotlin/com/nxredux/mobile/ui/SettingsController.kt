@@ -396,6 +396,7 @@ internal class SettingsController(
             s.menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE
             s.menuButtonHints = MenuStyles.DEFAULT_BUTTON_HINTS
             s.menuExtraInfo = MenuStyles.DEFAULT_EXTRA_INFO
+            s.menuInfoAchievements = false
             s.menuHomeStats = MenuStyles.DEFAULT_HOME_STATS
             s.gameListLayoutOptions = true
             s.gameListAchievementsPanel = true

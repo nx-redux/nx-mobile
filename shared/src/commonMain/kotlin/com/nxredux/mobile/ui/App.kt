@@ -492,6 +492,8 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
     // from this map, so hidden, every layout's info lines are empty ([launcherGameInfo]); counts stay. Home's stats strip
     // follows Layouts → Home stats instead.
     val gameInfo = launcherGameInfo(allInfo, LocalLauncherChrome.current.extraInfo)
+    val storedMeta by state.gameMeta.collectAsState()
+    val meta = launcherGameMeta(storedMeta, remember(page) { !state.settings.menuInfoAchievements }, LocalLauncherChrome.current.extraInfo)
     val frozen = remember(under) { under?.let { mutableStateOf(it.second) } }
     val selection: State<ListSelection> = frozen ?: pageSelection
     Box(Modifier.fillMaxSize()) {
@@ -548,10 +550,10 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                         if (!listBand.info) emptyList() else when (val row = s.rows.getOrNull(selection.value.index)) {
                             is MainRow.System -> consoleInfoLines(row)
                             is MainRow.Collection -> collectionInfoLines(row)
-                            else -> gameInfoFor(gameInfo, now, row.game(), full = true)   // Grid shows none (its tiles have tileInfo)
+                            else -> gameInfoFor(gameInfo, now, row.game(), full = true, meta)   // Grid shows none (its tiles have tileInfo)
                         }
                     },
-                    rowInfo = { i -> gameInfoFor(gameInfo, now, s.rows.getOrNull(i).game(), full = true) },   // Carousel Home's caption, any row
+                    rowInfo = { i -> gameInfoFor(gameInfo, now, s.rows.getOrNull(i).game(), full = true, meta) },   // Carousel Home's caption, any row
                     style = style, orientation = orientation, onGridLayout = onGridLayout,
                     tileInfo = remember(s.rows, gameInfo, now) { rowTileInfo(s.rows, gameInfo, now) }, layoutKey = s.category,
                     onHomeLayout = onHomeLayout, homeView = homeView.value, homeRowLast = { homeRowLast.value },
@@ -578,7 +580,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.Games -> GamesPage(state, s, selection, resume, gameInfo, now)
             // Its info follows Extra info, as the menus'. List: a row tap selects, a second tap resumes.
             is Screen.Switcher -> GameSwitcherScreen(
-                s, state::onButton, info = gameInfoFor(gameInfo, now, s.entries.getOrNull(s.index)?.game, full = true),
+                s, state::onButton, info = gameInfoFor(gameInfo, now, s.entries.getOrNull(s.index)?.game, full = true, meta),
                 onSelect = state::selectSwitcherRow, onOpen = { state.selectSwitcherRow(it); state.openSelected() },
                 backdropArt = state.artLayout.collectAsState().value.backdrop,
             )
@@ -665,6 +667,8 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     val current = { s.entries.getOrNull(selection.value.index) }
     val chrome = gameListChrome(LocalLauncherChrome.current, dual)
     val listInfo = launcherGameInfo(gameInfo, chrome.extraInfo)
+    val storedMeta by state.gameMeta.collectAsState()
+    val meta = launcherGameMeta(storedMeta, remember(s) { !state.settings.menuInfoAchievements }, chrome.extraInfo)
     // Unfiltered by Extra info: whether the highlighted game has a set decides the dual trophy, not what the list shows.
     val allInfo by state.gameInfo.collectAsState()
     val trophyAvailable = state.hasAchievements && state.settings.gameListAchievementsPanel
@@ -680,7 +684,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
             onLongPress = { state.openContextMenu(it) },
             showTag = s.source == ListSource.Hidden || s.source is ListSource.Search,   // a search mixes consoles
             emptyText = if (s.source is ListSource.Search || s.source is ListSource.Filtered) "No results" else null,
-            info = { gameInfoFor(listInfo, now, current()?.game, full = true) },   // Grid shows none (its tiles have tileInfo)
+            info = { gameInfoFor(listInfo, now, current()?.game, full = true, meta) },   // Grid shows none (its tiles have tileInfo)
             style = style, orientation = orientation, alignment = state.settings.gameListVerticalAlignment, onGridLayout = onGridLayout, onPageRows = onPageRows, tileInfo = remember(s.entries, listInfo, now) { entryTileInfo(s.entries, listInfo, now) }, layoutKey = s.source,
             artBox = artLayout.list.boxed,
             backdropArt = artLayout.backdrop,

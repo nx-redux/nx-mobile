@@ -180,7 +180,7 @@ internal fun stackCaptionRows(lines: List<InfoLine>): List<List<InfoLine>> = lin
  * [StackGeometry.captionX] to [bodyW] less [StackGeometry.captionRight], left-aligned ([alignment] LEFT: the text starts
  * the caption gap after the stack) or right-aligned (RIGHT, the mirror: it ends the gap before the stack, so it hugs the
  * stack rather than the screen edge), the block vertically centred on the selected item ([StackGeometry.centreY]). The
- * name ([title], [nameSp] SemiBold, up to two balanced lines, then an ellipsis), then
+ * name ([title], [nameSp] SemiBold, up to three balanced lines, then an ellipsis), then
  * the time, the trophy count and "Next: <name>", a row each, at 14 sp in grey ([stackCaptionRows] via [CaptionInfoRows]: a
  * row without data is left out; a next goal too long takes up to two lines, the block growing round its centre), 3 dp
  * apart. [shadow]: Backdrop's text shadow (over a picture). [splitNext] (the portrait family): "Next: <name>"
@@ -210,7 +210,7 @@ internal fun StackCaption(
         verticalArrangement = Arrangement.spacedBy(3.dp),
         horizontalAlignment = if (end) Alignment.End else Alignment.Start,
     ) {
-        Text(title, color = colors.accent, maxLines = 2, overflow = TextOverflow.Ellipsis, style = nameStyle)   // the selected game's name in the accent
+        Text(title, color = colors.accent, maxLines = 3, overflow = TextOverflow.Ellipsis, style = nameStyle)   // the selected game's name in the accent
         // The centred block may grow: "Next: <name>" may take its two lines whatever the body's room.
         CaptionInfoRows(stackCaptionRows(info), infoStyle, 12.dp, avail = width.dp, spare = bodyH.dp, alwaysSplitNext = splitNext)
     }

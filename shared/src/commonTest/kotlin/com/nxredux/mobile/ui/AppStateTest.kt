@@ -5766,7 +5766,7 @@ class AppStateTest {
         state.load()
         fun page(section: SettingsSection) = state.openLayoutsPage(section).map { it.label }
         assertEquals(
-            listOf("Home", "Consoles", "Collections", "Tools", "Game lists", "Title and hints", "Game Switcher", "Extra info", "Reset to defaults"),
+            listOf("Home", "Consoles", "Collections", "Tools", "Game lists", "Title and hints", "Game Switcher", "Extra info", "Game info", "Reset to defaults"),
             page(SettingsSection.MAIN_MENU),
         )
         assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Most played shelf", "Stats", "Layout"), page(SettingsSection.LAYOUT_HOME))   // Home never has an orientation row
@@ -5901,7 +5901,7 @@ class AppStateTest {
         state.openSettings(SettingsSection.MAIN_MENU)
         val rows = assertIs<Screen.Settings>(state.screen.value).rows
         assertEquals(
-            listOf("Home", "Consoles", "Collections", "Tools", "Game lists", "Title and hints", "Game Switcher", "Extra info", RESET_DEFAULTS_LABEL),
+            listOf("Home", "Consoles", "Collections", "Tools", "Game lists", "Title and hints", "Game Switcher", "Extra info", "Game info", RESET_DEFAULTS_LABEL),
             rows.map { it.label },
         )
         assertEquals("Grid", rows[0].secondary)                              // a shown tab: its layout
@@ -6100,7 +6100,8 @@ class AppStateTest {
         val rows = assertIs<Screen.Settings>(state.screen.value).rows
         val extra = rows.indexOfFirst { it.kind == SettingsKind.EXTRA_INFO }
         assertEquals(rows.indexOfFirst { it.kind == SettingsKind.LAYOUT_SWITCHER } + 1, extra)   // after the groups, before Reset
-        assertEquals(rows.indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS } - 1, extra)
+        assertEquals(rows.indexOfFirst { it.kind == SettingsKind.GAME_INFO } - 1, extra)
+        assertEquals(rows.indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS } - 2, extra)
         assertEquals(SettingsRow(SettingsKind.EXTRA_INFO, "Extra info", "Show"), rows[extra])
         assertTrue(settingsNxRow(rows[extra]).cycleable)
         assertTrue(state.launcherChrome().extraInfo)
@@ -6166,7 +6167,7 @@ class AppStateTest {
         assertEquals("Layouts", page.section.label)   // the page's title
         assertEquals(
             listOf("Home" to "Grid", "Consoles" to "List", "Collections" to "List", "Tools" to "List", "Game lists" to "List", "Title and hints" to "Title only",
-                "Game Switcher" to "Full screen", "Extra info" to "Show", "Reset to defaults" to null),
+                "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Details", "Reset to defaults" to null),
             page.rows.map { it.label to it.secondary },
         )
         fun group(section: SettingsSection) = state.openLayoutsPage(section).map { it.label to it.secondary }
@@ -10158,7 +10159,7 @@ class AppStateTest {
         // No Pinned row; Home first. Home, Collections and Tools are unset (their defaults: Minimal, Minimal, and Grid).
         assertEquals(
             listOf("Home" to "Minimal", "Consoles" to "Grid", "Collections" to "Minimal", "Tools" to "Grid", "Game lists" to "List", "Title and hints" to "Title only",
-                "Game Switcher" to "Full screen", "Extra info" to "Show", "Reset to defaults" to null),
+                "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Details", "Reset to defaults" to null),
             state.layoutsRows().map { it.label to it.secondary },
         )
         // Every group's rows, in Layouts' order, each page ending with Done.
@@ -10232,7 +10233,7 @@ class AppStateTest {
         state.load()
         val rows = state.openLayoutsPage(SettingsSection.MAIN_MENU)
         assertEquals(SettingsKind.RESET_DEFAULTS, rows.last().kind)
-        assertEquals(listOf(SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER, SettingsKind.EXTRA_INFO), rows.dropLast(1).takeLast(3).map { it.kind })
+        assertEquals(listOf(SettingsKind.LAYOUT_SWITCHER, SettingsKind.EXTRA_INFO, SettingsKind.GAME_INFO), rows.dropLast(1).takeLast(3).map { it.kind })
         assertTrue(settingsNxRow(rows.single { it.kind == SettingsKind.EXTRA_INFO }).cycleable)
         // The title and hints' page and the Game Switcher's: their value rows all cycle, then Done.
         val chrome = state.openLayoutsPage(SettingsSection.LAYOUT_TITLE_HINTS)
@@ -10463,7 +10464,7 @@ class AppStateTest {
         assertEquals(
             listOf(
                 "Home" to "Minimal", "Consoles" to "Carousel", "Collections" to "Minimal", "Tools" to "Grid", "Game lists" to "Carousel", "Title and hints" to "Title only",
-                "Game Switcher" to "Full screen", "Extra info" to "Show", "Reset to defaults" to null,
+                "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Details", "Reset to defaults" to null,
             ),
             page(SettingsSection.MAIN_MENU),
         )

@@ -447,6 +447,15 @@ interface AppSettings {
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
     /**
+     * Layouts → Game info: what a game's caption shows under its play time. Off (the default, Details): its genre and
+     * release. On (Achievements): its achievements where it has some to show, else the genre and release. Defaulted,
+     * like [debugLog].
+     */
+    var menuInfoAchievements: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
+    /**
      * The in-game Mic toggle has asked for the microphone permission once (never again from the toggle); Settings →
      * Library → Microphone access does not touch it. Defaulted, like [debugLog].
      */

@@ -71,7 +71,7 @@ import coil3.compose.AsyncImagePainter
 import com.nxredux.mobile.ui.BackdropGame
 import com.nxredux.mobile.ui.BoxShown
 import com.nxredux.mobile.ui.GridTile
-import com.nxredux.mobile.ui.InfoKind
+import com.nxredux.mobile.ui.ownRow
 import com.nxredux.mobile.ui.InfoLine
 import com.nxredux.mobile.ui.backdropBoxShown
 import com.nxredux.mobile.ui.gamesLabel
@@ -343,7 +343,7 @@ internal fun RowGeometry.grown(s: Float): RowGeometry = copy(itemW = itemW * s, 
  * under it ([fitCaptionRows]).
  */
 internal fun backdropCaptionRows(lines: List<InfoLine>): List<List<InfoLine>> {
-    val (next, rest) = lines.partition { it.kind == InfoKind.NEXT }
+    val (next, rest) = lines.partition { it.ownRow }
     return listOf(rest, next).filter { it.isNotEmpty() }
 }
 
