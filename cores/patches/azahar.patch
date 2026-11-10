@@ -43,7 +43,7 @@ index e28f994..08f6d4a 100644
  if(ENABLE_VULKAN)
    target_link_libraries(citra_libretro PRIVATE sirit vulkan-headers vma)
 diff --git a/src/citra_libretro/citra_libretro.cpp b/src/citra_libretro/citra_libretro.cpp
-index 8a65f9d..9d0476b 100644
+index 8a65f9d..1e6896d 100644
 --- a/src/citra_libretro/citra_libretro.cpp
 +++ b/src/citra_libretro/citra_libretro.cpp
 @@ -2,6 +2,7 @@
@@ -87,14 +87,14 @@ index 8a65f9d..9d0476b 100644
  };
  
  CitraLibRetro* emu_instance;
-@@ -94,6 +107,7 @@ void retro_deinit() {
+@@ -91,6 +104,7 @@ void retro_init() {
+ 
+ void retro_deinit() {
+     LOG_DEBUG(Frontend, "Shutting down core...");
++    LibRetro::RoomLink::Stop();
      if (Core::System::GetInstance().IsPoweredOn()) {
          Core::System::GetInstance().Shutdown();
      }
-+    LibRetro::RoomLink::Stop();
- 
-     LibRetro::Input::Shutdown();
- 
 @@ -211,6 +225,73 @@ static void UpdateSettings() {
      Core::System::GetInstance().ApplySettings();
  }
@@ -249,12 +249,13 @@ index 8a65f9d..9d0476b 100644
  
      // If using HW rendering, don't actually load the game here. azahar wants
      // the graphics context ready and available before calling System::Load.
-@@ -635,6 +748,15 @@ bool retro_load_game(const struct retro_game_info* info) {
+@@ -634,7 +747,16 @@ bool retro_load_game(const struct retro_game_info* info) {
+ 
  void retro_unload_game() {
      LOG_DEBUG(Frontend, "Unloading game...");
++    LibRetro::RoomLink::Stop();
      Core::System::GetInstance().Shutdown();
 +    Core::System::GetInstance().EjectCartridge();
-+    LibRetro::RoomLink::Stop();
 +    // The mode outlives retro_deinit() while the core stays loaded.
 +    LibRetro::VideoViews::SetCurrentMode({});
 +    emu_instance->views_status = ~0u;
@@ -265,6 +266,18 @@ index 8a65f9d..9d0476b 100644
  }
  
  unsigned retro_get_region() {
+@@ -727,6 +849,11 @@ bool retro_unserialize(const void* data, size_t size) {
+     if (!DrainAsyncOperations(system)) {
+         return false;
+     }
++    // The other consoles in the room would keep this one as it was before the load.
++    if (LibRetro::RoomLink::Linked()) {
++        LibRetro::DisplayMessage("Leave local multiplayer to load a state");
++        return false;
++    }
+ 
+     std::vector<u8> buffer(static_cast<const u8*>(data), static_cast<const u8*>(data) + size);
+     try {
 diff --git a/src/citra_libretro/core_settings.cpp b/src/citra_libretro/core_settings.cpp
 index 53fb164..553d215 100644
 --- a/src/citra_libretro/core_settings.cpp
@@ -1206,10 +1219,10 @@ index 0000000..0e6cf75
 +} // namespace LibRetro
 diff --git a/src/citra_libretro/room_link.cpp b/src/citra_libretro/room_link.cpp
 new file mode 100644
-index 0000000..36fd8b9
+index 0000000..bcf9f2c
 --- /dev/null
 +++ b/src/citra_libretro/room_link.cpp
-@@ -0,0 +1,469 @@
+@@ -0,0 +1,527 @@
 +// Copyright Citra Emulator Project / Azahar Emulator Project
 +// Licensed under GPLv2 or any later version
 +// Refer to the license.txt file included.
@@ -1257,13 +1270,15 @@ index 0000000..36fd8b9
 +constexpr char IP_KEY[] = "nx_3ds_link_ip";
 +constexpr char PORT_KEY[] = "nx_3ds_link_port";
 +constexpr char NAME_KEY[] = "nx_3ds_link_name";
++constexpr char BROADCAST_KEY[] = "nx_3ds_link_broadcast";
 +
 +constexpr u32 MAX_PLAYERS = 8;
 +// The joiner's game can be up before the host's room is: keep knocking for about half a minute.
 +constexpr int JOIN_ATTEMPTS = 30;
 +
 +// Auto mode's room search: a question broadcast on the local network, answered by the device
-+// that holds a room with its room id (the lower of two rooms started at once is the one kept).
++// that holds a room with its room id and whether the room is settled (a session's, or one with
++// another member). Of two rooms, a settled one is kept, else the one with the lower id.
 +constexpr u16 SEARCH_PORT = 24873;
 +constexpr char SEARCH_ASK[] = "NXR3DS?1";
 +constexpr char SEARCH_ANSWER[] = "NXR3DS!1";
@@ -1272,18 +1287,23 @@ index 0000000..36fd8b9
 +// A game drops and restarts its wireless between its own menus: the room outlives those gaps.
 +constexpr auto LINGER = std::chrono::seconds(10);
 +constexpr auto ALONE_SEARCH_EVERY = std::chrono::seconds(2);
++// A room that refused this device is asked again only after a pause.
++constexpr int REFUSED_WAIT_MS = 5000;
 +
 +enum class Mode { Off, Session, Auto };
 +
-+Mode mode = Mode::Off;
++std::atomic<Mode> mode{Mode::Off};
 +bool network_up = false;
 +std::thread worker;
 +std::thread answerer;
 +std::atomic<bool> cancel{false};
 +std::atomic<bool> answering{false};
++std::atomic<bool> worker_running{false};
 +std::atomic<bool> refused{false};
 +std::atomic<bool> joined_once{false};
 +std::atomic<bool> random_mac{false};
++// The last refusal shown: a room that keeps refusing is not reported again.
++std::atomic<int> shown_refusal{-1};
 +RoomMember::CallbackHandle<RoomMember::State> state_handle;
 +RoomMember::CallbackHandle<RoomMember::Error> error_handle;
 +
@@ -1294,6 +1314,11 @@ index 0000000..36fd8b9
 +u64 room_id = 0;
 +u16 room_port = Network::DefaultRoomPort;
 +std::string player_name;
++// The local network's broadcast address from the frontend; empty: the limited broadcast alone.
++std::string broadcast_address;
++// The console's MAC address, read on the emulation thread once the game uses wireless.
++std::mutex mac_mutex;
++std::optional<Network::MacAddress> console_mac;
 +
 +std::mutex notice_mutex;
 +std::deque<std::string> notices;
@@ -1336,8 +1361,11 @@ index 0000000..36fd8b9
 +    // The console keeps its own MAC address in the room when it is free there: a game's network
 +    // then carries the same address before and after the join.
 +    Network::MacAddress mac = Network::NoPreferredMac;
-+    if (!random_mac && Core::System::GetInstance().IsPoweredOn())
-+        mac = Service::CFG::GetConsoleMacAddress(Core::System::GetInstance());
++    if (!random_mac) {
++        std::scoped_lock lock(mac_mutex);
++        if (console_mac)
++            mac = *console_mac;
++    }
 +    // The console id only has to differ between the room's members, as the name does.
 +    member.Join(player_name, player_name, ip.c_str(), port, 0, mac);
 +    for (int i = 0; i < 100 && !cancel && member.GetState() == RoomMember::State::Joining; ++i)
@@ -1361,7 +1389,10 @@ index 0000000..36fd8b9
 +    std::string ip;
 +    u16 port;
 +    u64 id;
++    bool settled;
 +};
++
++constexpr std::size_t ANSWER_SIZE = SEARCH_TAG + sizeof(u64) + sizeof(u16) + 1;
 +
 +void SetTimeout(int fd, int ms) {
 +    timeval tv{};
@@ -1383,6 +1414,11 @@ index 0000000..36fd8b9
 +    to.sin_port = htons(SEARCH_PORT);
 +    to.sin_addr.s_addr = htonl(INADDR_BROADCAST);
 +    sendto(fd, SEARCH_ASK, SEARCH_TAG, 0, reinterpret_cast<sockaddr*>(&to), sizeof(to));
++    // The network's own broadcast address leaves through that network whatever the default route
++    // is (a Wi-Fi without internet next to mobile data).
++    if (!broadcast_address.empty() &&
++        inet_pton(AF_INET, broadcast_address.c_str(), &to.sin_addr) == 1)
++        sendto(fd, SEARCH_ASK, SEARCH_TAG, 0, reinterpret_cast<sockaddr*>(&to), sizeof(to));
 +
 +    std::optional<Found> found;
 +    const auto until = Clock::now() + std::chrono::milliseconds(SEARCH_WAIT_MS);
@@ -1392,7 +1428,7 @@ index 0000000..36fd8b9
 +        socklen_t from_size = sizeof(from);
 +        const auto size = recvfrom(fd, answer.data(), answer.size(), 0,
 +                                   reinterpret_cast<sockaddr*>(&from), &from_size);
-+        if (size < static_cast<ssize_t>(SEARCH_TAG + sizeof(u64) + sizeof(u16)) ||
++        if (size < static_cast<ssize_t>(ANSWER_SIZE) ||
 +            std::memcmp(answer.data(), SEARCH_ANSWER, SEARCH_TAG) != 0)
 +            continue;
 +        u64 id;
@@ -1403,9 +1439,10 @@ index 0000000..36fd8b9
 +            continue; // this device's own room
 +        char ip[INET_ADDRSTRLEN] = {};
 +        inet_ntop(AF_INET, &from.sin_addr, ip, sizeof(ip));
-+        // Two rooms answering: every device settles on the lower id.
-+        if (!found || id < found->id)
-+            found = Found{ip, ntohs(port), id};
++        const bool settled = answer[SEARCH_TAG + sizeof(id) + sizeof(port)] != 0;
++        // Two rooms answering: every device picks the same one.
++        if (!found || (settled && !found->settled) || (settled == found->settled && id < found->id))
++            found = Found{ip, ntohs(port), id, settled};
 +    }
 +    close(fd);
 +    return found;
@@ -1428,7 +1465,7 @@ index 0000000..36fd8b9
 +        close(fd);
 +        return;
 +    }
-+    std::array<u8, SEARCH_TAG + sizeof(u64) + sizeof(u16)> answer{};
++    std::array<u8, ANSWER_SIZE> answer{};
 +    const u16 port = htons(room_port);
 +    std::memcpy(answer.data(), SEARCH_ANSWER, SEARCH_TAG);
 +    std::memcpy(answer.data() + SEARCH_TAG, &room_id, sizeof(room_id));
@@ -1439,10 +1476,13 @@ index 0000000..36fd8b9
 +        socklen_t from_size = sizeof(from);
 +        const auto size = recvfrom(fd, ask.data(), ask.size(), 0,
 +                                   reinterpret_cast<sockaddr*>(&from), &from_size);
-+        if (size >= static_cast<ssize_t>(SEARCH_TAG) &&
-+            std::memcmp(ask.data(), SEARCH_ASK, SEARCH_TAG) == 0)
-+            sendto(fd, answer.data(), answer.size(), 0, reinterpret_cast<sockaddr*>(&from),
-+                   from_size);
++        if (size < static_cast<ssize_t>(SEARCH_TAG) ||
++            std::memcmp(ask.data(), SEARCH_ASK, SEARCH_TAG) != 0)
++            continue;
++        auto room = Network::GetRoom().lock();
++        answer[ANSWER_SIZE - 1] =
++            mode == Mode::Session || (room && room->GetRoomMemberList().size() > 1);
++        sendto(fd, answer.data(), answer.size(), 0, reinterpret_cast<sockaddr*>(&from), from_size);
 +    }
 +    close(fd);
 +}
@@ -1493,8 +1533,11 @@ index 0000000..36fd8b9
 +                LeaveAndClose();
 +                LOG_INFO(Frontend, "3DS link: wireless off, left the room");
 +            }
-+            Sleep(200);
-+            continue;
++            // Nothing to do until the game turns its wireless on again, which starts a new worker.
++            worker_running = false;
++            if (wireless_on && !cancel && !worker_running.exchange(true))
++                continue;
++            return;
 +        }
 +        if (member->IsConnected()) {
 +            // Two devices that hosted at once each hold a room: alone in this one, the lower id's
@@ -1503,7 +1546,8 @@ index 0000000..36fd8b9
 +                next_alone_search = Clock::now() + ALONE_SEARCH_EVERY;
 +                auto room = Network::GetRoom().lock();
 +                if (room && room->GetRoomMemberList().size() <= 1) {
-+                    if (const auto other = Search(); other && other->id < room_id) {
++                    if (const auto other = Search();
++                        other && (other->settled || other->id < room_id)) {
 +                        LeaveAndClose();
 +                        Join(*member, other->ip, other->port);
 +                    }
@@ -1517,7 +1561,8 @@ index 0000000..36fd8b9
 +            LeaveAndClose();
 +        }
 +        if (const auto found = Search()) {
-+            Join(*member, found->ip, found->port);
++            if (!Join(*member, found->ip, found->port))
++                Sleep(REFUSED_WAIT_MS);
 +        } else if (wireless_hosting && !cancel) {
 +            if (OpenRoom()) {
 +                answering = true;
@@ -1533,6 +1578,18 @@ index 0000000..36fd8b9
 +}
 +
 +void OnWireless(WirelessState state) {
++    if (state != WirelessState::Off) {
++        {
++            std::scoped_lock lock(mac_mutex);
++            if (!console_mac)
++                console_mac = Service::CFG::GetConsoleMacAddress(Core::System::GetInstance());
++        }
++        if (!worker_running.exchange(true)) {
++            if (worker.joinable())
++                worker.join();
++            worker = std::thread(AutoLoop);
++        }
++    }
 +    switch (state) {
 +    case WirelessState::On:
 +        wireless_on = true;
@@ -1554,6 +1611,7 @@ index 0000000..36fd8b9
 +    if (worker.joinable())
 +        worker.join();
 +    cancel = false;
++    worker_running = false;
 +}
 +
 +void LeaveRoom() {
@@ -1618,9 +1676,16 @@ index 0000000..36fd8b9
 +    refused = false;
 +    joined_once = false;
 +    random_mac = false;
++    shown_refusal = -1;
++    broadcast_address = FetchVariable(BROADCAST_KEY, "");
++    {
++        std::scoped_lock lock(mac_mutex);
++        console_mac.reset();
++    }
 +    state_handle = member->BindOnStateChanged([](const RoomMember::State& state) {
 +        if (state == RoomMember::State::Joined || state == RoomMember::State::Moderator) {
 +            joined_once = true;
++            shown_refusal = -1;
 +            Notice(RoomOpen() ? "Local wireless: room open" : "Local wireless: connected");
 +        }
 +    });
@@ -1637,7 +1702,8 @@ index 0000000..36fd8b9
 +        }
 +        if (!automatic)
 +            refused = true;
-+        Notice(std::string("Local wireless: ") + Reason(error));
++        if (shown_refusal.exchange(static_cast<int>(error)) != static_cast<int>(error))
++            Notice(std::string("Local wireless: ") + Reason(error));
 +    });
 +
 +    if (automatic) {
@@ -1645,8 +1711,8 @@ index 0000000..36fd8b9
 +        wireless_hosting = false;
 +        wireless_off_at = 0;
 +        mode = Mode::Auto;
++        // The worker starts with the game's wireless: a game that never uses it costs nothing.
 +        Service::NWM::wireless_hook = OnWireless;
-+        worker = std::thread(AutoLoop);
 +    } else {
 +        mode = Mode::Session;
 +        worker = std::thread(JoinLoop, ip, room_port);
@@ -1661,6 +1727,11 @@ index 0000000..36fd8b9
 +    }
 +    for (const auto& text : pending)
 +        DisplayMessage(text.c_str());
++}
++
++bool Linked() {
++    auto member = Network::GetRoomMember().lock();
++    return member && member->IsConnected();
 +}
 +
 +void OnOptionsChanged() {
@@ -1681,10 +1752,10 @@ index 0000000..36fd8b9
 +} // namespace LibRetro::RoomLink
 diff --git a/src/citra_libretro/room_link.h b/src/citra_libretro/room_link.h
 new file mode 100644
-index 0000000..42b389d
+index 0000000..e65bd59
 --- /dev/null
 +++ b/src/citra_libretro/room_link.h
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,27 @@
 +// Copyright Citra Emulator Project / Azahar Emulator Project
 +// Licensed under GPLv2 or any later version
 +// Refer to the license.txt file included.
@@ -1700,10 +1771,15 @@ index 0000000..42b389d
 +/// Shows pending link notices; call once a frame.
 +void Poll();
 +
++/// In a room now: the game's wireless state is shared with other devices, so a save state must
++/// not replace it.
++bool Linked();
++
 +/// Re-reads the link mode; leaves the room when the frontend turned it off.
 +void OnOptionsChanged();
 +
-+/// Leaves the room and shuts the network down. Call after the system has shut down.
++/// Leaves the room and shuts the network down. Call before the system shuts down: the worker is
++/// gone before the system it reads from is.
 +void Stop();
 +
 +} // namespace LibRetro::RoomLink
@@ -2068,7 +2144,7 @@ index 003b3fd..b8b7ee4 100644
  };
  
 diff --git a/src/core/hle/service/nwm/nwm_uds.cpp b/src/core/hle/service/nwm/nwm_uds.cpp
-index e602bd3..7e9f5c5 100644
+index e602bd3..cba8e16 100644
 --- a/src/core/hle/service/nwm/nwm_uds.cpp
 +++ b/src/core/hle/service/nwm/nwm_uds.cpp
 @@ -22,6 +22,7 @@
@@ -2106,7 +2182,7 @@ index e602bd3..7e9f5c5 100644
  
      {
          std::scoped_lock lock(connection_status_mutex);
-@@ -1735,7 +1742,13 @@ NWM_UDS::NWM_UDS(Core::System& system) : ServiceFramework("nwm::UDS"), system(sy
+@@ -1735,11 +1742,20 @@ NWM_UDS::NWM_UDS(Core::System& system) : ServiceFramework("nwm::UDS"), system(sy
          wifi_packet_received = room_member->BindOnWifiPacketReceived(
              [this](const Network::WifiPacket& packet) { OnWifiPacketReceived(packet); });
      } else {
@@ -2119,6 +2195,13 @@ index e602bd3..7e9f5c5 100644
 +#endif
      }
  }
+ 
+ NWM_UDS::~NWM_UDS() {
++    // A reset drops the service without a shutdown call.
++    if (initialized && wireless_hook)
++        wireless_hook(WirelessState::Off);
+     if (auto room_member = Network::GetRoomMember().lock())
+         room_member->Unbind(wifi_packet_received);
  
 diff --git a/src/core/hle/service/nwm/uds_wireless_hook.h b/src/core/hle/service/nwm/uds_wireless_hook.h
 new file mode 100644
@@ -2163,6 +2246,19 @@ index 16c3db6..6f878d6 100644
      }
  
      std::vector<u8> state(buffer.begin() + sizeof(CSTHeader), buffer.end());
+diff --git a/src/network/room_member.cpp b/src/network/room_member.cpp
+index 4afa0ce..0cb525a 100644
+--- a/src/network/room_member.cpp
++++ b/src/network/room_member.cpp
+@@ -15,7 +15,7 @@
+ 
+ namespace Network {
+ 
+-constexpr u32 ConnectionTimeoutMs = 5000;
++constexpr u32 ConnectionTimeoutMs = 1500;
+ 
+ class RoomMember::RoomMemberImpl {
+ public:
 diff --git a/src/video_core/cursor_dot.h b/src/video_core/cursor_dot.h
 new file mode 100644
 index 0000000..bb33f02

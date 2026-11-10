@@ -7,6 +7,7 @@ import android.net.Network
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.provider.Settings
+import com.nxredux.mobile.settings.AndroidDeviceInfo
 import com.nxredux.mobile.library.NaomiSets
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.netplay.usb.NetplayLink
@@ -81,8 +82,7 @@ class AndroidNetplay(context: Context, private val sdRoot: () -> File) : Netplay
 
     override fun wifi(): WifiInfo? {
         val ip = WifiNetworks.address(connectivity)?.address?.hostAddress ?: return null
-        val name = runCatching { Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME) }.getOrNull()
-        return WifiInfo(ip, name?.takeIf { it.isNotBlank() } ?: Build.MODEL)
+        return WifiInfo(ip, AndroidDeviceInfo.deviceName(context) ?: Build.MODEL)
     }
 
     override fun openWifiSettings() {

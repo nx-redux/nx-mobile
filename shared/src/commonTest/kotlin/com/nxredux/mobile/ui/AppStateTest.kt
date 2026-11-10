@@ -10896,6 +10896,9 @@ class AppStateTest {
         assertEquals("Player name" to "Player", row().label to row().secondary)   // no saved name, no device name
         state.onButton(NxButton.A)
         assertEquals("Player", page().nameDraft)
+        state.onButton(NxButton.A)                    // OK on the name as shown: nothing is saved, it keeps following the device
+        assertEquals("", settings.playerName)
+        state.onButton(NxButton.A)
         state.playerNameDraft("Mohammad Syuhada")
         assertEquals("Mohammad S", page().nameDraft)
         state.onButton(NxButton.B)                    // Cancel keeps the old name

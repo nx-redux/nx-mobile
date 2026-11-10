@@ -57,6 +57,9 @@ import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_OPTIONS
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_SYSTEM_SETS
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.AndroidDeviceInfo
+import com.nxredux.mobile.netplay.WifiNetworks
+import android.net.ConnectivityManager
+import android.net.wifi.WifiManager
 import com.nxredux.mobile.settings.PlayerName
 import com.nxredux.mobile.settings.GameRumble
 import com.nxredux.mobile.settings.Prefs
@@ -206,6 +209,16 @@ internal interface LaunchHost : GameScreenHost {
  * entries the launch took until the screen is destroyed ([onDestroy]). The state it sets is [host]'s.
  */
 internal class LaunchPipeline(private val host: LaunchHost) {
+    /** A 3DS launch's player name (Settings → System → Player name, else the device's). */
+    private var playerName = ""
+    /** Held while a 3DS game may hold a local wireless room ([holdBroadcasts]). */
+    private var broadcasts: WifiManager.MulticastLock? = null
+
+    private fun holdBroadcasts() {
+        if (broadcasts != null) return
+        val wifi = host.activity.applicationContext.getSystemService(WifiManager::class.java)
+        broadcasts = runCatching { wifi?.createMulticastLock("nx-3ds-wireless")?.apply { setReferenceCounted(false); acquire() } }.getOrNull()
+    }
     companion object {
         /** Cores that send a video view map (melonds-ds#335, azahar#2718 in our patches). */
         private val VIDEO_VIEW_CORES = setOf("melondsds", "azahar")
@@ -448,11 +461,13 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val linkKind = np?.linkKind
             // 3DS: the player's name in Azahar's room. Outside a session the game's local wireless finds other devices
             // itself unless the console's Local Wireless option is off ([N3dsOptions.LOCAL_WIRELESS]).
-            val n3dsRoomName = if (coreId != "azahar") null else NetplayLinkOptions.n3dsRoomName(
-                PlayerName.resolve(AndroidAppSettings(activity).playerName, AndroidDeviceInfo.deviceName(activity)), kotlin.random.Random.nextInt(10000),
-            )
+            if (coreId == "azahar") playerName = PlayerName.resolve(AndroidAppSettings(activity).playerName, AndroidDeviceInfo.deviceName(activity))
+            val n3dsRoomName = if (coreId != "azahar") null else NetplayLinkOptions.n3dsRoomName(playerName, kotlin.random.Random.nextInt(10000))
             val n3dsAuto = n3dsRoomName?.takeIf { N3dsOptions.localWireless(frontendValues) }
-            val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsAuto) else when (linkKind) {
+            // A room answers other devices' searches, which arrive as broadcasts: Android drops those without this lock.
+            if (n3dsAuto != null || linkKind == NetplayLinkKind.N3DSLINK) holdBroadcasts()
+            val n3dsBroadcast = n3dsAuto?.let { WifiNetworks.broadcast(WifiNetworks.address(activity.getSystemService(ConnectivityManager::class.java)))?.hostAddress }
+            val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsAuto, n3dsBroadcast) else when (linkKind) {
                 null -> NetplayLinkOptions.forPair(np)
                 NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)
                 NetplayLinkKind.N3DSLINK -> NetplayLinkOptions.forSession(np, null, n3dsRoomName)
@@ -684,7 +699,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         // gpsp: never unload the core between games, so its recompiler cache stays mapped near it.
                         keepCoreLoaded = cfg.descriptor?.keepLoaded == true
                         // 3DS: the console's profile name is the player's (Settings → System → Player name).
-                        if (gameCoreId == "azahar") username = PlayerName.resolve(AndroidAppSettings(activity).playerName, AndroidDeviceInfo.deviceName(activity))
+                        if (gameCoreId == "azahar") username = playerName
                         shader = renderer.shaderFor(cfg.frontend)
                         saveRAMState = prepared.sram
                         rtcState = prepared.rtc   // the clock file, applied after the battery save
@@ -1009,6 +1024,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
 
     /** onDestroy: the RomCache holds this game took go, and one taken later (an unpack or copy that outlived the screen) at once. */
     fun onDestroy() {
+        broadcasts?.let { runCatching { if (it.isHeld) it.release() } }
+        broadcasts = null
         cacheHoldsDrained = true
         releaseCacheHolds()
     }

@@ -53,11 +53,11 @@ internal class Res3dController(private val host: Res3dHost, private val renderer
     }
 
     /**
-     * A new DS / 3DS 3D scale can reach the core now: not under netplay (no core option changes mid-session, so nothing is
+     * A new DS / 3DS 3D scale can reach the core now: not in a session that locks its options (no core option changes mid-session, so nothing is
      * offered and the sender keeps the value the core has; [GameActivity.becomeLocal] offers again), not while quitting,
      * not once the view is gone.
      */
-    private fun canSend(): Boolean = host.netplayNow == null && !host.quitting && host.retroView?.isAttachedToWindow == true
+    private fun canSend(): Boolean = host.netplayNow?.locksOptions != true && !host.quitting && host.retroView?.isAttachedToWindow == true
 
     /**
      * The 3D scale for the console's rows' values and the layout now, to the core if it changed: at once, or for a game area that

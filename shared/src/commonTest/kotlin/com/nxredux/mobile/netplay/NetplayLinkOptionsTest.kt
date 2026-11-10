@@ -115,6 +115,7 @@ class NetplayLinkOptionsTest {
             mapOf("nx_3ds_link" to "auto", "nx_3ds_link_name" to "KotakNova-0042", "nx_3ds_link_port" to "24872"),
             NetplayLinkOptions.forSolo("azahar", "KotakNova-0042"),
         )
+        assertEquals("192.168.1.255", NetplayLinkOptions.forSolo("azahar", "KotakNova-0042", "192.168.1.255")["nx_3ds_link_broadcast"])
         assertEquals(emptyMap(), NetplayLinkOptions.forSolo("azahar"))   // the console's Local Wireless option is off
         assertEquals(true, com.nxredux.mobile.options.N3dsOptions.localWireless(emptyMap()))
         assertEquals(false, com.nxredux.mobile.options.N3dsOptions.localWireless(mapOf("nx_3ds_local_wireless" to "off")))

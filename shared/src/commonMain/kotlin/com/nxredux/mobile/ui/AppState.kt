@@ -4408,8 +4408,14 @@ class AppState(
     private fun onSettingsButton(s: Screen, button: NxButton) {
         (s as? Screen.Settings)?.takeIf { it.nameDraft != null }?.let { page ->
             when (button) {
-                // An emptied name goes back to the device's.
-                NxButton.A -> { deps.settings.playerName = PlayerName.clean(page.nameDraft); _screen.value = page.copy(nameDraft = null); settingsUi.refreshSettings() }
+                // An emptied name goes back to the device's; the device's own name left as it was shown is not saved, so
+                // the name keeps following the device.
+                NxButton.A -> {
+                    val typed = PlayerName.clean(page.nameDraft)
+                    if (typed != PlayerName.resolve(deps.settings.playerName, deps.deviceName())) deps.settings.playerName = typed
+                    _screen.value = page.copy(nameDraft = null)
+                    settingsUi.refreshSettings()
+                }
                 NxButton.B -> _screen.value = page.copy(nameDraft = null)
                 else -> Unit
             }
