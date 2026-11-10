@@ -16,6 +16,7 @@ import com.nxredux.mobile.ui.GameInfo
 import com.nxredux.mobile.ui.Listed
 import com.nxredux.mobile.ui.RaPanel
 import com.nxredux.mobile.ui.RaPanelContent
+import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -111,5 +112,14 @@ class TopDetailsTest {
         val list = listOf(achievement(1, RaAchievementState.UNLOCKED), achievement(2, RaAchievementState.LOCKED), achievement(3, RaAchievementState.LOCKED))
         val body = assertIs<DetailsBody.Rows>(topAchievements(panel(RaPanelContent.Game("h", list, emptyMap()))))
         assertEquals(listOf(2, 3, 1), body.achievements.map { it.id })
+    }
+
+    // The header's larger text needs more height: a shorter top screen drops the synopsis first, then the file chip.
+    @Test fun a_short_top_screen_drops_the_synopsis_then_the_file_chip() {
+        assertEquals(DetailsFit(synopsis = true, fileChip = true), detailsFit(500.dp))   // the Nova's top panel, inside its padding
+        assertEquals(DetailsFit(synopsis = true, fileChip = true), detailsFit(390.dp))
+        assertEquals(DetailsFit(synopsis = false, fileChip = true), detailsFit(389.dp))
+        assertEquals(DetailsFit(synopsis = false, fileChip = true), detailsFit(290.dp))
+        assertEquals(DetailsFit(synopsis = false, fileChip = false), detailsFit(289.dp))
     }
 }

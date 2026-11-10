@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,8 +34,10 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -179,6 +182,11 @@ private const val KB = 1024L
 private const val MB = KB * 1024
 private const val GB = MB * 1024
 
+/** What a top screen [height] tall (inside its padding) keeps of the header: a short one drops the synopsis first, then the file chip. */
+internal data class DetailsFit(val synopsis: Boolean, val fileChip: Boolean)
+
+internal fun detailsFit(height: Dp): DetailsFit = DetailsFit(synopsis = height >= TD_SYNOPSIS_MIN, fileChip = height >= TD_FILE_CHIP_MIN)
+
 /** A save state's name: "Auto" for the auto slot, else "Slot N" as the in-game menu names it. */
 internal fun slotName(slot: Int): String = if (slot == NxPaths.AUTO_SLOT) "Auto" else "Slot $slot"
 
@@ -197,12 +205,11 @@ fun TopDetailsPage(details: TopDetails, prefer: BackdropArt = BackdropArt.BOX3D)
     val area = details.lowerArea()
     val none = area == LowerArea.NONE
     BoxWithConstraints(Modifier.fillMaxSize().background(colors.background).padding(TD_PAD)) {
-        val synopsis = maxHeight >= TD_SYNOPSIS_MIN
-        val fileChip = maxHeight >= TD_FILE_CHIP_MIN
+        val (synopsis, fileChip) = detailsFit(maxHeight)
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(TD_PAD)) {
             Column(
                 Modifier.fillMaxWidth(if (none) 0.36f else 0.30f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(8.dp, if (none) Alignment.CenterVertically else Alignment.Top),
+                verticalArrangement = Arrangement.spacedBy(TD_GAP, if (none) Alignment.CenterVertically else Alignment.Top),
             ) {
                 DetailsArt(details, prefer, if (none) Modifier.fillMaxWidth().aspectRatio(1f) else Modifier.fillMaxWidth().weight(1f))
                 if (!none) ResumePicture(details, now, Modifier.fillMaxWidth().weight(0.45f))
@@ -213,7 +220,7 @@ fun TopDetailsPage(details: TopDetails, prefer: BackdropArt = BackdropArt.BOX3D)
             ) {
                 DetailsHeader(details, now, synopsisLines = if (!synopsis) 0 else if (none) 7 else 3, fileChip = fileChip, large = none)
                 if (!none) {
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(TD_GAP))
                     LowerAreaContent(details, area, now, Modifier.fillMaxWidth().weight(1f))
                 }
             }
@@ -257,22 +264,22 @@ private fun DetailsHeader(details: TopDetails, now: Long, synopsisLines: Int, fi
     val font = LocalNxFont.current
     val meta = details.meta
     Text(
-        details.entry.shown, color = colors.listText, fontFamily = font, fontSize = if (large) 24.sp else 20.sp,
+        details.entry.shown, color = colors.listText, fontFamily = font, fontSize = if (large) 34.sp else 28.sp,
         fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis,
     )
     val facts = listOfNotNull(meta?.genre, meta?.year, meta?.publisher, details.entry.system.displayName).joinToString(INFO_SEPARATOR)
     Text(facts, color = colors.hint, fontFamily = font, fontSize = TD_SMALL, maxLines = 1, overflow = TextOverflow.Ellipsis)
     if (meta != null && synopsisLines > 0) {
         Text(
-            meta.synopsis, color = colors.listText, fontFamily = font, fontSize = if (large) 15.sp else TD_SMALL,
-            lineHeight = if (large) 21.sp else 18.sp, maxLines = synopsisLines, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 6.dp),
+            meta.synopsis, color = colors.listText, fontFamily = font, fontSize = if (large) 20.sp else TD_SMALL,
+            lineHeight = if (large) 28.sp else 22.sp, maxLines = synopsisLines, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 8.dp),
         )
     }
     val chips = details.chips(now, files = fileChip)
     if (chips.isNotEmpty()) {
         FlowRow(
-            Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
+            Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp),
             maxLines = if (large) 3 else 2,
         ) { chips.forEach { Chip(it) } }
     }
@@ -283,7 +290,7 @@ private fun Chip(text: String) {
     val colors = LocalNxColors.current
     Text(
         text, color = colors.listText, fontFamily = LocalNxFont.current, fontSize = TD_CHIP, maxLines = 1,
-        modifier = Modifier.border(1.dp, colors.inkDim, RoundedCornerShape(50)).padding(horizontal = 9.dp, vertical = 2.dp),
+        modifier = Modifier.border(1.dp, colors.inkDim, RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 3.dp),
     )
 }
 
@@ -305,7 +312,7 @@ private fun LowerAreaContent(details: TopDetails, area: LowerArea, now: Long, mo
 private fun SectionLabel(text: String) {
     Text(
         text.uppercase(), color = LocalNxColors.current.hint, fontFamily = LocalNxFont.current, fontSize = TD_LABEL,
-        letterSpacing = 1.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        letterSpacing = 1.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
     )
 }
 
@@ -314,10 +321,10 @@ private fun SectionLabel(text: String) {
 private fun StatesSection(shots: List<StateShot>, now: Long, columns: Int, modifier: Modifier) {
     Column(modifier) {
         SectionLabel("Save states")
-        Spacer(Modifier.height(6.dp))
-        FadingColumn(Modifier.fillMaxWidth().weight(1f), Arrangement.spacedBy(6.dp)) {
+        Spacer(Modifier.height(8.dp))
+        FadingColumn(Modifier.fillMaxWidth().weight(1f), Arrangement.spacedBy(8.dp)) {
             shots.chunked(columns).forEach { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     row.forEach { s ->
                         Shot(s.uri, slotName(s.slot) + INFO_SEPARATOR + whenText(now, s.savedAt), Modifier.weight(1f).aspectRatio(4f / 3f))
                     }
@@ -336,16 +343,20 @@ private fun AchievementsSection(rows: DetailsBody.Rows, columns: Int, modifier: 
     val unlocked = all.count { it.state != RaAchievementState.LOCKED }
     Column(modifier) {
         SectionLabel("Achievements$INFO_SEPARATOR$unlocked of ${all.size}")
-        Box(Modifier.padding(vertical = 5.dp).fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(colors.inkFaint)) {
+        Box(Modifier.padding(vertical = 7.dp).fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(colors.inkFaint)) {
             if (unlocked > 0) Box(Modifier.fillMaxWidth(unlocked.toFloat() / all.size).fillMaxHeight().background(colors.listText))
         }
         // Only the first rows can show without scrolling: never compose the rest.
         val shown = all.take(TD_MAX_ROWS * columns)
-        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             (0 until columns).forEach { c ->
                 FadingColumn(Modifier.weight(1f).fillMaxHeight(), Arrangement.Top) {
-                    shown.filterIndexed { i, _ -> i % columns == c }.forEach { a ->
-                        AchievementRow(a.title, a, raBadgeModel(rows.badges, a), selected = false, Modifier)
+                    // The in-game panel's rows, grown as a whole (badge, text, padding) to the top screen's larger text.
+                    val d = LocalDensity.current
+                    CompositionLocalProvider(LocalDensity provides Density(d.density * TD_ROW_SCALE, d.fontScale)) {
+                        shown.filterIndexed { i, _ -> i % columns == c }.forEach { a ->
+                            AchievementRow(a.title, a, raBadgeModel(rows.badges, a), selected = false, Modifier)
+                        }
                     }
                 }
             }
@@ -370,19 +381,22 @@ private fun Shot(uri: String, caption: String, modifier: Modifier) {
     Box(modifier.clip(RoundedCornerShape(4.dp)).background(colors.inkFaint)) {
         AsyncImage(model = uri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         Text(
-            caption, color = colors.listText, fontFamily = LocalNxFont.current, fontSize = TD_LABEL, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.align(Alignment.BottomStart).padding(4.dp)
-                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(3.dp))   // role: a caption's plate over a picture
-                .padding(horizontal = 4.dp),
+            caption, color = colors.listText, fontFamily = LocalNxFont.current, fontSize = TD_CAPTION, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.align(Alignment.BottomStart).padding(6.dp)
+                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))   // role: a caption's plate over a picture
+                .padding(horizontal = 6.dp, vertical = 1.dp),
         )
     }
 }
 
-private val TD_PAD = 14.dp
-private val TD_SMALL = 13.sp
-private val TD_CHIP = 11.sp
-private val TD_LABEL = 10.sp
-private val TD_FADE = 28.dp
-private val TD_SYNOPSIS_MIN: Dp = 300.dp     // shorter top screens drop the synopsis first
-private val TD_FILE_CHIP_MIN: Dp = 220.dp    // then the file chip
+private val TD_PAD = 20.dp
+private val TD_GAP = 12.dp
+private val TD_SMALL = 16.sp
+private val TD_CHIP = 13.sp
+private val TD_LABEL = 12.sp
+private val TD_CAPTION = 13.sp
+private val TD_FADE = 40.dp
+private const val TD_ROW_SCALE = 1.4f        // the achievement rows' growth over the in-game panel's
+private val TD_SYNOPSIS_MIN: Dp = 390.dp     // shorter top screens drop the synopsis first
+private val TD_FILE_CHIP_MIN: Dp = 290.dp    // then the file chip
 private const val TD_MAX_ROWS = 12           // more rows than any top screen fits
