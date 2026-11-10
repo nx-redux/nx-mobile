@@ -34,19 +34,19 @@ class AndroidTopFacts(context: Context, private val source: RomsSource) : TopFac
         val game = entry.game
         val tag = entry.system.tag
         FileFacts(
-            sizeBytes = runCatching { source.child(game.folder, game.fileName)?.sizeBytes }.getOrNull(),
-            cheats = runCatching { hasCheats(tag, game.fileName) }.getOrDefault(false),
-            hiresPack = tag.trim().uppercase() == "N64" && runCatching { hasHiresPack(entry) }.getOrDefault(false),
+            sizeBytes = tryOrNull { source.child(game.folder, game.fileName)?.sizeBytes },
+            cheats = tryOr({ false }) { hasCheats(tag, game.fileName) },
+            hiresPack = tag.trim().uppercase() == "N64" && tryOr({ false }) { hasHiresPack(entry) },
         )
     }
 
     // A console's games share their cheat folders: each is listed once, then matched by name only.
     override suspend fun cheatGames(entries: List<Listed>): Int = withContext(Dispatchers.IO) {
-        runCatching {
+        tryOr({ 0 }) {
             val root = CheatsRoot.of(app)
             val listed = HashMap<String, List<String>>()
             entries.count { e -> hasCheats(e.system.tag, e.game.fileName, root) { folder -> listed.getOrPut(folder) { cheatFiles(root, folder) } } }
-        }.getOrDefault(0)
+        }
     }
 
     private fun hasCheats(tag: String, romFileName: String, root: File = CheatsRoot.of(app), files: (String) -> List<String> = { cheatFiles(root, it) }): Boolean {
@@ -73,17 +73,17 @@ class AndroidTopFacts(context: Context, private val source: RomsSource) : TopFac
     // Only the needs that apply to every game of the console: a need tied to disc extensions depends on the game, which
     // the page's console-level question does not name. No optional-BIOS list exists in the registry, so never OPTIONAL.
     override suspend fun biosMissing(tag: String): BiosMissing? = withContext(Dispatchers.IO) {
-        runCatching {
+        tryOrNull {
             val needs = CoreRegistry.requiredBios(tag).filter { it.forExtensions.isEmpty() }
-            if (needs.isEmpty()) return@runCatching null
-            val home = homes.current() ?: return@runCatching null
-            if (FileRefs.accessOff(home, AndroidAllFilesAccess.isGranted())) return@runCatching null   // cannot tell: not "missing"
-            val bios = source.child(home, "Bios")?.takeIf { it.isDirectory } ?: return@runCatching BiosMissing.REQUIRED
+            if (needs.isEmpty()) return@tryOrNull null
+            val home = homes.current() ?: return@tryOrNull null
+            if (FileRefs.accessOff(home, AndroidAllFilesAccess.isGranted())) return@tryOrNull null   // cannot tell: not "missing"
+            val bios = source.child(home, "Bios")?.takeIf { it.isDirectory } ?: return@tryOrNull BiosMissing.REQUIRED
             val present = BiosFolders.forTag(tag).flatMap { folder ->
                 val dir = source.child(bios.ref, folder)?.takeIf { it.isDirectory } ?: return@flatMap emptyList()
                 source.listChildren(dir.ref).filter { !it.isDirectory }.map { it.name }
             }.toSet()
             if (BiosCheck.missing(needs, "", present).isNotEmpty()) BiosMissing.REQUIRED else null
-        }.getOrNull()
+        }
     }
 }

@@ -56,17 +56,6 @@ class SecondScreenPresentation(private val activity: ComponentActivity, display:
     /** Wraps the panel and the pill in the app's theme (colours, font); identity until set. */
     var theme: @Composable (@Composable () -> Unit) -> Unit = { it() }
 
-    /**
-     * Takes key focus, so a text field here can type (the main menu's prompt on this display); false (the default):
-     * [WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE], the buttons stay on the [activity]'s window.
-     */
-    var focusable = false
-        set(value) {
-            if (field == value) return
-            field = value
-            applyFocusable()
-        }
-
     private var panel by mutableStateOf<(@Composable () -> Unit)?>(null)
     private var menu by mutableStateOf<(@Composable () -> Unit)?>(null)
     private var panelPill by mutableStateOf(false)
@@ -77,8 +66,8 @@ class SecondScreenPresentation(private val activity: ComponentActivity, display:
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // No key focus unless asked ([focusable]): a tap here must not move the buttons off the game's window (nor Back close this window).
-        applyFocusable()
+        // No key focus: a tap here must not move the buttons off the game's window (nor Back close this window).
+        window?.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
         setCancelable(false)
         // Edge to edge with the bars hidden: a desktop mode's taskbar (Samsung DeX) must not cover the picture.
         window?.let { w ->
@@ -141,15 +130,8 @@ class SecondScreenPresentation(private val activity: ComponentActivity, display:
         setContentView(root)
     }
 
-    private fun applyFocusable() {
-        val w = window ?: return
-        if (focusable) w.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) else w.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
-    }
-
-    // Should a key or a stick still arrive here, it is the game's (the activity's). While [focusable] the text field here
-    // has the keys first (the keyboard's Delete and Enter); Back, and whatever it leaves, still go to the activity.
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
-        (focusable && event.keyCode != KeyEvent.KEYCODE_BACK && super.dispatchKeyEvent(event)) || activity.dispatchKeyEvent(event)
+    // Should a key or a stick still arrive here, it is the game's (the activity's).
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean = activity.dispatchKeyEvent(event)
 
     override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean = activity.dispatchGenericMotionEvent(ev)
 

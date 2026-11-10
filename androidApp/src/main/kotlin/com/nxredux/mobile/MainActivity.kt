@@ -110,7 +110,7 @@ import com.nxredux.mobile.tools.CheatDbService
 import com.nxredux.mobile.update.AppUpdates
 import com.nxredux.mobile.ui.App
 import com.nxredux.mobile.ui.MenuTopScreen
-import com.nxredux.mobile.ui.menuWindowFocus
+import com.nxredux.mobile.ui.promptOnSecondWindow
 import com.nxredux.mobile.ui.AppDeps
 import com.nxredux.mobile.ui.AppState
 import com.nxredux.mobile.ui.SkinEditRequest
@@ -556,10 +556,11 @@ class MainActivity : ComponentActivity(), FolderPicker {
      * no onboarding prompt on it ([AppState.onDualMenu]). The bottom screen (Settings → Bottom screen, else the shapes, as
      * a game's [DualScreen.pictureOn]) has the menu, the other the top screen: usually this window keeps [App] and the
      * presentation shows [MenuTopScreen]; with the menu on the second display the two swap ([menuOnSecond]). Gone while a game
-     * starts ([launching]), an app opened on the top screen runs there ([TopScreenHost.active]: the presentation would cover it) or the app stops. Dual mode follows the window: on only once it is shown (a failed
-     * show leaves the menu whole on this screen), kept through [launching] so the cross-fade stays, and through an app on
-     * top so the main menu keeps its shape; any other screen (a tool, a game list) would be on the top screen, so this
-     * one shows it whole.
+     * starts ([launching]), an app opened on the top screen runs there ([TopScreenHost.active]: the presentation would
+     * cover it) or the app stops. Dual mode follows the window: on only once it is shown (a failed show leaves the menu
+     * whole on this screen), kept through [launching] so the cross-fade stays, and through an app on top so the main menu
+     * keeps its shape; any other screen then has dual mode off, so a game list keeps its achievements panel here (the
+     * top screen's details would sit behind the app).
      * That display gone or Second screen off lets go of the app on top ([TopScreenHost.release]).
      */
     private fun syncMenuScreen() {
@@ -579,8 +580,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 if (showMenuScreen(wanted)) menuRetries = 0 else retryMenuScreen()
             }
         }
-        // Under an app on top only the main menu keeps its two-screen shape: a tool or a game list would draw on the top
-        // screen, behind the app, so they take this screen whole.
+        // Under an app on top only the main menu keeps its two-screen shape: the top screen's details are behind the app,
+        // so a game list goes dual-off and keeps its achievements panel on this screen.
         state.onDualMenu(active && (launching || (appOnTop && state.screen.value is Screen.Systems) || menuScreen != null))
         // No window on the second display: no prompt is there, so the keyboard setting rules again.
         if (menuScreen == null && promptOnSecond) { promptOnSecond = false; state.refreshKeyboard() }
@@ -593,7 +594,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         }
         // The menu has the focus on every screen, so a prompt is on the second display only when the menu is there.
         // A prompt drawn there: Android's keyboard won't open on that display, so NX's types it, from this window.
-        val promptThere = menuWindowFocus(onSecond, state.textEntryOpen)
+        val promptThere = promptOnSecondWindow(onSecond, state.textEntryOpen)
         if (promptThere != promptOnSecond) { promptOnSecond = promptThere; state.refreshKeyboard() }
     }
 

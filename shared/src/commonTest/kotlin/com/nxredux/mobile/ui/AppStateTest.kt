@@ -7228,6 +7228,18 @@ class AppStateTest {
         assertTrue(f.state.topDetails.value?.raSet == true)
     }
 
+    // A played game with no achievement set (homebrew, a hack) still gets a pointer folder: not a set.
+    @Test fun a_pointer_without_set_data_is_no_retroachievements_set() = runTest {
+        val f = raFixture()
+        f.state.settings.raUsername = "me"; f.state.settings.raToken = "t"
+        kotlinx.coroutines.runBlocking { RaGamePointers.write(f.store, "a".repeat(32), RaGamePointer("GB", "home", "Roms/Game Boy (GB)", "Tetris.gb", "Tetris")) }
+        f.state.onForeground(); advanceUntilIdle()
+        f.state.onDualMenu(true)
+        f.state.openConsole("GB"); runCurrent()
+        assertNotNull(f.state.topDetails.value)
+        assertFalse(f.state.topDetails.value?.raSet == true)
+    }
+
     @Test fun the_skins_two_screens_feed_the_details_too() = runTest {
         val f = panelFixture()
         f.state.onSkinDualMenu(true)
@@ -13547,7 +13559,7 @@ class AppStateTest {
         val gate = CompletableDeferred<Unit>()
         val data = object : UserDataStore by NoUserData {
             override suspend fun stateShots(tag: String, fileName: String): List<StateShot> {
-                if (fileName == "Alleyway.gb") gate.await()
+                if (fileName == "Alleyway.gb") withContext(NonCancellable) { gate.await() }   // ignores the move's cancel: only the sameGame guard stops it
                 return listOf(StateShot(0, "file:///$fileName.png", 1L))
             }
         }
@@ -13608,7 +13620,7 @@ class AppStateTest {
         val state = state(MemorySettings(ContentRef("Home")), src = bigSource(), topFacts = facts).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
         state.openConsolesTab(); advanceUntilIdle()
         state.selectConsole("GB"); advanceUntilIdle()
-        assertEquals(listOf("Cheats for 2 games", "BIOS missing"), state.topStats.value?.chips)
+        assertEquals(listOf("BIOS missing", "Cheats for 2 games"), state.topStats.value?.chips)
     }
 
     private fun TestScope.dualConsoleState(runner: RecordingRunner): AppState {

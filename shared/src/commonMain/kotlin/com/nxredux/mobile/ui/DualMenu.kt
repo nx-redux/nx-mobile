@@ -26,6 +26,7 @@ object DualMenu {
             is MainRow.Collection -> TopContent.CollectionStats(row.name)
             else -> TopContent.Backdrop
         }
+        // The switcher owns its highlight (the shared selection index is not its row).
         screen is Screen.Switcher -> screen.entries.getOrNull(screen.index)?.let { TopContent.GameDetails(Listed(it.system, it.game)) } ?: TopContent.Backdrop
         else -> TopContent.Backdrop
     }
@@ -35,4 +36,4 @@ object DualMenu {
  * Whether a text prompt is drawn on the second display: only when the menu ([App]) is there. Android's keyboard won't
  * open on that display, so NX's types the prompt ([AppState.nxKeyboard]).
  */
-fun menuWindowFocus(menuOnSecond: Boolean, textEntryOpen: Boolean): Boolean = menuOnSecond && textEntryOpen
+fun promptOnSecondWindow(menuOnSecond: Boolean, textEntryOpen: Boolean): Boolean = menuOnSecond && textEntryOpen

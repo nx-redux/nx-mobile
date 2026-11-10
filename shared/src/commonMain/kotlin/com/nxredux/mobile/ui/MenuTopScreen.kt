@@ -24,7 +24,6 @@ import com.nxredux.mobile.library.path
 import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.background
 import com.nxredux.mobile.shared.res.nx_logo
-import com.nxredux.mobile.ui.keyboard.NxKeyboardBar
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.nxScreenInsets
 import com.nxredux.mobile.ui.nx.LocalPortrait

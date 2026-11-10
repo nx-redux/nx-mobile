@@ -458,7 +458,7 @@ internal fun BoxScope.PageOverlays(state: AppState, chooser: ValueChooser?, erro
     chooser?.let { c -> NxSettingPicker(c.title, c.labels, c.current, c.selected, onPick = state::chooseValue, onDismiss = state::closeChooser) }
     val settingInfo by state.settingInfo.collectAsState()   // a Settings row's full description
     NxSettingInfoPopup(settingInfo?.let { p -> NxHelpText(p.title, p.text, p.scrollSeq, p.scrollDir) }, onClose = state::closeSettingInfo)
-    // About's Update to: here, so it shows on whichever screen Settings is on (the top one in dual screen).
+    // About's Update to: here, so it shows on whichever screen Settings is on.
     val updateConfirm by state.updateConfirm.collectAsState()
     updateConfirm?.let { r ->
         NxDialog("Update to ${r.version}", updateText(r), onConfirm = { state.answerUpdateConfirm(true) }, confirmLabel = "Update",

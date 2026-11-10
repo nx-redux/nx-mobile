@@ -12,6 +12,7 @@ import com.nxredux.mobile.storage.Shortcut
 import com.nxredux.mobile.storage.Shortcuts
 import com.nxredux.mobile.storage.StateShot
 import com.nxredux.mobile.storage.UserDataStore
+import com.nxredux.mobile.tryOrNull
 import com.swordfish.libretrodroid.NxLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -74,9 +75,9 @@ class AndroidUserDataStore(context: Context) : UserDataStore {
         val root = this@AndroidUserDataStore.root
         // Slot 8 has no screenshot in minarch's scheme; the auto slot does.
         (0..7).plus(NxPaths.AUTO_SLOT).mapNotNull { slot ->
-            runCatching {
+            tryOrNull {
                 File(root, paths.thumb(slot)).takeIf { it.isFile }?.let { StateShot(slot, FileRefs.versioned(it.absolutePath, it.contentStamp()), it.lastModified()) }
-            }.getOrNull()
+            }
         }.sortedByDescending { it.savedAt }
     }
 }

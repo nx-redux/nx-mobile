@@ -64,10 +64,10 @@ class DualMenuTest {
         assertEquals(TopContent.Backdrop, DualMenu.top(Screen.Switcher(emptyList(), 0), 0))
     }
 
-    @Test fun menuHostsFocusOnlyWhereTheMenuIs() {
-        assertTrue(menuWindowFocus(menuOnSecond = true, textEntryOpen = true))
-        assertFalse(menuWindowFocus(menuOnSecond = true, textEntryOpen = false))
-        assertFalse(menuWindowFocus(menuOnSecond = false, textEntryOpen = true))
-        assertFalse(menuWindowFocus(menuOnSecond = false, textEntryOpen = false))
+    @Test fun promptOnSecondWindowOnlyWhereTheMenuIs() {
+        assertTrue(promptOnSecondWindow(menuOnSecond = true, textEntryOpen = true))
+        assertFalse(promptOnSecondWindow(menuOnSecond = true, textEntryOpen = false))
+        assertFalse(promptOnSecondWindow(menuOnSecond = false, textEntryOpen = true))
+        assertFalse(promptOnSecondWindow(menuOnSecond = false, textEntryOpen = false))
     }
 }
