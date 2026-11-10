@@ -467,8 +467,10 @@ sealed interface Screen {
     data class RetroAchievements(val confirm: RaConfirm? = null) : Screen
     /** Tools -> RetroAchievements -> the game data download's progress ([RaController.download]); [confirmCancel]: "Cancel download?" is open. */
     data class RaDownload(val confirmCancel: Boolean = false) : Screen
-    /** Tools -> RetroAchievements -> Achievements: the cached games. */
-    data class RaGames(val games: List<RaGameView>) : Screen
+    /** Tools -> RetroAchievements -> Achievements: the consoles of the cached games. */
+    data class RaConsoles(val consoles: List<com.nxredux.mobile.achievements.RaConsoleView>) : Screen
+    /** A console's cached games, opened from [RaConsoles]; [console] is its name (the page's title). */
+    data class RaGames(val console: String, val games: List<RaGameView>) : Screen
     /** One game's achievements, in the chosen sort order; [lockedOnly] hides unlocked and pending ones. */
     data class RaGame(val game: RaGameView, val achievements: List<com.nxredux.mobile.achievements.RaAchievement>, val lockedOnly: Boolean = false, val badges: Map<String, String> = emptyMap()) : Screen
     data class RaAchievement(val game: RaGameView, val achievement: com.nxredux.mobile.achievements.RaAchievement, val badges: Map<String, String> = emptyMap()) : Screen
@@ -1277,6 +1279,7 @@ class AppState(
             override fun refreshResume() = this@AppState.refreshResume()
             override fun refreshGameInfo() = this@AppState.refreshGameInfo()
             override fun raSignedIn(): Boolean = this@AppState.raSignedIn()
+            override fun libraryIndex(): LibraryIndex? = this@AppState.libraryIndex.snapshot
             override fun openPicker(title: String, labels: List<String>, current: Int, apply: (Int) -> Unit) =
                 settingsUi.openPicker(title, labels, current, apply)
         },
@@ -5134,7 +5137,7 @@ class AppState(
             Screen.DeviceSync -> onDeviceSyncButton(NxButton.A)
             is Screen.RetroAchievements -> ra.onRaButton(s, NxButton.A)
             is Screen.RaDownload -> Unit   // its rows only read (A, Done, comes through onButton)
-            is Screen.RaGames, is Screen.RaGame -> ra.onRaBrowserButton(s, NxButton.A)
+            is Screen.RaConsoles, is Screen.RaGames, is Screen.RaGame -> ra.onRaBrowserButton(s, NxButton.A)
             is Screen.RaAchievement -> Unit   // a detail page: nothing to open
             Screen.KidsHome, Screen.KidsUnlock, is Screen.KidsPin -> kidsUi.kidsActivate(s)   // as A on the focused tile, key or row
             is Screen.KidsSetup -> kidsUi.kidsSetupRow(_selection.value.index)
@@ -5879,7 +5882,7 @@ class AppState(
             if (button == NxButton.X && !it.signingIn && it.confirm == null) { if (settingsUi.selectedSettingShowsInfo()) showSettingInfo(_selection.value.index); return }
             ra.onRaSettingsButton(it, button); return
         }
-        _screen.value.takeIf { it is Screen.RaGames || it is Screen.RaGame || it is Screen.RaAchievement }?.let { ra.onRaBrowserButton(it, button); return }
+        _screen.value.takeIf { it is Screen.RaConsoles || it is Screen.RaGames || it is Screen.RaGame || it is Screen.RaAchievement }?.let { ra.onRaBrowserButton(it, button); return }
         if (button.isDirection && homeTab.homeMove(button, repeat)) return   // Home first: its own two-dimensional moves
         when (button) {
             // A List: UP on the first row wraps to the last, DOWN on the last to the first, on the main menu too (an
@@ -6106,7 +6109,7 @@ class AppState(
             }
             is Screen.CheatDb -> { onCheatDbButton(s, NxButton.B); true }
             Screen.DeviceSync -> { onDeviceSyncButton(NxButton.B); true }
-            is Screen.RetroAchievements, is Screen.RaGames, is Screen.RaGame, is Screen.RaAchievement, is Screen.RaSettings -> { ra.raBack(s); true }
+            is Screen.RetroAchievements, is Screen.RaConsoles, is Screen.RaGames, is Screen.RaGame, is Screen.RaAchievement, is Screen.RaSettings -> { ra.raBack(s); true }
             is Screen.RaDownload -> { ra.onRaDownloadButton(s, NxButton.B); true }
             is Screen.EmulatorList, is Screen.EmulatorConsoles, is Screen.EmulatorOptions -> emulatorSettings.back(s)
             is Screen.GameTime -> { if (s.modal != null) gameTimeScreen?.back(s) else showTools(); true }

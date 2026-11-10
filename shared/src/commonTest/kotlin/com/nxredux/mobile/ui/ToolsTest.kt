@@ -34,14 +34,16 @@ class ToolsTest {
 
     @Test fun tool_page_titles() {
         val game = RaGameView("h", 1, "Super Mario Land", null, 3, 20, 0)
-        assertEquals("RetroAchievements | Achievements", toolPageTitle(Screen.RaGames(emptyList())))
+        assertEquals("RetroAchievements | Achievements", toolPageTitle(Screen.RaConsoles(emptyList())))
+        assertEquals("RetroAchievements | Game Boy", toolPageTitle(Screen.RaGames("Game Boy", emptyList())))   // a console's games: its name
         assertEquals("RetroAchievements | Super Mario Land (3/20)", toolPageTitle(Screen.RaGame(game, emptyList())))
         // The count is drawn apart from the title, so a cut never reaches it.
         assertEquals("RetroAchievements | Super Mario Land", toolPageTitleHead(Screen.RaGame(game, emptyList())))
         val achievement = com.nxredux.mobile.achievements.RaAchievement(1, "Midway", "", 5, "", com.nxredux.mobile.achievements.RaAchievementState.LOCKED, null, null, 0f, 0f, null)
         assertEquals("RetroAchievements | Super Mario Land (3/20)", toolPageTitle(Screen.RaAchievement(game, achievement)))
         assertEquals("(3/20)", toolPageCount(Screen.RaGame(game, emptyList())))
-        assertNull(toolPageCount(Screen.RaGames(emptyList())))
+        assertNull(toolPageCount(Screen.RaGames("Game Boy", emptyList())))
+        assertNull(toolPageCount(Screen.RaConsoles(emptyList())))
         assertEquals("RetroAchievements | Settings", toolPageTitle(Screen.RaSettings(emptyList())))
         assertEquals("Artwork | Fetch by console", toolPageTitle(Screen.ArtworkConsoles(emptyList())))
         assertEquals("Artwork | Settings", toolPageTitle(Screen.ArtworkSettings(emptyList())))
@@ -55,7 +57,8 @@ class ToolsTest {
         val game = RaGameView("h", 1, "Super Mario Land", null, 3, 20, 0)
         val achievement = com.nxredux.mobile.achievements.RaAchievement(1, "Midway", "", 5, "", com.nxredux.mobile.achievements.RaAchievementState.LOCKED, null, null, 0f, 0f, null)
         assertEquals("Settings", toolPageTitle(Screen.RaSettings(emptyList()), split = true))
-        assertEquals("Achievements", toolPageTitle(Screen.RaGames(emptyList()), split = true))
+        assertEquals("Achievements", toolPageTitle(Screen.RaConsoles(emptyList()), split = true))
+        assertEquals("Game Boy", toolPageTitle(Screen.RaGames("Game Boy", emptyList()), split = true))
         assertEquals("Super Mario Land (3/20)", toolPageTitle(Screen.RaGame(game, emptyList()), split = true))
         assertEquals("Super Mario Land", toolPageTitleHead(Screen.RaGame(game, emptyList()), split = true))   // the count stays apart
         assertEquals("Super Mario Land", toolPageTitleHead(Screen.RaAchievement(game, achievement), split = true))

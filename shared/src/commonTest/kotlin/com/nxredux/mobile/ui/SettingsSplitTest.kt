@@ -69,7 +69,7 @@ class SettingsSplitTest {
         val ra = Screen.RaSettings(emptyList())
         val game = RaGameView("h", 1, "G", null, 0, 1, 0)
         val achievement = com.nxredux.mobile.achievements.RaAchievement(1, "A", "", 5, "", com.nxredux.mobile.achievements.RaAchievementState.LOCKED, null, null, 0f, 0f, null)
-        val levels = listOf(ra, ra.copy(signingIn = true), Screen.RaGames(emptyList()), Screen.RaGame(game, emptyList()), Screen.RaAchievement(game, achievement))
+        val levels = listOf(ra, ra.copy(signingIn = true), Screen.RaConsoles(emptyList()), Screen.RaGames("GB", emptyList()), Screen.RaGame(game, emptyList()), Screen.RaAchievement(game, achievement))
         for (s in levels) {
             assertTrue(raSplitView(DpSize(933.dp, 704.dp), s))          // the unfolded Fold, landscape
             assertTrue(raSplitView(DpSize(840.dp, 360.dp), s))
@@ -82,9 +82,10 @@ class SettingsSplitTest {
         assertFalse(raSplitView(DpSize(933.dp, 704.dp), Screen.Settings(SettingsSection.SYSTEM, emptyList())))
         assertTrue(twoPaneView(DpSize(933.dp, 704.dp), Screen.Settings(SettingsSection.SYSTEM, emptyList())))
         assertFalse(twoPaneView(DpSize(933.dp, 704.dp), Screen.RetroAchievements()))
-        // The page's row the left pane highlights: Settings beside the settings, Achievements beside the games list.
+        // The page's row the left pane highlights: Settings beside the settings, Achievements beside the consoles.
         assertEquals(RaAction.SETTINGS, RaAction.entries[raPageRow(ra)!!])
-        assertEquals(RaAction.ACHIEVEMENTS, RaAction.entries[raPageRow(Screen.RaGames(emptyList()))!!])
+        assertEquals(RaAction.ACHIEVEMENTS, RaAction.entries[raPageRow(Screen.RaConsoles(emptyList()))!!])
+        assertNull(raPageRow(Screen.RaGames("GB", emptyList())))
         assertNull(raPageRow(Screen.RaGame(game, emptyList())))
     }
 

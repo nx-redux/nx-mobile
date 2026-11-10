@@ -610,7 +610,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                 else WithIndex(selection) { GameTimeSessionsScreen(s, it, state::select, onHint = state::onButton) }
             // The RetroAchievements levels: on a split window a column browser, the level it came from on the left (the
             // same rule as the two-pane Settings); else one page.
-            is Screen.RaGames, is Screen.RaGame, is Screen.RaAchievement, is Screen.RaSettings ->
+            is Screen.RaConsoles, is Screen.RaGames, is Screen.RaGame, is Screen.RaAchievement, is Screen.RaSettings ->
                 if (raSplitView(LocalWindowSize.current, s)) RaSplitScreen(state, s) { RaLevelPage(state, s, selection, split = true) }
                 else if (s is Screen.RaAchievement) RaLevelPage(state, s, selection, split = false)   // its own detail page
                 else SettingsHintBar { NarrowRaPage(state, s, selection) }
@@ -842,7 +842,7 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
         is Screen.Artwork, is Screen.ArtworkConsoles, is Screen.ArtworkProgress, is Screen.ArtworkSettings, is Screen.ArtworkReset,
         is Screen.RetroAchievements, is Screen.CheatDb, Screen.DeviceSync -> SettingsBackground()
         // RetroAchievements' levels drawn as the rows block (a narrow window; its detail page keeps its own).
-        is Screen.RaGames, is Screen.RaGame, is Screen.RaSettings ->
+        is Screen.RaConsoles, is Screen.RaGames, is Screen.RaGame, is Screen.RaSettings ->
             if (raSplitView(LocalWindowSize.current, s)) MarkBackground(s) else SettingsBackground()
         else -> if (settingsPane(s) != null) SettingsBackground() else MarkBackground(s)
     }

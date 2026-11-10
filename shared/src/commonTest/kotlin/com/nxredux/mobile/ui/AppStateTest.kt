@@ -17,6 +17,7 @@ import com.nxredux.mobile.achievements.FakeRaStore
 import com.nxredux.mobile.achievements.RaController
 import com.nxredux.mobile.achievements.RaHomeTree
 import com.nxredux.mobile.achievements.RaPaths
+import com.nxredux.mobile.achievements.RaConsoles
 import com.nxredux.mobile.achievements.RaGamePointer
 import com.nxredux.mobile.achievements.RaGamePointers
 import com.nxredux.mobile.achievements.RaProgress
@@ -6471,7 +6472,7 @@ class AppStateTest {
         val tap = { i: Int -> state.raParentTap(Screen.RetroAchievements(), i) }
         nxTap(0, selected = false, opens = true, tap, tap)               // Achievements on the dimmed left
         advanceUntilIdle()
-        assertIs<Screen.RaGames>(state.screen.value)
+        assertIs<Screen.RaConsoles>(state.screen.value)
     }
 
     private fun TestScope.splitSettings(): Pair<AppState, MemorySettings> {
@@ -7106,20 +7107,54 @@ class AppStateTest {
         assertEquals(1, state.selection.value.index)   // RetroAchievements stays highlighted
     }
 
-    /** Two cached games (Alpha, Beta), two achievements each; on the RetroAchievements page. */
-    private fun TestScope.raBrowser(): AppState {
+    /**
+     * Three cached games, two achievements each: Alpha and Beta on Game Boy Advance, Gamma on Super Nintendo ES (by their
+     * RetroAchievements consoles: no library pointer); on the RetroAchievements page.
+     */
+    private fun TestScope.raBrowser(): AppState = raBrowserWithStore().first
+    private fun TestScope.raBrowserWithStore(): Pair<AppState, FakeRaStore> {
         val (state, store) = stateWithAchievements()
-        for ((c, t) in listOf('a' to "Alpha", 'b' to "Beta")) {
-            store.put(RaPaths.sets(c.toString().repeat(32)), setsJson(c.code, title = t, achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"},{"ID":2,"Title":"Second","Points":5,"BadgeName":"2"}"""))
+        for ((c, t, console) in listOf(Triple('a', "Alpha", RaConsoles.GBA), Triple('b', "Beta", RaConsoles.GBA), Triple('c', "Gamma", RaConsoles.SNES))) {
+            store.put(RaPaths.sets(c.toString().repeat(32)), setsJson(c.code, title = t, consoleId = console, achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"},{"ID":2,"Title":"Second","Points":5,"BadgeName":"2"}"""))
         }
         openRa(state)
         assertIs<Screen.RetroAchievements>(state.screen.value)
-        return state
+        return state to store
+    }
+
+    @Test fun achievements_lists_consoles_then_a_consoles_games_then_a_games_achievements() = runTest {
+        val (state, store) = raBrowserWithStore()
+        state.openSelected()                                                              // Achievements
+        val consoles = assertIs<Screen.RaConsoles>(state.screen.value)
+        assertEquals(listOf("Game Boy Advance", "Super Nintendo ES"), consoles.consoles.map { it.name })
+        assertEquals(listOf(2, 1), consoles.consoles.map { it.games.size })
+        assertEquals(0, state.selection.value.index)
+        state.onButton(NxButton.DOWN)
+        store.reads.clear(); store.beforeList = { error("no read opening a console") }
+        state.openSelected()                                                              // Super Nintendo ES: from what was read
+        val snes = assertIs<Screen.RaGames>(state.screen.value)
+        assertEquals("Super Nintendo ES", snes.console); assertEquals(listOf("Gamma"), snes.games.map { it.title })
+        assertTrue(store.reads.isEmpty()); assertFalse(state.loading.value)
+        store.beforeList = {}
+        state.openSelected()                                                              // Gamma
+        assertEquals("Gamma", assertIs<Screen.RaGame>(state.screen.value).game.title)
+        // B steps up one level at a time, each landing on the row it left.
+        assertTrue(state.back()); assertEquals(snes, state.screen.value); assertEquals(0, state.selection.value.index)
+        assertTrue(state.back()); assertIs<Screen.RaConsoles>(state.screen.value); assertEquals(1, state.selection.value.index)
+        assertTrue(state.back()); assertIs<Screen.RetroAchievements>(state.screen.value)
+        assertEquals(RaAction.entries.indexOf(RaAction.ACHIEVEMENTS), state.selection.value.index)
+    }
+
+    @Test fun no_cached_games_lists_no_consoles() = runTest {
+        val (state, _) = stateWithAchievements()
+        openRa(state); state.openSelected()
+        assertEquals(emptyList(), assertIs<Screen.RaConsoles>(state.screen.value).consoles)
+        assertTrue(state.back()); assertIs<Screen.RetroAchievements>(state.screen.value)
     }
 
     @Test fun a_on_a_game_page_opens_the_achievement_on_every_window() = runTest {
         val state = raBrowser()
-        state.openSelected(); state.openSelected()   // Achievements → Alpha
+        state.openSelected(); state.openSelected(); state.openSelected()   // Achievements → Game Boy Advance → Alpha
         assertIs<Screen.RaGame>(state.screen.value)
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)   // A opens the detail
         assertEquals("Second", assertIs<Screen.RaAchievement>(state.screen.value).achievement.title)
@@ -7129,8 +7164,11 @@ class AppStateTest {
         val state = raBrowser()
         assertNull(state.raParent(state.screen.value))                                   // the page: whole
         state.openSelected()                                                              // Achievements
+        val consoles = assertIs<Screen.RaConsoles>(state.screen.value)
+        assertEquals(RaParent(Screen.RetroAchievements(), RaAction.entries.indexOf(RaAction.ACHIEVEMENTS)), state.raParent(consoles))
+        state.openSelected()                                                              // Game Boy Advance
         val games = assertIs<Screen.RaGames>(state.screen.value)
-        assertEquals(RaParent(Screen.RetroAchievements(), RaAction.entries.indexOf(RaAction.ACHIEVEMENTS)), state.raParent(games))
+        assertEquals(RaParent(consoles, 0), state.raParent(games))                        // the consoles, Game Boy Advance lit
         state.onButton(NxButton.DOWN); state.openSelected()                               // Beta
         val beta = assertIs<Screen.RaGame>(state.screen.value)
         assertEquals(RaParent(games, 1), state.raParent(beta))                            // the games list, Beta lit
@@ -7141,8 +7179,10 @@ class AppStateTest {
         // B steps back one level each time, the columns shifting right; the page is whole again at the end.
         assertTrue(state.back()); assertEquals(beta.copy(lockedOnly = true), state.screen.value); assertEquals(1, state.selection.value.index)
         assertTrue(state.back()); assertIs<Screen.RaGames>(state.screen.value); assertEquals(1, state.selection.value.index)
+        assertTrue(state.back()); assertIs<Screen.RaConsoles>(state.screen.value); assertEquals(0, state.selection.value.index)
         assertTrue(state.back()); assertIs<Screen.RetroAchievements>(state.screen.value); assertNull(state.raParent(state.screen.value))
         // LEFT never leaves the focused pane.
+        state.openSelected(); state.onButton(NxButton.LEFT); assertIs<Screen.RaConsoles>(state.screen.value)
         state.openSelected(); state.onButton(NxButton.LEFT); assertIs<Screen.RaGames>(state.screen.value)
         state.openSelected(); state.onButton(NxButton.LEFT); assertIs<Screen.RaGame>(state.screen.value)
         state.openSelected(); state.onButton(NxButton.LEFT); assertIs<Screen.RaAchievement>(state.screen.value)
@@ -7150,7 +7190,7 @@ class AppStateTest {
 
     @Test fun one_tap_on_the_dimmed_left_pane_opens_that_row_in_place() = runTest {
         val state = raBrowser()
-        state.openSelected(); state.openSelected()                                        // Achievements → Alpha
+        state.openSelected(); state.openSelected(); state.openSelected()                  // Achievements → Game Boy Advance → Alpha
         val games = assertNotNull(state.raParent(state.screen.value)).screen
         val onGames = { i: Int -> state.raParentTap(games, i) }
         val seen = mutableListOf<Screen>()
@@ -7174,12 +7214,18 @@ class AppStateTest {
         assertEquals(1, assertNotNull(state.raParent(state.screen.value)).row)
         onGames(0); assertIs<Screen.RaAchievement>(state.screen.value)                     // a pane no longer beside it: nothing
         state.back(); state.back()                                                        // the games list
+        val consoles = assertNotNull(state.raParent(state.screen.value)).screen
+        val onConsoles = { i: Int -> state.raParentTap(consoles, i) }
+        nxTap(1, selected = false, opens = true, onConsoles, onConsoles)                   // Super Nintendo ES on the left
+        assertEquals("Super Nintendo ES", assertIs<Screen.RaGames>(state.screen.value).console)
+        assertEquals(1, assertNotNull(state.raParent(state.screen.value)).row)
+        state.back()                                                                      // the consoles
         val page = { i: Int -> state.raParentTap(Screen.RetroAchievements(), i) }
         nxTap(raPageRow(Screen.RaSettings(emptyList()))!!, selected = false, opens = true, page, page)   // Settings on the page
         assertIs<Screen.RaSettings>(state.screen.value)                                   // RetroAchievements Settings, split
         nxTap(0, selected = false, opens = true, page, page)                               // Achievements again
         advanceUntilIdle()
-        assertIs<Screen.RaGames>(state.screen.value)
+        assertIs<Screen.RaConsoles>(state.screen.value)
     }
 
     @Test fun achievements_browser_shows_cached_games_then_their_achievements() = runTest {
@@ -7193,6 +7239,8 @@ class AppStateTest {
         store.put(RaPaths.sets(h), setsJson(42, title = "Game", achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"}"""))
         store.put(RaPaths.game(h), """{"tag":"GBA","source":"home","dir":"Roms/$gba","file":"g.gba","title":"Game"}""")
         openRa(state); state.openSelected()   // Achievements
+        assertEquals(listOf("Game Boy Advance"), assertIs<Screen.RaConsoles>(state.screen.value).consoles.map { it.name })
+        state.openSelected()
         val games = assertIs<Screen.RaGames>(state.screen.value); assertEquals("Game", games.games.single().title)
         state.openSelected()
         val game = assertIs<Screen.RaGame>(state.screen.value); assertEquals("First", game.achievements.single().title)
@@ -7203,22 +7251,35 @@ class AppStateTest {
         state.onButton(NxButton.Y); assertTrue((state.screen.value as Screen.RaGame).lockedOnly)
         state.openSelected(); assertEquals(game.badges, assertIs<Screen.RaAchievement>(state.screen.value).badges)
         assertTrue(state.back()); assertTrue(state.back()); assertIs<Screen.RaGames>(state.screen.value)
+        assertTrue(state.back()); assertIs<Screen.RaConsoles>(state.screen.value)
         assertTrue(state.back()); assertIs<Screen.RetroAchievements>(state.screen.value)
         assertEquals(0, state.selection.value.index)   // Achievements stays highlighted
     }
 
-    @Test fun the_games_list_reloads_on_return_and_keeps_its_row() = runTest {
+    // Back from a game shows the list as read, at once, the game's row counting the unlocks its page read; a game cached
+    // meanwhile shows on the next Achievements.
+    @Test fun the_games_list_returns_without_a_read_and_keeps_its_row() = runTest {
         val (state, store) = stateWithAchievements()
         for (c in listOf('a', 'b')) {
             store.put(RaPaths.sets(c.toString().repeat(32)), setsJson(c.code, title = "Game $c", achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"}"""))
         }
-        openRa(state); state.openSelected()
-        state.onButton(NxButton.DOWN); state.openSelected()
+        openRa(state); state.openSelected(); state.openSelected()
+        state.onButton(NxButton.DOWN)
+        store.put(RaPaths.session('b'.code), """{"Success":true,"Unlocks":[{"ID":1,"When":100}]}""")   // unlocked since the list was read
+        state.openSelected()
         assertEquals("Game b", assertIs<Screen.RaGame>(state.screen.value).game.title)
         store.put(RaPaths.sets("c".repeat(32)), setsJson(99, title = "Game c", achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"}"""))
+        store.beforeList = { error("no read going back") }
         assertTrue(state.back())
-        assertEquals(3, assertIs<Screen.RaGames>(state.screen.value).games.size)   // reloaded
+        val games = assertIs<Screen.RaGames>(state.screen.value)
+        assertEquals(listOf("Game a", "Game b"), games.games.map { it.title })
+        assertEquals(1, games.games[1].unlocked)                                          // as its page showed
         assertEquals(1, state.selection.value.index)
+        assertTrue(state.back())
+        assertEquals(1, assertIs<Screen.RaConsoles>(state.screen.value).consoles.single().unlocked)   // the console's sum too
+        store.beforeList = {}
+        assertTrue(state.back()); state.openSelected()                                    // Achievements again: read afresh
+        assertEquals(3, assertIs<Screen.RaConsoles>(state.screen.value).consoles.single().games.size)
     }
 
     // Game data cached by a RetroAchievements job (Download all, here a sign-out's reset) shows in the menus'
@@ -7526,7 +7587,7 @@ class AppStateTest {
     private fun FakeRaStore.putGame(c: Char) =
         put(RaPaths.sets(c.toString().repeat(32)), setsJson(c.code, title = "Game $c", achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"}"""))
 
-    @Test fun the_loading_overlay_shows_after_its_grace_period_and_clears_when_the_games_list_opens() = runTest {
+    @Test fun the_loading_overlay_shows_after_its_grace_period_and_clears_when_the_consoles_open() = runTest {
         val (state, store) = stateWithAchievements()
         store.putGame('a')
         val gate = CompletableDeferred<Unit>()
@@ -7538,7 +7599,7 @@ class AppStateTest {
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A); state.openSelected()   // ignored while loading
         assertEquals(0, state.selection.value.index)
         gate.complete(Unit); runCurrent()
-        assertIs<Screen.RaGames>(state.screen.value)
+        assertIs<Screen.RaConsoles>(state.screen.value)
         assertFalse(state.loading.value)
     }
 
@@ -7573,7 +7634,7 @@ class AppStateTest {
     @Test fun a_games_achievements_load_under_the_overlay_and_back_cancels_it() = runTest {
         val (state, store) = stateWithAchievements()
         store.putGame('a')
-        openRa(state); state.openSelected()
+        openRa(state); state.openSelected(); state.openSelected()   // Achievements → its console
         assertIs<Screen.RaGames>(state.screen.value)
         val gate = CompletableDeferred<Unit>()
         store.beforeRead = { gate.await() }

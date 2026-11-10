@@ -42,6 +42,9 @@ class RaUiTest {
     @Test fun tools_row_status_and_browser_strings() {
         assertEquals(RaSubtitle("12/40 unlocked · 2 pending sync", RaTone.PENDING), raGameSubtitle(RaGameView("h", 1, "G", null, 12, 40, 2)))
         assertEquals(RaSubtitle("0/40 unlocked", RaTone.LOCKED), raGameSubtitle(RaGameView("h", 1, "G", null, 0, 40, 0)))
+        val g = RaGameView("h", 1, "G", null, 12, 40, 0)
+        assertEquals("2 games · 24 of 80 unlocked", raConsoleSubtitle(com.nxredux.mobile.achievements.RaConsoleView("GB", "GB", listOf(g, g.copy(hash = "i")))))
+        assertEquals("1 game · 12 of 40 unlocked", raConsoleSubtitle(com.nxredux.mobile.achievements.RaConsoleView("GB", "GB", listOf(g))))
         val a = RaAchievement(1, "A", "d", 5, "b", RaAchievementState.LOCKED, null, null, 0f, 0f, null)
         // No state words: the title, the points as its pill, the description under it (none when blank or worth no points).
         assertEquals(NxRichRow("A", "d", thumbnail = null, titleBadge = "5"), raAchievementRow(a, emptyMap()))

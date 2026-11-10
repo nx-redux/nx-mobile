@@ -1,6 +1,9 @@
 package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.tryOr
+import com.nxredux.mobile.achievements.RaAchievementState
+import com.nxredux.mobile.achievements.RaConsoleGroups
+import com.nxredux.mobile.achievements.RaConsoleView
 import com.nxredux.mobile.achievements.RaController
 import com.nxredux.mobile.achievements.RaDownloadPhase
 import com.nxredux.mobile.achievements.RaGameFetch
@@ -10,6 +13,7 @@ import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.achievements.RaState
 import com.nxredux.mobile.achievements.RaStoreException
 import com.nxredux.mobile.achievements.sortedBy
+import com.nxredux.mobile.library.LibraryIndex
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.settings.AppSettings
 import com.nxredux.mobile.ui.nx.ListSelection
@@ -39,6 +43,8 @@ internal interface RaScreenHost {
     fun refreshGameInfo()
     /** Signed in to RetroAchievements: a token and a user name. */
     fun raSignedIn(): Boolean
+    /** The library index in memory; null before it has loaded. */
+    fun libraryIndex(): LibraryIndex?
     /** A value row's picker popup titled [title]: [labels], [current] under the cursor; [apply] takes the picked index. */
     fun openPicker(title: String, labels: List<String>, current: Int, apply: (Int) -> Unit)
 }
@@ -240,6 +246,8 @@ internal class RaScreenController(
     // --- RetroAchievements: main page, games browser, a game's achievements, one achievement ---
 
     private var raSelection = ListSelection(0, 0)        // the main page's row, remembered while in the browser or settings
+    private var raConsolesSelection = ListSelection(0, 0)   // the consoles list's row, remembered while in a console
+    private var raConsolesScreen: Screen.RaConsoles? = null // the consoles as read on Achievements: a console opens from them, no read
     private var raGamesSelection = ListSelection(0, 0)   // the games list's row, remembered while in a game
     private var raGamesScreen: Screen.RaGames? = null    // the games list a game was opened from (the left pane beside it)
     private var raGameScreen: Screen.RaGame? = null      // the game page (list and filter) an achievement was opened from
@@ -423,11 +431,13 @@ internal class RaScreenController(
 
     /**
      * The level the left pane shows beside [screen] in the RetroAchievements column browser ([raSplitView]): the screen it
-     * was opened from and the row that opened it. The page beside its Settings and the games list; the games list beside a
-     * game; the game's achievements (its filter kept) beside one achievement. Null for any other screen.
+     * was opened from and the row that opened it. The page beside its Settings and the consoles; the consoles beside a
+     * console's games; the games beside a game; the game's achievements (its filter kept) beside one achievement. Null
+     * for any other screen.
      */
     fun raParent(screen: Screen): RaParent? = when (screen) {
-        is Screen.RaSettings, is Screen.RaGames -> RaParent(Screen.RetroAchievements(), raPageRow(screen) ?: 0)
+        is Screen.RaSettings, is Screen.RaConsoles -> RaParent(Screen.RetroAchievements(), raPageRow(screen) ?: 0)
+        is Screen.RaGames -> raConsolesScreen?.let { RaParent(it, raConsolesSelection.index) }
         is Screen.RaGame -> raGamesScreen?.let { RaParent(it, raGamesSelection.index) }
         is Screen.RaAchievement -> RaParent(raGameScreen ?: Screen.RaGame(screen.game, listOf(screen.achievement), badges = screen.badges), raGameSelection.index)
         else -> null
@@ -453,6 +463,7 @@ internal class RaScreenController(
                 raSelection = ListSelection(index, RaAction.entries.size); showRetroAchievements()
                 if (selection.value.index == index) host.openSelected()
             }
+            is Screen.RaConsoles -> ps.consoles.getOrNull(index)?.let { openRaConsole(it, ps, ListSelection(index, ps.consoles.size)) }
             // Straight to the tapped game or achievement: the right pane changes, the list never shows on it in between.
             is Screen.RaGames -> ps.games.getOrNull(index)?.let { openRaGame(it, ps, ListSelection(index, ps.games.size)) }
             is Screen.RaGame -> openRaAchievement(ps, ListSelection(index, visibleAchievements(ps).size))
@@ -550,16 +561,54 @@ internal class RaScreenController(
         }
     }
 
-    /** Reads the cached games under the loading overlay; [keep] = land on the row last used in the list (returning from a game). */
-    private fun openRaGames(keep: Boolean) {
+    /**
+     * Reads the cached games under the loading overlay and lists their consoles, on the first row. The games are kept with
+     * them ([raConsolesScreen]), so a console's games open without another read.
+     */
+    private fun openRaConsoles() {
         val c = achievements ?: return
         val here = screen.value
         loader.start {
-            val games = try { c.games() } catch (e: RaStoreException) { error.value = RA_READ_FAILED; return@start }
+            val games = try { c.games(host.libraryIndex()) } catch (e: RaStoreException) { error.value = RA_READ_FAILED; return@start }
             if (screen.value !== here) return@start   // the user moved on meanwhile
-            screen.value = Screen.RaGames(games)
-            selection.value = (if (keep) raGamesSelection else ListSelection(0, 0)).clampedTo(games.size)
+            val consoles = Screen.RaConsoles(RaConsoleGroups.of(games))
+            raConsolesScreen = consoles; raGamesScreen = null
+            screen.value = consoles
+            selection.value = ListSelection(0, consoles.consoles.size)
         }
+    }
+
+    /** [console]'s games from [consoles] on row [row] (the consoles, or a console's games beside them), on the first row. */
+    private fun openRaConsole(console: RaConsoleView, consoles: Screen.RaConsoles, row: ListSelection) {
+        raConsolesScreen = consoles; raConsolesSelection = row
+        screen.value = Screen.RaGames(console.name, console.games)
+        selection.value = ListSelection(0, console.games.size)
+    }
+
+    /**
+     * Back from [page] to the games it was opened from, on its row, at once: the game's row and its console's sums take
+     * the unlocks its page read; anything else cached since shows on the next Achievements.
+     */
+    private fun returnToRaGames(page: Screen.RaGame) {
+        val games = raGamesScreen ?: return openRaConsoles()
+        val list = page.achievements
+        val read = page.game.copy(
+            unlocked = list.count { it.state != RaAchievementState.LOCKED }, total = list.size,
+            pending = list.count { it.state == RaAchievementState.PENDING },
+        )
+        fun List<RaGameView>.withRead() = map { if (it.hash == read.hash) read else it }
+        val updated = games.copy(games = games.games.withRead())
+        raGamesScreen = updated
+        raConsolesScreen = raConsolesScreen?.let { cs -> cs.copy(consoles = cs.consoles.map { if (it.name == games.console) it.copy(games = it.games.withRead()) else it }) }
+        screen.value = updated
+        selection.value = raGamesSelection.clampedTo(updated.games.size)
+    }
+
+    /** Back from a console's games to the consoles, on the console's row. */
+    private fun returnToRaConsoles() {
+        val consoles = raConsolesScreen ?: return openRaConsoles()
+        screen.value = consoles
+        selection.value = raConsolesSelection.clampedTo(consoles.consoles.size)
     }
 
     /**
@@ -600,7 +649,7 @@ internal class RaScreenController(
                 val action = raRows(c.state.value, c.download.value).getOrNull(selection.value.index) ?: return
                 raSelection = selection.value
                 when (action) {
-                    RaAction.ACHIEVEMENTS -> openRaGames(keep = false)
+                    RaAction.ACHIEVEMENTS -> openRaConsoles()
                     RaAction.SYNC -> c.syncNow()
                     RaAction.SETTINGS -> openRaSettings()
                     RaAction.DOWNLOAD -> openRaDownload()
@@ -630,6 +679,7 @@ internal class RaScreenController(
             NxButton.UP -> selection.value = selection.value.up()
             NxButton.DOWN -> selection.value = selection.value.down()
             NxButton.A -> when (s) {
+                is Screen.RaConsoles -> s.consoles.getOrNull(selection.value.index)?.let { openRaConsole(it, s, selection.value) }
                 is Screen.RaGames -> s.games.getOrNull(selection.value.index)?.let { openRaGame(it, s, selection.value) }
                 is Screen.RaGame -> openRaAchievement(s, selection.value)
                 else -> Unit
@@ -646,7 +696,7 @@ internal class RaScreenController(
         }
     }
 
-    /** One level up the RetroAchievements screens; the games list reloads so a sync or play since shows. */
+    /** One level up the RetroAchievements screens, each landing on the row it was left on; Achievements reads afresh. */
     fun raBack(s: Screen) {
         when (s) {
             is Screen.RaAchievement -> {
@@ -655,8 +705,9 @@ internal class RaScreenController(
                 screen.value = g
                 selection.value = raGameSelection.clampedTo(visibleAchievements(g).size)
             }
-            is Screen.RaGame -> openRaGames(keep = true)   // a B cancel stays on the game
-            is Screen.RaGames -> showRetroAchievements()
+            is Screen.RaGame -> returnToRaGames(s)
+            is Screen.RaGames -> returnToRaConsoles()
+            is Screen.RaConsoles -> showRetroAchievements()
             is Screen.RaSettings -> onRaSettingsButton(s, NxButton.B)
             is Screen.RetroAchievements -> onRaButton(s, NxButton.B)
             else -> Unit
