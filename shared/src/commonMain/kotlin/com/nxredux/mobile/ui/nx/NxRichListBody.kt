@@ -113,4 +113,4 @@ fun NxRichListBody(
 }
 
 /** The list's edge fade: a short fixed hint that more rows are there, not rows' worth (tall art rows would leave a dark band). */
-private val RICH_LIST_FADE = 6.dp
+private val RICH_LIST_FADE = 24.dp
