@@ -71,12 +71,26 @@ class SocketChannel(private val socket: Socket) : NetplayChannel {
         return n
     }
 
+    override suspend fun readBytes(into: ByteArray, offset: Int, length: Int, timeoutMs: Long) = readLock.withLock {
+        withContext(Dispatchers.IO) {
+            val deadline = System.currentTimeMillis() + timeoutMs
+            val buffered = minOf(length, end - start)
+            buf.copyInto(into, offset, start, start + buffered)
+            start += buffered
+            if (start == end) { start = 0; end = 0 }
+            var got = buffered
+            while (got < length) got += fill(into, offset + got, length - got, deadline)
+        }
+    }
+
     override suspend fun writeLine(line: String) = write("$line\n".encodeToByteArray())
 
-    private suspend fun write(bytes: ByteArray) = writeLock.withLock {
+    override suspend fun writeBytes(bytes: ByteArray, offset: Int, length: Int) = write(bytes, offset, length)
+
+    private suspend fun write(bytes: ByteArray, offset: Int = 0, length: Int = bytes.size) = writeLock.withLock {
         withContext(Dispatchers.IO) {
             try {
-                output.write(bytes)
+                output.write(bytes, offset, length)
                 output.flush()
             } catch (_: IOException) {
                 throw NetplayIoException(NetplayIoException.CLOSED)

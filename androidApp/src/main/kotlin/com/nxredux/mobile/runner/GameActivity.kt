@@ -52,7 +52,9 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.round
+import com.nxredux.mobile.ui.nx.NxDelayIndicator
 import com.nxredux.mobile.ui.nx.NxSpeedIndicator
+import com.nxredux.mobile.ui.nx.pictureIndicatorAnchor
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -81,6 +83,7 @@ import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.netplay.NetplayLinkOptions
 import com.nxredux.mobile.netplay.NetplayRole
+import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.options.AudioOptions
 import com.nxredux.mobile.options.FrameSkipOptions
@@ -210,6 +213,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_NETPLAY_MIXED = "netplay_mixed"          // Boolean: a GBA link with the other side on the other core
         const val EXTRA_NETPLAY_PEER_WL = "netplay_peer_wl"      // the other side's GBA link mode token; absent: it sent none
         const val EXTRA_NETPLAY_USB_TOKEN = "netplay_usb_token"  // Long: the menu's cable start this session runs on (UsbCables.token)
+        // Cable Link over Wi-Fi (NetplaySession.cableLink and what its handshake settled)
+        const val EXTRA_NETPLAY_CABLE_LINK = "netplay_cable_link"        // Boolean
+        const val EXTRA_NETPLAY_OTHER_ROM = "netplay_other_rom"          // the other player's ROM, a filesystem path
+        const val EXTRA_NETPLAY_OTHER_SAVE = "netplay_other_save"        // its save in a session dir; absent: none
+        const val EXTRA_NETPLAY_LOCAL_SLOT = "netplay_local_slot"        // Int: 1 = GBA 1 (host), 2 = GBA 2
+        const val EXTRA_NETPLAY_BIOS = "netplay_bios"                    // "real" | "hle"
+        const val EXTRA_NETPLAY_RTC = "netplay_rtc"                      // Long: the session clock, epoch seconds
         /** Kids Mode's "Games close in 10 minutes" toast stays this long. */
         private const val KIDS_WARNING_MS = 6000L
         /** The failure dialog's title unless a caller names another. */
@@ -456,6 +466,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val gameNetplay = GameNetplay(this)
     override val netplay: NetplaySession? get() = gameNetplay.session
     override val netplayEnded: Boolean get() = gameNetplay.ended
+    override val netplayQuitOnly: Boolean get() = gameNetplay.quitOnly
+    override fun showMenu() { if (!menuOpen) menu.toggleMenu() }
     override val netplayNow: NetplaySession? get() = gameNetplay.now
 
     // ---- RetroAchievements (see the "achievements" block) ----
@@ -695,10 +707,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         shortcuts.pushMicSource()
     }
 
-    /** Plays the core on; a failed netplay start keeps the game paused behind its dialog. */
+    /** Plays the core on; a failed netplay start keeps the game paused behind its dialog, an ended Cable Link session for good. */
     private fun releaseCore() {
         gameNetplay.run?.takeIf { it.live }?.resume()
-        if (!gameNetplay.startFailed) {
+        if (!gameNetplay.startFailed && !gameNetplay.quitOnly) {
             retroView?.frameSpeed = 1
             retroView?.audioEnabled = true
         }
@@ -907,6 +919,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         SaveSession.awaitAutoWrites()
         GameTimeService.flush()
         runCatching { NetplayEngine.executor.submit {}.get(PROCESS_END_WAIT_S, TimeUnit.SECONDS) }
+        runCatching { PairSaveFiles.writer.submit {}.get(PROCESS_END_WAIT_S, TimeUnit.SECONDS) }   // a Cable Link save's commit
         ProviderPreferences.awaitSends(TimeUnit.SECONDS.toMillis(PROCESS_END_WAIT_S))   // settings applied in the game's last moments
         NxLog.i(TAG_LOG, "the game has ended: ending its process")
         Process.killProcess(Process.myPid())
@@ -1551,20 +1564,23 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow().round() }) {
                         val maxW = nxTopCentreMaxWidth(maxWidth.value, maxHeight.value, inset).dp
                         NxNotifications(toasts, pill, safeSides = sides, placement = placement, topCentreMaxWidth = maxW, onAction = input::onNoticeAction, onDismiss = input::onNoticeDismiss)
-                        // Top-right of the picture (not the screen: the landscape pad's shoulders hold the screen's corners),
-                        // kept inside the cutout; not under the menu.
+                        // Top-right of the picture ([pictureIndicatorAnchor]); not under the menu. This view sits over
+                        // the pad skin, so a skin's shell never covers them. The speed indicator and a Cable Link
+                        // session's delay share the corner: shortcuts do nothing in a session, so never both.
                         val kind = speed.indicator.value
+                        val delay = gameNetplay.delayShown.value
                         val pic = renderer.pictureBox.value
-                        if (kind != null && pic != null && !menuOpenState.value) {
-                            val margin = with(density) { 8.dp.roundToPx() }
-                            val cutRight = cutout.getRight(density, dir)
-                            val cutTop = cutout.getTop(density)
-                            val right = minOf(pic.right - origin.x, constraints.maxWidth - cutRight) - margin
-                            val top = maxOf(pic.top - origin.y, cutTop) + margin
-                            NxSpeedIndicator(kind, Modifier.layout { m, c ->
+                        if ((kind != null || delay != null) && pic != null && !menuOpenState.value) {
+                            val (right, top) = pictureIndicatorAnchor(
+                                pic.right - origin.x, pic.top - origin.y, constraints.maxWidth,
+                                cutout.getRight(density, dir), cutout.getTop(density), with(density) { 8.dp.roundToPx() },
+                            )
+                            val atAnchor = Modifier.layout { m, c ->
                                 val p = m.measure(c)
                                 layout(0, 0) { p.place(right - p.width, top) }
-                            })
+                            }
+                            if (kind != null) NxSpeedIndicator(kind, atAnchor)
+                            else if (delay != null) NxDelayIndicator(NetplayText.inputDelay(delay), atAnchor)
                         }
                     }
                 }

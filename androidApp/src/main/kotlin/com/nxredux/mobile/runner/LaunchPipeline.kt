@@ -27,6 +27,7 @@ import com.nxredux.mobile.netplay.NetplayPads
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.NetplayText
+import com.nxredux.mobile.netplay.cablelink.PairSaveCheckpoint
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.CoreConfig
 import com.nxredux.mobile.options.FrontendOptions
@@ -439,10 +440,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             // netplay link: gambatte gets its link options; a GBA link engine starts now, before the core loads, so
             // a joiner learns the host's gpsp_serial or mgba_link_mode from its READY and runs with it (the handheld reloads instead).
-            // Outside a session mGBA gets the real cable (NetplayLinkOptions.forSolo).
-            val linkKind = np?.let { NetplayCores.link(it.coreId) }
+            // Outside a session mGBA gets the real cable (NetplayLinkOptions.forSolo). Cable Link: the pair core's variables
+            // (both GBAs on this phone, NetplayLinkOptions.forPair), session-only like the others.
+            val linkKind = np?.linkKind
             val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId) else when (linkKind) {
-                null -> emptyMap()
+                null -> NetplayLinkOptions.forPair(np)
                 NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)
                 NetplayLinkKind.NETPACKET -> {
                     val own = NetplayLinkOptions.modeKey(np.coreId)?.let { key -> options.firstOrNull { it.key == key }?.value }
@@ -528,7 +530,22 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val battery = BatterySaves(cfg.sessionDir ?: File(dataRoot, paths.savesDir), sessionPaths ?: paths, dsvStem)
             val clock = if (cfg.sessionDir != null) null else ClockSave(File(dataRoot, paths.clock))
             saves.attachBattery(battery, clock)
+            val pairFiles = if (cfg.sessionDir != null) null else AndroidCheckpointFiles(PairSaveFiles.sessionFile(activity.filesDir, paths), battery)
+            if (cfg.np?.savesAtCheckpoints == true && pairFiles != null) gameNetplay.attachCheckpoint(pairFiles)
             val (sram, rtc) = withContext(Dispatchers.IO) {
+                // Cable Link: a game process that died mid-session left the last save both phones agreed on; it is the real
+                // save from now on, whatever this launch is.
+                pairFiles?.let { f ->
+                    runCatching { f.promotePending(File(dataRoot, paths.saveRam)) }
+                        .onSuccess {
+                            when (it) {
+                                PairSaveCheckpoint.Commit.Written -> NxLog.i(TAG_LOG, "promoted a Cable Link session's verified save")
+                                PairSaveCheckpoint.Commit.NothingVerified -> Unit
+                                is PairSaveCheckpoint.Commit.NotWritten -> NxLog.e(TAG_LOG, "could not promote a Cable Link session's save", it.error)
+                            }
+                        }
+                        .onFailure { NxLog.e(TAG_LOG, "could not promote a Cable Link session's save", it) }
+                }
                 battery.load() to clock?.load()
             }
             NxLog.i(TAG_LOG, "battery save: ${battery.loadedFrom ?: "none"}")

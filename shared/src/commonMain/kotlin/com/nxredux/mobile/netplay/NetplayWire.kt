@@ -87,5 +87,10 @@ object NetplayWire {
 
 data class Discovery(val version: Int, val port: Int, val game: String, val linkMode: String)
 
-/** [LINK] is only ever sent as `link-<core>.<wl>.<wl>` ([com.nxredux.mobile.netplay.wizard.Reject]), never bare. */
-enum class RejectReason(val wire: String) { VERSION("version"), GAME("game"), ROLE("role"), CORE("core"), SYNC("sync"), LINK("link"), OTHER("") }
+/**
+ * [LINK] is only ever sent as `link-<core>.<wl>.<wl>` ([com.nxredux.mobile.netplay.wizard.Reject]), never bare.
+ * [CABLE_LINK]: one side offered Cable Link over Wi-Fi (`cl=1`) and the other did not.
+ */
+enum class RejectReason(val wire: String) {
+    VERSION("version"), GAME("game"), ROLE("role"), CORE("core"), SYNC("sync"), LINK("link"), CABLE_LINK("cablelink"), OTHER(""),
+}

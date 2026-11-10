@@ -36,6 +36,7 @@ import com.nxredux.mobile.runner.LaunchRecords
 import com.nxredux.mobile.runner.LiveGameStore
 import com.nxredux.mobile.runner.Posture
 import com.nxredux.mobile.storage.LibchdrSectors
+import com.nxredux.mobile.storage.LinkRomCaches
 import com.nxredux.mobile.storage.NotificationAccess
 import com.nxredux.mobile.storage.AndroidLocalFiles
 import com.nxredux.mobile.storage.AndroidHomeLocator
@@ -454,6 +455,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 allFilesAccess = allFiles,
                 notificationAccess = notificationAccess,
                 micAccess = micAccess,
+                linkRomCache = LinkRomCaches.get(this),
                 localFiles = AndroidLocalFiles(AndroidLocalFiles.deviceVolumes(applicationContext)),
                 archiveHead = { ref, name, exts, max -> withContext(Dispatchers.IO) { Archives.head(applicationContext, ref, name, exts, max) } },
                 builtInSecondScreen = { secondScreens.builtInNow() != null },

@@ -2,6 +2,8 @@ package com.nxredux.mobile.netplay
 
 import com.nxredux.mobile.netplay.usb.NetplayLink
 import com.nxredux.mobile.netplay.usb.UsbCable
+import com.nxredux.mobile.netplay.wizard.CableLinkOffer
+import com.nxredux.mobile.netplay.wizard.CableLinkSetup
 import com.nxredux.mobile.netplay.wizard.HostSaves
 import com.nxredux.mobile.netplay.wizard.SaveSink
 import com.nxredux.mobile.runner.ContentRef
@@ -50,7 +52,22 @@ interface NetplayPlatform {
     /** Where a joiner's pulls land (a fresh session copy per join). */
     fun clientSink(romFileName: String): SaveSink
     fun keepScreenOn(on: Boolean)
+
+    /** Cable Link over Wi-Fi can run on this platform (the pair core and its files). */
+    val cableLinkAvailable: Boolean get() = false
+
+    /**
+     * This side's Cable Link offer for the GBA game [romFileName] ([content]): its ROM's hash and size, its BIOS hash and
+     * the files the exchange reads and writes. [findLibraryRom] answers a library ROM's ref value for a hash and size.
+     * Throws [CableLinkRefused] with the player's text when the game can't be offered; anything else when it can't be read.
+     */
+    suspend fun cableLinkOffer(
+        tag: String, romFileName: String, content: ContentRef, findLibraryRom: suspend (hash: String, sizeBytes: Long) -> String?,
+    ): CableLinkOffer = throw CableLinkRefused(NetplayText.CABLE_LINK_READ_FAILED)
 }
+
+/** A game that can't be offered for Cable Link over Wi-Fi; [text] is what the sheet says. */
+class CableLinkRefused(val text: String) : Exception(text)
 
 /**
  * Handed to the runner with the launch (GameSession.netplay). [emptySaves]: a save copy was due but did not happen (this
@@ -58,6 +75,10 @@ interface NetplayPlatform {
  * [overUsb]: the session runs over the USB cable; the game screen stops the cable when it releases the session.
  * [mixed]: a GBA link whose caps named gpSP on one side and mGBA on the other (the wizard outcome's `mixed`); [peerWl]:
  * the other side's game link mode from its caps (null: it sent none, a build without the Wi-Fi modes).
+ * [cableLink]: a Cable Link over Wi-Fi session (each phone runs both GBAs); the rest is what its handshake settled
+ * ([com.nxredux.mobile.netplay.wizard.CableLinkSetup]): [otherRomPath] the other player's ROM as a filesystem path,
+ * [otherSavePath] its save in a session dir (null: none), [localSlot] 1 on the host and 2 on the guest, [biosMode]
+ * `real` or `hle`, [rtcEpoch] the host's clock in epoch seconds. Unused outside Cable Link.
  */
 data class NetplaySession(
     val role: NetplayRole,
@@ -68,22 +89,55 @@ data class NetplaySession(
     val overUsb: Boolean = false,
     val mixed: Boolean = false,
     val peerWl: String? = null,
+    val cableLink: Boolean = false,
+    val otherRomPath: String = "",
+    val otherSavePath: String? = null,
+    val localSlot: Int = if (role == NetplayRole.HOST) 1 else 2,
+    val biosMode: String = CableLinkSetup.BIOS_HLE,
+    val rtcEpoch: Long = 0L,
 ) {
-    /** A link session (GB/GBC/GBA) never plays on a copy: each player keeps their own save, which a trade needs. */
-    val onCopy: Boolean get() = !NetplayCores.isLink(coreId) && (emptySaves || NetplaySaves.playsOnCopy(role, coreId, folderCoreId))
+    /** This session with what a Cable Link handshake settled. */
+    fun withCableLink(setup: CableLinkSetup): NetplaySession = copy(
+        cableLink = true,
+        otherRomPath = setup.otherRomPath,
+        otherSavePath = setup.otherSavePath,
+        localSlot = setup.localSlot,
+        biosMode = setup.biosMode,
+        rtcEpoch = setup.rtcEpoch,
+    )
+
+    /**
+     * How this session's link talks; null for a lockstep session. Cable Link runs on the lockstep engine (both GBAs on each
+     * phone, only inputs on the wire), although its core is mGBA.
+     */
+    val linkKind: NetplayLinkKind? get() = if (cableLink) null else NetplayCores.link(coreId)
+
+    /**
+     * A link session (GB/GBC/GBA) never plays on a copy: each player keeps their own save, which a trade needs. Nor does
+     * Cable Link: the player's own GBA boots from their real save, which only verified checkpoints write
+     * ([savesAtCheckpoints]).
+     */
+    val onCopy: Boolean get() = !cableLink && !NetplayCores.isLink(coreId) && (emptySaves || NetplaySaves.playsOnCopy(role, coreId, folderCoreId))
+
+    /**
+     * Cable Link: the real save is written only from the last checkpoint both phones agreed on, at the session's end; the
+     * game's own battery-save writes are off for the whole launch.
+     */
+    val savesAtCheckpoints: Boolean get() = cableLink
 
     /**
      * Once the session ends, the game is a normal local one: a link session's (each player runs their own game on their
-     * own save, nothing is synced from the host). A lockstep session's game is the host's synced state: it stays a
-     * netplay game (Continue / Quit, no states, options or cheats).
+     * own save, nothing is synced from the host). A lockstep session's game is the host's synced state, and a Cable Link
+     * session's holds the other player's GBA: it stays a netplay game (Continue / Quit, no states, options or cheats).
      */
-    val endsAsLocalGame: Boolean get() = NetplayCores.isLink(coreId)
+    val endsAsLocalGame: Boolean get() = linkKind != null
 
     /**
      * RetroAchievements run as in a normal launch: a link session's (each player's game is their own, on their own save,
-     * so an unlock is theirs). A lockstep session has none: the client plays the host's synced state.
+     * so an unlock is theirs), and Cable Link's (the core shows and maps only this player's GBA). A lockstep session has
+     * none: the client plays the host's synced state.
      */
-    val allowsAchievements: Boolean get() = endsAsLocalGame
+    val allowsAchievements: Boolean get() = endsAsLocalGame || cableLink
 }
 
 /** The browse filter: which discovery packets become a [FoundHost]. Pure, so every platform filters alike. */

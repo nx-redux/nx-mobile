@@ -82,4 +82,10 @@ int16_t inputState(unsigned port, unsigned device, unsigned index, unsigned id) 
 
 void shutdown() { np_shutdown(); }
 
+bool setPairMode(Core* core, bool on) {
+    np_hash_fn hash = (on && core != nullptr) ? reinterpret_cast<np_hash_fn>(core->symbol("nx_pair_hash")) : nullptr;
+    np_set_pair_mode(hash != nullptr, hash);
+    return !on || hash != nullptr;
+}
+
 }

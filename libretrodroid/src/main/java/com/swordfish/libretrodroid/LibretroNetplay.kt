@@ -17,6 +17,8 @@ object LibretroNetplay {
     const val STATE_PEER_PAUSED = 5
     const val STATE_ENDED = 6
     const val STATE_FAILED = 7
+    /** Pair mode: the drift check failed and the host's state is replacing the client's ("Syncing…"). */
+    const val STATE_RESYNCING = 8
 
     const val REASON_NONE = 0
     const val REASON_PEER_LEFT = 1
@@ -24,6 +26,12 @@ object LibretroNetplay {
     const val REASON_STATE_MISMATCH = 3
     const val REASON_CONNECT = 4
     const val REASON_IO = 5
+    /** Pair mode: the third drift-check mismatch within 60 s. */
+    const val REASON_DRIFT = 6
+    /** Pair mode: this phone missed the frame budget for more than 10 s while its peer waited. */
+    const val REASON_TOO_SLOW = 7
+    /** Pair mode: the other phone did (it said so before it left). */
+    const val REASON_PEER_TOO_SLOW = 8
 
     /** The GBA link (`cpp/netplay/np_link.h`): gpSP and mGBA packets over TCP 55437; no input or state exchange. */
     const val LINK_IDLE = 0
@@ -40,6 +48,31 @@ object LibretroNetplay {
     @JvmStatic external fun start(role: Int, peerIp: String, port: Int): Boolean
     /** Frames each side runs on its own before the state sync (a core that takes no state until it ran); call before [start]. */
     @JvmStatic external fun setPresyncFrames(frames: Int)
+    /**
+     * Pair mode (Cable Link over Wi-Fi: both sides must set it) for the next [start], which consumes it: drift checks
+     * with resync, adaptive input delay and the too-slow end. Call after the core has loaded, before [start] ([shutdown]
+     * in between keeps it). False when [on] and the loaded core does not export `nx_pair_hash` (pair mode stays off).
+     */
+    @JvmStatic external fun setPairMode(on: Boolean): Boolean
+    /** 0 = adaptive; 1..8 = pinned input delay in frames (Developer setting). Any time; kept across sessions. */
+    @JvmStatic external fun setDelayPin(frames: Int)
+    /** This device's input delay in frames (2 outside pair mode). */
+    @JvmStatic external fun currentDelay(): Int
+    /** Frames between pair-mode drift checks. */
+    const val PAIR_CHECK_INTERVAL = 120
+    /**
+     * Frames the session has run (-1 when not started). Read on the GL thread right after a lockstep frame: a non-zero
+     * multiple of [PAIR_CHECK_INTERVAL] is a drift-check frame, so snapshot the local save there keyed by it; once
+     * [lastVerifiedFrame] equals that frame the snapshot is verified. A snapshot it passes over is never verified.
+     */
+    @JvmStatic external fun runFrame(): Long
+    /**
+     * The last frame both phones' drift hashes matched (-1 none): the save checkpoint. Poll it; it stays readable after
+     * the session ended until [shutdown].
+     */
+    @JvmStatic external fun lastVerifiedFrame(): Long
+    /** A session is started and not yet ended or failed; cheap, any thread (the GL thread polls it after each step). */
+    @JvmStatic external fun active(): Boolean
     @JvmStatic external fun pause()
     @JvmStatic external fun resume()
     @JvmStatic external fun leave()

@@ -240,7 +240,15 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     // System's About group: what each read-only value is, and the two actions.
     SettingsKind.INFO -> SettingText("")   // System's About values read alone, compact (no description)
     SettingsKind.COPY_INFO -> quiet("Put the version, build and device on the clipboard, for a bug report")
+    SettingsKind.CLEAR_LINK_ROMS -> quiet("Delete the game files kept from Cable Link over Wi-Fi sessions; they are sent again next time")
     SettingsKind.APP_UPDATE -> quiet("Check for a new version and install it")
+    SettingsKind.CABLE_LINK_DELAY -> quiet(
+        "Frames between a press and the game in Cable Link over Wi-Fi",
+        "How many frames a button press waits in a Cable Link over Wi-Fi session, the same on both phones. Auto starts " +
+            "at 2 and rises when the network stalls; a number holds it there, for trying a game at a fixed delay. It " +
+            "applies from the next session.",
+    )
+    SettingsKind.CABLE_LINK_DELAY_OVERLAY -> quiet("Show the current input delay in a Cable Link over Wi-Fi session")
     SettingsKind.DEBUG_LOG -> quiet(
         "Saves detailed logs to Logs in your home folder, for a bug report",
         "Saves the app's and the emulators' detailed logs to the Logs folder in your home folder, one file each time " +

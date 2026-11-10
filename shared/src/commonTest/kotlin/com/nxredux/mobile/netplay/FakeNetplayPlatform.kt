@@ -3,6 +3,7 @@ package com.nxredux.mobile.netplay
 import com.nxredux.mobile.netplay.usb.FakeUsbCable
 import com.nxredux.mobile.netplay.usb.NetplayLink
 import com.nxredux.mobile.netplay.usb.UsbCable
+import com.nxredux.mobile.netplay.wizard.CableLinkOffer
 import com.nxredux.mobile.netplay.wizard.FakeHostSaves
 import com.nxredux.mobile.netplay.wizard.FakeSaveSink
 import com.nxredux.mobile.netplay.wizard.HostSaves
@@ -92,4 +93,13 @@ class FakeNetplayPlatform(
     }
     override fun clientSink(romFileName: String): SaveSink = sink
     override fun keepScreenOn(on: Boolean) { screenOn += on }
+
+    /** Cable Link's offer for a game file name; null: this platform has no Cable Link. */
+    var cableLinkFor: ((String) -> CableLinkOffer)? = null
+    override val cableLinkAvailable: Boolean get() = cableLinkFor != null
+    override suspend fun cableLinkOffer(
+        tag: String, romFileName: String, content: ContentRef, findLibraryRom: suspend (hash: String, sizeBytes: Long) -> String?,
+    ): CableLinkOffer {
+        return cableLinkFor?.invoke(romFileName) ?: throw CableLinkRefused(NetplayText.CABLE_LINK_READ_FAILED)
+    }
 }

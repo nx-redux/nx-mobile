@@ -3,10 +3,10 @@ package com.nxredux.mobile.runner
 import android.content.Intent
 import android.os.Bundle
 import android.os.SystemClock
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.lowLatencyWifiLock
-import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.netplay.NetplayLinkKind
 import com.nxredux.mobile.netplay.NetplayLinkOptions
 import com.nxredux.mobile.netplay.NetplayRole
@@ -14,10 +14,16 @@ import com.nxredux.mobile.netplay.NetplaySaves
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.NetplayText
+import com.nxredux.mobile.netplay.cablelink.CheckpointFiles
+import com.nxredux.mobile.netplay.cablelink.PairSaveCheckpoint
+import com.nxredux.mobile.netplay.wizard.CableLinkSetup
+import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.PrefsProvider
 import com.nxredux.mobile.storage.NxPaths
 import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.nxredux.mobile.ui.nx.NotificationQueue
+import com.swordfish.libretrodroid.GLRetroView
+import com.swordfish.libretrodroid.LibretroNetplay
 import com.swordfish.libretrodroid.NxLog
 import com.swordfish.libretrodroid.Variable
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +47,8 @@ internal interface GameNetplayHost : GameScreenHost {
     fun fail(message: String, title: String = GameActivity.START_FAILED)
     fun quitGame(chosen: Boolean, autoState: Boolean)
     fun becomeLocal(localCheats: (() -> Job)?)
+    /** Opens the in-game menu (nothing when it is open). */
+    fun showMenu()
 }
 
 /**
@@ -49,10 +57,24 @@ internal interface GameNetplayHost : GameScreenHost {
  * after which the game is a local one ([local]). Not the menu's netplay sheet. Main thread, but for [prepareSaves]' IO.
  */
 internal class GameNetplay(private val host: GameNetplayHost) {
+    /** The intent's Cable Link fields, or null for any other launch. */
+    private fun cableLinkFrom(intent: Intent): CableLinkSetup? {
+        if (!intent.getBooleanExtra(GameActivity.EXTRA_NETPLAY_CABLE_LINK, false)) return null
+        return CableLinkSetup(
+            otherRomPath = intent.getStringExtra(GameActivity.EXTRA_NETPLAY_OTHER_ROM).orEmpty(),
+            otherSavePath = intent.getStringExtra(GameActivity.EXTRA_NETPLAY_OTHER_SAVE),
+            localSlot = intent.getIntExtra(GameActivity.EXTRA_NETPLAY_LOCAL_SLOT, 0),
+            biosMode = intent.getStringExtra(GameActivity.EXTRA_NETPLAY_BIOS).orEmpty(),
+            rtcEpoch = intent.getLongExtra(GameActivity.EXTRA_NETPLAY_RTC, 0L),
+        )
+    }
+
     /**
      * netplay: this launch's session (read in onCreate from the EXTRA_NETPLAY_* extras); null for every other launch. In a
-     * session there are no save states or auto-resume, no cheats, Core Options or local multiplayer slots, no achievements
-     * outside a link session ([NetplaySession.allowsAchievements]), and the menu is only "Leave netplay?".
+     * session there are no save states or auto-resume, no cheats, Core Options or local multiplayer slots, and the menu is
+     * only "Leave netplay?". Achievements stay on where each player's unlocks are their own
+     * ([NetplaySession.allowsAchievements]): a link session, and Cable Link, whose core shows and maps only this player's
+     * GBA; a lockstep client plays the host's state, so lockstep has none.
      */
     var session: NetplaySession? = null
         private set
@@ -90,6 +112,10 @@ internal class GameNetplay(private val host: GameNetplayHost) {
     var startFailed = false
         private set
     @Volatile private var ownCopyFailed = false   // a host's copy of its own saves failed: it starts without them
+    /** Cable Link: the real save's checkpoints ([attachCheckpoint]); null for every other launch. */
+    private var pairSaves: PairSaveSession? = null
+    /** Cable Link, GL thread: sees the engine's end at the first step after it. */
+    private val pairEnd = EngineEndWatch()
 
     /** onCreate: the session this launch plays (a session launches cold: no saved or requested resume slot). */
     fun onCreate(intent: Intent, savedInstanceState: Bundle?) {
@@ -100,6 +126,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
             intent.getBooleanExtra(GameActivity.EXTRA_NETPLAY_USB, false),
             intent.getBooleanExtra(GameActivity.EXTRA_NETPLAY_MIXED, false),
             intent.getStringExtra(GameActivity.EXTRA_NETPLAY_PEER_WL),
+            cableLinkFrom(intent),
         )
         // netplay link: recreated after a process kill once its session had ended: the local game it had become, as a
         // normal launch (its resume slot below), not a session.
@@ -120,6 +147,9 @@ internal class GameNetplay(private val host: GameNetplayHost) {
      */
     fun onDestroyed() {
         releaseWifi()
+        // Cable Link ended by the screen going (a quit, the system): the last verified checkpoint becomes the real save. A
+        // verdict still in flight is lost with the engine, which the native destroy already shut down.
+        pairSaves?.end(null)
         session?.let { np ->
             val owner = owner
             val filesDir = host.activity.filesDir
@@ -181,6 +211,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
      * is up.
      */
     suspend fun onFirstFrame(np: NetplaySession, coreName: String): Boolean {
+        if (np.savesAtCheckpoints) host.retroView?.let { view -> view.afterStep = { afterPairFrame(view) } }
         if (!start(np)) {
             // The game must not play on (or be heard) behind the dialog, a menu closed meanwhile included.
             startFailed = true
@@ -205,8 +236,17 @@ internal class GameNetplay(private val host: GameNetplayHost) {
      */
     private suspend fun start(np: NetplaySession): Boolean {
         holdWifi(np)
-        return when (NetplayCores.link(np.coreId)) {
-            null -> NetplayGame(np, host.lifecycleScope, SystemClock::elapsedRealtime, ::onNotice).also { run = it }.start()
+        return when (np.linkKind) {
+            null -> {
+                val settings = AndroidAppSettings(host.activity)
+                val overlay = np.cableLink && settings.cableLinkDelayOverlay
+                NetplayGame(
+                    np, host.lifecycleScope, SystemClock::elapsedRealtime, ::onNotice,
+                    delayPin = if (np.cableLink) settings.cableLinkDelayPin else 0,
+                    onDelay = if (overlay) ::showDelay else null,
+                    onEnding = { verified -> pairSaves?.end(verified) },
+                ).also { run = it }.start()
+            }
             NetplayLinkKind.NETPACKET -> (run as? NetplayLinkGame)?.let { it.begin(); it.live } ?: false
             NetplayLinkKind.GBLINK -> true
         }
@@ -245,11 +285,14 @@ internal class GameNetplay(private val host: GameNetplayHost) {
                 pillShown = true
             }
             is NetplayNotice.Ended -> {
+                showDelay(null)
                 releaseWifi()
                 if (pillShown) notifications.hideProgress()
                 pillShown = false
                 notifications.push(notice.text, null, NETPLAY_NOTICE_MS, now)
-                if (session?.endsAsLocalGame == true) linkEnded() else {
+                if (session?.endsAsLocalGame == true) linkEnded()
+                else if (session?.cableLink == true) cableLinkEnded()
+                else {
                     // The ended session holds no frames: an open menu pauses the game as for any other launch.
                     if (host.menuOpen || host.focusPaused) host.retroView?.frameSpeed = 0
                     ended = true
@@ -257,6 +300,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
                 }
             }
             is NetplayNotice.Failed -> {
+                showDelay(null)
                 if (pillShown) notifications.hideProgress()
                 pillShown = false
                 host.fail(notice.text, NetplayText.FAILED)
@@ -283,7 +327,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
     private fun leaveLink() {
         run?.leave()
         if (pillShown) { host.notifications.hideProgress(); pillShown = false; host.publishNotifications() }   // the ticker is gone
-        if (session?.let { NetplayCores.link(it.coreId) } == NetplayLinkKind.GBLINK) host.retroView?.let { view ->
+        if (session?.linkKind == NetplayLinkKind.GBLINK) host.retroView?.let { view ->
             val off = Variable(NetplayLinkOptions.GB_MODE, NetplayLinkOptions.GB_OFF)
             view.queueEvent { runCatching { view.updateVariables(off) }.onFailure { NxLog.w("GameActivity", "ending the GB link failed", it) } }
         }
@@ -307,6 +351,21 @@ internal class GameNetplay(private val host: GameNetplayHost) {
         }
     }
 
+    /**
+     * Cable Link: the session is over and its save is committed from the last verified checkpoint, so the game stops (it
+     * holds the other player's GBA, and nothing more would be saved) and the menu offers only Quit ([quitOnly]).
+     */
+    private fun cableLinkEnded() {
+        ended = true
+        host.retroView?.frameSpeed = 0
+        host.retroView?.audioEnabled = false
+        host.showMenu()
+        host.withMenu { it.endNetplay(local = false, quitOnly = true) }
+    }
+
+    /** Cable Link's session ended: the game stays stopped and the menu stays open on Quit alone. */
+    val quitOnly: Boolean get() = ended && session?.cableLink == true
+
     /** netplay link: the session ended; from here [now] is null and the game is the normal launch ([GameActivity.becomeLocal]). */
     private fun playLocally() {
         if (local) return
@@ -314,9 +373,49 @@ internal class GameNetplay(private val host: GameNetplayHost) {
         host.becomeLocal(localCheats.also { localCheats = null })
     }
 
+    /** Cable Link: the launch's checkpoint files (the real save, through the battery save's naming and encoding). */
+    fun attachCheckpoint(files: CheckpointFiles) {
+        pairSaves = PairSaveSession(PairSaveCheckpoint(files), PairSaveFiles.writer::execute)
+    }
+
+    /**
+     * Cable Link, on the GL thread after each step: the local save is snapshot at each drift-check frame, and the one the
+     * engine's last verified frame names becomes the checkpoint (written off this thread).
+     */
+    private fun afterPairFrame(view: GLRetroView) {
+        // Once the engine is over the core would run free (its frames no longer wait for inputs) until the main thread's
+        // ending notice stops it a status tick later: stopped here, at the step the session ended.
+        if (pairEnd.endedNow(LibretroNetplay.active())) view.frameSpeed = 0
+        val saves = pairSaves ?: return
+        runCatching {
+            saves.afterFrame(LibretroNetplay.runFrame(), LibretroNetplay.lastVerifiedFrame()) { view.serializeSRAM(useEmulationThread = false) }
+        }.onFailure { NxLog.w(TAG_LOG, "pair save snapshot failed", it) }
+    }
+
+    /** The delay overlay's input delay, frames; null hides it. Drawn with the notifications, over the pad skin. */
+    val delayShown = mutableStateOf<Int?>(null)
+
+    private fun showDelay(frames: Int?) { delayShown.value = frames }
+
     private companion object {
         const val KEY_NETPLAY_LOCAL = "nx_netplay_local"   // netplay link: the session had ended ([local])
         const val NETPLAY_NOTICE_MS = 5000L   // netplay: "Netplay ended ...", "Using <core> for this match ..."
         const val NETPLAY_PILL_MS = 1000L     // netplay: a countdown pill outlives one 250 ms status tick
+    }
+}
+
+/**
+ * A session engine's end, seen by polling whether it is active: true once, at the first inactive poll after an active
+ * one (before the engine starts it is inactive too, which is not an end). One thread.
+ */
+internal class EngineEndWatch {
+    private var seenActive = false
+    private var ended = false
+
+    fun endedNow(active: Boolean): Boolean {
+        if (active) { seenActive = true; return false }
+        if (!seenActive || ended) return false
+        ended = true
+        return true
     }
 }

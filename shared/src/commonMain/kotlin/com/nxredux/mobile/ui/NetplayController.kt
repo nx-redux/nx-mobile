@@ -4,6 +4,7 @@ import com.nxredux.mobile.tryOr
 import com.nxredux.mobile.tryOrNull
 import com.nxredux.mobile.tryQuietly
 import com.nxredux.mobile.netplay.Advert
+import com.nxredux.mobile.netplay.CableLinkRefused
 import com.nxredux.mobile.netplay.FoundHost
 import com.nxredux.mobile.netplay.GbaWifiLink
 import com.nxredux.mobile.netplay.NetplayChannel
@@ -17,6 +18,7 @@ import com.nxredux.mobile.netplay.NetplayWire
 import com.nxredux.mobile.netplay.RejectReason
 import com.nxredux.mobile.netplay.usb.NetplayLink
 import com.nxredux.mobile.netplay.usb.UsbLinkState
+import com.nxredux.mobile.netplay.wizard.CableLinkOffer
 import com.nxredux.mobile.netplay.wizard.ClientOffer
 import com.nxredux.mobile.netplay.wizard.ClientOutcome
 import com.nxredux.mobile.netplay.wizard.HostOffer
@@ -24,6 +26,7 @@ import com.nxredux.mobile.netplay.wizard.HostOutcome
 import com.nxredux.mobile.netplay.wizard.Wizard
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.ui.nx.NxButton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -44,8 +47,9 @@ sealed interface NetplayPage {
     /**
      * Host Game / Join Game, the Emulator row ([emulators]: "Auto (match the other device)" then the core names; null for a
      * tag with one netplay core) at [pick], and with [needWifi] the "Connect to Wi-Fi first" line and a Wi-Fi settings row.
-     * [connection]: the Connection row's value (Wi-Fi / USB Cable), first; null when this device cannot offer
-     * the cable (no row). Over USB there is no Wi-Fi row. [selected] indexes [rows].
+     * [connection]: the Connection row's value (Wi-Fi / USB Cable / Cable Link over Wi-Fi), first; null when Wi-Fi is the
+     * only choice (no row). Over USB there is no Wi-Fi row; on Cable Link no Emulator row (it always runs mGBA).
+     * [selected] indexes [rows].
      */
     data class Role(
         val title: String, val emulators: List<String>?, val pick: Int, val selected: Int, val needWifi: Boolean,
@@ -55,7 +59,7 @@ sealed interface NetplayPage {
             get() = buildList {
                 if (connection != null) add(NetplayRoleRow.CONNECTION)
                 add(NetplayRoleRow.HOST); add(NetplayRoleRow.JOIN)
-                if (emulators != null) add(NetplayRoleRow.EMULATOR)
+                if (emulators != null && connection != NetplayLink.CABLE_LINK_WIFI) add(NetplayRoleRow.EMULATOR)
                 if (needWifi && connection != NetplayLink.USB) add(NetplayRoleRow.WIFI)
             }
     }
@@ -95,6 +99,8 @@ class NetplayController(
     private val platform: NetplayPlatform,
     private val launch: (Listed, NetplaySession) -> Unit,
     private val work: CoroutineContext = Dispatchers.Default,
+    /** The library ROM (a ref value) with this SHA-1, size and folder tag, for Cable Link ([AppState.findLocalRom]). */
+    private val findLibraryRom: suspend (hash: String, sizeBytes: Long, tag: String) -> String? = { _, _, _ -> null },
 ) {
     private val _page = MutableStateFlow<NetplayPage?>(null)
     val page: StateFlow<NetplayPage?> = _page.asStateFlow()
@@ -140,7 +146,7 @@ class NetplayController(
             val mode = GbaWifiLink.token(tryOrNull { platform.gbaLinkMode(entry.game.fileName, entry.game.ref) })
             if (this@NetplayController.entry !== entry) return@launch
             wl = mode
-            if (NetplayCores.usbOnly(entry.system.tag, mode) && platform.usb?.available != true) {
+            if (connections(entry.system.tag).isEmpty()) {
                 val name = NetplayCores.name(NetplayCores.defaultCore(entry.system.tag).orEmpty())
                 _page.value = NetplayPage.Error(NetplayText.cableOnlyNoUsb(name), null)
                 return@launch
@@ -149,13 +155,24 @@ class NetplayController(
         }
     }
 
+    /**
+     * The Connection row's choices for [tag]: Wi-Fi (not for an MGBA game without a Wi-Fi mode, which links over the real
+     * cable alone), the USB cable where this device has one, and Cable Link over Wi-Fi for a GBA game.
+     */
+    private fun connections(tag: String): List<NetplayLink> = buildList {
+        if (!NetplayCores.usbOnly(tag, wl)) add(NetplayLink.WIFI)
+        if (platform.usb?.available == true) add(NetplayLink.USB)
+        if (platform.cableLinkAvailable && NetplayCores.cableLinkOffered(tag)) add(NetplayLink.CABLE_LINK_WIFI)
+    }
+
     private fun showFirstRole(entry: Listed) {
         val offered = NetplayCores.offered(entry.system.tag)
         val emulators = if (offered.size > 1) listOf(NetplayText.AUTO) + offered.map(NetplayCores::name) else null
+        val choices = connections(entry.system.tag)
         val connection = when {
-            NetplayCores.usbOnly(entry.system.tag, wl) -> NetplayLink.USB   // MGBA without a Wi-Fi mode: no Wi-Fi
-            platform.usb?.available == true -> platform.lastLink
-            else -> null
+            choices == listOf(NetplayLink.WIFI) -> null
+            platform.lastLink in choices -> platform.lastLink
+            else -> choices.firstOrNull()
         }
         val r = NetplayPage.Role(entry.shown, emulators, pick = 0, selected = 0, needWifi = platform.wifi() == null, connection = connection)
         showRole(r.copy(selected = r.rows.indexOf(NetplayRoleRow.HOST)))   // Host Game highlighted, below the Connection row
@@ -240,10 +257,11 @@ class NetplayController(
         showRole(p.copy(pick = (p.pick + step + n) % n))
     }
 
-    /** Wi-Fi <-> USB Cable; remembered at once. The highlight stays on the Connection row. */
+    /** The next Connection choice; remembered at once. The highlight stays on the Connection row. */
     private fun toggleConnection(p: NetplayPage.Role) {
-        if (entry?.let { NetplayCores.usbOnly(it.system.tag, wl) } == true) return   // USB Cable only, and not remembered
-        val next = if (p.connection == NetplayLink.USB) NetplayLink.WIFI else NetplayLink.USB
+        val choices = entry?.let { connections(it.system.tag) } ?: return
+        if (choices.size < 2) return   // one choice (USB Cable only): nothing to switch to, and not remembered
+        val next = choices[(choices.indexOf(p.connection) + 1) % choices.size]
         platform.lastLink = next
         showRole(p.copy(connection = next, needWifi = platform.wifi() == null))
     }
@@ -274,7 +292,7 @@ class NetplayController(
 
     /** Host or Join over Wi-Fi with the Emulator row pinned to a core that needs the cable for this game: an error page back to the Role page. */
     private fun cableOnlyOverWifi(p: NetplayPage.Role, pick: String?): Boolean {
-        if (p.connection == NetplayLink.USB || pick == null || NetplayCores.wifiOk(pick, wl)) return false
+        if (p.connection == NetplayLink.USB || p.connection == NetplayLink.CABLE_LINK_WIFI || pick == null || NetplayCores.wifiOk(pick, wl)) return false
         role = p
         _page.value = NetplayPage.Error(NetplayText.cableOnly(NetplayCores.name(pick)), role)
         return true
@@ -289,18 +307,20 @@ class NetplayController(
         if (job?.isActive == true) return
         val e = entry ?: return
         val usb = p.connection == NetplayLink.USB
+        val cableLink = p.connection == NetplayLink.CABLE_LINK_WIFI
         val tag = e.system.tag
-        val pick = pickedCore(p, NetplayCores.offered(tag))
+        val pick = if (cableLink) null else pickedCore(p, NetplayCores.offered(tag))
         if (cableOnlyOverWifi(p, pick)) return
         val wifi = if (usb) null else platform.wifi() ?: run { needWifi(p); return }
         val rom = e.game.fileName
         val game = NetplayWire.gameName(rom)
-        val own = pick ?: runCore(tag, usb) ?: return
+        val own = if (cableLink) NetplayCores.CABLE_LINK_CORE else pick ?: runCore(tag, usb) ?: return
         val folderCore = folderCore(tag)
         role = p.copy(needWifi = false)
         job = scope.launch {
             val me = coroutineContext.job
             try {
+                val cl = if (cableLink) cableLinkOffer(e) ?: return@launch else null
                 val link = if (usb) bringUpCable(p.title) ?: return@launch else null
                 _page.value = if (link != null) {
                     NetplayPage.Hosting(p.title, NetplayText.USB_ADDRESS, NetplayText.WAITING_PLAYER, NetplayText.USB_CONNECTED)
@@ -326,7 +346,11 @@ class NetplayController(
                     // A failed or cancelled wizard must still close the peer's socket (it would wait for its timeout).
                     val out = try {
                         withContext(work) {   // staging the saves and the rsync daemon: off the main thread
-                            Wizard.host(ch, HostOffer(game, tag, own, pick, usb, wl), saves = { platform.hostSaves(tag, rom, e.game.ref) }, onSync = { hostStatus(NetplayText.SENDING) })
+                            Wizard.host(
+                                ch, HostOffer(game, tag, own, pick, usb, wl, cl), saves = { platform.hostSaves(tag, rom, e.game.ref) },
+                                onSync = { hostStatus(NetplayText.SENDING) },
+                                onTransfer = { t -> hostStatus(NetplayText.transfer(t.sending, t.done, t.total)) },
+                            )
                         }
                     } finally {
                         ch.close()
@@ -336,7 +360,8 @@ class NetplayController(
                         is HostOutcome.Started -> {
                             stopHosting()
                             _page.value = NetplayPage.Progress(NetplayText.TITLE, NetplayText.STARTING)
-                            finish(e, NetplaySession(NetplayRole.HOST, out.peer, out.core, folderCore, out.emptySaves, overUsb = link != null, mixed = out.mixed, peerWl = out.peerWl))
+                            val session = NetplaySession(NetplayRole.HOST, out.peer, out.core, folderCore, out.emptySaves, overUsb = link != null, mixed = out.mixed, peerWl = out.peerWl)
+                            finish(e, out.cableLink?.let(session::withCableLink) ?: session)
                             return@launch
                         }
                         is HostOutcome.Turned -> {
@@ -354,6 +379,8 @@ class NetplayController(
 
     private fun turnedAwayText(out: HostOutcome.Turned, usb: Boolean): String? = if (out.noWifiModes) NetplayText.NO_WIFI_MODES else when (out.reason) {
         RejectReason.SYNC.wire -> NetplayText.SAVE_TRANSFER_FAILED
+        RejectReason.CABLE_LINK.wire -> NetplayText.CABLE_LINK_NOT_PICKED
+        Wizard.GAME_COPY_FAILED -> NetplayText.GAME_TRANSFER_FAILED
         RejectReason.CORE.wire -> out.joinerCore?.let { NetplayText.coreTurnedAway(NetplayCores.name(it)) }
         // As the handheld host: one line while Wi-Fi keeps waiting for others, the full reason for the cable's one peer.
         RejectReason.LINK.wire -> if (!usb) NetplayText.LINK_TURNED_AWAY else NetplayText.linkModes(theirs = out.joinerWl, ours = out.ownWl)
@@ -444,7 +471,9 @@ class NetplayController(
                 val host = p.hosts.getOrNull(p.selected) ?: return
                 hostIndex = p.selected
                 val own = NetplayWire.gameName(entry?.game?.fileName ?: return)
-                if (NetplayWire.equivalent(host.game, own)) connect(host, any = false)
+                // Cable Link pairs different games too (Ruby with Sapphire), as two GBAs on a real cable: no "Join anyway?".
+                if (role?.connection == NetplayLink.CABLE_LINK_WIFI) connect(host, any = true)
+                else if (NetplayWire.equivalent(host.game, own)) connect(host, any = false)
                 else _page.value = NetplayPage.JoinAnyway(host, NetplayText.joinAnyway(host.game, own))
             }
             NxButton.B -> { stopBrowse(); backToRole() }
@@ -472,9 +501,11 @@ class NetplayController(
         val game = NetplayWire.gameName(rom)
         val link = if (cableOn) NetplayLink.USB else NetplayLink.WIFI
         val usb = link == NetplayLink.USB
-        val pick = pickedCore(p, NetplayCores.offered(tag))
-        val first = pick ?: runCore(tag, usb) ?: return
+        val cableLink = !usb && p.connection == NetplayLink.CABLE_LINK_WIFI
+        val pick = if (cableLink) null else pickedCore(p, NetplayCores.offered(tag))
+        val first = if (cableLink) NetplayCores.CABLE_LINK_CORE else pick ?: runCore(tag, usb) ?: return
         val folderCore = folderCore(tag)
+        val cl = if (cableLink) cableLinkOffer(e, errorBack()) ?: return else null
         var core = first
         var mayRetry = true
         while (true) {
@@ -486,9 +517,10 @@ class NetplayController(
             val out = try {
                 withContext(work) {   // the save sink runs rsync and writes files: off the main thread
                     Wizard.client(
-                        ch, ClientOffer(game, any, tag, core, pick, usb, mayRetry, wl), platform.clientSink(rom),
+                        ch, ClientOffer(game, any, tag, core, pick, usb, mayRetry && cl == null, wl, cl), platform.clientSink(rom),
                         onSync = { joinProgress(NetplayText.RECEIVING) },
                         onWaiting = { n -> joinProgress(NetplayText.youArePlayer(n)) },
+                        onTransfer = { t -> joinProgress(NetplayText.transfer(t.sending, t.done, t.total)) },
                     )
                 }
             } finally {
@@ -509,10 +541,30 @@ class NetplayController(
                     _page.value = NetplayPage.Progress(NetplayText.JOIN, NetplayText.STARTING)
                     // A joiner never declines offered saves (no rsync: the driver refuses with COPY_FAILED), so it
                     // always plays on the copy it received, empty when the host sent none; only a host has emptySaves.
-                    finish(e, NetplaySession(NetplayRole.CLIENT, host.ip, out.core, folderCore, overUsb = link == NetplayLink.USB, mixed = out.mixed, peerWl = out.peerWl))
+                    val session = NetplaySession(NetplayRole.CLIENT, host.ip, out.core, folderCore, overUsb = link == NetplayLink.USB, mixed = out.mixed, peerWl = out.peerWl)
+                    finish(e, out.cableLink?.let(session::withCableLink) ?: session)
                     return
                 }
             }
+        }
+    }
+
+    /**
+     * This side's Cable Link offer for [e], read through the platform off the main thread; null once an error page (back
+     * to [back]) says why it can't be offered.
+     */
+    private suspend fun cableLinkOffer(e: Listed, back: NetplayPage? = role): CableLinkOffer? {
+        val tag = e.system.tag
+        return try {
+            withContext(work) { platform.cableLinkOffer(tag, e.game.fileName, e.game.ref) { hash, size -> findLibraryRom(hash, size, tag) } }
+        } catch (c: CancellationException) {
+            throw c
+        } catch (r: CableLinkRefused) {
+            _page.value = NetplayPage.Error(r.text, back)
+            null
+        } catch (x: Exception) {
+            _page.value = NetplayPage.Error(NetplayText.CABLE_LINK_READ_FAILED, back)
+            null
         }
     }
 

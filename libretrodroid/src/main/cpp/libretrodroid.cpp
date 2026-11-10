@@ -195,6 +195,11 @@ bool LibretroDroid::unserializeState(int8_t *data, size_t size) {
     return true;
 }
 
+bool LibretroDroid::setNetplayPairMode(bool on) {
+    std::lock_guard<std::mutex> lock(coreLock);
+    return netplay::setPairMode(core.get(), on);
+}
+
 jboolean LibretroDroid::unserializeMemory(unsigned id, int8_t* data, size_t size) {
     std::lock_guard<std::mutex> lock(coreLock);
 

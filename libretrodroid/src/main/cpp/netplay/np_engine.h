@@ -44,7 +44,8 @@ typedef enum {
 	NP_STALLED,		/* the run frame lacks the peer's input; seconds_left counts down */
 	NP_PEER_PAUSED, /* the peer sent PAUSE; seconds_left counts down */
 	NP_ENDED,		/* session over: see the reason */
-	NP_FAILED		/* never got going: connect failed, state mismatch, sync timeout */
+	NP_FAILED,		/* never got going: connect failed, state mismatch, sync timeout */
+	NP_RESYNCING	/* pair mode: the hashes differed; the host's state is replacing the client's */
 } np_state;
 
 typedef enum {
@@ -53,7 +54,10 @@ typedef enum {
 	NP_REASON_TIMEOUT,	  /* 30 s stall/pause countdown, or a sync wait (10 s; the client's STATE_HDR wait 45 s), ran out */
 	NP_REASON_STATE_MISMATCH,
 	NP_REASON_CONNECT,
-	NP_REASON_IO
+	NP_REASON_IO,
+	NP_REASON_DRIFT,	/* pair mode: the third hash mismatch within 60 s */
+	NP_REASON_TOO_SLOW,	/* pair mode: this frame thread missed the frame budget for more than 10 s while its peer waited */
+	NP_REASON_PEER_TOO_SLOW	/* pair mode: the peer's frame thread did (its PAIR_END said so) */
 } np_reason;
 
 /* Threads: np_pre_frame / np_post_frame / np_input / np_analog only from the frame (GL) thread; np_start / np_pause /
@@ -94,6 +98,31 @@ uint16_t np_input(unsigned port); /* port 0 -> P1 word, 1 -> P2 word, >= 2 -> 0,
 /* The synced stick of the current run frame: port 0 -> P1, 1 -> P2; index 0 left, 1 right; id 0 x, 1 y; 0 otherwise. */
 int16_t np_analog(unsigned port, unsigned index, unsigned id);
 void np_shutdown(void);			  /* join the thread, close sockets, reset to IDLE (safe to call twice) */
+
+/* Pair mode (two emulated consoles on each device, e.g. two linked GBAs): both sides hash the core every
+ * NP_PAIR_CHECK_INTERVAL frames and compare; on a mismatch the host's state replaces the client's at an agreed frame
+ * (NP_RESYNCING meanwhile). The first two mismatches within 60 s resync; the third ends the session
+ * (NP_REASON_DRIFT). The input delay adapts (or is pinned), and a frame thread that cannot keep the frame rate ends it
+ * (NP_REASON_TOO_SLOW on that side, NP_REASON_PEER_TOO_SLOW on its peer). Both peers must be in pair mode: it adds
+ * commands to the wire. Off, the wire is exactly the handheld's protocol 3. */
+#define NP_PAIR_CHECK_INTERVAL 120
+typedef uint64_t (*np_hash_fn)(void); /* called on the frame thread, after a frame */
+/* Asks for pair mode in the next np_start, which consumes the request (a later session is in pair mode only when asked
+ * again); np_shutdown leaves it alone. on with a NULL hash is off. */
+void np_set_pair_mode(bool on, np_hash_fn hash);
+/* 0 = adaptive; 1..8 = pinned input delay in frames (Developer setting). Any time; kept across sessions. */
+void np_set_delay_pin(int frames);
+/* This device's input delay in frames (always 2 outside pair mode). */
+int np_current_delay(void);
+/* Frames the session has run (-1 when not started). Frame thread, right after np_post_frame: a value that is a non-zero
+ * multiple of NP_PAIR_CHECK_INTERVAL is a drift-check frame, and the core state now is the one both sides hash. Save
+ * checkpoints: snapshot the local save there, keyed by that frame; once np_last_verified_frame() equals that frame the
+ * snapshot is verified and may become the real save. A snapshot whose frame is passed over (np_last_verified_frame()
+ * moves beyond it, or a mismatch or resync voids it) is never verified: drop it. */
+int64_t np_run_frame(void);
+/* The last frame both sides' hashes matched (-1 none) — the save checkpoint. Still readable once the session ended,
+ * until np_shutdown. */
+int64_t np_last_verified_frame(void);
 
 #ifdef __cplusplus
 }

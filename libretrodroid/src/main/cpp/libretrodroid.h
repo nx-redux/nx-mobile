@@ -92,6 +92,9 @@ public:
     bool serializeState(const StateSink& sink);
     bool unserializeState(int8_t *data, size_t size);
 
+    // Netplay pair mode for the next session (netplay::setPairMode). False when on and the core cannot hash its pair.
+    bool setNetplayPairMode(bool on);
+
     // read(data, size) gets the core's memory while coreLock holds the core still; it must copy what it keeps. False
     // (read not called) when there is no core or no such memory.
     using MemoryReader = std::function<void(const int8_t* data, size_t size)>;

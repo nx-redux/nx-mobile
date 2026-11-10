@@ -50,12 +50,12 @@
  * and switches to RUNNING. The client's thread receives STATE_HDR; a size that differs from the client's own
  * size() fails with STATE_MISMATCH (DISCONNECT sent). Once the raw bytes are in, the client's np_pre_frame
  * unserialises them (GL thread), the thread sends STATE_ACK and waits for READY (10 s). Both sides then prefill
- * frames 0 and 1 with neutral input: run_frame 0, self_frame 2.
+ * frames 0 and 1 with neutral input: run_frame 0, our input goes out for frame 2.
  *
  * Where it differs from the handheld's engine:
  * - preFrame never waits on a blocking receive (the thread receives);
  * - ring: remote INPUT for frame f re-initialises slot(f) when it still holds an older frame, and pre-frame only
- *   initialises its own slot when slot->frame != self_frame, so an early remote half is never wiped;
+ *   initialises its own slot when slot->frame != the frame it sends for, so an early remote half is never wiped;
  * - framing: the accumulating reader handles split headers/payloads; size > 4096 ends the session (IO);
  * - pause: local_paused and remote_paused are tracked separately and frames never run while either is set, while
  *   the thread keeps reading, so RESUME and DISCONNECT are always seen. A local pause sends PAUSE and stops our
@@ -75,6 +75,24 @@
  *
  * The phone starts np_start only after its core has loaded (GameActivity's first frame), so a
  * handheld's 10 s state waits start late enough.
+ *
+ * Pair mode (phones only, both sides set it; off, nothing below happens and the wire is unchanged):
+ * - drift check: after every NP_PAIR_CHECK_INTERVAL (120th) frame both sides send HASH (frame = frames run, u64 BE hash of the core) and
+ *   compare it with the peer's; equal hashes make that frame the verified checkpoint;
+ * - resync: on a mismatch the host sends RESYNC (frame R = its run frame + 16, past any frame the client can have
+ *   reached). Both run up to R and hold; the host serialises there and sends STATE_HDR (frame R) + raw bytes, the
+ *   client unserialises them at R and acks (STATE_ACK, frame R), and both carry on. Inputs keep flowing: frame
+ *   numbers and the ring are untouched, only the client's core state is replaced. Checks up to R are void;
+ * - drift: the first two mismatches within 60 s resync; the host's third ends the session with PAIR_END (reason byte)
+ *   and DISCONNECT;
+ * - input delay: each side sends its own input `delay` frames ahead of its run frame, from 2, one more at once on a
+ *   stall (8 at most), one less after 10 s without one (1 at least), or pinned. Raising sends the extra frames in the
+ *   same pre_frame; lowering skips sending until the run frame catches up, so every frame still gets exactly one
+ *   input from each side and the delay never goes on the wire;
+ * - too slow: when the frame thread ran fewer than 90% of the frames a 17 ms budget allows in each 1 s window,
+ *   without once waiting on the peer, for more than 10 s, the session ends with PAIR_END too. A pause restarts the
+ *   windows, and a window over twice its length is a frame thread that stopped (the peer's stall countdown covers
+ *   that), never a slow one.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -119,7 +137,26 @@ enum {
 	CMD_PAUSE = 0x0A,	  // Player paused (menu opened)
 	CMD_RESUME = 0x0B,	  // Player resumed (menu closed)
 	CMD_KEEPALIVE = 0x0C, // Keepalive during stall to prevent timeout
+	// Pair mode only (the handheld never sees these)
+	CMD_HASH = 0x0D,	  // u64 BE hash of the core after `frame` frames
+	CMD_RESYNC = 0x0E,	  // host: the client takes the host's state at `frame`
+	CMD_PAIR_END = 0x0F,  // u8 reason, ahead of DISCONNECT
 };
+
+// PAIR_END reasons on the wire
+enum { PAIR_END_DRIFT = 1, PAIR_END_TOO_SLOW = 2 };
+
+// Pair mode
+#define NP_RESYNC_LEAD 16			// RESYNC frame past the host's run frame: the client is at most NP_DELAY_MAX + 1 ahead
+#define NP_DRIFT_LIMIT 3			// mismatches within NP_DRIFT_WINDOW_MS end the session
+#define NP_DRIFT_WINDOW_MS 60000
+#define NP_DELAY_MIN 1
+#define NP_DELAY_MAX 8
+#define NP_DELAY_EASE_MS 10000		// without a stall before the delay drops by one
+#define NP_SLOW_WINDOW_MS 1000
+#define NP_FRAME_BUDGET_MS 17		// one 60 Hz frame, rounded up
+#define NP_SLOW_RATE_PCT 90			// a window is slow below this share of the frames the budget allows
+#define NP_TOO_SLOW_MS 10000
 
 // Timers (milliseconds)
 #define NP_COUNTDOWN_MS 30000	  // stall / pause countdown (v2)
@@ -148,6 +185,15 @@ typedef struct {
 	bool have_p1;
 	bool have_p2;
 } FrameInput;
+
+typedef enum {
+	RESYNC_NONE = 0,
+	RESYNC_HOST_RUN_TO,		  // host: RESYNC sent, running up to the resync frame
+	RESYNC_HOST_SERIALIZING,  // host: GL thread is in ser()
+	RESYNC_HOST_WAIT_ACK,	  // host: state queued, holding at the resync frame for STATE_ACK
+	RESYNC_CLIENT_WAIT,		  // client: running up to the resync frame, then holding for the state
+	RESYNC_CLIENT_LOADING	  // client: GL thread is in unser()
+} ResyncPhase;
 
 typedef enum {
 	SYNC_NONE = 0,
@@ -201,8 +247,9 @@ static struct {
 	int presync_done;
 
 	// Frame synchronization
-	uint32_t self_frame; // Our current frame
 	uint32_t run_frame;	 // Frame we're executing
+	uint32_t sent_upto;	 // the last frame our input went out for
+	int delay;			 // our input goes out for run_frame + delay (2 outside pair mode)
 	FrameInput frame_buffer[NETPLAY_FRAME_BUFFER_SIZE];
 	bool frame_armed; // np_pre_frame returned 1 and np_post_frame has not run yet
 	uint16_t cur_p1;
@@ -217,7 +264,39 @@ static struct {
 	bool cd_active;
 	uint64_t cd_t0;
 	uint64_t last_keepalive;
+
+	// Pair mode (fixed at np_start)
+	bool pair;
+	np_hash_fn hash;
+	int64_t verified;	 // last frame both hashes matched, -1 none
+	int64_t hash_floor;	 // checks at or before this frame are void (a resync replaced that history), -1 none
+	bool have_local_hash;
+	bool have_remote_hash;
+	uint32_t local_hash_frame;
+	uint32_t remote_hash_frame;
+	uint64_t local_hash;
+	uint64_t remote_hash;
+	uint64_t mismatch_t[NP_DRIFT_LIMIT]; // host: recent mismatch times
+	int mismatches;
+	ResyncPhase resync;
+	uint32_t resync_frame;
+	bool resync_state_ready; // client: the host's state is in state_buf
+	bool resync_timer;		 // holding at the resync frame; runs out after NP_COUNTDOWN_MS without progress
+	uint64_t resync_t0;
+	uint64_t calm_t0; // last stall: the delay eases NP_DELAY_EASE_MS after it
+	bool win_open;	  // too-slow window
+	uint64_t win_t0;
+	uint32_t win_frames;
+	bool win_waited;
+	bool slow;		  // every window since slow_t0 was slow
+	uint64_t slow_t0;
 } np;
+
+// Set before np_start (np_start copies them; reset_fields leaves them alone).
+static int np_presync_wanted;
+static bool np_pair_wanted;
+static np_hash_fn np_hash_wanted;
+static int np_delay_pin; // 0 adaptive, else NP_DELAY_MIN..NP_DELAY_MAX
 
 static uint8_t rx_scratch[16384]; // engine thread only
 
@@ -235,6 +314,9 @@ static void reset_fields(void) {
 	np.reason = NP_REASON_NONE;
 	np.sock = -1;
 	np.listen_fd = -1;
+	np.delay = NETPLAY_INPUT_LATENCY_FRAMES;
+	np.verified = -1;
+	np.hash_floor = -1;
 	np_wake_init(&np.wake);
 	np_reader_reset(&np.rd);
 }
@@ -246,6 +328,18 @@ static int16_t get_be16(const uint8_t* b) {
 static void put_be16(uint8_t* b, uint16_t v) {
 	b[0] = (uint8_t)(v >> 8);
 	b[1] = (uint8_t)v;
+}
+
+static void put_be64(uint8_t* b, uint64_t v) {
+	for (int i = 0; i < 8; i++)
+		b[i] = (uint8_t)(v >> (56 - 8 * i));
+}
+
+static uint64_t get_be64(const uint8_t* b) {
+	uint64_t v = 0;
+	for (int i = 0; i < 8; i++)
+		v = (v << 8) | b[i];
+	return v;
 }
 
 static void wake_thread(void) {
@@ -275,6 +369,9 @@ static const char* reason_name(np_reason r) {
 	case NP_REASON_STATE_MISMATCH: return "state mismatch";
 	case NP_REASON_CONNECT: return "connect failed";
 	case NP_REASON_IO: return "i/o";
+	case NP_REASON_DRIFT: return "drift";
+	case NP_REASON_TOO_SLOW: return "too slow";
+	case NP_REASON_PEER_TOO_SLOW: return "peer too slow";
 	}
 	return "?";
 }
@@ -336,8 +433,12 @@ static void check_timers(uint64_t now) {
 		}
 		if (np.stalled && !np.local_paused && !np.remote_paused &&
 			elapsed(now, np.last_keepalive) >= NP_KEEPALIVE_MS) {
-			send_packet(CMD_KEEPALIVE, np.self_frame, NULL, 0);
+			send_packet(CMD_KEEPALIVE, np.run_frame + (uint32_t)np.delay, NULL, 0);
 			np.last_keepalive = now;
+		}
+		if (np.resync_timer && elapsed(now, np.resync_t0) >= NP_COUNTDOWN_MS) {
+			end_session(NP_ENDED, NP_REASON_TIMEOUT, true);
+			return;
 		}
 	} else if (np.phase == NP_SYNCING) {
 		uint64_t limit = np.sync == SYNC_CLIENT_WAIT_HDR ? NP_SYNC_HDR_TIMEOUT_MS : NP_SYNC_TIMEOUT_MS;
@@ -354,7 +455,6 @@ static void sync_wait(SyncPhase phase, uint64_t now) {
 
 static void enter_sync(uint64_t now) {
 	np.phase = NP_SYNCING;
-	np.self_frame = 0;
 	np.run_frame = 0;
 	init_frame_buffer();
 	np_reader_reset(&np.rd);
@@ -368,7 +468,7 @@ static void enter_sync(uint64_t now) {
 }
 
 // Netplay_completeStateSync
-static void complete_state_sync(void) {
+static void complete_state_sync(uint64_t now) {
 	init_frame_buffer();
 
 	// Pre-fill latency buffer frames with neutral input
@@ -384,7 +484,11 @@ static void complete_state_sync(void) {
 	}
 
 	np.run_frame = 0;
-	np.self_frame = NETPLAY_INPUT_LATENCY_FRAMES;
+	np.sent_upto = NETPLAY_INPUT_LATENCY_FRAMES - 1;
+	np.delay = (np.pair && np_delay_pin) ? np_delay_pin : NETPLAY_INPUT_LATENCY_FRAMES;
+	np.calm_t0 = now;
+	np.win_open = false;
+	np.slow = false;
 	np.phase = NP_RUNNING;
 	np.sync = SYNC_NONE;
 	np.sync_timer = false;
@@ -404,6 +508,106 @@ static bool run_slot_complete(void) {
 }
 
 //////////////////////////////////////////////////////////////////////////////
+// Pair mode (np_mutex held)
+//////////////////////////////////////////////////////////////////////////////
+
+// Tell the peer why (it ends with the same reason, or the peer-side one for too slow), then DISCONNECT.
+static void pair_end(np_reason why) {
+	if (!is_live())
+		return;
+	uint8_t code = why == NP_REASON_DRIFT ? PAIR_END_DRIFT : PAIR_END_TOO_SLOW;
+	send_packet(CMD_PAIR_END, 0, &code, 1);
+	end_session(NP_ENDED, why, true);
+}
+
+// After a pause or a resync hold: neither the too-slow windows nor the calm period may span the gap.
+static void restart_pair_clocks(uint64_t now) {
+	np.win_open = false;
+	np.slow = false;
+	np.calm_t0 = now;
+}
+
+static void forget_hashes(void) {
+	np.have_local_hash = false;
+	np.have_remote_hash = false;
+}
+
+// Host: a mismatch resyncs the client from our state, unless it is the third within the window.
+static void host_mismatch(uint64_t now) {
+	int kept = 0;
+	for (int i = 0; i < np.mismatches; i++)
+		if (elapsed(now, np.mismatch_t[i]) < NP_DRIFT_WINDOW_MS)
+			np.mismatch_t[kept++] = np.mismatch_t[i];
+	np.mismatch_t[kept++] = now;
+	np.mismatches = kept;
+	if (kept >= NP_DRIFT_LIMIT) {
+		pair_end(NP_REASON_DRIFT);
+		return;
+	}
+	np.resync = RESYNC_HOST_RUN_TO;
+	np.resync_frame = np.run_frame + NP_RESYNC_LEAD;
+	np.hash_floor = np.resync_frame;
+	forget_hashes();
+	send_packet(CMD_RESYNC, np.resync_frame, NULL, 0);
+	NP_LOG("pair: resync at frame %u", np.resync_frame);
+}
+
+static void compare_hashes(uint64_t now) {
+	if (!np.have_local_hash || !np.have_remote_hash || np.local_hash_frame != np.remote_hash_frame)
+		return;
+	uint32_t at = np.local_hash_frame;
+	bool same = np.local_hash == np.remote_hash;
+	forget_hashes();
+	if ((int64_t)at <= np.hash_floor)
+		return;
+	if (same) {
+		if ((int64_t)at > np.verified)
+			np.verified = at;
+		return;
+	}
+	NP_LOG("pair: hashes differ at frame %u", at);
+	if (np.role == NP_ROLE_HOST)
+		host_mismatch(now); // the client waits for the host's RESYNC
+}
+
+// One pre_frame of the too-slow check: ran = this call runs a frame. True when it ended the session.
+static bool slow_track(uint64_t now, bool ran) {
+	if (!np.pair)
+		return false;
+	if (!np.win_open) {
+		np.win_open = true;
+		np.win_t0 = now;
+		np.win_frames = 0;
+		np.win_waited = false;
+	}
+	if (ran)
+		np.win_frames++;
+	else
+		np.win_waited = true;
+	uint64_t span = elapsed(now, np.win_t0);
+	if (span < NP_SLOW_WINDOW_MS)
+		return false;
+	// A window where we waited even once was the peer's (or the network's) doing, not ours.
+	bool slow = !np.win_waited && span <= 2u * NP_SLOW_WINDOW_MS &&
+				(uint64_t)np.win_frames * NP_FRAME_BUDGET_MS * 100u < span * NP_SLOW_RATE_PCT;
+	if (!slow) {
+		np.slow = false;
+	} else if (!np.slow) {
+		np.slow = true;
+		np.slow_t0 = np.win_t0;
+	}
+	np.win_t0 = now;
+	np.win_frames = 0;
+	np.win_waited = false;
+	if (np.slow && elapsed(now, np.slow_t0) > NP_TOO_SLOW_MS) {
+		NP_LOG("pair: frame thread too slow");
+		pair_end(NP_REASON_TOO_SLOW);
+		return true;
+	}
+	return false;
+}
+
+//////////////////////////////////////////////////////////////////////////////
 // Receive (engine thread, np_mutex held)
 //////////////////////////////////////////////////////////////////////////////
 
@@ -414,7 +618,7 @@ static void handle_packet(const np_packet* p, uint64_t now) {
 		// as the handheld drains and discards it.
 		if (np.phase != NP_RUNNING || (p->size != NP_INPUT_SIZE && p->size != NP_INPUT_SIZE_LEGACY))
 			return;
-		// A legitimate peer is never behind our run frame and at most 2 ahead of our self frame.
+		// A legitimate peer is never behind our run frame and at most its input delay past it.
 		int32_t ahead = (int32_t)(p->frame - np.run_frame);
 		if (ahead < 0 || ahead >= NETPLAY_FRAME_BUFFER_SIZE) {
 			NP_LOG("dropping input for frame %u (run %u)", p->frame, np.run_frame);
@@ -444,6 +648,24 @@ static void handle_packet(const np_packet* p, uint64_t now) {
 		return;
 	}
 	case CMD_STATE_HDR: {
+		if (np.pair && np.role == NP_ROLE_CLIENT && np.phase == NP_RUNNING && np.resync == RESYNC_CLIENT_WAIT &&
+			!np.state_buf && !np.resync_state_ready && p->frame == np.resync_frame && p->size == 4) {
+			uint32_t size = ((uint32_t)p->payload[0] << 24) | ((uint32_t)p->payload[1] << 16) |
+							((uint32_t)p->payload[2] << 8) | (uint32_t)p->payload[3];
+			if (size == 0 || size != np.local_size) {
+				NP_LOG("resync state size mismatch: %u vs %zu", size, np.local_size);
+				end_session(NP_ENDED, NP_REASON_STATE_MISMATCH, true);
+				return;
+			}
+			np.state_buf = (uint8_t*)malloc(size);
+			if (!np.state_buf) {
+				end_session(NP_ENDED, NP_REASON_IO, true);
+				return;
+			}
+			np.state_len = size;
+			np_reader_expect_raw(&np.rd, np.state_buf, size);
+			return;
+		}
 		if (np.role != NP_ROLE_CLIENT || np.phase != NP_SYNCING || np.sync != SYNC_CLIENT_WAIT_HDR ||
 			p->size != 4) {
 			NP_LOG("unexpected STATE_HDR");
@@ -473,14 +695,22 @@ static void handle_packet(const np_packet* p, uint64_t now) {
 		return;
 	}
 	case CMD_STATE_ACK:
+		if (np.pair && np.role == NP_ROLE_HOST && np.phase == NP_RUNNING && np.resync == RESYNC_HOST_WAIT_ACK &&
+			p->frame == np.resync_frame) {
+			np.resync = RESYNC_NONE;
+			np.resync_timer = false;
+			restart_pair_clocks(now);
+			NP_LOG("pair: resync done at frame %u", np.resync_frame);
+			return;
+		}
 		if (np.role == NP_ROLE_HOST && np.phase == NP_SYNCING && np.sync == SYNC_HOST_WAIT_ACK) {
 			send_packet(CMD_READY, 0, NULL, 0);
-			complete_state_sync();
+			complete_state_sync(now);
 		}
 		return;
 	case CMD_READY:
 		if (np.role == NP_ROLE_CLIENT && np.phase == NP_SYNCING && np.sync == SYNC_CLIENT_WAIT_READY)
-			complete_state_sync();
+			complete_state_sync(now);
 		return;
 	case CMD_DISCONNECT:
 		end_session(NP_ENDED, NP_REASON_PEER_LEFT, false);
@@ -502,6 +732,40 @@ static void handle_packet(const np_packet* p, uint64_t now) {
 	case CMD_KEEPALIVE:
 		// Keepalive: the peer is alive. Deliberately does not clear the countdown (v2).
 		return;
+	case CMD_HASH:
+		if (!np.pair || np.phase != NP_RUNNING || p->size != 8 || (int64_t)p->frame <= np.hash_floor)
+			return;
+		np.remote_hash = get_be64(p->payload);
+		np.remote_hash_frame = p->frame;
+		np.have_remote_hash = true;
+		compare_hashes(now);
+		return;
+	case CMD_RESYNC: {
+		if (!np.pair || np.role != NP_ROLE_CLIENT || np.phase != NP_RUNNING)
+			return;
+		// The host picks a frame we have not run yet (nor are running now).
+		int32_t ahead = (int32_t)(p->frame - np.run_frame);
+		if (np.resync != RESYNC_NONE || ahead < (np.frame_armed ? 1 : 0) || ahead >= NETPLAY_FRAME_BUFFER_SIZE) {
+			NP_LOG("unusable RESYNC for frame %u (run %u)", p->frame, np.run_frame);
+			end_session(NP_ENDED, NP_REASON_IO, true);
+			return;
+		}
+		np.resync = RESYNC_CLIENT_WAIT;
+		np.resync_frame = p->frame;
+		np.hash_floor = p->frame;
+		forget_hashes();
+		NP_LOG("pair: resync at frame %u", p->frame);
+		return;
+	}
+	case CMD_PAIR_END:
+		if (!np.pair || p->size != 1)
+			return;
+		end_session(NP_ENDED,
+					p->payload[0] == PAIR_END_DRIFT		 ? NP_REASON_DRIFT
+					: p->payload[0] == PAIR_END_TOO_SLOW ? NP_REASON_PEER_TOO_SLOW
+														 : NP_REASON_PEER_LEFT,
+					false);
+		return;
 	default:
 		return;
 	}
@@ -510,6 +774,8 @@ static void handle_packet(const np_packet* p, uint64_t now) {
 static void process_bytes(const uint8_t* buf, size_t n, uint64_t now) {
 	if (np.phase == NP_SYNCING && np.sync_timer)
 		np.sync_t0 = now; // progress
+	if (np.resync_timer)
+		np.resync_t0 = now;
 	while (n > 0 && (np.phase == NP_SYNCING || np.phase == NP_RUNNING)) {
 		size_t used = 0;
 		np_packet pkt;
@@ -519,8 +785,12 @@ static void process_bytes(const uint8_t* buf, size_t n, uint64_t now) {
 		if (res == NP_RD_PACKET) {
 			handle_packet(&pkt, now);
 		} else if (res == NP_RD_RAW_DONE) {
-			np.sync = SYNC_CLIENT_UNSERIALIZE; // the GL thread is next: no network timer
-			np.sync_timer = false;
+			if (np.phase == NP_SYNCING) {
+				np.sync = SYNC_CLIENT_UNSERIALIZE; // the GL thread is next: no network timer
+				np.sync_timer = false;
+			} else {
+				np.resync_state_ready = true; // the GL thread loads it at the resync frame
+			}
 		} else if (res == NP_RD_OVERSIZE) {
 			NP_LOG("oversized packet header, closing");
 			end_session(NP_ENDED, NP_REASON_IO, true);
@@ -683,8 +953,6 @@ static void* engine_thread(void* arg) {
 // Public API
 //////////////////////////////////////////////////////////////////////////////
 
-static int np_presync_wanted;
-
 int np_start(np_role role, const char* peer_ip, uint16_t port, np_clock_fn clock) {
 	pthread_mutex_lock(&np_mutex);
 	if (np.started) {
@@ -694,6 +962,10 @@ int np_start(np_role role, const char* peer_ip, uint16_t port, np_clock_fn clock
 	reset_fields();
 	np.presync_frames = np_presync_wanted;
 	np.presync_done = 0;
+	np.pair = np_pair_wanted;
+	np.hash = np_hash_wanted;
+	if (np.pair && np_delay_pin)
+		np.delay = np_delay_pin;
 	np.role = role;
 	np.port = port;
 	np.clock = clock;
@@ -719,6 +991,9 @@ int np_start(np_role role, const char* peer_ip, uint16_t port, np_clock_fn clock
 	np.phase = NP_CONNECTING;
 	np.started = true;
 	np.thread_started = true;
+	// Consumed: a later session is in pair mode only when asked again (the hash belongs to this session's core).
+	np_pair_wanted = false;
+	np_hash_wanted = NULL;
 	NP_LOG(role == NP_ROLE_HOST ? "hosting on port %u" : "joining on port %u", port);
 	pthread_mutex_unlock(&np_mutex);
 	return 0;
@@ -734,6 +1009,7 @@ void np_pause(void) {
 		// (the peer runs it too).
 		send_packet(CMD_PAUSE, 0, NULL, 0);
 		update_countdown(now_ms());
+		restart_pair_clocks(now_ms());
 	}
 	pthread_mutex_unlock(&np_mutex);
 }
@@ -749,6 +1025,7 @@ void np_resume(void) {
 			np.cd_active = false;
 		}
 		update_countdown(now_ms());
+		restart_pair_clocks(now_ms());
 	}
 	pthread_mutex_unlock(&np_mutex);
 }
@@ -767,6 +1044,8 @@ np_state np_get_state(int* seconds_left, np_reason* reason) {
 	if (st == NP_RUNNING) {
 		if (np.remote_paused)
 			st = NP_PEER_PAUSED;
+		else if (np.resync != RESYNC_NONE)
+			st = NP_RESYNCING;
 		else if (np.stalled && !np.local_paused)
 			st = NP_STALLED;
 	}
@@ -791,23 +1070,37 @@ bool np_active(void) {
 	return a;
 }
 
-// Host: serialise on the GL thread (outside the mutex) and queue STATE_HDR + raw bytes for the engine thread.
-static void host_send_state(np_size_fn size, np_ser_fn ser) {
-	np.sync = SYNC_HOST_SERIALIZING;
+// Serialise on the GL thread with np_mutex released (called and returns with it held). NULL on failure.
+static uint8_t* serialize_unlocked(np_size_fn size, np_ser_fn ser, size_t* out_n) {
 	pthread_mutex_unlock(&np_mutex);
-
 	size_t n = size ? size() : 0;
 	uint8_t* buf = NULL;
 	bool ok = ser && n > 0 && n <= NP_MAX_STATE_SIZE && (buf = (uint8_t*)malloc(n)) != NULL && ser(buf, n);
-
 	pthread_mutex_lock(&np_mutex);
+	*out_n = n;
+	if (!ok) {
+		free(buf);
+		return NULL;
+	}
+	return buf;
+}
+
+static bool queue_state(uint32_t frame, const uint8_t* buf, size_t n) {
+	uint8_t sz[4] = {(uint8_t)(n >> 24), (uint8_t)(n >> 16), (uint8_t)(n >> 8), (uint8_t)n};
+	return send_packet(CMD_STATE_HDR, frame, sz, sizeof(sz)) && queue_bytes(buf, n);
+}
+
+// Host: serialise on the GL thread (outside the mutex) and queue STATE_HDR + raw bytes for the engine thread.
+static void host_send_state(np_size_fn size, np_ser_fn ser) {
+	np.sync = SYNC_HOST_SERIALIZING;
+	size_t n = 0;
+	uint8_t* buf = serialize_unlocked(size, ser, &n);
 	if (np.phase == NP_SYNCING && np.sync == SYNC_HOST_SERIALIZING) {
-		if (!ok) {
+		if (!buf) {
 			NP_LOG("serialize failed (size %zu)", n);
 			end_session(NP_FAILED, NP_REASON_IO, true);
 		} else {
-			uint8_t sz[4] = {(uint8_t)(n >> 24), (uint8_t)(n >> 16), (uint8_t)(n >> 8), (uint8_t)n};
-			if (send_packet(CMD_STATE_HDR, 0, sz, sizeof(sz)) && queue_bytes(buf, n)) {
+			if (queue_state(0, buf, n)) {
 				sync_wait(SYNC_HOST_WAIT_ACK, now_ms());
 				wake_thread();
 			} else {
@@ -816,6 +1109,98 @@ static void host_send_state(np_size_fn size, np_ser_fn ser) {
 		}
 	}
 	free(buf);
+}
+
+// Host at the resync frame: our state goes to the client, then we hold for its STATE_ACK.
+static void host_send_resync_state(np_size_fn size, np_ser_fn ser) {
+	np.resync = RESYNC_HOST_SERIALIZING;
+	size_t n = 0;
+	uint8_t* buf = serialize_unlocked(size, ser, &n);
+	if (np.phase == NP_RUNNING && np.resync == RESYNC_HOST_SERIALIZING) {
+		if (!buf) {
+			NP_LOG("resync serialize failed (size %zu)", n);
+			end_session(NP_ENDED, NP_REASON_IO, true);
+		} else if (queue_state(np.resync_frame, buf, n)) {
+			np.resync = RESYNC_HOST_WAIT_ACK;
+			np.resync_timer = true;
+			np.resync_t0 = now_ms();
+		} else {
+			end_session(NP_ENDED, NP_REASON_IO, false);
+		}
+	}
+	free(buf);
+}
+
+// Client at the resync frame with the host's state in: load it (GL thread, mutex released) and ack. True when the
+// resync frame may run.
+static bool client_load_resync(np_unser_fn unser) {
+	uint8_t* buf = np.state_buf;
+	size_t len = np.state_len;
+	np.state_buf = NULL;
+	np.resync_state_ready = false;
+	np.resync = RESYNC_CLIENT_LOADING;
+	pthread_mutex_unlock(&np_mutex);
+
+	bool ok = unser && unser(buf, len);
+	free(buf);
+
+	pthread_mutex_lock(&np_mutex);
+	if (np.phase != NP_RUNNING || np.resync != RESYNC_CLIENT_LOADING)
+		return false;
+	if (!ok) {
+		NP_LOG("resync unserialize failed");
+		end_session(NP_ENDED, NP_REASON_STATE_MISMATCH, true);
+		return false;
+	}
+	send_packet(CMD_STATE_ACK, np.resync_frame, NULL, 0);
+	np.resync = RESYNC_NONE;
+	np.resync_timer = false;
+	restart_pair_clocks(now_ms());
+	NP_LOG("pair: resync done at frame %u", np.resync_frame);
+	return true;
+}
+
+// Pre-frame at the resync frame: true when it may run (the client just loaded the host's state).
+static bool resync_at_frame(np_size_fn size, np_ser_fn ser, np_unser_fn unser, uint64_t now) {
+	switch (np.resync) {
+	case RESYNC_HOST_RUN_TO:
+		host_send_resync_state(size, ser);
+		return false;
+	case RESYNC_CLIENT_WAIT:
+		if (!np.resync_timer) {
+			np.resync_timer = true;
+			np.resync_t0 = now;
+		}
+		return np.resync_state_ready && client_load_resync(unser);
+	default:
+		return false;
+	}
+}
+
+// Store and send our input for every frame up to run_frame + delay not sent yet. Initialise a slot only when it still
+// holds an older frame: an early remote input for that frame (ring fix) must survive.
+static void send_local_inputs(uint16_t local, const int16_t axes[NP_ANALOG_AXES]) {
+	uint32_t target = np.run_frame + (uint32_t)np.delay;
+	while ((int32_t)(target - np.sent_upto) > 0) {
+		uint32_t frame = ++np.sent_upto;
+		FrameInput* slot = get_frame_slot(frame);
+		if (slot->frame != frame)
+			init_frame_slot(frame);
+		if (np.role == NP_ROLE_HOST) {
+			slot->p1_input = local;
+			memcpy(slot->p1_analog, axes, sizeof(slot->p1_analog));
+			slot->have_p1 = true;
+		} else {
+			slot->p2_input = local;
+			memcpy(slot->p2_analog, axes, sizeof(slot->p2_analog));
+			slot->have_p2 = true;
+		}
+		uint8_t payload[NP_INPUT_SIZE];
+		put_be16(payload, local);
+		for (int i = 0; i < NP_ANALOG_AXES; i++)
+			put_be16(payload + 2 + 2 * i, (uint16_t)axes[i]);
+		send_packet(CMD_INPUT, frame, payload, sizeof(payload));
+	}
 }
 
 // Client: unserialise the received state on the GL thread (outside the mutex), then queue STATE_ACK.
@@ -882,36 +1267,39 @@ int np_pre_frame(uint16_t local, const int16_t* local_analog, np_size_fn size, n
 		return 0;
 	}
 	if (np.phase != NP_RUNNING || np.local_paused || np.remote_paused) {
+		if (np.phase == NP_RUNNING)
+			slow_track(now, false);
 		pthread_mutex_unlock(&np_mutex);
 		return 0;
 	}
 
-	// Store and send our input for the FUTURE frame (self_frame). Initialise the slot only when it still holds an
-	// older frame: an early remote input for self_frame (ring fix) must survive.
-	FrameInput* input_slot = get_frame_slot(np.self_frame);
-	if (input_slot->frame != np.self_frame)
-		init_frame_slot(np.self_frame);
-	bool* have = np.role == NP_ROLE_HOST ? &input_slot->have_p1 : &input_slot->have_p2;
-	if (!*have) {
-		int16_t axes[NP_ANALOG_AXES] = {0, 0, 0, 0};
-		if (local_analog)
-			memcpy(axes, local_analog, sizeof(axes));
-		if (np.role == NP_ROLE_HOST) {
-			input_slot->p1_input = local;
-			memcpy(input_slot->p1_analog, axes, sizeof(axes));
-		} else {
-			input_slot->p2_input = local;
-			memcpy(input_slot->p2_analog, axes, sizeof(axes));
-		}
-		*have = true;
-		uint8_t payload[NP_INPUT_SIZE];
-		put_be16(payload, local);
-		for (int i = 0; i < NP_ANALOG_AXES; i++)
-			put_be16(payload + 2 + 2 * i, (uint16_t)axes[i]);
-		send_packet(CMD_INPUT, np.self_frame, payload, sizeof(payload));
+	// Our input for the future frames (up to run_frame + delay).
+	int16_t axes[NP_ANALOG_AXES] = {0, 0, 0, 0};
+	if (local_analog)
+		memcpy(axes, local_analog, sizeof(axes));
+	bool adaptive = np.pair && !np_delay_pin;
+	if (np.pair && np_delay_pin)
+		np.delay = np_delay_pin;
+	send_local_inputs(local, axes);
+
+	// Pair mode: hold at the resync frame until the state has crossed (the client runs it right after loading).
+	if (np.pair && np.resync != RESYNC_NONE && np.run_frame == np.resync_frame &&
+		!resync_at_frame(size, ser, unser, now)) {
+		if (np.phase == NP_RUNNING)
+			slow_track(now, false);
+		pthread_mutex_unlock(&np_mutex);
+		return 0;
 	}
 
 	if (run_slot_complete()) {
+		if (slow_track(now, true)) {
+			pthread_mutex_unlock(&np_mutex);
+			return 0;
+		}
+		if (adaptive && np.delay > NP_DELAY_MIN && elapsed(now, np.calm_t0) >= NP_DELAY_EASE_MS) {
+			np.delay--;
+			np.calm_t0 = now;
+		}
 		FrameInput* run_slot = get_frame_slot(np.run_frame);
 		np.stalled = false;
 		update_countdown(now);
@@ -927,6 +1315,14 @@ int np_pre_frame(uint16_t local, const int16_t* local_analog, np_size_fn size, n
 	if (!np.stalled) {
 		np.stalled = true;
 		np.last_keepalive = now;
+		if (adaptive && np.delay < NP_DELAY_MAX) {
+			np.delay++; // at once: the extra frame goes out now
+			send_local_inputs(local, axes);
+		}
+	}
+	if (np.pair) {
+		np.calm_t0 = now;
+		slow_track(now, false);
 	}
 	update_countdown(now);
 	pthread_mutex_unlock(&np_mutex);
@@ -941,12 +1337,68 @@ void np_set_presync_frames(int frames) {
 
 void np_post_frame(void) {
 	pthread_mutex_lock(&np_mutex);
+	np_hash_fn hash = NULL;
+	uint32_t at = 0;
 	if (np.frame_armed && np.phase == NP_RUNNING) {
 		np.run_frame++;
-		np.self_frame++;
+		if (np.pair && np.hash && np.run_frame % NP_PAIR_CHECK_INTERVAL == 0 && (int64_t)np.run_frame > np.hash_floor) {
+			hash = np.hash;
+			at = np.run_frame;
+		}
 	}
 	np.frame_armed = false;
 	pthread_mutex_unlock(&np_mutex);
+	if (!hash)
+		return;
+
+	uint64_t h = hash(); // the core, outside the mutex
+	pthread_mutex_lock(&np_mutex);
+	if (np.phase == NP_RUNNING && (int64_t)at > np.hash_floor) {
+		np.local_hash = h;
+		np.local_hash_frame = at;
+		np.have_local_hash = true;
+		uint8_t b[8];
+		put_be64(b, h);
+		send_packet(CMD_HASH, at, b, sizeof(b));
+		compare_hashes(now_ms());
+	}
+	pthread_mutex_unlock(&np_mutex);
+}
+
+void np_set_pair_mode(bool on, np_hash_fn hash) {
+	pthread_mutex_lock(&np_mutex);
+	np_pair_wanted = on && hash;
+	np_hash_wanted = np_pair_wanted ? hash : NULL;
+	pthread_mutex_unlock(&np_mutex);
+}
+
+void np_set_delay_pin(int frames) {
+	pthread_mutex_lock(&np_mutex);
+	np_delay_pin = frames <= 0 ? 0 : frames > NP_DELAY_MAX ? NP_DELAY_MAX : frames;
+	if (np.pair && np_delay_pin)
+		np.delay = np_delay_pin;
+	pthread_mutex_unlock(&np_mutex);
+}
+
+int np_current_delay(void) {
+	pthread_mutex_lock(&np_mutex);
+	int d = np.delay;
+	pthread_mutex_unlock(&np_mutex);
+	return d;
+}
+
+int64_t np_run_frame(void) {
+	pthread_mutex_lock(&np_mutex);
+	int64_t f = np.started ? (int64_t)np.run_frame : -1;
+	pthread_mutex_unlock(&np_mutex);
+	return f;
+}
+
+int64_t np_last_verified_frame(void) {
+	pthread_mutex_lock(&np_mutex);
+	int64_t v = np.verified;
+	pthread_mutex_unlock(&np_mutex);
+	return v;
 }
 
 uint16_t np_input(unsigned port) {

@@ -787,7 +787,8 @@ static void local_case(const char* name, case_fn fn) {
 
 int main(void) {
 	setvbuf(stdout, NULL, _IOLBF, 0);
-	next_port = (uint16_t)(42000 + (getpid() % 2000) * 10);
+	/* Below the ephemeral range (49152): a listen port there can collide with this test's own outgoing sockets. */
+	next_port = (uint16_t)(40000 + (getpid() % 180) * 50);
 
 	local_case("header_and_lockstep_detection", case_header_and_lockstep_detection);
 	local_case("start_refuses_bad_input", case_start_refuses_bad_input);

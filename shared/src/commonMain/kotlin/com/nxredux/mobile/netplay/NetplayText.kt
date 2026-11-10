@@ -36,6 +36,35 @@ object NetplayText {
     /** The Hosting page's one-line status after a joiner's save copy failed (the handheld's two-line notice, on one line). */
     const val SAVE_TRANSFER_FAILED = "Save transfer failed - waiting for another player"
     const val WIFI_LOST = "Wi-Fi disconnected."
+    /**
+     * One side picked Cable Link over Wi-Fi and the other did not send the capability (an older build, or one that picked
+     * another connection: the two look the same on the wire); both screens show it.
+     */
+    const val CABLE_LINK_NOT_PICKED = "The other phone isn't on Cable Link over Wi-Fi. Pick it on both phones, and update NX Redux if it isn't there."
+    const val SENDING_GAME = "Sending game..."
+    const val RECEIVING_GAME = "Receiving game..."
+    /** The Hosting page's one-line status after a Cable Link ROM exchange failed. */
+    const val GAME_TRANSFER_FAILED = "Couldn't send the game - waiting for another player"
+    const val CABLE_LINK_COPY_FAILED = "Could not swap games and saves\nwith the other phone.\n\nPlease try again."
+    const val GAME_DAMAGED = "The other phone's game\narrived damaged.\n\nPlease try again."
+    /** The Connection row's third value, GBA games only. */
+    const val CABLE_LINK = "Cable Link over Wi-Fi"
+    /** A sent or received game's progress on the waiting pages. */
+    fun transfer(sending: Boolean, done: Long, total: Long): String {
+        val percent = if (total <= 0) 0 else (done * 100 / total).coerceIn(0, 100)
+        return "${if (sending) SENDING_GAME else RECEIVING_GAME} $percent%"
+    }
+    const val CABLE_LINK_ARCHIVE = "Cable Link over Wi-Fi needs the\ngame unzipped.\n\nExtract the .gba file and try again."
+    const val CABLE_LINK_READ_FAILED = "Could not read the game\nfor Cable Link over Wi-Fi."
+    /** In game, while the host's state replaces this phone's after the two games drifted apart. */
+    const val SYNCING = "Syncing..."
+    const val ENDED_DRIFT = "The two games drifted apart, so the session ended. Your progress up to a few seconds ago is saved."
+    const val ENDED_TOO_SLOW = "This phone can't run both games at full speed, so the session ended."
+    const val ENDED_PEER_TOO_SLOW = "The other phone can't run both games at full speed, so the session ended."
+    /** The in-game menu's footer once a Cable Link session is over (Quit is its only row). */
+    const val CABLE_LINK_ENDED = "The Cable Link session is over. Your save is kept up to the last moment both phones agreed on."
+    /** The Developer overlay's current input delay in a Cable Link session. */
+    fun inputDelay(frames: Int) = "Delay $frames"
     const val CONNECTION = "Connection"
     const val WIFI = "Wi-Fi"
     const val USB_CABLE = "USB Cable"
@@ -121,6 +150,7 @@ object NetplayText {
         RejectReason.GAME -> "The host is running a\ndifferent game."
         RejectReason.ROLE -> "Both devices are hosting.\n\nOne of them must join instead."
         RejectReason.SYNC -> "The host could not share\nits saves."
+        RejectReason.CABLE_LINK -> CABLE_LINK_NOT_PICKED
         RejectReason.CORE, RejectReason.LINK, RejectReason.OTHER -> "The host refused the connection."
     }
     /** Titles in prompts are cut to 40 characters plus "..." (the handheld's PROMPT_TITLE_MAX). */

@@ -84,6 +84,14 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
                     putExtra(GameActivity.EXTRA_NETPLAY_USB, it.overUsb)
                     putExtra(GameActivity.EXTRA_NETPLAY_MIXED, it.mixed)
                     it.peerWl?.let { wl -> putExtra(GameActivity.EXTRA_NETPLAY_PEER_WL, wl) }
+                    if (it.cableLink) {
+                        putExtra(GameActivity.EXTRA_NETPLAY_CABLE_LINK, true)
+                        putExtra(GameActivity.EXTRA_NETPLAY_OTHER_ROM, it.otherRomPath)
+                        it.otherSavePath?.let { p -> putExtra(GameActivity.EXTRA_NETPLAY_OTHER_SAVE, p) }
+                        putExtra(GameActivity.EXTRA_NETPLAY_LOCAL_SLOT, it.localSlot)
+                        putExtra(GameActivity.EXTRA_NETPLAY_BIOS, it.biosMode)
+                        putExtra(GameActivity.EXTRA_NETPLAY_RTC, it.rtcEpoch)
+                    }
                     // The cable lives in this process: the game's stop names this start, sent back here (PrefsProvider).
                     if (it.overUsb) putExtra(GameActivity.EXTRA_NETPLAY_USB_TOKEN, UsbCables.get(context).token())
                 }

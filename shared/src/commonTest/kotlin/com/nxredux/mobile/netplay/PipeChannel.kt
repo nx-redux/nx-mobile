@@ -20,6 +20,13 @@ class PipeChannel private constructor(
         if (closed) throw NetplayIoException("closed")
         (line + "\n").encodeToByteArray().forEach { outbox.send(it) }
     }
+    override suspend fun readBytes(into: ByteArray, offset: Int, length: Int, timeoutMs: Long) {
+        withTimeoutOrNull(timeoutMs) { for (i in 0 until length) into[offset + i] = inbox.receive() } ?: throw NetplayIoException("timeout")
+    }
+    override suspend fun writeBytes(bytes: ByteArray, offset: Int, length: Int) {
+        if (closed) throw NetplayIoException("closed")
+        for (i in offset until offset + length) outbox.send(bytes[i])
+    }
     override fun close() { closed = true }
     companion object {
         /** [hostSees]: the host end's remoteAddress (the client); [clientSees]: the client end's (the host). */

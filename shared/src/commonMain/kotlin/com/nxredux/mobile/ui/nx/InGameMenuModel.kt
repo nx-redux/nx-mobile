@@ -421,17 +421,23 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      */
     var netplayLink: Boolean = false
 
+    /**
+     * netplay: an ended Cable Link session ([netplayEnded] too): the game has stopped and its save is committed, so the
+     * root is Quit alone and nothing closes the menu.
+     */
+    var netplayQuitOnly: Boolean = false
+
     /** Rebuilds the root page after a host-side flag ([netplay]) changed. */
     fun refresh() = refreshRoot()
 
     /**
      * netplay: the session ended. [local] (a link session, [com.nxredux.mobile.netplay.NetplaySession.endsAsLocalGame]):
      * the game is a normal local one from now on, so the full root and the panel beside it; otherwise the plain
-     * Continue / Quit ([netplayEnded]). The host sets [cheatsAvailable] first.
+     * Continue / Quit ([netplayEnded]), or Quit alone with [quitOnly] ([netplayQuitOnly]). The host sets [cheatsAvailable] first.
      */
-    fun endNetplay(local: Boolean) {
+    fun endNetplay(local: Boolean, quitOnly: Boolean = false) {
         if (!netplay) return
-        if (local) { netplay = false; netplayEnded = false } else netplayEnded = true
+        if (local) { netplay = false; netplayEnded = false } else { netplayEnded = true; netplayQuitOnly = quitOnly }
         refreshRoot()
     }
 
@@ -474,7 +480,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var coreOptionsPending = false
 
     fun press(button: NxButton): MenuEffect? =
-        pressMenu(button).also { if (it == MenuEffect.Close) state = state.copy(panelFocus = null, popup = null) }
+        pressMenu(button).takeUnless { it == MenuEffect.Close && netplayQuitOnly }
+            .also { if (it == MenuEffect.Close) state = state.copy(panelFocus = null, popup = null) }
 
     private fun pressMenu(button: NxButton): MenuEffect? {
         state.popup?.let { return pressPopup(it, button) }
@@ -1513,7 +1520,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         else -> false
     }
 
-    private fun rootPage() = if (netplay && netplayEnded) MenuPage(
+    private fun rootPage() = if (netplay && netplayEnded && netplayQuitOnly) MenuPage(
+        PageKind.Root, gameTitle, listOf(MenuRow.Action("Quit", MenuAction.QUIT_ONLY)), footer = NetplayText.CABLE_LINK_ENDED,
+    ) else if (netplay && netplayEnded) MenuPage(
         PageKind.Root, gameTitle,
         // No save states after netplay, so no resume point to choose about: Quit quits.
         listOf(MenuRow.Action("Continue", MenuAction.CONTINUE), MenuRow.Action("Quit", MenuAction.QUIT_ONLY)),

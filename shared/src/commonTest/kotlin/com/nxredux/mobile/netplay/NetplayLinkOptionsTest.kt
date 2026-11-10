@@ -150,4 +150,32 @@ class NetplayLinkOptionsTest {
         assertFalse(NetplaySession(NetplayRole.HOST, "1.2.3.4", "snes9x", "snes9x").allowsAchievements)
         assertFalse(NetplaySession(NetplayRole.CLIENT, "1.2.3.4", "fceumm", "fceumm").allowsAchievements)
     }
+
+    @Test fun pair_forced_options_for_host_and_guest() {
+        val host = NetplaySession(NetplayRole.HOST, "10.0.0.2", "mgba", "gpsp", cableLink = true, otherRomPath = "/cache/link/abc",
+            otherSavePath = "/files/cablelink/other.sav", localSlot = 1, biosMode = "real", rtcEpoch = 1_700_000_000L)
+        assertEquals(
+            mapOf(
+                "mgba_pair" to "ON", "mgba_pair_local" to "1", "mgba_pair_other_rom" to "/cache/link/abc",
+                "mgba_pair_other_save" to "/files/cablelink/other.sav", "mgba_pair_rtc" to "1700000000", "mgba_pair_bios" to "real",
+                NetplayLinkOptions.MGBA_LINK to NetplayLinkOptions.MGBA_DEFAULT,
+            ),
+            NetplayLinkOptions.forPair(host),
+        )
+        val guest = NetplaySession(NetplayRole.CLIENT, "10.0.0.1", "mgba", "mgba", cableLink = true, otherRomPath = "/roms/Ruby.gba",
+            otherSavePath = null, localSlot = 2, biosMode = "hle", rtcEpoch = 42L)
+        val g = NetplayLinkOptions.forPair(guest)
+        assertEquals("2", g["mgba_pair_local"])
+        assertEquals("", g["mgba_pair_other_save"])   // set even when there is none: never a stale value from an earlier run
+        assertEquals("hle", g["mgba_pair_bios"])
+        assertEquals("42", g["mgba_pair_rtc"])
+        assertEquals("/roms/Ruby.gba", g["mgba_pair_other_rom"])
+        // The session flags: the real save is the player's own, written from checkpoints; achievements for this GBA only.
+        assertFalse(host.onCopy)
+        assertFalse(host.endsAsLocalGame)
+        assertTrue(host.allowsAchievements)
+        assertTrue(host.savesAtCheckpoints)
+        assertFalse(NetplaySession(NetplayRole.HOST, "1.2.3.4", "mgba", "mgba").savesAtCheckpoints)
+        assertEquals(emptyMap(), NetplayLinkOptions.forPair(NetplaySession(NetplayRole.HOST, "1.2.3.4", "mgba", "mgba")))
+    }
 }

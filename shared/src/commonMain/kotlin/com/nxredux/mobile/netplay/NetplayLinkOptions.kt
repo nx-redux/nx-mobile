@@ -61,6 +61,28 @@ object NetplayLinkOptions {
 
     private fun defaultMode(coreId: String): String = if (coreId == "mgba") MGBA_DEFAULT else GPSP_DEFAULT
 
+    const val PAIR = "mgba_pair"
+    const val PAIR_LOCAL = "mgba_pair_local"
+    const val PAIR_OTHER_ROM = "mgba_pair_other_rom"
+    const val PAIR_OTHER_SAVE = "mgba_pair_other_save"
+    const val PAIR_RTC = "mgba_pair_rtc"
+    const val PAIR_BIOS = "mgba_pair_bios"
+
+    /**
+     * A Cable Link session's mGBA variables: pair mode, which GBA is this player's, the other GBA's ROM and save (an empty
+     * path for none), the session clock and the agreed BIOS. They are not declared core options: the core reads them once
+     * at load. The real cable stays the link mode, so the core never scans the ROM for a Wi-Fi mode. Empty outside Cable Link.
+     */
+    fun forPair(session: NetplaySession): Map<String, String> = if (!session.cableLink) emptyMap() else mapOf(
+        PAIR to "ON",
+        PAIR_LOCAL to session.localSlot.toString(),
+        PAIR_OTHER_ROM to session.otherRomPath,
+        PAIR_OTHER_SAVE to session.otherSavePath.orEmpty(),
+        PAIR_RTC to session.rtcEpoch.toString(),
+        PAIR_BIOS to session.biosMode,
+        MGBA_LINK to MGBA_DEFAULT,
+    )
+
     /** "192.168.1.7" -> "192168001007" (each octet zero-padded to 3); null when [ip] is not dotted IPv4. */
     fun ipDigits(ip: String): String? {
         val parts = ip.split('.')
@@ -83,7 +105,7 @@ object NetplayLinkOptions {
     }
 
     /** The options [session]'s core is launched with; [linkMode]: the agreed raw mode for gpSP or mGBA (null: the default). */
-    fun forSession(session: NetplaySession, linkMode: String?): Map<String, String> = when (NetplayCores.link(session.coreId)) {
+    fun forSession(session: NetplaySession, linkMode: String?): Map<String, String> = when (session.linkKind) {
         NetplayLinkKind.GBLINK -> buildMap {
             put(GB_PORT_KEY, GB_PORT.toString())
             if (session.role == NetplayRole.HOST) {

@@ -81,6 +81,10 @@ void Core::resolveSymbols() {
     retro_set_input_state = (void (*)(retro_input_state_t)) get_symbol(libHandle, "retro_set_input_state");
 }
 
+void* Core::symbol(const char* name) const {
+    return libHandle != nullptr ? dlsym(libHandle, name) : nullptr;
+}
+
 void Core::close() {
     if (libHandle) {
         dlclose(libHandle);

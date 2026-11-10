@@ -1,0 +1,817 @@
+# license: modifies mGBA (https://github.com/libretro/mgba), MPL-2.0 (LICENSE); this patch is distributed under the same license. With patches 001 and 003 the built core is distributed under GPL-2.0-or-later (MPL-2.0 section 3.3).
+diff --git forkSrcPrefix/CMakeLists.txt forkDstPrefix/CMakeLists.txt
+index c84b6c0c..a9b367ef 100644
+--- forkSrcPrefix/CMakeLists.txt
++++ forkDstPrefix/CMakeLists.txt
+@@ -1056,6 +1056,9 @@ if(BUILD_LIBRETRO)
+ 		COMPILE_OPTIONS "-Wno-missing-field-initializers;-Wno-implicit-fallthrough;-Wno-sign-compare;-Wno-empty-body"
+ 		INCLUDE_DIRECTORIES ${NX_GWL_DIR} OBJECT_DEPENDS "${NX_GWL_DEPS}")
+ 	set_property(SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/platform/libretro/libretro.c APPEND PROPERTY INCLUDE_DIRECTORIES ${NX_GWL_DIR})
++	# mGBA's in-process link cable, for pair mode (mgba_pair): one core
++	# running both GBAs of a link.
++	list(APPEND LIBRETRO_CORE_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/gba/sio/lockstep.c)
+ 	if(CMAKE_TRY_COMPILE_TARGET_TYPE STREQUAL "STATIC_LIBRARY" AND NOT APPLE)
+ 		# Link-based function probes always succeed under static try-compile,
+ 		# so every find_function result above is untrustworthy; use the set
+diff --git forkSrcPrefix/include/mgba/core/interface.h forkDstPrefix/include/mgba/core/interface.h
+index b5ffa304..9d7e7665 100644
+--- forkSrcPrefix/include/mgba/core/interface.h
++++ forkDstPrefix/include/mgba/core/interface.h
+@@ -96,6 +96,9 @@ struct mRTCSource {
+ 
+ 	void (*serialize)(struct mRTCSource*, struct mStateExtdataItem*);
+ 	bool (*deserialize)(struct mRTCSource*, const struct mStateExtdataItem*);
++
++	// unixTime is broken down as UTC, not in the host's time zone
++	bool utc;
+ };
+ 
+ struct mImageSource {
+diff --git forkSrcPrefix/src/gba/cart/gpio.c forkDstPrefix/src/gba/cart/gpio.c
+index f714cf85..a4f93a4b 100644
+--- forkSrcPrefix/src/gba/cart/gpio.c
++++ forkDstPrefix/src/gba/cart/gpio.c
+@@ -312,7 +312,11 @@ void _rtcUpdateClock(struct GBACartridgeHardware* hw) {
+ 	t -= hw->rtc.offset;
+ 
+ 	struct tm date;
+-	localtime_r(&t, &date);
++	if (rtc && rtc->utc) {
++		gmtime_r(&t, &date);
++	} else {
++		localtime_r(&t, &date);
++	}
+ 	hw->rtc.time[0] = _rtcBCD(date.tm_year - 100);
+ 	hw->rtc.time[1] = _rtcBCD(date.tm_mon + 1);
+ 	hw->rtc.time[2] = _rtcBCD(date.tm_mday);
+diff --git forkSrcPrefix/src/platform/libretro/libretro.c forkDstPrefix/src/platform/libretro/libretro.c
+index f2283851..f0848743 100644
+--- forkSrcPrefix/src/platform/libretro/libretro.c
++++ forkDstPrefix/src/platform/libretro/libretro.c
+@@ -24,6 +24,9 @@
+ #include <mgba/gba/core.h>
+ #include <mgba/gba/interface.h>
+ #include <mgba/internal/gba/gba.h>
++#include <mgba/internal/gba/io.h>
++#include <mgba/internal/gba/serialize.h>
++#include <mgba/internal/gba/sio/lockstep.h>
+ #include <mgba/internal/gba/sio/nx_lockstep.h>
+ #include <mgba/internal/gba/sio/nx_wifi_link.h>
+ #include "gwl_mode.h"
+@@ -87,6 +90,7 @@ static int32_t _readGyroZ(struct mRotationSource* source);
+ static void _setupMaps(struct mCore* core);
+ 
+ static struct mCore* core;
++static bool pairMode; /* mgba_pair: see the pair mode notes below */
+ #ifdef M_CORE_GBA
+ /* NXRedux netpacket session (link cable, see np_iface) */
+ static retro_netpacket_send_t np_send;
+@@ -98,6 +102,40 @@ static uint16_t np_peer_id;
+  * nothing on the serial port */
+ static enum GwlLinkPick np_link;
+ static enum GwlMode np_wl_mode;
++
++/* Pair mode (mgba_pair): this core runs both GBAs of a two-player link cable,
++ * joined by mGBA's lockstep coordinator. Both phones of a session feed the
++ * same two input streams into it and must compute the same two GBAs, so the
++ * GBAs take turns on the frame thread in an order set only by their emulated
++ * clocks, and nothing read from the device (wall clock, time zone, sensors,
++ * turbo phase) reaches them. core is the local GBA, the one this phone's
++ * player sees, hears and saves. */
++struct PairUser {
++	struct mLockstepUser d;
++	int id;
++};
++
++static unsigned pairLocal; /* index of core in pairCores: 0 = GBA 1 */
++static bool pairRealBios;
++static int64_t pairRtc;
++static struct mCore* pairCores[2];
++static mColor* pairOtherVideo;
++static void* pairOtherSave;
++static struct GBASIOLockstepCoordinator pairCoordinator;
++static struct GBASIOLockstepDriver pairDrivers[2];
++static struct PairUser pairUsers[2];
++static bool pairLinked;
++static bool pairStallLogged;
++static size_t pairStateSize;
++
++/* retro_serialize in pair mode: a header (magic, version, the two state
++ * lengths), each GBA's serial registers, then each GBA as mGBA's own state
++ * with its save and clock, and zeros up to pairStateSize. */
++#define PAIR_STATE_MAGIC 0x52504E58 /* "NXPR" */
++#define PAIR_STATE_VERSION 1
++#define PAIR_LINK_REGS_SIZE 0x40 /* SIODATA32_LO up to JOYSTAT and beyond, 0x120-0x15F */
++#define PAIR_LINK_SIZE (PAIR_LINK_REGS_SIZE + 8)
++#define PAIR_HEADER_SIZE (16 + 2 * PAIR_LINK_SIZE)
+ #endif
+ static mColor* outputBuffer = NULL;
+ static struct LibretroAudioConverter audioConverter;
+@@ -1174,7 +1212,8 @@ static void _updateGbPal(void) {
+ }
+ #endif
+ 
+-static void _reloadSettings(void) {
++/* core is a parameter here so pair mode can configure both GBAs the same. */
++static void _reloadSettingsFor(struct mCore* core) {
+ 	struct mCoreOptions opts = {
+ 		.useBios = true,
+ 		.volume = 0x100,
+@@ -1266,12 +1305,149 @@ static void _reloadSettings(void) {
+ 	if (environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+ 		mCoreConfigSetDefaultIntValue(&core->config, "gba.forceGbp", strcmp(var.value, "ON") == 0);
+ 	}
++	if (pairMode) {
++		// Both phones must run the same two GBAs whatever each player set,
++		// so every option that changes emulation is fixed here. Idle loop
++		// removal also keeps state that save states leave out (haltPending,
++		// detection steps). The BIOS is mgba_pair_bios's: without useBios a
++		// GBA never looks for one on its own.
++		opts.useBios = pairRealBios;
++		opts.skipBios = true;
++		mCoreConfigSetValue(&core->config, "idleOptimization", "ignore");
++		mCoreConfigSetIntValue(&core->config, "allowOpposingDirections", 0);
++		mCoreConfigSetIntValue(&core->config, "gba.forceGbp", 0);
++	}
+ #endif
+ 
+ 	mCoreConfigLoadDefaults(&core->config, &opts);
+ 	mCoreLoadConfig(core);
+ }
+ 
++static void _reloadSettings(void) {
++	_reloadSettingsFor(core);
++}
++
++#ifdef M_CORE_GBA
++static void _pairReset(void) {
++	// GBA 1 first: the coordinator's clock follows its player 0.
++	unsigned i;
++	for (i = 0; i < 2; ++i) {
++		pairCores[i]->reset(pairCores[i]);
++		// A reset reads a clock cart's saved RTC back with mktime, in this
++		// phone's time zone, and the offset it derives is not in save states.
++		// Zero, as on the first boot (the save is loaded after that reset).
++		((struct GBA*) pairCores[i]->board)->memory.hw.rtc.offset = 0;
++	}
++}
++
++static void _pairSleep(struct mLockstepUser* user) {
++	UNUSED(user);
++}
++
++static void _pairWake(struct mLockstepUser* user) {
++	UNUSED(user);
++}
++
++static int _pairRequestedId(struct mLockstepUser* user) {
++	return ((struct PairUser*) user)->id;
++}
++
++/* GBA 1 is the cable's player 0 (the clock owner), GBA 2 player 1. */
++static void _pairLink(void) {
++	GBASIOLockstepCoordinatorInit(&pairCoordinator);
++	unsigned i;
++	for (i = 0; i < 2; ++i) {
++		pairUsers[i] = (struct PairUser) {
++			.d = {
++				.sleep = _pairSleep,
++				.wake = _pairWake,
++				.requestedId = _pairRequestedId,
++			},
++			.id = i,
++		};
++		GBASIOLockstepDriverCreate(&pairDrivers[i], &pairUsers[i].d);
++		GBASIOLockstepCoordinatorAttach(&pairCoordinator, &pairDrivers[i]);
++		pairCores[i]->setPeripheral(pairCores[i], mPERIPH_GBA_LINK_PORT, &pairDrivers[i].d);
++	}
++	pairLinked = true;
++	pairStallLogged = false;
++}
++
++static uint16_t _pairKeys(unsigned port) {
++	uint16_t keys = 0;
++	unsigned i;
++	if (useBitmasks) {
++		int16_t joypadMask = inputCallback(port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
++		for (i = 0; i < sizeof(keymap) / sizeof(*keymap); ++i) {
++			keys |= ((joypadMask >> keymap[i]) & 1) << i;
++		}
++	} else {
++		for (i = 0; i < sizeof(keymap) / sizeof(*keymap); ++i) {
++			keys |= (!!inputCallback(port, RETRO_DEVICE_JOYPAD, 0, keymap[i])) << i;
++		}
++	}
++	return keys;
++}
++
++static struct GBASIOLockstepPlayer* _pairPlayer(unsigned i) {
++	return TableLookup(&pairCoordinator.players, pairDrivers[i].lockstepId);
++}
++
++/* One frame of both GBAs. The GBA behind on the cable's clock runs next, one
++ * event period at a time, so the two stay close in emulated time unless one
++ * is asleep in the coordinator, waiting on the other. A GBA that has finished
++ * its frame runs on into its vblank only while the other cannot run without
++ * it. */
++static void _pairRunFrame(void) {
++	struct GBA* gbas[2] = { pairCores[0]->board, pairCores[1]->board };
++	uint32_t frame[2];
++	int32_t start[2];
++	unsigned i;
++	for (i = 0; i < 2; ++i) {
++		frame[i] = gbas[i]->video.frameCounter;
++		start[i] = mTimingCurrentTime(&gbas[i]->timing);
++	}
++	while (true) {
++		bool done[2];
++		bool awake[2];
++		int32_t now[2];
++		for (i = 0; i < 2; ++i) {
++			struct GBASIOLockstepPlayer* player = _pairPlayer(i);
++			int32_t cycle = mTimingCurrentTime(&gbas[i]->timing);
++			done[i] = gbas[i]->video.frameCounter != frame[i] ||
++			          cycle - start[i] >= VIDEO_TOTAL_LENGTH + VIDEO_HORIZONTAL_LENGTH;
++			awake[i] = !player || !player->asleep;
++			now[i] = cycle - (player ? player->cycleOffset : 0);
++		}
++		if (done[0] && done[1]) {
++			break;
++		}
++		int pick = -1;
++		int pass;
++		for (pass = 0; pass < 2 && pick < 0; ++pass) {
++			for (i = 0; i < 2; ++i) {
++				if (!awake[i] || (pass == 0 && done[i])) {
++					continue;
++				}
++				if (pick < 0 || now[i] - now[pick] < 0) {
++					pick = i;
++				}
++			}
++		}
++		if (pick < 0) {
++			if (!pairStallLogged) {
++				mLOG(GBA_SIO, ERROR, "Pair: both GBAs are waiting on each other");
++				pairStallLogged = true;
++			}
++			break;
++		}
++		pairCores[pick]->runLoop(pairCores[pick]);
++	}
++	struct mCore* other = pairCores[!pairLocal];
++	mAudioBufferClear(other->getAudioBuffer(other));
++}
++#endif
++
+ static void _doDeferredSetup(void) {
+ 	// Libretro API doesn't let you know when it's done copying data into the save buffers.
+ 	// On the off-hand chance that a core actually expects its buffers to be populated when
+@@ -1280,6 +1456,11 @@ static void _doDeferredSetup(void) {
+ 	struct VFile* save = VFileFromMemory(savedata, GBA_SIZE_FLASH1M);
+ 
+     /* need to defer resetting the core on start so drivers are initialized */
++#ifdef M_CORE_GBA
++	if (pairMode) {
++		_pairReset();
++	} else
++#endif
+     core->reset(core);
+ 	_setupMaps(core);
+ 
+@@ -1290,6 +1471,19 @@ static void _doDeferredSetup(void) {
+ 	if (!core->loadSave(core, save)) {
+ 		save->close(save);
+ 	}
++#ifdef M_CORE_GBA
++	if (pairMode) {
++		struct mCore* other = pairCores[!pairLocal];
++		struct VFile* otherSave = VFileFromMemory(pairOtherSave, GBA_SIZE_FLASH1M);
++		if (!other->loadSave(other, otherSave)) {
++			otherSave->close(otherSave);
++		}
++		_pairLink();
++		// Room for the largest save either game can grow to, so the size
++		// stays the same for the whole session.
++		pairStateSize = PAIR_HEADER_SIZE + 2 * (core->stateSize(core) + GBA_SIZE_FLASH1M + 0x10000);
++	}
++#endif
+ 	deferredSetup = false;
+ }
+ 
+@@ -1575,7 +1769,8 @@ void retro_run(void) {
+ 			.key = "mgba_allow_opposing_directions",
+ 			.value = 0
+ 		};
+-		if (environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
++		// Pinned off in pair mode (_reloadSettingsFor)
++		if (!pairMode && environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+ 			mCoreConfigSetIntValue(&core->config, "allowOpposingDirections", strcmp(var.value, "yes") == 0);
+ 			core->reloadConfigOption(core, "allowOpposingDirections", NULL);
+ 		}
+@@ -1615,6 +1810,14 @@ void retro_run(void) {
+ 		);
+ 	}
+ 	core->setKeys(core, keys);
++#ifdef M_CORE_GBA
++	if (pairMode) {
++		// Port 0 is GBA 1 and port 1 GBA 2 on every phone; no turbo, whose
++		// phase lives outside the GBAs' state.
++		pairCores[0]->setKeys(pairCores[0], _pairKeys(0));
++		pairCores[1]->setKeys(pairCores[1], _pairKeys(1));
++	}
++#endif
+ 
+ 	if (!luxSensorUsed) {
+ 		static bool wasAdjustingLux = false;
+@@ -1693,6 +1896,11 @@ void retro_run(void) {
+       updateAudioLatency = false;
+    }
+ 
++#ifdef M_CORE_GBA
++	if (pairMode) {
++		_pairRunFrame();
++	} else
++#endif
+ 	core->runFrame(core);
+ 	unsigned width, height;
+ 	core->currentVideoSize(core, &width, &height);
+@@ -1955,6 +2163,11 @@ static void _setupMaps(struct mCore* core) {
+ }
+ 
+ void retro_reset(void) {
++#ifdef M_CORE_GBA
++	if (pairMode) {
++		_pairReset();
++	} else
++#endif
+ 	core->reset(core);
+ 	mRumbleIntegratorReset(&rumble);
+ 	_setupMaps(core);
+@@ -2121,6 +2334,89 @@ static void _resolveLinkMode(void) {
+ 	np_link = gwl_mgba_pick(option, autoMode);
+ 	np_wl_mode = gwl_mgba_wifi_mode(option, autoMode);
+ }
++
++static const char* _pairOption(const char* key) {
++	struct retro_variable var = { .key = key, .value = NULL };
++	if (!environCallback(RETRO_ENVIRONMENT_GET_VARIABLE, &var) || !var.value) {
++		return "";
++	}
++	return var.value;
++}
++
++static void _pairReadOptions(void) {
++	pairMode = core->platform(core) == mPLATFORM_GBA && strcmp(_pairOption("mgba_pair"), "ON") == 0;
++	pairLocal = strcmp(_pairOption("mgba_pair_local"), "2") == 0;
++	pairRealBios = strcmp(_pairOption("mgba_pair_bios"), "real") == 0;
++	pairRtc = strtoll(_pairOption("mgba_pair_rtc"), NULL, 10);
++}
++
++/* Both GBAs' clocks read the session's start plus emulated time, broken down
++ * as UTC so the phones' time zones don't matter. */
++static void _pairSetRtc(struct mCore* gbaCore) {
++	gbaCore->rtc.override = RTC_FAKE_EPOCH;
++	gbaCore->rtc.value = pairRtc * 1000LL;
++	gbaCore->rtc.d.utc = true;
++}
++
++/* The other GBA: its ROM, configured like core, and its save (read only, never
++ * written back). */
++static bool _pairLoadOther(void) {
++	const char* romPath = _pairOption("mgba_pair_other_rom");
++	struct VFile* rom = romPath[0] ? VFileOpen(romPath, O_RDONLY) : NULL;
++	if (!rom) {
++		mLOG(GBA_SIO, ERROR, "Pair: cannot open the other ROM");
++		return false;
++	}
++	struct mCore* other = mCoreIsCompatible(rom) == mPLATFORM_GBA ? mCoreFindVF(rom) : NULL;
++	if (!other) {
++		mLOG(GBA_SIO, ERROR, "Pair: the other ROM is not a GBA game");
++		rom->close(rom);
++		return false;
++	}
++	mCoreInitConfig(other, NULL);
++	other->init(other);
++	pairOtherVideo = malloc(VIDEO_BUFF_SIZE);
++	memset(pairOtherVideo, 0xFF, VIDEO_BUFF_SIZE);
++	other->setVideoBuffer(other, pairOtherVideo, VIDEO_WIDTH_MAX);
++	_reloadSettingsFor(other);
++	other->loadROM(other, rom);
++
++	pairOtherSave = anonymousMemoryMap(GBA_SIZE_FLASH1M);
++	memset(pairOtherSave, 0xFF, GBA_SIZE_FLASH1M);
++	const char* savePath = _pairOption("mgba_pair_other_save");
++	struct VFile* save = savePath[0] ? VFileOpen(savePath, O_RDONLY) : NULL;
++	if (save) {
++		ssize_t size = save->size(save);
++		save->read(save, pairOtherSave, size < GBA_SIZE_FLASH1M ? size : GBA_SIZE_FLASH1M);
++		save->close(save);
++	}
++
++	pairCores[pairLocal] = core;
++	pairCores[!pairLocal] = other;
++	_pairSetRtc(core);
++	_pairSetRtc(other);
++	return true;
++}
++
++static void _pairUnload(void) {
++	if (pairLinked) {
++		// Both GBAs leave at once: drop their players without the detach
++		// messages a GBA unplugging mid-game would send the other.
++		unsigned i;
++		for (i = 0; i < 2; ++i) {
++			TableRemove(&pairCoordinator.players, pairDrivers[i].lockstepId);
++		}
++	}
++	struct mCore* other = pairCores[!pairLocal];
++	mCoreConfigDeinit(&other->config);
++	other->deinit(other);
++	free(pairOtherVideo);
++	pairOtherVideo = NULL;
++	mappedMemoryFree(pairOtherSave, GBA_SIZE_FLASH1M);
++	pairOtherSave = NULL;
++	pairCores[0] = NULL;
++	pairCores[1] = NULL;
++}
+ #endif
+ 
+ bool retro_load_game(const struct retro_game_info* game) {
+@@ -2160,6 +2456,9 @@ bool retro_load_game(const struct retro_game_info* game) {
+ 	}
+ 	mCoreInitConfig(core, NULL);
+ 	core->init(core);
++#ifdef M_CORE_GBA
++	_pairReadOptions();
++#endif
+ 
+ #ifdef _3DS
+ 	outputBuffer = linearMemAlign(VIDEO_BUFF_SIZE, 0x80);
+@@ -2200,6 +2499,10 @@ bool retro_load_game(const struct retro_game_info* game) {
+ 
+ 	core->setAVStream(core, &stream);
+ 	core->setPeripheral(core, mPERIPH_RUMBLE, &rumble);
++#ifdef M_CORE_GBA
++	// The sensors are this phone's only, so a pair's GBAs never read them.
++	if (!pairMode)
++#endif
+ 	core->setPeripheral(core, mPERIPH_ROTATION, &rotation);
+ 
+ 	savedata = anonymousMemoryMap(GBA_SIZE_FLASH1M);
+@@ -2208,6 +2511,14 @@ bool retro_load_game(const struct retro_game_info* game) {
+ 	_reloadSettings();
+ 	core->loadROM(core, rom);
+ 	deferredSetup = true;
++#ifdef M_CORE_GBA
++	if (pairMode && !_pairLoadOther()) {
++		pairMode = false;
++		retro_unload_game();
++		core = NULL;
++		return false;
++	}
++#endif
+ 
+ 	const char* sysDir = 0;
+ 	const char* biosName = 0;
+@@ -2216,7 +2527,9 @@ bool retro_load_game(const struct retro_game_info* game) {
+ 
+ #ifdef M_CORE_GBA
+ 	if (core->platform(core) == mPLATFORM_GBA) {
+-		core->setPeripheral(core, mPERIPH_GBA_LUMINANCE, &lux);
++		if (!pairMode) {
++			core->setPeripheral(core, mPERIPH_GBA_LUMINANCE, &lux);
++		}
+ 		biosName = "gba_bios.bin";
+ 
+ 	}
+@@ -2260,6 +2573,34 @@ bool retro_load_game(const struct retro_game_info* game) {
+ #endif
+ 
+ #ifdef ENABLE_VFS
++#ifdef M_CORE_GBA
++	// mgba_pair_bios decides for both GBAs: the phones agreed on it.
++	// mGBA's HLE BIOS instead would split the phones, so no BIOS fails the
++	// load.
++	if (pairMode) {
++		if (pairRealBios) {
++			unsigned i;
++			for (i = 0; i < 2; ++i) {
++				struct VFile* bios = NULL;
++				if (sysDir) {
++					snprintf(biosPath, sizeof(biosPath), "%s%s%s", sysDir, PATH_SEP, biosName);
++					bios = VFileOpen(biosPath, O_RDONLY);
++				}
++				if (!bios || bios->size(bios) != GBA_SIZE_BIOS || !GBAIsBIOS(bios)) {
++					mLOG(GBA_SIO, ERROR, "Pair: mgba_pair_bios is real but there is no GBA BIOS at %s",
++					     sysDir ? biosPath : "(no system directory)");
++					if (bios) {
++						bios->close(bios);
++					}
++					retro_unload_game();
++					core = NULL;
++					return false;
++				}
++				pairCores[i]->loadBIOS(pairCores[i], bios, 0);
++			}
++		}
++	} else
++#endif
+ 	if (core->opts.useBios && sysDir && biosName) {
+ 		snprintf(biosPath, sizeof(biosPath), "%s%s%s", sysDir, PATH_SEP, biosName);
+ 		struct VFile* bios = VFileOpen(biosPath, O_RDONLY);
+@@ -2270,7 +2611,8 @@ bool retro_load_game(const struct retro_game_info* game) {
+ #endif
+ 
+ #ifdef M_CORE_GBA
+-	if (core->platform(core) == mPLATFORM_GBA) {
++	// A pair's link cable is inside this core; no netpacket session.
++	if (core->platform(core) == mPLATFORM_GBA && !pairMode) {
+ 		_resolveLinkMode();
+ 		environCallback(RETRO_ENVIRONMENT_SET_NETPACKET_INTERFACE,
+ 		                (void*) (np_link == GWL_PICK_WIFI ? &np_wl_iface : &np_iface));
+@@ -2292,19 +2634,240 @@ void retro_unload_game(void) {
+ 		np_poll = NULL;
+ 		np_peer = false;
+ 	}
++	if (pairMode) {
++		_pairUnload();
++	}
+ #endif
+ 	mCoreConfigDeinit(&core->config);
+ 	core->deinit(core);
++#ifdef M_CORE_GBA
++	if (pairMode) {
++		// After both GBAs' SIO drivers have left it
++		if (pairLinked) {
++			GBASIOLockstepCoordinatorDeinit(&pairCoordinator);
++			pairLinked = false;
++		}
++		pairMode = false;
++	}
++#endif
+ 	mappedMemoryFree(data, dataSize);
+ 	data = 0;
+ 	mappedMemoryFree(savedata, GBA_SIZE_FLASH1M);
+ 	savedata = 0;
+ }
+ 
++#ifdef M_CORE_GBA
++/* mGBA's states keep the serial registers as the game wrote them, and a load
++ * writes them back in address order while the old mode is still set: the
++ * mode-dependent data registers can be dropped and the live RCNT / SIOCNT
++ * bits (ready, clock) are lost. Pair mode saves them as they are and puts
++ * them back after the load. */
++static void _pairSaveLinkRegisters(unsigned i, uint8_t* out) {
++	struct GBA* gba = pairCores[i]->board;
++	memcpy(out, &gba->memory.io[GBA_REG(SIODATA32_LO)], PAIR_LINK_REGS_SIZE);
++	STORE_16LE(gba->sio.rcnt, PAIR_LINK_REGS_SIZE, out);
++	STORE_16LE(gba->sio.siocnt, PAIR_LINK_REGS_SIZE + 2, out);
++	STORE_32LE(gba->sio.mode, PAIR_LINK_REGS_SIZE + 4, out);
++}
++
++static void _pairLoadLinkRegisters(unsigned i, const uint8_t* in) {
++	struct GBA* gba = pairCores[i]->board;
++	int32_t mode;
++	memcpy(&gba->memory.io[GBA_REG(SIODATA32_LO)], in, PAIR_LINK_REGS_SIZE);
++	LOAD_16LE(gba->sio.rcnt, PAIR_LINK_REGS_SIZE, in);
++	LOAD_16LE(gba->sio.siocnt, PAIR_LINK_REGS_SIZE + 2, in);
++	LOAD_32LE(mode, PAIR_LINK_REGS_SIZE + 4, in);
++	gba->sio.mode = mode;
++}
++
++static bool _pairSerialize(void* out, size_t size) {
++	if (size < pairStateSize) {
++		return false;
++	}
++	uint8_t* bytes = out;
++	memset(bytes, 0, pairStateSize);
++	STORE_32LE(PAIR_STATE_MAGIC, 0, bytes);
++	STORE_32LE(PAIR_STATE_VERSION, 4, bytes);
++	size_t offset = PAIR_HEADER_SIZE;
++	unsigned i;
++	for (i = 0; i < 2; ++i) {
++		_pairSaveLinkRegisters(i, &bytes[16 + i * PAIR_LINK_SIZE]);
++		struct VFile* vfm = VFileMemChunk(NULL, 0);
++		mCoreSaveStateNamed(pairCores[i], vfm, SAVESTATE_SAVEDATA | SAVESTATE_RTC);
++		size_t length = vfm->size(vfm);
++		if (offset + length > pairStateSize) {
++			vfm->close(vfm);
++			return false;
++		}
++		vfm->seek(vfm, 0, SEEK_SET);
++		vfm->read(vfm, &bytes[offset], length);
++		vfm->close(vfm);
++		STORE_32LE(length, 8 + 4 * i, bytes);
++		offset += length;
++	}
++	return true;
++}
++
++/* Loading a GBA's registers re-runs its SIO mode switch, which tells the
++ * other GBA's player through the coordinator. Once both GBAs are loaded,
++ * their link drivers' own states are applied again, over those messages. */
++static bool _pairReloadLink(unsigned i, const void* state, size_t length) {
++	struct mStateExtdata extdata;
++	struct mStateExtdataItem item;
++	bool ok = false;
++	mStateExtdataInit(&extdata);
++	struct VFile* vf = VFileFromConstMemory(state, length);
++	if (mCoreExtractExtdata(pairCores[i], vf, &extdata) &&
++	    mStateExtdataGet(&extdata, EXTDATA_SUBSYSTEM_START + GBA_SUBSYSTEM_SIO_DRIVER, &item) &&
++	    item.size > (ssize_t) sizeof(uint32_t)) {
++		struct GBA* gba = pairCores[i]->board;
++		mTimingDeschedule(&gba->timing, &pairDrivers[i].event);
++		ok = pairDrivers[i].d.loadState(&pairDrivers[i].d, (const uint8_t*) item.data + sizeof(uint32_t),
++		                                item.size - sizeof(uint32_t));
++	}
++	vf->close(vf);
++	mStateExtdataDeinit(&extdata);
++	return ok;
++}
++
++/* Whether a GBA's part of a pair state will load: this build's state version,
++ * this GBA's game, and its link driver's state. Checked for both GBAs before
++ * either is touched, so a refused state leaves the pair as it was. */
++static bool _pairCheckState(unsigned i, const uint8_t* state, size_t length) {
++	struct mCore* gbaCore = pairCores[i];
++	struct GBA* gba = gbaCore->board;
++	if (length < gbaCore->stateSize(gbaCore) || !gba->memory.rom) {
++		return false;
++	}
++	const struct GBASerializedState* gbaState = (const struct GBASerializedState*) state;
++	// The header GBADeserialize compares against
++	const struct GBACartridge* cart = (const struct GBACartridge*) (gba->memory.unl.type == GBA_UNL_CART_MULTICART ?
++	                                                                gba->memory.unl.multi.rom : gba->memory.rom);
++	uint32_t magic;
++	LOAD_32LE(magic, 0, &gbaState->versionMagic);
++	if (magic != GBASavestateMagic + GBASavestateVersion || gbaState->id != cart->id ||
++	    memcmp(gbaState->title, cart->title, sizeof(gbaState->title)) != 0) {
++		return false;
++	}
++	struct mStateExtdata extdata;
++	struct mStateExtdataItem item;
++	mStateExtdataInit(&extdata);
++	struct VFile* vf = VFileFromConstMemory(state, length);
++	bool ok = mCoreExtractExtdata(gbaCore, vf, &extdata) &&
++	          mStateExtdataGet(&extdata, EXTDATA_SUBSYSTEM_START + GBA_SUBSYSTEM_SIO_DRIVER, &item) &&
++	          item.size > (ssize_t) sizeof(uint32_t);
++	vf->close(vf);
++	mStateExtdataDeinit(&extdata);
++	return ok;
++}
++
++static bool _pairUnserialize(const void* in, size_t size) {
++	const uint8_t* bytes = in;
++	uint32_t magic, version, length[2];
++	if (size < PAIR_HEADER_SIZE) {
++		return false;
++	}
++	LOAD_32LE(magic, 0, bytes);
++	LOAD_32LE(version, 4, bytes);
++	LOAD_32LE(length[0], 8, bytes);
++	LOAD_32LE(length[1], 12, bytes);
++	if (magic != PAIR_STATE_MAGIC || version != PAIR_STATE_VERSION ||
++	    (uint64_t) PAIR_HEADER_SIZE + length[0] + length[1] > size) {
++		return false;
++	}
++	const uint8_t* state[2] = { &bytes[PAIR_HEADER_SIZE], &bytes[PAIR_HEADER_SIZE + length[0]] };
++	if (!_pairCheckState(0, state[0], length[0]) || !_pairCheckState(1, state[1], length[1])) {
++		return false;
++	}
++	bool ok = true;
++	unsigned i;
++	for (i = 0; i < 2; ++i) {
++		// With its save, written into the save buffer like the game would:
++		// both phones must play on the same saves.
++		struct VFile* vf = VFileFromConstMemory(state[i], length[i]);
++		ok = mCoreLoadStateNamed(pairCores[i], vf, SAVESTATE_SAVEDATA | SAVESTATE_RTC) && ok;
++		vf->close(vf);
++	}
++	for (i = 0; ok && i < 2; ++i) {
++		ok = _pairReloadLink(i, state[i], length[i]);
++		_pairLoadLinkRegisters(i, &bytes[16 + i * PAIR_LINK_SIZE]);
++	}
++	return ok;
++}
++
++static uint64_t _pairHashBytes(uint64_t hash, const void* data, size_t size) {
++	const uint8_t* bytes = data;
++	size_t i;
++	for (i = 0; i < size; ++i) {
++		hash ^= bytes[i];
++		hash *= 0x100000001B3ULL;
++	}
++	return hash;
++}
++
++/* FNV-1a over what the phones must agree on, read from the live GBAs: their
++ * emulated time, CPU, memory, I/O and serial registers, and saves. Not their
++ * save states: mGBA stores some lazily updated timings (audio channels, a few
++ * events) in a form that a load changes while the emulation stays the same.
++ * Video and audio output are not part of it. All supported devices are
++ * little-endian, so the bytes are the same on each. 0 outside pair mode. */
++RETRO_API uint64_t nx_pair_hash(void) {
++	if (!pairMode || !core) {
++		return 0;
++	}
++	if (deferredSetup) {
++		_doDeferredSetup();
++	}
++	uint64_t hash = 0xCBF29CE484222325ULL;
++	unsigned i;
++	for (i = 0; i < 2; ++i) {
++		struct mCore* gbaCore = pairCores[i];
++		struct GBA* gba = gbaCore->board;
++		struct ARMCore* cpu = gba->cpu;
++		uint64_t time = mTimingGlobalTime(&gba->timing);
++		hash = _pairHashBytes(hash, &time, sizeof(time));
++		hash = _pairHashBytes(hash, cpu->gprs, sizeof(cpu->gprs));
++		hash = _pairHashBytes(hash, &cpu->cpsr.packed, sizeof(cpu->cpsr.packed));
++		hash = _pairHashBytes(hash, &cpu->spsr.packed, sizeof(cpu->spsr.packed));
++		hash = _pairHashBytes(hash, cpu->bankedRegisters, sizeof(cpu->bankedRegisters));
++		hash = _pairHashBytes(hash, cpu->bankedSPSRs, sizeof(cpu->bankedSPSRs));
++		uint8_t halted = cpu->halted;
++		hash = _pairHashBytes(hash, &halted, sizeof(halted));
++		hash = _pairHashBytes(hash, gba->memory.wram, GBA_SIZE_EWRAM);
++		hash = _pairHashBytes(hash, gba->memory.iwram, GBA_SIZE_IWRAM);
++		hash = _pairHashBytes(hash, gba->video.palette, GBA_SIZE_PALETTE_RAM);
++		hash = _pairHashBytes(hash, gba->video.vram, GBA_SIZE_VRAM);
++		hash = _pairHashBytes(hash, gba->video.oam.raw, GBA_SIZE_OAM);
++		hash = _pairHashBytes(hash, gba->memory.io, sizeof(gba->memory.io));
++		hash = _pairHashBytes(hash, &gba->sio.rcnt, sizeof(gba->sio.rcnt));
++		hash = _pairHashBytes(hash, &gba->sio.siocnt, sizeof(gba->sio.siocnt));
++		hash = _pairHashBytes(hash, gba->memory.hw.rtc.time, sizeof(gba->memory.hw.rtc.time));
++		hash = _pairHashBytes(hash, &gba->memory.hw.rtc.control, sizeof(gba->memory.hw.rtc.control));
++		struct GBASIOLockstepPlayer* player = _pairPlayer(i);
++		if (player) {
++			int32_t mode = player->mode;
++			uint8_t dataReceived = player->dataReceived;
++			hash = _pairHashBytes(hash, &mode, sizeof(mode));
++			hash = _pairHashBytes(hash, &dataReceived, sizeof(dataReceived));
++		}
++		void* sram = NULL;
++		size_t sramSize = gbaCore->savedataClone(gbaCore, &sram);
++		hash = _pairHashBytes(hash, sram, sramSize);
++		free(sram);
++	}
++	return hash;
++}
++#endif
++
+ size_t retro_serialize_size(void) {
+ 	if (deferredSetup) {
+ 		_doDeferredSetup();
+ 	}
++#ifdef M_CORE_GBA
++	if (pairMode) {
++		return pairStateSize;
++	}
++#endif
+ 	struct VFile* vfm = VFileMemChunk(NULL, 0);
+ 	mCoreSaveStateNamed(core, vfm, SAVESTATE_SAVEDATA | SAVESTATE_RTC);
+ 	size_t size = vfm->size(vfm);
+@@ -2316,6 +2879,11 @@ bool retro_serialize(void* data, size_t size) {
+ 	if (deferredSetup) {
+ 		_doDeferredSetup();
+ 	}
++#ifdef M_CORE_GBA
++	if (pairMode) {
++		return _pairSerialize(data, size);
++	}
++#endif
+ 	struct VFile* vfm = VFileMemChunk(NULL, 0);
+ 	mCoreSaveStateNamed(core, vfm, SAVESTATE_SAVEDATA | SAVESTATE_RTC);
+ 	if ((ssize_t) size > vfm->size(vfm)) {
+@@ -2334,6 +2902,11 @@ bool retro_unserialize(const void* data, size_t size) {
+ 	if (deferredSetup) {
+ 		_doDeferredSetup();
+ 	}
++#ifdef M_CORE_GBA
++	if (pairMode) {
++		return _pairUnserialize(data, size);
++	}
++#endif
+ 	struct VFile* vfm = VFileFromConstMemory(data, size);
+ 	bool success = mCoreLoadStateNamed(core, vfm, SAVESTATE_RTC);
+ 	vfm->close(vfm);
+@@ -2353,6 +2926,9 @@ void retro_cheat_reset(void) {
+ void retro_cheat_set(unsigned index, bool enabled, const char* code) {
+ 	UNUSED(index);
+ 	UNUSED(enabled);
++	if (pairMode) {
++		return; /* only this phone would run them */
++	}
+ 	struct mCheatDevice* device = core->cheatDevice(core);
+ 	struct mCheatSet* cheatSet = NULL;
+ 	if (mCheatSetsSize(&device->cheats)) {
+diff --git forkSrcPrefix/src/platform/libretro/link.T forkDstPrefix/src/platform/libretro/link.T
+index 9e82b5dd..f0d0dc00 100644
+--- forkSrcPrefix/src/platform/libretro/link.T
++++ forkDstPrefix/src/platform/libretro/link.T
+@@ -1,4 +1,4 @@
+ {
+-   global: retro_*;
++   global: retro_*; nx_pair_*;
+    local: *;
+ };

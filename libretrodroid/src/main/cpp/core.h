@@ -53,6 +53,9 @@ public:
     Core(const std::string& soCorePath);
     ~Core();
 
+    // An optional export of the loaded core (nullptr when it has none).
+    void* symbol(const char* name) const;
+
 private:
     void open(const std::string& soCorePath);
     void resolveSymbols();

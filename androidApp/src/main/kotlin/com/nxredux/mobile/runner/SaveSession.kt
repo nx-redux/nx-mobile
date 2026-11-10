@@ -580,8 +580,9 @@ internal class SaveSession(
         val view = host.retroView ?: return false
         val battery = batterySaves ?: return false
         if (!host.gameReady) return false
-        // netplay: only a host on its folder's own core, with its saves served, writes its real saves; a copy never.
-        host.netplay?.let { if (it.onCopy) return false }
+        // netplay: only a host on its folder's own core, with its saves served, writes its real saves; a copy never. Cable
+        // Link writes the real save only from verified checkpoints (GameNetplay), never from the running game.
+        host.netplay?.let { if (it.onCopy || it.savesAtCheckpoints) return false }
         return runCatching {
             synchronized(battery) {
                 val wrote = battery.write(view.serializeSRAM(useEmulationThread = false))

@@ -2,8 +2,11 @@ package com.nxredux.mobile.netplay.usb
 
 import kotlinx.coroutines.flow.StateFlow
 
-/** How the Netplay sheet reaches the other device (its Connection row). */
-enum class NetplayLink { WIFI, USB }
+/**
+ * How the Netplay sheet reaches the other device (its Connection row). [CABLE_LINK_WIFI]: Cable Link over Wi-Fi, GBA only
+ * (each phone runs both players' GBAs joined by mGBA's cable); it runs over Wi-Fi, never the USB cable.
+ */
+enum class NetplayLink { WIFI, USB, CABLE_LINK_WIFI }
 
 /** Why the cable could not link. [PEER_HOST]: none found, and this phone is the USB device on its port. */
 enum class UsbFail { NO_LINK, PEER_HOST, VERSION, VPN_BLOCKED, UNSUPPORTED, DENIED }
