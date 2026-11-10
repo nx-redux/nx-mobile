@@ -2,16 +2,13 @@ package com.nxredux.mobile.ui.nx
 
 import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.achievements.RaAchievementState
+import com.nxredux.mobile.achievements.RaProgress
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.storage.GamePath
-import com.nxredux.mobile.storage.ResumeInfo
-import com.nxredux.mobile.storage.StateShot
-import com.nxredux.mobile.ui.ANDROID_TAG
-import com.nxredux.mobile.ui.FileFacts
 import com.nxredux.mobile.ui.GameInfo
 import com.nxredux.mobile.ui.Listed
 import com.nxredux.mobile.ui.RaPanel
@@ -19,7 +16,6 @@ import com.nxredux.mobile.ui.RaPanelContent
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -58,68 +54,68 @@ class TopDetailsTest {
         assertEquals(DetailsBody.None, detailsBody(panel(RaPanelContent.Game("h", emptyList(), emptyMap()))))
     }
 
-    private fun details(
-        entry: Listed = entry(), info: GameInfo? = null, shots: List<StateShot> = emptyList(), facts: FileFacts? = null,
-        achievements: DetailsBody = DetailsBody.None, netplay: Boolean = false, raSet: Boolean = false,
-    ) = TopDetails(entry, info, ResumeInfo.NONE, shots, facts, achievements, null, netplay, raSet)
-
-    private val shot = StateShot(1, "file:///s1.png", 10L)
-    private val rows = DetailsBody.Rows(listOf(achievement(1, RaAchievementState.LOCKED)), emptyMap())
-
-    @Test fun lower_area_is_both_with_states_and_achievements() {
-        assertEquals(LowerArea.BOTH, details(shots = listOf(shot), achievements = rows).lowerArea())
-    }
-
-    @Test fun lower_area_is_states_only() {
-        assertEquals(LowerArea.STATES, details(shots = listOf(shot)).lowerArea())
-        assertEquals(LowerArea.STATES, details(shots = listOf(shot), achievements = DetailsBody.Downloading).lowerArea())
-    }
-
-    @Test fun lower_area_is_achievements_only() {
-        assertEquals(LowerArea.ACHIEVEMENTS, details(achievements = rows).lowerArea())
-    }
-
-    @Test fun lower_area_is_none_for_an_android_game() {
-        val app = GameEntry(ContentRef("app:a.b"), "a.b", "Some Game", folder = ContentRef("app:"), sourceId = "android", relativeDir = "")
-        val android = Listed(SystemFolder("Android", ANDROID_TAG, null, listOf(app), android = true), app)
-        val info = GameInfo(1L, 60_000, null, 2L)
-        assertEquals(LowerArea.NONE, details(entry = android, info = info, shots = listOf(shot), achievements = rows).lowerArea())
-        assertEquals(LowerArea.NONE, details().lowerArea())   // never played, no set
-    }
-
-    @Test fun chips_show_play_history_file_facts_and_readiness() {
-        val now = 10L * 86_400_000L
-        val g = GameEntry(
-            ContentRef("Home/Roms/GB/Zelda (USA).zip"), "Zelda (USA).zip", "Zelda",
-            folder = ContentRef("Home/Roms/GB"), sourceId = GamePath.HOME, relativeDir = "Roms/GB",
-        )
-        val e = Listed(SystemFolder("Game Boy", "GB", CoreRegistry.forTag("GB"), emptyList()), g)
-        val info = GameInfo(now - 86_400_000L, (12 * 60 + 40) * 60_000L, null, 23L)
-        val d = details(entry = e, info = info, facts = FileFacts(512 * 1024, cheats = true, hiresPack = false), netplay = true)
-        assertEquals(listOf("12h 40m · 23 sessions · Yesterday", "USA · ZIP 512 KB", "Cheats", "Netplay"), d.chips(now))
-        assertEquals(listOf("ZIP"), details(entry = e.copy(game = g.copy(fileName = "Zelda.zip"))).chips(now))   // never played, no facts read
-        assertEquals(listOf("1 session · Today", "Hi-res textures", "RetroAchievements"),
-            details(entry = e.copy(game = g.copy(fileName = "Zelda")), info = GameInfo(now, null, null, 1L), facts = FileFacts(null, false, true), raSet = true).chips(now))
-    }
-
     @Test fun no_placeholder_meta_in_release() {
         assertNull(gameMeta(placeholderMeta = false))
         val m = assertNotNull(gameMeta(placeholderMeta = true))
-        assertTrue(m.synopsis.isNotBlank())
+        assertTrue(m.genre.isNotBlank())
     }
 
-    @Test fun achievements_list_locked_first_keeping_their_order() {
-        val list = listOf(achievement(1, RaAchievementState.UNLOCKED), achievement(2, RaAchievementState.LOCKED), achievement(3, RaAchievementState.LOCKED))
-        val body = assertIs<DetailsBody.Rows>(topAchievements(panel(RaPanelContent.Game("h", list, emptyMap()))))
-        assertEquals(listOf(2, 3, 1), body.achievements.map { it.id })
+    private val day = 86_400_000L
+    private val now = 10 * day
+
+    @Test fun the_play_line_leaves_out_what_has_no_data() {
+        assertEquals("41 m played · 25 sessions · last played today", playLine(GameInfo(now, 41 * 60_000L, null, 25L), now))
+        assertEquals("3 h played · 1 session · last played yesterday", playLine(GameInfo(now - day, 3 * 3_600_000L, null, 1L), now))
+        assertEquals("< 1 m played · 1 session", playLine(GameInfo(null, 20_000L, null, 1L), now))
+        assertEquals("Last played today", playLine(GameInfo(now, null, null, null), now))   // alone: it starts the line
     }
 
-    // The header's larger text needs more height: a shorter top screen drops the synopsis first, then the file chip.
-    @Test fun a_short_top_screen_drops_the_synopsis_then_the_file_chip() {
-        assertEquals(DetailsFit(synopsis = true, fileChip = true), detailsFit(500.dp))   // the Nova's top panel, inside its padding
-        assertEquals(DetailsFit(synopsis = true, fileChip = true), detailsFit(390.dp))
-        assertEquals(DetailsFit(synopsis = false, fileChip = true), detailsFit(389.dp))
-        assertEquals(DetailsFit(synopsis = false, fileChip = true), detailsFit(290.dp))
-        assertEquals(DetailsFit(synopsis = false, fileChip = false), detailsFit(289.dp))
+    @Test fun a_game_never_played_says_so() {
+        assertEquals("Never played", playLine(null, now))
+        assertEquals("Never played", playLine(GameInfo(null, 0L, null, 0L), now))
+        assertEquals("Never played", playLine(GameInfo(null, null, RaProgress(0, 10, "A"), null), now))
+    }
+
+    @Test fun the_genre_line_is_the_console_alone_without_facts() {
+        assertEquals("Game Boy Advance", genreLine(null, "Game Boy Advance"))
+        assertEquals("RPG · 2004 · Game Boy Advance", genreLine(GameMeta("RPG", "2004"), "Game Boy Advance"))
+    }
+
+    @Test fun achievements_count_unlocked_and_name_the_first_locked() {
+        val list = listOf(achievement(1, RaAchievementState.UNLOCKED), achievement(2, RaAchievementState.PENDING), achievement(3, RaAchievementState.LOCKED), achievement(4, RaAchievementState.LOCKED))
+        assertEquals(DetailsAchievements(2, 4, "A3"), detailsAchievements(DetailsBody.Rows(list, emptyMap()), null))
+        val done = list.take(2)
+        assertEquals(DetailsAchievements(2, 2, null), detailsAchievements(DetailsBody.Rows(done, emptyMap()), null))
+    }
+
+    // The rows still downloading (or never read): the menus' cached progress stands in; no set, no block.
+    @Test fun achievements_fall_back_to_the_cached_progress_and_need_a_set() {
+        assertEquals(DetailsAchievements(13, 61, "I Choose You!"), detailsAchievements(DetailsBody.Downloading, RaProgress(13, 61, "I Choose You!")))
+        assertNull(detailsAchievements(DetailsBody.None, RaProgress(0, 0, null)))
+        assertNull(detailsAchievements(DetailsBody.None, null))
+    }
+
+    @Test fun the_picture_is_the_resume_then_the_screenshot_then_the_box() {
+        assertEquals(ShelfImage.Shot("resume"), detailsImage("resume", "shot", "box"))
+        assertEquals(ShelfImage.Shot("shot"), detailsImage(null, "shot", "box"))
+        assertEquals(ShelfImage.Box("box"), detailsImage(null, null, "box"))
+        assertEquals(ShelfImage.Placeholder, detailsImage(null, null, null))
+    }
+
+    @Test fun only_a_resume_picture_has_a_caption() {
+        assertEquals("Continue · yesterday", resumeCaption(ShelfImage.Shot("resume"), "resume", now - day, now))
+        assertEquals("Continue", resumeCaption(ShelfImage.Shot("resume"), "resume", null, now))
+        assertNull(resumeCaption(ShelfImage.Shot("shot"), null, null, now))
+        assertNull(resumeCaption(ShelfImage.Box("box"), null, null, now))
+    }
+
+    // A small top screen (inside its padding) gives the text the width first, then drops the next goal.
+    @Test fun a_small_top_screen_drops_the_picture_then_the_next_goal() {
+        assertEquals(DetailsFit(picture = true, next = true), detailsFit(560.dp, 300.dp))
+        assertEquals(DetailsFit(picture = true, next = true), detailsFit(400.dp, 220.dp))
+        assertEquals(DetailsFit(picture = false, next = true), detailsFit(399.dp, 300.dp))   // narrow: the text takes the width
+        assertEquals(DetailsFit(picture = false, next = true), detailsFit(560.dp, 219.dp))
+        assertEquals(DetailsFit(picture = false, next = true), detailsFit(560.dp, 176.dp))
+        assertEquals(DetailsFit(picture = false, next = false), detailsFit(560.dp, 175.dp))
     }
 }

@@ -152,7 +152,7 @@ import com.nxredux.mobile.ui.nx.consoleStats
 import com.nxredux.mobile.ui.nx.statsKey
 import com.nxredux.mobile.ui.nx.detailsRaFor
 import com.nxredux.mobile.ui.nx.gameMeta
-import com.nxredux.mobile.ui.nx.topAchievements
+import com.nxredux.mobile.ui.nx.detailsBody
 import com.nxredux.mobile.storage.Shortcut
 import com.nxredux.mobile.storage.SidecarStore
 import com.nxredux.mobile.storage.ToolPins
@@ -1190,9 +1190,9 @@ class AppState(
 
     /**
      * [topDetails] on the game [DualMenu.top] shows while the menu is on two screens, else null. A move publishes the new
-     * game's page at once from what is in memory, then its save states and file facts once read; the next move cancels
-     * that read, so a slow one never paints over the game now highlighted. [reread]: the same game's reads again (its
-     * play time moved: back from a game).
+     * game's page at once from what is in memory, then its resume save once read; the next move cancels that read, so a
+     * slow one never paints over the game now highlighted. [reread]: the same game's read again (its play time moved:
+     * back from a game).
      */
     private fun followTopDetails(reread: Boolean = false) {
         val entry = (if (_dualMenu.value) DualMenu.top(_screen.value, _selection.value.index) as? TopContent.GameDetails else null)?.entry
@@ -1205,21 +1205,16 @@ class AppState(
         val shown = _topDetails.value?.takeIf { sameGame(it.entry, entry) }
         val path = entry.game.path
         _topDetails.value = TopDetails(
-            entry, _gameInfo.value[path], shown?.resume ?: ResumeInfo.NONE, shown?.shots.orEmpty(), shown?.facts,
-            topAchievements(detailsRaFor(entry, ra.detailsRa.value)), gameMeta(deps.placeholderMeta),
-            netplay?.offers(entry) == true, hasRaSet(_gameInfo.value[path]),
+            entry, _gameInfo.value[path], shown?.resume ?: ResumeInfo.NONE,
+            detailsBody(detailsRaFor(entry, ra.detailsRa.value)), gameMeta(deps.placeholderMeta),
         )
         if (shown != null && !reread) return   // its reads ran or are running
         topDetailsJob?.cancel()
         topDetailsJob = scope.launch {
-            val tag = entry.system.tag
-            val file = entry.game.fileName
             val saves = !entry.system.android && !entry.system.unassigned
-            val resume = if (saves) tryOr({ ResumeInfo.NONE }) { deps.userData.resumeInfo(tag, file) } else ResumeInfo.NONE
-            val shots = if (saves) tryOr({ emptyList() }) { deps.userData.stateShots(tag, file) } else emptyList()
-            val facts = if (entry.system.android) null else deps.topFacts?.let { f -> tryOrNull { f.fileFacts(entry) } }
+            val resume = if (saves) tryOr({ ResumeInfo.NONE }) { deps.userData.resumeInfo(entry.system.tag, entry.game.fileName) } else ResumeInfo.NONE
             val now = _topDetails.value?.takeIf { sameGame(it.entry, entry) } ?: return@launch
-            _topDetails.value = now.copy(resume = resume, shots = shots, facts = facts)
+            _topDetails.value = now.copy(resume = resume)
         }
     }
 
@@ -1434,7 +1429,7 @@ class AppState(
         scope.launch { _gameInfo.collect { followTopDetails(reread = true); followTopStats() } }
         scope.launch {
             ra.detailsRa.collect { r ->
-                _topDetails.value?.let { d -> _topDetails.value = d.copy(achievements = topAchievements(detailsRaFor(d.entry, r)), raSet = hasRaSet(_gameInfo.value[d.entry.game.path])) }
+                _topDetails.value?.let { d -> _topDetails.value = d.copy(achievements = detailsBody(detailsRaFor(d.entry, r))) }
             }
         }
         scope.launch {

@@ -1,10 +1,7 @@
 package com.nxredux.mobile.ui.nx
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -20,30 +17,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.changedToUp
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.LineHeightStyle
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
-import org.jetbrains.compose.resources.painterResource
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.settings.BackdropArt
@@ -53,7 +36,6 @@ import com.nxredux.mobile.ui.INFO_SEPARATOR
 import com.nxredux.mobile.ui.Listed
 import com.nxredux.mobile.ui.TopContent
 import com.nxredux.mobile.ui.abstractArtFor
-import com.nxredux.mobile.ui.appId
 import com.nxredux.mobile.ui.gamesLabel
 import com.nxredux.mobile.ui.nowMs
 import com.nxredux.mobile.ui.panelArt
@@ -162,13 +144,6 @@ internal fun hoursText(ms: Long): String {
     }
 }
 
-/** What a shelf tile draws: a picture filling its 16:9, a box art fitted over a blurred copy of itself, or a placeholder when the game has neither. */
-sealed interface ShelfImage {
-    data class Shot(val url: String) : ShelfImage
-    data class Box(val url: String) : ShelfImage
-    data object Placeholder : ShelfImage
-}
-
 /** The scraped [screenshot], else the [resume] save's picture, else the [box] art. */
 internal fun shelfImage(screenshot: String?, resume: String?, box: String?): ShelfImage = when {
     screenshot != null -> ShelfImage.Shot(screenshot)
@@ -209,20 +184,19 @@ fun TopStatsPage(stats: TopStats, onLaunch: (Listed) -> Unit, prefer: BackdropAr
     val font = LocalNxFont.current
     val now = remember(stats) { nowMs() }
     BoxWithConstraints(Modifier.fillMaxSize().background(colors.background)) {
-        val vPad = minOf(maxWidth * TS_PAD, maxHeight * TS_PAD_MAX_H)
         // The title block's height decides how much of the shelf fits, so it is measured first.
-        SubcomposeLayout(Modifier.fillMaxSize().padding(horizontal = maxWidth * TS_PAD, vertical = vPad)) { constraints ->
+        SubcomposeLayout(Modifier.fillMaxSize().padding(topPagePadding(maxWidth, maxHeight))) { constraints ->
             val loose = Constraints(maxWidth = constraints.maxWidth)
             val head = subcompose("head") {
                 Column {
                     // Trimmed line spacing: the title and the facts line read as one block.
                     Text(
                         stats.title, color = colors.listText, fontFamily = font, fontSize = 40.sp, lineHeight = 42.sp, fontWeight = FontWeight.Bold,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis, style = TextStyle(lineHeightStyle = TS_TIGHT_LINES),
+                        maxLines = 2, overflow = TextOverflow.Ellipsis, style = TextStyle(lineHeightStyle = TOP_TIGHT_LINES),
                     )
                     Text(
                         statsLine(stats, now), color = colors.hint, fontFamily = font, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = TextStyle(lineHeightStyle = TS_TIGHT_LINES), modifier = Modifier.padding(top = 2.dp),
+                        style = TextStyle(lineHeightStyle = TOP_TIGHT_LINES), modifier = Modifier.padding(top = 2.dp),
                     )
                     biosPill(stats.bios)?.let { pill ->
                         Text(
@@ -274,78 +248,14 @@ private fun Shelf(stats: TopStats, captions: Boolean, gap: Dp, now: Long, prefer
     }
 }
 
-/** A tile's [shelfImage]: a picture cropped to 16:9, or the box fitted over a blurred, darkened copy of itself; an app's icon, else the console's logo or the game's name on a quiet surface. */
+/** A tile's [shelfImage] ([TopPicture]). */
 @Composable
 private fun ShelfPicture(game: ShelfGame, prefer: BackdropArt, modifier: Modifier) {
     val e = game.entry
-    Box(modifier.background(LocalNxColors.current.pictureGround), contentAlignment = Alignment.Center) {
-        val icon = rememberAppIcon(e.appId)
-        val colors = LocalNxColors.current
-        when (val image = shelfImage(e.game.screenshotRef?.value, game.resume, panelArt(prefer, e.game) ?: abstractArtFor(e))) {
-            is ShelfImage.Shot -> AsyncImage(model = image.url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            is ShelfImage.Box -> {
-                AsyncImage(model = image.url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(TS_BLUR))
-                Box(Modifier.fillMaxSize().background(BOX_DIM))
-                AsyncImage(model = image.url, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-            }
-            ShelfImage.Placeholder -> {
-                Box(Modifier.fillMaxSize().background(colors.modalCard), contentAlignment = Alignment.Center) {
-                    val logo = consoleLogo(e.system.tag)
-                    when {
-                        icon != null -> Image(icon, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.6f))
-                        logo != null -> Image(painterResource(logo), contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.6f), colorFilter = ColorFilter.tint(colors.hint))
-                        else -> Text(
-                            e.shown, color = colors.hint, fontFamily = LocalNxFont.current, fontSize = 14.sp, maxLines = 3,
-                            overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 12.dp),
-                        )
-                    }
-                }
-            }
-        }
-    }
+    TopPicture(e, shelfImage(e.game.screenshotRef?.value, game.resume, panelArt(prefer, e.game) ?: abstractArtFor(e)), modifier)
 }
 
-private const val TS_PAD = 0.07f            // of the width, every side
-private const val TS_PAD_MAX_H = 0.08f      // a wide, short screen's top and bottom padding: at most this of its height
 private const val TS_TILE_GAP = 0.04f       // between the shelf's tiles, of its width
 private val TS_BREATH: Dp = 24.dp           // between the line (or pill) and the shelf
 private val TS_LABEL: Dp = 28.dp            // the shelf's label, its gap to the pictures included
 private val TS_CAPTIONS: Dp = 52.dp         // a tile's two caption lines, their space above included
-private val TS_BLUR: Dp = 16.dp
-private val BOX_DIM = Color.Black.copy(alpha = 0.45f)   // role: darkens the blurred box copy so the fitted box stands out
-
-/**
- * Whether a lift ends a tap: quick (a finger or palm resting on the cover is not one), within the touch slop, and not
- * consumed (a parent took the gesture, or the system cancelled it).
- */
-internal fun isCleanTap(heldMs: Long, movedPx: Float, consumed: Boolean, timeoutMs: Long, slopPx: Float): Boolean =
-    !consumed && heldMs <= timeoutMs && movedPx <= slopPx
-
-/**
- * A tap that only taps: one finger, lifted within the long-press time and the touch slop of where it went down. A drag
- * or a second finger is not one, and nothing is consumed, so a swipe over the tile does what it did before.
- */
-private fun Modifier.cleanTap(onTap: () -> Unit): Modifier = composed {
-    val action = rememberUpdatedState(onTap)
-    pointerInput(Unit) {
-        awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false)
-            var clean = true
-            while (true) {
-                val event = awaitPointerEvent(PointerEventPass.Final)
-                if (event.changes.size > 1) clean = false
-                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                if (change.isConsumed) clean = false
-                if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) clean = false
-                if (change.changedToUp()) {
-                    val moved = (change.position - down.position).getDistance()
-                    if (clean && isCleanTap(change.uptimeMillis - down.uptimeMillis, moved, change.isConsumed, viewConfiguration.longPressTimeoutMillis, viewConfiguration.touchSlop)) action.value()
-                    break
-                }
-                if (!change.pressed) break
-            }
-        }
-    }
-}
-
-private val TS_TIGHT_LINES = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both)

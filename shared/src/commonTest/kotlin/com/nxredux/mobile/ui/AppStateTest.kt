@@ -101,7 +101,6 @@ import com.nxredux.mobile.storage.MemoryPrivateFiles
 import com.nxredux.mobile.storage.PrivateFiles
 import com.nxredux.mobile.storage.MemorySidecarStore
 import com.nxredux.mobile.storage.NoUserData
-import com.nxredux.mobile.storage.StateShot
 import com.nxredux.mobile.storage.Recent
 import com.nxredux.mobile.storage.Recents
 import com.nxredux.mobile.storage.RecentsRecorder
@@ -7217,6 +7216,8 @@ class AppStateTest {
 
     // --- The top screen's details: achievements ---
 
+    private fun topBlock(state: AppState) = state.topDetails.value?.let { com.nxredux.mobile.ui.nx.detailsAchievements(it.achievements, it.info?.ra) }
+
     private fun topTitles(state: AppState): List<String>? =
         (state.topDetails.value?.achievements as? com.nxredux.mobile.ui.nx.DetailsBody.Rows)?.achievements?.map { it.title }
 
@@ -7225,7 +7226,7 @@ class AppStateTest {
         f.state.onDualMenu(true)
         f.state.openConsole("GB"); runCurrent()   // no time advanced: cached data is read at once
         assertEquals(listOf("First", "Second"), topTitles(f.state))
-        assertTrue(f.state.topDetails.value?.raSet == true)
+        assertEquals(com.nxredux.mobile.ui.nx.DetailsAchievements(0, 2, "First"), topBlock(f.state))
     }
 
     // A played game with no achievement set (homebrew, a hack) still gets a pointer folder: not a set.
@@ -7237,7 +7238,7 @@ class AppStateTest {
         f.state.onDualMenu(true)
         f.state.openConsole("GB"); runCurrent()
         assertNotNull(f.state.topDetails.value)
-        assertFalse(f.state.topDetails.value?.raSet == true)
+        assertNull(topBlock(f.state))
     }
 
     @Test fun the_skins_two_screens_feed_the_details_too() = runTest {
@@ -13554,13 +13555,13 @@ class AppStateTest {
     private fun TestScope.dualState(): AppState =
         state(MemorySettings(ContentRef("Home")), src = bigSource()).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
 
-    // The top screen's details: entry 0's slow state-picture read lands after the highlight moved on; entry 1 stays.
+    // The top screen's details: entry 0's slow resume read lands after the highlight moved on; entry 1 stays.
     @Test fun details_follow_the_highlight_and_never_paint_a_stale_game() = runTest {
         val gate = CompletableDeferred<Unit>()
         val data = object : UserDataStore by NoUserData {
-            override suspend fun stateShots(tag: String, fileName: String): List<StateShot> {
+            override suspend fun resumeInfo(tag: String, fileName: String): ResumeInfo {
                 if (fileName == "Alleyway.gb") withContext(NonCancellable) { gate.await() }   // ignores the move's cancel: only the sameGame guard stops it
-                return listOf(StateShot(0, "file:///$fileName.png", 1L))
+                return ResumeInfo(0, "file:///$fileName.png", 1L)
             }
         }
         val state = state(MemorySettings(ContentRef("Home")), src = bigSource(), data = data).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
@@ -13572,10 +13573,10 @@ class AppStateTest {
         state.onButton(NxButton.DOWN); advanceUntilIdle()
         val entry1 = games.entries[1]
         assertEquals(entry1.game, state.topDetails.value?.entry?.game)
-        assertEquals(listOf("file:///Tetris.gb.png"), state.topDetails.value?.shots?.map { it.uri })
+        assertEquals("file:///Tetris.gb.png", state.topDetails.value?.resume?.previewPath)
         gate.complete(Unit); advanceUntilIdle()
         assertEquals(entry1.game, state.topDetails.value?.entry?.game)
-        assertEquals(listOf("file:///Tetris.gb.png"), state.topDetails.value?.shots?.map { it.uri })
+        assertEquals("file:///Tetris.gb.png", state.topDetails.value?.resume?.previewPath)
         state.onDualMenu(false)
         assertNull(state.topDetails.value)   // one screen: no top page
     }
@@ -13614,7 +13615,6 @@ class AppStateTest {
 
     @Test fun console_stats_read_the_bios_from_the_platform() = runTest {
         val facts = object : TopFactsPlatform {
-            override suspend fun fileFacts(entry: Listed) = FileFacts(null, cheats = entry.game.fileName != "Alleyway.gb", hiresPack = false)
             override suspend fun biosMissing(tag: String) = BiosMissing.REQUIRED.takeIf { tag == "GB" }
         }
         val state = state(MemorySettings(ContentRef("Home")), src = bigSource(), topFacts = facts).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
@@ -13672,7 +13672,6 @@ class AppStateTest {
     @Test fun stats_never_paint_a_console_the_highlight_left() = runTest {
         val gate = CompletableDeferred<Unit>()
         val facts = object : TopFactsPlatform {
-            override suspend fun fileFacts(entry: Listed) = FileFacts(null, cheats = false, hiresPack = false)
             override suspend fun biosMissing(tag: String): BiosMissing? {
                 if (tag == "GB") withContext(NonCancellable) { gate.await() }
                 return null

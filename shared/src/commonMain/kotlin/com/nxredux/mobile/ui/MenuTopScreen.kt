@@ -68,7 +68,7 @@ fun MenuTopScreen(state: AppState, inSkin: Boolean = false) {
                     when (val top = menuTop(dual, screen, selection.index)) {
                         // The feed may lag the highlight by a frame: never another game's page meanwhile.
                         is TopContent.GameDetails -> details?.takeIf { it.entry.game.path == top.entry.game.path }
-                            ?.let { TopDetailsPage(it, artLayout.backdrop) } ?: Backdrop()
+                            ?.let { TopDetailsPage(it, onAchievements = state::openRaPanel, prefer = artLayout.backdrop) } ?: Backdrop()
                         // As the details: never another console's or collection's stats while the feed catches up.
                         is TopContent.ConsoleStats, is TopContent.CollectionStats -> stats?.takeIf { it.key == statsKey(top) }
                             ?.let { TopStatsPage(it, onLaunch = { state.launchFromTop(it) }, prefer = artLayout.backdrop) } ?: Backdrop()
