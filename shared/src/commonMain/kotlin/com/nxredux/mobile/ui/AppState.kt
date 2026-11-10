@@ -4778,12 +4778,17 @@ class AppState(
                 if (_screen.value !== s) return   // the user navigated while the source was read
                 if (entries.isEmpty()) { leaveList(s.source); return }
                 val index = select?.let { p -> entries.indexOfFirst { it.game.path == p } }?.takeIf { it >= 0 } ?: _selection.value.index
-                _screen.value = Screen.Games(freshSource(s.source), entries)
+                // A background refresh (a browsing art fetch landing) must not close what the user has open: actions
+                // that change the list close their menu before refreshing, so whatever is still open here stays.
+                _screen.value = Screen.Games(
+                    freshSource(s.source), entries, menu = keptMenu(s.menu, entries), search = s.search, layoutMenu = s.layoutMenu,
+                )
                 _selection.value = ListSelection(index, entries.size).clampedTo(entries.size)
                 refreshResume()
             }
             is Screen.Systems -> menuScreen(s.category ?: menuCategory).let { m ->
-                showMenu(m, keptIndex(s, m))   // a gone tab: the fallback's own row
+                val kept = if (s.menu != null && m.category == s.category) m.copy(menu = s.menu) else m
+                showMenu(kept, keptIndex(s, m))   // a gone tab: the fallback's own row
             }
             else -> Unit
         }
@@ -6535,3 +6540,10 @@ internal fun textEntryOpen(s: Screen): Boolean = when (s) {
 }
 
 private fun keyboardLabel(android: Boolean): String = if (android) "Android" else "NX"
+
+/** [menu] over the rebuilt [entries], on its game's fresh entry; dropped when that game left the list. */
+internal fun keptMenu(menu: ContextMenu?, entries: List<Listed>): ContextMenu? {
+    val entry = menu?.entry ?: return menu
+    val fresh = entries.firstOrNull { it.game.path == entry.game.path } ?: return null
+    return menu.copy(entry = fresh)
+}

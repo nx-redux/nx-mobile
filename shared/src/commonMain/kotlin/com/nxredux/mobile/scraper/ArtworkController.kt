@@ -394,7 +394,11 @@ class ArtworkController(
             val one = ScrapeState(items = listOf(ScrapeItem(now.gamePath, now.tag, now.name)))
             // Not starting the sources: ScreenScraper's start reads the quota, a request beyond the lookup.
             val end = try {
-                engine.run(one, { if (it == now.gamePath) now else null }, startSources = false) {}
+                engine.run(one, { if (it == now.gamePath) now else null }, startSources = false) {}.also { e ->
+                    // Artwork settings' request counts stay true after browsing fetches.
+                    e.quota?.let { q -> _state.update { it.copy(quota = q) } }
+                    e.tgdbLeft?.let { n -> _state.update { it.copy(tgdbLeft = n) } }
+                }
             } finally {
                 // Their per-run answers are let go as after a job; nothing else is held by a run never started.
                 withContext(NonCancellable) { for (src in engine.sources) src.endJob() }
