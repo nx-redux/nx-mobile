@@ -95,6 +95,8 @@ public:
     void updateVariable(const std::string &key, const std::string &value);
 
     void setLanguage(const std::string &androidLanguage);
+    /** The player's name for RETRO_ENVIRONMENT_GET_USERNAME; empty answers nothing. Set before create(), kept across it. */
+    void setUsername(const std::string &name) { username = name; }
 
     float retrieveGameSpecificAspectRatio();
 
@@ -168,6 +170,7 @@ private:
     std::string systemDirectory;
     retro_hw_get_current_framebuffer_t callback_get_current_framebuffer = nullptr;
     unsigned language = RETRO_LANGUAGE_ENGLISH;
+    std::string username;
     bool useVirtualFileSystem = false;
     bool enableMicrophone = false;
     libretrodroid::ShutdownRequest shutdownRequest;

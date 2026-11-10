@@ -102,6 +102,14 @@ class NetplayLinkOptionsTest {
         )
     }
 
+    @Test fun a_3ds_room_name_is_the_player_name_in_room_characters_and_a_number() {
+        assertEquals("KotakNova-0042", NetplayLinkOptions.n3dsRoomName("KotakNova", 42))
+        assertEquals("Syus-1234", NetplayLinkOptions.n3dsRoomName("Syu's", 1234))
+        assertEquals("Player-0007", NetplayLinkOptions.n3dsRoomName("太郎", 7))
+        assertEquals("host", NetplayLinkOptions.forSession(session(NetplayRole.HOST, "azahar"), null, "KotakNova-0042")["nx_3ds_link"])
+        assertEquals("KotakNova-0042", NetplayLinkOptions.forSession(session(NetplayRole.HOST, "azahar"), null, "KotakNova-0042")["nx_3ds_link_name"])
+    }
+
     @Test fun gpsp_and_mgba_run_the_agreed_mode_for_the_transport() {
         assertEquals(mapOf("gpsp_serial" to "auto_cable"), NetplayLinkOptions.forSession(session(NetplayRole.HOST, "gpsp", usb = true), "auto"))
         assertEquals(mapOf("gpsp_serial" to "auto"), NetplayLinkOptions.forSession(session(NetplayRole.CLIENT, "gpsp"), "lockstep"))

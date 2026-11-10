@@ -179,6 +179,7 @@ class AppStateTest {
         override var skinTweaks = ""
         override var overlayTweaks = ""
         override var debugLog = false
+        override var playerName = ""
         override var secondScreen = true
         override var pauseWhenUnfocused = true
         override var bottomScreen = com.nxredux.mobile.runner.BottomScreen.AUTO
@@ -10800,7 +10801,8 @@ class AppStateTest {
         state.openSettings(SettingsSection.SYSTEM)
         fun row() = assertIs<Screen.Settings>(state.screen.value).rows.single { it.kind == SettingsKind.DEBUG_LOG }
         assertEquals("Debug log" to "Off", row().label to row().secondary)
-        state.onButton(NxButton.DOWN)                 // from Pause when unfocused to Screen care
+        state.onButton(NxButton.DOWN)                 // from Player name to Pause when unfocused
+        state.onButton(NxButton.DOWN)                 // then Screen care
         state.onButton(NxButton.DOWN)                 // then Debug log
         assertEquals(SettingsKind.DEBUG_LOG, assertIs<Screen.Settings>(state.screen.value).rows[state.selection.value.index].kind)
         state.onButton(NxButton.A)
@@ -10884,6 +10886,29 @@ class AppStateTest {
     }
 
     // Settings → System → Pause when unfocused (its General group, the first row), On by default; A, left and right each flip it.
+    @Test fun player_name_row_opens_a_prompt_that_saves_ten_characters() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings)
+        state.load()
+        state.openSettings(SettingsSection.SYSTEM)
+        fun page() = assertIs<Screen.Settings>(state.screen.value)
+        fun row() = page().rows.single { it.kind == SettingsKind.PLAYER_NAME }
+        assertEquals("Player name" to "Player", row().label to row().secondary)   // no saved name, no device name
+        state.onButton(NxButton.A)
+        assertEquals("Player", page().nameDraft)
+        state.playerNameDraft("Mohammad Syuhada")
+        assertEquals("Mohammad S", page().nameDraft)
+        state.onButton(NxButton.B)                    // Cancel keeps the old name
+        assertEquals(null, page().nameDraft)
+        assertEquals("", settings.playerName)
+        state.onButton(NxButton.A)
+        state.playerNameDraft(" Syu ")
+        state.onButton(NxButton.A)
+        assertEquals(null, page().nameDraft)
+        assertEquals("Syu", settings.playerName)
+        assertEquals("Syu", row().secondary)
+    }
+
     @Test fun pause_when_unfocused_row_flips_on_a_left_and_right() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = state(settings)
@@ -10891,7 +10916,8 @@ class AppStateTest {
         state.openSettings(SettingsSection.SYSTEM)
         fun row() = assertIs<Screen.Settings>(state.screen.value).rows.single { it.kind == SettingsKind.PAUSE_UNFOCUSED }
         assertEquals("Pause when unfocused" to "On", row().label to row().secondary)
-        assertEquals(0, state.selection.value.index)  // the first row: no group label above it
+        assertEquals(0, state.selection.value.index)  // the first row (Player name): no group label above it
+        state.onButton(NxButton.DOWN)
         state.onButton(NxButton.A)
         assertEquals(false, settings.pauseWhenUnfocused)
         assertEquals("Off", row().secondary)
@@ -12587,10 +12613,10 @@ class AppStateTest {
         assertEquals(sections, assertIs<Screen.SettingsMenu>(with.screen.value).sections)   // no Launcher category: its rows are on System and Library
         assertEquals(sections, with.settingsSections())   // the two-pane left pane lists the same
         with.openSettings(SettingsSection.SYSTEM)
-        // System's options are one group (Pause when unfocused, Screen care, Use as home screen, Debug log), then About and Licenses.
+        // System's options are one group (Player name, Pause when unfocused, Screen care, Use as home screen, Debug log), then About and Licenses.
         val sys = assertIs<Screen.Settings>(with.screen.value).rows
         assertEquals(listOf("About", "Licenses"), sys.filter { it.kind == SettingsKind.SECTION }.map { it.label })
-        assertEquals(listOf(SettingsKind.PAUSE_UNFOCUSED, SettingsKind.SCREEN_CARE, SettingsKind.HOME_SCREEN, SettingsKind.DEBUG_LOG), sys.take(4).map { it.kind })
+        assertEquals(listOf(SettingsKind.PLAYER_NAME, SettingsKind.PAUSE_UNFOCUSED, SettingsKind.SCREEN_CARE, SettingsKind.HOME_SCREEN, SettingsKind.DEBUG_LOG), sys.take(5).map { it.kind })
     }
 
     @Test fun launcher_page_toggles_the_home_screen() = runTest {

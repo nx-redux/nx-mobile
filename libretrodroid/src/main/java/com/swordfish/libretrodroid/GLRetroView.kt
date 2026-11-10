@@ -398,6 +398,7 @@ class GLRetroView(
         LibretroDroid.setVulkanSwapchainFrames(data.vulkanSwapchainFrames)
         LibretroDroid.setVideoViewsEnabled(data.videoViews)
         LibretroDroid.setKeepCoreLoaded(data.keepCoreLoaded)
+        LibretroDroid.setUsername(data.username)
         LibretroDroid.create(
             openGLESVersion,
             data.coreFilePath,

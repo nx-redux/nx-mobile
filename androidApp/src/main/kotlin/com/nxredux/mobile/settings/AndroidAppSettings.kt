@@ -273,6 +273,10 @@ class AndroidAppSettings(context: Context) : AppSettings {
             prefs.edit { putBoolean(KEY_SCREEN_CARE, value) }
         }
 
+    override var playerName: String
+        get() = prefs.getString(KEY_PLAYER_NAME, "").orEmpty()
+        set(value) = prefs.edit { putString(KEY_PLAYER_NAME, value) }
+
     override var debugLog: Boolean
         get() = prefs.getBoolean(KEY_DEBUG_LOG, false)
         set(value) {
@@ -422,6 +426,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_OVERLAY_TWEAKS = "overlay_tweaks"
         private const val KEY_GAME_RUMBLE = "game_rumble"
         private const val KEY_DEBUG_LOG = "debug_log"
+        private const val KEY_PLAYER_NAME = "player_name"
         private const val KEY_CABLE_LINK_DELAY = "cable_link_delay"
         private const val KEY_CABLE_LINK_DELAY_OVERLAY = "cable_link_delay_overlay"
         private const val KEY_ANDROID_KEYBOARD = "android_keyboard"

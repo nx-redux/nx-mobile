@@ -104,6 +104,7 @@ import com.nxredux.mobile.settings.migrateMixWheel
 import com.nxredux.mobile.settings.SecondaryAccent
 import com.nxredux.mobile.settings.OptionTextSize
 import com.nxredux.mobile.settings.AppSettings
+import com.nxredux.mobile.settings.PlayerName
 import com.nxredux.mobile.settings.ImportResult
 import com.nxredux.mobile.settings.ImportSource
 import com.nxredux.mobile.settings.SaveTransfer
@@ -311,6 +312,8 @@ class AppDeps(
     val switcherReturns: com.nxredux.mobile.runner.SwitcherReturnMark? = null,
     /** The platform draws the NX keyboard ([AppState.textEntry]); off: every prompt types through the platform's own. */
     val ownKeyboard: Boolean = false,
+    /** The device's own name (Android's About phone → Device name), the Player name until one is set; null: unknown. */
+    val deviceName: () -> String? = { null },
     /** The clipboard's plain text for the keyboard's Paste; null when it holds none. */
     val pasteText: () -> String? = { null },
     /** The open prompt is drawn on the second display, where Android's keyboard does not open: NX's always types there. */
@@ -457,6 +460,8 @@ sealed interface Screen {
         val choices: List<SettingChoices?> = emptyList(),
         /** The selected reset row (Reset to defaults, Clear all, Reset console) asks first ([settingsResetAsk]): A resets, B keeps. */
         val confirmReset: Boolean = false,
+        /** System → Player name's prompt is up (its draft): A saves it, B keeps the old name. */
+        val nameDraft: String? = null,
     ) : Screen
     /** Tools -> Settings: one row per section. */
     data class SettingsMenu(val sections: List<SettingsSection>) : Screen
@@ -545,7 +550,7 @@ sealed interface Screen {
 /** Kids Mode's first switch-on, in order (the spec's): PIN, allowed apps, play times, then the two permissions and home. */
 enum class KidsSetupStep { PIN, APPS, TIMES, USAGE, ALARMS, HOME }
 
-enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, GAME_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
+enum class SettingsKind { PLAYER_NAME, HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, GAME_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
@@ -3880,6 +3885,7 @@ class AppState(
     }.orEmpty()
 
     private fun systemRows(): List<SettingsRow> = buildList {
+        add(SettingsRow(SettingsKind.PLAYER_NAME, "Player name", PlayerName.resolve(deps.settings.playerName, deps.deviceName())))
         add(SettingsRow(SettingsKind.PAUSE_UNFOCUSED, "Pause when unfocused", if (deps.settings.pauseWhenUnfocused) "On" else "Off"))
         add(SettingsRow(SettingsKind.SCREEN_CARE, "Screen care", if (deps.settings.screenCare) "On" else "Off"))
         deps.launcher?.let { l -> add(SettingsRow(SettingsKind.HOME_SCREEN, "Use as home screen", if (l.isHome()) "On" else "Off")) }
@@ -4400,6 +4406,15 @@ class AppState(
 
     /** Settings sections and the section menu: UP/DOWN move, A opens or acts, B goes back. */
     private fun onSettingsButton(s: Screen, button: NxButton) {
+        (s as? Screen.Settings)?.takeIf { it.nameDraft != null }?.let { page ->
+            when (button) {
+                // An emptied name goes back to the device's.
+                NxButton.A -> { deps.settings.playerName = PlayerName.clean(page.nameDraft); _screen.value = page.copy(nameDraft = null); settingsUi.refreshSettings() }
+                NxButton.B -> _screen.value = page.copy(nameDraft = null)
+                else -> Unit
+            }
+            return
+        }
         (s as? Screen.Settings)?.takeIf { it.confirmReset }?.let { page ->
             when (button) {
                 NxButton.A -> { _screen.value = page.copy(confirmReset = false); settingsUi.runSettingsReset(page) }
@@ -4568,6 +4583,11 @@ class AppState(
         val s = _screen.value as? Screen.Systems ?: return
         if (s.menu != null || s.search != null || !canSearch) return
         _screen.value = s.copy(search = lastSearch)
+    }
+
+    /** Player name's text as typed in its prompt, cut to what a console holds. */
+    fun playerNameDraft(text: String) {
+        (_screen.value as? Screen.Settings)?.takeIf { it.nameDraft != null }?.let { _screen.value = it.copy(nameDraft = text.take(PlayerName.MAX)) }
     }
 
     /** The search prompt's live text (the composable reports every change), so A can confirm with it. */
@@ -5132,6 +5152,7 @@ class AppState(
                     SettingsKind.EMULATORS -> { settingsUi.rememberSection(s.section, _selection.value); emulatorSettings.openList(systemsCache) }
                     SettingsKind.INFO -> Unit   // About: read-only
                     SettingsKind.COPY_INFO -> copyDeviceInfo()
+                    SettingsKind.PLAYER_NAME -> _screen.value = s.copy(nameDraft = PlayerName.resolve(deps.settings.playerName, deps.deviceName()))
                     SettingsKind.CLEAR_LINK_ROMS -> deps.linkRomCache?.let { it.clear(); settingsUi.refreshSettings() }
                     SettingsKind.APP_UPDATE -> deps.updater?.let(::appUpdateRowA)
                     SettingsKind.HOME_SCREEN -> deps.launcher?.let { it.setHome(!it.isHome()); settingsUi.refreshSettings() }
@@ -5939,6 +5960,7 @@ class AppState(
                 else -> null
             }
             is Screen.FilePicker -> s.prompt?.let { one("folder", "Folder name", it, ::filePickerDraft) }
+            is Screen.Settings -> s.nameDraft?.let { one("player-name", "Player name", it, ::playerNameDraft) }
             is Screen.Systems -> s.search?.let { one("search", "Search", it, ::searchDraft, "Search") } ?: menuPromptSpec(s.menu)
             is Screen.Games -> s.search?.let { one("list-search", "Search", it, ::searchDraft, "Search") } ?: menuPromptSpec(s.menu)
             else -> menuPromptSpec(s.contextMenu)
@@ -6004,7 +6026,7 @@ class AppState(
                 else if (s.menu != null) { if (!s.menu.busy) closeContextMenu(); true }
                 else if (s.pushed) { popHiddenTab(); true }
                 else false
-            is Screen.Settings -> if (s.confirmReset) { _screen.value = s.copy(confirmReset = false); true } else {   // Back keeps the settings
+            is Screen.Settings -> if (s.nameDraft != null) { _screen.value = s.copy(nameDraft = null); true } else if (s.confirmReset) { _screen.value = s.copy(confirmReset = false); true } else {   // Back keeps the settings
                 settingsUi.rememberSection(s.section, _selection.value)
                 // A sub-page goes back to its section. Library or Emulators: after a change ([libraryDirty]), or an extra set
                 // or default tag changed behind the page's back (it fails the fit), it reloads (rescanning if needed); either
@@ -6472,6 +6494,7 @@ internal fun textEntryOpen(s: Screen): Boolean = when (s) {
     is Screen.Onboarding -> s.prompt || s.artSignIn || s.artKey != null   // setup's sign-in and art prompts
     is Screen.ArtworkSettings -> s.signingIn || s.editingKey
     is Screen.FilePicker -> s.prompt != null
+    is Screen.Settings -> s.nameDraft != null
     is Screen.Systems -> s.search != null || s.menu?.prompt.isTextEntry
     is Screen.Games -> s.search != null || s.menu?.prompt.isTextEntry
     else -> s.contextMenu?.prompt.isTextEntry

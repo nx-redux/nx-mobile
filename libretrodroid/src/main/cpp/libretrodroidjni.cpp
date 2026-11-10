@@ -1186,6 +1186,14 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setLogEnab
     nx_log_set_enabled(enabled);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setUsername(
+    JNIEnv* env,
+    jclass obj,
+    jstring name
+) {
+    Environment::getInstance().setUsername(name == nullptr ? std::string() : JniString(env, name).stdString());
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setKeepCoreLoaded(
     JNIEnv* env,
     jclass obj,

@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,10 +20,18 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,6 +48,12 @@ import kotlinx.coroutines.flow.Flow
  * A card taller than the room scrolls, its edges fading while there is more that way ([nxScrollFade]); with [scrollSteps] (the host's d-pad presses for it, -1 up and +1 down)
  * the key hints also lead with a d-pad Scroll hint while it overflows, whose tap steps down (back to the top at the end).
  */
+/**
+ * The top of the NX keyboard drawn over a pad ([com.nxredux.mobile.ui.keyboard.NxKeyboardBar]), in the window; null while
+ * none is. It can reach above the pad into the screen, so a modal there lifts clear of it.
+ */
+internal val nxKeyboardTop = mutableStateOf<Float?>(null)
+
 @Composable
 fun NxModal(
     caption: String?, kind: ModalKind, onButton: (NxButton) -> Unit,
@@ -63,9 +79,19 @@ fun NxModal(
     // Landscape (no pad): the screen slot is the whole window, so imePadding lifts the panel exactly above the keyboard.
     // Portrait: the keyboard lands mostly on the pad band, so no IME padding (the card scrolls if it is ever covered).
     // A tap gesture, not clickable: no full-screen ripple, and the scrim is not focusable or clicked by a hardware Enter.
+    // Over a pad the keyboard (Android's, or NX's over the pad) can still reach into the screen: the panel centres in what
+    // is left above it.
+    val density = LocalDensity.current
+    val imeBottom = WindowInsets.ime.getBottom(density)
+    var bottom by remember { mutableFloatStateOf(0f) }
+    var rootHeight by remember { mutableFloatStateOf(0f) }
+    val keyboardTop = listOfNotNull(nxKeyboardTop.value, if (imeBottom > 0 && rootHeight > 0f) rootHeight - imeBottom else null).minOrNull()
+    val covered = if (padVisible && keyboardTop != null) with(density) { (bottom - keyboardTop).coerceAtLeast(0f).toDp() } else 0.dp
     Box(
         Modifier.fillMaxSize().then(if (!padVisible) Modifier.imePadding() else Modifier).background(LocalNxColors.current.scrimModal)
-            .pointerInput(scrimDismisses) { detectTapGestures { if (scrimDismisses) onButton(dismiss) } },
+            .onGloballyPositioned { c -> bottom = c.positionInRoot().y + c.size.height; rootHeight = c.findRootCoordinates().size.height.toFloat() }
+            .pointerInput(scrimDismisses) { detectTapGestures { if (scrimDismisses) onButton(dismiss) } }
+            .padding(bottom = covered),
         contentAlignment = Alignment.Center,
     ) {
         Column(

@@ -56,6 +56,8 @@ import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_NETPLAY_ROLE
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_OPTIONS
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_SYSTEM_SETS
 import com.nxredux.mobile.settings.AndroidAppSettings
+import com.nxredux.mobile.settings.AndroidDeviceInfo
+import com.nxredux.mobile.settings.PlayerName
 import com.nxredux.mobile.settings.GameRumble
 import com.nxredux.mobile.settings.Prefs
 import com.nxredux.mobile.shortcuts.Shortcuts
@@ -446,7 +448,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val linkKind = np?.linkKind
             val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId) else when (linkKind) {
                 null -> NetplayLinkOptions.forPair(np)
-                NetplayLinkKind.GBLINK, NetplayLinkKind.N3DSLINK -> NetplayLinkOptions.forSession(np, null)
+                NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)
+                NetplayLinkKind.N3DSLINK -> NetplayLinkOptions.forSession(
+                    np, null,
+                    NetplayLinkOptions.n3dsRoomName(PlayerName.resolve(AndroidAppSettings(activity).playerName, AndroidDeviceInfo.deviceName(activity)), kotlin.random.Random.nextInt(10000)),
+                )
                 NetplayLinkKind.NETPACKET -> {
                     val own = NetplayLinkOptions.modeKey(np.coreId)?.let { key -> options.firstOrNull { it.key == key }?.value }
                     val mode = gameNetplay.connectLink(np, own) ?: return refuse(NetplayText.FAILED_CONNECT, NetplayText.FAILED)
@@ -674,6 +680,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         videoViews = gameCoreId in VIDEO_VIEW_CORES
                         // gpsp: never unload the core between games, so its recompiler cache stays mapped near it.
                         keepCoreLoaded = cfg.descriptor?.keepLoaded == true
+                        // 3DS: the console's profile name is the player's (Settings → System → Player name).
+                        if (gameCoreId == "azahar") username = PlayerName.resolve(AndroidAppSettings(activity).playerName, AndroidDeviceInfo.deviceName(activity))
                         shader = renderer.shaderFor(cfg.frontend)
                         saveRAMState = prepared.sram
                         rtcState = prepared.rtc   // the clock file, applied after the battery save

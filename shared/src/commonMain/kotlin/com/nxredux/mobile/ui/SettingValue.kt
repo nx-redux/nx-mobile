@@ -75,7 +75,7 @@ internal fun rowEditTwoPane(s: Screen, split: Boolean): Boolean =
 
 /** [s] has a dialog open that takes the pad (a confirm, a sign-in, a key): no row is changed under it. */
 internal fun rowEditBlocked(s: Screen): Boolean = when (s) {
-    is Screen.Settings -> s.confirmReset || s.confirmRemove != null
+    is Screen.Settings -> s.confirmReset || s.confirmRemove != null || s.nameDraft != null
     is Screen.RaSettings -> s.signingIn || s.confirm != null
     is Screen.ArtworkSettings -> s.dialogOpen
     else -> false

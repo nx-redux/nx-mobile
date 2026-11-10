@@ -33,6 +33,16 @@ object NetplayLinkOptions {
     const val N3DS_PORT = 24872
 
     /**
+     * This player's name in Azahar's room: the [player] name in the characters a room takes (ASCII letters, digits,
+     * space, dot, underscore, hyphen), then [number] as four digits. The room turns away a second member with the same
+     * name, and two devices can carry the same one, hence the number (drawn per launch).
+     */
+    fun n3dsRoomName(player: String, number: Int): String {
+        val base = player.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it in " ._-" }.trim().ifEmpty { "Player" }
+        return "$base-${(number.mod(10000)).toString().padStart(4, '0')}"
+    }
+
+    /**
      * gbalink_serial_option for gpSP: a [mixed] session (the other side runs mGBA) runs the game's own mode whatever is
      * pinned (`auto`, `auto_cable` over USB). Otherwise over USB `auto` is `auto_cable` (real cable unless the game has
      * a wireless adapter); elsewhere `lockstep` is `auto`.
@@ -116,8 +126,11 @@ object NetplayLinkOptions {
         else -> host
     }
 
-    /** The options [session]'s core is launched with; [linkMode]: the agreed raw mode for gpSP or mGBA (null: the default). */
-    fun forSession(session: NetplaySession, linkMode: String?): Map<String, String> = when (session.linkKind) {
+    /**
+     * The options [session]'s core is launched with; [linkMode]: the agreed raw mode for gpSP or mGBA (null: the default);
+     * [roomName]: this player's name in a 3DS link's room ([n3dsRoomName]; null: the role's).
+     */
+    fun forSession(session: NetplaySession, linkMode: String?, roomName: String? = null): Map<String, String> = when (session.linkKind) {
         NetplayLinkKind.GBLINK -> buildMap {
             put(GB_PORT_KEY, GB_PORT.toString())
             if (session.role == NetplayRole.HOST) {
@@ -135,15 +148,14 @@ object NetplayLinkOptions {
                 else -> emptyMap()
             }
         }
-        // The room turns away a second member with the same name, so each role has its own.
         NetplayLinkKind.N3DSLINK -> buildMap {
             put(N3DS_PORT_KEY, N3DS_PORT.toString())
             if (session.role == NetplayRole.HOST) {
                 put(N3DS_MODE, N3DS_HOST)
-                put(N3DS_NAME, "Player 1")
+                put(N3DS_NAME, roomName ?: "Player 1")
             } else {
                 put(N3DS_MODE, N3DS_JOIN)
-                put(N3DS_NAME, "Player 2")
+                put(N3DS_NAME, roomName ?: "Player 2")
                 put(N3DS_IP, session.peerIp)
             }
         }
