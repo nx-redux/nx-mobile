@@ -10,6 +10,7 @@ import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.ui.BiosMissing
 import com.nxredux.mobile.ui.GameInfo
 import com.nxredux.mobile.ui.Listed
+import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -76,10 +77,18 @@ class TopStatsTest {
     @Test fun bios_and_cheat_chips() {
         val ps = system("PS", "PlayStation", game("PS", "A", firstSeen = now - day), game("PS", "B", firstSeen = now - 2 * day), game("PS", "C", firstSeen = now - 30 * day))
         val s = consoleStats(listOf(ps), listed(ps), emptyMap(), now, weekStart = now - 6 * day, bios = BiosMissing.REQUIRED, cheatGames = 40)
-        assertEquals(listOf("Added this week: 2", "Cheats for 40 games", "BIOS missing"), s.chips)
+        assertEquals(listOf("BIOS missing", "Added this week: 2", "Cheats for 40 games"), s.chips)
         val optional = consoleStats(listOf(ps), listed(ps), emptyMap(), now, weekStart = now, bios = BiosMissing.OPTIONAL, cheatGames = 1)
-        assertEquals(listOf("Cheats for 1 game", "BIOS missing (optional)"), optional.chips)
+        assertEquals(listOf("BIOS missing (optional)", "Cheats for 1 game"), optional.chips)
         assertEquals(emptyList(), consoleStats(listOf(ps), listed(ps), emptyMap(), now, weekStart = now, bios = null, cheatGames = 0).chips)
+    }
+
+    // The header, four tiles and chips need ~146dp; each shelf tile needs ~37dp of text under its art.
+    @Test fun the_shelf_shows_only_where_its_art_has_room() {
+        assertEquals(false, statsShelfShown(170.dp, hasShelf = true))
+        assertEquals(false, statsShelfShown(215.dp, hasShelf = true))
+        assertEquals(true, statsShelfShown(220.dp, hasShelf = true))
+        assertEquals(false, statsShelfShown(400.dp, hasShelf = false))
     }
 
     @Test fun collection_stats_span_consoles_and_count_finished() {

@@ -1204,7 +1204,7 @@ class AppState(
         _topDetails.value = TopDetails(
             entry, _gameInfo.value[path], shown?.resume ?: ResumeInfo.NONE, shown?.shots.orEmpty(), shown?.facts,
             topAchievements(detailsRaFor(entry, ra.detailsRa.value)), gameMeta(deps.placeholderMeta),
-            netplay?.offers(entry) == true, ra.hasRaSet(path),
+            netplay?.offers(entry) == true, hasRaSet(path),
         )
         if (shown != null && !reread) return   // its reads ran or are running
         topDetailsJob?.cancel()
@@ -1219,6 +1219,9 @@ class AppState(
             _topDetails.value = now.copy(resume = resume, shots = shots, facts = facts)
         }
     }
+
+    /** Whether [path] has achievements: a played homebrew or hack has a pointer folder but no set, so only real data counts. */
+    private fun hasRaSet(path: String): Boolean = _gameInfo.value[path]?.ra?.total?.let { it > 0 } == true
 
     /** Whether [a] and [b] are one game: a rebuilt list gives new [Listed]s for the same files. */
     private fun sameGame(a: Listed, b: Listed): Boolean = a.system.tag == b.system.tag && a.game.path == b.game.path
@@ -1431,7 +1434,7 @@ class AppState(
         scope.launch { _gameInfo.collect { followTopDetails(reread = true); followTopStats() } }
         scope.launch {
             ra.detailsRa.collect { r ->
-                _topDetails.value?.let { d -> _topDetails.value = d.copy(achievements = topAchievements(detailsRaFor(d.entry, r)), raSet = ra.hasRaSet(d.entry.game.path)) }
+                _topDetails.value?.let { d -> _topDetails.value = d.copy(achievements = topAchievements(detailsRaFor(d.entry, r)), raSet = hasRaSet(d.entry.game.path)) }
             }
         }
         scope.launch {
@@ -1935,15 +1938,9 @@ class AppState(
     }
 
     /**
-     * Shows [screen] with its tab's remembered row, clamped. Over START's open prompt (a rebuild in place: a foreground,
+     * Shows [menu] with its tab's remembered row, clamped. Over START's open prompt (a rebuild in place: a foreground,
      * a new Home frame, counts landing) the prompt and its draft stay; closing it is the prompt's own keys.
      */
-    /** First setup's steps and onboarding (a folder change in Settings may resume them). */
-    private fun setupScreen(s: Screen): Boolean = when (s) {
-        is Screen.PermissionsStep, Screen.PickFolder, Screen.AddFirstExtra, is Screen.FolderSummary, is Screen.AndroidGamesStep, is Screen.Onboarding, is Screen.StorageUpgrade -> true
-        else -> false
-    }
-
     private fun showMenu(menu: Screen.Systems, at: Int = -1) {
         if (kidsUi.kidsLocked) return kidsUi.showKidsHome()   // Kids Mode while Locked: the tiles screen is the main menu
         val prev = _screen.value

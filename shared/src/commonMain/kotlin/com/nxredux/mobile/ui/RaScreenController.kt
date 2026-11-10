@@ -44,8 +44,9 @@ internal interface RaScreenHost {
 }
 
 /**
- * RetroAchievements in the launcher: the achievements panel over a game list ([raPanel]), and the Tools pages (the main page, the game data download, the games browser, a game's
- * achievements, one achievement, and the settings page). [achievements] null: a platform without it.
+ * RetroAchievements in the launcher: the achievements panel over a game list ([raPanel]), and the Tools pages (the main
+ * page, the game data download, the games browser, a game's achievements, one achievement, and the settings page).
+ * [achievements] null: a platform without it.
  */
 internal class RaScreenController(
     private val scope: CoroutineScope,
@@ -79,9 +80,6 @@ internal class RaScreenController(
     val detailsRa: StateFlow<RaPanel?> = _detailsRa.asStateFlow()
     private var raDetailJob: Job? = null
     private var detailsEntry: Listed? = null
-
-    /** Whether [path]'s RetroAchievements set is known (its hash is cached). */
-    fun hasRaSet(path: String): Boolean = path in raHashes || raFetches[path] is RaGameFetch.Cached
 
     // --- The achievements panel over a game list ---
 

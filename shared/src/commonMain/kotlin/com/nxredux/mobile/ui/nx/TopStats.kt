@@ -113,13 +113,13 @@ fun consoleStats(
     )
 }
 
-/** A console's chips: games first seen since [weekStart], games with cheats, a missing BIOS; each only when there is one. */
+/** A console's chips: a missing BIOS, games first seen since [weekStart], games with cheats; each only when there is one. The page shows one row, so the last ones are the first dropped. */
 fun consoleChips(entries: List<Listed>, now: Long, weekStart: Long, bios: BiosMissing?, cheatGames: Int): List<String> {
     val added = entries.count { e -> e.game.firstSeen?.let { it in weekStart..now } == true }
     return listOfNotNull(
+        when (bios) { BiosMissing.REQUIRED -> "BIOS missing"; BiosMissing.OPTIONAL -> "BIOS missing (optional)"; null -> null },
         "Added this week: $added".takeIf { added > 0 },
         (if (cheatGames == 1) "Cheats for 1 game" else "Cheats for $cheatGames games").takeIf { cheatGames > 0 },
-        when (bios) { BiosMissing.REQUIRED -> "BIOS missing"; BiosMissing.OPTIONAL -> "BIOS missing (optional)"; null -> null },
     )
 }
 
@@ -190,7 +190,7 @@ fun TopStatsPage(stats: TopStats, onLaunch: (Listed) -> Unit, prefer: BackdropAr
     val now = remember(stats) { nowMs() }
     BoxWithConstraints(Modifier.fillMaxSize().background(colors.background).padding(TS_PAD)) {
         val chips = maxHeight >= TS_CHIPS_MIN && stats.chips.isNotEmpty()
-        val shelf = maxHeight >= TS_SHELF_MIN && stats.shelf.isNotEmpty()
+        val shelf = statsShelfShown(maxHeight, stats.shelf.isNotEmpty())
         val tiles = ((maxWidth + TS_GAP) / (TS_TILE_MIN + TS_GAP)).toInt().coerceIn(1, SHELF_MAX)
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             StatsHeader(stats)
@@ -292,7 +292,10 @@ private val TS_SMALL = 13.sp
 private val TS_CHIP = 11.sp
 private val TS_LABEL = 10.sp
 private val TS_CHIPS_MIN: Dp = 260.dp   // shorter top screens drop the chips first
-private val TS_SHELF_MIN: Dp = 170.dp   // then the shelf, after it has shrunk to a sliver
+private val TS_SHELF_MIN: Dp = 220.dp   // then the shelf: the fixed content takes ~146dp and a tile's two text lines ~37dp, so less leaves no art
+
+/** Whether the shelf (with its label) fits a page [height] tall: below it a tile's art would be squeezed to nothing. */
+internal fun statsShelfShown(height: Dp, hasShelf: Boolean): Boolean = hasShelf && height >= TS_SHELF_MIN
 
 /**
  * Whether a lift ends a tap: quick (a finger or palm resting on the cover is not one), within the touch slop, and not

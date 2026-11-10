@@ -101,7 +101,7 @@ internal fun gameMeta(placeholderMeta: Boolean): GameMeta? = if (placeholderMeta
 /**
  * The top screen's page for the highlighted game: its play history ([info]), resume save, save-state pictures ([shots],
  * newest first), file facts ([facts], null until read or on a platform without them), achievements, scraped facts
- * ([meta]), whether [netplay] can start it, and whether its RetroAchievements set is known ([raSet]).
+ * ([meta]), whether [netplay] can start it, and whether it has a RetroAchievements set with achievements ([raSet]).
  */
 data class TopDetails(
     val entry: Listed,
