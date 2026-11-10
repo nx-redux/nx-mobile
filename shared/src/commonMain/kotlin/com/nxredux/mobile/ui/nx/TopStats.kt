@@ -41,8 +41,8 @@ import com.nxredux.mobile.ui.nowMs
 import com.nxredux.mobile.ui.panelArt
 import com.nxredux.mobile.ui.whenText
 
-/** A game on the stats page's shelf: its play time ([ms], 0 on a newest-added shelf), when it was [added], its [resume] picture once read. */
-data class ShelfGame(val entry: Listed, val ms: Long, val added: Long?, val resume: String? = null)
+/** A game on the stats page's shelf: its play time ([ms], 0 for a newest-added one filling the shelf), its [resume] picture once read. */
+data class ShelfGame(val entry: Listed, val ms: Long, val resume: String? = null)
 
 /**
  * The top screen's page for a highlighted console or collection ([key]: which, [statsKey]): its [title], its [games],
@@ -115,11 +115,11 @@ internal fun biosPill(bios: BiosMissing?): String? = when (bios) {
 private fun shelf(entries: List<Listed>, info: Map<String, GameInfo>): List<ShelfGame> {
     val played = entries.mapNotNull { e -> info[e.game.path]?.totalMs?.takeIf { it > 0 }?.let { e to it } }
         .sortedWith(compareByDescending<Pair<Listed, Long>> { it.second }.thenBy { it.first.shown.lowercase() })
-        .take(SHELF_MAX).map { (e, ms) -> ShelfGame(e, ms, e.game.firstSeen) }
+        .take(SHELF_MAX).map { (e, ms) -> ShelfGame(e, ms) }
     val taken = played.map { it.entry.game.path }.toSet()
     val fill = entries.filter { it.game.path !in taken }
         .sortedWith(compareByDescending<Listed, Long?>(nullsFirst()) { it.game.firstSeen }.thenBy { it.shown.lowercase() })
-        .take(SHELF_MAX - played.size).map { e -> ShelfGame(e, 0, e.game.firstSeen) }
+        .take(SHELF_MAX - played.size).map { e -> ShelfGame(e, 0) }
     return played + fill
 }
 
@@ -130,9 +130,11 @@ internal fun shelfLabel(shelf: List<ShelfGame>): String = when {
     else -> "PLAYED & NEW"
 }
 
-/** A tile's line under its name: "24 h" for a played game, "added yesterday" for a filled one (null without a first-seen time). */
-internal fun shelfCaption(game: ShelfGame, now: Long): String? =
-    if (game.ms > 0) hoursText(game.ms) else game.added?.let { "added " + whenText(now, it).lowercase() }
+/**
+ * A tile's line under its name: "24 h" for a played game, "Not played yet" for a filled one (its first-seen time can be
+ * the file's own date, years before the player added it).
+ */
+internal fun shelfCaption(game: ShelfGame): String = if (game.ms > 0) hoursText(game.ms) else "Not played yet"
 
 /** "86 h" from an hour up, else "45 m"; a play under a minute is "< 1 m" so it never reads as none. */
 internal fun hoursText(ms: Long): String {
@@ -174,7 +176,7 @@ private const val SHELF_MAX = 3
 /**
  * The top screen's console / collection stats: the title, one quiet line of facts and the BIOS pill (only when one is
  * missing) over the shelf, all anchored to the bottom; the shelf is its label over three 16:9 pictures, each captioned
- * with its game's name and play time (or when it was added). Nothing scrolls: a short screen drops the captions, then
+ * with its game's name and play time (or "Not played yet"). Nothing scrolls: a short screen drops the captions, then
  * the shelf ([shelfFit]), and the title block stays at the bottom. [onLaunch]: a picture's clean tap. [prefer]: Layouts → Backdrop art, for a game whose only picture is
  * its box.
  */
@@ -209,7 +211,7 @@ fun TopStatsPage(stats: TopStats, onLaunch: (Listed) -> Unit, prefer: BackdropAr
             val width = constraints.maxWidth.toDp()
             val fit = if (stats.shelf.isEmpty()) ShelfFit.NONE else shelfFit(width, (constraints.maxHeight - head.height).toDp())
             val shelf = if (fit == ShelfFit.NONE) null else subcompose("shelf") {
-                Shelf(stats, fit == ShelfFit.CAPTIONED, width * TS_TILE_GAP, now, prefer, onLaunch)
+                Shelf(stats, fit == ShelfFit.CAPTIONED, width * TS_TILE_GAP, prefer, onLaunch)
             }.first().measure(loose)
             val shelfTop = constraints.maxHeight - (shelf?.height ?: 0)
             val headTop = if (shelf == null) shelfTop - head.height else shelfTop - TS_BREATH.roundToPx() - head.height
@@ -222,7 +224,7 @@ fun TopStatsPage(stats: TopStats, onLaunch: (Listed) -> Unit, prefer: BackdropAr
 }
 
 @Composable
-private fun Shelf(stats: TopStats, captions: Boolean, gap: Dp, now: Long, prefer: BackdropArt, onLaunch: (Listed) -> Unit) {
+private fun Shelf(stats: TopStats, captions: Boolean, gap: Dp, prefer: BackdropArt, onLaunch: (Listed) -> Unit) {
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
     Column(Modifier.fillMaxWidth()) {
@@ -238,9 +240,7 @@ private fun Shelf(stats: TopStats, captions: Boolean, gap: Dp, now: Long, prefer
                     ShelfPicture(g, prefer, Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).cleanTap { onLaunch(g.entry) })
                     if (captions) Column(Modifier.height(TS_CAPTIONS).padding(top = 8.dp)) {
                         Text(g.entry.shown, color = colors.listText, fontFamily = font, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        shelfCaption(g, now)?.let {
-                            Text(it, color = colors.hint, fontFamily = font, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
+                        Text(shelfCaption(g), color = colors.hint, fontFamily = font, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
