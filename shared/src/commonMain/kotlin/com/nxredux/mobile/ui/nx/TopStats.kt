@@ -3,6 +3,8 @@ package com.nxredux.mobile.ui.nx
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -23,15 +25,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalViewConfiguration
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -296,8 +295,15 @@ private val TS_CHIPS_MIN: Dp = 260.dp   // shorter top screens drop the chips fi
 private val TS_SHELF_MIN: Dp = 170.dp   // then the shelf, after it has shrunk to a sliver
 
 /**
- * A tap that only taps: one finger, up within the touch slop of where it went down. A drag or a second finger is not
- * one, and nothing is consumed, so a swipe over the tile does what it did before.
+ * Whether a lift ends a tap: quick (a finger or palm resting on the cover is not one), within the touch slop, and not
+ * consumed (a parent took the gesture, or the system cancelled it).
+ */
+internal fun isCleanTap(heldMs: Long, movedPx: Float, consumed: Boolean, timeoutMs: Long, slopPx: Float): Boolean =
+    !consumed && heldMs <= timeoutMs && movedPx <= slopPx
+
+/**
+ * A tap that only taps: one finger, lifted within the long-press time and the touch slop of where it went down. A drag
+ * or a second finger is not one, and nothing is consumed, so a swipe over the tile does what it did before.
  */
 private fun Modifier.cleanTap(onTap: () -> Unit): Modifier = composed {
     val action = rememberUpdatedState(onTap)
@@ -309,9 +315,11 @@ private fun Modifier.cleanTap(onTap: () -> Unit): Modifier = composed {
                 val event = awaitPointerEvent(PointerEventPass.Final)
                 if (event.changes.size > 1) clean = false
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (change.isConsumed) clean = false
                 if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) clean = false
                 if (change.changedToUp()) {
-                    if (clean) action.value()
+                    val moved = (change.position - down.position).getDistance()
+                    if (clean && isCleanTap(change.uptimeMillis - down.uptimeMillis, moved, change.isConsumed, viewConfiguration.longPressTimeoutMillis, viewConfiguration.touchSlop)) action.value()
                     break
                 }
                 if (!change.pressed) break
