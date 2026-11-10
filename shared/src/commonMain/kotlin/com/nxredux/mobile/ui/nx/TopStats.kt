@@ -58,7 +58,7 @@ data class ShelfGame(val entry: Listed, val ms: Long, val added: Long?, val resu
 /**
  * The top screen's page for a highlighted console or collection ([key]: which, [statsKey]): its [title], its [games],
  * the [consoles] a collection spans (null for a console), the time [playedMs] and when one was [lastPlayed] (null: never),
- * the [bios] pill (a console's only) and a [shelf] of up to three games, the most played or else the [newest] added.
+ * the [bios] pill (a console's only) and a [shelf] of up to three games, the most played topped up with the newest added.
  */
 data class TopStats(
     val key: String,
@@ -69,7 +69,6 @@ data class TopStats(
     val lastPlayed: Long?,
     val bios: BiosMissing?,
     val shelf: List<ShelfGame>,
-    val newest: Boolean,
 )
 
 /** Which stats page [top] shows, as [TopStats.key]; null for any other top content. */
@@ -84,20 +83,20 @@ private fun collectionKey(name: String) = "collection:$name"
 
 /** [systems]' page over their [entries]. */
 fun consoleStats(systems: List<SystemFolder>, entries: List<Listed>, info: Map<String, GameInfo>, bios: BiosMissing? = null): TopStats {
-    val (newest, shelf) = shelf(entries, info)
+    val shelf = shelf(entries, info)
     return TopStats(
         key = consoleKey(systems), title = systems.first().displayName, games = entries.size, consoles = null,
-        playedMs = playedMs(entries, info), lastPlayed = lastPlayed(entries, info), bios = bios, shelf = shelf, newest = newest,
+        playedMs = playedMs(entries, info), lastPlayed = lastPlayed(entries, info), bios = bios, shelf = shelf,
     )
 }
 
 /** Collection [name]'s page over its [entries]. */
 fun collectionStats(name: String, entries: List<Listed>, info: Map<String, GameInfo>): TopStats {
-    val (newest, shelf) = shelf(entries, info)
+    val shelf = shelf(entries, info)
     return TopStats(
         key = collectionKey(name), title = name, games = entries.size,
         consoles = entries.map { it.system.displayName }.distinct().size,   // a merged console (GBA and MGBA) is one console
-        playedMs = playedMs(entries, info), lastPlayed = lastPlayed(entries, info), bios = null, shelf = shelf, newest = newest,
+        playedMs = playedMs(entries, info), lastPlayed = lastPlayed(entries, info), bios = null, shelf = shelf,
     )
 }
 
@@ -123,20 +122,28 @@ internal fun biosPill(bios: BiosMissing?): String? = when (bios) {
     null -> null
 }
 
-/** Most played (by play time) when anything was; else the newest added (true), so the shelf is never empty. */
-private fun shelf(entries: List<Listed>, info: Map<String, GameInfo>): Pair<Boolean, List<ShelfGame>> {
+/** The played games by time, then the newest added to fill the shelf, never the same game twice. */
+private fun shelf(entries: List<Listed>, info: Map<String, GameInfo>): List<ShelfGame> {
     val played = entries.mapNotNull { e -> info[e.game.path]?.totalMs?.takeIf { it > 0 }?.let { e to it } }
-    if (played.isNotEmpty()) {
-        return false to played.sortedWith(compareByDescending<Pair<Listed, Long>> { it.second }.thenBy { it.first.shown.lowercase() })
-            .take(SHELF_MAX).map { (e, ms) -> ShelfGame(e, ms, e.game.firstSeen) }
-    }
-    return true to entries.sortedWith(compareByDescending<Listed, Long?>(nullsFirst()) { it.game.firstSeen }.thenBy { it.shown.lowercase() })
-        .take(SHELF_MAX).map { e -> ShelfGame(e, 0, e.game.firstSeen) }
+        .sortedWith(compareByDescending<Pair<Listed, Long>> { it.second }.thenBy { it.first.shown.lowercase() })
+        .take(SHELF_MAX).map { (e, ms) -> ShelfGame(e, ms, e.game.firstSeen) }
+    val taken = played.map { it.entry.game.path }.toSet()
+    val fill = entries.filter { it.game.path !in taken }
+        .sortedWith(compareByDescending<Listed, Long?>(nullsFirst()) { it.game.firstSeen }.thenBy { it.shown.lowercase() })
+        .take(SHELF_MAX - played.size).map { e -> ShelfGame(e, 0, e.game.firstSeen) }
+    return played + fill
 }
 
-/** A tile's line under its name: "24 h", or "added yesterday" on a [newest] shelf (null without a first-seen time). */
-internal fun shelfCaption(game: ShelfGame, newest: Boolean, now: Long): String? =
-    if (newest) game.added?.let { "added " + whenText(now, it).lowercase() } else hoursText(game.ms)
+/** The shelf's label: all played, all filled, or both. */
+internal fun shelfLabel(shelf: List<ShelfGame>): String = when {
+    shelf.all { it.ms > 0 } -> "MOST PLAYED"
+    shelf.none { it.ms > 0 } -> "NEWEST ADDED"
+    else -> "PLAYED & NEW"
+}
+
+/** A tile's line under its name: "24 h" for a played game, "added yesterday" for a filled one (null without a first-seen time). */
+internal fun shelfCaption(game: ShelfGame, now: Long): String? =
+    if (game.ms > 0) hoursText(game.ms) else game.added?.let { "added " + whenText(now, it).lowercase() }
 
 /** "86 h" from an hour up, else "45 m" (under a minute: "0 m"). */
 internal fun hoursText(ms: Long): String {
@@ -218,7 +225,7 @@ private fun Shelf(stats: TopStats, captions: Boolean, gap: Dp, now: Long, prefer
     val font = LocalNxFont.current
     Column(Modifier.fillMaxWidth()) {
         Text(
-            if (stats.newest) "NEWEST ADDED" else "MOST PLAYED", color = colors.hint, fontFamily = font, fontSize = 12.sp,
+            shelfLabel(stats.shelf), color = colors.hint, fontFamily = font, fontSize = 12.sp,
             letterSpacing = 1.5.sp, maxLines = 1, modifier = Modifier.height(TS_LABEL),
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
@@ -229,7 +236,7 @@ private fun Shelf(stats: TopStats, captions: Boolean, gap: Dp, now: Long, prefer
                     ShelfPicture(g, prefer, Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).cleanTap { onLaunch(g.entry) })
                     if (captions) Column(Modifier.height(TS_CAPTIONS).padding(top = 8.dp)) {
                         Text(g.entry.shown, color = colors.listText, fontFamily = font, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        shelfCaption(g, stats.newest, now)?.let {
+                        shelfCaption(g, now)?.let {
                             Text(it, color = colors.hint, fontFamily = font, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }

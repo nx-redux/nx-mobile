@@ -61,23 +61,57 @@ class TopStatsTest {
         // G most, then F..., A never played.
         val info = gb.games.drop(1).mapIndexed { i, g -> g.path to played((i + 1) * hour, 1, now) }.toMap()
         val s = consoleStats(listOf(gb), listed(gb), info)
-        assertEquals(false, s.newest)
+        assertEquals("MOST PLAYED", shelfLabel(s.shelf))
         assertEquals(listOf("G", "F", "E"), s.shelf.map { it.entry.shown })
-        assertEquals("6 h", shelfCaption(s.shelf.first(), s.newest, now))
+        assertEquals("6 h", shelfCaption(s.shelf.first(), now))
     }
 
     @Test fun nothing_played_shows_newest_added() {
         val gb = system("GB", "Game Boy", game("GB", "Old", firstSeen = now - 40 * day), game("GB", "New", firstSeen = now - day), game("GB", "Mid", firstSeen = now - 10 * day))
         val s = consoleStats(listOf(gb), listed(gb), emptyMap())
-        assertEquals(true, s.newest)
+        assertEquals("NEWEST ADDED", shelfLabel(s.shelf))
         assertEquals(listOf("New", "Mid", "Old"), s.shelf.map { it.entry.shown })
-        assertEquals("added yesterday", shelfCaption(s.shelf.first(), s.newest, now))
+        assertEquals("added yesterday", shelfCaption(s.shelf.first(), now))
+    }
+
+    @Test fun one_played_game_is_filled_to_three_with_the_newest_added() {
+        val gb = system(
+            "GB", "Game Boy", game("GB", "Old", firstSeen = now - 40 * day), game("GB", "Played", firstSeen = now - 30 * day),
+            game("GB", "New", firstSeen = now - day), game("GB", "Mid", firstSeen = now - 10 * day), game("GB", "Unknown"),
+        )
+        val played = gb.games[1]
+        val s = consoleStats(listOf(gb), listed(gb), mapOf(played.path to played(10 * 60_000L, 1, now - day)))
+        assertEquals(listOf("Played", "New", "Mid"), s.shelf.map { it.entry.shown })
+        assertEquals("PLAYED & NEW", shelfLabel(s.shelf))
+        assertEquals(listOf("10 m", "added yesterday", "added last week"), s.shelf.map { shelfCaption(it, now) })
+    }
+
+    @Test fun a_played_game_that_is_also_the_newest_is_not_listed_twice() {
+        val gb = system("GB", "Game Boy", game("GB", "New", firstSeen = now - day), game("GB", "Old", firstSeen = now - 9 * day), game("GB", "Mid", firstSeen = now - 5 * day))
+        val s = consoleStats(listOf(gb), listed(gb), mapOf(gb.games[0].path to played(hour, 1, now)))
+        assertEquals(listOf("New", "Mid", "Old"), s.shelf.map { it.entry.shown })
+        assertEquals("PLAYED & NEW", shelfLabel(s.shelf))
+    }
+
+    @Test fun three_played_games_fill_the_shelf_alone() {
+        val gb = system("GB", "Game Boy", game("GB", "A", firstSeen = now - day), game("GB", "B"), game("GB", "C"), game("GB", "D", firstSeen = now))
+        val info = gb.games.take(3).associate { it.path to played(hour, 1, now) }
+        val s = consoleStats(listOf(gb), listed(gb), info)
+        assertEquals(listOf("A", "B", "C"), s.shelf.map { it.entry.shown })
+        assertEquals("MOST PLAYED", shelfLabel(s.shelf))
+    }
+
+    @Test fun a_console_with_two_games_shows_two_tiles() {
+        val gb = system("GB", "Game Boy", game("GB", "A"), game("GB", "B"))
+        val s = consoleStats(listOf(gb), listed(gb), mapOf(gb.games[0].path to played(hour, 1, now)))
+        assertEquals(2, s.shelf.size)
+        assertEquals("PLAYED & NEW", shelfLabel(s.shelf))
     }
 
     @Test fun a_newest_game_without_a_first_seen_time_has_no_second_caption_line() {
         val gb = system("GB", "Game Boy", game("GB", "Tetris"))
         val s = consoleStats(listOf(gb), listed(gb), emptyMap())
-        assertNull(shelfCaption(s.shelf.first(), s.newest, now))
+        assertNull(shelfCaption(s.shelf.first(), now))
     }
 
     @Test fun the_bios_pill_shows_only_when_a_bios_is_missing() {
@@ -103,7 +137,7 @@ class TopStatsTest {
         assertEquals("Favourites", s.title)
         assertEquals("4 games · 3 consoles · 53 h played · last played yesterday", statsLine(s, now))
         assertEquals(listOf("Links Awakening", "Mario World", "Tetris"), s.shelf.map { it.entry.shown })
-        assertEquals("31 h", shelfCaption(s.shelf.first(), s.newest, now))
+        assertEquals("31 h", shelfCaption(s.shelf.first(), now))
     }
 
     @Test fun a_collection_never_played_on_one_console_is_singular() {
