@@ -41,7 +41,7 @@ index e28f994..20b645f 100644
  if(ENABLE_VULKAN)
    target_link_libraries(citra_libretro PRIVATE sirit vulkan-headers vma)
 diff --git a/src/citra_libretro/citra_libretro.cpp b/src/citra_libretro/citra_libretro.cpp
-index 8a65f9d..827bec9 100644
+index 8a65f9d..29dbe55 100644
 --- a/src/citra_libretro/citra_libretro.cpp
 +++ b/src/citra_libretro/citra_libretro.cpp
 @@ -2,6 +2,7 @@
@@ -195,7 +195,17 @@ index 8a65f9d..827bec9 100644
  #ifdef ENABLE_OPENGL
      if (Settings::values.graphics_api.GetValue() == Settings::GraphicsAPI::OpenGL) {
          // We can't assume that the frontend has been nice and preserved all OpenGL settings. Reset.
-@@ -513,6 +601,8 @@ bool retro_load_game(const struct retro_game_info* info) {
+@@ -369,6 +457,9 @@ static void setup_memory_maps() {
+ }
+ 
+ static bool do_load_game() {
++    // A game card image runs as the inserted card (ignored for anything else): Download Play
++    // hosting, which local multiplayer uses, reads the card's own child partition.
++    Core::System::GetInstance().InsertCartridge(LibRetro::settings.file_path);
+     const Core::System::ResultStatus load_result{
+         Core::System::GetInstance().Load(*emu_instance->emu_window, LibRetro::settings.file_path)};
+ 
+@@ -513,6 +604,8 @@ bool retro_load_game(const struct retro_game_info* info) {
  #endif
  
      UpdateSettings();
@@ -204,10 +214,11 @@ index 8a65f9d..827bec9 100644
  
      // If using HW rendering, don't actually load the game here. azahar wants
      // the graphics context ready and available before calling System::Load.
-@@ -635,6 +725,14 @@ bool retro_load_game(const struct retro_game_info* info) {
+@@ -635,6 +728,15 @@ bool retro_load_game(const struct retro_game_info* info) {
  void retro_unload_game() {
      LOG_DEBUG(Frontend, "Unloading game...");
      Core::System::GetInstance().Shutdown();
++    Core::System::GetInstance().EjectCartridge();
 +    LibRetro::RoomLink::Stop();
 +    // The mode outlives retro_deinit() while the core stays loaded.
 +    LibRetro::VideoViews::SetCurrentMode({});

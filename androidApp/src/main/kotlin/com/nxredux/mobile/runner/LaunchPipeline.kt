@@ -406,9 +406,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // values then, so leaving split (or unfolding) puts back the stored ones. Not under netplay: a session changes no
             // core option once it runs, so an unfold could never put them back; it runs the user's swap, as it launched.
             val launchDual = dual.dualModeNow()
-            // 3DS under video views (no netplay): Azahar stays at its unswapped Default, which keeps its views on; the app
+            // 3DS under video views (not in a session that locks its options): Azahar stays at its unswapped Default, which keeps its views on; the app
             // draws the player's layout and does SWAP itself ([FrontendRenderer.n3dsComposition], [N3dsSwap]).
-            val n3dsViews = N3dsOptions.appliesTo(tag) && np == null && LibretroDroid.videoViewsOffered()
+            val npLocks = np?.locksOptions == true
+            val n3dsViews = N3dsOptions.appliesTo(tag) && !npLocks && LibretroDroid.videoViewsOffered()
             renderer.n3dsViews = n3dsViews
             if (n3dsViews) {
                 n3dsSwapMode = resolved.values[DualScreen.N3DS_SWAP_MODE_KEY] ?: "Toggle"
@@ -416,9 +417,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             val n3dsSplit = if (!N3dsOptions.appliesTo(tag)) null
                 else if (n3dsViews) DualScreen.N3DS_VIEWS_CORE
-                else DualScreen.n3dsForcedOptions(launchDual, n3dsSkinStack() && np == null)
+                else DualScreen.n3dsForcedOptions(launchDual, n3dsSkinStack() && !npLocks)
             if (n3dsSplit != null && !n3dsViews) dual.n3dsSwapBeforeSplit = DualScreen.n3dsSwapRestore(null, resolved.values)
-            n3dsSwapPinnedHalfFolded = N3dsOptions.appliesTo(tag) && np == null && n3dsHalfFoldedPin(launchDual)
+            n3dsSwapPinnedHalfFolded = N3dsOptions.appliesTo(tag) && !npLocks && n3dsHalfFoldedPin(launchDual)
             val options = FrontendOptions.coreValues(resolved.values)
                 .filterNot { (k, _) -> k == N3dsOptions.LAYOUT && N3dsOptions.appliesTo(tag) }   // set from the row below
                 .filterNot { (k, _) -> n3dsSplit?.containsKey(k) == true }

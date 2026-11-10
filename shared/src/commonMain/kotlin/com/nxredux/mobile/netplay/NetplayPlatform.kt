@@ -133,6 +133,12 @@ data class NetplaySession(
     val endsAsLocalGame: Boolean get() = linkKind != null
 
     /**
+     * No layout, swap or other core option changes once the session runs: the other device would not follow. A 3DS
+     * link's game is each player's own, so its picture stays theirs to arrange, as in a normal launch.
+     */
+    val locksOptions: Boolean get() = linkKind != NetplayLinkKind.N3DSLINK
+
+    /**
      * RetroAchievements run as in a normal launch: a link session's (each player's game is their own, on their own save,
      * so an unlock is theirs), and Cable Link's (the core shows and maps only this player's GBA). A lockstep session has
      * none: the client plays the host's synced state.
