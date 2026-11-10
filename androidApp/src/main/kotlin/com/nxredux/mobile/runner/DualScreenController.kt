@@ -55,6 +55,7 @@ import com.nxredux.mobile.skin.SkinDual
 import com.nxredux.mobile.ui.nx.GamePanel
 import com.nxredux.mobile.ui.nx.GamePanelEvent
 import com.nxredux.mobile.ui.nx.GamePanelHeader
+import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.ui.nx.GamePanelModel
 import com.nxredux.mobile.ui.nx.GamePanelState
 import com.nxredux.mobile.ui.nx.GamePanelTab
@@ -109,10 +110,14 @@ internal interface DualScreenHost : GameScreenHost {
     fun menuLayoutParams(orientation: Int, overPanel: Boolean, glass: Boolean): FrameLayout.LayoutParams
     fun isLandscape(): Boolean
     fun syncN3dsCore()
-    /** The panel's Second screen, Players and Cheats rows act as the in-game menu's own effects ([MenuEffect]). */
+    /** The panel's Players and Cheats rows act as the in-game menu's own effects ([MenuEffect]). */
     fun handleMenuEffect(effect: MenuEffect)
-    /** The open menu's Second screen shortcut again. */
-    fun publishMenuSecondScreen()
+    /** The touch buttons the panel shows a tile for ([GamePanelModel.panelTouchActions]). */
+    fun panelTouchActions(): List<ShortcutAction>
+    /** A touch button's tile pressed or let go. */
+    fun onPanelTouch(action: ShortcutAction, down: Boolean)
+    /** The save-state slot Save and Load use; null until read. */
+    val lastSlotCache: Int?
     /** Runs [block] on the open in-game menu, if any, and redraws it. */
     fun withMenu(block: (InGameMenuModel) -> Unit)
     /** The open in-game menu moves to the display it belongs on now ([menuOnSecond]). */
@@ -728,7 +733,7 @@ internal class DualScreenController(
 
     /**
      * The dual-screen panel's state: the header ([panelHeader], with the achievement count while there is a set), the tabs
-     * that apply, the Shortcuts (Swap disc for a multi-disc game outside netplay, Second screen, Fast forward, Rewind and Reset outside netplay), this
+     * that apply, the Shortcuts (the touch buttons' tiles, Swap disc for a multi-disc game, Fast forward, Rewind and Reset, all outside netplay), this
      * game's achievements in the menu's order, the cheats (the host's set: one owner, as the menu's), and the Players
      * page's rows.
      */
@@ -748,7 +753,10 @@ internal class DualScreenController(
             header = panelHeader().copy(ra = summary.takeIf { GamePanelTab.ACHIEVEMENTS in tabs }),
             tabs = tabs,
             tab = GamePanelModel.resolveTab(dualPanelTab, tabs),
-            shortcuts = GamePanelModel.shortcuts(count, disc, secondScreens.current.value != null, appSettings.secondScreen, netplayNow != null, ff, rewind, owner.micTile()),
+            shortcuts = GamePanelModel.shortcuts(
+                count, disc, netplayNow != null, ff, rewind, owner.micTile(),
+                touch = owner.panelTouchActions(), slot = owner.lastSlotCache,
+            ),
             achievements = list,
             badges = b?.badges.orEmpty(),
             players = players?.first.orEmpty(),
@@ -765,7 +773,7 @@ internal class DualScreenController(
     }
 
     /**
-     * A touch on the dual-screen panel: Swap disc, Second screen, the Players and Cheats rows as the in-game menu's own effects
+     * A touch on the dual-screen panel: Swap disc, a touch button's tile, the Players and Cheats rows as the in-game menu's own effects
      * (the menu, if open over the game, follows), a tab, the Game pill flipping the DS/3DS screen back, a Fast forward /
      * Rewind toggle, or Reset (the in-game menu's dialog). Achievement rows ask for nothing.
      */
@@ -773,9 +781,11 @@ internal class DualScreenController(
         if (quitting) return
         when (e) {
             GamePanelEvent.SwapDisc -> swapDisc()
-            is GamePanelEvent.SetSecondScreen -> {
-                owner.handleMenuEffect(MenuEffect.SetSecondScreen(e.on))
-                owner.publishMenuSecondScreen()
+            // Hidden in netplay; a stale press there does nothing, a release always lands.
+            is GamePanelEvent.Touch -> if (netplayNow == null || !e.down) {
+                owner.onPanelTouch(e.action, e.down)
+                // A held action runs the game: a panel flipped up over the DS/3DS screen gives the screen back, as for FF.
+                if (e.down && panelUp && (e.action == ShortcutAction.HOLD_FF || e.action == ShortcutAction.HOLD_REWIND)) { panelUp = false; syncDual() }
             }
             is GamePanelEvent.SelectTab -> { dualPanelTab = e.tab; refreshDualPanel() }
             is GamePanelEvent.SetPlayer -> owner.handleMenuEffect(MenuEffect.SetPlayer(e.slot, e.key))

@@ -12,6 +12,7 @@ import com.nxredux.mobile.shortcuts.ClaimedInput
 import com.nxredux.mobile.shortcuts.ConsoleHotkeys
 import com.nxredux.mobile.shortcuts.EffectiveShortcuts
 import com.nxredux.mobile.shortcuts.ShortcutAction
+import com.nxredux.mobile.ui.nx.GamePanelModel
 import com.nxredux.mobile.shortcuts.ShortcutOverrides
 import com.nxredux.mobile.shortcuts.ShortcutSet
 import com.nxredux.mobile.shortcuts.Shortcuts
@@ -174,6 +175,16 @@ internal class ShortcutsMicController(
         }
     }
 
+    /** The touch buttons the second-screen panel shows a tile for ([GamePanelModel.panelTouchActions]). */
+    fun panelTouchActions(): List<ShortcutAction> =
+        GamePanelModel.panelTouchActions(effectiveShortcuts?.touch.orEmpty(), host.speed.rewindShown)
+
+    /** A panel tile's press or release, as the touch button's: not while the in-game menu is open (it took the shortcuts). */
+    fun onPanelTouch(action: ShortcutAction, down: Boolean) {
+        if (down && (host.menuOpen || host.quitting)) return   // a release always goes through: a held action must not stick
+        onShortcut(action, down)
+    }
+
     /**
      * The touch buttons to draw now: after the shortcuts are built ([applyShortcuts]), a session starts or ends, and the
      * speed's tiles change (a toggle's look, the Rewind row).
@@ -183,6 +194,7 @@ internal class ShortcutsMicController(
         val before = touchShortcuts.value.keys
         touchShortcuts.value = visibleTouchShortcuts(effectiveShortcuts, speed.output, speed.inSession, rewind = speed.rewindShown)
         padLayout.refreshSkinShortcuts()
+        dual.refreshDualPanel()   // its touch buttons' tiles
         // A button coming or going changes the landscape pad's second row, so its height and reach: lay out again.
         if (touchShortcuts.value.keys != before) host.activity.findViewById<View?>(R.id.root)?.post { renderer.relayoutFrontend() }
     }

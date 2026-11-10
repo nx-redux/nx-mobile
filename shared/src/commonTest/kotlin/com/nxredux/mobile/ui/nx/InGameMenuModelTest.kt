@@ -96,11 +96,11 @@ class InGameMenuModelTest {
     @Test fun use_top_screen_shows_on_the_root_while_an_app_holds_the_second_display() {
         val m = model()
         assertNull(m.state.page.rows.firstOrNull { it.label == "Use top screen" })
-        m.setSecondScreen(connected = false, on = true, taken = true)
+        m.setSecondScreen(connected = false, taken = true)
         assertEquals(listOf("Continue", "Save", "Load", "Reset", "Use top screen", "Options", "Quit"), m.state.page.rows.map { it.label })
         m.select(m.state.page.rows.indexOfFirst { it.label == "Use top screen" })
         assertEquals(MenuEffect.UseTopScreen, m.press(NxButton.A))
-        m.setSecondScreen(connected = true, on = true)
+        m.setSecondScreen(connected = true)
         assertNull(m.state.page.rows.firstOrNull { it.label == "Use top screen" })
     }
 
@@ -900,7 +900,7 @@ class InGameMenuModelTest {
 
     @Test fun root_has_no_second_screen_or_players_row() {
         val m = model()
-        m.setSecondScreen(connected = true, on = true)
+        m.setSecondScreen(connected = true)
         m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
         assertEquals(listOf("Continue", "Save", "Load", "Reset", "Options", "Quit"), m.labels())
     }
@@ -1184,13 +1184,11 @@ class InGameMenuModelTest {
         var before = m.state
         m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
         assertTrue(before != m.state); before = m.state
-        m.setSecondScreen(connected = true, on = true)
+        m.setSecondScreen(connected = true)
         assertTrue(before != m.state); before = m.state
         m.setAchievements(listOf(ach(1, RaAchievementState.UNLOCKED)), 1 to 1, RaSortOrder.DEFAULT, emptySet(), BADGES)
         assertTrue(before != m.state); before = m.state
         m.setAchievementsAvailable(false)
-        assertTrue(before != m.state); before = m.state
-        m.panelEvent(GamePanelEvent.SetSecondScreen(false))
         assertTrue(before != m.state); before = m.state
         m.setPanelHeader(GamePanelHeader("Tetris", null, "GBA", 2L, null, "12:00", 50))
         assertTrue(before != m.state)
@@ -1354,13 +1352,13 @@ class InGameMenuModelTest {
         m.select(4); m.activate(4)                                         // Options
         assertNull(m.activate(m.optionsRow("Display")))
         assertEquals(PICTURE_ROWS, m.state.page.rows.map { it.label })
-        m.setSecondScreen(connected = true, on = true)
+        m.setSecondScreen(connected = true)
         assertEquals(listOf("Bottom screen") + PICTURE_ROWS, m.state.page.rows.map { it.label })
         m.select(0)
         assertEquals("System default", m.optionRow(0).valueLabel)
         assertEquals(MenuEffect.SetFrontend(BottomScreenOptions.KEY, "main"), m.stepRow(1))
         assertEquals("Main screen", m.optionRow(0).valueLabel)
-        m.setSecondScreen(connected = false, on = true)
+        m.setSecondScreen(connected = false)
         assertEquals(PICTURE_ROWS, m.state.page.rows.map { it.label })
     }
 
@@ -1373,9 +1371,9 @@ class InGameMenuModelTest {
         m.setFrontend(FrontendOptions.defaults(plainTag), emptyList(), pictureLocked, plainTag)
         m.select(4); m.activate(4)                                         // Options (no Second screen row on the root)
         assertEquals(NO_DISPLAY_OPTIONS, m.state.page.rows.map { it.label })
-        m.setSecondScreen(connected = true, on = true)
+        m.setSecondScreen(connected = true)
         assertEquals(PLAIN_OPTIONS, m.state.page.rows.map { it.label })
-        m.setSecondScreen(connected = false, on = true)
+        m.setSecondScreen(connected = false)
         assertEquals(NO_DISPLAY_OPTIONS, m.state.page.rows.map { it.label })
     }
 
@@ -1397,11 +1395,11 @@ class InGameMenuModelTest {
     @Test fun display_open_on_only_bottom_screen_closes_when_the_display_goes() {
         val m = model()
         m.setFrontend(FrontendOptions.defaults(plainTag), emptyList(), pictureLocked, plainTag)
-        m.setSecondScreen(connected = true, on = true)
+        m.setSecondScreen(connected = true)
         m.select(4); m.activate(4)                                         // Options
         assertNull(m.activate(m.optionsRow("Display")))
         assertEquals(listOf("Bottom screen"), m.state.page.rows.map { it.label })
-        m.setSecondScreen(connected = false, on = true)
+        m.setSecondScreen(connected = false)
         assertEquals(PageKind.Options, m.state.page.kind)                  // back to Options, never an empty page
         assertEquals(NO_DISPLAY_OPTIONS, m.state.page.rows.map { it.label })
     }

@@ -71,6 +71,11 @@ internal class SaveSession(
     // strip, the overlay sets and the presets on IO and publishes them when they land (the cached ones show meanwhile).
     val slotsUi = mutableStateOf<List<SlotUi>>(emptyList())
     @Volatile var lastSlotCache: Int? = null   // SaveStates.lastSlot(); null until the first read
+        set(value) {
+            if (field == value) return
+            field = value
+            host.activity.runOnUiThread { dual.refreshDualPanel() }   // its Save and Load tiles name the slot
+        }
     private var slotsJob: Job? = null   // the newest strip refresh (main thread only); a newer one cancels it
     private val lastSlotWaiters = LastSlotWaiters()   // callbacks of cancelled refreshes too: the next one to land runs them
     var saveStates: SaveStates? = null

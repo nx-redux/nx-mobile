@@ -1778,7 +1778,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun leaveNetplay() = gameNetplay.leave()
 
     override fun handleMenuEffect(effect: MenuEffect) = menu.handle(effect)
-    override fun publishMenuSecondScreen() { menu.menuModel?.let(menu::publishSecondScreen) }
+    override fun panelTouchActions() = shortcuts.panelTouchActions()
+    override fun onPanelTouch(action: ShortcutAction, down: Boolean) = shortcuts.onPanelTouch(action, down)
     override fun placeMenu() = menu.placeMenu()
     override fun relayoutPad() = padLayout.applyLayout(resources.configuration.orientation)
 
