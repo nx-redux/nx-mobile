@@ -702,7 +702,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 state.page.kind == PageKind.Shortcuts && row.choices.isEmpty() -> { bindAction(row.key)?.let(::startCapture); null }
                 // The root has no descriptions (Disc N/M): A shows it.
                 state.page.kind == PageKind.Root -> { if (row.fullInfo.isNotBlank()) push(message(row.label, row.fullInfo)); null }
-                row.visual -> { push(adjustPage(row.key)); null }
+                row.visual && !inPanel -> { push(adjustPage(row.key)); null }
                 else -> when (row.control) {
                     NxSettingControl.SWITCH -> setChoice(index, 1 - row.index.coerceIn(0, 1))
                     NxSettingControl.PICKER -> { openPicker(index); null }

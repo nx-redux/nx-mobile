@@ -12,6 +12,7 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
@@ -24,6 +25,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -57,8 +59,10 @@ import com.nxredux.mobile.ui.nx.GamePanelModel
 import com.nxredux.mobile.ui.nx.GamePanelState
 import com.nxredux.mobile.ui.nx.GamePanelTab
 import com.nxredux.mobile.ui.nx.InGameMenuModel
+import com.nxredux.mobile.ui.nx.LocalInSkin
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxOptionText
+import com.nxredux.mobile.ui.nx.LocalWindowSize
 import com.nxredux.mobile.ui.nx.MenuEffect
 import com.nxredux.mobile.ui.nx.NxTheme
 import com.nxredux.mobile.ui.nx.PanelPill
@@ -602,8 +606,9 @@ internal class DualScreenController(
                             // in a skin's glass: no cutout to keep clear of (the skin's frame does that)
                             panel != null && mainPanelGlass.value != null ->
                                 Box(Modifier.fillMaxSize().background(LocalNxColors.current.background)) { panel() }
+                            // a side cutout is in the panel's page inset, as the in-game menu's that takes its place
                             panel != null -> Box(Modifier.fillMaxSize().background(LocalNxColors.current.background)
-                                .windowInsetsPadding(WindowInsets.displayCutout)) { panel() }
+                                .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Vertical))) { panel() }
                             // Bottom-right, where the panel's Game pill sits (clear of a cutout on those sides): the
                             // two switch pills land on one spot.
                             mainPanelPill.value -> PanelPill(
@@ -693,7 +698,14 @@ internal class DualScreenController(
 
     /** The game panel, live on [dualPanel], touch-only; [gamePill]: the DS/3DS Game pill. */
     private fun panelContent(gamePill: Boolean): @Composable () -> Unit = {
-        dualPanel.value?.let { GamePanel(it.copy(showGamePill = gamePill), ::onGamePanelEvent) }
+        dualPanel.value?.let { state ->
+            // The window and the skin as the in-game menu sees them in the panel's place: its page inset follows them.
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                CompositionLocalProvider(LocalWindowSize provides DpSize(maxWidth, maxHeight), LocalInSkin provides (mainPanelGlass.value != null)) {
+                    GamePanel(state.copy(showGamePill = gamePill), ::onGamePanelEvent)
+                }
+            }
+        }
     }
 
     /**

@@ -107,6 +107,8 @@ data class NxColors(
     val scrimNotice: Color = Color(0xCC000000)
     /** The in-game menu's wash over the paused frame behind its pages (InGameMenu): the game shows only faintly. */
     val scrimMenuWash: Color = Color(0xF5000000)
+    /** The paused picture's display while the menu is in the dual-screen panel (PausedPictureCover): the game still seen. */
+    val scrimPaused: Color = Color(0x80000000)
     /** The in-game menu's adjust strip over the paused frame (InGameMenu's AdjustContent). */
     val scrimAdjust: Color = Color(0xD9000000)
     /** The screen under a modal: NxModal, GameSettingsModal, RaPanelView, NxTouchRows' picker. */

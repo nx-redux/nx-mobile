@@ -56,6 +56,26 @@ class InGameMenuInPanelTest {
         assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)
     }
 
+    @Test fun in_the_panel_a_or_a_tap_on_a_visual_row_opens_no_live_preview() {
+        val display = PageKind.Settings(OptionGroup.DISPLAY)
+        for (i in model().openDisplay().state.page.rows.indices) {
+            val m = model().openDisplay()
+            if ((m.state.page.rows[i] as? MenuRow.Option)?.visual != true) continue
+            m.select(i)
+            m.press(NxButton.A)
+            m.state.popup?.let { m.closePopup() }
+            assertEquals(display, m.state.page.kind, "A on row $i")
+            m.activate(i)
+            m.state.popup?.let { m.closePopup() }
+            assertEquals(display, m.state.page.kind, "tap on row $i")
+            m.openPicker(i)
+            m.state.popup?.let { m.closePopup() }
+            assertEquals(display, m.state.page.kind, "picker on row $i")
+            m.press(NxButton.LEFT)
+            assertEquals(display, m.state.page.kind, "LEFT on row $i")
+        }
+    }
+
     @Test fun moving_into_the_panel_leaves_a_live_preview() {
         val m = model(inPanel = false).openDisplay()
         m.press(NxButton.RIGHT)

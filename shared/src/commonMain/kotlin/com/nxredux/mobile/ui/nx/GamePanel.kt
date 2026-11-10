@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -78,11 +79,17 @@ fun GamePanel(
     val focused = (state.focus as? PanelFocus.Item)?.index
     // The lists' bottom room: clear of the Game pill when it is drawn.
     val bottom = if (state.showGamePill) GP_LIST_BOTTOM else GP_LIST_END
+    // On its own (with its header) on the in-game menu's page inset, so the header and what follows sit where the menu
+    // puts them when it takes the panel's place; inside the menu, the menu's column already pads by it.
+    val inset = nxPageInset()
+    val page = if (showHeader) Modifier.padding(start = inset.pillStart, end = inset.pillEnd) else Modifier
     Box(modifier.fillMaxSize().then(if (opaque) Modifier.background(colors.background) else Modifier)) {
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().then(page)) {
             if (showHeader) GamePanelHeaderBar(state.header)
             if (showTabs) MenuTabRow(
                 tabs.map { it.label }, tabs.indexOf(tab).coerceAtLeast(0), onTab = { onEvent(GamePanelEvent.SelectTab(tabs[it])) },
+                // The row pads by the page inset itself, which the column already has: its words where the menu's start.
+                modifier = if (showHeader) Modifier.offset(x = nxListInset() - inset.start) else Modifier,
                 focused = state.focus == PanelFocus.Tabs,
             )
             Box(Modifier.weight(1f).fillMaxWidth()) {

@@ -9,8 +9,6 @@ import com.nxredux.mobile.skin.menuRoom
 import com.nxredux.mobile.ui.nx.LocalInSkin
 import kotlin.math.roundToInt
 import android.widget.FrameLayout
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -23,7 +21,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
@@ -53,7 +50,6 @@ import com.nxredux.mobile.ui.nx.FooterMode
 import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.nxredux.mobile.ui.nx.InputRouter
 import com.nxredux.mobile.ui.nx.LocalHintGlyphs
-import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxOptionText
 import com.nxredux.mobile.ui.nx.LocalPadBelow
 import com.nxredux.mobile.ui.nx.LocalPortrait
@@ -63,6 +59,7 @@ import com.nxredux.mobile.ui.nx.MenuState
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxTheme
 import com.nxredux.mobile.ui.nx.PadProfile
+import com.nxredux.mobile.ui.nx.PausedPictureCover
 import com.nxredux.mobile.ui.nx.SlotUi
 import com.nxredux.mobile.ui.nx.livePreviewRow
 import com.nxredux.mobile.ui.nx.nxColorsFor
@@ -424,13 +421,9 @@ internal class InGameMenuController(
                 }
             }
         }
-        // The menu's own wash over the paused picture, lifted while a row that changes the picture is highlighted.
+        // The paused picture's cover, lifted while a row that changes the picture is highlighted.
         menuDim = {
-            NxTheme(colors = colors) {
-                val dimmed = menuState.value?.let { !livePreviewRow(it) } ?: true
-                Box(Modifier.fillMaxSize().then(if (dimmed) Modifier.background(LocalNxColors.current.scrimMenuWash) else Modifier)
-                    .pointerInput(Unit) { detectTapGestures { /* swallow */ } })
-            }
+            NxTheme(colors = colors) { PausedPictureCover(dimmed = menuState.value?.let { !livePreviewRow(it) } ?: true) }
         }
         padLayout.skinStripHidden = true   // the skin's strip shortcuts (SAVE, LOAD, ...) go while the menu is up
         placeMenu()
