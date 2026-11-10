@@ -59,17 +59,26 @@ class SystemButtonsTest {
         assertEquals(SystemButtonMap(), map)
     }
 
-    @Test fun resetKeepsAsked() {
-        val map = SystemButtons.reset(SystemButtons.markAsked(SystemButtons.bind(SystemButtonMap(), m, SystemRole.MENU, ayaMenu), m), m)
+    @Test fun resetClearsTheModel() {
+        val map = SystemButtons.reset(SystemButtons.bind(SystemButtonMap(), m, SystemRole.MENU, ayaMenu), m)
         assertNull(map.bound[m])
-        assertTrue(m in map.asked)
+    }
+
+    // A button on a device beside the pad: its press becomes the role, the same code from the pad itself does not.
+    @Test fun buttonOnAnotherDeviceTranslatesFromThatDeviceOnly() {
+        val side = PhysicalKey.of(4, 0, device = "00010001")
+        val map = SystemButtons.bind(SystemButtonMap(), m, SystemRole.SELECT, side)
+        assertEquals(SystemRole.SELECT.keyCode, SystemButtons.translateFrom(map, "00010001", 4, 0))
+        assertNull(SystemButtons.translateFrom(map, "00020002", 4, 0))
+        assertNull(SystemButtons.translate(map, m, 4, 0))
+        assertNull(SystemButtons.translateFrom(SystemButtonMap(), "00010001", 4, 0))
+        assertEquals(map, SystemButtons.decode(SystemButtons.encode(map)))
     }
 
     @Test fun encodeDecodeRoundTrips() {
         var map = SystemButtons.bind(SystemButtonMap(), m, SystemRole.MENU, ayaMenu)
         map = SystemButtons.bind(map, m, SystemRole.SELECT, PhysicalKey.of(106, 0))
         map = SystemButtons.bind(map, "045e:028e", SystemRole.START, PhysicalKey.of(188, 0))
-        map = SystemButtons.markAsked(map, "057e:2009")
         assertEquals(map, SystemButtons.decode(SystemButtons.encode(map)))
         assertEquals(SystemButtonMap(), SystemButtons.decode(""))
         assertEquals(SystemButtonMap(), SystemButtons.decode("nonsense"))

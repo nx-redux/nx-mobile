@@ -26,10 +26,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-/** The SELECT / START / MENU page in a real [AppState]: in onboarding after the text size, and once per new pad model. */
+/** Setup with a controller in a real [AppState]: no page asks for its SELECT / START / MENU; the last page says where they are set. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SystemButtonsOnboardingTest {
     class Settings(override var treeRef: ContentRef? = ContentRef("Home"), override var onboardingDone: Boolean? = true) : AppSettings {
@@ -87,208 +86,36 @@ class SystemButtonsOnboardingTest {
         return state
     }
 
-    private fun AppState.page() = assertIs<Screen.Onboarding>(screen.value).also { assertEquals(OnboardingStep.SYSTEM_BUTTONS, it.step) }
-    private fun AppState.row(label: String) { select(page().rows.indexOfFirst { it.label == label }); onButton(NxButton.A) }
-    private fun AppState.tap(code: Int, scan: Int = 0) = systemButtonKey(aya, code, scan, true, false).also { systemButtonKey(aya, code, scan, false, false) }
     private fun AppState.toTextSizeContinue() {
         onButton(NxButton.A)   // the welcome's Get started
         assertEquals(OnboardingStep.TEXT_SIZE, assertIs<Screen.Onboarding>(screen.value).step)
         select(1); onButton(NxButton.A)
     }
 
-    @Test fun stepFollowsTextSizeWithController() = runTest {
+    // A controller adds no step: the text size goes straight on to the folders, as without one.
+    @Test fun controllerAddsNoSetupStep() = runTest {
         pads = listOf(aya)
-        val s = state(Settings(treeRef = null, onboardingDone = null))
-        s.toTextSizeContinue()
-        assertEquals(listOf("SELECT", "START", "MENU", "I've pressed them all"), s.page().rows.map { it.label })   // no Skip: the step is required
-        assertEquals(
-            listOf("Your controller's buttons", "Press SELECT, START and MENU on your controller (AYANEO Controller). One wasn't found? Choose I've pressed them all, and we will configure it next."),
-            s.page().details,
-        )
-        assertEquals("Setup · Step 2/11", s.page().title)   // after Text size, counted with the rest
-    }
-
-    // In setup's layout the three are rows with their status on the right, I've pressed them all the button under them.
-    @Test fun stepRowsShowTheirStatusAndOneButton() = runTest {
-        pads = listOf(aya)
-        val s = state(Settings(treeRef = null, onboardingDone = null))
-        s.toTextSizeContinue()
-        val rows = assertNotNull(s.page().touchRows)
-        assertEquals(listOf("Not found yet", "Not found yet", "Not found yet", null), rows.map { it.value })
-        assertEquals(1, setupButtons(rows, button = true))
-    }
-
-    @Test fun noControllerSkipsStepAndAsksLater() = runTest {
         val fresh = Settings(treeRef = null, onboardingDone = null)
         val s = state(fresh)
         s.toTextSizeContinue()
         assertFalse(s.screen.value is Screen.Onboarding)
         assertEquals("", fresh.systemButtons)
-
-        val settings = Settings()
-        val later = state(settings)
-        assertIs<Screen.Systems>(later.screen.value)
-        pads = listOf(aya)
-        later.padsChanged()
-        later.page()
     }
 
-    @Test fun askedModelNotAskedAgain() = runTest {
-        val settings = Settings()
-        val s = state(settings)
-        pads = listOf(aya)
-        s.padsChanged()
-        s.tap(KeyCodes.BUTTON_SELECT); s.tap(KeyCodes.BUTTON_START); s.tap(KeyCodes.BUTTON_MODE)
-        assertIs<Screen.Systems>(s.screen.value)
-        assertTrue(aya.key in SystemButtons.decode(settings.systemButtons).asked)
-        s.padsChanged()
-        assertIs<Screen.Systems>(s.screen.value)
-    }
-
-    @Test fun menuSkipShowsChordNote() = runTest {
-        val settings = Settings()
-        val s = state(settings)
-        pads = listOf(aya)
-        s.padsChanged()
-        s.tap(KeyCodes.BUTTON_SELECT); s.tap(KeyCodes.BUTTON_START)
-        s.row("I've pressed them all")
-        assertEquals(
-            listOf("Your controller's buttons", "Press the button you want as MENU.", "No MENU button? Choose Skip.", "SELECT+START will open the menu."),
-            s.page().details,
-        )
-        assertEquals(listOf("Skip"), s.page().rows.map { it.label })   // MENU's bind: Skip only, no Cancel
-        s.row("Skip")
-        assertEquals("No MENU button? Press SELECT+START together to open the menu.", s.notice.value)
-        assertIs<Screen.Systems>(s.screen.value)
-        assertTrue(aya.key in SystemButtons.decode(settings.systemButtons).asked)
-    }
-
-    @Test fun standaloneReturnsToPreviousScreen() = runTest {
+    // A controller connected later opens nothing over the menu.
+    @Test fun newControllerOpensNoPage() = runTest {
         val s = state()
+        val menu = assertIs<Screen.Systems>(s.screen.value)
         pads = listOf(aya)
-        s.padsChanged()
-        assertEquals("Controller", s.page().title)
-        s.tap(KeyCodes.BUTTON_SELECT); s.tap(KeyCodes.BUTTON_START); s.tap(KeyCodes.BUTTON_MODE)
-        assertIs<Screen.Systems>(s.screen.value)
+        assertFalse(s.systemButtonKey(aya, null, KeyCodes.BUTTON_SELECT, 0, true, false))
+        assertEquals(menu, s.screen.value)
     }
 
-    @Test fun pageKeysDontReachMenu() = runTest {
-        val s = state()
-        assertFalse(s.systemButtonKey(aya, 0, 0x2f1, true, false))
-        s.systemButtonKey(aya, 0, 0x2f1, false, false)
-        pads = listOf(aya)
-        s.padsChanged()
-        assertTrue(s.systemButtonKey(aya, 0, 0x2f1, true, false))
-        assertTrue(s.page().details.any { it == "That's not one of the three." })
-    }
-
-    @Test fun ayaMenuBindsByScanCode() = runTest {
-        val settings = Settings()
-        val s = state(settings)
-        pads = listOf(aya)
-        s.padsChanged()
-        s.tap(KeyCodes.BUTTON_SELECT); s.tap(KeyCodes.BUTTON_START); s.tap(0, 0x2f1)
-        s.row("I've pressed them all")
-        s.tap(0, 0x2f1)
-        assertIs<Screen.Systems>(s.screen.value)
-        assertEquals(110, SystemButtons.translate(SystemButtons.decode(settings.systemButtons), aya.key, 0, 0x2f1))
-    }
-
-    @Test fun bOnThePageGoesBackToTextSizeInOnboarding() = runTest {
-        pads = listOf(aya)
-        val s = state(Settings(treeRef = null, onboardingDone = null))
-        s.toTextSizeContinue()
-        s.page()
-        s.onButton(NxButton.B)
-        assertEquals(OnboardingStep.TEXT_SIZE, assertIs<Screen.Onboarding>(s.screen.value).step)
-    }
-
-    @Test fun doneInOnboardingGoesOnToTheFolders() = runTest {
-        pads = listOf(aya)
-        val settings = Settings(treeRef = null, onboardingDone = null)
-        val s = state(settings)
-        s.toTextSizeContinue()
-        s.tap(KeyCodes.BUTTON_SELECT); s.tap(KeyCodes.BUTTON_START); s.tap(KeyCodes.BUTTON_MODE)
-        assertFalse(s.screen.value is Screen.Onboarding)
-        assertTrue(aya.key in SystemButtons.decode(settings.systemButtons).asked)
-    }
-
-    // Closing the page over the menu brings back the menu's own selection.
-    @Test fun standaloneRestoresTheMenuSelection() = runTest {
-        val s = state()
-        s.select(1)
-        val before = s.selection.value
-        pads = listOf(aya)
-        s.padsChanged()
-        s.tap(KeyCodes.BUTTON_SELECT); s.tap(KeyCodes.BUTTON_START); s.tap(KeyCodes.BUTTON_MODE)
-        assertIs<Screen.Systems>(s.screen.value)
-        assertEquals(before, s.selection.value)
-    }
-
-    // Never over Settings (it would drop a Shortcuts draft or a wait); the menu asks instead.
-    @Test fun notOpenedOverSettings() = runTest {
-        val s = state()
-        s.openSettings(SettingsSection.CONTROLS)
-        pads = listOf(aya)
-        s.padsChanged()
-        assertIs<Screen.Settings>(s.screen.value)
-    }
-
-    // A page another screen replaced is abandoned, so the model is still asked later.
-    @Test fun aReplacedPageIsAskedAgain() = runTest {
-        val s = state()
-        pads = listOf(aya)
-        s.padsChanged()
-        s.page()
-        s.openSettings(SettingsSection.CONTROLS)   // something else took the screen
-        while (s.screen.value !is Screen.Systems) s.onButton(NxButton.B)
-        s.padsChanged()
-        s.page()
-    }
-
-    // A pad already connected at launch (a handheld's own) is asked when the menu first shows.
-    @Test fun coldStartAsksTheBuiltInPad() = runTest {
-        pads = listOf(aya)
-        val s = state()
-        s.page()
-    }
-
-    // The step is required: B on the page on its own (pad or touch) leaves it up and asks nothing.
-    @Test fun bDoesNotSkipTheStandalonePage() = runTest {
-        val settings = Settings()
-        val s = state(settings)
-        pads = listOf(aya)
-        s.padsChanged()
-        assertFalse(s.page().canGoBack)                                           // no B hint
-        assertFalse(s.systemButtonKey(aya, KeyCodes.BUTTON_B, 0, true, false))   // the page leaves B to the menu
-        s.onButton(NxButton.B)
-        s.back()
-        s.page()
-        assertEquals("", settings.systemButtons)
-    }
-
-    // "I've pressed them all" and Skip are rows only: no page line mentions holding START.
-    @Test fun pageTextHasNoHoldStart() = runTest {
-        val s = state()
-        pads = listOf(aya)
-        s.padsChanged()
-        assertTrue(s.page().details.none { "hold" in it.lowercase() })
-        s.tap(KeyCodes.BUTTON_SELECT); s.tap(KeyCodes.BUTTON_START)
-        s.row("I've pressed them all")
-        assertTrue(s.page().details.none { "hold" in it.lowercase() })
-    }
-
-    // SELECT and START are required: their bind steps have no row (no Skip, no Cancel); B goes back to the three.
-    @Test fun selectAndStartBindHaveNoRows() = runTest {
-        val s = state()
-        pads = listOf(aya)
-        s.padsChanged()
-        s.tap(KeyCodes.BUTTON_START); s.tap(KeyCodes.BUTTON_MODE)
-        s.row("I've pressed them all")
-        assertTrue(s.page().details.any { "SELECT" in it })
-        assertEquals(emptyList(), s.page().rows)
-        assertTrue(s.page().canGoBack)
-        s.onButton(NxButton.B)
-        assertEquals("I've pressed them all", s.page().rows.last().label)   // back on the three
+    // The entry earlier versions kept for the models their page had asked about is read past and dropped on the next save.
+    @Test fun oldAskedEntryIsReadPast() {
+        val map = SystemButtons.decode("4001:0428=MENU:0:753;asked=4001:0428,057e:2009")
+        assertEquals(setOf("4001:0428"), map.bound.keys)
+        assertEquals("4001:0428=MENU:0:753", SystemButtons.encode(map))
+        assertTrue(SystemButtons.decode("asked=4001:0428").bound.isEmpty())
     }
 }

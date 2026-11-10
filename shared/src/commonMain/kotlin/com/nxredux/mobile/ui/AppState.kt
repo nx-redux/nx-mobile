@@ -23,7 +23,6 @@ import com.nxredux.mobile.shortcuts.ShortcutCapture
 import com.nxredux.mobile.shortcuts.ShortcutSet
 import com.nxredux.mobile.shortcuts.Shortcuts
 import com.nxredux.mobile.shortcuts.SystemButtons
-import com.nxredux.mobile.shortcuts.SystemButtonsPage
 import com.nxredux.mobile.shortcuts.SystemRole
 import com.nxredux.mobile.shortcuts.PhysicalKey
 import com.nxredux.mobile.shortcuts.TouchSlot
@@ -631,8 +630,6 @@ internal const val SHORTCUT_PROMPT = "Press a button…"
 internal const val SYSTEM_BUTTONS_NO_CONTROLLER = "Connect a controller to set its SELECT, START and MENU buttons."
 /** A System buttons row waiting for its press. */
 internal const val SYSTEM_BUTTON_PROMPT = "Press a button…"
-/** The page's MENU skipped: SELECT+START is the menu on this pad. */
-internal const val MENU_SKIPPED_NOTE = "No MENU button? Press SELECT+START together to open the menu."
 internal const val SHORTCUTS_NO_CONTROLLER = "Connect a controller to bind buttons. On the on-screen pad, use Touch button 1 and 2 instead."
 
 /** How long a notice stays before it clears itself. */
@@ -1978,8 +1975,6 @@ class AppState(
         // The menu came up (not rebuilt in place, which a count landing does while the install-permission screen is up):
         // the daily check, or a held install's retry. A foreground over it does the same ([onForeground]).
         if (prev !is Screen.Systems && screen.menu == null && !firstSetup) updaterOnMainMenu()
-        // The first menu after a load: a pad connected from the start (a handheld's own) is asked here, once.
-        if (prev is Screen.Loading) padsChanged()
     }
 
     /** The main menu showed: this instance becomes the updater's host again (another may have taken it, or let it go), then tells it. */
@@ -2097,7 +2092,6 @@ class AppState(
     private fun showOnboarding(selected: Int = onboardingCurrentRow(), error: String? = null) {
         refreshPadContext()
         val step = onboarding.step ?: return
-        if (step == OnboardingStep.SYSTEM_BUTTONS) return showSystemButtons()
         val (title, details, rows) = onboardingPage(step, error)
         // The step count is the page's small title; the step's own question or name is its headline, its lines under it.
         // The sync step is Device Sync itself, in place under this page title.
@@ -2148,8 +2142,7 @@ class AppState(
         return when (onboarding.step) {
             null, OnboardingStep.WELCOME -> "Welcome"
             OnboardingStep.TEXT_SIZE -> setupCounter(1)
-            OnboardingStep.SYSTEM_BUTTONS -> setupCounter(2)
-            OnboardingStep.BOTTOM_SCREEN -> setupCounter(2 + (if (deps.connectedPads().isNotEmpty()) 1 else 0))
+            OnboardingStep.BOTTOM_SCREEN -> setupCounter(2)
             else -> setupCounter(onboarding.position().first + pre + setupFolderSteps())
         }
     }
@@ -2159,7 +2152,7 @@ class AppState(
      * screen on a device with a built-in second screen.
      */
     private fun setupPreSteps(): Int =
-        if (!inFirstSetup()) 0 else 1 + (if (deps.connectedPads().isNotEmpty()) 1 else 0) + (if (deps.builtInSecondScreen()) 1 else 0)
+        if (!inFirstSetup()) 0 else 1 + (if (deps.builtInSecondScreen()) 1 else 0)
 
     /**
      * "Setup · Step [at]/m": m the steps as the answers so far make them (Text size, Bottom screen where asked, the folder
@@ -2338,7 +2331,6 @@ class AppState(
     /** A step's title, details and rows. */
     private fun onboardingPage(step: OnboardingStep, error: String?): Triple<String, List<String>, List<NxRow>> = when (step) {
         OnboardingStep.WELCOME -> Triple("NX Redux", listOf("Ready when you are."), listOf(NxRow("Get started")))
-        OnboardingStep.SYSTEM_BUTTONS -> systemButtonsContent()
         OnboardingStep.BOTTOM_SCREEN -> Triple(
             "Which is the bottom screen?",
             listOf(
@@ -2471,9 +2463,7 @@ class AppState(
         when (s.step) {
             OnboardingStep.WELCOME -> { onboarding.startTextSize(); showOnboarding() }
             OnboardingStep.TEXT_SIZE -> if (index < s.rows.lastIndex) stepOnboardingValue(onboarding.step, index, 1)
-                else if (deps.connectedPads().isNotEmpty()) { onboarding.startSystemButtons(); showOnboarding() }   // the pad's buttons, then on
-                else afterSystemButtons()
-            OnboardingStep.SYSTEM_BUTTONS -> systemButtonsRow(index)
+                else afterTextSize()
             OnboardingStep.BOTTOM_SCREEN -> {
                 if (index == 0) deps.settings.bottomScreen = BottomScreen.MAIN   // Skip keeps Auto
                 startFolderSteps()
@@ -2654,8 +2644,7 @@ class AppState(
         if (kidsUi.kidsOnAtDone()) return   // Kids Mode on: the earlier steps (Device Sync, the folders) are a parent's, Press Start alone goes on
         // A first run's first step after the folders: back to the ROMs folder step (going on again comes back here, the saved step kept).
         if (onboarding.isFirstMain()) { onboarding.finish(); return showAddFirstExtra() }
-        if (onboarding.step == OnboardingStep.SYSTEM_BUTTONS) systemButtons = null
-        val step = onboarding.back(controller = deps.connectedPads().isNotEmpty()) ?: return
+        val step = onboarding.back() ?: return
         onboardingImported = null
         deps.settings.onboardingStep = step.takeIf { it > OnboardingStep.BOTTOM_SCREEN }?.name   // the steps before the folders are never resumed
         showOnboarding()
@@ -2674,166 +2663,46 @@ class AppState(
         welcomeDone = false
         when {
             deps.builtInSecondScreen() -> onboarding.startBottomScreen()
-            deps.connectedPads().isNotEmpty() -> onboarding.startSystemButtons()
             else -> onboarding.startTextSize()
         }
         showOnboarding()
     }
 
-    /** After the text size (and the pad's buttons, with a pad): the bottom screen question where there is one, else the folder steps. */
-    private fun afterSystemButtons() {
+    /** After the text size: the bottom screen question where there is one, else the folder steps. */
+    private fun afterTextSize() {
         if (deps.builtInSecondScreen()) { onboarding.startBottomScreen(); showOnboarding() } else startFolderSteps()
     }
 
-    // ---- SELECT / START / MENU (Controls → System buttons' page) ----
+    // ---- SELECT / START / MENU (Controls → System buttons) ----
 
-    /** The page while it shows: in onboarding ([onboarding] on SYSTEM_BUTTONS) or on its own ([systemButtonsReturn] set). */
-    private var systemButtons: SystemButtonsPage? = null
-    /** The screen the page opened over on its own (a new pad model after onboarding); null in onboarding. */
-    private var systemButtonsReturn: Screen? = null
-    /** That screen's selection, put back with it. */
-    private var systemButtonsReturnSelection: ListSelection? = null
-    /** The pad that pressed a key last: the page and Controls → System buttons act on it. */
+    /** The pad that pressed a key last: Controls → System buttons acts on it. */
     private var lastPad: PadModel? = null
 
     private fun systemButtonMap() = SystemButtons.decode(deps.settings.systemButtons)
 
-    /** The pad the page and Settings act on: the last one pressed while it's connected, else the first connected. */
+    /** The pad Settings acts on: the last one pressed while it's connected, else the first connected. */
     private fun currentPad(): PadModel? {
         val pads = deps.connectedPads()
         return lastPad?.takeIf { p -> pads.any { it.key == p.key } } ?: pads.firstOrNull()
     }
 
     /**
-     * Every key from a pad, before anything else sees it ([model] null: not a physical pad). It remembers the pad, and
-     * while the page shows a press of its pad goes to it; true when the page used the key (the menu must not see it).
+     * Every key from a physical device, before anything else sees it. [model]: its pad (null: not one); [source]: the
+     * device itself when it is no pad (a handheld's own buttons on a device beside its pad), null for a pad or a device
+     * that binds nothing. It remembers the pad, and a wait in Controls → System buttons takes the press; true when it
+     * used the key (the menu must not see it).
      */
-    fun systemButtonKey(model: PadModel?, keyCode: Int, scanCode: Int, down: Boolean, repeat: Boolean): Boolean {
-        // A wait in System buttons keeps its pad: another pad's press neither binds nor moves the page to it.
-        if (systemButtonWaiting != null || model?.key in systemButtonsHeld) return systemButtonSettingsKey(model, keyCode, scanCode, down, repeat)
+    fun systemButtonKey(model: PadModel?, source: String?, keyCode: Int, scanCode: Int, down: Boolean, repeat: Boolean): Boolean {
+        // A wait keeps its pad: another pad's press neither binds nor moves the page to it.
+        if (systemButtonWaiting != null || (model?.key ?: source) in systemButtonsHeld) return systemButtonSettingsKey(model, source, keyCode, scanCode, down, repeat)
         if (model != null && down) lastPad = model
-        val page = systemButtons ?: return false
-        if (model == null || model.key != page.model.key || (_screen.value as? Screen.Onboarding)?.step != OnboardingStep.SYSTEM_BUTTONS) return false
-        val used = page.onKey(PhysicalKey.of(keyCode, scanCode), down, repeat)
-        if (used && down) {
-            if (page.phase == SystemButtonsPage.Phase.DONE) finishSystemButtons(page) else showSystemButtons()
-        }
-        return used
-    }
-
-    /**
-     * A pad came or went (or the app came back): after onboarding, a connected model never asked about opens the page on
-     * its own, once, over the menu or Settings.
-     */
-    fun padsChanged() {
-        if (deps.settings.onboardingDone != true || onboarding.step != null) return
-        val current = _screen.value
-        if (systemButtons != null) {
-            if ((current as? Screen.Onboarding)?.step == OnboardingStep.SYSTEM_BUTTONS) return
-            // Another screen took over the page (a load landing, a game's return): it's abandoned, the model unasked.
-            systemButtons = null; systemButtonsReturn = null
-        }
-        // Over the menu and game lists only: over Settings it would drop a Shortcuts draft or a wait.
-        if (current !is Screen.Systems && current !is Screen.Games) return
-        val asked = systemButtonMap().asked
-        val pad = deps.connectedPads().firstOrNull { it.key !in asked } ?: return
-        systemButtonsReturn = current
-        systemButtonsReturnSelection = _selection.value
-        systemButtons = SystemButtonsPage(pad, systemButtonMap())
-        showSystemButtons()
-    }
-
-    /** The page's title, lines and rows: PRESS asks for the three and shows which were found, BIND for the missing one. */
-    private fun systemButtonsContent(): Triple<String, List<String>, List<NxRow>> {
-        val page = systemButtons ?: return Triple("Your controller's buttons", emptyList(), listOf(NxRow("Skip")))
-        val title = "Your controller's buttons"
-        val taken = page.lastTaken?.let { "That button is already ${it.label}." }
-        val role = page.binding
-        if (page.phase == SystemButtonsPage.Phase.BIND && role != null) {
-            val lines = listOfNotNull(
-                "Press the button you want as ${role.label}.",
-                if (role == SystemRole.MENU) "No MENU button? Choose Skip." else null,
-                if (role == SystemRole.MENU) "SELECT+START will open the menu." else null,
-                taken,
-            )
-            // MENU's bind: Skip only. SELECT's and START's are required: no row at all. B goes back to the three on either.
-            val rows = if (role == SystemRole.MENU) listOf(NxRow("Skip")) else emptyList()
-            return Triple(title, lines, rows)
-        }
-        val lines = listOfNotNull(
-            "Press SELECT, START and MENU on your controller (${page.model.name}). One wasn't found? Choose I've pressed them " +
-                "all, and we will configure it next.",
-            if (page.lastOther) "That's not one of the three." else null,
-        )
-        // No Skip: SELECT and START are required (MENU alone can be skipped, on its bind step).
-        val rows = SystemRole.entries.map { NxRow(it.label, secondary = if (it in page.found) "Found" else "Not found yet") } +
-            NxRow("I've pressed them all")
-        return Triple(title, lines, rows)
-    }
-
-    /** Draws the page: onboarding's ("Setup", B back to the text size) or its own ("Controller"); opens it for the current pad when needed. */
-    private fun showSystemButtons() {
-        if (systemButtons == null) {
-            val pad = currentPad() ?: return afterSystemButtons()   // the pad went: on without the page
-            systemButtons = SystemButtonsPage(pad, systemButtonMap())
-        }
-        val page = systemButtons ?: return
-        val (title, details, rows) = systemButtonsContent()
-        val pageTitle = if (systemButtonsReturn != null) "Controller" else onboardingPageTitle()
-        val selected = when {
-            page.phase == SystemButtonsPage.Phase.BIND -> 0
-            else -> rows.indexOfFirst { it.label == "I've pressed them all" }
-        }
-        // On its own the page is required: B (and its hint) only while a bind waits, to cancel it.
-        val canGoBack = systemButtonsReturn == null || page.phase == SystemButtonsPage.Phase.BIND
-        _screen.value = Screen.Onboarding(
-            OnboardingStep.SYSTEM_BUTTONS, pageTitle, listOf(title) + details, rows, accent = deps.settings.accent, padTheme = deps.settings.padTheme,
-            canGoBack = canGoBack, touchRows = onboardingTouchRows(OnboardingStep.SYSTEM_BUTTONS, rows),
-        )
-        _selection.value = ListSelection(selected.coerceIn(0, (rows.size - 1).coerceAtLeast(0)), rows.size)
-    }
-
-    /** A or a tap on the page's row [index]. */
-    private fun systemButtonsRow(index: Int) {
-        val page = systemButtons ?: return
-        val label = (_screen.value as? Screen.Onboarding)?.rows?.getOrNull(index)?.label ?: return
-        when (label) {
-            "I've pressed them all" -> page.pressedAll()
-            "Cancel" -> page.cancelBind()
-            "Skip" -> page.skipMenu()   // only BIND for MENU has it
-            else -> return   // a SELECT / START / MENU status row
-        }
-        if (page.phase == SystemButtonsPage.Phase.DONE) finishSystemButtons(page) else showSystemButtons()
-    }
-
-    /** B on the page: BIND back to PRESS; else onboarding's step before. The page on its own is required: B stays. */
-    private fun systemButtonsBack() {
-        val page = systemButtons
-        if (page != null && page.phase == SystemButtonsPage.Phase.BIND) { page.cancelBind(); return showSystemButtons() }
-        if (systemButtonsReturn != null) return
-        onboardingBack()
-    }
-
-    /** The page is done or skipped: its binds saved and the pad marked asked; on to what follows it. */
-    private fun finishSystemButtons(page: SystemButtonsPage) {
-        deps.settings.systemButtons = SystemButtons.encode(SystemButtons.markAsked(page.map, page.model.key))
-        systemButtons = null
-        if (page.menuSkipped) showNotice(MENU_SKIPPED_NOTE)
-        val back = systemButtonsReturn
-        systemButtonsReturn = null
-        if (back != null) {
-            _screen.value = back
-            systemButtonsReturnSelection?.let { _selection.value = it }
-            systemButtonsReturnSelection = null
-            return
-        }
-        afterSystemButtons()
+        return false
     }
 
     /** Controls → System buttons: the role waiting for a press (its row says so), or null. */
     private var systemButtonWaiting: SystemRole? = null
-    /** The pad whose press bound or cancelled a wait, until its release (swallowed with it). */
-    private var systemButtonsHeld: Set<String?> = emptySet()
+    /** The devices whose press bound or cancelled a wait, each until its release (swallowed with it). */
+    private var systemButtonsHeld: Set<String> = emptySet()
 
     /**
      * Controls → System buttons: the pad it acts on ([currentPad], by name), then SELECT, START and MENU with their
@@ -2854,20 +2723,23 @@ class AppState(
         if (k.keyCode == 0) "Button ${k.scanCode.toString(16).uppercase()}" else KeyLabels.label(ShortcutBinding(null, k.keyCode))
 
     /**
-     * A key while System buttons waits: the next fresh press from its pad binds the role (B or Back cancel), swapping
-     * with a role that had that button; another pad's keys pass. The press's release is swallowed with it.
+     * A key while System buttons waits: the next fresh press binds the role, from its pad or from a device that is no
+     * pad (a handheld whose SELECT and START sit on a device beside its pad), swapping with a role that had that button;
+     * the pad's B cancels, another pad's keys pass. The press's release is swallowed with it.
      */
-    private fun systemButtonSettingsKey(model: PadModel?, keyCode: Int, scanCode: Int, down: Boolean, repeat: Boolean): Boolean {
-        if (!down) { val held = model?.key in systemButtonsHeld; systemButtonsHeld = systemButtonsHeld - model?.key; return held }
+    private fun systemButtonSettingsKey(model: PadModel?, source: String?, keyCode: Int, scanCode: Int, down: Boolean, repeat: Boolean): Boolean {
+        val sender = model?.key ?: source ?: return false
+        if (!down) { val held = sender in systemButtonsHeld; systemButtonsHeld = systemButtonsHeld - sender; return held }
         val role = systemButtonWaiting ?: return false
-        val pad = currentPad()
-        if (model == null || pad == null || model.key != pad.key) return false
+        val pad = currentPad() ?: return false
+        if (model != null && model.key != pad.key) return false
         if (repeat) return true
-        systemButtonsHeld = systemButtonsHeld + model.key
+        systemButtonsHeld = systemButtonsHeld + sender
         systemButtonWaiting = null
         // B cancels; the pad's Back binds like any button (a Retroid Pocket Classic's home button sends it).
-        if (keyCode != KeyCodes.BUTTON_B) {
-            deps.settings.systemButtons = SystemButtons.encode(SystemButtons.bind(systemButtonMap(), pad.key, role, PhysicalKey.of(keyCode, scanCode)))
+        if (model == null || keyCode != KeyCodes.BUTTON_B) {
+            val key = PhysicalKey.of(keyCode, scanCode, device = if (model == null) sender else "")
+            deps.settings.systemButtons = SystemButtons.encode(SystemButtons.bind(systemButtonMap(), pad.key, role, key))
         }
         settingsUi.refreshSettings()
         return true
@@ -3010,7 +2882,7 @@ class AppState(
                 else -> Unit
             }
             NxButton.A -> onboardingRow(_selection.value.index)
-            NxButton.B -> if (s.step == OnboardingStep.SYSTEM_BUTTONS) systemButtonsBack() else onboardingBack()
+            NxButton.B -> onboardingBack()
             else -> Unit
         }
     }
@@ -6045,7 +5917,6 @@ class AppState(
             is Screen.Onboarding -> {
                 when {
                     s.prompt -> _screen.value = s.copy(prompt = false, draftPassword = "")
-                    s.step == OnboardingStep.SYSTEM_BUTTONS -> systemButtonsBack()
                     else -> onboardingBack()
                 }
                 true

@@ -20,6 +20,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -36,8 +37,6 @@ class SystemButtonsSettingsTest {
     private var pads = listOf<PadModel>()
 
     private fun TestScope.state(settings: SystemButtonsOnboardingTest.Settings = SystemButtonsOnboardingTest.Settings()): AppState {
-        // Every model already asked about: the page never opens over Settings here.
-        if (settings.systemButtons.isEmpty()) settings.systemButtons = SystemButtons.encode(SystemButtonMap(asked = setOf(aya.key, xbox.key)))
         val state = AppState(
             AppDeps(settings, source, Runner(), Picker, compute = UnconfinedTestDispatcher(testScheduler), connectedPads = { pads }),
             CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
@@ -54,7 +53,9 @@ class SystemButtonsSettingsTest {
         assertEquals(SettingsSection.SYSTEM_BUTTONS, page().section)
     }
     private fun AppState.bind(role: SystemRole) { select(page().rows.indexOfFirst { it.label == role.label }); onButton(NxButton.A) }
-    private fun AppState.tap(pad: PadModel, code: Int, scan: Int = 0) = systemButtonKey(pad, code, scan, true, false).also { systemButtonKey(pad, code, scan, false, false) }
+    private fun AppState.tap(pad: PadModel, code: Int, scan: Int = 0) = systemButtonKey(pad, null, code, scan, true, false).also { systemButtonKey(pad, null, code, scan, false, false) }
+    /** A press from a device that is no pad ([device]: its name). */
+    private fun AppState.tapOther(device: String, code: Int) = systemButtonKey(null, device, code, 0, true, false).also { systemButtonKey(null, device, code, 0, false, false) }
 
     @Test fun controlsHasSystemButtonsAfterShortcuts() = runTest {
         val s = state()
@@ -98,7 +99,7 @@ class SystemButtonsSettingsTest {
     @Test fun resetClearsThisModelOnly() = runTest {
         pads = listOf(aya)
         val settings = SystemButtonsOnboardingTest.Settings()
-        var map = SystemButtonMap(asked = setOf(aya.key, xbox.key))
+        var map = SystemButtonMap()
         map = SystemButtons.bind(map, aya.key, SystemRole.MENU, PhysicalKey.of(0, 0x2f1))
         map = SystemButtons.bind(map, xbox.key, SystemRole.MENU, PhysicalKey.of(KeyCodes.BUTTON_THUMBR, 0))
         settings.systemButtons = SystemButtons.encode(map)
@@ -129,9 +130,30 @@ class SystemButtonsSettingsTest {
         assertNull(after.bound[xbox.key])
     }
 
+    // A handheld whose SELECT sits on a device beside its pad: the wait takes that device's press, kept with the device.
+    @Test fun bindsAButtonFromADeviceBesideThePad() = runTest {
+        pads = listOf(aya)
+        val settings = SystemButtonsOnboardingTest.Settings()
+        val s = state(settings)
+        s.open()
+        s.bind(SystemRole.SELECT)
+        assertTrue(s.tapOther("00010001", KeyCodes.BACK))
+        assertEquals(PhysicalKey(KeyCodes.BACK, 0, "00010001"), SystemButtons.decode(settings.systemButtons).bound[aya.key]?.get(SystemRole.SELECT))
+        assertTrue(s.row("SELECT").secondary != "Standard")
+        // Its B is a button like any other there: only the pad's B cancels.
+        s.bind(SystemRole.START)
+        assertTrue(s.tapOther("00010001", KeyCodes.BUTTON_B))
+        assertEquals(PhysicalKey(KeyCodes.BUTTON_B, 0, "00010001"), SystemButtons.decode(settings.systemButtons).bound[aya.key]?.get(SystemRole.START))
+        // No wait: that device's keys are not the page's.
+        assertFalse(s.tapOther("00010001", KeyCodes.BACK))
+    }
+
     @Test fun noPadShowsConnectNote() = runTest {
         val s = state()
         s.open()
         assertEquals(listOf(SYSTEM_BUTTONS_NO_CONTROLLER), s.page().rows.map { it.label })
+        // The line reads as text, not as a row to choose.
+        assertTrue(settingsTouchPage(s.page()))
+        assertTrue(settingsTouchRow(s.page().rows.single(), null, SettingsSection.SYSTEM_BUTTONS).paragraph)
     }
 }
