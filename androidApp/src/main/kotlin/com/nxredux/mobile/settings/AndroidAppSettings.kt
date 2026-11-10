@@ -267,6 +267,10 @@ class AndroidAppSettings(context: Context) : AppSettings {
             if (value) DebugLogFile.start(app) else DebugLogFile.stop()
         }
 
+    override var androidKeyboard: Boolean
+        get() = prefs.getBoolean(KEY_ANDROID_KEYBOARD, false)
+        set(value) = prefs.edit { putBoolean(KEY_ANDROID_KEYBOARD, value) }
+
     override var kidsEnabled: Boolean
         get() = prefs.getBoolean(KEY_KIDS_ENABLED, false)
         set(value) = prefs.edit { putBoolean(KEY_KIDS_ENABLED, value) }
@@ -395,6 +399,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_OVERLAY_TWEAKS = "overlay_tweaks"
         private const val KEY_GAME_RUMBLE = "game_rumble"
         private const val KEY_DEBUG_LOG = "debug_log"
+        private const val KEY_ANDROID_KEYBOARD = "android_keyboard"
         private const val KEY_KIDS_ENABLED = "kids_enabled"
         private const val KEY_KIDS_SCHEDULE = "kids_schedule"
         private const val KEY_KIDS_APPS = "kids_apps"

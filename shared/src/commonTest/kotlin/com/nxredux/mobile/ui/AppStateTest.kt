@@ -1,5 +1,11 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.keyboard.EntryFocus
+import com.nxredux.mobile.ui.keyboard.Key
+import com.nxredux.mobile.ui.keyboard.KeyPage
+import com.nxredux.mobile.ui.keyboard.KeyPos
+import com.nxredux.mobile.ui.keyboard.NxKeys
+
 import com.nxredux.mobile.library.IndexedSystem
 import com.nxredux.mobile.settings.SwitcherLayout
 import com.nxredux.mobile.achievements.RaDownloadPhase
@@ -161,6 +167,7 @@ private val LIST_TABS = mapOf(MenuCategory.HOME to MenuStyle.GRID, MenuCategory.
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppStateTest {
     private class MemorySettings(override var treeRef: ContentRef? = null) : AppSettings {
+        override var androidKeyboard = false
         override var extraFolders: List<ExtraFolder> = emptyList()
         override var defaultTags: Map<String, String> = emptyMap()
         override var skinTweaks = ""
@@ -2126,8 +2133,8 @@ class AppStateTest {
         assertEquals(2, runner.launched.size)
     }
 
-    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, skinEditor: SkinEditorLauncher? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }) =
-        AppState(AppDeps(settings, src, runner, picker, data, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, skinEditor = skinEditor, saveTransfer = saveTransfer, allFilesAccess = allFiles, micAccess = mic, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, skinEditor: SkinEditorLauncher? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }, ownKeyboard: Boolean = false, onSecond: () -> Boolean = { false }) =
+        AppState(AppDeps(settings, src, runner, picker, data, ownKeyboard = ownKeyboard, promptOnSecondDisplay = onSecond, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, skinEditor = skinEditor, saveTransfer = saveTransfer, allFilesAccess = allFiles, micAccess = mic, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
 
     /** What a scan of [src] for [settings] stores, built without an AppState (so without the skeleton). */
     private suspend fun scannedIndex(settings: MemorySettings, src: RomsSource = source): LibraryIndex =
@@ -6857,12 +6864,12 @@ class AppStateTest {
     private class RaFixture(val state: AppState, val store: FakeRaStore, val http: FakeRaHttp, val controller: RaController, val hasher: FakeRaHasher = FakeRaHasher())
 
     /** The Tools setup plus an achievements controller on fakes (no cheat DB controller). */
-    private fun TestScope.raFixture(home: RaHomeTree? = null, index: LibraryIndex? = null, hasher: FakeRaHasher = FakeRaHasher(), roms: FakeRomsSource = source): RaFixture {
+    private fun TestScope.raFixture(home: RaHomeTree? = null, index: LibraryIndex? = null, hasher: FakeRaHasher = FakeRaHasher(), roms: FakeRomsSource = source, ownKeyboard: Boolean = false): RaFixture {
         val store = FakeRaStore(); val http = FakeRaHttp()
         val settings = MemorySettings(ContentRef("Home"))   // a home, so the main menu (and its Tools tab) is built
         val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
         val controller = RaController(if (home == null) fakePlatform(store, http, hasher) else fakePlatform(store, http, hasher, home = home), settings, { index }, scope, now = { 0L })
-        return RaFixture(AppState(AppDeps(settings, roms, RecordingRunner(), NoopPicker(), achievements = controller, compute = UnconfinedTestDispatcher(testScheduler)), scope).also { it.load() }, store, http, controller, hasher)
+        return RaFixture(AppState(AppDeps(settings, roms, RecordingRunner(), NoopPicker(), achievements = controller, ownKeyboard = ownKeyboard, compute = UnconfinedTestDispatcher(testScheduler)), scope).also { it.load() }, store, http, controller, hasher)
     }
     private fun TestScope.stateWithAchievements(): Pair<AppState, FakeRaStore> = raFixture().let { it.state to it.store }
 
@@ -13764,6 +13771,131 @@ class AppStateTest {
         f.state.onButton(NxButton.X); advanceUntilIdle()
         assertNotNull(f.state.raPanel.value)
     }
+
+    // NX keyboard: every text prompt types through it while the app has its own keyboard (AppDeps.ownKeyboard).
+    private fun TestScope.keyboardSearchState(settings: MemorySettings = MemorySettings(ContentRef("Home")), onSecond: () -> Boolean = { false }) =
+        state(settings, src = searchSource(), ownKeyboard = true, onSecond = onSecond).also { it.load() }
+
+    @Test fun keyboard_search_types_through_it() = runTest {
+        val state = keyboardSearchState()
+        state.onButton(NxButton.START)
+        assertNotNull(state.textEntry.value)
+        state.onButton(NxButton.A)   // the highlight starts on g
+        assertEquals("g", assertIs<Screen.Systems>(state.screen.value).search)
+    }
+
+    @Test fun keyboard_start_submits_search_as_a_did() = runTest {
+        val state = keyboardSearchState()
+        state.onButton(NxButton.START)
+        state.searchDraft("tetris")
+        state.onButton(NxButton.START)
+        assertEquals(ListSource.Search("tetris"), assertIs<Screen.Games>(state.screen.value).source)
+        assertNull(state.textEntry.value)
+    }
+
+    @Test fun keyboard_menu_cancels_rename_with_text() = runTest {
+        val src = FakeRomsSource(dirs = mapOf("Home" to listOf("Roms"), "Home/Roms" to listOf("Game Boy (GB)"), "Home/Roms/Game Boy (GB)" to listOf("Tetris.gb", "Zelda.gb")))
+        val state = state(MemorySettings(ContentRef("Home")), src = src, ownKeyboard = true)
+        state.load()
+        state.onConsoles()
+        state.onButton(NxButton.A)
+        choose(state, ContextKind.RENAME)
+        val before = assertIs<MenuPrompt.Rename>((state.screen.value as Screen.Games).menu!!.prompt).initial
+        state.onButton(NxButton.MENU)
+        val games = assertIs<Screen.Games>(state.screen.value)
+        assertNull(games.menu?.prompt)
+        assertEquals(before, games.entries[state.selection.value.index].shown)
+    }
+
+    @Test fun keyboard_new_prompt_starts_fresh() = runTest {
+        val src = FakeRomsSource(dirs = mapOf("Home" to listOf("Roms"), "Home/Roms" to listOf("Game Boy (GB)"), "Home/Roms/Game Boy (GB)" to listOf("Tetris.gb", "Zelda.gb")))
+        val state = state(MemorySettings(ContentRef("Home")), src = src, ownKeyboard = true)
+        state.load()
+        state.onConsoles()
+        state.onButton(NxButton.A)
+        state.onButton(NxButton.START)   // the list's search
+        state.onButton(NxButton.RIGHT); state.onButton(NxButton.A)
+        state.onButton(NxButton.MENU)    // closes it
+        assertNull(state.textEntry.value)
+        choose(state, ContextKind.RENAME)
+        val entry = assertNotNull(state.textEntry.value)
+        assertEquals(EntryFocus.Keys(NxKeys.HOME), entry.focus)
+        assertEquals(entry.fields[0].value.length, entry.cursor)
+    }
+
+    @Test fun keyboard_android_setting_turns_it_off() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { androidKeyboard = true }
+        val state = keyboardSearchState(settings)
+        state.onButton(NxButton.START)
+        assertNull(state.textEntry.value)
+        state.onButton(NxButton.A)   // A confirms as before; blank, so the prompt stays and nothing is typed
+        assertEquals("", assertIs<Screen.Systems>(state.screen.value).search)
+    }
+
+    @Test fun keyboard_second_display_always_nx() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { androidKeyboard = true }
+        val state = keyboardSearchState(settings, onSecond = { true })
+        state.onButton(NxButton.START)
+        assertNotNull(state.textEntry.value)
+    }
+
+    @Test fun keyboard_ra_sign_in_select_then_start_signs_in() = runTest {
+        val f = raFixture(ownKeyboard = true); val state = f.state
+        f.http.on("login2", body = """{"Success":true,"User":"Me","Token":"tok"}""")
+        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        state.openSelected()   // Sign in
+        assertTrue(state.raSettings().signingIn)
+        state.keyboardType("me")
+        state.onButton(NxButton.SELECT)
+        state.keyboardType("secret")
+        assertEquals("me", state.raSettings().draftUser)
+        state.onButton(NxButton.START)
+        assertEquals(listOf("r=login2&u=me&p=secret"), f.http.posts)
+    }
+
+    @Test fun keyboard_paste_inserts_clipboard_text() = runTest {
+        val state = AppState(AppDeps(MemorySettings(ContentRef("Home")), searchSource(), RecordingRunner(), NoopPicker(), ownKeyboard = true, pasteText = { "te\ntris" }, compute = UnconfinedTestDispatcher(testScheduler)), CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { it.load() }
+        state.onButton(NxButton.START)
+        state.keyboardTapKey(KeyPos(4, NxKeys.rows(KeyPage.LETTERS, twoFields = false)[4].indexOf(Key.Paste)))
+        assertEquals("tetris", assertIs<Screen.Systems>(state.screen.value).search)
+    }
+
+    @Test fun keyboard_taps_wait_under_an_error() = runTest {
+        val state = keyboardSearchState()
+        state.onButton(NxButton.START)
+        state.showError("Something went wrong")
+        state.keyboardTapKey(NxKeys.HOME)
+        state.keyboardType("x")
+        assertEquals("", assertIs<Screen.Systems>(state.screen.value).search)
+    }
+
+    @Test fun keyboard_prompt_leaving_the_second_display_follows_the_setting_again() = runTest {
+        var onSecond = true
+        val settings = MemorySettings(ContentRef("Home")).apply { androidKeyboard = true }
+        val state = keyboardSearchState(settings, onSecond = { onSecond })
+        state.onButton(NxButton.START)
+        assertNotNull(state.textEntry.value)
+        onSecond = false
+        state.refreshKeyboard()
+        assertNull(state.textEntry.value)
+    }
+
+    @Test fun keyboard_onboarding_art_prompts_count_as_text_entry() =
+        assertTrue(textEntryOpen(Screen.Onboarding(OnboardingStep.entries.first(), "", emptyList(), emptyList(), artSignIn = true)))
+
+    @Test fun keyboard_row_in_system_settings() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings, ownKeyboard = true)
+        state.load()
+        state.openSettings(SettingsSection.SYSTEM)
+        val rows = assertIs<Screen.Settings>(state.screen.value).rows
+        val at = rows.indexOfFirst { it.kind == SettingsKind.KEYBOARD }
+        assertEquals("Keyboard", rows[at].label); assertEquals("NX", rows[at].secondary)
+        state.select(at); state.onButton(NxButton.RIGHT)
+        assertTrue(settings.androidKeyboard)
+        assertEquals("Android", assertIs<Screen.Settings>(state.screen.value).rows[at].secondary)
+    }
+
 }
 
 /** The consoles on the main menu (every tab). */
