@@ -446,10 +446,13 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // Outside a session mGBA gets the real cable (NetplayLinkOptions.forSolo). Cable Link: the pair core's variables
             // (both GBAs on this phone, NetplayLinkOptions.forPair), session-only like the others.
             val linkKind = np?.linkKind
+            // 3DS: the player's name in Azahar's room. Outside a session the game's local wireless finds other devices
+            // itself unless the console's Local Wireless option is off ([N3dsOptions.LOCAL_WIRELESS]).
             val n3dsRoomName = if (coreId != "azahar") null else NetplayLinkOptions.n3dsRoomName(
                 PlayerName.resolve(AndroidAppSettings(activity).playerName, AndroidDeviceInfo.deviceName(activity)), kotlin.random.Random.nextInt(10000),
             )
-            val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsRoomName) else when (linkKind) {
+            val n3dsAuto = n3dsRoomName?.takeIf { N3dsOptions.localWireless(frontendValues) }
+            val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsAuto) else when (linkKind) {
                 null -> NetplayLinkOptions.forPair(np)
                 NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)
                 NetplayLinkKind.N3DSLINK -> NetplayLinkOptions.forSession(np, null, n3dsRoomName)

@@ -3867,7 +3867,7 @@ class AppState(
     }
 
     /**
-     * Settings -> System: its options as one group under the page's title (Pause when unfocused, Screen care, Use as home screen with
+     * Settings -> System: its options as one group under the page's title (Player name, Pause when unfocused, Screen care, Use as home screen with
      * a launcher, Debug log), then the About and Licenses groups.
      */
     /**

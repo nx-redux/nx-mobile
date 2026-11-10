@@ -1206,10 +1206,10 @@ index 0000000..0e6cf75
 +} // namespace LibRetro
 diff --git a/src/citra_libretro/room_link.cpp b/src/citra_libretro/room_link.cpp
 new file mode 100644
-index 0000000..9529c7a
+index 0000000..36fd8b9
 --- /dev/null
 +++ b/src/citra_libretro/room_link.cpp
-@@ -0,0 +1,464 @@
+@@ -0,0 +1,469 @@
 +// Copyright Citra Emulator Project / Azahar Emulator Project
 +// Licensed under GPLv2 or any later version
 +// Refer to the license.txt file included.
@@ -1603,9 +1603,16 @@ index 0000000..9529c7a
 +    auto member = Network::GetRoomMember().lock();
 +    if (!member)
 +        return;
-+    if (host && !OpenRoom()) {
-+        Notice("Local wireless: the room could not open");
-+        return;
++    std::random_device random;
++    room_id = (static_cast<u64>(random()) << 32) | random();
++    if (host) {
++        if (!OpenRoom()) {
++            Notice("Local wireless: the room could not open");
++            return;
++        }
++        // A session's room answers searches too: a device on automatic wireless joins it.
++        answering = true;
++        answerer = std::thread(AnswerLoop);
 +    }
 +
 +    refused = false;
@@ -1634,8 +1641,6 @@ index 0000000..9529c7a
 +    });
 +
 +    if (automatic) {
-+        std::random_device random;
-+        room_id = (static_cast<u64>(random()) << 32) | random();
 +        wireless_on = false;
 +        wireless_hosting = false;
 +        wireless_off_at = 0;
