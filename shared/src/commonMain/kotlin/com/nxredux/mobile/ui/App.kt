@@ -568,6 +568,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     // Every row has a menu while it holds a hidden tab. Recent and Search are never in it: an icon
                     // stands in for a hidden hint.
                     tabMenu = s.hidden.isNotEmpty(),
+                    dual = state.dualMenu.collectAsState().value,
                 )
                 s.menu?.let { ContextMenuOverlay(it, onButton = state::onButton, onSelect = state::menuSelect, onOpen = state::menuOpen, onDraft = state::menuDraft, onColumns = state::onMenuLayout) }
                 s.search?.let { NxTextPrompt("Search", it, state::searchDraft, onConfirm = { state.onButton(NxButton.A) }, onCancel = { state.onButton(NxButton.B) }) }
