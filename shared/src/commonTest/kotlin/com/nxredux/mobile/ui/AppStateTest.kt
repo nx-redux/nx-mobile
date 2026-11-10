@@ -11911,15 +11911,15 @@ class AppStateTest {
     // itself, without Home having to report its frame again.
     @Test fun closing_a_menu_swaps_in_the_home_rows_it_held_back() = runTest {
         val state = b2Home(games = 3, tools = 7, recent = 3); state.load(); advanceUntilIdle()   // Continue: G3; pins G1 G2
-        state.onHomeLayout(LAND); advanceUntilIdle()                     // the wide face: the 2 pins inline, 5 tools and "+2" after them (top 9)
+        state.onHomeLayout(LAND); advanceUntilIdle()                     // the wide face: the 2 pins inline, the 7 tools in the row under them (top 10)
         assertTrue(state.shelfRows.isNotEmpty())                         // every frame shows the shelves
-        assertEquals(9, state.homeView.value.topCount)
+        assertEquals(10, state.homeView.value.topCount)
         val rows = state.screen.value.homeRows
         state.openContextMenu(rows.indices.first { rows[it] is MainRow.Continue }); advanceUntilIdle()   // its game menu
         assertNotNull(assertIs<Screen.Systems>(state.screen.value).menu)
         state.onHomeLayout(PORT); advanceUntilIdle()                     // rebuilt behind the menu: held back
         assertEquals(rows, state.screen.value.homeRows)
-        assertEquals(9, state.homeView.value.topCount)
+        assertEquals(10, state.homeView.value.topCount)
         state.closeContextMenu(); advanceUntilIdle()
         assertEquals(8, state.homeView.value.topCount)                   // the portrait type's rows swapped in: the pins under the tools
         assertNotEquals(rows, state.screen.value.homeRows)
@@ -12297,7 +12297,8 @@ class AppStateTest {
     private fun AppState.homeFocus(): MainRow = screen.value.homeRows[selection.value.index]
 
     // A landscape split (SPS3, 800 × 340) puts the first 2 pinned games inline too: the rows are Pick a game, G1, G2,
-    // then the tools, then G3 a row game; they line up with the board the screen draws, and the d-pad walks them in order.
+    // then the tools (one row under them), then G3 a row game; they line up with the board the screen draws, and the
+    // d-pad walks them by it.
     @Test fun sps3_puts_two_pinned_games_inline_in_the_rows_and_the_board() = runTest {
         val state = b2Home(games = 3, tools = 2); state.load(); advanceUntilIdle()
         val sps3 = HomeFrame(800f, 340f, false, 800f / 428f)
@@ -12316,10 +12317,12 @@ class AppStateTest {
         state.select(0)
         state.onButton(NxButton.RIGHT); assertEquals(1, state.selection.value.index)    // Continue → G1
         state.onButton(NxButton.DOWN); assertEquals(2, state.selection.value.index)     // G1 → G2, under it
-        state.onButton(NxButton.UP); state.onButton(NxButton.RIGHT)
-        assertEquals(3, state.selection.value.index)                                     // G1 → the top square
-        state.select(2); state.onButton(NxButton.DOWN)
-        assertEquals(b2Path(3), assertIs<MainRow.Pin>(state.homeFocus()).entry.game.path)   // G2 → the row game
+        state.onButton(NxButton.DOWN)
+        assertEquals(b2Path(3), assertIs<MainRow.Pin>(state.homeFocus()).entry.game.path)   // G2, no tool under it → the row game
+        state.select(0); state.onButton(NxButton.DOWN); assertEquals(3, state.selection.value.index)   // Continue → the row's first tool, under it
+        state.onButton(NxButton.RIGHT); assertEquals(4, state.selection.value.index)    // along the row
+        state.onButton(NxButton.DOWN)
+        assertEquals(b2Path(3), assertIs<MainRow.Pin>(state.homeFocus()).entry.game.path)   // a tool → the row game
     }
 
     // Six GBA games, none pinned or played: Not started picks 4. Grid Home shows what its board fits ([homeShelfCap]): 4
@@ -12369,7 +12372,7 @@ class AppStateTest {
         state.onHomeLayout(FOLD); advanceUntilIdle()
         val rows = state.screen.value.homeRows
         val topCount = state.homeView.value.topCount
-        assertEquals(7, topCount)                                        // Continue, G1, G2, 3 tools and "+3"
+        assertEquals(9, topCount)                                        // Continue, G1, G2 and the 6 tools in their row
         assertEquals(listOf(b2Path(1), b2Path(2)), rows.subList(1, 3).map { assertIs<MainRow.Pin>(it).entry.game.path })
         assertTrue(rows.drop(topCount).none { it is MainRow.Pin })
         assertEquals(2, state.homeView.value.games)
@@ -12466,21 +12469,23 @@ class AppStateTest {
         assertEquals(moved, state.homeFocus())
     }
 
-    // Landscape (the wide face), 6 tools, 6 games: Pick a game 0, G1 1 and G2 2 inline (stacked), the tool tiles
-    // 3 4 5 / 6 7 8 (3 columns of 2 rows), then G3 G4 G5 | G6.
+    // Landscape (the wide face), 6 tools, 6 games: Pick a game 0, G1 1 and G2 2 inline (stacked) beside it, the tool
+    // tiles 3 … 8 in one row under Pick a game, then G3 G4 G5 | G6.
     @Test fun the_d_pad_uses_the_board() = runTest {
         val state = b2Home(games = 6, tools = 6); state.load(); advanceUntilIdle()
         state.onHomeLayout(LAND); advanceUntilIdle()
         state.onButton(NxButton.RIGHT)
         assertEquals(1, state.selection.value.index); assertEquals(b2Path(1), assertIs<MainRow.Pin>(state.homeFocus()).entry.game.path)   // G1, inline
-        state.onButton(NxButton.RIGHT)
-        assertEquals(3, state.selection.value.index); assertIs<MainRow.PinnedTool>(state.homeFocus())   // the block's top left
-        state.onButton(NxButton.DOWN); assertEquals(6, state.selection.value.index)                     // the tile below
-        state.onButton(NxButton.LEFT); assertEquals(1, state.selection.value.index)                     // the left column: G1
-        state.onButton(NxButton.RIGHT); assertEquals(6, state.selection.value.index)                    // back to the tile it left
-        state.onButton(NxButton.RIGHT); state.onButton(NxButton.RIGHT); assertEquals(8, state.selection.value.index)   // the block's second row, right
-        state.onButton(NxButton.DOWN); assertEquals(11, state.selection.value.index)                    // the row's third game
-        assertEquals(b2Path(5), assertIs<MainRow.Pin>(state.homeFocus()).entry.game.path)
+        state.onButton(NxButton.DOWN); assertEquals(2, state.selection.value.index)                     // G2, under it
+        state.onButton(NxButton.LEFT); assertEquals(0, state.selection.value.index)                     // Pick a game
+        state.onButton(NxButton.DOWN)
+        assertEquals(3, state.selection.value.index); assertIs<MainRow.PinnedTool>(state.homeFocus())   // the row's first tool
+        state.onButton(NxButton.RIGHT); assertEquals(4, state.selection.value.index)                    // along the row
+        state.onButton(NxButton.UP); assertEquals(0, state.selection.value.index)                       // Pick a game, over the row
+        state.onButton(NxButton.DOWN); assertEquals(4, state.selection.value.index)                     // back to the tile it left
+        repeat(4) { state.onButton(NxButton.RIGHT) }; assertEquals(8, state.selection.value.index)      // the row's last tool
+        state.onButton(NxButton.DOWN); assertEquals(10, state.selection.value.index)                    // the row's second game, under it
+        assertEquals(b2Path(4), assertIs<MainRow.Pin>(state.homeFocus()).entry.game.path)
     }
 
     // A layout change with 12 tools and 6 games: portrait (8 slots) is Pick a game, 7 tools, "+5", then G1…G6; a tall

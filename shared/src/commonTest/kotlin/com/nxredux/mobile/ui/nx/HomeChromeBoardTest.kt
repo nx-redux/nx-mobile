@@ -6,8 +6,9 @@ import kotlin.test.assertTrue
 
 /**
  * Home with Layouts → Page title hidden. The tab row's 44 dp goes to the body's top: the strip moves up into it and
- * the top section gains it: Continue grows, and a column of tool tiles beside it may fit another row (the tiles keep
- * the Tools page's size). A hidden hint bar keeps its room (it never reaches the frame), so only the tab row is tested here.
+ * the top section gains it: Continue grows, and a landscape face's row of tool tiles stays one row a gap under
+ * Continue (the tiles keep the Tools page's size). A hidden hint bar keeps its room (it never reaches the frame), so only
+ * the tab row is tested here.
  */
 class HomeChromeBoardTest {
     private fun near(e: Float, a: Float, what: String) = assertEquals(e, a, 0.05f, what)
@@ -73,66 +74,69 @@ class HomeChromeBoardTest {
         assertEquals(6, hidden.slots); near(shown.toolH, hidden.toolH, "the tile's size either way")
     }
 
-    // SPS3 (a 16:9 phone in landscape, 800 × 340): the top section takes the 44 dp, the whole body 384 − 28 − 8 = 348
-    // (304 with the tab row): 3 rows of tiles fit (floor(356 / 115.6)), 2 before, so 6 slots (4). 7 tools: 5 and "+2"
-    // hidden (3 and "+4" shown), 2 columns, the "+2" at the right of the third row. The pin row keeps its shape (109,
-    // from the bars-shown height).
-    @Test fun sps3TakesARowMoreWithTheTabRowHidden() {
+    // SPS3 (a 16:9 phone in landscape, 800 × 340): Continue takes the 44 dp, the whole body 384 − 28 − 8 = 348 (304
+    // with the tab row). The tools stay one row of 8 slots (83.5 × 109.7 tiles) a gap under it, at 28 + 348 + 14 = 390,
+    // 7 tools all showing; the top section 348 + 14 + 109.7 = 471.7. The pin row keeps its shape (109, from the
+    // bars-shown height).
+    @Test fun sps3ContinueTakesTheTabRowsRoom() {
         val land = HomeFrame(800f, 340f, false, 800f / 428f)
         val shown = homeBoard(land, 1, tools = 7, games = 4)
-        assertEquals(HomeToolMode.SPS3, shown.mode); assertEquals(4, shown.slots); assertEquals(4, shown.more)
+        assertEquals(HomeToolMode.SPS3, shown.mode); assertEquals(8, shown.slots); assertEquals(0, shown.more)
+        near(304f, continueOf(shown).h, "shown: continue h")
         val b = homeBoard(chrome(land, title = false), 1, tools = 7, games = 4)
-        assertEquals(HomeToolMode.SPS3, b.mode); assertEquals(6, b.slots); assertEquals(2, b.more)
-        near(80f, b.toolW, "toolW"); near(107.6f, b.toolH, "toolH: the same tile"); near(348f, b.topH, "topH: the whole body")
-        near(109f, b.pinH, "pinH")
-        val sq = b.top.filter { it.kind == HomeTopKind.TOOL || it.kind == HomeTopKind.MORE }.map { it.rect }
-        assertEquals(6, sq.size)
-        near(28f + 2 * 115.6f, sq[5].y, "+2: the third row"); near(sq[1].x, sq[5].x, "its column, the right one")
-        assertEquals(1, tiles(homeBoard(chrome(land, title = false), 1, tools = 3, games = 4), HomeTopKind.TOOL).map { it.x }.distinct().size, "3 tools: one column of 3")
+        assertEquals(HomeToolMode.SPS3, b.mode); assertEquals(8, b.slots); assertEquals(0, b.more)
+        near(83.5f, b.toolW, "toolW"); near(109.7f, b.toolH, "toolH: the same tile"); near(471.7f, b.topH, "topH")
+        near(109f, b.pinH, "pinH"); near(348f, continueOf(b).h, "continue h: the whole body")
+        val sq = tiles(b, HomeTopKind.TOOL)
+        assertEquals(7, sq.size)
+        sq.forEachIndexed { i, r -> near(38f + i * 91.5f, r.x, "tile $i x"); near(390f, r.y, "tile $i y: the one row") }
     }
 
-    // The Flip's wide face (804 × 261, 0–2 games: the top section the body): 225 → 269, 2 rows of tiles either way
-    // (floor(277 / 115.6)), so 6 slots: 12 tools show 5 and "+7", 3 columns, top-aligned; Continue and the games take
-    // the taller top.
+    // The Flip's wide face (804 × 261, 0–2 games): Continue and the games the body, 225 → 269. One row of 8 slots
+    // (84 × 110 tiles) a gap under them either way: 12 tools show 7 and "+5"; the top section the body and 14 + 110.
     @Test fun flipWideWithAndWithoutTheTabRow() {
         val flip = HomeFrame(804f, 261f, false, 804f / 330f)
-        for ((title, topH) in listOf(true to 225f, false to 269f)) {
+        for ((title, body) in listOf(true to 225f, false to 269f)) {
             val f = chrome(flip, title)
             val what = "title $title"
             val b = homeBoard(f, 1, tools = 12, games = 2)
-            assertEquals(HomeToolMode.WIDE, b.mode, what); near(topH, b.topH, "$what: topH"); near(107.6f, b.toolH, "$what: toolH")
-            assertEquals(6, b.slots, "$what: slots"); assertEquals(7, b.more, "$what: more")
-            near(topH, continueOf(b).h, "$what: continue h")
+            assertEquals(HomeToolMode.WIDE, b.mode, what); near(body + 14f + 110f, b.topH, "$what: topH"); near(110f, b.toolH, "$what: toolH")
+            assertEquals(8, b.slots, "$what: slots"); assertEquals(5, b.more, "$what: more")
+            near(body, continueOf(b).h, "$what: continue h")
             val sq = b.top.filter { it.kind == HomeTopKind.TOOL || it.kind == HomeTopKind.MORE }.map { it.rect }
-            assertEquals(6, sq.size, what)
-            for ((i, r) in sq.withIndex()) near(28f + (i / 3) * 115.6f, r.y, "$what: tile $i y")
+            assertEquals(8, sq.size, what)
+            for ((i, r) in sq.withIndex()) near(28f + body + 14f, r.y, "$what: tile $i y")
             val g = tiles(b, HomeTopKind.GAME)
-            near(28f, g[0].y, "$what: game 0 y"); near(28f + topH, g[1].y + g[1].h, "$what: the games end with Continue")
+            near(28f, g[0].y, "$what: game 0 y"); near(28f + body, g[1].y + g[1].h, "$what: the games end with Continue")
             near(g[0].h, g[1].h, "$what: the games alike")
         }
-        // Past 2 games the rest are row games a scroll away: the top is still the body (225 → 269).
+        // Past 2 games the rest are row games under the tools' row: the top section is still the body and the row
+        // (349 → 393).
         val rowsShown = homeBoard(flip, 1, tools = 6, games = 4)
         val rowsHidden = homeBoard(chrome(flip, title = false), 1, tools = 6, games = 4)
-        near(225f, rowsShown.topH, "row games, shown"); near(269f, rowsHidden.topH, "row games, hidden")
+        near(349f, rowsShown.topH, "row games, shown"); near(393f, rowsHidden.topH, "row games, hidden")
         near(rowsShown.toolH, rowsHidden.toolH, "row games: the same tile"); near(rowsShown.pinH, rowsHidden.pinH, "the pin row keeps its shape")
     }
 
-    // The unfolded Fold (933 × 572, the large face): topH 2 · 128.83 + 7 = 264.67 → 308.67, 2 rows of tiles either way
-    // (floor(316.67 / 115.6)), so 4 slots: 9 tools show 3 and "+6"; the bands below move down by the 44 dp.
+    // The unfolded Fold (933 × 572, the large face): Continue 2 · 128.83 + 7 = 264.67 → 308.67. One row of 9 slots
+    // (88.11 × 112.47 tiles) a gap under it either way, 9 tools all showing; the top section Continue and
+    // 14 + 112.47 (391.13 → 435.13); the bands below move down by the 44 dp.
     @Test fun foldUnfoldedWithAndWithoutTheTabRow() {
         val fold = HomeFrame(933f, 572f, false, 933f / 660f)
         val shown = homeBoard(fold, 1, tools = 9, games = 6, shelves = listOf(HomeShelf.NEW to 6))
-        for ((title, topH) in listOf(true to 264.67f, false to 308.67f)) {
+        for ((title, contH) in listOf(true to 264.67f, false to 308.67f)) {
             val f = chrome(fold, title)
             val what = "title $title"
             val b = homeBoard(f, 1, tools = 9, games = 6, shelves = listOf(HomeShelf.NEW to 6))
-            assertEquals(HomeToolMode.LARGE, b.mode, what); near(topH, b.topH, "$what: topH"); near(107.6f, b.toolH, "$what: toolH")
-            assertEquals(4, b.slots, "$what: slots"); assertEquals(6, b.more, "$what: more")
-            near(topH, continueOf(b).h, "$what: continue h")
+            val topH = contH + 14f + 112.47f
+            assertEquals(HomeToolMode.LARGE, b.mode, what); near(topH, b.topH, "$what: topH"); near(112.47f, b.toolH, "$what: toolH")
+            assertEquals(9, b.slots, "$what: slots"); assertEquals(0, b.more, "$what: more")
+            near(contH, continueOf(b).h, "$what: continue h")
             val sq = b.top.filter { it.kind == HomeTopKind.TOOL || it.kind == HomeTopKind.MORE }.map { it.rect }
-            for ((i, r) in sq.withIndex()) near(28f + (i / 2) * 115.6f, r.y, "$what: tile $i y")
+            assertEquals(9, sq.size, what)
+            for ((i, r) in sq.withIndex()) near(28f + contH + 14f, r.y, "$what: tile $i y")
             assertTrue(sq.all { it.y + it.h <= 28f + topH + 0.05f }, "$what: the tiles inside the top")
-            val drop = topH - 264.67f
+            val drop = contH - 264.67f
             near(shown.tilesY + drop, b.tilesY, "$what: the bands follow")
             near(shown.shelfTiles[0].y + drop, b.shelfTiles[0].y, "$what: the shelves"); near(shown.pageH + drop, b.pageH, "$what: pageH")
         }

@@ -9,116 +9,122 @@ class HomeBoardTest {
     private fun near(e: Float, a: Float, what: String) = assertEquals(e, a, 0.05f, what)
     private fun tiles(b: HomeBoard, k: HomeTopKind) = b.top.filter { it.kind == k }
 
-    // The Tools page's tile at its narrowest (80 dp): 2 · 10 + 0.6 · 80 + 6 + 2 · 12 · 1.15 + 6 = 107.6 tall at a text
-    // scale of 1, rows 8 dp apart (115.6 a row).
-    private val tw = HOME_TOOL_TILE_W
-    private val th = toolTileHeight(80f, 1f)
+    // The Tools page's tile, w wide: 2 · 10 + 0.6 · w + 6 + 2 · 12 · 1.15 + 6 = 59.6 + 0.6 · w tall at a text scale of 1,
+    // in as many columns as fit the page at 80 dp with 8 dp between, stretched to fill the row.
 
-    // The mockup's landscape (WIDE, up to 3 columns) with 4 tools: the Tools page's tiles flush right, as many rows as fit
-    // the top section (topY 2 + 18 + 8 = 28; the whole body 344 − 28 − 8 = 308: floor(316 / 115.6) = 2), so 6 slots, the
-    // 4 in 2 columns (ceil(4 / 2)), 2 · 80 + 8 = 168 wide. The first 2 of 6 games inline before them, the other 4 row
-    // games. Left of the tools (a gap before them) 884 − 168 − 14 = 702: the inline column 0.4 · (702 − 14) = 275.2,
-    // Continue the other 0.6, 412.8. The row games a scroll away, from 28 + 308 + 14 = 350, at their full shape 124.4.
-    @Test fun landscapeIsWideWithToolTilesBeside() {
-        near(107.6f, th, "the tile's height"); near(80f, tw, "the tile's width")
+    // The mockup's landscape (WIDE) with 4 tools. Continue and the first 2 of 6 games keep the first screen (topY
+    // 2 + 18 + 8 = 28; the whole body 344 − 28 − 8 = 308) across the page (884 between the insets): the inline column
+    // 0.4 · (884 − 14) = 348, Continue the other 0.6, 522. A gap under them, at 28 + 308 + 14 = 350, one row of the
+    // Tools page's tiles: floor(892 / 88) = 10 columns of (884 − 72) / 10 = 81.2, each 59.6 + 48.72 = 108.32 tall, so 10
+    // slots, the 4 from the left. The top section is both, 308 + 14 + 108.32 = 430.32; the other 4 games are row games a
+    // gap under it, from 28 + 430.32 + 14 = 472.32, at their full shape 124.4.
+    @Test fun wideFacePutsTheToolRowUnderContinue() {
         val b = homeBoard(HomeFrame(960f, 344f, false, 960f / 432f), stripLines = 1, tools = 4, games = 6)
-        assertEquals(HomeToolMode.WIDE, b.mode); assertEquals(6, b.slots); assertEquals(0, b.more)
-        near(28f, b.topY, "topY"); near(308f, b.topH, "topH"); near(80f, b.toolW, "toolW"); near(107.6f, b.toolH, "toolH")
-        near(412.8f, tiles(b, HomeTopKind.CONTINUE).single().rect.w, "continue w")
+        assertEquals(HomeToolMode.WIDE, b.mode); assertEquals(10, b.slots); assertEquals(0, b.more)
+        near(28f, b.topY, "topY"); near(430.32f, b.topH, "topH"); near(81.2f, b.toolW, "toolW"); near(108.32f, b.toolH, "toolH")
+        near(toolTileHeight(81.2f, 1f), b.toolH, "the Tools page's height")
+        tiles(b, HomeTopKind.CONTINUE).single().rect.let { near(522f, it.w, "continue w"); near(308f, it.h, "continue h: the body") }
         assertEquals(4, tiles(b, HomeTopKind.TOOL).size); assertEquals(0, tiles(b, HomeTopKind.MORE).size)
+        tiles(b, HomeTopKind.TOOL).map { it.rect }.forEachIndexed { i, r ->
+            near(38f + i * (81.2f + 8f), r.x, "tool $i x"); near(350f, r.y, "tool $i y: a gap under Continue")
+            assertTrue(r.y >= 344f, "tool $i a scroll away")
+        }
         assertEquals(2, b.inlineGames); assertEquals(2, tiles(b, HomeTopKind.GAME).size)
-        tiles(b, HomeTopKind.GAME).forEach { near(38f + 412.8f + 14f, it.rect.x, "game x"); near(275.2f, it.rect.w, "game w") }
+        tiles(b, HomeTopKind.GAME).forEach { near(38f + 522f + 14f, it.rect.x, "game x"); near(348f, it.rect.w, "game w"); near(147f, it.rect.h, "game h") }
         assertEquals(3, b.perRow); near(285.33f, b.pinW, "pinW"); near(124.4f, b.pinH, "pinH"); assertEquals(4, b.rowGames)
-        near(350f, b.tilesY, "the rows under the body"); assertTrue(b.tilesY >= 344f, "a scroll away")
+        near(472.32f, b.tilesY, "the rows a gap under the tools")
     }
-    // 6 tools: all 3 columns of 2 rows, flush right, top-aligned from 28, in reading order; tiles 8 dp apart both ways.
-    // Left of them 884 − (3 · 80 + 16) − 14 = 614: Continue 0.6 · (614 − 14) = 360.
-    @Test fun wideSixToolsFillThreeColumnsOfTwoRows() {
+    // 6 tools: the first 6 of the row's 10 columns, from the page's left, in reading order, 8 dp apart, all at 350.
+    // Continue's width never follows the tools: 0.6 · (884 − 14) = 522.
+    @Test fun wideToolsFillOneRowFromTheLeft() {
         val b = homeBoard(HomeFrame(960f, 344f, false, 960f / 432f), 1, tools = 6, games = 6)
-        assertEquals(HomeToolMode.WIDE, b.mode); assertEquals(6, b.slots); assertEquals(0, b.more)
-        near(360f, tiles(b, HomeTopKind.CONTINUE).single().rect.w, "continue w")
+        assertEquals(HomeToolMode.WIDE, b.mode); assertEquals(10, b.slots); assertEquals(0, b.more)
+        near(522f, tiles(b, HomeTopKind.CONTINUE).single().rect.w, "continue w")
         val sq = tiles(b, HomeTopKind.TOOL).map { it.rect }
         assertEquals(6, sq.size); assertEquals(0, tiles(b, HomeTopKind.MORE).size)
-        val left = 38f + 884f - 3 * tw - 2 * 8f
         for ((i, r) in sq.withIndex()) {
-            near(left + (i % 3) * (tw + 8f), r.x, "tile $i x"); near(28f + (i / 3) * (th + 8f), r.y, "tile $i y")
-            near(tw, r.w, "tile $i w"); near(th, r.h, "tile $i h")
+            near(38f + i * (81.2f + 8f), r.x, "tile $i x"); near(350f, r.y, "tile $i y")
+            near(81.2f, r.w, "tile $i w"); near(108.32f, r.h, "tile $i h")
         }
         assertEquals(4, b.rowGames)
     }
-    // Past 6 tools (3 columns of 2): 5 and "+N", the last tile, at the right of the second row.
-    @Test fun wideMoreThanSixToolsShowFiveAndMore() {
+    // Past the row's 10 slots: 9 tools and "+N", the last tile, at the row's right end (38 + 884 − 81.2 = 840.8).
+    @Test fun widePastTenToolsShowNineAndMore() {
         val b = homeBoard(HomeFrame(960f, 344f, false, 960f / 432f), 1, tools = 17, games = 6)
-        assertEquals(6, b.slots); assertEquals(17 - 6 + 1, b.more)
-        assertEquals(5, tiles(b, HomeTopKind.TOOL).size)
+        assertEquals(10, b.slots); assertEquals(17 - 10 + 1, b.more)
+        assertEquals(9, tiles(b, HomeTopKind.TOOL).size)
         val more = b.top.last(); assertEquals(HomeTopKind.MORE, more.kind)
-        near(38f + 884f - tw, more.rect.x, "more x: the right column"); near(28f + th + 8f, more.rect.y, "more y: the second row")
-        near(tw, more.rect.w, "more w: a tool tile"); near(th, more.rect.h, "more h: a tool tile")
+        near(840.8f, more.rect.x, "more x: the row's right end"); near(350f, more.rect.y, "more y: the row")
+        near(81.2f, more.rect.w, "more w: a tool tile"); near(108.32f, more.rect.h, "more h: a tool tile")
     }
-    // topY 28: the top the whole body 248 − 28 − 8 = 212, one row of tiles (floor(220 / 115.6) = 1), so 3 slots; 2 of the
-    // 4 games inline, the other 2 row games a scroll away. Left of the tools 764 − 256 − 14 = 494: Continue
-    // 0.6 · (494 − 14) = 288.
+    // topY 28: Continue and the games keep the whole body, 248 − 28 − 8 = 212; 2 of the 4 games inline
+    // (0.4 · (764 − 14) = 300 wide), Continue 450. The row across 764: floor(772 / 88) = 8 columns of
+    // (764 − 56) / 8 = 88.5, each 59.6 + 53.1 = 112.7 tall, so 8 slots, a gap under them; the top section
+    // 212 + 14 + 112.7 = 338.7. The other 2 games are row games under it.
     @Test fun flipLandscapeIsWide() {
         val b = homeBoard(HomeFrame(840f, 248f, false, 840f / 336f), 1, tools = 3, games = 4)
-        assertEquals(HomeToolMode.WIDE, b.mode); assertEquals(3, b.slots); near(80f, b.toolW, "toolW"); near(107.6f, b.toolH, "toolH")
-        near(288f, tiles(b, HomeTopKind.CONTINUE).single().rect.w, "continue w")
+        assertEquals(HomeToolMode.WIDE, b.mode); assertEquals(8, b.slots); near(88.5f, b.toolW, "toolW"); near(112.7f, b.toolH, "toolH")
+        tiles(b, HomeTopKind.CONTINUE).single().rect.let { near(450f, it.w, "continue w"); near(212f, it.h, "continue h") }
+        near(338.7f, b.topH, "topH"); near(28f + 212f + 14f, tiles(b, HomeTopKind.TOOL).first().rect.y, "the row a gap under Continue")
         near(245.33f, b.pinW, "pinW"); near(86.75f, b.pinH, "pinH"); assertEquals(2, b.inlineGames); assertEquals(2, b.rowGames)
     }
-    // SPS3: the tool tiles flush right, up to 2 columns of as many rows as fit; the first 2 games inline before them;
-    // Continue takes the rest. Landscape, so the strip is one line (2 + 18 + 8 = 28); the two-line reference (48) is in
+    // SPS3: Continue and the first 2 games keep the first screen; one row of tool tiles across the page a gap under
+    // them. Landscape, so the strip is one line (2 + 18 + 8 = 28); the two-line reference (48) is in
     // stripLinesFollowTheTextScale. The unfolded Fold is LARGE, so SPS3 is checked on a sub-840 landscape split.
-    // w 724, columns 109, row shape min(109, (340 − 33) · 0.4 = 122.8) = 109; the top the whole body 340 − 28 − 8 = 304:
-    // 2 rows (floor(312 / 115.6)), 4 slots; 3 tools in 2 columns, 168 wide. Left of them 724 − 168 − 14 = 542: the
-    // inline column 0.4 · (542 − 14) = 211.2, Continue 316.8.
+    // w 724, columns 109, row shape min(109, (340 − 33) · 0.4 = 122.8) = 109; Continue and the games the whole body
+    // 340 − 28 − 8 = 304: the inline column 0.4 · (724 − 14) = 284, Continue 426. The row: floor(732 / 88) = 8 columns
+    // of (724 − 56) / 8 = 83.5, each 59.6 + 50.1 = 109.7 tall, at 28 + 304 + 14 = 346; the top section
+    // 304 + 14 + 109.7 = 427.7.
     @Test fun landscapeSplitIsSps3() {
         val b = homeBoard(HomeFrame(800f, 340f, false, 800f / 428f), 1, tools = 3, games = 4)
-        assertEquals(HomeToolMode.SPS3, b.mode); assertEquals(4, b.slots); near(28f, b.topY, "topY"); near(304f, b.topH, "topH")
-        near(80f, b.toolW, "toolW"); near(107.6f, b.toolH, "toolH")
-        near(316.8f, tiles(b, HomeTopKind.CONTINUE).single().rect.w, "continue w")
-        val left = 38f + 724f - 2 * tw - 8f
+        assertEquals(HomeToolMode.SPS3, b.mode); assertEquals(8, b.slots); near(28f, b.topY, "topY"); near(427.7f, b.topH, "topH")
+        near(83.5f, b.toolW, "toolW"); near(109.7f, b.toolH, "toolH")
+        tiles(b, HomeTopKind.CONTINUE).single().rect.let { near(426f, it.w, "continue w"); near(304f, it.h, "continue h: the body") }
         tiles(b, HomeTopKind.TOOL).map { it.rect }.forEachIndexed { i, r ->
-            near(left + (i % 2) * (tw + 8f), r.x, "tool $i x"); near(28f + (i / 2) * (th + 8f), r.y, "tool $i y")
+            near(38f + i * (83.5f + 8f), r.x, "tool $i x"); near(346f, r.y, "tool $i y")
         }
         assertEquals(2, b.inlineGames); assertEquals(2, b.rowGames)
     }
-    // SPS3's inline games (800 × 340, 3 tools). The top section is the body, 340 − 28 − 8 = 304, whatever the games:
-    // left of the tools 542: the column 0.4 · (542 − 14) = 211.2 at 38 + 316.8 + 14 = 368.8, Continue 316.8; 1 game the
-    // full 304, 2 stacked (304 − 14) / 2 = 145 tall. 3 games: the same 2 inline and 1 row game a scroll away, at
-    // 28 + 304 + 14 = 346, its full shape 109.
+    // SPS3's inline games (800 × 340, 3 tools). Continue and the games are the body, 340 − 28 − 8 = 304, whatever the
+    // games: the column 0.4 · (724 − 14) = 284 at 38 + 426 + 14 = 478, Continue 426; 1 game the full 304, 2 stacked
+    // (304 − 14) / 2 = 145 tall. The top section with the tools' row 427.7, so the page with nothing under it
+    // 28 + 427.7 + 8 = 463.7. 3 games: the same 2 inline and 1 row game under the tools, at 28 + 427.7 + 14 = 469.7, its
+    // full shape 109.
     @Test fun sps3PutsTheFirstTwoGamesInline() {
         val f = HomeFrame(800f, 340f, false, 800f / 428f)
         val one = homeBoard(f, 1, tools = 3, games = 1)
         assertEquals(HomeToolMode.SPS3, one.mode); assertEquals(1, one.inlineGames); assertEquals(0, one.rowGames)
-        near(304f, one.topH, "1: topH the body"); near(107.6f, one.toolH, "1: toolH"); near(340f, one.pageH, "1: pageH")
+        near(427.7f, one.topH, "1: topH"); near(109.7f, one.toolH, "1: toolH"); near(463.7f, one.pageH, "1: pageH")
         assertEquals(listOf(HomeTopKind.CONTINUE, HomeTopKind.GAME) + List(3) { HomeTopKind.TOOL }, one.top.map { it.kind })
-        near(316.8f, tiles(one, HomeTopKind.CONTINUE).single().rect.w, "1: continue w")
-        tiles(one, HomeTopKind.GAME).single().rect.let { near(368.8f, it.x, "1: game x"); near(28f, it.y, "1: game y"); near(211.2f, it.w, "1: game w"); near(304f, it.h, "1: game h") }
+        tiles(one, HomeTopKind.CONTINUE).single().rect.let { near(426f, it.w, "1: continue w"); near(304f, it.h, "1: continue h") }
+        tiles(one, HomeTopKind.GAME).single().rect.let { near(478f, it.x, "1: game x"); near(28f, it.y, "1: game y"); near(284f, it.w, "1: game w"); near(304f, it.h, "1: game h") }
         val two = homeBoard(f, 1, tools = 3, games = 2)
-        assertEquals(2, two.inlineGames); assertEquals(0, two.rowGames); near(304f, two.topH, "2: topH")
+        assertEquals(2, two.inlineGames); assertEquals(0, two.rowGames); near(427.7f, two.topH, "2: topH")
         val g2 = tiles(two, HomeTopKind.GAME).map { it.rect }
         near(28f, g2[0].y, "2: game 0 y"); near(28f + 145f + 14f, g2[1].y, "2: game 1 y")
-        g2.forEach { near(211.2f, it.w, "2: game w"); near(145f, it.h, "2: game h") }
+        g2.forEach { near(284f, it.w, "2: game w"); near(145f, it.h, "2: game h") }
         val three = homeBoard(f, 1, tools = 3, games = 3)
-        assertEquals(2, three.inlineGames); assertEquals(1, three.rowGames); near(304f, three.topH, "3: topH")
-        tiles(three, HomeTopKind.GAME).forEach { near(211.2f, it.rect.w, "3: game w"); near(145f, it.rect.h, "3: game h") }
-        near(346f, three.tilesY, "3: tilesY"); near(109f, three.pinH, "3: pinH")
+        assertEquals(2, three.inlineGames); assertEquals(1, three.rowGames); near(427.7f, three.topH, "3: topH")
+        tiles(three, HomeTopKind.GAME).forEach { near(284f, it.rect.w, "3: game w"); near(145f, it.rect.h, "3: game h") }
+        near(469.7f, three.tilesY, "3: tilesY"); near(109f, three.pinH, "3: pinH")
     }
-    // SPS3 (a sub-840 landscape split) past its 4 slots (2 columns of 2): 3 tools and "+N" last, at the right of the
-    // second row; 12 tools "+9".
-    @Test fun sps3PastFourToolsShowsThreeAndMore() {
-        for ((tools, more) in listOf(5 to 2, 6 to 3, 12 to 9)) {
+    // SPS3 (a sub-840 landscape split) past its row's 8 slots: 7 tools and "+N" last, at the row's right end
+    // (38 + 724 − 83.5 = 678.5); 12 tools "+5".
+    @Test fun sps3PastEightToolsShowsSevenAndMore() {
+        for ((tools, more) in listOf(9 to 2, 10 to 3, 12 to 5)) {
             val b = homeBoard(HomeFrame(800f, 340f, false, 800f / 428f), 1, tools = tools, games = 4)
-            assertEquals(HomeToolMode.SPS3, b.mode); assertEquals(4, b.slots, "$tools: slots"); assertEquals(more, b.more, "$tools: more")
-            assertEquals(3, tiles(b, HomeTopKind.TOOL).size, "$tools: tools shown")
-            near(316.8f, tiles(b, HomeTopKind.CONTINUE).single().rect.w, "$tools: continue w")
+            assertEquals(HomeToolMode.SPS3, b.mode); assertEquals(8, b.slots, "$tools: slots"); assertEquals(more, b.more, "$tools: more")
+            assertEquals(7, tiles(b, HomeTopKind.TOOL).size, "$tools: tools shown")
+            near(426f, tiles(b, HomeTopKind.CONTINUE).single().rect.w, "$tools: continue w")
             val last = b.top.last(); assertEquals(HomeTopKind.MORE, last.kind)
-            near(38f + 724f - tw, last.rect.x, "$tools: more x: the right column"); near(28f + th + 8f, last.rect.y, "$tools: more y: the second row")
+            near(678.5f, last.rect.x, "$tools: more x: the row's right end"); near(346f, last.rect.y, "$tools: more y: the row")
         }
     }
-    // Each face's slots are its columns times the rows that fit, whatever the tool count: the Flip's wide face 3 (one row
-    // of 3), the portrait type 8 (2 rows of the 4 columns across the Fold cover), UNDER 3 (one row across 284 dp).
+    // Each face's slots are the columns that fit its page times its rows, whatever the tool count: the Flip's wide face 8
+    // (one row across 764 dp), the portrait type 8 (2 rows of the 4 columns across the Fold cover), UNDER 3 (one row
+    // across 284 dp).
     @Test fun facesSlotsAreTheTilesThatFit() {
-        assertEquals(3, homeBoard(HomeFrame(840f, 248f, false, 840f / 336f), 1, tools = 8, games = 4).slots)   // WIDE
+        assertEquals(8, homeBoard(HomeFrame(840f, 248f, false, 840f / 336f), 1, tools = 8, games = 4).slots)   // WIDE
         assertEquals(8, homeBoard(HomeFrame(475f, 291f, true), 2, tools = 8, games = 4).slots)                 // COLUMN
         assertEquals(3, homeBoard(HomeFrame(360f, 423f, false), 2, tools = 8, games = 4).slots)                 // UNDER
     }
@@ -200,12 +206,12 @@ class HomeBoardTest {
         near(homeBoard(f, 2, tools = 0, games = 0).topH, 319f, "no tools: the same top section")
     }
     // The tile follows the system font scale as the Tools page's does: on the Fold cover at 1.3 its two name lines take
-    // 2 · 12 · 1.15 · 1.3 = 35.88, so 126.53 tall; beside Continue (the landscape split) 80 wide and 115.88 tall.
+    // 2 · 12 · 1.15 · 1.3 = 35.88, so 126.53 tall; in the landscape split's row 83.5 wide and 82.1 + 35.88 = 117.98 tall.
     @Test fun toolTilesFollowTheFontScale() {
         near(126.53f, homeBoard(HomeFrame(475f, 291f, true, textScale = 1.3f), 2, tools = 3, games = 0).toolH, "portrait at 1.3")
         val land = homeBoard(HomeFrame(800f, 340f, false, 800f / 428f, textScale = 1.3f), 1, tools = 3, games = 0)
-        near(80f, land.toolW, "landscape at 1.3: w"); near(115.88f, land.toolH, "landscape at 1.3: h")
-        near(toolTileHeight(80f, 1.3f), land.toolH, "the Tools page's height")
+        near(83.5f, land.toolW, "landscape at 1.3: w"); near(117.98f, land.toolH, "landscape at 1.3: h")
+        near(toolTileHeight(83.5f, 1.3f), land.toolH, "the Tools page's height")
     }
     // A taller portrait-type body (the Flip's inner display, 300 dp between the insets) stops its top section at the Fold
     // cover's 235 (from 48): 3 columns of 94.67, each 116.4 tall; 7 tools in 6 slots, two rows (5 and "+2"), so Continue
@@ -223,14 +229,16 @@ class HomeBoardTest {
         near(260f - 48f - 8f, homeBoard(HomeFrame(475f, 260f, true), 2, tools = 0, games = 2).topH, "short: the body")
         near(145f, homeBoard(HomeFrame(475f, 150f, true), 2, tools = 0, games = 2).topH, "tiny: the floor")
     }
-    // A landscape halves body (not the portrait type): the cap (628 − 14) / 2 / 1.17 = 262.39 holds 2 rows of tiles
-    // (floor(270.39 / 115.6)); the first 2 games inline: left of the 2 columns 628 − 168 − 14 = 446, Continue
-    // 0.6 · (446 − 14) = 259.2.
+    // A landscape halves body (not the portrait type): Continue and the first 2 games keep the cap
+    // (628 − 14) / 2 / 1.17 = 262.39: the inline column 0.4 · (628 − 14) = 245.6, Continue 368.4. A gap under them the
+    // row across 628: floor(636 / 88) = 7 columns of (628 − 48) / 7 = 82.86, each 59.6 + 49.71 = 109.31 tall; the top
+    // section 262.39 + 14 + 109.31 = 385.71.
     @Test fun largePortraitIsColumn() {
         val b = homeBoard(HomeFrame(704f, 845f, false), 1, tools = 3, games = 4)   // not the portrait type: one strip line
-        assertEquals(HomeToolMode.COLUMN, b.mode); assertEquals(4, b.slots); near(262.39f, b.topH, "topH"); near(107.6f, b.toolH, "toolH")
-        near(259.2f, tiles(b, HomeTopKind.CONTINUE).single().rect.w, "continue w")
-        tiles(b, HomeTopKind.TOOL).forEach { assertTrue(it.rect.x >= 30f + 259.2f, "beside Continue") }
+        assertEquals(HomeToolMode.COLUMN, b.mode); assertEquals(7, b.slots); near(385.71f, b.topH, "topH"); near(109.31f, b.toolH, "toolH")
+        val c = tiles(b, HomeTopKind.CONTINUE).single().rect
+        near(368.4f, c.w, "continue w"); near(262.39f, c.h, "continue h: the cap")
+        tiles(b, HomeTopKind.TOOL).forEach { near(c.y + c.h + 14f, it.rect.y, "a gap under Continue") }
         assertEquals(2, b.inlineGames); assertEquals(2, b.rowGames)
     }
     // The strip's line boxes grow with the text scale (the system font scale), so the top section moves down
@@ -284,11 +292,13 @@ class HomeBoardTest {
         assertEquals(3, sps.top.size); near(522f, tiles(sps, HomeTopKind.CONTINUE).single().rect.w, "to the games"); assertEquals(1, sps.rowGames)
         near(38f + 884f, tiles(sps, HomeTopKind.GAME).first().rect.let { it.x + it.w }, "the games flush right")
     }
-    // No games: the wide face's top is the body (308), with tools or without, the tools the Tools page's 80 × 107.6 tile,
-    // the page 344.
-    @Test fun noGamesTopTakesTheBody() {
+    // No games: the wide face's Continue is the body (308) across the page (884), with tools or without. The tools' row
+    // (the Tools page's 81.2 × 108.32 tiles) a gap under it makes the top section 308 + 14 + 108.32 = 430.32 and the page
+    // 28 + 430.32 + 8 = 466.32; without tools the top is the body and the page 344.
+    @Test fun noGamesContinueTakesTheBody() {
         val b = homeBoard(HomeFrame(960f, 344f, false, 960f / 432f), 1, tools = 2, games = 0)
-        assertEquals(0, b.rowGames); near(80f, b.toolW, "toolW"); near(107.6f, b.toolH, "toolH"); near(308f, b.topH, "the body"); near(344f, b.pageH, "page")
+        assertEquals(0, b.rowGames); near(81.2f, b.toolW, "toolW"); near(108.32f, b.toolH, "toolH"); near(430.32f, b.topH, "topH"); near(466.32f, b.pageH, "page")
+        tiles(b, HomeTopKind.CONTINUE).single().rect.let { near(884f, it.w, "continue w"); near(308f, it.h, "continue h: the body") }
         val none = homeBoard(HomeFrame(960f, 344f, false, 960f / 432f), 1, tools = 0, games = 0)
         near(344f - 28f - 8f, none.topH, "body (topY 28)"); near(344f, none.pageH, "page")
     }
@@ -297,28 +307,32 @@ class HomeBoardTest {
         val p = homeBoardPin(b, 2)
         near(30f, p.x, "x"); near(b.tilesY + b.pinH + 12f, p.y, "second row")
     }
-    // Without games the wide face's top is the body, 248 − 28 − 8 = 212: one row of 3 tiles top-aligned at topY,
-    // Continue 764 − (3 · 80 + 16) − 14 = 494.
-    @Test fun wideToolsTopAlignedWithoutGames() {
+    // Without games the wide face's Continue is the body, 248 − 28 − 8 = 212, across the page (764); the row of 3
+    // tiles from the page's left a gap under it, at 28 + 212 + 14 = 254, ends the top section (212 + 14 + 112.7 = 338.7).
+    @Test fun wideToolRowSitsUnderContinueWithoutGames() {
         val b = homeBoard(HomeFrame(840f, 248f, false, 840f / 336f), 1, tools = 3, games = 0)
-        assertEquals(HomeToolMode.WIDE, b.mode); near(107.6f, b.toolH, "toolH")
+        assertEquals(HomeToolMode.WIDE, b.mode); near(112.7f, b.toolH, "toolH")
         val c = tiles(b, HomeTopKind.CONTINUE).single().rect
-        near(494f, c.w, "continue w"); near(b.topH, c.h, "continue h")
-        near(b.topY, tiles(b, HomeTopKind.TOOL).first().rect.y, "the block top-aligned")
+        near(764f, c.w, "continue w"); near(212f, c.h, "continue h")
+        val first = tiles(b, HomeTopKind.TOOL).first().rect
+        near(38f, first.x, "the row from the page's left"); near(254f, first.y, "the row a gap under Continue")
+        near(338.7f, b.topH, "topH"); near(b.topY + b.topH, first.y + first.h, "the row ends the top section")
     }
-    // A narrow landscape split (400 × 304, SPS3): Continue, the 2 inline games, then the tool tiles, each a gap apart,
-    // none empty (the top the body 304 − 28 − 8 = 268: 2 rows, so 3 tools take 2 columns, 168 wide; left of them
-    // 324 − 168 − 14 = 142: Continue 0.6 · (142 − 14) = 76.8); the third game a row game.
-    @Test fun narrowLandscapeKeepsContinueBesideTheTools() {
+    // A narrow landscape split (400 × 304, SPS3): Continue and the 2 inline games across the page, a gap apart, the
+    // body tall (304 − 28 − 8 = 268), none empty: the column 0.4 · (324 − 14) = 124, Continue 186. The tools' row a gap
+    // under them, at 28 + 268 + 14 = 310, across 324: floor(332 / 88) = 3 columns of (324 − 16) / 3 = 102.67, each
+    // 59.6 + 61.6 = 121.2 tall; the third game a row game.
+    @Test fun narrowLandscapeKeepsContinueAndTheGamesOverTheTools() {
         val b = homeBoard(HomeFrame(400f, 304f, false, 400f / 392f), 1, tools = 3, games = 3)
-        assertEquals(HomeToolMode.SPS3, b.mode); assertEquals(2, b.inlineGames); assertEquals(1, b.rowGames)
-        b.top.forEach { assertTrue(it.rect.w > 0f, "${it.kind} w ${it.rect.w}") }
+        assertEquals(HomeToolMode.SPS3, b.mode); assertEquals(2, b.inlineGames); assertEquals(1, b.rowGames); assertEquals(3, b.slots)
+        b.top.forEach { assertTrue(it.rect.w > 0f && it.rect.h > 0f, "${it.kind} ${it.rect}") }
         val c = tiles(b, HomeTopKind.CONTINUE).single().rect
-        val game = tiles(b, HomeTopKind.GAME).first().rect
-        val firstSquare = b.top.first { it.kind == HomeTopKind.TOOL || it.kind == HomeTopKind.MORE }.rect
-        near(76.8f, c.w, "continue w")
-        assertTrue(c.x + c.w <= game.x - b.gap + 0.05f, "continue ends a gap before the games")
-        assertTrue(game.x + game.w <= firstSquare.x - b.gap + 0.05f, "the games end a gap before the tools")
+        val games = tiles(b, HomeTopKind.GAME).map { it.rect }
+        val firstTool = b.top.first { it.kind == HomeTopKind.TOOL || it.kind == HomeTopKind.MORE }.rect
+        near(186f, c.w, "continue w"); near(268f, c.h, "continue h: the body")
+        near(c.x + c.w + b.gap, games[0].x, "the games a gap after Continue"); near(38f + 324f, games[0].x + games[0].w, "the games end the page")
+        near(c.y + c.h, games[1].y + games[1].h, "the games end with Continue")
+        near(310f, firstTool.y, "the tools a gap under Continue"); near(121.2f, firstTool.h, "the tile's height")
     }
     @Test fun landscapeTopNeverNegative() {
         val b = homeBoard(HomeFrame(600f, 40f, false, 600f / 128f), 1, tools = 3, games = 2)
@@ -375,36 +389,37 @@ class HomeBoardTest {
         near(48f, homeBoard(fold, 2, 3, 4).topY, "topY stays"); near(28f, homeBoard(land, 1, 3, 4).topY, "topY stays")
     }
 
-    // SPS3 (a sub-840 landscape split) stacks its tiles 8 dp apart both ways, as many rows as fit the top section (the
-    // body, 304: 2 rows, 2 · 107.6 + 8 = 223.2 of it), top-aligned. The top section and the pins are the same with tools
-    // or without: the pin row keeps its full shape (109), a scroll away under the body at 28 + 304 + 14 = 346. 8 games:
-    // 2 inline, 6 row games in 2 rows.
-    @Test fun sps3ToolRowsFitTheTop() {
+    // SPS3 (a sub-840 landscape split) puts its tiles in one row, 8 dp apart, a gap under the first screen (Continue,
+    // the body, 304): at 28 + 304 + 14 = 346, under the 340 dp body; 10 tools in its 8 slots, 7 and "+3". Continue and
+    // the pins' shape are the same with tools or without; the top section grows by the gap and the row
+    // (304 + 14 + 109.7 = 427.7), so the pin rows start under it at 28 + 427.7 + 14 = 469.7, their full shape 109.
+    // 8 games: 2 inline, 6 row games in 2 rows.
+    @Test fun sps3ToolRowSitsUnderTheFirstScreen() {
         val f = HomeFrame(800f, 340f, false, 800f / 428f)
         val b = homeBoard(f, 1, tools = 10, games = 8)
         val noTools = homeBoard(f, 1, tools = 0, games = 8)
         assertEquals(HomeToolMode.SPS3, b.mode)
         val sq = b.top.filter { it.kind == HomeTopKind.TOOL || it.kind == HomeTopKind.MORE }.map { it.rect }
-        val ys = sq.map { it.y }.distinct().sorted()
-        assertEquals(2, ys.size, "rows")
-        ys.zipWithNext().forEach { (a, n) -> near(b.toolH + 8f, n - a, "row step") }
-        val xs = sq.map { it.x }.distinct().sorted()
-        assertEquals(2, xs.size, "columns")
+        assertEquals(1, sq.map { it.y }.distinct().size, "rows")
+        val xs = sq.map { it.x }
+        assertEquals(8, xs.size, "columns"); near(b.gutter, xs.first(), "from the page's left")
         xs.zipWithNext().forEach { (a, n) -> near(b.toolW + 8f, n - a, "column step") }
-        near(b.topY, ys.first(), "top-aligned"); assertTrue(ys.last() + b.toolH <= b.topY + b.topH + 0.05f, "inside the top section")
-        near(b.topH, tiles(b, HomeTopKind.CONTINUE).single().rect.h, "Continue as tall")
-        near(noTools.topH, b.topH, "topH as without tools"); near(noTools.pinH, b.pinH, "pinH as without tools")
-        near(346f, b.tilesY, "the rows under the body"); near(109f, b.pinH, "pinH: the full shape")
+        near(346f, sq.first().y, "the row a gap under Continue"); assertTrue(sq.first().y >= f.h, "the row a scroll away")
+        near(304f, tiles(b, HomeTopKind.CONTINUE).single().rect.h, "Continue the body")
+        near(304f, tiles(noTools, HomeTopKind.CONTINUE).single().rect.h, "no tools: Continue the body"); near(304f, noTools.topH, "no tools: topH")
+        near(noTools.topH + b.gap + b.toolH, b.topH, "topH: the gap and the row more"); near(427.7f, b.topH, "topH")
+        near(noTools.pinH, b.pinH, "pinH as without tools")
+        near(346f, noTools.tilesY, "no tools: the rows under the body"); near(469.7f, b.tilesY, "the rows under the tools"); near(109f, b.pinH, "pinH: the full shape")
         val p1 = homeBoardPin(b, b.perRow)
         near(b.tilesY + b.pinH + b.gap, p1.y, "second row")
         near(p1.y + b.pinH + 3f + 8f, b.pageH, "pageH")
     }
 
-    // The wide face and UNDER keep their row heights, the Flip's wide face one row of 3 tiles 8 dp apart; with no tools
-    // nothing changes.
+    // The wide face and UNDER keep their row heights, the Flip's wide face one row of tiles 8 dp apart under Continue;
+    // with no tools the top section is Continue alone.
     @Test fun wideUnderAndNoToolsKeepTheirGeometry() {
         val wide = homeBoard(HomeFrame(840f, 248f, false, 840f / 336f), 1, tools = 6, games = 4)
-        assertEquals(HomeToolMode.WIDE, wide.mode); near(86.75f, wide.pinH, "WIDE pinH"); near(248f - 28f - 8f, wide.topH, "WIDE topH: the body")
+        assertEquals(HomeToolMode.WIDE, wide.mode); near(86.75f, wide.pinH, "WIDE pinH"); near(248f - 28f - 8f, tiles(wide, HomeTopKind.CONTINUE).single().rect.h, "WIDE Continue: the body")
         val sq = tiles(wide, HomeTopKind.TOOL).map { it.rect }
         near(sq[0].x + wide.toolW + 8f, sq[1].x, "WIDE column step"); assertEquals(1, sq.map { it.y }.distinct().size, "WIDE one row")
         // UNDER on a tall window without the pad (flipTallIsUnder); the Fold cover without tools fills its body.

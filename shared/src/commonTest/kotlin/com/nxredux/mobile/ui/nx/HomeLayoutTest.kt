@@ -27,15 +27,16 @@ class HomeLayoutTest {
 
     // The scroll moves as little as keeps the selected game, ring room included, 5 dp clear of the tab row and the hint
     // bar; the top section scrolls to the top (DOWN through the rows, then UP).
-    // Landscape (the wide face: topH the body 308, tilesY 350, pinH 124.4, rows 138.4 apart, the page ending at
-    // 626.8 + 124.4 + 11 = 762.2): row 0 474.4 + 8 − 344 = 138.4, row 1 276.8, row 2 415.2 (under the end 418.2), back
-    // up row 1 in view, row 0 350 − 8 = 342. The Fold cover's top
+    // Landscape (the wide face: Continue the body 308, the tools' row a gap under it, 108.32 tall, so tilesY
+    // 28 + 430.32 + 14 = 472.32, pinH 124.4, rows 138.4 apart, the page ending at 749.12 + 124.4 + 11 = 884.52): row 0
+    // 596.72 + 8 − 344 = 260.72, row 1 399.12, row 2 537.52 (under the end 540.52), back up row 1 in view, row 0
+    // 472.32 − 8 = 464.32. The Fold cover's top
     // section is Continue (145) and its row of tools (12 + 118.25), 275.25, its pin rows 106.59 tall and 118.59 apart
     // from 335.25, below the first screen; the page ends at 927.22: down 158.84, 277.44, 396.03, 514.63, 633.22; back
     // up, rows 4 and 3 in view, row 2 at 572.44 − 8, row 1 445.84, row 0 327.25.
     @Test fun theScrollKeepsTheSelectedGameInView() {
         assertEquals(3, land.rowGames / land.perRow)
-        assertScrolls(listOf(138.4f, 276.8f, 415.2f, 415.2f, 342f, 0f), walk(land, 344f, listOf(0, 1, 2, 1, 0, -1)), "landscape")
+        assertScrolls(listOf(260.72f, 399.12f, 537.52f, 537.52f, 464.32f, 0f), walk(land, 344f, listOf(0, 1, 2, 1, 0, -1)), "landscape")
         assertScrolls(listOf(158.84f, 277.44f, 396.03f, 514.63f, 633.22f, 633.22f, 633.22f, 564.44f, 445.84f, 327.25f, 0f),
             walk(port, 291f, listOf(0, 1, 2, 3, 4, 4, 3, 2, 1, 0, -1)), "portrait")
         assertEquals(927.22f, port.pageH, 0.01f, "portrait pageH")
@@ -49,30 +50,50 @@ class HomeLayoutTest {
     }
 
     // A drag leaves the page anywhere between the top and the end; the next move scrolls only if the game is not in view.
-    // Row 1 at 276.8, as in theScrollKeepsTheSelectedGameInView.
+    // Row 1 (610.72 … 735.12) scrolls to 399.12, as in theScrollKeepsTheSelectedGameInView.
     @Test fun theScrollStartsFromWhereADragLeftIt() {
         val row1 = homeBoardPin(land, 3)
-        assertEquals(300f, homeScrollTo(300f, row1, land.pageH, 344f), 0.01f)              // in view: stays
-        assertEquals(276.8f, homeScrollTo(20f, row1, land.pageH, 344f), 0.02f)            // below the view: just enough
+        assertEquals(420f, homeScrollTo(420f, row1, land.pageH, 344f), 0.01f)              // in view: stays
+        assertEquals(399.12f, homeScrollTo(20f, row1, land.pageH, 344f), 0.02f)           // below the view: just enough
         assertEquals(land.pageH - 344f, homeScrollTo(1000f, row1, land.pageH, 344f), 0.02f)   // past the end (stale): clamped
-        // One row game (3 pinned, 2 inline) is a scroll away too: under the body, at 350, so 138.4.
+        // One row game (3 pinned, 2 inline) is a scroll away too: under the tools' row, at 472.32, so 260.72.
         val one = homeBoard(HomeFrame(960f, 344f, false, 960f / 432f), stripLines = 1, tools = 3, games = 3)
-        assertEquals(138.4f, homeScrollTo(0f, homeBoardPin(one, 0), one.pageH, 344f), 0.02f)
+        assertEquals(260.72f, homeScrollTo(0f, homeBoardPin(one, 0), one.pageH, 344f), 0.02f)
+    }
+
+    // A selected top tile that shows whole on the first screen leaves the page at the top: Continue and the inline
+    // games end at 28 + 308 = 336, their ring room and 5 dp (8) just inside the 344 dp body. The tools' row sits under
+    // it (350 … 458.32), so a selected tool is followed as a row tile: the page scrolls 458.32 + 8 − 344 = 122.32,
+    // which shows it whole.
+    @Test fun aSelectedToolUnderTheFirstScreenScrollsIntoView() {
+        val top = land.top
+        for (t in top.filter { it.kind == HomeTopKind.CONTINUE || it.kind == HomeTopKind.GAME })
+            assertEquals(null, homeTopScrollRect(t.rect, 344f), "${t.kind}: on the first screen")
+        val tool = top.first { it.kind == HomeTopKind.TOOL }.rect
+        assertEquals(350f, tool.y, 0.05f); assertEquals(108.32f, tool.h, 0.05f)
+        assertEquals(tool, homeTopScrollRect(tool, 344f))
+        val y = homeScrollTo(0f, homeTopScrollRect(tool, 344f), land.pageH, 344f)
+        assertEquals(122.32f, y, 0.05f)
+        assertTrue(tool.y - (NX_TILE_RING + 5f) >= y - 0.01f && tool.y + tool.h + NX_TILE_RING + 5f <= y + 344f + 0.01f, "the tool in view")
+        assertEquals(0f, homeScrollTo(y, homeTopScrollRect(top[0].rect, 344f), land.pageH, 344f), "back on Continue: the top")
+        // A tile that fits the first screen whole is not followed: UNDER's row sits inside its top section.
+        val under = homeBoard(HomeFrame(360f, 423f, false), 2, tools = 5, games = 4)
+        under.top.forEach { assertEquals(null, homeTopScrollRect(it.rect, 423f), "UNDER ${it.kind}") }
     }
 
     // The scroll across recompositions: a new board snaps (to show the selection from the top), a new selection eases
     // from where the page is, and anything else (a rows swap on the same board: stats, recents) keeps the offset, a
     // drag's included, only clamped into a page that got shorter.
-    // Row 1 at 276.8 and row 2 at 415.2, as in theScrollKeepsTheSelectedGameInView.
+    // Row 1 at 399.12 and row 2 at 537.52, as in theScrollKeepsTheSelectedGameInView.
     @Test fun aRowsSwapKeepsTheScrollAndOnlyASelectionOrBoardChangeMovesIt() {
         val pageH = land.pageH
         val row1 = homeBoardPin(land, 3)
         val row2 = homeBoardPin(land, 6)
-        assertEquals(HomeScrollStep(HomeScrollMove.SNAP, 276.8f), homeScrollStep(0f, null, land, null, row1, pageH, 344f).round())   // first layout
+        assertEquals(HomeScrollStep(HomeScrollMove.SNAP, 399.12f), homeScrollStep(0f, null, land, null, row1, pageH, 344f).round())   // first layout
         assertEquals(HomeScrollStep(HomeScrollMove.KEEP, 200f), homeScrollStep(200f, land, land, null, null, pageH, 344f))   // Continue selected, rows swapped
         assertEquals(HomeScrollStep(HomeScrollMove.KEEP, 150f), homeScrollStep(150f, land, land, row1, row1, pageH, 344f))   // the same game: kept
         assertEquals(HomeScrollStep(HomeScrollMove.KEEP, 138.4f), homeScrollStep(200f, land, land, row1, row1, 482.4f, 344f).round())   // a shorter page: clamped
-        assertEquals(HomeScrollStep(HomeScrollMove.EASE, 415.2f), homeScrollStep(150f, land, land, row1, row2, pageH, 344f).round())   // a new selection
+        assertEquals(HomeScrollStep(HomeScrollMove.EASE, 537.52f), homeScrollStep(150f, land, land, row1, row2, pageH, 344f).round())   // a new selection
         assertEquals(HomeScrollStep(HomeScrollMove.EASE, 0f), homeScrollStep(150f, land, land, row1, null, pageH, 344f))             // to the top section
         assertEquals(HomeScrollMove.SNAP, homeScrollStep(150f, land, port, row1, row1, pageH, 291f).move)                       // a rotation
         val morePins = homeBoard(HomeFrame(960f, 344f, false, 960f / 432f), stripLines = 1, tools = 3, games = 10)
