@@ -37,4 +37,59 @@ class ThumbnailCropTest {
         assertEquals(bottom, listOf(region(NdsScreen.BOTTOM, bottom)).thumbnailPicture())
         assertNull(emptyList<NdsRegion>().thumbnailPicture())
     }
+
+    private val gbaOnMain = PxRect(160f, 0f, 960f, 640f)
+    private val gbaOnSecond = PxRect(0f, 20f, 1200f, 800f)
+
+    @Test fun oneScreenCopiesTheMainPicture() {
+        assertEquals(
+            ThumbnailSource(ThumbnailDisplay.MAIN, gbaOnMain),
+            thumbnailSource(emptyList(), gbaOnMain, second = null, secondWhole = null, mainBlack = false, secondDrawing = false),
+        )
+    }
+
+    @Test fun thePictureOnTheSecondDisplayIsCopiedFromThere() {   // the panel on main: main draws only black under it
+        assertEquals(
+            ThumbnailSource(ThumbnailDisplay.SECOND, gbaOnSecond),
+            thumbnailSource(emptyList(), gbaOnMain, second = null, secondWhole = gbaOnSecond, mainBlack = true, secondDrawing = true),
+        )
+    }
+
+    @Test fun noSecondSurfaceFallsBackToMain() {   // the presentation's surface not there (yet)
+        assertEquals(
+            ThumbnailSource(ThumbnailDisplay.MAIN, gbaOnMain),
+            thumbnailSource(emptyList(), gbaOnMain, second = null, secondWhole = null, mainBlack = true, secondDrawing = false),
+        )
+    }
+
+    @Test fun aDsWithTheSecondDisplayAsItsPictureKeepsTheTopScreenThere() {
+        val top = PxRect(100f, 0f, 1000f, 750f)
+        val bottom = PxRect(0f, 0f, 512f, 384f)
+        // the panel on main, both DS screens side by side on the second display (panel up)
+        assertEquals(
+            ThumbnailSource(ThumbnailDisplay.SECOND, top),
+            thumbnailSource(emptyList(), gbaOnMain, listOf(region(NdsScreen.BOTTOM, bottom), region(NdsScreen.TOP, top)), null, mainBlack = true, secondDrawing = true),
+        )
+        // split: the bottom screen on main, the top one on the second display
+        assertEquals(
+            ThumbnailSource(ThumbnailDisplay.SECOND, top),
+            thumbnailSource(listOf(region(NdsScreen.BOTTOM, bottom)), null, listOf(region(NdsScreen.TOP, top)), null, mainBlack = false, secondDrawing = true),
+        )
+    }
+
+    @Test fun splitWithTheTopScreenOnMainCopiesMain() {
+        val top = PxRect(0f, 0f, 1000f, 750f)
+        val bottom = PxRect(0f, 0f, 512f, 384f)
+        assertEquals(
+            ThumbnailSource(ThumbnailDisplay.MAIN, top),
+            thumbnailSource(listOf(region(NdsScreen.TOP, top)), null, listOf(region(NdsScreen.BOTTOM, bottom)), null, mainBlack = false, secondDrawing = true),
+        )
+    }
+
+    @Test fun aSecondDisplayDrawingNothingStaysOnMain() {   // split with the DS frame not the plain stack: main draws it whole
+        assertEquals(
+            ThumbnailSource(ThumbnailDisplay.MAIN, gbaOnMain),
+            thumbnailSource(emptyList(), gbaOnMain, emptyList(), null, mainBlack = false, secondDrawing = true),
+        )
+    }
 }

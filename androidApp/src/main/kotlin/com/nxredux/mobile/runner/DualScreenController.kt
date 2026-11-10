@@ -270,6 +270,9 @@ internal class DualScreenController(
     /** Shows [content] as the in-game menu on the second display; null takes it away. */
     fun showMenuOnSecond(content: (@Composable () -> Unit)?) { presentation?.showMenu(content) }
 
+    /** The second display's surface while the GL thread draws on it (split, or the picture there); else null. */
+    fun drawnSecondSurface(): SecondSurface? = pushedSecondSurface?.takeIf { it == secondSurface && secondDraws() }
+
     /** The panel fills the game's window on main (the picture is on the second display). */
     fun mainPanelShown(): Boolean = mainPanel.value != null
 
@@ -883,7 +886,7 @@ internal class DualScreenController(
 }
 
 /** The second display's surface and its size in px. */
-private data class SecondSurface(val surface: Surface, val width: Int, val height: Int)
+internal data class SecondSurface(val surface: Surface, val width: Int, val height: Int)
 
 /** A display's real size in px and its density: a change needs a new window on it. */
 private data class DisplayShape(val width: Int, val height: Int, val densityDpi: Int)
