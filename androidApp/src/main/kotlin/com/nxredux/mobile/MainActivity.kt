@@ -122,6 +122,9 @@ import com.nxredux.mobile.ui.nx.BottomScreenButton
 import com.nxredux.mobile.ui.nx.NxTheme
 import com.nxredux.mobile.ui.nx.nxColorsFor
 import com.nxredux.mobile.runner.SecondScreenPresentation
+import com.nxredux.mobile.runner.CARE_TICK_MS
+import com.nxredux.mobile.runner.CareLayer
+import com.nxredux.mobile.runner.ScreenCare
 import com.nxredux.mobile.runner.SecondScreens
 import com.nxredux.mobile.ui.nx.AxisDirections
 import com.nxredux.mobile.ui.nx.InputRouter
@@ -260,6 +263,12 @@ class MainActivity : ComponentActivity(), FolderPicker {
     private var bottomScreenPrompt: SecondScreenPresentation? = null
     /** The main menu's window on the second display ([syncMenuScreen]): the top screen, or the menu itself; null while not shown. */
     private var menuScreen: SecondScreenPresentation? = null
+
+    // Settings → System → Screen care: the menu's tabs, titles and hints move by a dp now and then on both screens. No
+    // dim: the menu never holds the screen on, so Android's timeout already turns an idle menu off.
+    private var mainCare: CareLayer? = null
+    private val care = ScreenCare(android.os.SystemClock::uptimeMillis, { listOfNotNull(mainCare, menuScreen?.careLayer) }, {})
+    private var careTicker: Job? = null
     /** The open prompt is drawn on the second display ([syncMenuScreen]): NX's keyboard always types it. */
     private var promptOnSecond = false
     /** A failed [showMenuScreen] looks again shortly ([retryMenuScreen]): the game's own window may still be on the display. */
@@ -501,6 +510,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
             // This window's root gets the insets unconsumed: the pages may pad for the bars at rest ([LocalRestingBars]).
             CompositionLocalProvider(LocalPosture provides posture.value, LocalRestingBars provides true, LocalSkinPacks provides ::menuSkinPack) { if (menuOnSecond.value) MenuTopScreen(state) else App(state, ::pad, keyboard = true) }
         }
+        mainCare = CareLayer(findViewById(android.R.id.content))
         collectPosture()
         // Dual mode: apps open on the top screen; one there takes our window on that display down until it leaves.
         launcher.topDisplay = ::appTopDisplay
@@ -639,7 +649,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
             if (!launching) state.onDualMenu(false)
             window.decorView.post { syncMenuScreen() }
         }
-        return runCatching { p.show() }.onSuccess { menuScreen = p }
+        return runCatching { p.show() }.onSuccess { menuScreen = p; p.careLayer?.let(care::adopt) }
             .onFailure { NxLog.w("NXAPP", "menu second screen: ${it.message}") }.isSuccess
     }
 
@@ -727,6 +737,9 @@ class MainActivity : ComponentActivity(), FolderPicker {
         secondScreens.start()
         if (::state.isInitialized) state.onSecondScreenChanged(secondScreens.current.value != null)   // what is there now, once, after the pause
         syncMenuScreen()
+        careTicker = scope.launch {
+            while (isActive) { if (::settings.isInitialized) care.enabled = settings.screenCare; care.tick(running = false); delay(CARE_TICK_MS) }
+        }
     }
 
     /** Back in front: the screen-on rule ([applyKeepScreenOn]) is set again, the netplay pages or a sync may have changed meanwhile. */
@@ -787,6 +800,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
     }
 
     override fun onStop() {
+        careTicker?.cancel(); careTicker = null
         if (::kids.isInitialized) AndroidKids.menuShown(this, this, shown = false)   // Locked with Usage access: the guard starts
         inFront = false
         cancelMenuRetry()

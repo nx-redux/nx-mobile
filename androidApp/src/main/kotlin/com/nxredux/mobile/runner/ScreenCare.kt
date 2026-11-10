@@ -11,6 +11,7 @@ import kotlin.math.roundToInt
  * panel sit in the same place for hours, and a game left running with nobody playing holds the same picture on.
  * Everything on a screen moves by a dp now and then ([shiftStep]), so edges never sit on the same pixels; a game nobody
  * has touched for a while dims ([careStage] DIM) and then lets Android's screen timeout turn the screens off (SLEEP).
+ * The main menu only moves (its tabs, titles and hints stay put while browsing); it never holds the screen on.
  */
 internal enum class CareStage { AWAKE, DIM, SLEEP }
 

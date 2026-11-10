@@ -37,9 +37,9 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "bottom screen and the in-game menu never pause it; leaving the app always does.",
     )
     SettingsKind.SCREEN_CARE -> quiet(
-        "Protect OLED screens from burn-in during games",
-        "Keeps a game's pad, frame and panel from marking an OLED screen. Everything on each screen moves by a tiny " +
-            "step every few minutes, too little to notice. A game nobody has touched for 5 minutes dims both screens, and " +
+        "Protect OLED screens from burn-in",
+        "Keeps the menu and a game's pad, frame and panel from marking an OLED screen. Everything on each screen moves by " +
+            "a tiny step every few minutes, too little to notice, in the menu and in games. A game nobody has touched for 5 minutes dims both screens, and " +
             "after 10 minutes the screens turn off on your phone's screen timeout. Press anything or touch a screen to bring " +
             "them back.",
     )

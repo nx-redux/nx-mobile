@@ -438,8 +438,8 @@ interface AppSettings {
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
     /**
-     * Settings → System → Screen care (default on), for OLED screens: in a game, what is on each screen moves by a dp
-     * now and then, and a game nobody has touched for a while dims, then lets the screens turn off. Defaulted, like
+     * Settings → System → Screen care (default on), for OLED screens: in the menu and in a game, what is on each screen
+     * moves by a dp now and then, and a game nobody has touched for a while dims, then lets the screens turn off. Defaulted, like
      * [debugLog].
      */
     var screenCare: Boolean
