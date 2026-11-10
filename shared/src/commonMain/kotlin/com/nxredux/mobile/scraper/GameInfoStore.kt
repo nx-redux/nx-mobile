@@ -72,7 +72,7 @@ class GameInfoStore(
         ok
     }
 
-    /** Drops every cached read (after a Reset deleted info files). */
+    /** Drops every cached read (after a Reset deleted info files, or a Device Sync may have brought some). */
     suspend fun forgetCached() = cacheLock.withLock { cache.clear() }
 
     suspend fun isMiss(path: String): Boolean = withContext(work) { missLock.withLock { loadMisses().contains(path) } }

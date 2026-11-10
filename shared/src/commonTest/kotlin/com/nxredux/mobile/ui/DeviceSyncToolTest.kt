@@ -2,6 +2,9 @@ package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.library.FakeRomsSource
+import com.nxredux.mobile.library.ensurePath
+import com.nxredux.mobile.scraper.StoredGameInfo
+import kotlinx.serialization.json.Json
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.EmulatorRunner
 import com.nxredux.mobile.runner.GameSession
@@ -37,6 +40,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -101,10 +105,11 @@ class DeviceSyncToolTest {
     private class Rig(
         val state: AppState, val sync: DeviceSyncController, val platform: FakeSyncPlatform,
         val runner: RecordingRunner, val data: CountingUserData, val source: FakeRomsSource,
+        val artwork: com.nxredux.mobile.scraper.ArtworkController? = null,
     )
 
     /** [withCollections]: the home has an empty `Collections/`. [onboardingAt]: onboarding to do, resumed at that step. */
-    private fun TestScope.rig(withCollections: Boolean = false, onboardingAt: OnboardingStep? = null): Rig {
+    private fun TestScope.rig(withCollections: Boolean = false, onboardingAt: OnboardingStep? = null, info: Boolean = false): Rig {
         val source = FakeRomsSource(
             dirs = mapOf(
                 "Home" to listOf("Roms") + if (withCollections) listOf("Collections") else emptyList(),
@@ -118,13 +123,27 @@ class DeviceSyncToolTest {
         val data = CountingUserData()
         val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
         val settings = Settings().apply { if (onboardingAt != null) { onboardingDone = false; onboardingStep = onboardingAt.name } }
+        var artwork: com.nxredux.mobile.scraper.ArtworkController? = null
+        val factory: ((com.nxredux.mobile.scraper.ArtworkHost) -> com.nxredux.mobile.scraper.ArtworkController)? = if (!info) null else { host ->
+            com.nxredux.mobile.scraper.ArtworkController(
+                host,
+                { auth, onArt, onWritten, _, logged, onOptions, picked ->
+                    com.nxredux.mobile.scraper.ssEngine(
+                        com.nxredux.mobile.scraper.FakeHttp(), com.nxredux.mobile.scraper.FakeFitter(), com.nxredux.mobile.scraper.FakeHasher(),
+                        source, ContentRef("Home"), auth, { testScheduler.currentTime }, {}, onArt, onWritten,
+                        logged = logged, onOptions = onOptions, picked = picked, infoFiles = com.nxredux.mobile.storage.MemoryPrivateFiles(),
+                    )
+                },
+                com.nxredux.mobile.scraper.FakeCredentials(), com.nxredux.mobile.scraper.FakeRunner(), scope,
+            ).also { artwork = it }
+        }
         val state = AppState(
-            AppDeps(settings, source, runner, Picker, data, compute = UnconfinedTestDispatcher(testScheduler), deviceSync = sync),
+            AppDeps(settings, source, runner, Picker, data, compute = UnconfinedTestDispatcher(testScheduler), deviceSync = sync, artwork = factory),
             scope,
         )
         state.load()
         advanceUntilIdle()
-        return Rig(state, sync, platform, runner, data, source)
+        return Rig(state, sync, platform, runner, data, source, artwork)
     }
 
     private fun AppState.toolRows(): List<ToolRow> =
@@ -338,6 +357,24 @@ class DeviceSyncToolTest {
         assertEquals(DeviceSyncPage.Done(SyncLink.WIFI, received = 1, sent = 0, notes = listOf(DeviceSyncText.BIOS_NO_ACCESS, DeviceSyncText.COLLECTIONS_NO_ACCESS)), r.sync.page.value)
         assertEquals(before + 1, r.data.resumeReads)   // one main-row rebuild re-read Continue's resume point
         assertEquals(Screen.DeviceSync, r.state.screen.value)   // the refresh does not leave the tool
+    }
+
+    // A pulled info file is read, not the absence cached before the pull (which the top screen would fetch and write over).
+    @Test fun a_sync_that_received_files_reads_game_info_again() = runTest {
+        val r = rig(info = true)
+        val store = r.artwork!!.info!!
+        val tetris = com.nxredux.mobile.scraper.Scrape.homeGame("Tetris.gb", dir = "Roms/Game Boy (GB)")
+        assertNull(store.read(tetris))
+        val dir = assertNotNull(r.source.ensurePath(ContentRef("Home"), listOf("Roms", "Game Boy (GB)", ".media", "info")))
+        assertTrue(r.source.writeText(dir, "Tetris.json", Json.encodeToString(StoredGameInfo.serializer(), StoredGameInfo("Blocks fall.", null, null, null, "en", "42", 1L))))
+        assertNull(store.read(tetris))   // still the cached absence
+        r.platform.steps[SyncStep.RECEIVE_SAVES] = listOf("GB/.media/info/Tetris.json", " 1 (xfr#1, to-chk=0/1)") to 0
+        r.openDeviceSync()
+        r.sync.pick(SyncLink.WIFI); r.state.onButton(NxButton.A); runCurrent()
+        pairWithHandheld(r)
+        r.platform.socket.from(handheld, SyncWire.READY); advanceTimeBy(5_000); runCurrent()
+        assertIs<DeviceSyncPage.Done>(r.sync.page.value)
+        assertEquals("Blocks fall.", store.read(tetris)?.synopsis)
     }
 
     @Test fun a_sync_that_received_nothing_does_not_rebuild() = runTest {

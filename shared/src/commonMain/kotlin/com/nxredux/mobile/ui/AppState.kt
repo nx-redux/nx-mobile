@@ -1508,8 +1508,9 @@ class AppState(
         }
         deps.deviceSync?.let { c ->
             scope.launch { c.notices.collect { showNotice(it) } }
-            // Files arrived (saves, states, their pictures): Continue's resume point and slot picture are read again.
-            scope.launch { c.received.collect { refreshMainRows() } }
+            // Files arrived (saves, states, their pictures): Continue's resume point and slot picture are read again. Game
+            // info files may be among them: a cached absence would have the top screen fetch one and write over it.
+            scope.launch { c.received.collect { gameInfoStore?.forgetCached(); refreshMainRows() } }
             // ROM files arrived: a plain Systems page rescans at once; anywhere else (the tool itself) waits until it is left.
             // Collections changed (merged by this phone's writer, or pushed by a peer phone into its home `Collections/`): a
             // store copy takes in a daemon-written home file, then the tab is listed again and those counts redone.
