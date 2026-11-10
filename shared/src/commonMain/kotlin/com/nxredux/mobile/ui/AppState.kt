@@ -281,7 +281,7 @@ class AppDeps(
     val allFilesAccess: AllFilesAccess? = null,
     /** Microphone access for DS / 3DS games' Mic toggle (Settings → Library row); null: none, or no mic to use. */
     val micAccess: MicAccess? = null,
-    /** ROMs received over a Cable Link session (Settings → System's Clear link ROM cache row); null: none on this platform. */
+    /** ROMs received over a Cable Link session (Settings → Emulation's Clear link ROM cache row); null: none on this platform. */
     val linkRomCache: LinkRomCache? = null,
     /** Local folders for the list-style picker and the SAF → file conversion; null: Android's pickers only. */
     val localFiles: LocalFiles? = null,
@@ -3904,10 +3904,11 @@ class AppState(
 
     private fun settingsRows(section: SettingsSection): List<SettingsRow> = when (section) {
         SettingsSection.LIBRARY -> libraryRows()
-        SettingsSection.EMULATORS -> listOf(
-            SettingsRow(SettingsKind.DEFAULTS, "Default emulators"),
-            SettingsRow(SettingsKind.EMULATORS, "Default settings"),
-        )
+        SettingsSection.EMULATORS -> buildList {
+            add(SettingsRow(SettingsKind.DEFAULTS, "Default emulators"))
+            add(SettingsRow(SettingsKind.EMULATORS, "Default settings"))
+            addAll(cableLinkRows())
+        }
         SettingsSection.SECOND_SCREEN -> listOf(
             SettingsRow(SettingsKind.SECOND_SCREEN_ENABLE, "Enable", if (deps.settings.secondScreen) "On" else "Off"),
             SettingsRow(SettingsKind.BOTTOM_SCREEN, "Bottom screen", bottomScreenLabel(deps.settings.bottomScreen)),
@@ -3970,18 +3971,26 @@ class AppState(
      * Settings -> System: its options as one group under the page's title (Pause when unfocused, Use as home screen with
      * a launcher, Debug log), then the About and Licenses groups.
      */
+    /**
+     * Settings -> Emulation's Cable Link group: the received-ROM cache and the input delay, for trying a game at a fixed
+     * one. Only where Cable Link exists (the platform with a link ROM cache).
+     */
+    private fun cableLinkRows(): List<SettingsRow> = deps.linkRomCache?.let { cache ->
+        listOf(
+            SettingsRow(SettingsKind.GAP, ""),
+            SettingsRow(SettingsKind.SECTION, "Cable Link"),
+            SettingsRow(SettingsKind.CABLE_LINK_DELAY, "Input delay", cableLinkDelayLabel(deps.settings.cableLinkDelayPin)),
+            SettingsRow(SettingsKind.CABLE_LINK_DELAY_OVERLAY, "Delay overlay", if (deps.settings.cableLinkDelayOverlay) "On" else "Off"),
+            SettingsRow(SettingsKind.CLEAR_LINK_ROMS, "Clear link ROM cache", formatBytes(cache.sizeBytes())),
+        )
+    }.orEmpty()
+
     private fun systemRows(): List<SettingsRow> = buildList {
         add(SettingsRow(SettingsKind.PAUSE_UNFOCUSED, "Pause when unfocused", if (deps.settings.pauseWhenUnfocused) "On" else "Off"))
         deps.launcher?.let { l -> add(SettingsRow(SettingsKind.HOME_SCREEN, "Use as home screen", if (l.isHome()) "On" else "Off")) }
         if (deps.ownKeyboard) add(SettingsRow(SettingsKind.KEYBOARD, "Keyboard", keyboardLabel(deps.settings.androidKeyboard)))
         // Logging for a bug report; off, only errors reach logcat.
         add(SettingsRow(SettingsKind.DEBUG_LOG, "Debug log", if (deps.settings.debugLog) "On" else "Off"))
-        deps.linkRomCache?.let { add(SettingsRow(SettingsKind.CLEAR_LINK_ROMS, "Clear link ROM cache", formatBytes(it.sizeBytes()))) }
-        // Cable Link over Wi-Fi's input delay, for trying a game at a fixed one (the platform with a link ROM cache has Cable Link).
-        if (deps.linkRomCache != null) {
-            add(SettingsRow(SettingsKind.CABLE_LINK_DELAY, "Cable Link input delay", cableLinkDelayLabel(deps.settings.cableLinkDelayPin)))
-            add(SettingsRow(SettingsKind.CABLE_LINK_DELAY_OVERLAY, "Cable Link delay overlay", if (deps.settings.cableLinkDelayOverlay) "On" else "Off"))
-        }
         add(SettingsRow(SettingsKind.GAP, ""))
         add(SettingsRow(SettingsKind.SECTION, "About"))
         queryGpu()   // the page (or its preview) shows: the GPU row reads "…" until this lands

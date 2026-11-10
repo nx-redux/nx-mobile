@@ -10811,14 +10811,14 @@ class AppStateTest {
         assertEquals("On", row().secondary)
     }
 
-    // Settings → System → Clear link ROM cache: its value is the cache's size; A empties it.
+    // Settings → Emulation → Cable Link → Clear link ROM cache: its value is the cache's size; A empties it.
     @Test fun settings_row_shows_size_and_clears() = runTest {
         val store = com.nxredux.mobile.netplay.cablelink.MemoryCacheStore()
         store.files["a".repeat(40)] = ByteArray(2048)
         val cache = com.nxredux.mobile.netplay.cablelink.LinkRomCache(store)
         val state = state(MemorySettings(ContentRef("Home")), linkRomCache = cache)
         state.load()
-        state.openSettings(SettingsSection.SYSTEM)
+        state.openSettings(SettingsSection.EMULATORS)
         fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
         fun row() = rows().single { it.kind == SettingsKind.CLEAR_LINK_ROMS }
         assertEquals("Clear link ROM cache" to "2.0 KB", row().label to row().secondary)
@@ -10828,11 +10828,26 @@ class AppStateTest {
         assertEquals("0 B", row().secondary)
     }
 
-    @Test fun no_clear_row_without_a_link_rom_cache() = runTest {
+    @Test fun no_cable_link_rows_without_a_link_rom_cache() = runTest {
         val state = state(MemorySettings(ContentRef("Home")))
         state.load()
-        state.openSettings(SettingsSection.SYSTEM)
-        assertEquals(false, assertIs<Screen.Settings>(state.screen.value).rows.any { it.kind == SettingsKind.CLEAR_LINK_ROMS })
+        state.openSettings(SettingsSection.EMULATORS)
+        val kinds = assertIs<Screen.Settings>(state.screen.value).rows.map { it.kind }
+        assertEquals(listOf(SettingsKind.DEFAULTS, SettingsKind.EMULATORS), kinds)
+    }
+
+    // The Cable Link group lives under Emulation (delay, overlay, cache), not System.
+    @Test fun cable_link_rows_are_in_emulation_not_system() = runTest {
+        val cache = com.nxredux.mobile.netplay.cablelink.LinkRomCache(com.nxredux.mobile.netplay.cablelink.MemoryCacheStore())
+        val state = state(MemorySettings(ContentRef("Home")), linkRomCache = cache)
+        state.load()
+        val cableKinds = setOf(SettingsKind.CABLE_LINK_DELAY, SettingsKind.CABLE_LINK_DELAY_OVERLAY, SettingsKind.CLEAR_LINK_ROMS)
+        state.openSettings(SettingsSection.EMULATORS)
+        val emulation = assertIs<Screen.Settings>(state.screen.value).rows
+        assertEquals(listOf(SettingsKind.CABLE_LINK_DELAY, SettingsKind.CABLE_LINK_DELAY_OVERLAY, SettingsKind.CLEAR_LINK_ROMS), emulation.map { it.kind }.filter { it in cableKinds })
+        assertEquals("Cable Link", emulation.single { it.kind == SettingsKind.SECTION }.label)
+        state.onButton(NxButton.B); state.openSettings(SettingsSection.SYSTEM)
+        assertEquals(false, assertIs<Screen.Settings>(state.screen.value).rows.any { it.kind in cableKinds })
     }
 
     @Test fun find_local_rom_looks_only_in_gba_folders() = runTest {
