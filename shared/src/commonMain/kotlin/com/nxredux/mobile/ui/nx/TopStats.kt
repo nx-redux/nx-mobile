@@ -173,11 +173,15 @@ internal fun shelfFit(width: Dp, height: Dp): ShelfFit {
 
 private const val SHELF_MAX = 3
 
+/** The small mark fits above the stats' [content] (its title block and shelf) in a page [height] tall (inside its padding). */
+internal fun statsMark(content: Dp, height: Dp): Boolean = content + TOP_MARK_BAND <= height
+
 /**
  * The top screen's console / collection stats: the title, one quiet line of facts and the BIOS pill (only when one is
  * missing) over the shelf, all anchored to the bottom; the shelf is its label over three 16:9 pictures, each captioned
  * with its game's name and play time (or "Not played yet"). Nothing scrolls: a short screen drops the captions, then
- * the shelf ([shelfFit]), and the title block stays at the bottom. [onLaunch]: a picture's clean tap. [prefer]: Layouts → Backdrop art, for a game whose only picture is
+ * the shelf ([shelfFit]), and the title block stays at the bottom. The small NX mark sits at the top right where the
+ * content leaves it room ([statsMark]). [onLaunch]: a picture's clean tap. [prefer]: Layouts → Backdrop art, for a game whose only picture is
  * its box.
  */
 @Composable
@@ -215,7 +219,12 @@ fun TopStatsPage(stats: TopStats, onLaunch: (Listed) -> Unit, prefer: BackdropAr
             }.first().measure(loose)
             val shelfTop = constraints.maxHeight - (shelf?.height ?: 0)
             val headTop = if (shelf == null) shelfTop - head.height else shelfTop - TS_BREATH.roundToPx() - head.height
+            // Only where the content leaves its band free: the mark never costs the shelf or the captions.
+            val mark = if (statsMark((constraints.maxHeight - headTop).toDp(), constraints.maxHeight.toDp())) {
+                subcompose("mark") { Box(Modifier.fillMaxWidth()) { TopMark() } }.first().measure(loose)
+            } else null
             layout(constraints.maxWidth, constraints.maxHeight) {
+                mark?.place(0, 0)
                 head.place(0, headTop)
                 shelf?.place(0, shelfTop)
             }

@@ -13,7 +13,9 @@ import com.nxredux.mobile.ui.Listed
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class TopStatsTest {
     private val day = 86_400_000L
@@ -183,5 +185,10 @@ class TopStatsTest {
 
     @Test fun an_empty_shelf_does_not_claim_most_played() {
         assertEquals("NEWEST ADDED", shelfLabel(emptyList()))
+    }
+
+    @Test fun the_mark_shows_only_above_content_that_leaves_it_room() {
+        assertTrue(statsMark(200.dp, 200.dp + TOP_MARK_BAND))
+        assertFalse(statsMark(200.dp, 200.dp + TOP_MARK_BAND - 1.dp))
     }
 }

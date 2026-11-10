@@ -145,9 +145,19 @@ internal fun detailsFit(width: Dp, height: Dp): DetailsFit =
     )
 
 /**
+ * The small mark fits above the details in a [width] x [height] page (inside its padding): only where they keep, in the
+ * height its band leaves, all they would keep without it, and at least the next goal.
+ */
+internal fun detailsMark(width: Dp, height: Dp): Boolean {
+    val left = detailsFit(width, height - TOP_MARK_BAND)
+    return left == detailsFit(width, height) && left.next
+}
+
+/**
  * The top screen's game details, in the stats page's language: on the left, anchored to the bottom, the title, the
  * genre line, the play line and the achievements block (a count, a bar and the next goal); on the right, one picture
  * at its own aspect ([detailsImage], [detailsPictureRatio]) captioned "Continue · <when>" when it is the resume save's.
+ * The small NX mark sits at the top right where it costs nothing ([detailsMark]).
  * Nothing scrolls; a small screen drops the synopsis, then the picture, then the next goal ([detailsFit]). [onAchievements]: the achievements block's clean tap, the only
  * touch here. [prefer]: Layouts → Backdrop art, for a game whose only picture is its box.
  */
@@ -159,8 +169,11 @@ fun TopDetailsPage(details: TopDetails, onAchievements: () -> Unit, prefer: Back
         val pad = topPagePadding(maxWidth, maxHeight)
         val gap = maxWidth * TD_COLUMN_GAP
         BoxWithConstraints(Modifier.fillMaxSize().padding(pad)) {
-            val fit = detailsFit(maxWidth, maxHeight)
-            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.Bottom) {
+            val mark = detailsMark(maxWidth, maxHeight)
+            val fit = detailsFit(maxWidth, if (mark) maxHeight - TOP_MARK_BAND else maxHeight)
+            if (mark) TopMark()
+            // Under the mark's band: a tall picture never reaches it.
+            Row(Modifier.fillMaxSize().padding(top = if (mark) TOP_MARK_BAND else 0.dp), verticalAlignment = Alignment.Bottom) {
                 DetailsText(details, now, fit, onAchievements, Modifier.weight(TD_TEXT_SHARE))
                 if (fit.picture) {
                     Spacer(Modifier.width(gap))

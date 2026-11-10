@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -34,6 +35,8 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.ui.Listed
+import com.nxredux.mobile.ui.SETTINGS_MARK
+import com.nxredux.mobile.ui.SettingsMark
 import com.nxredux.mobile.ui.appId
 import org.jetbrains.compose.resources.painterResource
 
@@ -58,6 +61,13 @@ internal fun topPictureCacheKey(image: ShelfImage): String? = when (image) {
 /** The top screen pages' padding in a [width] x [height] screen: a share of the width every side, a wide, short screen's top and bottom capped by its height. */
 internal fun topPagePadding(width: Dp, height: Dp): PaddingValues =
     PaddingValues(horizontal = width * TOP_PAD, vertical = minOf(width * TOP_PAD, height * TOP_PAD_MAX_H))
+
+/** The top pages' small NX mark and the gap under it: the band it takes at the top of the padded page. */
+internal val TOP_MARK_BAND: Dp = SETTINGS_MARK + 16.dp
+
+/** The small NX mark, as on the Settings pages, at the top right inside a top page's padding. */
+@Composable
+internal fun BoxScope.TopMark() = SettingsMark(Modifier.align(Alignment.TopEnd))
 
 /** Trimmed line spacing: a title and the line under it read as one block. */
 internal val TOP_TIGHT_LINES = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both)

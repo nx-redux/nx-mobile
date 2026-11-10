@@ -18,6 +18,7 @@ import com.nxredux.mobile.ui.RaPanelContent
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -124,6 +125,17 @@ class TopDetailsTest {
         assertEquals(DetailsFit(picture = false, next = true, synopsis = false), detailsFit(560.dp, 219.dp))
         assertEquals(DetailsFit(picture = false, next = true, synopsis = false), detailsFit(560.dp, 176.dp))
         assertEquals(DetailsFit(picture = false, next = false, synopsis = false), detailsFit(560.dp, 175.dp))
+    }
+
+    // The mark takes its band above the content only where the content loses nothing to it.
+    @Test fun the_mark_shows_only_where_the_details_keep_all_they_would_without_it() {
+        val band = TOP_MARK_BAND.value
+        assertTrue(detailsMark(560.dp, 400.dp))
+        assertFalse(detailsMark(560.dp, (320 + band - 1).dp))   // it would cost the synopsis
+        assertTrue(detailsMark(560.dp, (320 + band).dp))
+        assertTrue(detailsMark(560.dp, 300.dp))                 // the synopsis is gone either way; the picture stays
+        assertFalse(detailsMark(560.dp, (220 + band - 1).dp))   // it would cost the picture
+        assertFalse(detailsMark(560.dp, 150.dp))                // too short for the content's least
     }
 
     @Test fun synopsis_is_dropped_first_on_short_screens() {
