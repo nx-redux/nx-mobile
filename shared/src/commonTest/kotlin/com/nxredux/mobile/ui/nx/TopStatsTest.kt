@@ -14,7 +14,6 @@ import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 class TopStatsTest {
     private val day = 86_400_000L
@@ -32,37 +31,39 @@ class TopStatsTest {
 
     private fun played(ms: Long, plays: Long, at: Long, ra: RaProgress? = null) = GameInfo(at, ms, ra, plays)
 
-    @Test fun console_numbers_are_games_play_time_and_achievements() {
+    @Test fun the_console_line_is_games_play_time_and_last_played() {
         val gba = system("GBA", "Game Boy Advance", game("GBA", "Minish Cap"), game("GBA", "Emerald"), game("GBA", "Fusion"))
         val (minish, emerald) = gba.games
         val info = mapOf(
-            minish.path to played(24 * hour, 10, now - day, RaProgress(30, 40, null)),
-            emerald.path to played(19 * hour, 5, now - 3 * day, RaProgress(12, 12, null)),
+            minish.path to played(24 * hour, 10, now - 3 * day, RaProgress(30, 40, null)),
+            emerald.path to played(19 * hour, 5, now - 2 * hour),
         )
         val s = consoleStats(listOf(gba), listed(gba), info)
         assertEquals("Game Boy Advance", s.title)
-        assertEquals(
-            listOf(StatNumber("3", "games · 1 unplayed"), StatNumber("43 h", "played · 15 sessions"), StatNumber("42", "achievements")),
-            s.numbers,
-        )
+        assertEquals("3 games · 43 h played · last played today", statsLine(s, now))
         assertNull(s.bios)
     }
 
-    @Test fun no_achievements_drop_the_third_number_and_all_played_drops_unplayed() {
-        val gb = system("GB", "Game Boy", game("GB", "Tetris"))
-        val s = consoleStats(listOf(gb), listed(gb), mapOf(gb.games[0].path to played(30 * 60_000L, 1, now)))
-        assertEquals(listOf(StatNumber("1", "game"), StatNumber("30 m", "played · 1 session")), s.numbers)
+    @Test fun a_console_never_played_shows_its_games_alone() {
+        val gb = system("GB", "Game Boy", game("GB", "Tetris"), game("GB", "Alleyway"))
+        assertEquals("2 games", statsLine(consoleStats(listOf(gb), listed(gb), emptyMap()), now))
     }
 
-    @Test fun most_played_is_top_four_by_time() {
+    @Test fun one_game_under_an_hour_is_singular_in_minutes() {
+        val gb = system("GB", "Game Boy", game("GB", "Tetris"))
+        val s = consoleStats(listOf(gb), listed(gb), mapOf(gb.games[0].path to played(30 * 60_000L, 1, now - day)))
+        assertEquals("1 game · 30 m played · last played yesterday", statsLine(s, now))
+    }
+
+    @Test fun most_played_is_top_three_by_time() {
         val names = listOf("A", "B", "C", "D", "E", "F", "G")
         val gb = system("GB", "Game Boy", *names.map { game("GB", it) }.toTypedArray())
         // G most, then F..., A never played.
         val info = gb.games.drop(1).mapIndexed { i, g -> g.path to played((i + 1) * hour, 1, now) }.toMap()
         val s = consoleStats(listOf(gb), listed(gb), info)
         assertEquals(false, s.newest)
-        assertEquals(listOf("G", "F", "E", "D"), s.shelf.map { it.entry.shown })
-        assertEquals("G · 6 h · most played", heroCaption(s.shelf.first(), s.newest, now))
+        assertEquals(listOf("G", "F", "E"), s.shelf.map { it.entry.shown })
+        assertEquals("6 h", shelfCaption(s.shelf.first(), s.newest, now))
     }
 
     @Test fun nothing_played_shows_newest_added() {
@@ -70,14 +71,13 @@ class TopStatsTest {
         val s = consoleStats(listOf(gb), listed(gb), emptyMap())
         assertEquals(true, s.newest)
         assertEquals(listOf("New", "Mid", "Old"), s.shelf.map { it.entry.shown })
-        assertEquals("New · added yesterday · newest", heroCaption(s.shelf.first(), s.newest, now))
-        assertEquals(listOf(StatNumber("3", "games · 3 unplayed"), StatNumber("0 m", "played · 0 sessions")), s.numbers)
+        assertEquals("added yesterday", shelfCaption(s.shelf.first(), s.newest, now))
     }
 
-    @Test fun a_newest_game_without_a_first_seen_time_is_captioned_by_name() {
+    @Test fun a_newest_game_without_a_first_seen_time_has_no_second_caption_line() {
         val gb = system("GB", "Game Boy", game("GB", "Tetris"))
         val s = consoleStats(listOf(gb), listed(gb), emptyMap())
-        assertEquals("Tetris · newest", heroCaption(s.shelf.first(), s.newest, now))
+        assertNull(shelfCaption(s.shelf.first(), s.newest, now))
     }
 
     @Test fun the_bios_pill_shows_only_when_a_bios_is_missing() {
@@ -88,37 +88,33 @@ class TopStatsTest {
         assertNull(biosPill(null))
     }
 
-    @Test fun collection_numbers_span_consoles_and_count_finished() {
+    @Test fun the_collection_line_adds_the_consoles_it_spans() {
         val gb = system("GB", "Game Boy", game("GB", "Links Awakening"), game("GB", "Tetris"))
         val snes = system("SFC", "Super Nintendo", game("SFC", "Mario World"))
         val gba = system("GBA", "Game Boy Advance", game("GBA", "Emerald"))
         val entries = listed(gb) + listed(snes) + listed(gba)
         val (links, tetris) = gb.games
         val info = mapOf(
-            links.path to played(31 * hour, 20, now - day, RaProgress(50, 50, null)),
-            snes.games[0].path to played(22 * hour, 8, now - 5 * day, RaProgress(96, 96, null)),
-            tetris.path to played(30 * 60_000L, 1, now - 9 * day, RaProgress(3, 10, null)),
+            links.path to played(31 * hour, 20, now - 5 * day),
+            snes.games[0].path to played(22 * hour, 8, now - day),
+            tetris.path to played(30 * 60_000L, 1, now - 9 * day),
         )
         val s = collectionStats("Favourites", entries, info)
         assertEquals("Favourites", s.title)
-        assertEquals(
-            listOf(StatNumber("4", "games · 3 consoles"), StatNumber("53 h", "played · 29 sessions"), StatNumber("2", "finished")),
-            s.numbers,
-        )
+        assertEquals("4 games · 3 consoles · 53 h played · last played yesterday", statsLine(s, now))
         assertEquals(listOf("Links Awakening", "Mario World", "Tetris"), s.shelf.map { it.entry.shown })
-        assertEquals("Links Awakening · 31 h · most played", heroCaption(s.shelf.first(), s.newest, now))
+        assertEquals("31 h", shelfCaption(s.shelf.first(), s.newest, now))
     }
 
-    @Test fun nothing_finished_drops_the_third_collection_number() {
+    @Test fun a_collection_never_played_on_one_console_is_singular() {
         val gb = system("GB", "Game Boy", game("GB", "Tetris"))
-        val s = collectionStats("X", listed(gb), mapOf(gb.games[0].path to played(2 * hour, 3, now, RaProgress(3, 10, null))))
-        assertEquals(listOf(StatNumber("1", "game · 1 console"), StatNumber("2 h", "played · 3 sessions")), s.numbers)
+        assertEquals("1 game · 1 console", statsLine(collectionStats("X", listed(gb), emptyMap()), now))
     }
 
     @Test fun a_merged_console_counts_as_one_console() {
         val a = system("GBA", "Game Boy Advance", game("GBA", "A"))
         val b = system("MGBA", "Game Boy Advance", game("MGBA", "B"))
-        assertEquals("games · 1 console", collectionStats("X", listed(a) + listed(b), emptyMap()).numbers[0].caption)
+        assertEquals("2 games · 1 console", statsLine(collectionStats("X", listed(a) + listed(b), emptyMap()), now))
     }
 
     @Test fun a_tile_shows_the_screenshot_then_the_resume_picture_then_the_box() {
@@ -128,17 +124,14 @@ class TopStatsTest {
         assertEquals(ShelfImage.None, shelfImage(null, null, null))
     }
 
-    // Caption line 22dp, gaps 6dp; strips are a third of the hero's width less the gaps, 16:9 like it.
-    @Test fun the_shelf_drops_strips_then_the_picture_on_short_screens() {
-        val roomy = assertNotNullFit(shelfFit(width = 360.dp, height = 400.dp))
-        assertEquals(360.dp, roomy.heroWidth)
-        assertTrue(roomy.strips)
-        assertTrue(assertNotNullFit(shelfFit(width = 360.dp, height = 146.dp)).strips)   // a 90dp-tall picture with strips
-        val short = assertNotNullFit(shelfFit(width = 360.dp, height = 140.dp))
-        assertTrue(short.strips.not() && short.heroWidth * 9 / 16 >= 60.dp)
-        assertNull(shelfFit(width = 360.dp, height = 70.dp))
-        assertNull(shelfFit(width = 80.dp, height = 400.dp))   // too narrow for a 60dp-tall picture
+    // Three 16:9 tiles over 92% of the width (two 4% gaps): 826dp wide, each 142.5dp tall. Over them a 16dp breath and
+    // the 28dp label; under them the 52dp captions.
+    @Test fun the_shelf_drops_its_captions_then_itself_on_short_screens() {
+        assertEquals(ShelfFit.CAPTIONED, shelfFit(width = 826.dp, height = 400.dp))
+        assertEquals(ShelfFit.CAPTIONED, shelfFit(width = 826.dp, height = 239.dp))
+        assertEquals(ShelfFit.PICTURES, shelfFit(width = 826.dp, height = 238.dp))
+        assertEquals(ShelfFit.PICTURES, shelfFit(width = 826.dp, height = 187.dp))
+        assertEquals(ShelfFit.NONE, shelfFit(width = 826.dp, height = 186.dp))
+        assertEquals(ShelfFit.CAPTIONED, shelfFit(width = 400.dp, height = 166.dp))   // a narrower screen's smaller tiles fit sooner
     }
-
-    private fun assertNotNullFit(f: ShelfFit?): ShelfFit = kotlin.test.assertNotNull(f)
 }

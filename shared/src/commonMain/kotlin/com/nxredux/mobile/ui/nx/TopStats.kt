@@ -12,13 +12,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,7 +24,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -35,16 +31,12 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import com.nxredux.mobile.achievements.RaProgress
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.settings.BackdropArt
@@ -55,6 +47,7 @@ import com.nxredux.mobile.ui.Listed
 import com.nxredux.mobile.ui.TopContent
 import com.nxredux.mobile.ui.abstractArtFor
 import com.nxredux.mobile.ui.appId
+import com.nxredux.mobile.ui.gamesLabel
 import com.nxredux.mobile.ui.nowMs
 import com.nxredux.mobile.ui.panelArt
 import com.nxredux.mobile.ui.whenText
@@ -62,18 +55,18 @@ import com.nxredux.mobile.ui.whenText
 /** A game on the stats page's shelf: its play time ([ms], 0 on a newest-added shelf), when it was [added], its [resume] picture once read. */
 data class ShelfGame(val entry: Listed, val ms: Long, val added: Long?, val resume: String? = null)
 
-/** One of the page's big numbers: the [value] over its dim [caption]. */
-data class StatNumber(val value: String, val caption: String)
-
 /**
- * The top screen's page for a highlighted console or collection ([key]: which, [statsKey]): its [title], two or three
- * [numbers], the [bios] pill (a console's only) and a [shelf] of up to four games, the most played or else the
- * [newest] added.
+ * The top screen's page for a highlighted console or collection ([key]: which, [statsKey]): its [title], its [games],
+ * the [consoles] a collection spans (null for a console), the time [playedMs] and when one was [lastPlayed] (null: never),
+ * the [bios] pill (a console's only) and a [shelf] of up to three games, the most played or else the [newest] added.
  */
 data class TopStats(
     val key: String,
     val title: String,
-    val numbers: List<StatNumber>,
+    val games: Int,
+    val consoles: Int?,
+    val playedMs: Long,
+    val lastPlayed: Long?,
     val bios: BiosMissing?,
     val shelf: List<ShelfGame>,
     val newest: Boolean,
@@ -89,69 +82,45 @@ fun statsKey(top: TopContent): String? = when (top) {
 private fun consoleKey(systems: List<SystemFolder>) = "console:" + systems.joinToString(",") { it.tag }
 private fun collectionKey(name: String) = "collection:$name"
 
-/** [systems]' page over their [entries]: games and how many are unplayed, play time, achievements earned. */
+/** [systems]' page over their [entries]. */
 fun consoleStats(systems: List<SystemFolder>, entries: List<Listed>, info: Map<String, GameInfo>, bios: BiosMissing? = null): TopStats {
-    val t = tally(entries, info)
-    val earned = t.ra.sumOf { it.unlocked }
     val (newest, shelf) = shelf(entries, info)
     return TopStats(
-        key = consoleKey(systems),
-        title = systems.first().displayName,
-        numbers = listOfNotNull(
-            gamesNumber(entries.size, "${t.neverPlayed} unplayed".takeIf { t.neverPlayed > 0 }),
-            timeNumber(t),
-            StatNumber("$earned", if (earned == 1) "achievement" else "achievements").takeIf { earned > 0 },
-        ),
-        bios = bios, shelf = shelf, newest = newest,
+        key = consoleKey(systems), title = systems.first().displayName, games = entries.size, consoles = null,
+        playedMs = playedMs(entries, info), lastPlayed = lastPlayed(entries, info), bios = bios, shelf = shelf, newest = newest,
     )
 }
 
-/** Collection [name]'s page over its [entries]: games and the consoles they span, play time, games finished (every achievement). */
+/** Collection [name]'s page over its [entries]. */
 fun collectionStats(name: String, entries: List<Listed>, info: Map<String, GameInfo>): TopStats {
-    val t = tally(entries, info)
-    // A merged console (GBA and MGBA) is one console.
-    val consoles = entries.map { it.system.displayName }.distinct().size
-    val finished = t.ra.count { it.total > 0 && it.unlocked >= it.total }
     val (newest, shelf) = shelf(entries, info)
     return TopStats(
-        key = collectionKey(name), title = name,
-        numbers = listOfNotNull(
-            gamesNumber(entries.size, if (consoles == 1) "1 console" else "$consoles consoles"),
-            timeNumber(t),
-            StatNumber("$finished", "finished").takeIf { finished > 0 },
-        ),
-        bios = null, shelf = shelf, newest = newest,
+        key = collectionKey(name), title = name, games = entries.size,
+        consoles = entries.map { it.system.displayName }.distinct().size,   // a merged console (GBA and MGBA) is one console
+        playedMs = playedMs(entries, info), lastPlayed = lastPlayed(entries, info), bios = null, shelf = shelf, newest = newest,
     )
 }
 
-private fun gamesNumber(games: Int, note: String?) =
-    StatNumber("$games", listOfNotNull(if (games == 1) "game" else "games", note).joinToString(INFO_SEPARATOR))
+private fun playedMs(entries: List<Listed>, info: Map<String, GameInfo>) = entries.sumOf { (info[it.game.path]?.totalMs ?: 0L).coerceAtLeast(0) }
 
-private fun timeNumber(t: Tally) =
-    StatNumber(hoursText(t.totalMs), "played" + INFO_SEPARATOR + if (t.sessions == 1L) "1 session" else "${t.sessions} sessions")
+private fun lastPlayed(entries: List<Listed>, info: Map<String, GameInfo>) = entries.mapNotNull { info[it.game.path]?.lastPlayedAt }.maxOrNull()
+
+/**
+ * The page's one line at [now]: "71 games · 86 h played · last played today", a collection's consoles after its games;
+ * the play time without any, the last played without a play.
+ */
+internal fun statsLine(stats: TopStats, now: Long): String = listOfNotNull(
+    gamesLabel(stats.games),
+    stats.consoles?.let { if (it == 1) "1 console" else "$it consoles" },
+    "${hoursText(stats.playedMs)} played".takeIf { stats.playedMs > 0 },
+    stats.lastPlayed?.let { "last played " + whenText(now, it).lowercase() },
+).joinToString(INFO_SEPARATOR)
 
 /** The BIOS pill's words; null (no pill) when nothing is missing. */
 internal fun biosPill(bios: BiosMissing?): String? = when (bios) {
     BiosMissing.REQUIRED -> "BIOS missing"
     BiosMissing.OPTIONAL -> "BIOS missing (optional)"
     null -> null
-}
-
-private class Tally(val neverPlayed: Int, val totalMs: Long, val sessions: Long, val ra: List<RaProgress>)
-
-private fun tally(entries: List<Listed>, info: Map<String, GameInfo>): Tally {
-    var never = 0; var total = 0L; var sessions = 0L
-    val ra = ArrayList<RaProgress>()
-    for (e in entries) {
-        val i = info[e.game.path]
-        val ms = i?.totalMs ?: 0L
-        val plays = i?.plays ?: 0L
-        if (ms <= 0 && plays <= 0 && i?.lastPlayedAt == null) never++
-        total += ms.coerceAtLeast(0)
-        sessions += plays.coerceAtLeast(0)
-        i?.ra?.let(ra::add)
-    }
-    return Tally(never, total, sessions, ra)
 }
 
 /** Most played (by play time) when anything was; else the newest added (true), so the shelf is never empty. */
@@ -165,12 +134,9 @@ private fun shelf(entries: List<Listed>, info: Map<String, GameInfo>): Pair<Bool
         .take(SHELF_MAX).map { e -> ShelfGame(e, 0, e.game.firstSeen) }
 }
 
-/** The hero's caption: "Minish Cap · 24 h · most played", or "Tetris · added yesterday · newest" on a [newest] shelf. */
-internal fun heroCaption(game: ShelfGame, newest: Boolean, now: Long): String = listOfNotNull(
-    game.entry.shown,
-    if (newest) game.added?.let { "added " + whenText(now, it).replaceFirstChar { c -> c.lowercaseChar() } } else hoursText(game.ms),
-    if (newest) "newest" else "most played",
-).joinToString(INFO_SEPARATOR)
+/** A tile's line under its name: "24 h", or "added yesterday" on a [newest] shelf (null without a first-seen time). */
+internal fun shelfCaption(game: ShelfGame, newest: Boolean, now: Long): String? =
+    if (newest) game.added?.let { "added " + whenText(now, it).lowercase() } else hoursText(game.ms)
 
 /** "86 h" from an hour up, else "45 m" (under a minute: "0 m"). */
 internal fun hoursText(ms: Long): String {
@@ -193,28 +159,31 @@ internal fun shelfImage(screenshot: String?, resume: String?, box: String?): She
     else -> ShelfImage.None
 }
 
-/** The shelf in a [width] x [height] space: the hero's width, and whether the strips fit under it. */
-internal data class ShelfFit(val heroWidth: Dp, val strips: Boolean)
+/** What of the shelf a short top screen keeps: the pictures and their captions, the pictures alone, or nothing. */
+internal enum class ShelfFit { CAPTIONED, PICTURES, NONE }
 
 /**
- * The largest 16:9 hero [width] x [height] holds over its caption, with the strips (each a third of its width less the
- * gaps, 16:9) while it stays [TS_HERO_STRIPS_MIN] tall, else alone while [TS_HERO_MIN] tall; null: no picture fits.
+ * The shelf in the [width] x [height] left under the page's line: its label over three 16:9 tiles in a row (gaps
+ * [TS_TILE_GAP] of the width) after a [TS_BREATH] from the line, with their captions while they fit, else without.
  */
-internal fun shelfFit(width: Dp, height: Dp): ShelfFit? {
-    // hero 9/16 w + caption + gap + strips (w - 2 gaps) * 3/16 = 12/16 w + caption + 10/16 gap
-    val withStrips = minOf(width, (height - TS_CAPTION - TS_STRIP_GAP * 10 / 16) * 16 / 12)
-    if (withStrips * 9 / 16 >= TS_HERO_STRIPS_MIN) return ShelfFit(withStrips, strips = true)
-    val alone = minOf(width, (height - TS_CAPTION) * 16 / 9)
-    return if (alone * 9 / 16 >= TS_HERO_MIN) ShelfFit(alone, strips = false) else null
+internal fun shelfFit(width: Dp, height: Dp): ShelfFit {
+    val tile = (width - width * TS_TILE_GAP * (SHELF_MAX - 1)) / SHELF_MAX * 9f / 16f
+    val pictures = TS_BREATH + TS_LABEL + tile
+    return when {
+        height >= pictures + TS_CAPTIONS -> ShelfFit.CAPTIONED
+        height >= pictures -> ShelfFit.PICTURES
+        else -> ShelfFit.NONE
+    }
 }
 
-private const val SHELF_MAX = 4
+private const val SHELF_MAX = 3
 
 /**
- * The top screen's console / collection stats: the title, the big numbers and the BIOS pill in a column on the left;
- * the shelf on the right, its first game one large picture captioned under it, the next ones small strips below.
- * Nothing scrolls: a short screen drops the strips, then the picture ([shelfFit]). [onLaunch]: a picture's clean tap.
- * [prefer]: Layouts → Backdrop art, for a game whose only picture is its box.
+ * The top screen's console / collection stats: the title, one quiet line of facts and the BIOS pill (only when one is
+ * missing) at the top; the shelf at the bottom, its label over three 16:9 pictures, each captioned with its game's name
+ * and play time (or when it was added). Nothing scrolls: a short screen drops the captions, then the shelf
+ * ([shelfFit]). [onLaunch]: a picture's clean tap. [prefer]: Layouts → Backdrop art, for a game whose only picture is
+ * its box.
  */
 @Composable
 fun TopStatsPage(stats: TopStats, onLaunch: (Listed) -> Unit, prefer: BackdropArt = BackdropArt.BOX3D) {
@@ -222,64 +191,49 @@ fun TopStatsPage(stats: TopStats, onLaunch: (Listed) -> Unit, prefer: BackdropAr
     val font = LocalNxFont.current
     val now = remember(stats) { nowMs() }
     BoxWithConstraints(Modifier.fillMaxSize().background(colors.background)) {
-        val vPad = minOf(maxWidth * 0.07f, maxHeight * 0.08f)
-        val gap = (maxHeight * 0.045f).coerceIn(4.dp, 16.dp)
-        val pageWidth = maxWidth
-        Row(Modifier.fillMaxSize()) {
-            Column(
-                Modifier.width(pageWidth * 0.38f).fillMaxHeight().padding(start = pageWidth * 0.07f, top = vPad, bottom = vPad),
-                verticalArrangement = Arrangement.spacedBy(gap, Alignment.CenterVertically),
-            ) {
-                Text(stats.title, color = colors.listText, fontFamily = font, fontSize = 24.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                stats.numbers.forEach { n ->
-                    Column {
-                        Text(n.value, color = colors.listText, fontFamily = font, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(n.caption, color = colors.hint, fontFamily = font, fontSize = TS_CAPTION_TEXT, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-                biosPill(stats.bios)?.let { pill ->
-                    Text(
-                        pill, color = colors.alertText, fontFamily = font, fontSize = TS_CAPTION_TEXT, maxLines = 1,
-                        modifier = Modifier.border(1.dp, colors.alertLine, RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 1.dp),
-                    )
-                }
+        val vPad = minOf(maxWidth * TS_PAD, maxHeight * TS_PAD_MAX_H)
+        Column(Modifier.fillMaxSize().padding(horizontal = maxWidth * TS_PAD, vertical = vPad)) {
+            Text(stats.title, color = colors.listText, fontFamily = font, fontSize = 40.sp, lineHeight = 46.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(
+                statsLine(stats, now), color = colors.hint, fontFamily = font, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            biosPill(stats.bios)?.let { pill ->
+                Text(
+                    pill, color = colors.alertText, fontFamily = font, fontSize = 13.sp, maxLines = 1,
+                    modifier = Modifier.padding(top = 12.dp).border(1.dp, colors.alertLine, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 2.dp),
+                )
             }
-            BoxWithConstraints(
-                Modifier.weight(1f).fillMaxHeight().padding(start = pageWidth * 0.03f, end = pageWidth * 0.06f, top = vPad, bottom = vPad),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                val hero = stats.shelf.firstOrNull()
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.BottomStart) {
                 val fit = shelfFit(maxWidth, maxHeight)
-                if (hero != null && fit != null) Shelf(stats, hero, fit, now, prefer, onLaunch)
+                if (stats.shelf.isNotEmpty() && fit != ShelfFit.NONE) Shelf(stats, fit == ShelfFit.CAPTIONED, maxWidth * TS_TILE_GAP, now, prefer, onLaunch)
             }
         }
     }
 }
 
 @Composable
-private fun Shelf(stats: TopStats, hero: ShelfGame, fit: ShelfFit, now: Long, prefer: BackdropArt, onLaunch: (Listed) -> Unit) {
+private fun Shelf(stats: TopStats, captions: Boolean, gap: Dp, now: Long, prefer: BackdropArt, onLaunch: (Listed) -> Unit) {
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
-    val caption = heroCaption(hero, stats.newest, now)
-    val name = hero.entry.shown
-    Column(Modifier.width(fit.heroWidth)) {
-        ShelfPicture(hero, prefer, Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).cleanTap { onLaunch(hero.entry) })
+    Column(Modifier.fillMaxWidth()) {
         Text(
-            buildAnnotatedString {
-                withStyle(SpanStyle(color = colors.listText)) { append(name) }
-                withStyle(SpanStyle(color = colors.hint)) { append(caption.removePrefix(name)) }
-            },
-            fontFamily = font, fontSize = TS_HERO_TEXT, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.height(TS_CAPTION).wrapContentHeight(Alignment.CenterVertically),
+            if (stats.newest) "NEWEST ADDED" else "MOST PLAYED", color = colors.hint, fontFamily = font, fontSize = 12.sp,
+            letterSpacing = 1.5.sp, maxLines = 1, modifier = Modifier.height(TS_LABEL),
         )
-        if (fit.strips) {
-            Row(Modifier.fillMaxWidth().padding(top = TS_STRIP_GAP), horizontalArrangement = Arrangement.spacedBy(TS_STRIP_GAP)) {
-                val strips = stats.shelf.drop(1)
-                strips.forEach { g ->
-                    // role: the strips sit back from the hero ([TS_STRIP_ALPHA])
-                    ShelfPicture(g, prefer, Modifier.weight(1f).aspectRatio(16f / 9f).clip(RoundedCornerShape(5.dp)).alpha(TS_STRIP_ALPHA).cleanTap { onLaunch(g.entry) })
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+            repeat(SHELF_MAX) { i ->
+                val g = stats.shelf.getOrNull(i)
+                if (g == null) Spacer(Modifier.weight(1f))
+                else Column(Modifier.weight(1f)) {
+                    ShelfPicture(g, prefer, Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).cleanTap { onLaunch(g.entry) })
+                    if (captions) Column(Modifier.height(TS_CAPTIONS).padding(top = 8.dp)) {
+                        Text(g.entry.shown, color = colors.listText, fontFamily = font, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        shelfCaption(g, stats.newest, now)?.let {
+                            Text(it, color = colors.hint, fontFamily = font, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
                 }
-                repeat(SHELF_MAX - 1 - strips.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
@@ -303,13 +257,12 @@ private fun ShelfPicture(game: ShelfGame, prefer: BackdropArt, modifier: Modifie
     }
 }
 
-private val TS_CAPTION_TEXT = 10.sp
-private val TS_HERO_TEXT = 12.sp
-private val TS_CAPTION: Dp = 22.dp   // the hero's caption line, its space above included
-private val TS_STRIP_GAP: Dp = 6.dp
-private val TS_HERO_STRIPS_MIN: Dp = 90.dp   // a shorter hero drops the strips
-private val TS_HERO_MIN: Dp = 60.dp          // a shorter one is not drawn
-private const val TS_STRIP_ALPHA = 0.8f   // role: the strips sit back from the hero
+private const val TS_PAD = 0.07f            // of the width, every side
+private const val TS_PAD_MAX_H = 0.08f      // a wide, short screen's top and bottom padding: at most this of its height
+private const val TS_TILE_GAP = 0.04f       // between the shelf's tiles, of its width
+private val TS_BREATH: Dp = 16.dp           // the least room between the line (or pill) and the shelf
+private val TS_LABEL: Dp = 28.dp            // the shelf's label, its gap to the pictures included
+private val TS_CAPTIONS: Dp = 52.dp         // a tile's two caption lines, their space above included
 private val TS_BLUR: Dp = 16.dp
 private val BOX_DIM = Color.Black.copy(alpha = 0.45f)   // role: darkens the blurred box copy so the fitted box stands out
 

@@ -115,7 +115,6 @@ import com.nxredux.mobile.scraper.ArtSlot
 import com.nxredux.mobile.storage.ToolPins
 import com.nxredux.mobile.storage.UserDataStore
 import com.nxredux.mobile.ui.nx.Hint
-import com.nxredux.mobile.ui.nx.StatNumber
 import com.nxredux.mobile.ui.nx.NxSettingControl
 import com.nxredux.mobile.ui.nx.control
 import com.nxredux.mobile.ui.nx.HomeFrame
@@ -13594,11 +13593,11 @@ class AppStateTest {
         state.openConsolesTab(); advanceUntilIdle()
         state.selectConsole("GB"); advanceUntilIdle()
         assertEquals("Game Boy", state.topStats.value!!.title)
-        assertEquals(StatNumber("3", "games · 2 unplayed"), state.topStats.value!!.numbers[0])
-        assertEquals(StatNumber("1 h", "played · 2 sessions"), state.topStats.value!!.numbers[1])
+        assertEquals(3, state.topStats.value!!.games)
+        assertEquals(3_600_000L, state.topStats.value!!.playedMs)
         total = total.copy(totalMs = 7_200_000, plays = 3)
         state.onForeground(); advanceUntilIdle()   // back from the game: play time read again
-        assertEquals(StatNumber("2 h", "played · 3 sessions"), state.topStats.value!!.numbers[1])
+        assertEquals(7_200_000L, state.topStats.value!!.playedMs)
     }
 
     @Test fun collection_stats_follow_the_highlighted_collection() = runTest {
@@ -13607,7 +13606,8 @@ class AppStateTest {
         state.select(assertIs<Screen.Systems>(state.screen.value).rows.indexOfFirst { it is MainRow.Collection && it.name == "RPGs" }); advanceUntilIdle()
         val s = assertNotNull(state.topStats.value)
         assertEquals("RPGs", s.title)
-        assertEquals(StatNumber("2", "games · 1 console"), s.numbers[0])
+        assertEquals(2, s.games)
+        assertEquals(1, s.consoles)
         state.onDualMenu(false)
         assertNull(state.topStats.value)   // one screen: no top page
     }
