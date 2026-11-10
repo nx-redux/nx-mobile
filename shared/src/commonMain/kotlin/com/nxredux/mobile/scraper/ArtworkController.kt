@@ -91,7 +91,7 @@ class ArtworkController(
     private val _state = MutableStateFlow(ScrapeState())
     val state: StateFlow<ScrapeState> = _state.asStateFlow()
 
-    /** Guards [job], [pending], [replace], [single] and every phase change. */
+    /** Guards [job], [pending], [replace], [retryMisses], [single] and every phase change. */
     private val lock = Mutex()
     /**
      * Held by [halt] from its check to the phase it records, taken before [lock]. The stopped job winds down meanwhile
@@ -103,6 +103,8 @@ class ArtworkController(
     /** Games queued while running; the run loop chains onto them when the engine's run ends. */
     private var pending: List<ScrapeItem> = emptyList()
     private var replace = false
+    /** A Fetch all or Replace run is (or was) queued in the job: its games' info misses are asked again ([ScrapeEngine.run]). */
+    private var retryMisses = false
     /**
      * The engine's end state of the live run, from its return until the loop merges it under [lock]. A stop landing in
      * between (the merge's lock wait is cancellable) leaves it here for [halt] to record after its join, so the games
@@ -125,12 +127,12 @@ class ArtworkController(
     private var savedAt = 0L
 
     /** Games without art (no box or no background, or no mix with Mix on); each is asked only for what it lacks. */
-    fun fetchMissing(): Job? = enqueue(false) { !it.have.complete }
+    fun fetchMissing(): Job? = enqueue(false, retry = false) { !it.have.complete }
     fun fetchConsole(tags: Set<String>, replaceExisting: Boolean = false): Job? {
         val up = tags.mapTo(HashSet()) { it.uppercase() }
-        return enqueue(replaceExisting) { it.tag.uppercase() in up && (replaceExisting || !it.have.complete) }
+        return enqueue(replaceExisting, retry = replaceExisting) { it.tag.uppercase() in up && (replaceExisting || !it.have.complete) }
     }
-    fun fetchAll(replaceExisting: Boolean): Job? = enqueue(replaceExisting) { replaceExisting || !it.have.complete }
+    fun fetchAll(replaceExisting: Boolean): Job? = enqueue(replaceExisting, retry = true) { replaceExisting || !it.have.complete }
 
     fun missingCount(games: List<LibraryGameRef>): Int = games.count { fetchable(it) && !it.have.complete }
 
@@ -140,7 +142,7 @@ class ArtworkController(
      * restore has run merges into it instead of overwriting the saved queue. Returns the queuing (null when unavailable):
      * once it ends, [state] shows the job the games went into (Progress waits on it).
      */
-    private fun enqueue(replaceExisting: Boolean, pick: (LibraryGameRef) -> Boolean): Job? {
+    private fun enqueue(replaceExisting: Boolean, retry: Boolean, pick: (LibraryGameRef) -> Boolean): Job? {
         if (!available) return null
         return scope.launch(work) {
             val picked = host.libraryGames().filter { fetchable(it) && pick(it) }
@@ -156,11 +158,12 @@ class ArtworkController(
                 when {
                     job != null -> if (add.isNotEmpty()) {
                         replace = replace || replaceExisting
+                        retryMisses = retryMisses || retry
                         pending = pending + add
                         _state.value = s.copy(items = s.items + add)
                     }
-                    s.phase == JobPhase.PAUSED -> { replace = replace || replaceExisting; startLocked(s.copy(items = s.items + add)) }
-                    add.isNotEmpty() -> { replace = replaceExisting; startLocked(ScrapeState(JobPhase.RUNNING, add, quota = s.quota, tgdbLeft = s.tgdbLeft)) }
+                    s.phase == JobPhase.PAUSED -> { replace = replace || replaceExisting; retryMisses = retryMisses || retry; startLocked(s.copy(items = s.items + add)) }
+                    add.isNotEmpty() -> { replace = replaceExisting; retryMisses = retry; startLocked(ScrapeState(JobPhase.RUNNING, add, quota = s.quota, tgdbLeft = s.tgdbLeft)) }
                 }
             } }
         }
@@ -190,7 +193,8 @@ class ArtworkController(
                 singleLock.withLock {}   // a fetchGame in flight finishes first: its game is never scraped twice at once
                 val refs = host.libraryGames().associateBy { it.gamePath }
                 // Bulk jobs save the options found on the way, never the wide pass.
-                runEnd = engine.run(start, { refs[it] }, lock.withLock { replace }, wide = false) { publish(it) }
+                val (rep, retry) = lock.withLock { replace to retryMisses }
+                runEnd = engine.run(start, { refs[it] }, rep, wide = false, retryMisses = retry) { publish(it) }
                 start = lock.withLock {
                     // Stopped since the run returned: [halt] records the phase from [runEnd] once this job is gone.
                     currentCoroutineContext().ensureActive()
@@ -326,6 +330,8 @@ class ArtworkController(
         val (s, r) = host.readPrivate(JOB_FILE)?.let { ScrapeJobCodec.decode(it) } ?: return false
         if (s.phase != JobPhase.PAUSED || s.items.none { it.status == ItemStatus.WAITING }) return false
         replace = r
+        // Not saved with the job: a restored one asks misses again only when it replaces.
+        retryMisses = r
         _state.value = s.copy(quota = _state.value.quota, tgdbLeft = _state.value.tgdbLeft)
         return true
     }

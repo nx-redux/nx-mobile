@@ -229,6 +229,26 @@ class ArtworkControllerTest {
         assertEquals("Roms/GB/.media/wheel/Tetris.png\tsteamgriddb\t5\t6", rig.host.files.getValue(ArtworkController.LOG_FILE).trim())
     }
 
+    /** Each run kind on Tetris (art missing, a remembered info miss, an unreadable answer): true when the miss is left. */
+    private suspend fun TestScope.missLeftBy(label: String, start: suspend (ArtworkController) -> Unit): Boolean {
+        val rig = Rig(this, listOf(tetris))
+        rig.controller.info!!.markMiss(tetris.gamePath)
+        rig.http.on("romnom=Tetris.gb", Scrape.json(ScraperFixtures.GARBAGE))
+        start(rig.controller)
+        advanceUntilIdle()
+        assertTrue(rig.http.count("romnom=Tetris.gb") > 0, "$label: ${rig.http.calls}")
+        return rig.controller.info!!.isMiss(tetris.gamePath)
+    }
+
+    @Test fun only_fetch_all_and_replace_runs_ask_a_remembered_info_miss_again() = runTest {
+        assertTrue(missLeftBy("Fetch missing") { it.fetchMissing() }, "Fetch missing")
+        assertTrue(missLeftBy("console") { it.fetchConsole(setOf("GB")) }, "console")
+        assertFalse(missLeftBy("Fetch all") { it.fetchAll(replaceExisting = false) }, "Fetch all")
+        assertFalse(missLeftBy("Fetch all, Replace") { it.fetchAll(replaceExisting = true) }, "Fetch all, Replace")
+        assertFalse(missLeftBy("console, Replace") { it.fetchConsole(setOf("GB"), replaceExisting = true) }, "console, Replace")
+        assertTrue(missLeftBy("one game") { it.fetchGame(tetris.gamePath) }, "one game")
+    }
+
     @Test fun reset_deletes_info_files() = runTest {
         val rig = Rig(this, listOf(tetris, sonic))
         val info = StoredGameInfo("Blocks fall.", "Puzzle", "1989", "Nintendo", "en", "42", 1L)
@@ -746,8 +766,7 @@ class ArtworkControllerTest {
         advanceUntilIdle()
         assertEquals(JobPhase.DONE, rig.controller.state.value.phase)
         assertEquals(ItemStatus.SKIPPED, rig.controller.state.value.items.single().status)
-        // Only its info is asked for (it has none stored): no image download.
-        assertTrue(rig.http.calls.all { it.contains("jeuInfos") }, "${rig.http.calls}")
+        assertTrue(rig.http.calls.isEmpty())
     }
 
     @Test fun fetchGameRunsOneGameInTheCallersCoroutine() = runTest {
@@ -804,9 +823,7 @@ class ArtworkControllerTest {
         val end = rig.controller.state.value
         assertEquals(JobPhase.DONE, end.phase)
         assertEquals(listOf(ItemStatus.SKIPPED, ItemStatus.DONE), end.items.map { it.status })   // Tetris had its art by then
-        // The single fetch's lookup, then the job's info-only one: that answer had no info, a miss a user's run retries.
-        assertEquals(2, rig.http.count("romnom=Tetris.gb"))
-        assertEquals(4, rig.http.count("https://m/"))   // each game's box and screenshot, once
+        assertEquals(1, rig.http.count("romnom=Tetris.gb"))
     }
 
     @Test fun fetchGameWaitsForTheJobInsteadOfFetchingTwice() = runTest {

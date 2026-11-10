@@ -187,10 +187,13 @@ class ScrapeEngine(
      * still writes the slots the game lacks; the wide pass writes nothing, and a source stopping there never changes
      * the game's status. [found]: each game's options so far, each time a source's answer adds some (the art panel's
      * tiles while the run goes on; nothing is saved by it, [onOptions] still reports the game's list once at its end).
+     * Game info is only what a looked-up game's art answer carries. [retryMisses] (Fetch all, Replace): a game's
+     * remembered info miss is forgotten before its lookup, so the top screen asks again when this answer brings none;
+     * otherwise a miss stays until an answer brings info.
      */
     suspend fun run(
         start: ScrapeState, games: (String) -> LibraryGameRef?, replace: Boolean = false, startSources: Boolean = true,
-        wide: Boolean = false, found: suspend (gamePath: String, options: List<ArtOption>) -> Unit = { _, _ -> },
+        wide: Boolean = false, retryMisses: Boolean = false, found: suspend (gamePath: String, options: List<ArtOption>) -> Unit = { _, _ -> },
         update: suspend (ScrapeState) -> Unit,
     ): ScrapeState {
         var s = start.inFlightToWaiting().copy(phase = JobPhase.RUNNING, pauseReason = null)
@@ -227,17 +230,18 @@ class ScrapeEngine(
                 }
                 val known = sourcesFor(ref)
                 if (known.isEmpty()) { set(i, ItemStatus.SKIPPED, NO_SOURCE); continue }
-                if (hasArt(ref) && !replace && !wide) { fillInfo(ref, null, stopped, stop, flush); set(i, ItemStatus.SKIPPED, HAS_ART); continue }
+                if (hasArt(ref) && !replace && !wide) { set(i, ItemStatus.SKIPPED, HAS_ART); continue }
                 // A game lacking only its mix, with no source that has mixes, is made one from its files on disk (no
                 // request); one ScreenScraper would be asked waits while it is stopped, as any other.
                 if (known.all { it.id in stopped } && !(mixOnlyLocal(ref, known) && !replace)) { blocked = true; continue }
                 set(i, ItemStatus.SEARCHING)
+                if (retryMisses) info?.let { store -> infoTarget.path(ref)?.let { store.clearMiss(ref.gamePath) } }
                 val downloading: suspend () -> Unit = { set(i, ItemStatus.DOWNLOADING) }
                 var artInfo: InfoResult? = null
                 val onInfo: (InfoResult) -> Unit = { if (artInfo !is InfoResult.Found) artInfo = it }
                 val result = if (ref.android) scrapeAndroid(ref, stopped, replace, wide, downloading, stop, found, flush) else scrape(ref, known, stopped, replace, wide, listings, downloading, stop, found, flush, onInfo)
                 if (result == null) { blocked = true; set(i, ItemStatus.WAITING); continue }   // every source stopped: Resume retries it
-                fillInfo(ref, artInfo, stopped, stop, flush)
+                artInfo?.let { keepInfo(ref, it) }
                 set(i, result.first, result.second)
             }
             s = current().copy(phase = if (blocked) JobPhase.PAUSED else JobPhase.DONE, pauseReason = if (blocked) ALL_STOPPED else null)
@@ -257,28 +261,16 @@ class ScrapeEngine(
         return s
     }
 
-    /**
-     * Stores [ref]'s game info after its art step: from the art's own ScreenScraper answer ([fromArt]) when there was
-     * one, else (art already had, or written by other sources) with one info-only lookup when no info is stored. Every
-     * run is one the user started, so a remembered miss is cleared and tried again. A stop or pause of that lookup is
-     * ScreenScraper's as in the art flow ([SourceStop] stops it for the run; [JobPause] pauses the job).
-     */
-    private suspend fun fillInfo(
-        ref: LibraryGameRef, fromArt: InfoResult?, stopped: Set<String>, stop: (ArtSource, SourceStop) -> Unit, flush: suspend () -> Unit,
-    ) {
+    /** Stores [ref]'s game info from its art lookup's answer: found info is written, a plain not-found remembered as a miss. */
+    private suspend fun keepInfo(ref: LibraryGameRef, r: InfoResult) {
         val store = info ?: return
         val ss = ss ?: return
         infoTarget.path(ref) ?: return
-        suspend fun keep(r: InfoResult) = when (r) {
+        when (r) {
             is InfoResult.Found -> { store.write(ref, StoredGameInfo.of(r.info, r.ssId, ss.now())); store.clearMiss(ref.gamePath) }
             InfoResult.Missing -> store.markMiss(ref.gamePath)
             InfoResult.Failed -> Unit
         }
-        if (fromArt != null) return keep(fromArt)
-        if (!ss.enabled || ss.id in stopped || !ss.knows(ref) || store.read(ref) != null) return
-        store.clearMiss(ref.gamePath)
-        flush()
-        keep(try { ss.info(ref) } catch (e: SourceStop) { stop(ss, e); return })
     }
 
     /** What a Reset delete did: [DELETED], the file was not there ([ABSENT]), or it is still there ([FAILED]). */

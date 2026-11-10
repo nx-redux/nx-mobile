@@ -126,7 +126,8 @@ class ScreenScraperSource(
     }
 
     /**
-     * The game's info alone: the art's lookup ([lookup]) without any media download, counted and paced as one.
+     * The game's info alone: the art's lookup ([lookup], its ROM-hash second try included) without any media download,
+     * counted and paced as one.
      * Throws [SourceStop] / [JobPause] as [find] does; [InfoResult.Missing] when [ref] has no system.
      */
     internal suspend fun info(ref: LibraryGameRef): InfoResult {

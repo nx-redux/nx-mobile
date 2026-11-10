@@ -12,7 +12,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** An Artwork run's game info: from the art's own answer, or one info-only lookup for a game whose art is complete. */
+/** An Artwork run's game info: only from the art lookup's own answer, never a lookup of its own. */
 class ScrapeEngineInfoTest {
     private class Rig(scope: TestScope, withInfo: Boolean = true) {
         val http = FakeHttp().apply { clock = { scope.testScheduler.currentTime } }
@@ -24,8 +24,8 @@ class ScrapeEngineInfoTest {
         )
         val store get() = engine.info!!
 
-        suspend fun run(vararg games: LibraryGameRef) =
-            engine.run(ScrapeState(items = games.map { Scrape.item(it) }), { p -> games.firstOrNull { it.gamePath == p } }) {}
+        suspend fun run(vararg games: LibraryGameRef, retryMisses: Boolean = false) =
+            engine.run(ScrapeState(items = games.map { Scrape.item(it) }), { p -> games.firstOrNull { it.gamePath == p } }, retryMisses = retryMisses) {}
     }
 
     private val tetris = Scrape.homeGame("Tetris.gb")
@@ -54,15 +54,15 @@ class ScrapeEngineInfoTest {
         assertEquals(calls[1], calls[0])
     }
 
-    @Test fun an_art_complete_game_gets_one_info_only_lookup_and_no_downloads() = runTest {
-        val rig = Rig(this)
-        rig.http.on("romnom=Tetris.gb", withInfo("ss" to "https://m/s.png", "box-2D" to "https://m/b.png"))
-        rig.http.on("https://m/", OK_PNG)
-        val end = rig.run(tetrisHasArt)
-        assertEquals(ItemStatus.SKIPPED to ScrapeEngine.HAS_ART, end.items.single().let { it.status to it.reason })
-        assertEquals(1, rig.http.count("jeuInfos"))
-        assertEquals(0, rig.http.count("https://m/"))
-        assertEquals("Blocks fall.", rig.store.read(tetris)?.synopsis)
+    @Test fun an_art_complete_game_is_not_asked_for_its_info() = runTest {
+        for (retry in listOf(false, true)) {
+            val rig = Rig(this)
+            rig.http.on("romnom=Tetris.gb", withInfo("ss" to "https://m/s.png", "box-2D" to "https://m/b.png"))
+            val end = rig.run(tetrisHasArt, retryMisses = retry)
+            assertEquals(ItemStatus.SKIPPED to ScrapeEngine.HAS_ART, end.items.single().let { it.status to it.reason })
+            assertTrue(rig.http.calls.isEmpty(), "${rig.http.calls}")
+            assertNull(rig.store.read(tetris))
+        }
     }
 
     @Test fun not_found_marks_a_miss_and_errors_do_not() = runTest {
@@ -70,7 +70,8 @@ class ScrapeEngineInfoTest {
         for (answer in listOf<HttpResult?>(null, Scrape.found("ss" to "https://m/s.png"))) {
             val rig = Rig(this)
             answer?.let { rig.http.on("romnom=Tetris.gb", it) }
-            rig.run(tetrisHasArt)
+            rig.http.on("https://m/", OK_PNG)
+            rig.run(tetris)
             assertTrue(rig.store.isMiss(tetris.gamePath), "$answer")
             assertNull(rig.store.read(tetris))
         }
@@ -78,49 +79,33 @@ class ScrapeEngineInfoTest {
         for (answer in listOf(HttpResult(500, null), HttpResult(-1, null), Scrape.json(ScraperFixtures.GARBAGE))) {
             val rig = Rig(this)
             rig.http.on("romnom=Tetris.gb", answer)
-            rig.run(tetrisHasArt)
+            rig.run(tetris)
             assertFalse(rig.store.isMiss(tetris.gamePath), "${answer.status}")
             assertNull(rig.store.read(tetris))
         }
     }
 
-    @Test fun a_quota_stop_in_an_info_lookup_stops_screenscraper_for_the_run() = runTest {
-        val rig = Rig(this)
-        rig.http.on("romnom=", HttpResult(430, null))
-        val end = rig.run(tetrisHasArt, Scrape.homeGame("Zelda.gb", have = Scrape.HAS_ART))
-        assertEquals(ScreenScraperSource.DAILY_LIMIT, end.notes[SourceId.SS])
-        assertEquals(2, rig.http.count("jeuInfos"))   // the first game's 430 and its one retry; none for the second
-        assertFalse(rig.store.isMiss(tetris.gamePath))
+    @Test fun only_a_run_that_retries_misses_clears_one_before_the_lookup() = runTest {
+        // An unreadable answer neither marks nor clears a miss: what is left is the run's own doing.
+        for (retry in listOf(false, true)) {
+            val rig = Rig(this)
+            rig.store.markMiss(tetris.gamePath)
+            rig.http.on("romnom=Tetris.gb", Scrape.json(ScraperFixtures.GARBAGE))
+            rig.run(tetris, retryMisses = retry)
+            assertTrue(rig.http.count("romnom=Tetris.gb") > 0, "retry=$retry")
+            assertEquals(!retry, rig.store.isMiss(tetris.gamePath), "retry=$retry")
+        }
     }
 
-    @Test fun a_no_connection_info_lookup_pauses_and_the_game_is_tried_again() = runTest {
-        val rig = Rig(this)
-        rig.http.on("romnom=Tetris.gb", HttpResult(-1, null))
-        val end = rig.run(tetrisHasArt)
-        assertEquals(JobPhase.PAUSED to ScrapeEngine.NO_CONNECTION, end.phase to end.pauseReason)
-        assertEquals(ItemStatus.WAITING, end.items.single().status)
-    }
-
-    @Test fun a_manual_run_clears_the_miss_and_tries_again() = runTest {
-        val rig = Rig(this)
-        rig.store.markMiss(tetris.gamePath)
-        rig.http.on("romnom=Tetris.gb", withInfo())
-        rig.run(tetrisHasArt)
-        assertEquals(1, rig.http.count("jeuInfos"))
-        assertFalse(rig.store.isMiss(tetris.gamePath))
-        assertEquals("Blocks fall.", rig.store.read(tetris)?.synopsis)
-    }
-
-    @Test fun an_existing_info_file_is_not_fetched_again() = runTest {
-        val rig = Rig(this)
-        rig.http.on("romnom=Tetris.gb", withInfo())
-        rig.run(tetrisHasArt)
-        rig.run(tetrisHasArt)
-        assertEquals(1, rig.http.count("jeuInfos"))
-        // A file written before the run is not fetched either.
-        val other = Rig(this)
-        assertTrue(other.store.write(tetris, StoredGameInfo("Old.", null, null, null, "en", "42", 1L)))
-        other.run(tetrisHasArt)
-        assertEquals(0, other.http.count("jeuInfos"))
+    @Test fun info_in_the_art_answer_clears_a_miss_in_any_run() = runTest {
+        for (retry in listOf(false, true)) {
+            val rig = Rig(this)
+            rig.store.markMiss(tetris.gamePath)
+            rig.http.on("romnom=Tetris.gb", withInfo("ss" to "https://m/s.png", "box-2D" to "https://m/b.png"))
+            rig.http.on("https://m/", OK_PNG)
+            rig.run(tetris, retryMisses = retry)
+            assertFalse(rig.store.isMiss(tetris.gamePath), "retry=$retry")
+            assertEquals("Blocks fall.", rig.store.read(tetris)?.synopsis)
+        }
     }
 }
