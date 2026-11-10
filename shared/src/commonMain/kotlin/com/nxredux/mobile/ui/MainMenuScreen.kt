@@ -209,7 +209,7 @@ fun MainMenuScreen(
                     when (style) {
                         // Its rows level with Recent and Search (tab row hidden) stop short of them, as a List tab's.
                         MenuStyle.LIST -> HomeListScreen(
-                            rows, selection, homeView.strip, info, onSelect, onOpen, onLongPress, onHint,
+                            rows, selection, homeView.strip, onSelect, onOpen, onLongPress, onHint,
                             Modifier.weight(1f), tabMenu = tabMenu, iconsRoom = topIconsRoom(chrome.tabRow, topIcons.isNotEmpty()).pad,
                         )
                         MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> {
