@@ -18,6 +18,8 @@ import com.nxredux.mobile.achievements.RaController
 import com.nxredux.mobile.achievements.RaHomeTree
 import com.nxredux.mobile.achievements.RaPaths
 import com.nxredux.mobile.achievements.RaConsoles
+import com.nxredux.mobile.achievements.RaGamesCache
+import com.nxredux.mobile.achievements.RaGamesSnapshotCodec
 import com.nxredux.mobile.achievements.RaGamePointer
 import com.nxredux.mobile.achievements.RaGamePointers
 import com.nxredux.mobile.achievements.RaProgress
@@ -153,6 +155,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.delay
@@ -6949,12 +6952,16 @@ class AppStateTest {
     private class RaFixture(val state: AppState, val store: FakeRaStore, val http: FakeRaHttp, val controller: RaController, val hasher: FakeRaHasher = FakeRaHasher())
 
     /** The Tools setup plus an achievements controller on fakes (no cheat DB controller). */
-    private fun TestScope.raFixture(home: RaHomeTree? = null, index: LibraryIndex? = null, hasher: FakeRaHasher = FakeRaHasher(), roms: FakeRomsSource = source, ownKeyboard: Boolean = false): RaFixture {
-        val store = FakeRaStore(); val http = FakeRaHttp()
-        val settings = MemorySettings(ContentRef("Home"))   // a home, so the main menu (and its Tools tab) is built
+    private fun TestScope.raFixture(
+        home: RaHomeTree? = null, index: LibraryIndex? = null, hasher: FakeRaHasher = FakeRaHasher(), roms: FakeRomsSource = source, ownKeyboard: Boolean = false,
+        store: FakeRaStore = FakeRaStore(), settings: MemorySettings = MemorySettings(ContentRef("Home")),   // a home, so the main menu (and its Tools tab) is built
+        files: PrivateFiles = MemoryPrivateFiles(), log: (String) -> Unit = {},
+    ): RaFixture {
+        val http = FakeRaHttp()
         val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
         val controller = RaController(if (home == null) fakePlatform(store, http, hasher) else fakePlatform(store, http, hasher, home = home), settings, { index }, scope, now = { 0L })
-        return RaFixture(AppState(AppDeps(settings, roms, RecordingRunner(), NoopPicker(), achievements = controller, ownKeyboard = ownKeyboard, compute = UnconfinedTestDispatcher(testScheduler)), scope).also { it.load() }, store, http, controller, hasher)
+        val deps = AppDeps(settings, roms, RecordingRunner(), NoopPicker(), achievements = controller, ownKeyboard = ownKeyboard, compute = UnconfinedTestDispatcher(testScheduler), privateFiles = files, log = log)
+        return RaFixture(AppState(deps, scope).also { it.load() }, store, http, controller, hasher)
     }
     private fun TestScope.stateWithAchievements(): Pair<AppState, FakeRaStore> = raFixture().let { it.state to it.store }
 
@@ -7254,6 +7261,107 @@ class AppStateTest {
         assertTrue(state.back()); assertIs<Screen.RaConsoles>(state.screen.value)
         assertTrue(state.back()); assertIs<Screen.RetroAchievements>(state.screen.value)
         assertEquals(0, state.selection.value.index)   // Achievements stays highlighted
+    }
+
+    // --- The Achievements snapshot: shown at once, refreshed quietly ---
+
+    /** Alpha and Beta on Game Boy Advance, Gamma on Super Nintendo ES, signed in as "me"; on the RetroAchievements page. */
+    private fun TestScope.raSnapshotFixture(
+        store: FakeRaStore = FakeRaStore(), files: PrivateFiles = MemoryPrivateFiles(), user: String = "me", log: (String) -> Unit = {},
+    ): RaFixture {
+        val settings = MemorySettings(ContentRef("Home")).apply { raToken = "tok"; raUsername = user }
+        val f = raFixture(store = store, settings = settings, files = files, log = log)
+        for ((c, t, console) in listOf(Triple('a', "Alpha", RaConsoles.GBA), Triple('b', "Beta", RaConsoles.GBA), Triple('c', "Gamma", RaConsoles.SNES))) {
+            if (RaPaths.sets(c.toString().repeat(32)) !in store.files) store.put(RaPaths.sets(c.toString().repeat(32)), setsJson(c.code, title = t, consoleId = console, achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"}"""))
+        }
+        openRa(f.state)
+        return f
+    }
+    private fun FakeRaStore.hold(): CompletableDeferred<Unit> = CompletableDeferred<Unit>().also { held -> beforeList = { held.await() } }
+    private fun RaFixture.openAchievements() { state.select(RaAction.entries.indexOf(RaAction.ACHIEVEMENTS)); state.openSelected() }
+
+    @Test fun achievements_with_a_snapshot_opens_at_once_and_the_refresh_keeps_the_row_by_console_and_game() = runTest {
+        val lines = mutableListOf<String>()
+        val f = raSnapshotFixture(log = { lines += it }); val state = f.state
+        f.openAchievements(); assertTrue(state.back())                                    // read once: the snapshot
+        f.store.put(RaPaths.sets("d".repeat(32)), setsJson('d'.code, title = "Dot", consoleId = RaConsoles.GAMEBOY, achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"}"""))   // above the GBA row
+        f.store.put(RaPaths.sets("e".repeat(32)), setsJson('e'.code, title = "Aaa", consoleId = RaConsoles.GBA, achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"}"""))
+        val held = f.store.hold()
+        f.openAchievements()
+        val shown = assertIs<Screen.RaConsoles>(state.screen.value)                       // at once, as last read
+        assertEquals(listOf("Game Boy Advance", "Super Nintendo ES"), shown.consoles.map { it.name })
+        advanceTimeBy(1_000); assertFalse(state.loading.value)                             // no overlay while it refreshes
+        state.openSelected(); state.onButton(NxButton.DOWN)                                // Game Boy Advance → Beta, from the snapshot
+        assertEquals("Beta", assertIs<Screen.RaGames>(state.screen.value).games[state.selection.value.index].title)
+        held.complete(Unit); advanceUntilIdle()
+        val games = assertIs<Screen.RaGames>(state.screen.value)                           // refreshed in place
+        assertEquals(listOf("Aaa", "Alpha", "Beta"), games.games.map { it.title })
+        assertEquals("Beta", games.games[state.selection.value.index].title)               // the same game, not the same row
+        assertTrue(state.back())
+        val consoles = assertIs<Screen.RaConsoles>(state.screen.value)
+        assertEquals(listOf("Game Boy", "Game Boy Advance", "Super Nintendo ES"), consoles.consoles.map { it.name })
+        assertEquals(1, state.selection.value.index)                                       // still Game Boy Advance
+        assertTrue(lines.any { "RA games refresh" in it && "5 games" in it }, "$lines")
+    }
+
+    @Test fun a_refresh_that_finds_nothing_new_leaves_the_rows_alone() = runTest {
+        val f = raSnapshotFixture(); val state = f.state
+        f.openAchievements(); state.onButton(NxButton.DOWN); assertTrue(state.back())
+        val held = f.store.hold()
+        f.openAchievements(); state.onButton(NxButton.DOWN)
+        val shown = state.screen.value
+        val seen = mutableListOf<Screen>()
+        val watch = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { state.screen.drop(1).collect { seen += it } }
+        held.complete(Unit); advanceUntilIdle(); watch.cancel()
+        assertTrue(seen.isEmpty(), "$seen")                                                 // no new screen: no flicker
+        assertSame(shown, state.screen.value); assertEquals(1, state.selection.value.index)
+    }
+
+    @Test fun achievements_with_no_snapshot_reads_under_the_overlay() = runTest {
+        val f = raSnapshotFixture(); val state = f.state
+        val held = f.store.hold()
+        f.openAchievements()
+        assertIs<Screen.RetroAchievements>(state.screen.value)
+        advanceTimeBy(1_000); assertTrue(state.loading.value)
+        held.complete(Unit); advanceUntilIdle()
+        assertFalse(state.loading.value); assertEquals(2, assertIs<Screen.RaConsoles>(state.screen.value).consoles.size)
+    }
+
+    @Test fun the_snapshot_outlives_the_app_for_its_own_user_only() = runTest {
+        val store = FakeRaStore(); val files = MemoryPrivateFiles()
+        raSnapshotFixture(store, files).run { openAchievements(); advanceUntilIdle() }
+        assertNotNull(files.files[RaGamesCache.FILE])
+        val again = raSnapshotFixture(store, files)                                        // the next app start
+        val held = store.hold()
+        again.openAchievements()
+        assertEquals(2, assertIs<Screen.RaConsoles>(again.state.screen.value).consoles.size)   // at once from the file
+        held.complete(Unit); advanceUntilIdle()
+        store.beforeList = {}
+        val other = raSnapshotFixture(store, files, user = "someone")                     // another account on this phone
+        val heldOther = store.hold()
+        other.openAchievements()
+        assertIs<Screen.RetroAchievements>(other.state.screen.value)                       // never the first user's list
+        heldOther.complete(Unit); advanceUntilIdle()
+        assertIs<Screen.RaConsoles>(other.state.screen.value)
+    }
+
+    @Test fun signing_out_drops_the_snapshot() = runTest {
+        val store = FakeRaStore(); val files = MemoryPrivateFiles()
+        val f = raSnapshotFixture(store, files); val state = f.state
+        f.openAchievements(); assertTrue(state.back())
+        state.select(RaAction.entries.indexOf(RaAction.SETTINGS)); state.openSelected()
+        state.select(state.raSettings().rows.indexOfFirst { it.kind == RaSettingKind.SIGN_OUT })
+        state.onButton(NxButton.A); state.onButton(NxButton.A)                              // Sign out, confirmed
+        advanceUntilIdle()
+        assertNull(state.settings.raToken)
+        assertNull(RaGamesSnapshotCodec.decode(files.files[RaGamesCache.FILE], "me"))
+        state.settings.raToken = "tok"                                                      // the same user signs in again
+        assertTrue(state.back())
+        val held = store.hold()
+        f.openAchievements()
+        assertIs<Screen.RetroAchievements>(state.screen.value)                             // read afresh, under the overlay
+        held.complete(Unit); advanceUntilIdle()
+        assertIs<Screen.RaConsoles>(state.screen.value)
     }
 
     // Back from a game shows the list as read, at once, the game's row counting the unlocks its page read; a game cached

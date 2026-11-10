@@ -464,6 +464,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 ownKeyboard = true,
                 pasteText = { AndroidDeviceInfo.clipboardText(applicationContext) },
                 promptOnSecondDisplay = { promptOnSecond },
+                log = { NxLog.i("NXAPP", it) },
             ),
             scope,
             kids,

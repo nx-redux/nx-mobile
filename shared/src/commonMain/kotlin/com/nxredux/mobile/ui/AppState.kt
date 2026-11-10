@@ -54,6 +54,7 @@ import com.nxredux.mobile.launcher.InstalledApp
 import com.nxredux.mobile.library.ArcadeSets
 import com.nxredux.mobile.library.ArtRefs
 import com.nxredux.mobile.library.CollectionCountCache
+import com.nxredux.mobile.achievements.RaGamesCache
 import com.nxredux.mobile.library.Collections
 import com.nxredux.mobile.library.CountStamps
 import com.nxredux.mobile.library.GameEntry
@@ -309,6 +310,8 @@ class AppDeps(
     val pasteText: () -> String? = { null },
     /** The open prompt is drawn on the second display, where Android's keyboard does not open: NX's always types there. */
     val promptOnSecondDisplay: () -> Boolean = { false },
+    /** A diagnostic line (Android: NxLog, so only with Settings → System → Debug log on). */
+    val log: (String) -> Unit = {},
 )
 
 /**
@@ -1272,6 +1275,7 @@ class AppState(
     /** The RetroAchievements panel and screens; it reaches back into this state only through [RaScreenHost]. */
     private val ra = RaScreenController(
         scope, _screen, _selection, _error, deps.settings, loader, deps.achievements,
+        RaGamesCache(deps.privateFiles, scope, deps.compute), deps.log,
         host = object : RaScreenHost {
             override fun showNotice(text: String) = this@AppState.showNotice(text)
             override fun showTools() = this@AppState.showTools()
@@ -1461,9 +1465,10 @@ class AppState(
                 var wasBusy = false
                 c.state.collect { s ->
                     // A job (Download all, a sync, sign-in, sign-out, a reset) just ended: the menus' achievement info
-                    // reads the cache again, so a game list shows the new progress without a game played first.
+                    // reads the cache again, so a game list shows the new progress without a game played first; the
+                    // Achievements snapshot too.
                     val busy = s !is RaState.Idle
-                    if (wasBusy && !busy) refreshGameInfo()
+                    if (wasBusy && !busy) { refreshGameInfo(); ra.raDataChanged() }
                     wasBusy = busy
                     when (_screen.value) {
                         // Busy shows no rows; back to idle it lands on the row that started the job. The settings page's rows follow.
