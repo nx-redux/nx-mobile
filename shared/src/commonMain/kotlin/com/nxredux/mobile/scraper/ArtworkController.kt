@@ -134,7 +134,10 @@ class ArtworkController(
     }
     fun fetchAll(replaceExisting: Boolean): Job? = enqueue(replaceExisting, retry = true) { replaceExisting || !it.have.complete }
 
-    fun missingCount(games: List<LibraryGameRef>): Int = games.count { fetchable(it) && !it.have.complete }
+    fun missingCount(games: List<LibraryGameRef>): Int = games.count(::wantsArt)
+
+    /** [ref] lacks art a fetch would ask for: as Fetch missing picks its games. */
+    fun wantsArt(ref: LibraryGameRef): Boolean = fetchable(ref) && !ref.have.complete
 
     /**
      * Running: appends the games not already queued. Paused: merges them in and resumes. Otherwise a new job. Before any
@@ -362,6 +365,33 @@ class ArtworkController(
         val ss = engine.ss?.takeIf { !ref.android && it.enabled && it.knows(ref) } ?: return@withContext null
         singleLock.withLock {
             if (haltLock.withLock { lock.withLock { job != null } }) null else ss.info(ref)
+        }
+    }
+
+    /**
+     * The top screen's art fetch for [ref], lacking art ([wantsArt]): the single-game flow (only the slots it lacks, its
+     * info kept from ScreenScraper's same answer) with nothing shown, so outside [state], keep-alive and [busy]. Null when
+     * not made (no longer lacking art in the library, or a job live). True once the run finished, whatever it found
+     * (a library folder that can't be written included, as asking again would not help). ScreenScraper stopping in it
+     * throws its [SourceStop], no connection a [JobPause], as [lookupInfo] does. Under [singleLock] as [lookupInfo].
+     */
+    internal suspend fun fetchArtQuietly(ref: LibraryGameRef): Boolean? = withContext(work) {
+        if (!available) return@withContext null
+        val now = host.libraryGames().firstOrNull { it.gamePath == ref.gamePath }?.takeIf(::wantsArt) ?: return@withContext null
+        singleLock.withLock {
+            if (haltLock.withLock { lock.withLock { job != null } }) return@withLock null
+            val one = ScrapeState(items = listOf(ScrapeItem(now.gamePath, now.tag, now.name)))
+            // Not starting the sources: ScreenScraper's start reads the quota, a request beyond the lookup.
+            val end = try {
+                engine.run(one, { if (it == now.gamePath) now else null }, startSources = false) {}
+            } finally {
+                // Their per-run answers are let go as after a job; nothing else is held by a run never started.
+                withContext(NonCancellable) { for (src in engine.sources) src.endJob() }
+                flushArt()   // the art shows now, as after the art panel's fetch
+            }
+            end.notes[SourceId.SS]?.let { throw SourceStop(it) }
+            if (end.pauseReason == ScrapeEngine.NO_CONNECTION) throw JobPause(ScrapeEngine.NO_CONNECTION)
+            true
         }
     }
 

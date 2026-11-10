@@ -252,7 +252,7 @@ interface AppSettings {
     var artWheel: Boolean
         get() = false
         set(value) {}
-    /** Art settings → Fetch game info: the top screen looks up a highlighted game's info on ScreenScraper (default on). */
+    /** Art settings → Fetch art and info when browsing: the top screen fetches a highlighted game's missing art and its info (default on). */
     var fetchGameInfo: Boolean
         get() = true
         set(value) {}

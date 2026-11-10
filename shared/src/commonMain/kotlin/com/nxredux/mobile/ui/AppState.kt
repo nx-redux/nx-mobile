@@ -5385,11 +5385,12 @@ class AppState(
     /** Game info beside the art (the top screen's details read it); null without a controller or an engine keeping it. */
     private val gameInfoStore: com.nxredux.mobile.scraper.GameInfoStore? = artworkController?.info
 
-    /** The top screen's background info fetch for the game its details show; null without [gameInfoStore]. */
+    /** The top screen's background art and info fetch for the game its details show; null without [gameInfoStore]. */
     private val infoFetcher: InfoFetcher? = artworkController?.let { c ->
         val store = gameInfoStore ?: return@let null
         InfoFetcher(
-            scope, store, lookup = c::lookupInfo, enabled = { deps.settings.fetchGameInfo && c.ssAvailable }, runActive = { c.busy },
+            scope, store, lookup = c::lookupInfo, wantsArt = c::wantsArt, fetchArt = c::fetchArtQuietly,
+            enabled = { deps.settings.fetchGameInfo && c.ssAvailable }, runActive = { c.busy },
             quotaRead = { c.ssQuotaRead }, now = ::clockNow, calendar = deps.calendar,
         ).also { f -> scope.launch { f.fetched.collect { showFetchedInfo(it) } } }
     }

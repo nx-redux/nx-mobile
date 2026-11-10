@@ -25,6 +25,7 @@ Device checks still owed:
 - [ ] Signed out, signed in, quota exhausted (silent; resumes the next day); offline (retries after a few minutes).
 - [ ] Device Sync phone↔phone/handheld carries `.media/info/` for home games; the receiver shows it without re-fetching.
 - [ ] Short top screen (Fold cover / skin glass): the synopsis drops first, nothing clips.
+- [ ] Browsing art: with art skipped in onboarding, rest on a game without art — its missing art appears on the top screen and its tile (no Artwork progress, no notification); a game with all its art only gets its info; Artwork running meanwhile → no background fetch; toggle off → nothing.
 
 ## Dual screen: bottom acts, top informs
 

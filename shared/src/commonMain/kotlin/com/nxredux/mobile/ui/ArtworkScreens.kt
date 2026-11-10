@@ -242,7 +242,7 @@ internal fun artworkSettingInfo(row: ArtworkSettingRow): SettingText = when (row
         "Fetch ScreenScraper's mix picture. When it has none, the app makes one from the screenshot, box and wheel.",
     )
     ArtworkSettingKind.FETCH_INFO -> quiet(
-        "Look up a game's synopsis, genre, release year and publisher on ScreenScraper when it's highlighted on the top screen.",
+        "Download a game's missing artwork and look up its synopsis, genre, release year and publisher on ScreenScraper when it's highlighted on the top screen.",
     )
     ArtworkSettingKind.SS_LOGIN -> quiet(
         "Log in for your own daily allowance",

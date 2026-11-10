@@ -842,9 +842,9 @@ class ArtworkScreensTest {
         r.state.pick(ArtworkAction.SETTINGS)
         fun rows() = assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows
         val at = rows().indexOfFirst { it.kind == ArtworkSettingKind.FETCH_INFO }
-        assertEquals(ArtworkSettingRow(ArtworkSettingKind.FETCH_INFO, "Fetch game info", "On"), rows()[at])
+        assertEquals(ArtworkSettingRow(ArtworkSettingKind.FETCH_INFO, "Fetch art and info when browsing", "On"), rows()[at])
         assertEquals(
-            "Look up a game's synopsis, genre, release year and publisher on ScreenScraper when it's highlighted on the top screen.",
+            "Download a game's missing artwork and look up its synopsis, genre, release year and publisher on ScreenScraper when it's highlighted on the top screen.",
             artworkSettingTouchRow(rows()[at]).detail,
         )
         r.state.select(at); r.state.onButton(NxButton.A)

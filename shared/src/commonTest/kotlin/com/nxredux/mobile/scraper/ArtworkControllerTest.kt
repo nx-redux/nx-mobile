@@ -13,12 +13,14 @@ import com.nxredux.mobile.storage.MemorySidecarStore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -1471,5 +1473,63 @@ class ArtworkControllerTest {
         assertNull(rig.fs.bytesAt("Home/$moved"))
         assertFalse(moved in rig.controller.heroShots())
         assertFalse(rig.host.applied.last { it.first == tetris.gamePath }.second.heroShot)
+    }
+
+    /** A jeuInfos answer (game id 42) with a synopsis and the given media. */
+    private fun withInfo(vararg media: Pair<String, String>) = Scrape.json(
+        """{"response":{"jeu":{"id":"42","synopsis":[{"langue":"en","text":"Blocks fall."}],""" +
+            """"medias":[${media.joinToString(",") { (t, u) -> """{"type":"$t","region":"us","url":"$u"}""" }}]}}}""",
+    )
+
+    @Test fun a_browse_fetch_downloads_only_the_missing_slots_and_the_info_from_one_lookup_quietly() = runTest {
+        val boxOnly = Scrape.homeGame("Tetris.gb", have = ArtHave(box = true))
+        val rig = Rig(this, listOf(boxOnly), creds = FakeCredentials().apply { user = "me"; password = "pw" })
+        rig.http.on("romnom=Tetris.gb", withInfo("ss" to "https://m/s.png", "box-2D" to "https://m/b.png"))
+        rig.http.on("https://m/", OK_PNG)
+        val before = rig.controller.state.value
+        assertTrue(rig.controller.wantsArt(boxOnly))
+        assertFalse(rig.controller.wantsArt(Scrape.homeGame("Tetris.gb", have = Scrape.HAS_ART)))
+        assertEquals(true, rig.controller.fetchArtQuietly(boxOnly))
+        assertEquals(1, rig.http.count("jeuInfos"))
+        assertEquals(0, rig.http.count("ssuserInfos"))   // no job start: no quota read beside the lookup
+        assertEquals(1, rig.http.count("https://m/s.png"))
+        assertEquals(0, rig.http.count("https://m/b.png"))   // the box it has is never replaced
+        assertNotNull(rig.fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.png"))
+        assertEquals("Blocks fall.", rig.controller.info!!.read(boxOnly)?.synopsis)
+        assertEquals(boxOnly.gamePath, rig.host.applied.single().first)
+        assertEquals(before, rig.controller.state.value)   // no job, no progress
+        assertTrue(rig.runner.calls.isEmpty())
+        assertNull(rig.host.files[ArtworkController.JOB_FILE])
+        assertFalse(rig.controller.busy)
+    }
+
+    @Test fun a_browse_fetch_reports_screenscrapers_stops_and_no_connection_as_the_info_lookup_does() = runTest {
+        for ((answer, note) in listOf(HttpResult(430, null) to ScreenScraperSource.DAILY_LIMIT, HttpResult(503, null) to ScreenScraperSource.UNAVAILABLE)) {
+            val rig = Rig(this, listOf(tetris))
+            rig.http.on("romnom=Tetris.gb", answer)
+            val e = assertFailsWith<SourceStop> { rig.controller.fetchArtQuietly(tetris) }
+            assertEquals(note, e.note)
+            assertEquals(ScrapeState(), rig.controller.state.value)
+        }
+        val offline = Rig(this, listOf(tetris))
+        offline.http.on("romnom=Tetris.gb", HttpResult(-1, null))
+        assertEquals(ScrapeEngine.NO_CONNECTION, assertFailsWith<JobPause> { offline.controller.fetchArtQuietly(tetris) }.reason)
+    }
+
+    @Test fun a_browse_fetch_is_not_made_for_a_game_no_source_fetches_or_while_a_job_runs() = runTest {
+        val loose = Scrape.homeGame("Loose.gb", tag = "", dir = "Roms")
+        val rig = Rig(this, listOf(loose, tetris, zelda))
+        assertFalse(rig.controller.wantsArt(loose))
+        assertNull(rig.controller.fetchArtQuietly(loose))
+        rig.http.on("romnom=", Scrape.BOTH)
+        rig.http.on("https://m/", OK_PNG)
+        rig.http.latency = 1_000
+        rig.controller.fetchMissing()
+        advanceTimeBy(500)
+        assertTrue(rig.controller.busy)
+        assertNull(rig.controller.fetchArtQuietly(zelda))
+        advanceUntilIdle()
+        assertEquals(1, rig.http.count("romnom=Zelda.gb"))   // the job's own
+        assertEquals(0, rig.http.count("romnom=Loose.gb"))
     }
 }

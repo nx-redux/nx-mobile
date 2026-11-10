@@ -56,7 +56,7 @@ internal class ArtworkAccountSettings(
     private val signedIn: Boolean get() = settings.ssUsername.isNotEmpty() && settings.ssPassword != null
 
     /**
-     * In groups: Art to fetch (Replace existing art and the optional art: 2D box art, Wheel, Mix, then Fetch game info
+     * In groups: Art to fetch (Replace existing art and the optional art: 2D box art, Wheel, Mix, then Fetch art and info when browsing
      * with ScreenScraper; only when fetching is available), then Accounts (ScreenScraper's login / logout row, only in a build with its credentials; the
      * SteamGridDB key row, one row each: the key prompt, or once set Remove; TheGamesDB's key row likewise and its
      * read-only allowance for the key in use, only once the user's key is set), and Reset artwork last, after a gap.
@@ -68,7 +68,7 @@ internal class ArtworkAccountSettings(
             add(ArtworkSettingRow(ArtworkSettingKind.BOX2D, "2D box art", onOff(settings.artBox2d)))
             add(ArtworkSettingRow(ArtworkSettingKind.WHEEL, "Wheel", onOff(settings.artWheel)))
             add(ArtworkSettingRow(ArtworkSettingKind.MIX, "Mix", onOff(settings.artMix)))
-            if (controller.ssAvailable) add(ArtworkSettingRow(ArtworkSettingKind.FETCH_INFO, "Fetch game info", onOff(settings.fetchGameInfo)))
+            if (controller.ssAvailable) add(ArtworkSettingRow(ArtworkSettingKind.FETCH_INFO, "Fetch art and info when browsing", onOff(settings.fetchGameInfo)))
         }
         if (controller.ssAvailable || controller.sgdbAvailable || controller.tgdbSupported) {
             if (isNotEmpty()) add(ArtworkSettingRow(ArtworkSettingKind.GAP, ""))

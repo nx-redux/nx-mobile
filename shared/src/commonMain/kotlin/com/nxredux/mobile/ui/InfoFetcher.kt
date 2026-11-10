@@ -21,8 +21,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * The top screen's background info fetch: the game the highlight rests on for [restMs] is looked up when it has no info
- * stored and no remembered miss, so scrolling a list asks nothing. One lookup at a time, none while an Artwork run asks
+ * The top screen's background art and info fetch: the game the highlight rests on for [restMs] gets the quiet art run
+ * when it lacks art ([wantsArt]; once per game this process, as art no source has is not asked for on every highlight),
+ * its info coming with that lookup; otherwise it is looked up for its info alone when it has none stored and no
+ * remembered miss. Scrolling a list asks nothing. One lookup at a time, none while an Artwork run asks
  * ScreenScraper. The daily limit or a lasting refusal (a blocked app) stops it until the next local day, a failure
  * (offline, ScreenScraper unavailable, an unreadable answer) for [RETRY_MS]; silently either way: nothing here throws
  * or tells the user.
@@ -34,6 +36,13 @@ class InfoFetcher(
     private val store: GameInfoStore,
     /** ScreenScraper's info-only lookup; null: not asked (a run started meanwhile). May throw [SourceStop] or a pause. */
     private val lookup: suspend (LibraryGameRef) -> InfoResult?,
+    /** The game lacks art an Artwork run would fetch. */
+    private val wantsArt: (LibraryGameRef) -> Boolean = { false },
+    /**
+     * The quiet single-game art run, storing the info its lookup brings: null when not made, true once finished. May
+     * throw [SourceStop] or a pause, as [lookup].
+     */
+    private val fetchArt: suspend (LibraryGameRef) -> Boolean? = { null },
     private val enabled: () -> Boolean,
     private val runActive: () -> Boolean,
     /** ScreenScraper's last quota read and when (epoch millis); null when none was read. */
@@ -57,6 +66,8 @@ class InfoFetcher(
     private var stoppedUntil = Long.MIN_VALUE
     /** Found but not storable (a library folder that can't be written): not asked again this process. */
     private val unstorable = HashSet<String>()
+    /** The games whose art run finished this process. */
+    private val artTried = HashSet<String>()
 
     /** The game now shown on the top screen, or null for none. */
     fun follow(ref: LibraryGameRef?) {
@@ -96,6 +107,12 @@ class InfoFetcher(
         val t = now()
         if (t < stoppedUntil) return
         if (quotaSpent(t)) { stoppedUntil = calendar.dayStart(t, 1); return }
+        if (ref.gamePath !in artTried && wantsArt(ref)) {
+            tryOr({ e -> stoppedUntil = stopAfter(e); null }) { fetchArt(ref) } ?: return
+            artTried += ref.gamePath
+            if (store.read(ref) != null) _fetched.emit(ref.gamePath)
+            return
+        }
         if (ref.gamePath in unstorable || store.read(ref) != null || store.isMiss(ref.gamePath)) return
         val r = tryOr({ e -> stoppedUntil = stopAfter(e); null }) { lookup(ref) }
         when (r) {
