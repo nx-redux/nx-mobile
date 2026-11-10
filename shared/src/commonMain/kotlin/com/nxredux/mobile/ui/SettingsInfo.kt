@@ -36,6 +36,13 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "itself. Turn it off to keep a game running while you use another app beside it. The game panel, the DS or 3DS " +
             "bottom screen and the in-game menu never pause it; leaving the app always does.",
     )
+    SettingsKind.SCREEN_CARE -> quiet(
+        "Protect OLED screens from burn-in",
+        "Keeps the menu and a game's pad, frame and panel from marking an OLED screen. Everything on each screen moves by " +
+            "a tiny step every few minutes, too little to notice, in the menu and in games. A game nobody has touched for 5 minutes dims both screens, and " +
+            "after 10 minutes the screens turn off on your phone's screen timeout. Press anything or touch a screen to bring " +
+            "them back.",
+    )
     SettingsKind.DEFAULT_TAG -> SettingText("")   // a single-emulator console says nothing: its emulator name is all there is
     // Library's Saves row, then the Saves page.
     SettingsKind.SAVES -> quiet("Save file formats, and export or import your saves")

@@ -10799,7 +10799,8 @@ class AppStateTest {
         state.openSettings(SettingsSection.SYSTEM)
         fun row() = assertIs<Screen.Settings>(state.screen.value).rows.single { it.kind == SettingsKind.DEBUG_LOG }
         assertEquals("Debug log" to "Off", row().label to row().secondary)
-        state.onButton(NxButton.DOWN)                 // from Pause when unfocused, past the Developer label
+        state.onButton(NxButton.DOWN)                 // from Pause when unfocused to Screen care
+        state.onButton(NxButton.DOWN)                 // then Debug log
         assertEquals(SettingsKind.DEBUG_LOG, assertIs<Screen.Settings>(state.screen.value).rows[state.selection.value.index].kind)
         state.onButton(NxButton.A)
         assertEquals(true, settings.debugLog)
@@ -12580,10 +12581,10 @@ class AppStateTest {
         assertEquals(sections, assertIs<Screen.SettingsMenu>(with.screen.value).sections)   // no Launcher category: its rows are on System and Library
         assertEquals(sections, with.settingsSections())   // the two-pane left pane lists the same
         with.openSettings(SettingsSection.SYSTEM)
-        // System's options are one group (Pause when unfocused, Use as home screen, Debug log), then About and Licenses.
+        // System's options are one group (Pause when unfocused, Screen care, Use as home screen, Debug log), then About and Licenses.
         val sys = assertIs<Screen.Settings>(with.screen.value).rows
         assertEquals(listOf("About", "Licenses"), sys.filter { it.kind == SettingsKind.SECTION }.map { it.label })
-        assertEquals(listOf(SettingsKind.PAUSE_UNFOCUSED, SettingsKind.HOME_SCREEN, SettingsKind.DEBUG_LOG), sys.take(3).map { it.kind })
+        assertEquals(listOf(SettingsKind.PAUSE_UNFOCUSED, SettingsKind.SCREEN_CARE, SettingsKind.HOME_SCREEN, SettingsKind.DEBUG_LOG), sys.take(4).map { it.kind })
     }
 
     @Test fun launcher_page_toggles_the_home_screen() = runTest {
@@ -12594,7 +12595,7 @@ class AppStateTest {
         state.openSettings(SettingsSection.SYSTEM)
         val page = assertIs<Screen.Settings>(state.screen.value)
         val at = rowIndex(state, SettingsKind.HOME_SCREEN)
-        assertEquals(SettingsKind.PAUSE_UNFOCUSED, page.rows[at - 1].kind)                     // right under Pause when unfocused, no group of its own
+        assertEquals(SettingsKind.SCREEN_CARE, page.rows[at - 1].kind)                         // right under Screen care, no group of its own
         assertEquals(SettingsRow(SettingsKind.HOME_SCREEN, "Use as home screen", "Off"), page.rows[at])
         state.select(at); state.onButton(NxButton.A)
         assertEquals(listOf(true), launcher.homeRequests)

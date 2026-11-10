@@ -438,6 +438,15 @@ interface AppSettings {
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
     /**
+     * Settings → System → Screen care (default on), for OLED screens: in the menu and in a game, what is on each screen
+     * moves by a dp now and then, and a game nobody has touched for a while dims, then lets the screens turn off. Defaulted, like
+     * [debugLog].
+     */
+    var screenCare: Boolean
+        get() = true
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
+    /**
      * The in-game Mic toggle has asked for the microphone permission once (never again from the toggle); Settings →
      * Library → Microphone access does not touch it. Defaulted, like [debugLog].
      */

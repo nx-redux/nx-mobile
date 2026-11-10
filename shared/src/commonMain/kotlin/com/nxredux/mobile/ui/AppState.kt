@@ -544,7 +544,7 @@ sealed interface Screen {
 /** Kids Mode's first switch-on, in order (the spec's): PIN, allowed apps, play times, then the two permissions and home. */
 enum class KidsSetupStep { PIN, APPS, TIMES, USAGE, ALARMS, HOME }
 
-enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
+enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
@@ -3840,7 +3840,7 @@ class AppState(
     }
 
     /**
-     * Settings -> System: its options as one group under the page's title (Pause when unfocused, Use as home screen with
+     * Settings -> System: its options as one group under the page's title (Pause when unfocused, Screen care, Use as home screen with
      * a launcher, Debug log), then the About and Licenses groups.
      */
     /**
@@ -3859,6 +3859,7 @@ class AppState(
 
     private fun systemRows(): List<SettingsRow> = buildList {
         add(SettingsRow(SettingsKind.PAUSE_UNFOCUSED, "Pause when unfocused", if (deps.settings.pauseWhenUnfocused) "On" else "Off"))
+        add(SettingsRow(SettingsKind.SCREEN_CARE, "Screen care", if (deps.settings.screenCare) "On" else "Off"))
         deps.launcher?.let { l -> add(SettingsRow(SettingsKind.HOME_SCREEN, "Use as home screen", if (l.isHome()) "On" else "Off")) }
         if (deps.ownKeyboard) add(SettingsRow(SettingsKind.KEYBOARD, "Keyboard", keyboardLabel(deps.settings.androidKeyboard)))
         // Logging for a bug report; off, only errors reach logcat.
@@ -4074,6 +4075,7 @@ class AppState(
             SettingsKind.BUTTON_LAYOUT_N3DS_PAD -> cycle(listOf(false, true), buttonLayoutN3dsNew, ::n3dsPadLabel) { buttonLayoutN3dsNew = it }
             // Emulators, Saves (the handheld's formats in its order), Second screen and Developer.
             SettingsKind.PAUSE_UNFOCUSED -> flip(s.pauseWhenUnfocused) { s.pauseWhenUnfocused = it }
+            SettingsKind.SCREEN_CARE -> flip(s.screenCare) { s.screenCare = it }
             SettingsKind.SAVE_FORMAT -> cycle(SaveFormat.entries, s.saveFormat, { it.label }) { s.saveFormat = it }
             SettingsKind.STATE_FORMAT -> cycle(StateFormat.entries, s.stateFormat, { it.label }) { s.stateFormat = it }
             SettingsKind.EXTRACTED_NAME -> flip(s.useExtractedFileName) { s.useExtractedFileName = it }
