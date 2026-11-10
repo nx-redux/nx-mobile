@@ -844,7 +844,7 @@ class ArtworkScreensTest {
         val at = rows().indexOfFirst { it.kind == ArtworkSettingKind.FETCH_INFO }
         assertEquals(ArtworkSettingRow(ArtworkSettingKind.FETCH_INFO, "Fetch game info", "On"), rows()[at])
         assertEquals(
-            "Look up a game's synopsis, genre and release year on ScreenScraper when it's highlighted on the top screen.",
+            "Look up a game's synopsis, genre, release year and publisher on ScreenScraper when it's highlighted on the top screen.",
             artworkSettingTouchRow(rows()[at]).detail,
         )
         r.state.select(at); r.state.onButton(NxButton.A)
