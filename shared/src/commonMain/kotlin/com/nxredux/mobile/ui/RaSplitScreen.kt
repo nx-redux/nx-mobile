@@ -1,6 +1,7 @@
 package com.nxredux.mobile.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -9,6 +10,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.unit.dp
+import com.nxredux.mobile.achievements.RaController
 import com.nxredux.mobile.ui.nx.ListSelection
 
 /**
@@ -20,11 +23,29 @@ import com.nxredux.mobile.ui.nx.ListSelection
 @Composable
 internal fun RaSplitScreen(state: AppState, s: Screen, page: @Composable () -> Unit) {
     val parent = state.raParent(s)
-    SplitPanes(
-        left = { parent?.let { RaParentPane(state, it) } },
-        right = page,
-        over = { if (s is Screen.RaSettings) RaSettingsDialogs(s, state, state::onButton) },
-    )
+    val panes: @Composable (Float) -> Unit = { share ->
+        SplitPanes(
+            left = { parent?.let { RaParentPane(state, it) } },
+            right = page,
+            over = { if (s is Screen.RaSettings) RaSettingsDialogs(s, state, state::onButton) },
+            leftShare = share,
+        )
+    }
+    val c = state.achievements
+    if (parent?.screen is Screen.RetroAchievements && c != null) RaPageShare(c, panes) else panes(SETTINGS_SPLIT_LEFT)
+}
+
+/** [panes] with the left pane's share wide enough for the page's word block, head included ([raSplitLeftWidth]). */
+@Composable
+private fun RaPageShare(c: RaController, panes: @Composable (Float) -> Unit) {
+    val ra by c.state.collectAsState()
+    val download by c.download.collectAsState()
+    WithSettingsWordBlockSize(RA_TITLE, raPageWords(ra, download), raHeadline(ra), raDetails(ra)) { block ->
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val width = raSplitLeftWidth(maxWidth, settingsSectionStart() + block.width, settingsPlateEnd())
+            panes(if (maxWidth > 0.dp) width / maxWidth else SETTINGS_SPLIT_LEFT)
+        }
+    }
 }
 
 /** The dimmed left pane: [parent]'s level drawn as it was (a progress body on the RetroAchievements page too), its row lit. */

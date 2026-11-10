@@ -741,7 +741,7 @@ private fun NarrowRaPage(state: AppState, s: Screen, selection: State<ListSelect
     val c = state.achievements
     val ra = c?.state?.collectAsState()?.value
     val download = c?.download?.collectAsState()?.value
-    val words = ra?.let { st -> raRows(st, download).map { raRowLabel(it, download, raPending(st)) } }.orEmpty()
+    val words = ra?.let { raPageWords(it, download) }.orEmpty()
     WithSettingsWordBlockSize(RA_TITLE, words) { size ->
         val block = remember(size.height) { SettingsBlockMode(RA_TITLE, minHeight = size.height) }
         CompositionLocalProvider(LocalSettingsBlock provides block) { RaLevelPage(state, s, selection, split = true) }

@@ -145,4 +145,15 @@ class SettingsSplitTest {
         assertEquals(listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS, SettingsSection.SYSTEM), settingsCategories())   // System last
         assertEquals(listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS, SettingsSection.SECOND_SCREEN, SettingsSection.SYSTEM), settingsCategories(secondScreen = true))
     }
+
+    @Test fun theRetroAchievementsLeftPaneIsAsWideAsItsWordsNeed() {
+        // Short words: the pane keeps its share of the width.
+        assertEquals(640.dp * SETTINGS_SPLIT_LEFT, raSplitLeftWidth(640.dp, sectionRight = 180.dp, gutter = 24.dp))
+        // The Nova's bottom screen: the user name and "Achievements" need more than the share, so the pane widens to them.
+        assertEquals(260.dp + 24.dp, raSplitLeftWidth(640.dp, sectionRight = 260.dp, gutter = 24.dp))
+        // A very long name: the list keeps the rows pane's least width.
+        assertEquals(640.dp - SETTINGS_FRAME_MIN, raSplitLeftWidth(640.dp, sectionRight = 400.dp, gutter = 24.dp))
+        // Never under the share, even where the least width cannot be kept.
+        assertEquals(400.dp * SETTINGS_SPLIT_LEFT, raSplitLeftWidth(400.dp, sectionRight = 300.dp, gutter = 24.dp))
+    }
 }

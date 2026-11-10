@@ -7,6 +7,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.achievements.RaController
+import com.nxredux.mobile.achievements.RaDownload
 import com.nxredux.mobile.achievements.RaState
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.NxButton
@@ -36,11 +37,12 @@ fun RetroAchievementsScreen(
             val cancellable = state is RaState.Syncing
             NxProgressBody(RA_TITLE, line, raProgressFraction(state), detail = raProgressDetail(state), hints = if (cancellable && focused) listOf(Hint(NxButton.B, "Cancel")) else emptyList(), onHint = onHint)
         } else {
-            val pending = raPending(state)
+            // Unfocused, the empty bar still keeps its room (the split's keepHeight), so the block stays where the page has it.
             SettingsRootScreen(
-                RA_TITLE, raRows(state, download).map { raRowLabel(it, download, pending) }, emptyList(), selectedIndex,
-                onTap = { onSelect(it); onOpen(it) }, hintBar = focused, onHint = onHint,
+                RA_TITLE, raPageWords(state, download), emptyList(), selectedIndex,
+                onTap = { onSelect(it); onOpen(it) }, hintBar = true, onHint = onHint,
                 headline = raHeadline(state), description = raDetails(state),
+                hints = if (focused) SETTINGS_ROOT_HINTS else emptyList(),
             )
         }
         if (focused) screen.confirm?.let { c ->
@@ -48,6 +50,10 @@ fun RetroAchievementsScreen(
         }
     }
 }
+
+/** The page's large words: its actions as [raRowLabel] names them. */
+internal fun raPageWords(state: RaState, download: RaDownload?): List<String> =
+    raPending(state).let { pending -> raRows(state, download).map { raRowLabel(it, download, pending) } }
 
 /** The tool's name, its page's label. */
 internal const val RA_TITLE = "RetroAchievements"
