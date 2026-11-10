@@ -261,7 +261,7 @@ fun MainMenuScreen(
                                 // Home's stats header in the room left of Recent and Search ([homeStatsHeader], two
                                 // lines): Consoles and Collections show the selected one's name and count there
                                 // ([GridTitleLines]), Tools nothing; every tab's tiles start under it, as Home's page does.
-                                val whole = homeFrameHere()
+                                val whole = homeFrameHere(squareIsPortrait = true)   // Home's own frame, so the header lines up
                                 val header = whole?.let { homeStatsHeader(it, GRID_TITLE_LINES) }
                                 val title = gridTitle(tiles.getOrNull(selection()))
                                 if (whole != null && header != null && title != null) {

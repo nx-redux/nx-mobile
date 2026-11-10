@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui.nx
 
+import com.nxredux.mobile.ui.TOOL_APPS_MIN_TILE
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -74,5 +75,55 @@ class GridVerticalTest {
         assertEquals(0, gridCentredScroll(0, 6, 100, 200))           // the first row rests at the top
         assertEquals(250, gridCentredScroll(3, 6, 100, 200))         // row 3 (300..400) centred: 50 px either side
         assertEquals(400, gridCentredScroll(5, 6, 100, 200))         // the last rests at the bottom
+    }
+
+    // The unfolded Fold upright with a DS-style skin: the bottom glass (about 369 x 293 dp) leaves a short wide body.
+    @Test fun aSkinsShortWideGlassKeepsToolTilesNearTheirShape() {
+        val g = gridMatched(369f, 200f, 369f, 293f, GridTileKind.ICON, portrait = false, insetStart = 20f, skin = true)
+        assertEquals(GRID_PAD_MIN_ROWS, g.rows)
+        assertTrue(g.tileH >= 75f, "tile ${g.tileH} dp tall")
+        // Without a skin the same box keeps three rows (a phone's own landscape is left as it was).
+        assertEquals(GRID_MIN_ROWS, gridMatched(369f, 200f, 369f, 293f, GridTileKind.ICON, portrait = false, insetStart = 20f).rows)
+    }
+
+    // The unfolded Fold sideways with a skin: the glass (about 553 x 650 dp) is the window, so the matched rows come from
+    // the glass turned, not the whole window round it, and tool tiles stay near square.
+    @Test fun aSkinsTallGlassMatchesTheGlassTurned() {
+        val g = gridMatched(553f, 520f, 553f, 650f, GridTileKind.ICON, portrait = true, insetStart = 20f, skin = true)
+        assertTrue(g.rows >= GRID_MIN_ROWS, "${g.rows} rows")
+        assertTrue(g.tileH <= g.tileW * 1.15f, "tile ${g.tileW} x ${g.tileH}")
+    }
+
+    // Tools: one tile size on every screen; only the columns and the rows in view change.
+    @Test fun toolsTilesAreOneSizeOnEveryScreen() {
+        val small = gridFixedTools(369f, 200f, 20f, 20f, fontScale = 1f)   // the unfolded Fold's bottom glass, upright
+        val big = gridFixedTools(933f, 600f, 30f, 30f, fontScale = 1f)     // the unfolded Fold without a skin
+        assertEquals(3, small.columns)
+        assertTrue(big.columns > small.columns)
+        assertTrue(small.tileW in TOOL_APPS_MIN_TILE..(TOOL_APPS_MIN_TILE * 2), "${small.tileW}")
+        assertEquals(toolTileHeight(small.tileW, 1f), small.tileH)
+        assertTrue(small.rows >= 1)
+        // The icon is capped, so a wider tile is no taller past the cap.
+        assertEquals(toolTileHeight(200f, 1f), toolTileHeight(300f, 1f))
+    }
+
+    // The folded Fold upright with a skin: a near-square glass (about 475 x 405 dp). Screenshots two across, not forced to
+    // three thumbnails; a phone held sideways (no skin) still gets three.
+    @Test fun aSkinsNearSquareGlassIsNotForcedToThreeColumns() {
+        val g = gridMatched(475f, 265f, 475f, 405f, GridTileKind.SCREENSHOT, portrait = false, insetStart = 20f, skin = true)
+        assertEquals(2, g.columns)
+        assertTrue(g.tileH >= g.tileW / GridTileKind.SCREENSHOT.aspect * GRID_SKIN_MIN_SHAPE, "${g.tileW} x ${g.tileH}")
+        assertEquals(GRID_MIN_COLUMNS_SIDEWAYS, gridMatched(475f, 265f, 475f, 405f, GridTileKind.SCREENSHOT, portrait = false, insetStart = 20f).columns)
+        // The cover's real glass (about 457 dp wide, a wider skin inset): one screenshot fits by width, two are kept.
+        assertEquals(2, gridMatched(457f, 270f, 457f, 400f, GridTileKind.SCREENSHOT, portrait = false, insetStart = 30f, skin = true).columns)
+    }
+
+    // The folded Fold sideways with a skin: a tall glass about 370 dp wide. Two screenshots across, near their shape.
+    @Test fun aSkinsTallSmallGlassShowsTwoAcross() {
+        val g = gridMatched(370f, 300f, 370f, 420f, GridTileKind.SCREENSHOT, portrait = true, insetStart = 30f, skin = true)
+        assertEquals(2, g.columns)
+        assertTrue(g.tileH >= g.tileW / GridTileKind.SCREENSHOT.aspect * GRID_SKIN_MIN_SHAPE, "${g.tileW} x ${g.tileH}")
+        // A phone held upright (no skin) keeps its one wide tile a row.
+        assertEquals(1, gridMatched(370f, 600f, 370f, 780f, GridTileKind.SCREENSHOT, portrait = true, insetStart = 20f).columns)
     }
 }

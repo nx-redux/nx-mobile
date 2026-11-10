@@ -43,6 +43,7 @@ import com.nxredux.mobile.ui.nx.footerModeFor
 import com.nxredux.mobile.ui.nx.rememberControllerConnected
 import com.nxredux.mobile.ui.nx.rememberHasTouchscreen
 import org.jetbrains.compose.resources.painterResource
+import com.nxredux.mobile.ui.nx.splitWindow
 
 /**
  * The top screen while the main menu is on the second display ([AppState.dualMenu]): the same [AppState] as [App], drawn
@@ -81,7 +82,7 @@ fun MenuTopScreen(state: AppState, inSkin: Boolean = false, keyboard: Boolean = 
                         is TopContent.Preview -> PreviewList(state, top.list, gameInfo)
                         TopContent.Tool -> Box(Modifier.fillMaxSize()) {
                             // Laid out here: this window decides whether Settings splits (App reports the bottom's otherwise).
-                            val split = settingsSplit(LocalWindowSize.current)
+                            val split = settingsSplit(splitWindow())
                             LaunchedEffect(split) { state.onSettingsSplit(split) }
                             val live = remember { mutableStateOf(true) }
                             val chooser by state.chooser.collectAsState()
