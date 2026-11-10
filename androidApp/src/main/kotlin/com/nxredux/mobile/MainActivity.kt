@@ -555,9 +555,9 @@ class MainActivity : ComponentActivity(), FolderPicker {
      * The main menu on both screens while the app is in front with Settings → Second screen on, a second display there and
      * no onboarding prompt on it ([AppState.onDualMenu]). The bottom screen (Settings → Bottom screen, else the shapes, as
      * a game's [DualScreen.pictureOn]) has the menu, the other the top screen: usually this window keeps [App] and the
-     * presentation shows [MenuTopScreen]; with the menu on the second display the two swap ([menuOnSecond]). Gone while a game
-     * starts ([launching]), an app opened on the top screen runs there ([TopScreenHost.active]: the presentation would
-     * cover it) or the app stops. Dual mode follows the window: on only once it is shown (a failed show leaves the menu
+     * presentation shows [MenuTopScreen]; with the menu on the second display the two swap ([menuOnSecond]). Gone while an
+     * app opened on the top screen runs there ([TopScreenHost.active]: the presentation would cover it) or the app stops
+     * (a game starting keeps it until then). Dual mode follows the window: on only once it is shown (a failed show leaves the menu
      * whole on this screen), kept through [launching] so the cross-fade stays, and through an app on top so the main menu
      * keeps its shape; any other screen then has dual mode off, so a game list keeps its achievements panel here (the
      * top screen's details would sit behind the app).
@@ -571,7 +571,9 @@ class MainActivity : ComponentActivity(), FolderPicker {
         val appOnTop = TopScreenHost.active
         state.onAppOnTop(appOnTop)
         if (::kids.isInitialized) AndroidKids.topScreenChanged(this)   // the menu stays shown under an app on top: the guard watches it
-        val wanted = display.takeIf { active && !launching && !appOnTop }
+        // Kept through [launching] until the menu stops: with no window of ours there, Android mirrors the bottom screen on
+        // the top one until the game's own window shows.
+        val wanted = display.takeIf { active && !appOnTop }
         if (wanted == null) cancelMenuRetry()
         if (menuScreen?.display?.displayId != wanted?.displayId) {
             hideMenuScreen()
