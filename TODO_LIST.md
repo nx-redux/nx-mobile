@@ -14,6 +14,18 @@
 - [ ] Home during a slow PS2/Wii quit, tap the same game → starts fresh; Home during a big PS2 state resume → no ANR; then clear it from the launcher icon → SRAM survived.
 - [ ] Threaded cores across pause/resume (input lock): Dolphin GC/Wii incl. Wii pointer, Azahar, ARMSX2, PPSSPP; N64 netplay input still arrives; a game from a picked file still opens.
 
+## Game info from ScreenScraper
+
+Device checks still owed:
+
+- [x] Nova: highlighting a game without info fills genre · year · publisher and a 5-line synopsis after a moment (Astro Boy, 2026-11-10).
+- [ ] Nova: scroll fast through a list — no request burst (Debug log); only the game you stop on is looked up.
+- [ ] Artwork "Fetch missing" on a console with missing art stores info from the same lookup; games with all their art are not looked up by the run.
+- [ ] "Fetch all" re-asks remembered misses; "Fetch missing" and highlights don't.
+- [ ] Signed out, signed in, quota exhausted (silent; resumes the next day); offline (retries after a few minutes).
+- [ ] Device Sync phone↔phone/handheld carries `.media/info/` for home games; the receiver shows it without re-fetching.
+- [ ] Short top screen (Fold cover / skin glass): the synopsis drops first, nothing clips.
+
 ## Dual screen: bottom acts, top informs
 
 Device checks still owed:
