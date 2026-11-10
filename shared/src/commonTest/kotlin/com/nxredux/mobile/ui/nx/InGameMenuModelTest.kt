@@ -1986,6 +1986,41 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.Close, m.press(NxButton.B))
     }
 
+    /**
+     * Back and B in a live session (Back with the menu closed opens it, the host's backPressed; Back or B inside it is B
+     * here): the menu opens on Continue, and B, MENU or X, however often, only close it or do nothing. Only A on Leave
+     * ends a session.
+     */
+    @Test fun back_and_b_never_leave_a_live_session() {
+        for (link in listOf(false, true)) {   // Cable Link and lockstep (false), a GB/GBA link session (true)
+            val m = model()
+            m.netplay = true
+            m.netplayLink = link
+            m.refresh()
+            assertEquals(0, m.state.page.selected)   // Continue
+            val effects = listOf(NxButton.B, NxButton.B, NxButton.MENU, NxButton.X, NxButton.B).map(m::press)
+            assertTrue(effects.all { it == null || it == MenuEffect.Close }, "link=$link: $effects")
+            assertEquals(listOf("Continue", "Leave"), m.state.page.rows.map { it.label })
+            // B on the Leave row is not a choice of Leave either.
+            m.press(NxButton.DOWN)
+            assertEquals(MenuEffect.Close, m.press(NxButton.B))
+        }
+    }
+
+    /** A long-pressed B in the menu is one press: the menu's router repeats only directions, so B cannot walk to Leave. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun a_long_pressed_b_in_a_session_menu_closes_it_once() = kotlinx.coroutines.test.runTest {
+        val m = model()
+        m.netplay = true
+        m.refresh()
+        val effects = ArrayList<MenuEffect?>()
+        val router = InputRouter(backgroundScope, { effects += m.press(it) })
+        router.onEvent(PadEvent.Down(NxButton.B))
+        testScheduler.advanceTimeBy(3000); testScheduler.runCurrent()
+        router.onEvent(PadEvent.Up(NxButton.B))
+        assertEquals(listOf<MenuEffect?>(MenuEffect.Close), effects)
+    }
+
     @Test fun netplay_mode_after_the_session_ended_is_continue_quit() {
         val m = model()
         m.netplay = true

@@ -154,6 +154,14 @@ class SpeedControlTest {
         assertEquals(4, c.output.ffSpeed)
     }
 
+    /** A bound Save & Quit (or Reset, or a state) does nothing in a session: only the menu's Leave ends one. */
+    @Test fun sessionShortcutsNeverQuit() {
+        val c = control()
+        c.setSession(netplay = true)
+        for (a in listOf(ShortcutAction.SAVE_AND_QUIT, ShortcutAction.RESET, ShortcutAction.SAVE_STATE, ShortcutAction.LOAD_STATE))
+            assertNull(c.onAction(a, true), a.name)
+    }
+
     @Test fun rewindIgnoredWhenOff() {
         val c = control(SpeedSettings(rewind = false))
         c.tap(ShortcutAction.TOGGLE_REWIND)

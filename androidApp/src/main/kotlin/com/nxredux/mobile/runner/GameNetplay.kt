@@ -71,8 +71,10 @@ internal class GameNetplay(private val host: GameNetplayHost) {
 
     /**
      * netplay: this launch's session (read in onCreate from the EXTRA_NETPLAY_* extras); null for every other launch. In a
-     * session there are no save states or auto-resume, no cheats, Core Options or local multiplayer slots, no achievements
-     * outside a link session ([NetplaySession.allowsAchievements]), and the menu is only "Leave netplay?".
+     * session there are no save states or auto-resume, no cheats, Core Options or local multiplayer slots, and the menu is
+     * only "Leave netplay?". Achievements stay on where each player's unlocks are their own
+     * ([NetplaySession.allowsAchievements]): a link session, and Cable Link, whose core shows and maps only this player's
+     * GBA; a lockstep client plays the host's state, so lockstep has none.
      */
     var session: NetplaySession? = null
         private set
