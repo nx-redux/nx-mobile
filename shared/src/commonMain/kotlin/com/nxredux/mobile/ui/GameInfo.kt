@@ -4,6 +4,7 @@ import com.nxredux.mobile.achievements.RaProgress
 import com.nxredux.mobile.gametime.GameTimeFormat
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.path
+import com.nxredux.mobile.scraper.StoredGameInfo
 
 /** What the menu shows under a selected game: last played and total time (game time), and RetroAchievements progress. */
 data class GameInfo(val lastPlayedAt: Long?, val totalMs: Long?, val ra: RaProgress?, val plays: Long? = null)
@@ -36,7 +37,10 @@ internal fun whenText(now: Long, then: Long): String {
 internal fun nextWhenChange(now: Long, thens: Iterable<Long>): Long? =
     thens.minOfOrNull { then -> if (then > now) then + DAY_MS else then + ((now - then) / DAY_MS + 1) * DAY_MS }
 
-enum class InfoKind { TIME, ACHIEVEMENTS, NEXT, COUNT }
+enum class InfoKind { TIME, ACHIEVEMENTS, NEXT, COUNT, GENRE, RELEASE }
+
+/** The segment a caption puts on a row of its own under the rest: the next goal, or the release in its place. */
+internal val InfoLine.ownRow: Boolean get() = kind == InfoKind.NEXT || kind == InfoKind.RELEASE
 
 /** Between the info line's segments: a middle dot, a space each side. */
 internal const val INFO_SEPARATOR = " · "
@@ -47,19 +51,61 @@ data class InfoLine(val kind: InfoKind, val text: String)
 /**
  * The selected game's info segments, each left out without data: "<when> - <duration>" (either alone), "n of m", then
  * "Next: <title>"; shown joined by [INFO_SEPARATOR], e.g. "Today - 1m 31s · 0 of 35 · Next: That Was Easy".
- * [full] false (a grid tile): the achievement count without the next goal.
+ * [full] false (a grid tile): the achievement count without the next goal. Where [full], a game with no achievements
+ * to show (signed out, or no set), or any game with [metaAlways] (Layouts → Game info: Details, the default), has its stored
+ * ScreenScraper facts ([meta]) in their place: its genre for the count ([noGenre] without one: [NO_GENRE] in the
+ * menus, so every caption keeps its pill), "<year> · <publisher>" for the next goal, left out without data.
  */
-internal fun gameInfoLines(info: GameInfo?, now: Long, full: Boolean): List<InfoLine> {
-    if (info == null) return emptyList()
-    return buildList {
-        val time = listOfNotNull(info.lastPlayedAt?.let { whenText(now, it) }, info.totalMs?.let(GameTimeFormat::duration)).joinToString(" - ")
-        if (time.isNotEmpty()) add(InfoLine(InfoKind.TIME, time))
-        info.ra?.let { ra ->
-            add(InfoLine(InfoKind.ACHIEVEMENTS, "${ra.unlocked} of ${ra.total}"))
-            if (full && ra.next != null) add(InfoLine(InfoKind.NEXT, "Next: ${ra.next}"))
-        }
+internal fun gameInfoLines(
+    info: GameInfo?, now: Long, full: Boolean, meta: StoredGameInfo? = null, metaAlways: Boolean = false, noGenre: String? = null,
+): List<InfoLine> = buildList {
+    val time = listOfNotNull(info?.lastPlayedAt?.let { whenText(now, it) }, info?.totalMs?.let(GameTimeFormat::duration)).joinToString(" - ")
+    if (time.isNotEmpty()) add(InfoLine(InfoKind.TIME, time))
+    val ra = info?.ra?.takeUnless { full && metaAlways }
+    if (ra != null) {
+        add(InfoLine(InfoKind.ACHIEVEMENTS, "${ra.unlocked} of ${ra.total}"))
+        if (full && ra.next != null) add(InfoLine(InfoKind.NEXT, "Next: ${ra.next}"))
+    } else if (full) {
+        (meta?.genre?.trim()?.ifEmpty { null } ?: noGenre)?.let { add(InfoLine(InfoKind.GENRE, it)) }
+        val release = listOfNotNull(meta?.year?.trim()?.ifEmpty { null }, meta?.publisher?.trim()?.ifEmpty { null }).joinToString(INFO_SEPARATOR)
+        if (release.isNotEmpty()) add(InfoLine(InfoKind.RELEASE, release))
     }
 }
+
+/**
+ * The games' stored ScreenScraper facts by path ([AppState.gameMeta]) and Layouts → Game info ([always]: they show in
+ * the achievements' place for every game, not only one without achievements). [shown]: the menus show them (Extra
+ * info), so a game without a genre gets [NO_GENRE].
+ */
+internal data class GameMeta(val byPath: Map<String, StoredGameInfo> = emptyMap(), val always: Boolean = false, val shown: Boolean = false) {
+    companion object { val NONE = GameMeta() }
+}
+
+/** The genre pill's word for a game with no genre stored (none fetched yet, or ScreenScraper has none: an Android game). */
+internal const val NO_GENRE = "Game"
+
+/** A [InfoKind.GENRE] segment's genres ("Sports / Soccer" is two), each drawn as a pill. */
+internal fun genreParts(text: String): List<String> = text.split('/', ',').map { it.trim() }.filter { it.isNotEmpty() }
+
+/** Between a genre segment's genres in its text ([genreParts] reads them back). */
+internal const val GENRE_JOIN = " / "
+
+/** How many genre pills ([widths] px, in order, [gap] px between) fit [room] px: the first always, cut short itself if it must be. */
+internal fun genresThatFit(widths: List<Float>, gap: Float, room: Float): Int {
+    var used = 0f
+    widths.forEachIndexed { i, w ->
+        used += w + if (i > 0) gap else 0f
+        if (i > 0 && used > room) return i
+    }
+    return widths.size
+}
+
+/** [lines] with only the first genre: for a one-line caption that is not fitted to its width. */
+internal fun firstGenre(lines: List<InfoLine>): List<InfoLine> =
+    lines.map { l -> if (l.kind == InfoKind.GENRE) l.copy(text = genreParts(l.text).firstOrNull() ?: l.text) else l }
+
+/** Layouts → Game info's value: what a caption shows under the play time. */
+internal fun gameInfoLabel(achievements: Boolean): String = if (achievements) "Achievements" else "Details"
 
 /**
  * A console row's info line: its games over every tag it merges (SFC and SUPA are one row). The systems are the
@@ -81,9 +127,13 @@ internal fun switcherSubtitle(systemName: String, index: Int, count: Int): Strin
 internal fun launcherGameInfo(gameInfo: Map<String, GameInfo>, extraInfo: Boolean): Map<String, GameInfo> =
     if (extraInfo) gameInfo else emptyMap()
 
-/** A game's info segments ([gameInfoLines]) from [gameInfo] at [now]; none for no game. [full] false: a grid tile's. */
-internal fun gameInfoFor(gameInfo: Map<String, GameInfo>, now: Long, game: GameEntry?, full: Boolean): List<InfoLine> =
-    game?.let { gameInfoLines(gameInfo[it.path], now, full) }.orEmpty()
+/** A game's info segments ([gameInfoLines]) from [gameInfo] and [meta] at [now]; none for no game. [full] false: a grid tile's. */
+internal fun gameInfoFor(gameInfo: Map<String, GameInfo>, now: Long, game: GameEntry?, full: Boolean, meta: GameMeta = GameMeta.NONE): List<InfoLine> =
+    game?.let { gameInfoLines(gameInfo[it.path], now, full, meta.byPath[it.path], meta.always, NO_GENRE.takeIf { meta.shown }) }.orEmpty()
+
+/** [GameMeta] for the launcher menus: none while Layouts → Extra info hides the game info ([launcherGameInfo]). */
+internal fun launcherGameMeta(byPath: Map<String, StoredGameInfo>, always: Boolean, extraInfo: Boolean): GameMeta =
+    if (extraInfo) GameMeta(byPath, always, shown = true) else GameMeta.NONE
 
 /** A main menu row's game (a pin's, a shelf game's or Continue's); null for any other row. */
 internal fun MainRow?.game(): GameEntry? = listed()?.game

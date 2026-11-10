@@ -3,6 +3,8 @@ package com.nxredux.mobile.ui.nx
 import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.achievements.RaAchievementState
 import com.nxredux.mobile.cheats.CheatEntry
+import com.nxredux.mobile.shortcuts.ShortcutAction
+import com.nxredux.mobile.shortcuts.TouchSlot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -12,9 +14,10 @@ class GamePanelModelTest {
     private val speedTiles = listOf(Shortcut.FAST_FORWARD, Shortcut.REWIND, Shortcut.RESET)
 
     private fun shortcuts(
-        discCount: Int = 1, discIndex: Int = 0, connected: Boolean = false, on: Boolean = true, netplay: Boolean = false,
+        discCount: Int = 1, discIndex: Int = 0, netplay: Boolean = false,
         ff: Boolean = false, rewind: Boolean? = false, mic: Boolean? = null,
-    ) = GamePanelModel.shortcuts(discCount, discIndex, connected, on, netplay, ff, rewind, mic)
+        touch: List<ShortcutAction> = emptyList(), slot: Int? = null,
+    ) = GamePanelModel.shortcuts(discCount, discIndex, netplay, ff, rewind, mic, touch, slot)
 
     @Test fun tabs_shortcuts_only() {
         assertEquals(listOf(GamePanelTab.SHORTCUTS), GamePanelModel.tabs(raAvailable = false, playerSlots = 1))
@@ -82,31 +85,66 @@ class GamePanelModelTest {
         assertEquals("Swap disc", swap.label)
     }
 
-    @Test fun second_screen_only_when_connected() {
-        assertTrue(shortcuts(connected = false).none { it.shortcut == Shortcut.SECOND_SCREEN })
-        val on = shortcuts(connected = true, on = true).single { it.shortcut == Shortcut.SECOND_SCREEN }
-        assertTrue(on.enabled)
-        assertNull(on.value)   // a toggle: no On/Off words, its fill says it
-        assertEquals(true, on.on)
-        val off = shortcuts(connected = true, on = false).single { it.shortcut == Shortcut.SECOND_SCREEN }
-        assertNull(off.value)
-        assertEquals(false, off.on)
-        // Netplay hides only Swap disc.
-        assertTrue(shortcuts(connected = true, netplay = true).any { it.shortcut == Shortcut.SECOND_SCREEN })
+    // The touch buttons' tiles: each button's action in the buttons' order, Save and Load on the first two while unset;
+    // one with a tile of the panel's own, a repeat, or a rewind hold where the game can't rewind is left out.
+    @Test fun touch_buttons_get_tiles_with_save_and_load_by_default() {
+        val save = ShortcutAction.SAVE_STATE; val load = ShortcutAction.LOAD_STATE
+        assertEquals(listOf(save, load), GamePanelModel.panelTouchActions(emptyMap(), rewind = true))
+        assertEquals(listOf(save, load), GamePanelModel.panelTouchActions(mapOf(TouchSlot.THREE to save, TouchSlot.FOUR to load), rewind = true))
+        val set = mapOf(TouchSlot.ONE to ShortcutAction.HOLD_FF, TouchSlot.THREE to ShortcutAction.HOLD_REWIND, TouchSlot.FOUR to ShortcutAction.TOGGLE_FF)
+        assertEquals(listOf(ShortcutAction.HOLD_FF, load, ShortcutAction.HOLD_REWIND), GamePanelModel.panelTouchActions(set, rewind = true))
+        assertEquals(listOf(ShortcutAction.HOLD_FF, load), GamePanelModel.panelTouchActions(set, rewind = false))
+        assertEquals(listOf(save, load), GamePanelModel.panelTouchActions(mapOf(TouchSlot.THREE to ShortcutAction.RESET, TouchSlot.FOUR to ShortcutAction.TOGGLE_REWIND), rewind = true))
+    }
+
+    // A touch tile is first, named for its action, with the save-state slot under Save and Load; netplay has none.
+    @Test fun touch_tiles_come_first_and_name_the_slot() {
+        val list = shortcuts(discCount = 2, touch = listOf(ShortcutAction.SAVE_STATE, ShortcutAction.LOAD_STATE, ShortcutAction.HOLD_FF), slot = 2)
+        assertEquals(listOf("Save", "Load", "Hold fast forward", "Swap disc", "Fast forward", "Rewind", "Reset"), list.map { it.label })
+        assertEquals(listOf("Slot 2", "Slot 2", null), list.take(3).map { it.value })
+        assertTrue(list.take(3).all { it.shortcut == Shortcut.TOUCH && it.on == null && it.enabled })
+        assertEquals(ShortcutAction.HOLD_FF, list[2].action)
+        assertNull(shortcuts(touch = listOf(ShortcutAction.SAVE_STATE)).first().value)   // the slot not read yet
+        assertNull(GamePanelModel.eventFor(list.first()))   // its press and release are the tile's own
+        assertTrue(shortcuts(netplay = true, touch = listOf(ShortcutAction.SAVE_STATE)).isEmpty())
     }
 
     @Test fun tiles() {
-        for (list in listOf(shortcuts(), shortcuts(discCount = 2, connected = true))) {
+        for (list in listOf(shortcuts(), shortcuts(discCount = 2))) {
             val tiles = list.filter { it.shortcut in speedTiles }
             assertEquals(speedTiles, tiles.map { it.shortcut })
             assertTrue(tiles.all { it.enabled })
             assertEquals(listOf(false, false, null), tiles.map { it.on })   // FF and Rewind toggles; Reset an action
         }
-        // Display order: Swap disc, Second screen, then Fast forward, Rewind, Mic and Reset.
-        assertEquals(Shortcut.entries.toList(), shortcuts(discCount = 2, connected = true, mic = false).map { it.shortcut })
+        // Display order: the touch buttons, Swap disc, then Fast forward, Rewind, Mic and Reset.
+        assertEquals(Shortcut.entries.toList(), shortcuts(discCount = 2, mic = false, touch = listOf(ShortcutAction.SAVE_STATE)).map { it.shortcut })
         // The live state fills the toggle.
         assertEquals(true, shortcuts(ff = true).single { it.shortcut == Shortcut.FAST_FORWARD }.on)
         assertEquals(true, shortcuts(rewind = true).single { it.shortcut == Shortcut.REWIND }.on)
+    }
+
+    // The Settings tab is the second-screen panel's: after Shortcuts, only where asked for.
+    @Test fun settings_tab_sits_after_shortcuts() {
+        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.SETTINGS, GamePanelTab.ACHIEVEMENTS), GamePanelModel.tabs(raAvailable = true, playerSlots = 1, settings = true))
+        assertTrue(GamePanelTab.SETTINGS !in GamePanelModel.tabs(raAvailable = true, playerSlots = 2, cheats = true))
+    }
+
+    // A Settings option: up to four values sit side by side, more step between two arrows (wrapping); a value not among
+    // them steps to the first or the last, and a step onto the value in use asks for nothing.
+    @Test fun a_quick_choice_marks_its_value_and_steps_round() {
+        val scaling = GamePanelModel.quickChoice("k", "Screen Scaling", listOf("Auto", "Native", "Aspect", "Fullscreen"), "Aspect")
+        assertEquals(2, scaling.index); assertTrue(scaling.segments); assertTrue(scaling.enabled)
+        val shader = GamePanelModel.quickChoice("s", "Shader", listOf("None", "nx/line.glslp", "nx/grid.glslp", "User/crt/easy.glslp", "x.glslp"), "None")
+        assertTrue(!shader.segments)
+        assertEquals("nx/line.glslp", GamePanelModel.quickStep(shader, 1))
+        assertEquals("x.glslp", GamePanelModel.quickStep(shader, -1))
+        val gone = shader.copy(index = -1, current = "User/removed.glslp")
+        assertEquals("None", GamePanelModel.quickStep(gone, 1)); assertEquals("x.glslp", GamePanelModel.quickStep(gone, -1))
+        assertNull(GamePanelModel.quickStep(GamePanelModel.quickChoice("o", "Overlay", listOf("None"), "None"), 1))
+        assertTrue(!GamePanelModel.quickChoice("o", "Overlay", listOf("None"), "None").segments)   // one value: nothing to pick between
+        assertEquals("easy", GamePanelModel.quickFileLabel("User/crt/easy.glslp"))
+        assertEquals("None", GamePanelModel.quickFileLabel("None"))
+        assertEquals("scan lines", GamePanelModel.quickFileLabel("scan lines.png"))
     }
 
     @Test fun noScreenshot() {
@@ -152,15 +190,12 @@ class GamePanelModelTest {
     }
 
     @Test fun disabled_shortcut_has_no_event() {
-        val list = shortcuts(discCount = 2, connected = true, on = true)
+        val list = shortcuts(discCount = 2)
         for (s in list) assertNull(GamePanelModel.eventFor(s.copy(enabled = false)))
         assertEquals(GamePanelEvent.SwapDisc, GamePanelModel.eventFor(list.single { it.shortcut == Shortcut.SWAP_DISC }))
-        assertEquals(GamePanelEvent.SetSecondScreen(false), GamePanelModel.eventFor(list.single { it.shortcut == Shortcut.SECOND_SCREEN }))
-        val off = shortcuts(connected = true, on = false).single { it.shortcut == Shortcut.SECOND_SCREEN }
-        assertEquals(GamePanelEvent.SetSecondScreen(true), GamePanelModel.eventFor(off))
-        // The event follows the typed setting, not the display text.
-        val typed = ShortcutState(Shortcut.SECOND_SCREEN, "Second screen", enabled = true, value = "whatever", on = true)
-        assertEquals(GamePanelEvent.SetSecondScreen(false), GamePanelModel.eventFor(typed))
+        // The event follows the typed state, not the display text.
+        val typed = ShortcutState(Shortcut.FAST_FORWARD, "Fast forward", enabled = true, value = "whatever", on = true)
+        assertEquals(GamePanelEvent.SetFastForward(false), GamePanelModel.eventFor(typed))
     }
 
     @Test fun player_tap_cycles_empty_and_every_connected_pad() {

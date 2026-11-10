@@ -7,7 +7,7 @@ import kotlin.test.assertNull
 class HomeBandNavTest {
     private val fold = HomeFrame(933f, 572f, false, 933f / 660f)
     private val m = HomeMemory()
-    // 4 tools, 7 games: Continue 0, the inline games 1 2, tools 3 4 / 5 6. Pins 7..11 (rows 7 8 9 10 / 11). New
+    // 4 tools, 7 games: Continue 0, the inline games 1 2, the tools' row 3 4 5 6. Pins 7..11 (rows 7 8 9 10 / 11). New
     // 12..15, Not started 16..18, Pick up 19..22.
     // The large face's shelves hold at most 4 (one row), so New's 6 draws 4, Not started its 3 and Pick up its 4, in the
     // pins' grid (4 a row, the pins' tile size).
@@ -66,17 +66,22 @@ class HomeBandNavTest {
         assertEquals(phone.count - 1, homeClamp(20, s, phone))  // a shelf tile on the large face → the phone's last pin
     }
 
-    // The Fold with 1 pinned game and 4 tools: Continue 0, the inline game 1 (448.6 … 713), tools 2 3 / 4 5; New 6..9
-    // (4 a shelf, in the pins' grid: 4 a row, 203.75 wide). RIGHT Continue → the game → the top tool; LEFT back, from
-    // either tool row; DOWN from the game to the first New tile under it (New 1, 255.75 … 459.5), UP back to it.
+    // The Fold with 1 pinned game and 4 tools: Continue 0 (38 … 543.8), the inline game 1 (557.8 … 895), the tools' row
+    // 2 3 4 5 under Continue (88.11 wide, 96.11 apart from 38, ending at 414.44); New 6..9 (4 a shelf, in the pins'
+    // grid: 4 a row, 203.75 wide). RIGHT Continue → the game, nothing right of it; LEFT back. DOWN from Continue → the
+    // first tool, UP back; DOWN from a tool → the New tile under it (tool 5, 326.33 … 414.44, over New 1,
+    // 255.75 … 459.5). No tool under the game: DOWN goes to the first New tile under it (New 2, 473.5 … 677.25), UP
+    // back to it.
     @Test fun foldOneGameInline() {
         val t = homeShape(homeBoard(fold, 1, tools = 4, games = 1, shelves = listOf(HomeShelf.NEW to 6)))
         assertEquals(6, t.topCount); assertEquals(listOf(HomeBand(0, 4, 4)), t.bands)
-        assertEquals(1, homeStep(0, t, m, NxButton.RIGHT)); assertEquals(2, homeStep(1, t, m, NxButton.RIGHT))
-        assertEquals(1, homeStep(2, t, m, NxButton.LEFT)); assertEquals(1, homeStep(4, t, m, NxButton.LEFT))
+        assertEquals(1, homeStep(0, t, m, NxButton.RIGHT)); assertNull(homeStep(1, t, m, NxButton.RIGHT))
         assertEquals(0, homeStep(1, t, m, NxButton.LEFT))
-        assertEquals(7, homeStep(1, t, m, NxButton.DOWN)); assertEquals(6, homeStep(0, t, m, NxButton.DOWN))
-        assertEquals(1, homeStep(7, t, HomeMemory(lastTop = 1), NxButton.UP))
+        assertEquals(2, homeStep(0, t, m, NxButton.DOWN)); assertEquals(0, homeStep(2, t, m, NxButton.UP)); assertEquals(0, homeStep(5, t, m, NxButton.UP))
+        assertEquals(3, homeStep(2, t, m, NxButton.RIGHT)); assertNull(homeStep(5, t, m, NxButton.RIGHT)); assertNull(homeStep(2, t, m, NxButton.LEFT))
+        assertEquals(6, homeStep(2, t, m, NxButton.DOWN)); assertEquals(7, homeStep(5, t, m, NxButton.DOWN))
+        assertEquals(8, homeStep(1, t, m, NxButton.DOWN))
+        assertEquals(1, homeStep(8, t, HomeMemory(lastTop = 1), NxButton.UP)); assertEquals(5, homeStep(7, t, HomeMemory(lastTop = 5), NxButton.UP))
         assertEquals(1, homeStep(1, t, m, NxButton.UP))         // the top: stays
     }
 }

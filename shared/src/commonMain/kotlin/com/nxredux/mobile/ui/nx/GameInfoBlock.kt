@@ -2,6 +2,9 @@ package com.nxredux.mobile.ui.nx
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -13,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.LocalTextStyle
@@ -38,8 +42,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.isSpecified
+import com.nxredux.mobile.ui.GENRE_JOIN
+import com.nxredux.mobile.ui.firstGenre
+import com.nxredux.mobile.ui.genreParts
+import com.nxredux.mobile.ui.genresThatFit
 import com.nxredux.mobile.ui.INFO_SEPARATOR
 import com.nxredux.mobile.ui.InfoKind
+import com.nxredux.mobile.ui.ownRow
 import com.nxredux.mobile.ui.InfoLine
 import com.nxredux.mobile.ui.ToolKind
 import org.jetbrains.compose.resources.painterResource
@@ -70,7 +86,7 @@ private fun GameInfoBlock(lines: List<InfoLine>, alignEnd: Boolean, modifier: Mo
     val colors = LocalNxColors.current
     val base = infoStyle()
     val style = base.copy(color = colors.hint, shadow = Shadow(color = colors.background, blurRadius = 6f), fontSize = base.fontSize * scale)
-    val info = infoText(lines, colors.hint, icon = ICON * scale)
+    val info = infoText(remember(lines) { firstGenre(lines) }, colors.hint, icon = ICON * scale)   // one line, not fitted: the first genre
     Text(
         info.text, modifier, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis,
         textAlign = if (alignEnd) TextAlign.End else TextAlign.Start, inlineContent = info.inlineContent,
@@ -79,15 +95,48 @@ private fun GameInfoBlock(lines: List<InfoLine>, alignEnd: Boolean, modifier: Mo
 
 internal const val TROPHY = "trophy"   // the inline content id of the achievement segment's icon
 
+/** The inline content id of [genre]'s pill. */
+internal fun genreId(genre: String): String = "genre:$genre"
+
+// A genre pill against the line's font size (em): its text, the room each side of it, and its height (under a line's,
+// so a pill never grows the line).
+private const val GENRE_TEXT = 0.78f
+private const val GENRE_PAD = 0.5f
+private const val GENRE_HEIGHT = 1.1f
+private val GENRE_MEASURE = 100.sp   // the pill text is measured once at this size; its width scales with the font
+
+/** [genre]'s pill width in em of the line's font size: its text at [GENRE_TEXT] and [GENRE_PAD] each side. */
+internal fun genrePillEm(measurer: TextMeasurer, density: Density, font: FontFamily, genre: String): Float {
+    val w = measurer.measure(genre, TextStyle(fontFamily = font, fontWeight = FontWeight.Medium, fontSize = GENRE_MEASURE), maxLines = 1, softWrap = false).size.width
+    return w / with(density) { GENRE_MEASURE.toPx() } * GENRE_TEXT + 2 * GENRE_PAD
+}
+
+/** [genre] as an outlined pill, inline in the info text: sized in em ([widthEm]), so it follows the line's font size. */
+private fun genrePill(genre: String, widthEm: Float, tint: Color, font: FontFamily) =
+    InlineTextContent(Placeholder(widthEm.em, GENRE_HEIGHT.em, PlaceholderVerticalAlign.TextCenter)) {
+        BoxWithConstraints(Modifier.fillMaxSize().border(1.dp, tint.copy(alpha = 0.7f), RoundedCornerShape(50)), contentAlignment = Alignment.Center) {   // role: the pill's outline, a little under the text
+            val size = with(LocalDensity.current) { (maxHeight * (GENRE_TEXT / GENRE_HEIGHT)).toSp() }
+            // On its natural line box, which may be taller than the pill: the font's capitals sit at that box's middle, so
+            // centring the box centres the word; a line squeezed to the pill's height would sit low.
+            Text(
+                genre, Modifier.wrapContentSize(unbounded = true), color = tint, fontFamily = font, fontWeight = FontWeight.Medium, fontSize = size,
+                maxLines = 1, softWrap = false, style = TextStyle(shadow = null),
+            )
+        }
+    }
+
 /**
  * [infoText]'s text: the segments joined by [INFO_SEPARATOR], the trophy's inline content ([TROPHY]) before the
- * achievements; every segment in the Text's own colour.
+ * achievements; every segment in the Text's own colour. A genre segment is its genres' pills ([genreId]), a space apart.
  */
 internal fun infoAnnotatedString(lines: List<InfoLine>): AnnotatedString = buildAnnotatedString {
     lines.forEachIndexed { i, line ->
         if (i > 0) append(INFO_SEPARATOR)
         if (line.kind == InfoKind.ACHIEVEMENTS) appendInlineContent(TROPHY, "[trophy]")
-        append(line.text)
+        if (line.kind == InfoKind.GENRE) genreParts(line.text).forEachIndexed { j, genre ->
+            if (j > 0) append(" ")
+            appendInlineContent(genreId(genre), genre)
+        } else append(line.text)
     }
 }
 
@@ -97,7 +146,7 @@ internal class InfoText(val text: AnnotatedString, val inlineContent: Map<String
 /**
  * The info [lines] (gameInfoLines' segments in order) joined by [INFO_SEPARATOR], the achievement segment led by the
  * trophy ([icon], [tint]) and the 6 dp after it, inline, the next goal in the line's own colour, as the rest: the title
- * above stays the brightest text ([infoAnnotatedString]). One builder for the List's band, the switcher's, the Grid's
+ * above stays the brightest text ([infoAnnotatedString]), a genre as outlined pills ([genrePill]). One builder for the List's band, the switcher's, the Grid's
  * selected tile and the Carousel and Backdrop captions.
  */
 @Composable
@@ -113,7 +162,13 @@ internal fun infoText(lines: List<InfoLine>, tint: Color, icon: Dp = ICON): Info
         }
         mapOf(TROPHY to trophy)
     }
-    return remember(lines, inline) { InfoText(infoAnnotatedString(lines), inline) }
+    val font = LocalNxFont.current
+    val measurer = rememberTextMeasurer()
+    val genres = remember(lines) { lines.filter { it.kind == InfoKind.GENRE }.flatMap { genreParts(it.text) } }
+    val pills = remember(genres, tint, font, density) {
+        genres.associate { g -> genreId(g) to genrePill(g, genrePillEm(measurer, density, font, g), tint, font) }
+    }
+    return remember(lines, inline, pills) { InfoText(infoAnnotatedString(lines), inline + pills) }
 }
 
 /** A game caption's info row as drawn: its segments, and the most lines it may wrap to before it ellipsizes. */
@@ -136,8 +191,8 @@ internal fun fitCaptionRows(
 ): List<CaptionInfoRow> {
     var spare = spareLines
     return rows.flatMapIndexed { i, row ->
-        val next = row.filter { it.kind == InfoKind.NEXT }
-        val head = row.filter { it.kind != InfoKind.NEXT }
+        val next = row.filter { it.ownRow }
+        val head = row.filter { !it.ownRow }
         val width = widths.getOrElse(i) { 0f }
         // A next goal on a row of its own ([backdropCaptionRows]) too long for the width wraps onto the room left.
         if (head.isEmpty() && next.isNotEmpty() && width > avail && spare > 0) {
@@ -171,16 +226,34 @@ internal fun rememberFittedCaptionRows(
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val merged = LocalTextStyle.current.merge(style)
-    return remember(rows, merged, icon, avail, spare, density, alwaysSplitNext) {
+    val font = LocalNxFont.current
+    return remember(rows, merged, icon, avail, spare, density, alwaysSplitNext, font) {
         with(density) {
             val trophy = (icon + 6.dp).toPx()   // infoText's placeholder: the icon and the 6 dp after it
-            val widths = rows.map { row ->
-                val text = row.joinToString(INFO_SEPARATOR) { it.text }
-                measurer.measure(text, merged, maxLines = 1, softWrap = false).size.width +
-                    if (row.any { it.kind == InfoKind.ACHIEVEMENTS }) trophy else 0f
+            val fontPx = (if (merged.fontSize.isSpecified) merged.fontSize else 14.sp).toPx()
+            val space = measurer.measure(" ", merged, maxLines = 1).size.width.toFloat()
+            fun plain(row: List<InfoLine>): Float = measurer.measure(row.joinToString(INFO_SEPARATOR) { it.text }, merged, maxLines = 1, softWrap = false).size.width +
+                if (row.any { it.kind == InfoKind.ACHIEVEMENTS }) trophy else 0f
+            fun pills(genres: List<String>): Float = genres.sumOf { (genrePillEm(measurer, density, font, it) * fontPx).toDouble() }.toFloat() + space * (genres.size - 1).coerceAtLeast(0)
+            // A row's genres are pills: only those that fit beside the rest of the row are kept ([genresThatFit]).
+            val fitted = rows.map { row ->
+                val rest = row.filter { it.kind != InfoKind.GENRE }
+                val restW = if (rest.isEmpty()) 0f else plain(rest + InfoLine(InfoKind.COUNT, ""))   // with the separator before the genre
+                row.map { l ->
+                    if (l.kind != InfoKind.GENRE) l else genreParts(l.text).let { g ->
+                        val n = genresThatFit(g.map { pills(listOf(it)) }, space, avail.toPx() - restW)
+                        l.copy(text = g.take(n).joinToString(GENRE_JOIN))
+                    }
+                }
+            }
+            val widths = fitted.map { row ->
+                val genre = row.filter { it.kind == InfoKind.GENRE }
+                if (genre.isEmpty()) return@map plain(row)
+                val rest = row - genre.toSet()
+                (if (rest.isEmpty()) 0f else plain(rest + InfoLine(InfoKind.COUNT, ""))) + pills(genre.flatMap { genreParts(it.text) })
             }
             val lineH = measurer.measure("A", merged, maxLines = 1).size.height.coerceAtLeast(1)
-            fitCaptionRows(rows, widths, avail.toPx(), (spare.toPx() / lineH).toInt(), alwaysSplitNext)
+            fitCaptionRows(fitted, widths, avail.toPx(), (spare.toPx() / lineH).toInt(), alwaysSplitNext)
         }
     }
 }

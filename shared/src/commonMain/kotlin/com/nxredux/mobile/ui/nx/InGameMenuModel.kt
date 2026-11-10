@@ -218,8 +218,6 @@ sealed interface MenuEffect {
     data class SetCheat(val index: Int, val enabled: Boolean) : MenuEffect
     /** Put disc [index] (0-based) in the drive now; not persisted. [toast]: the panel's Swap disc, which says "Disc N of M". */
     data class ChangeDisc(val index: Int, val toast: Boolean = false) : MenuEffect
-    /** Turn the second-screen setting [on] or off (the panel's shortcut; already flipped in the model); the host persists it and re-syncs the dual mode. */
-    data class SetSecondScreen(val on: Boolean) : MenuEffect
     /** Flip achievement [id]'s notification mute (already flipped in the model); the host persists it. */
     data class ToggleMute(val id: Int) : MenuEffect
     /**
@@ -273,9 +271,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** The core's disc count and current disc (0-based), from [setDiscs]; the Disc row shows when [discCount] > 1. */
     private var discCount = 0
     private var discIndex = 0
-    /** From [setSecondScreen]; the panel shows the Second screen shortcut only while a second display is [secondConnected]. */
+    /** From [setSecondScreen]: a second display is connected. */
     private var secondConnected = false
-    private var secondOn = true
     /** From [setSecondScreen]: an app holds the second display, so Use top screen shows on the root. */
     private var screenTaken = false
     /** From [setSpeedTiles]: the panel's Fast forward and Rewind tiles' live state; [speedRewind] null: no Rewind tile. */
@@ -898,13 +895,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     /**
-     * A second display is [connected] and the setting is [on]; shows (or hides) the panel's Second screen shortcut and
-     * Display's Bottom screen row, keeping the selection. [taken]: an app the player opened holds it (Use top screen).
+     * A second display is [connected]; shows (or hides) Display's Bottom screen row, keeping the selection. [taken]: an
+     * app the player opened holds it (Use top screen).
      */
-    fun setSecondScreen(connected: Boolean, on: Boolean, taken: Boolean = false) {
+    fun setSecondScreen(connected: Boolean, taken: Boolean = false) {
         val changed = connected != secondConnected
         secondConnected = connected
-        secondOn = on
         screenTaken = taken
         refreshRoot()
         if (!changed) return
@@ -927,6 +923,13 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         speedFf = ff
         speedRewind = rewind
         fixPanel()
+    }
+
+    /** The second-screen panel's All options: the menu on its Options page. Nothing in netplay (its root has no Options). */
+    fun openOptions() {
+        if (netplay) return
+        popTo(PageKind.Root)
+        push(optionsPage())
     }
 
     /**
@@ -1060,11 +1063,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private fun panelEffect(event: GamePanelEvent): MenuEffect? = when (event) {
         GamePanelEvent.SwapDisc -> (changeDisc(1) as? MenuEffect.ChangeDisc)?.copy(toast = true)
-        is GamePanelEvent.SetSecondScreen -> {
-            secondOn = event.on
-            refreshRoot()
-            MenuEffect.SetSecondScreen(event.on)
-        }
+        // The second-screen panel's own: this menu's panel has none of them.
+        is GamePanelEvent.Touch, is GamePanelEvent.SelectSlot, is GamePanelEvent.SetVolume, is GamePanelEvent.SetQuick, GamePanelEvent.OpenOptions -> null
         is GamePanelEvent.SelectTab -> {
             // A tap leaves a touch player's focus nowhere: off the Menu tab that reads as the tab row ([pressPanel]). The
             // tab row also shows over the Options page beside the root ([menuTabsShown]): a tab there goes back to the root.
@@ -1131,6 +1131,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private fun panelItemCount(tab: GamePanelTab): Int = when (tab) {
         GamePanelTab.SHORTCUTS -> 0   // the Menu tab: its words, no items
+        GamePanelTab.SETTINGS -> 0    // the second-screen panel's only
         GamePanelTab.ACHIEVEMENTS -> achievements.orEmpty().size
         GamePanelTab.CHEATS -> cheats.size
         GamePanelTab.PLAYERS -> playerSlots.size
@@ -1197,13 +1198,13 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         when (tab) {
             GamePanelTab.ACHIEVEMENTS -> push(achievementsPage())
             GamePanelTab.PLAYERS -> push(playersPage())
-            GamePanelTab.SHORTCUTS, GamePanelTab.CHEATS -> Unit
+            GamePanelTab.SHORTCUTS, GamePanelTab.SETTINGS, GamePanelTab.CHEATS -> Unit
         }
     }
 
     /** The shown tab's item that asks for [event] ([panelItemEvent] backwards); null for a tab, the Game pill, or none. */
     private fun panelItemIndex(event: GamePanelEvent): Int? = when (panelTab()) {
-        GamePanelTab.SHORTCUTS -> null   // no items
+        GamePanelTab.SHORTCUTS, GamePanelTab.SETTINGS -> null   // no items
         GamePanelTab.ACHIEVEMENTS -> null   // its rows ask for nothing
         GamePanelTab.CHEATS -> (event as? GamePanelEvent.SetCheat)?.index
         GamePanelTab.PLAYERS -> (event as? GamePanelEvent.SetPlayer)?.slot
@@ -1211,7 +1212,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /** What A on item [index] of [tab] asks for, as a tap there would ([GamePanel]); null for a disabled shortcut or an achievement. */
     private fun panelItemEvent(tab: GamePanelTab, index: Int): GamePanelEvent? = when (tab) {
-        GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS -> null
+        GamePanelTab.SHORTCUTS, GamePanelTab.SETTINGS, GamePanelTab.ACHIEVEMENTS -> null
         GamePanelTab.CHEATS -> GamePanelModel.cheatEvent(index, panelCheats())
         GamePanelTab.PLAYERS -> if (index < playerSlots.size) GamePanelModel.nextPlayer(index, playerSlots, playerPads) else null
     }

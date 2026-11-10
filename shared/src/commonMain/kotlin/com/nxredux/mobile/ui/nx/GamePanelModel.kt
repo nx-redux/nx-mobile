@@ -3,9 +3,11 @@ package com.nxredux.mobile.ui.nx
 import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.cheats.CheatEntry
 import com.nxredux.mobile.gametime.GameTimeFormat
+import com.nxredux.mobile.shortcuts.ShortcutAction
+import com.nxredux.mobile.shortcuts.TouchSlot
 
 /** The game panel's tabs, in display order; [GamePanelModel.tabs] hides the ones that don't apply. */
-enum class GamePanelTab(val label: String) { SHORTCUTS("Shortcuts"), ACHIEVEMENTS("Achievements"), CHEATS("Cheats"), PLAYERS("Players") }
+enum class GamePanelTab(val label: String) { SHORTCUTS("Shortcuts"), SETTINGS("Settings"), ACHIEVEMENTS("Achievements"), CHEATS("Cheats"), PLAYERS("Players") }
 
 /**
  * The tab's word in the in-game menu's tab row: Shortcuts is the Menu tab there (the menu's words with the shortcuts
@@ -15,17 +17,24 @@ val GamePanelTab.menuLabel: String get() = if (this == GamePanelTab.SHORTCUTS) M
 
 const val MENU_TAB_LABEL = "Menu"
 
-/** The Shortcuts tab's one-tap actions, in display order. No Screenshot: the spec dropped it everywhere. */
+/**
+ * The Shortcuts tab's tiles, in display order: the player's touch buttons ([TOUCH], each its own action), then the
+ * panel's own. No Screenshot: the spec dropped it everywhere.
+ */
 enum class Shortcut(val label: String) {
-    SWAP_DISC("Swap disc"), SECOND_SCREEN("Second screen"), FAST_FORWARD("Fast forward"), REWIND("Rewind"), MIC("Mic"), RESET("Reset"),
+    TOUCH(""), SWAP_DISC("Swap disc"), FAST_FORWARD("Fast forward"), REWIND("Rewind"), MIC("Mic"), RESET("Reset"),
 }
 
 /**
- * One shortcut button: [enabled] false is drawn dimmed and does nothing; [value] is the display text under the label
- * ("2/3" for discs); [on] makes it a toggle (the second screen's setting, fast forward, rewind; null for the action
- * shortcuts), drawn as a quick-settings tile: filled while on, outlined while off, with no On/Off words.
+ * One shortcut tile: [enabled] false is drawn dimmed and does nothing; [value] is the display text under the label
+ * ("2/3" for discs, "Slot 2" for a save state); [on] makes it a toggle (fast forward, rewind, the mic; null for the
+ * action shortcuts), drawn as a quick-settings tile: filled while on, outlined while off, with no On/Off words.
+ * [action]: a [Shortcut.TOUCH] tile's, run as its touch button runs it (held while pressed).
  */
-data class ShortcutState(val shortcut: Shortcut, val label: String, val enabled: Boolean, val value: String? = null, val on: Boolean? = null)
+data class ShortcutState(
+    val shortcut: Shortcut, val label: String, val enabled: Boolean, val value: String? = null, val on: Boolean? = null,
+    val action: ShortcutAction? = null,
+)
 
 /**
  * The header on every tab: the game's [title], its box art ([artPath]; null draws the [consoleTag]'s logo), its total
@@ -48,6 +57,24 @@ data class GamePanelHeader(
  * [on] (its switch).
  */
 data class CheatRow(val name: String, val source: String, val on: Boolean)
+
+/** One row of the Settings tab ([GamePanelState.quick]): what a player changes mid-game, applied as it is touched. */
+sealed interface QuickSetting {
+    val label: String
+
+    /** The game's volume, [value] 0..1 of the device's range. */
+    data class Volume(override val label: String, val value: Float) : QuickSetting
+
+    /**
+     * An option with a few [values] ([labels]: what each reads as), the one in use at [index] (-1: a value not among
+     * them, shown as it is in [current]). [segments]: every value side by side; else the value between two arrows.
+     * [enabled] false: the game's layout holds it (dimmed, not changed).
+     */
+    data class Choice(
+        val key: String, override val label: String, val values: List<String>, val labels: List<String>, val index: Int,
+        val current: String, val segments: Boolean, val enabled: Boolean = true,
+    ) : QuickSetting
+}
 
 /** Where a controller is inside the panel (single-screen in-game menu): the tab row, or the current tab's item [index]. */
 sealed interface PanelFocus {
@@ -75,14 +102,27 @@ data class GamePanelState(
     val noCheatsText: String = "",
     val focus: PanelFocus? = null,
     val showGamePill: Boolean = false,
+    /** The Shortcuts tab's save-state slots, in slot order (none: no strip), and the one Save and Load use (1-based). */
+    val slots: List<SlotUi> = emptyList(),
+    val slot: Int? = null,
+    /** The Settings tab's rows. */
+    val quick: List<QuickSetting> = emptyList(),
 )
 
 /** What a tap (or A) on the panel asks the game for. */
 sealed interface GamePanelEvent {
     /** Next disc, as the menu's Disc row cycles. */
     data object SwapDisc : GamePanelEvent
-    /** The global Second screen setting to [on]. */
-    data class SetSecondScreen(val on: Boolean) : GamePanelEvent
+    /** The Settings tab's volume to [value] (0..1). */
+    data class SetVolume(val value: Float) : GamePanelEvent
+    /** The Settings tab's option [key] to [value], live. */
+    data class SetQuick(val key: String, val value: String) : GamePanelEvent
+    /** The Settings tab's "All options": the in-game menu on its Options page. */
+    data object OpenOptions : GamePanelEvent
+    /** Save-state [slot] (1-based) picked on the strip: Save and Load use it. */
+    data class SelectSlot(val slot: Int) : GamePanelEvent
+    /** A touch button's tile pressed ([down]) or let go, as the button on the pad: a hold runs while down. */
+    data class Touch(val action: ShortcutAction, val down: Boolean) : GamePanelEvent
     data class SelectTab(val tab: GamePanelTab) : GamePanelEvent
     /** Put pad [key] in player [slot] (0-based); null empties it. */
     data class SetPlayer(val slot: Int, val key: String?) : GamePanelEvent
@@ -103,15 +143,36 @@ sealed interface GamePanelEvent {
 /** The panel's rules, pure so the in-game menu and both hosts share them. */
 object GamePanelModel {
     /**
-     * Shortcuts always; Achievements only with a RetroAchievements set; Cheats while the core takes them ([cheats], even
-     * with none for the game: the tab says how to add some); Players only with more than one player slot.
+     * Shortcuts always; Settings on the second-screen panel ([settings]); Achievements only with a RetroAchievements
+     * set; Cheats while the core takes them ([cheats], even with none for the game: the tab says how to add some);
+     * Players only with more than one player slot.
      */
-    fun tabs(raAvailable: Boolean, playerSlots: Int, cheats: Boolean = false): List<GamePanelTab> = buildList {
+    fun tabs(raAvailable: Boolean, playerSlots: Int, cheats: Boolean = false, settings: Boolean = false): List<GamePanelTab> = buildList {
         add(GamePanelTab.SHORTCUTS)
+        if (settings) add(GamePanelTab.SETTINGS)
         if (raAvailable) add(GamePanelTab.ACHIEVEMENTS)
         if (cheats) add(GamePanelTab.CHEATS)
         if (playerSlots > 1) add(GamePanelTab.PLAYERS)
     }
+
+    /**
+     * A Settings tab option: [values] with the one in use ([current]) marked; side by side while there are at most
+     * [QUICK_SEGMENTS_MAX] and none has its own name ([labels]) too long to share a row, else between two arrows.
+     */
+    fun quickChoice(key: String, label: String, values: List<String>, current: String, labels: List<String> = values, enabled: Boolean = true) =
+        QuickSetting.Choice(key, label, values, labels, values.indexOf(current), current, segments = values.size in 2..QUICK_SEGMENTS_MAX, enabled = enabled)
+
+    const val QUICK_SEGMENTS_MAX = 4
+
+    /** The value [delta] steps on from [c]'s (wrapping; from a value not among them, the first or the last); null with none to step to. */
+    fun quickStep(c: QuickSetting.Choice, delta: Int): String? {
+        if (c.values.isEmpty()) return null
+        val at = if (c.index >= 0) (c.index + delta).mod(c.values.size) else if (delta > 0) 0 else c.values.lastIndex
+        return c.values[at].takeIf { it != c.current }
+    }
+
+    /** A shader preset or overlay file as the Settings tab names it: its file's name without the folder or the extension. */
+    fun quickFileLabel(value: String): String = value.substringAfterLast('/').substringBeforeLast('.').ifEmpty { value }
 
     /** The points badge at the end of an achievement's name; none for one worth no points. */
     fun pointsBadge(a: RaAchievement): String? = a.points.takeIf { it > 0 }?.toString()
@@ -121,16 +182,44 @@ object GamePanelModel {
         if (current in tabs) current else GamePanelTab.SHORTCUTS
 
     /**
-     * The Shortcuts tab: Swap disc for a multi-disc game outside netplay (disc swaps aren't synced), Second screen while
-     * one is connected, then Fast forward ([ff]: running now), Rewind ([rewind]: rewinding now; null where the game
-     * can't rewind, the core or its Rewind row off: hidden, never greyed), Mic ([mic]: on now; null off DS/3DS: hidden) and Reset. Netplay and link sessions hide all
-     * three, since they would desync the players. [discIndex] is 0-based.
+     * The touch buttons the panel shows a tile for, in the buttons' order: each button's action ([touch], the player's),
+     * the first two Save state and Load state while unset, the rest left out while unset. An action with a tile of
+     * the panel's own (Toggle FF, Toggle Rewind, Reset) is left out, as is one already listed, and a rewind hold where
+     * the game can't rewind now ([rewind] false).
+     */
+    fun panelTouchActions(touch: Map<TouchSlot, ShortcutAction>, rewind: Boolean): List<ShortcutAction> =
+        TouchSlot.entries.mapNotNull { touch[it] ?: PANEL_TOUCH_DEFAULTS[it] }.distinct()
+            .filter { it !in PANEL_OWN_ACTIONS && (rewind || !it.rewind) }
+
+    private val PANEL_TOUCH_DEFAULTS = mapOf(TouchSlot.ONE to ShortcutAction.SAVE_STATE, TouchSlot.TWO to ShortcutAction.LOAD_STATE)
+    private val PANEL_OWN_ACTIONS = setOf(ShortcutAction.TOGGLE_FF, ShortcutAction.TOGGLE_REWIND, ShortcutAction.RESET)
+
+    /** A touch button's tile for [action]: Save and Load say the save-state [slot] they use (null: not read yet). */
+    private fun touchTile(action: ShortcutAction, slot: Int?): ShortcutState {
+        val label = when (action) {
+            ShortcutAction.SAVE_STATE -> "Save"
+            ShortcutAction.LOAD_STATE -> "Load"
+            ShortcutAction.HOLD_FF -> "Hold fast forward"
+            ShortcutAction.HOLD_REWIND -> "Hold rewind"
+            else -> action.label
+        }
+        val state = action == ShortcutAction.SAVE_STATE || action == ShortcutAction.LOAD_STATE
+        return ShortcutState(Shortcut.TOUCH, label, true, value = slot?.takeIf { state }?.let { "Slot $it" }, action = action)
+    }
+
+    /**
+     * The Shortcuts tab: the touch buttons' tiles ([touch], [panelTouchActions]; Save and Load on the save-state [slot]),
+     * Swap disc for a multi-disc game outside netplay (disc swaps aren't synced), then Fast forward ([ff]: running now),
+     * Rewind ([rewind]: rewinding now; null where the game can't rewind, the core or its Rewind row off: hidden, never
+     * greyed), Mic ([mic]: on now; null off DS/3DS: hidden) and Reset. Netplay and link sessions keep only Swap disc's
+     * rule: the rest would desync the players. [discIndex] is 0-based.
      */
     fun shortcuts(
-        discCount: Int, discIndex: Int, secondConnected: Boolean, secondOn: Boolean, netplay: Boolean, ff: Boolean, rewind: Boolean?, mic: Boolean? = null,
+        discCount: Int, discIndex: Int, netplay: Boolean, ff: Boolean, rewind: Boolean?, mic: Boolean? = null,
+        touch: List<ShortcutAction> = emptyList(), slot: Int? = null,
     ): List<ShortcutState> = buildList {
+        if (!netplay) touch.forEach { add(touchTile(it, slot)) }
         if (discCount > 1 && !netplay) add(ShortcutState(Shortcut.SWAP_DISC, Shortcut.SWAP_DISC.label, true, "${discIndex + 1}/$discCount"))
-        if (secondConnected) add(ShortcutState(Shortcut.SECOND_SCREEN, Shortcut.SECOND_SCREEN.label, true, on = secondOn))
         if (netplay) return@buildList
         add(ShortcutState(Shortcut.FAST_FORWARD, Shortcut.FAST_FORWARD.label, true, on = ff))
         if (rewind != null) add(ShortcutState(Shortcut.REWIND, Shortcut.REWIND.label, true, on = rewind))
@@ -138,10 +227,13 @@ object GamePanelModel {
         add(ShortcutState(Shortcut.RESET, Shortcut.RESET.label, true))
     }
 
-    /** What activating [s] asks for: nothing while disabled; Swap disc, a toggle flipped (from its live [ShortcutState.on]), or Reset. */
+    /**
+     * What activating [s] asks for: nothing while disabled; Swap disc, a toggle flipped (from its live [ShortcutState.on]),
+     * or Reset. A touch button's tile asks on its press and release instead ([GamePanelEvent.Touch]).
+     */
     fun eventFor(s: ShortcutState): GamePanelEvent? = if (!s.enabled) null else when (s.shortcut) {
+        Shortcut.TOUCH -> null
         Shortcut.SWAP_DISC -> GamePanelEvent.SwapDisc
-        Shortcut.SECOND_SCREEN -> s.on?.let { GamePanelEvent.SetSecondScreen(on = !it) }
         Shortcut.FAST_FORWARD -> s.on?.let { GamePanelEvent.SetFastForward(on = !it) }
         Shortcut.REWIND -> s.on?.let { GamePanelEvent.SetRewind(on = !it) }
         Shortcut.MIC -> s.on?.let { GamePanelEvent.SetMic(on = !it) }

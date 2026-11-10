@@ -74,6 +74,8 @@ internal interface PadLayoutHost {
     val padShortcuts: Map<TouchSlot, TouchShortcut>
     /** A touch shortcut button's press ([down]) or release. */
     fun onPadShortcut(slot: TouchSlot, down: Boolean)
+    /** The DS / 3DS split's Panel pill as a corner button: what its tap does; null while there is none to show. */
+    fun cornerPanel(): (() -> Unit)?
     /** A pad skin's SAVE / LOAD (the last-used slot), REWIND (held) or FAST (toggled) button: press ([down]) or release. */
     fun onSkinShortcut(action: SkinAction, down: Boolean)
     fun isLandscape(orientation: Int): Boolean
@@ -179,6 +181,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private fun skinViews() = listOfNotNull(skinView, bareView)
     /** The corner buttons (mic, touch shortcuts) while no pad is drawn ([addCornerButtons]: a controller), else null. */
     private var cornerView: ComposeView? = null
+    /** The corner buttons are in the layout ([addCornerButtons]): they carry the Panel pill then. */
+    val cornerShown = mutableStateOf(false)
     /** The touch shortcuts changed ([PadLayoutHost.padShortcuts]): the skin's strip writes the new ones. */
     fun refreshSkinShortcuts() { skinViews().forEach { it.shortcuts = host.padShortcuts } }
     /** The in-game menu is open: the skin's strip shortcuts are hidden ([PadSkinView.stripHidden]). */
@@ -236,6 +240,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         bareView = null
         cornerView?.let { root.removeView(it) }
         cornerView = null
+        cornerShown.value = false
         skinShownState.value = false
         input.setSkinLayouts(shown = false, layouts = false)
         input.dpadHat.clear()
@@ -705,7 +710,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
 
     /**
      * No pad drawn (a controller attached): the corner buttons over the game ([CornerButtons]): a DS / 3DS game's mic
-     * bottom-left ([micCornerShown]) and the set touch shortcuts bottom-right ([cornerShortcuts]). Added whatever they are
+     * bottom-left ([micCornerShown]), the set touch shortcuts bottom-right ([cornerShortcuts]) and a split's Panel pill after them. Added whatever they are
      * now: both are states ([PadLayoutHost.padMic] is set up after the first layout, the shortcuts change with the
      * session), so the buttons come and go with them; with neither the view draws nothing.
      */
@@ -717,12 +722,14 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                         mic = host.padMic()?.takeIf { micCornerShown(it, padDrawn = false) },
                         shortcuts = cornerShortcuts(host.padShortcuts, padDrawn = false),
                         onShortcut = host::onPadShortcut,
+                        panel = host.cornerPanel(),
                     )
                 }
             }
         }
         root.addView(v, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         cornerView = v
+        cornerShown.value = true
     }
 
     /** The bare buttons are over the game, so they hide while the in-game menu is open and touch reaches the menu. */
