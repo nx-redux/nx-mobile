@@ -115,6 +115,7 @@ import com.nxredux.mobile.scraper.ArtSlot
 import com.nxredux.mobile.storage.ToolPins
 import com.nxredux.mobile.storage.UserDataStore
 import com.nxredux.mobile.ui.nx.Hint
+import com.nxredux.mobile.ui.nx.StatNumber
 import com.nxredux.mobile.ui.nx.NxSettingControl
 import com.nxredux.mobile.ui.nx.control
 import com.nxredux.mobile.ui.nx.HomeFrame
@@ -13593,12 +13594,11 @@ class AppStateTest {
         state.openConsolesTab(); advanceUntilIdle()
         state.selectConsole("GB"); advanceUntilIdle()
         assertEquals("Game Boy", state.topStats.value!!.title)
-        assertEquals(3_600_000L, state.topStats.value!!.totalMs)
-        assertEquals(2, state.topStats.value!!.neverPlayed)
+        assertEquals(StatNumber("3", "games · 2 unplayed"), state.topStats.value!!.numbers[0])
+        assertEquals(StatNumber("1 h", "played · 2 sessions"), state.topStats.value!!.numbers[1])
         total = total.copy(totalMs = 7_200_000, plays = 3)
         state.onForeground(); advanceUntilIdle()   // back from the game: play time read again
-        assertEquals(7_200_000L, state.topStats.value!!.totalMs)
-        assertEquals(3L, state.topStats.value!!.sessions)
+        assertEquals(StatNumber("2 h", "played · 3 sessions"), state.topStats.value!!.numbers[1])
     }
 
     @Test fun collection_stats_follow_the_highlighted_collection() = runTest {
@@ -13607,12 +13607,12 @@ class AppStateTest {
         state.select(assertIs<Screen.Systems>(state.screen.value).rows.indexOfFirst { it is MainRow.Collection && it.name == "RPGs" }); advanceUntilIdle()
         val s = assertNotNull(state.topStats.value)
         assertEquals("RPGs", s.title)
-        assertEquals(2, s.games)
+        assertEquals(StatNumber("2", "games · 1 console"), s.numbers[0])
         state.onDualMenu(false)
         assertNull(state.topStats.value)   // one screen: no top page
     }
 
-    @Test fun console_stats_count_cheats_and_bios_from_the_platform() = runTest {
+    @Test fun console_stats_read_the_bios_from_the_platform() = runTest {
         val facts = object : TopFactsPlatform {
             override suspend fun fileFacts(entry: Listed) = FileFacts(null, cheats = entry.game.fileName != "Alleyway.gb", hiresPack = false)
             override suspend fun biosMissing(tag: String) = BiosMissing.REQUIRED.takeIf { tag == "GB" }
@@ -13620,7 +13620,18 @@ class AppStateTest {
         val state = state(MemorySettings(ContentRef("Home")), src = bigSource(), topFacts = facts).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
         state.openConsolesTab(); advanceUntilIdle()
         state.selectConsole("GB"); advanceUntilIdle()
-        assertEquals(listOf("BIOS missing", "Cheats for 2 games"), state.topStats.value?.chips)
+        assertEquals(BiosMissing.REQUIRED, state.topStats.value?.bios)
+    }
+
+    @Test fun shelf_games_carry_their_resume_pictures() = runTest {
+        val data = object : UserDataStore by NoUserData {
+            override suspend fun resumeInfo(tag: String, fileName: String) = if (fileName == "Tetris.gb") ResumeInfo(9, "file:///tetris.png") else ResumeInfo.NONE
+        }
+        val state = state(MemorySettings(ContentRef("Home")), src = bigSource(), data = data).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
+        state.openConsolesTab(); advanceUntilIdle()
+        state.selectConsole("GB"); advanceUntilIdle()
+        val shelf = assertNotNull(state.topStats.value).shelf.associate { it.entry.game.fileName to it.resume }
+        assertEquals(mapOf("Alleyway.gb" to null, "Tetris.gb" to "file:///tetris.png", "Wario Land.gb" to null), shelf)
     }
 
     private fun TestScope.dualConsoleState(runner: RecordingRunner): AppState {

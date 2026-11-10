@@ -139,6 +139,9 @@ data class NxColors(
     val editorPanel: Color = Color(0xE6121212)
     /** The button layout editor's toolbar buttons (not the primary one, on the accent). */
     val editorButton: Color = Color(0xFF2A2A2A)
+    /** The top screen's stats page: a missing BIOS pill's word and its edge (TopStatsPage). */
+    val alertText: Color = Color(0xFFE3A0A0)
+    val alertLine: Color = Color(0xFF6B3B3B)
 }
 
 /** The Secondary accent's Auto for the accent in use: the colour its swatch shows ([NxSwatches]). */

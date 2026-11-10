@@ -147,7 +147,6 @@ import com.nxredux.mobile.storage.RecentsRecorder
 import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.ui.nx.TopDetails
 import com.nxredux.mobile.ui.nx.TopStats
-import com.nxredux.mobile.ui.nx.consoleChips
 import com.nxredux.mobile.ui.nx.collectionStats
 import com.nxredux.mobile.ui.nx.consoleStats
 import com.nxredux.mobile.ui.nx.statsKey
@@ -1148,27 +1147,26 @@ class AppState(
         if (statsCacheOf?.let { it.first === systems && it.second === info } != true) {
             statsCache.clear(); statsCacheOf = systems to info
         }
-        if (consoleFactsLibrary !== systems) { consoleFacts.clear(); consoleFactsLibrary = systems }
+        if (consoleBiosLibrary !== systems) { consoleBios.clear(); consoleBiosLibrary = systems }
         topStatsJob?.cancel(); topStatsJob = null
         val inputs = StatsInputs(key, top, systems, info)
         topStatsFor = inputs
         statsCache[key]?.takeIf { sameStatsTarget(it.first, top) }?.let { _topStats.value = it.second; return }
         if (_topStats.value?.key != key) _topStats.value = null   // never another target's page meanwhile
-        val now = clockNow()
         // Built here: consoleEntries' cache belongs to the main thread.
         val console = (top as? TopContent.ConsoleStats)?.let { it.systems to consoleEntries(it.systems) }
         topStatsJob = scope.launch {
-            val stats = if (console != null) {
+            val base = if (console != null) {
                 val (group, entries) = console
-                val weekStart = deps.calendar.dayStart(now, -6)
-                val base = withContext(deps.compute) { consoleStats(group, entries, info, now, weekStart, bios = null, cheatGames = 0) }
-                val (cheats, bios) = consoleFacts[key] ?: readConsoleFacts(group, entries).also { if (consoleFactsLibrary === systems) consoleFacts[key] = it }
-                base.copy(chips = consoleChips(entries, now, weekStart, bios, cheats))
+                val stats = withContext(deps.compute) { consoleStats(group, entries, info) }
+                val bios = if (consoleBios.containsKey(key)) consoleBios[key] else readConsoleBios(group).also { if (consoleBiosLibrary === systems) consoleBios[key] = it }
+                stats.copy(bios = bios)
             } else {
                 val name = (top as TopContent.CollectionStats).name
                 val entries = tryOr({ emptyList() }) { entriesFor(ListSource.Collection(name)) }
-                withContext(deps.compute) { collectionStats(name, entries, info, now) }
+                withContext(deps.compute) { collectionStats(name, entries, info) }
             }
+            val stats = base.copy(shelf = base.shelf.map { it.copy(resume = shelfResume(it.entry)) })
             // A read that ended after a move (one that ignored the cancel) must not paint over the target now shown.
             if (topStatsFor !== inputs) return@launch
             if (statsCacheOf?.let { it.first === systems && it.second === info } == true) statsCache[key] = top to stats
@@ -1176,13 +1174,18 @@ class AppState(
         }
     }
 
-    /** [entries]' cheat count and [group]'s BIOS state (required missing on any of its tags wins); none for the Android console. */
-    private suspend fun readConsoleFacts(group: List<SystemFolder>, entries: List<Listed>): Pair<Int, BiosMissing?> {
-        val facts = deps.topFacts ?: return 0 to null
-        if (group.any { it.android || it.unassigned }) return 0 to null
-        val cheats = tryOr({ 0 }) { facts.cheatGames(entries) }
+    /** [group]'s BIOS state (required missing on any of its tags wins); none for the Android console. */
+    private suspend fun readConsoleBios(group: List<SystemFolder>): BiosMissing? {
+        val facts = deps.topFacts ?: return null
+        if (group.any { it.android || it.unassigned }) return null
         val bios = group.map { s -> tryOrNull { facts.biosMissing(s.tag) } }
-        return cheats to (bios.firstOrNull { it == BiosMissing.REQUIRED } ?: bios.firstOrNull { it != null })
+        return bios.firstOrNull { it == BiosMissing.REQUIRED } ?: bios.firstOrNull { it != null }
+    }
+
+    /** [entry]'s resume picture for a shelf tile, read only when it has no scraped screenshot (that one is shown first). */
+    private suspend fun shelfResume(entry: Listed): String? {
+        if (entry.game.screenshotRef != null || entry.system.android || entry.system.unassigned) return null
+        return tryOrNull { deps.userData.resumeInfo(entry.system.tag, entry.game.fileName).previewPath }
     }
 
     /**
@@ -1286,8 +1289,8 @@ class AppState(
     private var topStatsFor: StatsInputs? = null   // the latest computation's inputs: only it writes [topStats]
     private val statsCache = HashMap<String, Pair<TopContent, TopStats>>()   // by [TopStats.key] with its target, for [statsCacheOf]'s library and play time
     private var statsCacheOf: Pair<List<SystemFolder>, Map<String, GameInfo>>? = null
-    private val consoleFacts = HashMap<String, Pair<Int, BiosMissing?>>()   // cheats and BIOS by console key: file reads, kept per library ([readConsoleFacts])
-    private var consoleFactsLibrary: List<SystemFolder>? = null
+    private val consoleBios = HashMap<String, BiosMissing?>()   // by console key: file reads, kept per library ([readConsoleBios])
+    private var consoleBiosLibrary: List<SystemFolder>? = null
     private var gameInfoDirty = false   // a refresh was asked for while one ran: it runs once more
     private val shelvesCache = HomeShelvesCache()   // Home's shelves while their inputs hold ([shelvesFor])
     private var gameInfoRead = false    // a [refreshGameInfo] pass has read play time: the shelves can go by play time

@@ -40,19 +40,11 @@ class AndroidTopFacts(context: Context, private val source: RomsSource) : TopFac
         )
     }
 
-    // A console's games share their cheat folders: each is listed once, then matched by name only.
-    override suspend fun cheatGames(entries: List<Listed>): Int = withContext(Dispatchers.IO) {
-        tryOr({ 0 }) {
-            val root = CheatsRoot.of(app)
-            val listed = HashMap<String, List<String>>()
-            entries.count { e -> hasCheats(e.system.tag, e.game.fileName, root) { folder -> listed.getOrPut(folder) { cheatFiles(root, folder) } } }
-        }
-    }
-
-    private fun hasCheats(tag: String, romFileName: String, root: File = CheatsRoot.of(app), files: (String) -> List<String> = { cheatFiles(root, it) }): Boolean {
+    private fun hasCheats(tag: String, romFileName: String): Boolean {
         if (CoreRegistry.forTag(tag)?.cheats == false) return false
+        val root = CheatsRoot.of(app)
         val displayName = CheatMatch.displayName(romFileName)
-        return CheatFolders.tagsFor(tag, romFileName).any { folder -> CheatMatch.select(displayName, romFileName, files(folder)).isNotEmpty() }
+        return CheatFolders.tagsFor(tag, romFileName).any { folder -> CheatMatch.select(displayName, romFileName, cheatFiles(root, folder)).isNotEmpty() }
     }
 
     private fun cheatFiles(root: File, folder: String): List<String> =
