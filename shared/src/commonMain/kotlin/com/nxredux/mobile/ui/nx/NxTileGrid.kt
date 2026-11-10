@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nxredux.mobile.ui.GridTile
 import com.nxredux.mobile.ui.InfoLine
+import com.nxredux.mobile.ui.TOOL_APPS_GAP
 
 /** Below this tile height (dp) the grid neither draws nor reports its columns: a layout pass not yet at its size. */
 internal const val GRID_TILE_MIN_DP = 40f
@@ -63,7 +64,9 @@ fun NxTileGrid(
     topGap: Boolean = true,
 ) {
     val portrait = LocalPortrait.current
-    val window = LocalWindowSize.current
+    // In a pad skin the glass is the screen turned sideways for the matched rows, not the whole window round it.
+    val window = splitWindow()
+    val skin = LocalInSkin.current
     val density = LocalDensity.current
     val inset = nxPageInset()   // the first column's left edge and the last's right on it
     BoxWithConstraints(modifier.fillMaxSize()) {
@@ -76,8 +79,11 @@ fun NxTileGrid(
             tiles.all { it is GridTile.Tool } -> GridTileKind.ICON
             else -> GridTileKind.NAME
         }
-        // Sized above the fixed gap over the tab row ([GRID_TAB_GAP], the last row's own gap part of it).
-        val g = gridMatched(width, height - (GRID_TAB_GAP - GRID_GAP), window.width.value, window.height.value, kind, portrait, inset.start.value, inset.end.value)
+        // Sized above the fixed gap over the tab row ([GRID_TAB_GAP], the last row's own gap part of it). Tools: the app
+        // drawer's fixed tiles whatever the screen ([gridFixedTools]).
+        val fixed = kind == GridTileKind.ICON
+        val g = if (fixed) gridFixedTools(width, height - (GRID_TAB_GAP - TOOL_APPS_GAP), inset.start.value, inset.end.value, density.fontScale)
+            else gridMatched(width, height - (GRID_TAB_GAP - GRID_GAP), window.width.value, window.height.value, kind, portrait, inset.start.value, inset.end.value, skin = skin)
         if (!gridDrawable(width, height, g)) return@BoxWithConstraints
         val columns = g.columns
         val rows = (tiles.size + columns - 1) / columns
@@ -124,12 +130,13 @@ fun NxTileGrid(
             if (target != current) { if (animate) state.animateScrollToItem(index, offset) else state.scrollToItem(index, offset) }
         }
         LazyColumn(
-            Modifier.align(if (fits) Alignment.BottomStart else Alignment.TopStart)
-                .padding(top = if (fits) 0.dp else with(density) { topPx.toDp() }, bottom = if (fits) with(density) { tabGapPx.toDp() } else 0.dp)
+            // A grid that fits sits on the box's bottom; Tools' fixed tiles start at its top, as the app drawer's.
+            Modifier.align(if (fits && !fixed) Alignment.BottomStart else Alignment.TopStart)
+                .padding(top = if (fits && !fixed) 0.dp else with(density) { topPx.toDp() }, bottom = if (fits && !fixed) with(density) { tabGapPx.toDp() } else 0.dp)
                 .fillMaxWidth().height(with(density) { viewport.toDp() })
                 // A short fixed fade: enough to show more tiles are there without dimming a whole row of them.
                 .nxEdgeFade({ state.canScrollBackward }, { state.canScrollForward }, TILE_GRID_FADE, strong = roomy),
-            state = state, verticalArrangement = Arrangement.Bottom,
+            state = state, verticalArrangement = if (fixed) Arrangement.Top else Arrangement.Bottom,
             flingBehavior = if (roomy) rememberNxRowSnapFling(state) else rememberSnapFlingBehavior(state, SnapPosition.Center),
         ) {
             items(rows) { r ->

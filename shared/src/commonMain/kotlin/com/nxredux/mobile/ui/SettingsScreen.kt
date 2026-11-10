@@ -1,6 +1,5 @@
 package com.nxredux.mobile.ui
 
-import com.nxredux.mobile.ui.nx.LocalWindowSize
 import com.nxredux.mobile.ui.nx.NX_SWATCH_AUTO
 import com.nxredux.mobile.settings.SecondaryAccent
 import com.nxredux.mobile.settings.AccentPreset
@@ -27,6 +26,7 @@ import com.nxredux.mobile.ui.nx.NxRowKind
 import com.nxredux.mobile.ui.nx.NxBanner
 import com.nxredux.mobile.ui.nx.NxScreenScaffold
 import com.nxredux.mobile.ui.nx.NX_EDIT_HINTS
+import com.nxredux.mobile.ui.nx.splitWindow
 import com.nxredux.mobile.ui.nx.valueHints
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
@@ -115,7 +115,7 @@ private fun SettingsTouchPage(
     val report = onTruncated
     val selected = rows.getOrNull(selectedIndex)
     val infoShown = selected != null && nxShowsInfo(selected, truncated)
-    val twoPane = rowEditTwoPane(screen, settingsSplit(LocalWindowSize.current))
+    val twoPane = rowEditTwoPane(screen, settingsSplit(splitWindow()))
     val shownHints = hints ?: if (editing >= 0) NX_EDIT_HINTS else settingsHints(screen.rows, selectedIndex, selected, infoShown, twoPane)
     val preview = onSetting == null
     val events = onSetting ?: {}

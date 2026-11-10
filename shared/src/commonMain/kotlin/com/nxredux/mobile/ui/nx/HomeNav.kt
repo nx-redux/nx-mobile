@@ -10,7 +10,7 @@ data class HomeBand(val start: Int, val count: Int, val perRow: Int) {
 }
 
 /**
- * Grid Home's focus order as rectangles: [top] (Continue, the inline games, the squares in reading order), then the row
+ * Grid Home's focus order as rectangles: [top] (Continue, the inline games, the tool tiles in reading order), then the row
  * tiles [pins] ([perRow] a row), moved through in [bands]: the pinned games, then each shelf at its board's
  * [HomeBoard.shelfCols] ([homeShape]). Flat index i < [topCount] is a top tile, else pin i − topCount.
  */

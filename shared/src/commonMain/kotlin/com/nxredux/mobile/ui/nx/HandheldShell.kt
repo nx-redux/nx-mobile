@@ -74,6 +74,17 @@ val LocalScreenCentreY = compositionLocalOf<Float?> { null }
  */
 val LocalWindowSize = compositionLocalOf { DpSize.Zero }
 
+/**
+ * The screen's own area when it is smaller than [LocalWindowSize]: a pad skin's glass. Null when the screen fills the
+ * window. Whether pages split in two ([splitWindow]) is decided on it, not the window: a landscape skin's glass between
+ * the side columns is near square, too narrow for two panes.
+ */
+val LocalScreenArea = compositionLocalOf<DpSize?> { null }
+
+/** The area two-pane decisions ([settingsSplit] and the column browsers) read: the skin's glass, else the window. */
+@Composable
+fun splitWindow(): DpSize = LocalScreenArea.current ?: LocalWindowSize.current
+
 /** The device posture in window px (a skin's hinge), supplied by the host; [Posture.Flat] where there is no fold (and on iOS). */
 val LocalPosture = compositionLocalOf<Posture> { Posture.Flat }
 
@@ -175,7 +186,11 @@ fun HandheldShell(
                     // the pages lay out for the glass's own shape (landscape: a wide glass between the side columns)
                     // the glass reaches under the camera cutout: the page starts below it (the shell's own top, [above])
                     val cutoutPad = with(density) { (above - g.y).coerceAtLeast(0f).toDp() }
-                    CompositionLocalProvider(LocalPortrait provides (gh > gw), LocalPadBelow provides true, LocalWindowSize provides window, LocalInSkin provides true) {
+                    val glass = with(density) { DpSize(gw.toDp(), (gh.toFloat() - cutoutPad.toPx()).coerceAtLeast(0f).toDp()) }
+                    CompositionLocalProvider(
+                        LocalPortrait provides (gh > gw), LocalPadBelow provides true, LocalWindowSize provides window, LocalInSkin provides true,
+                        LocalScreenArea provides glass,
+                    ) {
                         Box(Modifier.fillMaxSize().padding(top = cutoutPad)) { movableScreen(screenSlot) }
                     }
                 }

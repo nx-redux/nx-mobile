@@ -1,6 +1,6 @@
 package com.nxredux.mobile.ui
 
-import com.nxredux.mobile.ui.nx.LocalWindowSize
+import com.nxredux.mobile.ui.nx.splitWindow
 import com.nxredux.mobile.ui.nx.valueHints
 import com.nxredux.mobile.ui.nx.HintTouch
 import androidx.compose.foundation.layout.Box
@@ -82,7 +82,7 @@ internal fun ArtworkPageBody(
             val touch = rows.getOrNull(selectedIndex)
             NxSettingsPage(
                 toolPageTitle(screen, split), rows, selectedIndex,
-                hints = hints(artworkSettingsHints(screen.rows.getOrNull(selectedIndex), touch, touch != null && nxShowsInfo(touch, truncated), rowEditTwoPane(screen, settingsSplit(LocalWindowSize.current)))),
+                hints = hints(artworkSettingsHints(screen.rows.getOrNull(selectedIndex), touch, touch != null && nxShowsInfo(touch, truncated), rowEditTwoPane(screen, settingsSplit(splitWindow())))),
                 onSelect = onSelect, onOpen = onOpen, onEvent = onSetting, modifier = modifier,
                 onTruncated = onTruncated, onHint = onHint, preview = !focused,
             )

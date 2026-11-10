@@ -5,7 +5,7 @@ import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.ui.nx.HomeFrame
 import com.nxredux.mobile.ui.nx.HomeShelf
-import com.nxredux.mobile.ui.nx.homeBoard
+import com.nxredux.mobile.ui.nx.homePortraitTopH
 import com.nxredux.mobile.ui.nx.homePortraitTwin
 import kotlin.math.max
 import kotlin.random.Random
@@ -19,7 +19,7 @@ import com.nxredux.mobile.ui.nx.homeInsetStart
 data class HomeStats(val playedMs: Long?, val unlocks: Int?, val signedIn: Boolean, val top: GameTotal?, val computed: Boolean)
 
 /**
- * The Home tab: the top section (Continue or Pick a game, any inline games, the tool squares), the row games, the
+ * The Home tab: the top section (Continue or Pick a game, any inline games, the pinned tools), the row games, the
  * strip and the shelves' games.
  */
 data class Home(val top: List<MainRow>, val pins: List<MainRow>, val strip: HomeStrip?, val freshInstall: Boolean, val shelves: List<MainRow.Shelf> = emptyList())
@@ -37,17 +37,22 @@ data class HomeView(
 )
 
 internal const val HOME_DOCK_GAP = 12f
-/** The smallest a dock square gets, on a body too small for Grid Home's squares. */
+/** The smallest a dock square gets, on a body too small for its share of the top section. */
 private const val HOME_DOCK_MIN_SIDE = 32f
+/** The dock square's share of the portrait top section: a fifth of it less four half gaps, a column of five icons' room. */
+private const val HOME_DOCK_SHARE = 5
+private const val HOME_DOCK_SHARE_GAP = 6f
 
 /**
- * The Carousel Home's dock squares' side on [f]: Grid Home's portrait pinned tool squares' ([HomeBoard.square], with the
- * strip's [stripLines] and the [games] pinned games Grid would have in its rows), in landscape too ([homePortraitTwin]),
- * so the dock looks the same either way; at least [HOME_DOCK_MIN_SIDE]. AppState fits the dock with it ([homeDockFit])
- * and the screen draws it, so the two agree.
+ * The Carousel Home's dock squares' side on [f]: a fifth of the portrait type's top section ([homePortraitTopH], with
+ * the strip's [stripLines]) less four [HOME_DOCK_SHARE_GAP]s, in landscape too ([homePortraitTwin]), so the dock looks
+ * the same either way; at least [HOME_DOCK_MIN_SIDE]. Its own size, not Grid Home's tool tiles: an icon-only row keeps
+ * the carousel's card large. AppState fits the dock with it ([homeDockFit]) and the screen draws it, so the two agree.
  */
-internal fun homeDockSide(f: HomeFrame, stripLines: Int, games: Int): Float =
-    max(HOME_DOCK_MIN_SIDE, homeBoard(if (f.portrait) f else homePortraitTwin(f), stripLines, tools = 1, games = games, fillSliver = false).square)
+internal fun homeDockSide(f: HomeFrame, stripLines: Int): Float {
+    val top = homePortraitTopH(if (f.portrait) f else homePortraitTwin(f), stripLines)
+    return max(HOME_DOCK_MIN_SIDE, (top - (HOME_DOCK_SHARE - 1) * HOME_DOCK_SHARE_GAP) / HOME_DOCK_SHARE)
+}
 
 /** The Carousel Home's dock squares of [side] dp that fit [f]'s width inside its page insets: at least one. */
 internal fun homeDockFit(f: HomeFrame, side: Float): Int =
@@ -60,7 +65,7 @@ internal const val NO_PLAY_YET = "No play yet"
 internal const val STAT_PENDING = "\u2026"         // a stats value not computed yet
 
 /**
- * Home from the last game ([last]), the pins in their order and the stats, for a top section of [slots] squares (the
+ * Home from the last game ([last]), the pins in their order and the stats, for a top section of [slots] tool tiles (the
  * board's, [com.nxredux.mobile.ui.nx.homeBoard]). Continue's own game is never a pin. The first [inline] pinned games
  * (the board's [com.nxredux.mobile.ui.nx.HomeBoard.inlineGames], on every landscape face) go in [Home.top] right
  * after Continue, before the tools; [Home.pins] holds the rest. More tools than slots: the first slots − 1 and a
@@ -83,7 +88,7 @@ internal fun buildHome(
     return Home(listOf(last ?: MainRow.PickAGame) + games.take(n) + tools, games.drop(n), homeStrip(stats), freshInstall = false, shelves = rows)
 }
 
-/** Every pinned tool is a square or hidden behind "+N"; [HomeView.games] counts every pinned game, inline ones too. */
+/** Every pinned tool is a tile (a dock square on Carousel Home) or hidden behind "+N"; [HomeView.games] counts every pinned game, inline ones too. */
 internal fun homeView(home: Home, rows: List<MainRow>): HomeView = HomeView(
     home.strip, home.top.size,
     tools = rows.count { it is MainRow.PinnedTool } + (rows.firstNotNullOfOrNull { it as? MainRow.MoreTools }?.count ?: 0),
