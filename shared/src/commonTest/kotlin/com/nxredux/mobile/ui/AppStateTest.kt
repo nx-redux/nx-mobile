@@ -4578,6 +4578,89 @@ class AppStateTest {
         assertEquals(2, state.selection.value.index)
     }
 
+    // Dual screen: the top screen has the game's details, so a game list never draws Backdrop or a vertical Carousel.
+    @Test fun a_dual_screen_game_list_draws_backdrop_and_a_vertical_carousel_as_a_horizontal_carousel() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), settings)
+        state.onConsoles()
+        settings.gameListStyle = MenuStyle.BACKDROP
+        settings.gameListOrientation = MenuOrientation.VERTICAL
+        state.openSelected()
+        val list = assertIs<Screen.Games>(state.screen.value)
+        assertEquals(MenuStyle.BACKDROP, state.styleOf(list))
+        assertEquals(MenuOrientation.VERTICAL, state.orientationOf(list))
+        state.onDualMenu(true)
+        assertEquals(MenuStyle.CAROUSEL, state.styleOf(list))
+        assertEquals(MenuOrientation.HORIZONTAL, state.orientationOf(list))
+        settings.gameListStyle = MenuStyle.CAROUSEL
+        assertEquals(MenuOrientation.HORIZONTAL, state.orientationOf(list))
+        settings.gameListStyle = MenuStyle.GRID
+        assertEquals(MenuStyle.GRID, state.styleOf(list))
+        settings.gameListStyle = MenuStyle.BACKDROP
+        assertEquals(MenuStyle.CAROUSEL, state.styleOf(list))
+        assertEquals(MenuStyle.LIST, state.styleOf(Screen.Systems(emptyList())))   // the main menu tabs are not game lists
+        state.onDualMenu(false)
+        assertEquals(MenuStyle.BACKDROP, state.styleOf(list))   // the saved layout was never changed
+        assertEquals(MenuOrientation.VERTICAL, state.orientationOf(list))
+        assertEquals(MenuStyle.BACKDROP, settings.gameListStyle)
+        assertEquals(MenuOrientation.VERTICAL, settings.gameListOrientation)
+    }
+
+    @Test fun dual_screen_layouts_hide_backdrop_and_the_vertical_carousel_for_game_lists() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings)
+        state.load()
+        fun row(kind: SettingsKind) = state.layoutsRows().firstOrNull { it.kind == kind }
+        for (dual in listOf(false, true)) for (style in MenuStyle.entries) for (o in MenuOrientation.entries) {
+            state.onDualMenu(dual)
+            settings.gameListStyle = style; settings.gameListOrientation = o
+            state.openSettings(SettingsSection.LAYOUT_GAME_LISTS)
+            val turns = !dual && (style == MenuStyle.CAROUSEL || style == MenuStyle.BACKDROP)
+            assertEquals(turns, row(SettingsKind.GAME_LIST_ORIENTATION) != null, "dual=$dual $style $o")
+            assertEquals(turns && o == MenuOrientation.VERTICAL, row(SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT) != null, "dual=$dual $style $o")
+            val shown = if (dual && style == MenuStyle.BACKDROP) MenuStyle.CAROUSEL else style
+            assertEquals(menuStyleLabel(shown), row(SettingsKind.GAME_LIST_STYLE)?.secondary, "dual=$dual $style $o")
+            val vertical = !dual && turns && o == MenuOrientation.VERTICAL
+            assertEquals(LayoutShot.Games(shown, vertical), assertIs<Screen.Settings>(state.screen.value).shot, "dual=$dual $style $o")
+            assertEquals(style, settings.gameListStyle); assertEquals(o, settings.gameListOrientation)   // showing never saves
+        }
+        // Stepping the layout in dual skips Backdrop: from a saved Backdrop (shown as Carousel) RIGHT is Minimal.
+        state.onDualMenu(true)
+        settings.gameListStyle = MenuStyle.GRID
+        state.openSettings(SettingsSection.LAYOUT_GAME_LISTS)
+        state.select(state.layoutsRows().indexOfFirst { it.kind == SettingsKind.GAME_LIST_STYLE }); state.onButton(NxButton.RIGHT)
+        assertEquals(MenuStyle.CAROUSEL, settings.gameListStyle)
+        state.onButton(NxButton.RIGHT)
+        assertEquals(MenuStyle.MINIMAL, settings.gameListStyle)
+        settings.gameListStyle = MenuStyle.BACKDROP
+        state.openSettings(SettingsSection.LAYOUT_GAME_LISTS)
+        state.select(state.layoutsRows().indexOfFirst { it.kind == SettingsKind.GAME_LIST_STYLE }); state.onButton(NxButton.RIGHT)
+        assertEquals(MenuStyle.MINIMAL, settings.gameListStyle)
+        // Back on one screen the Backdrop choice returns.
+        state.onDualMenu(false)
+        settings.gameListStyle = MenuStyle.CAROUSEL
+        state.openSettings(SettingsSection.LAYOUT_GAME_LISTS)
+        state.select(state.layoutsRows().indexOfFirst { it.kind == SettingsKind.GAME_LIST_STYLE }); state.onButton(NxButton.RIGHT)
+        assertEquals(MenuStyle.BACKDROP, settings.gameListStyle)
+    }
+
+    @Test fun the_dual_screen_layout_dropdown_offers_no_backdrop_or_vertical_carousel() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { gameListStyle = MenuStyle.BACKDROP; gameListOrientation = MenuOrientation.VERTICAL }
+        val state = searchState(settings)
+        state.onDualMenu(true)
+        state.openSystem(assertIs<Screen.Systems>(state.screen.value).systems.first { it.tag == "SFC" })
+        state.toggleLayoutMenu()
+        assertEquals(2, assertIs<Screen.Games>(state.screen.value).layoutMenu)   // on the Carousel the list is drawn as
+        repeat(5) { state.onButton(NxButton.DOWN) }
+        assertEquals(3, assertIs<Screen.Games>(state.screen.value).layoutMenu)   // Minimal, the last of four
+        state.onButton(NxButton.A)
+        assertEquals(MenuStyle.MINIMAL, settings.gameListStyle)
+        state.toggleLayoutMenu()
+        state.pickLayout(2)
+        assertEquals(MenuStyle.CAROUSEL, settings.gameListStyle)
+        assertEquals(MenuOrientation.HORIZONTAL, settings.gameListOrientation)
+    }
+
     @Test fun style_of_follows_the_screen() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), settings)

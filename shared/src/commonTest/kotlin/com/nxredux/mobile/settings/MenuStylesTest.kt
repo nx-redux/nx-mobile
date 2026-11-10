@@ -103,4 +103,16 @@ class MenuStylesTest {
         assertEquals(MenuStyle.LIST, MenuStyles.cycleMainMenu(MenuStyle.MINIMAL, 1))
         assertEquals(mapOf(MenuCategory.HOME to MenuStyle.LIST), MenuStyles.decode(MenuStyles.encode(mapOf(MenuCategory.HOME to MenuStyle.LIST))))
     }
+
+    @Test fun dual_screen_game_lists_draw_backdrop_and_a_vertical_carousel_as_a_horizontal_carousel() {
+        for (style in MenuStyle.entries) for (o in MenuOrientation.entries) {
+            val expected = when (style) {
+                MenuStyle.BACKDROP, MenuStyle.CAROUSEL -> MenuStyle.CAROUSEL to MenuOrientation.HORIZONTAL
+                else -> style to o
+            }
+            assertEquals(expected, MenuStyles.dualGameListLayout(style, o), "$style $o")
+        }
+        assertEquals(listOf(MenuStyle.LIST, MenuStyle.GRID, MenuStyle.CAROUSEL, MenuStyle.MINIMAL), MenuStyles.gameListStyles(dual = true))
+        assertEquals(MenuStyles.GAME_LIST_STYLES, MenuStyles.gameListStyles(dual = false))
+    }
 }

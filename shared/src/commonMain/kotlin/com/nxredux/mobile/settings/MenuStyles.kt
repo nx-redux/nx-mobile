@@ -60,6 +60,19 @@ object MenuStyles {
     fun effectiveOrientation(style: MenuStyle, stored: MenuOrientation): MenuOrientation =
         if (hasOrientation(style)) stored else MenuOrientation.HORIZONTAL
 
+    /**
+     * The game list layout drawn while the menu is on two screens: Backdrop and a vertical Carousel give their room to the
+     * game's picture and details, which the top screen already shows, so both are a horizontal Carousel there. The stored
+     * [style] and [orientation] are kept for a single screen.
+     */
+    fun dualGameListLayout(style: MenuStyle, orientation: MenuOrientation): Pair<MenuStyle, MenuOrientation> = when (style) {
+        MenuStyle.BACKDROP, MenuStyle.CAROUSEL -> MenuStyle.CAROUSEL to MenuOrientation.HORIZONTAL
+        else -> style to orientation
+    }
+
+    /** The game list styles Layouts offers: [GAME_LIST_STYLES], without Backdrop on two screens ([dualGameListLayout]). */
+    fun gameListStyles(dual: Boolean): List<MenuStyle> = if (dual) GAME_LIST_STYLES - MenuStyle.BACKDROP else GAME_LIST_STYLES
+
     /** The other orientation: LEFT, RIGHT and A all flip, there being two. */
     fun flip(o: MenuOrientation): MenuOrientation =
         if (o == MenuOrientation.HORIZONTAL) MenuOrientation.VERTICAL else MenuOrientation.HORIZONTAL

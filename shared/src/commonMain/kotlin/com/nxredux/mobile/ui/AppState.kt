@@ -429,7 +429,7 @@ sealed interface Screen {
     /**
      * A game list from [source]; each entry carries its system. [menu]: the context menu is open over the list.
      * [search]: the list's own search prompt is up (its draft); [layoutMenu]: the Layout dropdown is open, on that
-     * choice of [GameListLayouts.all].
+     * choice of [GameListLayouts.choices].
      */
     data class Games(val source: ListSource, val entries: List<Listed>, val menu: ContextMenu? = null, val search: String? = null, val layoutMenu: Int? = null) : Screen
     /**
@@ -665,8 +665,6 @@ private const val LISTING_HIDDEN_NO_INDEX = "Storage did not list the library fo
 /** "1 game" / "<n> games" for the Library page and the rescan notice. */
 internal fun gamesLabel(n: Int): String = if (n == 1) "1 game" else "$n games"
 
-/** The layouts a game list steps through on onboarding's Game lists page (a tab's: [MenuStyles.cycleMainMenu]). */
-private val ONBOARDING_GAME_LIST_STYLES = MenuStyles.GAME_LIST_STYLES
 /** Onboarding's layout pages: a layout row above one picture of it. */
 internal val ONBOARDING_LAYOUT_STEPS = setOf(
     OnboardingStep.TAB_HOME, OnboardingStep.TAB_CONSOLES, OnboardingStep.TAB_COLLECTIONS, OnboardingStep.TAB_TOOLS, OnboardingStep.GAME_LISTS,
@@ -1111,6 +1109,9 @@ class AppState(
         if (_dualMenu.value == active) return
         _dualMenu.value = active
         if (active) ra.closeRaPanel()   // the panel is a single-screen overlay: dual mode shows the details on the top screen instead
+        // A game list's layout choices and Layouts' game list rows differ on two screens.
+        (_screen.value as? Screen.Games)?.takeIf { it.layoutMenu != null }?.let { _screen.value = it.copy(layoutMenu = null) }
+        if (_screen.value is Screen.Settings) settingsUi.refreshSettings()
         followTopDetails()
         followTopStats()
     }
@@ -2513,7 +2514,7 @@ class AppState(
 
     /** The layout a layout page sets, as it is now. */
     private fun onboardingLayout(step: OnboardingStep): MenuStyle =
-        ONBOARDING_TAB_STEPS[step]?.let { MenuStyles.styleOf(deps.settings.menuStyles, it) } ?: deps.settings.gameListStyle
+        ONBOARDING_TAB_STEPS[step]?.let { MenuStyles.styleOf(deps.settings.menuStyles, it) } ?: gameListLayout().first
 
     /**
      * A layout page's value rows, the options its picture shows: the layout, then Home's stats, a tab Carousel's
@@ -2526,7 +2527,7 @@ class AppState(
             if (category == null) SettingsKind.GAME_LIST_STYLE else SettingsKind.MENU_STYLE,
             SettingsKind.HOME_STATS.takeIf { category == MenuCategory.HOME },
             SettingsKind.MENU_ORIENTATION.takeIf { category != null && category != MenuCategory.HOME && MenuStyles.styleOf(s.menuStyles, category) == MenuStyle.CAROUSEL },
-            SettingsKind.GAME_LIST_ORIENTATION.takeIf { category == null && MenuStyles.hasOrientation(s.gameListStyle) },
+            SettingsKind.GAME_LIST_ORIENTATION.takeIf { category == null && gameListTurns(gameListLayout().first) },
             SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT.takeIf { category == null && gameListsShot().vertical },
         )
     }
@@ -2575,7 +2576,7 @@ class AppState(
         val step = onboarding.step ?: return
         val category = ONBOARDING_TAB_STEPS[step]
         if (category == null) {
-            deps.settings.gameListStyle = ONBOARDING_GAME_LIST_STYLES.stepFrom(deps.settings.gameListStyle, by)
+            deps.settings.gameListStyle = MenuStyles.gameListStyles(_dualMenu.value).stepFrom(gameListLayout().first, by)
             deps.settings.gameListOrientation = MenuStyles.DEFAULT_ORIENTATION
             deps.settings.gameListVerticalAlignment = VerticalListAlignment.DEFAULT
         } else {
@@ -4102,11 +4103,12 @@ class AppState(
                     settingsUi.refreshSettings()
                 }) { s.menuStyles = s.menuStyles + (c to it) }
             }
-            SettingsKind.GAME_LIST_STYLE -> cycle(MenuStyles.GAME_LIST_STYLES, s.gameListStyle, ::menuStyleLabel) { s.gameListStyle = it }
+            // Two screens: from the style drawn, never through Backdrop; the saved one changes only when stepped.
+            SettingsKind.GAME_LIST_STYLE -> cycle(MenuStyles.gameListStyles(_dualMenu.value), gameListLayout().first, ::menuStyleLabel) { s.gameListStyle = it }
             SettingsKind.MENU_ORIENTATION -> row.category?.let { c ->
                 cycle(MenuOrientation.entries, MenuStyles.orientationOf(s.menuOrientations, c), ::orientationLabel) { s.menuOrientations = s.menuOrientations + (c to it) }
             }
-            SettingsKind.GAME_LIST_ORIENTATION -> cycle(MenuOrientation.entries, s.gameListOrientation, ::orientationLabel) { s.gameListOrientation = it }
+            SettingsKind.GAME_LIST_ORIENTATION -> if (_dualMenu.value) null else cycle(MenuOrientation.entries, s.gameListOrientation, ::orientationLabel) { s.gameListOrientation = it }
             SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT -> cycle(VerticalListAlignment.entries, s.gameListVerticalAlignment, ::verticalAlignmentLabel) { s.gameListVerticalAlignment = it }
             SettingsKind.CONTROLLER_ART -> cycle(ConsoleArt.entries, s.consoleArt, { it.label }) { s.consoleArt = it }   // Controller, Background, None
             SettingsKind.LIST_ART -> cycle(GameListArt.entries, s.gameListArt, { it.label }) { s.gameListArt = it }
@@ -4278,7 +4280,7 @@ class AppState(
             else -> "Hide"
         }
         return tabs + listOf(
-            SettingsRow(SettingsKind.LAYOUT_GAME_LISTS, SettingsSection.LAYOUT_GAME_LISTS.label, menuStyleLabel(s.gameListStyle)),
+            SettingsRow(SettingsKind.LAYOUT_GAME_LISTS, SettingsSection.LAYOUT_GAME_LISTS.label, menuStyleLabel(gameListLayout().first)),
             SettingsRow(SettingsKind.LAYOUT_TITLE_HINTS, SettingsSection.LAYOUT_TITLE_HINTS.label, chrome),
             SettingsRow(SettingsKind.LAYOUT_SWITCHER, SettingsSection.LAYOUT_SWITCHER.label, s.switcherLayout.label),
             SettingsRow(SettingsKind.EXTRA_INFO, "Extra info", if (s.menuExtraInfo) "Show" else "Hide"),
@@ -4322,7 +4324,7 @@ class AppState(
     private fun layoutGameListRows(): List<SettingsRow> {
         val s = deps.settings
         fun shown(on: Boolean) = if (on) "Show" else "Hide"
-        val list = s.gameListStyle
+        val (list, orientation) = gameListLayout()
         return listOfNotNull(
             SettingsRow(SettingsKind.LIST_ART, "List art", s.gameListArt.label).takeIf { list == MenuStyle.LIST },
             // Every layout: it also picks the game panel's header and the Game Switcher's box.
@@ -4332,9 +4334,9 @@ class AppState(
             SettingsRow(SettingsKind.ACHIEVEMENTS_PANEL, "Achievements panel", shown(s.gameListAchievementsPanel)).takeIf { deps.achievements != null },
             // A vertical list's alignment: with the layout rows, just above them.
             SettingsRow(SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT, "Alignment", verticalAlignmentLabel(s.gameListVerticalAlignment))
-                .takeIf { MenuStyles.effectiveOrientation(list, s.gameListOrientation) == MenuOrientation.VERTICAL },
+                .takeIf { MenuStyles.effectiveOrientation(list, orientation) == MenuOrientation.VERTICAL },
             SettingsRow(SettingsKind.GAME_LIST_STYLE, "Layout", menuStyleLabel(list)),
-            SettingsRow(SettingsKind.GAME_LIST_ORIENTATION, "Orientation", orientationLabel(s.gameListOrientation)).takeIf { MenuStyles.hasOrientation(list) },
+            SettingsRow(SettingsKind.GAME_LIST_ORIENTATION, "Orientation", orientationLabel(orientation)).takeIf { gameListTurns(list) },
         )
     }
 
@@ -4352,9 +4354,9 @@ class AppState(
 
     /** The game lists' picture: their layout, stood on end (a Carousel or Backdrop) on the left or the right. */
     private fun gameListsShot(): LayoutShot.Games {
-        val s = deps.settings
-        val vertical = MenuStyles.effectiveOrientation(s.gameListStyle, s.gameListOrientation) == MenuOrientation.VERTICAL && MenuStyles.hasOrientation(s.gameListStyle)
-        return LayoutShot.Games(s.gameListStyle, vertical, right = vertical && s.gameListVerticalAlignment == VerticalListAlignment.RIGHT)
+        val (style, orientation) = gameListLayout()
+        val vertical = MenuStyles.effectiveOrientation(style, orientation) == MenuOrientation.VERTICAL && MenuStyles.hasOrientation(style)
+        return LayoutShot.Games(style, vertical, right = vertical && deps.settings.gameListVerticalAlignment == VerticalListAlignment.RIGHT)
     }
 
     /** A tab picture's Consoles background: the setting's on Consoles, the default on the other tabs (they have none). */
@@ -4712,14 +4714,14 @@ class AppState(
     fun toggleLayoutMenu() {
         val s = _screen.value as? Screen.Games ?: return
         if (s.menu != null || s.search != null || !deps.settings.gameListLayoutOptions) return
-        _screen.value = s.copy(layoutMenu = if (s.layoutMenu != null) null else GameListLayouts.indexOf(deps.settings.gameListStyle, deps.settings.gameListOrientation, deps.settings.gameListVerticalAlignment))
+        _screen.value = s.copy(layoutMenu = if (s.layoutMenu != null) null else GameListLayouts.indexOf(deps.settings.gameListStyle, deps.settings.gameListOrientation, deps.settings.gameListVerticalAlignment, _dualMenu.value))
     }
 
     /** The Layout dropdown has the buttons: UP / DOWN move, A picks, B closes. */
     private fun onLayoutMenuButton(s: Screen.Games, at: Int, button: NxButton) {
         when (button) {
             NxButton.UP -> _screen.value = s.copy(layoutMenu = (at - 1).coerceAtLeast(0))
-            NxButton.DOWN -> _screen.value = s.copy(layoutMenu = (at + 1).coerceAtMost(GameListLayouts.all.lastIndex))
+            NxButton.DOWN -> _screen.value = s.copy(layoutMenu = (at + 1).coerceAtMost(GameListLayouts.choices(_dualMenu.value).lastIndex))
             NxButton.A -> pickLayout(at)
             NxButton.B -> _screen.value = s.copy(layoutMenu = null)
             else -> Unit
@@ -4732,7 +4734,7 @@ class AppState(
      */
     fun pickLayout(index: Int) {
         val s = _screen.value as? Screen.Games ?: return
-        val layout = GameListLayouts.all.getOrNull(index) ?: return
+        val layout = GameListLayouts.choices(_dualMenu.value).getOrNull(index) ?: return
         deps.settings.gameListStyle = layout.style
         if (MenuStyles.hasOrientation(layout.style)) deps.settings.gameListOrientation = layout.orientation
         layout.alignment?.let { deps.settings.gameListVerticalAlignment = it }
@@ -5686,9 +5688,18 @@ class AppState(
     /** The style [screen] is drawn in (a page sliding out keeps its own): a main menu tab's own, the game list style, else List. */
     internal fun styleOf(screen: Screen): MenuStyle = when (val s = screen) {
         is Screen.Systems -> s.category?.let { MenuStyles.styleOf(deps.settings.menuStyles, it) } ?: MenuStyle.LIST
-        is Screen.Games -> deps.settings.gameListStyle
+        is Screen.Games -> gameListLayout().first
         else -> MenuStyle.LIST
     }
+
+    /** The game lists' style and stored orientation as drawn now: on two screens through [MenuStyles.dualGameListLayout]. */
+    private fun gameListLayout(): Pair<MenuStyle, MenuOrientation> {
+        val s = deps.settings
+        return if (_dualMenu.value) MenuStyles.dualGameListLayout(s.gameListStyle, s.gameListOrientation) else s.gameListStyle to s.gameListOrientation
+    }
+
+    /** Whether the game lists in [style] offer an orientation: not on two screens, where a Carousel only runs across. */
+    private fun gameListTurns(style: MenuStyle): Boolean = MenuStyles.hasOrientation(style) && !_dualMenu.value
 
     /** The orientation the screen showing now is drawn in ([orientationOf]). */
     internal fun currentOrientation(): MenuOrientation = orientationOf(_screen.value)
@@ -5701,7 +5712,7 @@ class AppState(
         is Screen.Systems -> s.category?.takeIf { it != MenuCategory.HOME }?.let {
             MenuStyles.effectiveOrientation(styleOf(s), MenuStyles.orientationOf(deps.settings.menuOrientations, it))
         } ?: MenuOrientation.HORIZONTAL
-        is Screen.Games -> MenuStyles.effectiveOrientation(deps.settings.gameListStyle, deps.settings.gameListOrientation)
+        is Screen.Games -> gameListLayout().let { (style, o) -> MenuStyles.effectiveOrientation(style, o) }
         else -> MenuOrientation.HORIZONTAL
     }
 

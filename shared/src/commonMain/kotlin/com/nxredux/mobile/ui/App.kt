@@ -494,6 +494,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
     val frozen = remember(under) { under?.let { mutableStateOf(it.second) } }
     val selection: State<ListSelection> = frozen ?: pageSelection
     Box(Modifier.fillMaxSize()) {
+        state.dualMenu.collectAsState().value   // read so the page redraws in a game list's dual screen layout ([AppState.styleOf])
         val style = state.styleOf(s)   // this page's own: a page sliding out keeps its style while the next one's may differ
         val orientation = state.orientationOf(s)   // likewise its orientation
         // A Grid reports its columns only while its page is the one showing (a page sliding out never overwrites the count).
@@ -690,7 +691,8 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     )
     s.layoutMenu?.let { at ->
         GameListLayoutMenu(
-            current = GameListLayouts.indexOf(state.settings.gameListStyle, state.settings.gameListOrientation, state.settings.gameListVerticalAlignment), highlighted = at,
+            choices = GameListLayouts.choices(dual),
+            current = GameListLayouts.indexOf(state.settings.gameListStyle, state.settings.gameListOrientation, state.settings.gameListVerticalAlignment, dual), highlighted = at,
             onPick = state::pickLayout, onDismiss = { state.onButton(NxButton.B) },
         )
     }

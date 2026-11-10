@@ -29,9 +29,17 @@ object GameListLayouts {
         GameListLayout(MenuStyle.MINIMAL, MenuOrientation.HORIZONTAL, "Minimal"),
     )
 
-    /** The choice [style], its stored [orientation] and [alignment] are drawn as (List, Grid and Minimal ignore both, a horizontal row the alignment). */
-    fun indexOf(style: MenuStyle, orientation: MenuOrientation, alignment: VerticalListAlignment): Int {
-        val o = MenuStyles.effectiveOrientation(style, orientation)
-        return all.indexOfFirst { it.style == style && it.orientation == o && (it.alignment == null || it.alignment == alignment) }.coerceAtLeast(0)
+    /** The choices the dropdown lists: [all], or on two screens only those a game list draws there ([MenuStyles.dualGameListLayout]). */
+    fun choices(dual: Boolean): List<GameListLayout> =
+        if (dual) all.filter { MenuStyles.dualGameListLayout(it.style, it.orientation) == (it.style to it.orientation) } else all
+
+    /**
+     * The choice of [choices] that [style], its stored [orientation] and [alignment] are drawn as (List, Grid and Minimal
+     * ignore both, a horizontal row the alignment; on two screens Backdrop and a vertical Carousel are a horizontal Carousel).
+     */
+    fun indexOf(style: MenuStyle, orientation: MenuOrientation, alignment: VerticalListAlignment, dual: Boolean = false): Int {
+        val (st, stored) = if (dual) MenuStyles.dualGameListLayout(style, orientation) else style to orientation
+        val o = MenuStyles.effectiveOrientation(st, stored)
+        return choices(dual).indexOfFirst { it.style == st && it.orientation == o && (it.alignment == null || it.alignment == alignment) }.coerceAtLeast(0)
     }
 }
