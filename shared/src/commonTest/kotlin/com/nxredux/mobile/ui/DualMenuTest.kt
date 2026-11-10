@@ -8,6 +8,8 @@ import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.ui.nx.HomeShelf
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class DualMenuTest {
     private val game = GameEntry(ContentRef("r/a.rom"), "a.rom", "A", folder = ContentRef("f"), sourceId = "home", relativeDir = "Roms/x")
@@ -60,5 +62,12 @@ class DualMenuTest {
         val s = Screen.Switcher(listOf(SwitcherEntry(system, game, resume), SwitcherEntry(system, game2, resume)), 1)
         assertEquals(TopContent.GameDetails(listed2), DualMenu.top(s, 0))
         assertEquals(TopContent.Backdrop, DualMenu.top(Screen.Switcher(emptyList(), 0), 0))
+    }
+
+    @Test fun menuHostsFocusOnlyWhereTheMenuIs() {
+        assertTrue(menuWindowFocus(menuOnSecond = true, textEntryOpen = true))
+        assertFalse(menuWindowFocus(menuOnSecond = true, textEntryOpen = false))
+        assertFalse(menuWindowFocus(menuOnSecond = false, textEntryOpen = true))
+        assertFalse(menuWindowFocus(menuOnSecond = false, textEntryOpen = false))
     }
 }

@@ -43,7 +43,7 @@ import org.jetbrains.compose.resources.painterResource
  * (two screens in one window), already inside the shell's insets.
  */
 @Composable
-fun MenuTopScreen(state: AppState, inSkin: Boolean = false, keyboard: Boolean = false) {
+fun MenuTopScreen(state: AppState, inSkin: Boolean = false) {
     val screen by state.screen.collectAsState()
     val dual by state.dualMenu.collectAsState()
     val selection by state.selection.collectAsState()
@@ -64,7 +64,6 @@ fun MenuTopScreen(state: AppState, inSkin: Boolean = false, keyboard: Boolean = 
                     }
                 }
             }
-            if (keyboard) NxKeyboardBar(state)   // this window is in the hands (the menu on the second display): the keyboard docks here
             }
         }
     }

@@ -30,3 +30,9 @@ object DualMenu {
         else -> TopContent.Backdrop
     }
 }
+
+/**
+ * Whether a text prompt is drawn on the second display: only when the menu ([App]) is there. Android's keyboard won't
+ * open on that display, so NX's types the prompt ([AppState.nxKeyboard]).
+ */
+fun menuWindowFocus(menuOnSecond: Boolean, textEntryOpen: Boolean): Boolean = menuOnSecond && textEntryOpen
