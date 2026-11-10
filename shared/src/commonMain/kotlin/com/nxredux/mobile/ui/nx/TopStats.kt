@@ -33,7 +33,9 @@ import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
@@ -213,10 +215,14 @@ fun TopStatsPage(stats: TopStats, onLaunch: (Listed) -> Unit, prefer: BackdropAr
             val loose = Constraints(maxWidth = constraints.maxWidth)
             val head = subcompose("head") {
                 Column {
-                    Text(stats.title, color = colors.listText, fontFamily = font, fontSize = 40.sp, lineHeight = 42.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    // Trimmed line spacing: the title and the facts line read as one block.
+                    Text(
+                        stats.title, color = colors.listText, fontFamily = font, fontSize = 40.sp, lineHeight = 42.sp, fontWeight = FontWeight.Bold,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis, style = TextStyle(lineHeightStyle = TS_TIGHT_LINES),
+                    )
                     Text(
                         statsLine(stats, now), color = colors.hint, fontFamily = font, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 4.dp),
+                        style = TextStyle(lineHeightStyle = TS_TIGHT_LINES), modifier = Modifier.padding(top = 2.dp),
                     )
                     biosPill(stats.bios)?.let { pill ->
                         Text(
@@ -341,3 +347,5 @@ private fun Modifier.cleanTap(onTap: () -> Unit): Modifier = composed {
         }
     }
 }
+
+private val TS_TIGHT_LINES = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both)
