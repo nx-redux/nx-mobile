@@ -74,7 +74,7 @@ internal class SaveSession(
         set(value) {
             if (field == value) return
             field = value
-            host.activity.runOnUiThread { dual.refreshDualPanel() }   // its Save and Load tiles name the slot
+            host.activity.runOnUiThread { dual.onSlotsChanged(lastMoved = true) }   // its Save and Load tiles name the slot
         }
     private var slotsJob: Job? = null   // the newest strip refresh (main thread only); a newer one cancels it
     private val lastSlotWaiters = LastSlotWaiters()   // callbacks of cancelled refreshes too: the next one to land runs them
@@ -419,6 +419,7 @@ internal class SaveSession(
             } ?: return@launch
             slotsUi.value = slots
             lastSlotCache = last
+            dual.onSlotsChanged(lastMoved = false)   // its strip
             lastSlotWaiters.takeAll().forEach { it(last) }
         }
     }

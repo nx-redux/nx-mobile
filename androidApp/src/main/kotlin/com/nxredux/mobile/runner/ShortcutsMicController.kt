@@ -179,9 +179,19 @@ internal class ShortcutsMicController(
     fun panelTouchActions(): List<ShortcutAction> =
         GamePanelModel.panelTouchActions(effectiveShortcuts?.touch.orEmpty(), host.speed.rewindShown)
 
-    /** A panel tile's press or release, as the touch button's: not while the in-game menu is open (it took the shortcuts). */
-    fun onPanelTouch(action: ShortcutAction, down: Boolean) {
+    /**
+     * A panel tile's press or release, as the touch button's: not while the in-game menu is open (it took the shortcuts).
+     * Save and Load go to [slot], the one picked on the panel's strip (null: the last used one).
+     */
+    fun onPanelTouch(action: ShortcutAction, down: Boolean, slot: Int?) {
         if (down && (host.menuOpen || host.quitting)) return   // a release always goes through: a held action must not stick
+        val save = action == ShortcutAction.SAVE_STATE
+        if (slot != null && (save || action == ShortcutAction.LOAD_STATE)) {
+            if (!down) return
+            if (host.saveStates == null) { host.toast("Save states are off here"); return }
+            if (save) host.saveToSlot(slot) else host.loadFromSlot(slot)
+            return
+        }
         onShortcut(action, down)
     }
 

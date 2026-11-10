@@ -925,6 +925,13 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         fixPanel()
     }
 
+    /** The second-screen panel's All options: the menu on its Options page. Nothing in netplay (its root has no Options). */
+    fun openOptions() {
+        if (netplay) return
+        popTo(PageKind.Root)
+        push(optionsPage())
+    }
+
     /**
      * A Reset binding or the second-screen panel's Reset tile: the menu shows the Reset dialog, as its own panel's Reset
      * tile does. [closesOnCancel]: the menu opened for it, so Cancel and B close the menu and the game plays on (the
@@ -1056,7 +1063,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private fun panelEffect(event: GamePanelEvent): MenuEffect? = when (event) {
         GamePanelEvent.SwapDisc -> (changeDisc(1) as? MenuEffect.ChangeDisc)?.copy(toast = true)
-        is GamePanelEvent.Touch -> null   // the second-screen panel's tiles: this menu's panel has none
+        // The second-screen panel's own: this menu's panel has none of them.
+        is GamePanelEvent.Touch, is GamePanelEvent.SelectSlot, is GamePanelEvent.SetVolume, is GamePanelEvent.SetQuick, GamePanelEvent.OpenOptions -> null
         is GamePanelEvent.SelectTab -> {
             // A tap leaves a touch player's focus nowhere: off the Menu tab that reads as the tab row ([pressPanel]). The
             // tab row also shows over the Options page beside the root ([menuTabsShown]): a tab there goes back to the root.
@@ -1123,6 +1131,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private fun panelItemCount(tab: GamePanelTab): Int = when (tab) {
         GamePanelTab.SHORTCUTS -> 0   // the Menu tab: its words, no items
+        GamePanelTab.SETTINGS -> 0    // the second-screen panel's only
         GamePanelTab.ACHIEVEMENTS -> achievements.orEmpty().size
         GamePanelTab.CHEATS -> cheats.size
         GamePanelTab.PLAYERS -> playerSlots.size
@@ -1189,13 +1198,13 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         when (tab) {
             GamePanelTab.ACHIEVEMENTS -> push(achievementsPage())
             GamePanelTab.PLAYERS -> push(playersPage())
-            GamePanelTab.SHORTCUTS, GamePanelTab.CHEATS -> Unit
+            GamePanelTab.SHORTCUTS, GamePanelTab.SETTINGS, GamePanelTab.CHEATS -> Unit
         }
     }
 
     /** The shown tab's item that asks for [event] ([panelItemEvent] backwards); null for a tab, the Game pill, or none. */
     private fun panelItemIndex(event: GamePanelEvent): Int? = when (panelTab()) {
-        GamePanelTab.SHORTCUTS -> null   // no items
+        GamePanelTab.SHORTCUTS, GamePanelTab.SETTINGS -> null   // no items
         GamePanelTab.ACHIEVEMENTS -> null   // its rows ask for nothing
         GamePanelTab.CHEATS -> (event as? GamePanelEvent.SetCheat)?.index
         GamePanelTab.PLAYERS -> (event as? GamePanelEvent.SetPlayer)?.slot
@@ -1203,7 +1212,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /** What A on item [index] of [tab] asks for, as a tap there would ([GamePanel]); null for a disabled shortcut or an achievement. */
     private fun panelItemEvent(tab: GamePanelTab, index: Int): GamePanelEvent? = when (tab) {
-        GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS -> null
+        GamePanelTab.SHORTCUTS, GamePanelTab.SETTINGS, GamePanelTab.ACHIEVEMENTS -> null
         GamePanelTab.CHEATS -> GamePanelModel.cheatEvent(index, panelCheats())
         GamePanelTab.PLAYERS -> if (index < playerSlots.size) GamePanelModel.nextPlayer(index, playerSlots, playerPads) else null
     }

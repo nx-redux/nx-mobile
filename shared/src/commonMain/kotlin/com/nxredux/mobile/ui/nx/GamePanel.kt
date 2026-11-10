@@ -1,5 +1,12 @@
 package com.nxredux.mobile.ui.nx
 
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.foundation.layout.fillMaxHeight
+import kotlin.math.roundToInt
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -102,14 +109,15 @@ fun GamePanel(
             )
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (tab) {
-                    GamePanelTab.SHORTCUTS -> ShortcutsTab(state.shortcuts, focused, bottom, onEvent)
+                    GamePanelTab.SHORTCUTS -> ShortcutsTab(state.shortcuts, state.slots, state.slot, focused, bottom, onEvent)
+                    GamePanelTab.SETTINGS -> SettingsTab(state.quick, bottom, onEvent)
                     GamePanelTab.ACHIEVEMENTS -> AchievementsTab(state.achievements, state.badges, focused, bottom)
                     GamePanelTab.CHEATS -> CheatsTab(state.cheats, state.noCheatsText, focused, bottom, onEvent)
                     GamePanelTab.PLAYERS -> PlayersTab(state.players, state.playerPads, focused, bottom, onEvent)
                 }
             }
         }
-        if (state.showGamePill) PanelPill("Game", Modifier.align(Alignment.BottomEnd).padding(GP_PILL_MARGIN)) { onEvent(GamePanelEvent.ShowGame) }
+        if (state.showGamePill) GamePillCorner { onEvent(GamePanelEvent.ShowGame) }
     }
 }
 
@@ -150,27 +158,77 @@ fun GamePanelHeaderBar(h: GamePanelHeader) {
 
 /**
  * The shortcut tiles, 4 to a row, or 2 or 1 where a label's longest word would not fit ([rememberGamePanelColumns]); a
- * short last row keeps the cell width. The player's touch buttons ([Shortcut.TOUCH]) have rows of their own, first.
+ * short last row keeps the cell width. Under them the save-state [slots]' strip ([SlotStrip]) where the game has any.
  */
 @Composable
-private fun ShortcutsTab(shortcuts: List<ShortcutState>, focused: Int?, bottom: Dp, onEvent: (GamePanelEvent) -> Unit) {
+private fun ShortcutsTab(
+    shortcuts: List<ShortcutState>, slots: List<SlotUi>, slot: Int?, focused: Int?, bottom: Dp, onEvent: (GamePanelEvent) -> Unit,
+) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val columns = rememberGamePanelColumns(maxWidth, shortcuts)
         val scroll = rememberScrollState()
         Column(
             Modifier.fillMaxSize().nxScrollFade(scroll, height = 56.dp, strong = true).verticalScroll(scroll)
-                .padding(start = GP_GUTTER, end = GP_GUTTER, top = 10.dp, bottom = bottom),
+                .padding(top = 10.dp, bottom = bottom),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            val rows = remember(shortcuts, columns) {
-                shortcuts.withIndex().partition { it.value.shortcut == Shortcut.TOUCH }.toList().flatMap { it.chunked(columns) }
-            }
-            rows.forEach { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(GP_CELL_GAP)) {
-                    row.forEach { (i, s) ->
-                        ShortcutTile(s, selected = focused == i, Modifier.weight(1f), onEvent)
+            shortcuts.chunked(columns).forEachIndexed { r, row ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = GP_GUTTER), horizontalArrangement = Arrangement.spacedBy(GP_CELL_GAP)) {
+                    row.forEachIndexed { c, s ->
+                        ShortcutTile(s, selected = focused == r * columns + c, Modifier.weight(1f), onEvent)
                     }
                     repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            if (slots.isNotEmpty()) SlotStrip(slots, slot) { onEvent(GamePanelEvent.SelectSlot(it)) }
+        }
+    }
+}
+
+/**
+ * The save-state slots, a strip that scrolls sideways to the panel's edges: each slot's screenshot (or "Empty"), its
+ * name and when it was saved. A tap picks the slot Save and Load use ([onPick], 1-based); the picked one ([slot]) wears
+ * the accent.
+ */
+@Composable
+private fun SlotStrip(slots: List<SlotUi>, slot: Int?, onPick: (Int) -> Unit) {
+    val colors = LocalNxColors.current
+    val font = LocalNxFont.current
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+        Text("Save states", Modifier.padding(horizontal = GP_GUTTER), color = colors.hint, fontFamily = font, fontSize = GP_SMALL_SIZE, maxLines = 1)
+        // Opens on the picked slot, one card before it in view.
+        val list = rememberLazyListState(initialFirstVisibleItemIndex = ((slot ?: 1) - 2).coerceIn(0, (slots.size - 1).coerceAtLeast(0)))
+        LazyRow(
+            Modifier.fillMaxWidth().padding(top = 8.dp), state = list,
+            contentPadding = PaddingValues(horizontal = GP_GUTTER), horizontalArrangement = Arrangement.spacedBy(GP_CELL_GAP),
+        ) {
+            itemsIndexed(slots) { i, s ->
+                val picked = slot == i + 1
+                val shape = RoundedCornerShape(GP_SLOT_RADIUS)
+                Column(Modifier.width(GP_SLOT_W).clip(shape).clickable { onPick(i + 1) }) {
+                    Box(
+                        Modifier.fillMaxWidth().height(GP_SLOT_H).clip(shape)
+                            .background(if (s.thumbPath != null) Color.Black else Color.Transparent)
+                            .border(if (picked) GP_SLOT_PICK else GP_TILE_RING, if (picked) colors.accent else colors.hint.copy(alpha = 0.35f), shape),   // role: the picked slot's accent ring, else a faint outline
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        val thumb = s.thumbPath
+                        if (thumb != null) {
+                            val context = coil3.compose.LocalPlatformContext.current
+                            AsyncImage(
+                                model = remember(thumb, context) { coil3.request.ImageRequest.Builder(context).data(thumb).memoryCacheKey(thumb).build() },
+                                contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(GP_SLOT_PICK),
+                            )
+                        } else Text(if (s.occupied) s.label else "Empty", color = colors.hint, fontFamily = font, fontSize = GP_SMALL_SIZE, maxLines = 1)
+                    }
+                    Text(
+                        s.label, Modifier.padding(top = 6.dp, start = 2.dp), color = if (picked) colors.accent else colors.listText,
+                        fontFamily = font, fontSize = GP_SMALL_SIZE, maxLines = 1,
+                    )
+                    Text(
+                        if (s.occupied) s.subtitle else " ", Modifier.padding(start = 2.dp, bottom = 2.dp), color = colors.hint,
+                        fontFamily = font, fontSize = GP_SLOT_DATE, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
@@ -271,6 +329,101 @@ private fun DrawScope.focusRing(color: Color) {
         color, topLeft = Offset(-out, -out), size = Size(size.width + out * 2, size.height + out * 2),
         cornerRadius = CornerRadius(GP_TILE_RADIUS.toPx() + out), style = Stroke(GP_FOCUS_RING.toPx()),
     )
+}
+
+/**
+ * The Settings tab: a row a setting ([QuickSetting]), its name then its control, changed as it is touched (the volume as
+ * the thumb moves, an option on a tap), then "All options" (the in-game menu's Options page). A row the game's layout
+ * holds is dimmed and takes no touch.
+ */
+@Composable
+private fun SettingsTab(rows: List<QuickSetting>, bottom: Dp, onEvent: (GamePanelEvent) -> Unit) {
+    val colors = LocalNxColors.current
+    val font = LocalNxFont.current
+    val scroll = rememberScrollState()
+    Column(
+        Modifier.fillMaxSize().nxScrollFade(scroll, height = 56.dp, strong = true).verticalScroll(scroll)
+            .padding(start = GP_GUTTER, end = GP_GUTTER, top = 6.dp, bottom = bottom),
+    ) {
+        rows.forEach { row ->
+            val enabled = (row as? QuickSetting.Choice)?.enabled != false
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = GP_QUICK_ROW).alpha(if (enabled) 1f else NX_DISABLED_ALPHA),   // role: a disabled control
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text(row.label, Modifier.width(GP_QUICK_LABEL), color = colors.listText, fontFamily = font, fontSize = GP_LABEL_SIZE, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                when (row) {
+                    is QuickSetting.Volume -> {
+                        // The thumb follows the finger; the device's volume has whole steps, so the row's own value lands on release.
+                        var drag by remember { mutableStateOf<Float?>(null) }
+                        Slider(
+                            value = drag ?: row.value, onValueChange = { drag = it; onEvent(GamePanelEvent.SetVolume(it)) },
+                            onValueChangeFinished = { drag = null }, modifier = Modifier.weight(1f),
+                            colors = SliderDefaults.colors(
+                                thumbColor = colors.listText, activeTrackColor = colors.listText,
+                                inactiveTrackColor = colors.hint.copy(alpha = 0.3f),   // role: the track past the thumb
+                            ),
+                        )
+                        Text("${((drag ?: row.value) * 100).roundToInt()}%", Modifier.width(44.dp), color = colors.hint, fontFamily = font, fontSize = GP_SMALL_SIZE, maxLines = 1, textAlign = TextAlign.End)
+                    }
+                    is QuickSetting.Choice -> if (row.segments) QuickSegments(row, Modifier.weight(1f), onEvent) else QuickStepper(row, Modifier.weight(1f), onEvent)
+                }
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = GP_QUICK_ROW).clip(RoundedCornerShape(GP_SLOT_RADIUS))
+                .clickable { onEvent(GamePanelEvent.OpenOptions) },
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text("Changes apply now. Save them from All options.", Modifier.weight(1f), color = colors.hint, fontFamily = font, fontSize = GP_SMALL_SIZE, maxLines = 2)
+            Text("All options  \u203A", color = colors.listText, fontFamily = font, fontSize = GP_LABEL_SIZE, maxLines = 1)
+        }
+    }
+}
+
+/** A [QuickSetting.Choice]'s values side by side in one ring, the one in use filled; a tap on another sets it. */
+@Composable
+private fun QuickSegments(c: QuickSetting.Choice, modifier: Modifier, onEvent: (GamePanelEvent) -> Unit) {
+    val colors = LocalNxColors.current
+    val shape = RoundedCornerShape(50)
+    Row(modifier.height(GP_QUICK_CONTROL).clip(shape).border(GP_TILE_RING, colors.hint.copy(alpha = 0.6f), shape)) {   // role: a button's grey ring
+        c.values.forEachIndexed { i, v ->
+            val on = i == c.index
+            Box(
+                Modifier.weight(1f).fillMaxHeight().clip(shape).background(if (on) colors.listText else Color.Transparent)
+                    .then(if (c.enabled && !on) Modifier.clickable { onEvent(GamePanelEvent.SetQuick(c.key, v)) } else Modifier),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    c.labels.getOrElse(i) { v }, color = if (on) colors.background else colors.hint, fontFamily = LocalNxFont.current,
+                    fontSize = GP_SMALL_SIZE, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/** A [QuickSetting.Choice]'s value between two arrows in one ring: a tap on its left half steps back, on its right half on. */
+@Composable
+private fun QuickStepper(c: QuickSetting.Choice, modifier: Modifier, onEvent: (GamePanelEvent) -> Unit) {
+    val colors = LocalNxColors.current
+    val font = LocalNxFont.current
+    val shape = RoundedCornerShape(50)
+    val step = { delta: Int -> GamePanelModel.quickStep(c, delta)?.let { onEvent(GamePanelEvent.SetQuick(c.key, it)) } }
+    Box(modifier.height(GP_QUICK_CONTROL).clip(shape).border(GP_TILE_RING, colors.hint.copy(alpha = 0.6f), shape)) {   // role: a button's grey ring
+        Row(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f).fillMaxHeight().then(if (c.enabled) Modifier.clickable { step(-1) } else Modifier))
+            Box(Modifier.weight(1f).fillMaxHeight().then(if (c.enabled) Modifier.clickable { step(1) } else Modifier))
+        }
+        Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("\u2039", color = colors.hint, fontFamily = font, fontSize = GP_TITLE_SIZE, maxLines = 1)
+            Text(
+                c.labels.getOrNull(c.index) ?: GamePanelModel.quickFileLabel(c.current), Modifier.weight(1f), color = colors.listText,
+                fontFamily = font, fontSize = GP_LABEL_SIZE, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+            )
+            Text("\u203A", color = colors.hint, fontFamily = font, fontSize = GP_TITLE_SIZE, maxLines = 1)
+        }
+    }
 }
 
 /** The achievements as [AchievementRow]s; they open nothing (the description is on the row). */
@@ -466,14 +619,21 @@ fun BottomScreenButton(onClick: () -> Unit) {
 
 private val GP_GUTTER = 16.dp
 private val GP_LIST_GUTTER = 8.dp
-private val GP_LIST_BOTTOM = 52.dp   // the last row clears the Game pill
+private val GP_LIST_BOTTOM = 76.dp   // the last row clears the Game pill (52 dp, 16 from the corner)
 private val GP_LIST_END = 8.dp       // without the pill
-private val GP_PILL_MARGIN = 10.dp
 private val GP_ART = 64.dp
 private val GP_HEADER_BOTTOM = 16.dp   // between the header and the tabs (and the menu's list beside them)
 private val GP_BADGE = 32.dp
 private val GP_ROW_HEIGHT = 44.dp
-private val GP_TILE_HEIGHT = 84.dp
+private val GP_TILE_HEIGHT = 72.dp
+private val GP_SLOT_W = 124.dp       // a save-state slot's card on the strip
+private val GP_SLOT_H = 93.dp        // its screenshot box: 4:3
+private val GP_SLOT_RADIUS = 10.dp
+private val GP_SLOT_PICK = 2.dp      // the picked slot's accent ring
+private val GP_SLOT_DATE = 12.sp
+private val GP_QUICK_ROW = 50.dp      // a Settings tab row
+private val GP_QUICK_LABEL = 124.dp   // its name's column
+private val GP_QUICK_CONTROL = 38.dp  // its segments or stepper
 private val GP_TILE_RADIUS = 18.dp
 private val GP_TILE_RING = 1.5.dp     // a tile's grey outline
 private val GP_FOCUS_RING = 2.dp     // the controller's ring round a shortcut tile

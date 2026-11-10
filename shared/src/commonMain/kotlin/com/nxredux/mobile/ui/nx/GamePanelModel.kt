@@ -7,7 +7,7 @@ import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.shortcuts.TouchSlot
 
 /** The game panel's tabs, in display order; [GamePanelModel.tabs] hides the ones that don't apply. */
-enum class GamePanelTab(val label: String) { SHORTCUTS("Shortcuts"), ACHIEVEMENTS("Achievements"), CHEATS("Cheats"), PLAYERS("Players") }
+enum class GamePanelTab(val label: String) { SHORTCUTS("Shortcuts"), SETTINGS("Settings"), ACHIEVEMENTS("Achievements"), CHEATS("Cheats"), PLAYERS("Players") }
 
 /**
  * The tab's word in the in-game menu's tab row: Shortcuts is the Menu tab there (the menu's words with the shortcuts
@@ -58,6 +58,24 @@ data class GamePanelHeader(
  */
 data class CheatRow(val name: String, val source: String, val on: Boolean)
 
+/** One row of the Settings tab ([GamePanelState.quick]): what a player changes mid-game, applied as it is touched. */
+sealed interface QuickSetting {
+    val label: String
+
+    /** The game's volume, [value] 0..1 of the device's range. */
+    data class Volume(override val label: String, val value: Float) : QuickSetting
+
+    /**
+     * An option with a few [values] ([labels]: what each reads as), the one in use at [index] (-1: a value not among
+     * them, shown as it is in [current]). [segments]: every value side by side; else the value between two arrows.
+     * [enabled] false: the game's layout holds it (dimmed, not changed).
+     */
+    data class Choice(
+        val key: String, override val label: String, val values: List<String>, val labels: List<String>, val index: Int,
+        val current: String, val segments: Boolean, val enabled: Boolean = true,
+    ) : QuickSetting
+}
+
 /** Where a controller is inside the panel (single-screen in-game menu): the tab row, or the current tab's item [index]. */
 sealed interface PanelFocus {
     data object Tabs : PanelFocus
@@ -84,12 +102,25 @@ data class GamePanelState(
     val noCheatsText: String = "",
     val focus: PanelFocus? = null,
     val showGamePill: Boolean = false,
+    /** The Shortcuts tab's save-state slots, in slot order (none: no strip), and the one Save and Load use (1-based). */
+    val slots: List<SlotUi> = emptyList(),
+    val slot: Int? = null,
+    /** The Settings tab's rows. */
+    val quick: List<QuickSetting> = emptyList(),
 )
 
 /** What a tap (or A) on the panel asks the game for. */
 sealed interface GamePanelEvent {
     /** Next disc, as the menu's Disc row cycles. */
     data object SwapDisc : GamePanelEvent
+    /** The Settings tab's volume to [value] (0..1). */
+    data class SetVolume(val value: Float) : GamePanelEvent
+    /** The Settings tab's option [key] to [value], live. */
+    data class SetQuick(val key: String, val value: String) : GamePanelEvent
+    /** The Settings tab's "All options": the in-game menu on its Options page. */
+    data object OpenOptions : GamePanelEvent
+    /** Save-state [slot] (1-based) picked on the strip: Save and Load use it. */
+    data class SelectSlot(val slot: Int) : GamePanelEvent
     /** A touch button's tile pressed ([down]) or let go, as the button on the pad: a hold runs while down. */
     data class Touch(val action: ShortcutAction, val down: Boolean) : GamePanelEvent
     data class SelectTab(val tab: GamePanelTab) : GamePanelEvent
@@ -112,15 +143,36 @@ sealed interface GamePanelEvent {
 /** The panel's rules, pure so the in-game menu and both hosts share them. */
 object GamePanelModel {
     /**
-     * Shortcuts always; Achievements only with a RetroAchievements set; Cheats while the core takes them ([cheats], even
-     * with none for the game: the tab says how to add some); Players only with more than one player slot.
+     * Shortcuts always; Settings on the second-screen panel ([settings]); Achievements only with a RetroAchievements
+     * set; Cheats while the core takes them ([cheats], even with none for the game: the tab says how to add some);
+     * Players only with more than one player slot.
      */
-    fun tabs(raAvailable: Boolean, playerSlots: Int, cheats: Boolean = false): List<GamePanelTab> = buildList {
+    fun tabs(raAvailable: Boolean, playerSlots: Int, cheats: Boolean = false, settings: Boolean = false): List<GamePanelTab> = buildList {
         add(GamePanelTab.SHORTCUTS)
+        if (settings) add(GamePanelTab.SETTINGS)
         if (raAvailable) add(GamePanelTab.ACHIEVEMENTS)
         if (cheats) add(GamePanelTab.CHEATS)
         if (playerSlots > 1) add(GamePanelTab.PLAYERS)
     }
+
+    /**
+     * A Settings tab option: [values] with the one in use ([current]) marked; side by side while there are at most
+     * [QUICK_SEGMENTS_MAX] and none has its own name ([labels]) too long to share a row, else between two arrows.
+     */
+    fun quickChoice(key: String, label: String, values: List<String>, current: String, labels: List<String> = values, enabled: Boolean = true) =
+        QuickSetting.Choice(key, label, values, labels, values.indexOf(current), current, segments = values.size in 2..QUICK_SEGMENTS_MAX, enabled = enabled)
+
+    const val QUICK_SEGMENTS_MAX = 4
+
+    /** The value [delta] steps on from [c]'s (wrapping; from a value not among them, the first or the last); null with none to step to. */
+    fun quickStep(c: QuickSetting.Choice, delta: Int): String? {
+        if (c.values.isEmpty()) return null
+        val at = if (c.index >= 0) (c.index + delta).mod(c.values.size) else if (delta > 0) 0 else c.values.lastIndex
+        return c.values[at].takeIf { it != c.current }
+    }
+
+    /** A shader preset or overlay file as the Settings tab names it: its file's name without the folder or the extension. */
+    fun quickFileLabel(value: String): String = value.substringAfterLast('/').substringBeforeLast('.').ifEmpty { value }
 
     /** The points badge at the end of an achievement's name; none for one worth no points. */
     fun pointsBadge(a: RaAchievement): String? = a.points.takeIf { it > 0 }?.toString()

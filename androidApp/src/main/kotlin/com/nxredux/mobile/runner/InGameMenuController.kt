@@ -278,6 +278,7 @@ internal class InGameMenuController(
 
     private fun openMenu() {
         if (menuOpen) return
+        dual.menuOpening()
         menuOpen = true
         val model = InGameMenuModel(
             gameTitle = intent.getStringExtra(EXTRA_TITLE) ?: "Paused",
@@ -531,6 +532,7 @@ internal class InGameMenuController(
         menuState.value = null
         dual.syncPanelClock()
         padLayout.updatePadVisibility()
+        dual.menuClosed()
         host.resumeAfterMenu()   // the game plays on, unless another app has the focus (focusResume then)
     }
 

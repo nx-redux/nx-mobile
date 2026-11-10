@@ -1655,6 +1655,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun onSkinShortcut(action: SkinAction, down: Boolean) = shortcuts.onSkinShortcut(action, down)
 
     override fun onPadShortcut(slot: TouchSlot, down: Boolean) = shortcuts.onPadShortcut(slot, down)
+    override fun cornerPanel(): (() -> Unit)? = dual.cornerPanel()
 
     override val shortcutKeys: ShortcutKeys? get() = shortcuts.shortcutKeys
 
@@ -1779,7 +1780,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun handleMenuEffect(effect: MenuEffect) = menu.handle(effect)
     override fun panelTouchActions() = shortcuts.panelTouchActions()
-    override fun onPanelTouch(action: ShortcutAction, down: Boolean) = shortcuts.onPanelTouch(action, down)
+
+    /** The second-screen panel's All options: the in-game menu on its Options page (opened for it when closed). */
+    override fun openOptions() {
+        if (quitting || !gameReady) return
+        if (!menuOpen) toggleMenu()
+        withMenu { it.openOptions() }
+    }
+    override fun onPanelTouch(action: ShortcutAction, down: Boolean, slot: Int?) = shortcuts.onPanelTouch(action, down, slot)
     override fun placeMenu() = menu.placeMenu()
     override fun relayoutPad() = padLayout.applyLayout(resources.configuration.orientation)
 

@@ -123,6 +123,30 @@ class GamePanelModelTest {
         assertEquals(true, shortcuts(rewind = true).single { it.shortcut == Shortcut.REWIND }.on)
     }
 
+    // The Settings tab is the second-screen panel's: after Shortcuts, only where asked for.
+    @Test fun settings_tab_sits_after_shortcuts() {
+        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.SETTINGS, GamePanelTab.ACHIEVEMENTS), GamePanelModel.tabs(raAvailable = true, playerSlots = 1, settings = true))
+        assertTrue(GamePanelTab.SETTINGS !in GamePanelModel.tabs(raAvailable = true, playerSlots = 2, cheats = true))
+    }
+
+    // A Settings option: up to four values sit side by side, more step between two arrows (wrapping); a value not among
+    // them steps to the first or the last, and a step onto the value in use asks for nothing.
+    @Test fun a_quick_choice_marks_its_value_and_steps_round() {
+        val scaling = GamePanelModel.quickChoice("k", "Screen Scaling", listOf("Auto", "Native", "Aspect", "Fullscreen"), "Aspect")
+        assertEquals(2, scaling.index); assertTrue(scaling.segments); assertTrue(scaling.enabled)
+        val shader = GamePanelModel.quickChoice("s", "Shader", listOf("None", "nx/line.glslp", "nx/grid.glslp", "User/crt/easy.glslp", "x.glslp"), "None")
+        assertTrue(!shader.segments)
+        assertEquals("nx/line.glslp", GamePanelModel.quickStep(shader, 1))
+        assertEquals("x.glslp", GamePanelModel.quickStep(shader, -1))
+        val gone = shader.copy(index = -1, current = "User/removed.glslp")
+        assertEquals("None", GamePanelModel.quickStep(gone, 1)); assertEquals("x.glslp", GamePanelModel.quickStep(gone, -1))
+        assertNull(GamePanelModel.quickStep(GamePanelModel.quickChoice("o", "Overlay", listOf("None"), "None"), 1))
+        assertTrue(!GamePanelModel.quickChoice("o", "Overlay", listOf("None"), "None").segments)   // one value: nothing to pick between
+        assertEquals("easy", GamePanelModel.quickFileLabel("User/crt/easy.glslp"))
+        assertEquals("None", GamePanelModel.quickFileLabel("None"))
+        assertEquals("scan lines", GamePanelModel.quickFileLabel("scan lines.png"))
+    }
+
     @Test fun noScreenshot() {
         assertTrue(Shortcut.entries.none { it.name == "SCREENSHOT" })
     }

@@ -82,6 +82,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.sin
+import android.media.AudioManager
+import com.nxredux.mobile.options.ShaderOptions
+import com.nxredux.mobile.options.FrontendOptions
+import com.nxredux.mobile.ui.nx.QuickSetting
 import kotlin.math.roundToInt
 
 /**
@@ -114,10 +118,16 @@ internal interface DualScreenHost : GameScreenHost {
     fun handleMenuEffect(effect: MenuEffect)
     /** The touch buttons the panel shows a tile for ([GamePanelModel.panelTouchActions]). */
     fun panelTouchActions(): List<ShortcutAction>
-    /** A touch button's tile pressed or let go. */
-    fun onPanelTouch(action: ShortcutAction, down: Boolean)
-    /** The save-state slot Save and Load use; null until read. */
+    /** A touch button's tile pressed or let go; Save and Load on [slot] (null: the last used one). */
+    fun onPanelTouch(action: ShortcutAction, down: Boolean, slot: Int?)
+    /** The save-state slot last saved to or loaded; null until read. */
     val lastSlotCache: Int?
+    /** The frontend keys the game's layout holds (the in-game menu shows them locked). */
+    fun menuLocked(): Set<String>
+    /** The panel's All options: the in-game menu, on its Options page. */
+    fun openOptions()
+    /** The save-state slots as the in-game menu shows them; empty where the game has none. */
+    val slotsUi: androidx.compose.runtime.State<List<com.nxredux.mobile.ui.nx.SlotUi>>
     /** Runs [block] on the open in-game menu, if any, and redraws it. */
     fun withMenu(block: (InGameMenuModel) -> Unit)
     /** The open in-game menu moves to the display it belongs on now ([menuOnSecond]). */
@@ -623,7 +633,8 @@ internal class DualScreenController(
                                 .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Vertical))) { panel() }
                             // Bottom-right, where the panel's Game pill sits (clear of a cutout on those sides): the
                             // two switch pills land on one spot.
-                            mainPanelPill.value -> PanelPill(
+                            // Not beside the corner buttons: their row carries it ([cornerPanel]).
+                            mainPanelPill.value && !padLayout.cornerShown.value -> PanelPill(
                                 "Panel", Modifier.windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.End + WindowInsetsSides.Bottom)).padding(10.dp),
                             ) { panelUp = true; syncDual() }
                         }
@@ -744,7 +755,7 @@ internal class DualScreenController(
         val players = input.playerRows()
         val tabs = GamePanelModel.tabs(
             raAvailable = list.isNotEmpty(), playerSlots = if (netplayNow != null) 0 else players?.first?.size ?: 0,
-            cheats = owner.cheatsSupported && netplayNow == null,
+            cheats = owner.cheatsSupported && netplayNow == null, settings = true,
         )
         val cheats = owner.cheatSet
         val (disc, count) = discs ?: (0 to 0)
@@ -755,8 +766,11 @@ internal class DualScreenController(
             tab = GamePanelModel.resolveTab(dualPanelTab, tabs),
             shortcuts = GamePanelModel.shortcuts(
                 count, disc, netplayNow != null, ff, rewind, owner.micTile(),
-                touch = owner.panelTouchActions(), slot = owner.lastSlotCache,
+                touch = owner.panelTouchActions(), slot = panelSlotNow(),
             ),
+            slots = if (netplayNow == null) owner.slotsUi.value else emptyList(),
+            slot = panelSlotNow(),
+            quick = quickSettings(),
             achievements = list,
             badges = b?.badges.orEmpty(),
             players = players?.first.orEmpty(),
@@ -765,6 +779,64 @@ internal class DualScreenController(
             noCheatsText = GamePanelModel.noCheatsText(owner.cheatsFolder, cheats.expected),
             showGamePill = dualMode == DualMode.PANEL_UP,
         )
+    }
+
+    /**
+     * The Settings tab's rows: the volume, then the picture options a player changes mid-game (Screen Scaling, Screen
+     * Sharpness, Shader), each as in effect now and applied through the in-game menu's own effects. A key the game's
+     * layout holds is dimmed.
+     */
+    private fun quickSettings(): List<QuickSetting> = buildList {
+        val audio = activity.getSystemService(AudioManager::class.java)
+        val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        add(QuickSetting.Volume("Volume", audio.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max))
+        val locked = owner.menuLocked()
+        for (key in listOf(FrontendOptions.SCALING, FrontendOptions.SHARPNESS)) {
+            val o = FrontendOptions.table.firstOrNull { it.key == key } ?: continue
+            val labels = o.valueLabels.ifEmpty { o.values.map { v -> v.lowercase().replaceFirstChar { it.uppercase() } } }
+            add(GamePanelModel.quickChoice(key, o.label, o.values, frontendValues[key] ?: o.default, labels, enabled = key !in locked))
+        }
+        val presets = ShaderOptions.presetChoices(renderer.presetNames)
+        add(GamePanelModel.quickChoice(
+            ShaderOptions.PRESET, ShaderOptions.PRESET_LABEL, presets, ShaderOptions.preset(renderer.shaderValues) ?: ShaderOptions.NONE,
+            presets.map(GamePanelModel::quickFileLabel),
+        ))
+    }
+
+    /** The in-game menu flipped the panel up ([menuOpening]): closing it flips the panel back ([menuClosed]). */
+    private var menuRaisedPanel = false
+
+    /**
+     * The in-game menu is about to open: on a DS / 3DS split the panel comes up over the touch screen, so the menu draws
+     * in the panel's place there, as on every other console, and never over the picture's screen.
+     */
+    fun menuOpening() {
+        if (dualMode != DualMode.SPLIT || panelUp) return
+        panelUp = true
+        menuRaisedPanel = true
+        syncDual()
+    }
+
+    /** The in-game menu closed: a panel it flipped up gives the touch screen back. */
+    fun menuClosed() {
+        if (!menuRaisedPanel) return
+        menuRaisedPanel = false
+        if (panelUp) { panelUp = false; syncDual() }
+    }
+
+    /** The Panel pill for the corner buttons' row, while it shows: its tap flips the panel up over the touch screen. */
+    fun cornerPanel(): (() -> Unit)? = if (mainPanelPill.value) ({ panelUp = true; syncDual() }) else null
+
+    /** The slot picked on the panel's strip; null: the last used one ([panelSlotNow]). */
+    private var panelSlot: Int? = null
+
+    /** The slot the panel's Save and Load use: the one picked on its strip, else the last used one (null: not read yet). */
+    private fun panelSlotNow(): Int? = panelSlot ?: owner.lastSlotCache
+
+    /** A save or load moved the last used slot, or the strip was read again: the panel's pick gives way to it. */
+    fun onSlotsChanged(lastMoved: Boolean) {
+        if (lastMoved) panelSlot = null
+        refreshDualPanel()
     }
 
     /** Rebuilds [dualPanel] while the dual-screen panel is up; nothing otherwise ([syncPanel] builds it as it comes up). */
@@ -782,8 +854,21 @@ internal class DualScreenController(
         when (e) {
             GamePanelEvent.SwapDisc -> swapDisc()
             // Hidden in netplay; a stale press there does nothing, a release always lands.
+            is GamePanelEvent.SelectSlot -> { panelSlot = e.slot; refreshDualPanel() }
+            is GamePanelEvent.SetVolume -> {
+                val audio = activity.getSystemService(AudioManager::class.java)
+                val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                audio.setStreamVolume(AudioManager.STREAM_MUSIC, (e.value.coerceIn(0f, 1f) * max).roundToInt(), 0)
+                refreshDualPanel()
+            }
+            // A held key never changes (a stale tap on its dimmed row); a shader key goes the shader's way, as in the menu.
+            is GamePanelEvent.SetQuick -> if (e.key !in owner.menuLocked()) {
+                owner.handleMenuEffect(if (ShaderOptions.isShaderKey(e.key)) MenuEffect.SetShader(e.key, e.value) else MenuEffect.SetFrontend(e.key, e.value))
+                refreshDualPanel()
+            }
+            GamePanelEvent.OpenOptions -> owner.openOptions()
             is GamePanelEvent.Touch -> if (netplayNow == null || !e.down) {
-                owner.onPanelTouch(e.action, e.down)
+                owner.onPanelTouch(e.action, e.down, panelSlotNow())
                 // A held action runs the game: a panel flipped up over the DS/3DS screen gives the screen back, as for FF.
                 if (e.down && panelUp && (e.action == ShortcutAction.HOLD_FF || e.action == ShortcutAction.HOLD_REWIND)) { panelUp = false; syncDual() }
             }
