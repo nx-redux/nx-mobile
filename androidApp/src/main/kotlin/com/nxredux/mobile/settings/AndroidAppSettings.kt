@@ -263,6 +263,10 @@ class AndroidAppSettings(context: Context) : AppSettings {
             prefs.edit { putBoolean(KEY_PAUSE_UNFOCUSED, value) }
         }
 
+    override var menuInfoAchievements: Boolean
+        get() = prefs.getBoolean(KEY_MENU_INFO_ACHIEVEMENTS, false)
+        set(value) = prefs.edit { putBoolean(KEY_MENU_INFO_ACHIEVEMENTS, value) }
+
     override var screenCare: Boolean
         get() = prefs.getBoolean(KEY_SCREEN_CARE, true)
         set(value) {
@@ -432,6 +436,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_BOTTOM_SCREEN = "bottom_screen"
         private const val KEY_PAUSE_UNFOCUSED = "pause_unfocused"
         private const val KEY_SCREEN_CARE = "screen_care"
+        private const val KEY_MENU_INFO_ACHIEVEMENTS = "menu_info_achievements"
         private const val KEY_SAVE_FORMAT = "save_format"
         private const val KEY_STATE_FORMAT = "state_format"
         private const val KEY_USE_EXTRACTED_FILE_NAME = "use_extracted_file_name"

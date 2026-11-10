@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui.nx
 
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -51,7 +52,8 @@ fun cornerShortcuts(shortcuts: Map<TouchSlot, TouchShortcut>, padDrawn: Boolean)
 
 /**
  * The buttons over the game where no pad is drawn: [mic]'s round button in the bottom-left corner ([micCornerShown]) and
- * the set touch shortcuts ([shortcuts], [cornerShortcuts]) as a row of pills ending in the bottom-right corner. All
+ * the set touch shortcuts ([shortcuts], [cornerShortcuts]) as a row of pills ending in the bottom-right corner, the
+ * DS / 3DS split's Panel pill ([panel]: shows the game panel over the touch screen; null: none) the last of the row. All
  * see-through, lit (white, dark ink) while on. The mic toggles on a tap; a shortcut goes down on the press and up on the
  * release ([onShortcut]), as the skin strip's, so its hold actions hold. Clear of the system bars and the cutout; only the
  * buttons take touches.
@@ -59,7 +61,7 @@ fun cornerShortcuts(shortcuts: Map<TouchSlot, TouchShortcut>, padDrawn: Boolean)
 @Composable
 fun CornerButtons(
     mic: PadMic?, shortcuts: List<Pair<TouchSlot, TouchShortcut>>, onShortcut: (TouchSlot, Boolean) -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier, panel: (() -> Unit)? = null,
 ) {
     Box(modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(CORNER_MARGIN)) {
         if (mic != null) {
@@ -67,23 +69,35 @@ fun CornerButtons(
                 Icon(painterResource(Res.drawable.pad_mic), contentDescription = "Mic", tint = cornerInk(mic.on), modifier = Modifier.size(MIC_ICON_SIZE))
             }
         }
-        if (shortcuts.isNotEmpty()) {
+        if (shortcuts.isNotEmpty() || panel != null) {
             Row(Modifier.align(Alignment.BottomEnd), horizontalArrangement = Arrangement.spacedBy(CORNER_GAP)) {
                 shortcuts.forEach { (slot, s) ->
-                    CornerButton(
-                        s.on, RoundedCornerShape(50), Modifier.height(CORNER_BUTTON_HEIGHT).widthIn(min = CORNER_BUTTON_HEIGHT),
-                        onPress = { down -> onShortcut(slot, down) },
-                    ) {
-                        Text(
-                            touchShortcutLabel(s.action), color = cornerInk(s.on), fontFamily = LocalNxFont.current,
-                            fontWeight = FontWeight.SemiBold, fontSize = SHORTCUT_TEXT_SIZE.pinned(), maxLines = 1,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
-                    }
+                    CornerPill(touchShortcutLabel(s.action), s.on) { down -> onShortcut(slot, down) }
                 }
+                if (panel != null) CornerPill("Panel", on = false) { down -> if (!down) panel() }
             }
         }
     }
+}
+
+/** A corner pill with its [label]: a touch shortcut's, the Panel pill, or the panel's Game pill ([GamePillCorner]). */
+@Composable
+private fun CornerPill(label: String, on: Boolean, modifier: Modifier = Modifier, onPress: (Boolean) -> Unit) {
+    CornerButton(on, RoundedCornerShape(50), modifier.height(CORNER_BUTTON_HEIGHT).widthIn(min = CORNER_BUTTON_HEIGHT), onPress) {
+        Text(
+            label, color = cornerInk(on), fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold,
+            fontSize = SHORTCUT_TEXT_SIZE.pinned(), maxLines = 1, modifier = Modifier.padding(horizontal = 16.dp),
+        )
+    }
+}
+
+/**
+ * The game panel's Game pill, where the Panel pill it answers sits ([CornerButtons]' bottom-right corner, the same
+ * size and look): the two switch pills land on one spot.
+ */
+@Composable
+fun BoxScope.GamePillCorner(onClick: () -> Unit) {
+    CornerPill("Game", on = false, Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(CORNER_MARGIN)) { down -> if (!down) onClick() }
 }
 
 /** One corner button: the see-through fill (lit while [on]) and its ring; [onPress] true on the press, false on the release. */

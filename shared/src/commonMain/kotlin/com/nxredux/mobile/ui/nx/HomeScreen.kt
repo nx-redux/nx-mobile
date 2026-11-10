@@ -292,8 +292,8 @@ internal fun HomeScreen(
 }
 
 /**
- * The scroll's answer to a new selection or board ([homeScrollStep]): the selected row tile's rect ([homeBoardTile]; the
- * top section's none), eased or snapped to. Its own scope, as [FollowSelection]: only this reads [selection] for the
+ * The scroll's answer to a new selection or board ([homeScrollStep]): the selected row tile's rect ([homeBoardTile]; a
+ * top tile's only when it is under the first screen, [homeTopScrollRect]), eased or snapped to. Its own scope, as [FollowSelection]: only this reads [selection] for the
  * scroll, so a step recomposes it alone. [last] holds the board and the selected rect the scroll last answered.
  */
 @Composable
@@ -301,7 +301,9 @@ private fun HomeScrollFollow(
     scroll: Animatable<Float, AnimationVector1D>, last: Array<Any?>, b: HomeBoard, selection: () -> Int,
     topCount: Int, pinCount: Int, tiles: Int, pageH: Float, h: Float,
 ) {
-    val selected = (selection() - topCount).takeIf { it in 0 until pinCount && it < tiles }?.let { homeBoardTile(b, it) }
+    val at = selection()
+    val selected = if (at in 0 until topCount) b.top.getOrNull(at)?.let { homeTopScrollRect(it.rect, h) }
+        else (at - topCount).takeIf { it in 0 until pinCount && it < tiles }?.let { homeBoardTile(b, it) }
     LaunchedEffect(scroll, b, selected, pageH) {
         val step = homeScrollStep(scroll.targetValue, last[0] as HomeBoard?, b, last[1] as HomeRect?, selected, pageH, h)
         last[0] = b; last[1] = selected

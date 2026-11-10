@@ -288,8 +288,8 @@ internal fun GameListFrame(
                             }
                             // Each line [pitch] under the last: the boxes may overlap, as the main menu's.
                             val facts = info()
-                            HomeFactsLine(if (next) facts.filter { it.kind != InfoKind.NEXT } else facts, size, Modifier.offset(y = (pitch - lh).dp).fillMaxWidth().height(lh.dp))
-                            if (next) HomeFactsLine(facts.filter { it.kind == InfoKind.NEXT }, size, Modifier.offset(y = (2 * (pitch - lh)).dp).fillMaxWidth().height(lh.dp))
+                            HomeFactsLine(if (next) facts.filter { !it.ownRow } else facts, size, Modifier.offset(y = (pitch - lh).dp).fillMaxWidth().height(lh.dp))
+                            if (next) HomeFactsLine(facts.filter { it.ownRow }, size, Modifier.offset(y = (2 * (pitch - lh)).dp).fillMaxWidth().height(lh.dp))
                         }
                         NxTopIcons(titleIcons, Modifier.align(Alignment.TopEnd).height(MENU_TAB_ROW_HEIGHT).padding(end = inset.end - TOP_ICON_INSET))
                     }

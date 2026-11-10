@@ -257,9 +257,9 @@ internal class InGameMenuController(
     // NdsRenderer.APPLY_ON_RESTART values set in the menu: kept from the running core, shown and saved (next launch).
     private val pendingRestartOptions = mutableMapOf<String, String>()
 
-    /** Shows the in-game menu panel's Second screen shortcut while a second display is attached, with the setting's value. */
+    /** Tells the in-game menu whether a second display is attached (its Bottom screen row) and whether an app holds it. */
     fun publishSecondScreen(model: InGameMenuModel) {
-        model.setSecondScreen(dual.secondScreens.current.value != null, dual.appSettings.secondScreen, dual.screenTaken())
+        model.setSecondScreen(dual.secondScreens.current.value != null, dual.screenTaken())
         menuState.value = model.state
     }
 
@@ -278,6 +278,7 @@ internal class InGameMenuController(
 
     private fun openMenu() {
         if (menuOpen) return
+        dual.menuOpening()
         menuOpen = true
         val model = InGameMenuModel(
             gameTitle = intent.getStringExtra(EXTRA_TITLE) ?: "Paused",
@@ -531,6 +532,7 @@ internal class InGameMenuController(
         menuState.value = null
         dual.syncPanelClock()
         padLayout.updatePadVisibility()
+        dual.menuClosed()
         host.resumeAfterMenu()   // the game plays on, unless another app has the focus (focusResume then)
     }
 
@@ -614,10 +616,6 @@ internal class InGameMenuController(
                 lifecycleScope.launch(Dispatchers.IO) {
                     runCatching { view.changeDisk(effect.index) }.onFailure { NxLog.w("GameActivity", "disc change failed", it) }
                 }
-            }
-            is MenuEffect.SetSecondScreen -> {
-                dual.appSettings.secondScreen = effect.on
-                dual.syncDual()
             }
             MenuEffect.SaveForConsole -> saveOptions(game = false)
             MenuEffect.SaveForGame -> saveOptions(game = true)

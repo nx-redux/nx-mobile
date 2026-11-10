@@ -107,11 +107,18 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     // Layouts' group rows: no text on the row (their pages' rows say what each group holds).
     SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER -> SettingText("")
+    SettingsKind.GAME_INFO -> SettingText(
+        "Game details or achievements under a game",
+        "What shows under a game's play time. Details: its genre, year and publisher. Achievements: its " +
+            "RetroAchievements progress and next goal when you are signed in and the game has achievements, else its " +
+            "details. The details come from ScreenScraper (Artwork → Fetch art and info when browsing).",
+    )
     SettingsKind.EXTRA_INFO -> SettingText(
-        "Play time and achievements for games",
-        "Hide removes the game stats (play time, achievements) from the main menu, the game lists and the Game " +
-            "Switcher, for a cleaner look. It works in every mode. A console's or collection's game count stays, and the " +
-            "in-game menu, the Game Tracker and RetroAchievements keep all their info.",
+        "Additional game info",
+        "The info under a game: its play time, its genre, year and publisher, and its achievements (Game info picks " +
+            "which). Hide removes it from the main menu, the game lists and the Game Switcher, for a cleaner look. It " +
+            "works in every mode. A console's or collection's game count stays, and the in-game menu, the Game Tracker " +
+            "and RetroAchievements keep all their info.",
     )
     SettingsKind.TAB_SHOWN -> quiet(
         "The ${row.category?.label ?: "tab"} tab in the tab row",
