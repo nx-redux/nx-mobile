@@ -8,6 +8,7 @@ import com.nxredux.mobile.ui.nx.SkinPad
 import com.nxredux.mobile.ui.nx.nxPageInset
 import com.nxredux.mobile.ui.nx.LocalNxHintBarHidden
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
+import com.nxredux.mobile.ui.nx.nxListInset
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.compose.AsyncImagePainter
@@ -603,7 +604,13 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             } ?: Box(Modifier.fillMaxSize())
             is Screen.RetroAchievements -> state.achievements?.let { c -> SettingsHintBar { WithIndex(selection) { RetroAchievementsScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton) } } } ?: Box(Modifier.fillMaxSize())
             is Screen.RaDownload -> state.achievements?.let { c -> WithIndex(selection) { RaDownloadScreen(s, c, it, state::select, {}, onHint = state::onButton) } } ?: Box(Modifier.fillMaxSize())
-            is Screen.GameTime -> WithIndex(selection) { GameTimeScreen(s, it, state::select, { state.openSelected() }, state::gameTimeSelectModal, onHint = state::onButton) }
+            // The page on Settings' insets: the plates' edges on both sides (the title and the list's thumbnails then sit on the
+            // words' edge, [nxListInset] in), the hint bar on that same edge, as the RetroAchievements split's right page.
+            is Screen.GameTime -> Box(Modifier.fillMaxSize().padding(start = settingsPlateStart(), end = settingsPlateEnd())) {
+                CompositionLocalProvider(LocalNxHintBarStart provides nxListInset()) {
+                    WithIndex(selection) { GameTimeScreen(s, it, state::select, { state.openSelected() }, state::gameTimeSelectModal, onHint = state::onButton) }
+                }
+            }
             // A game's sessions: on a split window beside the tracker list (the RetroAchievements column browser's rule); else one page.
             is Screen.GameTimeSessions ->
                 if (gameTimeSplitView(LocalWindowSize.current, s)) GameTimeSplitScreen(state, s, selection)
