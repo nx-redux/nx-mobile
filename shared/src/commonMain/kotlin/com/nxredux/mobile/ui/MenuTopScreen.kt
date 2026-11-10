@@ -32,6 +32,8 @@ import com.nxredux.mobile.ui.nx.LocalWindowSize
 import com.nxredux.mobile.ui.nx.NxScreenBackground
 import com.nxredux.mobile.ui.nx.NxTheme
 import com.nxredux.mobile.ui.nx.TopDetailsPage
+import com.nxredux.mobile.ui.nx.TopStatsPage
+import com.nxredux.mobile.ui.nx.statsKey
 import com.nxredux.mobile.ui.nx.footerModeFor
 import com.nxredux.mobile.ui.nx.rememberControllerConnected
 import com.nxredux.mobile.ui.nx.rememberHasTouchscreen
@@ -50,6 +52,7 @@ fun MenuTopScreen(state: AppState, inSkin: Boolean = false) {
     val dual by state.dualMenu.collectAsState()
     val selection by state.selection.collectAsState()
     val details by state.topDetails.collectAsState()
+    val stats by state.topStats.collectAsState()
     val artLayout by state.artLayout.collectAsState()
     val look = rememberMenuLook(state, screen)
     val controllerConnected = rememberControllerConnected()
@@ -67,7 +70,10 @@ fun MenuTopScreen(state: AppState, inSkin: Boolean = false) {
                         // The feed may lag the highlight by a frame: never another game's page meanwhile.
                         is TopContent.GameDetails -> details?.takeIf { it.entry.game.path == top.entry.game.path }
                             ?.let { TopDetailsPage(it, artLayout.backdrop) } ?: Backdrop()
-                        TopContent.Backdrop, is TopContent.ConsoleStats, is TopContent.CollectionStats -> Backdrop()
+                        // As the details: never another console's or collection's stats while the feed catches up.
+                        is TopContent.ConsoleStats, is TopContent.CollectionStats -> stats?.takeIf { it.key == statsKey(top) }
+                            ?.let { TopStatsPage(it, onLaunch = {}, prefer = artLayout.backdrop) } ?: Backdrop()
+                        TopContent.Backdrop -> Backdrop()
                     }
                 }
             }

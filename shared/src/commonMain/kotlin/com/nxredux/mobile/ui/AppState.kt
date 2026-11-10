@@ -146,6 +146,11 @@ import com.nxredux.mobile.storage.Recents
 import com.nxredux.mobile.storage.RecentsRecorder
 import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.ui.nx.TopDetails
+import com.nxredux.mobile.ui.nx.TopStats
+import com.nxredux.mobile.ui.nx.consoleChips
+import com.nxredux.mobile.ui.nx.collectionStats
+import com.nxredux.mobile.ui.nx.consoleStats
+import com.nxredux.mobile.ui.nx.statsKey
 import com.nxredux.mobile.ui.nx.detailsRaFor
 import com.nxredux.mobile.ui.nx.gameMeta
 import com.nxredux.mobile.ui.nx.topAchievements
@@ -1111,6 +1116,73 @@ class AppState(
         _dualMenu.value = active
         if (active) ra.closeRaPanel()   // the panel is a single-screen overlay: dual mode shows the details on the top screen instead
         followTopDetails()
+        followTopStats()
+    }
+
+    /** What one [topStats] computation was started for: the [target] (as [key]), the library and the play time it read. */
+    private class StatsInputs(val key: String, val target: TopContent, val systems: List<SystemFolder>, val info: Map<String, GameInfo>)
+
+    /** [a] and [b] are one stats target built from the same folders (a rescan gives the row new ones under the same tags). */
+    private fun sameStatsTarget(a: TopContent, b: TopContent): Boolean = when {
+        a is TopContent.ConsoleStats && b is TopContent.ConsoleStats -> a.systems.size == b.systems.size && a.systems.indices.all { a.systems[it] === b.systems[it] }
+        else -> a == b
+    }
+
+    /**
+     * [topStats] on the console or collection [DualMenu.top] shows while the menu is on two screens, else null. Stats
+     * built from the same library and play time show again at once ([statsCache]); else they are computed off the main
+     * thread, the page shown staying while its own target is recomputed (new play time, a rescan). The next move cancels
+     * that computation, and one that ends anyway writes only while it is still the latest ([topStatsFor]).
+     */
+    private fun followTopStats() {
+        val top = if (_dualMenu.value) DualMenu.top(_screen.value, _selection.value.index) else TopContent.Backdrop
+        val key = statsKey(top)
+        if (key == null) {
+            topStatsJob?.cancel(); topStatsJob = null; topStatsFor = null
+            _topStats.value = null
+            return
+        }
+        val systems = systemsCache
+        val info = _gameInfo.value
+        topStatsFor?.let { if (it.key == key && sameStatsTarget(it.target, top) && it.systems === systems && it.info === info) return }   // computing or shown already
+        if (statsCacheOf?.let { it.first === systems && it.second === info } != true) {
+            statsCache.clear(); statsCacheOf = systems to info
+        }
+        if (consoleFactsLibrary !== systems) { consoleFacts.clear(); consoleFactsLibrary = systems }
+        topStatsJob?.cancel(); topStatsJob = null
+        val inputs = StatsInputs(key, top, systems, info)
+        topStatsFor = inputs
+        statsCache[key]?.takeIf { sameStatsTarget(it.first, top) }?.let { _topStats.value = it.second; return }
+        if (_topStats.value?.key != key) _topStats.value = null   // never another target's page meanwhile
+        val now = clockNow()
+        // Built here: consoleEntries' cache belongs to the main thread.
+        val console = (top as? TopContent.ConsoleStats)?.let { it.systems to consoleEntries(it.systems) }
+        topStatsJob = scope.launch {
+            val stats = if (console != null) {
+                val (group, entries) = console
+                val weekStart = deps.calendar.dayStart(now, -6)
+                val base = withContext(deps.compute) { consoleStats(group, entries, info, now, weekStart, bios = null, cheatGames = 0) }
+                val (cheats, bios) = consoleFacts[key] ?: readConsoleFacts(group, entries).also { if (consoleFactsLibrary === systems) consoleFacts[key] = it }
+                base.copy(chips = consoleChips(entries, now, weekStart, bios, cheats))
+            } else {
+                val name = (top as TopContent.CollectionStats).name
+                val entries = tryOr({ emptyList() }) { entriesFor(ListSource.Collection(name)) }
+                withContext(deps.compute) { collectionStats(name, entries, info, now) }
+            }
+            // A read that ended after a move (one that ignored the cancel) must not paint over the target now shown.
+            if (topStatsFor !== inputs) return@launch
+            if (statsCacheOf?.let { it.first === systems && it.second === info } == true) statsCache[key] = top to stats
+            _topStats.value = stats
+        }
+    }
+
+    /** [entries]' cheat count and [group]'s BIOS state (required missing on any of its tags wins); none for the Android console. */
+    private suspend fun readConsoleFacts(group: List<SystemFolder>, entries: List<Listed>): Pair<Int, BiosMissing?> {
+        val facts = deps.topFacts ?: return 0 to null
+        if (group.any { it.android || it.unassigned }) return 0 to null
+        val cheats = tryOr({ 0 }) { facts.cheatGames(entries) }
+        val bios = group.map { s -> tryOrNull { facts.biosMissing(s.tag) } }
+        return cheats to (bios.firstOrNull { it == BiosMissing.REQUIRED } ?: bios.firstOrNull { it != null })
     }
 
     /**
@@ -1204,6 +1276,15 @@ class AppState(
     /** The top screen's game details page ([followTopDetails]); null while the top screen shows no game. */
     val topDetails: StateFlow<TopDetails?> = _topDetails.asStateFlow()
     private var topDetailsJob: Job? = null
+    private val _topStats = MutableStateFlow<TopStats?>(null)
+    /** The top screen's console or collection stats page ([followTopStats]); null while the top screen shows neither. */
+    val topStats: StateFlow<TopStats?> = _topStats.asStateFlow()
+    private var topStatsJob: Job? = null
+    private var topStatsFor: StatsInputs? = null   // the latest computation's inputs: only it writes [topStats]
+    private val statsCache = HashMap<String, Pair<TopContent, TopStats>>()   // by [TopStats.key] with its target, for [statsCacheOf]'s library and play time
+    private var statsCacheOf: Pair<List<SystemFolder>, Map<String, GameInfo>>? = null
+    private val consoleFacts = HashMap<String, Pair<Int, BiosMissing?>>()   // cheats and BIOS by console key: file reads, kept per library ([readConsoleFacts])
+    private var consoleFactsLibrary: List<SystemFolder>? = null
     private var gameInfoDirty = false   // a refresh was asked for while one ran: it runs once more
     private val shelvesCache = HomeShelvesCache()   // Home's shelves while their inputs hold ([shelvesFor])
     private var gameInfoRead = false    // a [refreshGameInfo] pass has read play time: the shelves can go by play time
@@ -1345,9 +1426,9 @@ class AppState(
             }
         }
         // The achievements panel follows the game list's selection, and closes off the game list.
-        scope.launch { _selection.collect { ra.followRaPanel(); followTopDetails() } }
-        // The top screen's details: new play time re-reads the shown game; its achievements land in place.
-        scope.launch { _gameInfo.collect { followTopDetails(reread = true) } }
+        scope.launch { _selection.collect { ra.followRaPanel(); followTopDetails(); followTopStats() } }
+        // The top screen's details: new play time re-reads the shown game; its achievements land in place. Stats too.
+        scope.launch { _gameInfo.collect { followTopDetails(reread = true); followTopStats() } }
         scope.launch {
             ra.detailsRa.collect { r ->
                 _topDetails.value?.let { d -> _topDetails.value = d.copy(achievements = topAchievements(detailsRaFor(d.entry, r)), raSet = ra.hasRaSet(d.entry.game.path)) }
@@ -1356,6 +1437,7 @@ class AppState(
         scope.launch {
             _screen.collect {
                 followTopDetails()
+                followTopStats()
                 if (it !is Screen.Games) { ra.closeRaPanel() } else { ra.followRaPanel() }
                 if (it !is Screen.Games) closeArtPanel()   // as the achievements panel: only over a game list
             }
@@ -1696,6 +1778,10 @@ class AppState(
         if (name == null) collectionCounts.clear() else collectionCounts.remove(name)
         countsGeneration++
         if (name != null) { countCache.remove(name); countCache.save() }
+        // The stats page of a collection holds its games too: computed again, shown in place meanwhile.
+        val stale = name?.let { statsKey(TopContent.CollectionStats(it)) }
+        if (stale == null) statsCache.clear() else statsCache.remove(stale)
+        if (stale == null || topStatsFor?.key == stale) { topStatsFor = null; followTopStats() }
     }
 
     /** [CountStamps.library] of [systems] (the games a collection line can resolve to), taken once per systems list. */
@@ -1943,7 +2029,7 @@ class AppState(
 
     /** [systems], computed under [gen], becomes [systemsCache] unless a newer computation's is shown; true when it did. */
     private suspend fun offerSystems(gen: Long, systems: List<SystemFolder>): Boolean = systemsLock.withLock {
-        (gen > systemsWritten).also { if (it) { systemsWritten = gen; systemsCache = systems } }
+        (gen > systemsWritten).also { if (it) { systemsWritten = gen; systemsCache = systems; followTopStats() } }
     }
 
     private suspend fun showSystems(playable: List<SystemFolder>) {

@@ -40,15 +40,23 @@ class AndroidTopFacts(context: Context, private val source: RomsSource) : TopFac
         )
     }
 
-    private fun hasCheats(tag: String, romFileName: String): Boolean {
-        if (CoreRegistry.forTag(tag)?.cheats == false) return false
-        val root = CheatsRoot.of(app)
-        val displayName = CheatMatch.displayName(romFileName)
-        return CheatFolders.tagsFor(tag, romFileName).any { folder ->
-            val files = File(root, "Cheats/$folder").listFiles()?.filter { it.isFile && it.name.endsWith(".cht", ignoreCase = true) }?.map { it.name }.orEmpty()
-            CheatMatch.select(displayName, romFileName, files).isNotEmpty()
-        }
+    // A console's games share their cheat folders: each is listed once, then matched by name only.
+    override suspend fun cheatGames(entries: List<Listed>): Int = withContext(Dispatchers.IO) {
+        runCatching {
+            val root = CheatsRoot.of(app)
+            val listed = HashMap<String, List<String>>()
+            entries.count { e -> hasCheats(e.system.tag, e.game.fileName, root) { folder -> listed.getOrPut(folder) { cheatFiles(root, folder) } } }
+        }.getOrDefault(0)
     }
+
+    private fun hasCheats(tag: String, romFileName: String, root: File = CheatsRoot.of(app), files: (String) -> List<String> = { cheatFiles(root, it) }): Boolean {
+        if (CoreRegistry.forTag(tag)?.cheats == false) return false
+        val displayName = CheatMatch.displayName(romFileName)
+        return CheatFolders.tagsFor(tag, romFileName).any { folder -> CheatMatch.select(displayName, romFileName, files(folder)).isNotEmpty() }
+    }
+
+    private fun cheatFiles(root: File, folder: String): List<String> =
+        File(root, "Cheats/$folder").listFiles()?.filter { it.isFile && it.name.endsWith(".cht", ignoreCase = true) }?.map { it.name }.orEmpty()
 
     private suspend fun hasHiresPack(entry: Listed): Boolean {
         val game = entry.game

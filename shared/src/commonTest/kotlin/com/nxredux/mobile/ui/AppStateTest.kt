@@ -161,6 +161,8 @@ import kotlin.coroutines.ContinuationInterceptor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 /** Every styled main menu tab on List ([AppStateTest]'s settings fixture); a test sets a tab with `LIST_TABS + mapOf(tab to style)`. */
 private val LIST_TABS = mapOf(MenuCategory.HOME to MenuStyle.GRID, MenuCategory.CONSOLES to MenuStyle.LIST, MenuCategory.COLLECTIONS to MenuStyle.LIST, MenuCategory.TOOLS to MenuStyle.LIST)
@@ -2133,8 +2135,8 @@ class AppStateTest {
         assertEquals(2, runner.launched.size)
     }
 
-    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, skinEditor: SkinEditorLauncher? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }, ownKeyboard: Boolean = false, onSecond: () -> Boolean = { false }) =
-        AppState(AppDeps(settings, src, runner, picker, data, ownKeyboard = ownKeyboard, promptOnSecondDisplay = onSecond, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, skinEditor = skinEditor, saveTransfer = saveTransfer, allFilesAccess = allFiles, micAccess = mic, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, skinEditor: SkinEditorLauncher? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }, ownKeyboard: Boolean = false, onSecond: () -> Boolean = { false }, topFacts: TopFactsPlatform? = null) =
+        AppState(AppDeps(settings, src, runner, picker, data, topFacts = topFacts, ownKeyboard = ownKeyboard, promptOnSecondDisplay = onSecond, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, skinEditor = skinEditor, saveTransfer = saveTransfer, allFilesAccess = allFiles, micAccess = mic, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
 
     /** What a scan of [src] for [settings] stores, built without an AppState (so without the skeleton). */
     private suspend fun scannedIndex(settings: MemorySettings, src: RomsSource = source): LibraryIndex =
@@ -13564,6 +13566,68 @@ class AppStateTest {
         assertEquals(listOf("file:///Tetris.gb.png"), state.topDetails.value?.shots?.map { it.uri })
         state.onDualMenu(false)
         assertNull(state.topDetails.value)   // one screen: no top page
+    }
+
+    // --- The top screen's stats ---
+
+    private fun AppState.selectConsole(tag: String) =
+        select(assertIs<Screen.Systems>(screen.value).rows.indexOfFirst { it is MainRow.System && it.system.tag == tag })
+
+    @Test fun stats_refresh_after_a_game_is_played() = runTest {
+        val tetris = "/Roms/Game Boy (GB)/Tetris.gb"
+        var total = GameTotal(1, "Tetris", "GB", tetris, totalMs = 3_600_000, plays = 2, lastPlayedAt = 1L)
+        val data = object : GameTimeData by NoGameTime { override suspend fun byPath() = mapOf(tetris to total) }
+        val state = state(MemorySettings(ContentRef("Home")), src = bigSource(), gameTime = data).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
+        state.openConsolesTab(); advanceUntilIdle()
+        state.selectConsole("GB"); advanceUntilIdle()
+        assertEquals("Game Boy", state.topStats.value!!.title)
+        assertEquals(3_600_000L, state.topStats.value!!.totalMs)
+        assertEquals(2, state.topStats.value!!.neverPlayed)
+        total = total.copy(totalMs = 7_200_000, plays = 3)
+        state.onForeground(); advanceUntilIdle()   // back from the game: play time read again
+        assertEquals(7_200_000L, state.topStats.value!!.totalMs)
+        assertEquals(3L, state.topStats.value!!.sessions)
+    }
+
+    @Test fun collection_stats_follow_the_highlighted_collection() = runTest {
+        val state = dualState()
+        state.selectTab(assertIs<Screen.Systems>(state.screen.value).tabs.indexOfFirst { it.category == MenuCategory.COLLECTIONS }); advanceUntilIdle()
+        state.select(assertIs<Screen.Systems>(state.screen.value).rows.indexOfFirst { it is MainRow.Collection && it.name == "RPGs" }); advanceUntilIdle()
+        val s = assertNotNull(state.topStats.value)
+        assertEquals("RPGs", s.title)
+        assertEquals(2, s.games)
+        state.onDualMenu(false)
+        assertNull(state.topStats.value)   // one screen: no top page
+    }
+
+    @Test fun console_stats_count_cheats_and_bios_from_the_platform() = runTest {
+        val facts = object : TopFactsPlatform {
+            override suspend fun fileFacts(entry: Listed) = FileFacts(null, cheats = entry.game.fileName != "Alleyway.gb", hiresPack = false)
+            override suspend fun biosMissing(tag: String) = BiosMissing.REQUIRED.takeIf { tag == "GB" }
+        }
+        val state = state(MemorySettings(ContentRef("Home")), src = bigSource(), topFacts = facts).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
+        state.openConsolesTab(); advanceUntilIdle()
+        state.selectConsole("GB"); advanceUntilIdle()
+        assertEquals(listOf("Cheats for 2 games", "BIOS missing"), state.topStats.value?.chips)
+    }
+
+    // GB's BIOS read finishes after the highlight moved to GBA, ignoring the move's cancel: GBA's page must stay.
+    @Test fun stats_never_paint_a_console_the_highlight_left() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val facts = object : TopFactsPlatform {
+            override suspend fun fileFacts(entry: Listed) = FileFacts(null, cheats = false, hiresPack = false)
+            override suspend fun biosMissing(tag: String): BiosMissing? {
+                if (tag == "GB") withContext(NonCancellable) { gate.await() }
+                return null
+            }
+        }
+        val state = state(MemorySettings(ContentRef("Home")), src = bigSource(), topFacts = facts).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
+        state.openConsolesTab(); advanceUntilIdle()
+        state.selectConsole("GB"); advanceUntilIdle()
+        state.selectConsole("GBA"); advanceUntilIdle()
+        assertEquals("Game Boy Advance", state.topStats.value?.title)
+        gate.complete(Unit); advanceUntilIdle()
+        assertEquals("Game Boy Advance", state.topStats.value?.title)
     }
 
     // App moving to the other display (a new App instance) must not load again: the open list and its highlight stay.

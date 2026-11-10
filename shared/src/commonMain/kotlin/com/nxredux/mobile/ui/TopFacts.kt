@@ -6,11 +6,13 @@ data class FileFacts(val sizeBytes: Long?, val cheats: Boolean, val hiresPack: B
 /** [REQUIRED]: the console cannot start without it; [OPTIONAL]: only an optional BIOS file is missing. */
 enum class BiosMissing { REQUIRED, OPTIONAL }
 
-/** The platform's reads for the details page; never throws, a failed read is a null / false answer. */
+/** The platform's reads for the details and stats pages; never throws, a failed read is a null / false / zero answer. */
 interface TopFactsPlatform {
     suspend fun fileFacts(entry: Listed): FileFacts
     /** Null when nothing is missing (or it cannot be told). */
     suspend fun biosMissing(tag: String): BiosMissing?
+    /** How many of [entries] have cheats; a platform can list each cheat folder once instead of once per game. */
+    suspend fun cheatGames(entries: List<Listed>): Int = entries.count { fileFacts(it).cheats }
 }
 
 // Any No-Intro parenthesised word that is a region; checked in order of appearance.
