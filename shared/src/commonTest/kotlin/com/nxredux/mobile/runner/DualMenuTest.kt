@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.options.PxRect
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -33,6 +34,14 @@ class DualMenuTest {
         // the second display's window made again (a new size or density): the dim or the menu goes on the new one
         assertNotEquals(MenuPlacement(false, true, first), MenuPlacement(false, true, Any()))
         assertNotEquals(MenuPlacement(false, true, first), MenuPlacement(false, true, null))
+    }
+
+    @Test fun the_menu_lays_out_upright_for_a_tall_glass_or_an_upright_window_here() {
+        assertTrue(DualMenu.menuPortrait(PxRect(0f, 0f, 100f, 200f), onSecond = false, portraitWindow = false))
+        assertFalse(DualMenu.menuPortrait(PxRect(0f, 0f, 200f, 100f), onSecond = false, portraitWindow = true))
+        assertTrue(DualMenu.menuPortrait(null, onSecond = false, portraitWindow = true))
+        assertFalse(DualMenu.menuPortrait(null, onSecond = true, portraitWindow = true))   // the second display: its own window
+        assertFalse(DualMenu.menuPortrait(null, onSecond = false, portraitWindow = false))
     }
 
     @Test fun the_menu_display_is_the_hosts() {

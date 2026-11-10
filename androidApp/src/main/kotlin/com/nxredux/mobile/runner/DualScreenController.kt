@@ -62,6 +62,7 @@ import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.nxredux.mobile.ui.nx.LocalInSkin
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxOptionText
+import com.nxredux.mobile.ui.nx.LocalPortrait
 import com.nxredux.mobile.ui.nx.LocalWindowSize
 import com.nxredux.mobile.ui.nx.MenuEffect
 import com.nxredux.mobile.ui.nx.NxTheme
@@ -555,7 +556,7 @@ internal class DualScreenController(
         val spot = SkinDual.panelSpot(dualMode, pictureOn, p != null, glass)
         panelSpot = spot
         val shown = panelShown()
-        val content = if (shown) panelContent(gamePill = dualMode == DualMode.PANEL_UP) else null
+        val content = if (shown) panelContent(gamePill = dualMode == DualMode.PANEL_UP, onSecond = spot == PanelSpot.SECOND_DISPLAY) else null
         p?.showPanelPill(dualMode == DualMode.SPLIT && !onMain)
         p?.showPanel(content.takeIf { spot == PanelSpot.SECOND_DISPLAY })
         val wasCovering = mainPanelCoversWindow()
@@ -696,13 +697,24 @@ internal class DualScreenController(
         host.visibility = if (shown) View.VISIBLE else View.GONE
     }
 
-    /** The game panel, live on [dualPanel], touch-only; [gamePill]: the DS/3DS Game pill. */
-    private fun panelContent(gamePill: Boolean): @Composable () -> Unit = {
-        dualPanel.value?.let { state ->
-            // The window and the skin as the in-game menu sees them in the panel's place: its page inset follows them.
-            BoxWithConstraints(Modifier.fillMaxSize()) {
-                CompositionLocalProvider(LocalWindowSize provides DpSize(maxWidth, maxHeight), LocalInSkin provides (mainPanelGlass.value != null)) {
+    /**
+     * The game panel, live on [dualPanel], touch-only; [gamePill]: the DS/3DS Game pill; [onSecond]: on the second
+     * display's window. Where the in-game menu opens in its place ([MenuHost.PANEL]), on the menu's page inset, with the
+     * window, orientation and skin the menu reads ([menuFrame]); else (one screen's skin glass) as it always was.
+     */
+    private fun panelContent(gamePill: Boolean, onSecond: Boolean): @Composable () -> Unit {
+        val menuPage = menuHost() == MenuHost.PANEL
+        return {
+            dualPanel.value?.let { state ->
+                if (!menuPage) {
                     GamePanel(state.copy(showGamePill = gamePill), ::onGamePanelEvent)
+                } else BoxWithConstraints(Modifier.fillMaxSize()) {
+                    val frame = menuFrame(padLayout, onSecond, DpSize(maxWidth, maxHeight))
+                    CompositionLocalProvider(
+                        LocalWindowSize provides frame.window, LocalPortrait provides frame.portrait, LocalInSkin provides (frame.skinGlass != null),
+                    ) {
+                        GamePanel(state.copy(showGamePill = gamePill), ::onGamePanelEvent, menuInset = true)
+                    }
                 }
             }
         }

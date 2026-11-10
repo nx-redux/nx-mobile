@@ -1,5 +1,7 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.options.PxRect
+
 /** Where the open in-game menu draws: over the game picture, or in the game panel's content area under its header. */
 enum class MenuHost { PICTURE, PANEL }
 
@@ -21,6 +23,14 @@ object DualMenu {
      */
     fun menuHost(mode: DualMode, panelShown: Boolean): MenuHost =
         if (panelShown && (mode == DualMode.PANEL || mode == DualMode.PANEL_UP)) MenuHost.PANEL else MenuHost.PICTURE
+
+    /**
+     * The menu lays out upright: for a pad skin's tall [glass] (here), else for an upright window here
+     * ([portraitWindow]); never on the second display ([onSecond]), whose window is its own. The dual-screen panel in the
+     * menu's place takes the same, so its page inset matches.
+     */
+    fun menuPortrait(glass: PxRect?, onSecond: Boolean, portraitWindow: Boolean): Boolean =
+        glass?.let { it.height > it.width } ?: (!onSecond && portraitWindow)
 
     /**
      * The menu draws on the second display: the picture's display for [MenuHost.PICTURE], the other one for
