@@ -4,6 +4,13 @@ package com.nxredux.mobile.runner
 enum class MenuHost { PICTURE, PANEL }
 
 /**
+ * Where the open menu was put: on the second display or here ([onSecond]), in the panel or over the picture
+ * ([inPanel]), and the second display's window then ([secondWindow], compared by identity): a window made again while
+ * the menu is open has nothing on it yet, so the same flags on a new window are a new placement.
+ */
+data class MenuPlacement(val onSecond: Boolean, val inPanel: Boolean, val secondWindow: Any?)
+
+/**
  * The in-game menu on dual screen. The bottom screen is where you act and the top one only informs: with the panel on
  * its own display the menu takes the panel's place, the picture left to show the paused game.
  */
@@ -12,7 +19,7 @@ object DualMenu {
      * [MenuHost.PANEL] while the panel is up beside the picture on another display (PANEL, PANEL_UP); else over the
      * picture, as on one screen (a DS / 3DS split has no panel, a skin's panel glass with no second display is one screen).
      */
-    fun menuHost(mode: DualMode, pictureOn: PictureOn, panelShown: Boolean): MenuHost =
+    fun menuHost(mode: DualMode, panelShown: Boolean): MenuHost =
         if (panelShown && (mode == DualMode.PANEL || mode == DualMode.PANEL_UP)) MenuHost.PANEL else MenuHost.PICTURE
 
     /**

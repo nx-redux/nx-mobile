@@ -262,7 +262,7 @@ internal class DualScreenController(
         mode == DualMode.SPLIT || (picture == PictureOn.SECOND && (mode == DualMode.PANEL || mode == DualMode.PANEL_UP))
 
     /** Where the open in-game menu draws: in the panel while it is up on the other display from the picture ([DualMenu]). */
-    fun menuHost(): MenuHost = DualMenu.menuHost(dualMode, pictureOn, panelShown())
+    fun menuHost(): MenuHost = DualMenu.menuHost(dualMode, panelShown())
 
     /**
      * The in-game menu draws on the second display: in the panel there (the picture here), or over the picture there

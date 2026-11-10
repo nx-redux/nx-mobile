@@ -3,27 +3,36 @@ package com.nxredux.mobile.runner
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class DualMenuTest {
     @Test fun single_screen_keeps_the_menu_over_the_picture() {
-        assertEquals(MenuHost.PICTURE, DualMenu.menuHost(DualMode.OFF, PictureOn.MAIN, panelShown = false))
+        assertEquals(MenuHost.PICTURE, DualMenu.menuHost(DualMode.OFF, panelShown = false))
         // the fold board's panel glass with no second display
-        assertEquals(MenuHost.PICTURE, DualMenu.menuHost(DualMode.OFF, PictureOn.MAIN, panelShown = true))
+        assertEquals(MenuHost.PICTURE, DualMenu.menuHost(DualMode.OFF, panelShown = true))
     }
 
     @Test fun panel_modes_put_the_menu_in_the_panel() {
         for (mode in listOf(DualMode.PANEL, DualMode.PANEL_UP)) for (picture in PictureOn.entries) {
-            assertEquals(MenuHost.PANEL, DualMenu.menuHost(mode, picture, panelShown = true), "$mode $picture")
+            assertEquals(MenuHost.PANEL, DualMenu.menuHost(mode, panelShown = true), "$mode $picture")
         }
     }
 
     @Test fun no_panel_keeps_the_menu_over_the_picture() {
-        assertEquals(MenuHost.PICTURE, DualMenu.menuHost(DualMode.PANEL, PictureOn.MAIN, panelShown = false))
+        assertEquals(MenuHost.PICTURE, DualMenu.menuHost(DualMode.PANEL, panelShown = false))
     }
 
     @Test fun ds_split_keeps_the_menu_over_the_picture() {
-        for (picture in PictureOn.entries) assertEquals(MenuHost.PICTURE, DualMenu.menuHost(DualMode.SPLIT, picture, panelShown = false))
+        for (picture in PictureOn.entries) assertEquals(MenuHost.PICTURE, DualMenu.menuHost(DualMode.SPLIT, panelShown = false))
+    }
+
+    @Test fun a_new_second_window_is_a_new_placement() {
+        val first = Any()
+        assertEquals(MenuPlacement(false, true, first), MenuPlacement(false, true, first))
+        // the second display's window made again (a new size or density): the dim or the menu goes on the new one
+        assertNotEquals(MenuPlacement(false, true, first), MenuPlacement(false, true, Any()))
+        assertNotEquals(MenuPlacement(false, true, first), MenuPlacement(false, true, null))
     }
 
     @Test fun the_menu_display_is_the_hosts() {

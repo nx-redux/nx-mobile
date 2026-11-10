@@ -9,6 +9,8 @@ import com.nxredux.mobile.skin.menuRoom
 import com.nxredux.mobile.ui.nx.LocalInSkin
 import kotlin.math.roundToInt
 import android.widget.FrameLayout
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -21,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
@@ -50,6 +53,7 @@ import com.nxredux.mobile.ui.nx.FooterMode
 import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.nxredux.mobile.ui.nx.InputRouter
 import com.nxredux.mobile.ui.nx.LocalHintGlyphs
+import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxOptionText
 import com.nxredux.mobile.ui.nx.LocalPadBelow
 import com.nxredux.mobile.ui.nx.LocalPortrait
@@ -60,12 +64,8 @@ import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxTheme
 import com.nxredux.mobile.ui.nx.PadProfile
 import com.nxredux.mobile.ui.nx.SlotUi
-import com.nxredux.mobile.ui.nx.nxColorsFor
-import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.livePreviewRow
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
+import com.nxredux.mobile.ui.nx.nxColorsFor
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.NxLog
 import com.swordfish.libretrodroid.Variable
@@ -245,8 +245,8 @@ internal class InGameMenuController(
     private var menuContent: (@Composable (Boolean, DpSize?) -> Unit)? = null
     // The picture's dim while the menu is in the dual-screen panel ([placeMenu]).
     private var menuDim: (@Composable () -> Unit)? = null
-    // Where the open menu was last put: (on the second display, in the panel); null while closed.
-    private var menuPlacement: Pair<Boolean, Boolean>? = null
+    // Where the open menu was last put; null while closed.
+    private var menuPlacement: MenuPlacement? = null
     var menuModel: InGameMenuModel? = null
         private set
     val menuState = mutableStateOf<MenuState?>(null)
@@ -447,7 +447,8 @@ internal class InGameMenuController(
         if (!menuOpen) return
         val inPanel = dual.menuHost() == MenuHost.PANEL
         val second = dual.menuOnSecond()
-        if (menuPlacement == (second to inPanel)) return
+        val placement = MenuPlacement(second, inPanel, dual.presentation)
+        if (menuPlacement == placement) return
         menuModel?.takeIf { it.inPanel != inPanel }?.let { it.setInPanel(inPanel); menuState.value = it.state }
         val root = findViewById<FrameLayout>(R.id.root)
         menuView?.let { root.removeView(it) }
@@ -462,7 +463,7 @@ internal class InGameMenuController(
             dual.showMenuOnSecond(menuDim.takeIf { inPanel })
             addMenuView(root) { content(false, null) }
         }
-        menuPlacement = second to inPanel
+        menuPlacement = placement
         dual.syncMainPanelHost()
         padLayout.updatePadVisibility()
     }

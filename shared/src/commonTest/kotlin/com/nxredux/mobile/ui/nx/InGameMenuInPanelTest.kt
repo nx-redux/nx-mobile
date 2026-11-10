@@ -17,7 +17,8 @@ class InGameMenuInPanelTest {
     }
 
     private fun InGameMenuModel.openDisplay(): InGameMenuModel {
-        select(4); activate(4)
+        val options = state.page.rows.indexOfFirst { it.label == "Options" }
+        select(options); activate(options)
         activate(state.page.rows.indexOfFirst { it.label == "Display" })
         assertEquals(PageKind.Settings(OptionGroup.DISPLAY), state.page.kind)
         return this
