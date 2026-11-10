@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +30,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.ui.Listed
 import com.nxredux.mobile.ui.appId
 import org.jetbrains.compose.resources.painterResource
@@ -38,6 +42,17 @@ sealed interface ShelfImage {
     data class Shot(val url: String) : ShelfImage
     data class Box(val url: String) : ShelfImage
     data object Placeholder : ShelfImage
+}
+
+/**
+ * The memory cache key for [image]: its versioned ref, else null for Coil's own (path + modified time). A save state's
+ * picture is rewritten in place by the game's process, and the menu's process can still see the old modified time
+ * (Retroid Pocket Nova), so only the content stamp in the ref tells the new picture from the old one.
+ */
+internal fun topPictureCacheKey(image: ShelfImage): String? = when (image) {
+    is ShelfImage.Shot -> image.url.takeIf(FileRefs::isVersioned)
+    is ShelfImage.Box -> image.url.takeIf(FileRefs::isVersioned)
+    ShelfImage.Placeholder -> null
 }
 
 /** The top screen pages' padding in a [width] x [height] screen: a share of the width every side, a wide, short screen's top and bottom capped by its height. */
@@ -55,16 +70,21 @@ internal val TOP_TIGHT_LINES = LineHeightStyle(LineHeightStyle.Alignment.Center,
 @Composable
 internal fun TopPicture(entry: Listed, image: ShelfImage, modifier: Modifier, onShotSize: ((Size) -> Unit)? = null) {
     val colors = LocalNxColors.current
+    val context = LocalPlatformContext.current
+    val model: Any? = remember(image, context) {
+        val url = (image as? ShelfImage.Shot)?.url ?: (image as? ShelfImage.Box)?.url
+        topPictureCacheKey(image)?.let { ImageRequest.Builder(context).data(url).memoryCacheKey(it).build() } ?: url
+    }
     Box(modifier.background(colors.pictureGround), contentAlignment = Alignment.Center) {
         when (image) {
             is ShelfImage.Shot -> AsyncImage(
-                model = image.url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
+                model = model, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
                 onSuccess = onShotSize?.let { report -> { state -> report(state.painter.intrinsicSize) } },
             )
             is ShelfImage.Box -> {
-                AsyncImage(model = image.url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(TOP_BLUR))
+                AsyncImage(model = model, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(TOP_BLUR))
                 Box(Modifier.fillMaxSize().background(BOX_DIM))
-                AsyncImage(model = image.url, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                AsyncImage(model = model, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
             }
             ShelfImage.Placeholder -> {
                 val icon = rememberAppIcon(entry.appId)

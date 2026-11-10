@@ -9,6 +9,7 @@ import com.nxredux.mobile.library.path
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.ui.GameInfo
 import com.nxredux.mobile.ui.Listed
@@ -154,5 +155,18 @@ class TopDetailsTest {
     @Test fun box_art_and_the_placeholder_stay_16_9() {
         assertEquals(16f / 9f, detailsPictureRatio(ShelfImage.Box("/b.png"), 300f, 420f))
         assertEquals(16f / 9f, detailsPictureRatio(ShelfImage.Placeholder, null, null))
+    }
+
+    @Test fun a_versioned_picture_is_cached_by_its_versioned_ref() {
+        val shot = FileRefs.versioned("/Home/Saves/GBA/Mario.gba.9.bmp", 42L)
+        assertEquals(shot, topPictureCacheKey(ShelfImage.Shot(shot)))
+        val box = FileRefs.versioned("/data/android-art/com.game.box2d.png", 7L)
+        assertEquals(box, topPictureCacheKey(ShelfImage.Box(box)))
+    }
+
+    @Test fun an_unversioned_picture_and_the_placeholder_keep_coils_own_key() {
+        assertNull(topPictureCacheKey(ShelfImage.Shot("file:///Home/Roms/GBA/.media/Mario.png")))
+        assertNull(topPictureCacheKey(ShelfImage.Box("https://example.com/box.png")))
+        assertNull(topPictureCacheKey(ShelfImage.Placeholder))
     }
 }
