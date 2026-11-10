@@ -101,6 +101,7 @@ import com.nxredux.mobile.storage.MemoryPrivateFiles
 import com.nxredux.mobile.storage.PrivateFiles
 import com.nxredux.mobile.storage.MemorySidecarStore
 import com.nxredux.mobile.storage.NoUserData
+import com.nxredux.mobile.storage.StateShot
 import com.nxredux.mobile.storage.Recent
 import com.nxredux.mobile.storage.Recents
 import com.nxredux.mobile.storage.RecentsRecorder
@@ -7212,6 +7213,95 @@ class AppStateTest {
         assertFalse(f.state.dualMenu.value)
     }
 
+    // --- The top screen's details: achievements ---
+
+    private fun topTitles(state: AppState): List<String>? =
+        (state.topDetails.value?.achievements as? com.nxredux.mobile.ui.nx.DetailsBody.Rows)?.achievements?.map { it.title }
+
+    @Test fun the_details_show_the_highlighted_games_cached_achievements() = runTest {
+        val f = panelFixture()
+        f.state.onDualMenu(true)
+        f.state.openConsole("GB"); runCurrent()   // no time advanced: cached data is read at once
+        assertEquals(listOf("First", "Second"), topTitles(f.state))
+        assertTrue(f.state.topDetails.value?.raSet == true)
+    }
+
+    @Test fun the_skins_two_screens_feed_the_details_too() = runTest {
+        val f = panelFixture()
+        f.state.onSkinDualMenu(true)
+        f.state.openConsole("GB"); runCurrent()
+        assertEquals(listOf("First", "Second"), topTitles(f.state))
+    }
+
+    private val threeGbaRoms = FakeRomsSource(dirs = mapOf(
+        "Home" to listOf("Roms"), "Home/Roms" to listOf("Game Boy Advance (GBA)"),
+        "Home/Roms/Game Boy Advance (GBA)" to listOf("A.gba", "B.gba", "C.gba"),
+    ))
+    private val threeGbaIndex = LibraryIndex(2, "home", emptyList(), emptyMap(), listOf(IndexedSystem("GBA", "GBA", games =
+        listOf("A", "B", "C").map { IndexedGame("home", "Roms/Game Boy Advance (GBA)", "$it.gba", "r$it", "f", it) })))
+    private fun threeGbaHasher() = FakeRaHasher().apply { hashes["A.gba"] = "1".repeat(32); hashes["B.gba"] = "2".repeat(32); hashes["C.gba"] = "3".repeat(32) }
+
+    @Test fun leaving_the_list_or_dual_mode_within_the_rest_downloads_nothing() = runTest {
+        val f = panelFixture(index = threeGbaIndex, hasher = threeGbaHasher(), roms = threeGbaRoms)
+        f.http.on("gameid", body = """{"Success":true,"GameID":0}""")
+        f.state.onDualMenu(true)
+        f.state.openConsole("GBA"); runCurrent()
+        f.hasher.calls.clear()
+        f.state.back(); advanceTimeBy(600); runCurrent()
+        assertTrue(f.hasher.calls.isEmpty())
+        f.state.openConsole("GBA"); runCurrent()
+        f.state.onDualMenu(false); advanceTimeBy(600); runCurrent()
+        assertTrue(f.hasher.calls.isEmpty())
+        assertNull(f.state.topDetails.value)
+    }
+
+    @Test fun a_failed_details_download_is_tried_again_when_the_highlight_rests_on_it_again() = runTest {
+        val f = panelFixture(index = threeGbaIndex, hasher = threeGbaHasher(), roms = threeGbaRoms)
+        f.http.offline = true
+        f.state.onDualMenu(true)
+        f.state.openConsole("GBA"); runCurrent()
+        f.hasher.calls.clear()
+        advanceTimeBy(600); runCurrent()
+        assertEquals(listOf("A.gba"), f.hasher.calls.toList())
+        advanceTimeBy(2000); runCurrent()
+        assertEquals(1, f.hasher.calls.size)   // no retry loop while it rests
+        f.http.offline = false
+        f.http.on("gameid", body = """{"Success":true,"GameID":0}""")
+        f.state.onButton(NxButton.DOWN); f.state.onButton(NxButton.UP)
+        advanceTimeBy(600); runCurrent()
+        assertEquals(listOf("A.gba", "A.gba"), f.hasher.calls.toList())
+    }
+
+    @Test fun scrolling_past_games_downloads_only_where_the_highlight_rests() = runTest {
+        val f = panelFixture(index = threeGbaIndex, hasher = threeGbaHasher(), roms = threeGbaRoms)
+        f.http.on("gameid", body = """{"Success":true,"GameID":0}""")
+        f.state.onDualMenu(true)
+        f.state.openConsole("GBA"); advanceUntilIdle()
+        f.hasher.calls.clear()
+        f.state.onButton(NxButton.DOWN); advanceTimeBy(100)
+        f.state.onButton(NxButton.DOWN); advanceTimeBy(100)
+        assertTrue(f.hasher.calls.isEmpty())   // still scrolling: nothing requested
+        advanceTimeBy(600); advanceUntilIdle()
+        assertEquals(listOf("C.gba"), f.hasher.calls.toList())
+    }
+
+    @Test fun signed_out_details_have_no_achievements() = runTest {
+        val f = panelFixture(signedIn = false)
+        f.state.onDualMenu(true)
+        f.state.openConsole("GB"); advanceUntilIdle()
+        assertNotNull(f.state.topDetails.value)
+        assertEquals(com.nxredux.mobile.ui.nx.DetailsBody.None, f.state.topDetails.value?.achievements)
+    }
+
+    @Test fun the_details_clear_off_the_game_list() = runTest {
+        val f = panelFixture()
+        f.state.onDualMenu(true)
+        f.state.openConsole("GB"); advanceUntilIdle()
+        assertNotNull(f.state.topDetails.value)
+        assertTrue(f.state.back())
+        assertNull(f.state.topDetails.value)   // a console row: its stats, not a game
+    }
+
     /** The library index with Mario.gba (the test library's GBA game), hashed as [MARIO_HASH]. */
     private val marioIndex = LibraryIndex(2, "home", emptyList(), emptyMap(), listOf(
         IndexedSystem("GBA", "GBA", games = listOf(IndexedGame("home", "Roms/Game Boy Advance (GBA)", "Mario.gba", "rMario", "f", "Mario"))),
@@ -13449,6 +13539,32 @@ class AppStateTest {
 
     private fun TestScope.dualState(): AppState =
         state(MemorySettings(ContentRef("Home")), src = bigSource()).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
+
+    // The top screen's details: entry 0's slow state-picture read lands after the highlight moved on; entry 1 stays.
+    @Test fun details_follow_the_highlight_and_never_paint_a_stale_game() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val data = object : UserDataStore by NoUserData {
+            override suspend fun stateShots(tag: String, fileName: String): List<StateShot> {
+                if (fileName == "Alleyway.gb") gate.await()
+                return listOf(StateShot(0, "file:///$fileName.png", 1L))
+            }
+        }
+        val state = state(MemorySettings(ContentRef("Home")), src = bigSource(), data = data).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
+        state.openConsolesTab(); advanceUntilIdle()
+        state.select(state.consoleRows().indexOfFirst { it.system.tag == "GB" }); state.onButton(NxButton.A); advanceUntilIdle()
+        val games = assertIs<Screen.Games>(state.screen.value)
+        assertEquals("Alleyway.gb", games.entries[0].game.fileName)
+        assertEquals(games.entries[0].game, state.topDetails.value?.entry?.game)   // its page at once; the pictures still reading
+        state.onButton(NxButton.DOWN); advanceUntilIdle()
+        val entry1 = games.entries[1]
+        assertEquals(entry1.game, state.topDetails.value?.entry?.game)
+        assertEquals(listOf("file:///Tetris.gb.png"), state.topDetails.value?.shots?.map { it.uri })
+        gate.complete(Unit); advanceUntilIdle()
+        assertEquals(entry1.game, state.topDetails.value?.entry?.game)
+        assertEquals(listOf("file:///Tetris.gb.png"), state.topDetails.value?.shots?.map { it.uri })
+        state.onDualMenu(false)
+        assertNull(state.topDetails.value)   // one screen: no top page
+    }
 
     // App moving to the other display (a new App instance) must not load again: the open list and its highlight stay.
     @Test fun a_second_load_once_leaves_the_open_list_alone() = runTest {

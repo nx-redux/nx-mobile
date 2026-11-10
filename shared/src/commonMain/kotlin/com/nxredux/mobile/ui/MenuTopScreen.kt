@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import com.nxredux.mobile.library.path
 import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.background
 import com.nxredux.mobile.shared.res.nx_logo
@@ -30,6 +31,7 @@ import com.nxredux.mobile.ui.nx.LocalPortrait
 import com.nxredux.mobile.ui.nx.LocalWindowSize
 import com.nxredux.mobile.ui.nx.NxScreenBackground
 import com.nxredux.mobile.ui.nx.NxTheme
+import com.nxredux.mobile.ui.nx.TopDetailsPage
 import com.nxredux.mobile.ui.nx.footerModeFor
 import com.nxredux.mobile.ui.nx.rememberControllerConnected
 import com.nxredux.mobile.ui.nx.rememberHasTouchscreen
@@ -47,6 +49,8 @@ fun MenuTopScreen(state: AppState, inSkin: Boolean = false) {
     val screen by state.screen.collectAsState()
     val dual by state.dualMenu.collectAsState()
     val selection by state.selection.collectAsState()
+    val details by state.topDetails.collectAsState()
+    val artLayout by state.artLayout.collectAsState()
     val look = rememberMenuLook(state, screen)
     val controllerConnected = rememberControllerConnected()
     val touchscreen = rememberHasTouchscreen()
@@ -59,8 +63,11 @@ fun MenuTopScreen(state: AppState, inSkin: Boolean = false) {
             ) {
                 // No HandheldShell here: the screen's own shape and size, as the shell gives App's pages.
                 CompositionLocalProvider(LocalPortrait provides (maxHeight > maxWidth), LocalWindowSize provides DpSize(maxWidth, maxHeight)) {
-                    when (menuTop(dual, screen, selection.index)) {
-                        TopContent.Backdrop, is TopContent.GameDetails, is TopContent.ConsoleStats, is TopContent.CollectionStats -> Backdrop()
+                    when (val top = menuTop(dual, screen, selection.index)) {
+                        // The feed may lag the highlight by a frame: never another game's page meanwhile.
+                        is TopContent.GameDetails -> details?.takeIf { it.entry.game.path == top.entry.game.path }
+                            ?.let { TopDetailsPage(it, artLayout.backdrop) } ?: Backdrop()
+                        TopContent.Backdrop, is TopContent.ConsoleStats, is TopContent.CollectionStats -> Backdrop()
                     }
                 }
             }

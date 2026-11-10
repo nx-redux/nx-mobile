@@ -145,6 +145,10 @@ import com.nxredux.mobile.storage.Recent
 import com.nxredux.mobile.storage.Recents
 import com.nxredux.mobile.storage.RecentsRecorder
 import com.nxredux.mobile.storage.ResumeInfo
+import com.nxredux.mobile.ui.nx.TopDetails
+import com.nxredux.mobile.ui.nx.detailsRaFor
+import com.nxredux.mobile.ui.nx.gameMeta
+import com.nxredux.mobile.ui.nx.topAchievements
 import com.nxredux.mobile.storage.Shortcut
 import com.nxredux.mobile.storage.SidecarStore
 import com.nxredux.mobile.storage.ToolPins
@@ -1106,7 +1110,46 @@ class AppState(
         if (_dualMenu.value == active) return
         _dualMenu.value = active
         if (active) ra.closeRaPanel()   // the panel is a single-screen overlay: dual mode shows the details on the top screen instead
+        followTopDetails()
     }
+
+    /**
+     * [topDetails] on the game [DualMenu.top] shows while the menu is on two screens, else null. A move publishes the new
+     * game's page at once from what is in memory, then its save states and file facts once read; the next move cancels
+     * that read, so a slow one never paints over the game now highlighted. [reread]: the same game's reads again (its
+     * play time moved: back from a game).
+     */
+    private fun followTopDetails(reread: Boolean = false) {
+        val entry = (if (_dualMenu.value) DualMenu.top(_screen.value, _selection.value.index) as? TopContent.GameDetails else null)?.entry
+        ra.followRaDetails(entry)
+        if (entry == null) {
+            topDetailsJob?.cancel(); topDetailsJob = null
+            _topDetails.value = null
+            return
+        }
+        val shown = _topDetails.value?.takeIf { sameGame(it.entry, entry) }
+        val path = entry.game.path
+        _topDetails.value = TopDetails(
+            entry, _gameInfo.value[path], shown?.resume ?: ResumeInfo.NONE, shown?.shots.orEmpty(), shown?.facts,
+            topAchievements(detailsRaFor(entry, ra.detailsRa.value)), gameMeta(deps.placeholderMeta),
+            netplay?.offers(entry) == true, ra.hasRaSet(path),
+        )
+        if (shown != null && !reread) return   // its reads ran or are running
+        topDetailsJob?.cancel()
+        topDetailsJob = scope.launch {
+            val tag = entry.system.tag
+            val file = entry.game.fileName
+            val saves = !entry.system.android && !entry.system.unassigned
+            val resume = if (saves) tryOr({ ResumeInfo.NONE }) { deps.userData.resumeInfo(tag, file) } else ResumeInfo.NONE
+            val shots = if (saves) tryOr({ emptyList() }) { deps.userData.stateShots(tag, file) } else emptyList()
+            val facts = if (entry.system.android) null else deps.topFacts?.let { f -> tryOrNull { f.fileFacts(entry) } }
+            val now = _topDetails.value?.takeIf { sameGame(it.entry, entry) } ?: return@launch
+            _topDetails.value = now.copy(resume = resume, shots = shots, facts = facts)
+        }
+    }
+
+    /** Whether [a] and [b] are one game: a rebuilt list gives new [Listed]s for the same files. */
+    private fun sameGame(a: Listed, b: Listed): Boolean = a.system.tag == b.system.tag && a.game.path == b.game.path
 
     /** The drawer's apps: every installed app but the Android games console's, marked when it is in Tools. */
     private fun drawerRows(apps: List<InstalledApp>): List<ToolAppRow> {
@@ -1157,6 +1200,10 @@ class AppState(
     )
     /** The achievements panel over a game list; null while closed. */
     val raPanel: StateFlow<RaPanel?> = ra.raPanel
+    private val _topDetails = MutableStateFlow<TopDetails?>(null)
+    /** The top screen's game details page ([followTopDetails]); null while the top screen shows no game. */
+    val topDetails: StateFlow<TopDetails?> = _topDetails.asStateFlow()
+    private var topDetailsJob: Job? = null
     private var gameInfoDirty = false   // a refresh was asked for while one ran: it runs once more
     private val shelvesCache = HomeShelvesCache()   // Home's shelves while their inputs hold ([shelvesFor])
     private var gameInfoRead = false    // a [refreshGameInfo] pass has read play time: the shelves can go by play time
@@ -1298,9 +1345,17 @@ class AppState(
             }
         }
         // The achievements panel follows the game list's selection, and closes off the game list.
-        scope.launch { _selection.collect { ra.followRaPanel() } }
+        scope.launch { _selection.collect { ra.followRaPanel(); followTopDetails() } }
+        // The top screen's details: new play time re-reads the shown game; its achievements land in place.
+        scope.launch { _gameInfo.collect { followTopDetails(reread = true) } }
+        scope.launch {
+            ra.detailsRa.collect { r ->
+                _topDetails.value?.let { d -> _topDetails.value = d.copy(achievements = topAchievements(detailsRaFor(d.entry, r)), raSet = ra.hasRaSet(d.entry.game.path)) }
+            }
+        }
         scope.launch {
             _screen.collect {
+                followTopDetails()
                 if (it !is Screen.Games) { ra.closeRaPanel() } else { ra.followRaPanel() }
                 if (it !is Screen.Games) closeArtPanel()   // as the achievements panel: only over a game list
             }
@@ -2876,6 +2931,7 @@ class AppState(
                 val raRead = tryOrNull { deps.achievements?.progressByPath().orEmpty() }
                 tryQuietly { deps.achievements?.hashesByPath()?.let { ra.raHashes = it } }
                 ra.followRaPanel(force = true)   // the panel's game may have data now (a download just ended)
+                ra.refreshRaDetails()
                 val times = read?.also { lastTimes = it } ?: lastTimes
                 val raByPath = raRead?.also { lastRa = it } ?: lastRa
                 _gameInfo.value = (times.keys + raByPath.keys).associateWith { p -> GameInfo(times[p]?.lastPlayedAt, times[p]?.totalMs, raByPath[p], times[p]?.plays) }
