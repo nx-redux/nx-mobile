@@ -94,11 +94,18 @@ class ScreenScraperSource(
      */
     private val hashes = LinkedHashMap<String, Pair<RomStamp, Pair<Long, Long>>>()
 
+    /** When [quota] was read ([now]); with it, a reading from an earlier day is told from today's. */
+    @Volatile private var quotaRead: Pair<SsQuota, Long>? = null
+
     /** The last quota read (null after [forgetQuota] or before any read). */
     val lastQuota: SsQuota? get() = quota
+    /** [lastQuota] with when it was read (epoch millis). */
+    val lastQuotaRead: Pair<SsQuota, Long>? get() = quotaRead
 
     /** Drops the last known quota (sign-out): the next run reports only its own reads. */
-    fun forgetQuota() { quota = null }
+    fun forgetQuota() { quota = null; quotaRead = null }
+
+    private fun keepQuota(q: SsQuota) { quota = q; quotaRead = q to now() }
 
     override suspend fun startJob() {
         countLock.withLock { sinceQuota = 0 }
@@ -134,7 +141,7 @@ class ScreenScraperSource(
         if (!a.signedIn) return null
         return try {
             val r = api(ScraperRequest.userInfo(a))
-            ScraperResponse.parseQuota(r.status, r.body?.decodeToString())?.also { quota = it }
+            ScraperResponse.parseQuota(r.status, r.body?.decodeToString())?.also { keepQuota(it) }
         } catch (_: SourceStop) { null } catch (_: JobPause) { null }
     }
 
@@ -153,7 +160,7 @@ class ScreenScraperSource(
             }
         }
         if (r.status != 200) return SignInResult.UNAVAILABLE
-        quota = ScraperResponse.parseQuota(r.status, r.body?.decodeToString()) ?: return SignInResult.BAD_LOGIN
+        keepQuota(ScraperResponse.parseQuota(r.status, r.body?.decodeToString()) ?: return SignInResult.BAD_LOGIN)
         return SignInResult.OK
     }
 
@@ -204,7 +211,7 @@ class ScreenScraperSource(
     private suspend fun checkQuota() {
         val r = api(ScraperRequest.userInfo(auth()))
         val q = ScraperResponse.parseQuota(r.status, r.body?.decodeToString()) ?: return
-        quota = q
+        keepQuota(q)
         if (q.today >= q.max) throw SourceStop(DAILY_LIMIT)
     }
 
@@ -243,7 +250,7 @@ class ScreenScraperSource(
         if (!a.signedIn) return false
         val r = pacer.paced { http.get(ScraperRequest.userInfo(a)) }
         val q = ScraperResponse.parseQuota(r.status, r.body?.decodeToString()) ?: return false
-        quota = q
+        keepQuota(q)
         return q.today >= q.max
     }
 

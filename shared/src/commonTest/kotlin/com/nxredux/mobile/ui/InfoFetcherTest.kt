@@ -10,6 +10,7 @@ import com.nxredux.mobile.scraper.Scrape
 import com.nxredux.mobile.scraper.ScreenScraperSource
 import com.nxredux.mobile.scraper.SourceStop
 import com.nxredux.mobile.scraper.SsGameInfo
+import com.nxredux.mobile.scraper.SsQuota
 import com.nxredux.mobile.storage.MemoryPrivateFiles
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -26,9 +27,10 @@ import kotlin.test.assertTrue
 class InfoFetcherTest {
     private class MemoryInfoFiles : GameInfoFiles {
         val texts = HashMap<String, String>()
+        var writable = true
         override fun path(ref: LibraryGameRef) = "info/${ref.gamePath}"
         override suspend fun read(ref: LibraryGameRef) = texts[path(ref)]
-        override suspend fun write(ref: LibraryGameRef, text: String): Boolean { texts[path(ref)] = text; return true }
+        override suspend fun write(ref: LibraryGameRef, text: String): Boolean { if (writable) texts[path(ref)] = text; return writable }
     }
 
     private class Rig(scope: TestScope) {
@@ -38,7 +40,8 @@ class InfoFetcherTest {
         var answer: suspend (LibraryGameRef) -> InfoResult? = { InfoResult.Found(SsGameInfo("Blocks fall.", null, "1989", null, "en"), "42") }
         var enabled = true
         var runActive = false
-        var quotaLeft = true
+        /** The last quota read and when; null: none. */
+        var quota: Pair<SsQuota, Long>? = null
         /** Epoch millis: 10:00 on day 0 of a UTC calendar, plus virtual time. */
         var base = 10 * HOUR
         val now = { base + scope.testScheduler.currentTime }
@@ -46,7 +49,7 @@ class InfoFetcherTest {
         val fetcher = InfoFetcher(
             CoroutineScope(StandardTestDispatcher(scope.testScheduler)), store,
             lookup = { ref -> asked += ref.gamePath; answer(ref) },
-            enabled = { enabled }, runActive = { runActive }, quotaLeft = { quotaLeft }, now = now,
+            enabled = { enabled }, runActive = { runActive }, quotaRead = { quota }, now = now,
             calendar = FixedOffsetCalendar(),
         ).also { f -> scope.backgroundScope.launch(StandardTestDispatcher(scope.testScheduler)) { f.fetched.collect { fetched += it } } }
     }
@@ -95,16 +98,48 @@ class InfoFetcherTest {
         rig.fetcher.follow(game(2)); advanceUntilIdle()
         assertEquals(2, rig.asked.size)
 
-        // A quota read already at its limit stops it the same way, without asking.
+        // A quota read today already at its limit stops it the same way, without asking.
         val other = Rig(this)
-        other.quotaLeft = false
-        other.fetcher.follow(game(1)); advanceUntilIdle()
-        other.quotaLeft = true   // a read later the same day does not lift the stop either
+        other.quota = SsQuota(20_000, 20_000) to other.now()
         other.fetcher.follow(game(1)); advanceUntilIdle()
         assertTrue(other.asked.isEmpty())
-        other.base += 14 * HOUR + 1
+        other.base += 14 * HOUR + 1   // past midnight: yesterday's reading no longer stops it
         other.fetcher.follow(game(1)); advanceUntilIdle()
         assertEquals(1, other.asked.size)
+        other.fetcher.follow(game(2)); advanceUntilIdle()
+        assertEquals(2, other.asked.size)   // nor re-arms the stop on the next game
+    }
+
+    @Test fun unavailable_waits_a_pause_and_refusals_a_day() = runTest {
+        val rig = Rig(this)
+        rig.answer = { throw SourceStop(ScreenScraperSource.UNAVAILABLE) }
+        rig.fetcher.follow(game(1)); advanceUntilIdle()
+        rig.answer = { InfoResult.Missing }
+        rig.fetcher.follow(game(1)); advanceUntilIdle()
+        assertEquals(1, rig.asked.size)
+        rig.base += InfoFetcher.RETRY_MS
+        rig.fetcher.follow(game(1)); advanceUntilIdle()
+        assertEquals(2, rig.asked.size)
+        // A refusal that stays (this build refused) waits for the next day, as the daily limit does.
+        rig.answer = { throw SourceStop(ScreenScraperSource.BUILD_REFUSED) }
+        rig.fetcher.follow(game(2)); advanceUntilIdle()
+        rig.answer = { InfoResult.Missing }
+        rig.base += InfoFetcher.RETRY_MS
+        rig.fetcher.follow(game(3)); advanceUntilIdle()
+        assertEquals(3, rig.asked.size)
+        rig.base += 14 * HOUR
+        rig.fetcher.follow(game(3)); advanceUntilIdle()
+        assertEquals(4, rig.asked.size)
+    }
+
+    // Found info that can't be written (a read-only folder) is not asked again for each highlight.
+    @Test fun unstorable_info_is_not_asked_again() = runTest {
+        val rig = Rig(this)
+        rig.files.writable = false
+        rig.fetcher.follow(game(1)); advanceUntilIdle()
+        rig.fetcher.follow(null); rig.fetcher.follow(game(1)); advanceUntilIdle()
+        assertEquals(1, rig.asked.size)
+        assertTrue(rig.fetched.isEmpty())
     }
 
     @Test fun failed_lookups_are_not_misses_and_retry_after_a_pause() = runTest {

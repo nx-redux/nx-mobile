@@ -5392,7 +5392,7 @@ class AppState(
         val store = gameInfoStore ?: return@let null
         InfoFetcher(
             scope, store, lookup = c::lookupInfo, enabled = { deps.settings.fetchGameInfo && c.ssAvailable }, runActive = { c.busy },
-            quotaLeft = { c.ssQuota?.let { it.today < it.max } ?: true }, now = ::clockNow, calendar = deps.calendar,
+            quotaRead = { c.ssQuotaRead }, now = ::clockNow, calendar = deps.calendar,
         ).also { f -> scope.launch { f.fetched.collect { showFetchedInfo(it) } } }
     }
 

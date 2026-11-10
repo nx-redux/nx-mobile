@@ -344,13 +344,13 @@ class ArtworkController(
     /** A job or a single-game fetch is asking the sources (the top screen's info fetch waits it out). */
     val busy: Boolean get() = job != null || single != null || _state.value.phase == JobPhase.RUNNING
 
-    /** ScreenScraper's last quota read, or null when none was read (anonymous use never reads one). */
-    val ssQuota: SsQuota? get() = engine.ss?.lastQuota
+    /** ScreenScraper's last quota read and when (epoch millis), or null when none was read (anonymous use never reads one). */
+    val ssQuotaRead: Pair<SsQuota, Long>? get() = engine.ss?.lastQuotaRead
 
     /**
      * The top screen's info-only lookup of [ref]: null when not asked (no ScreenScraper for it, or a job or a fetch is
      * live). Under [singleLock] as [fetchOne], so it never runs beside a run's requests (ScreenScraper's one-thread
-     * rule); a job started meanwhile waits for this one lookup. Throws [SourceStop] / [JobPause] as the source does.
+     * rule); a job or a user's Fetch art started meanwhile waits for this one lookup (its requests and their back-off). Throws [SourceStop] / [JobPause] as the source does.
      */
     internal suspend fun lookupInfo(ref: LibraryGameRef): InfoResult? = withContext(work) {
         val ss = engine.ss?.takeIf { !ref.android && it.enabled && it.knows(ref) } ?: return@withContext null

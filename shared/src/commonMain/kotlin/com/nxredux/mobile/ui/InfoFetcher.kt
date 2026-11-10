@@ -5,7 +5,9 @@ import com.nxredux.mobile.gametime.systemLocalCalendar
 import com.nxredux.mobile.scraper.GameInfoStore
 import com.nxredux.mobile.scraper.InfoResult
 import com.nxredux.mobile.scraper.LibraryGameRef
+import com.nxredux.mobile.scraper.ScreenScraperSource
 import com.nxredux.mobile.scraper.SourceStop
+import com.nxredux.mobile.scraper.SsQuota
 import com.nxredux.mobile.scraper.StoredGameInfo
 import com.nxredux.mobile.tryOr
 import kotlinx.coroutines.CoroutineScope
@@ -21,8 +23,9 @@ import kotlinx.coroutines.sync.withLock
 /**
  * The top screen's background info fetch: the game the highlight rests on for [restMs] is looked up when it has no info
  * stored and no remembered miss, so scrolling a list asks nothing. One lookup at a time, none while an Artwork run asks
- * ScreenScraper. A refusal (the daily limit, a blocked app) stops it until the next local day, a failure (offline, an
- * unreadable answer) for [RETRY_MS]; silently either way: nothing here throws or tells the user.
+ * ScreenScraper. The daily limit or a lasting refusal (a blocked app) stops it until the next local day, a failure
+ * (offline, ScreenScraper unavailable, an unreadable answer) for [RETRY_MS]; silently either way: nothing here throws
+ * or tells the user.
  *
  * [follow] is called on [scope]'s thread (the UI's), and the state below is only touched there.
  */
@@ -33,8 +36,8 @@ class InfoFetcher(
     private val lookup: suspend (LibraryGameRef) -> InfoResult?,
     private val enabled: () -> Boolean,
     private val runActive: () -> Boolean,
-    /** False when the last quota read is at its daily limit. */
-    private val quotaLeft: () -> Boolean,
+    /** ScreenScraper's last quota read and when (epoch millis); null when none was read. */
+    private val quotaRead: () -> Pair<SsQuota, Long>?,
     /** Epoch millis. */
     private val now: () -> Long,
     private val restMs: Long = 600,
@@ -67,14 +70,34 @@ class InfoFetcher(
         }
     }
 
+    /**
+     * Today's quota read is at its limit. A reading from an earlier local day says nothing about today's (it is only
+     * read again when ScreenScraper is asked): the next lookup reports the quota itself.
+     */
+    private fun quotaSpent(t: Long): Boolean {
+        val (q, at) = quotaRead() ?: return false
+        return q.today >= q.max && calendar.dayStart(at) == calendar.dayStart(t)
+    }
+
+    /**
+     * Until when a thrown lookup stops the fetch: the daily limit and the refusals that stay (this build or app refused,
+     * a bad login, the unrecognised-games limit) until the next local day; ScreenScraper unavailable (a 5xx, a closed
+     * API, too many requests) and no connection for [RETRY_MS].
+     */
+    private fun stopAfter(e: Exception): Long = when ((e as? SourceStop)?.note) {
+        ScreenScraperSource.DAILY_LIMIT, ScreenScraperSource.UNRECOGNISED_LIMIT, ScreenScraperSource.BUILD_REFUSED,
+        ScreenScraperSource.APP_BLOCKED, ScreenScraperSource.SIGN_IN_FAILED -> calendar.dayStart(now(), 1)
+        else -> now() + RETRY_MS
+    }
+
     private suspend fun fetch(ref: LibraryGameRef) {
         // Queued behind another lookup while the highlight moved on: that game was not rested on any more.
         if (followed != ref.gamePath || !enabled() || runActive()) return
         val t = now()
         if (t < stoppedUntil) return
-        if (!quotaLeft()) { stoppedUntil = calendar.dayStart(t, 1); return }
+        if (quotaSpent(t)) { stoppedUntil = calendar.dayStart(t, 1); return }
         if (ref.gamePath in unstorable || store.read(ref) != null || store.isMiss(ref.gamePath)) return
-        val r = tryOr({ e -> stoppedUntil = if (e is SourceStop) calendar.dayStart(now(), 1) else now() + RETRY_MS; null }) { lookup(ref) }
+        val r = tryOr({ e -> stoppedUntil = stopAfter(e); null }) { lookup(ref) }
         when (r) {
             null -> Unit
             is InfoResult.Found ->
