@@ -1200,22 +1200,37 @@ class AppState(
         if (entry == null) {
             topDetailsJob?.cancel(); topDetailsJob = null
             _topDetails.value = null
+            infoFetcher?.follow(null)
             return
         }
         val shown = _topDetails.value?.takeIf { sameGame(it.entry, entry) }
         val path = entry.game.path
         _topDetails.value = TopDetails(
             entry, _gameInfo.value[path], shown?.resume ?: ResumeInfo.NONE,
-            detailsBody(detailsRaFor(entry, ra.detailsRa.value)), gameMeta(deps.placeholderMeta),
+            detailsBody(detailsRaFor(entry, ra.detailsRa.value)), gameMeta(deps.placeholderMeta), shown?.scraped,
         )
         if (shown != null && !reread) return   // its reads ran or are running
+        val ref = infoRef(entry)
+        if (shown == null) infoFetcher?.follow(ref)
         topDetailsJob?.cancel()
         topDetailsJob = scope.launch {
             val saves = !entry.system.android && !entry.system.unassigned
             val resume = if (saves) tryOr({ ResumeInfo.NONE }) { deps.userData.resumeInfo(entry.system.tag, entry.game.fileName) } else ResumeInfo.NONE
+            val scraped = ref?.let { r -> gameInfoStore?.read(r) }
             val now = _topDetails.value?.takeIf { sameGame(it.entry, entry) } ?: return@launch
-            _topDetails.value = now.copy(resume = resume)
+            _topDetails.value = now.copy(resume = resume, scraped = scraped)
         }
+    }
+
+    /** [entry] as the info fetch and store name it; null for an Android or Unassigned game (no ScreenScraper info). */
+    private fun infoRef(entry: Listed): LibraryGameRef? =
+        if (entry.system.android || entry.system.unassigned) null else artworkRef(entry.system.tag, entry.game)
+
+    /** [path]'s info was just fetched: the details page shows it when that game is still on it. */
+    private suspend fun showFetchedInfo(path: String) {
+        val entry = _topDetails.value?.entry?.takeIf { it.game.path == path } ?: return
+        val scraped = infoRef(entry)?.let { r -> gameInfoStore?.read(r) } ?: return
+        _topDetails.value = _topDetails.value?.takeIf { sameGame(it.entry, entry) }?.copy(scraped = scraped)
     }
 
     /** Whether [a] and [b] are one game: a rebuilt list gives new [Listed]s for the same files. */
@@ -5263,18 +5278,21 @@ class AppState(
         ix: LibraryIndex?, withHidden: Boolean = false, datTitle: (tag: String, fileName: String) -> String? = { _, _ -> null },
     ): List<LibraryGameRef> =
         ix?.playableSystems(if (withHidden) emptySet() else hiddenPaths.toSet()).orEmpty().flatMap { s ->
-            s.games.map { g ->
-                val art = ArtRefs(
-                    g.boxartRef?.value, g.box2dRef?.value, g.screenshotRef?.value,
-                    wheel = g.wheelRef?.value, mix = g.mixRef?.value, heroShot = g.heroShot,
-                )
-                LibraryGameRef(
-                    gamePath = g.path, tag = s.tag, name = g.shownName, fileName = g.fileName, rom = g.ref, sourceId = g.sourceId,
-                    relativeDir = g.relativeDir, folderGame = g.lookupDir != g.relativeDir,
-                    have = ArtHave.of(art, needMix = settings.artMix), datTitle = datTitle(s.tag, g.fileName), art = art,
-                )
-            }
+            s.games.map { g -> artworkRef(s.tag, g, datTitle(s.tag, g.fileName)) }
         } + if (withHidden) emptyList() else androidArtworkGames()
+
+    /** A console game [g] (tagged [tag]) as the scraper sees it. */
+    private fun artworkRef(tag: String, g: GameEntry, datTitle: String? = null): LibraryGameRef {
+        val art = ArtRefs(
+            g.boxartRef?.value, g.box2dRef?.value, g.screenshotRef?.value,
+            wheel = g.wheelRef?.value, mix = g.mixRef?.value, heroShot = g.heroShot,
+        )
+        return LibraryGameRef(
+            gamePath = g.path, tag = tag, name = g.shownName, fileName = g.fileName, rom = g.ref, sourceId = g.sourceId,
+            relativeDir = g.relativeDir, folderGame = g.lookupDir != g.relativeDir,
+            have = ArtHave.of(art, needMix = settings.artMix), datTitle = datTitle, art = art,
+        )
+    }
 
     /**
      * The scraper's games with each arcade set's raw DAT title (fbneo's table; flycast's for a DC zip/7z): libretro names
@@ -5366,6 +5384,18 @@ class AppState(
 
     /** The artwork controller; null in a build without one (no Tools row, no Fetch art or Change art). */
     private val artworkController: com.nxredux.mobile.scraper.ArtworkController? = deps.artwork?.invoke(artworkHost)
+    /** Game info beside the art (the top screen's details read it); null without a controller or an engine keeping it. */
+    private val gameInfoStore: com.nxredux.mobile.scraper.GameInfoStore? = artworkController?.info
+
+    /** The top screen's background info fetch for the game its details show; null without [gameInfoStore]. */
+    private val infoFetcher: InfoFetcher? = artworkController?.let { c ->
+        val store = gameInfoStore ?: return@let null
+        InfoFetcher(
+            scope, store, lookup = c::lookupInfo, enabled = { deps.settings.fetchGameInfo && c.ssAvailable }, runActive = { c.busy },
+            quotaLeft = { c.ssQuota?.let { it.today < it.max } ?: true }, now = ::clockNow, calendar = deps.calendar,
+        ).also { f -> scope.launch { f.fetched.collect { showFetchedInfo(it) } } }
+    }
+
     /** The scanner's one-time `grid/` and `hero/` move, sharing the artwork controller's written-art log; none without it. */
     private val legacyArtMove: LegacyArtMove? = artworkController?.legacyArtMove(deps.source)
 

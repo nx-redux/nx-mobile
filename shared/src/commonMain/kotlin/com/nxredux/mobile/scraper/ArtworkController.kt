@@ -341,6 +341,24 @@ class ArtworkController(
     override suspend fun fetchGame(gamePath: String, replaceExisting: Boolean, wide: Boolean, found: suspend (List<ArtOption>) -> Unit): FetchResult =
         fetchOne(gamePath, replaceExisting, wide, found).first
 
+    /** A job or a single-game fetch is asking the sources (the top screen's info fetch waits it out). */
+    val busy: Boolean get() = job != null || single != null || _state.value.phase == JobPhase.RUNNING
+
+    /** ScreenScraper's last quota read, or null when none was read (anonymous use never reads one). */
+    val ssQuota: SsQuota? get() = engine.ss?.lastQuota
+
+    /**
+     * The top screen's info-only lookup of [ref]: null when not asked (no ScreenScraper for it, or a job or a fetch is
+     * live). Under [singleLock] as [fetchOne], so it never runs beside a run's requests (ScreenScraper's one-thread
+     * rule); a job started meanwhile waits for this one lookup. Throws [SourceStop] / [JobPause] as the source does.
+     */
+    internal suspend fun lookupInfo(ref: LibraryGameRef): InfoResult? = withContext(work) {
+        val ss = engine.ss?.takeIf { !ref.android && it.enabled && it.knows(ref) } ?: return@withContext null
+        singleLock.withLock {
+            if (haltLock.withLock { lock.withLock { job != null } }) null else ss.info(ref)
+        }
+    }
+
     /** [fetchGame], with the sources' stop notes of its own run (none when the job fetched the game). */
     private suspend fun fetchOne(
         gamePath: String, replaceExisting: Boolean, wide: Boolean, found: suspend (List<ArtOption>) -> Unit = {},

@@ -96,6 +96,7 @@ class ArtworkScreensTest {
         override var artWheel = false
         override var artMix = false
         override var artWheelMigrated = false
+        override var fetchGameInfo = true
         override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = com.nxredux.mobile.settings.MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = com.nxredux.mobile.settings.AccentPreset.DEFAULT; override var secondaryAccent: com.nxredux.mobile.settings.SecondaryAccent = com.nxredux.mobile.settings.SecondaryAccent.DEFAULT
     }
 
@@ -145,6 +146,7 @@ class ArtworkScreensTest {
         optionCache: com.nxredux.mobile.scraper.ArtOptionCache = com.nxredux.mobile.scraper.ArtOptionCache.NONE,
         store: com.nxredux.mobile.storage.MemoryLibraryIndexStore = com.nxredux.mobile.storage.MemoryLibraryIndexStore(),
         mixEngine: Boolean = false,   // the engine reads Settings' Mix and has a codec, as the app's
+        info: Boolean = false,   // the engine keeps game info (in [files])
         stored: Settings.() -> Unit = {},   // settings as an earlier version left them, before the first load
     ): Rig {
         val source = FakeRomsSource(
@@ -184,6 +186,7 @@ class ArtworkScreensTest {
                     ssEngine(
                         http, FakeFitter(), FakeHasher(), source, ContentRef("Home"), auth, { testScheduler.currentTime }, { delay(it) }, onArt, onWritten, artStore, onAndroidArt, more, logged, onOptions, picked,
                         extras = { com.nxredux.mobile.scraper.ArtExtras(mix = mixEngine && settings.artMix) }, pixels = if (mixEngine) FakePixels() else null,
+                        infoFiles = if (info) files else null,
                     )
                 },
                 Credentials(settings, if (available) "DEV" else ""), FakeRunner(), scope, optionCache = optionCache,
@@ -209,6 +212,10 @@ class ArtworkScreensTest {
         val rows = assertIs<Screen.Systems>(screen.value).also { assertEquals(MenuCategory.TOOLS, it.category) }.rows.map { (it as MainRow.Tool).row }
         select(rows.indexOfFirst { it.kind == ToolKind.ARTWORK }); openSelected()
     }
+
+    private fun AppState.openConsole(tag: String) = openSystem(
+        assertIs<Screen.Systems>(screen.value).tabs.flatMap { it.rows }.firstNotNullOf { (it as? MainRow.System)?.systems?.firstOrNull { s -> s.tag == tag } },
+    )
 
     private fun AppState.pick(action: ArtworkAction) {
         val rows = assertIs<Screen.Artwork>(screen.value).rows
@@ -547,11 +554,11 @@ class ArtworkScreensTest {
         r.state.openArtwork()
         r.state.pick(ArtworkAction.SETTINGS)
         val account = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
-        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.SGDB_KEY, ArtworkSettingKind.CLEAR_CACHE, ArtworkSettingKind.RESET), account.rows.filter { it.selectable }.map { it.kind })
-        assertEquals("Not set", account.rows[8].secondary)
+        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.FETCH_INFO, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.SGDB_KEY, ArtworkSettingKind.CLEAR_CACHE, ArtworkSettingKind.RESET), account.rows.filter { it.selectable }.map { it.kind })
+        assertEquals("Not set", account.rows[9].secondary)
 
         r.http.on("search/autocomplete/tetris", HttpResult(401, null))
-        r.state.select(8); r.state.onButton(NxButton.A)
+        r.state.select(9); r.state.onButton(NxButton.A)
         assertTrue(assertIs<Screen.ArtworkSettings>(r.state.screen.value).editingKey)
         assertTrue(r.state.textEntryOpen)
         r.state.artworkDraftKey("WRONGKEY")
@@ -596,11 +603,11 @@ class ArtworkScreensTest {
         r.state.openArtwork()
         r.state.pick(ArtworkAction.SETTINGS)
         val account = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
-        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.TGDB_KEY, ArtworkSettingKind.CLEAR_CACHE, ArtworkSettingKind.RESET), account.rows.filter { it.selectable }.map { it.kind })
-        assertEquals("TheGamesDB API key" to "Not set", account.rows[8].label to account.rows[8].secondary)
+        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.FETCH_INFO, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.TGDB_KEY, ArtworkSettingKind.CLEAR_CACHE, ArtworkSettingKind.RESET), account.rows.filter { it.selectable }.map { it.kind })
+        assertEquals("TheGamesDB API key" to "Not set", account.rows[9].label to account.rows[9].secondary)
 
         r.http.on("API/Limit?apikey=WRONGKEY", HttpResult(200, """{"remaining_monthly_allowance":0,"allowance_refresh_timer":0}""".encodeToByteArray()))
-        r.state.select(8); r.state.onButton(NxButton.A)
+        r.state.select(9); r.state.onButton(NxButton.A)
         val prompt = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
         assertTrue(prompt.editingKey && prompt.keyFor == ArtKeyFor.TGDB)
         r.state.artworkDraftKey("WRONGKEY")
@@ -663,10 +670,10 @@ class ArtworkScreensTest {
         r.state.openArtwork()
         r.state.pick(ArtworkAction.SETTINGS)
         val account = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
-        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.CLEAR_CACHE, ArtworkSettingKind.RESET), account.rows.filter { it.selectable }.map { it.kind })
+        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.FETCH_INFO, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.CLEAR_CACHE, ArtworkSettingKind.RESET), account.rows.filter { it.selectable }.map { it.kind })
 
         r.http.on("ssuserInfos", Scrape.json("""{"response":{}}"""))   // an answer without a user: a bad login
-        r.state.select(7); r.state.onButton(NxButton.A)   // ScreenScraper login, under Replace existing art and the optional art
+        r.state.select(8); r.state.onButton(NxButton.A)   // ScreenScraper login, under Replace existing art and the optional art
         assertTrue(r.state.textEntryOpen)
         r.state.artworkDraftUser("me"); r.state.artworkDraftPassword("secret")
         assertFalse("secret" in r.state.screen.value.toString())
@@ -699,8 +706,8 @@ class ArtworkScreensTest {
         r.state.onButton(NxButton.A)   // Logout asks first
         assertTrue(assertIs<Screen.ArtworkSettings>(r.state.screen.value).confirmLogout)
         r.state.onButton(NxButton.A)   // yes: the row turns back into login, the highlight stays on it
-        assertEquals(ArtworkSettingKind.SS_LOGIN, assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows[7].kind)
-        assertEquals(7, r.state.selection.value.index)
+        assertEquals(ArtworkSettingKind.SS_LOGIN, assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows[8].kind)
+        assertEquals(8, r.state.selection.value.index)
         assertEquals("", r.settings.ssUsername)
 
     }
@@ -780,7 +787,7 @@ class ArtworkScreensTest {
         r.state.openArtwork()
         r.state.pick(ArtworkAction.SETTINGS)
         fun rows() = assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows
-        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.CLEAR_CACHE, ArtworkSettingKind.RESET), rows().filter { it.selectable }.map { it.kind })
+        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.FETCH_INFO, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.CLEAR_CACHE, ArtworkSettingKind.RESET), rows().filter { it.selectable }.map { it.kind })
         assertEquals(ArtworkSettingKind.REPLACE, rows()[r.state.selection.value.index].kind)   // opens past the group label
         assertEquals("Off", rows()[1].secondary)
         r.state.onButton(NxButton.A)
@@ -809,6 +816,48 @@ class ArtworkScreensTest {
         r.settings.artMix = true
         r.state.load(); advanceUntilIdle()
         assertFalse(r.settings.artWheel)
+    }
+
+    // The top screen's details: the highlighted game's info is looked up once the highlight rests, then shown.
+    @Test fun details_show_fetched_info() = runTest {
+        val r = rig(info = true)
+        r.http.on("romnom=Mario.gba", com.nxredux.mobile.scraper.Scrape.json(
+            """{"response":{"jeu":{"id":"7","synopsis":[{"langue":"en","text":"A plumber."}],"dates":[{"region":"us","text":"2001-06-11"}],"medias":[]}}}""",
+        ))
+        r.state.onDualMenu(true); advanceUntilIdle()
+        r.state.openConsole("GBA")
+        runCurrent()
+        assertEquals("Mario.gba", r.state.topDetails.value?.entry?.game?.fileName)
+        assertNull(r.state.topDetails.value?.scraped)
+        assertEquals(0, r.http.count("jeuInfos"))   // nothing asked before the rest
+        advanceUntilIdle()
+        assertEquals("A plumber.", r.state.topDetails.value?.scraped?.synopsis)
+        assertEquals("2001", r.state.topDetails.value?.scraped?.year)
+        assertEquals(1, r.http.count("jeuInfos"))
+    }
+
+    @Test fun fetch_game_info_row_turns_the_highlight_fetch_off() = runTest {
+        val r = rig(info = true)
+        r.state.openArtwork()
+        r.state.pick(ArtworkAction.SETTINGS)
+        fun rows() = assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows
+        val at = rows().indexOfFirst { it.kind == ArtworkSettingKind.FETCH_INFO }
+        assertEquals(ArtworkSettingRow(ArtworkSettingKind.FETCH_INFO, "Fetch game info", "On"), rows()[at])
+        assertEquals(
+            "Look up a game's synopsis, genre and release year on ScreenScraper when it's highlighted on the top screen.",
+            artworkSettingTouchRow(rows()[at]).detail,
+        )
+        r.state.select(at); r.state.onButton(NxButton.A)
+        assertFalse(r.settings.fetchGameInfo)
+        assertEquals("Off", rows()[at].secondary)
+        // Off: a highlighted game is never looked up.
+        val off = rig(info = true, stored = { fetchGameInfo = false })
+        off.http.on("romnom=Mario.gba", com.nxredux.mobile.scraper.Scrape.json("""{"response":{"jeu":{"id":"7","synopsis":[{"langue":"en","text":"A plumber."}]}}}"""))
+        off.state.onDualMenu(true); advanceUntilIdle()
+        off.state.openConsole("GBA")
+        advanceUntilIdle()
+        assertEquals("Mario.gba", off.state.topDetails.value?.entry?.game?.fileName)
+        assertEquals(0, off.http.count("jeuInfos"))
     }
 
     @Test fun extras_toggle_and_mix_leaves_the_wheel_free() = runTest {

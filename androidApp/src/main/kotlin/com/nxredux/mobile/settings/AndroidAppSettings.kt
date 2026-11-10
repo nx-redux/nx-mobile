@@ -150,6 +150,9 @@ class AndroidAppSettings(context: Context) : AppSettings {
     override var artMix: Boolean
         get() = prefs.getBoolean(KEY_ART_MIX, false)
         set(value) = prefs.edit { putBoolean(KEY_ART_MIX, value) }
+    override var fetchGameInfo: Boolean
+        get() = prefs.getBoolean(KEY_FETCH_GAME_INFO, true)
+        set(value) = prefs.edit { putBoolean(KEY_FETCH_GAME_INFO, value) }
     override var artWheelMigrated: Boolean
         get() = prefs.getBoolean(KEY_ART_WHEEL_MIGRATED, false)
         set(value) = prefs.edit { putBoolean(KEY_ART_WHEEL_MIGRATED, value) }
@@ -372,6 +375,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_ART_BOX2D = "art_box2d"
         private const val KEY_ART_WHEEL = "art_wheel"
         private const val KEY_ART_MIX = "art_mix"
+        private const val KEY_FETCH_GAME_INFO = "fetch_game_info"
         private const val KEY_ART_WHEEL_MIGRATED = "art_wheel_migrated"
         private const val KEY_SHOW_HOME_TAB = "show_home_tab"
         private const val KEY_SHOW_CONSOLES_TAB = "show_consoles_tab"

@@ -29,10 +29,10 @@ enum class ArtKeyFor(val label: String) { SGDB("SteamGridDB"), TGDB("TheGamesDB"
  * artwork; [SECTION] a group's label and [GAP] the space before one, never selected.
  */
 enum class ArtworkSettingKind {
-    SECTION, GAP, REPLACE, BOX2D, WHEEL, MIX, SS_LOGIN, SS_LOGOUT, SGDB_KEY, SGDB_REMOVE, TGDB_KEY, TGDB_REMOVE, TGDB_LEFT, CLEAR_CACHE, RESET;
+    SECTION, GAP, REPLACE, BOX2D, WHEEL, MIX, FETCH_INFO, SS_LOGIN, SS_LOGOUT, SGDB_KEY, SGDB_REMOVE, TGDB_KEY, TGDB_REMOVE, TGDB_LEFT, CLEAR_CACHE, RESET;
 
     /** The On/Off rows that step on A / LEFT / RIGHT (when enabled). */
-    val toggle: Boolean get() = this == REPLACE || this == BOX2D || this == WHEEL || this == MIX
+    val toggle: Boolean get() = this == REPLACE || this == BOX2D || this == WHEEL || this == MIX || this == FETCH_INFO
 }
 
 /** [bytes] as "512 B", "2.0 KB" or "12.3 MB" (one decimal from a kilobyte up), for the cache size. */

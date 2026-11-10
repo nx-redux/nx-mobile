@@ -56,8 +56,8 @@ internal class ArtworkAccountSettings(
     private val signedIn: Boolean get() = settings.ssUsername.isNotEmpty() && settings.ssPassword != null
 
     /**
-     * In groups: Art to fetch (Replace existing art and the optional art: 2D box art, Wheel, Mix; only when
-     * fetching is available), then Accounts (ScreenScraper's login / logout row, only in a build with its credentials; the
+     * In groups: Art to fetch (Replace existing art and the optional art: 2D box art, Wheel, Mix, then Fetch game info
+     * with ScreenScraper; only when fetching is available), then Accounts (ScreenScraper's login / logout row, only in a build with its credentials; the
      * SteamGridDB key row, one row each: the key prompt, or once set Remove; TheGamesDB's key row likewise and its
      * read-only allowance for the key in use, only once the user's key is set), and Reset artwork last, after a gap.
      */
@@ -68,6 +68,7 @@ internal class ArtworkAccountSettings(
             add(ArtworkSettingRow(ArtworkSettingKind.BOX2D, "2D box art", onOff(settings.artBox2d)))
             add(ArtworkSettingRow(ArtworkSettingKind.WHEEL, "Wheel", onOff(settings.artWheel)))
             add(ArtworkSettingRow(ArtworkSettingKind.MIX, "Mix", onOff(settings.artMix)))
+            if (controller.ssAvailable) add(ArtworkSettingRow(ArtworkSettingKind.FETCH_INFO, "Fetch game info", onOff(settings.fetchGameInfo)))
         }
         if (controller.ssAvailable || controller.sgdbAvailable || controller.tgdbSupported) {
             if (isNotEmpty()) add(ArtworkSettingRow(ArtworkSettingKind.GAP, ""))
@@ -277,7 +278,7 @@ internal class ArtworkAccountSettings(
             NxButton.UP, NxButton.DOWN -> selection.value = selection.value.step(if (button == NxButton.UP) -1 else 1) { s.rows.getOrNull(it)?.selectable == true }
             NxButton.LEFT, NxButton.RIGHT -> if (row?.enabled == true && row.kind.toggle) toggle(row.kind)
             NxButton.A -> if (row?.enabled == true) when (row.kind) {
-                ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX -> toggle(row.kind)
+                ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.FETCH_INFO -> toggle(row.kind)
                 ArtworkSettingKind.SS_LOGIN ->
                     screen.value = s.copy(signingIn = true, draftUser = settings.ssUsername, draftPassword = "")
                 ArtworkSettingKind.SS_LOGOUT -> screen.value = s.copy(confirmLogout = true)
@@ -317,6 +318,7 @@ internal class ArtworkAccountSettings(
             ArtworkSettingKind.BOX2D -> settings.artBox2d = !settings.artBox2d
             ArtworkSettingKind.WHEEL -> settings.artWheel = !settings.artWheel
             ArtworkSettingKind.MIX -> settings.artMix = !settings.artMix
+            ArtworkSettingKind.FETCH_INFO -> settings.fetchGameInfo = !settings.fetchGameInfo
             else -> return
         }
         refreshSettings()

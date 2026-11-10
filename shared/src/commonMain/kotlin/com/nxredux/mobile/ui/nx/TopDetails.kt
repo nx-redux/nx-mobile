@@ -34,6 +34,7 @@ import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.achievements.RaAchievementState
 import com.nxredux.mobile.achievements.RaProgress
 import com.nxredux.mobile.library.path
+import com.nxredux.mobile.scraper.StoredGameInfo
 import com.nxredux.mobile.settings.BackdropArt
 import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.ui.GameInfo
@@ -72,8 +73,8 @@ private val PLACEHOLDER_META = GameMeta(genre = "[Genre]", year = "[Year]")
 internal fun gameMeta(placeholderMeta: Boolean): GameMeta? = if (placeholderMeta) PLACEHOLDER_META else null
 
 /**
- * The top screen's page for the highlighted game: its play history ([info]), resume save, achievements and scraped
- * facts ([meta]).
+ * The top screen's page for the highlighted game: its play history ([info]), resume save, achievements, scraped
+ * facts ([meta]) and its stored ScreenScraper info ([scraped], null until read or fetched).
  */
 data class TopDetails(
     val entry: Listed,
@@ -81,6 +82,7 @@ data class TopDetails(
     val resume: ResumeInfo,
     val achievements: DetailsBody,
     val meta: GameMeta?,
+    val scraped: StoredGameInfo? = null,
 )
 
 /** "RPG · 2004 · Game Boy Advance" with scraped facts, else the console's name alone. */
