@@ -746,7 +746,8 @@ class ArtworkControllerTest {
         advanceUntilIdle()
         assertEquals(JobPhase.DONE, rig.controller.state.value.phase)
         assertEquals(ItemStatus.SKIPPED, rig.controller.state.value.items.single().status)
-        assertTrue(rig.http.calls.isEmpty())
+        // Only its info is asked for (it has none stored): no image download.
+        assertTrue(rig.http.calls.all { it.contains("jeuInfos") }, "${rig.http.calls}")
     }
 
     @Test fun fetchGameRunsOneGameInTheCallersCoroutine() = runTest {
@@ -803,7 +804,9 @@ class ArtworkControllerTest {
         val end = rig.controller.state.value
         assertEquals(JobPhase.DONE, end.phase)
         assertEquals(listOf(ItemStatus.SKIPPED, ItemStatus.DONE), end.items.map { it.status })   // Tetris had its art by then
-        assertEquals(1, rig.http.count("romnom=Tetris.gb"))
+        // The single fetch's lookup, then the job's info-only one: that answer had no info, a miss a user's run retries.
+        assertEquals(2, rig.http.count("romnom=Tetris.gb"))
+        assertEquals(4, rig.http.count("https://m/"))   // each game's box and screenshot, once
     }
 
     @Test fun fetchGameWaitsForTheJobInsteadOfFetchingTwice() = runTest {

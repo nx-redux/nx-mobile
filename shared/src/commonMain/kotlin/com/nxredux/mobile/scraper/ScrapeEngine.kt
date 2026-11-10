@@ -150,8 +150,9 @@ class ScrapeEngine(
         }
     }
 
+    private val infoTarget = InfoFiles()
     /** Game info beside each game's art (`.media/info/<name>.json`), or null without [infoFiles]. */
-    val info: GameInfoStore? = infoFiles?.let { GameInfoStore(InfoFiles(), it, infoWork) }
+    val info: GameInfoStore? = infoFiles?.let { GameInfoStore(infoTarget, it, infoWork) }
 
     /** ScreenScraper among [sources] (its account calls and the Android games' lookup), or null. */
     val ss: ScreenScraperSource? = sources.firstNotNullOfOrNull { it as? ScreenScraperSource }
@@ -226,14 +227,17 @@ class ScrapeEngine(
                 }
                 val known = sourcesFor(ref)
                 if (known.isEmpty()) { set(i, ItemStatus.SKIPPED, NO_SOURCE); continue }
-                if (hasArt(ref) && !replace && !wide) { set(i, ItemStatus.SKIPPED, HAS_ART); continue }
+                if (hasArt(ref) && !replace && !wide) { fillInfo(ref, null, stopped, stop, flush); set(i, ItemStatus.SKIPPED, HAS_ART); continue }
                 // A game lacking only its mix, with no source that has mixes, is made one from its files on disk (no
                 // request); one ScreenScraper would be asked waits while it is stopped, as any other.
                 if (known.all { it.id in stopped } && !(mixOnlyLocal(ref, known) && !replace)) { blocked = true; continue }
                 set(i, ItemStatus.SEARCHING)
                 val downloading: suspend () -> Unit = { set(i, ItemStatus.DOWNLOADING) }
-                val result = if (ref.android) scrapeAndroid(ref, stopped, replace, wide, downloading, stop, found, flush) else scrape(ref, known, stopped, replace, wide, listings, downloading, stop, found, flush)
+                var artInfo: InfoResult? = null
+                val onInfo: (InfoResult) -> Unit = { if (artInfo !is InfoResult.Found) artInfo = it }
+                val result = if (ref.android) scrapeAndroid(ref, stopped, replace, wide, downloading, stop, found, flush) else scrape(ref, known, stopped, replace, wide, listings, downloading, stop, found, flush, onInfo)
                 if (result == null) { blocked = true; set(i, ItemStatus.WAITING); continue }   // every source stopped: Resume retries it
+                fillInfo(ref, artInfo, stopped, stop, flush)
                 set(i, result.first, result.second)
             }
             s = current().copy(phase = if (blocked) JobPhase.PAUSED else JobPhase.DONE, pauseReason = if (blocked) ALL_STOPPED else null)
@@ -251,6 +255,30 @@ class ScrapeEngine(
         }
         update(s)
         return s
+    }
+
+    /**
+     * Stores [ref]'s game info after its art step: from the art's own ScreenScraper answer ([fromArt]) when there was
+     * one, else (art already had, or written by other sources) with one info-only lookup when no info is stored. Every
+     * run is one the user started, so a remembered miss is cleared and tried again. A stop or pause of that lookup is
+     * ScreenScraper's as in the art flow ([SourceStop] stops it for the run; [JobPause] pauses the job).
+     */
+    private suspend fun fillInfo(
+        ref: LibraryGameRef, fromArt: InfoResult?, stopped: Set<String>, stop: (ArtSource, SourceStop) -> Unit, flush: suspend () -> Unit,
+    ) {
+        val store = info ?: return
+        val ss = ss ?: return
+        infoTarget.path(ref) ?: return
+        suspend fun keep(r: InfoResult) = when (r) {
+            is InfoResult.Found -> { store.write(ref, StoredGameInfo.of(r.info, r.ssId, ss.now())); store.clearMiss(ref.gamePath) }
+            InfoResult.Missing -> store.markMiss(ref.gamePath)
+            InfoResult.Failed -> Unit
+        }
+        if (fromArt != null) return keep(fromArt)
+        if (!ss.enabled || ss.id in stopped || !ss.knows(ref) || store.read(ref) != null) return
+        store.clearMiss(ref.gamePath)
+        flush()
+        keep(try { ss.info(ref) } catch (e: SourceStop) { stop(ss, e); return })
     }
 
     /** What a Reset delete did: [DELETED], the file was not there ([ABSENT]), or it is still there ([FAILED]). */
@@ -465,9 +493,16 @@ class ScrapeEngine(
         ref: LibraryGameRef, known: List<ArtSource>, stopped: Set<String>, replace: Boolean, wide: Boolean, ls: Listings,
         downloading: suspend () -> Unit, stop: (ArtSource, SourceStop) -> Unit,
         found: suspend (gamePath: String, options: List<ArtOption>) -> Unit, flush: suspend () -> Unit,
+        onInfo: (InfoResult) -> Unit = {},
     ): Pair<ItemStatus, String?>? {
-        /** A source's answer; the job's state is shown first, as the call may take a while. */
-        suspend fun ask(src: ArtSource, slots: Set<ArtSlot>): List<ArtHit> { flush(); return src.find(ref, slots) }
+        /** A source's answer (ScreenScraper's game info from it to [onInfo]); the job's state is shown first, as the call may take a while. */
+        suspend fun ask(src: ArtSource, slots: Set<ArtSlot>): List<ArtHit> {
+            flush()
+            if (src !is ScreenScraperSource) return src.find(ref, slots)
+            val (hits, info) = src.findWithInfo(ref, slots)
+            info?.let(onInfo)
+            return hits
+        }
         val target = guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) }
             ?: return ItemStatus.ERROR to "No place for its art"
         val ex = extras()

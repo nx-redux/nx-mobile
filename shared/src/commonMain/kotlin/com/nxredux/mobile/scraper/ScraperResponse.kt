@@ -36,6 +36,9 @@ object ScraperResponse {
     private fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.takeIf { it.isString }?.content   // JSON null = absent
     private fun JsonElement?.int(): Int? = (this as? JsonPrimitive)?.let { it.intOrNull ?: it.content.trim().toIntOrNull() }
 
+    /** [body] is a JSON object (a `jeuInfos` answer without a game is a not-found, not an unreadable answer). */
+    internal fun isJson(body: String?): Boolean = parse(body) != null
+
     fun parseGame(status: Int, body: String?): GameLookup {
         if (status != 200) return GameLookup.NotFound
         val jeu = parse(body)?.obj("response")?.obj("jeu") ?: return GameLookup.NotFound
