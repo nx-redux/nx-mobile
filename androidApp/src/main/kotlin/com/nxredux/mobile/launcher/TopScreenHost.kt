@@ -22,7 +22,7 @@ import java.lang.ref.WeakReference
  * when another app's task leaves a display. This invisible activity, in a task of its own on that display, starts the
  * app over itself; when it shows again (the app finished, went to the back or crashed) the app has left the top screen:
  * [onChange] brings the menu's top screen back, and it closes. A newer host closes the older one. Something else covering
- * the host (a home on that display) is not seen this way: [recheck] and [release] are the other ways back.
+ * the host (a home on that display) is not seen this way: [recheck], [release] and [reclaim] are the other ways back.
  *
  * The menu's window on that display goes down before the host starts ([start]): over it, the system never shows the
  * translucent host (Samsung DeX left it invisible and never created). A host not created within [HOST_TIMEOUT_MS] is
@@ -146,16 +146,26 @@ class TopScreenHost : Activity() {
         }
 
         /**
+         * Home was pressed while an app opened on the top screen was there: the menu's window comes back over it (the app
+         * stays behind, as under any home). Home only reaches the menu's display, so nothing else would ever free the top
+         * screen. False when nothing held it.
+         */
+        fun reclaim(context: Context): Boolean {
+            if (!active) return false
+            release(context)
+            onChange()
+            return true
+        }
+
+        /**
          * Kids Mode's guard sent an app back while an app opened on the top screen was there: the top screen is taken
          * back, the menu's window over whatever is on that display now (a bounce to the menu covers only the menu's own
          * display) and a [TopScreenCover] in front of it. False when nothing held the top screen.
          */
         fun takeBack(context: Context): Boolean {
-            if (!active) return false
             val display = heldDisplay
-            release(context)
+            if (!reclaim(context)) return false
             TopScreenCover.cover(context, display)
-            onChange()
             return true
         }
 

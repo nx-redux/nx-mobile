@@ -233,8 +233,7 @@ class AppStateTest {
         val launched = mutableListOf<String>()
         val homeRequests = mutableListOf<Boolean>()
         var missing = emptySet<String>()   // ids label() treats as uninstalled
-        var listingFails = false
-        override suspend fun installedApps() = if (listingFails) throw IllegalStateException("package manager died") else apps
+        override suspend fun installedApps() = apps
         override fun label(id: String) = if (id in missing) null else apps.firstOrNull { it.id == id }?.label
         override fun launch(id: String): Boolean { launched += id; return id !in missing }
         override fun isHome() = home
@@ -9539,6 +9538,22 @@ class AppStateTest {
         assertEquals("NX Redux", menu.caption)
     }
 
+    @Test fun an_app_on_the_top_screen_adds_use_top_screen_to_the_main_menus_menu() = runTest {
+        val state = hiddenTabsState(MenuCategory.CONSOLES, data = FakeUserData(recents = listOf(Recent(tetris))))
+        var taken = 0
+        state.takeTopScreen = { taken++ }
+        state.onAppOnTop(true)
+        state.select(0); state.onButton(NxButton.MENU)                        // Continue: Pin, the hidden tab, then Use top screen
+        assertEquals(listOf(ContextKind.PIN, ContextKind.OPEN_CONSOLES, ContextKind.USE_TOP_SCREEN), menuKinds(state))
+        state.onButton(NxButton.B)
+        choose(state, ContextKind.USE_TOP_SCREEN)
+        assertEquals(1, taken)
+        assertNull(assertIs<Screen.Systems>(state.screen.value).menu)
+        state.onAppOnTop(false)
+        state.onButton(NxButton.MENU)
+        assertEquals(listOf(ContextKind.PIN, ContextKind.OPEN_CONSOLES), menuKinds(state))
+    }
+
     @Test fun a_long_press_on_pick_a_game_with_tools_hidden_offers_tools() = runTest {
         val state = hiddenTabsState(MenuCategory.TOOLS)                       // no recents: Home's first item is Pick a game
         val pick = assertIs<Screen.Systems>(state.screen.value).rows.indexOf(MainRow.PickAGame)
@@ -12455,55 +12470,26 @@ class AppStateTest {
         assertFalse(state.toolOnTop.value)
     }
 
-    // Dual screen: the highlighted Apps tile previews the drawer on the top screen; a tap there opens it on that app.
-    // An app added meanwhile sorts before Apps: the menu below still shows Apps highlighted, and B lands on it.
-    @Test fun the_drawer_previews_on_the_top_screen_and_opens_there() = runTest {
+    // Dual screen: highlighting the Apps tile shows nothing of the drawer on the top screen; A opens it there. An app
+    // added meanwhile sorts before Apps: the menu below still shows Apps highlighted, and B lands on it.
+    @Test fun the_drawer_opens_on_the_top_screen_only_with_a() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = state(settings, launcher = FakeLauncher(listOf(alpha, beta)))
         state.load()
         state.onDualMenu(true)
         state.openTools()
-        state.select(state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.SETTINGS }); advanceUntilIdle()
-        assertNull(state.drawerPreview.value)                                 // Apps is not highlighted
         state.select(state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.APPS }); advanceUntilIdle()
-        assertEquals(listOf("a/A", "b/B"), state.drawerPreview.value?.map { it.id })
-        state.openDrawerPreviewApp(1); advanceUntilIdle()
+        assertIs<Screen.Systems>(state.screen.value)
+        assertEquals(TopContent.Backdrop, menuTop(true, state.screen.value, state.secondList.value, state.toolOnTop.value))
+        state.onButton(NxButton.A); advanceUntilIdle()
         assertIs<Screen.ToolApps>(state.screen.value)
-        assertEquals(1, state.selection.value.index)                          // on Beta, as tapped
         assertTrue(state.toolOnTop.value)
-        assertNull(state.drawerPreview.value)
         state.select(0); choose(state, ContextKind.ADD_TO_TOOLS); advanceUntilIdle()   // Alpha into Tools, before Apps
         val (menu, at) = assertNotNull(state.toolUnder())
         assertEquals(ToolKind.APPS, (menu.rows[at.index] as MainRow.Tool).row.kind)
         state.onButton(NxButton.B)
         assertFalse(state.toolOnTop.value)
         assertEquals(ToolKind.APPS, state.screen.value.toolRows()[state.selection.value.index].kind)
-    }
-
-    // A package listing that throws leaves the top screen's drawer preview empty instead of crashing the app.
-    @Test fun a_failing_listing_leaves_the_drawer_preview_empty() = runTest {
-        val launcher = FakeLauncher(listOf(alpha, beta))
-        val state = state(MemorySettings(ContentRef("Home")), launcher = launcher)
-        state.load()
-        launcher.listingFails = true
-        state.onDualMenu(true)
-        state.openTools()
-        state.select(state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.APPS }); advanceUntilIdle()
-        assertNull(state.drawerPreview.value)
-    }
-
-    // An app installed after the preview was read: the tap still lands on the app tapped, not on its old index.
-    @Test fun a_drawer_preview_tap_opens_on_the_app_tapped() = runTest {
-        val launcher = FakeLauncher(listOf(alpha, beta))
-        val state = state(MemorySettings(ContentRef("Home")), launcher = launcher)
-        state.load()
-        state.onDualMenu(true)
-        state.openTools()
-        state.select(state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.APPS }); advanceUntilIdle()
-        launcher.apps = listOf(InstalledApp("0/0", "Aardvark"), alpha, beta)
-        state.openDrawerPreviewApp(1); advanceUntilIdle()                      // Beta in the preview
-        val drawer = assertIs<Screen.ToolApps>(state.screen.value)
-        assertEquals("b/B", drawer.apps[state.selection.value.index].id)
     }
 
     @Test fun the_app_drawer_opens_apps_and_adds_them_to_tools() = runTest {

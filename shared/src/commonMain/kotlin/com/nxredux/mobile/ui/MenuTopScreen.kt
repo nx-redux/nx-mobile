@@ -48,8 +48,7 @@ import org.jetbrains.compose.resources.painterResource
  * The top screen while the main menu is on the second display ([AppState.dualMenu]): the same [AppState] as [App], drawn
  * by [DualMenu.top]. A [TopContent.Preview] of the highlighted console's or collection's games (unfocused: no hints, a
  * tap opens the list there, a swipe only scrolls); the [TopContent.GameList] itself while it has focus, with its hints,
- * every overlay and the Netplay sheet (the modals follow the focused screen); the highlighted Apps tile's drawer as a
- * [TopContent.AppsPreview] (a tap opens it there on that app); a [TopContent.Tool] opened from the menu, with the focus,
+ * every overlay and the Netplay sheet (the modals follow the focused screen); a [TopContent.Tool] opened from the menu, with the focus,
  * its loading, dialogs and notices; else the [TopContent.Backdrop]. It has the
  * theme and the launcher locals [App] has ([MenuLocals]), from the same settings; the image loader is App's (process-wide).
  * There is no pad here, so the footer follows a connected controller alone. [inSkin]: drawn in the menu skin's top glass
@@ -59,7 +58,6 @@ import org.jetbrains.compose.resources.painterResource
 fun MenuTopScreen(state: AppState, inSkin: Boolean = false, keyboard: Boolean = false) {
     val screen by state.screen.collectAsState()
     val secondList by state.secondList.collectAsState()
-    val drawerPreview by state.drawerPreview.collectAsState()
     val toolOnTop by state.toolOnTop.collectAsState()
     val dual by state.dualMenu.collectAsState()
     val selection = state.selection.collectAsState()
@@ -79,9 +77,8 @@ fun MenuTopScreen(state: AppState, inSkin: Boolean = false, keyboard: Boolean = 
             ) {
                 // No HandheldShell here: the screen's own shape and size, as the shell gives App's pages.
                 CompositionLocalProvider(LocalPortrait provides (maxHeight > maxWidth), LocalWindowSize provides DpSize(maxWidth, maxHeight)) {
-                    when (val top = menuTop(dual, screen, secondList, drawerPreview, toolOnTop)) {
+                    when (val top = menuTop(dual, screen, secondList, toolOnTop)) {
                         is TopContent.Preview -> PreviewList(state, top.list, gameInfo)
-                        is TopContent.AppsPreview -> AppsPreview(state, top.apps)
                         TopContent.Tool -> Box(Modifier.fillMaxSize()) {
                             // Laid out here: this window decides whether Settings splits (App reports the bottom's otherwise).
                             val split = settingsSplit(LocalWindowSize.current)
@@ -115,23 +112,8 @@ fun MenuTopScreen(state: AppState, inSkin: Boolean = false, keyboard: Boolean = 
 }
 
 /** [DualMenu.top] while the menu is on the second display ([dual]); else the backdrop, never a list. */
-internal fun menuTop(dual: Boolean, screen: Screen, preview: SecondList?, apps: List<ToolAppRow>? = null, tool: Boolean = false): TopContent =
-    if (dual) DualMenu.top(screen, preview, apps, tool) else TopContent.Backdrop
-
-/**
- * The highlighted Apps tile's drawer ([apps]), unfocused: no hints and no highlight until a swipe-free tap, which opens
- * the drawer on the top screen on that app ([AppState.openDrawerPreviewApp]).
- */
-@Composable
-private fun AppsPreview(state: AppState, apps: List<ToolAppRow>) {
-    val page = remember(apps) { Screen.ToolApps(apps, AppPick.TOOLS) }
-    val selection = remember(apps) { mutableStateOf(ListSelection(-1, apps.size)) }
-    val live = remember { mutableStateOf(true) }
-    PageBackground(state, page, state.styleOf(page), selection, live)
-    CompositionLocalProvider(LocalNxTapOpens provides { true }) {
-        ToolAppsScreen(page, -1, onSelect = {}, onOpen = state::openDrawerPreviewApp, onColumns = {}, hints = false)
-    }
-}
+internal fun menuTop(dual: Boolean, screen: Screen, preview: SecondList?, tool: Boolean = false): TopContent =
+    if (dual) DualMenu.top(screen, preview, tool) else TopContent.Backdrop
 
 /**
  * The highlighted console's or collection's games ([list]) in the game list layout (Settings → Layouts), over a game list's

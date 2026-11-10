@@ -59,12 +59,14 @@ object SecondScreenRule {
 /**
  * The display a second-screen Presentation should go to: [current] is [SecondScreenRule.pick]'s for a window on
  * [hostDisplay] (the display the game is on now), kept up to date between [start] and [stop]; a move of that window to
- * another display calls [refresh]. Every display's facts are logged once, for device reports.
+ * another display calls [refresh]. A display [taken] by something the player keeps there is never picked. Every
+ * display's facts are logged once, for device reports.
  */
 class SecondScreens(
     context: Context,
     private val debug: Boolean = BuildConfig.DEBUG,
     private val hostDisplay: () -> Int = { Display.DEFAULT_DISPLAY },
+    private val taken: (Int) -> Boolean = { false },
 ) {
     private val app = context.applicationContext
     private val manager = app.getSystemService(DisplayManager::class.java)
@@ -122,7 +124,7 @@ class SecondScreens(
             if (logged.add(f.id)) NxLog.i(TAG, "display $f qualifies=${SecondScreenRule.qualifies(f, debug)}")
         }
         val id = SecondScreenRule.pick(shown.map { facts.getValue(it) }, default?.let { facts.getValue(it) }, host, debug)
-        _current.value = all.firstOrNull { it.displayId == id }
+        _current.value = all.firstOrNull { it.displayId == id && !taken(id) }
     }
 
     private companion object {

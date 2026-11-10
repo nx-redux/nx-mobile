@@ -8,7 +8,7 @@ import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.settings.MenuCategory
 
-enum class ContextKind { PIN, UNPIN, HIDE, UNHIDE, RENAME, ADD_TO_COLLECTION, GAME_SETTINGS, REMOVE_FROM_COLLECTION, REMOVE_RECENT, EMULATOR, CONSOLE, FETCH_ART, CHANGE_ART, PIN_TOOL, UNPIN_TOOL, ADD_TO_TOOLS, REMOVE_FROM_TOOLS, RENAME_COLLECTION, DELETE_COLLECTION, NETPLAY, PLAY_FROM_START, OPEN_CONSOLES, OPEN_COLLECTIONS, OPEN_TOOLS, ACHIEVEMENTS }
+enum class ContextKind { PIN, UNPIN, HIDE, UNHIDE, RENAME, ADD_TO_COLLECTION, GAME_SETTINGS, REMOVE_FROM_COLLECTION, REMOVE_RECENT, EMULATOR, CONSOLE, FETCH_ART, CHANGE_ART, PIN_TOOL, UNPIN_TOOL, ADD_TO_TOOLS, REMOVE_FROM_TOOLS, RENAME_COLLECTION, DELETE_COLLECTION, NETPLAY, PLAY_FROM_START, OPEN_CONSOLES, OPEN_COLLECTIONS, OPEN_TOOLS, ACHIEVEMENTS, USE_TOP_SCREEN }
 
 data class ContextItem(val kind: ContextKind, val label: String)
 
@@ -138,7 +138,7 @@ object ContextMenus {
      */
     private val kidsPlayKinds: Set<ContextKind> = setOf(
         ContextKind.PLAY_FROM_START, ContextKind.NETPLAY, ContextKind.PIN, ContextKind.UNPIN, ContextKind.REMOVE_RECENT,
-        ContextKind.ACHIEVEMENTS, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS,
+        ContextKind.ACHIEVEMENTS, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.USE_TOP_SCREEN,
     )
 
     /** [items] as a kid may see them ([kidsPlayKinds]). */
