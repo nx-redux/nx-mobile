@@ -430,6 +430,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 emulatorConfigs = AndroidEmulatorConfigStore { DataRoot.of(this) },
                 coreDefaults = { id -> if (id == NdsRenderer.CORE_ID_MELONDSDS) NdsRenderer.defaults(glesVersion) else emptyMap() },
                 gameTime = LazyGameTimeData { withContext(Dispatchers.IO) { GameTimeService.data(this@MainActivity) } },
+                topFacts = AndroidTopFacts(this, AndroidRomsSources.of(this)),
+                placeholderMeta = BuildConfig.DEBUG,
                 now = System::currentTimeMillis,
                 // The process's one controller; each AppState becomes its host (index writes stay in AppState).
                 artwork = { host -> artworkHost = host; ArtworkService.controller(this, host) },

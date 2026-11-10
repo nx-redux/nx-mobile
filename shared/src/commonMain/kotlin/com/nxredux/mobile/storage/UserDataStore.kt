@@ -15,7 +15,12 @@ interface UserDataStore {
     suspend fun resumeInfo(tag: String, fileName: String): ResumeInfo
     /** The hidden (auto) save state's frame, `<rom.ext>.9.bmp`, as a coil-loadable URI: what Save & Quit leaves; null when none. */
     suspend fun hiddenStateShot(tag: String, fileName: String): String? = null
+    /** The game's save-state pictures (slots 0-7 and the hidden auto slot), newest first; empty when none. */
+    suspend fun stateShots(tag: String, fileName: String): List<StateShot> = emptyList()
 }
+
+/** One save state's picture: [uri] is coil-loadable, [savedAt] the picture's modified time (epoch ms). */
+data class StateShot(val slot: Int, val uri: String, val savedAt: Long)
 
 /** No persistence (tests / previews). */
 object NoUserData : UserDataStore {

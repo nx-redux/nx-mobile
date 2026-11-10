@@ -7975,10 +7975,19 @@ class AppStateTest {
         val data = object : GameTimeData by NoGameTime { override suspend fun byPath() = mapOf(path to total) }
         val state = state(MemorySettings(ContentRef("Home")), data = FakeUserData(pins = listOf(Shortcut(mario, "Mario"))), gameTime = data)
         state.load(); advanceUntilIdle()
-        assertEquals(GameInfo(123L, 7_200_000, null), state.gameInfo.value[path])
+        assertEquals(GameInfo(123L, 7_200_000, null, 3L), state.gameInfo.value[path])
         total = total.copy(totalMs = 9_000_000, plays = 4, lastPlayedAt = 456L)
         state.selectHome { it is MainRow.Pin }; state.onButton(NxButton.A); advanceUntilIdle()   // the pin launches Mario: recorded
-        assertEquals(GameInfo(456L, 9_000_000, null), state.gameInfo.value[path])
+        assertEquals(GameInfo(456L, 9_000_000, null, 4L), state.gameInfo.value[path])
+    }
+
+    @Test fun game_info_carries_play_counts() = runTest {
+        val path = mario
+        val total = GameTotal(1, "Mario", "GBA", path, totalMs = 1_000, plays = 23, lastPlayedAt = 1L)
+        val data = object : GameTimeData by NoGameTime { override suspend fun byPath() = mapOf(path to total) }
+        val state = state(MemorySettings(ContentRef("Home")), gameTime = data)
+        state.load(); advanceUntilIdle()
+        assertEquals(23L, state.gameInfo.value[path]?.plays)
     }
 
     @Test fun a_game_info_refresh_asked_for_during_one_runs_once_after_it_not_in_parallel() = runTest {
@@ -8005,7 +8014,7 @@ class AppStateTest {
         gate.complete(Unit); advanceUntilIdle()
         assertEquals(2, calls)                                           // one re-run for both asks, not lost
         assertEquals(1, maxActive)
-        assertEquals(GameInfo(2L, 2_000, null), state.gameInfo.value[path])   // the re-run's (newer) answer
+        assertEquals(GameInfo(2L, 2_000, null, 1L), state.gameInfo.value[path])   // the re-run's (newer) answer
     }
 
     @Test fun y_remove_in_the_switcher_moves_continue_past_the_game_on_close() = runTest {

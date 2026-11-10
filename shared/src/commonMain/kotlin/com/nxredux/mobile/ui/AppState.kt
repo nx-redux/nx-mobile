@@ -231,6 +231,10 @@ class AppDeps(
     val coreDefaults: (String) -> Map<String, String> = { emptyMap() },
     /** Tools -> Game Tracker's data (null on a platform without the tracker: no Tools row). */
     val gameTime: GameTimeData? = null,
+    /** The top screen's details page reads a game's file and BIOS facts here (null on a platform without them). */
+    val topFacts: TopFactsPlatform? = null,
+    /** Debug builds fill the details page's missing facts with placeholders. */
+    val placeholderMeta: Boolean = false,
     /** The wall clock (epoch ms) that stamps a successful scan for Settings -> Library's "Last scan"; null records none. */
     val now: (() -> Long)? = null,
     /**
@@ -2874,7 +2878,7 @@ class AppState(
                 ra.followRaPanel(force = true)   // the panel's game may have data now (a download just ended)
                 val times = read?.also { lastTimes = it } ?: lastTimes
                 val raByPath = raRead?.also { lastRa = it } ?: lastRa
-                _gameInfo.value = (times.keys + raByPath.keys).associateWith { p -> GameInfo(times[p]?.lastPlayedAt, times[p]?.totalMs, raByPath[p]) }
+                _gameInfo.value = (times.keys + raByPath.keys).associateWith { p -> GameInfo(times[p]?.lastPlayedAt, times[p]?.totalMs, raByPath[p], times[p]?.plays) }
                 if (read != null) gameInfoRead = true
                 rebuildHomeTab()   // the shelves follow play time (Not started, Pick up again)
             } while (gameInfoDirty)

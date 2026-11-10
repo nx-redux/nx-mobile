@@ -10,6 +10,7 @@ import com.nxredux.mobile.storage.Recents
 import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.storage.Shortcut
 import com.nxredux.mobile.storage.Shortcuts
+import com.nxredux.mobile.storage.StateShot
 import com.nxredux.mobile.storage.UserDataStore
 import com.swordfish.libretrodroid.NxLog
 import kotlinx.coroutines.Dispatchers
@@ -66,5 +67,16 @@ class AndroidUserDataStore(context: Context) : UserDataStore {
     override suspend fun hiddenStateShot(tag: String, fileName: String): String? = withContext(Dispatchers.IO) {
         val bmp = File(root, NxPaths(tag, "", fileName).thumb(NxPaths.AUTO_SLOT)).takeIf { it.exists() }
         bmp?.let { FileRefs.versioned(it.absolutePath, it.contentStamp()) }
+    }
+
+    override suspend fun stateShots(tag: String, fileName: String): List<StateShot> = withContext(Dispatchers.IO) {
+        val paths = NxPaths(tag, "", fileName)
+        val root = this@AndroidUserDataStore.root
+        // Slot 8 has no screenshot in minarch's scheme; the auto slot does.
+        (0..7).plus(NxPaths.AUTO_SLOT).mapNotNull { slot ->
+            runCatching {
+                File(root, paths.thumb(slot)).takeIf { it.isFile }?.let { StateShot(slot, FileRefs.versioned(it.absolutePath, it.contentStamp()), it.lastModified()) }
+            }.getOrNull()
+        }.sortedByDescending { it.savedAt }
     }
 }

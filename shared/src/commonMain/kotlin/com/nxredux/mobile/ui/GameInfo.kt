@@ -6,7 +6,7 @@ import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.path
 
 /** What the menu shows under a selected game: last played and total time (game time), and RetroAchievements progress. */
-data class GameInfo(val lastPlayedAt: Long?, val totalMs: Long?, val ra: RaProgress?)
+data class GameInfo(val lastPlayedAt: Long?, val totalMs: Long?, val ra: RaProgress?, val plays: Long? = null)
 
 private const val DAY_MS = 86_400_000L
 
