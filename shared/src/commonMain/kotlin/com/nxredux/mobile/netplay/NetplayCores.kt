@@ -5,7 +5,7 @@ import com.nxredux.mobile.runner.CoreRegistry
 /**
  * Which tags have netplay and with which cores. The first core of a tag is the handheld pak's (nx-redux main), this
  * device's netplay default, which is also the tag's single-player core here (MD, SMS, GG, SG1000 and SEGACD: picodrive;
- * GPGX: genesis_plus_gx). GB, GBC, GBA and MGBA are link sessions: no input lockstep, each player on their own save.
+ * GPGX: genesis_plus_gx). GB, GBC, GBA, MGBA and 3DS are link sessions: no input lockstep, each player on their own save.
  * GBA and MGBA run either core (gpSP and mGBA keep the same raw flash save, so either reads the other folder's); mGBA
  * leaves the USB cable only for a game with a Wi-Fi link mode ([wifiOk]). Core versions are never compared (not on the
  * wire). The `wl` arguments are the games' link mode tokens ([GbaWifiLink]); null when unknown or not sent.
@@ -24,6 +24,7 @@ object NetplayCores {
         "GB" to listOf("gambatte"), "GBC" to listOf("gambatte"),   // GB link: gambatte's own network serial (TCP 56400)
         // GBA link: the netpacket interface over TCP 55437. Both folders run either core (the same raw flash save).
         "GBA" to listOf("gpsp", "mgba"), "MGBA" to listOf("mgba", "gpsp"),
+        "3DS" to listOf("azahar"),   // 3DS link: local wireless through Azahar's own room (UDP 24872), phone to phone
     )
 
     fun supported(tag: String): Boolean = CoreRegistry.handheldTag(tag) in table
@@ -59,7 +60,10 @@ object NetplayCores {
     fun name(core: String): String = CoreRegistry.forId(core)?.name ?: core
 
     private val LINK: Map<String, NetplayLinkKind> =
-        mapOf("gambatte" to NetplayLinkKind.GBLINK, "gpsp" to NetplayLinkKind.NETPACKET, "mgba" to NetplayLinkKind.NETPACKET)
+        mapOf(
+            "gambatte" to NetplayLinkKind.GBLINK, "gpsp" to NetplayLinkKind.NETPACKET, "mgba" to NetplayLinkKind.NETPACKET,
+            "azahar" to NetplayLinkKind.N3DSLINK,
+        )
 
     /** How [core]'s link session talks; null for a lockstep core. */
     fun link(core: String): NetplayLinkKind? = LINK[core]
@@ -138,5 +142,8 @@ object NetplayCores {
 
 }
 
-/** A link session's backend: gambatte runs its own socket; gpSP and mGBA use the runner's GBA link. */
-enum class NetplayLinkKind { GBLINK, NETPACKET }
+/**
+ * A link session's backend: gambatte runs its own socket; gpSP and mGBA use the runner's GBA link; Azahar hosts or joins
+ * its own multiplayer room, which carries the games' local wireless.
+ */
+enum class NetplayLinkKind { GBLINK, NETPACKET, N3DSLINK }

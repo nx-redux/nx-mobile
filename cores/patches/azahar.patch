@@ -14,23 +14,34 @@ index f75bfe5..8ddc633 100644
          string(REPLACE "_" "_1" KEY_JNI_ESCAPED ${KEY})
          set(SETTING_KEY_LIST "${SETTING_KEY_LIST}\n\"${KEY}\",")
 diff --git a/src/citra_libretro/CMakeLists.txt b/src/citra_libretro/CMakeLists.txt
-index e28f994..5a589f3 100644
+index e28f994..20b645f 100644
 --- a/src/citra_libretro/CMakeLists.txt
 +++ b/src/citra_libretro/CMakeLists.txt
-@@ -13,7 +13,10 @@ add_library(citra_libretro_common OBJECT
+@@ -13,7 +13,12 @@ add_library(citra_libretro_common OBJECT
          environment.cpp
          environment.h
          core_settings.cpp
 -        core_settings.h)
 +        core_settings.h
++        room_link.cpp
++        room_link.h
 +        libretro_views.h
 +        video_views.cpp
 +        video_views.h)
  
  target_compile_definitions(citra_libretro_common PRIVATE HAVE_LIBRETRO)
  target_link_libraries(citra_libretro_common PRIVATE citra_common citra_core video_core libretro tsl::robin_map)
+@@ -49,7 +54,7 @@ target_compile_definitions(video_core PRIVATE HAVE_LIBRETRO)
+ target_compile_definitions(audio_core PRIVATE HAVE_LIBRETRO)
+ target_compile_definitions(input_common PRIVATE HAVE_LIBRETRO)
+ 
+-target_link_libraries(citra_libretro PRIVATE citra_common citra_core)
++target_link_libraries(citra_libretro PRIVATE citra_common citra_core network)
+ target_link_libraries(citra_libretro PRIVATE Boost::boost dds-ktx libretro tsl::robin_map)
+ if(ENABLE_VULKAN)
+   target_link_libraries(citra_libretro PRIVATE sirit vulkan-headers vma)
 diff --git a/src/citra_libretro/citra_libretro.cpp b/src/citra_libretro/citra_libretro.cpp
-index 8a65f9d..4be9067 100644
+index 8a65f9d..827bec9 100644
 --- a/src/citra_libretro/citra_libretro.cpp
 +++ b/src/citra_libretro/citra_libretro.cpp
 @@ -2,6 +2,7 @@
@@ -41,15 +52,16 @@ index 8a65f9d..4be9067 100644
  #include <list>
  #include <numeric>
  #include <vector>
-@@ -32,6 +33,7 @@
+@@ -32,6 +33,8 @@
  #include "citra_libretro/core_settings.h"
  #include "citra_libretro/environment.h"
  #include "citra_libretro/input/input_factory.h"
++#include "citra_libretro/room_link.h"
 +#include "citra_libretro/video_views.h"
  
  #include "common/arch.h"
  #if CITRA_ARCH(x86_64)
-@@ -63,6 +65,14 @@ public:
+@@ -63,6 +66,14 @@ public:
      bool game_loaded = false;
      bool first_run_loop = true;
      struct retro_hw_render_callback hw_render{};
@@ -64,7 +76,15 @@ index 8a65f9d..4be9067 100644
  };
  
  CitraLibRetro* emu_instance;
-@@ -211,6 +221,73 @@ static void UpdateSettings() {
+@@ -94,6 +105,7 @@ void retro_deinit() {
+     if (Core::System::GetInstance().IsPoweredOn()) {
+         Core::System::GetInstance().Shutdown();
+     }
++    LibRetro::RoomLink::Stop();
+ 
+     LibRetro::Input::Shutdown();
+ 
+@@ -211,6 +223,73 @@ static void UpdateSettings() {
      Core::System::GetInstance().ApplySettings();
  }
  
@@ -138,7 +158,7 @@ index 8a65f9d..4be9067 100644
  /**
   * libretro callback; Called every game tick.
   */
-@@ -223,9 +300,16 @@ void retro_run() {
+@@ -223,9 +302,18 @@ void retro_run() {
          return;
      }
  
@@ -146,8 +166,10 @@ index 8a65f9d..4be9067 100644
 +    static bool screens_swapped = false;
 +
      // Check to see if we actually have any config updates to process.
++    LibRetro::RoomLink::Poll();
      if (LibRetro::HasUpdatedConfig()) {
          LibRetro::ParseCoreOptions();
++        LibRetro::RoomLink::OnOptionsChanged();
 +        // nx-mobile 2026-10-20: re-reading the options resets swap_screen to citra_swap_screen; keep
 +        // a swap made with the swap button (toggled, or held right now).
 +        if (LibRetro::settings.swap_screen_mode == "Toggle" ? screens_swapped : screen_swap_button_state)
@@ -155,7 +177,7 @@ index 8a65f9d..4be9067 100644
          Core::System::GetInstance().ApplySettings();
          emu_instance->emu_window->UpdateLayout();
      }
-@@ -237,8 +321,6 @@ void retro_run() {
+@@ -237,8 +325,6 @@ void retro_run() {
      }
  
      // Check if the screen swap button is pressed
@@ -164,7 +186,7 @@ index 8a65f9d..4be9067 100644
      bool screen_swap_btn =
          !!LibRetro::CheckInput(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3);
      if (screen_swap_btn != screen_swap_button_state) {
-@@ -269,6 +351,8 @@ void retro_run() {
+@@ -269,6 +355,8 @@ void retro_run() {
          screen_swap_button_state = screen_swap_btn;
      }
  
@@ -173,10 +195,20 @@ index 8a65f9d..4be9067 100644
  #ifdef ENABLE_OPENGL
      if (Settings::values.graphics_api.GetValue() == Settings::GraphicsAPI::OpenGL) {
          // We can't assume that the frontend has been nice and preserved all OpenGL settings. Reset.
-@@ -635,6 +719,13 @@ bool retro_load_game(const struct retro_game_info* info) {
+@@ -513,6 +601,8 @@ bool retro_load_game(const struct retro_game_info* info) {
+ #endif
+ 
+     UpdateSettings();
++    // The room member has to exist before the system loads: NWM_UDS binds to it once, at boot.
++    LibRetro::RoomLink::Start();
+ 
+     // If using HW rendering, don't actually load the game here. azahar wants
+     // the graphics context ready and available before calling System::Load.
+@@ -635,6 +725,14 @@ bool retro_load_game(const struct retro_game_info* info) {
  void retro_unload_game() {
      LOG_DEBUG(Frontend, "Unloading game...");
      Core::System::GetInstance().Shutdown();
++    LibRetro::RoomLink::Stop();
 +    // The mode outlives retro_deinit() while the core stays loaded.
 +    LibRetro::VideoViews::SetCurrentMode({});
 +    emu_instance->views_status = ~0u;
@@ -940,6 +972,245 @@ index 0000000..e160fc7
 +};
 +
 +#endif
+diff --git a/src/citra_libretro/room_link.cpp b/src/citra_libretro/room_link.cpp
+new file mode 100644
+index 0000000..9069bd5
+--- /dev/null
++++ b/src/citra_libretro/room_link.cpp
+@@ -0,0 +1,205 @@
++// Copyright Citra Emulator Project / Azahar Emulator Project
++// Licensed under GPLv2 or any later version
++// Refer to the license.txt file included.
++
++#include <atomic>
++#include <chrono>
++#include <deque>
++#include <memory>
++#include <mutex>
++#include <string>
++#include <thread>
++
++#include "citra_libretro/environment.h"
++#include "citra_libretro/room_link.h"
++#include "common/common_types.h"
++#include "common/logging/log.h"
++#include "network/network.h"
++#include "network/room.h"
++#include "network/room_member.h"
++#include "network/verify_user.h"
++
++namespace LibRetro::RoomLink {
++
++namespace {
++
++using Network::RoomMember;
++
++// The frontend sets these for one launch; they are not declared core options.
++constexpr char MODE_KEY[] = "nx_3ds_link";
++constexpr char IP_KEY[] = "nx_3ds_link_ip";
++constexpr char PORT_KEY[] = "nx_3ds_link_port";
++constexpr char NAME_KEY[] = "nx_3ds_link_name";
++
++constexpr u32 MAX_PLAYERS = 8;
++// The joiner's game can be up before the host's room is: keep knocking for about half a minute.
++constexpr int JOIN_ATTEMPTS = 30;
++
++bool network_up = false;
++bool active = false;
++std::thread worker;
++std::atomic<bool> cancel{false};
++std::atomic<bool> refused{false};
++std::atomic<bool> joined_once{false};
++RoomMember::CallbackHandle<RoomMember::State> state_handle;
++RoomMember::CallbackHandle<RoomMember::Error> error_handle;
++
++std::mutex notice_mutex;
++std::deque<std::string> notices;
++
++void Notice(std::string text) {
++    LOG_INFO(Frontend, "3DS link: {}", text);
++    std::scoped_lock lock(notice_mutex);
++    notices.push_back(std::move(text));
++}
++
++const char* Reason(RoomMember::Error error) {
++    switch (error) {
++    case RoomMember::Error::NameCollision:
++        return "that player name is already in the room";
++    case RoomMember::Error::MacCollision:
++    case RoomMember::Error::ConsoleIdCollision:
++        return "this console is already in the room";
++    case RoomMember::Error::WrongVersion:
++        return "the two devices run different versions";
++    case RoomMember::Error::RoomIsFull:
++        return "the room is full";
++    default:
++        return "the host refused the connection";
++    }
++}
++
++bool Sleep(int ms) {
++    for (int waited = 0; waited < ms && !cancel; waited += 50)
++        std::this_thread::sleep_for(std::chrono::milliseconds(50));
++    return !cancel;
++}
++
++void JoinLoop(std::string name, std::string ip, u16 port) {
++    auto member = Network::GetRoomMember().lock();
++    if (!member)
++        return;
++    for (int attempt = 0; attempt < JOIN_ATTEMPTS && !cancel && !refused; ++attempt) {
++        // The console id only has to differ between the room's members, as the name does.
++        member->Join(name, name, ip.c_str(), port);
++        // Connected: the room's answer to the join request arrives on the member's own thread.
++        for (int i = 0; i < 100 && !cancel && member->GetState() == RoomMember::State::Joining; ++i)
++            std::this_thread::sleep_for(std::chrono::milliseconds(50));
++        if (member->IsConnected() || !Sleep(1000))
++            return;
++    }
++    if (!cancel && !refused)
++        Notice("Local wireless: could not reach the host");
++}
++
++void StopWorker() {
++    cancel = true;
++    if (worker.joinable())
++        worker.join();
++    cancel = false;
++}
++
++void LeaveRoom() {
++    StopWorker();
++    if (auto member = Network::GetRoomMember().lock()) {
++        // Both callbacks would report this leave as a lost connection.
++        if (state_handle)
++            member->Unbind(state_handle);
++        if (error_handle)
++            member->Unbind(error_handle);
++        state_handle.reset();
++        error_handle.reset();
++        if (member->GetState() != RoomMember::State::Idle &&
++            member->GetState() != RoomMember::State::Uninitialized)
++            member->Leave();
++    }
++    if (auto room = Network::GetRoom().lock()) {
++        if (room->GetState() == Network::Room::State::Open)
++            room->Destroy();
++    }
++    active = false;
++}
++
++} // namespace
++
++void Start() {
++    const std::string mode = FetchVariable(MODE_KEY, "off");
++    if (active || (mode != "host" && mode != "join"))
++        return;
++    const bool host = mode == "host";
++    const std::string ip = host ? "127.0.0.1" : FetchVariable(IP_KEY, "");
++    const std::string name = FetchVariable(NAME_KEY, host ? "Host" : "Player");
++    u16 port = Network::DefaultRoomPort;
++    try {
++        port = static_cast<u16>(std::stoi(FetchVariable(PORT_KEY, "")));
++    } catch (...) {
++    }
++    if (ip.empty()) {
++        Notice("Local wireless: no host address");
++        return;
++    }
++    if (!network_up && !Network::Init()) {
++        Notice("Local wireless: the network could not start");
++        return;
++    }
++    network_up = true;
++
++    auto member = Network::GetRoomMember().lock();
++    auto room = Network::GetRoom().lock();
++    if (!member || !room)
++        return;
++    if (host && !room->Create("NX Redux", "", "", port, "", MAX_PLAYERS, name, "", 0,
++                              std::make_unique<Network::VerifyUser::NullBackend>(), {})) {
++        Notice("Local wireless: the room could not open");
++        return;
++    }
++
++    refused = false;
++    joined_once = false;
++    state_handle = member->BindOnStateChanged([host](const RoomMember::State& state) {
++        if (state == RoomMember::State::Joined || state == RoomMember::State::Moderator) {
++            joined_once = true;
++            Notice(host ? "Local wireless: room open" : "Local wireless: connected to the host");
++        }
++    });
++    error_handle = member->BindOnError([](const RoomMember::Error& error) {
++        if (error == RoomMember::Error::CouldNotConnect)
++            return; // the join loop tries again
++        if (error == RoomMember::Error::LostConnection && joined_once) {
++            Notice("Local wireless: connection lost");
++            return;
++        }
++        refused = true;
++        Notice(std::string("Local wireless: ") + Reason(error));
++    });
++
++    active = true;
++    worker = std::thread(JoinLoop, name, ip, port);
++}
++
++void Poll() {
++    std::deque<std::string> pending;
++    {
++        std::scoped_lock lock(notice_mutex);
++        pending.swap(notices);
++    }
++    for (const auto& text : pending)
++        DisplayMessage(text.c_str());
++}
++
++void OnOptionsChanged() {
++    if (active && FetchVariable(MODE_KEY, "off") == "off") {
++        LeaveRoom();
++        LOG_INFO(Frontend, "3DS link: left the room");
++    }
++}
++
++void Stop() {
++    if (!network_up)
++        return;
++    LeaveRoom();
++    Network::Shutdown();
++    network_up = false;
++}
++
++} // namespace LibRetro::RoomLink
+diff --git a/src/citra_libretro/room_link.h b/src/citra_libretro/room_link.h
+new file mode 100644
+index 0000000..42b389d
+--- /dev/null
++++ b/src/citra_libretro/room_link.h
+@@ -0,0 +1,22 @@
++// Copyright Citra Emulator Project / Azahar Emulator Project
++// Licensed under GPLv2 or any later version
++// Refer to the license.txt file included.
++
++#pragma once
++
++namespace LibRetro::RoomLink {
++
++/// Reads the link variables and, for a host or a joiner, brings the multiplayer room up. Call
++/// before the system loads: NWM_UDS binds to the room member when it is constructed.
++void Start();
++
++/// Shows pending link notices; call once a frame.
++void Poll();
++
++/// Re-reads the link mode; leaves the room when the frontend turned it off.
++void OnOptionsChanged();
++
++/// Leaves the room and shuts the network down. Call after the system has shut down.
++void Stop();
++
++} // namespace LibRetro::RoomLink
 diff --git a/src/citra_libretro/video_views.cpp b/src/citra_libretro/video_views.cpp
 new file mode 100644
 index 0000000..8f831b1
@@ -1301,7 +1572,7 @@ index 003b3fd..b8b7ee4 100644
  };
  
 diff --git a/src/core/hle/service/nwm/nwm_uds.cpp b/src/core/hle/service/nwm/nwm_uds.cpp
-index e602bd3..b76b22c 100644
+index e602bd3..084c5a1 100644
 --- a/src/core/hle/service/nwm/nwm_uds.cpp
 +++ b/src/core/hle/service/nwm/nwm_uds.cpp
 @@ -1735,7 +1735,13 @@ NWM_UDS::NWM_UDS(Core::System& system) : ServiceFramework("nwm::UDS"), system(sy
@@ -1309,8 +1580,8 @@ index e602bd3..b76b22c 100644
              [this](const Network::WifiPacket& packet) { OnWifiPacketReceived(packet); });
      } else {
 +#ifdef HAVE_LIBRETRO
-+        // nx-mobile 2026-10-14: the libretro core has no multiplayer rooms (Network::Init is the
-+        // Qt/Android frontends'), so no room member is the expected state here, not an error.
++        // The libretro core brings the room network up only for a link session
++        // (citra_libretro/room_link.cpp), so no room member is the expected state otherwise.
 +        LOG_INFO(Service_NWM, "No multiplayer room member (libretro): local wireless unavailable");
 +#else
          LOG_ERROR(Service_NWM, "Network isn't initalized");

@@ -20,6 +20,18 @@ object NetplayLinkOptions {
 
     fun gbIpKey(digit: Int) = "gambatte_gb_link_network_server_ip_$digit"
 
+    /** Azahar's room link: host, join or off; the core reads these at load, and the mode again on a variable update. */
+    const val N3DS_MODE = "nx_3ds_link"
+    const val N3DS_IP = "nx_3ds_link_ip"
+    const val N3DS_PORT_KEY = "nx_3ds_link_port"
+    const val N3DS_NAME = "nx_3ds_link_name"
+    const val N3DS_HOST = "host"
+    const val N3DS_JOIN = "join"
+    /** Leave in a 3DS link session: the core leaves the room and the game plays on. */
+    const val N3DS_OFF = "off"
+    /** Azahar's default room port. */
+    const val N3DS_PORT = 24872
+
     /**
      * gbalink_serial_option for gpSP: a [mixed] session (the other side runs mGBA) runs the game's own mode whatever is
      * pinned (`auto`, `auto_cable` over USB). Otherwise over USB `auto` is `auto_cable` (real cable unless the game has
@@ -121,6 +133,18 @@ object NetplayLinkOptions {
                 "gpsp" -> mapOf(GPSP_SERIAL to gpspSerial(mode, session.overUsb, session.mixed))
                 "mgba" -> mapOf(MGBA_LINK to mgbaMode(mode, session.overUsb, session.peerWl != null, session.mixed))
                 else -> emptyMap()
+            }
+        }
+        // The room turns away a second member with the same name, so each role has its own.
+        NetplayLinkKind.N3DSLINK -> buildMap {
+            put(N3DS_PORT_KEY, N3DS_PORT.toString())
+            if (session.role == NetplayRole.HOST) {
+                put(N3DS_MODE, N3DS_HOST)
+                put(N3DS_NAME, "Player 1")
+            } else {
+                put(N3DS_MODE, N3DS_JOIN)
+                put(N3DS_NAME, "Player 2")
+                put(N3DS_IP, session.peerIp)
             }
         }
         null -> emptyMap()

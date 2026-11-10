@@ -232,7 +232,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
     /**
      * netplay: starts this screen's session once the first frame is up ([run] set first, so onDestroy shuts down
      * what started). A GBA link's engine started before the load ([connectLink]); its status ticks from now. GB link has
-     * no engine: gambatte runs it.
+     * no engine: gambatte runs it. Nor has a 3DS link: Azahar runs its own room.
      */
     private suspend fun start(np: NetplaySession): Boolean {
         holdWifi(np)
@@ -248,7 +248,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
                 ).also { run = it }.start()
             }
             NetplayLinkKind.NETPACKET -> (run as? NetplayLinkGame)?.let { it.begin(); it.live } ?: false
-            NetplayLinkKind.GBLINK -> true
+            NetplayLinkKind.GBLINK, NetplayLinkKind.N3DSLINK -> true
         }
     }
 
@@ -321,15 +321,19 @@ internal class GameNetplay(private val host: GameNetplayHost) {
      * netplay link: Leave. The link ends and the game plays on ([linkEnded]); the menu stays open on the normal root and
      * the player leaves later with Quit. A GBA link's engine sends DISCONNECT and shuts down off main; [NetplayRun.leave]
      * detaches it first, so no Ended notice follows. GB link has no engine: gambatte's network serial stops on its mode's
-     * variable update, read at the next frame (the menu holds frames, so on Continue). Set past [GameActivity.applyOptions]'
+     * variable update, read at the next frame (the menu holds frames, so on Continue); Azahar leaves its room the same way. Set past [GameActivity.applyOptions]'
      * guard and not stored: the link options are this launch's ([GameActivity.graphicsForcedOptions]), never the user's config.
      */
     private fun leaveLink() {
         run?.leave()
         if (pillShown) { host.notifications.hideProgress(); pillShown = false; host.publishNotifications() }   // the ticker is gone
-        if (session?.linkKind == NetplayLinkKind.GBLINK) host.retroView?.let { view ->
-            val off = Variable(NetplayLinkOptions.GB_MODE, NetplayLinkOptions.GB_OFF)
-            view.queueEvent { runCatching { view.updateVariables(off) }.onFailure { NxLog.w("GameActivity", "ending the GB link failed", it) } }
+        val off = when (session?.linkKind) {
+            NetplayLinkKind.GBLINK -> Variable(NetplayLinkOptions.GB_MODE, NetplayLinkOptions.GB_OFF)
+            NetplayLinkKind.N3DSLINK -> Variable(NetplayLinkOptions.N3DS_MODE, NetplayLinkOptions.N3DS_OFF)
+            else -> null
+        }
+        if (off != null) host.retroView?.let { view ->
+            view.queueEvent { runCatching { view.updateVariables(off) }.onFailure { NxLog.w("GameActivity", "ending the link failed", it) } }
         }
         linkEnded()
     }

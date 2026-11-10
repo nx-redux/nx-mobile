@@ -91,6 +91,17 @@ class NetplayLinkOptionsTest {
         assertEquals(14, joiner.size)
     }
 
+    @Test fun a_3ds_host_opens_the_room_and_a_3ds_joiner_dials_the_host() {
+        assertEquals(
+            mapOf("nx_3ds_link_port" to "24872", "nx_3ds_link" to "host", "nx_3ds_link_name" to "Player 1"),
+            NetplayLinkOptions.forSession(session(NetplayRole.HOST, "azahar"), null),
+        )
+        assertEquals(
+            mapOf("nx_3ds_link_port" to "24872", "nx_3ds_link" to "join", "nx_3ds_link_name" to "Player 2", "nx_3ds_link_ip" to "192.168.1.7"),
+            NetplayLinkOptions.forSession(session(NetplayRole.CLIENT, "azahar", peer = "192.168.1.7"), null),
+        )
+    }
+
     @Test fun gpsp_and_mgba_run_the_agreed_mode_for_the_transport() {
         assertEquals(mapOf("gpsp_serial" to "auto_cable"), NetplayLinkOptions.forSession(session(NetplayRole.HOST, "gpsp", usb = true), "auto"))
         assertEquals(mapOf("gpsp_serial" to "auto"), NetplayLinkOptions.forSession(session(NetplayRole.CLIENT, "gpsp"), "lockstep"))

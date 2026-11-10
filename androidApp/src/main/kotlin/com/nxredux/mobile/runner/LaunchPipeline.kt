@@ -438,14 +438,14 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 renderer.n3dsProportion = n3dsProportion()
                 renderer.n3dsComposeLayout = N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsSkinStack())
             }
-            // netplay link: gambatte gets its link options; a GBA link engine starts now, before the core loads, so
+            // netplay link: gambatte and Azahar get their link options; a GBA link engine starts now, before the core loads, so
             // a joiner learns the host's gpsp_serial or mgba_link_mode from its READY and runs with it (the handheld reloads instead).
             // Outside a session mGBA gets the real cable (NetplayLinkOptions.forSolo). Cable Link: the pair core's variables
             // (both GBAs on this phone, NetplayLinkOptions.forPair), session-only like the others.
             val linkKind = np?.linkKind
             val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId) else when (linkKind) {
                 null -> NetplayLinkOptions.forPair(np)
-                NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)
+                NetplayLinkKind.GBLINK, NetplayLinkKind.N3DSLINK -> NetplayLinkOptions.forSession(np, null)
                 NetplayLinkKind.NETPACKET -> {
                     val own = NetplayLinkOptions.modeKey(np.coreId)?.let { key -> options.firstOrNull { it.key == key }?.value }
                     val mode = gameNetplay.connectLink(np, own) ?: return refuse(NetplayText.FAILED_CONNECT, NetplayText.FAILED)
