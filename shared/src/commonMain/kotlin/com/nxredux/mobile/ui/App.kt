@@ -655,26 +655,34 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     val artLayout by state.artLayout.collectAsState()   // Layouts → Backdrop art / List art: the panel's Switch changes them here
     val dual by state.dualMenu.collectAsState()   // the menu is on the second display: the top screen has the game's details
     val current = { s.entries.getOrNull(selection.value.index) }
-    GameListScreen(
-        listTitle(s.source), s.entries, index,
-        canResume = { resume.value.canResume }, menuAvailable = s.source != ListSource.Hidden,
-        canOpen = { current().let { it != null && (s.source == ListSource.Hidden || it.system.core != null || it.system.android) } },
-        canNetplay = { state.canNetplay(current()) },
-        openLabel = if (s.source == ListSource.Hidden) "Unhide" else "Open",
-        onSelect = state::select, onOpen = { state.openSelected() }, onHint = state::onButton,
-        onLongPress = { state.openContextMenu(it) },
-        showTag = s.source == ListSource.Hidden || s.source is ListSource.Search,   // a search mixes consoles
-        emptyText = if (s.source is ListSource.Search || s.source is ListSource.Filtered) "No results" else null,
-        info = { gameInfoFor(gameInfo, now, current()?.game, full = true) },   // Grid shows none (its tiles have tileInfo)
-        style = style, orientation = orientation, alignment = state.settings.gameListVerticalAlignment, onGridLayout = onGridLayout, onPageRows = onPageRows, tileInfo = remember(s.entries, gameInfo, now) { entryTileInfo(s.entries, gameInfo, now) }, layoutKey = s.source,
-        artBox = artLayout.list.boxed,
-        backdropArt = artLayout.backdrop,
-        onSearch = state::openListSearch.takeIf { s.source.searchable },
-        onLayout = state::toggleLayoutMenu.takeIf { state.settings.gameListLayoutOptions }, layoutOpen = s.layoutMenu != null,
-        // Layouts → Achievements panel Hide: no icon or hint (X and the game's menu still open it). Dual: none (X does nothing).
-        onAchievements = state::toggleRaPanel.takeIf { state.hasAchievements && state.settings.gameListAchievementsPanel && !dual }, achievementsOpen = raPanel != null,
-        minimalOpening = minimalOpening.value?.takeIf { it.page == s.source },
-    )
+    val chrome = gameListChrome(LocalLauncherChrome.current, dual)
+    val listInfo = launcherGameInfo(gameInfo, chrome.extraInfo)
+    // Unfiltered by Extra info: whether the highlighted game has a set decides the dual trophy, not what the list shows.
+    val allInfo by state.gameInfo.collectAsState()
+    val trophyAvailable = state.hasAchievements && state.settings.gameListAchievementsPanel
+    val trophy by remember(s, allInfo, dual, trophyAvailable) { derivedStateOf { gameListTrophy(trophyAvailable, dual, current()?.let { allInfo[it.game.path] }) } }
+    CompositionLocalProvider(LocalLauncherChrome provides chrome) {
+        GameListScreen(
+            listTitle(s.source), s.entries, index,
+            canResume = { resume.value.canResume }, menuAvailable = s.source != ListSource.Hidden,
+            canOpen = { current().let { it != null && (s.source == ListSource.Hidden || it.system.core != null || it.system.android) } },
+            canNetplay = { state.canNetplay(current()) },
+            openLabel = if (s.source == ListSource.Hidden) "Unhide" else "Open",
+            onSelect = state::select, onOpen = { state.openSelected() }, onHint = state::onButton,
+            onLongPress = { state.openContextMenu(it) },
+            showTag = s.source == ListSource.Hidden || s.source is ListSource.Search,   // a search mixes consoles
+            emptyText = if (s.source is ListSource.Search || s.source is ListSource.Filtered) "No results" else null,
+            info = { gameInfoFor(listInfo, now, current()?.game, full = true) },   // Grid shows none (its tiles have tileInfo)
+            style = style, orientation = orientation, alignment = state.settings.gameListVerticalAlignment, onGridLayout = onGridLayout, onPageRows = onPageRows, tileInfo = remember(s.entries, listInfo, now) { entryTileInfo(s.entries, listInfo, now) }, layoutKey = s.source,
+            artBox = artLayout.list.boxed,
+            backdropArt = artLayout.backdrop,
+            onSearch = state::openListSearch.takeIf { s.source.searchable },
+            onLayout = state::toggleLayoutMenu.takeIf { state.settings.gameListLayoutOptions }, layoutOpen = s.layoutMenu != null,
+            // Layouts → Achievements panel Hide: no icon or hint (X and the game's menu still open it).
+            onAchievements = state::toggleRaPanel.takeIf { trophy }, achievementsOpen = raPanel != null,
+            minimalOpening = minimalOpening.value?.takeIf { it.page == s.source },
+        )
+    }
     RaPanelOverlay(raPanel.takeIf { state.screen.value === s }, onRow = state::openRaPanelRow, onButton = state::onButton)
     ArtPanelOverlay(
         artPanel.takeIf { state.screen.value === s }, artLayout.backdrop, artLayout.list,

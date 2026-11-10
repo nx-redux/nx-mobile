@@ -56,7 +56,6 @@ internal class RaScreenController(
     private val settings: AppSettings,
     private val loader: ScreenLoader,
     private val achievements: RaController?,
-    private val dualMenu: StateFlow<Boolean>,
     private val host: RaScreenHost,
 ) {
     /** The cached RetroAchievements games' hashes by library path, read with the game info (for the panel). */
@@ -90,12 +89,12 @@ internal class RaScreenController(
     fun toggleRaPanel() { if (_raPanel.value != null) closeRaPanel() else openRaPanel() }
 
     /**
-     * X (or the trophy icon) on a game list: the panel on its highlighted game. Not over its menu, search or Layout
-     * dropdown, nor while [dualMenu] (the top screen shows the game's details).
+     * X (or the trophy icon, or the top screen's achievements) on a game list: the panel on its highlighted game. Not
+     * over its menu, search or Layout dropdown.
      */
     fun openRaPanel() {
         val s = screen.value as? Screen.Games ?: return
-        if (!hasAchievements || dualMenu.value || s.menu != null || s.search != null || s.layoutMenu != null) return
+        if (!hasAchievements || s.menu != null || s.search != null || s.layoutMenu != null) return
         raFetches.values.removeAll { it is RaGameFetch.Failed }   // opened again: a failed download is tried once more
         _raPanel.value = RaPanel(null, "", RaPanelContent.Loading)
         followRaPanel(force = true)

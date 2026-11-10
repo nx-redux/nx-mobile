@@ -469,5 +469,14 @@ internal fun gameListTopStats(style: MenuStyle, titleShown: Boolean, extraInfo: 
         MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> false
     }
 
+/** A game list's chrome on two screens ([dual]): Extra info off, since the top screen shows the selected game's stats. */
+internal fun gameListChrome(chrome: LauncherChrome, dual: Boolean): LauncherChrome = if (dual) chrome.copy(extraInfo = false) else chrome
+
+/**
+ * Whether a game list shows the trophy icon: where it is [available] (signed in, Achievements panel shown) and, on two
+ * screens ([dual]), only while the highlighted game ([info]) has a set, as the top screen's achievements block.
+ */
+internal fun gameListTrophy(available: Boolean, dual: Boolean, info: GameInfo?): Boolean = available && (!dual || hasRaSet(info))
+
 /** A Grid's tiles with the info on the line under the title ([gameListTopStats]): none in the selected tile. */
 private val NoTileInfo: (Int) -> List<InfoLine> = { emptyList() }

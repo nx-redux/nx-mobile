@@ -1207,7 +1207,7 @@ class AppState(
         _topDetails.value = TopDetails(
             entry, _gameInfo.value[path], shown?.resume ?: ResumeInfo.NONE, shown?.shots.orEmpty(), shown?.facts,
             topAchievements(detailsRaFor(entry, ra.detailsRa.value)), gameMeta(deps.placeholderMeta),
-            netplay?.offers(entry) == true, hasRaSet(path),
+            netplay?.offers(entry) == true, hasRaSet(_gameInfo.value[path]),
         )
         if (shown != null && !reread) return   // its reads ran or are running
         topDetailsJob?.cancel()
@@ -1222,9 +1222,6 @@ class AppState(
             _topDetails.value = now.copy(resume = resume, shots = shots, facts = facts)
         }
     }
-
-    /** Whether [path] has achievements: a played homebrew or hack has a pointer folder but no set, so only real data counts. */
-    private fun hasRaSet(path: String): Boolean = _gameInfo.value[path]?.ra?.total?.let { it > 0 } == true
 
     /** Whether [a] and [b] are one game: a rebuilt list gives new [Listed]s for the same files. */
     private fun sameGame(a: Listed, b: Listed): Boolean = a.system.tag == b.system.tag && a.game.path == b.game.path
@@ -1264,7 +1261,7 @@ class AppState(
     private var gameInfoJob: Job? = null
     /** The RetroAchievements panel and screens; it reaches back into this state only through [RaScreenHost]. */
     private val ra = RaScreenController(
-        scope, _screen, _selection, _error, deps.settings, loader, deps.achievements, _dualMenu,
+        scope, _screen, _selection, _error, deps.settings, loader, deps.achievements,
         host = object : RaScreenHost {
             override fun showNotice(text: String) = this@AppState.showNotice(text)
             override fun showTools() = this@AppState.showTools()
@@ -1437,7 +1434,7 @@ class AppState(
         scope.launch { _gameInfo.collect { followTopDetails(reread = true); followTopStats() } }
         scope.launch {
             ra.detailsRa.collect { r ->
-                _topDetails.value?.let { d -> _topDetails.value = d.copy(achievements = topAchievements(detailsRaFor(d.entry, r)), raSet = hasRaSet(d.entry.game.path)) }
+                _topDetails.value?.let { d -> _topDetails.value = d.copy(achievements = topAchievements(detailsRaFor(d.entry, r)), raSet = hasRaSet(_gameInfo.value[d.entry.game.path])) }
             }
         }
         scope.launch {
@@ -5489,7 +5486,7 @@ class AppState(
             override fun netplayOffered(entry: Listed): Boolean = this@AppState.netplay?.offers(entry) == true
             override fun openNetplay(entry: Listed) = this@AppState.openNetplay(entry)
             override val netplayInMenu: Boolean get() = !launcherChrome().netplayHint || _screen.value is Screen.Systems   // the main menu has no hint bar
-            override val achievementsInMenu: Boolean get() = hasAchievements && !deps.settings.gameListAchievementsPanel && !_dualMenu.value
+            override val achievementsInMenu: Boolean get() = hasAchievements && !deps.settings.gameListAchievementsPanel
             override fun openAchievements() = ra.openRaPanel()
             override suspend fun canResume(entry: Listed): Boolean = deps.userData.resumeInfo(entry.system.tag, entry.game.fileName).canResume
             override fun playFromStart(entry: Listed) = launches.playFromStart(entry)
@@ -5873,7 +5870,7 @@ class AppState(
             }
             NxButton.SELECT -> switcher.openSwitcher()
             NxButton.START -> if (_screen.value is Screen.Games) openListSearch() else openSearch()   // a game list searches its own games
-            NxButton.X -> if (_screen.value is Screen.Games && !_dualMenu.value) ra.openRaPanel()   // the highlighted game's achievements (the second display's list has its own details)
+            NxButton.X -> if (_screen.value is Screen.Games) ra.openRaPanel()   // the highlighted game's achievements
             NxButton.MENU -> openContextMenu()
             NxButton.L1, NxButton.R1 -> when (val s = _screen.value) {
                 is Screen.Games -> letterJump(s, button)

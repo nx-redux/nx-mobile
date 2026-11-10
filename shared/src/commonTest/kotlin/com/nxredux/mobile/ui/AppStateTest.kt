@@ -13735,31 +13735,27 @@ class AppStateTest {
         }
     }
 
-    // Dual: the panel never opens over the top list (the trophy icon, the game's menu item), Achievements panel Hide or not.
-    @Test fun the_dual_game_list_offers_no_achievements_panel() = runTest {
-        val f = panelFixture()
-        f.state.settings.gameListAchievementsPanel = false   // Hide: the game's menu would carry Achievements
-        f.state.onDualMenu(true)
-        f.state.openConsole("GB")
-        f.state.openRaPanel(); advanceUntilIdle()
-        assertNull(f.state.raPanel.value)
-        f.state.openContextMenu(0)
-        assertTrue(assertNotNull(assertIs<Screen.Games>(f.state.screen.value).menu).items.none { it.kind == ContextKind.ACHIEVEMENTS })
-        f.state.closeContextMenu()
-        f.state.onDualMenu(false)
-        f.state.openContextMenu(0)
-        assertTrue(assertNotNull(assertIs<Screen.Games>(f.state.screen.value).menu).items.any { it.kind == ContextKind.ACHIEVEMENTS })
-    }
-
-    @Test fun x_does_nothing_in_the_dual_game_list() = runTest {
+    // Dual: the bottom screen's game list opens the panel as one screen does: the trophy icon, the top screen's tap, X,
+    // the game's menu (Achievements panel Hide); B closes it.
+    @Test fun the_dual_game_list_opens_the_achievements_panel() = runTest {
         val f = panelFixture()
         f.state.onDualMenu(true)
         f.state.openConsole("GB")
-        f.state.onButton(NxButton.X); advanceUntilIdle()
+        f.state.toggleRaPanel(); advanceUntilIdle()   // the trophy icon
+        assertEquals(listOf("First", "Second"), assertNotNull(f.state.raPanel.value).visible.map { it.title })
+        f.state.onButton(NxButton.B)
         assertNull(f.state.raPanel.value)
-        f.state.onDualMenu(false)
+        assertIs<Screen.Games>(f.state.screen.value)   // the list stays
+        f.state.openRaPanel(); advanceUntilIdle()   // the top screen's achievements tap
+        assertNotNull(f.state.raPanel.value)
+        f.state.onButton(NxButton.B)
         f.state.onButton(NxButton.X); advanceUntilIdle()
         assertNotNull(f.state.raPanel.value)
+        f.state.onButton(NxButton.B)
+        assertNull(f.state.raPanel.value)
+        f.state.settings.gameListAchievementsPanel = false   // Hide: the game's menu carries Achievements
+        f.state.openContextMenu(0)
+        assertTrue(assertNotNull(assertIs<Screen.Games>(f.state.screen.value).menu).items.any { it.kind == ContextKind.ACHIEVEMENTS })
     }
 
     // NX keyboard: every text prompt types through it while the app has its own keyboard (AppDeps.ownKeyboard).
