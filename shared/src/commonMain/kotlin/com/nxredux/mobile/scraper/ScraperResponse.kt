@@ -11,8 +11,13 @@ data class SsMedia(val type: String, val region: String?, val url: String)
 
 sealed interface GameLookup {
     /** [id]: ScreenScraper's `jeu.id` (the written-art log's game id). */
-    data class Found(val medias: List<SsMedia>, val id: String? = null) : GameLookup
+    data class Found(val medias: List<SsMedia>, val id: String? = null, val info: SsGameInfo? = null) : GameLookup
     data object NotFound : GameLookup
+}
+
+/** The text facts of a `jeuInfos` game; [lang] is the language the synopsis (else the genre) was read in. */
+data class SsGameInfo(val synopsis: String?, val genre: String?, val year: String?, val publisher: String?, val lang: String?) {
+    val empty: Boolean get() = synopsis == null && genre == null && year == null && publisher == null
 }
 
 data class SsQuota(val today: Int, val max: Int)
@@ -34,7 +39,32 @@ object ScraperResponse {
     fun parseGame(status: Int, body: String?): GameLookup {
         if (status != 200) return GameLookup.NotFound
         val jeu = parse(body)?.obj("response")?.obj("jeu") ?: return GameLookup.NotFound
-        return GameLookup.Found(medias(jeu), jeu["id"].str() ?: jeu["id"].int()?.toString())
+        return GameLookup.Found(medias(jeu), jeu["id"].str() ?: jeu["id"].int()?.toString(), parseInfo(jeu))
+    }
+
+    /** Null when the game carries none of the four facts. */
+    internal fun parseInfo(jeu: JsonObject): SsGameInfo? {
+        val syn = localized(jeu["synopsis"])
+        val genreNames = ((jeu["genres"] as? JsonArray).orEmpty().firstOrNull() as? JsonObject)?.get("noms")
+        val genre = localized(genreNames)
+        val year = (jeu["dates"] as? JsonArray).orEmpty()
+            .mapNotNull { e -> (e as? JsonObject)?.get("text").str()?.trim()?.take(4)?.takeIf { y -> y.length == 4 && y.all(Char::isDigit) } }
+            .minOrNull()
+        val publisher = jeu.obj("editeur")?.get("text").str()?.let(::cleanText)?.takeIf { it.isNotEmpty() }
+        val info = SsGameInfo(syn?.second, genre?.second, year, publisher, (syn ?: genre)?.first)
+        return info.takeUnless { it.empty }
+    }
+
+    private val LANG_ORDER = listOf("en", "fr", "ja")
+
+    /** The `{langue, text}` entry of [arr] in English, French, Japanese order, else the first usable one: (language, cleaned text). */
+    private fun localized(arr: JsonElement?): Pair<String, String>? {
+        val entries = (arr as? JsonArray).orEmpty().mapNotNull { e ->
+            val o = e as? JsonObject ?: return@mapNotNull null
+            val text = cleanText(o["text"].str() ?: return@mapNotNull null).takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            (o["langue"].str() ?: "") to text
+        }
+        return LANG_ORDER.firstNotNullOfOrNull { l -> entries.firstOrNull { it.first == l } } ?: entries.firstOrNull()
     }
 
     private fun medias(jeu: JsonObject): List<SsMedia> = (jeu["medias"] as? JsonArray).orEmpty().mapNotNull { e ->
@@ -133,3 +163,22 @@ internal fun normaliseTitle(s: String): String {
     val folded = buildString { for (c in s.lowercase()) append(TITLE_FOLD[c] ?: c) }
     return folded.replace(TITLE_MARKS, " ").replace(':', ' ').replace(TITLE_DASH, " ").replace(TITLE_SPACE, " ").trim()
 }
+
+private val ENTITY = Regex("&(#[xX][0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);")
+private val NAMED_ENTITIES = mapOf("amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'", "nbsp" to " ")
+
+/** ScreenScraper text as plain display text: HTML entities decoded, CRLF as LF, trimmed. */
+internal fun cleanText(s: String): String = ENTITY.replace(s) { m ->
+    val body = m.groupValues[1]
+    when {
+        body.startsWith("#") -> {
+            val code = if (body[1] == 'x' || body[1] == 'X') body.drop(2).toIntOrNull(16) else body.drop(1).toIntOrNull()
+            if (code != null && code in 1..0x10FFFF) codePointString(code) else m.value
+        }
+        else -> NAMED_ENTITIES[body] ?: m.value
+    }
+}.replace("\r\n", "\n").trim()
+
+private fun codePointString(cp: Int): String =
+    if (cp < 0x10000) cp.toChar().toString()
+    else (cp - 0x10000).let { "${(0xD800 + (it shr 10)).toChar()}${(0xDC00 + (it and 0x3FF)).toChar()}" }
