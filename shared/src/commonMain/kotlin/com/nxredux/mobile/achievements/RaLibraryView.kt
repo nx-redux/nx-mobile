@@ -1,5 +1,6 @@
 package com.nxredux.mobile.achievements
 
+import com.nxredux.mobile.library.IndexedSystem
 import com.nxredux.mobile.library.LibraryIndex
 import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.storage.GameRef
@@ -9,28 +10,33 @@ object RaLibraryView {
     suspend fun games(store: RaStore, journal: RaJournal, confirmed: RaJournal, index: LibraryIndex?, user: String): List<RaGameView> {
         val pendingByHash = journal.entries(user).groupBy { it.m }
         val confirmedByHash = confirmed.entries(user).groupBy { it.m }
-        val artByKey = HashMap<Triple<String, String, String>, String?>()
+        val indexed = HashMap<Triple<String, String, String>, Indexed>()
         // A game's art: its screenshot (not a SteamGridDB hero's), else its 3D box, else its 2D cover.
         index?.systems?.forEach { s ->
-            s.games.forEach { g -> artByKey[Triple(g.source, g.dir, g.file)] = g.screenshot?.takeIf { !g.heroShot } ?: g.boxart ?: g.box2d }
+            s.games.forEach { g -> indexed[Triple(g.source, g.dir, g.file)] = Indexed(g.screenshot?.takeIf { !g.heroShot } ?: g.boxart ?: g.box2d, s.takeUnless { it.unassigned }) }
         }
+        val sessions = HashMap<Int, Set<Int>>()   // a multi-disc set's hashes share one game id and session
         val rows = store.list(RaPaths.GAMES).filter(RaPaths::isHash).mapNotNull { hash ->
             val sets = RaSetsCache.summary(store, hash) ?: return@mapNotNull null
-            val pointer = RaGamePointers.read(store, hash)
             if (sets.core.isEmpty()) return@mapNotNull null   // nothing but the Unknown-Emulator warning (or no set at all)
+            val pointer = RaGamePointers.read(store, hash)
             val core = sets.core
-            val session = readSession(store, sets.gameId)
-            val unlockedIds = session?.let(::sessionUnlocks)?.keys.orEmpty() + confirmedByHash[hash]?.map { it.a }.orEmpty()
+            val sessionIds = sessions[sets.gameId] ?: (readSession(store, sets.gameId)?.let(::sessionUnlocks)?.keys.orEmpty()).also { sessions[sets.gameId] = it }
+            val unlockedIds = sessionIds + confirmedByHash[hash]?.map { it.a }.orEmpty()
             val pending = pendingByHash[hash]?.map { it.a }.orEmpty().toSet() - unlockedIds
             val ids = core.map { it.id }.toSet()
             val title = pointer?.title?.ifEmpty { null } ?: sets.title
-            val art = pointer?.let { artByKey[Triple(it.source, it.dir, it.file)] }
-            RaGameView(hash, sets.gameId, title, art, (unlockedIds + pending).count { it in ids }, core.size, pending.count { it in ids }) to (pointer?.file ?: "")
+            val hit = pointer?.let { indexed[Triple(it.source, it.dir, it.file)] }
+            val (console, tag) = RaConsoleGroups.consoleOf(hit?.system?.tag, hit?.system?.displayName, pointer?.tag, sets.consoleId)
+            RaGameView(hash, sets.gameId, title, hit?.art, (unlockedIds + pending).count { it in ids }, core.size, pending.count { it in ids }, console, tag) to (pointer?.file ?: "")
         }
         // Multi-disc sets share a game id: keep one row, preferring the m3u.
         return rows.groupBy { it.first.gameId }.values.map { group -> (group.firstOrNull { it.second.endsWith(".m3u", ignoreCase = true) } ?: group.first()).first }
             .sortedBy { it.title.lowercase() }
     }
+
+    /** A library game's art and its console's system (null in Unassigned: no console to list it under). */
+    private class Indexed(val art: String?, val system: IndexedSystem?)
 
     suspend fun achievements(store: RaStore, journal: RaJournal, confirmed: RaJournal, hash: String, user: String): List<RaAchievement> =
         achievementsOf(store, hash, journal.entries(user).filter { it.m == hash }, confirmed.entries(user).filter { it.m == hash })

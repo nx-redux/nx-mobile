@@ -50,6 +50,8 @@ object RaSetsCache {
     /** [hash]'s summary; null when its sets are not cached or unreadable. */
     suspend fun summary(store: RaStore, hash: String): RaSetsSummary? {
         read(store, hash)?.let { return it }
+        // Most cached hashes of a downloaded library have no set (gameid.json only): one cheap check, not two more reads.
+        if (!store.exists(RaPaths.sets(hash))) return null
         return lock.withLock {
             read(store, hash) ?: run {
                 val sets = store.readJson(RaPaths.sets(hash), SetsBody.serializer()) ?: return@withLock null

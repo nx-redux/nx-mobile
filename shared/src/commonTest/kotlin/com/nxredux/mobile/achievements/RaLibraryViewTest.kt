@@ -31,7 +31,7 @@ class RaLibraryViewTest {
     @Test fun games_join_the_index_collapse_discs_and_count_states() = runTest {
         val store = FakeRaStore(); seed(store)
         val games = RaLibraryView.games(store, RaJournal(store, RaPaths.JOURNAL), RaJournal(store, RaPaths.CONFIRMED), index, "me")
-        assertEquals(listOf(RaGameView(h1, 42, "Game (m3u)", "shot1", 2, 2, 1), RaGameView(h3, 7, "Other", "box3", 1, 1, 0)), games)
+        assertEquals(listOf(RaGameView(h1, 42, "Game (m3u)", "shot1", 2, 2, 1, "Sony PlayStation", "PS"), RaGameView(h3, 7, "Other", "box3", 1, 1, 0, "Sony PlayStation", "PS")), games)
     }
     @Test fun a_games_art_is_its_screenshot_then_its_box_art_then_its_cover() = runTest {
         val store = FakeRaStore(); seed(store)
@@ -63,6 +63,32 @@ class RaLibraryViewTest {
         val store = FakeRaStore(); seed(store)
         val games = RaLibraryView.games(store, RaJournal(store, RaPaths.JOURNAL), RaJournal(store, RaPaths.CONFIRMED), null, "me")
         assertEquals(listOf("Game (m3u)", "Other"), games.map { it.title })
+    }
+
+    @Test fun a_games_console_is_its_library_folder_else_its_pointer_tag_else_retroachievements_console() = runTest {
+        val store = FakeRaStore(); seed(store)
+        val h4 = "d".repeat(32); val h5 = "e".repeat(32); val h6 = "f".repeat(32)
+        store.put(RaPaths.sets(h4), setsJson(8, title = "Gone", consoleId = 3, achievements = """{"ID":1}"""))
+        store.put(RaPaths.game(h4), RaJson.json.encodeToString(RaGamePointer.serializer(), RaGamePointer("SUPA", "home", "Roms/SUPA", "Gone.sfc", "Gone")))
+        store.put(RaPaths.sets(h5), setsJson(9, title = "Pointerless", consoleId = RaConsoles.GAMEBOY, achievements = """{"ID":1}"""))
+        store.put(RaPaths.sets(h6), setsJson(10, title = "Stranger", consoleId = 9999, achievements = """{"ID":1}"""))
+        val games = RaLibraryView.games(store, RaJournal(store, RaPaths.JOURNAL), RaJournal(store, RaPaths.CONFIRMED), index, "me").associateBy { it.title }
+        assertEquals("Sony PlayStation" to "PS", games.getValue("Other").let { it.console to it.consoleTag })        // the library's folder
+        assertEquals("Super Nintendo ES" to "SUPA", games.getValue("Gone").let { it.console to it.consoleTag })     // not indexed: its pointer's tag
+        assertEquals("Game Boy" to "GB", games.getValue("Pointerless").let { it.console to it.consoleTag })         // no pointer: RA's console
+        assertEquals(RaConsoleGroups.OTHER to null, games.getValue("Stranger").let { it.console to it.consoleTag })
+    }
+
+    // The browser reads per cached hash; on a phone each read crosses the shared storage, so none is spent twice.
+    @Test fun the_game_list_reads_an_unrecognised_hash_twice_at_most_and_a_session_once_per_game() = runTest {
+        val store = FakeRaStore(); seed(store)
+        val unknown = "9".repeat(32)
+        store.put(RaPaths.gameId(unknown), """{"GameID":0}""")
+        RaLibraryView.games(store, RaJournal(store, RaPaths.JOURNAL), RaJournal(store, RaPaths.CONFIRMED), index, "me")   // builds the summaries
+        store.reads.clear()
+        RaLibraryView.games(store, RaJournal(store, RaPaths.JOURNAL), RaJournal(store, RaPaths.CONFIRMED), index, "me")
+        assertTrue(store.reads.count { it.contains(unknown) } <= 1, "${store.reads.filter { it.contains(unknown) }}")   // its summary only (the sets checked by existence)
+        assertEquals(1, store.reads.count { it == RaPaths.session(42) })   // two discs, one game: one session read
     }
 
     @Test fun hardcore_unlocks_count_and_a_prefetched_time_of_zero_shows_no_date() = runTest {

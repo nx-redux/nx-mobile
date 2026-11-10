@@ -320,8 +320,12 @@ class RaController(
         scope.launch { val s = readStatusOrKeep(); if (!busy) _state.value = RaState.Idle(s) }
     }
 
-    // Every cached game's sets.json (up to ~2 MB each) and the library index are parsed here: never on the main thread.
-    suspend fun games(): List<RaGameView> = withContext(work) { RaLibraryView.games(platform.store, journal, confirmed, index(), settings.raUsername) }
+    /**
+     * Every cached game's files are read here: never on the main thread. [library]: the library index already in memory
+     * (decoding the stored one again is a whole library's JSON); null reads the stored one.
+     */
+    suspend fun games(library: LibraryIndex? = null): List<RaGameView> =
+        withContext(work) { RaLibraryView.games(platform.store, journal, confirmed, library ?: index(), settings.raUsername) }
     suspend fun achievements(hash: String): List<RaAchievement> = withContext(work) { RaLibraryView.achievements(platform.store, journal, confirmed, hash, settings.raUsername) }
 
     /** The menu's per-game progress; empty when signed out or the cache won't read. */

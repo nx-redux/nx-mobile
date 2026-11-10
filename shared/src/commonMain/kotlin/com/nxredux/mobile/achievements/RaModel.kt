@@ -42,8 +42,17 @@ fun List<RaAchievement>.sortedBy(order: RaSortOrder): List<RaAchievement> = when
 @Serializable
 data class RaGamePointer(val tag: String, val source: String, val dir: String, val file: String, val title: String)
 
-/** One row of the Tools browser. */
-data class RaGameView(val hash: String, val gameId: Int, val title: String, val art: String?, val unlocked: Int, val total: Int, val pending: Int)
+/** One row of the Tools browser; [console] is the console it is listed under, [consoleTag] its tag (its logo), null for [RaConsoleGroups.OTHER]. */
+data class RaGameView(
+    val hash: String, val gameId: Int, val title: String, val art: String?, val unlocked: Int, val total: Int, val pending: Int,
+    val console: String = RaConsoleGroups.OTHER, val consoleTag: String? = null,
+)
+
+/** One row of the Tools browser's first level: a console's cached [games] and their progress summed. */
+data class RaConsoleView(val name: String, val tag: String?, val games: List<RaGameView>) {
+    val unlocked: Int get() = games.sumOf { it.unlocked }
+    val total: Int get() = games.sumOf { it.total }
+}
 
 /** A cached game's RetroAchievements progress for the menu: unlocked (pending included) of [total], and the first locked achievement's title in display order. */
 data class RaProgress(val unlocked: Int, val total: Int, val next: String?)
