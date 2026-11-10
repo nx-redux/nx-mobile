@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 class HomeLayoutTest {
     /** The mockup's landscape body (WIDE, the strip on one line): 11 games, the first 2 inline, 9 in 3 rows of 3. */
     private val land = homeBoard(HomeFrame(960f, 344f, false, 960f / 432f), stripLines = 1, tools = 3, games = 11)
-    /** The Fold cover (COLUMN, two strip lines): 10 games in 5 rows of 2, all below the first screen. */
+    /** The Fold cover (COLUMN, two strip lines): Continue and a row of 3 tools, then 10 games in 5 rows of 2, all below the first screen. */
     private val port = homeBoard(HomeFrame(475f, 291f, true), stripLines = 2, tools = 3, games = 10)
 
     /** The scroll after each move through [rows] (a row's first game; -1 the top section), from the top. */
@@ -30,15 +30,15 @@ class HomeLayoutTest {
     // Landscape (the wide face: topH the body 308, tilesY 350, pinH 124.4, rows 138.4 apart, the page ending at
     // 626.8 + 124.4 + 11 = 762.2): row 0 474.4 + 8 − 344 = 138.4, row 1 276.8, row 2 415.2 (under the end 418.2), back
     // up row 1 in view, row 0 350 − 8 = 342. The Fold cover's top
-    // section is its whole body (235), its pin rows 106.59 tall and 118.59 apart from 295, below the first screen; the
-    // page ends at 886.97: down 118.59, 237.19, 355.78, 474.38, 592.97; back up, rows 4 and 3 in view, row 2 at
-    // 532.19 − 8, row 1 405.59, row 0 287.
+    // section is Continue (145) and its row of tools (12 + 118.25), 275.25, its pin rows 106.59 tall and 118.59 apart
+    // from 335.25, below the first screen; the page ends at 927.22: down 158.84, 277.44, 396.03, 514.63, 633.22; back
+    // up, rows 4 and 3 in view, row 2 at 572.44 − 8, row 1 445.84, row 0 327.25.
     @Test fun theScrollKeepsTheSelectedGameInView() {
         assertEquals(3, land.rowGames / land.perRow)
         assertScrolls(listOf(138.4f, 276.8f, 415.2f, 415.2f, 342f, 0f), walk(land, 344f, listOf(0, 1, 2, 1, 0, -1)), "landscape")
-        assertScrolls(listOf(118.59f, 237.19f, 355.78f, 474.38f, 592.97f, 592.97f, 592.97f, 524.19f, 405.59f, 287f, 0f),
+        assertScrolls(listOf(158.84f, 277.44f, 396.03f, 514.63f, 633.22f, 633.22f, 633.22f, 564.44f, 445.84f, 327.25f, 0f),
             walk(port, 291f, listOf(0, 1, 2, 3, 4, 4, 3, 2, 1, 0, -1)), "portrait")
-        assertEquals(886.97f, port.pageH, 0.01f, "portrait pageH")
+        assertEquals(927.22f, port.pageH, 0.01f, "portrait pageH")
         // Every selected pin fully in the 291 dp body with its ring room 5 dp clear.
         var y = 0f
         for (k in 0 until port.rowGames) {

@@ -8,7 +8,6 @@ import com.nxredux.mobile.settings.MenuStyle
 import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.ui.nx.HomeFrame
 import com.nxredux.mobile.ui.nx.HomeShelf
-import com.nxredux.mobile.ui.nx.homeBoard
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -56,14 +55,15 @@ class HomeLayoutsModelTest {
         assertEquals(4, homeDockFit(HomeFrame(30f * 2 + 5 * 56f + 4 * 12f - 1f, 600f, portrait = true), side = 56f))
         assertEquals(1, homeDockFit(HomeFrame(10f, 300f, portrait = false), side = 64f))
     }
-    // The dock's squares are Grid Home's portrait ones, in landscape too: the same size either way.
-    @Test fun dock_side_is_grid_homes_portrait_tool_square() {
+    // The dock's squares are a fifth of the portrait top section less four 6 dp gaps (the Fold cover's 235: 42.2), in
+    // landscape too: the same size either way, whatever the pins.
+    @Test fun dock_side_is_a_fifth_of_the_portrait_top() {
         val cover = HomeFrame(475f, 291f, portrait = true)
-        assertEquals(homeBoard(cover, 2, tools = 3, games = 2).square, homeDockSide(cover, 2, games = 2))
+        assertEquals(42.2f, homeDockSide(cover, 2), 0.01f)
         val phone = HomeFrame(411f, 900f, portrait = true)
         for (land in listOf(HomeFrame(933f, 600f, portrait = false), HomeFrame(900f, 330f, portrait = false), HomeFrame(700f, 600f, portrait = false))) {
-            assertEquals(homeDockSide(phone, 1, games = 0), homeDockSide(land, 1, games = 0), "$land")
+            assertEquals(homeDockSide(phone, 1), homeDockSide(land, 1), "$land")
         }
-        assertEquals(32f, homeDockSide(HomeFrame(60f, 40f, portrait = true), 2, games = 0))   // a tiny body: the floor
+        assertEquals(32f, homeDockSide(HomeFrame(60f, 40f, portrait = true), 2))   // a tiny body: the floor
     }
 }

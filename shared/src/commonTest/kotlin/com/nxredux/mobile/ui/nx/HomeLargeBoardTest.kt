@@ -23,46 +23,48 @@ class HomeLargeBoardTest {
         assertFalse(homeIsLarge(HomeFrame(846f, 324f, false, 846f / 412f)))        // wide but short (a 21:9 landscape): under 480 tall
     }
     // w 857 (933 − 2 · 38); a full square (857 / 2 − 14 − 28) / 3 = 128.83 sets the top, 2 · 128.83 + 7 = 264.67 from
-    // topY 28. The squares 5 a column (rows 7 apart), min(128.83 / 2, (264.67 − 4 · 7) / 5) = 47.33, top-aligned, flush
-    // right: 6 tools are 2 columns (2 · 47.33 + 14 = 108.67) from 748.33, in reading order. Left of them 734.33: the 2
-    // inline games 0.4 · (734.33 − 14) = 288.13 wide, Continue 432.2 (without games 734.33).
-    @Test fun topSectionIsContinueAndSquaresFiveAColumn() {
+    // topY 28. The tools the Tools page's tiles (80 × 107.6), 2 rows (floor(272.67 / 115.6)) of up to 2 columns, so 4
+    // slots: 6 tools show 3 and "+3", 2 columns (2 · 80 + 8 = 168) from 689, top-aligned, in reading order, 8 dp apart.
+    // Left of them 675: the 2 inline games 0.4 · (675 − 14) = 264.4 wide, Continue 396.6 (without games 675).
+    @Test fun topSectionIsContinueAndToolTilesBeside() {
         val b = homeBoard(fold, 1, tools = 6, games = 7, shelves = three)
-        assertEquals(HomeToolMode.LARGE, b.mode); assertEquals(10, b.slots); assertEquals(0, b.more)
-        near(28f, b.topY, "topY"); near(264.67f, b.topH, "topH"); near(47.33f, b.square, "square")
+        assertEquals(HomeToolMode.LARGE, b.mode); assertEquals(4, b.slots); assertEquals(3, b.more)
+        near(28f, b.topY, "topY"); near(264.67f, b.topH, "topH"); near(80f, b.toolW, "toolW"); near(107.6f, b.toolH, "toolH")
         val c = tiles(b, HomeTopKind.CONTINUE).single().rect
-        near(38f, c.x, "continue x"); near(432.2f, c.w, "continue w"); near(264.67f, c.h, "continue h")
-        val sq = tiles(b, HomeTopKind.TOOL).map { it.rect }
-        assertEquals(6, sq.size)
-        for ((i, r) in sq.withIndex()) {
-            near(38f + 748.33f + (i % 2) * 61.33f, r.x, "square $i x"); near(28f + (i / 2) * 54.33f, r.y, "square $i y")
-            near(47.33f, r.w, "square w"); near(47.33f, r.h, "square h")
+        near(38f, c.x, "continue x"); near(396.6f, c.w, "continue w"); near(264.67f, c.h, "continue h")
+        val sq = b.top.filter { it.kind == HomeTopKind.TOOL || it.kind == HomeTopKind.MORE }
+        assertEquals(listOf(HomeTopKind.TOOL, HomeTopKind.TOOL, HomeTopKind.TOOL, HomeTopKind.MORE), sq.map { it.kind })
+        for ((i, t) in sq.withIndex()) {
+            val r = t.rect
+            near(38f + 689f + (i % 2) * 88f, r.x, "tile $i x"); near(28f + (i / 2) * 115.6f, r.y, "tile $i y")
+            near(80f, r.w, "tile w"); near(107.6f, r.h, "tile h")
         }
     }
-    // 4 tools are one column as 3 are (Continue 857 − 47.33 − 14 = 795.67); 6 two.
+    // 3 and 4 tools are 2 columns as 6 are (Continue 857 − 168 − 14 = 675); 2 tools one (857 − 80 − 14 = 763).
     @Test fun fewerToolsNarrowTheBlockAndWidenContinue() {
-        near(734.33f, tiles(homeBoard(fold, 1, tools = 6, games = 0), HomeTopKind.CONTINUE).single().rect.w, "continue w (2 columns)")
-        near(795.67f, tiles(homeBoard(fold, 1, tools = 4, games = 0), HomeTopKind.CONTINUE).single().rect.w, "continue w (1 column)")
-        near(795.67f, tiles(homeBoard(fold, 1, tools = 3, games = 0), HomeTopKind.CONTINUE).single().rect.w, "continue w (1 column)")
+        near(675f, tiles(homeBoard(fold, 1, tools = 6, games = 0), HomeTopKind.CONTINUE).single().rect.w, "continue w (2 columns)")
+        near(675f, tiles(homeBoard(fold, 1, tools = 4, games = 0), HomeTopKind.CONTINUE).single().rect.w, "continue w (2 columns)")
+        near(675f, tiles(homeBoard(fold, 1, tools = 3, games = 0), HomeTopKind.CONTINUE).single().rect.w, "continue w (2 columns)")
+        near(763f, tiles(homeBoard(fold, 1, tools = 2, games = 0), HomeTopKind.CONTINUE).single().rect.w, "continue w (1 column)")
         val none = homeBoard(fold, 1, tools = 0, games = 0)
         near(857f, tiles(none, HomeTopKind.CONTINUE).single().rect.w, "continue w (no tools)")
         near(264.67f, none.topH, "topH holds")
     }
-    // 2 columns of 5: past 10 tools, 9 and "+N".
-    @Test fun moreThanTenToolsShowNineAndMore() {
+    // 2 columns of 2: past 4 tools, 3 and "+N", the last tile, second row.
+    @Test fun moreThanFourToolsShowThreeAndMore() {
         val b = homeBoard(fold, 1, tools = 13, games = 0)
-        assertEquals(10, b.slots); assertEquals(9, tiles(b, HomeTopKind.TOOL).size); assertEquals(1, tiles(b, HomeTopKind.MORE).size); assertEquals(4, b.more)
-        near(28f + 4 * 54.33f, tiles(b, HomeTopKind.MORE).single().rect.y, "+N: the last square, fifth row")
+        assertEquals(4, b.slots); assertEquals(3, tiles(b, HomeTopKind.TOOL).size); assertEquals(1, tiles(b, HomeTopKind.MORE).size); assertEquals(10, b.more)
+        near(28f + 115.6f, tiles(b, HomeTopKind.MORE).single().rect.y, "+N: the last tile, second row")
     }
-    // 1 pinned game sits inline, 0.4 · (734.33 − 14) = 288.13 wide, the top's full height, at 38 + 432.2 + 14 = 484.2;
-    // Continue 432.2. No pins: New's tiles start a gap under the top, at 306.67.
+    // 1 pinned game sits inline, 0.4 · (675 − 14) = 264.4 wide, the top's full height, at 38 + 396.6 + 14 = 448.6;
+    // Continue 396.6. No pins: New's tiles start a gap under the top, at 306.67.
     @Test fun oneGameSitsInline() {
-        val b = homeBoard(fold, 1, tools = 6, games = 1, shelves = listOf(HomeShelf.NEW to 6))
+        val b = homeBoard(fold, 1, tools = 4, games = 1, shelves = listOf(HomeShelf.NEW to 6))
         assertEquals(1, b.inlineGames); assertEquals(0, b.rowGames)
-        assertEquals(listOf(HomeTopKind.CONTINUE, HomeTopKind.GAME) + List(6) { HomeTopKind.TOOL }, b.top.map { it.kind })
-        near(432.2f, tiles(b, HomeTopKind.CONTINUE).single().rect.w, "continue w")
+        assertEquals(listOf(HomeTopKind.CONTINUE, HomeTopKind.GAME) + List(4) { HomeTopKind.TOOL }, b.top.map { it.kind })
+        near(396.6f, tiles(b, HomeTopKind.CONTINUE).single().rect.w, "continue w")
         val g = tiles(b, HomeTopKind.GAME).single().rect
-        near(484.2f, g.x, "game x"); near(28f, g.y, "game y"); near(288.13f, g.w, "game w"); near(264.67f, g.h, "game h")
+        near(448.6f, g.x, "game x"); near(28f, g.y, "game y"); near(264.4f, g.w, "game w"); near(264.67f, g.h, "game h")
         near(306.67f, homeBoardTile(b, 0).y, "New's tiles")
     }
     // 2 games: that column, stacked, each (264.67 − 14) / 2 = 125.33 tall, the second at 28 + 139.33.
@@ -71,7 +73,7 @@ class HomeLargeBoardTest {
         assertEquals(2, b.inlineGames); assertEquals(0, b.rowGames)
         val g = tiles(b, HomeTopKind.GAME).map { it.rect }
         near(28f, g[0].y, "game 0 y"); near(167.33f, g[1].y, "game 1 y")
-        for (r in g) { near(484.2f, r.x, "game x"); near(288.13f, r.w, "game w"); near(125.33f, r.h, "game h") }
+        for (r in g) { near(448.6f, r.x, "game x"); near(264.4f, r.w, "game w"); near(125.33f, r.h, "game h") }
         near(28f + 264.67f + 8f, b.pageH, "pageH: nothing below the top")
     }
     // No tools: the column 0.4 · (857 − 14) = 337.2 wide, flush right (38 + 857 − 337.2 = 557.8), Continue 505.8.
@@ -158,6 +160,9 @@ class HomeLargeBoardTest {
         val bp = homeBoardTile(big, 4)
         near(bp.y + bp.h + big.gap, homeBoardTile(big, 5).y, "New under the pins at 1.5")
         val small = homeBoard(fold.copy(textScale = 0.85f), 1, tools = 6, games = 7, shelves = three)
-        assertEquals(b, small.copy(stripY = b.stripY))                                           // a smaller system font: as at 1
+        // A smaller system font: as at 1 but the tool tiles' name lines, shorter as on the Tools page; the same 2 rows.
+        assertEquals(b.copy(top = emptyList(), toolH = 0f), small.copy(stripY = b.stripY, top = emptyList(), toolH = 0f))
+        near(toolTileHeight(80f, 0.85f), small.toolH, "the tiles at 0.85")
+        assertEquals(b.top.map { it.kind to it.rect.x }, small.top.map { it.kind to it.rect.x })
     }
 }
