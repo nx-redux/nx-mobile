@@ -19,7 +19,6 @@ import com.nxredux.mobile.ui.OnboardingStep.RA_DOWNLOAD
 import com.nxredux.mobile.ui.OnboardingStep.RA_SIGN_IN
 import com.nxredux.mobile.ui.OnboardingStep.SAVE_FORMATS
 import com.nxredux.mobile.ui.OnboardingStep.SYNC_OFFER
-import com.nxredux.mobile.ui.OnboardingStep.SYSTEM_BUTTONS
 import com.nxredux.mobile.ui.OnboardingStep.WELCOME
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -148,23 +147,9 @@ class OnboardingControllerTest {
         assertEquals(Pair(1, 7), c.position())
     }
 
-    // The controller's SELECT / START / MENU page sits right after the text size, unnumbered, before the bottom screen.
-    @Test fun systemButtonsBackGoesToTextSize() {
+    @Test fun bottomScreenBackGoesToTextSize() {
         val c = OnboardingController()
-        c.startTextSize()
-        c.startSystemButtons()
-        assertEquals(SYSTEM_BUTTONS, c.step)
-        assertEquals(Pair(0, 0), c.position())
-        assertFalse(c.isFirstMain())
+        c.startBottomScreen()
         assertEquals(TEXT_SIZE, c.back())
-        assertTrue(SYSTEM_BUTTONS !in onboardingSteps(OnboardingContext(customise = true, padPage = true, buttons = true)))
-    }
-
-    @Test fun bottomScreenBackGoesToSystemButtonsWithController() {
-        val c = OnboardingController()
-        c.startBottomScreen()
-        assertEquals(SYSTEM_BUTTONS, c.back(controller = true))
-        c.startBottomScreen()
-        assertEquals(TEXT_SIZE, c.back(controller = false))
     }
 }

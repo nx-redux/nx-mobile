@@ -166,12 +166,14 @@ internal fun SettingsDetailLines(lines: List<String>, separator: String = " ") {
 
 /**
  * Whether [screen] draws as touch rows: a page with a value row ([Screen.Settings.choices]), Library and System (their
- * groups, System's licence paragraphs) and Default emulators (a value page even when every console has one emulator).
+ * groups, System's licence paragraphs), Default emulators (a value page even when every console has one emulator) and
+ * System buttons (without a controller its one line is a paragraph, not a row to choose).
  * Emulators, Import saves and its results keep their rows.
  */
 internal fun settingsTouchPage(screen: Screen.Settings): Boolean =
     screen.choices.any { it != null } || screen.section == SettingsSection.DEFAULT_EMULATORS ||
-        screen.section == SettingsSection.LIBRARY || screen.section == SettingsSection.SYSTEM
+        screen.section == SettingsSection.LIBRARY || screen.section == SettingsSection.SYSTEM ||
+        screen.section == SettingsSection.SYSTEM_BUTTONS
 
 /** The Settings rows that open a page or an editor: their touch row ends in `›`. */
 private val OPENER_KINDS = setOf(

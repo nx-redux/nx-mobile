@@ -15,25 +15,24 @@ data class PadModel(val vendor: Int, val product: Int, val name: String) {
 /**
  * A physical button: its key code, or its scan code when Android has no key code for it (KEYCODE_UNKNOWN, 0), as the
  * AYANEO Pocket Air Mini's button below the logo (scan 0x2f1). Build it with [of], so a key with a code never carries
- * its scan code.
+ * its scan code. [device]: the input device that sends it when that is not the pad itself (a handheld whose SELECT and
+ * START sit on a device beside its pad), as the platform names it; empty for the pad's own button.
  */
-data class PhysicalKey(val keyCode: Int, val scanCode: Int) {
+data class PhysicalKey(val keyCode: Int, val scanCode: Int, val device: String = "") {
     companion object {
-        fun of(keyCode: Int, scanCode: Int): PhysicalKey = if (keyCode == 0) PhysicalKey(0, scanCode) else PhysicalKey(keyCode, 0)
+        fun of(keyCode: Int, scanCode: Int, device: String = ""): PhysicalKey =
+            if (keyCode == 0) PhysicalKey(0, scanCode, device) else PhysicalKey(keyCode, 0, device)
     }
 }
 
-/** Every model's overrides ([bound]: a role on a key other than its standard one) and the models already asked about ([asked]). */
-data class SystemButtonMap(
-    val bound: Map<String, Map<SystemRole, PhysicalKey>> = emptyMap(),
-    val asked: Set<String> = emptySet(),
-)
+/** Every model's overrides ([bound]: a role on a key other than its standard one). */
+data class SystemButtonMap(val bound: Map<String, Map<SystemRole, PhysicalKey>> = emptyMap())
 
 /**
- * Controls → System buttons and the onboarding page that sets them: which physical button is SELECT, START and MENU
- * on a pad model. A bound button acts only as its role ([translate]); a role with no override is its standard code.
+ * Controls → System buttons: which physical button is SELECT, START and MENU on a pad model. A bound button acts only as its role ([translate]); a role with no override is its standard code.
  */
 object SystemButtons {
+    // An entry earlier versions wrote (the models their setup page had asked about): read past, never written.
     private const val ASKED = "asked"
 
     fun keyOf(map: SystemButtonMap, model: String, role: SystemRole): PhysicalKey =
@@ -57,8 +56,6 @@ object SystemButtons {
 
     fun reset(map: SystemButtonMap, model: String): SystemButtonMap = map.copy(bound = map.bound - model)
 
-    fun markAsked(map: SystemButtonMap, model: String): SystemButtonMap = map.copy(asked = map.asked + model)
-
     /** The key code this press should become: its role's standard code when it's bound on [model], null to leave it alone. */
     fun translate(map: SystemButtonMap, model: String, keyCode: Int, scanCode: Int): Int? {
         if (map.bound[model] == null) return null
@@ -66,30 +63,35 @@ object SystemButtons {
         return role.keyCode.takeIf { it != keyCode }
     }
 
-    /** `4001:0428=MENU:0:753,SELECT:106:0;asked=4001:0428,057e:2009`; [decode] reads it back. */
-    fun encode(map: SystemButtonMap): String {
-        val models = map.bound.entries.sortedBy { it.key }.map { (model, roles) ->
-            "$model=" + roles.entries.sortedBy { it.key }.joinToString(",") { (r, k) -> "${r.name}:${k.keyCode}:${k.scanCode}" }
-        }
-        val asked = if (map.asked.isEmpty()) emptyList() else listOf("$ASKED=" + map.asked.sorted().joinToString(","))
-        return (models + asked).joinToString(";")
+    /** [translate] for a press from [device], which is no pad: the role some pad model keeps on that device's button. */
+    fun translateFrom(map: SystemButtonMap, device: String, keyCode: Int, scanCode: Int): Int? {
+        val key = PhysicalKey.of(keyCode, scanCode, device)
+        val role = map.bound.values.firstNotNullOfOrNull { roles -> roles.entries.firstOrNull { it.value == key }?.key } ?: return null
+        return role.keyCode.takeIf { it != keyCode }
     }
+
+    /** `4001:0428=MENU:0:753,SELECT:106:0:00010001` (a fourth part: the other device that sends the button); [decode] reads it back. */
+    fun encode(map: SystemButtonMap): String =
+        map.bound.entries.sortedBy { it.key }.joinToString(";") { (model, roles) ->
+            "$model=" + roles.entries.sortedBy { it.key }.joinToString(",") { (r, k) ->
+                "${r.name}:${k.keyCode}:${k.scanCode}" + if (k.device.isEmpty()) "" else ":${k.device}"
+            }
+        }
 
     /** [encode]'s text; empty or unreadable text is no bindings. */
     fun decode(stored: String): SystemButtonMap {
         if (stored.isBlank()) return SystemButtonMap()
         return runCatching {
-            var asked = emptySet<String>()
             val bound = mutableMapOf<String, Map<SystemRole, PhysicalKey>>()
             for (entry in stored.split(';')) {
                 val (name, value) = entry.split('=', limit = 2).also { require(it.size == 2) }
-                if (name == ASKED) { asked = value.split(',').filter { it.isNotEmpty() }.toSet(); continue }
+                if (name == ASKED) continue
                 bound[name] = value.split(',').associate { part ->
-                    val (role, code, scan) = part.split(':').also { require(it.size == 3) }
-                    SystemRole.valueOf(role) to PhysicalKey(code.toInt(), scan.toInt())
+                    val parts = part.split(':').also { require(it.size == 3 || it.size == 4) }
+                    SystemRole.valueOf(parts[0]) to PhysicalKey(parts[1].toInt(), parts[2].toInt(), parts.getOrElse(3) { "" })
                 }
             }
-            SystemButtonMap(bound, asked)
+            SystemButtonMap(bound)
         }.getOrElse { SystemButtonMap() }
     }
 }
