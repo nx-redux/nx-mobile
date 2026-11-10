@@ -13611,6 +13611,40 @@ class AppStateTest {
         assertEquals(listOf("Cheats for 2 games", "BIOS missing"), state.topStats.value?.chips)
     }
 
+    private fun TestScope.dualConsoleState(runner: RecordingRunner): AppState {
+        val state = state(MemorySettings(ContentRef("Home")), src = bigSource(), runner = runner).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
+        state.openConsolesTab(); advanceUntilIdle()
+        state.selectConsole("GB"); advanceUntilIdle()
+        return state
+    }
+
+    @Test fun a_top_tap_launches_and_quit_returns_to_the_console_row() = runTest {
+        val runner = RecordingRunner()
+        val state = dualConsoleState(runner)
+        val row = state.selection.value.index
+        val tile = assertNotNull(state.topStats.value).shelf.first().entry
+        assertNotNull(state.launchFromTop(tile)); advanceUntilIdle()
+        assertEquals(listOf(tile.game.path), runner.launched.map { it.gamePath })
+        state.onForeground(); advanceUntilIdle()   // the game quit
+        val back = assertIs<Screen.Systems>(state.screen.value)
+        assertEquals(row, state.selection.value.index)
+        assertEquals("GB", assertIs<MainRow.System>(back.rows[row]).system.tag)
+    }
+
+    @Test fun a_top_tap_does_nothing_while_a_context_menu_or_prompt_is_open() = runTest {
+        val runner = RecordingRunner()
+        val state = dualConsoleState(runner)
+        val tile = assertNotNull(state.topStats.value).shelf.first().entry
+        state.openSearch(); advanceUntilIdle()
+        assertTrue(state.textEntryOpen)
+        assertNull(state.launchFromTop(tile)); advanceUntilIdle()
+        assertTrue(runner.launched.isEmpty())
+        state.back()
+        state.selectConsole("GBA"); advanceUntilIdle()   // the shelf shown belongs to another console now
+        assertNull(state.launchFromTop(tile)); advanceUntilIdle()
+        assertTrue(runner.launched.isEmpty())
+    }
+
     // GB's BIOS read finishes after the highlight moved to GBA, ignoring the move's cancel: GBA's page must stay.
     @Test fun stats_never_paint_a_console_the_highlight_left() = runTest {
         val gate = CompletableDeferred<Unit>()

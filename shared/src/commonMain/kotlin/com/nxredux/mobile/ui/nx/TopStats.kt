@@ -20,9 +20,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -174,10 +182,9 @@ private const val SHELF_MAX = 5
 /**
  * The top screen's console / collection stats: the header (console logo, title, emulators or consoles), the four
  * numbers, the shelf and the chips. Nothing scrolls: on a short screen the chips go first, then the shelf shrinks, and
- * the shelf shows the tiles that fit its width. [onLaunch]: a shelf game's tap (not wired yet). [prefer]: Layouts →
+ * the shelf shows the tiles that fit its width. [onLaunch]: a shelf game's clean tap. [prefer]: Layouts →
  * Backdrop art.
  */
-@Suppress("UNUSED_PARAMETER")
 @Composable
 fun TopStatsPage(stats: TopStats, onLaunch: (Listed) -> Unit, prefer: BackdropArt = BackdropArt.BOX3D) {
     val colors = LocalNxColors.current
@@ -198,7 +205,7 @@ fun TopStatsPage(stats: TopStats, onLaunch: (Listed) -> Unit, prefer: BackdropAr
             if (shelf) {
                 Label(stats.shelfTitle)
                 Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(TS_GAP)) {
-                    stats.shelf.take(tiles).forEach { ShelfTile(it, prefer, Modifier.weight(1f)) }
+                    stats.shelf.take(tiles).forEach { ShelfTile(it, prefer, Modifier.weight(1f).cleanTap { onLaunch(it.entry) }) }
                     repeat(tiles - stats.shelf.size.coerceAtMost(tiles)) { Spacer(Modifier.weight(1f)) }
                 }
             } else {
@@ -287,3 +294,28 @@ private val TS_CHIP = 11.sp
 private val TS_LABEL = 10.sp
 private val TS_CHIPS_MIN: Dp = 260.dp   // shorter top screens drop the chips first
 private val TS_SHELF_MIN: Dp = 170.dp   // then the shelf, after it has shrunk to a sliver
+
+/**
+ * A tap that only taps: one finger, up within the touch slop of where it went down. A drag or a second finger is not
+ * one, and nothing is consumed, so a swipe over the tile does what it did before.
+ */
+private fun Modifier.cleanTap(onTap: () -> Unit): Modifier = composed {
+    val action = rememberUpdatedState(onTap)
+    pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            var clean = true
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Final)
+                if (event.changes.size > 1) clean = false
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) clean = false
+                if (change.changedToUp()) {
+                    if (clean) action.value()
+                    break
+                }
+                if (!change.pressed) break
+            }
+        }
+    }
+}

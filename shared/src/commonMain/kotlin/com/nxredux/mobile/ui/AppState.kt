@@ -5066,11 +5066,7 @@ class AppState(
         when (val row = s.rows.getOrNull(index)) {
             is MainRow.System -> { intendNav(forward); openSystem(row.system) }
             // Home's pinned game, as Continue: its save read now resumes, none plays. An Android game opens its app.
-            is MainRow.Pin -> {
-                rememberMenuSelection()
-                if (!row.entry.system.android) return launches.resumeFromSave(row.entry, orPlay = true)
-                androidApps.launchApp(row.entry)
-            }
+            is MainRow.Pin -> return launchPinned(row.entry)
             // A shelf game, as a pin (never an Android game).
             is MainRow.Shelf -> { rememberMenuSelection(); return launches.resumeFromSave(row.entry, orPlay = true) }
             is MainRow.Collection -> { intendNav(forward); openList(ListSource.Collection(row.name)) }
@@ -5084,6 +5080,31 @@ class AppState(
             null -> Unit
         }
         return null
+    }
+
+    /** [openMainRow]'s pinned game: remembers the row so a quit lands back on it. */
+    private fun launchPinned(entry: Listed): Job? {
+        rememberMenuSelection()
+        if (!entry.system.android) return launches.resumeFromSave(entry, orPlay = true)
+        androidApps.launchApp(entry)
+        return null
+    }
+
+    /**
+     * A tap on a game of the top screen's stats shelf: played as Home's pinned game. Refused (null) while anything else
+     * has the bottom screen, or once the bottom's highlight left the console or collection whose shelf was tapped.
+     */
+    fun launchFromTop(entry: Listed): Job? {
+        if (loader.active || launches.minimalPending || kidsUi.kidsLocked || textEntryOpen) return null
+        if (settingsUi.chooser.value != null || settingsUi.settingInfo.value != null || _capturingShortcut.value != null) return null
+        if (_androidGamesAsk.value != null || _updateConfirm.value != null || updatePopupShows() || _error.value != null) return null
+        if (netplay?.page?.value != null) return null
+        val s = _screen.value as? Screen.Systems ?: return null
+        if (s.menu != null || s.search != null) return null
+        val stats = _topStats.value ?: return null
+        if (stats.key != statsKey(DualMenu.top(s, _selection.value.index))) return null
+        if (stats.shelf.none { it.entry.game.path == entry.game.path }) return null
+        return launchPinned(entry)
     }
 
     fun select(index: Int) {

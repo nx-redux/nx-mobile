@@ -72,7 +72,7 @@ fun MenuTopScreen(state: AppState, inSkin: Boolean = false) {
                             ?.let { TopDetailsPage(it, artLayout.backdrop) } ?: Backdrop()
                         // As the details: never another console's or collection's stats while the feed catches up.
                         is TopContent.ConsoleStats, is TopContent.CollectionStats -> stats?.takeIf { it.key == statsKey(top) }
-                            ?.let { TopStatsPage(it, onLaunch = {}, prefer = artLayout.backdrop) } ?: Backdrop()
+                            ?.let { TopStatsPage(it, onLaunch = { state.launchFromTop(it) }, prefer = artLayout.backdrop) } ?: Backdrop()
                         TopContent.Backdrop -> Backdrop()
                     }
                 }
