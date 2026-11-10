@@ -151,7 +151,6 @@ import com.nxredux.mobile.ui.nx.collectionStats
 import com.nxredux.mobile.ui.nx.consoleStats
 import com.nxredux.mobile.ui.nx.statsKey
 import com.nxredux.mobile.ui.nx.detailsRaFor
-import com.nxredux.mobile.ui.nx.gameMeta
 import com.nxredux.mobile.ui.nx.detailsBody
 import com.nxredux.mobile.storage.Shortcut
 import com.nxredux.mobile.storage.SidecarStore
@@ -241,8 +240,6 @@ class AppDeps(
     val gameTime: GameTimeData? = null,
     /** The top screen's details page reads a game's file and BIOS facts here (null on a platform without them). */
     val topFacts: TopFactsPlatform? = null,
-    /** Debug builds fill the details page's missing facts with placeholders. */
-    val placeholderMeta: Boolean = false,
     /** The wall clock (epoch ms) that stamps a successful scan for Settings -> Library's "Last scan"; null records none. */
     val now: (() -> Long)? = null,
     /**
@@ -1207,7 +1204,7 @@ class AppState(
         val path = entry.game.path
         _topDetails.value = TopDetails(
             entry, _gameInfo.value[path], shown?.resume ?: ResumeInfo.NONE,
-            detailsBody(detailsRaFor(entry, ra.detailsRa.value)), gameMeta(deps.placeholderMeta), shown?.scraped,
+            detailsBody(detailsRaFor(entry, ra.detailsRa.value)), shown?.scraped,
         )
         if (shown != null && !reread) return   // its reads ran or are running
         val ref = infoRef(entry)

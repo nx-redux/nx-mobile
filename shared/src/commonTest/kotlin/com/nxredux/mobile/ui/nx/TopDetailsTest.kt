@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui.nx
 
+import com.nxredux.mobile.scraper.StoredGameInfo
 import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.achievements.RaAchievementState
 import com.nxredux.mobile.achievements.RaProgress
@@ -54,11 +55,14 @@ class TopDetailsTest {
         assertEquals(DetailsBody.None, detailsBody(panel(RaPanelContent.Game("h", emptyList(), emptyMap()))))
     }
 
-    @Test fun no_placeholder_meta_in_release() {
-        assertNull(gameMeta(placeholderMeta = false))
-        val m = assertNotNull(gameMeta(placeholderMeta = true))
-        assertTrue(m.genre.isNotBlank())
+    @Test fun no_placeholder_text_exists() {
+        assertNull(synopsisOf(null))
+        assertNull(synopsisOf(stored(synopsis = "  ")))
+        assertEquals("A hero.", synopsisOf(stored(synopsis = " A hero. ")))
     }
+
+    private fun stored(synopsis: String? = null, genre: String? = null, year: String? = null, publisher: String? = null) =
+        StoredGameInfo(synopsis, genre, year, publisher, null, null, 0L)
 
     private val day = 86_400_000L
     private val now = 10 * day
@@ -76,9 +80,11 @@ class TopDetailsTest {
         assertEquals("Never played", playLine(GameInfo(null, null, RaProgress(0, 10, "A"), null), now))
     }
 
-    @Test fun the_genre_line_is_the_console_alone_without_facts() {
+    @Test fun genre_line_includes_publisher_and_omits_missing_parts() {
         assertEquals("Game Boy Advance", genreLine(null, "Game Boy Advance"))
-        assertEquals("RPG · 2004 · Game Boy Advance", genreLine(GameMeta("RPG", "2004"), "Game Boy Advance"))
+        assertEquals("RPG · 2004 · Nintendo · Game Boy Advance", genreLine(stored(genre = "RPG", year = "2004", publisher = "Nintendo"), "Game Boy Advance"))
+        assertEquals("2004 · Game Boy Advance", genreLine(stored(year = "2004", genre = " "), "Game Boy Advance"))
+        assertEquals("Nintendo · Game Boy Advance", genreLine(stored(publisher = "Nintendo"), "Game Boy Advance"))
     }
 
     @Test fun achievements_count_unlocked_and_name_the_first_locked() {
@@ -111,11 +117,16 @@ class TopDetailsTest {
 
     // A small top screen (inside its padding) gives the text the width first, then drops the next goal.
     @Test fun a_small_top_screen_drops_the_picture_then_the_next_goal() {
-        assertEquals(DetailsFit(picture = true, next = true), detailsFit(560.dp, 300.dp))
-        assertEquals(DetailsFit(picture = true, next = true), detailsFit(400.dp, 220.dp))
-        assertEquals(DetailsFit(picture = false, next = true), detailsFit(399.dp, 300.dp))   // narrow: the text takes the width
-        assertEquals(DetailsFit(picture = false, next = true), detailsFit(560.dp, 219.dp))
-        assertEquals(DetailsFit(picture = false, next = true), detailsFit(560.dp, 176.dp))
-        assertEquals(DetailsFit(picture = false, next = false), detailsFit(560.dp, 175.dp))
+        assertEquals(DetailsFit(picture = true, next = true, synopsis = true), detailsFit(560.dp, 320.dp))
+        assertEquals(DetailsFit(picture = true, next = true, synopsis = false), detailsFit(400.dp, 220.dp))
+        assertEquals(DetailsFit(picture = false, next = true, synopsis = true), detailsFit(399.dp, 320.dp))   // narrow: the text takes the width
+        assertEquals(DetailsFit(picture = false, next = true, synopsis = false), detailsFit(560.dp, 219.dp))
+        assertEquals(DetailsFit(picture = false, next = true, synopsis = false), detailsFit(560.dp, 176.dp))
+        assertEquals(DetailsFit(picture = false, next = false, synopsis = false), detailsFit(560.dp, 175.dp))
+    }
+
+    @Test fun synopsis_is_dropped_first_on_short_screens() {
+        assertEquals(DetailsFit(picture = true, next = true, synopsis = false), detailsFit(560.dp, 319.dp))
+        assertEquals(DetailsFit(picture = true, next = true, synopsis = false), detailsFit(560.dp, 220.dp))
     }
 }

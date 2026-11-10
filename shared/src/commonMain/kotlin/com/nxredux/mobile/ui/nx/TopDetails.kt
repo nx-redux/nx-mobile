@@ -64,30 +64,26 @@ internal fun detailsBody(ra: RaPanel?): DetailsBody = when (val c = ra?.content)
     else -> DetailsBody.None
 }
 
-/** Scraped facts about a game; until a scraper fills them only debug builds show placeholders ([gameMeta]). */
-data class GameMeta(val genre: String, val year: String)
-
-private val PLACEHOLDER_META = GameMeta(genre = "[Genre]", year = "[Year]")
-
-/** The details page's facts: a visible placeholder when [placeholderMeta] (debug), else none, so release never shows fake facts. */
-internal fun gameMeta(placeholderMeta: Boolean): GameMeta? = if (placeholderMeta) PLACEHOLDER_META else null
-
 /**
- * The top screen's page for the highlighted game: its play history ([info]), resume save, achievements, scraped
- * facts ([meta]) and its stored ScreenScraper info ([scraped], null until read or fetched).
+ * The top screen's page for the highlighted game: its play history ([info]), resume save, achievements and its
+ * stored ScreenScraper info ([scraped], null until read or fetched).
  */
 data class TopDetails(
     val entry: Listed,
     val info: GameInfo?,
     val resume: ResumeInfo,
     val achievements: DetailsBody,
-    val meta: GameMeta?,
     val scraped: StoredGameInfo? = null,
 )
 
-/** "RPG · 2004 · Game Boy Advance" with scraped facts, else the console's name alone. */
-internal fun genreLine(meta: GameMeta?, console: String): String =
-    listOfNotNull(meta?.genre, meta?.year, console).joinToString(INFO_SEPARATOR)
+/** "RPG · 2004 · Nintendo · Game Boy Advance" with [info]'s facts (missing ones left out), else the console's name alone. */
+internal fun genreLine(info: StoredGameInfo?, console: String): String =
+    listOfNotNull(info?.genre?.nonBlank(), info?.year?.nonBlank(), info?.publisher?.nonBlank(), console).joinToString(INFO_SEPARATOR)
+
+/** [info]'s synopsis, null when there is none (a blank one is none). */
+internal fun synopsisOf(info: StoredGameInfo?): String? = info?.synopsis?.trim()?.ifEmpty { null }
+
+private fun String.nonBlank(): String? = trim().ifEmpty { null }
 
 /**
  * The play line at [now]: "41 m played · 25 sessions · last played today", each part left out without data (the first
@@ -124,17 +120,20 @@ internal fun resumeCaption(image: ShelfImage, resume: String?, savedAt: Long?, n
     return listOfNotNull("Continue", savedAt?.let { whenText(now, it).lowercase() }).joinToString(INFO_SEPARATOR)
 }
 
-/** What a top screen [width] x [height] (inside its padding) keeps: a small one drops the picture first, then the next goal. */
-internal data class DetailsFit(val picture: Boolean, val next: Boolean)
+/** What a top screen [width] x [height] (inside its padding) keeps: a small one drops the synopsis first, then the picture, then the next goal. */
+internal data class DetailsFit(val picture: Boolean, val next: Boolean, val synopsis: Boolean)
 
 internal fun detailsFit(width: Dp, height: Dp): DetailsFit =
-    DetailsFit(picture = width >= TD_PICTURE_MIN_W && height >= TD_PICTURE_MIN_H, next = height >= TD_NEXT_MIN_H)
+    DetailsFit(
+        picture = width >= TD_PICTURE_MIN_W && height >= TD_PICTURE_MIN_H, next = height >= TD_NEXT_MIN_H,
+        synopsis = height >= TD_SYNOPSIS_MIN_H,
+    )
 
 /**
  * The top screen's game details, in the stats page's language: on the left, anchored to the bottom, the title, the
  * genre line, the play line and the achievements block (a count, a bar and the next goal); on the right, one 16:9
  * picture ([detailsImage]) captioned "Continue · <when>" when it is the resume save's. Nothing scrolls; a small screen
- * drops the picture, then the next goal ([detailsFit]). [onAchievements]: the achievements block's clean tap, the only
+ * drops the synopsis, then the picture, then the next goal ([detailsFit]). [onAchievements]: the achievements block's clean tap, the only
  * touch here. [prefer]: Layouts → Backdrop art, for a game whose only picture is its box.
  */
 @Composable
@@ -147,7 +146,7 @@ fun TopDetailsPage(details: TopDetails, onAchievements: () -> Unit, prefer: Back
         BoxWithConstraints(Modifier.fillMaxSize().padding(pad)) {
             val fit = detailsFit(maxWidth, maxHeight)
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.Bottom) {
-                DetailsText(details, now, fit.next, onAchievements, Modifier.weight(TD_TEXT_SHARE))
+                DetailsText(details, now, fit, onAchievements, Modifier.weight(TD_TEXT_SHARE))
                 if (fit.picture) {
                     Spacer(Modifier.width(gap))
                     DetailsPicture(details, now, prefer, Modifier.weight(1f - TD_TEXT_SHARE))
@@ -158,7 +157,7 @@ fun TopDetailsPage(details: TopDetails, onAchievements: () -> Unit, prefer: Back
 }
 
 @Composable
-private fun DetailsText(details: TopDetails, now: Long, next: Boolean, onAchievements: () -> Unit, modifier: Modifier) {
+private fun DetailsText(details: TopDetails, now: Long, fit: DetailsFit, onAchievements: () -> Unit, modifier: Modifier) {
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
     Column(modifier.fillMaxHeight(), verticalArrangement = Arrangement.Bottom) {
@@ -167,9 +166,15 @@ private fun DetailsText(details: TopDetails, now: Long, next: Boolean, onAchieve
             maxLines = 2, overflow = TextOverflow.Ellipsis, style = TextStyle(lineHeightStyle = TOP_TIGHT_LINES),
         )
         Text(
-            genreLine(details.meta, details.entry.system.displayName), color = colors.hint, fontFamily = font, fontSize = 18.sp,
+            genreLine(details.scraped, details.entry.system.displayName), color = colors.hint, fontFamily = font, fontSize = 18.sp,
             maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(lineHeightStyle = TOP_TIGHT_LINES), modifier = Modifier.padding(top = 2.dp),
         )
+        if (fit.synopsis) synopsisOf(details.scraped)?.let { synopsis ->
+            Text(
+                synopsis, color = colors.hint, fontFamily = font, fontSize = 16.sp, maxLines = TD_SYNOPSIS_LINES,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp),
+            )
+        }
         Text(
             playLine(details.info, now), color = colors.listText, fontFamily = font, fontSize = 18.sp, maxLines = 1,
             overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 16.dp),
@@ -183,7 +188,7 @@ private fun DetailsText(details: TopDetails, now: Long, next: Boolean, onAchieve
                 Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(colors.inkFaint)) {
                     if (a.unlocked > 0) Box(Modifier.fillMaxWidth(a.unlocked.toFloat() / a.total).fillMaxHeight().background(colors.listText))
                 }
-                if (next && a.next != null) {
+                if (fit.next && a.next != null) {
                     Text(
                         buildAnnotatedString {
                             withStyle(SpanStyle(color = colors.hint)) { append("Next: ") }
@@ -224,4 +229,6 @@ private const val TD_TEXT_SHARE = 0.55f          // the text column's share of t
 private const val TD_COLUMN_GAP = 0.05f          // between the columns, of the screen's width
 private val TD_PICTURE_MIN_W: Dp = 400.dp        // narrower: the text takes the width
 private val TD_PICTURE_MIN_H: Dp = 220.dp        // shorter: the picture goes first
+private const val TD_SYNOPSIS_LINES = 5
+private val TD_SYNOPSIS_MIN_H: Dp = 320.dp       // shorter: the synopsis goes first
 private val TD_NEXT_MIN_H: Dp = 176.dp           // then the next goal
