@@ -52,7 +52,9 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.round
+import com.nxredux.mobile.ui.nx.NxDelayIndicator
 import com.nxredux.mobile.ui.nx.NxSpeedIndicator
+import com.nxredux.mobile.ui.nx.pictureIndicatorAnchor
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -81,6 +83,7 @@ import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.netplay.NetplayLinkOptions
 import com.nxredux.mobile.netplay.NetplayRole
+import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.options.AudioOptions
 import com.nxredux.mobile.options.FrameSkipOptions
@@ -1561,20 +1564,23 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow().round() }) {
                         val maxW = nxTopCentreMaxWidth(maxWidth.value, maxHeight.value, inset).dp
                         NxNotifications(toasts, pill, safeSides = sides, placement = placement, topCentreMaxWidth = maxW, onAction = input::onNoticeAction, onDismiss = input::onNoticeDismiss)
-                        // Top-right of the picture (not the screen: the landscape pad's shoulders hold the screen's corners),
-                        // kept inside the cutout; not under the menu.
+                        // Top-right of the picture ([pictureIndicatorAnchor]); not under the menu. This view sits over
+                        // the pad skin, so a skin's shell never covers them. The speed indicator and a Cable Link
+                        // session's delay share the corner: shortcuts do nothing in a session, so never both.
                         val kind = speed.indicator.value
+                        val delay = gameNetplay.delayShown.value
                         val pic = renderer.pictureBox.value
-                        if (kind != null && pic != null && !menuOpenState.value) {
-                            val margin = with(density) { 8.dp.roundToPx() }
-                            val cutRight = cutout.getRight(density, dir)
-                            val cutTop = cutout.getTop(density)
-                            val right = minOf(pic.right - origin.x, constraints.maxWidth - cutRight) - margin
-                            val top = maxOf(pic.top - origin.y, cutTop) + margin
-                            NxSpeedIndicator(kind, Modifier.layout { m, c ->
+                        if ((kind != null || delay != null) && pic != null && !menuOpenState.value) {
+                            val (right, top) = pictureIndicatorAnchor(
+                                pic.right - origin.x, pic.top - origin.y, constraints.maxWidth,
+                                cutout.getRight(density, dir), cutout.getTop(density), with(density) { 8.dp.roundToPx() },
+                            )
+                            val atAnchor = Modifier.layout { m, c ->
                                 val p = m.measure(c)
                                 layout(0, 0) { p.place(right - p.width, top) }
-                            })
+                            }
+                            if (kind != null) NxSpeedIndicator(kind, atAnchor)
+                            else if (delay != null) NxDelayIndicator(NetplayText.inputDelay(delay), atAnchor)
                         }
                     }
                 }

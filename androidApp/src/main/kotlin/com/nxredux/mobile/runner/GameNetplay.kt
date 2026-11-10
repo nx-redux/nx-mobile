@@ -3,11 +3,9 @@ package com.nxredux.mobile.runner
 import android.content.Intent
 import android.os.Bundle
 import android.os.SystemClock
-import android.view.View
-import android.widget.TextView
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import com.nxredux.mobile.R
 import com.nxredux.mobile.lowLatencyWifiLock
 import com.nxredux.mobile.netplay.NetplayLinkKind
 import com.nxredux.mobile.netplay.NetplayLinkOptions
@@ -392,13 +390,10 @@ internal class GameNetplay(private val host: GameNetplayHost) {
         }.onFailure { NxLog.w(TAG_LOG, "pair save snapshot failed", it) }
     }
 
-    /** The Developer overlay's input delay; null hides it. Main thread. */
-    private fun showDelay(frames: Int?) {
-        val label = host.activity.findViewById<TextView>(R.id.netplayDelay) ?: return
-        if (frames == null) { label.visibility = View.GONE; return }
-        label.text = NetplayText.inputDelay(frames)
-        label.visibility = View.VISIBLE
-    }
+    /** The delay overlay's input delay, frames; null hides it. Drawn with the notifications, over the pad skin. */
+    val delayShown = mutableStateOf<Int?>(null)
+
+    private fun showDelay(frames: Int?) { delayShown.value = frames }
 
     private companion object {
         const val KEY_NETPLAY_LOCAL = "nx_netplay_local"   // netplay link: the session had ended ([local])
