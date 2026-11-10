@@ -386,6 +386,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var gameTime: GameTimeRecorder? = null
     private var gameTimeTicker: Job? = null
 
+    // Settings → System → Screen care: both screens' layers (this window's, the second display's while it is up).
+    private var mainCare: CareLayer? = null
+    private val care = ScreenCare(SystemClock::uptimeMillis, { listOfNotNull(mainCare, dual.presentation?.careLayer) }, { syncKeepScreenOn() })
+    private var careTicker: Job? = null
+
     // ---- frontend (display) settings ----
     override var gameTag = "UNKNOWN"
         private set
@@ -506,6 +511,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             else @Suppress("DEPRECATION") setTaskDescription(ActivityManager.TaskDescription(recentsLabel))
         }
         setContentView(R.layout.activity_game)
+        mainCare = CareLayer(findViewById(R.id.root))
+        care.enabled = settings.screenCare
         opaqueAfterFirstFrame()
         dual.readPlayTotal()   // before this launch's own slices land: the header's total stays as it was
         volumeControlStream = AudioManager.STREAM_MUSIC   // volume keys set the game's (media) volume, even between sounds
@@ -725,10 +732,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /**
      * The screen stays on while the game runs (cutscenes and attract screens get no input), not while it is held (the
      * in-game menu, a focus pause): a paused game sleeps on Android's timeout. A live netplay session runs on while held,
-     * so it holds the screen too.
+     * so it holds the screen too. Screen care lets a running game nobody has touched for a while sleep too.
      */
     private fun syncKeepScreenOn() {
-        if (testAwake || !corePaused() || gameNetplay.run?.live == true) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (testAwake || gameNetplay.run?.live == true || (!corePaused() && !care.letSleep)) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
@@ -774,6 +781,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         lifecycleScope.launch {
             withContext(Dispatchers.IO) { Prefs.refreshGame() }
             if (quitting || isFinishing || !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return@launch
+            care.enabled = settings.screenCare
             dual.syncDual()
             // Both ways: a focus change before the refresh landed acted on the old value.
             val resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
@@ -791,11 +799,16 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (isNds) input.syncPen()   // restarts the pen tick onStop stopped, if stylus mode is on
         if (isN3ds) input.syncN3dsCursor()
         dual.secondScreens.start()   // the collector shows the presentation again
+        care.input()   // back in the foreground: the idle time starts again
+        careTicker = lifecycleScope.launch {
+            while (true) { delay(CARE_TICK_MS); care.tick(running = !corePaused() && !quitting) }
+        }
         // onStop closed the session: back in the foreground, a new one on the same game (background time is not play)
         gameTime?.let { if (!isFinishing && !quitting) { it.resume(); startGameTimeTicker(it) } }
     }
 
     override fun onStop() {
+        careTicker?.cancel(); careTicker = null
         gameTime?.pause()   // the session ends here: a kill in the background loses nothing, a return opens a new one
         gameTimeTicker?.cancel()
         gameTimeTicker = null
@@ -1794,8 +1807,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
     override val gameContainer: FrameLayout get() = findViewById(R.id.gameContainer)
 
+    override fun careInput() = care.input()
+    override fun careAdopt(layer: CareLayer) = care.adopt(layer)
+
     override fun dispatchKeyEvent(raw: KeyEvent): Boolean {
         kidsInputSeen()
+        care.input()
         val event = SystemButtonKeys.translate(this, raw)   // a bound SELECT / START / MENU button as its role, first
         val code = event.keyCode
         // The Adjust buttons editor is touch-driven: Back / B leave it, every other key waits (the menu under it and the
@@ -1809,12 +1826,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         kidsInputSeen()
+        care.input()
         return super.dispatchTouchEvent(event)
     }
 
     /** Sticks go nowhere under the Adjust buttons editor. */
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
         kidsInputSeen()
+        care.input()
         return skinEditView != null || super.dispatchGenericMotionEvent(event)
     }
 

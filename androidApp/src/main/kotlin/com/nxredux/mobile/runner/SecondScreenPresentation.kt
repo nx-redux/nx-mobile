@@ -53,6 +53,13 @@ class SecondScreenPresentation(private val activity: ComponentActivity, display:
     /** The Panel pill was tapped (DS/3DS split: flip the second display to the panel). */
     var onPanelPill: () -> Unit = {}
 
+    /** A touch anywhere on this display (Screen care: the player is here). */
+    var onInput: () -> Unit = {}
+
+    /** This display's Screen care layer, once the window is created. */
+    internal var careLayer: CareLayer? = null
+        private set
+
     /** Wraps the panel and the pill in the app's theme (colours, font); identity until set. */
     var theme: @Composable (@Composable () -> Unit) -> Unit = { it() }
 
@@ -127,7 +134,13 @@ class SecondScreenPresentation(private val activity: ComponentActivity, display:
             v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             WindowInsetsCompat.CONSUMED
         }
+        careLayer = CareLayer(root)
         setContentView(root)
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        onInput()
+        return super.dispatchTouchEvent(ev)
     }
 
     // Should a key or a stick still arrive here, it is the game's (the activity's).

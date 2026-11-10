@@ -123,6 +123,10 @@ internal interface DualScreenHost : GameScreenHost {
     fun micTile(): Boolean?
     /** The Reset tile: reset always asks first, so the in-game menu opens on its Reset dialog. */
     fun askReset()
+    /** Screen care: a touch on the second display. */
+    fun careInput()
+    /** Screen care: the second display's window came; it takes the current offset and dim. */
+    fun careAdopt(layer: CareLayer)
 }
 
 /**
@@ -467,6 +471,7 @@ internal class DualScreenController(
         }
         p.theme = panelTheme()
         p.onPanelPill = { panelUp = true; syncDual() }
+        p.onInput = { owner.careInput() }
         p.onTouch = { x, y, down ->
             retroView?.let { view ->
                 val point = view.mapSecondaryTouch(x, y)
@@ -484,6 +489,7 @@ internal class DualScreenController(
             presentationShape = shapeOf(display)
             presentation = p
             p.show()
+            p.careLayer?.let { owner.careAdopt(it) }
         } catch (e: WindowManager.InvalidDisplayException) {
             NxLog.w(TAG_LOG, "second screen ${display.displayId} went before its window showed", e)
             presentation = null
