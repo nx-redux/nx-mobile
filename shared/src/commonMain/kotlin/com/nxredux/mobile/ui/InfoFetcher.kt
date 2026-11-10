@@ -5,6 +5,7 @@ import com.nxredux.mobile.gametime.systemLocalCalendar
 import com.nxredux.mobile.scraper.GameInfoStore
 import com.nxredux.mobile.scraper.InfoResult
 import com.nxredux.mobile.scraper.LibraryGameRef
+import com.nxredux.mobile.scraper.QuietArt
 import com.nxredux.mobile.scraper.ScreenScraperSource
 import com.nxredux.mobile.scraper.SourceStop
 import com.nxredux.mobile.scraper.SsQuota
@@ -38,11 +39,8 @@ class InfoFetcher(
     private val lookup: suspend (LibraryGameRef) -> InfoResult?,
     /** The game lacks art an Artwork run would fetch. */
     private val wantsArt: (LibraryGameRef) -> Boolean = { false },
-    /**
-     * The quiet single-game art run, storing the info its lookup brings: null when not made, true once finished. May
-     * throw [SourceStop] or a pause, as [lookup].
-     */
-    private val fetchArt: suspend (LibraryGameRef) -> Boolean? = { null },
+    /** The quiet single-game art run, storing the info its lookup brings. May throw [SourceStop] or a pause, as [lookup]. */
+    private val fetchArt: suspend (LibraryGameRef) -> QuietArt = { QuietArt.NOT_WANTED },
     private val enabled: () -> Boolean,
     private val runActive: () -> Boolean,
     /** ScreenScraper's last quota read and when (epoch millis); null when none was read. */
@@ -66,7 +64,7 @@ class InfoFetcher(
     private var stoppedUntil = Long.MIN_VALUE
     /** Found but not storable (a library folder that can't be written): not asked again this process. */
     private val unstorable = HashSet<String>()
-    /** The games whose art run finished this process. */
+    /** The games whose art run finished, or was not wanted, this process. */
     private val artTried = HashSet<String>()
 
     /** The game now shown on the top screen, or null for none. */
@@ -108,10 +106,14 @@ class InfoFetcher(
         if (t < stoppedUntil) return
         if (quotaSpent(t)) { stoppedUntil = calendar.dayStart(t, 1); return }
         if (ref.gamePath !in artTried && wantsArt(ref)) {
-            tryOr({ e -> stoppedUntil = stopAfter(e); null }) { fetchArt(ref) } ?: return
+            val r = tryOr({ e -> stoppedUntil = stopAfter(e); null }) { fetchArt(ref) }
+            if (r == null || r == QuietArt.BUSY) return
             artTried += ref.gamePath
-            if (store.read(ref) != null) _fetched.emit(ref.gamePath)
-            return
+            if (r == QuietArt.DONE) {
+                if (store.read(ref) != null) _fetched.emit(ref.gamePath)
+                return
+            }
+            // Not wanted (the art arrived meanwhile, or the game is hidden): its info alone, as for a game with art.
         }
         if (ref.gamePath in unstorable || store.read(ref) != null || store.isMiss(ref.gamePath)) return
         val r = tryOr({ e -> stoppedUntil = stopAfter(e); null }) { lookup(ref) }

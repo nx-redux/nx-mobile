@@ -1489,7 +1489,7 @@ class ArtworkControllerTest {
         val before = rig.controller.state.value
         assertTrue(rig.controller.wantsArt(boxOnly))
         assertFalse(rig.controller.wantsArt(Scrape.homeGame("Tetris.gb", have = Scrape.HAS_ART)))
-        assertEquals(true, rig.controller.fetchArtQuietly(boxOnly))
+        assertEquals(QuietArt.DONE, rig.controller.fetchArtQuietly(boxOnly))
         assertEquals(1, rig.http.count("jeuInfos"))
         assertEquals(0, rig.http.count("ssuserInfos"))   // no job start: no quota read beside the lookup
         assertEquals(1, rig.http.count("https://m/s.png"))
@@ -1520,16 +1520,37 @@ class ArtworkControllerTest {
         val loose = Scrape.homeGame("Loose.gb", tag = "", dir = "Roms")
         val rig = Rig(this, listOf(loose, tetris, zelda))
         assertFalse(rig.controller.wantsArt(loose))
-        assertNull(rig.controller.fetchArtQuietly(loose))
+        assertEquals(QuietArt.NOT_WANTED, rig.controller.fetchArtQuietly(loose))
         rig.http.on("romnom=", Scrape.BOTH)
         rig.http.on("https://m/", OK_PNG)
         rig.http.latency = 1_000
         rig.controller.fetchMissing()
         advanceTimeBy(500)
         assertTrue(rig.controller.busy)
-        assertNull(rig.controller.fetchArtQuietly(zelda))
+        assertEquals(QuietArt.BUSY, rig.controller.fetchArtQuietly(zelda))
         advanceUntilIdle()
         assertEquals(1, rig.http.count("romnom=Zelda.gb"))   // the job's own
         assertEquals(0, rig.http.count("romnom=Loose.gb"))
+    }
+
+    // The user's own fetch of the game, waited out, is what the background run reads: it asks nothing more.
+    @Test fun a_browse_fetch_behind_a_users_fetch_of_the_game_reads_the_art_it_left() = runTest {
+        val rig = Rig(this, listOf(tetris))
+        rig.http.on("romnom=Tetris.gb", Scrape.BOTH)
+        rig.http.on("https://m/", OK_PNG)
+        rig.http.latency = 1_000
+        val user = launch { rig.controller.fetchGame(tetris.gamePath) }
+        advanceTimeBy(500)   // the user's lookup is in flight
+        assertEquals(QuietArt.NOT_WANTED, rig.controller.fetchArtQuietly(tetris))
+        user.join()
+        assertEquals(1, rig.http.count("jeuInfos"))
+        assertEquals(1, rig.http.count("https://m/s.png"))
+    }
+
+    @Test fun a_hidden_game_is_not_wanted_by_a_browse_fetch() = runTest {
+        val rig = Rig(this, emptyList())
+        rig.host.hidden = listOf(tetris)
+        assertEquals(QuietArt.NOT_WANTED, rig.controller.fetchArtQuietly(tetris))
+        assertEquals(0, rig.http.count("jeuInfos"))
     }
 }

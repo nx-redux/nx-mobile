@@ -29,6 +29,16 @@ import kotlin.time.TimeSource
 
 private val processStart = TimeSource.Monotonic.markNow()
 
+/** What [ArtworkController.fetchArtQuietly] did. */
+enum class QuietArt {
+    /** The run finished, whatever it found. */
+    DONE,
+    /** Not made: the library has the game's art by now, hides it, or no source fetches it. */
+    NOT_WANTED,
+    /** Not made: a job or the user's own fetch is asking the sources. */
+    BUSY,
+}
+
 /** The artwork façade for the UI and onboarding: one job at a time (appends chain onto it), persistence, account, Reset. */
 class ArtworkController(
     private val host: ArtworkHost, engine: ScrapeEngineFactory, private val credentials: ScraperCredentials,
@@ -370,16 +380,17 @@ class ArtworkController(
 
     /**
      * The top screen's art fetch for [ref], lacking art ([wantsArt]): the single-game flow (only the slots it lacks, its
-     * info kept from ScreenScraper's same answer) with nothing shown, so outside [state], keep-alive and [busy]. Null when
-     * not made (no longer lacking art in the library, or a job live). True once the run finished, whatever it found
-     * (a library folder that can't be written included, as asking again would not help). ScreenScraper stopping in it
-     * throws its [SourceStop], no connection a [JobPause], as [lookupInfo] does. Under [singleLock] as [lookupInfo].
+     * info kept from ScreenScraper's same answer) with nothing shown, so outside [state], keep-alive and [busy]. See
+     * [QuietArt] for what it did; a library folder that can't be written is [QuietArt.DONE], as asking again would not
+     * help. ScreenScraper stopping in it throws its [SourceStop], no connection a [JobPause], as [lookupInfo] does. Under
+     * [singleLock] as [lookupInfo], the game read after its wait.
      */
-    internal suspend fun fetchArtQuietly(ref: LibraryGameRef): Boolean? = withContext(work) {
-        if (!available) return@withContext null
-        val now = host.libraryGames().firstOrNull { it.gamePath == ref.gamePath }?.takeIf(::wantsArt) ?: return@withContext null
+    internal suspend fun fetchArtQuietly(ref: LibraryGameRef): QuietArt = withContext(work) {
+        if (!available) return@withContext QuietArt.NOT_WANTED
         singleLock.withLock {
-            if (haltLock.withLock { lock.withLock { job != null } }) return@withLock null
+            if (haltLock.withLock { lock.withLock { job != null || single != null } }) return@withLock QuietArt.BUSY
+            // Read after the wait: a user's fetch of this game that held the lock has written its art by now.
+            val now = host.libraryGames().firstOrNull { it.gamePath == ref.gamePath }?.takeIf(::wantsArt) ?: return@withLock QuietArt.NOT_WANTED
             val one = ScrapeState(items = listOf(ScrapeItem(now.gamePath, now.tag, now.name)))
             // Not starting the sources: ScreenScraper's start reads the quota, a request beyond the lookup.
             val end = try {
@@ -391,7 +402,7 @@ class ArtworkController(
             }
             end.notes[SourceId.SS]?.let { throw SourceStop(it) }
             if (end.pauseReason == ScrapeEngine.NO_CONNECTION) throw JobPause(ScrapeEngine.NO_CONNECTION)
-            true
+            QuietArt.DONE
         }
     }
 

@@ -6,6 +6,7 @@ import com.nxredux.mobile.scraper.GameInfoStore
 import com.nxredux.mobile.scraper.InfoResult
 import com.nxredux.mobile.scraper.JobPause
 import com.nxredux.mobile.scraper.LibraryGameRef
+import com.nxredux.mobile.scraper.QuietArt
 import com.nxredux.mobile.scraper.Scrape
 import com.nxredux.mobile.scraper.ScreenScraperSource
 import com.nxredux.mobile.scraper.SourceStop
@@ -51,7 +52,7 @@ class InfoFetcherTest {
         val artless = HashSet<String>()
         val artAsked = mutableListOf<String>()
         /** The quiet art run: by default it stores the info its lookup brings, as the engine does, and finishes. */
-        var artAnswer: suspend (LibraryGameRef) -> Boolean? = { ref -> store.write(ref, StoredGameInfo("Blocks fall.", null, "1989", null, "en", "42", 1L)); true }
+        var artAnswer: suspend (LibraryGameRef) -> QuietArt = { ref -> store.write(ref, StoredGameInfo("Blocks fall.", null, "1989", null, "en", "42", 1L)); QuietArt.DONE }
         val fetcher = InfoFetcher(
             CoroutineScope(StandardTestDispatcher(scope.testScheduler)), store,
             lookup = { ref -> asked += ref.gamePath; answer(ref) },
@@ -211,19 +212,31 @@ class InfoFetcherTest {
     @Test fun the_art_run_is_made_once_per_game_then_the_info_rule_applies() = runTest {
         val rig = Rig(this)
         rig.artless += game(1).gamePath
-        rig.artAnswer = { true }   // finished without info (no ScreenScraper lookup: a local mix, another source)
+        rig.artAnswer = { QuietArt.DONE }   // finished without info (no ScreenScraper lookup: a local mix, another source)
         rig.fetcher.follow(game(1)); advanceUntilIdle()
         assertTrue(rig.fetched.isEmpty())
         rig.fetcher.follow(null); rig.fetcher.follow(game(1)); advanceUntilIdle()
         assertEquals(listOf(game(1).gamePath), rig.artAsked)
         assertEquals(listOf(game(1).gamePath), rig.asked)
-        // Not asked (a run started meanwhile): not counted as made.
+        // Not made as a run is live: nothing this rest, the art run is made on a later one.
         rig.artless += game(2).gamePath
-        rig.artAnswer = { null }
+        rig.artAnswer = { QuietArt.BUSY }
         rig.fetcher.follow(game(2)); advanceUntilIdle()
-        rig.artAnswer = { true }
+        assertEquals(listOf(game(1).gamePath), rig.asked)
+        rig.artAnswer = { QuietArt.DONE }
         rig.fetcher.follow(game(3)); rig.fetcher.follow(game(2)); advanceUntilIdle()
         assertEquals(listOf(game(1).gamePath, game(2).gamePath, game(2).gamePath), rig.artAsked)
+    }
+
+    // The library has its art by now, or hides it: its info is looked up instead, and the art run is not made again.
+    @Test fun an_art_run_not_wanted_falls_through_to_the_info_lookup() = runTest {
+        val rig = Rig(this)
+        rig.artless += game(1).gamePath
+        rig.artAnswer = { QuietArt.NOT_WANTED }
+        rig.fetcher.follow(game(1)); advanceUntilIdle()
+        assertEquals(listOf(game(1).gamePath), rig.asked)
+        rig.fetcher.follow(null); rig.fetcher.follow(game(1)); advanceUntilIdle()
+        assertEquals(listOf(game(1).gamePath), rig.artAsked)
     }
 
     @Test fun no_art_run_while_a_run_is_active_or_the_setting_is_off() = runTest {
@@ -252,7 +265,7 @@ class InfoFetcherTest {
         for (i in 1..3) rig.artless += game(i).gamePath
         rig.artAnswer = { throw SourceStop(ScreenScraperSource.DAILY_LIMIT) }
         rig.fetcher.follow(game(1)); advanceUntilIdle()
-        rig.artAnswer = { true }
+        rig.artAnswer = { QuietArt.DONE }
         rig.base += 13 * HOUR   // 23:00, same day
         rig.fetcher.follow(game(2)); advanceUntilIdle()
         assertEquals(1, rig.artAsked.size)
@@ -260,14 +273,14 @@ class InfoFetcherTest {
         rig.fetcher.follow(game(1)); advanceUntilIdle()
         assertEquals(listOf(game(1).gamePath, game(1).gamePath), rig.artAsked)   // a stopped run is made again
         // ScreenScraper unavailable or no connection: a pause.
-        val fails = listOf<suspend (LibraryGameRef) -> Boolean?>({ throw SourceStop(ScreenScraperSource.UNAVAILABLE) }, { throw JobPause("No connection") })
+        val fails = listOf<suspend (LibraryGameRef) -> QuietArt>({ throw SourceStop(ScreenScraperSource.UNAVAILABLE) }, { throw JobPause("No connection") })
         for ((k, fail) in fails.withIndex()) {
             val g = game(10 + k)
             rig.artless += g.gamePath
             val n = rig.artAsked.size
             rig.artAnswer = fail
             rig.fetcher.follow(g); advanceUntilIdle()
-            rig.artAnswer = { true }
+            rig.artAnswer = { QuietArt.DONE }
             rig.fetcher.follow(game(2)); advanceUntilIdle()
             assertEquals(n + 1, rig.artAsked.size)
             rig.base += InfoFetcher.RETRY_MS
