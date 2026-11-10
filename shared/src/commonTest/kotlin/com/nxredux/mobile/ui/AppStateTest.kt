@@ -10836,6 +10836,14 @@ class AppStateTest {
         assertEquals(listOf(SettingsKind.DEFAULTS, SettingsKind.EMULATORS), kinds)
     }
 
+    @Test fun cable_link_input_delay_defaults_to_one_frame() = runTest {
+        val cache = com.nxredux.mobile.netplay.cablelink.LinkRomCache(com.nxredux.mobile.netplay.cablelink.MemoryCacheStore())
+        val state = state(MemorySettings(ContentRef("Home")), linkRomCache = cache)
+        state.load()
+        state.openSettings(SettingsSection.EMULATORS)
+        assertEquals("1 frame", assertIs<Screen.Settings>(state.screen.value).rows.single { it.kind == SettingsKind.CABLE_LINK_DELAY }.secondary)
+    }
+
     // The Cable Link group lives under Emulation (delay, overlay, cache), not System.
     @Test fun cable_link_rows_are_in_emulation_not_system() = runTest {
         val cache = com.nxredux.mobile.netplay.cablelink.LinkRomCache(com.nxredux.mobile.netplay.cablelink.MemoryCacheStore())

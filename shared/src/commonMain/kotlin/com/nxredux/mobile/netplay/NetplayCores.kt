@@ -36,6 +36,8 @@ object NetplayCores {
     private val CABLE_LINK_TAGS = setOf("GBA", "MGBA")
     /** The longest input delay a Cable Link session can be pinned to (the engine's 1..8; 0 is Auto). */
     const val CABLE_LINK_DELAY_MAX = 8
+    /** A fresh install pins Cable Link at one frame: two phones on home Wi-Fi held full speed there with near-zero stalls. */
+    const val CABLE_LINK_DELAY_DEFAULT = 1
 
     /**
      * [tag]'s netplay cores, default first; without the cable ([usb] false) the ones [wifiOk] refuses for this game ([wl])

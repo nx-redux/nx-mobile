@@ -272,7 +272,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         }
 
     override var cableLinkDelayPin: Int
-        get() = prefs.getInt(KEY_CABLE_LINK_DELAY, 0).coerceIn(0, NetplayCores.CABLE_LINK_DELAY_MAX)
+        get() = prefs.getInt(KEY_CABLE_LINK_DELAY, NetplayCores.CABLE_LINK_DELAY_DEFAULT).coerceIn(0, NetplayCores.CABLE_LINK_DELAY_MAX)
         set(value) = prefs.edit { putInt(KEY_CABLE_LINK_DELAY, value.coerceIn(0, NetplayCores.CABLE_LINK_DELAY_MAX)) }
 
     override var cableLinkDelayOverlay: Boolean

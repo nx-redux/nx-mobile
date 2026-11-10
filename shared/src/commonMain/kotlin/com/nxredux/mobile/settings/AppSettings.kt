@@ -1,5 +1,6 @@
 package com.nxredux.mobile.settings
 
+import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.runner.BottomScreen
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.SaveFormat
@@ -363,11 +364,11 @@ interface AppSettings {
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
     /**
-     * Settings → Emulation → Cable Link → Input delay: 0 = Auto (the engine adapts it), 1..8 = pinned to that many frames, for
-     * trying a game at a fixed delay. Defaulted, like [debugLog].
+     * Settings → Emulation → Cable Link → Input delay: 0 = Auto (the engine adapts it), 1..8 = pinned to that many frames.
+     * Defaults to [NetplayCores.CABLE_LINK_DELAY_DEFAULT].
      */
     var cableLinkDelayPin: Int
-        get() = 0
+        get() = NetplayCores.CABLE_LINK_DELAY_DEFAULT
         set(@Suppress("UNUSED_PARAMETER") value) {}
     /** Settings → Emulation → Cable Link → Delay overlay: the current input delay in a corner of the game. Defaulted, like [debugLog]. */
     var cableLinkDelayOverlay: Boolean
