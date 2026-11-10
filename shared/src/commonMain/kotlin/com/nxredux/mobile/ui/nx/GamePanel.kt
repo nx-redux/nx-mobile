@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -65,12 +66,13 @@ import org.jetbrains.compose.resources.painterResource
  * rows with a switch, Players as the Players page's rows. The controller's [GamePanelState.focus] sits on the accent pill (the tab row's capsule on
  * Tabs). The Game pill (DS/3DS panel-up) sits bottom-right. The dual-screen panel and the in-game menu share it; the
  * menu draws the header itself across its top ([GamePanelHeaderBar]) and its own tab row across the menu ([showTabs] off:
- * the current tab's body alone), on its own surface ([opaque] off: no black box of the panel's own).
+ * the current tab's body alone), on its own surface ([opaque] off: no black box of the panel's own). [menuInset]: the
+ * dual-screen panel the menu takes the place of, padded as the menu's page.
  */
 @Composable
 fun GamePanel(
     state: GamePanelState, onEvent: (GamePanelEvent) -> Unit, modifier: Modifier = Modifier, showHeader: Boolean = true, opaque: Boolean = true,
-    showTabs: Boolean = true,
+    showTabs: Boolean = true, menuInset: Boolean = false,
 ) {
     val colors = LocalNxColors.current
     val tab = GamePanelModel.resolveTab(state.tab, state.tabs)
@@ -78,11 +80,17 @@ fun GamePanel(
     val focused = (state.focus as? PanelFocus.Item)?.index
     // The lists' bottom room: clear of the Game pill when it is drawn.
     val bottom = if (state.showGamePill) GP_LIST_BOTTOM else GP_LIST_END
+    // [menuInset]: on the in-game menu's page inset, so the header and what follows sit where the menu puts them when it
+    // takes the panel's place.
+    val inset = nxPageInset()
+    val page = if (menuInset) Modifier.padding(start = inset.pillStart, end = inset.pillEnd) else Modifier
     Box(modifier.fillMaxSize().then(if (opaque) Modifier.background(colors.background) else Modifier)) {
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().then(page)) {
             if (showHeader) GamePanelHeaderBar(state.header)
             if (showTabs) MenuTabRow(
                 tabs.map { it.label }, tabs.indexOf(tab).coerceAtLeast(0), onTab = { onEvent(GamePanelEvent.SelectTab(tabs[it])) },
+                // The row pads by the page inset itself, which the column already has: its words where the menu's start.
+                modifier = if (menuInset) Modifier.offset(x = nxListInset() - inset.start) else Modifier,
                 focused = state.focus == PanelFocus.Tabs,
             )
             Box(Modifier.weight(1f).fillMaxWidth()) {

@@ -13,7 +13,9 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.window.layout.WindowMetricsCalculator
 import com.nxredux.mobile.R
 import com.nxredux.mobile.layout.CoreFrame
+import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.skin.SkinDual
+import com.nxredux.mobile.skin.menuRoom
 import com.nxredux.mobile.skin.SkinChoice
 import com.nxredux.mobile.skin.OverlayMode
 import com.nxredux.mobile.skin.SkinPlacement
@@ -439,11 +441,12 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
 
     /**
      * What the in-game Adjust buttons edits: the layout drawn now (the skin, or its bare buttons) as the game places it
-     * for this window before the player's tweaks, its stick or d-pad as shown; null with neither drawn, or no console.
+     * for this window before the player's tweaks, both of a stick / d-pad swap's sets still in it as the game tweaks it,
+     * [useStick] the one shown; null with neither drawn, or no console.
      */
     class SkinEdit(
         val consoleId: String, val placement: SkinPlacement, val w: Int, val h: Int,
-        val picture: android.graphics.Bitmap, val parts: android.graphics.Bitmap?, val bare: Boolean,
+        val picture: android.graphics.Bitmap, val parts: android.graphics.Bitmap?, val bare: Boolean, val useStick: Boolean,
     )
 
     /** The layout being played, untweaked ([SkinEdit]). */
@@ -459,7 +462,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val placed = placeUntweaked(pack, key, ds, closest = bare) ?: return null
         val picture = pack.picture(placed.spec.image) ?: return null
         val parts = placed.spec.parts?.let { pack.picture(it) }
-        return SkinEdit(console, placed.forStick(view.useStick), key.w, key.h, picture, parts, bare)
+        return SkinEdit(console, placed, key.w, key.h, picture, parts, bare, view.useStick)
     }
 
     /** The skin's bare buttons are the pad now ([addBareSkin]). */
@@ -617,6 +620,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
 
     /** Whether the pad skin is the layout now. */
     val skinShown: Boolean get() = skinView != null
+
+    /** The room the in-game menu takes over the shown skin ([com.nxredux.mobile.skin.menuRoom]), window px; null with none. */
+    fun skinMenuRoom(): PxRect? = if (skinShown) skinPlacement()?.menuRoom() else null
     /** The skin's view while shown: a panel in its glass sits right above it. */
     val skinViewNow: View? get() = skinView
     /** [skinShown] as state, for the notifications (top-centre over a skin). */

@@ -11,9 +11,11 @@ import com.nxredux.mobile.runner.BottomScreen
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.SaveFormat
 import com.nxredux.mobile.storage.StateFormat
+import com.nxredux.mobile.DebugLogFile
 import com.swordfish.libretrodroid.NxLog
 
 class AndroidAppSettings(context: Context) : AppSettings {
+    private val app = context.applicationContext
     private val prefs = Prefs.open(context, PREFS_NAME)
 
     override var treeRef: ContentRef?
@@ -149,6 +151,9 @@ class AndroidAppSettings(context: Context) : AppSettings {
     override var artMix: Boolean
         get() = prefs.getBoolean(KEY_ART_MIX, false)
         set(value) = prefs.edit { putBoolean(KEY_ART_MIX, value) }
+    override var fetchGameInfo: Boolean
+        get() = prefs.getBoolean(KEY_FETCH_GAME_INFO, true)
+        set(value) = prefs.edit { putBoolean(KEY_FETCH_GAME_INFO, value) }
     override var artWheelMigrated: Boolean
         get() = prefs.getBoolean(KEY_ART_WHEEL_MIGRATED, false)
         set(value) = prefs.edit { putBoolean(KEY_ART_WHEEL_MIGRATED, value) }
@@ -263,6 +268,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         set(value) {
             prefs.edit { putBoolean(KEY_DEBUG_LOG, value) }
             NxLog.enabled = value   // at once: the app, the runner and the cores in this process
+            if (value) DebugLogFile.start(app) else DebugLogFile.stop()
         }
 
     override var cableLinkDelayPin: Int
@@ -272,6 +278,10 @@ class AndroidAppSettings(context: Context) : AppSettings {
     override var cableLinkDelayOverlay: Boolean
         get() = prefs.getBoolean(KEY_CABLE_LINK_DELAY_OVERLAY, false)
         set(value) = prefs.edit { putBoolean(KEY_CABLE_LINK_DELAY_OVERLAY, value) }
+
+    override var androidKeyboard: Boolean
+        get() = prefs.getBoolean(KEY_ANDROID_KEYBOARD, false)
+        set(value) = prefs.edit { putBoolean(KEY_ANDROID_KEYBOARD, value) }
 
     override var kidsEnabled: Boolean
         get() = prefs.getBoolean(KEY_KIDS_ENABLED, false)
@@ -374,6 +384,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_ART_BOX2D = "art_box2d"
         private const val KEY_ART_WHEEL = "art_wheel"
         private const val KEY_ART_MIX = "art_mix"
+        private const val KEY_FETCH_GAME_INFO = "fetch_game_info"
         private const val KEY_ART_WHEEL_MIGRATED = "art_wheel_migrated"
         private const val KEY_SHOW_HOME_TAB = "show_home_tab"
         private const val KEY_SHOW_CONSOLES_TAB = "show_consoles_tab"
@@ -403,6 +414,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_DEBUG_LOG = "debug_log"
         private const val KEY_CABLE_LINK_DELAY = "cable_link_delay"
         private const val KEY_CABLE_LINK_DELAY_OVERLAY = "cable_link_delay_overlay"
+        private const val KEY_ANDROID_KEYBOARD = "android_keyboard"
         private const val KEY_KIDS_ENABLED = "kids_enabled"
         private const val KEY_KIDS_SCHEDULE = "kids_schedule"
         private const val KEY_KIDS_APPS = "kids_apps"

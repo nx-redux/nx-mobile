@@ -58,6 +58,7 @@ public:
 
 private:
     void open(const std::string& soCorePath);
+    void resolveSymbols();
     void close();
 
     void* libHandle = nullptr;

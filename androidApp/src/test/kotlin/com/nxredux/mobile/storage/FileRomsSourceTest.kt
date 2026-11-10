@@ -1,6 +1,7 @@
 package com.nxredux.mobile.storage
 
 import com.nxredux.mobile.library.Entry
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -90,6 +91,34 @@ class FileRomsSourceTest {
         assertFalse(source.writeBytes(ref(dir), "folder", byteArrayOf(1)))   // a folder is never replaced
         assertFalse(source.writeBytes(ref(dir), "../x.png", byteArrayOf(1)))
         assertEquals(setOf("a.png", "folder"), dir.list()!!.toSet())
+    }
+
+    @Test fun overlapping_writes_each_use_their_own_part_and_one_whole_text_wins() = runBlocking {
+        val dir = tmp.newFolder("sidecars")
+        val texts = (1..8).map { n -> "line $n\n".repeat(20_000) }
+        kotlinx.coroutines.coroutineScope {
+            texts.forEach { t -> launch(kotlinx.coroutines.Dispatchers.IO) { assertTrue(source.writeText(ref(dir), "map.txt", t)) } }
+        }
+        assertTrue(File(dir, "map.txt").readText() in texts)
+        assertEquals(listOf("map.txt"), dir.list()!!.toList())
+    }
+
+    @Test fun a_part_left_by_a_killed_write_is_hidden_from_scans_and_sync() {
+        val part = com.nxredux.mobile.runner.uniqueTempName("Tetris.gb", com.nxredux.mobile.library.Names.PART)
+        assertTrue(part.startsWith("Tetris.gb.") && part != "Tetris.gb.part")
+        assertTrue(com.nxredux.mobile.library.Names.isHidden(part))
+        assertTrue(MirrorRules.isTransient(part))
+    }
+
+    @Test fun a_write_deletes_its_own_old_parts_but_not_fresh_ones_or_other_files_parts() = runBlocking {
+        val dir = tmp.newFolder("stale")
+        val old = File(dir, "map.txt.1a2b.part").apply { writeText("x"); setLastModified(System.currentTimeMillis() - 3_600_000) }
+        val fresh = File(dir, "map.txt.3c4d.part").apply { writeText("y") }
+        val other = File(dir, "systems.txt.5e6f.part").apply { writeText("z"); setLastModified(System.currentTimeMillis() - 3_600_000) }
+        val lookalike = File(dir, "map.txt.backup.part").apply { writeText("w"); setLastModified(System.currentTimeMillis() - 3_600_000) }
+        assertTrue(source.writeText(ref(dir), "map.txt", "a\tb\n"))
+        assertTrue(!old.exists())
+        assertTrue(fresh.exists() && other.exists() && lookalike.exists())
     }
 
     @Test fun write_text_and_read_text_round_trip() = runBlocking {

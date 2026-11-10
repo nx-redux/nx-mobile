@@ -98,18 +98,18 @@ internal fun abstractBackgroundFor(e: Listed): String? =
  * A merged console row (SFC + SUPA) takes the first logo any of its tags has, as [menuBackground] does, and counts the
  * games of all its systems ([consoleInfoLines]' number). [controllerArt]: a console also carries its controller
  * ([consolePad], the first of its tags' as the logo), which the Carousel draws behind the focused logo; Grid and Home
- * leave it off.
+ * leave it off. [counts] false: no console or collection carries its game count (the top screen of two shows it).
  */
-internal fun gridTiles(rows: List<MainRow>, controllerArt: Boolean = false): List<GridTile> = rows.map { r ->
+internal fun gridTiles(rows: List<MainRow>, controllerArt: Boolean = false, counts: Boolean = true): List<GridTile> = rows.map { r ->
     when (r) {
         is MainRow.System -> GridTile.Logo(
-            r.systems.firstNotNullOfOrNull { consoleLogo(it.tag) }, r.system.displayName, r.systems.sumOf { it.gameCount },
+            r.systems.firstNotNullOfOrNull { consoleLogo(it.tag) }, r.system.displayName, r.systems.sumOf { it.gameCount }.takeIf { counts },
             pad = if (controllerArt) r.systems.firstNotNullOfOrNull { consolePad(it.tag) } else null,
         )
         // Home's pinned and shelf games: their hidden save state's frame (Save & Quit's) first, else their screenshot.
         is MainRow.Pin -> gameTile(r.entry, r.entry.game.shownName, r.shot)
         is MainRow.Shelf -> gameTile(r.entry, r.entry.game.shownName, r.shot)
-        is MainRow.Collection -> GridTile.Collection(r.name, r.count)
+        is MainRow.Collection -> GridTile.Collection(r.name, r.count.takeIf { counts })
         is MainRow.Tool -> GridTile.Tool(toolIcon(r.row.kind), toolDisplayLines(r.row.label), r.row.appId)
         is MainRow.PinnedTool -> GridTile.Tool(toolIcon(r.row.kind), toolDisplayLines(r.row.label), r.row.appId)
         is MainRow.Continue, is MainRow.MoreTools, MainRow.PickAGame -> homeOnly(r)

@@ -47,7 +47,7 @@ class SyncCommandsTest {
         val a = SyncCommands.romArgs("/b", push, "10.0.0.2", "/sd/Roms", emptyMap(), null, null, homeBios = "/sd/Bios")
         assertEquals(listOf("/sd/Bios/PS/", "rsync://10.0.0.2:18730/bios/ps/"), a.takeLast(2))
         assertTrue("--ignore-existing" in a && "--ignore-missing-args" in a)
-        assertTrue("--exclude=._*" in a && "--exclude=.DS_Store" in a)
+        assertTrue("--exclude=._*" in a && "--exclude=.DS_Store" in a && "--exclude=*.part" in a && "--exclude=*.tmp" in a)
         val pull = RomRun(SyncStep.RECEIVE_BIOS, "PS", RomEnd.Peer("bios", "ps"), RomEnd.Bios("PS"), ignoreExisting = true)
         val p = SyncCommands.romArgs("/b", pull, "10.0.0.2", "/sd/Roms", emptyMap(), null, null, homeBios = "/sd/Bios/")
         assertEquals(listOf("rsync://10.0.0.2:18730/bios/ps/", "/sd/Bios/PS/"), p.takeLast(2))
@@ -70,7 +70,7 @@ class SyncCommandsTest {
     @Test fun daemon_conf_adds_bios_only_with_a_bios_folder() {
         assertTrue("[bios]" !in SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l"))
         val c = SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", bios = "/sd/Bios")
-        assertTrue("[bios]\n  path = /sd/Bios\n  read only = false\n  list = false\n  exclude = ._* .DS_Store vmu_save_*.bin\n" in c)
+        assertTrue("[bios]\n  path = /sd/Bios\n  read only = false\n  list = false\n  exclude = ._* .DS_Store *.tmp *.part vmu_save_*.bin\n" in c)
         assertTrue("[roms]" !in c)
         assertFailsWith<IllegalArgumentException> { SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", bios = "/sd/Bios\n[evil]") }
     }
@@ -134,7 +134,7 @@ class SyncCommandsTest {
               path = /r/Saves
               read only = false
               list = false
-              exclude = ._* .DS_Store
+              exclude = ._* .DS_Store *.tmp *.part
 
             """.trimIndent(),
             conf,
@@ -155,6 +155,8 @@ class SyncCommandsTest {
         assertEquals("rsync://192.168.1.10:18730/roms/Pokémon mini (PKM)/", a.last())
         assertTrue("--exclude-from=/c/ex.txt" in a); assertTrue("--inplace" !in a)
         assertTrue("--exclude=._*" in a && "--exclude=.DS_Store" in a)
+        // A part a killed sidecar write left, or any write temp, never travels to the peer.
+        assertTrue("--exclude=*.part" in a && "--exclude=*.tmp" in a)
     }
 
     /** A console with two handheld folders: each one's badges pull without replacing, and a folder without any is no failure. */
@@ -221,10 +223,10 @@ class SyncCommandsTest {
         val base = SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l")
         assertTrue("[roms]" !in base)
         val c = SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", ServerRoms("/sd/Roms", listOf("/storage/SD/Games"), "/c/nx"))
-        assertTrue("[roms]\n  path = /sd/Roms\n  read only = false\n  list = false\n  exclude = ._* .DS_Store /.sources/\n" in c)
-        assertTrue("[extra-0]\n  path = /storage/SD/Games\n  read only = true\n" in c)
+        assertTrue("[roms]\n  path = /sd/Roms\n  read only = false\n  list = false\n  exclude = ._* .DS_Store *.tmp *.part /.sources/\n" in c)
+        assertTrue("[extra-0]\n  path = /storage/SD/Games\n  read only = true\n  list = false\n  exclude = ._* .DS_Store *.tmp *.part\n" in c)
         assertTrue("[nx-extras]\n  path = /c/nx\n  read only = true\n" in c)
-        assertTrue("[nx-art]\n  path = /sd/Roms/.sources\n  read only = true\n  list = false\n  exclude = ._* .DS_Store\n" in c)
+        assertTrue("[nx-art]\n  path = /sd/Roms/.sources\n  read only = true\n  list = false\n  exclude = ._* .DS_Store *.tmp *.part\n" in c)
     }
 
     @Test fun only_rules_keep_named_entries_and_parents() {

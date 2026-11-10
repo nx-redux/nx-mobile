@@ -210,10 +210,8 @@ internal fun HomeCarouselScreen(
         // The tab row's room kept with it hidden too (the Recent and Search icons are there): the rows never run up into it.
         val headerH = header?.height ?: if (frame.titleHidden) MENU_TAB_ROW_HEIGHT.value else 0f
         val (capTop, inkH) = if (shownStrip != null && header == null) homeStripInk(frame, stripLines) else 0f to 0f
-        // Grid Home's pinned tool squares on this frame, as AppState fitted the dock to ([homeDockSide]).
-        val side = remember(frame, strip, rows) {
-            homeDockSide(frame, homeStripLines(strip), rows.count { it is MainRow.Pin })
-        }
+        // The dock's squares on this frame, as AppState fitted the dock to ([homeDockSide]).
+        val side = remember(frame, strip) { homeDockSide(frame, homeStripLines(strip)) }
         val dockH = if (rows.size > rowCount) side else 0f
         val pick = rowCount == 1 && rows.first() == MainRow.PickAGame
         val bodyH = maxHeight.value - headerH
@@ -270,8 +268,8 @@ internal fun HomeCarouselScreen(
 }
 
 /**
- * The Carousel Home's dock: [rows] from [first] on (the pinned tools AppState fits, then "+N") as Grid Home's squares
- * ([HomeToolSquare], [HomeMoreSquare]), [side] dp ([homeDockSide]) and [HOME_DOCK_GAP] dp apart, centred across at
+ * The Carousel Home's dock: [rows] from [first] on (the pinned tools AppState fits, then "+N") as icon-only squares
+ * ([HomeDockToolSquare], [HomeDockMoreSquare]), [side] dp ([homeDockSide]) and [HOME_DOCK_GAP] dp apart, centred across at
  * [modifier]'s place; lit when [selection] is on one. Taps as Grid Home's ([nxTap]); a long press (only rows with a
  * menu reach it) calls [onLongPress].
  */
@@ -302,8 +300,8 @@ private fun HomeDock(
             val m = Modifier.size(side.dp)
             val menu = homeCarouselMenu(row, tabMenu)
             when (row) {
-                is MainRow.PinnedTool -> tools[k]?.let { HomeToolSquare(it, i == lit, side, m.taps(i, menu)) }
-                is MainRow.MoreTools -> HomeMoreSquare(row.count, i == lit, side, m.taps(i, menu))
+                is MainRow.PinnedTool -> tools[k]?.let { HomeDockToolSquare(it, i == lit, side, m.taps(i, menu)) }
+                is MainRow.MoreTools -> HomeDockMoreSquare(row.count, i == lit, side, m.taps(i, menu))
                 else -> Unit
             }
         }

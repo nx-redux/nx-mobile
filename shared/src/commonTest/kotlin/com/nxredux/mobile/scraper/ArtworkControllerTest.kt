@@ -8,16 +8,19 @@ import com.nxredux.mobile.library.ensurePath
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.scraper.Scrape.OK_PNG
 import com.nxredux.mobile.scraper.Scrape.found
+import com.nxredux.mobile.storage.MemoryPrivateFiles
 import com.nxredux.mobile.storage.MemorySidecarStore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -45,7 +48,7 @@ class ArtworkControllerTest {
             { auth, onArt, onWritten, _, logged, onOptions, picked ->
                 ssEngine(
                     http, FakeFitter(), FakeHasher(), fs, Scrape.home, auth, engineClock, { delay(it) }, onArt, onWritten,
-                    art, { androidRefreshed++ }, more, logged, onOptions, picked, pixels = pixels,
+                    art, { androidRefreshed++ }, more, logged, onOptions, picked, pixels = pixels, infoFiles = MemoryPrivateFiles(),
                 )
             },
             creds, runner, scope, clock = jobClock, optionCache = cache,
@@ -226,6 +229,48 @@ class ArtworkControllerTest {
         // Still the app's: the next Reset tries it again.
         assertEquals(ResetResult(0), rig.controller.resetArt(null))
         assertEquals("Roms/GB/.media/wheel/Tetris.png\tsteamgriddb\t5\t6", rig.host.files.getValue(ArtworkController.LOG_FILE).trim())
+    }
+
+    /** Each run kind on Tetris (art missing, a remembered info miss, an unreadable answer): true when the miss is left. */
+    private suspend fun TestScope.missLeftBy(label: String, start: suspend (ArtworkController) -> Unit): Boolean {
+        val rig = Rig(this, listOf(tetris))
+        rig.controller.info!!.markMiss(tetris.gamePath)
+        rig.http.on("romnom=Tetris.gb", Scrape.json(ScraperFixtures.GARBAGE))
+        start(rig.controller)
+        advanceUntilIdle()
+        assertTrue(rig.http.count("romnom=Tetris.gb") > 0, "$label: ${rig.http.calls}")
+        return rig.controller.info!!.isMiss(tetris.gamePath)
+    }
+
+    @Test fun only_fetch_all_and_replace_runs_ask_a_remembered_info_miss_again() = runTest {
+        assertTrue(missLeftBy("Fetch missing") { it.fetchMissing() }, "Fetch missing")
+        assertTrue(missLeftBy("console") { it.fetchConsole(setOf("GB")) }, "console")
+        assertFalse(missLeftBy("Fetch all") { it.fetchAll(replaceExisting = false) }, "Fetch all")
+        assertFalse(missLeftBy("Fetch all, Replace") { it.fetchAll(replaceExisting = true) }, "Fetch all, Replace")
+        assertFalse(missLeftBy("console, Replace") { it.fetchConsole(setOf("GB"), replaceExisting = true) }, "console, Replace")
+        assertTrue(missLeftBy("one game") { it.fetchGame(tetris.gamePath) }, "one game")
+    }
+
+    @Test fun reset_deletes_info_files() = runTest {
+        val rig = Rig(this, listOf(tetris, sonic))
+        val info = StoredGameInfo("Blocks fall.", "Puzzle", "1989", "Nintendo", "en", "42", 1L)
+        val store = rig.controller.info!!
+        assertTrue(store.write(tetris, info))
+        assertTrue(store.write(sonic, info))
+        val handPlaced = rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "info"))!!
+        rig.fs.writeText(handPlaced, "Mine.json", "{}")
+        assertEquals(info, store.read(tetris))
+
+        assertEquals(ResetResult(1), rig.controller.resetArt(setOf("MD")))
+        assertNull(rig.fs.readText(ContentRef("Home/Roms/MD/.media/info/Sonic.json")))
+        assertEquals(listOf("Sonic.md"), rig.fs.childNames("Home/Roms/MD"))   // info/ and .media emptied: removed
+        assertNull(store.read(sonic))
+        assertEquals(info, store.read(tetris))
+
+        assertEquals(ResetResult(1), rig.controller.resetArt(null))
+        assertNull(rig.fs.readText(ContentRef("Home/Roms/GB/.media/info/Tetris.json")))
+        assertNull(store.read(tetris))
+        assertEquals(listOf("Mine.json"), rig.fs.childNames("Home/Roms/GB/.media/info"))
     }
 
     private fun resetLeavesUnloggedFiles(rig: Rig) =
@@ -1428,5 +1473,84 @@ class ArtworkControllerTest {
         assertNull(rig.fs.bytesAt("Home/$moved"))
         assertFalse(moved in rig.controller.heroShots())
         assertFalse(rig.host.applied.last { it.first == tetris.gamePath }.second.heroShot)
+    }
+
+    /** A jeuInfos answer (game id 42) with a synopsis and the given media. */
+    private fun withInfo(vararg media: Pair<String, String>) = Scrape.json(
+        """{"response":{"jeu":{"id":"42","synopsis":[{"langue":"en","text":"Blocks fall."}],""" +
+            """"medias":[${media.joinToString(",") { (t, u) -> """{"type":"$t","region":"us","url":"$u"}""" }}]}}}""",
+    )
+
+    @Test fun a_browse_fetch_downloads_only_the_missing_slots_and_the_info_from_one_lookup_quietly() = runTest {
+        val boxOnly = Scrape.homeGame("Tetris.gb", have = ArtHave(box = true))
+        val rig = Rig(this, listOf(boxOnly), creds = FakeCredentials().apply { user = "me"; password = "pw" })
+        rig.http.on("romnom=Tetris.gb", withInfo("ss" to "https://m/s.png", "box-2D" to "https://m/b.png"))
+        rig.http.on("https://m/", OK_PNG)
+        val before = rig.controller.state.value
+        assertTrue(rig.controller.wantsArt(boxOnly))
+        assertFalse(rig.controller.wantsArt(Scrape.homeGame("Tetris.gb", have = Scrape.HAS_ART)))
+        assertEquals(QuietArt.DONE, rig.controller.fetchArtQuietly(boxOnly))
+        assertEquals(1, rig.http.count("jeuInfos"))
+        assertEquals(0, rig.http.count("ssuserInfos"))   // no job start: no quota read beside the lookup
+        assertEquals(1, rig.http.count("https://m/s.png"))
+        assertEquals(0, rig.http.count("https://m/b.png"))   // the box it has is never replaced
+        assertNotNull(rig.fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.png"))
+        assertEquals("Blocks fall.", rig.controller.info!!.read(boxOnly)?.synopsis)
+        assertEquals(boxOnly.gamePath, rig.host.applied.single().first)
+        assertEquals(before, rig.controller.state.value)   // no job, no progress
+        assertTrue(rig.runner.calls.isEmpty())
+        assertNull(rig.host.files[ArtworkController.JOB_FILE])
+        assertFalse(rig.controller.busy)
+    }
+
+    @Test fun a_browse_fetch_reports_screenscrapers_stops_and_no_connection_as_the_info_lookup_does() = runTest {
+        for ((answer, note) in listOf(HttpResult(430, null) to ScreenScraperSource.DAILY_LIMIT, HttpResult(503, null) to ScreenScraperSource.UNAVAILABLE)) {
+            val rig = Rig(this, listOf(tetris))
+            rig.http.on("romnom=Tetris.gb", answer)
+            val e = assertFailsWith<SourceStop> { rig.controller.fetchArtQuietly(tetris) }
+            assertEquals(note, e.note)
+            assertEquals(ScrapeState(), rig.controller.state.value)
+        }
+        val offline = Rig(this, listOf(tetris))
+        offline.http.on("romnom=Tetris.gb", HttpResult(-1, null))
+        assertEquals(ScrapeEngine.NO_CONNECTION, assertFailsWith<JobPause> { offline.controller.fetchArtQuietly(tetris) }.reason)
+    }
+
+    @Test fun a_browse_fetch_is_not_made_for_a_game_no_source_fetches_or_while_a_job_runs() = runTest {
+        val loose = Scrape.homeGame("Loose.gb", tag = "", dir = "Roms")
+        val rig = Rig(this, listOf(loose, tetris, zelda))
+        assertFalse(rig.controller.wantsArt(loose))
+        assertEquals(QuietArt.NOT_WANTED, rig.controller.fetchArtQuietly(loose))
+        rig.http.on("romnom=", Scrape.BOTH)
+        rig.http.on("https://m/", OK_PNG)
+        rig.http.latency = 1_000
+        rig.controller.fetchMissing()
+        advanceTimeBy(500)
+        assertTrue(rig.controller.busy)
+        assertEquals(QuietArt.BUSY, rig.controller.fetchArtQuietly(zelda))
+        advanceUntilIdle()
+        assertEquals(1, rig.http.count("romnom=Zelda.gb"))   // the job's own
+        assertEquals(0, rig.http.count("romnom=Loose.gb"))
+    }
+
+    // The user's own fetch of the game, waited out, is what the background run reads: it asks nothing more.
+    @Test fun a_browse_fetch_behind_a_users_fetch_of_the_game_reads_the_art_it_left() = runTest {
+        val rig = Rig(this, listOf(tetris))
+        rig.http.on("romnom=Tetris.gb", Scrape.BOTH)
+        rig.http.on("https://m/", OK_PNG)
+        rig.http.latency = 1_000
+        val user = launch { rig.controller.fetchGame(tetris.gamePath) }
+        advanceTimeBy(500)   // the user's lookup is in flight
+        assertEquals(QuietArt.NOT_WANTED, rig.controller.fetchArtQuietly(tetris))
+        user.join()
+        assertEquals(1, rig.http.count("jeuInfos"))
+        assertEquals(1, rig.http.count("https://m/s.png"))
+    }
+
+    @Test fun a_hidden_game_is_not_wanted_by_a_browse_fetch() = runTest {
+        val rig = Rig(this, emptyList())
+        rig.host.hidden = listOf(tetris)
+        assertEquals(QuietArt.NOT_WANTED, rig.controller.fetchArtQuietly(tetris))
+        assertEquals(0, rig.http.count("jeuInfos"))
     }
 }

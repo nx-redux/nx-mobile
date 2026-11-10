@@ -17,6 +17,7 @@ import com.nxredux.mobile.library.splitFolders
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.Recents
 import com.nxredux.mobile.tryOr
+import com.nxredux.mobile.tryQuietly
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxButton
 import kotlinx.coroutines.CancellationException
@@ -158,7 +159,11 @@ internal class FolderSummaryController(
         (screen.value as? Screen.FolderSummary)?.let { screen.value = it.copy(progress = done to total) }
     }
 
-    /** Every saved line naming a game the merge [moved] (old path → new) follows it: Recents, pins, hidden games, collections. */
+    /**
+     * Every saved line naming a game the merge [moved] (old path → new) follows it: Recents, pins, hidden games,
+     * collections, and its play time. A game time failure does not hold back the lines (they would be rewritten again
+     * on every flush); its games then only start a new total at the new path.
+     */
     private suspend fun rewriteHomeLines(moved: Map<String, String>) {
         host.recentsLock.withLock {
             val recents = deps.userData.readRecents()
@@ -174,6 +179,7 @@ internal class FolderSummaryController(
             val next = rewriteLines(lines, moved)
             if (next != lines) collections.writeMerged(name, next, lines)
         }
+        deps.gameTime?.let { gameTime -> tryQuietly { gameTime.renamePaths(moved) } }
     }
 
     /**

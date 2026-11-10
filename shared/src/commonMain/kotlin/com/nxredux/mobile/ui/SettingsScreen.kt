@@ -1,6 +1,5 @@
 package com.nxredux.mobile.ui
 
-import com.nxredux.mobile.ui.nx.LocalWindowSize
 import com.nxredux.mobile.ui.nx.NX_SWATCH_AUTO
 import com.nxredux.mobile.settings.SecondaryAccent
 import com.nxredux.mobile.settings.AccentPreset
@@ -27,6 +26,7 @@ import com.nxredux.mobile.ui.nx.NxRowKind
 import com.nxredux.mobile.ui.nx.NxBanner
 import com.nxredux.mobile.ui.nx.NxScreenScaffold
 import com.nxredux.mobile.ui.nx.NX_EDIT_HINTS
+import com.nxredux.mobile.ui.nx.splitWindow
 import com.nxredux.mobile.ui.nx.valueHints
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
@@ -115,7 +115,7 @@ private fun SettingsTouchPage(
     val report = onTruncated
     val selected = rows.getOrNull(selectedIndex)
     val infoShown = selected != null && nxShowsInfo(selected, truncated)
-    val twoPane = rowEditTwoPane(screen, settingsSplit(LocalWindowSize.current))
+    val twoPane = rowEditTwoPane(screen, settingsSplit(splitWindow()))
     val shownHints = hints ?: if (editing >= 0) NX_EDIT_HINTS else settingsHints(screen.rows, selectedIndex, selected, infoShown, twoPane)
     val preview = onSetting == null
     val events = onSetting ?: {}
@@ -325,7 +325,7 @@ internal fun settingsNxRow(row: SettingsRow): NxRow = NxRow(
         SettingsKind.PAD_SKIN, SettingsKind.PAD_THEME,
         SettingsKind.DEFAULT_TAG, SettingsKind.MENU_STYLE, SettingsKind.GAME_LIST_STYLE,
         SettingsKind.MENU_ORIENTATION, SettingsKind.GAME_LIST_ORIENTATION, SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT,
-        SettingsKind.CONTROLLER_ART, SettingsKind.TAB_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.HINT_SHOWN, SettingsKind.LIST_ART, SettingsKind.BACKDROP_ART, SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS, SettingsKind.EXTRA_INFO, SettingsKind.HOME_STATS, SettingsKind.LAYOUT_OPTIONS, SettingsKind.ACHIEVEMENTS_PANEL, SettingsKind.SWITCHER_LAYOUT, SettingsKind.PAD_VIBRATION, SettingsKind.GAME_RUMBLE, SettingsKind.BUTTON_LAYOUT_CONSOLE, SettingsKind.BUTTON_LAYOUT_WII_PAD, SettingsKind.BUTTON_LAYOUT_N3DS_PAD, SettingsKind.SHORTCUT_TOUCH, SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT, SettingsKind.TEXT_SIZE, SettingsKind.DEBUG_LOG, SettingsKind.CABLE_LINK_DELAY, SettingsKind.CABLE_LINK_DELAY_OVERLAY, SettingsKind.SECOND_SCREEN_ENABLE, SettingsKind.BOTTOM_SCREEN, SettingsKind.PAUSE_UNFOCUSED, SettingsKind.SAVE_FORMAT, SettingsKind.STATE_FORMAT, SettingsKind.EXTRACTED_NAME -> true
+        SettingsKind.CONTROLLER_ART, SettingsKind.TAB_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.HINT_SHOWN, SettingsKind.LIST_ART, SettingsKind.BACKDROP_ART, SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS, SettingsKind.EXTRA_INFO, SettingsKind.HOME_STATS, SettingsKind.LAYOUT_OPTIONS, SettingsKind.ACHIEVEMENTS_PANEL, SettingsKind.SWITCHER_LAYOUT, SettingsKind.PAD_VIBRATION, SettingsKind.GAME_RUMBLE, SettingsKind.BUTTON_LAYOUT_CONSOLE, SettingsKind.BUTTON_LAYOUT_WII_PAD, SettingsKind.BUTTON_LAYOUT_N3DS_PAD, SettingsKind.SHORTCUT_TOUCH, SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT, SettingsKind.TEXT_SIZE, SettingsKind.DEBUG_LOG, SettingsKind.KEYBOARD, SettingsKind.CABLE_LINK_DELAY, SettingsKind.CABLE_LINK_DELAY_OVERLAY, SettingsKind.SECOND_SCREEN_ENABLE, SettingsKind.BOTTOM_SCREEN, SettingsKind.PAUSE_UNFOCUSED, SettingsKind.SAVE_FORMAT, SettingsKind.STATE_FORMAT, SettingsKind.EXTRACTED_NAME -> true
         else -> false
     },
 )

@@ -92,6 +92,18 @@ class InGameMenuModelTest {
         assertTrue(m.panelState().shortcuts.isEmpty())
     }
 
+    // An app the player opened holds the second display: the root offers Use top screen, which asks the host to move there.
+    @Test fun use_top_screen_shows_on_the_root_while_an_app_holds_the_second_display() {
+        val m = model()
+        assertNull(m.state.page.rows.firstOrNull { it.label == "Use top screen" })
+        m.setSecondScreen(connected = false, on = true, taken = true)
+        assertEquals(listOf("Continue", "Save", "Load", "Reset", "Use top screen", "Options", "Quit"), m.state.page.rows.map { it.label })
+        m.select(m.state.page.rows.indexOfFirst { it.label == "Use top screen" })
+        assertEquals(MenuEffect.UseTopScreen, m.press(NxButton.A))
+        m.setSecondScreen(connected = true, on = true)
+        assertNull(m.state.page.rows.firstOrNull { it.label == "Use top screen" })
+    }
+
     // Adjust buttons lives in Options → Controls, only while a skin or its bare buttons are drawn and no controller is
     // attached (no pad is drawn then); Controls shows for it even with no settings rows of its own.
     @Test fun adjust_buttons_is_in_options_controls_while_the_pad_is_drawn_without_a_controller() {

@@ -23,6 +23,13 @@ object RaConsoles {
         "32X" to SEGA_32X, "COLECO" to COLECOVISION, "FBN" to ARCADE, "DC" to DREAMCAST,
         "WII" to WII, "GC" to GAMECUBE,
     )
+    /**
+     * The tag of RetroAchievements console [consoleId]: the first tag that maps to it, or the tag whose discs it is (PC
+     * Engine CD); null for a console the app has no core for.
+     */
+    fun tagOf(consoleId: Int): String? =
+        if (consoleId == PC_ENGINE_CD) "PCE" else byTag.entries.firstOrNull { it.value == consoleId }?.key
+
     private val discExtensions = setOf("cue", "chd", "iso", "m3u", "ccd", "toc")
     /**
      * What rcheevos hashes as a Dreamcast disc (an m3u as a playlist: its first disc). Not `.cdi` (rcheevos has no CDI

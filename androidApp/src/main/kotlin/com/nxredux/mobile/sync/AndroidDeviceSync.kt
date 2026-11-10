@@ -5,11 +5,14 @@ import android.net.ConnectivityManager
 import android.net.wifi.WifiManager
 import com.nxredux.mobile.library.Collections
 import com.nxredux.mobile.library.LibraryIndexCodec
+import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.SidecarTxt
 import com.nxredux.mobile.netplay.Rsync
 import com.nxredux.mobile.netplay.WifiNetworks
 import com.nxredux.mobile.netplay.usb.UsbCable
 import com.nxredux.mobile.netplay.usb.UsbCables
+import com.nxredux.mobile.runner.deleteStaleTempSiblings
+import com.nxredux.mobile.runner.writeAtomically
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.storage.AndroidHomeLocator
 import com.nxredux.mobile.storage.AndroidLibraryIndexStore
@@ -245,11 +248,11 @@ class AndroidDeviceSync(
 
     override suspend fun writeHomeText(path: String, text: String): Boolean = withContext(Dispatchers.IO) {
         runCatching {
+            // A synced part of its own: two overlapping writes of one sidecar never mix, and a cut-short one is a `.part`
+            // that scans and the ROM sync skip.
             val file = File(homeRoms(), path)
-            file.parentFile?.mkdirs()
-            val tmp = File(file.parentFile, file.name + ".tmp")
-            tmp.writeText(text)
-            if (!tmp.renameTo(file)) { tmp.delete(); error("rename failed") }
+            file.deleteStaleTempSiblings(Names.PART)
+            file.writeAtomically(text.encodeToByteArray(), Names.PART)
             true
         }.onFailure { NxLog.w(TAG, "device sync write of $path failed", it) }.getOrDefault(false)
     }

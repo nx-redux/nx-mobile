@@ -27,6 +27,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.nxredux.mobile.ui.keyboard.EntryFocus
+import com.nxredux.mobile.ui.keyboard.LocalPromptKeyboard
+import com.nxredux.mobile.ui.keyboard.NxEntryField
+import com.nxredux.mobile.ui.keyboard.buttonFocus
 
 /**
  * The RetroAchievements sign-in: a username and a masked password field in the shared modal frame. The username takes
@@ -41,6 +45,26 @@ fun NxSignInPrompt(
     caption: String = "Sign in to RetroAchievements",
 ) {
     val colors = LocalNxColors.current
+    val keyboard = LocalPromptKeyboard.current
+    keyboard.entry?.takeIf { it.fields.size == 2 }?.let { entry ->
+        // The NX keyboard types: both fields drawn from its entry, the caret in the active one; the box's buttons answer past it.
+        NxModal(
+            caption = caption, kind = ModalKind.PROMPT, confirmLabel = "Sign in", buttonFocus = entry.buttonFocus(),
+            onButton = { keyboard.answer(if (it == NxButton.B) NxButton.B else NxButton.A) },
+        ) {
+            entry.fields.forEachIndexed { i, f ->
+                if (i > 0) Spacer(Modifier.height(12.dp))
+                Text(f.label, color = colors.hint, fontFamily = LocalNxFont.current, fontSize = nxModalSmall())
+                Spacer(Modifier.height(4.dp))
+                NxEntryField(
+                    f.value, f.password, entry.cursor.takeIf { entry.active == i },
+                    focused = entry.active == i && entry.focus == EntryFocus.Field, onTap = { keyboard.tapField(i) },
+                    revealed = f.password && entry.reveal, onReveal = if (f.password) keyboard.toggleReveal else null,
+                )
+            }
+        }
+        return
+    }
     val userFocus = remember { FocusRequester() }
     val passwordFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { userFocus.requestFocus() }

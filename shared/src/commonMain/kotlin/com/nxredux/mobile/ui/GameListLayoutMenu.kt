@@ -41,13 +41,13 @@ private val ROW_H = 32.dp
 private val BOTTOM_ROOM = 8.dp
 
 /**
- * The Layout icon's dropdown, under the title row's icons at the page's top right: every [GameListLayouts]
- * choice, [current] (the one in use) ticked, [highlighted] (the d-pad's) on the accent pill, as a List's. Taller than
+ * The Layout icon's dropdown, under the title row's icons at the page's top right: the [choices]
+ * ([GameListLayouts.choices]), [current] (the one in use) ticked, [highlighted] (the d-pad's) on the accent pill, as a List's. Taller than
  * the page leaves it, it scrolls, keeping the highlighted row in view. A tap picks a choice ([onPick]); a tap anywhere
  * else closes it ([onDismiss]), as B does.
  */
 @Composable
-fun GameListLayoutMenu(current: Int, highlighted: Int, onPick: (Int) -> Unit, onDismiss: () -> Unit) {
+fun GameListLayoutMenu(choices: List<GameListLayout>, current: Int, highlighted: Int, onPick: (Int) -> Unit, onDismiss: () -> Unit) {
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
     val scroll = rememberScrollState()
@@ -75,7 +75,7 @@ fun GameListLayoutMenu(current: Int, highlighted: Int, onPick: (Int) -> Unit, on
                 .padding(6.dp)
                 .verticalScroll(scroll),
         ) {
-            GameListLayouts.all.forEachIndexed { i, layout ->
+            choices.forEachIndexed { i, layout ->
                 val lit = i == highlighted
                 val ink = if (lit) colors.onAccent else colors.listText
                 Box(

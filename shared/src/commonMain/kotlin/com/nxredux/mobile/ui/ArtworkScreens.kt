@@ -1,6 +1,6 @@
 package com.nxredux.mobile.ui
 
-import com.nxredux.mobile.ui.nx.LocalWindowSize
+import com.nxredux.mobile.ui.nx.splitWindow
 import com.nxredux.mobile.ui.nx.valueHints
 import com.nxredux.mobile.ui.nx.HintTouch
 import androidx.compose.foundation.layout.Box
@@ -82,7 +82,7 @@ internal fun ArtworkPageBody(
             val touch = rows.getOrNull(selectedIndex)
             NxSettingsPage(
                 toolPageTitle(screen, split), rows, selectedIndex,
-                hints = hints(artworkSettingsHints(screen.rows.getOrNull(selectedIndex), touch, touch != null && nxShowsInfo(touch, truncated), rowEditTwoPane(screen, settingsSplit(LocalWindowSize.current)))),
+                hints = hints(artworkSettingsHints(screen.rows.getOrNull(selectedIndex), touch, touch != null && nxShowsInfo(touch, truncated), rowEditTwoPane(screen, settingsSplit(splitWindow())))),
                 onSelect = onSelect, onOpen = onOpen, onEvent = onSetting, modifier = modifier,
                 onTruncated = onTruncated, onHint = onHint, preview = !focused,
             )
@@ -240,6 +240,9 @@ internal fun artworkSettingInfo(row: ArtworkSettingRow): SettingText = when (row
     ArtworkSettingKind.MIX -> quiet(
         "Fetch the handheld's mix picture",
         "Fetch ScreenScraper's mix picture. When it has none, the app makes one from the screenshot, box and wheel.",
+    )
+    ArtworkSettingKind.FETCH_INFO -> quiet(
+        "Download a game's missing artwork and look up its synopsis, genre, release year and publisher on ScreenScraper when it's highlighted on the top screen.",
     )
     ArtworkSettingKind.SS_LOGIN -> quiet(
         "Log in for your own daily allowance",

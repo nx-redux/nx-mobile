@@ -38,6 +38,7 @@
 #include "languagemap.h"
 #include "achievements/achievements.h"
 #include "corelog.h"
+#include "avtiming.h"
 #include "netplay/linkhooks.h"
 #include "sensorstate.h"
 #include "vulkanbridge.h"
@@ -764,7 +765,7 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             // other vblank (its retro_run runs until the game renders), so pacing at the old rate would run it 2x.
             // TODO: a changed timing.sample_rate is still ignored (Audio keeps the rate it was built with).
             auto *avInfo = static_cast<struct retro_system_av_info *>(data);
-            if (avInfo->timing.fps > 1.0 && avInfo->timing.fps <= 240.0) {
+            if (libretrodroid::avtiming::isValidFps(avInfo->timing.fps)) {
                 timingFps.store(avInfo->timing.fps, std::memory_order_relaxed);
                 timingUpdated.store(true, std::memory_order_release);
             }

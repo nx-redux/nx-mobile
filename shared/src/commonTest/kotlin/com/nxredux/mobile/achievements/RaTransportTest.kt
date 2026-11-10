@@ -56,11 +56,24 @@ class RaTransportTest {
         val award = "r=awardachievement&u=me&t=tok&a=7&h=0&m=$hash&v=x"
         for ((status, body) in listOf(200 to """{"Success":true,"AchievementID":7,"Score":10,"SoftcoreScore":5}""",
             200 to """{"Success":false,"Error":"User already has this achievement unlocked."}""",
-            401 to """{"Success":false,"Status":401,"Code":"invalid_credentials","Error":"Invalid token"}""")) {
+            200 to """{"Success":false,"Error":"Unknown achievement"}""")) {
             val (t, store, http) = setup()
             http.on("awardachievement", status = status, body = body)
             assertEquals(RaResponse(status, body), t.call(RaRequests.URL, award))
             assertTrue(RaJournal(store, RaPaths.JOURNAL).entries().isEmpty())
+        }
+    }
+    @Test fun online_award_refused_for_the_login_or_account_is_passed_through_and_stays_journaled() = runTest {
+        val award = "r=awardachievement&u=me&t=tok&a=7&h=0&m=$hash&v=x"
+        for ((status, body) in listOf(401 to """{"Success":false,"Status":401,"Code":"invalid_credentials","Error":"Invalid token"}""",
+            200 to """{"Success":false,"Code":"expired_token","Error":"Token expired"}""",
+            200 to """{"Success":false,"Code":"invalid_credentials","Error":"Invalid"}""",
+            403 to """{"Success":false,"Code":"access_denied","Error":"Unverified"}""",
+            200 to """{"Success":false,"Code":"unsupported_client","Error":"Old client"}""")) {
+            val (t, store, http) = setup()
+            http.on("awardachievement", status = status, body = body)
+            assertEquals(RaResponse(status, body), t.call(RaRequests.URL, award), body)
+            assertEquals(listOf(RaUnlock("me", 7, hash, 5L)), RaJournal(store, RaPaths.JOURNAL).entries(), body)
         }
     }
     @Test fun online_award_is_journaled_before_its_post_and_cleared_on_a_definitive_answer() = runTest {

@@ -29,6 +29,16 @@ import kotlin.time.TimeSource
 
 private val processStart = TimeSource.Monotonic.markNow()
 
+/** What [ArtworkController.fetchArtQuietly] did. */
+enum class QuietArt {
+    /** The run finished, whatever it found. */
+    DONE,
+    /** Not made: the library has the game's art by now, hides it, or no source fetches it. */
+    NOT_WANTED,
+    /** Not made: a job or the user's own fetch is asking the sources. */
+    BUSY,
+}
+
 /** The artwork façade for the UI and onboarding: one job at a time (appends chain onto it), persistence, account, Reset. */
 class ArtworkController(
     private val host: ArtworkHost, engine: ScrapeEngineFactory, private val credentials: ScraperCredentials,
@@ -68,6 +78,9 @@ class ArtworkController(
     )
     private val previews = Semaphore(PREVIEW_DOWNLOADS)
 
+    /** Game info beside the art; null when the engine keeps none. */
+    val info: GameInfoStore? get() = engine.info
+
     /** Any source is on; fetching works in a build without ScreenScraper's credentials when another source is. */
     val available: Boolean get() = engine.sources.any { it.enabled }
     /** ScreenScraper's build credentials are present (its account rows). */
@@ -88,7 +101,7 @@ class ArtworkController(
     private val _state = MutableStateFlow(ScrapeState())
     val state: StateFlow<ScrapeState> = _state.asStateFlow()
 
-    /** Guards [job], [pending], [replace], [single] and every phase change. */
+    /** Guards [job], [pending], [replace], [retryMisses], [single] and every phase change. */
     private val lock = Mutex()
     /**
      * Held by [halt] from its check to the phase it records, taken before [lock]. The stopped job winds down meanwhile
@@ -100,6 +113,8 @@ class ArtworkController(
     /** Games queued while running; the run loop chains onto them when the engine's run ends. */
     private var pending: List<ScrapeItem> = emptyList()
     private var replace = false
+    /** A Fetch all or Replace run is (or was) queued in the job: its games' info misses are asked again ([ScrapeEngine.run]). */
+    private var retryMisses = false
     /**
      * The engine's end state of the live run, from its return until the loop merges it under [lock]. A stop landing in
      * between (the merge's lock wait is cancellable) leaves it here for [halt] to record after its join, so the games
@@ -122,14 +137,17 @@ class ArtworkController(
     private var savedAt = 0L
 
     /** Games without art (no box or no background, or no mix with Mix on); each is asked only for what it lacks. */
-    fun fetchMissing(): Job? = enqueue(false) { !it.have.complete }
+    fun fetchMissing(): Job? = enqueue(false, retry = false) { !it.have.complete }
     fun fetchConsole(tags: Set<String>, replaceExisting: Boolean = false): Job? {
         val up = tags.mapTo(HashSet()) { it.uppercase() }
-        return enqueue(replaceExisting) { it.tag.uppercase() in up && (replaceExisting || !it.have.complete) }
+        return enqueue(replaceExisting, retry = replaceExisting) { it.tag.uppercase() in up && (replaceExisting || !it.have.complete) }
     }
-    fun fetchAll(replaceExisting: Boolean): Job? = enqueue(replaceExisting) { replaceExisting || !it.have.complete }
+    fun fetchAll(replaceExisting: Boolean): Job? = enqueue(replaceExisting, retry = true) { replaceExisting || !it.have.complete }
 
-    fun missingCount(games: List<LibraryGameRef>): Int = games.count { fetchable(it) && !it.have.complete }
+    fun missingCount(games: List<LibraryGameRef>): Int = games.count(::wantsArt)
+
+    /** [ref] lacks art a fetch would ask for: as Fetch missing picks its games. */
+    fun wantsArt(ref: LibraryGameRef): Boolean = fetchable(ref) && !ref.have.complete
 
     /**
      * Running: appends the games not already queued. Paused: merges them in and resumes. Otherwise a new job. Before any
@@ -137,7 +155,7 @@ class ArtworkController(
      * restore has run merges into it instead of overwriting the saved queue. Returns the queuing (null when unavailable):
      * once it ends, [state] shows the job the games went into (Progress waits on it).
      */
-    private fun enqueue(replaceExisting: Boolean, pick: (LibraryGameRef) -> Boolean): Job? {
+    private fun enqueue(replaceExisting: Boolean, retry: Boolean, pick: (LibraryGameRef) -> Boolean): Job? {
         if (!available) return null
         return scope.launch(work) {
             val picked = host.libraryGames().filter { fetchable(it) && pick(it) }
@@ -153,11 +171,12 @@ class ArtworkController(
                 when {
                     job != null -> if (add.isNotEmpty()) {
                         replace = replace || replaceExisting
+                        retryMisses = retryMisses || retry
                         pending = pending + add
                         _state.value = s.copy(items = s.items + add)
                     }
-                    s.phase == JobPhase.PAUSED -> { replace = replace || replaceExisting; startLocked(s.copy(items = s.items + add)) }
-                    add.isNotEmpty() -> { replace = replaceExisting; startLocked(ScrapeState(JobPhase.RUNNING, add, quota = s.quota, tgdbLeft = s.tgdbLeft)) }
+                    s.phase == JobPhase.PAUSED -> { replace = replace || replaceExisting; retryMisses = retryMisses || retry; startLocked(s.copy(items = s.items + add)) }
+                    add.isNotEmpty() -> { replace = replaceExisting; retryMisses = retry; startLocked(ScrapeState(JobPhase.RUNNING, add, quota = s.quota, tgdbLeft = s.tgdbLeft)) }
                 }
             } }
         }
@@ -187,7 +206,8 @@ class ArtworkController(
                 singleLock.withLock {}   // a fetchGame in flight finishes first: its game is never scraped twice at once
                 val refs = host.libraryGames().associateBy { it.gamePath }
                 // Bulk jobs save the options found on the way, never the wide pass.
-                runEnd = engine.run(start, { refs[it] }, lock.withLock { replace }, wide = false) { publish(it) }
+                val (rep, retry) = lock.withLock { replace to retryMisses }
+                runEnd = engine.run(start, { refs[it] }, rep, wide = false, retryMisses = retry) { publish(it) }
                 start = lock.withLock {
                     // Stopped since the run returned: [halt] records the phase from [runEnd] once this job is gone.
                     currentCoroutineContext().ensureActive()
@@ -323,6 +343,8 @@ class ArtworkController(
         val (s, r) = host.readPrivate(JOB_FILE)?.let { ScrapeJobCodec.decode(it) } ?: return false
         if (s.phase != JobPhase.PAUSED || s.items.none { it.status == ItemStatus.WAITING }) return false
         replace = r
+        // Not saved with the job: a restored one asks misses again only when it replaces.
+        retryMisses = r
         _state.value = s.copy(quota = _state.value.quota, tgdbLeft = _state.value.tgdbLeft)
         return true
     }
@@ -337,6 +359,56 @@ class ArtworkController(
      */
     override suspend fun fetchGame(gamePath: String, replaceExisting: Boolean, wide: Boolean, found: suspend (List<ArtOption>) -> Unit): FetchResult =
         fetchOne(gamePath, replaceExisting, wide, found).first
+
+    /** A job or a single-game fetch is asking the sources (the top screen's info fetch waits it out). */
+    val busy: Boolean get() = job != null || single != null || _state.value.phase == JobPhase.RUNNING
+
+    /** ScreenScraper's last quota read and when (epoch millis), or null when none was read (anonymous use never reads one). */
+    val ssQuotaRead: Pair<SsQuota, Long>? get() = engine.ss?.lastQuotaRead
+
+    /**
+     * The top screen's info-only lookup of [ref]: null when not asked (no ScreenScraper for it, or a job or a fetch is
+     * live). Under [singleLock] as [fetchOne], so it never runs beside a run's requests (ScreenScraper's one-thread
+     * rule); a job or a user's Fetch art started meanwhile waits for this one lookup (its requests and their back-off). Throws [SourceStop] / [JobPause] as the source does.
+     */
+    internal suspend fun lookupInfo(ref: LibraryGameRef): InfoResult? = withContext(work) {
+        val ss = engine.ss?.takeIf { !ref.android && it.enabled && it.knows(ref) } ?: return@withContext null
+        singleLock.withLock {
+            if (haltLock.withLock { lock.withLock { job != null } }) null else ss.info(ref)
+        }
+    }
+
+    /**
+     * The top screen's art fetch for [ref], lacking art ([wantsArt]): the single-game flow (only the slots it lacks, its
+     * info kept from ScreenScraper's same answer) with nothing shown, so outside [state], keep-alive and [busy]. See
+     * [QuietArt] for what it did; a library folder that can't be written is [QuietArt.DONE], as asking again would not
+     * help. ScreenScraper stopping in it throws its [SourceStop], no connection a [JobPause], as [lookupInfo] does. Under
+     * [singleLock] as [lookupInfo], the game read after its wait.
+     */
+    internal suspend fun fetchArtQuietly(ref: LibraryGameRef): QuietArt = withContext(work) {
+        if (!available) return@withContext QuietArt.NOT_WANTED
+        singleLock.withLock {
+            if (haltLock.withLock { lock.withLock { job != null || single != null } }) return@withLock QuietArt.BUSY
+            // Read after the wait: a user's fetch of this game that held the lock has written its art by now.
+            val now = host.libraryGames().firstOrNull { it.gamePath == ref.gamePath }?.takeIf(::wantsArt) ?: return@withLock QuietArt.NOT_WANTED
+            val one = ScrapeState(items = listOf(ScrapeItem(now.gamePath, now.tag, now.name)))
+            // Not starting the sources: ScreenScraper's start reads the quota, a request beyond the lookup.
+            val end = try {
+                engine.run(one, { if (it == now.gamePath) now else null }, startSources = false) {}.also { e ->
+                    // Artwork settings' request counts stay true after browsing fetches.
+                    e.quota?.let { q -> _state.update { it.copy(quota = q) } }
+                    e.tgdbLeft?.let { n -> _state.update { it.copy(tgdbLeft = n) } }
+                }
+            } finally {
+                // Their per-run answers are let go as after a job; nothing else is held by a run never started.
+                withContext(NonCancellable) { for (src in engine.sources) src.endJob() }
+                flushArt()   // the art shows now, as after the art panel's fetch
+            }
+            end.notes[SourceId.SS]?.let { throw SourceStop(it) }
+            if (end.pauseReason == ScrapeEngine.NO_CONNECTION) throw JobPause(ScrapeEngine.NO_CONNECTION)
+            QuietArt.DONE
+        }
+    }
 
     /** [fetchGame], with the sources' stop notes of its own run (none when the job fetched the game). */
     private suspend fun fetchOne(
@@ -633,8 +705,8 @@ class ArtworkController(
     }
 
     /**
-     * Deletes the logged art files of the games in scope ([tags] null = every logged file: typed art and the app's
-     * legacy untyped mixes; one whose delete failed stays logged and uncounted), removes the slot and `.media` folders
+     * Deletes the logged art files of the games in scope ([tags] null = every logged file: typed art, game info and the
+     * app's legacy untyped mixes; one whose delete failed stays logged and uncounted), removes the slot and `.media` folders
      * that left empty, and, for Android's scope or All, the Android games console's stored screenshots; then re-reads
      * what is left on disk for every game whose art paths were touched (hidden games too), so hand-placed art stays in
      * the index. The scope's Change art lists, picks and previews are forgotten too (All: every preview). A running job
@@ -659,6 +731,7 @@ class ArtworkController(
                 engine.removeEmptyArtDirs(inScope)
                 before to results.count { it.value == ScrapeEngine.Deleted.DELETED }
             }
+            engine.info?.forgetCached()
             // The Android games console's screenshots are app-private, outside the log: Android's scope or All deletes them.
             val android = up == null || ANDROID_CONSOLE_TAG in up
             val androidDeleted = if (android) engine.deleteAndroidArt() else 0
@@ -680,10 +753,10 @@ class ArtworkController(
 
     /**
      * Every path the app may have written for [g]: each typed slot (the 2D box, wheel and mix among them) in both
-     * encodings, the 2D box's legacy `box2d/` files and the legacy untyped mix.
+     * encodings, the 2D box's legacy `box2d/` files, the legacy untyped mix and the game info file.
      */
     private fun artPaths(g: LibraryGameRef): List<String> {
         val t = try { ArtPaths.target(g.sourceId, g.relativeDir, g.fileName, g.folderGame) } catch (_: IllegalArgumentException) { return emptyList() }
-        return ArtEncoding.entries.flatMap { e -> ArtSlot.entries.map { t.path(it, e) } + t.legacyBox2dPath(e) } + t.legacyMixPath
+        return ArtEncoding.entries.flatMap { e -> ArtSlot.entries.map { t.path(it, e) } + t.legacyBox2dPath(e) } + t.legacyMixPath + t.infoPath
     }
 }

@@ -38,17 +38,20 @@ enum class GuardEventType { RESUMED, PAUSED, STOPPED }
 data class GuardEvent(val type: GuardEventType, val pkg: String, val cls: String?, val at: Long)
 
 /**
- * The activity in front from [events] (oldest first): the last resume with no later pause or stop of that same
- * activity. Null when there is none (the front activity was resumed before the events start, or has since paused
- * with nothing resumed after it).
+ * Every activity still in front from [events] (oldest first): each resume with no later pause or stop of that same
+ * activity, oldest first. With more than one display several apps are resumed at once, and the last resume alone may
+ * be an allowed app on one display while a blocked one stays resumed on the other.
  */
-fun guardFront(events: List<GuardEvent>): GuardEvent? {
-    var front: GuardEvent? = null
-    for (e in events) when (e.type) {
-        GuardEventType.RESUMED -> front = e
-        GuardEventType.PAUSED, GuardEventType.STOPPED -> if (front != null && front.pkg == e.pkg && front.cls == e.cls) front = null
+fun guardFronts(events: List<GuardEvent>): List<GuardEvent> {
+    val fronts = LinkedHashMap<Pair<String, String?>, GuardEvent>()
+    for (e in events) {
+        val key = e.pkg to e.cls
+        when (e.type) {
+            GuardEventType.RESUMED -> { fronts.remove(key); fronts[key] = e }
+            GuardEventType.PAUSED, GuardEventType.STOPPED -> fronts.remove(key)
+        }
     }
-    return front
+    return fronts.values.toList()
 }
 
 /** The packages of the allowed apps' ids ("pkg/activity"). */
@@ -67,8 +70,9 @@ fun guardExempt(defaultIme: String?, granting: Boolean): Set<String> = buildSet 
 }
 
 /**
- * The guard runs only while Locked, with Usage access (it cannot see the front app without it), and while no menu is
- * shown (the tiles screen is in front, nothing to watch).
+ * The guard runs only while Locked, with Usage access (it cannot see the front app without it), and while something
+ * other than the menu may be in front: no menu shown, or an app open on the other display ([appOnOtherDisplay], dual
+ * mode's top screen), where a link out of it opens beside the shown menu.
  */
-fun guardRuns(mode: KidsMode, usageAccess: Boolean, menuShown: Boolean): Boolean =
-    mode is KidsMode.Locked && usageAccess && !menuShown
+fun guardRuns(mode: KidsMode, usageAccess: Boolean, menuShown: Boolean, appOnOtherDisplay: Boolean = false): Boolean =
+    mode is KidsMode.Locked && usageAccess && (!menuShown || appOnOtherDisplay)

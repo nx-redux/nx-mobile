@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 
@@ -82,9 +83,28 @@ fun settingsCategoryOf(screen: Screen): SettingsSection? = when (screen) {
  */
 fun raSplitView(window: DpSize, screen: Screen): Boolean = settingsSplit(window) && raSplitLevel(screen)
 
+/**
+ * The RetroAchievements left pane's width beside a level ([raSplitView]) while it shows the page: its share
+ * ([SETTINGS_SPLIT_LEFT]), or wider so the word block (its head included) ends at [sectionRight] with the [gutter] after
+ * it, as on the page itself, as Settings' stage keeps its words whole; the list keeps [SETTINGS_FRAME_MIN] unless the
+ * share itself leaves less.
+ */
+// Unlike Settings' stage ([settingsFrameLeft]), the left pane grows rather than the frame shrinking: the right side is a list, not a fixed frame.
+fun raSplitLeftWidth(stageWidth: Dp, sectionRight: Dp, gutter: Dp): Dp =
+    maxOf(stageWidth * SETTINGS_SPLIT_LEFT, minOf(sectionRight + gutter, stageWidth - SETTINGS_FRAME_MIN))
+
+/** [raSplitLeftWidth] as [SplitPanes]' left share: of the width it splits, the stage less the [SPLIT_DIVIDER]. */
+fun raSplitLeftShare(stageWidth: Dp, sectionRight: Dp, gutter: Dp): Float {
+    val split = stageWidth - SPLIT_DIVIDER
+    return if (split > 0.dp) raSplitLeftWidth(stageWidth, sectionRight, gutter) / split else SETTINGS_SPLIT_LEFT
+}
+
+/** The hairline between [SplitPanes]' panes. */
+val SPLIT_DIVIDER = 1.dp
+
 /** Whether [screen] is a RetroAchievements level drawn beside its parent when the window splits ([raSplitView]). */
 fun raSplitLevel(screen: Screen): Boolean =
-    screen is Screen.RaSettings || screen is Screen.RaGames || screen is Screen.RaGame || screen is Screen.RaAchievement
+    screen is Screen.RaSettings || screen is Screen.RaConsoles || screen is Screen.RaGames || screen is Screen.RaGame || screen is Screen.RaAchievement
 
 /**
  * The Game Tracker column browser on a split window ([settingsSplit], the same rule): a game's sessions are the focused
@@ -114,7 +134,7 @@ fun twoPaneView(window: DpSize, screen: Screen): Boolean =
 
 /** The RetroAchievements page's row that opened [screen] (Achievements, Settings), highlighted in the left pane; null below that. */
 fun raPageRow(screen: Screen): Int? = when (screen) {
-    is Screen.RaGames -> RaAction.entries.indexOf(RaAction.ACHIEVEMENTS)
+    is Screen.RaConsoles -> RaAction.entries.indexOf(RaAction.ACHIEVEMENTS)
     is Screen.RaSettings -> RaAction.entries.indexOf(RaAction.SETTINGS)
     else -> null
 }

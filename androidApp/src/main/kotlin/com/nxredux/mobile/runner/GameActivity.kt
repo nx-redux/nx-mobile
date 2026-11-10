@@ -99,6 +99,7 @@ import com.nxredux.mobile.options.ScreenScaling
 import com.nxredux.mobile.options.SpeedOptions
 import com.nxredux.mobile.options.SpeedSettings
 import com.nxredux.mobile.options.VulkanFallback
+import com.nxredux.mobile.settings.ProviderPreferences
 import com.nxredux.mobile.settings.Prefs
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.PrefsProvider
@@ -183,6 +184,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_CORE_FILE = "core_file"
         const val EXTRA_CORE_ID = "core_id"
         const val EXTRA_TAG = "tag"
+        const val EXTRA_LEAVE_DISPLAY = "leave_display"   // Int: an app the player opened on this display stays there
         const val EXTRA_TITLE = "title"
         const val EXTRA_FILE_NAME = "file_name"      // ROM file name; keys save data
         const val EXTRA_CONTENT_URI = "content_uri"
@@ -334,7 +336,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     override var focusPaused = false
         private set
-    private val saves = SaveSession(this, renderer, menu)
+    private val saves = SaveSession(this, renderer, menu, dual)
     private val wii = WiiDolphinController(this, input, saves)
     private val launchPipeline = LaunchPipeline(LaunchState())
     override val slotsUi: androidx.compose.runtime.State<List<SlotUi>> get() = saves.slotsUi
@@ -642,9 +644,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun onPause() {
         rumbles.forEach { it.pause() }   // no rumble in the background; onResume picks the core's state up again
-        // The battery save is written synchronously (the process may be killed once backgrounded).
-        // A quit writes it once itself, off the main thread (quitWithAutoState), so nothing here then.
-        if (!quitting) saves.writeBatterySave(notify = false)
+        // A quit writes the battery save once itself, off the main thread (quitWithAutoState), so nothing here then.
+        if (!quitting) saves.writeBatterySaveOnPause()
         gameNetplay.run?.pause()   // netplay: backgrounded: no input goes out; the other side stalls, 30 s ends the session
         wii.syncMotionSensors(foreground = false)
         // Closes the phone mic at once (the paused core stops reading it); the toggle stays as it is for onResume.
@@ -836,6 +837,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** Back to the menu the game fades to black over 150 ms: below Android 14 (no close override set in onCreate) set here. */
     override fun finish() {
         // Launcher mode, quit on screen (not a handoff behind the menu, not the GLES relaunch): back to NX Redux's home.
+        if (!relaunching) markClosing()
         if (intent.getBooleanExtra(EXTRA_OWN_TASK, false) && !relaunching && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
             bringHomeTaskToFront()
             // A quit finishes once the menu covers it (onStop): a task closing on screen slides out, Android's task
@@ -848,6 +850,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         super.finish()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) @Suppress("DEPRECATION") overridePendingTransition(0, R.anim.launch_return_out)
+    }
+
+    /**
+     * The menu must not bring this screen back from here on ([canBringBack]): its task would come forward only to finish,
+     * and no game would start. A pick of the same game then waits for this process to end and starts fresh.
+     */
+    private fun markClosing() {
+        runCatching { liveGameStore.markClosing(Process.myPid(), launchId) }.onFailure { NxLog.w(TAG_LOG, "could not mark the game closing", it) }
     }
 
     /** A quit waiting to be hidden ([finish]) finishes now. */
@@ -907,6 +917,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         GameTimeService.flush()
         runCatching { NetplayEngine.executor.submit {}.get(PROCESS_END_WAIT_S, TimeUnit.SECONDS) }
         runCatching { PairSaveFiles.writer.submit {}.get(PROCESS_END_WAIT_S, TimeUnit.SECONDS) }   // a Cable Link save's commit
+        ProviderPreferences.awaitSends(TimeUnit.SECONDS.toMillis(PROCESS_END_WAIT_S))   // settings applied in the game's last moments
         NxLog.i(TAG_LOG, "the game has ended: ending its process")
         Process.killProcess(Process.myPid())
     }
@@ -1346,15 +1357,20 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun quitWithAutoState(chosen: Boolean, autoState: Boolean = true) {
         if (quitting) return   // single-shot: a second job could serialize after the core is destroyed
         quitting = true
+        markClosing()
         GameHeartbeat.start(this)   // the menu may be waiting for this process to end: its saves can take a while
         rumbles.forEach { it.release() }
         shortcuts.pushMicSource()   // silence now, so the phone's mic closes before the save, not at the pause
         endGameTime()
         val view = retroView
         input.gcClearTriggers()   // a latched soft press never outlives the game
-        stopAchievements()
-        if (view == null || !gameReady) { finish(); return }   // not running yet: no save to write
-        saves.writeOnQuit(view, chosen, autoState, ::finish)
+        // Detached now: its events stop reaching the screen (no toast during the quit). Its native unload takes the core's
+        // lock, so it waits off the main thread for the quit's read of the core.
+        val ach = achievements
+        ach?.detach()
+        achievements = null
+        if (view == null || !gameReady) { ach?.stop(); finish(); return }   // not running yet: no save to write
+        saves.writeOnQuit(view, chosen, autoState, release = { live -> ach?.stop(native = live) }, finish = ::finish)
     }
 
     override fun refreshSlots() = saves.refreshSlots()
@@ -1429,7 +1445,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         achievements = AchievementsBridge(controller, settings, lifecycleScope).also { it.prepare(consoleId, hashJob, pointer, launch) }
     }
 
-    /** Idempotent; onDestroy, a finishing onStop and the quit path all reach it. */
+    /** Idempotent; onDestroy and a finishing onStop both reach it (a quit detaches it itself: quitWithAutoState). */
     private fun stopAchievements() {
         achievements?.stop()
         achievements = null
@@ -1684,7 +1700,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (!menuOpen || quitting || skinEditView != null) { frame?.recycle(); return }
         val root = findViewById<FrameLayout>(R.id.root)
         // the layout drawn now: the bare buttons are the overlay's, edited apart from the skin's
-        val state = SkinLayoutEdit.state(settings, edit.consoleId, edit.placement, edit.w, edit.h, overlay = edit.bare, minTouchPx = resources.displayMetrics.density * MIN_TOUCH_DP)
+        val state = SkinLayoutEdit.state(settings, edit.consoleId, edit.placement, edit.w, edit.h, overlay = edit.bare, minTouchPx = resources.displayMetrics.density * MIN_TOUCH_DP, useStick = edit.useStick)
         val colors = nxColorsFor(settings.accent, settings.secondaryAccent)
         val title = CoreRegistry.consoles.firstOrNull { it.id == edit.consoleId }?.displayName ?: "Adjust buttons"
         val picture = edit.picture.asImageBitmap()

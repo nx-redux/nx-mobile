@@ -5,12 +5,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.options.CoreOptionFilter
 import com.nxredux.mobile.runner.CoreRegistry
-import com.nxredux.mobile.ui.nx.LocalWindowSize
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxScreenScaffold
 import com.nxredux.mobile.ui.nx.NX_EDIT_HINTS
+import com.nxredux.mobile.ui.nx.splitWindow
 import com.nxredux.mobile.ui.nx.valueHints
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
@@ -73,7 +73,7 @@ fun EmulatorOptionsScreen(
     NxSettingsPage(
         emulatorOptionsTitle(screen), rows, selectedIndex,
         hints = if (editing >= 0) NX_EDIT_HINTS
-            else emulatorOptionsHints(screen.rows.getOrNull(selectedIndex), rows.getOrNull(selectedIndex), truncated, rowEditTwoPane(screen, settingsSplit(LocalWindowSize.current))),
+            else emulatorOptionsHints(screen.rows.getOrNull(selectedIndex), rows.getOrNull(selectedIndex), truncated, rowEditTwoPane(screen, settingsSplit(splitWindow()))),
         onSelect = { i -> if (screen.rows.getOrNull(i)?.selectable == true) onSelect(i) },   // headers and notices take no tap
         onOpen = { i -> if (screen.rows.getOrNull(i)?.selectable == true) onOpen(i) },
         onEvent = { e -> if (screen.rows.getOrNull(e.row)?.selectable == true) onSetting(e) },

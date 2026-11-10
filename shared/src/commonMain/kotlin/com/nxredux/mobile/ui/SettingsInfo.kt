@@ -250,9 +250,15 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     )
     SettingsKind.CABLE_LINK_DELAY_OVERLAY -> quiet("Show the current input delay in a Cable Link over Wi-Fi session")
     SettingsKind.DEBUG_LOG -> quiet(
-        "Detailed logs in Android's system log, for a bug report",
-        "Writes the app's and the emulators' detailed logs to Android's system log, for a bug report. Off, only errors " +
-            "are logged. It takes effect at once.",
+        "Saves detailed logs to Logs in your home folder, for a bug report",
+        "Saves the app's and the emulators' detailed logs to the Logs folder in your home folder, one file each time " +
+            "the app or a game starts, so you can attach it to a bug report. Off, only errors reach Android's system " +
+            "log and no file is written. It takes effect at once.",
+    )
+    SettingsKind.KEYBOARD -> quiet(
+        "NX: type with the pad or touch. Android: your phone's keyboard",
+        "NX: a keyboard you can use with the pad or touch. Android: your phone's keyboard (password managers, swipe " +
+            "typing). A field on the top screen always uses NX.",
     )
     SettingsKind.LICENSES_LINK -> quiet(row.secondary.orEmpty())   // the URL behind the icon; A opens it
     // Settings -> Kids Mode.

@@ -46,6 +46,16 @@ void Core::open(const std::string& soCorePath) {
         CoreLog::add('E', "core load: %s", why != nullptr ? why : "unknown loader error");
         throw std::runtime_error("Cannot dlopen library");
     }
+    // A throwing constructor never runs the destructor, so a missing symbol must close the library here.
+    try {
+        resolveSymbols();
+    } catch (...) {
+        close();
+        throw;
+    }
+}
+
+void Core::resolveSymbols() {
     retro_cheat_reset = (void (*)()) get_symbol(libHandle, "retro_cheat_reset");
     retro_cheat_set = (void (*)(unsigned, bool, const char*)) get_symbol(libHandle, "retro_cheat_set");
     retro_init = (void (*)()) get_symbol(libHandle, "retro_init");

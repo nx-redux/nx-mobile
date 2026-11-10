@@ -1201,6 +1201,23 @@ class DeviceSyncControllerTest {
         assertTrue(p.logs.any { it.startsWith("device sync: listing of $mgba: exit 0") })
     }
 
+    /** A game's info file (`.media/info/<name>.json`) goes with its game, as its art does. */
+    @Test fun device_sync_lists_info_files_with_the_art() = runTest {
+        val media = "$gbaRemote/.media"
+        val p = FakeSyncPlatform().apply {
+            roms = true
+            remoteListing = 0 to listOf(dir(gbaRemote), dir(mgba))
+            remoteHashes = hashListing(gbaRemote, mgba)
+            home = mapOf(null to listOf(gbaRemote), gbaRemote to listOf("A.gba", "B.gba"), media to listOf("boxart", "info", "grid"),
+                "$media/boxart" to listOf("A.png", "B.png"), "$media/info" to listOf("A.json", "B.json"), "$media/grid" to listOf("B.png"))
+            gameTags[gbaRemote] = mapOf("B.gba" to "MGBA")
+        }
+        assertIs<DeviceSyncPage.Done>(romClient(p).page.value)
+        fun artPush(remote: String) = p.romRuns.single { it.step == SyncStep.SEND_ROMS && it.to == RomEnd.Peer("roms", "$remote/.media") }
+        assertEquals(listOf("boxart/A.png", "info/A.json"), artPush(gbaRemote).filesFrom)
+        assertEquals(listOf("boxart/B.png", "info/B.json"), artPush(mgba).filesFrom)
+    }
+
     /** Both handheld GBA folders pull into the phone's one GBA folder; each pair merges its own hashes.json, once. */
     @Test fun a_handheld_with_two_gba_folders_gets_two_pairs_with_distinct_keys() = runTest {
         val p = FakeSyncPlatform().apply {

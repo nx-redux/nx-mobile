@@ -12,6 +12,7 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
@@ -24,6 +25,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -35,6 +37,7 @@ import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.layout.CoreFrame
 import com.nxredux.mobile.layout.consoleScale
+import com.nxredux.mobile.launcher.TopScreenTaken
 import com.nxredux.mobile.options.BottomScreenOptions
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.N3dsOptions
@@ -56,8 +59,11 @@ import com.nxredux.mobile.ui.nx.GamePanelModel
 import com.nxredux.mobile.ui.nx.GamePanelState
 import com.nxredux.mobile.ui.nx.GamePanelTab
 import com.nxredux.mobile.ui.nx.InGameMenuModel
+import com.nxredux.mobile.ui.nx.LocalInSkin
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxOptionText
+import com.nxredux.mobile.ui.nx.LocalPortrait
+import com.nxredux.mobile.ui.nx.LocalWindowSize
 import com.nxredux.mobile.ui.nx.MenuEffect
 import com.nxredux.mobile.ui.nx.NxTheme
 import com.nxredux.mobile.ui.nx.PanelPill
@@ -160,7 +166,24 @@ internal class DualScreenController(
     private fun syncN3dsCore() = owner.syncN3dsCore()
     private fun toast(msg: String) = owner.toast(msg)
 
-    val secondScreens by lazy { SecondScreens(activity, hostDisplay = ::gameDisplayId) }
+    /** The display an app the player opened holds ([GameActivity.EXTRA_LEAVE_DISPLAY]); let go of by [useTakenScreen]. */
+    private var leave = Display.INVALID_DISPLAY
+    val secondScreens by lazy {
+        leave = intent.getIntExtra(GameActivity.EXTRA_LEAVE_DISPLAY, Display.INVALID_DISPLAY)
+        SecondScreens(activity, hostDisplay = ::gameDisplayId, taken = { it == leave })
+    }
+
+    /** An app holds a display the game would use as its second screen. */
+    fun screenTaken(): Boolean =
+        leave != Display.INVALID_DISPLAY && activity.getSystemService(android.hardware.display.DisplayManager::class.java)?.getDisplay(leave) != null
+
+    /** Use top screen: the game takes the app's display after all, and the menu takes it back once the game ends. */
+    fun useTakenScreen() {
+        if (leave == Display.INVALID_DISPLAY) return
+        leave = Display.INVALID_DISPLAY
+        TopScreenTaken.mark(activity)
+        secondScreens.refresh()
+    }
 
     /** The display the game's window is on now (a monitor or DeX: not the default one). */
     private fun gameDisplayId(): Int =
@@ -243,14 +266,20 @@ internal class DualScreenController(
     private fun secondDraws(mode: DualMode = dualMode, picture: PictureOn = pictureOn): Boolean =
         mode == DualMode.SPLIT || (picture == PictureOn.SECOND && (mode == DualMode.PANEL || mode == DualMode.PANEL_UP))
 
+    /** Where the open in-game menu draws: in the panel while it is up on the other display from the picture ([DualMenu]). */
+    fun menuHost(): MenuHost = DualMenu.menuHost(dualMode, panelShown())
+
     /**
-     * On dual screen the in-game menu is on the top display: the one with the picture (the DS / 3DS picture screen while
-     * split). The other display is left to what it shows.
+     * The in-game menu draws on the second display: in the panel there (the picture here), or over the picture there
+     * (the DS / 3DS picture screen while split).
      */
-    fun menuOnSecond(): Boolean = presentation != null && dualMode != DualMode.OFF && pictureOn == PictureOn.SECOND
+    fun menuOnSecond(): Boolean = DualMenu.menuOnSecond(menuHost(), dualMode, pictureOn, presentation != null)
 
     /** Shows [content] as the in-game menu on the second display; null takes it away. */
     fun showMenuOnSecond(content: (@Composable () -> Unit)?) { presentation?.showMenu(content) }
+
+    /** The second display's surface while the GL thread draws on it (split, or the picture there); else null. */
+    fun drawnSecondSurface(): SecondSurface? = pushedSecondSurface?.takeIf { it == secondSurface && secondDraws() }
 
     /** The panel fills the game's window on main (the picture is on the second display). */
     fun mainPanelShown(): Boolean = mainPanel.value != null
@@ -527,7 +556,7 @@ internal class DualScreenController(
         val spot = SkinDual.panelSpot(dualMode, pictureOn, p != null, glass)
         panelSpot = spot
         val shown = panelShown()
-        val content = if (shown) panelContent(gamePill = dualMode == DualMode.PANEL_UP) else null
+        val content = if (shown) panelContent(gamePill = dualMode == DualMode.PANEL_UP, onSecond = spot == PanelSpot.SECOND_DISPLAY) else null
         p?.showPanelPill(dualMode == DualMode.SPLIT && !onMain)
         p?.showPanel(content.takeIf { spot == PanelSpot.SECOND_DISPLAY })
         val wasCovering = mainPanelCoversWindow()
@@ -578,8 +607,9 @@ internal class DualScreenController(
                             // in a skin's glass: no cutout to keep clear of (the skin's frame does that)
                             panel != null && mainPanelGlass.value != null ->
                                 Box(Modifier.fillMaxSize().background(LocalNxColors.current.background)) { panel() }
+                            // a side cutout is in the panel's page inset, as the in-game menu's that takes its place
                             panel != null -> Box(Modifier.fillMaxSize().background(LocalNxColors.current.background)
-                                .windowInsetsPadding(WindowInsets.displayCutout)) { panel() }
+                                .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Vertical))) { panel() }
                             // Bottom-right, where the panel's Game pill sits (clear of a cutout on those sides): the
                             // two switch pills land on one spot.
                             mainPanelPill.value -> PanelPill(
@@ -667,9 +697,27 @@ internal class DualScreenController(
         host.visibility = if (shown) View.VISIBLE else View.GONE
     }
 
-    /** The game panel, live on [dualPanel], touch-only; [gamePill]: the DS/3DS Game pill. */
-    private fun panelContent(gamePill: Boolean): @Composable () -> Unit = {
-        dualPanel.value?.let { GamePanel(it.copy(showGamePill = gamePill), ::onGamePanelEvent) }
+    /**
+     * The game panel, live on [dualPanel], touch-only; [gamePill]: the DS/3DS Game pill; [onSecond]: on the second
+     * display's window. Where the in-game menu opens in its place ([MenuHost.PANEL]), on the menu's page inset, with the
+     * window, orientation and skin the menu reads ([menuFrame]); else (one screen's skin glass) as it always was.
+     */
+    private fun panelContent(gamePill: Boolean, onSecond: Boolean): @Composable () -> Unit {
+        val menuPage = menuHost() == MenuHost.PANEL
+        return {
+            dualPanel.value?.let { state ->
+                if (!menuPage) {
+                    GamePanel(state.copy(showGamePill = gamePill), ::onGamePanelEvent)
+                } else BoxWithConstraints(Modifier.fillMaxSize()) {
+                    val frame = menuFrame(padLayout, onSecond, DpSize(maxWidth, maxHeight))
+                    CompositionLocalProvider(
+                        LocalWindowSize provides frame.window, LocalPortrait provides frame.portrait, LocalInSkin provides (frame.skinGlass != null),
+                    ) {
+                        GamePanel(state.copy(showGamePill = gamePill), ::onGamePanelEvent, menuInset = true)
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -865,7 +913,7 @@ internal class DualScreenController(
 }
 
 /** The second display's surface and its size in px. */
-private data class SecondSurface(val surface: Surface, val width: Int, val height: Int)
+internal data class SecondSurface(val surface: Surface, val width: Int, val height: Int)
 
 /** A display's real size in px and its density: a change needs a new window on it. */
 private data class DisplayShape(val width: Int, val height: Int, val densityDpi: Int)

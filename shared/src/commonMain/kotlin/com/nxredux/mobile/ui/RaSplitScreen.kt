@@ -1,15 +1,21 @@
 package com.nxredux.mobile.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.unit.dp
+import com.nxredux.mobile.achievements.RaController
 import com.nxredux.mobile.ui.nx.ListSelection
+import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
+import com.nxredux.mobile.ui.nx.nxListInset
 
 /**
  * The RetroAchievements column browser on a split window ([raSplitView]): the level the user is on ([page], drawn with
@@ -20,11 +26,29 @@ import com.nxredux.mobile.ui.nx.ListSelection
 @Composable
 internal fun RaSplitScreen(state: AppState, s: Screen, page: @Composable () -> Unit) {
     val parent = state.raParent(s)
-    SplitPanes(
-        left = { parent?.let { RaParentPane(state, it) } },
-        right = page,
-        over = { if (s is Screen.RaSettings) RaSettingsDialogs(s, state, state::onButton) },
-    )
+    val panes: @Composable (Float) -> Unit = { share ->
+        SplitPanes(
+            left = { parent?.let { RaParentPane(state, it) } },
+            // The page's hints start where its list does (the thumbnails' edge), not at the page inset the left pane holds.
+            right = { CompositionLocalProvider(LocalNxHintBarStart provides nxListInset()) { page() } },
+            over = { if (s is Screen.RaSettings) RaSettingsDialogs(s, state, state::onButton) },
+            leftShare = share,
+        )
+    }
+    val c = state.achievements
+    if (parent?.screen is Screen.RetroAchievements && c != null) RaPageShare(c, panes) else panes(SETTINGS_SPLIT_LEFT)
+}
+
+/** [panes] with the left pane's share wide enough for the page's word block, head included ([raSplitLeftWidth]). */
+@Composable
+private fun RaPageShare(c: RaController, panes: @Composable (Float) -> Unit) {
+    val ra by c.state.collectAsState()
+    val download by c.download.collectAsState()
+    WithSettingsWordBlockSize(RA_TITLE, raPageWords(ra, download), raHeadline(ra), raDetails(ra)) { block ->
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            panes(raSplitLeftShare(maxWidth, settingsSectionStart() + block.width, settingsPlateEnd()))
+        }
+    }
 }
 
 /** The dimmed left pane: [parent]'s level drawn as it was (a progress body on the RetroAchievements page too), its row lit. */
@@ -35,6 +59,7 @@ private fun RaParentPane(state: AppState, parent: RaParent) {
     val dim = Modifier.alpha(UNFOCUSED_ALPHA)   // role: an unfocused pane, dimmed
     when (val p = parent.screen) {
         is Screen.RetroAchievements -> RetroAchievementsScreen(p, c, parent.row, tap, tap, modifier = dim, focused = false)
+        is Screen.RaConsoles -> RaConsolesScreen(p, parent.row, tap, tap, modifier = dim, onHint = {}, split = true, focused = false)
         is Screen.RaGames -> RaGamesScreen(p, parent.row, tap, tap, modifier = dim, onHint = {}, split = true, focused = false)
         is Screen.RaGame -> RaGameScreen(p, c, parent.row, tap, tap, modifier = dim, split = true, focused = false)
         else -> Box(Modifier.fillMaxSize())
@@ -49,6 +74,7 @@ private fun RaParentPane(state: AppState, parent: RaParent) {
 internal fun RaLevelPage(state: AppState, s: Screen, selection: State<ListSelection>, split: Boolean) {
     val c = state.achievements
     when (s) {
+        is Screen.RaConsoles -> WithIndex(selection) { RaConsolesScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, split = split) }
         is Screen.RaGames -> WithIndex(selection) { RaGamesScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, split = split) }
         is Screen.RaGame -> c?.let { WithIndex(selection) { RaGameScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton, split = split) } } ?: Box(Modifier.fillMaxSize())
         is Screen.RaAchievement -> c?.let { RaAchievementScreen(s, c, onHint = state::onButton, split = split) } ?: Box(Modifier.fillMaxSize())

@@ -38,7 +38,7 @@ import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.ui.SHORTCUTS_NO_CONTROLLER
 import com.nxredux.mobile.ui.SHORTCUT_PROMPT
 
-enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET, ASK_RESET, CANCEL, ADJUST_BUTTONS }
+enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET, ASK_RESET, CANCEL, ADJUST_BUTTONS, USE_TOP_SCREEN }
 enum class SlotAction { SAVE, LOAD }
 
 sealed interface PageKind {
@@ -180,6 +180,16 @@ data class MenuState(
         get() = selectedInfoTruncated || (page.kind != PageKind.Root && page.rows.getOrNull(page.selected)?.hasMoreInfo == true)
 }
 
+/**
+ * The top page's highlighted row changes the picture live (a visual option, or its preview strip): on dual screen the
+ * picture's display lifts its dim meanwhile, so the change shows there as it is made.
+ */
+fun livePreviewRow(state: MenuState): Boolean {
+    val page = state.page
+    if (page.kind is PageKind.Adjust) return true
+    return (page.rows.getOrNull(page.selected) as? MenuRow.Option)?.visual == true
+}
+
 /** What the host must do in response to input; the model never touches the platform or the core. */
 sealed interface MenuEffect {
     data object Close : MenuEffect
@@ -236,6 +246,8 @@ sealed interface MenuEffect {
     data object ResetGame : MenuEffect
     /** Adjust buttons: the host opens the skin layout editor over the paused game; the menu stays as it is under it. */
     data object AdjustButtons : MenuEffect
+    /** Use top screen: the game moves onto the display it left to an app opened there, then the menu closes. */
+    data object UseTopScreen : MenuEffect
 }
 
 /**
@@ -264,6 +276,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** From [setSecondScreen]; the panel shows the Second screen shortcut only while a second display is [secondConnected]. */
     private var secondConnected = false
     private var secondOn = true
+    /** From [setSecondScreen]: an app holds the second display, so Use top screen shows on the root. */
+    private var screenTaken = false
     /** From [setSpeedTiles]: the panel's Fast forward and Rewind tiles' live state; [speedRewind] null: no Rewind tile. */
     private var speedFf = false
     private var speedRewind: Boolean? = null
@@ -695,7 +709,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 state.page.kind == PageKind.Shortcuts && row.choices.isEmpty() -> { bindAction(row.key)?.let(::startCapture); null }
                 // The root has no descriptions (Disc N/M): A shows it.
                 state.page.kind == PageKind.Root -> { if (row.fullInfo.isNotBlank()) push(message(row.label, row.fullInfo)); null }
-                row.visual -> { push(adjustPage(row.key)); null }
+                row.visual && !inPanel -> { push(adjustPage(row.key)); null }
                 else -> when (row.control) {
                     NxSettingControl.SWITCH -> setChoice(index, 1 - row.index.coerceIn(0, 1))
                     NxSettingControl.PICKER -> { openPicker(index); null }
@@ -885,12 +899,13 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /**
      * A second display is [connected] and the setting is [on]; shows (or hides) the panel's Second screen shortcut and
-     * Display's Bottom screen row, keeping the selection.
+     * Display's Bottom screen row, keeping the selection. [taken]: an app the player opened holds it (Use top screen).
      */
-    fun setSecondScreen(connected: Boolean, on: Boolean) {
+    fun setSecondScreen(connected: Boolean, on: Boolean, taken: Boolean = false) {
         val changed = connected != secondConnected
         secondConnected = connected
         secondOn = on
+        screenTaken = taken
         refreshRoot()
         if (!changed) return
         // Display may come or go with its Bottom screen row (a console whose other rows are all locked).
@@ -1073,7 +1088,25 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * Whether the root draws the game panel beside its list: not in netplay ([netplay], also once it ended), where the
      * menu is the game header over Continue / Leave (or Quit) and an empty right side.
      */
-    val panelBeside: Boolean get() = !netplay
+    val panelBeside: Boolean get() = !netplay && !inPanel
+
+    /** Hosted in the dual-screen panel ([setInPanel]): under the panel's header, no tabs, and visual rows change in place. */
+    var inPanel: Boolean = false
+        private set
+
+    /**
+     * The menu moves into the dual-screen panel (or out of it). The picture is on the other display there, so a visual
+     * row's change shows on it as it is; a live preview strip already up gives way to its page.
+     */
+    fun setInPanel(on: Boolean) {
+        inPanel = on
+        if (on) {
+            val i = state.stack.indexOfLast { it.kind !is PageKind.Adjust }
+            if (i >= 0 && i < state.stack.size - 1) state = state.copy(stack = state.stack.take(i + 1), editing = false)
+            if (state.panelFocus != null) state = state.copy(panelFocus = null)
+        }
+        fixPanel()
+    }
 
     /** The menu's tab row is up and live: the root on top with the panel ([panelBeside]); see [menuTabsShown]. */
     private fun tabsShown(): Boolean = panelBeside && state.stack.size == 1 && state.page.kind == PageKind.Root
@@ -1199,7 +1232,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /** Row [index] of the top page when it is a visual option (it changes the picture) on a page that isn't its strip. */
     private fun visualRow(index: Int): MenuRow.Option? =
-        (state.page.rows.getOrNull(index) as? MenuRow.Option)?.takeIf { it.visual && state.page.kind !is PageKind.Adjust }
+        (state.page.rows.getOrNull(index) as? MenuRow.Option)?.takeIf { it.visual && !inPanel && state.page.kind !is PageKind.Adjust }
 
     /**
      * Every change to a visual row happens in its live preview: LEFT/RIGHT, a tap on its control, A. When row [index] is
@@ -1231,6 +1264,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         MenuAction.ASK_RESET -> { push(resetPage()); resetClosesOnCancel = false; null }
         MenuAction.CANCEL -> cancelReset()
         MenuAction.ADJUST_BUTTONS -> MenuEffect.AdjustButtons
+        MenuAction.USE_TOP_SCREEN -> MenuEffect.UseTopScreen
         MenuAction.LEAVE_NETPLAY -> MenuEffect.LeaveNetplay
         MenuAction.SAVE_FOR_CONSOLE -> { popTo(PageKind.Options); MenuEffect.SaveForConsole }
         MenuAction.SAVE_FOR_GAME -> { popTo(PageKind.Options); MenuEffect.SaveForGame }
@@ -1504,6 +1538,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             add(MenuRow.Slot("Save", SlotAction.SAVE))
             add(MenuRow.Slot("Load", SlotAction.LOAD))
             add(MenuRow.Action("Reset", MenuAction.ASK_RESET))   // asks first ([resetPage]); the panel's Reset tile before
+            if (screenTaken) add(MenuRow.Action(USE_TOP_SCREEN_LABEL, MenuAction.USE_TOP_SCREEN))
             add(MenuRow.Submenu("Options", PageKind.Options))
             add(MenuRow.Action("Quit", MenuAction.QUIT))
         },
@@ -1834,6 +1869,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     companion object {
         const val SHORTCUTS_LABEL = "Shortcuts"
+        const val USE_TOP_SCREEN_LABEL = "Use top screen"
         const val SHORTCUTS_FOOTER = "Changes here apply to this console or game. Save them with Save Changes."
         const val BIND_KEY_PREFIX = "nx:bind:"
         const val TOUCH_KEY_PREFIX = "nx:touch:"

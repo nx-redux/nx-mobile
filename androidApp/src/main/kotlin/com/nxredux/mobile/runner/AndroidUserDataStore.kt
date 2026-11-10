@@ -60,7 +60,7 @@ class AndroidUserDataStore(context: Context) : UserDataStore {
         val slot = ResumeInfo.slotFrom(slotText) ?: return@withContext ResumeInfo.NONE
         // NxPaths.thumb accepts 0..7 and 9; slot 8 has no screenshot in minarch's scheme.
         val bmp = slot.takeIf { it != 8 }?.let { File(root, paths.thumb(it)) }?.takeIf { it.exists() }
-        ResumeInfo(slot, bmp?.let { FileRefs.versioned(it.absolutePath, it.contentStamp()) })
+        ResumeInfo(slot, bmp?.let { FileRefs.versioned(it.absolutePath, it.contentStamp()) }, bmp?.lastModified())
     }
 
     override suspend fun hiddenStateShot(tag: String, fileName: String): String? = withContext(Dispatchers.IO) {

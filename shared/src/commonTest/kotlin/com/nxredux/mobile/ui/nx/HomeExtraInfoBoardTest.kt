@@ -7,8 +7,9 @@ import kotlin.test.assertTrue
 /**
  * Home with Layouts → Extra info hidden ([HomeFrame.statsHidden]). The stats strip is not drawn (the
  * board's lines 0, the top section from the 8 dp margin) and its room goes to the top section as the hidden tab row's
- * does: Continue grows, the caps rise by it so the pins start where they did, and the squares grow (to each face's cap),
- * every column keeping its 5.
+ * does: Continue grows, the caps rise by it so the pins start where they did, and a column of tool tiles beside
+ * Continue may fit another row (the tiles keep the Tools page's size). On the portrait type Continue already at its
+ * floor for the tool rows stays there: the rows and the pins move up by the freed room.
  */
 class HomeExtraInfoBoardTest {
     private fun near(e: Float, a: Float, what: String) = assertEquals(e, a, 0.05f, what)
@@ -26,132 +27,135 @@ class HomeExtraInfoBoardTest {
         assertEquals(0, homeStripLinesShown(hide(cover), 2)); assertEquals(2, homeStripLinesShown(cover, 2))
     }
 
-    // The Fold cover (475 × 291, two strip lines): shown, topY 48, the top 235 (the cap), 5 squares of (235 − 24) / 5 =
-    // 42.2, Continue 415 − 42.2 − 12 = 360.8 wide; hidden, topY 8, the top 275 (the cap 235 + 40), still 5 squares, of
-    // (275 − 24) / 5 = 50.2, Continue 352.8 × 275. The pins start at 295 either way.
-    @Test fun foldCoverContinueAndSquaresGrowThePinsStay() {
+    // The Fold cover (475 × 291, two strip lines): shown, topY 48, the top 235 (the cap); hidden, topY 8, the top 275
+    // (the cap 235 + 40). Without tools Continue is the top, 415 × 275, and the pins start at 295 either way. With tools
+    // (rows of 4 tiles, 118.25 tall) Continue is at its 145 floor either way (275 − 12 − 118.25 = 144.75 for one row), so
+    // the top section is Continue, a gap and the rows, and the rows and pins sit 40 dp higher hidden.
+    @Test fun foldCoverContinueGrowsAndTheToolRowsFollow() {
         for (tools in listOf(0, 3, 5, 8, 12)) {
             val shown = homeBoard(cover, 2, tools = tools, games = 4)
             val b = homeBoard(hide(cover), 2, tools = tools, games = 4)
             val what = "tools $tools"
             assertEquals(HomeToolMode.COLUMN, b.mode, what)
-            assertEquals(0, b.stripLines, what); near(8f, b.topY, "$what: topY")
-            near(48f, shown.topY, "$what: shown topY"); near(235f, shown.topH, "$what: shown topH")
-            near(275f, b.topH, "$what: topH"); near(275f, continueOf(b).h, "$what: continue h")
-            assertEquals(shown.slots, b.slots, "$what: no row gained")
-            near(shown.tilesY, b.tilesY, "$what: the pins start where they did"); near(295f, b.tilesY, "$what: tilesY")
-            near(shown.pinH, b.pinH, "$what: pinH")
-            if (tools > 0) {
-                near(42.2f, shown.square, "$what: shown square"); near(50.2f, b.square, "$what: square")
-                val cols = if (tools > 5) 2 else 1
-                near(415f - cols * 50.2f - (cols - 1) * 12f - 12f, continueOf(b).w, "$what: continue w")
+            assertEquals(0, b.stripLines, what); near(8f, b.topY, "$what: topY"); near(48f, shown.topY, "$what: shown topY")
+            assertEquals(shown.slots, b.slots, "$what: the same slots"); near(shown.pinH, b.pinH, "$what: pinH")
+            near(415f, continueOf(b).w, "$what: continue the full width")
+            if (tools == 0) {
+                near(235f, shown.topH, "$what: shown topH"); near(275f, b.topH, "$what: topH"); near(275f, continueOf(b).h, "$what: continue h")
+                near(shown.tilesY, b.tilesY, "$what: the pins start where they did"); near(295f, b.tilesY, "$what: tilesY")
+            } else {
+                val rows = if (tools <= 4) 1 else 2
+                val topH = 145f + 12f + rows * 118.25f + (rows - 1) * 8f
+                near(topH, shown.topH, "$what: shown topH"); near(topH, b.topH, "$what: topH"); near(145f, continueOf(b).h, "$what: continue h")
+                near(shown.tilesY - 40f, b.tilesY, "$what: the pins 40 higher")
+                near(shown.toolH, b.toolH, "$what: the same tile")
                 for ((i, r) in b.top.filter { it.kind != HomeTopKind.CONTINUE }.withIndex())
-                    near(8f + (i % 5) * (50.2f + 6f), r.rect.y, "$what: square $i y")
-            } else near(415f, continueOf(b).w, "$what: continue the full width")
+                    near(8f + 145f + 12f + (i / 4) * (118.25f + 8f), r.rect.y, "$what: tile $i y")
+            }
         }
     }
 
-    // The cover with the tab row hidden too (its 44 dp in the body, still 5 squares a column): shown, the top 279
-    // ((279 − 24) / 5 = 51); hidden, 319 (the cap 279 + 40): (319 − 24) / 5 = 59.
+    // The cover with the tab row hidden too (its 44 dp in the body) and 3 tools: shown, the top 279, Continue
+    // 279 − 12 − 118.25 = 148.75; hidden, 319 (the cap 279 + 40), Continue 188.75: above the floor both, so the top
+    // section is the cap and the pins start where they did (339).
     @Test fun foldCoverWithTheTabRowHiddenToo() {
         val f = cover.copy(h = 335f, titleHidden = true)
         val shown = homeBoard(f, 2, tools = 3, games = 4)
         val b = homeBoard(hide(f), 2, tools = 3, games = 4)
-        near(279f, shown.topH, "shown topH"); near(51f, shown.square, "shown square")
-        near(8f, b.topY, "topY"); near(319f, b.topH, "topH"); near(59f, b.square, "square")
-        assertEquals(5, b.slots); near(shown.tilesY, b.tilesY, "the pins start where they did")
+        near(279f, shown.topH, "shown topH"); near(148.75f, continueOf(shown).h, "shown continue h")
+        near(8f, b.topY, "topY"); near(319f, b.topH, "topH"); near(188.75f, continueOf(b).h, "continue h")
+        assertEquals(8, b.slots); near(339f, b.tilesY, "tilesY"); near(shown.tilesY, b.tilesY, "the pins start where they did")
     }
 
     // A taller portrait body (the Flip's inner display) stops its top section at the cap, raised by the freed room:
-    // 235 + 40 = 275 from 8, so its pins start at 295 as with the strip shown (48 + 235 + 12).
+    // 235 + 40 = 275 from 8, so with no tools its pins start at 295 as with the strip shown (48 + 235 + 12). With 7 tools
+    // (two rows of 116.4) Continue is at the floor either way: the top 397.8 both.
     @Test fun tallPortraitCapRisesByTheFreedRoom() {
         val f = HomeFrame(360f, 640f, true)
-        val shown = homeBoard(f, 2, tools = 7, games = 6)
-        val b = homeBoard(hide(f), 2, tools = 7, games = 6)
+        val shown = homeBoard(f, 2, tools = 0, games = 6)
+        val b = homeBoard(hide(f), 2, tools = 0, games = 6)
         near(235f, shown.topH, "shown topH"); near(275f, b.topH, "topH")
         near(shown.tilesY, b.tilesY, "the pins start below the cap where they did")
         near(shown.pinH, b.pinH, "pinH")
+        near(397.8f, homeBoard(f, 2, tools = 7, games = 6).topH, "7 tools, shown"); near(397.8f, homeBoard(hide(f), 2, tools = 7, games = 6).topH, "7 tools, hidden")
     }
 
-    // A short portrait body (230 tall): shown, the top 174 and squares of (174 − 24) / 5 = 30; hidden, the column keeps
-    // its 5 and they grow: (214 − 24) / 5 = 38 (10 slots past 5 tools).
-    @Test fun aShortPortraitKeepsFiveAColumnAndGrowsThem() {
+    // A short portrait body (230 tall): shown, the top 174; hidden, 214. Two tool rows keep Continue at 145 either way
+    // (the top 145 + 12 + 244.5 = 401.5, the page scrolls); 8 slots, one row's 4 or two's.
+    @Test fun aShortPortraitKeepsContinueAtTheFloor() {
         val f = HomeFrame(475f, 230f, true)
+        near(174f, homeBoard(f, 2, tools = 0, games = 2).topH, "no tools, shown"); near(214f, homeBoard(hide(f), 2, tools = 0, games = 2).topH, "no tools, hidden")
         val shown = homeBoard(f, 2, tools = 8, games = 2)
         val b = homeBoard(hide(f), 2, tools = 8, games = 2)
-        near(174f, shown.topH, "shown topH"); near(30f, shown.square, "shown square"); assertEquals(10, shown.slots)
-        near(214f, b.topH, "topH"); near(38f, b.square, "square"); assertEquals(10, b.slots)
-        assertTrue(b.square >= shown.square, "the freed room only grows the squares")
-        assertEquals(5, homeBoard(hide(f), 2, tools = 4, games = 2).slots)
+        near(401.5f, shown.topH, "shown topH"); assertEquals(8, shown.slots)
+        near(401.5f, b.topH, "topH"); assertEquals(8, b.slots); near(145f, continueOf(b).h, "continue h")
+        assertEquals(8, homeBoard(hide(f), 2, tools = 4, games = 2).slots)
     }
 
-    // Landscape SPS3 (800 × 340, one strip line): the top section 20 dp taller from 8 (28 with the strip), still 5
-    // squares, of the whole body 324: (324 − 4 · 7) / 5 = 59.2 (304 and 55.2 with it), the pin row where it is with the
-    // strip (8 + 324 + 14 = 28 + 304 + 14 = 346).
+    // Landscape SPS3 (800 × 340, one strip line): the top section 20 dp taller from 8 (28 with the strip), the whole body
+    // 324 (304 with it): still 2 rows of tiles (floor(332 / 115.6)), 4 slots; the pin row where it is with the strip
+    // (8 + 324 + 14 = 28 + 304 + 14 = 346).
     @Test fun landscapeSps3() {
         val f = HomeFrame(800f, 340f, false, 800f / 428f)
         val shown = homeBoard(f, 1, tools = 3, games = 4)
         val b = homeBoard(hide(f), 1, tools = 3, games = 4)
-        assertEquals(HomeToolMode.SPS3, b.mode); assertEquals(5, b.slots); assertEquals(0, b.stripLines)
+        assertEquals(HomeToolMode.SPS3, b.mode); assertEquals(4, b.slots); assertEquals(0, b.stripLines)
         near(28f, shown.topY, "shown topY"); near(8f, b.topY, "topY")
-        near(shown.topH + 20f, b.topH, "topH"); near(55.2f, shown.square, "shown square"); near(59.2f, b.square, "square")
+        near(shown.topH + 20f, b.topH, "topH"); near(107.6f, shown.toolH, "shown toolH"); near(107.6f, b.toolH, "toolH")
         near(shown.tilesY, b.tilesY, "tilesY"); near(shown.pinH, b.pinH, "pinH")
         assertTrue(continueOf(b).h > continueOf(shown).h, "Continue grows")
     }
 
-    // UNDER (a tall narrow window): its 5 squares stay; Continue grows by the 40 dp (the cap rises with it).
-    @Test fun underKeepsItsFiveAndContinueGrows() {
+    // UNDER (a tall narrow window): its row of 3 tiles stays; Continue grows by the 40 dp (the cap rises with it).
+    @Test fun underKeepsItsRowAndContinueGrows() {
         val f = HomeFrame(360f, 423f, false)
         val shown = homeBoard(f, 2, tools = 5, games = 4)
         val b = homeBoard(hide(f), 2, tools = 5, games = 4)
-        assertEquals(HomeToolMode.UNDER, b.mode); assertEquals(5, b.slots)
-        near(shown.square, b.square, "square"); near(continueOf(shown).h + 40f, continueOf(b).h, "continue h")
+        assertEquals(HomeToolMode.UNDER, b.mode); assertEquals(3, b.slots)
+        near(shown.toolH, b.toolH, "toolH"); near(continueOf(shown).h + 40f, continueOf(b).h, "continue h")
         near(shown.tilesY, b.tilesY, "tilesY")
     }
 
-    // The wide face (960 × 344, one line): the top (the body) 20 dp taller from 8 (308 → 328), still 5 squares a column,
-    // grown from (308 − 4 · 7) / 5 = 56 to min(58, (328 − 28) / 5 = 60) = 58; the pins where they are with the strip.
-    // 7 tools are 2 columns, so the room left of them shrinks by 2 · 2 dp, and Continue (0.6 of it) by 2.4.
+    // The wide face (960 × 344, one line): the top (the body) 20 dp taller from 8 (308 → 328), still 2 rows of tiles, 6
+    // slots; the tiles keep their size, so Continue keeps its width; the pins where they are with the strip. With the tab
+    // row hidden too the top (388 − 8 − 8 = 372) fits 3 rows: 9 slots, so 7 tools all show.
     @Test fun wideFace() {
         val f = HomeFrame(960f, 344f, false, 960f / 432f)
         val shown = homeBoard(f, 1, tools = 7, games = 6)
         val b = homeBoard(hide(f), 1, tools = 7, games = 6)
-        assertEquals(HomeToolMode.WIDE, b.mode); assertEquals(15, b.slots); assertEquals(0, b.more)
-        near(8f, b.topY, "topY"); near(shown.topH + 20f, b.topH, "topH"); near(56f, shown.square, "shown square"); near(58f, b.square, "square")
-        near(shown.tilesY, b.tilesY, "tilesY"); near(continueOf(shown).w - 0.6f * 2 * 2f, continueOf(b).w, "continue w")
-        // With the tab row hidden too: still 15 slots; the top (388 − 28 − 8 = 352) 20 dp taller still, squares at the
-        // 58 cap.
+        assertEquals(HomeToolMode.WIDE, b.mode); assertEquals(6, b.slots); assertEquals(2, b.more)
+        near(8f, b.topY, "topY"); near(shown.topH + 20f, b.topH, "topH"); near(shown.toolH, b.toolH, "toolH")
+        near(shown.tilesY, b.tilesY, "tilesY"); near(continueOf(shown).w, continueOf(b).w, "continue w")
         val t = f.copy(h = 388f, titleHidden = true)
         val tb = homeBoard(hide(t), 1, tools = 7, games = 6)
-        assertEquals(15, tb.slots); near(homeBoard(t, 1, tools = 7, games = 6).topH + 20f, tb.topH, "title hidden topH")
-        near(58f, tb.square, "title hidden square")
+        assertEquals(9, tb.slots); assertEquals(0, tb.more); near(homeBoard(t, 1, tools = 7, games = 6).topH + 20f, tb.topH, "title hidden topH")
+        assertEquals(3, tiles(tb, HomeTopKind.TOOL).map { it.y }.distinct().size, "title hidden: 3 rows")
     }
 
-    // A very short wide body (960 × 60, no games): shown, the top 24, too short for 5 rows and their 4 half gaps (28), so
-    // the squares floor at 0; hidden, the top 44 and still 5 rows, of (44 − 28) / 5 = 3.2: 15 slots either way.
-    @Test fun aShortWideFaceKeepsFiveAColumn() {
+    // A very short wide body (960 × 60, no games): shown, the top 24, shorter than a tile, so one row of tiles as tall as
+    // the top (the drawn tile's icon gives way); hidden, the top 44, the tiles 44: 3 slots either way.
+    @Test fun aShortWideFaceHoldsTheTileToTheTop() {
         val f = HomeFrame(960f, 60f, false, 960f / 148f)
         val shown = homeBoard(f, 1, tools = 7, games = 0)
         val b = homeBoard(hide(f), 1, tools = 7, games = 0)
-        assertEquals(15, shown.slots); near(0f, shown.square, "shown square")
-        assertEquals(15, b.slots); assertEquals(0, b.more); near(3.2f, b.square, "square"); near(44f, b.topH, "topH")
+        assertEquals(3, shown.slots); near(24f, shown.toolH, "shown toolH")
+        assertEquals(3, b.slots); assertEquals(5, b.more); near(44f, b.toolH, "toolH"); near(44f, b.topH, "topH")
     }
 
-    // The large face (933 × 616, one line): the top 264.67 + 20 from 8, still 5 squares a column, of min(64.42,
-    // (284.67 − 4 · 7) / 5) = 51.33, the bands (Pinned, the shelves) where they are with the strip. With the tab row hidden
-    // too: the top 308.67 + 20, squares (328.67 − 28) / 5 = 60.13.
+    // The large face (933 × 616, one line): the top 264.67 + 20 from 8, still 2 rows of tiles, 4 slots, the bands
+    // (Pinned, the shelves) where they are with the strip. With the tab row hidden too: the top 308.67 + 20, still 2 rows.
     @Test fun largeFace() {
         val f = HomeFrame(933f, 616f, false, 933f / 704f)
         val shelves = listOf(HomeShelf.NEW to 6, HomeShelf.NOT_STARTED to 3)
         val shown = homeBoard(f, 1, tools = 5, games = 6, shelves = shelves)
         val b = homeBoard(hide(f), 1, tools = 5, games = 6, shelves = shelves)
-        assertEquals(HomeToolMode.LARGE, b.mode); assertEquals(10, b.slots); assertEquals(0, b.stripLines)
+        assertEquals(HomeToolMode.LARGE, b.mode); assertEquals(4, b.slots); assertEquals(2, b.more); assertEquals(0, b.stripLines)
         near(264.67f, shown.topH, "shown topH"); near(8f, b.topY, "topY"); near(284.67f, b.topH, "topH"); near(284.67f, continueOf(b).h, "continue h")
-        near(51.33f, b.square, "square")
+        near(107.6f, b.toolH, "toolH")
         assertEquals(shown.shelfTiles, b.shelfTiles); near(shown.tilesY, b.tilesY, "tilesY")
         val t = f.copy(h = 660f, titleHidden = true)
         val tb = homeBoard(hide(t), 1, tools = 5, games = 6, shelves = shelves)
-        assertEquals(10, tb.slots); near(328.67f, tb.topH, "title hidden topH"); near(60.13f, tb.square, "title hidden square")
+        assertEquals(4, tb.slots); near(328.67f, tb.topH, "title hidden topH"); near(107.6f, tb.toolH, "title hidden toolH")
     }
 
     // A face without a strip (nothing on Home: the Pick card, 0 lines) frees nothing: the board is the shown one's.

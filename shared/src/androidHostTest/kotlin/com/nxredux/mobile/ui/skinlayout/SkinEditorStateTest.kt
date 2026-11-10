@@ -318,6 +318,12 @@ class SkinEditorStateTest {
     }
 
     @Test
+    fun the_settings_title_says_which_layout_it_edits() {
+        assertEquals("Wii · Classic · Pad skin", SkinLayoutEdit.title("Wii · Classic", overlay = false))
+        assertEquals("Game Boy Advance · Overlay", SkinLayoutEdit.title("Game Boy Advance", overlay = true))
+    }
+
+    @Test
     fun the_red_area_is_each_screen_whole() {
         // what the editor marks is the screen as seen (its area), not the smaller middle that is off-limits
         val p = grip()
@@ -340,5 +346,28 @@ class SkinEditorStateTest {
         ov.select(centre(box(p, id))); ov.drag(Offset(-100000f, 0f))
         assertTrue(box(ov.placed(), id).x < box(skin.placed(), id).x - 1f, "the overlay goes on into the glass")
         assertTrue(box(ov.placed(), id).x < zone.x + zone.width - 1f)
+    }
+
+    @Test
+    fun in_d_pad_mode_the_editor_lands_a_group_where_the_game_does() {
+        // the DC's portrait layout carries the stick (ring 170, touch area past it) and the d-pad (156) on one spot: the
+        // game tweaks both sets, then shows the d-pad, so the stick's touch area is what stops the group there too
+        val p = assertNotNull(SkinChoice.place(carbon, 1080, 2520, 420, tablet = false, ds = false, picture = 320f to 240f, variant = SkinVariant.DC))
+        assertEquals("stacked_dc", p.spec.id)
+        assertTrue(p.controls.any { it.spec.alt == "stick" } && p.controls.any { it.spec.alt == "dpad" })
+        val s = SkinEditorState(p, emptyMap(), 1080f, 2520f, useStick = false)
+        val shown = s.placed()
+        assertTrue(shown.controls.none { it.spec.alt == "stick" }, "the d-pad set shown")
+        val id = assertNotNull(SkinTweaks.boxes(shown).entries.firstOrNull { (_, b) ->
+            shown.controls.single { it.spec.id == "DPAD" }.let { c -> b.box.x <= c.x && c.x <= b.box.x + b.box.width && b.box.y <= c.y && c.y <= b.box.y + b.box.height }
+        }).key
+        s.select(centre(box(shown, id)))
+        assertEquals(id, s.selected)
+        s.drag(Offset(1000f, 0f))
+        val editor = box(s.placed(), id)
+        val game = box(SkinTweaks.apply(p, s.saved(), 1080f, 2520f).forStick(false), id)
+        near(editor.x, game.x, "x", e = 0.5f); near(editor.y, game.y, "y", e = 0.5f)
+        near(editor.width, game.width, "width", e = 0.5f)
+        assertTrue(editor.x > box(shown, id).x + 1f, "it moved")
     }
 }

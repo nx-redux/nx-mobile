@@ -13,7 +13,8 @@ private const val OFFLINE_BODY = """{"Success":false,"Error":"Offline mode"}"""
 /**
  * The server-call shim (nx-redux `ra_offline.c`): online, requests go out and successful bodies are cached by kind;
  * offline, they are answered from the cache, `startsession` gets the journal and confirmed unlocks merged in, and
- * `awardachievement` is journaled. Online, an award is journaled before its POST and taken off on a [definitive] answer,
+ * `awardachievement` is journaled. Online, an award is journaled before its POST and taken off on a [definitive] answer
+ * about the unlock itself (not a login or account refusal),
  * so one whose answer never comes (no connection, a 5xx or 429, an HTML error page, or the process killed mid-POST)
  * stays for the sync; a game lookup without one falls back to its cached body when there is one.
  */
@@ -57,8 +58,9 @@ class RaTransport(
         val response = try { http.post(url, post, RaRequests.CONTENT_TYPE) } catch (e: RaHttpException) { null }
         if (response != null && definitive(response)) {
             // Only this call's entry: an equal older one (an offline unlock) stays for the sync. A failed rewrite only
-            // costs a harmless second submission.
-            if (added) runCatching { journal.remove(listOf(entry)) }
+            // costs a harmless second submission. A refusal of the login or account says nothing about this unlock (a
+            // token revoked mid-game): it stays journaled for the sync after signing in again, like RaSync keeps it.
+            if (added && !authRefused(response) && !accountRefused(response)) runCatching { journal.remove(listOf(entry)) }
             return response
         }
         unwritten?.let { throw it }   // neither answered nor kept: the bridge's hard failure

@@ -267,6 +267,17 @@ internal class FrontendRenderer(
     /** What a save state's picture keeps (game-area px): the one picture, or the DS / 3DS top screen ([thumbnailPicture]). */
     fun thumbnailPicture(): PxRect? = if (ndsRegions.isNotEmpty()) ndsRegions.thumbnailPicture() else shownPicture
 
+    // The second surface's screens and whole frame as last laid out (px of it), for a save state's picture copied there.
+    private var secondThumbScreens: List<NdsRegion>? = emptyList()
+    private var secondThumbWhole: PxRect? = null
+
+    /**
+     * Where a save state's picture is copied from ([thumbnailSource]): main's surface, or the second display's while it
+     * draws the picture ([secondDrawing]: the surface is there and the GL thread draws on it).
+     */
+    fun thumbnailSource(secondDrawing: Boolean): ThumbnailSource =
+        thumbnailSource(ndsRegions, shownPicture, secondThumbScreens, secondThumbWhole, host.mainShowsNoPicture(), secondDrawing)
+
     /** Called after each relayout: [thumbnailPicture] may have moved (the resume cover follows it). */
     var onPictureLaidOut: (() -> Unit)? = null
     private var hudJob: Job? = null
@@ -584,6 +595,8 @@ internal class FrontendRenderer(
         ndsRegions = nds ?: emptyList()
         val secondDs = secondDsRegions(g)
         secondNdsRegions = secondDs.takeIf { isNds }.orEmpty()
+        secondThumbScreens = secondDs
+        secondThumbWhole = if (secondDs == null) host.secondWholeFrame(g) else null
         if (isNds) reportNds3d(w, h, screen, halfFolded = skinDs != null)
         if (isN3ds && nds != null) reportN3ds3d(w, h, screen, halfFolded = skinDs != null, g, flat = null, secondDs)
         input.positionPen()   // on whichever display shows the bottom screen

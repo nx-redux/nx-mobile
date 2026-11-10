@@ -69,7 +69,7 @@ class SettingsSplitTest {
         val ra = Screen.RaSettings(emptyList())
         val game = RaGameView("h", 1, "G", null, 0, 1, 0)
         val achievement = com.nxredux.mobile.achievements.RaAchievement(1, "A", "", 5, "", com.nxredux.mobile.achievements.RaAchievementState.LOCKED, null, null, 0f, 0f, null)
-        val levels = listOf(ra, ra.copy(signingIn = true), Screen.RaGames(emptyList()), Screen.RaGame(game, emptyList()), Screen.RaAchievement(game, achievement))
+        val levels = listOf(ra, ra.copy(signingIn = true), Screen.RaConsoles(emptyList()), Screen.RaGames("GB", emptyList()), Screen.RaGame(game, emptyList()), Screen.RaAchievement(game, achievement))
         for (s in levels) {
             assertTrue(raSplitView(DpSize(933.dp, 704.dp), s))          // the unfolded Fold, landscape
             assertTrue(raSplitView(DpSize(840.dp, 360.dp), s))
@@ -82,9 +82,10 @@ class SettingsSplitTest {
         assertFalse(raSplitView(DpSize(933.dp, 704.dp), Screen.Settings(SettingsSection.SYSTEM, emptyList())))
         assertTrue(twoPaneView(DpSize(933.dp, 704.dp), Screen.Settings(SettingsSection.SYSTEM, emptyList())))
         assertFalse(twoPaneView(DpSize(933.dp, 704.dp), Screen.RetroAchievements()))
-        // The page's row the left pane highlights: Settings beside the settings, Achievements beside the games list.
+        // The page's row the left pane highlights: Settings beside the settings, Achievements beside the consoles.
         assertEquals(RaAction.SETTINGS, RaAction.entries[raPageRow(ra)!!])
-        assertEquals(RaAction.ACHIEVEMENTS, RaAction.entries[raPageRow(Screen.RaGames(emptyList()))!!])
+        assertEquals(RaAction.ACHIEVEMENTS, RaAction.entries[raPageRow(Screen.RaConsoles(emptyList()))!!])
+        assertNull(raPageRow(Screen.RaGames("GB", emptyList())))
         assertNull(raPageRow(Screen.RaGame(game, emptyList())))
     }
 
@@ -144,5 +145,23 @@ class SettingsSplitTest {
         assertEquals(SettingsSection.LIBRARY, settingsCategoryOf(Screen.Settings(SettingsSection.SAVES, emptyList())))   // Saves under Library
         assertEquals(listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS, SettingsSection.SYSTEM), settingsCategories())   // System last
         assertEquals(listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS, SettingsSection.SECOND_SCREEN, SettingsSection.SYSTEM), settingsCategories(secondScreen = true))
+    }
+
+    @Test fun theRetroAchievementsLeftPaneIsAsWideAsItsWordsNeed() {
+        // Short words: the pane keeps its share of the width.
+        assertEquals(640.dp * SETTINGS_SPLIT_LEFT, raSplitLeftWidth(640.dp, sectionRight = 180.dp, gutter = 24.dp))
+        // The Nova's bottom screen: the user name and "Achievements" need more than the share, so the pane widens to them.
+        assertEquals(260.dp + 24.dp, raSplitLeftWidth(640.dp, sectionRight = 260.dp, gutter = 24.dp))
+        // A very long name: the list keeps the rows pane's least width.
+        assertEquals(640.dp - SETTINGS_FRAME_MIN, raSplitLeftWidth(640.dp, sectionRight = 400.dp, gutter = 24.dp))
+        // Never under the share, even where the least width cannot be kept.
+        assertEquals(400.dp * SETTINGS_SPLIT_LEFT, raSplitLeftWidth(400.dp, sectionRight = 300.dp, gutter = 24.dp))
+    }
+
+    @Test fun theRetroAchievementsLeftShareIsOfTheWidthLeftBesideTheDivider() {
+        // The panes share the width less the divider, so the left pane gets every dp of its width.
+        val share = raSplitLeftShare(640.dp, sectionRight = 260.dp, gutter = 24.dp)
+        assertEquals((260f + 24f) / (640f - SPLIT_DIVIDER.value), share, 1e-5f)
+        assertEquals(SETTINGS_SPLIT_LEFT, raSplitLeftShare(0.dp, sectionRight = 260.dp, gutter = 24.dp))   // not measured yet
     }
 }

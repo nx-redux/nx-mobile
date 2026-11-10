@@ -77,6 +77,7 @@ class AchievementsBridge(private val controller: RaController, private val setti
     @Volatile private var gameLoaded = false
     @Volatile private var prepared = false
     @Volatile private var stopped = false
+    private var delivery: Job? = null   // the screen's collector of [events] (main thread only)
     /** Signed in (online or from the cache) with a hash for this game; the menu row shows only then. */
     val available: Boolean get() = !stopped && mode != RaSessionMode.DISABLED && hash != null
     @Volatile var muted: Set<Int> = emptySet(); private set
@@ -125,6 +126,25 @@ class AchievementsBridge(private val controller: RaController, private val setti
             }
         }
         scope.launch { view.getAchievementEvents().collect { e -> onNative(e) } }
+    }
+
+    /**
+     * Hands [events] to [onEvent] on the main thread until [detach] or [stop]. Subscribe before [startSession]: events are
+     * not replayed.
+     */
+    fun deliverEvents(onEvent: (RaEvent) -> Unit) {
+        delivery?.cancel()
+        delivery = scope.launch(Dispatchers.Main.immediate) { events.collect { onEvent(it) } }
+    }
+
+    /**
+     * The quit: nothing more reaches the screen from here on (no toast during the quit's saves), while server calls are
+     * still answered and journaled until [stop]. Main thread: cancelled here, the main-thread collector delivers nothing
+     * after it.
+     */
+    fun detach() {
+        delivery?.cancel()
+        delivery = null
     }
 
     /** After the first frame: decide the mode, log in, load the game once the login answers. */
@@ -249,12 +269,15 @@ class AchievementsBridge(private val controller: RaController, private val setti
         return muted
     }
 
-    /** Idempotent: cancels everything the bridge started and disables the native client. */
-    fun stop() {
+    /**
+     * Idempotent: cancels everything the bridge started and disables the native client. [native] false: the core is
+     * already destroyed, whose destroy reset the native session itself.
+     */
+    fun stop(native: Boolean = true) {
         if (stopped) return
         stopped = true
         scope.cancel()
-        if (prepared) runCatching { LibretroDroid.achievementsUnloadGame(); LibretroDroid.achievementsEnable(false) }
+        if (prepared && native) runCatching { LibretroDroid.achievementsUnloadGame(); LibretroDroid.achievementsEnable(false) }
             .onFailure { NxLog.w(TAG, "stopping the native client failed", it) }
     }
 

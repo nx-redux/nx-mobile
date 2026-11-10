@@ -28,6 +28,8 @@ public:
     };
 
     static ReadResult readFileAsBytes(const std::string &filePath);
+    // Both throw LibretroDroidError (ERROR_LOAD_GAME) when the file can't be read whole. The fd overload takes ownership
+    // of the descriptor and closes it on every path, a failure included.
     static ReadResult readFileAsBytes(const int fileDescriptor);
 
     static const char* cloneToCString(const std::string &input);

@@ -30,8 +30,6 @@ internal interface AppsHost {
     fun openContextMenu()
     /** The drawer's rows for [apps] (A–Z, each marked when it is in Tools). */
     fun drawerRows(apps: List<InstalledApp>): List<ToolAppRow>
-    /** The drawer is a tool: it has the focus, on the top screen while the menu is on the second display. */
-    fun toolOnTop()
     suspend fun rebuildMainRows()
     fun swapMainRows()
     /** Apps [ids] joined the Android games console: their Tools pins on Home become Android pins. */
@@ -99,7 +97,6 @@ internal class AppsController(
                 AppPick.GAMES -> androidGamesPickOrder(apps).map { ToolAppRow(it.id, it.label, it.id in console) }
             }
             toolAppsColumns = 0   // a new picker: it reports its own columns on its first layout
-            if (pick == AppPick.TOOLS) host.toolOnTop()   // the drawer, a tool: it lands after a read, so [openTool] could not tell
             screen.value = Screen.ToolApps(rows, pick)
             selection.value = ListSelection(rows.indexOfFirst { it.id == selectId }.coerceAtLeast(0), rows.size)
         }

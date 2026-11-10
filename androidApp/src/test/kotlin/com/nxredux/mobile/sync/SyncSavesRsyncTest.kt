@@ -199,6 +199,17 @@ class SyncSavesRsyncTest {
         assertFalse(File(phone, "send/GBA/Emerald.gba.sav").exists())
     }
 
+    @Test fun listing_leaves_out_cut_short_writes_and_mac_metadata() {
+        val phone = tmp.newFolder("phone")
+        val saves = File(phone, "Saves")
+        write(saves, "GBA/Emerald.srm", "OK", t1)
+        write(saves, "GBA/Emerald.srm.1a2b3c4d.tmp", "CUT", t1)
+        write(saves, "GBA/Ruby.srm.part", "CUT", t1)
+        write(saves, "GBA/._Emerald.srm", "MAC", t1)
+        val files = SyncSaveFiles(saves, File(phone, "send"), File(phone, "recv"))
+        assertEquals(listOf("GBA/Emerald.srm"), files.listSaves().map { it.path })
+    }
+
     @Test fun a_plan_path_outside_its_root_is_refused_before_any_write() {
         val phone = tmp.newFolder("phone")
         val saves = File(phone, "Saves")

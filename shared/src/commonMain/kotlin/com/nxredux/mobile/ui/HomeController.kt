@@ -52,7 +52,7 @@ internal data class HomeInputs(
 
 /**
  * [row], a Home row, in the new Home [rows]: itself; else "+N" for "+N" (its count follows the slots), "+N" for a
- * pinned tool the slots now hide, the last tool square for a "+N" whose tools now all fit, a shelf game's pin when it
+ * pinned tool the slots now hide, the last tool tile for a "+N" whose tools now all fit, a shelf game's pin when it
  * was just pinned ([pinnedTools]: the tools pinned now). Null: gone.
  */
 internal fun homeRowIn(row: MainRow?, rows: List<MainRow>, pinnedTools: List<ToolRow>?): Int? {
@@ -155,8 +155,8 @@ internal class HomeController(
     private fun homeLinesFor(strip: HomeStrip?) = homeStripLines(strip)
 
     /**
-     * Home from its [inputs], its slots from the board they make on the frame ([homeBoardFor]; the
-     * [com.nxredux.mobile.ui.nx.HomeToolMode.SPS3] split and the portrait type grow with the tools), with Home's shelves
+     * Home from its [inputs], its slots from the board they make on the frame ([homeBoardFor]: the tool tiles that fit
+     * the face, [com.nxredux.mobile.ui.nx.HomeBoard.slots]), with Home's shelves
      * ([HomeHost.shelvesFor]) and every landscape face's inline games (the board's inlineGames).
      */
     fun homeFor(inputs: HomeInputs): Home {
@@ -169,9 +169,9 @@ internal class HomeController(
             // List and Minimal: every tool is a row. Carousel: the dock's squares, "+N" for the rest.
             MenuStyle.LIST, MenuStyle.MINIMAL -> return buildHome(last, games, tools, homeStats, Int.MAX_VALUE, shelves, tag = host::shelfTag, shot = { inputs.shots[it.game.path] })
             MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> {
-                // The dock's squares are Grid Home's pinned tool squares on this frame ([homeDockSide]).
+                // The dock's squares on this frame ([homeDockSide]).
                 val f = homeFrameNow()
-                val side = homeDockSide(f, homeLinesFor(strip), games.count { it.game.path != last?.entry?.game?.path })
+                val side = homeDockSide(f, homeLinesFor(strip))
                 return buildHome(last, games, tools, homeStats, homeDockFit(f, side), shelves, tag = host::shelfTag, shot = { inputs.shots[it.game.path] })
             }
             MenuStyle.GRID -> Unit

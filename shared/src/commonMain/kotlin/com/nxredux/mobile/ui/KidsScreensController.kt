@@ -20,6 +20,7 @@ import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.gridStep
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,7 +34,7 @@ internal interface KidsHost {
     fun showNotice(text: String)
     /** The main menu on [category] (null: the tab last shown). */
     fun showSystemsNow(category: MenuCategory? = null)
-    /** The tiles screen replaces the menu: no tool on the top screen, no hidden tab pushed over the menu. */
+    /** The tiles screen replaces the menu: no hidden tab pushed over it, nothing game-related on the top screen. */
     fun clearMenuTop()
     fun select(index: Int)
     fun back(): Boolean
@@ -75,6 +76,11 @@ internal class KidsScreensController(
 
     val kidsLocked: Boolean get() = kidsMode is KidsMode.Locked
 
+    init {
+        // A wake of the phone must not find the parent's unlock where they left it.
+        if (kids != null) scope.launch { kids.screenOffs.collect { kidsCloseUnlock() } }
+    }
+
     /** The mode [onKidsMode] last saw; null before its first value. */
     private var kidsModeSeen: KidsMode? = null
 
@@ -105,7 +111,7 @@ internal class KidsScreensController(
         return rows
     }
 
-    /** The tiles screen; the second screen has no tool on it ([AppState.toolOnTop] off), so it shows the backdrop ([DualMenu]). */
+    /** The tiles screen; the second screen shows the backdrop ([DualMenu]). */
     fun showKidsHome() {
         host.clearMenuTop()
         screen.value = Screen.KidsHome
@@ -148,8 +154,33 @@ internal class KidsScreensController(
     /** The unlock sheet laid its chips out [columns] per row; the d-pad steps in that grid. */
     fun onKidsUnlockColumns(columns: Int) { kidsUnlockColumns = columns.coerceAtLeast(1) }
 
-    /** A touch anywhere on the menu: Parent mode's idle time starts again, as a press does. */
-    fun onTouch() { kids?.parentInput() }
+    /** A touch anywhere on the menu: Parent mode's idle time starts again, as a press does; the unlock's idle time too. */
+    fun onTouch() { kids?.parentInput(); kidsUnlockInput() }
+
+    private var kidsUnlockIdle: Job? = null
+
+    /** The unlock PIN or sheet is up: the parent's way past the kid's screen. */
+    private fun onUnlock(s: Screen): Boolean = s == Screen.KidsUnlock || (s is Screen.KidsPin && s.purpose == PinPurpose.UNLOCK)
+
+    /**
+     * Input on the unlock PIN or sheet (or either just opened): it closes after [KIDS_UNLOCK_IDLE_MS] without more, so a
+     * parent who walks away never leaves it for the kid.
+     */
+    private fun kidsUnlockInput() {
+        if (!onUnlock(screen.value)) return
+        kidsUnlockIdle?.cancel()
+        kidsUnlockIdle = scope.launch {
+            delay(KIDS_UNLOCK_IDLE_MS)
+            kidsCloseUnlock()
+        }
+    }
+
+    /** The unlock PIN or sheet goes, back to the kid's screen (the screen went off, the app left the front, or idle). */
+    fun kidsCloseUnlock() {
+        if (!onUnlock(screen.value)) return
+        kidsUnlockIdle?.cancel(); kidsUnlockIdle = null
+        kidsBackToKid()
+    }
 
     /** A tile: the allowed app [id] starts; any other id (an app taken off the list meanwhile) is ignored. */
     fun kidsOpenApp(id: String) {
@@ -164,6 +195,7 @@ internal class KidsScreensController(
         if (screen.value != Screen.KidsHome) return
         screen.value = Screen.KidsPin(PinPurpose.UNLOCK, waitUntil = k.waitUntil)
         selection.value = ListSelection(0, KIDS_PIN_KEYS.size)
+        kidsUnlockInput()
     }
 
     /**
@@ -175,6 +207,7 @@ internal class KidsScreensController(
         if (kidsMode !is KidsMode.Open || screen.value !is Screen.Systems) return
         screen.value = Screen.KidsPin(PinPurpose.UNLOCK, waitUntil = k.waitUntil)
         selection.value = ListSelection(0, KIDS_PIN_KEYS.size)
+        kidsUnlockInput()
     }
 
     /** Off the unlock PIN or the sheet without a choice: the tiles while Locked, else the main menu the lock was pressed on. */
@@ -199,6 +232,7 @@ internal class KidsScreensController(
     /** A tap on PIN key [key]: the highlight moves onto it (as the d-pad's would), then the key acts. */
     internal fun kidsPinTap(key: PinKey) {
         if (screen.value !is Screen.KidsPin) return
+        kidsUnlockInput()
         KIDS_PIN_KEYS.indexOf(key).takeIf { it >= 0 }?.let(host::select)
         when (key) {
             is PinKey.Digit -> kidsPinDigit(key.d)
@@ -217,7 +251,7 @@ internal class KidsScreensController(
         if (s.typed.length < KIDS_PIN_LENGTH) return
         if (s.purpose != PinPurpose.UNLOCK) return kidsNewPinEnter(s)   // setup's and Change PIN's: a new PIN, twice
         when (k.tryPin(s.typed, k.now().epochMs)) {
-            PinResult.OK -> { screen.value = Screen.KidsUnlock; selection.value = ListSelection(0, KIDS_UNLOCK_ROWS) }
+            PinResult.OK -> { screen.value = Screen.KidsUnlock; selection.value = ListSelection(0, KIDS_UNLOCK_ROWS); kidsUnlockInput() }
             PinResult.WRONG -> screen.value = s.copy(typed = "", wrong = s.wrong + 1)
             PinResult.WAIT -> screen.value = s.copy(typed = "", wrong = s.wrong + 1, waitUntil = k.waitUntil)
         }
@@ -265,6 +299,7 @@ internal class KidsScreensController(
 
     /** Off the sheet onto Home at once, unless the mode's collector ([onKidsMode]) has moved there already. */
     private fun kidsLeaveSheet() {
+        kidsUnlockIdle?.cancel(); kidsUnlockIdle = null
         if (isKidsScreen(screen.value) && !kidsLocked) host.showSystemsNow(MenuCategory.HOME)
     }
 
@@ -316,6 +351,7 @@ internal class KidsScreensController(
      * along the chips, UP / DOWN between the chips and the two rows, A chooses, B back to the tiles.
      */
     fun onKidsButton(s: Screen, button: NxButton) {
+        kidsUnlockInput()
         val sel = selection.value
         fun move(to: Int) { if (to != sel.index) selection.value = sel.copy(index = to) }
         when (s) {

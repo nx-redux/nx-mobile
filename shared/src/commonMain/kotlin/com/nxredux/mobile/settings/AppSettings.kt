@@ -252,6 +252,10 @@ interface AppSettings {
     var artWheel: Boolean
         get() = false
         set(value) {}
+    /** Art settings → Fetch art and info when browsing: the top screen fetches a highlighted game's missing art and its info (default on). */
+    var fetchGameInfo: Boolean
+        get() = true
+        set(value) {}
     /** Art settings → Mix: fetch the mix picture, else the device makes NX Redux's screenshot + box + wheel one (default off; a game has art only with it). */
     var artMix: Boolean
         get() = false
@@ -367,6 +371,11 @@ interface AppSettings {
         set(@Suppress("UNUSED_PARAMETER") value) {}
     /** Settings → System → Cable Link delay overlay: the current input delay in a corner of the game. Defaulted, like [debugLog]. */
     var cableLinkDelayOverlay: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
+    /** Settings → System → Keyboard: Android's keyboard instead of NX's (default off). Defaulted, like [debugLog]. */
+    var androidKeyboard: Boolean
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
 

@@ -20,7 +20,7 @@ class SyncSaveFiles(
     private val saves: File, private val send: File, private val recv: File,
     private val setTime: (File, Long) -> Boolean = File::setLastModified,
 ) {
-    /** Every file below [saves] (relative, `/`-separated), with its time. */
+    /** Every file below [saves] (relative, `/`-separated), with its time; [SyncAreas.isJunk] ones left out. */
     fun listSaves(): List<SaveFile> = list(saves)
 
     /** Every file below the receive tree. */
@@ -117,7 +117,7 @@ class SyncSaveFiles(
         val base = root.canonicalFile
         return base.walkTopDown().filter { it.isFile }.map { f ->
             SaveFile(f.relativeTo(base).invariantSeparatorsPath, f.lastModified())
-        }.toList()
+        }.filterNot { SyncAreas.isJunk(it.path) }.toList()
     }
 
     companion object {

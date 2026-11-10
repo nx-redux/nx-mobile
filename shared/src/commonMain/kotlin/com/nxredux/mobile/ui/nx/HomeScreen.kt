@@ -100,7 +100,7 @@ private const val MOST_PLAYED = "Most played"
 /**
  * The Home tab in its Grid layout (List and Carousel Home are [HomeListScreen] and [HomeCarouselScreen]), for a body
  * between the tab row and the hint bar: the stats strip ([HomeStripLines]) over the top section (Continue or Pick a game,
- * the inline games, the tool squares, "+N") over the row games and shelves, every tile on its [homeBoard] rect. The page
+ * the inline games, the pinned tools' tiles, "+N") over the row games and shelves, every tile on its [homeBoard] rect. The page
  * scrolls to keep the selected row tile in view ([homeScrollTo], eased 0.32 s), and sits at the top while the top
  * section is selected. With the tab row hidden the body starts at the screen's top and the strip moves into a header
  * there ([homeStatsHeader]).
@@ -128,11 +128,11 @@ internal fun HomeScreen(
     tabMenu: Boolean = false,
 ) {
     val colors = LocalNxColors.current
-    val portrait = LocalPortrait.current
+    val portrait = homeGridPortrait()
     val tabRow = LocalLauncherChrome.current.tabRow
     BoxWithConstraints(modifier.fillMaxSize().clipToBounds()) {
         val w = maxWidth.value
-        val whole = homeFrameHere() ?: return@BoxWithConstraints
+        val whole = homeFrameHere(squareIsPortrait = true) ?: return@BoxWithConstraints
         // With the tab row hidden the stats strip sits in a fixed header in its place ([homeStatsHeader]); the page is
         // the body under it, laid out as under a tab row with the strip hidden.
         val header = homeStatsHeader(whole, homeStripLines(view.strip))
@@ -216,10 +216,11 @@ internal fun HomeScreen(
                     when (row) {
                         is MainRow.Continue -> { val m = Modifier.at(at).taps(i, menu = true); HomeLit(i, selection) { lit -> ContinueCard(row, lit, contInfo, portrait, m) } }
                         MainRow.PickAGame -> { val m = Modifier.at(at).taps(i, menu = tabMenu); HomeLit(i, selection) { lit -> PickCard(lit, portrait, at.h, m) } }
+                        // The Tools page's tile ([ToolTileCell]), so a pinned tool looks the same on Home and on Tools.
                         is MainRow.PinnedTool -> (topTiles.getOrNull(i) as? GridTile.Tool)?.let { t ->
-                            val m = Modifier.at(at).taps(i, menu = true); HomeLit(i, selection) { lit -> HomeToolSquare(t, lit, at.w, m) }
+                            val m = Modifier.at(at).taps(i, menu = true); HomeLit(i, selection) { lit -> MenuMarkCell(t, lit, at.w, at.h, m) }
                         }
-                        is MainRow.MoreTools -> { val m = Modifier.at(at).taps(i, menu = tabMenu); HomeLit(i, selection) { lit -> HomeMoreSquare(row.count, lit, at.w, m) } }
+                        is MainRow.MoreTools -> { val m = Modifier.at(at).taps(i, menu = tabMenu); HomeLit(i, selection) { lit -> HomeMoreTile(row.count, lit, at.w, m) } }
                         // An inline game (every landscape face) is a pinned game's tile at its rect, taps and all.
                         is MainRow.Pin -> topTiles.getOrNull(i)?.let { t ->
                             val m = Modifier.at(at).taps(i, menu = true)
@@ -326,16 +327,28 @@ private fun HomeLit(i: Int, selection: () -> Int, content: @Composable (lit: Boo
 internal const val HOME_HEADER_ICONS_ROOM = 88f
 
 /**
+ * Whether the Grid Home lays out as the portrait type: a portrait screen, or a pad skin's near-square glass (the folded
+ * Fold upright), too narrow for the pinned games beside Continue: Continue across the page, the pins under it.
+ */
+@Composable
+internal fun homeGridPortrait(): Boolean {
+    if (LocalPortrait.current) return true
+    if (!LocalInSkin.current) return false
+    val glass = splitWindow()
+    return glass.width.value < glass.height.value * GRID_SKIN_SIDEWAYS_ASPECT
+}
+
+/**
  * Home's [HomeFrame] for this box (null before it has a size): its size, the portrait type, the app area's aspect
  * (landscape only: the window inside the safe insets, not the body, decides the wide rule), the text scale (the system
  * font scale), whether the tab row is hidden, and whether the stats strip is hidden (Home stats off).
  */
 @Composable
-internal fun BoxWithConstraintsScope.homeFrameHere(): HomeFrame? {
+internal fun BoxWithConstraintsScope.homeFrameHere(squareIsPortrait: Boolean = false): HomeFrame? {
     val w = maxWidth.value
     val h = maxHeight.value
     if (w <= 0f || h <= 0f) return null
-    val portrait = LocalPortrait.current
+    val portrait = if (squareIsPortrait) homeGridPortrait() else LocalPortrait.current
     val chrome = LocalLauncherChrome.current
     val window = LocalWindowSize.current
     val menuRatio = if (!portrait && window.height.value > 0f) window.width.value / window.height.value else null
@@ -366,12 +379,30 @@ private fun HomePinTile(
     )
 
 /**
- * A pinned tool's square: the tool's glyph alone, centred, min(46, 55% of the side) dp, in the ink at full opacity
- * selected and dimmed ([nxDimInk]) not, eased as the selection moves; no plate, no ring. An Android app's own icon shows
- * in its colours ([ToolIcon]), dimmed the same.
+ * "+N" as a tool tile ([ToolTileCell], the pinned tools' size [w]): the count large in the icon's place, over "More".
+ * The count is held to the icon's box whatever the font scale, as the icon is.
  */
 @Composable
-internal fun HomeToolSquare(tile: GridTile.Tool, lit: Boolean, side: Float, modifier: Modifier) {
+internal fun HomeMoreTile(count: Int, lit: Boolean, w: Float, modifier: Modifier) =
+    ToolTileCell(HOME_MORE_NAME, lit, w, modifier) { m, ink ->
+        BoxWithConstraints(m, contentAlignment = Alignment.Center) {
+            val sp = maxHeight.value * HOME_MORE_COUNT_SHARE / LocalDensity.current.fontScale
+            if (sp > 0f) HomeText("+$count", ink, sp, sp * 1.2f, maxLines = 1, align = TextAlign.Center)
+        }
+    }
+
+/** "+N"'s name under its count ([HomeMoreTile]). */
+private const val HOME_MORE_NAME = "More"
+/** "+N"'s count, as a share of the icon box's side (sp per dp). */
+private const val HOME_MORE_COUNT_SHARE = 0.5f
+
+/**
+ * A pinned tool's square in the Carousel Home's dock ([homeDockSide]): the tool's glyph alone, centred, min(46, 55% of
+ * the side) dp, in the ink at full opacity selected and dimmed ([nxDimInk]) not, eased as the selection moves; no plate,
+ * no ring. An Android app's own icon shows in its colours ([ToolIcon]), dimmed the same.
+ */
+@Composable
+internal fun HomeDockToolSquare(tile: GridTile.Tool, lit: Boolean, side: Float, modifier: Modifier) {
     val colors = LocalNxColors.current
     val icon = max(0f, min(46f, side * 0.55f))
     val litness = nxLitness(lit)
@@ -380,9 +411,9 @@ internal fun HomeToolSquare(tile: GridTile.Tool, lit: Boolean, side: Float, modi
     }
 }
 
-/** "+N": the pinned tools that don't fit, min(20, 36% of the side) sp in the ink, dimmed ([nxDimInk]) unless selected; no plate. */
+/** The dock's "+N": the tools that don't fit, min(20, 36% of the side) sp in the ink, dimmed ([nxDimInk]) unless selected; no plate. */
 @Composable
-internal fun HomeMoreSquare(count: Int, lit: Boolean, side: Float, modifier: Modifier) {
+internal fun HomeDockMoreSquare(count: Int, lit: Boolean, side: Float, modifier: Modifier) {
     val colors = LocalNxColors.current
     val sp = max(0f, min(20f, side * 0.36f))
     val litness = nxLitness(lit)

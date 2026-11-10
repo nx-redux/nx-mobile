@@ -401,6 +401,20 @@ class NetplayControllerTest {
         assertEquals(2, fake.acceptsStarted)
     }
 
+    @Test fun a_wizard_that_ends_by_cancellation_still_closes_the_players_channel() = runTest {
+        val fake = FakeNetplayPlatform()
+        val timingOut = object : com.nxredux.mobile.netplay.NetplayPlatform by fake {
+            override suspend fun hostSaves(tag: String, romFileName: String, content: ContentRef): HostSaves =
+                throw kotlinx.coroutines.CancellationException("a timeout leaking out of the save staging")
+        }
+        val c = NetplayController(backgroundScope, timingOut, { _, _ -> }, work = StandardTestDispatcher(testScheduler))
+        c.open(kart); c.press(NxButton.A); runCurrent()
+        val (h, cEnd) = PipeChannel.pair()
+        fake.lan.pending.send(h)
+        cEnd.writeLine(HelloCodec.format(Hello.client("Super Mario Kart (USA)", false, "core=snes9x,tag=SFC"))); runCurrent()
+        assertTrue(h.closed)
+    }
+
     @Test fun wifi_lost_while_hosting_stops_and_says_so() = runTest {
         val p = FakeNetplayPlatform()
         val c = controller(p)

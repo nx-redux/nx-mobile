@@ -18,8 +18,11 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
     /** A game screen is alive (playing, suspended in its own task, or closing): the live-game record. Import saves waits for it. */
     val gameScreenAlive: Boolean get() = LiveGameStore.alive(context)
 
-    /** Runs first in every [launch], on the main thread: the menu clears the second display for the game. */
-    var beforeLaunch: () -> Unit = {}
+    /**
+     * Runs first in every [launch], on the main thread: the menu clears the second display for the game. Returns a display
+     * the game must leave alone (an app the player opened there stays), or null.
+     */
+    var beforeLaunch: (GameSession) -> Int? = { null }
 
     /** The launch threw after [beforeLaunch] (the activity could not start); the error is rethrown after it. */
     var launchFailed: () -> Unit = {}
@@ -33,7 +36,7 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
      * in a fresh game process with a pending launch record. Called on the main thread.
      */
     override suspend fun launch(session: GameSession, recent: Recent) {
-        beforeLaunch()
+        val leave = beforeLaunch(session)
         val app = context.applicationContext
         val decision = withContext(Dispatchers.IO) {
             runCatching { GameProcessControl.of(app).prepare(session) }
@@ -46,10 +49,10 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
                     }
                 }
         }
-        if (decision == GameProcessControl.Decision.START) withContext(Dispatchers.Main.immediate) { start(session, recent) }
+        if (decision == GameProcessControl.Decision.START) withContext(Dispatchers.Main.immediate) { start(session, recent, leave) }
     }
 
-    private fun start(session: GameSession, recent: Recent) {
+    private fun start(session: GameSession, recent: Recent, leave: Int?) {
         val records = LaunchRecords.of(context)
         val launchId = if (recordLaunches) records.pending(recent) else LaunchRecords.NONE
         records.markSwitcherReturn(launchId, session.fromSwitcher)   // on disk: this menu process may not see the game end
@@ -58,6 +61,7 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
             .putExtra(GameActivity.EXTRA_CORE_FILE, session.core.libraryFileName)
             .putExtra(GameActivity.EXTRA_CORE_ID, session.core.id)
             .putExtra(GameActivity.EXTRA_TAG, session.systemTag)
+            .apply { leave?.let { putExtra(GameActivity.EXTRA_LEAVE_DISPLAY, it) } }
             .putExtra(GameActivity.EXTRA_TITLE, session.displayName)
             .putExtra(GameActivity.EXTRA_FILE_NAME, session.fileName)
             .putExtra(GameActivity.EXTRA_CONTENT_URI, session.content.value)

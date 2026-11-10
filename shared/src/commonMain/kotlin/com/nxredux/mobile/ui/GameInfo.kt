@@ -6,7 +6,10 @@ import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.path
 
 /** What the menu shows under a selected game: last played and total time (game time), and RetroAchievements progress. */
-data class GameInfo(val lastPlayedAt: Long?, val totalMs: Long?, val ra: RaProgress?)
+data class GameInfo(val lastPlayedAt: Long?, val totalMs: Long?, val ra: RaProgress?, val plays: Long? = null)
+
+/** Whether [info]'s game has achievements: a played homebrew or hack has a pointer folder but no set, so only real data counts. */
+internal fun hasRaSet(info: GameInfo?): Boolean = info?.ra?.total?.let { it > 0 } == true
 
 private const val DAY_MS = 86_400_000L
 

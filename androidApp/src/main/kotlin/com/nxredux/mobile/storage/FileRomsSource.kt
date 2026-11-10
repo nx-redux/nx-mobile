@@ -4,10 +4,11 @@ import com.nxredux.mobile.library.Entry
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.runner.ContentRef
+import com.nxredux.mobile.runner.deleteStaleTempSiblings
+import com.nxredux.mobile.runner.writeAtomically
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.io.IOException
 import java.io.RandomAccessFile
 import kotlinx.coroutines.Dispatchers
@@ -111,22 +112,22 @@ class FileRomsSource(
     override suspend fun writeText(dir: ContentRef, name: String, text: String): Boolean = writeBytes(dir, name, text.encodeToByteArray())
 
     /**
-     * `<name>.part`, synced, then renamed over [name] (a replacing rename: atomic). A failure deletes the part; [name] is
-     * untouched.
+     * A part of its own (`<name>.<hex>.part`, so two overlapping writes of one sidecar never share it), synced, then
+     * renamed over [name] (a replacing rename: atomic). A failure deletes the part; [name] is untouched. A part a killed
+     * write leaves is skipped by scans and sync like any `.part` ([Names.isHidden]), and the next write of [name] deletes it
+     * once it is old enough not to be a write in flight.
      */
     override suspend fun writeBytes(dir: ContentRef, name: String, bytes: ByteArray): Boolean = withContext(Dispatchers.IO) {
         val target = childOf(dir, name) ?: return@withContext false
-        if (target.isDirectory) return@withContext false
-        val part = File(target.parentFile, name + Names.PART)
+        if (target.isDirectory || target.parentFile?.isDirectory != true) return@withContext false
         try {
-            part.delete()   // a leftover from an interrupted write
-            FileOutputStream(part).use { it.write(bytes); it.fd.sync() }
-            if (part.renameTo(target)) true else { part.delete(); false }
+            File(target.parentFile, name + Names.PART).delete()   // the fixed part name older versions left behind
+            target.deleteStaleTempSiblings(Names.PART)
+            target.writeAtomically(bytes, Names.PART)
+            true
         } catch (e: IOException) {
-            part.delete()
             false
         } catch (e: SecurityException) {
-            part.delete()
             false
         }
     }

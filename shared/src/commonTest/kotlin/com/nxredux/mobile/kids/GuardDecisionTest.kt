@@ -75,19 +75,28 @@ class GuardDecisionTest {
 
     private fun ev(type: GuardEventType, pkg: String, cls: String, at: Long) = GuardEvent(type, pkg, cls, at)
 
-    @Test fun frontIsTheLastResumeNotPausedSince() {
+    @Test fun frontsAreTheResumesNotPausedSince() {
         val r = GuardEventType.RESUMED; val p = GuardEventType.PAUSED; val s = GuardEventType.STOPPED
+        fun pkgs(vararg e: GuardEvent) = guardFronts(e.toList()).map { it.pkg }
         // A game resumed hours ago and still in front: found (the long first look).
-        assertEquals("g", guardFront(listOf(ev(r, "a", "A", 1), ev(p, "a", "A", 2), ev(r, "g", "G", 3)))?.pkg)
+        assertEquals(listOf("g"), pkgs(ev(r, "a", "A", 1), ev(p, "a", "A", 2), ev(r, "g", "G", 3)))
         // The last resume was paused later and nothing came after: nothing in front to judge.
-        assertEquals(null, guardFront(listOf(ev(r, "g", "G", 3), ev(p, "g", "G", 4))))
+        assertEquals(emptyList(), pkgs(ev(r, "g", "G", 3), ev(p, "g", "G", 4)))
         // A pause of another activity does not cancel the front one; its own stop does.
-        assertEquals("G", guardFront(listOf(ev(r, "g", "G", 3), ev(p, "a", "A", 4)))?.cls)
-        assertEquals(null, guardFront(listOf(ev(r, "g", "G", 3), ev(s, "g", "G", 5))))
-        // The newest unpaused resume wins, with its time.
-        val f = guardFront(listOf(ev(r, "a", "A", 1), ev(r, "b", "B", 7), ev(p, "a", "A", 8)))
-        assertEquals(GuardEvent(r, "b", "B", 7), f)
-        assertEquals(null, guardFront(emptyList()))
+        assertEquals(listOf("g"), pkgs(ev(r, "g", "G", 3), ev(p, "a", "A", 4)))
+        assertEquals(emptyList(), pkgs(ev(r, "g", "G", 3), ev(s, "g", "G", 5)))
+        assertEquals(emptyList(), guardFronts(emptyList()))
+    }
+
+    @Test fun twoDisplaysKeepBothResumedApps() {
+        val r = GuardEventType.RESUMED; val p = GuardEventType.PAUSED
+        // A blocked app stays resumed on the top screen while an allowed one resumes on the other display after it.
+        val f = guardFronts(listOf(ev(r, "store", "S", 1), ev(r, "chrome", "C", 2)))
+        assertEquals(listOf(GuardEvent(r, "store", "S", 1), GuardEvent(r, "chrome", "C", 2)), f)
+        // A second resume of the same activity replaces the first, newest last.
+        assertEquals(listOf("chrome", "store"), guardFronts(listOf(ev(r, "store", "S", 1), ev(r, "chrome", "C", 2), ev(r, "store", "S", 3))).map { it.pkg })
+        // Once paused, it is gone even with the other still resumed.
+        assertEquals(listOf("chrome"), guardFronts(listOf(ev(r, "store", "S", 1), ev(r, "chrome", "C", 2), ev(p, "store", "S", 3))).map { it.pkg })
     }
 
     @Test fun runsOnlyWhileLockedWithAccessAndNoMenu() {
@@ -96,5 +105,13 @@ class GuardDecisionTest {
         assertFalse(guardRuns(locked, usageAccess = false, menuShown = false))
         assertFalse(guardRuns(locked, usageAccess = true, menuShown = true))
         for (m in listOf(KidsMode.Off, KidsMode.Parent, KidsMode.Open(1L))) assertFalse(guardRuns(m, usageAccess = true, menuShown = false))
+    }
+
+    /** Dual mode: an app on the top screen keeps the menu shown below it, and the guard still watches what opens there. */
+    @Test fun runsWithTheMenuShownWhileAnAppIsOnTheOtherDisplay() {
+        val locked = KidsMode.Locked(null)
+        assertTrue(guardRuns(locked, usageAccess = true, menuShown = true, appOnOtherDisplay = true))
+        assertFalse(guardRuns(locked, usageAccess = false, menuShown = true, appOnOtherDisplay = true))
+        assertFalse(guardRuns(KidsMode.Open(1L), usageAccess = true, menuShown = true, appOnOtherDisplay = true))
     }
 }

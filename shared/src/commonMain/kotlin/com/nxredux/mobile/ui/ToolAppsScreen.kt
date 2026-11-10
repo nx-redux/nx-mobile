@@ -45,6 +45,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nxredux.mobile.ui.nx.nxPageInset
+import com.nxredux.mobile.ui.nx.TOOL_TILE_LINE
+import com.nxredux.mobile.ui.nx.TOOL_TILE_NAME_GAP
+import com.nxredux.mobile.ui.nx.TOOL_TILE_NAME_SP
+import com.nxredux.mobile.ui.nx.TOOL_TILE_PAD_V
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.NxColors
@@ -71,9 +75,9 @@ internal fun toolAppsTitle(pick: AppPick): String = if (pick == AppPick.GAMES) "
 
 /** The gap between the picker's tiles, dp (its sides are the page inset, [nxPageInset]). */
 internal const val TOOL_APPS_GAP = 8f
-private const val TOOL_APPS_MIN_TILE = 80f      // a tile's narrowest width, dp
-private const val TOOL_APPS_ICON_SHARE = 0.6f   // an app icon's side, of its tile's width
-private const val TOOL_APPS_ICON_MAX = 64f      // dp
+internal const val TOOL_APPS_MIN_TILE = 80f      // a tile's narrowest width, dp
+internal const val TOOL_APPS_ICON_SHARE = 0.6f   // an app icon's side, of its tile's width
+internal const val TOOL_APPS_ICON_MAX = 64f      // dp
 private const val TOOL_APPS_HIDDEN_ALPHA = 0.5f // a hidden app's icon and name: dimmed
 
 /** How many picker tiles of at least [TOOL_APPS_MIN_TILE] fit a body [widthDp] wide less its side insets ([sides], both together); one at least. */
@@ -193,15 +197,14 @@ private fun ToolAppTile(app: ToolAppRow, lit: Boolean, tileW: Float, dim: Boolea
             .combinedClickable(remember { MutableInteractionSource() }, indication = null, onLongClick = onLongPress, onClick = onTap),
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 10.dp).alpha(if (dim) TOOL_APPS_HIDDEN_ALPHA else 1f),   // role: a hidden app, dimmed
+            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = TOOL_TILE_PAD_V.dp).alpha(if (dim) TOOL_APPS_HIDDEN_ALPHA else 1f),   // role: a hidden app, dimmed
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             ToolIcon(toolIcon(ToolKind.APP), app.id, content, Modifier.size(iconDp.dp))
-            Spacer(Modifier.height(6.dp))
-            val size = 12.sp
+            Spacer(Modifier.height(TOOL_TILE_NAME_GAP.dp))
             Text(
                 app.label, color = content, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis,
-                style = TextStyle(fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = size, lineHeight = size * 1.15f, textAlign = TextAlign.Center),
+                style = TextStyle(fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = TOOL_TILE_NAME_SP.sp, lineHeight = (TOOL_TILE_NAME_SP * TOOL_TILE_LINE).sp, textAlign = TextAlign.Center),
             )
         }
         if (app.shown) toolAppBadgeColors(colors, lit).let { (disc, tick) -> CheckBadge(disc, tick, Modifier.align(Alignment.TopEnd).padding(5.dp)) }

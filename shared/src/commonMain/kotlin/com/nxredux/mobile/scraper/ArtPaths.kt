@@ -13,7 +13,14 @@ data class ArtTarget(val mediaSegments: List<String>, val base: String) {
     fun legacyBox2dPath(e: ArtEncoding): String = (mediaSegments + LEGACY_BOX2D_FOLDER + name(e)).joinToString("/")
     /** The legacy untyped mix's path `.media/<name>.png` (neither written nor read; Reset deletes it when logged). */
     val legacyMixPath: String get() = (mediaSegments + "$base.png").joinToString("/")
+    /** The game info file's folder (`.media/info/`) and its home-relative path (`<base>.json`). */
+    val infoSegments: List<String> get() = mediaSegments + INFO_FOLDER
+    val infoName: String get() = "$base.json"
+    val infoPath: String get() = (infoSegments + infoName).joinToString("/")
 }
+
+/** The game info files' folder in `.media/` ([GameInfoStore]); never an art slot. */
+const val INFO_FOLDER = "info"
 
 /** Where art for a library game goes (NX Redux `scraper_scan.c:50-61`; extras → the home mirror `Roms/.sources/<id>/`). */
 object ArtPaths {

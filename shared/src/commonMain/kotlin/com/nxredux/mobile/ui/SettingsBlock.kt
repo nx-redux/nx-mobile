@@ -59,13 +59,13 @@ import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.nx_logo
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxFont
-import com.nxredux.mobile.ui.nx.LocalWindowSize
 import com.nxredux.mobile.ui.nx.NxTextSizes
 import com.nxredux.mobile.ui.nx.nxListInset
 import com.nxredux.mobile.ui.nx.nxTextScale
 import com.nxredux.mobile.ui.nx.pinned
 import org.jetbrains.compose.resources.painterResource
 import com.nxredux.mobile.ui.nx.nxDescSize
+import com.nxredux.mobile.ui.nx.splitWindow
 
 /** The window classes the Settings block's geometry follows. */
 enum class SettingsSizeClass { PHONE_UPRIGHT, PHONE_LANDSCAPE, TABLET }
@@ -148,9 +148,9 @@ private const val SETTINGS_SECTION_LINE = 1.2f
 @Composable
 internal fun settingsSectionStart(): Dp = nxPageInset().start
 
-/** The size class of the window the screen is in ([LocalWindowSize]). */
+/** The size class of the screen's area ([splitWindow]: a skin's glass, else the window). */
 @Composable
-internal fun settingsSizeClass(): SettingsSizeClass = LocalWindowSize.current.let { settingsSizeClass(it.width.value, it.height.value) }
+internal fun settingsSizeClass(): SettingsSizeClass = splitWindow().let { settingsSizeClass(it.width.value, it.height.value) }
 
 /**
  * The Settings section block: [SettingsWordBlock] titled "Settings" ([SETTINGS_TITLE]) over the [sections]' labels.
@@ -378,19 +378,23 @@ fun settingsWideBlockPage(screen: Screen): Boolean =
  */
 @Composable
 internal fun WithSettingsSectionSize(sections: List<SettingsSection>, content: @Composable (DpSize) -> Unit) =
-    WithSettingsWordBlockSize(SETTINGS_TITLE, sections.map { it.label }, content)
+    WithSettingsWordBlockSize(SETTINGS_TITLE, sections.map { it.label }, content = content)
 
 /**
- * [content] given a word block's size ([SettingsWordBlock] for [title] and [words]): its widest word or title as
- * drawn, open marks included, and its height; measured in the same pass (no frame late).
+ * [content] given a word block's size ([SettingsWordBlock] for [title] and [words], a tool's [headline] and
+ * [description] too): its widest word, title or head line as drawn, open marks included, and its height; measured in
+ * the same pass (no frame late).
  */
 @Composable
-internal fun WithSettingsWordBlockSize(title: String, words: List<String>, content: @Composable (DpSize) -> Unit) {
+internal fun WithSettingsWordBlockSize(
+    title: String, words: List<String>, headline: String? = null, description: List<String> = emptyList(),
+    content: @Composable (DpSize) -> Unit,
+) {
     // The content slot is kept while neither the size nor [content] changes, so a remeasure does not recompose the stage.
     val slot = remember { SectionSizeSlot() }
     SubcomposeLayout { constraints ->
         val probe = subcompose("probe") {
-            SettingsWordBlock(title, words, current = 0, rowsFocused = false, onTap = {}, markAll = true)
+            SettingsWordBlock(title, words, current = 0, rowsFocused = false, onTap = {}, markAll = true, headline = headline, description = description)
         }
         val width = probe.maxOfOrNull { it.maxIntrinsicWidth(constraints.maxHeight) } ?: 0
         val height = probe.maxOfOrNull { it.minIntrinsicHeight(width) } ?: 0

@@ -1,8 +1,12 @@
 package com.nxredux.mobile.kids
 
 import com.nxredux.mobile.settings.AppSettings
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /** What a PIN prompt is for: the tiles screen's lock, or setup's and Change PIN's new PIN and its confirmation. */
@@ -46,6 +50,8 @@ class KidsController(private val settings: AppSettings, private val platform: Ki
                 // Deleting the flag is the forgotten-PIN way out: the PIN goes too, so switching on asks for a new one.
                 FlagAction.TurnOff -> {
                     settings.kidsEnabled = false; parent = false
+                    settings.kidsUnlockUntil = 0L
+                    settings.kidsFlagHome = null
                     settings.clearKidsPin()
                     platform.setStartReceiver(false)
                 }
@@ -124,6 +130,17 @@ class KidsController(private val settings: AppSettings, private val platform: Ki
         publish()
     }
 
+    private val _screenOffs = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** Each screen off ([screenOff]): the menu closes the unlock PIN and sheet, which a kid could wake the phone to. */
+    val screenOffs: SharedFlow<Unit> = _screenOffs.asSharedFlow()
+
+    /** The screen went off: Parent mode ends ([endParent]) and the menu hears it ([screenOffs]). */
+    fun screenOff() {
+        endParent()
+        _screenOffs.tryEmit(Unit)
+    }
+
     /** Lock now: Parent mode ends and a timed unlock is dropped (a play window still counts). */
     fun lock() {
         parent = false
@@ -134,6 +151,7 @@ class KidsController(private val settings: AppSettings, private val platform: Ki
     /** Kids Mode on, with its flag file, straight into the schedule's mode: outside a play window the tiles at once. */
     fun turnOn() {
         settings.kidsEnabled = true
+        settings.kidsUnlockUntil = 0L   // an unlock left from before the last switch-off would come up Open
         platform.setStartReceiver(true)
         val flag = platform.flag
         val home = flag.homeKey()
