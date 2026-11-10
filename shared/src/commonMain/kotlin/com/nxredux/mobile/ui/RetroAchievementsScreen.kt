@@ -40,7 +40,8 @@ fun RetroAchievementsScreen(
             // Unfocused, the empty bar still keeps its room (the split's keepHeight), so the block stays where the page has it.
             SettingsRootScreen(
                 RA_TITLE, raPageWords(state, download), emptyList(), selectedIndex,
-                onTap = { onSelect(it); onOpen(it) }, hintBar = true, onHint = onHint,
+                // Unfocused is the split's left pane: its open row points at the page beside it, as Settings' section.
+                onTap = { onSelect(it); onOpen(it) }, rowsFocused = !focused, hintBar = true, onHint = onHint,
                 headline = raHeadline(state), description = raDetails(state),
                 hints = if (focused) SETTINGS_ROOT_HINTS else emptyList(),
             )

@@ -4,14 +4,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.achievements.RaController
 import com.nxredux.mobile.ui.nx.ListSelection
+import com.nxredux.mobile.ui.nx.LocalNxHintBarEnd
 
 /**
  * The RetroAchievements column browser on a split window ([raSplitView]): the level the user is on ([page], drawn with
@@ -25,7 +28,8 @@ internal fun RaSplitScreen(state: AppState, s: Screen, page: @Composable () -> U
     val panes: @Composable (Float) -> Unit = { share ->
         SplitPanes(
             left = { parent?.let { RaParentPane(state, it) } },
-            right = page,
+            // The page's hints end at the column's edge, not at the page's end inset.
+            right = { CompositionLocalProvider(LocalNxHintBarEnd provides 0.dp) { page() } },
             over = { if (s is Screen.RaSettings) RaSettingsDialogs(s, state, state::onButton) },
             leftShare = share,
         )
