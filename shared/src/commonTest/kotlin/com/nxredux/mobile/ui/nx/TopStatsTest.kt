@@ -155,7 +155,7 @@ class TopStatsTest {
         assertEquals(ShelfImage.Shot("shot"), shelfImage("shot", "resume", "box"))
         assertEquals(ShelfImage.Shot("resume"), shelfImage(null, "resume", "box"))
         assertEquals(ShelfImage.Box("box"), shelfImage(null, null, "box"))
-        assertEquals(ShelfImage.None, shelfImage(null, null, null))
+        assertEquals(ShelfImage.Placeholder, shelfImage(null, null, null))
     }
 
     // Three 16:9 tiles over 92% of the width (two 4% gaps): 826dp wide, each 142.5dp tall. Over them a 24dp breath and
@@ -167,5 +167,18 @@ class TopStatsTest {
         assertEquals(ShelfFit.PICTURES, shelfFit(width = 826.dp, height = 195.dp))
         assertEquals(ShelfFit.NONE, shelfFit(width = 826.dp, height = 194.dp))
         assertEquals(ShelfFit.CAPTIONED, shelfFit(width = 400.dp, height = 174.dp))   // a narrower screen's smaller tiles fit sooner
+    }
+
+    @Test fun a_game_played_under_a_minute_reads_under_one_minute() {
+        val gb = system("gb", "Game Boy", game("gb", "A"))
+        val s = consoleStats(listOf(gb), listed(gb), mapOf(gb.games[0].path to played(20_000L, 1, now - day)))
+        assertEquals("1 game · < 1 m played · last played yesterday", statsLine(s, now))
+        assertEquals("< 1 m", shelfCaption(s.shelf.first(), now))
+        assertEquals("< 1 m", hoursText(59_999L))
+        assertEquals("1 m", hoursText(60_000L))
+    }
+
+    @Test fun an_empty_shelf_does_not_claim_most_played() {
+        assertEquals("NEWEST ADDED", shelfLabel(emptyList()))
     }
 }

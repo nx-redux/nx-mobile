@@ -27,18 +27,21 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import org.jetbrains.compose.resources.painterResource
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.settings.BackdropArt
@@ -138,8 +141,8 @@ private fun shelf(entries: List<Listed>, info: Map<String, GameInfo>): List<Shel
 
 /** The shelf's label: all played, all filled, or both. */
 internal fun shelfLabel(shelf: List<ShelfGame>): String = when {
-    shelf.all { it.ms > 0 } -> "MOST PLAYED"
     shelf.none { it.ms > 0 } -> "NEWEST ADDED"
+    shelf.all { it.ms > 0 } -> "MOST PLAYED"
     else -> "PLAYED & NEW"
 }
 
@@ -147,17 +150,21 @@ internal fun shelfLabel(shelf: List<ShelfGame>): String = when {
 internal fun shelfCaption(game: ShelfGame, now: Long): String? =
     if (game.ms > 0) hoursText(game.ms) else game.added?.let { "added " + whenText(now, it).lowercase() }
 
-/** "86 h" from an hour up, else "45 m" (under a minute: "0 m"). */
+/** "86 h" from an hour up, else "45 m"; a play under a minute is "< 1 m" so it never reads as none. */
 internal fun hoursText(ms: Long): String {
     val m = ms.coerceAtLeast(0) / 60_000L
-    return if (m >= 60) "${m / 60} h" else "$m m"
+    return when {
+        m >= 60 -> "${m / 60} h"
+        m == 0L && ms > 0 -> "< 1 m"
+        else -> "$m m"
+    }
 }
 
-/** What a shelf tile draws: a picture filling its 16:9, or a box art fitted over a blurred copy of itself. */
+/** What a shelf tile draws: a picture filling its 16:9, a box art fitted over a blurred copy of itself, or a placeholder when the game has neither. */
 sealed interface ShelfImage {
     data class Shot(val url: String) : ShelfImage
     data class Box(val url: String) : ShelfImage
-    data object None : ShelfImage
+    data object Placeholder : ShelfImage
 }
 
 /** The scraped [screenshot], else the [resume] save's picture, else the [box] art. */
@@ -165,7 +172,7 @@ internal fun shelfImage(screenshot: String?, resume: String?, box: String?): She
     screenshot != null -> ShelfImage.Shot(screenshot)
     resume != null -> ShelfImage.Shot(resume)
     box != null -> ShelfImage.Box(box)
-    else -> ShelfImage.None
+    else -> ShelfImage.Placeholder
 }
 
 /** What of the shelf a short top screen keeps: the pictures and their captions, the pictures alone, or nothing. */
@@ -206,10 +213,10 @@ fun TopStatsPage(stats: TopStats, onLaunch: (Listed) -> Unit, prefer: BackdropAr
             val loose = Constraints(maxWidth = constraints.maxWidth)
             val head = subcompose("head") {
                 Column {
-                    Text(stats.title, color = colors.listText, fontFamily = font, fontSize = 40.sp, lineHeight = 46.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(stats.title, color = colors.listText, fontFamily = font, fontSize = 40.sp, lineHeight = 42.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(
                         statsLine(stats, now), color = colors.hint, fontFamily = font, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 8.dp),
+                        modifier = Modifier.padding(top = 4.dp),
                     )
                     biosPill(stats.bios)?.let { pill ->
                         Text(
@@ -261,12 +268,13 @@ private fun Shelf(stats: TopStats, captions: Boolean, gap: Dp, now: Long, prefer
     }
 }
 
-/** A tile's [shelfImage]: a picture cropped to 16:9, or the box fitted over a blurred, darkened copy of itself; an app's icon. */
+/** A tile's [shelfImage]: a picture cropped to 16:9, or the box fitted over a blurred, darkened copy of itself; an app's icon, else the console's logo or the game's name on a quiet surface. */
 @Composable
 private fun ShelfPicture(game: ShelfGame, prefer: BackdropArt, modifier: Modifier) {
     val e = game.entry
     Box(modifier.background(LocalNxColors.current.pictureGround), contentAlignment = Alignment.Center) {
         val icon = rememberAppIcon(e.appId)
+        val colors = LocalNxColors.current
         when (val image = shelfImage(e.game.screenshotRef?.value, game.resume, panelArt(prefer, e.game) ?: abstractArtFor(e))) {
             is ShelfImage.Shot -> AsyncImage(model = image.url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             is ShelfImage.Box -> {
@@ -274,7 +282,19 @@ private fun ShelfPicture(game: ShelfGame, prefer: BackdropArt, modifier: Modifie
                 Box(Modifier.fillMaxSize().background(BOX_DIM))
                 AsyncImage(model = image.url, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
             }
-            ShelfImage.None -> if (icon != null) Image(icon, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.6f))
+            ShelfImage.Placeholder -> {
+                Box(Modifier.fillMaxSize().background(colors.modalCard), contentAlignment = Alignment.Center) {
+                    val logo = consoleLogo(e.system.tag)
+                    when {
+                        icon != null -> Image(icon, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.6f))
+                        logo != null -> Image(painterResource(logo), contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.6f), colorFilter = ColorFilter.tint(colors.hint))
+                        else -> Text(
+                            e.shown, color = colors.hint, fontFamily = LocalNxFont.current, fontSize = 14.sp, maxLines = 3,
+                            overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 12.dp),
+                        )
+                    }
+                }
+            }
         }
     }
 }
