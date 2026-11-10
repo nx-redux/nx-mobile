@@ -7,6 +7,7 @@ import com.nxredux.mobile.library.ensurePath
 import com.nxredux.mobile.library.findDir
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.GamePath
+import com.nxredux.mobile.storage.PrivateFiles
 import com.nxredux.mobile.tryOrNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -15,6 +16,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.concurrent.Volatile
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.TimeSource
 
 /**
@@ -63,6 +66,10 @@ class ScrapeEngine(
     private val picked: suspend (gamePath: String) -> Set<ArtSlot> = { emptySet() },
     /** Milliseconds on a monotonic clock: the pacing of [run]'s state emissions (a test's virtual clock). */
     private val clock: () -> Long = TimeSource.Monotonic.markNow().let { start -> { start.elapsedNow().inWholeMilliseconds } },
+    /** The app-private files of the game info's miss list; null = no game info ([info]). */
+    infoFiles: PrivateFiles? = null,
+    /** Where [info]'s reads and writes run (Android: off the main thread). */
+    infoWork: CoroutineContext = EmptyCoroutineContext,
 ) {
     companion object {
         const val NO_CONNECTION = "No connection"
@@ -142,6 +149,9 @@ class ScrapeEngine(
             )
         }
     }
+
+    /** Game info beside each game's art (`.media/info/<name>.json`), or null without [infoFiles]. */
+    val info: GameInfoStore? = infoFiles?.let { GameInfoStore(InfoFiles(), it, infoWork) }
 
     /** ScreenScraper among [sources] (its account calls and the Android games' lookup), or null. */
     val ss: ScreenScraperSource? = sources.firstNotNullOfOrNull { it as? ScreenScraperSource }
@@ -258,18 +268,42 @@ class ScrapeEngine(
     } ?: Deleted.FAILED
 
     /**
-     * After a Reset of [paths] (home-relative art files): removes each slot folder of theirs (`.media/<slot>/`) that is
-     * left empty, then each of their `.media` folders left empty (NX Redux's `rmdir` after its deletes). A folder that
-     * still holds anything is never removed.
+     * After a Reset of [paths] (home-relative art and info files): removes each slot folder of theirs (`.media/<slot>/`,
+     * `.media/info/`) that is left empty, then each of their `.media` folders left empty (NX Redux's `rmdir` after its
+     * deletes). A folder that still holds anything is never removed.
      */
     suspend fun removeEmptyArtDirs(paths: Collection<String>) {
-        val slotFolders = ArtSlot.entries.map { it.folder }.toSet() + LEGACY_BOX2D_FOLDER
+        val slotFolders = ArtSlot.entries.map { it.folder }.toSet() + LEGACY_BOX2D_FOLDER + INFO_FOLDER
         val dirs = paths.map { it.split('/').dropLast(1) }.toSet()
         val slots = dirs.filter { it.size >= 2 && it[it.size - 2] == ".media" && it.last() in slotFolders }
         val medias = dirs.mapNotNull { d -> d.lastIndexOf(".media").takeIf { it >= 0 }?.let { d.take(it + 1) } }.toSet()
         for (d in slots + medias) {
             if (guard { source.findDir(home, d.dropLast(1))?.let { source.deleteEmptyDirectory(it, d.last()) } } == true) diskGeneration++
         }
+    }
+
+    /**
+     * The info files in [ref]'s art target, through a fresh [Listings] per call as [artOnDisk]: a write never bumps
+     * [diskGeneration], so a running job's listings (art folders only) are not dropped for each game's info.
+     */
+    private inner class InfoFiles : GameInfoFiles {
+        private fun target(ref: LibraryGameRef): ArtTarget? =
+            if (ref.android) null else guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) }
+
+        override fun path(ref: LibraryGameRef): String? = target(ref)?.infoPath
+
+        override suspend fun read(ref: LibraryGameRef): String? = guard {
+            val t = target(ref) ?: return@guard null
+            val dir = Listings().dir(t.infoSegments) ?: return@guard null
+            source.child(dir, t.infoName)?.takeIf { !it.isDirectory }?.let { source.readText(it.ref) }
+        }
+
+        override suspend fun write(ref: LibraryGameRef, text: String): Boolean = guard {
+            val t = target(ref) ?: return@guard false
+            val dir = Listings().ensure(t.infoSegments) ?: return@guard false
+            onWritten(listOf(t.infoPath to null))
+            source.writeText(dir, t.infoName, text)
+        } == true
     }
 
     /** Deletes the Android games console's stored pictures (and hero marks), then rebuilds the console when any went; how many. */

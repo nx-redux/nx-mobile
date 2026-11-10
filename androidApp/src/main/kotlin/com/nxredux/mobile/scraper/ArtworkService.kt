@@ -75,6 +75,7 @@ object ArtworkService {
                 http, fitter, source, HomeRomsSource.HOME, sources, onArt, onWritten, androidArt, onAndroidArt, logged,
                 extras = { ArtExtras(settings.artBox2d, settings.artWheel, settings.artMix) }, pixels = fitter,
                 warn = { NxLog.w(TAG, it) }, onOptions = onOptions, picked = picked,
+                infoFiles = AndroidPrivateFiles(app), infoWork = Dispatchers.Default,
             )
         }
         val runner = object : ScrapeRunner {

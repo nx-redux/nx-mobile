@@ -8,6 +8,7 @@ import com.nxredux.mobile.library.ensurePath
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.scraper.Scrape.OK_PNG
 import com.nxredux.mobile.scraper.Scrape.found
+import com.nxredux.mobile.storage.MemoryPrivateFiles
 import com.nxredux.mobile.storage.MemorySidecarStore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -45,7 +46,7 @@ class ArtworkControllerTest {
             { auth, onArt, onWritten, _, logged, onOptions, picked ->
                 ssEngine(
                     http, FakeFitter(), FakeHasher(), fs, Scrape.home, auth, engineClock, { delay(it) }, onArt, onWritten,
-                    art, { androidRefreshed++ }, more, logged, onOptions, picked, pixels = pixels,
+                    art, { androidRefreshed++ }, more, logged, onOptions, picked, pixels = pixels, infoFiles = MemoryPrivateFiles(),
                 )
             },
             creds, runner, scope, clock = jobClock, optionCache = cache,
@@ -226,6 +227,28 @@ class ArtworkControllerTest {
         // Still the app's: the next Reset tries it again.
         assertEquals(ResetResult(0), rig.controller.resetArt(null))
         assertEquals("Roms/GB/.media/wheel/Tetris.png\tsteamgriddb\t5\t6", rig.host.files.getValue(ArtworkController.LOG_FILE).trim())
+    }
+
+    @Test fun reset_deletes_info_files() = runTest {
+        val rig = Rig(this, listOf(tetris, sonic))
+        val info = StoredGameInfo("Blocks fall.", "Puzzle", "1989", "Nintendo", "en", "42", 1L)
+        val store = rig.controller.info!!
+        assertTrue(store.write(tetris, info))
+        assertTrue(store.write(sonic, info))
+        val handPlaced = rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "info"))!!
+        rig.fs.writeText(handPlaced, "Mine.json", "{}")
+        assertEquals(info, store.read(tetris))
+
+        assertEquals(ResetResult(1), rig.controller.resetArt(setOf("MD")))
+        assertNull(rig.fs.readText(ContentRef("Home/Roms/MD/.media/info/Sonic.json")))
+        assertEquals(listOf("Sonic.md"), rig.fs.childNames("Home/Roms/MD"))   // info/ and .media emptied: removed
+        assertNull(store.read(sonic))
+        assertEquals(info, store.read(tetris))
+
+        assertEquals(ResetResult(1), rig.controller.resetArt(null))
+        assertNull(rig.fs.readText(ContentRef("Home/Roms/GB/.media/info/Tetris.json")))
+        assertNull(store.read(tetris))
+        assertEquals(listOf("Mine.json"), rig.fs.childNames("Home/Roms/GB/.media/info"))
     }
 
     private fun resetLeavesUnloggedFiles(rig: Rig) =

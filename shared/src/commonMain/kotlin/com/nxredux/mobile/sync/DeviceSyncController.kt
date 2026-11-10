@@ -9,6 +9,7 @@ import com.nxredux.mobile.library.SidecarTxt
 import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.netplay.usb.UsbLinkState
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.scraper.INFO_FOLDER
 import com.nxredux.mobile.storage.SaveKeys
 import com.nxredux.mobile.tryOr
 import com.nxredux.mobile.tryOrNull
@@ -725,13 +726,15 @@ class DeviceSyncController(
 
     /**
      * Home `Roms/<folder>/.media`'s files: `<slot>/<file>` for each typed art slot a handheld shows ([ArtworkResolver.TYPED]
-     * less the phone-only ones), plus its top-level image files (`bg.png`).
+     * less the phone-only ones) and the game info files (`info/<name>.json`, named as the art), plus its top-level image
+     * files (`bg.png`).
      */
     private suspend fun homeArt(folder: String): List<String> {
         val media = "$folder/.media"
         return platform.listHomeRoms(media).flatMap { name ->
             when {
-                name in ArtworkResolver.TYPED && name !in SyncRoms.PHONE_ONLY_SLOTS -> platform.listHomeRoms("$media/$name").map { "$name/$it" }
+                (name in ArtworkResolver.TYPED && name !in SyncRoms.PHONE_ONLY_SLOTS) || name == INFO_FOLDER ->
+                    platform.listHomeRoms("$media/$name").map { "$name/$it" }
                 name.substringAfterLast('.', "").lowercase() in ART_EXTENSIONS -> listOf(name)
                 else -> emptyList()
             }

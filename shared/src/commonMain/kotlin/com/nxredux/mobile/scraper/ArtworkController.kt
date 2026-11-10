@@ -68,6 +68,9 @@ class ArtworkController(
     )
     private val previews = Semaphore(PREVIEW_DOWNLOADS)
 
+    /** Game info beside the art; null when the engine keeps none. */
+    val info: GameInfoStore? get() = engine.info
+
     /** Any source is on; fetching works in a build without ScreenScraper's credentials when another source is. */
     val available: Boolean get() = engine.sources.any { it.enabled }
     /** ScreenScraper's build credentials are present (its account rows). */
@@ -633,8 +636,8 @@ class ArtworkController(
     }
 
     /**
-     * Deletes the logged art files of the games in scope ([tags] null = every logged file: typed art and the app's
-     * legacy untyped mixes; one whose delete failed stays logged and uncounted), removes the slot and `.media` folders
+     * Deletes the logged art files of the games in scope ([tags] null = every logged file: typed art, game info and the
+     * app's legacy untyped mixes; one whose delete failed stays logged and uncounted), removes the slot and `.media` folders
      * that left empty, and, for Android's scope or All, the Android games console's stored screenshots; then re-reads
      * what is left on disk for every game whose art paths were touched (hidden games too), so hand-placed art stays in
      * the index. The scope's Change art lists, picks and previews are forgotten too (All: every preview). A running job
@@ -659,6 +662,7 @@ class ArtworkController(
                 engine.removeEmptyArtDirs(inScope)
                 before to results.count { it.value == ScrapeEngine.Deleted.DELETED }
             }
+            engine.info?.forgetCached()
             // The Android games console's screenshots are app-private, outside the log: Android's scope or All deletes them.
             val android = up == null || ANDROID_CONSOLE_TAG in up
             val androidDeleted = if (android) engine.deleteAndroidArt() else 0
@@ -680,10 +684,10 @@ class ArtworkController(
 
     /**
      * Every path the app may have written for [g]: each typed slot (the 2D box, wheel and mix among them) in both
-     * encodings, the 2D box's legacy `box2d/` files and the legacy untyped mix.
+     * encodings, the 2D box's legacy `box2d/` files, the legacy untyped mix and the game info file.
      */
     private fun artPaths(g: LibraryGameRef): List<String> {
         val t = try { ArtPaths.target(g.sourceId, g.relativeDir, g.fileName, g.folderGame) } catch (_: IllegalArgumentException) { return emptyList() }
-        return ArtEncoding.entries.flatMap { e -> ArtSlot.entries.map { t.path(it, e) } + t.legacyBox2dPath(e) } + t.legacyMixPath
+        return ArtEncoding.entries.flatMap { e -> ArtSlot.entries.map { t.path(it, e) } + t.legacyBox2dPath(e) } + t.legacyMixPath + t.infoPath
     }
 }
