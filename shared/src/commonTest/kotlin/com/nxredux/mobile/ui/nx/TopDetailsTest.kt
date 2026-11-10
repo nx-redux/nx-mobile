@@ -129,4 +129,30 @@ class TopDetailsTest {
         assertEquals(DetailsFit(picture = true, next = true, synopsis = false), detailsFit(560.dp, 319.dp))
         assertEquals(DetailsFit(picture = true, next = true, synopsis = false), detailsFit(560.dp, 220.dp))
     }
+
+    @Test fun a_picture_keeps_its_own_aspect() {
+        val shot = ShelfImage.Shot("/x.png")
+        assertEquals(4f / 3f, detailsPictureRatio(shot, 640f, 480f))
+        assertEquals(1.5f, detailsPictureRatio(shot, 240f, 160f))   // GBA
+        assertEquals(16f / 9f, detailsPictureRatio(shot, 1920f, 1080f))
+    }
+
+    @Test fun a_picture_is_16_9_until_its_size_is_known() {
+        val shot = ShelfImage.Shot("/x.png")
+        assertEquals(16f / 9f, detailsPictureRatio(shot, null, null))
+        assertEquals(16f / 9f, detailsPictureRatio(shot, 0f, 480f))
+        assertEquals(16f / 9f, detailsPictureRatio(shot, Float.NaN, 480f))
+        assertEquals(16f / 9f, detailsPictureRatio(shot, Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY))
+    }
+
+    @Test fun a_portrait_or_very_wide_picture_is_clamped() {
+        val shot = ShelfImage.Shot("/x.png")
+        assertEquals(1f, detailsPictureRatio(shot, 256f, 384f))   // a DS stack
+        assertEquals(2f, detailsPictureRatio(shot, 800f, 240f))
+    }
+
+    @Test fun box_art_and_the_placeholder_stay_16_9() {
+        assertEquals(16f / 9f, detailsPictureRatio(ShelfImage.Box("/b.png"), 300f, 420f))
+        assertEquals(16f / 9f, detailsPictureRatio(ShelfImage.Placeholder, null, null))
+    }
 }

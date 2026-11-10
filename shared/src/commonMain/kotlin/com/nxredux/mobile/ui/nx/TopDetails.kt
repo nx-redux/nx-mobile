@@ -17,10 +17,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -120,6 +125,16 @@ internal fun resumeCaption(image: ShelfImage, resume: String?, savedAt: Long?, n
     return listOfNotNull("Continue", savedAt?.let { whenText(now, it).lowercase() }).joinToString(INFO_SEPARATOR)
 }
 
+/**
+ * The details picture's width / height: a picture's own ([width] x [height], its intrinsic size once loaded), clamped
+ * so a portrait or very wide one can't break the row; 16:9 until it is known, and for the box art and the placeholder.
+ */
+internal fun detailsPictureRatio(image: ShelfImage, width: Float?, height: Float?): Float {
+    if (image !is ShelfImage.Shot || width == null || height == null) return TD_RATIO_DEFAULT
+    val ratio = width / height
+    return if (width > 0f && height > 0f && ratio.isFinite()) ratio.coerceIn(TD_RATIO_MIN, TD_RATIO_MAX) else TD_RATIO_DEFAULT
+}
+
 /** What a top screen [width] x [height] (inside its padding) keeps: a small one drops the synopsis first, then the picture, then the next goal. */
 internal data class DetailsFit(val picture: Boolean, val next: Boolean, val synopsis: Boolean)
 
@@ -131,9 +146,9 @@ internal fun detailsFit(width: Dp, height: Dp): DetailsFit =
 
 /**
  * The top screen's game details, in the stats page's language: on the left, anchored to the bottom, the title, the
- * genre line, the play line and the achievements block (a count, a bar and the next goal); on the right, one 16:9
- * picture ([detailsImage]) captioned "Continue · <when>" when it is the resume save's. Nothing scrolls; a small screen
- * drops the synopsis, then the picture, then the next goal ([detailsFit]). [onAchievements]: the achievements block's clean tap, the only
+ * genre line, the play line and the achievements block (a count, a bar and the next goal); on the right, one picture
+ * at its own aspect ([detailsImage], [detailsPictureRatio]) captioned "Continue · <when>" when it is the resume save's.
+ * Nothing scrolls; a small screen drops the synopsis, then the picture, then the next goal ([detailsFit]). [onAchievements]: the achievements block's clean tap, the only
  * touch here. [prefer]: Layouts → Backdrop art, for a game whose only picture is its box.
  */
 @Composable
@@ -209,8 +224,14 @@ private fun DetailsPicture(details: TopDetails, now: Long, prefer: BackdropArt, 
     val e = details.entry
     val resume = details.resume.previewPath
     val image = detailsImage(resume, e.game.screenshotRef?.value, panelArt(prefer, e.game) ?: abstractArtFor(e))
+    var size by remember(image) { mutableStateOf<Size?>(null) }
+    val ratio = detailsPictureRatio(image, size?.width, size?.height)
     Column(modifier) {
-        TopPicture(e, image, Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)))
+        // Weighted last, the caption is measured first: a tall picture on a short screen shrinks to the height left, at its aspect.
+        TopPicture(
+            e, image, Modifier.weight(1f, fill = false).aspectRatio(ratio).clip(RoundedCornerShape(8.dp)),
+            onShotSize = { if (it.isSpecified) size = it },
+        )
         resumeCaption(image, resume, details.resume.savedAt, now)?.let { caption ->
             val (head, tail) = caption.substringBefore(INFO_SEPARATOR) to caption.substringAfter(INFO_SEPARATOR, "")
             Text(
@@ -232,3 +253,6 @@ private val TD_PICTURE_MIN_H: Dp = 220.dp        // shorter: the picture goes fi
 private const val TD_SYNOPSIS_LINES = 5
 private val TD_SYNOPSIS_MIN_H: Dp = 320.dp       // shorter: the synopsis goes first
 private val TD_NEXT_MIN_H: Dp = 176.dp           // then the next goal
+private const val TD_RATIO_DEFAULT = 16f / 9f
+private const val TD_RATIO_MIN = 1f              // the tallest picture: square
+private const val TD_RATIO_MAX = 2f

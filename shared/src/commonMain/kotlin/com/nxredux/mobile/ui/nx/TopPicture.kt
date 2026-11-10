@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -32,7 +33,7 @@ import com.nxredux.mobile.ui.Listed
 import com.nxredux.mobile.ui.appId
 import org.jetbrains.compose.resources.painterResource
 
-/** What a top screen picture draws: a picture filling its 16:9, a box art fitted over a blurred copy of itself, or a placeholder when the game has neither. */
+/** What a top screen picture draws: a picture filling its frame, a box art fitted over a blurred copy of itself, or a placeholder when the game has neither. */
 sealed interface ShelfImage {
     data class Shot(val url: String) : ShelfImage
     data class Box(val url: String) : ShelfImage
@@ -47,15 +48,19 @@ internal fun topPagePadding(width: Dp, height: Dp): PaddingValues =
 internal val TOP_TIGHT_LINES = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both)
 
 /**
- * [image] for [entry]: a picture cropped to 16:9, or the box fitted over a blurred, darkened copy of itself; an app's
- * icon, else the console's logo or the game's name on a quiet surface.
+ * [image] for [entry]: a picture cropped to the frame, or the box fitted over a blurred, darkened copy of itself; an
+ * app's icon, else the console's logo or the game's name on a quiet surface. [onShotSize]: a picture's intrinsic size
+ * once it loads.
  */
 @Composable
-internal fun TopPicture(entry: Listed, image: ShelfImage, modifier: Modifier) {
+internal fun TopPicture(entry: Listed, image: ShelfImage, modifier: Modifier, onShotSize: ((Size) -> Unit)? = null) {
     val colors = LocalNxColors.current
     Box(modifier.background(colors.pictureGround), contentAlignment = Alignment.Center) {
         when (image) {
-            is ShelfImage.Shot -> AsyncImage(model = image.url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            is ShelfImage.Shot -> AsyncImage(
+                model = image.url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
+                onSuccess = onShotSize?.let { report -> { state -> report(state.painter.intrinsicSize) } },
+            )
             is ShelfImage.Box -> {
                 AsyncImage(model = image.url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(TOP_BLUR))
                 Box(Modifier.fillMaxSize().background(BOX_DIM))
