@@ -89,8 +89,18 @@ fun raSplitView(window: DpSize, screen: Screen): Boolean = settingsSplit(window)
  * it, as on the page itself, as Settings' stage keeps its words whole; the list keeps [SETTINGS_FRAME_MIN] unless the
  * share itself leaves less.
  */
+// Unlike Settings' stage ([settingsFrameLeft]), the left pane grows rather than the frame shrinking: the right side is a list, not a fixed frame.
 fun raSplitLeftWidth(stageWidth: Dp, sectionRight: Dp, gutter: Dp): Dp =
     maxOf(stageWidth * SETTINGS_SPLIT_LEFT, minOf(sectionRight + gutter, stageWidth - SETTINGS_FRAME_MIN))
+
+/** [raSplitLeftWidth] as [SplitPanes]' left share: of the width it splits, the stage less the [SPLIT_DIVIDER]. */
+fun raSplitLeftShare(stageWidth: Dp, sectionRight: Dp, gutter: Dp): Float {
+    val split = stageWidth - SPLIT_DIVIDER
+    return if (split > 0.dp) raSplitLeftWidth(stageWidth, sectionRight, gutter) / split else SETTINGS_SPLIT_LEFT
+}
+
+/** The hairline between [SplitPanes]' panes. */
+val SPLIT_DIVIDER = 1.dp
 
 /** Whether [screen] is a RetroAchievements level drawn beside its parent when the window splits ([raSplitView]). */
 fun raSplitLevel(screen: Screen): Boolean =

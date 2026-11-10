@@ -10,7 +10,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.achievements.RaController
 import com.nxredux.mobile.ui.nx.ListSelection
 
@@ -42,8 +41,7 @@ private fun RaPageShare(c: RaController, panes: @Composable (Float) -> Unit) {
     val download by c.download.collectAsState()
     WithSettingsWordBlockSize(RA_TITLE, raPageWords(ra, download), raHeadline(ra), raDetails(ra)) { block ->
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            val width = raSplitLeftWidth(maxWidth, settingsSectionStart() + block.width, settingsPlateEnd())
-            panes(if (maxWidth > 0.dp) width / maxWidth else SETTINGS_SPLIT_LEFT)
+            panes(raSplitLeftShare(maxWidth, settingsSectionStart() + block.width, settingsPlateEnd()))
         }
     }
 }

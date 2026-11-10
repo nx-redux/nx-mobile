@@ -156,4 +156,11 @@ class SettingsSplitTest {
         // Never under the share, even where the least width cannot be kept.
         assertEquals(400.dp * SETTINGS_SPLIT_LEFT, raSplitLeftWidth(400.dp, sectionRight = 300.dp, gutter = 24.dp))
     }
+
+    @Test fun theRetroAchievementsLeftShareIsOfTheWidthLeftBesideTheDivider() {
+        // The panes share the width less the divider, so the left pane gets every dp of its width.
+        val share = raSplitLeftShare(640.dp, sectionRight = 260.dp, gutter = 24.dp)
+        assertEquals((260f + 24f) / (640f - SPLIT_DIVIDER.value), share, 1e-5f)
+        assertEquals(SETTINGS_SPLIT_LEFT, raSplitLeftShare(0.dp, sectionRight = 260.dp, gutter = 24.dp))   // not measured yet
+    }
 }
