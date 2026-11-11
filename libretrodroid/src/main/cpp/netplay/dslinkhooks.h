@@ -29,7 +29,7 @@ struct Variable;
 //
 // setNetpacket, forgetCore, configure, radio, preFrame and stopCore run on the frame (GL) thread, the core's emulation
 // thread, with coreLock held or no step possible (load, destroy); only that thread creates or destroys the link.
-// inRoom, leaveNow, rejoin and shutdown may run on any thread.
+// inRoom, presence, leaveNow, rejoin and shutdown may run on any thread.
 namespace libretrodroid::dslink {
     bool setNetpacket(const nl_netpacket_callback* callbacks);   // SET_NETPACKET_INTERFACE; NULL clears it
     void forgetCore();          // the core is gone or about to be replaced: drop its callbacks and the link
@@ -42,6 +42,7 @@ namespace libretrodroid::dslink {
     void stopCore();            // the core's stop() if its session is open, then the link ends; before retro_unload_game
     void shutdown();            // leaves the room at once; the link itself ends in stopCore
     bool inRoom();
+    int presence();             // ndl_presence: 0 out, 1 seeking a room, 2 in a room
     void leaveNow();            // backgrounded: leave without the radio-off linger
     void rejoin();              // back in front: a sheet session's link goes back into its room (no-op in auto)
 }

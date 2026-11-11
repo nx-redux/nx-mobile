@@ -141,6 +141,13 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_linkShut
     }
 }
 
+JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsPresence(
+    JNIEnv* env,
+    jclass obj
+) {
+    return dslink::presence();   // the same short locks as dsInRoom
+}
+
 JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsInRoom(
     JNIEnv* env,
     jclass obj

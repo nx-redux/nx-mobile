@@ -591,6 +591,36 @@ static int case_leave_now_skips_linger(uint16_t port) {
 	return 0;
 }
 
+static int case_presence_follows_radio_and_leave(uint16_t port) {
+	CHECK(ndl_presence_now(NULL) == NDL_OUT);
+	/* A lone auto link on its own search port, so it never meets the pair below; room[3] is closed by run. */
+	ndl_config c = auto_config("solo", free_udp_port(), free_udp_port());
+	room[3] = ndl_create(&c);
+	CHECK(room[3] != NULL);
+	CHECK(ndl_presence_now(room[3]) == NDL_OUT);
+	ndl_radio_changed(room[3], NDL_RADIO_ON);
+	CHECK(ndl_presence_now(room[3]) == NDL_SEEKING);
+	ndl_radio_changed(room[3], NDL_RADIO_OFF);
+	CHECK(ndl_presence_now(room[3]) == NDL_OUT);
+	CHECK(auto_pair(port, free_udp_port()) == 0);
+	CHECK(ndl_presence_now(room[1]) == NDL_ROOM);
+	CHECK(ndl_presence_now(room[2]) == NDL_ROOM);
+	ndl_radio_changed(room[2], NDL_RADIO_OFF);
+	CHECK(ndl_presence_now(room[2]) == NDL_ROOM);
+	ndl_radio_changed(room[2], NDL_RADIO_ON);
+	ndl_leave_now(room[2]);
+	CHECK(ndl_presence_now(room[2]) == NDL_OUT);
+	/* A sheet host is in its room until it leaves. */
+	ndl_destroy(room[3]);
+	c = config(NDL_HOST, "sheet", free_udp_port(), 8);
+	room[3] = ndl_create(&c);
+	CHECK(room[3] != NULL);
+	CHECK(ndl_presence_now(room[3]) == NDL_ROOM);
+	ndl_leave_now(room[3]);
+	CHECK(ndl_presence_now(room[3]) == NDL_OUT);
+	return 0;
+}
+
 static int case_short_data_dropped(uint16_t port) {
 	CHECK(room_open(port, 2) == 0);
 	ndl_drop_counts d;
@@ -717,6 +747,7 @@ int main(void) {
 	run("auto_idle_without_radio", case_auto_idle_without_radio);
 	run("linger_then_leave", case_linger_then_leave);
 	run("leave_now_skips_linger", case_leave_now_skips_linger);
+	run("presence_follows_radio_and_leave", case_presence_follows_radio_and_leave);
 	if (fails) {
 		printf("%d test(s) failed\n", fails);
 		return 1;

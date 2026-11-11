@@ -974,6 +974,19 @@ bool ndl_in_room(ndl_link* l) {
 	return in;
 }
 
+ndl_presence ndl_presence_now(ndl_link* l) {
+	if (!l)
+		return NDL_OUT;
+	pthread_mutex_lock(&l->mu);
+	ndl_presence p = NDL_OUT;
+	if (l->role == R_HOLDER || l->role == R_MEMBER)
+		p = NDL_ROOM;
+	else if (l->mode == NDL_AUTO && auto_wanted(l, now_ms(l)))
+		p = NDL_SEEKING;
+	pthread_mutex_unlock(&l->mu);
+	return p;
+}
+
 int ndl_client_id(ndl_link* l) {
 	if (!l)
 		return -1;

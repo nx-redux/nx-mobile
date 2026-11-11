@@ -448,6 +448,11 @@ bool inRoom() {
     return ndl_in_room(theLink);
 }
 
+int presence() {
+    std::lock_guard<std::mutex> guard(linkMutex);
+    return ndl_presence_now(theLink);
+}
+
 void leaveNow() {
     std::lock_guard<std::mutex> guard(linkMutex);
     ndl_leave_now(theLink);

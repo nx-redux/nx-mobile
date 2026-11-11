@@ -109,6 +109,11 @@ void ndl_leave_now(ndl_link* l);
 void ndl_rejoin(ndl_link* l);
 
 bool ndl_in_room(ndl_link* l);
+
+/* Where the link stands for the in-game menu: out of any room and not looking for one, looking for or about to open
+ * one (the automatic route with the radio on, or a leave not yet taken back), or in a room. */
+typedef enum { NDL_OUT = 0, NDL_SEEKING = 1, NDL_ROOM = 2 } ndl_presence;
+ndl_presence ndl_presence_now(ndl_link* l);
 /* This phone's member id, -1 when not in a room. */
 int ndl_client_id(ndl_link* l);
 /* Members in the room including this phone, 0 when not in a room. */
