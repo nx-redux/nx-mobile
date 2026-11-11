@@ -108,6 +108,11 @@ object LibretroNetplay {
     /** [state, secondsLeft, reason]: LINK_* and REASON_*. */
     @JvmStatic external fun linkStatus(): IntArray
 
+    /** The DS link (`cpp/netplay/ndl_link.h`): this phone is in a local wireless room. Any thread. */
+    @JvmStatic external fun dsInRoom(): Boolean
+    /** The DS link: leave the room at once, without the radio-off linger (backgrounded, like closing the lid). Any thread. */
+    @JvmStatic external fun dsLeaveNow()
+
     init {
         System.loadLibrary("libretrodroid")
     }

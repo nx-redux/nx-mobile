@@ -221,6 +221,8 @@ add_library(libretrodroid SHARED
         netplay/nl_netpacket.h
         netplay/linkhooks.h
         netplay/linkhooks.cpp
+        netplay/dslinkhooks.h
+        netplay/dslinkhooks.cpp
         netplay/linkjni.cpp
         ${GWL_DIR}/gwl_mode.c
         ${RCHEEVOS_SOURCES}
