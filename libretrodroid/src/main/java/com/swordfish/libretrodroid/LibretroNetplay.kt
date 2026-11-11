@@ -112,6 +112,8 @@ object LibretroNetplay {
     @JvmStatic external fun dsInRoom(): Boolean
     /** The DS link: leave the room at once, without the radio-off linger (backgrounded, like closing the lid). Any thread. */
     @JvmStatic external fun dsLeaveNow()
+    /** The DS link: the Wi-Fi `Network.networkHandle` its sockets bind to (0 = the default network). Set before the core loads. */
+    @JvmStatic external fun dsSetNetwork(handle: Long)
 
     init {
         System.loadLibrary("libretrodroid")

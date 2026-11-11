@@ -92,6 +92,11 @@ static ndl_config config(ndl_mode mode, const char* name, uint16_t port, int max
 	return c;
 }
 
+static void count_bind(int fd, void* ctx) {
+	(void)fd;
+	(*(int*)ctx)++;
+}
+
 /* ---- Collected deliveries ---- */
 
 typedef struct {
@@ -201,6 +206,25 @@ static int case_host_and_three_joiners_get_distinct_ids(uint16_t port) {
 		CHECK(ndl_member_count(room[i]) == 4);
 	}
 	CHECK(ndl_client_id(room[1]) == 1);
+	return 0;
+}
+
+static int case_bind_socket_called_for_each_socket(uint16_t port) {
+	int host_calls = 0, join_calls = 0;
+	ndl_config c = config(NDL_HOST, "holder", port, 2);
+	c.bind_socket = count_bind;
+	c.bind_ctx = &host_calls;
+	room[1] = ndl_create(&c);
+	CHECK(room[1] != NULL);
+	CHECK(host_calls >= 1);
+	c = config(NDL_JOIN, "joiner", port, 2);
+	c.bind_socket = count_bind;
+	c.bind_ctx = &join_calls;
+	room[2] = ndl_create(&c);
+	CHECK(room[2] != NULL);
+	CHECK(join_calls >= 1);
+	CHECK(wait_in_room(room[2], true, 2000));
+	CHECK(wait_count(room[1], 2, 2000));
 	return 0;
 }
 
@@ -414,6 +438,7 @@ static void run(const char* name, int (*fn)(uint16_t)) {
 int main(void) {
 	setvbuf(stdout, NULL, _IOLBF, 0);
 	run("host_and_three_joiners_get_distinct_ids", case_host_and_three_joiners_get_distinct_ids);
+	run("bind_socket_called_for_each_socket", case_bind_socket_called_for_each_socket);
 	run("broadcast_reaches_every_other_member", case_broadcast_reaches_every_other_member);
 	run("directed_reaches_only_its_member", case_directed_reaches_only_its_member);
 	run("leave_tells_the_others", case_leave_tells_the_others);

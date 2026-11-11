@@ -469,6 +469,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val n3dsBroadcast = n3dsAuto?.let { WifiNetworks.broadcast(WifiNetworks.address(activity.getSystemService(ConnectivityManager::class.java)))?.hostAddress }
             // A DS room runs under its own MAC (a seed kept per install) so rooms tell its members apart.
             val ndsMac = if (coreId == "melondsds" && (n3dsAuto != null || linkKind == NetplayLinkKind.NDSLINK)) NetplayLinkOptions.ndsMac(AndroidAppSettings(activity).ndsMacSeed) else null
+            if (ndsMac != null) com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(WifiNetworks.network(activity.getSystemService(ConnectivityManager::class.java))?.networkHandle ?: 0L)
             val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsAuto, n3dsBroadcast, ndsMac) else when (linkKind) {
                 null -> NetplayLinkOptions.forPair(np)
                 NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)

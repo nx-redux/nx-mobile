@@ -63,6 +63,10 @@ typedef struct {
 	char host_ip[16];		/* JOIN only */
 	int max_members;		/* 2..NDL_MAX_MEMBERS; anything else means NDL_MAX_MEMBERS */
 	uint64_t (*clock)(void); /* milliseconds; NULL = np_net_now_ms */
+	/* Called on every socket the link creates, before bind: lets the platform pin it to one network (the default one
+	 * can be mobile data, which would carry replies away from the LAN). NULL = nothing. */
+	void (*bind_socket)(int fd, void* ctx);
+	void* bind_ctx;
 } ndl_config;
 
 typedef struct ndl_link ndl_link;

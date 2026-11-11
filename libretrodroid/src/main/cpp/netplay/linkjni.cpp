@@ -148,6 +148,14 @@ JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsIn
     return dslink::inRoom() ? JNI_TRUE : JNI_FALSE;   // takes two short locks; never throws
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsSetNetwork(
+    JNIEnv* env,
+    jclass obj,
+    jlong handle
+) {
+    dslink::setNetwork((int64_t) handle);
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsLeaveNow(
     JNIEnv* env,
     jclass obj

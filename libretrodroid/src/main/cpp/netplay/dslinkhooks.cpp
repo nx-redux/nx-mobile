@@ -18,10 +18,13 @@
 #include "dslinkhooks.h"
 
 #include <algorithm>
+#include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <android/multinetwork.h>
 #include <mutex>
 #include <string>
 
@@ -35,6 +38,17 @@ extern "C" {
 namespace libretrodroid::dslink {
 
 namespace {
+
+// The Wi-Fi network's handle (0 = none). The default network can be mobile data, which would send the room's
+// replies out over the carrier instead of the LAN.
+std::atomic<int64_t> wifiNetwork { 0 };
+
+void bindToWifi(int fd, void*) {
+    int64_t handle = wifiNetwork.load();
+    if (handle == 0) return;
+    int rc = android_setsocknetwork((net_handle_t) handle, fd);
+    if (rc != 0) LOGW("DS link: cannot bind a socket to the Wi-Fi network (errno %d)", errno);
+}
 
 constexpr uint16_t ROOM_PORT = 24874;
 constexpr uint16_t SEARCH_PORT = 24875;
@@ -209,6 +223,8 @@ void configure(const std::vector<Variable>& vars) {
     copyField(cfg.host_ip, wanted.ip);
     cfg.max_members = NDL_MAX_MEMBERS;
     cfg.clock = nullptr;
+    cfg.bind_socket = bindToWifi;
+    cfg.bind_ctx = nullptr;
 
     ndl_link* created = ndl_create(&cfg);
     if (created == nullptr) {
@@ -221,6 +237,10 @@ void configure(const std::vector<Variable>& vars) {
         theLink = created;
     }
     LOGI("DS link: %s on port %u", modeName(wanted.mode), (unsigned) wanted.port);
+}
+
+void setNetwork(int64_t handle) {
+    wifiNetwork.store(handle);
 }
 
 void radio(unsigned state) {

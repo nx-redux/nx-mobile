@@ -173,10 +173,12 @@ static void close_socket(ndl_link* l) {
 
 /* UDP, non-blocking, bound to port on every address (0: any free port). No SO_REUSEADDR: on Linux it would let a
  * second socket share the room port and take half its datagrams. */
-static int open_socket(uint16_t port) {
+static int open_socket(const ndl_config* cfg, uint16_t port) {
 	int fd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (fd < 0)
 		return -1;
+	if (cfg->bind_socket)
+		cfg->bind_socket(fd, cfg->bind_ctx);
 	int buf = 256 * 1024;
 	setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &buf, sizeof(buf));
 	setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &buf, sizeof(buf));
@@ -271,7 +273,7 @@ static void apply_mode(ndl_link* l, ndl_mode m) {
 	close_socket(l);
 	l->mode = m;
 	if (m == NDL_HOST) {
-		l->fd = open_socket(l->cfg.room_port);
+		l->fd = open_socket(&l->cfg, l->cfg.room_port);
 		if (l->fd < 0) {
 			NP_LOG("DS link: cannot open the room on port %u (errno %d)", l->cfg.room_port, errno);
 			return;
@@ -287,7 +289,7 @@ static void apply_mode(ndl_link* l, ndl_mode m) {
 			NP_LOG("DS link: bad room address '%s'", l->cfg.host_ip);
 			return;
 		}
-		l->fd = open_socket(0);
+		l->fd = open_socket(&l->cfg, 0);
 		if (l->fd < 0) {
 			NP_LOG("DS link: cannot open a socket (errno %d)", errno);
 			return;
