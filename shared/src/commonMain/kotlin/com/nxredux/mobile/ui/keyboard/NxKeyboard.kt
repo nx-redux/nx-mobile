@@ -18,6 +18,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import com.nxredux.mobile.ui.nx.nxKeyboardTop
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -113,5 +117,10 @@ fun NxKeyboard(entry: TextEntry, onKey: (KeyPos) -> Unit, onHint: (NxButton) -> 
 fun NxKeyboardBar(state: AppState) {
     val entry by state.textEntry.collectAsState()
     val e = entry ?: return
-    NxKeyboard(e, onKey = state::keyboardTapKey, onHint = state::onButton, confirmLabel = state.textEntryConfirmLabel)
+    // Where the keys start, for a prompt's box to stay above them ([nxKeyboardTop]).
+    DisposableEffect(Unit) { onDispose { nxKeyboardTop.value = null } }
+    NxKeyboard(
+        e, onKey = state::keyboardTapKey, onHint = state::onButton, confirmLabel = state.textEntryConfirmLabel,
+        modifier = Modifier.onGloballyPositioned { nxKeyboardTop.value = it.positionInRoot().y },
+    )
 }

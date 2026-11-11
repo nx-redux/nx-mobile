@@ -49,8 +49,9 @@ import kotlinx.coroutines.flow.Flow
  * the key hints also lead with a d-pad Scroll hint while it overflows, whose tap steps down (back to the top at the end).
  */
 /**
- * The top of the NX keyboard drawn over a pad ([com.nxredux.mobile.ui.keyboard.NxKeyboardBar]), in the window; null while
- * none is. It can reach above the pad into the screen, so a modal there lifts clear of it.
+ * The top of the NX keyboard ([com.nxredux.mobile.ui.keyboard.NxKeyboardBar]), in the window; null while none is up. A page
+ * can be laid out taller than the space the keyboard leaves (Settings keeps the window's height; over a pad the keys
+ * reach into the screen), so a modal lifts clear of it wherever its page put it.
  */
 internal val nxKeyboardTop = mutableStateOf<Float?>(null)
 
@@ -79,14 +80,14 @@ fun NxModal(
     // Landscape (no pad): the screen slot is the whole window, so imePadding lifts the panel exactly above the keyboard.
     // Portrait: the keyboard lands mostly on the pad band, so no IME padding (the card scrolls if it is ever covered).
     // A tap gesture, not clickable: no full-screen ripple, and the scrim is not focusable or clicked by a hardware Enter.
-    // Over a pad the keyboard (Android's, or NX's over the pad) can still reach into the screen: the panel centres in what
-    // is left above it.
+    // The keyboard can cover part of this box (NX's anywhere; Android's over a pad, where there is no IME padding): the
+    // panel centres in what is left above it.
     val density = LocalDensity.current
     val imeBottom = WindowInsets.ime.getBottom(density)
     var bottom by remember { mutableFloatStateOf(0f) }
     var rootHeight by remember { mutableFloatStateOf(0f) }
-    val keyboardTop = listOfNotNull(nxKeyboardTop.value, if (imeBottom > 0 && rootHeight > 0f) rootHeight - imeBottom else null).minOrNull()
-    val covered = if (padVisible && keyboardTop != null) with(density) { (bottom - keyboardTop).coerceAtLeast(0f).toDp() } else 0.dp
+    val keyboardTop = listOfNotNull(nxKeyboardTop.value, if (padVisible && imeBottom > 0 && rootHeight > 0f) rootHeight - imeBottom else null).minOrNull()
+    val covered = if (keyboardTop != null) with(density) { (bottom - keyboardTop).coerceAtLeast(0f).toDp() } else 0.dp
     Box(
         Modifier.fillMaxSize().then(if (!padVisible) Modifier.imePadding() else Modifier).background(LocalNxColors.current.scrimModal)
             .onGloballyPositioned { c -> bottom = c.positionInRoot().y + c.size.height; rootHeight = c.findRootCoordinates().size.height.toFloat() }
@@ -96,7 +97,8 @@ fun NxModal(
     ) {
         Column(
             // 24dp from every screen edge: a tall card (long notes in landscape) stops short of the top and bottom too.
-            Modifier.padding(24.dp).widthIn(max = maxWidth).fillMaxWidth().background(LocalNxColors.current.modalPanel, RoundedCornerShape(24.dp))
+            // Above a keyboard the space is short: 8dp there, so a prompt's field and buttons fit without scrolling.
+            Modifier.padding(horizontal = 24.dp, vertical = if (covered > 0.dp) 8.dp else 24.dp).widthIn(max = maxWidth).fillMaxWidth().background(LocalNxColors.current.modalPanel, RoundedCornerShape(24.dp))
                 .pointerInput(Unit) { detectTapGestures { } }   // taps inside stay inside
                 .padding(8.dp),
         ) {
