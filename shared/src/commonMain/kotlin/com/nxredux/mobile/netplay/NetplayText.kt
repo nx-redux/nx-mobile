@@ -97,6 +97,8 @@ object NetplayText {
     const val LEAVE_LINK_TEXT = "Leaving ends the link. You keep playing on your own save."
     const val CONTINUE = "Continue"
     const val LEAVE = "Leave"
+    const val DS_DISCONNECT = "Disconnect"
+    const val DS_WIRELESS_TEXT = "Disconnect leaves local multiplayer. The game plays on."
     const val ENDED = "Netplay ended"
     const val ENDED_DETAIL = "The other player left or the connection was lost."
     const val ENDED_COPY = "Netplay ended - progress here won't be saved."

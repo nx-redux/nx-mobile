@@ -38,7 +38,7 @@ import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.ui.SHORTCUTS_NO_CONTROLLER
 import com.nxredux.mobile.ui.SHORTCUT_PROMPT
 
-enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET, ASK_RESET, CANCEL, ADJUST_BUTTONS, USE_TOP_SCREEN }
+enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, DISCONNECT_DS, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET, ASK_RESET, CANCEL, ADJUST_BUTTONS, USE_TOP_SCREEN }
 enum class SlotAction { SAVE, LOAD }
 
 sealed interface PageKind {
@@ -203,6 +203,8 @@ sealed interface MenuEffect {
      * normal root once the host calls [InGameMenuModel.endNetplay].
      */
     data object LeaveNetplay : MenuEffect
+    /** Disconnect on the root shown while a DS game's local wireless is on ([InGameMenuModel.dsWireless]): the wireless ends, the game plays on. */
+    data object DisconnectDs : MenuEffect
     data class SaveSlot(val slot: Int) : MenuEffect
     data class LoadSlot(val slot: Int) : MenuEffect
     /** Load the core's options, then call [InGameMenuModel.showCoreOptions]. */
@@ -426,6 +428,27 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /** Rebuilds the root page after a host-side flag ([netplay]) changed. */
     fun refresh() = refreshRoot()
+
+    /**
+     * A DS game's local wireless is on: the root is Continue / Disconnect / Quit, and what would break the link (speed,
+     * reset, options, cheats, players) is hidden as in [netplay]. Set through [setDsWireless].
+     */
+    var dsWireless: Boolean = false
+        private set
+
+    /** Netplay's session-breaking things are hidden for a live session and for DS wireless alike. */
+    private val sessionLocked: Boolean get() = netplay || dsWireless
+
+    /**
+     * The DS wireless went on or off. A sheet session ([netplay]) keeps its own root. Going on returns an open page to the
+     * root, whose Options and Reset are gone; going off brings the full root back.
+     */
+    fun setDsWireless(on: Boolean) {
+        if (on == dsWireless || netplay) return
+        dsWireless = on
+        if (on) state = state.copy(stack = state.stack.take(1), editing = false, popup = null)
+        refreshRoot()
+    }
 
     /**
      * netplay: the session ended. [local] (a link session, [com.nxredux.mobile.netplay.NetplaySession.endsAsLocalGame]):
@@ -927,7 +950,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /** The second-screen panel's All options: the menu on its Options page. Nothing in netplay (its root has no Options). */
     fun openOptions() {
-        if (netplay) return
+        if (sessionLocked) return
         popTo(PageKind.Root)
         push(optionsPage())
     }
@@ -939,7 +962,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * players) or while the dialog is already up.
      */
     fun openResetDialog(closesOnCancel: Boolean = false) {
-        if (netplay || state.page.kind == PageKind.ResetGame) return
+        if (sessionLocked || state.page.kind == PageKind.ResetGame) return
         popTo(PageKind.Root)
         push(resetPage())
         resetClosesOnCancel = closesOnCancel
@@ -1028,7 +1051,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         // Asked on every recomposition of the menu: rebuilt (the achievements sorted again) only when an input changed.
         val key = listOf(
             state.panelTab, state.panelFocus, panelHeader, achievements, achievementsAvailable, achievementSummary, achievementOrder,
-            badges, playerSlots, playerPads, netplay, frontendTag, cheats, cheatsAvailable, cheatsFolder, cheatsExpected,
+            badges, playerSlots, playerPads, sessionLocked, frontendTag, cheats, cheatsAvailable, cheatsFolder, cheatsExpected,
         )
         panelCache?.takeIf { it.first == key }?.let { return it.second }
         return buildPanelState().also { panelCache = key to it }
@@ -1078,17 +1101,17 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         is GamePanelEvent.SetCheat -> setCheat(event.index, event.on)
         GamePanelEvent.ShowGame -> null
         // The tiles are hidden in netplay; a stale tap there does nothing.
-        is GamePanelEvent.SetFastForward -> if (netplay) null else GamePanelModel.speedEffect(event)
-        is GamePanelEvent.SetRewind -> if (netplay || speedRewind == null) null else GamePanelModel.speedEffect(event)
+        is GamePanelEvent.SetFastForward -> if (sessionLocked) null else GamePanelModel.speedEffect(event)
+        is GamePanelEvent.SetRewind -> if (sessionLocked || speedRewind == null) null else GamePanelModel.speedEffect(event)
         is GamePanelEvent.SetMic -> if (netplay || micTile == null) null else MenuEffect.SetMic(event.on)
-        GamePanelEvent.Reset -> { if (!netplay) { push(resetPage()); resetClosesOnCancel = false }; null }
+        GamePanelEvent.Reset -> { if (!sessionLocked) { push(resetPage()); resetClosesOnCancel = false }; null }
     }
 
     /**
      * Whether the root draws the game panel beside its list: not in netplay ([netplay], also once it ended), where the
      * menu is the game header over Continue / Leave (or Quit) and an empty right side.
      */
-    val panelBeside: Boolean get() = !netplay && !inPanel
+    val panelBeside: Boolean get() = !sessionLocked && !inPanel
 
     /** Hosted in the dual-screen panel ([setInPanel]): under the panel's header, no tabs, and visual rows change in place. */
     var inPanel: Boolean = false
@@ -1119,8 +1142,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * with more than one slot. Never Cheats or Players in netplay (the root had no Options or Players row there).
      */
     private fun panelTabs(): List<GamePanelTab> = GamePanelModel.tabs(
-        raAvailable = achievementsAvailable && !achievements.isNullOrEmpty(), playerSlots = if (netplay) 0 else playerSlots.size,
-        cheats = cheatsAvailable && !netplay,
+        raAvailable = achievementsAvailable && !achievements.isNullOrEmpty(), playerSlots = if (sessionLocked) 0 else playerSlots.size,
+        cheats = cheatsAvailable && !sessionLocked,
     )
 
     private fun panelAchievements(): List<RaAchievement> = achievements.orEmpty().sortedBy(achievementOrder)
@@ -1267,6 +1290,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         MenuAction.ADJUST_BUTTONS -> MenuEffect.AdjustButtons
         MenuAction.USE_TOP_SCREEN -> MenuEffect.UseTopScreen
         MenuAction.LEAVE_NETPLAY -> MenuEffect.LeaveNetplay
+        MenuAction.DISCONNECT_DS -> MenuEffect.DisconnectDs
         MenuAction.SAVE_FOR_CONSOLE -> { popTo(PageKind.Options); MenuEffect.SaveForConsole }
         MenuAction.SAVE_FOR_GAME -> { popTo(PageKind.Options); MenuEffect.SaveForGame }
         // The overrides go with the file (spec: Restore defaults drops them); the host sets the restored layer's after.
@@ -1531,6 +1555,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         PageKind.Root, NetplayText.LEAVE_TITLE,
         listOf(MenuRow.Action(NetplayText.CONTINUE, MenuAction.CONTINUE), MenuRow.Action(NetplayText.LEAVE, MenuAction.LEAVE_NETPLAY)),
         footer = if (netplayLink) NetplayText.LEAVE_LINK_TEXT else NetplayText.LEAVE_TEXT,
+    ) else if (dsWireless) MenuPage(
+        PageKind.Root, gameTitle,
+        listOf(
+            MenuRow.Action(NetplayText.CONTINUE, MenuAction.CONTINUE),
+            MenuRow.Action(NetplayText.DS_DISCONNECT, MenuAction.DISCONNECT_DS),
+            MenuRow.Action("Quit", MenuAction.QUIT),
+        ),
+        footer = NetplayText.DS_WIRELESS_TEXT,
     ) else MenuPage(
         PageKind.Root, gameTitle,
         buildList {
