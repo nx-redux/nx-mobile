@@ -62,11 +62,13 @@ object SystemButtons {
     /**
      * The role a pad's key stands in for while nothing is bound: many pads send SELECT as Back and have no SELECT key,
      * a few send START as the Menu key; on a pad with its own START the Menu key is MENU. A pad with its own SELECT
-     * keeps its Back as Back (a handheld's separate Back button).
+     * keeps its Back as Back (a handheld's separate Back button). An AYANEO handheld's logo button is MENU: its pad
+     * has no mode button.
      */
     fun standIn(keyCode: Int, keys: PadKeys): SystemRole? = when (keyCode) {
         KeyCodes.BACK -> SystemRole.SELECT.takeIf { !keys.hasSelect }
         KeyCodes.MENU -> if (keys.hasStart) SystemRole.MENU else SystemRole.START
+        KeyCodes.AYANEO_AYA -> SystemRole.MENU
         else -> null
     }
 

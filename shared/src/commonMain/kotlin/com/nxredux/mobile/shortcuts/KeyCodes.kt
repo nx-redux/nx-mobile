@@ -9,6 +9,11 @@ object KeyCodes {
     const val BACK = 4
     /** A controller's Menu key (not its mode / guide button, [BUTTON_MODE]). */
     const val MENU = 82
+    /**
+     * AYANEO's own key code for the logo button on its handhelds (their key layouts name it AYA): no Android key, so
+     * nothing pins it; no standard key code is this high.
+     */
+    const val AYANEO_AYA = 754
     const val DPAD_UP = 19
     const val DPAD_DOWN = 20
     const val DPAD_LEFT = 21
