@@ -10,7 +10,11 @@ import com.nxredux.mobile.options.CoreOption
 import com.nxredux.mobile.options.CoreOptionFilter
 import com.nxredux.mobile.options.CoreOptionSource
 import com.nxredux.mobile.options.EmulatorPage
+import com.nxredux.mobile.gpudriver.GpuDriver
+import com.nxredux.mobile.gpudriver.GpuDriverChoice
+import com.nxredux.mobile.library.path
 import com.nxredux.mobile.options.EmulatorSettings
+import com.nxredux.mobile.options.GpuDriverOptions
 import com.nxredux.mobile.options.OptionGroup
 import com.nxredux.mobile.options.Ps2Options
 import com.nxredux.mobile.runner.CoreDescriptor
@@ -148,6 +152,14 @@ internal class EmulatorSettingsController(
     private val windowPx: () -> Pair<Int, Int>? = { null },
     /** The ".bin" names in the PS2 BIOS folder (Bios/PS2/), read off the main thread: the PS2 BIOS row's choices. */
     private val ps2BiosFiles: () -> List<String> = { emptyList() },
+    /** The installed custom GPU drivers (null: the feature is unavailable, so no GPU driver row). */
+    private val gpuDrivers: () -> List<GpuDriver>? = { null },
+    /** The app-wide driver id (Settings -> System -> GPU driver), null for the system driver. */
+    private val gpuDriverAppWide: () -> String? = { null },
+    /** The driver ids that crashed in the game at this library path ([com.nxredux.mobile.library.path]). */
+    private val gpuDriverCrashed: (gamePath: String) -> Set<String> = { emptySet() },
+    /** Forgets the driver crashes recorded for the game at this library path. */
+    private val clearGpuDriverCrash: (gamePath: String) -> Unit = {},
 ) {
     private val lock = Mutex()
     private var listRows: List<EmulatorListRow> = emptyList()
@@ -270,11 +282,23 @@ internal class EmulatorSettingsController(
 
     private fun build(tag: String, d: CoreDescriptor, game: Listed?, files: Pair<ConfigFile?, ConfigFile?>): EmulatorPage {
         val screen = screenClass()
-        return EmulatorSettings.page(
+        val drivers = gpuDrivers()
+        fun page(resolved: Boolean = false, crashNote: String? = null) = EmulatorSettings.page(
             tag, d, coreOptions.table(d.id), defaults(d), files.first, files.second, forGame = game != null, vulkanFailed = vulkanFailed(d.id),
             secondScreen = secondScreen(), screen = screen, displayMax = Res3dConsole.forTag(tag)?.displayMaxOf(windowPx(), screen),
             biosFiles = if (Ps2Options.appliesTo(tag)) ps2BiosFiles() else emptyList(),
+            gpuDrivers = drivers, gpuDriverResolved = resolved, gpuDriverCrashNote = crashNote,
         )
+        val first = page()
+        // The GPU driver row shows only on Vulkan, so its presence says the page's Graphics API is Vulkan and what it shows is what the launch reads.
+        val shown = first.console.firstOrNull { it.option.key == GpuDriverOptions.KEY }
+        if (drivers == null || shown == null) return first
+        val installed = drivers.map { it.id }.toSet()
+        val crashed = game?.let { gpuDriverCrashed(it.game.path) }.orEmpty()
+        val wanted = GpuDriverChoice.resolve(shown.value, gpuDriverAppWide(), installed, emptySet())
+        val note = wanted?.takeIf { it in crashed }?.let { id -> GpuDriverOptions.CRASH_NOTE.replace("%s", drivers.first { it.id == id }.name) }
+        val resolved = GpuDriverChoice.resolve(shown.value, gpuDriverAppWide(), installed, crashed) != null
+        return if (resolved || note != null) page(resolved, note) else first
     }
 
     private suspend fun readPage(tag: String, d: CoreDescriptor, game: Listed?): EmulatorPage =
@@ -384,6 +408,7 @@ internal class EmulatorSettingsController(
                         } else {
                             val text = EmulatorSettings.gameWrite(page, files.first, files.second, key, value)
                             configs.writeGame(tag, d.id, rom, text)
+                            if (key == GpuDriverOptions.KEY) game?.let { clearGpuDriverCrash(it.game.path) }
                             build(tag, d, game, files.first to CoreConfig.parse(text))
                         }
                     } catch (e: CancellationException) {
