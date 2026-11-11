@@ -23,6 +23,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include <android/multinetwork.h>
 #include <mutex>
@@ -99,6 +100,86 @@ struct Stats {
     }
 } stats;
 
+// Stall trace, emulation thread only: the last core packets in either direction, dumped when one frame runs long, to
+// show which packet a waiting core never got.
+struct TraceEntry {
+    int64_t us;          // steady clock
+    bool out;            // sent by the core (peer = destination) or delivered to it (peer = sender)
+    uint16_t peer;
+    int type;            // melonDS packet type, -1 when too short to carry one
+    int aid;
+    uint32_t stamp;      // low 32 bits of the melonDS timestamp
+    uint32_t len;
+};
+
+constexpr size_t TRACE_SIZE = 64;
+constexpr uint64_t TRACE_FRAME_US = 100000;
+constexpr int TRACE_DUMPS = 3;
+constexpr int64_t TRACE_WINDOW_US = 10000000;
+
+struct Trace {
+    TraceEntry ring[TRACE_SIZE];
+    size_t head = 0, count = 0;
+    int64_t dumps[TRACE_DUMPS] = {};
+    int dumpsMade = 0;
+
+    void clear() { head = 0; count = 0; }
+
+    void add(bool out, uint16_t peer, const uint8_t* buf, size_t len) {
+        TraceEntry& e = ring[(head + count) % TRACE_SIZE];
+        if (count == TRACE_SIZE) head = (head + 1) % TRACE_SIZE; else count++;
+        e.us = nowUs();
+        e.out = out;
+        e.peer = peer;
+        e.len = (uint32_t) len;
+        // [timestamp u64 BE][aid u8][type u8]: the low half of the timestamp is enough to tell packets apart.
+        if (buf != nullptr && len >= 10) {
+            e.stamp = ((uint32_t) buf[4] << 24) | ((uint32_t) buf[5] << 16) | ((uint32_t) buf[6] << 8) | buf[7];
+            e.aid = buf[8];
+            e.type = buf[9];
+        } else {
+            e.stamp = 0;
+            e.aid = -1;
+            e.type = -1;
+        }
+    }
+
+    static int64_t nowUs() {
+        return std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count();
+    }
+
+    // At most TRACE_DUMPS dumps per TRACE_WINDOW_US; the ring is cleared either way.
+    bool allowDump(int64_t now) {
+        int recent = 0;
+        for (int i = 0; i < dumpsMade && i < TRACE_DUMPS; i++) {
+            if (now - dumps[i] < TRACE_WINDOW_US) recent++;
+        }
+        if (recent >= TRACE_DUMPS) return false;
+        dumps[dumpsMade % TRACE_DUMPS] = now;
+        dumpsMade++;
+        return true;
+    }
+} trace;
+
+void dumpTrace(uint64_t frameUs, unsigned polls) {
+    int64_t now = Trace::nowUs();
+    if (trace.count > 0 && trace.allowDump(now)) {
+        unsigned sent = 0, received = 0;
+        int64_t lastIn = 0, lastOut = 0;
+        for (size_t i = 0; i < trace.count; i++) {
+            const TraceEntry& e = trace.ring[(trace.head + i) % TRACE_SIZE];
+            if (e.out) { sent++; lastOut = e.us; } else { received++; lastIn = e.us; }
+            LOGI("DS link: trace t=%lld %s peer=%u type=%d aid=%d ts=%u len=%u", (long long) (e.us - now),
+                 e.out ? "out" : "in", (unsigned) e.peer, e.type, e.aid, (unsigned) e.stamp, (unsigned) e.len);
+        }
+        LOGI("DS link: trace summary frameMs=%.1f polls=%u entries=%zu sent=%u received=%u lastInAgoMs=%.1f "
+             "lastOutAgoMs=%.1f (t in us before this line)",
+             frameUs / 1000.0, polls, trace.count, sent, received, received ? (now - lastIn) / 1000.0 : -1.0,
+             sent ? (now - lastOut) / 1000.0 : -1.0);
+    }
+    trace.clear();
+}
+
 void destroyLink() {
     ndl_link* old;
     {
@@ -118,11 +199,13 @@ void endCoreSession() {
     coreStarted = false;   // first: nothing reaches the core from here on
     stats.active = false;
     stats.windowOpen = false;
+    trace.clear();
     if (callbacks.stop != nullptr) callbacks.stop();
 }
 
 void deliver(const uint8_t* buf, size_t len, uint16_t sender, void*) {
     if (stats.active) { stats.pktsIn++; stats.bytesIn += len; }
+    if (coreStarted) trace.add(false, sender, buf, len);
     if (coreStarted && callbacks.receive != nullptr) callbacks.receive(buf, len, sender);
 }
 
@@ -130,7 +213,9 @@ void deliver(const uint8_t* buf, size_t len, uint16_t sender, void*) {
 void coreSend(int flags, const void* buf, size_t len, uint16_t clientId) {
     (void) flags;
     if (!coreStarted) return;
+    if (buf == nullptr || len == 0) return;   // the core's flush hint, not a packet
     if (stats.active) { stats.pktsOut++; stats.bytesOut += len; }
+    trace.add(true, clientId, (const uint8_t*) buf, len);
     ndl_send(theLink, buf, len, clientId);
 }
 
@@ -293,18 +378,35 @@ void frameEnd() {
     stats.sumPolls += stats.polls;
     stats.maxPolls = std::max<uint64_t>(stats.maxPolls, stats.polls);
     stats.maxSpanUs = std::max(stats.maxSpanUs, spanUs);
+    if (frameUs > TRACE_FRAME_US) dumpTrace(frameUs, stats.polls);
 
     uint64_t windowUs = us(now - stats.windowStart);
     if (windowUs < 1000000 || stats.frames == 0) return;
     int rttMin, rttAvg, rttMax;
     ndl_stats_rtt(theLink, &rttMin, &rttAvg, &rttMax);
+    ndl_drop_counts drops {};
+    ndl_stats_drops(theLink, &drops);
+    char dropText[160] = "";
+    {
+        const struct { const char* name; uint32_t n; } kinds[] = {
+            { "queue", drops.queue }, { "src", drops.unknown }, { "wrongsrc", drops.wrong_src },
+            { "bad", drops.bad }, { "echo", drops.echo }, { "dest", drops.dest },
+        };
+        size_t at = 0;
+        for (const auto& k : kinds) {
+            if (k.n == 0 || at >= sizeof(dropText)) continue;
+            int w = std::snprintf(dropText + at, sizeof(dropText) - at, "%s%s:%u", at ? "," : " drops=", k.name,
+                                  (unsigned) k.n);
+            if (w > 0) at += (size_t) w;
+        }
+    }
     double sec = (double) windowUs / 1e6;
     LOGI("DS link: stats frames=%llu over17=%llu over33=%llu maxFrameMs=%.1f avgFrameMs=%.2f avgPolls=%.1f maxPolls=%llu "
-         "maxWaitMs=%.1f pktsIn/s=%.0f pktsOut/s=%.0f bytesIn/s=%.0f bytesOut/s=%.0f members=%d rttMs=%d/%d/%d",
+         "maxWaitMs=%.1f pktsIn/s=%.0f pktsOut/s=%.0f bytesIn/s=%.0f bytesOut/s=%.0f members=%d rttMs=%d/%d/%d qHigh=%u%s",
          (unsigned long long) stats.frames, (unsigned long long) stats.over17, (unsigned long long) stats.over33,
          stats.maxUs / 1000.0, stats.sumUs / 1000.0 / stats.frames, (double) stats.sumPolls / stats.frames,
          (unsigned long long) stats.maxPolls, stats.maxSpanUs / 1000.0, stats.pktsIn / sec, stats.pktsOut / sec,
-         stats.bytesIn / sec, stats.bytesOut / sec, ndl_member_count(theLink), rttMin, rttAvg, rttMax);
+         stats.bytesIn / sec, stats.bytesOut / sec, ndl_member_count(theLink), rttMin, rttAvg, rttMax, (unsigned) drops.queue_hwm, dropText);
     stats.windowOpen = false;
 }
 

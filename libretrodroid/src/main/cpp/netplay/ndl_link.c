@@ -124,6 +124,7 @@ struct ndl_link {
 	int q_head;
 	int q_len;
 	bool q_full_logged;
+	ndl_drop_counts drops;
 };
 
 static uint64_t now_ms(ndl_link* l) {
@@ -209,6 +210,7 @@ static void queue_push(ndl_link* l, uint16_t sender, const uint8_t* buf, size_t 
 			NP_LOG("DS link: inbound queue full, dropping packets");
 			l->q_full_logged = true;
 		}
+		l->drops.queue++;
 		return;
 	}
 	ndl_slot* s = &l->q[(l->q_head + l->q_len) % NDL_QUEUE];
@@ -216,6 +218,8 @@ static void queue_push(ndl_link* l, uint16_t sender, const uint8_t* buf, size_t 
 	s->len = (uint16_t)n;
 	memcpy(s->buf, buf, n);
 	l->q_len++;
+	if ((uint32_t)l->q_len > l->drops.queue_hwm)
+		l->drops.queue_hwm = (uint32_t)l->q_len;
 }
 
 /* ---- Room state ---- */
@@ -321,6 +325,8 @@ static void holder_relay(ndl_link* l, int from, uint16_t dest, const uint8_t* pa
 		queue_push(l, (uint16_t)from, payload, n);
 	} else if (dest <= l->max_members && dest != from && l->members[dest].used) {
 		send_to(l, &l->members[dest].addr, T_DATA, (uint16_t)from, dest, payload, n);
+	} else {
+		l->drops.dest++;
 	}
 }
 
@@ -357,8 +363,10 @@ static void holder_handle(ndl_link* l, const struct sockaddr_in* from, uint8_t t
 		holder_tell_count(l);
 		return;
 	}
-	if (!id)
+	if (!id) {
+		l->drops.unknown++;
 		return;
+	}
 	l->members[id].heard_ms = now;
 	if (type == T_DATA) {
 		holder_relay(l, id, dest, payload, n);
@@ -378,8 +386,10 @@ static void holder_handle(ndl_link* l, const struct sockaddr_in* from, uint8_t t
 
 static void member_handle(ndl_link* l, const struct sockaddr_in* from, uint8_t type, uint16_t sender, uint16_t dest,
 						  const uint8_t* payload, size_t n) {
-	if (!same_addr(from, &l->holder))
+	if (!same_addr(from, &l->holder)) {
+		l->drops.wrong_src++;
 		return;
+	}
 	uint64_t now = now_ms(l);
 	if (l->role == R_JOINING) {
 		if (type == T_ACCEPT && dest >= 2 && dest <= NDL_MAX_MEMBERS) {
@@ -398,8 +408,12 @@ static void member_handle(ndl_link* l, const struct sockaddr_in* from, uint8_t t
 	l->heard_ms = now;
 	switch (type) {
 	case T_DATA:
-		if ((dest == NDL_BROADCAST || dest == l->my_id) && sender != l->my_id)
+		if (sender == l->my_id)
+			l->drops.echo++;
+		else if (dest == NDL_BROADCAST || dest == l->my_id)
 			queue_push(l, sender, payload, n);
+		else
+			l->drops.dest++;
 		break;
 	case T_KEEPALIVE:
 		if (n >= 1)
@@ -433,15 +447,19 @@ static void member_handle(ndl_link* l, const struct sockaddr_in* from, uint8_t t
 }
 
 static void handle_datagram(ndl_link* l, const struct sockaddr_in* from, const uint8_t* buf, size_t n) {
-	if (n < NDL_HDR_SIZE || n > NDL_DGRAM_MAX || buf[0] != 'N' || buf[1] != 'D' || buf[2] != NDL_VERSION)
+	if (n < NDL_HDR_SIZE || n > NDL_DGRAM_MAX || buf[0] != 'N' || buf[1] != 'D' || buf[2] != NDL_VERSION) {
+		l->drops.bad++;
 		return;
+	}
 	uint8_t type = buf[3];
 	uint16_t sender = (uint16_t)((buf[4] << 8) | buf[5]);
 	uint16_t dest = (uint16_t)((buf[6] << 8) | buf[7]);
 	const uint8_t* payload = buf + NDL_HDR_SIZE;
 	size_t pn = n - NDL_HDR_SIZE;
-	if (type == T_DATA && pn == 0)
+	if (type == T_DATA && pn == 0) {
+		l->drops.bad++;
 		return;
+	}
 	if (l->role == R_HOLDER)
 		holder_handle(l, from, type, dest, payload, pn);
 	else if (l->role == R_JOINING || l->role == R_MEMBER)
@@ -693,6 +711,20 @@ void ndl_stats_rtt(ndl_link* l, int* min_ms, int* avg_ms, int* max_ms) {
 		*avg_ms = av;
 	if (max_ms)
 		*max_ms = mx;
+}
+
+void ndl_stats_drops(ndl_link* l, ndl_drop_counts* out) {
+	ndl_drop_counts d;
+	memset(&d, 0, sizeof(d));
+	if (l) {
+		pthread_mutex_lock(&l->mu);
+		d = l->drops;
+		memset(&l->drops, 0, sizeof(l->drops));
+		l->drops.queue_hwm = (uint32_t)l->q_len;
+		pthread_mutex_unlock(&l->mu);
+	}
+	if (out)
+		*out = d;
 }
 
 int ndl_send(ndl_link* l, const void* buf, size_t len, uint16_t dest) {

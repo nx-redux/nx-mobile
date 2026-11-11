@@ -99,6 +99,20 @@ int ndl_member_count(ndl_link* l);
  * (the holder, or nothing came back). Resets what it reports. */
 void ndl_stats_rtt(ndl_link* l, int* min_ms, int* avg_ms, int* max_ms);
 
+/* Datagrams the link dropped or did not deliver since the last ndl_stats_drops, by reason. */
+typedef struct {
+	uint32_t queue;		/* inbound queue full */
+	uint32_t unknown;	/* holder: from an address that is no member (and not a JOIN) */
+	uint32_t wrong_src; /* member: from an address that is not the holder */
+	uint32_t bad;		/* bad magic, version or length, or an empty DATA */
+	uint32_t echo;		/* a member's own packet relayed back */
+	uint32_t dest;		/* addressed to another member, or to one that is gone */
+	uint32_t queue_hwm; /* most packets waiting in the inbound queue at once (not a drop) */
+} ndl_drop_counts;
+
+/* Fills out with the counts since the last call and resets them. */
+void ndl_stats_drops(ndl_link* l, ndl_drop_counts* out);
+
 /* One core packet to dest (a member id, or NDL_BROADCAST for everyone else), sent from the calling thread.
  * 0 sent; -1 when not in a room, len is 0 or above NDL_MAX_PAYLOAD, or dest is this phone or 0. */
 int ndl_send(ndl_link* l, const void* buf, size_t len, uint16_t dest);

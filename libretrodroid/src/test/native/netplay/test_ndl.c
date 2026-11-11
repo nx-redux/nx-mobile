@@ -425,6 +425,34 @@ static int case_keepalive_rtt_reported(uint16_t port) {
 	return 0;
 }
 
+static int case_drops_are_counted(uint16_t port) {
+	CHECK(room_open(port, 1) == 0);
+	ndl_drop_counts d;
+	ndl_stats_drops(room[1], &d);   /* clear what the join left */
+	/* DATA from an address that is no member, and a datagram with bad magic. */
+	uint8_t data[NDL_HDR_SIZE + 3] = {'N', 'D', 1, 6, 0, 2, 0xFF, 0xFF, 'x', 'y', 'z'};
+	raw_send(port, data, sizeof(data));
+	uint8_t bad[NDL_HDR_SIZE + 3];
+	memcpy(bad, data, sizeof(bad));
+	bad[0] = 'X';
+	raw_send(port, bad, sizeof(bad));
+	nap_ms(150);
+	ndl_stats_drops(room[1], &d);
+	CHECK(d.unknown == 1);
+	CHECK(d.bad == 1);
+	CHECK(d.queue == 0 && d.wrong_src == 0 && d.echo == 0 && d.dest == 0);
+	ndl_stats_drops(room[1], &d);   /* read resets */
+	CHECK(d.unknown == 0 && d.bad == 0);
+	/* A delivered packet shows in the queue's high-water mark. */
+	ndl_stats_drops(room[2], &d);
+	const char msg[] = "hi";
+	CHECK(ndl_send(room[1], msg, sizeof(msg), 2) == 0);
+	nap_ms(100);
+	ndl_stats_drops(room[2], &d);
+	CHECK(d.queue_hwm == 1);
+	return 0;
+}
+
 static void run(const char* name, int (*fn)(uint16_t)) {
 	uint16_t port = free_udp_port();
 	int ok = fn(port) == 0;
@@ -448,6 +476,7 @@ int main(void) {
 	run("bad_datagrams_are_ignored", case_bad_datagrams_are_ignored);
 	run("oversize_send_rejected", case_oversize_send_rejected);
 	run("keepalive_rtt_reported", case_keepalive_rtt_reported);
+	run("drops_are_counted", case_drops_are_counted);
 	if (fails) {
 		printf("%d test(s) failed\n", fails);
 		return 1;
