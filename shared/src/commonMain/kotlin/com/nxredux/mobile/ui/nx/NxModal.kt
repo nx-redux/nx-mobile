@@ -62,6 +62,8 @@ fun NxModal(
     maxWidth: Dp = 420.dp,
     scrollSteps: Flow<Int>? = null,
     buttonFocus: Int = -1,
+    confirmKey: NxButton? = null,
+    cancelKey: NxButton? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = LocalNxColors.current
@@ -112,7 +114,7 @@ fun NxModal(
                     }
                     content()
                 }
-                NxModalFooter(footer, onFooter, buttonFocus)
+                NxModalFooter(footer, onFooter, buttonFocus, confirmKey, cancelKey)
             }
         }
     }
@@ -125,16 +127,21 @@ private val SCROLL_STEP = 72.dp
  * The card's buttons under its text, as the in-game Quit dialog's ([NxChoiceDialog]): its words side by side as setup's
  * buttons ([footerWords], [SetupButtons]), in the list text; only the one the host's pad focus is on ([focus], its
  * place among them) on the accent pill, none while the focus is the card's content (a prompt's field, the text). A tap
- * sends its key. Nothing for [ModalFooter.None].
+ * sends its key. Nothing for [ModalFooter.None]. [confirmKey], [cancelKey]: the pad buttons that answer the box from
+ * anywhere (a typed prompt's START and B), drawn on their words.
  */
 @Composable
-private fun NxModalFooter(footer: ModalFooter, onButton: (NxButton) -> Unit, focus: Int) {
+private fun NxModalFooter(footer: ModalFooter, onButton: (NxButton) -> Unit, focus: Int, confirmKey: NxButton?, cancelKey: NxButton?) {
     val words = footerWords(footer)
     if (words.isEmpty()) return
+    // A word with a button of its own shows it, where there is a pad to press it on.
+    val keys = if (LocalFooterMode.current != FooterMode.HINTS) emptyList() else words.map {
+        when (it.button) { NxButton.A -> confirmKey; NxButton.B -> cancelKey; else -> null }
+    }
     Spacer(Modifier.height(16.dp))
     SetupButtons(
         words.map { it.label }, 0, focus, NxTextSizes.listLabel(NxListPitch) * nxTextScale(),
-        onSelect = {}, onOpen = { onButton(words[it].button) }, rest = LocalNxColors.current.listText,
+        onSelect = {}, onOpen = { onButton(words[it].button) }, rest = LocalNxColors.current.listText, outlined = 0, keys = keys,
     )
 }
 
