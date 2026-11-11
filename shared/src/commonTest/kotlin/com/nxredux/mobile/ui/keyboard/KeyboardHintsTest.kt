@@ -10,8 +10,9 @@ class KeyboardHintsTest {
 
     @Test fun keysHints() {
         val hints = keyboardHints(entry, "Sign in")
-        assertEquals(listOf(NxButton.A, NxButton.B, NxButton.Y, NxButton.START, NxButton.MENU), hints.map { it.button })
-        assertEquals(listOf("Type", "Delete", "Space", "Done", "Cancel"), hints.map { it.label })
+        // START and B are on the prompt's own words, not in the row.
+        assertEquals(listOf(NxButton.A, NxButton.X, NxButton.Y), hints.map { it.button })
+        assertEquals(listOf("Type", "Delete", "Space"), hints.map { it.label })
     }
 
     @Test fun fieldHints() {

@@ -67,7 +67,6 @@ private fun TextEntry.insert(s: String): EntryStep {
 }
 
 private fun TextEntry.backspace(): EntryStep = when {
-    text.isEmpty() -> EntryStep(this, EntryOutcome.Cancel)
     cursor == 0 -> none()
     else -> edited(text.removeRange(cursor - 1, cursor), cursor - 1)
 }
@@ -91,10 +90,10 @@ private fun TextEntry.cursorBy(d: Int) = copy(cursor = (cursor + d).coerceIn(0, 
  */
 fun TextEntry.press(button: NxButton, repeat: Boolean = false): EntryStep {
     when (button) {
-        NxButton.MENU -> return EntryStep(this, EntryOutcome.Cancel)
-        NxButton.B -> return if (repeat && text.isEmpty()) none() else backspace()   // a held delete clears, never cancels
+        // B cancels, as it goes back everywhere else; a held B does not, so letting go late never drops the text.
+        NxButton.B, NxButton.MENU -> return if (repeat) none() else EntryStep(this, EntryOutcome.Cancel)
+        NxButton.X -> return backspace()
         NxButton.Y -> return insert(" ")
-        NxButton.X -> return EntryStep(copy(shift = !shift), EntryOutcome.None)
         NxButton.L1 -> return EntryStep(cursorBy(-1), EntryOutcome.None)
         NxButton.R1 -> return EntryStep(cursorBy(1), EntryOutcome.None)
         NxButton.SELECT -> return next()

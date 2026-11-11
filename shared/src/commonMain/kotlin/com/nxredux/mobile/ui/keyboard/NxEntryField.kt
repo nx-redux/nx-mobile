@@ -42,12 +42,15 @@ import com.nxredux.mobile.ui.nx.nxModalText
 /**
  * What the prompts need of the NX keyboard: the open prompt's [entry] (null: the platform's keyboard types, the prompts
  * keep their text fields), a tap on a field ([tapField]), the box's own buttons answering past the keyboard ([answer])
- * and a password's Show / Hide ([toggleReveal]).
+ * and a password's Show / Hide ([toggleReveal]). [nx]: the NX keyboard is the one that types here. Its entry reaches a
+ * prompt a moment apart from the prompt itself (opening, and again closing), and a prompt that fell back to its own
+ * text field for that moment would bring the platform's keyboard up: it draws nothing instead.
  */
 class PromptKeyboard(
     val entry: TextEntry?, val tapField: (Int) -> Unit, val answer: (NxButton) -> Unit, val toggleReveal: () -> Unit = {},
     /** The box's confirm word, as the keyboard's hints say it ("Search", "Sign in", "OK"). */
     val confirmLabel: String = "OK",
+    val nx: Boolean = false,
 )
 
 /** The app's [PromptKeyboard]; none outside the menu. */
