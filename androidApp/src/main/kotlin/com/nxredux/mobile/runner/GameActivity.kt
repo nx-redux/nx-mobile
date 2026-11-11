@@ -343,6 +343,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val saves = SaveSession(this, renderer, menu, dual)
     private val wii = WiiDolphinController(this, input, saves)
     private val launchPipeline = LaunchPipeline(LaunchState())
+    private val dsRoom = DsRoomWatcher(lifecycleScope, LibretroNetplay::dsInRoom, ::onDsRoomChanged)
     override val slotsUi: androidx.compose.runtime.State<List<SlotUi>> get() = saves.slotsUi
     override var lastSlotCache: Int?
         get() = saves.lastSlotCache
@@ -594,7 +595,23 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 NxLog.i(TAG_LOG, "the previous game screen is torn down: starting")
             }
             launchPipeline.start()
+            if (launchPipeline.dsLinked && !isDestroyed) dsRoom.start()
         }
+    }
+
+    /**
+     * DS local wireless: this phone went into a room or out of one. The automatic route plays a room as a session (no
+     * save, load, speed or reset shortcuts: they would break it for every member) and holds the low-latency Wi-Fi lock
+     * only while in one; a sheet session has both from its launch. A menu open meanwhile holds the core the way the room
+     * now asks: running for the members, or paused once alone.
+     */
+    private fun onDsRoomChanged(inRoom: Boolean) {
+        launchPipeline.dsRoomChanged(inRoom)
+        if (launchPipeline.dsAutoRoute) {
+            speed.setSession(netplay = inRoom)
+            shortcuts.refreshTouchShortcuts()
+        }
+        if (menuOpen && !quitting) holdCore()
     }
 
     /**
@@ -689,6 +706,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun focusPause() {
         if (focusPaused || quitting) return
         LibretroNetplay.dsLeaveNow()   // a DS room cannot wait out a pause: its members would time out
+        dsRoom.check()   // an open menu pauses the core now that the room is gone
         focusPaused = true
         syncKeepScreenOn()
         if (menuOpen) return
@@ -700,6 +718,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun focusResume() {
         if (!focusPaused) return
         focusPaused = false
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) LibretroNetplay.dsRejoin()   // a sheet session's room again
         syncKeepScreenOn()
         if (menuOpen || quitting || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
         releaseCore()
@@ -814,12 +833,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         careTicker = lifecycleScope.launch {
             while (true) { delay(CARE_TICK_MS); care.tick(running = !corePaused() && !quitting) }
         }
+        // onStop left the DS room; still focus paused, focusResume goes back instead.
+        if (!focusPaused) LibretroNetplay.dsRejoin()
         // onStop closed the session: back in the foreground, a new one on the same game (background time is not play)
         gameTime?.let { if (!isFinishing && !quitting) { it.resume(); startGameTimeTicker(it) } }
     }
 
     override fun onStop() {
         LibretroNetplay.dsLeaveNow()
+        dsRoom.check()   // an open menu pauses the core now that the room is gone
         careTicker?.cancel(); careTicker = null
         gameTime?.pause()   // the session ends here: a kill in the background loses nothing, a return opens a new one
         gameTimeTicker?.cancel()
@@ -897,6 +919,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(kidsWarn) }   // not registered when onCreate stopped early
+        dsRoom.stop()   // launchPipeline.onDestroy lets the Wi-Fi lock go
         renderer.cancelGeometryWatch()
         res3d.cancelTick()
         rumbles.forEach { it.release() }
