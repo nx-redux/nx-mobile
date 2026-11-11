@@ -35,6 +35,19 @@ object NetplayLinkOptions {
     /** Azahar's default room port. */
     const val N3DS_PORT = 24872
 
+    /** melonDS DS's room link: the same variables as [N3DS_MODE]'s, on its own port; the core reads them at load, and the mode again on a variable update. */
+    const val NDS_MODE = "nx_nds_link"
+    const val NDS_IP = "nx_nds_link_ip"
+    const val NDS_PORT_KEY = "nx_nds_link_port"
+    const val NDS_NAME = "nx_nds_link_name"
+    const val NDS_BROADCAST = "nx_nds_link_broadcast"
+    const val NDS_PORT = 24874
+    /** The core option for the console's MAC; unset, the firmware's own MAC is kept. */
+    const val NDS_MAC_MODE = "melonds_mac_address_mode"
+
+    /** This install's DS MAC from [seed]: Nintendo's prefix and the seed's low three bytes, so two phones never share one. */
+    fun ndsMac(seed: Int): String = "00:08:BF:%02X:%02X:%02X".format((seed shr 16) and 0xFF, (seed shr 8) and 0xFF, seed and 0xFF)
+
     /**
      * This player's name in Azahar's room: the [player] name in the characters a room takes (ASCII letters, digits,
      * space, dot, underscore, hyphen), then [number] as four digits. The room turns away a second member with the same
@@ -73,10 +86,11 @@ object NetplayLinkOptions {
 
     /**
      * gbalink_serial_option outside a session: mGBA's mode matters only in one, and `cable` keeps the core from scanning
-     * the ROM for it on every load. Azahar gets its automatic local wireless under [roomName] (null: none), searching
-     * for rooms on [broadcast] too. Never saved, like [forSession]'s.
+     * the ROM for it on every load. Azahar and melonDS DS get their automatic local wireless under [roomName] (null:
+     * none), searching for rooms on [broadcast] too; melonDS DS also runs under [ndsMac] when given. Never saved, like
+     * [forSession]'s.
      */
-    fun forSolo(coreId: String, roomName: String? = null, broadcast: String? = null): Map<String, String> = when (coreId) {
+    fun forSolo(coreId: String, roomName: String? = null, broadcast: String? = null, ndsMac: String? = null): Map<String, String> = when (coreId) {
         "mgba" -> mapOf(MGBA_LINK to MGBA_DEFAULT)
         // 3DS local wireless with no session: Azahar finds or opens a room itself once the game turns its wireless on.
         "azahar" -> if (roomName == null) emptyMap() else buildMap {
@@ -84,6 +98,13 @@ object NetplayLinkOptions {
             put(N3DS_NAME, roomName)
             put(N3DS_PORT_KEY, N3DS_PORT.toString())
             broadcast?.let { put(N3DS_BROADCAST, it) }
+        }
+        "melondsds" -> if (roomName == null) emptyMap() else buildMap {
+            put(NDS_MODE, N3DS_AUTO)
+            put(NDS_NAME, roomName)
+            put(NDS_PORT_KEY, NDS_PORT.toString())
+            broadcast?.let { put(NDS_BROADCAST, it) }
+            ndsMac?.let { put(NDS_MAC_MODE, it) }
         }
         else -> emptyMap()
     }
@@ -142,9 +163,10 @@ object NetplayLinkOptions {
 
     /**
      * The options [session]'s core is launched with; [linkMode]: the agreed raw mode for gpSP or mGBA (null: the default);
-     * [roomName]: this player's name in a 3DS link's room ([n3dsRoomName]; null: the role's).
+     * [roomName]: this player's name in a 3DS or DS link's room ([n3dsRoomName]; null: the role's); [ndsMac]: a DS link's MAC
+     * ([ndsMac]; null: the firmware's).
      */
-    fun forSession(session: NetplaySession, linkMode: String?, roomName: String? = null): Map<String, String> = when (session.linkKind) {
+    fun forSession(session: NetplaySession, linkMode: String?, roomName: String? = null, ndsMac: String? = null): Map<String, String> = when (session.linkKind) {
         NetplayLinkKind.GBLINK -> buildMap {
             put(GB_PORT_KEY, GB_PORT.toString())
             if (session.role == NetplayRole.HOST) {
@@ -172,6 +194,18 @@ object NetplayLinkOptions {
                 put(N3DS_NAME, roomName ?: "Player 2")
                 put(N3DS_IP, session.peerIp)
             }
+        }
+        NetplayLinkKind.NDSLINK -> buildMap {
+            put(NDS_PORT_KEY, NDS_PORT.toString())
+            if (session.role == NetplayRole.HOST) {
+                put(NDS_MODE, N3DS_HOST)
+                put(NDS_NAME, roomName ?: "Player 1")
+            } else {
+                put(NDS_MODE, N3DS_JOIN)
+                put(NDS_NAME, roomName ?: "Player 2")
+                put(NDS_IP, session.peerIp)
+            }
+            ndsMac?.let { put(NDS_MAC_MODE, it) }
         }
         null -> emptyMap()
     }

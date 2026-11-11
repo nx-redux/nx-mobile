@@ -100,6 +100,7 @@ class ContextMenusTest {
         val gba = entry("GBA")
         val gg = entry("GG", file = "Sonic.gg")
         val nds = entry("NDS", file = "Mario Kart DS.nds")
+        val psp = entry("PSP", file = "Daxter.iso")
         fun netplay(e: Listed, source: ListSource = ListSource.Console(e.system), on: Boolean = true) =
             ContextMenus.itemsFor(source, e, false, netplay = on).filter { it.kind == ContextKind.NETPLAY }
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(sfc))
@@ -108,7 +109,8 @@ class ContextMenusTest {
             .map { it.kind }.let { it[it.indexOf(ContextKind.GAME_SETTINGS) + 1] })   // right after Game Settings
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(gba))   // GBA link
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(gg))   // GG lockstep, as the handheld's GG.pak
-        assertTrue(netplay(nds).isEmpty())
+        assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(nds))   // DS local wireless
+        assertTrue(netplay(psp).isEmpty())
         assertTrue(netplay(sfc, on = false).isEmpty())   // a platform without netplay
         assertTrue(netplay(sfc, ListSource.Recent).isEmpty())
         val u = entry("SFC", unassigned = true, file = "thing.sfc")
@@ -211,8 +213,8 @@ class ContextMenusTest {
         assertEquals(listOf(ContextKind.PLAY_FROM_START, ContextKind.NETPLAY, ContextKind.PIN), lead(src, e).map { it.kind }.take(3))
         assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), lead(src, e, canResume = false).map { it.kind }.take(2))
         assertEquals(listOf(ContextKind.PLAY_FROM_START, ContextKind.PIN), lead(src, e, netplay = false).map { it.kind }.take(2))
-        val nds = entry("NDS", file = "Mario.nds")   // a tag without netplay: never Netplay
-        assertTrue(ContextKind.NETPLAY !in lead(ListSource.Console(nds.system), nds).map { it.kind })
+        val psp = entry("PSP", file = "Daxter.iso")   // a tag without netplay: never Netplay
+        assertTrue(ContextKind.NETPLAY !in lead(ListSource.Console(psp.system), psp).map { it.kind })
     }
 
     @Test fun collection_and_search_menus_list_netplay_once() {

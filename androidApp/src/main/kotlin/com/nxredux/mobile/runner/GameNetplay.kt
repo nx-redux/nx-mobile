@@ -248,7 +248,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
                 ).also { run = it }.start()
             }
             NetplayLinkKind.NETPACKET -> (run as? NetplayLinkGame)?.let { it.begin(); it.live } ?: false
-            NetplayLinkKind.GBLINK, NetplayLinkKind.N3DSLINK -> true
+            NetplayLinkKind.GBLINK, NetplayLinkKind.N3DSLINK, NetplayLinkKind.NDSLINK -> true
         }
     }
 
@@ -330,6 +330,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
         val off = when (session?.linkKind) {
             NetplayLinkKind.GBLINK -> Variable(NetplayLinkOptions.GB_MODE, NetplayLinkOptions.GB_OFF)
             NetplayLinkKind.N3DSLINK -> Variable(NetplayLinkOptions.N3DS_MODE, NetplayLinkOptions.N3DS_OFF)
+            NetplayLinkKind.NDSLINK -> null
             else -> null
         }
         if (off != null) host.retroView?.let { view ->

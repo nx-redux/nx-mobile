@@ -471,6 +471,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 null -> NetplayLinkOptions.forPair(np)
                 NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)
                 NetplayLinkKind.N3DSLINK -> NetplayLinkOptions.forSession(np, null, n3dsRoomName)
+                NetplayLinkKind.NDSLINK -> NetplayLinkOptions.forSession(np, null)
                 NetplayLinkKind.NETPACKET -> {
                     val own = NetplayLinkOptions.modeKey(np.coreId)?.let { key -> options.firstOrNull { it.key == key }?.value }
                     val mode = gameNetplay.connectLink(np, own) ?: return refuse(NetplayText.FAILED_CONNECT, NetplayText.FAILED)

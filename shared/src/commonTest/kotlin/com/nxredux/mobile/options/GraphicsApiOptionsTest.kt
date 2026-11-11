@@ -27,7 +27,7 @@ class GraphicsApiOptionsTest {
     @Test fun exactly_the_rows_read_at_launch_are_marked() {
         val all = listOf("WII", "GC", "N64", "PSP", "PSX", "DC", "3DS", "NDS", "MD", "GBA").flatMap(ConsoleSettings::tableFor).distinct()
         assertEquals(
-            setOf(GraphicsApiOptions.KEY, WiiOptions.SCREEN, WiiOptions.POINTER_WIDTH, WiiOptions.POINTER_HEIGHT, WiiOptions.POINTER_OFFSET, AudioOptions.BUFFER, N3dsOptions.LOCAL_WIRELESS),
+            setOf(GraphicsApiOptions.KEY, WiiOptions.SCREEN, WiiOptions.POINTER_WIDTH, WiiOptions.POINTER_HEIGHT, WiiOptions.POINTER_OFFSET, AudioOptions.BUFFER, N3dsOptions.LOCAL_WIRELESS, NdsOptions.LOCAL_WIRELESS),
             all.filter { it.atLaunch }.map { it.key }.toSet(),
         )
     }

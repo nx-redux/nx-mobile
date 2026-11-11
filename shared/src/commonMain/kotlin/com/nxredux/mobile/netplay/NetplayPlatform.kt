@@ -133,10 +133,10 @@ data class NetplaySession(
     val endsAsLocalGame: Boolean get() = linkKind != null
 
     /**
-     * No layout, swap or other core option changes once the session runs: the other device would not follow. A 3DS
+     * No layout, swap or other core option changes once the session runs: the other device would not follow. A 3DS or DS
      * link's game is each player's own, so its picture stays theirs to arrange, as in a normal launch.
      */
-    val locksOptions: Boolean get() = linkKind != NetplayLinkKind.N3DSLINK
+    val locksOptions: Boolean get() = linkKind != NetplayLinkKind.N3DSLINK && linkKind != NetplayLinkKind.NDSLINK
 
     /**
      * RetroAchievements run as in a normal launch: a link session's (each player's game is their own, on their own save,

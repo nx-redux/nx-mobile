@@ -1414,7 +1414,7 @@ class InGameMenuModelTest {
         val m = model().openConsoleSettings()
         assertEquals("Display", m.state.page.title)
         assertEquals(
-            ConsoleSettings.tableFor("NDS").filter { it != BottomScreenOptions.row && it.key != NdsOptions.SCALE_3D && OptionGroup.of(it.key) == OptionGroup.DISPLAY }.map { it.label },
+            ConsoleSettings.tableFor("NDS").filter { it != BottomScreenOptions.row && !it.atLaunch && it.key != NdsOptions.SCALE_3D && OptionGroup.of(it.key) == OptionGroup.DISPLAY }.map { it.label },
             m.state.page.rows.map { it.label }.dropLast(3),   // then the picture rows the DS screens take
         )
         assertEquals(
