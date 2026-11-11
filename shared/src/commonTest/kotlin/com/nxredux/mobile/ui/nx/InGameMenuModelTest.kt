@@ -1996,9 +1996,36 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.DisconnectDs, m.press(NxButton.A))
         assertEquals(MenuEffect.DisconnectDs, m.activate(1))
         m.press(NxButton.DOWN)
-        assertEquals(MenuEffect.Quit, m.press(NxButton.A))   // A on Quit saves and quits, as on the full root
-        assertNull(m.activate(2))                            // a tap opens the normal quit page
-        assertEquals(PageKind.QuitGame, m.state.page.kind)
+        assertEquals(MenuEffect.QuitWithoutResume, m.press(NxButton.A))   // no resume point from a wireless session
+        assertEquals(MenuEffect.QuitWithoutResume, m.activate(2))
+        assertEquals(PageKind.Root, m.state.page.kind)
+    }
+
+    @Test fun ds_wireless_root_counts_down_to_the_idle_leave() {
+        val m = model()
+        m.setDsWireless(true)
+        m.press(NxButton.DOWN)
+        m.setIdleSeconds(45)
+        assertEquals(listOf("Continue", "Disconnect (45s)", "Quit"), m.state.page.rows.map { it.label })
+        assertEquals("Disconnect leaves local multiplayer. The game plays on.", m.state.page.footer)
+        assertEquals(1, m.state.page.selected)   // the countdown never moves the selection
+        m.setIdleSeconds(44)
+        assertEquals("Disconnect (44s)", m.state.page.rows[1].label)
+        assertEquals(1, m.state.page.selected)
+        assertEquals(MenuEffect.DisconnectDs, m.press(NxButton.A))
+        m.setIdleSeconds(null)
+        assertEquals(listOf("Continue", "Disconnect", "Quit"), m.state.page.rows.map { it.label })
+        assertEquals(1, m.state.page.selected)
+    }
+
+    @Test fun sheet_session_root_counts_down_to_the_idle_leave() {
+        val m = model()
+        m.netplay = true
+        m.refresh()
+        m.setIdleSeconds(9)
+        assertEquals("Leaving ends the netplay session. Leaves the room in 9 s with the menu open. Continue rejoins.", m.state.page.footer)
+        m.setIdleSeconds(null)
+        assertEquals("Leaving ends the netplay session.", m.state.page.footer)
     }
 
     @Test fun ds_wireless_disconnect_row_takes_one_tap_and_hints_select() {

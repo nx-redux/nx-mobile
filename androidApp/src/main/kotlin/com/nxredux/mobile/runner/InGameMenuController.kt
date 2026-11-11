@@ -103,6 +103,8 @@ internal interface InGameMenuHost : GameScreenHost {
     val netplayQuitOnly: Boolean
     /** DS local wireless on the automatic route: the game's radio is up, so the root is Continue, Disconnect, Quit. */
     val dsWireless: Boolean
+    /** Seconds until a menu left open in a DS room leaves it by itself; null when nothing counts down. */
+    val dsIdleSeconds: Int?
     // The game's config: the store in use, which layer it is, what is locked, forced or hidden, and its resolved values.
     val configStore: CoreConfigStore?
     var configSource: ConfigSource
@@ -305,6 +307,7 @@ internal class InGameMenuController(
                 it.netplay = true; it.netplayLink = netplay?.endsAsLocalGame == true; it.netplayEnded = netplayEnded; it.netplayQuitOnly = netplayQuitOnly; it.refresh()
             }
             it.setDsWireless(host.dsWireless)   // a DS game's wireless on the automatic route: Continue, Disconnect, Quit
+            it.setIdleSeconds(host.dsIdleSeconds)
         }
         if (retroView != null) {
             // Re-listed on every open so a bundled tree swapped in since launch, or a shader added to the home, is

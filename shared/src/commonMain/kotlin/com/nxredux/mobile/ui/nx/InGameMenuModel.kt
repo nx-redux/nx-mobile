@@ -451,6 +451,22 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     /**
+     * Seconds until a menu left open in a DS room leaves it by itself, shown on the Disconnect row (a sheet session:
+     * in the root's note); null when nothing counts down.
+     */
+    var idleSeconds: Int? = null
+        private set
+
+    fun setIdleSeconds(seconds: Int?) {
+        if (seconds == idleSeconds) return
+        idleSeconds = seconds
+        // The Disconnect row's label carries the count, and a refreshed root finds its selected row by label.
+        val selected = state.stack.firstOrNull { it.kind == PageKind.Root }?.selected
+        refreshRoot()
+        if (selected != null) state = state.copy(stack = state.stack.map { if (it.kind == PageKind.Root) it.copy(selected = selected) else it })
+    }
+
+    /**
      * netplay: the session ended. [local] (a link session, [com.nxredux.mobile.netplay.NetplaySession.endsAsLocalGame]):
      * the game is a normal local one from now on, so the full root and the panel beside it; otherwise the plain
      * Continue / Quit ([netplayEnded]), or Quit alone with [quitOnly] ([netplayQuitOnly]). The host sets [cheatsAvailable] first.
@@ -1554,13 +1570,15 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     ) else if (netplay) MenuPage(
         PageKind.Root, NetplayText.LEAVE_TITLE,
         listOf(MenuRow.Action(NetplayText.CONTINUE, MenuAction.CONTINUE), MenuRow.Action(NetplayText.LEAVE, MenuAction.LEAVE_NETPLAY)),
-        footer = if (netplayLink) NetplayText.LEAVE_LINK_TEXT else NetplayText.LEAVE_TEXT,
+        footer = (if (netplayLink) NetplayText.LEAVE_LINK_TEXT else NetplayText.LEAVE_TEXT) +
+            (idleSeconds?.let { " " + NetplayText.dsSheetIdleText(it) } ?: ""),
     ) else if (dsWireless) MenuPage(
         PageKind.Root, gameTitle,
         listOf(
             MenuRow.Action(NetplayText.CONTINUE, MenuAction.CONTINUE),
-            MenuRow.Action(NetplayText.DS_DISCONNECT, MenuAction.DISCONNECT_DS),
-            MenuRow.Action("Quit", MenuAction.QUIT),
+            MenuRow.Action(idleSeconds?.let { NetplayText.dsDisconnectIn(it) } ?: NetplayText.DS_DISCONNECT, MenuAction.DISCONNECT_DS),
+            // No save states mid-session, so no resume point to choose about: Quit quits.
+            MenuRow.Action("Quit", MenuAction.QUIT_ONLY),
         ),
         footer = NetplayText.DS_WIRELESS_TEXT,
     ) else MenuPage(

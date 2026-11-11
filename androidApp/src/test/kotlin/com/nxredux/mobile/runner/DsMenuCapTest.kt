@@ -22,6 +22,33 @@ class DsMenuCapTest {
         assertEquals(1, calls)
     }
 
+    @Test fun ticksTheSecondsLeftAndClearsThem() = runTest {
+        val ticks = mutableListOf<Int?>()
+        val cap = DsMenuCap(backgroundScope, 2500, { ticks += it }) { calls++ }
+        cap.sync(true)
+        runCurrent()
+        assertEquals(listOf<Int?>(3), ticks)
+        assertEquals(3, cap.secondsLeft)
+        advanceTimeBy(1000); runCurrent()
+        advanceTimeBy(1000); runCurrent()
+        assertEquals(listOf<Int?>(3, 2, 1), ticks)
+        advanceTimeBy(500); runCurrent()
+        assertEquals(listOf<Int?>(3, 2, 1, null), ticks)
+        assertEquals(1, calls)
+        assertEquals(null, cap.secondsLeft)
+    }
+
+    @Test fun cancellingClearsTheSecondsLeft() = runTest {
+        val ticks = mutableListOf<Int?>()
+        val cap = DsMenuCap(backgroundScope, 5000, { ticks += it }) { calls++ }
+        cap.sync(true)
+        runCurrent()
+        cap.sync(false)
+        assertEquals(listOf<Int?>(5, null), ticks)
+        cap.sync(false)
+        assertEquals(listOf<Int?>(5, null), ticks)
+    }
+
     @Test fun repeatedSyncDoesNotRestart() = runTest {
         val cap = DsMenuCap(backgroundScope, 1000) { calls++ }
         cap.sync(true)

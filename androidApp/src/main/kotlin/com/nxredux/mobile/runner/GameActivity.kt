@@ -346,7 +346,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val dsRoom = DsRoomWatcher(lifecycleScope, { DsPresence.of(LibretroNetplay.dsPresence()) }, ::onDsPresenceChanged)
     // A sheet session's room has no Disconnect to come back from: the cap's leave is undone when the menu closes.
     private var dsRejoinAfterMenu = false
-    private val dsMenuCap = DsMenuCap(lifecycleScope) {
+    private val dsMenuCap = DsMenuCap(lifecycleScope, onTick = { seconds -> withMenu { it.setIdleSeconds(seconds) } }) {
         // Set before leaving: disconnectDs syncs the cap off, cancelling the countdown this runs in.
         if (!launchPipeline.dsAutoRoute) dsRejoinAfterMenu = true
         disconnectDs()
@@ -482,6 +482,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override val netplayEnded: Boolean get() = gameNetplay.ended
     override val netplayQuitOnly: Boolean get() = gameNetplay.quitOnly
     override val dsWireless: Boolean get() = launchPipeline.dsAutoRoute && dsRoom.current != DsPresence.OUT
+    override val dsIdleSeconds: Int? get() = dsMenuCap.secondsLeft
     override fun showMenu() { if (!menuOpen) menu.toggleMenu() }
     override val netplayNow: NetplaySession? get() = gameNetplay.now
     override val sessionLocked: Boolean get() = netplayNow != null || dsWireless
