@@ -251,7 +251,7 @@ internal class DualScreenController(
      */
     fun captureN3dsSwap() {
         val view = retroView ?: return
-        if (netplayNow != null) return   // no core option changes mid-session, so none to undo
+        if (netplayNow?.locksOptions == true) return   // no core option changes mid-session, so none to undo
         view.queueEvent {
             if (n3dsSwapBeforeSplit != null) return@queueEvent
             n3dsSwapBeforeSplit = runCatching {
@@ -267,7 +267,7 @@ internal class DualScreenController(
      */
     fun restoreN3dsScreen() {
         val view = retroView ?: return
-        if (netplayNow != null) return
+        if (netplayNow?.locksOptions == true) return
         val stored = storedValues
         val proportion = N3dsOptions.stackedSmallProportion(
             frontendValues, isLandscape(), renderer.ndsControllerMode(), activity.screenClass(), false, renderer.n3dsPictureSpace,

@@ -50,6 +50,7 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_changeDisk
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setRumbleEnabled(JNIEnv* env, jclass obj, jboolean enabled);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setGlDebugOutput(JNIEnv* env, jclass obj, jboolean enabled);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setKeepCoreLoaded(JNIEnv* env, jclass obj, jboolean keep);
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setUsername(JNIEnv* env, jclass obj, jstring name);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setFrameSpeed(JNIEnv* env, jclass obj, jint speed);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setFrameSkip(JNIEnv* env, jclass obj, jboolean skip);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_renderSecondaryInFrame(JNIEnv* env, jclass obj, jint width, jint height);

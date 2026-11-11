@@ -285,7 +285,7 @@ internal class SettingsController(
      */
     fun settingsCategoryTap(index: Int) {
         if (host.loaderActive()) return
-        if ((screen.value as? Screen.Settings)?.let { it.confirmRemove != null || it.confirmReset } == true) return   // a dialog answers first
+        if ((screen.value as? Screen.Settings)?.let { it.confirmRemove != null || it.confirmReset || it.nameDraft != null } == true) return   // a dialog answers first
         // One tap opens the section, from the root or from another section's page.
         if (screen.value is Screen.SettingsMenu) {
             host.select(index)

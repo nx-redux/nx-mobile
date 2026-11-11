@@ -8,6 +8,7 @@ import android.opengl.EGL14
 import android.opengl.EGLConfig
 import android.opengl.GLES20
 import android.os.Build
+import android.provider.Settings
 import android.system.Os
 import android.system.OsConstants
 import com.nxredux.mobile.BuildConfig
@@ -36,6 +37,11 @@ object AndroidDeviceInfo {
             pageSizeKb = runCatching { (Os.sysconf(OsConstants._SC_PAGESIZE) / 1024).toInt() }.getOrDefault(0),
         )
     }
+
+    /** The name the owner gave the device (About phone → Device name); the model when Android holds none. */
+    fun deviceName(context: Context): String? =
+        runCatching { Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME) }.getOrNull()?.takeIf { it.isNotBlank() }
+            ?: Build.MODEL?.takeIf { it.isNotBlank() }
 
     /** `Samsung SM-F956B`: the maker capitalised, left out when the model already starts with it. */
     private fun device(): String {

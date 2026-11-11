@@ -57,6 +57,8 @@ class GLRetroViewData(context: Context) {
      * same address. For a core that maps memory near its own code once (gpsp's recompiler cache).
      */
     var keepCoreLoaded: Boolean = false
+    /** The player's name for a core that asks the frontend for one (RETRO_ENVIRONMENT_GET_USERNAME); empty: none. */
+    var username: String = ""
     /**
      * libretro device type per port (e.g. 1 = RETRO_DEVICE_JOYPAD), applied with retro_set_controller_port_device
      * after the game loads and before the first retro_run, so a core that reads its pads at boot sees them.

@@ -269,6 +269,12 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "the app or a game starts, so you can attach it to a bug report. Off, only errors reach Android's system " +
             "log and no file is written. It takes effect at once.",
     )
+    SettingsKind.PLAYER_NAME -> quiet(
+        "Your name in games that show one, up to 10 characters",
+        "The name 3DS games show for you, in local multiplayer for one. Up to 10 characters; until you set one, your " +
+            "device's name is used. Clear it to go back to the device's name. It applies from the next game you start; " +
+            "a game that saved a name in its own save keeps that one.",
+    )
     SettingsKind.KEYBOARD -> quiet(
         "NX: type with the pad or touch. Android: your phone's keyboard",
         "NX: a keyboard you can use with the pad or touch. Android: your phone's keyboard (password managers, swipe " +

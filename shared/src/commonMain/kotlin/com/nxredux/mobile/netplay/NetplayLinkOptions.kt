@@ -20,6 +20,31 @@ object NetplayLinkOptions {
 
     fun gbIpKey(digit: Int) = "gambatte_gb_link_network_server_ip_$digit"
 
+    /** Azahar's room link: host, join or off; the core reads these at load, and the mode again on a variable update. */
+    const val N3DS_MODE = "nx_3ds_link"
+    const val N3DS_IP = "nx_3ds_link_ip"
+    const val N3DS_PORT_KEY = "nx_3ds_link_port"
+    const val N3DS_NAME = "nx_3ds_link_name"
+    /** The Wi-Fi network's broadcast address, for the room search; left out when it is unknown. */
+    const val N3DS_BROADCAST = "nx_3ds_link_broadcast"
+    const val N3DS_HOST = "host"
+    const val N3DS_JOIN = "join"
+    const val N3DS_AUTO = "auto"
+    /** Leave in a 3DS link session: the core leaves the room and the game plays on. */
+    const val N3DS_OFF = "off"
+    /** Azahar's default room port. */
+    const val N3DS_PORT = 24872
+
+    /**
+     * This player's name in Azahar's room: the [player] name in the characters a room takes (ASCII letters, digits,
+     * space, dot, underscore, hyphen), then [number] as four digits. The room turns away a second member with the same
+     * name, and two devices can carry the same one, hence the number (drawn per launch).
+     */
+    fun n3dsRoomName(player: String, number: Int): String {
+        val base = player.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it in " ._-" }.trim().ifEmpty { "Player" }
+        return "$base-${(number.mod(10000)).toString().padStart(4, '0')}"
+    }
+
     /**
      * gbalink_serial_option for gpSP: a [mixed] session (the other side runs mGBA) runs the game's own mode whatever is
      * pinned (`auto`, `auto_cable` over USB). Otherwise over USB `auto` is `auto_cable` (real cable unless the game has
@@ -48,9 +73,20 @@ object NetplayLinkOptions {
 
     /**
      * gbalink_serial_option outside a session: mGBA's mode matters only in one, and `cable` keeps the core from scanning
-     * the ROM for it on every load. Never saved, like [forSession]'s.
+     * the ROM for it on every load. Azahar gets its automatic local wireless under [roomName] (null: none), searching
+     * for rooms on [broadcast] too. Never saved, like [forSession]'s.
      */
-    fun forSolo(coreId: String): Map<String, String> = if (coreId == "mgba") mapOf(MGBA_LINK to MGBA_DEFAULT) else emptyMap()
+    fun forSolo(coreId: String, roomName: String? = null, broadcast: String? = null): Map<String, String> = when (coreId) {
+        "mgba" -> mapOf(MGBA_LINK to MGBA_DEFAULT)
+        // 3DS local wireless with no session: Azahar finds or opens a room itself once the game turns its wireless on.
+        "azahar" -> if (roomName == null) emptyMap() else buildMap {
+            put(N3DS_MODE, N3DS_AUTO)
+            put(N3DS_NAME, roomName)
+            put(N3DS_PORT_KEY, N3DS_PORT.toString())
+            broadcast?.let { put(N3DS_BROADCAST, it) }
+        }
+        else -> emptyMap()
+    }
 
     /** gbalink_link_mode_key: the core option that holds [coreId]'s link mode; null for a core without one. */
     fun modeKey(coreId: String): String? = when (coreId) {
@@ -104,8 +140,11 @@ object NetplayLinkOptions {
         else -> host
     }
 
-    /** The options [session]'s core is launched with; [linkMode]: the agreed raw mode for gpSP or mGBA (null: the default). */
-    fun forSession(session: NetplaySession, linkMode: String?): Map<String, String> = when (session.linkKind) {
+    /**
+     * The options [session]'s core is launched with; [linkMode]: the agreed raw mode for gpSP or mGBA (null: the default);
+     * [roomName]: this player's name in a 3DS link's room ([n3dsRoomName]; null: the role's).
+     */
+    fun forSession(session: NetplaySession, linkMode: String?, roomName: String? = null): Map<String, String> = when (session.linkKind) {
         NetplayLinkKind.GBLINK -> buildMap {
             put(GB_PORT_KEY, GB_PORT.toString())
             if (session.role == NetplayRole.HOST) {
@@ -121,6 +160,17 @@ object NetplayLinkOptions {
                 "gpsp" -> mapOf(GPSP_SERIAL to gpspSerial(mode, session.overUsb, session.mixed))
                 "mgba" -> mapOf(MGBA_LINK to mgbaMode(mode, session.overUsb, session.peerWl != null, session.mixed))
                 else -> emptyMap()
+            }
+        }
+        NetplayLinkKind.N3DSLINK -> buildMap {
+            put(N3DS_PORT_KEY, N3DS_PORT.toString())
+            if (session.role == NetplayRole.HOST) {
+                put(N3DS_MODE, N3DS_HOST)
+                put(N3DS_NAME, roomName ?: "Player 1")
+            } else {
+                put(N3DS_MODE, N3DS_JOIN)
+                put(N3DS_NAME, roomName ?: "Player 2")
+                put(N3DS_IP, session.peerIp)
             }
         }
         null -> emptyMap()

@@ -428,6 +428,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 sidecarStore = AndroidSidecarStore(this),
                 indexStore = indexStore,
                 appInfo = AndroidDeviceInfo.appInfo(this),
+                deviceName = { AndroidDeviceInfo.deviceName(applicationContext) },
                 deviceGpu = AndroidDeviceInfo::gpu,
                 copyText = { AndroidDeviceInfo.copyText(applicationContext, it) },
                 // A browser's page; none installed: nothing happens.

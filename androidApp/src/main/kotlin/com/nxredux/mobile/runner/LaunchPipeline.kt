@@ -56,6 +56,11 @@ import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_NETPLAY_ROLE
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_OPTIONS
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_SYSTEM_SETS
 import com.nxredux.mobile.settings.AndroidAppSettings
+import com.nxredux.mobile.settings.AndroidDeviceInfo
+import com.nxredux.mobile.netplay.WifiNetworks
+import android.net.ConnectivityManager
+import android.net.wifi.WifiManager
+import com.nxredux.mobile.settings.PlayerName
 import com.nxredux.mobile.settings.GameRumble
 import com.nxredux.mobile.settings.Prefs
 import com.nxredux.mobile.shortcuts.Shortcuts
@@ -204,6 +209,16 @@ internal interface LaunchHost : GameScreenHost {
  * entries the launch took until the screen is destroyed ([onDestroy]). The state it sets is [host]'s.
  */
 internal class LaunchPipeline(private val host: LaunchHost) {
+    /** A 3DS launch's player name (Settings → System → Player name, else the device's). */
+    private var playerName = ""
+    /** Held while a 3DS game may hold a local wireless room ([holdBroadcasts]). */
+    private var broadcasts: WifiManager.MulticastLock? = null
+
+    private fun holdBroadcasts() {
+        if (broadcasts != null) return
+        val wifi = host.activity.applicationContext.getSystemService(WifiManager::class.java)
+        broadcasts = runCatching { wifi?.createMulticastLock("nx-3ds-wireless")?.apply { setReferenceCounted(false); acquire() } }.getOrNull()
+    }
     companion object {
         /** Cores that send a video view map (melonds-ds#335, azahar#2718 in our patches). */
         private val VIDEO_VIEW_CORES = setOf("melondsds", "azahar")
@@ -406,9 +421,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // values then, so leaving split (or unfolding) puts back the stored ones. Not under netplay: a session changes no
             // core option once it runs, so an unfold could never put them back; it runs the user's swap, as it launched.
             val launchDual = dual.dualModeNow()
-            // 3DS under video views (no netplay): Azahar stays at its unswapped Default, which keeps its views on; the app
+            // 3DS under video views (not in a session that locks its options): Azahar stays at its unswapped Default, which keeps its views on; the app
             // draws the player's layout and does SWAP itself ([FrontendRenderer.n3dsComposition], [N3dsSwap]).
-            val n3dsViews = N3dsOptions.appliesTo(tag) && np == null && LibretroDroid.videoViewsOffered()
+            val npLocks = np?.locksOptions == true
+            val n3dsViews = N3dsOptions.appliesTo(tag) && !npLocks && LibretroDroid.videoViewsOffered()
             renderer.n3dsViews = n3dsViews
             if (n3dsViews) {
                 n3dsSwapMode = resolved.values[DualScreen.N3DS_SWAP_MODE_KEY] ?: "Toggle"
@@ -416,9 +432,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             val n3dsSplit = if (!N3dsOptions.appliesTo(tag)) null
                 else if (n3dsViews) DualScreen.N3DS_VIEWS_CORE
-                else DualScreen.n3dsForcedOptions(launchDual, n3dsSkinStack() && np == null)
+                else DualScreen.n3dsForcedOptions(launchDual, n3dsSkinStack() && !npLocks)
             if (n3dsSplit != null && !n3dsViews) dual.n3dsSwapBeforeSplit = DualScreen.n3dsSwapRestore(null, resolved.values)
-            n3dsSwapPinnedHalfFolded = N3dsOptions.appliesTo(tag) && np == null && n3dsHalfFoldedPin(launchDual)
+            n3dsSwapPinnedHalfFolded = N3dsOptions.appliesTo(tag) && !npLocks && n3dsHalfFoldedPin(launchDual)
             val options = FrontendOptions.coreValues(resolved.values)
                 .filterNot { (k, _) -> k == N3dsOptions.LAYOUT && N3dsOptions.appliesTo(tag) }   // set from the row below
                 .filterNot { (k, _) -> n3dsSplit?.containsKey(k) == true }
@@ -438,14 +454,23 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 renderer.n3dsProportion = n3dsProportion()
                 renderer.n3dsComposeLayout = N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsSkinStack())
             }
-            // netplay link: gambatte gets its link options; a GBA link engine starts now, before the core loads, so
+            // netplay link: gambatte and Azahar get their link options; a GBA link engine starts now, before the core loads, so
             // a joiner learns the host's gpsp_serial or mgba_link_mode from its READY and runs with it (the handheld reloads instead).
             // Outside a session mGBA gets the real cable (NetplayLinkOptions.forSolo). Cable Link: the pair core's variables
             // (both GBAs on this phone, NetplayLinkOptions.forPair), session-only like the others.
             val linkKind = np?.linkKind
-            val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId) else when (linkKind) {
+            // 3DS: the player's name in Azahar's room. Outside a session the game's local wireless finds other devices
+            // itself unless the console's Local Wireless option is off ([N3dsOptions.LOCAL_WIRELESS]).
+            if (coreId == "azahar") playerName = PlayerName.resolve(AndroidAppSettings(activity).playerName, AndroidDeviceInfo.deviceName(activity))
+            val n3dsRoomName = if (coreId != "azahar") null else NetplayLinkOptions.n3dsRoomName(playerName, kotlin.random.Random.nextInt(10000))
+            val n3dsAuto = n3dsRoomName?.takeIf { N3dsOptions.localWireless(frontendValues) }
+            // A room answers other devices' searches, which arrive as broadcasts: Android drops those without this lock.
+            if (n3dsAuto != null || linkKind == NetplayLinkKind.N3DSLINK) holdBroadcasts()
+            val n3dsBroadcast = n3dsAuto?.let { WifiNetworks.broadcast(WifiNetworks.address(activity.getSystemService(ConnectivityManager::class.java)))?.hostAddress }
+            val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsAuto, n3dsBroadcast) else when (linkKind) {
                 null -> NetplayLinkOptions.forPair(np)
                 NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)
+                NetplayLinkKind.N3DSLINK -> NetplayLinkOptions.forSession(np, null, n3dsRoomName)
                 NetplayLinkKind.NETPACKET -> {
                     val own = NetplayLinkOptions.modeKey(np.coreId)?.let { key -> options.firstOrNull { it.key == key }?.value }
                     val mode = gameNetplay.connectLink(np, own) ?: return refuse(NetplayText.FAILED_CONNECT, NetplayText.FAILED)
@@ -673,6 +698,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         videoViews = gameCoreId in VIDEO_VIEW_CORES
                         // gpsp: never unload the core between games, so its recompiler cache stays mapped near it.
                         keepCoreLoaded = cfg.descriptor?.keepLoaded == true
+                        // 3DS: the console's profile name is the player's (Settings → System → Player name).
+                        if (gameCoreId == "azahar") username = playerName
                         shader = renderer.shaderFor(cfg.frontend)
                         saveRAMState = prepared.sram
                         rtcState = prepared.rtc   // the clock file, applied after the battery save
@@ -997,6 +1024,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
 
     /** onDestroy: the RomCache holds this game took go, and one taken later (an unpack or copy that outlived the screen) at once. */
     fun onDestroy() {
+        broadcasts?.let { runCatching { if (it.isHeld) it.release() } }
+        broadcasts = null
         cacheHoldsDrained = true
         releaseCacheHolds()
     }

@@ -470,6 +470,8 @@ flycast_FLAGS = -DLIBRETRO=ON -DUSE_GLES=ON -DUSE_OPENMP=OFF -DCMAKE_OSX_ARCHITE
 # the GL path requests a GLES 3.2 context. Android builds define HAVE_LIBRETRO_VFS and USING_GLES. patches/azahar.patch:
 # RenderToWindow waits for the render worker to submit a frame before presenting it, so the frontend's Vulkan bridge
 # never copies an unfinished frame; the Large screen layout puts its small screen top-right (upstream: bottom-right).
+# It also starts Azahar's multiplayer room for local wireless between devices and names the console after the player
+# (README, Azahar).
 # The top-level CMakeLists needs CMake >= 3.25, above the SDK's 3.22.1 every other core uses: sdkmanager "cmake;3.30.3"
 # (upstream CI's version) and azahar_CMAKE / azahar_NINJA below. No FetchContent: ~35 git submodules, all initialised
 # recursively by the template's default. Built-in AES keyblob and open-source shared font: no BIOS. Decrypted games only.

@@ -375,6 +375,11 @@ interface AppSettings {
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
+    /** Settings → System → Player name ([PlayerName]); empty: the device's name is used. Defaulted, like [debugLog]. */
+    var playerName: String
+        get() = ""
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
     /** Settings → System → Keyboard: Android's keyboard instead of NX's (default off). Defaulted, like [debugLog]. */
     var androidKeyboard: Boolean
         get() = false

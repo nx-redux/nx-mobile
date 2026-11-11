@@ -808,6 +808,11 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             LOGD("Called RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE");
             return false;
 
+        case RETRO_ENVIRONMENT_GET_USERNAME:
+            if (username.empty()) return false;
+            *((const char**) data) = username.c_str();
+            return true;
+
         case RETRO_ENVIRONMENT_GET_LANGUAGE:
             LOGD("Called RETRO_ENVIRONMENT_GET_LANGUAGE");
             *((unsigned*) data) = language;

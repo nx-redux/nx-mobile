@@ -140,6 +140,8 @@ public class LibretroDroid {
     public static native void setLogEnabled(boolean enabled);
     /** Keep the next core's library loaded after its session (RTLD_NODELETE), so it is never reloaded elsewhere. Set before create(). */
     public static native void setKeepCoreLoaded(boolean keep);
+    /** The player's name a core gets from RETRO_ENVIRONMENT_GET_USERNAME; empty or null: none. Set before create(). */
+    public static native void setUsername(String name);
     public static native void setFrameSpeed(int speed);
     /** Frame Skip: true (Auto) skips frames to hold the game's speed, false shows every frame and lets it slow. Any thread. */
     public static native void setFrameSkip(boolean skip);

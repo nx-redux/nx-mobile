@@ -90,6 +90,10 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.runtime.DisposableEffect
+import com.nxredux.mobile.ui.nx.nxKeyboardTop
 import androidx.compose.ui.graphics.ColorMatrix
 import com.nxredux.mobile.ui.nx.padColorMatrix
 import com.nxredux.mobile.ui.nx.padPainter
@@ -273,7 +277,8 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}, keyboard: Boolean 
         )
         // A drawn pad: the keyboard covers it while it types (taps on the keys or a controller), leaving the screen its
         // full height for the prompt's box; a phone's screen above the pad is too short for both.
-        if (keyboard && menuPad) Box(Modifier.align(Alignment.BottomCenter)) {
+        if (keyboard && menuPad) Box(Modifier.align(Alignment.BottomCenter).onGloballyPositioned { nxKeyboardTop.value = it.positionInRoot().y }) {
+            DisposableEffect(Unit) { onDispose { nxKeyboardTop.value = null } }
             NxTheme(colors = look.colors) { MenuLocals(state, look, footerModeFor(controllerConnected, false), touchscreen) { NxKeyboardBar(state) } }
         }
     }
@@ -594,6 +599,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                 else CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart()) {
                     if (settingsSplitView(splitWindow(), s)) SettingsSplitScreen(state, s, selection) { SettingsPage(state, s, selection, titled = true) }
                     else NarrowSettingsPage(state, s, selection)
+                    (s as? Screen.Settings)?.nameDraft?.let { NxTextPrompt("Player name", it, state::playerNameDraft, onConfirm = { state.onButton(NxButton.A) }, onCancel = { state.onButton(NxButton.B) }) }
                 }
             // Cheats & Patches and RetroAchievements: the Settings root's look, so the Settings hint bar rules too.
             is Screen.CheatDb -> state.cheatDb?.let { c -> SettingsHintBar { WithIndex(selection) { CheatDbScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton) } } } ?: Box(Modifier.fillMaxSize())

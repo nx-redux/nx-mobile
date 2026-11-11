@@ -218,6 +218,16 @@ every pin bump, re-check it: the PR's commits re-apply, its Frontend Layout and 
 with `auto`, and a 3DS game sends a map (top and bottom views) in single display and Split. Drop the carried commits
 once the pin includes them.
 
+The patch also adds local wireless between devices (`src/citra_libretro/room_link.cpp`): Azahar's own multiplayer room
+carries the games' wireless frames, as in the standalone app, but the libretro core never started it. With the
+frontend's `nx_3ds_link` set to `auto`, the core makes the room ready at load without opening a socket; when the game
+turns its wireless on (`src/core/hle/service/nwm/uds_wireless_hook.h`), it asks the local network for a room on UDP
+24873 and joins it, or opens one on UDP 24872 for a game that hosts. `host` and `join` are the netplay sheet's session.
+The ROM runs as the inserted game card, which Download Play hosting (Mario Kart 7's local play) reads from. The player's
+name (`RETRO_ENVIRONMENT_GET_USERNAME`) becomes the console's profile name and its personal Mii
+(`src/citra_libretro/player_mii.cpp`), which games show in multiplayer. On every pin bump, check two devices still
+meet in a game's local play, and that the names show.
+
 ## Link cores (netplay stage 2c, 2026-10-10)
 
 GB/GBC and GBA link as on the NX Redux handheld (nx-redux main 2f25643b):

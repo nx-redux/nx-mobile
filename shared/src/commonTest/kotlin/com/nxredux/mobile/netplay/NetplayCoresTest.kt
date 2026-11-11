@@ -21,6 +21,7 @@ class NetplayCoresTest {
             "FBN" to listOf("fbneo"),
             "N64" to listOf("mupen64plus_next"),
             "GB" to listOf("gambatte"), "GBC" to listOf("gambatte"), "GBA" to listOf("gpsp", "mgba"), "MGBA" to listOf("mgba", "gpsp"),
+            "3DS" to listOf("azahar"),
         )
         want.forEach { (tag, cores) ->
             assertEquals(cores, NetplayCores.offered(tag), tag)
@@ -42,7 +43,7 @@ class NetplayCoresTest {
     }
 
     @Test fun every_offered_core_is_registered() {
-        listOf("FC", "SFC", "SUPA", "MD", "GG", "GPGX", "32X", "PS", "PSX", "FBN", "N64", "GB", "GBC", "GBA", "MGBA").flatMap(NetplayCores::offered).forEach {
+        listOf("FC", "SFC", "SUPA", "MD", "GG", "GPGX", "32X", "PS", "PSX", "FBN", "N64", "GB", "GBC", "GBA", "MGBA", "3DS").flatMap(NetplayCores::offered).forEach {
             assertTrue(CoreRegistry.forId(it) != null, it)
         }
     }
@@ -51,6 +52,7 @@ class NetplayCoresTest {
         assertEquals(NetplayLinkKind.GBLINK, NetplayCores.link("gambatte"))
         assertEquals(NetplayLinkKind.NETPACKET, NetplayCores.link("gpsp"))
         assertEquals(NetplayLinkKind.NETPACKET, NetplayCores.link("mgba"))
+        assertEquals(NetplayLinkKind.N3DSLINK, NetplayCores.link("azahar"))
         assertNull(NetplayCores.link("snes9x"))
         assertTrue(NetplayCores.isLink("gpsp"))
         assertFalse(NetplayCores.isLink("picodrive"))

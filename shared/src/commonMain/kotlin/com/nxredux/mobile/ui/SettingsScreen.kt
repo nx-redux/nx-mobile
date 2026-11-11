@@ -230,6 +230,7 @@ internal fun settingsTouchRow(row: SettingsRow, choices: SettingChoices?, sectio
  */
 internal fun settingsRowAction(row: SettingsRow, section: SettingsSection?): String? = when (row.kind) {
     SettingsKind.COPY_INFO -> "Copy"
+    SettingsKind.PLAYER_NAME -> "Edit"
     SettingsKind.CLEAR_LINK_ROMS -> "Clear"
     SettingsKind.APP_UPDATE -> appUpdateHint(row.label)
     SettingsKind.RESET_DEFAULTS -> if (section == SettingsSection.SHORTCUTS) "Clear all" else "Reset"

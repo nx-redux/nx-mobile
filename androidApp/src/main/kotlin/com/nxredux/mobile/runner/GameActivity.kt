@@ -1117,7 +1117,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * Half-folded with no second screen in use pins the core's swap ([DualScreen.n3dsForcedOptions]); never under netplay,
      * whose core options stay as the session launched them.
      */
-    private fun n3dsHalfFoldedPin(mode: DualMode): Boolean = n3dsSkinStack() && mode == DualMode.OFF && netplayNow == null
+    private fun n3dsHalfFoldedPin(mode: DualMode): Boolean = n3dsSkinStack() && mode == DualMode.OFF && !netplayLocks
 
     /** The core's swap was last pinned by half-folding ([syncN3dsCore]): flat again puts the user's values back. */
     private var n3dsSwapPinnedHalfFolded = false
@@ -1130,15 +1130,18 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * calls [syncN3dsCore]. A second screen's split still wins ([withN3dsSplit]). Not under netplay, which keeps the
      * player's layout (drawn whole in the skin).
      */
-    private fun n3dsSkinStack(): Boolean = isN3ds && padLayout.skinShown && netplayNow == null
+    private fun n3dsSkinStack(): Boolean = isN3ds && padLayout.skinShown && !netplayLocks
+
+    /** A running session that allows no option changes ([NetplaySession.locksOptions]); a 3DS link is not one. */
+    private val netplayLocks: Boolean get() = netplayNow?.locksOptions == true
 
     /** On a DS or 3DS game where SELECT + Left / Right changes the layout: the tip saying so, until hidden from its button ([LayoutTip]). */
     private fun offerLayoutTip() {
-        if (!LayoutTip.due((isN3ds || isNds) && netplayNow == null, padLayout.skinShown, input.skinLayouts, settings.layoutTipHidden)) return
+        if (!LayoutTip.due((isN3ds || isNds) && !netplayLocks, padLayout.skinShown, input.skinLayouts, settings.layoutTipHidden)) return
         // up until closed: Close, or its button to hide it for good
         input.showNotice(LayoutTip.text(ds = isNds), com.nxredux.mobile.ui.nx.NotificationQueue.UNTIL_CLOSED, LayoutTip.ACTION) { settings.layoutTipHidden = true }
     }
-    override val n3dsStackPinned: Boolean get() = netplayNow == null
+    override val n3dsStackPinned: Boolean get() = !netplayLocks
 
     /**
      * The 3DS touch screen's proportion for the row in use ([N3dsOptions.stackedSmallProportion]): Large screen in portrait
@@ -1154,7 +1157,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * nor under netplay (no option changes mid-session).
      */
     override fun onN3dsPictureSpace() {
-        if (!isN3ds || netplayNow != null || DualScreen.n3dsForcedOptions(dual.dualMode, n3dsSkinStack()) != null) return
+        if (!isN3ds || netplayLocks || DualScreen.n3dsForcedOptions(dual.dualMode, n3dsSkinStack()) != null) return
         val proportion = n3dsProportion()
         if (renderer.n3dsViews) {
             if (proportion != renderer.n3dsProportion) { renderer.n3dsProportion = proportion; renderer.relayoutFrontend() }
@@ -1321,7 +1324,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * [withCoreOptions] read sees them.
      */
     override fun applyOptions(vars: List<Variable>) {
-        if (netplayNow != null) return   // netplay: no core option changes mid-session (the other device would not follow)
+        if (netplayLocks) return   // netplay: no core option changes mid-session (the other device would not follow)
         val view = retroView ?: return
         if (vars.isEmpty()) return
         vars.firstOrNull { it.key == N3dsOptions.STACKED_SMALL_PROPORTION }?.value?.let { renderer.n3dsProportion = it }
