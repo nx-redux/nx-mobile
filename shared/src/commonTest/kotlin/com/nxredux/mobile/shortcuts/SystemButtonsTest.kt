@@ -69,10 +69,10 @@ class SystemButtonsTest {
     private val noSelect = PadKeys(hasSelect = false, hasStart = true)
     private val noStart = PadKeys(hasSelect = true, hasStart = false)
 
-    // A pad with no SELECT key sends it as Back; one with its own SELECT keeps Back as Back.
-    @Test fun backStandsInForSelectOnlyOnAPadWithoutOne() {
+    // A pad with no SELECT key sends it as Back; on one with its own SELECT, Back is a separate button: MENU.
+    @Test fun backStandsInForSelectOrIsMenuOnAPadWithItsOwnSelect() {
         assertEquals(SystemRole.SELECT.keyCode, SystemButtons.translate(SystemButtonMap(), m, KeyCodes.BACK, 0, noSelect))
-        assertNull(SystemButtons.translate(SystemButtonMap(), m, KeyCodes.BACK, 0, full))
+        assertEquals(SystemRole.MENU.keyCode, SystemButtons.translate(SystemButtonMap(), m, KeyCodes.BACK, 0, full))
         assertNull(SystemButtons.translate(SystemButtonMap(), m, KeyCodes.BACK, 0))   // the pad's keys unknown: left alone
     }
 
