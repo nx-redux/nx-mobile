@@ -484,6 +484,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override val dsWireless: Boolean get() = launchPipeline.dsAutoRoute && dsRoom.current != DsPresence.OUT
     override fun showMenu() { if (!menuOpen) menu.toggleMenu() }
     override val netplayNow: NetplaySession? get() = gameNetplay.now
+    override val sessionLocked: Boolean get() = netplayNow != null || dsWireless
 
     // ---- RetroAchievements (see the "achievements" block) ----
     override var achievements: AchievementsBridge? = null   // null: off, signed out, or a console RA does not cover
@@ -791,6 +792,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /** The opening menu holds the game ([InGameMenuController.openMenu]), as [focusPause] does. */
     override fun pauseForMenu() {
+        dsRoom.check()   // the menu opened on the watcher's last poll: a presence changed since reaches the open menu now
         syncKeepScreenOn()
         wii.syncMotionSensors()   // no motion while paused
         holdCore()   // the phone mic closes under the menu too
@@ -1742,10 +1744,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /**
      * A Reset shortcut or the dual-screen panel's Reset tile: reset always asks first, so the in-game menu opens on its
      * Reset dialog; a menu opened for it closes again on Cancel. Never before the game is ready (nothing to reset yet),
-     * in netplay or a link session (the model refuses too).
+     * in netplay, a link session or the DS wireless (the model refuses too).
      */
     override fun askReset() {
-        if (quitting || !gameReady || netplayNow != null) return
+        if (quitting || !gameReady || sessionLocked) return
         val opened = !menuOpen
         if (opened) toggleMenu()
         withMenu { it.openResetDialog(closesOnCancel = opened) }
@@ -1846,9 +1848,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun handleMenuEffect(effect: MenuEffect) = menu.handle(effect)
     override fun panelTouchActions() = shortcuts.panelTouchActions()
 
-    /** The second-screen panel's All options: the in-game menu on its Options page (opened for it when closed). */
+    /**
+     * The second-screen panel's All options: the in-game menu on its Options page (opened for it when closed). Not while
+     * the DS wireless is on: the reduced menu has no Options, and a menu opened in a room starts the cap.
+     */
     override fun openOptions() {
-        if (quitting || !gameReady) return
+        if (quitting || !gameReady || dsWireless) return
         if (!menuOpen) toggleMenu()
         withMenu { it.openOptions() }
     }

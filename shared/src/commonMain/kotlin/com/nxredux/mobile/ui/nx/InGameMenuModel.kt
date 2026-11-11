@@ -446,7 +446,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     fun setDsWireless(on: Boolean) {
         if (on == dsWireless || netplay) return
         dsWireless = on
-        if (on) state = state.copy(stack = state.stack.take(1), editing = false, popup = null)
+        if (on) { resetClosesOnCancel = false; popTo(PageKind.Root) }
         refreshRoot()
     }
 

@@ -86,6 +86,7 @@ import android.media.AudioManager
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.ui.nx.QuickSetting
+import com.nxredux.mobile.ui.nx.Shortcut
 import kotlin.math.roundToInt
 
 /**
@@ -103,6 +104,8 @@ internal interface DualScreenHost : GameScreenHost {
     val isNds: Boolean
     val isN3ds: Boolean
     val netplayNow: NetplaySession?
+    /** A netplay session or a DS game's wireless: the panel hides what would break it (touch, speed, Reset, slots, Cheats, Players). */
+    val sessionLocked: Boolean
     val achievements: AchievementsBridge?
     /** The game's cheats (toggled through [handleMenuEffect]), whether the core takes any, and their folder: the Cheats tab. */
     val cheatsSupported: Boolean
@@ -177,6 +180,7 @@ internal class DualScreenController(
     private val isNds get() = owner.isNds
     private val isN3ds get() = owner.isN3ds
     private val netplayNow get() = owner.netplayNow
+    private val sessionLocked get() = owner.sessionLocked
     private val achievements get() = owner.achievements
     private val menuView get() = owner.menuView
     private fun layoutTag() = owner.layoutTag()
@@ -744,9 +748,9 @@ internal class DualScreenController(
 
     /**
      * The dual-screen panel's state: the header ([panelHeader], with the achievement count while there is a set), the tabs
-     * that apply, the Shortcuts (the touch buttons' tiles, Swap disc for a multi-disc game, Fast forward, Rewind and Reset, all outside netplay), this
-     * game's achievements in the menu's order, the cheats (the host's set: one owner, as the menu's), and the Players
-     * page's rows.
+     * that apply, the Shortcuts (the touch buttons' tiles, Swap disc for a multi-disc game, Fast forward, Rewind and Reset, all outside netplay;
+     * the DS wireless keeps only Swap disc and the mic), this game's achievements in the menu's order, the cheats (the
+     * host's set: one owner, as the menu's), and the Players page's rows.
      */
     private fun panelState(): GamePanelState {
         val b = achievements?.takeIf { it.available }
@@ -754,8 +758,8 @@ internal class DualScreenController(
         val list = if (b != null && summary != null) b.list().sortedBy(appSettings.raSortOrder) else emptyList()
         val players = input.playerRows()
         val tabs = GamePanelModel.tabs(
-            raAvailable = list.isNotEmpty(), playerSlots = if (netplayNow != null) 0 else players?.first?.size ?: 0,
-            cheats = owner.cheatsSupported && netplayNow == null, settings = true,
+            raAvailable = list.isNotEmpty(), playerSlots = if (sessionLocked) 0 else players?.first?.size ?: 0,
+            cheats = owner.cheatsSupported && !sessionLocked, settings = true,
         )
         val cheats = owner.cheatSet
         val (disc, count) = discs ?: (0 to 0)
@@ -767,8 +771,8 @@ internal class DualScreenController(
             shortcuts = GamePanelModel.shortcuts(
                 count, disc, netplayNow != null, ff, rewind, owner.micTile(),
                 touch = owner.panelTouchActions(), slot = panelSlotNow(),
-            ),
-            slots = if (netplayNow == null) owner.slotsUi.value else emptyList(),
+            ).filter { !sessionLocked || it.shortcut == Shortcut.SWAP_DISC || it.shortcut == Shortcut.MIC },   // the DS wireless keeps the mic
+            slots = if (!sessionLocked) owner.slotsUi.value else emptyList(),
             slot = panelSlotNow(),
             quick = quickSettings(),
             achievements = list,
@@ -867,7 +871,7 @@ internal class DualScreenController(
                 refreshDualPanel()
             }
             GamePanelEvent.OpenOptions -> owner.openOptions()
-            is GamePanelEvent.Touch -> if (netplayNow == null || !e.down) {
+            is GamePanelEvent.Touch -> if (!sessionLocked || !e.down) {
                 owner.onPanelTouch(e.action, e.down, panelSlotNow())
                 // A held action runs the game: a panel flipped up over the DS/3DS screen gives the screen back, as for FF.
                 if (e.down && panelUp && (e.action == ShortcutAction.HOLD_FF || e.action == ShortcutAction.HOLD_REWIND)) { panelUp = false; syncDual() }
@@ -877,7 +881,7 @@ internal class DualScreenController(
             is GamePanelEvent.SetCheat -> owner.handleMenuEffect(MenuEffect.SetCheat(e.index, e.on))
             GamePanelEvent.ShowGame -> { panelUp = false; syncDual() }
             // Hidden in netplay; a stale tap there does nothing. The tiles follow through the speed's onTiles.
-            is GamePanelEvent.SetFastForward, is GamePanelEvent.SetRewind -> GamePanelModel.speedEffect(e)?.takeIf { netplayNow == null }?.let {
+            is GamePanelEvent.SetFastForward, is GamePanelEvent.SetRewind -> GamePanelModel.speedEffect(e)?.takeIf { !sessionLocked }?.let {
                 owner.handleMenuEffect(it)
                 // The game runs with it on: a panel flipped up over the DS/3DS screen gives the screen back.
                 if (panelUp) { panelUp = false; syncDual() }
@@ -887,7 +891,7 @@ internal class DualScreenController(
                 // The game hears it now: a panel flipped up over the DS/3DS screen gives the screen back, as for FF.
                 if (panelUp) { panelUp = false; syncDual() }
             }
-            GamePanelEvent.Reset -> if (netplayNow == null) owner.askReset()
+            GamePanelEvent.Reset -> if (!sessionLocked) owner.askReset()
         }
     }
 

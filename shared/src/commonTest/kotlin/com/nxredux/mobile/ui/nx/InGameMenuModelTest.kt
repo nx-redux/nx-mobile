@@ -2033,8 +2033,21 @@ class InGameMenuModelTest {
         m.setDsWireless(true)
         m.activate(2)                                         // the quit page
         val kind = m.state.page.kind
+        val depth = m.state.stack.size
         m.setDsWireless(false)
         assertEquals(kind, m.state.page.kind)
+        assertEquals(depth, m.state.stack.size)
+    }
+
+    @Test fun ds_wireless_on_ends_a_shortcut_capture() {
+        val m = shortcuts()
+        m.selectRow("Toggle FF")
+        m.press(NxButton.A)
+        assertTrue(m.capturingShortcut)
+        m.setDsWireless(true)
+        assertFalse(m.capturingShortcut)                      // the next press is the reduced root's, not a binding
+        assertEquals(PageKind.Root, m.state.page.kind)
+        assertEquals(listOf("Continue", "Disconnect", "Quit"), m.state.page.rows.map { it.label })
     }
 
     @Test fun b_menu_and_x_never_disconnect() {
