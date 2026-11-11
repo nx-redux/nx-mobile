@@ -18,8 +18,8 @@ object MenuStyles {
     const val DEFAULT_TAB_SHOWN = true
     /** Layouts → Page title: Show. */
     const val DEFAULT_PAGE_TITLE = true
-    /** Layouts → Button hints: Hide. */
-    const val DEFAULT_BUTTON_HINTS = false
+    /** Layouts → Button hints: Show. */
+    const val DEFAULT_BUTTON_HINTS = true
     /** Layouts → Extra info: Show. */
     const val DEFAULT_EXTRA_INFO = true
     /** Layouts → Home stats: Show. */

@@ -7,6 +7,14 @@ package com.nxredux.mobile.shortcuts
 object KeyCodes {
     /** A controller's or the system's Back: press-to-bind cancels on it, as on B. */
     const val BACK = 4
+    /** A controller's Menu key (not its mode / guide button, [BUTTON_MODE]). */
+    const val MENU = 82
+    /**
+     * AYANEO's small button beside the logo button on its handhelds (their key layouts name it EQ): the kernel's key
+     * 753, which arrives as that key code, or on a firmware without one as the scan code alone. No Android key, so
+     * nothing pins it; no standard key code is this high.
+     */
+    const val AYANEO_EQ = 753
     const val DPAD_UP = 19
     const val DPAD_DOWN = 20
     const val DPAD_LEFT = 21
