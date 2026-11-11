@@ -90,10 +90,6 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.runtime.DisposableEffect
-import com.nxredux.mobile.ui.nx.nxKeyboardTop
 import androidx.compose.ui.graphics.ColorMatrix
 import com.nxredux.mobile.ui.nx.padColorMatrix
 import com.nxredux.mobile.ui.nx.padPainter
@@ -277,8 +273,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}, keyboard: Boolean 
         )
         // A drawn pad: the keyboard covers it while it types (taps on the keys or a controller), leaving the screen its
         // full height for the prompt's box; a phone's screen above the pad is too short for both.
-        if (keyboard && menuPad) Box(Modifier.align(Alignment.BottomCenter).onGloballyPositioned { nxKeyboardTop.value = it.positionInRoot().y }) {
-            DisposableEffect(Unit) { onDispose { nxKeyboardTop.value = null } }
+        if (keyboard && menuPad) Box(Modifier.align(Alignment.BottomCenter)) {
             NxTheme(colors = look.colors) { MenuLocals(state, look, footerModeFor(controllerConnected, false), touchscreen) { NxKeyboardBar(state) } }
         }
     }
@@ -317,7 +312,8 @@ internal fun rememberMenuLook(state: AppState, screen: Screen): MenuLook {
 internal fun MenuLocals(state: AppState, look: MenuLook, footer: FooterMode, touchscreen: Boolean, content: @Composable () -> Unit) {
     val chrome = launcherChromeFor(look.pageTitle, look.buttonHints, footer, look.extraInfo, look.netplayHint, look.homeStats)
     val entry by state.textEntry.collectAsState()
-    val keyboard = remember(entry) { PromptKeyboard(entry, state::keyboardTapField, state::promptAnswer, state::keyboardToggleReveal, state.textEntryConfirmLabel) }
+    val nx = state.nxKeyboard
+    val keyboard = remember(entry, nx) { PromptKeyboard(entry, state::keyboardTapField, state::promptAnswer, state::keyboardToggleReveal, state.textEntryConfirmLabel, nx) }
     CompositionLocalProvider(
         LocalPromptKeyboard provides keyboard,
         LocalFooterMode provides footer, LocalLauncherChrome provides chrome, LocalHasTouchscreen provides touchscreen,

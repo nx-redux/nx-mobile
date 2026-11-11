@@ -29,13 +29,15 @@ class TextEntryTest {
     }
 
     @Test fun shiftCapitalisesOnceThenClears() {
-        val first = one("").run(NxButton.X, NxButton.A)
+        val first = one("").copy(shift = true).press(NxButton.A)   // the board's own shift key
         assertEquals(EntryOutcome.Edit(0, "G"), first.outcome)
         assertEquals(EntryOutcome.Edit(0, "Gg"), first.entry.press(NxButton.A).outcome)
     }
 
-    @Test fun bDeletesBeforeCursorThenCancelsWhenEmpty() {
-        assertEquals(EntryOutcome.Edit(0, "a"), one("ab").press(NxButton.B).outcome)
+    @Test fun xDeletesBeforeCursorAndBCancels() {
+        assertEquals(EntryOutcome.Edit(0, "a"), one("ab").press(NxButton.X).outcome)
+        assertEquals(EntryOutcome.None, one("").press(NxButton.X).outcome)   // nothing left: nothing happens
+        assertEquals(EntryOutcome.Cancel, one("ab").press(NxButton.B).outcome)
         assertEquals(EntryOutcome.Cancel, one("").press(NxButton.B).outcome)
     }
 
@@ -176,8 +178,9 @@ class TextEntryTest {
         assertEquals(EntryFocus.Button(1), onCancel.press(NxButton.RIGHT).entry.focus)
     }
 
-    @Test fun aHeldBackspaceNeverCancels() {
-        assertEquals(EntryOutcome.None, one("").press(NxButton.B, repeat = true).outcome)
-        assertEquals(EntryOutcome.Edit(0, "a"), one("ab").press(NxButton.B, repeat = true).outcome)
+    @Test fun aHeldDeleteClearsAndAHeldBNeverCancels() {
+        assertEquals(EntryOutcome.None, one("").press(NxButton.X, repeat = true).outcome)
+        assertEquals(EntryOutcome.Edit(0, "a"), one("ab").press(NxButton.X, repeat = true).outcome)
+        assertEquals(EntryOutcome.None, one("ab").press(NxButton.B, repeat = true).outcome)
     }
 }

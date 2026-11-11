@@ -6,6 +6,7 @@ import com.nxredux.mobile.ui.nx.LocalPadBelow
 import com.nxredux.mobile.ui.nx.NxListFooter
 import com.nxredux.mobile.ui.nx.NxOptionsSidePad
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.nxredux.mobile.ui.nx.nxHighlight
 import androidx.compose.foundation.clickable
@@ -46,6 +47,7 @@ import org.jetbrains.compose.resources.DrawableResource
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
 import com.nxredux.mobile.ui.nx.NxButton
+import com.nxredux.mobile.ui.nx.NxButtonGlyph
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingsList
 import com.nxredux.mobile.ui.nx.NxSignInPrompt
@@ -194,11 +196,16 @@ internal fun SetupBlockPage(
  * its first action, lit). Each word stays on its text edge, the pill reaching [nxListInset] past it either side, so the words
  * keep their places and spacing whichever is lit; a tap target [SETUP_BUTTON_TAP] tall. A tap selects and opens it.
  * [rest]: the unlit words' ink, inkDim on a setup page; a modal's are the list text ([NxModal], [NxChoiceDialog]).
+ * [outlined]: the word that keeps the pill's outline while unlit (a modal's first action, so it reads as a button with
+ * the focus elsewhere); null: none. [keys]: a pad button's glyph before a word that has a button of its own (a typed
+ * prompt's START and B), in [labels]' order; null or missing: the word alone.
  */
 @Composable
 internal fun SetupButtons(
     labels: List<String>, first: Int, selected: Int, size: TextUnit, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit,
     rest: Color = LocalNxColors.current.inkDim,
+    outlined: Int? = null,
+    keys: List<NxButton?> = emptyList(),
 ) {
     val colors = LocalNxColors.current
     val inset = nxListInset()
@@ -212,7 +219,17 @@ internal fun SetupButtons(
                 contentAlignment = Alignment.CenterStart,
             ) {
                 val ink = if (lit) colors.onAccent else rest
-                Box(Modifier.then(if (lit) Modifier.background(pill, RoundedCornerShape(50)) else Modifier).padding(horizontal = inset, vertical = 4.dp)) {
+                val shape = RoundedCornerShape(50)
+                val ground = when {
+                    lit -> Modifier.background(pill, shape)
+                    index == outlined -> Modifier.border(1.dp, colors.inkRing, shape)
+                    else -> Modifier
+                }
+                Row(ground.padding(horizontal = inset, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    keys.getOrNull(i)?.let { key ->
+                        NxButtonGlyph(key, with(LocalDensity.current) { size.toDp() }, tint = ink)
+                        Spacer(Modifier.width(6.dp))
+                    }
                     Text(
                         text, color = ink,
                         fontFamily = LocalNxFont.current, fontWeight = FontWeight.Bold, fontSize = size, lineHeight = size * SETUP_WORD_LINE, maxLines = 1,
