@@ -29,7 +29,7 @@ object EmulatorSettings {
      * unknown), which shapes the 3D Resolution scales. [biosFiles]: the ".bin" names in the PS2 BIOS folder, the PS2 BIOS row's choices.
      * [gpuDrivers]: the installed custom GPU drivers (null: the feature is unavailable, no GPU driver row). [gpuDriverResolved]:
      * a custom driver will load for this page, so the Vulkan-failed note (about the system driver) is left off the Graphics API
-     * row. [gpuDriverCrashNote]: the GPU driver row's disabled note, for a game whose driver crashed.
+     * row. [gpuDriverCrashNote]: put on the GPU driver row (its line and before its info, still editable), for a game whose driver crashed.
      */
     fun page(
         tag: String, descriptor: CoreDescriptor, table: CoreOptionTable?, defaults: Map<String, String>,
@@ -51,7 +51,8 @@ object EmulatorSettings {
                 // The DS and 3DS layout rows read their old keys too, as the game does (no pick: the row default).
                 val value = (if (it.key in FrontendOptions.NO_PICK_KEYS) FrontendOptions.layoutValue(resolved.values, it.key) else resolved.values[it.key]) ?: it.default
                 ConsoleSettings.fitted(VulkanFallback.noted(it, vulkanFailed && !gpuDriverResolved), value).let { (option, shown) ->
-                    ConsoleRow(option, shown, NdsOptions.SOFTWARE_NOTE.takeIf { software && option.key in NdsOptions.RESOLUTION_KEYS } ?: gpuDriverCrashNote.takeIf { option.key == GpuDriverOptions.KEY })
+                    val noted = if (option.key == GpuDriverOptions.KEY && gpuDriverCrashNote != null) option.copy(brief = gpuDriverCrashNote, info = gpuDriverCrashNote + "\n" + option.info) else option
+                    ConsoleRow(noted, shown, NdsOptions.SOFTWARE_NOTE.takeIf { software && option.key in NdsOptions.RESOLUTION_KEYS })
                 }
             }
         val core = table?.let { t ->

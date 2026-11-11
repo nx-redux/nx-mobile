@@ -62,7 +62,10 @@ class GpuDriverOptionsTest {
     @Test fun crashNoteOnGamePage() {
         val note = GpuDriverOptions.CRASH_NOTE.replace("%s", "Turnip 24.1")
         val p = page(console = "nx_graphics_api = vulkan\n", forGame = true, note = note)
-        assertEquals(note, ConsolePageRow(p)!!.disabledNote)
+        val row = ConsolePageRow(p)!!
+        assertEquals(note, row.option.brief)
+        assertTrue(row.option.info.startsWith(note))
+        assertNull(row.disabledNote)
         assertNull(page(console = "nx_graphics_api = vulkan\n", forGame = true).console.single { it.option.key == GpuDriverOptions.KEY }.disabledNote)
         assertNull(p.console.single { it.option.key == GraphicsApiOptions.KEY }.disabledNote)
     }
