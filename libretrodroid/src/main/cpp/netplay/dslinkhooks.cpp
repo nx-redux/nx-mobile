@@ -100,8 +100,16 @@ struct Stats {
     }
 } stats;
 
+// The stats line comes every second while the link struggles (a slow frame, a drop, a slow round trip), else every
+// 10 s, so the log stays readable on a good link.
+constexpr int64_t STATS_QUIET_US = 10000000;
+constexpr uint64_t STATS_SLOW_FRAME_US = 33000;
+constexpr int STATS_SLOW_RTT_MS = 50;
+Clock::time_point lastStatsLine {};
+
+#ifdef NX_DSLINK_TRACE
 // Stall trace, emulation thread only: the last core packets in either direction, dumped when one frame runs long, to
-// show which packet a waiting core never got.
+// show which packet a waiting core never got. Built only with NX_DSLINK_TRACE: it costs a few stores per packet.
 struct TraceEntry {
     int64_t us;          // steady clock
     bool out;            // sent by the core (peer = destination) or delivered to it (peer = sender)
@@ -179,6 +187,7 @@ void dumpTrace(uint64_t frameUs, unsigned polls) {
     }
     trace.clear();
 }
+#endif
 
 void destroyLink() {
     ndl_link* old;
@@ -199,13 +208,17 @@ void endCoreSession() {
     coreStarted = false;   // first: nothing reaches the core from here on
     stats.active = false;
     stats.windowOpen = false;
+#ifdef NX_DSLINK_TRACE
     trace.clear();
+#endif
     if (callbacks.stop != nullptr) callbacks.stop();
 }
 
 void deliver(const uint8_t* buf, size_t len, uint16_t sender, void*) {
     if (stats.active) { stats.pktsIn++; stats.bytesIn += len; }
+#ifdef NX_DSLINK_TRACE
     if (coreStarted) trace.add(false, sender, buf, len);
+#endif
     if (coreStarted && callbacks.receive != nullptr) callbacks.receive(buf, len, sender);
 }
 
@@ -215,7 +228,9 @@ void coreSend(int flags, const void* buf, size_t len, uint16_t clientId) {
     if (!coreStarted) return;
     if (buf == nullptr || len == 0) return;   // the core's flush hint, not a packet
     if (stats.active) { stats.pktsOut++; stats.bytesOut += len; }
+#ifdef NX_DSLINK_TRACE
     trace.add(true, clientId, (const uint8_t*) buf, len);
+#endif
     ndl_send(theLink, buf, len, clientId);
 }
 
@@ -378,7 +393,9 @@ void frameEnd() {
     stats.sumPolls += stats.polls;
     stats.maxPolls = std::max<uint64_t>(stats.maxPolls, stats.polls);
     stats.maxSpanUs = std::max(stats.maxSpanUs, spanUs);
+#ifdef NX_DSLINK_TRACE
     if (frameUs > TRACE_FRAME_US) dumpTrace(frameUs, stats.polls);
+#endif
 
     uint64_t windowUs = us(now - stats.windowStart);
     if (windowUs < 1000000 || stats.frames == 0) return;
@@ -386,6 +403,12 @@ void frameEnd() {
     ndl_stats_rtt(theLink, &rttMin, &rttAvg, &rttMax);
     ndl_drop_counts drops {};
     ndl_stats_drops(theLink, &drops);
+    stats.windowOpen = false;
+    const bool notable = stats.maxUs > STATS_SLOW_FRAME_US || rttMax > STATS_SLOW_RTT_MS || drops.queue != 0 ||
+                         drops.unknown != 0 || drops.wrong_src != 0 || drops.bad != 0 || drops.echo != 0 ||
+                         drops.dest != 0;
+    if (!notable && lastStatsLine != Clock::time_point {} && us(now - lastStatsLine) < (uint64_t) STATS_QUIET_US) return;
+    lastStatsLine = now;
     char dropText[160] = "";
     {
         const struct { const char* name; uint32_t n; } kinds[] = {
@@ -407,7 +430,6 @@ void frameEnd() {
          stats.maxUs / 1000.0, stats.sumUs / 1000.0 / stats.frames, (double) stats.sumPolls / stats.frames,
          (unsigned long long) stats.maxPolls, stats.maxSpanUs / 1000.0, stats.pktsIn / sec, stats.pktsOut / sec,
          stats.bytesIn / sec, stats.bytesOut / sec, ndl_member_count(theLink), rttMin, rttAvg, rttMax, (unsigned) drops.queue_hwm, dropText);
-    stats.windowOpen = false;
 }
 
 void stopCore() {
