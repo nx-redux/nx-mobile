@@ -119,6 +119,7 @@ import com.nxredux.mobile.storage.DataRoot
 import com.nxredux.mobile.test.NxTestResults
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.LibretroDroid
+import com.swordfish.libretrodroid.LibretroNetplay
 import com.swordfish.libretrodroid.NxLog
 import com.swordfish.libretrodroid.ScaleMode
 import com.swordfish.libretrodroid.ScreenRegion
@@ -687,6 +688,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** The game holds as under the menu (see openMenu); an open menu has already paused it. */
     private fun focusPause() {
         if (focusPaused || quitting) return
+        LibretroNetplay.dsLeaveNow()   // a DS room cannot wait out a pause: its members would time out
         focusPaused = true
         syncKeepScreenOn()
         if (menuOpen) return
@@ -708,6 +710,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * local pause stops this device's input instead. The core stops with its rumble latched: still while held, back on release.
      */
     private fun holdCore() {
+        if (LibretroNetplay.dsInRoom()) {
+            // A DS room keeps the core running (its members expect packets); the player just stops playing.
+            input.releaseAllGameInput()
+            retroView?.audioEnabled = false
+            retroView?.frameSpeed = 1
+            rumbles.forEach { it.pause() }
+            shortcuts.pushMicSource()
+            return
+        }
         gameNetplay.run?.takeIf { it.live }?.pause() ?: run { retroView?.frameSpeed = 0 }
         retroView?.audioEnabled = false
         rumbles.forEach { it.pause() }
@@ -808,6 +819,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     override fun onStop() {
+        LibretroNetplay.dsLeaveNow()
         careTicker?.cancel(); careTicker = null
         gameTime?.pause()   // the session ends here: a kill in the background loses nothing, a return opens a new one
         gameTimeTicker?.cancel()

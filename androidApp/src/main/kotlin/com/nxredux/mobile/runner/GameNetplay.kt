@@ -330,7 +330,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
         val off = when (session?.linkKind) {
             NetplayLinkKind.GBLINK -> Variable(NetplayLinkOptions.GB_MODE, NetplayLinkOptions.GB_OFF)
             NetplayLinkKind.N3DSLINK -> Variable(NetplayLinkOptions.N3DS_MODE, NetplayLinkOptions.N3DS_OFF)
-            NetplayLinkKind.NDSLINK -> null
+            NetplayLinkKind.NDSLINK -> Variable(NetplayLinkOptions.NDS_MODE, NetplayLinkOptions.N3DS_OFF)
             else -> null
         }
         if (off != null) host.retroView?.let { view ->

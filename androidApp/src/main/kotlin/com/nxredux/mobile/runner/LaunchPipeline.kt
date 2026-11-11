@@ -461,17 +461,19 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val linkKind = np?.linkKind
             // 3DS: the player's name in Azahar's room. Outside a session the game's local wireless finds other devices
             // itself unless the console's Local Wireless option is off ([N3dsOptions.LOCAL_WIRELESS]).
-            if (coreId == "azahar") playerName = PlayerName.resolve(AndroidAppSettings(activity).playerName, AndroidDeviceInfo.deviceName(activity))
-            val n3dsRoomName = if (coreId != "azahar") null else NetplayLinkOptions.n3dsRoomName(playerName, kotlin.random.Random.nextInt(10000))
-            val n3dsAuto = n3dsRoomName?.takeIf { N3dsOptions.localWireless(frontendValues) }
+            if (coreId == "azahar" || coreId == "melondsds") playerName = PlayerName.resolve(AndroidAppSettings(activity).playerName, AndroidDeviceInfo.deviceName(activity))
+            val n3dsRoomName = if (coreId != "azahar" && coreId != "melondsds") null else NetplayLinkOptions.n3dsRoomName(playerName, kotlin.random.Random.nextInt(10000))
+            val n3dsAuto = n3dsRoomName?.takeIf { if (coreId == "melondsds") NdsOptions.localWireless(frontendValues) else N3dsOptions.localWireless(frontendValues) }
             // A room answers other devices' searches, which arrive as broadcasts: Android drops those without this lock.
-            if (n3dsAuto != null || linkKind == NetplayLinkKind.N3DSLINK) holdBroadcasts()
+            if (n3dsAuto != null || linkKind == NetplayLinkKind.N3DSLINK || linkKind == NetplayLinkKind.NDSLINK) holdBroadcasts()
             val n3dsBroadcast = n3dsAuto?.let { WifiNetworks.broadcast(WifiNetworks.address(activity.getSystemService(ConnectivityManager::class.java)))?.hostAddress }
-            val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsAuto, n3dsBroadcast) else when (linkKind) {
+            // A DS room runs under its own MAC (a seed kept per install) so rooms tell its members apart.
+            val ndsMac = if (coreId == "melondsds" && (n3dsAuto != null || linkKind == NetplayLinkKind.NDSLINK)) NetplayLinkOptions.ndsMac(AndroidAppSettings(activity).ndsMacSeed) else null
+            val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsAuto, n3dsBroadcast, ndsMac) else when (linkKind) {
                 null -> NetplayLinkOptions.forPair(np)
                 NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)
                 NetplayLinkKind.N3DSLINK -> NetplayLinkOptions.forSession(np, null, n3dsRoomName)
-                NetplayLinkKind.NDSLINK -> NetplayLinkOptions.forSession(np, null)
+                NetplayLinkKind.NDSLINK -> NetplayLinkOptions.forSession(np, null, n3dsRoomName, ndsMac)
                 NetplayLinkKind.NETPACKET -> {
                     val own = NetplayLinkOptions.modeKey(np.coreId)?.let { key -> options.firstOrNull { it.key == key }?.value }
                     val mode = gameNetplay.connectLink(np, own) ?: return refuse(NetplayText.FAILED_CONNECT, NetplayText.FAILED)
@@ -700,7 +702,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         // gpsp: never unload the core between games, so its recompiler cache stays mapped near it.
                         keepCoreLoaded = cfg.descriptor?.keepLoaded == true
                         // 3DS: the console's profile name is the player's (Settings → System → Player name).
-                        if (gameCoreId == "azahar") username = playerName
+                        if (gameCoreId == "azahar" || gameCoreId == "melondsds") username = playerName
                         shader = renderer.shaderFor(cfg.frontend)
                         saveRAMState = prepared.sram
                         rtcState = prepared.rtc   // the clock file, applied after the battery save
