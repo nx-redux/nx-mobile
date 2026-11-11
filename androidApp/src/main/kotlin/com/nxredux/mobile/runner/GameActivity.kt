@@ -343,7 +343,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val saves = SaveSession(this, renderer, menu, dual)
     private val wii = WiiDolphinController(this, input, saves)
     private val launchPipeline = LaunchPipeline(LaunchState())
-    private val dsRoom = DsRoomWatcher(lifecycleScope, LibretroNetplay::dsInRoom, ::onDsRoomChanged)
+    private val dsRoom = DsRoomWatcher(lifecycleScope, { DsPresence.of(LibretroNetplay.dsPresence()) }, ::onDsRoomChanged)
     override val slotsUi: androidx.compose.runtime.State<List<SlotUi>> get() = saves.slotsUi
     override var lastSlotCache: Int?
         get() = saves.lastSlotCache
@@ -605,7 +605,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * only while in one; a sheet session has both from its launch. A menu open meanwhile holds the core the way the room
      * now asks: running for the members, or paused once alone.
      */
-    private fun onDsRoomChanged(inRoom: Boolean) {
+    private fun onDsRoomChanged(presence: DsPresence) {
+        val inRoom = presence == DsPresence.ROOM
         launchPipeline.dsRoomChanged(inRoom)
         if (launchPipeline.dsAutoRoute) {
             speed.setSession(netplay = inRoom)
