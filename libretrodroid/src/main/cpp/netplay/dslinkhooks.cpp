@@ -237,6 +237,13 @@ void coreSend(int flags, const void* buf, size_t len, uint16_t clientId) {
 // melonDS DS waits inside retro_run for the others' packets and polls until they arrive: hand over all of them.
 void corePollReceive() {
     if (!coreStarted) return;
+    // The core can wait here for a whole frame's worth of ticks: once this phone is out of the room, end the session
+    // now, or the frame that would notice it never comes.
+    if (!ndl_in_room(theLink)) {
+        endCoreSession();
+        LOGI("DS link: core stopped");
+        return;
+    }
     if (stats.active) {
         Clock::time_point now = Clock::now();
         if (stats.polls++ == 0) stats.firstPoll = now;
