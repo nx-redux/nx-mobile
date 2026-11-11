@@ -65,6 +65,35 @@ class SystemButtonsTest {
     }
 
     // A button on a device beside the pad: its press becomes the role, the same code from the pad itself does not.
+    private val full = PadKeys(hasSelect = true, hasStart = true)
+    private val noSelect = PadKeys(hasSelect = false, hasStart = true)
+    private val noStart = PadKeys(hasSelect = true, hasStart = false)
+
+    // A pad with no SELECT key sends it as Back; one with its own SELECT keeps Back as Back.
+    @Test fun backStandsInForSelectOnlyOnAPadWithoutOne() {
+        assertEquals(SystemRole.SELECT.keyCode, SystemButtons.translate(SystemButtonMap(), m, KeyCodes.BACK, 0, noSelect))
+        assertNull(SystemButtons.translate(SystemButtonMap(), m, KeyCodes.BACK, 0, full))
+        assertNull(SystemButtons.translate(SystemButtonMap(), m, KeyCodes.BACK, 0))   // the pad's keys unknown: left alone
+    }
+
+    // The Menu key is MENU, or START on a pad that has no START key.
+    @Test fun menuKeyStandsInForMenuOrAMissingStart() {
+        assertEquals(SystemRole.MENU.keyCode, SystemButtons.translate(SystemButtonMap(), m, KeyCodes.MENU, 0, full))
+        assertEquals(SystemRole.START.keyCode, SystemButtons.translate(SystemButtonMap(), m, KeyCodes.MENU, 0, noStart))
+        assertNull(SystemButtons.translate(SystemButtonMap(), m, KeyCodes.BUTTON_A, 0, noSelect))
+    }
+
+    // A binding wins: Back bound as MENU is MENU, and a role bound to another button no longer takes its stand-in.
+    @Test fun bindingsBeatStandIns() {
+        val backIsMenu = SystemButtons.bind(SystemButtonMap(), m, SystemRole.MENU, PhysicalKey.of(KeyCodes.BACK, 0))
+        assertEquals(SystemRole.MENU.keyCode, SystemButtons.translate(backIsMenu, m, KeyCodes.BACK, 0, noSelect))
+        val selectElsewhere = SystemButtons.bind(SystemButtonMap(), m, SystemRole.SELECT, PhysicalKey.of(KeyCodes.BUTTON_THUMBL, 0))
+        assertNull(SystemButtons.translate(selectElsewhere, m, KeyCodes.BACK, 0, noSelect))
+        assertEquals(SystemRole.MENU.keyCode, SystemButtons.translate(selectElsewhere, m, KeyCodes.MENU, 0, full))   // MENU not bound there
+        // Another model's bindings are not this pad's.
+        assertEquals(SystemRole.SELECT.keyCode, SystemButtons.translate(selectElsewhere, "045e:0b13", KeyCodes.BACK, 0, noSelect))
+    }
+
     @Test fun buttonOnAnotherDeviceTranslatesFromThatDeviceOnly() {
         val side = PhysicalKey.of(4, 0, device = "00010001")
         val map = SystemButtons.bind(SystemButtonMap(), m, SystemRole.SELECT, side)

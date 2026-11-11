@@ -13,6 +13,7 @@ class KeyCodesTest {
     @Test fun key_codes_match_android() {
         val pinned = listOf(
             KeyCodes.BACK to KeyEvent.KEYCODE_BACK,
+            KeyCodes.MENU to KeyEvent.KEYCODE_MENU,
             KeyCodes.DPAD_UP to KeyEvent.KEYCODE_DPAD_UP,
             KeyCodes.DPAD_DOWN to KeyEvent.KEYCODE_DPAD_DOWN,
             KeyCodes.DPAD_LEFT to KeyEvent.KEYCODE_DPAD_LEFT,
