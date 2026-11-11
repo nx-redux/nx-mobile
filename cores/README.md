@@ -82,6 +82,13 @@ the GPU when `melonds_render_mode = opengl`. Two patches:
   still asks for a plain GLES 3 context in practice; see the main README's known issues), ports its compositor shaders
   to GLSL ES 3.00, and keeps its VAO state away from glsm and the frontend's client-array draw.
 
+For local wireless between phones, `patches/melondsds.patch` also adds the private environment call
+`NX_ENVIRONMENT_SET_NDS_RADIO` (`libretrodroid/src/main/cpp/netplay/nx_nds_radio.h`, duplicated in the patch as
+`src/libretro/nx_nds_radio.h`): from the emulation thread the core reports OFF, ON (the game powers its Wi-Fi on,
+`Platform::MP_Begin`) and HOSTING (the game's first beacon since the last ON), and OFF again on unload and reset. The
+firmware flush writes the dump back with its own MAC and nickname, not the in-memory ones the core overrides, and
+`MpState::NextPacketBlock` waits its 25 ms by wall clock (`std::clock` counts CPU time).
+
 pcsx_rearmed is built with `USE_LIBRETRO_VFS=1` (its `jni/Android.mk` defaults to 0, which would bypass the runner's
 virtual files) and only the `frontend/libpicofe` submodule. gpsp and pcsx_rearmed are dynarec cores: `verify` checks
 only static alignment, so each passed a runtime smoke test on a 16 KB-page arm64 emulator image (android-35

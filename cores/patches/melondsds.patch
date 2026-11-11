@@ -4,6 +4,7 @@ melonDS DS on GLES 3.2: lets the GL renderer build against GLES3 (with patches/m
 dependency), requests a GLES 3.2 context, ports the compositor shaders to GLSL ES 3.00, and turns face culling off
 around the screen blit. Also carries JesseTG/melonds-ds#335 (video views: the frontend lays the screens out). Applied to cores/src/melondsds.
 
+Local wireless: tells the frontend when the emulated radio is on, off or hosting (nx_nds_radio.h), writes the firmware dump back with its own MAC and nickname, and waits for multiplayer replies by wall clock.
 diff --git a/CHANGELOG.md b/CHANGELOG.md
 index 49d182d..9868bba 100644
 --- a/CHANGELOG.md
@@ -437,6 +438,50 @@ index bb52319..4654f01 100644
          /// non-nullopt while the task is compiling melonDS's shaders;
          /// the console can't emulate a frame until it finishes.
          std::optional<uint32_t> _shaderCompileTaskId = std::nullopt;
+diff --git a/src/libretro/core/tasks.cpp b/src/libretro/core/tasks.cpp
+index 87bfa2a..a4a4df8 100644
+--- a/src/libretro/core/tasks.cpp
++++ b/src/libretro/core/tasks.cpp
+@@ -24,6 +24,8 @@
+ #include <glm/vec2.hpp>
+ 
+ #include <file/file_path.h>
++#include <cstdlib>
++#include <cstring>
+ #include <retro_assert.h>
+ #include <streams/file_stream.h>
+ 
+@@ -242,9 +244,28 @@ void MelonDsDs::CoreState::FlushFirmware(string_view firmwarePath, string_view w
+         }
+ 
+         retro_assert(firmwarePath.rfind("//notfound") == std::string_view::npos);
++        // The dump on disk still has the console's own MAC and nickname, which the core overrides in memory (to tell
++        // phones apart in local play); writing the overridden ones would make that permanent.
+         Firmware firmwareCopy(firmware);
+-        // TODO: Apply the original values of the settings that were overridden
+-        if (filestream_write_file(firmwarePath.data(), firmware.Buffer(), firmware.Length())) {
++        void* originalBuffer = nullptr;
++        int64_t originalLength = 0;
++        if (filestream_read_file(firmwarePath.data(), &originalBuffer, &originalLength) && originalBuffer != nullptr) {
++            Firmware original(static_cast<const uint8_t*>(originalBuffer), static_cast<uint32_t>(originalLength));
++            if (original.Buffer() != nullptr) {
++                if (Config.MacAddress()) {
++                    firmwareCopy.GetHeader().MacAddr = original.GetHeader().MacAddr;
++                }
++                if (Config.UsernameMode() != MelonDsDs::UsernameMode::Firmware) {
++                    Firmware::UserData& copyData = firmwareCopy.GetEffectiveUserData();
++                    const Firmware::UserData& originalData = original.GetEffectiveUserData();
++                    copyData.NameLength = originalData.NameLength;
++                    memcpy(copyData.Nickname, originalData.Nickname, sizeof(copyData.Nickname));
++                }
++                firmwareCopy.UpdateChecksums();
++            }
++        }
++        free(originalBuffer);
++        if (filestream_write_file(firmwarePath.data(), firmwareCopy.Buffer(), firmwareCopy.Length())) {
+             // ...then write the whole thing back.
+             retro::debug("Flushed {}-byte firmware to \"{}\"", firmware.Length(), firmwarePath);
+         }
 diff --git a/src/libretro/core/test.cpp b/src/libretro/core/test.cpp
 index 8b8bd27..33e4c7b 100644
 --- a/src/libretro/core/test.cpp
@@ -604,6 +649,34 @@ index fabccaa..d817085 100644
          // Add 1 to the index because we present the layout index as 1-based to the user.
      }
  }
+diff --git a/src/libretro/libretro.cpp b/src/libretro/libretro.cpp
+index b56f23a..1154aa0 100644
+--- a/src/libretro/libretro.cpp
++++ b/src/libretro/libretro.cpp
+@@ -131,6 +131,7 @@ PUBLIC_SYMBOL void retro_unload_game(void) {
+     retro::task::wait();
+     retro::task::deinit();
+ 
++    MelonDsDs::NdsRadioOff();
+     Core.UnloadGame();
+ }
+ 
+@@ -180,6 +181,7 @@ PUBLIC_SYMBOL void retro_reset(void) {
+     ZoneScopedN(TracyFunction);
+     retro::debug("retro_reset()\n");
+ 
++    MelonDsDs::NdsRadioOff();
+     try {
+         MelonDsDs::Core.Reset();
+     }
+@@ -354,6 +356,7 @@ int DeconstructPacket(u8 *data, u64 *timestamp, const std::optional<MelonDsDs::P
+ }
+ 
+ int Platform::MP_SendPacket(u8* data, int len, u64 timestamp, void*) {
++    MelonDsDs::NdsRadioSawFrame(data, len);
+     return MelonDsDs::Core.MpSendPacket(MelonDsDs::Packet(data, len, timestamp, 0, MelonDsDs::Packet::Type::Other)) ? len : 0;
+ }
+ 
 diff --git a/src/libretro/libretro_views.h b/src/libretro/libretro_views.h
 new file mode 100644
 index 0000000..cfaa783
@@ -679,6 +752,122 @@ index 0000000..cfaa783
 +#endif
 +
 +#endif //MELONDS_DS_LIBRETRO_VIEWS_H
+diff --git a/src/libretro/net/mp.cpp b/src/libretro/net/mp.cpp
+index caa185d..ea831ac 100644
+--- a/src/libretro/net/mp.cpp
++++ b/src/libretro/net/mp.cpp
+@@ -15,7 +15,7 @@
+ */
+ #include "mp.hpp"
+ #include "environment.hpp"
+-#include <ctime>
++#include <chrono>
+ #include <libretro.h>
+ #include <retro_assert.h>
+ #include <retro_endianness.h>
+@@ -132,7 +132,9 @@ std::optional<Packet> MpState::NextPacket() noexcept {
+ std::optional<Packet> MpState::NextPacketBlock() noexcept {
+     retro_assert(IsReady());
+     if (receivedPackets.empty()) {
+-        for(std::clock_t start = std::clock(); std::clock() < (start + (RECV_TIMEOUT_MS * CLOCKS_PER_SEC / 1000));) {
++        // Wall clock: std::clock counts CPU time, which stretches the wait to many times 25 ms while this thread sleeps in poll.
++        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(RECV_TIMEOUT_MS);
++        while (std::chrono::steady_clock::now() < deadline) {
+             _sendFn(RETRO_NETPACKET_FLUSH_HINT, NULL, 0, RETRO_NETPACKET_BROADCAST);
+             _pollFn();
+             if(!receivedPackets.empty()) {
+diff --git a/src/libretro/net/mp.hpp b/src/libretro/net/mp.hpp
+index f6b5dfc..d8022c1 100644
+--- a/src/libretro/net/mp.hpp
++++ b/src/libretro/net/mp.hpp
+@@ -21,6 +21,10 @@
+ #include <libretro.h>
+ 
+ namespace MelonDsDs {
++/// Tell the frontend what the emulated radio is doing (emulation thread). Hosting is reported once per power-on.
++void NdsRadioOn() noexcept;
++void NdsRadioOff() noexcept;
++void NdsRadioSawFrame(const uint8_t* txFrame, int len) noexcept;
+ // timestamp, aid, and isReply, respectively.
+ constexpr size_t HeaderSize = sizeof(uint64_t) + sizeof(uint8_t) + sizeof(uint8_t);
+ 
+diff --git a/src/libretro/nx_nds_radio.h b/src/libretro/nx_nds_radio.h
+new file mode 100644
+index 0000000..9d5cc94
+--- /dev/null
++++ b/src/libretro/nx_nds_radio.h
+@@ -0,0 +1,8 @@
++#pragma once
++// nx-mobile private libretro environment call: the core tells the frontend what the emulated DS radio is doing;
++// *data is a const unsigned* holding one of the NX_NDS_RADIO_ values. Only the nx-mobile runner answers it; only
++// nx-mobile's patched melonDS DS sends it, from the emulation thread.
++#define NX_ENVIRONMENT_SET_NDS_RADIO (0x20000 /* RETRO_ENVIRONMENT_PRIVATE */ | 0x4e59)
++#define NX_NDS_RADIO_OFF 0      // the game powered the radio off, or the game ended
++#define NX_NDS_RADIO_ON 1       // the game powered the radio on
++#define NX_NDS_RADIO_HOSTING 2  // the game sent a beacon: it created a group (once per ON)
+diff --git a/src/libretro/platform/mp.cpp b/src/libretro/platform/mp.cpp
+index 30ee4c2..ca3c0aa 100644
+--- a/src/libretro/platform/mp.cpp
++++ b/src/libretro/platform/mp.cpp
+@@ -18,6 +18,7 @@
+ #include "tracy.hpp"
+ #include "core/core.hpp"
+ #include "environment.hpp"
++#include "nx_nds_radio.h"
+ #include <fmt/base.h>
+ #include <retro_assert.h>
+ 
+@@ -85,11 +86,49 @@ bool MelonDsDs::CoreState::MpActive() const noexcept {
+     return _mpState.IsReady();
+ }
+ 
+-// Not much we can do in Begin and End
++namespace {
++    bool radioOn = false;
++    bool hostingReported = false;
++
++    void ReportRadio(unsigned state) noexcept {
++        retro::environment(NX_ENVIRONMENT_SET_NDS_RADIO, &state);
++    }
++}
++
++void MelonDsDs::NdsRadioOn() noexcept {
++    radioOn = true;
++    hostingReported = false;
++    ReportRadio(NX_NDS_RADIO_ON);
++}
++
++void MelonDsDs::NdsRadioOff() noexcept {
++    if (!radioOn) {
++        return;
++    }
++    radioOn = false;
++    hostingReported = false;
++    ReportRadio(NX_NDS_RADIO_OFF);
++}
++
++void MelonDsDs::NdsRadioSawFrame(const uint8_t* txFrame, int len) noexcept {
++    // The game's own beacon means it created a group; melonDS puts a 12-byte TX header before the 802.11 frame, whose
++    // frame control starts 0x80 0x00 for a beacon.
++    constexpr int TX_HEADER_LENGTH = 12;
++    if (!radioOn || hostingReported || len < TX_HEADER_LENGTH + 2) {
++        return;
++    }
++    if (txFrame[TX_HEADER_LENGTH] == 0x80 && txFrame[TX_HEADER_LENGTH + 1] == 0x00) {
++        hostingReported = true;
++        ReportRadio(NX_NDS_RADIO_HOSTING);
++    }
++}
++
+ void Platform::MP_Begin(void*) {
+     ZoneScopedN(TracyFunction);
++    MelonDsDs::NdsRadioOn();
+ }
+ 
+ void Platform::MP_End(void*) {
+     ZoneScopedN(TracyFunction);
++    MelonDsDs::NdsRadioOff();
+ }
 diff --git a/src/libretro/render/opengl.cpp b/src/libretro/render/opengl.cpp
 index d2aec34..7818363 100644
 --- a/src/libretro/render/opengl.cpp
