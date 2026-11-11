@@ -12,11 +12,13 @@ import java.util.zip.ZipInputStream
  * lists and removes.
  */
 class AndroidGpuDrivers(private val root: File, private val sdkInt: Int) {
-    /** The installed drivers sorted by name; a folder without a readable meta.json is skipped, a leftover `.tmp` deleted. */
+    private val lock = Any()
+
+    /** The installed drivers sorted by name; a folder without a readable meta.json is skipped, a `.tmp` folder ignored. */
     fun installed(): List<GpuDriver> {
         val dirs = root.listFiles { f -> f.isDirectory } ?: return emptyList()
         return dirs.mapNotNull { dir ->
-            if (dir.name.endsWith(TMP)) { dir.deleteRecursively(); return@mapNotNull null }
+            if (dir.name.endsWith(TMP)) return@mapNotNull null   // an install may be unpacking into it right now
             val meta = runCatching { File(dir, GpuDriverPackage.META).readText() }.getOrNull() ?: return@mapNotNull null
             GpuDriverPackage.parseMeta(dir.name, meta)
         }.sortedWith(compareBy({ it.name.lowercase() }, { it.id }))
@@ -26,9 +28,10 @@ class AndroidGpuDrivers(private val root: File, private val sdkInt: Int) {
      * Installs the zip [open] returns (it may be called twice: once to hash and inspect, once to unpack). Never throws:
      * anything wrong is a [PackageCheck.Rejected] and nothing is left behind.
      */
-    fun install(open: () -> InputStream): PackageCheck {
+    fun install(open: () -> InputStream): PackageCheck = synchronized(lock) {
         var tmp: File? = null
         try {
+            root.listFiles { f -> f.isDirectory && f.name.endsWith(TMP) }?.forEach { it.deleteRecursively() }   // an interrupted earlier install
             val scan = scan(open) ?: return PackageCheck.Rejected("This file isn't a zip.")
             if (scan is Scan.Bad) return PackageCheck.Rejected(scan.reason)
             scan as Scan.Good

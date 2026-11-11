@@ -94,9 +94,11 @@ class AndroidGpuDriversTest {
         assertTrue(drivers.installed().isEmpty())
     }
 
-    @Test fun staleTmpIsIgnoredAndCleaned() {
+    @Test fun staleTmpIsIgnoredThenCleanedByInstall() {
         File(root, "abc.tmp").mkdirs()
         assertTrue(drivers.installed().isEmpty())
+        assertTrue(File(root, "abc.tmp").exists())
+        install(valid())
         assertFalse(File(root, "abc.tmp").exists())
     }
 
