@@ -4,7 +4,7 @@ melonDS DS on GLES 3.2: lets the GL renderer build against GLES3 (with patches/m
 dependency), requests a GLES 3.2 context, ports the compositor shaders to GLSL ES 3.00, and turns face culling off
 around the screen blit. Also carries JesseTG/melonds-ds#335 (video views: the frontend lays the screens out). Applied to cores/src/melondsds.
 
-Local wireless: tells the frontend when the emulated radio is on, off or hosting (nx_nds_radio.h), writes the firmware dump back with its own MAC and nickname, and waits for multiplayer replies by wall clock.
+Local wireless: tells the frontend when the emulated radio is on, off or hosting (nx_nds_radio.h), writes the firmware dump back with its own MAC and nickname, and waits for multiplayer replies by wall clock, counting blank replies by sender like standalone melonDS.
 diff --git a/CHANGELOG.md b/CHANGELOG.md
 index 49d182d..9868bba 100644
 --- a/CHANGELOG.md
@@ -405,10 +405,18 @@ index df32f07..065e0fc 100644
  
      // ...then load the game.
 diff --git a/src/libretro/core/core.hpp b/src/libretro/core/core.hpp
-index bb52319..4654f01 100644
+index bb52319..f36755a 100644
 --- a/src/libretro/core/core.hpp
 +++ b/src/libretro/core/core.hpp
-@@ -147,6 +147,14 @@ namespace MelonDsDs {
+@@ -96,6 +96,7 @@ namespace MelonDsDs {
+         bool MpSendPacket(const Packet &p) noexcept;
+         std::optional<Packet> MpNextPacket() noexcept;
+         std::optional<Packet> MpNextPacketBlock() noexcept;
++        bool MpAllPeersReplied(const std::vector<uint16_t> &replied) noexcept;
+         bool MpActive() const noexcept;
+ 
+         void WriteNdsSave(std::span<const std::byte> savedata, uint32_t writeoffset, uint32_t writelen) noexcept;
+@@ -147,6 +148,14 @@ namespace MelonDsDs {
              int type
          ) noexcept;
          [[gnu::hot]] static void RenderAudio(melonDS::NDS& nds) noexcept;
@@ -423,7 +431,7 @@ index bb52319..4654f01 100644
          [[gnu::cold]] bool InitErrorScreen(const config_exception& e) noexcept;
          [[gnu::cold]] void RenderErrorScreen() noexcept;
          [[gnu::cold]] void InitContent(unsigned type, std::span<const retro_game_info> game);
-@@ -196,6 +204,14 @@ namespace MelonDsDs {
+@@ -196,6 +205,14 @@ namespace MelonDsDs {
          /// \see UpdateSystemAvInfo
          bool _nudgeMaxHeight = false;
          uint32_t _flushTaskId = 0;
@@ -664,10 +672,25 @@ index fabccaa..d817085 100644
      }
  }
 diff --git a/src/libretro/libretro.cpp b/src/libretro/libretro.cpp
-index b56f23a..1154aa0 100644
+index b56f23a..338629d 100644
 --- a/src/libretro/libretro.cpp
 +++ b/src/libretro/libretro.cpp
-@@ -131,6 +131,7 @@ PUBLIC_SYMBOL void retro_unload_game(void) {
+@@ -20,12 +20,14 @@
+ // This must come before <GPU.h>!
+ #include "PlatformOGLPrivate.h"
+ 
++#include <algorithm>
+ #include <cstddef>
+ #include <cstdlib>
+ #include <cstring>
+ #include <ctime>
+ #include <memory>
+ #include <span>
++#include <vector>
+ 
+ #include <compat/strl.h>
+ #include <file/file_path.h>
+@@ -131,6 +133,7 @@ PUBLIC_SYMBOL void retro_unload_game(void) {
      retro::task::wait();
      retro::task::deinit();
  
@@ -675,7 +698,7 @@ index b56f23a..1154aa0 100644
      Core.UnloadGame();
  }
  
-@@ -180,6 +181,7 @@ PUBLIC_SYMBOL void retro_reset(void) {
+@@ -180,6 +183,7 @@ PUBLIC_SYMBOL void retro_reset(void) {
      ZoneScopedN(TracyFunction);
      retro::debug("retro_reset()\n");
  
@@ -683,7 +706,7 @@ index b56f23a..1154aa0 100644
      try {
          MelonDsDs::Core.Reset();
      }
-@@ -354,6 +356,7 @@ int DeconstructPacket(u8 *data, u64 *timestamp, const std::optional<MelonDsDs::P
+@@ -354,6 +358,7 @@ int DeconstructPacket(u8 *data, u64 *timestamp, const std::optional<MelonDsDs::P
  }
  
  int Platform::MP_SendPacket(u8* data, int len, u64 timestamp, void*) {
@@ -691,6 +714,37 @@ index b56f23a..1154aa0 100644
      return MelonDsDs::Core.MpSendPacket(MelonDsDs::Packet(data, len, timestamp, 0, MelonDsDs::Packet::Type::Other)) ? len : 0;
  }
  
+@@ -392,7 +397,9 @@ u16 Platform::MP_RecvReplies(u8* packets, u64 timestamp, u16 aidmask, void*) {
+         return 0;
+     }
+     u16 ret = 0;
+-    int loops = 0;
++    // A console that isn't addressed by this command (or has no AID yet) answers with a blank reply, which never
++    // fills aidmask; count replies by sender as standalone melonDS does, or each blank costs a full receive timeout.
++    std::vector<uint16_t> replied;
+     while((ret & aidmask) != aidmask) {
+         std::optional<MelonDsDs::Packet> o_p = MelonDsDs::Core.MpNextPacketBlock();
+         if(!o_p.has_value()) {
+@@ -405,9 +412,16 @@ u16 Platform::MP_RecvReplies(u8* packets, u64 timestamp, u16 aidmask, void*) {
+         if(p.PacketType() != MelonDsDs::Packet::Type::Reply) {
+             continue;
+         }
+-        ret |= 1<<p.Aid();
+-        memcpy(&packets[(p.Aid()-1)*1024], p.Data(), std::min(p.Length(), (uint64_t)1024));
+-        loops++;
++        if(std::find(replied.begin(), replied.end(), p.SenderId()) == replied.end()) {
++            replied.push_back(p.SenderId());
++        }
++        if(p.Aid() != 0 && p.Length() != 0) {
++            ret |= 1<<p.Aid();
++            memcpy(&packets[(p.Aid()-1)*1024], p.Data(), std::min(p.Length(), (uint64_t)1024));
++        }
++        if(MelonDsDs::Core.MpAllPeersReplied(replied)) {
++            break;
++        }
+     }
+     return ret;
+ }
 diff --git a/src/libretro/libretro_views.h b/src/libretro/libretro_views.h
 new file mode 100644
 index 0000000..cfaa783
@@ -767,19 +821,38 @@ index 0000000..cfaa783
 +
 +#endif //MELONDS_DS_LIBRETRO_VIEWS_H
 diff --git a/src/libretro/net/mp.cpp b/src/libretro/net/mp.cpp
-index caa185d..ea831ac 100644
+index caa185d..ee9e998 100644
 --- a/src/libretro/net/mp.cpp
 +++ b/src/libretro/net/mp.cpp
-@@ -15,7 +15,7 @@
+@@ -15,7 +15,8 @@
  */
  #include "mp.hpp"
  #include "environment.hpp"
 -#include <ctime>
++#include <algorithm>
 +#include <chrono>
  #include <libretro.h>
  #include <retro_assert.h>
  #include <retro_endianness.h>
-@@ -132,7 +132,9 @@ std::optional<Packet> MpState::NextPacket() noexcept {
+@@ -25,6 +26,8 @@ using namespace MelonDsDs;
+ // the player gets notified they are not supposed to use a VPN.
+ constexpr int SUCCESSIVE_TIMEOUTS_WARNING = 6;
+ constexpr long RECV_TIMEOUT_MS = 25;
++// A console silent this long has left; the host stops waiting for its replies.
++constexpr long PEER_FORGET_MS = 2000;
+ 
+ uint64_t swapToNetwork(uint64_t n) {
+     return swap_if_little64(n);
+@@ -106,6 +109,8 @@ void MpState::SetPollFn(retro_netpacket_poll_receive_t pollFn) noexcept {
+ void MpState::PacketReceived(const void *buf, size_t len, uint16_t client_id) noexcept {
+     retro_assert(IsReady());
+     Packet p = Packet::parsePk(buf, len);
++    p.SetSenderId(client_id);
++    _lastHeard[client_id] = std::chrono::steady_clock::now();
+     if(p.PacketType() == Packet::Type::Cmd) {
+         _hostId = client_id;
+         //retro::debug("Host client id is {}", client_id);
+@@ -132,7 +137,9 @@ std::optional<Packet> MpState::NextPacket() noexcept {
  std::optional<Packet> MpState::NextPacketBlock() noexcept {
      retro_assert(IsReady());
      if (receivedPackets.empty()) {
@@ -790,11 +863,43 @@ index caa185d..ea831ac 100644
              _sendFn(RETRO_NETPACKET_FLUSH_HINT, NULL, 0, RETRO_NETPACKET_BROADCAST);
              _pollFn();
              if(!receivedPackets.empty()) {
+@@ -151,6 +158,22 @@ std::optional<Packet> MpState::NextPacketBlock() noexcept {
+     return std::nullopt;
+ }
+ 
++bool MpState::AllPeersReplied(const std::vector<uint16_t> &replied) noexcept {
++    const auto cutoff = std::chrono::steady_clock::now() - std::chrono::milliseconds(PEER_FORGET_MS);
++    bool all = true;
++    for (auto it = _lastHeard.begin(); it != _lastHeard.end();) {
++        if (it->second < cutoff) {
++            it = _lastHeard.erase(it);
++            continue;
++        }
++        if (std::find(replied.begin(), replied.end(), it->first) == replied.end()) {
++            all = false;
++        }
++        ++it;
++    }
++    return all;
++}
++
+ void MpState::SendPacket(const Packet &p) noexcept {
+     retro_assert(IsReady());
+     uint16_t dest = RETRO_NETPACKET_BROADCAST;
 diff --git a/src/libretro/net/mp.hpp b/src/libretro/net/mp.hpp
-index f6b5dfc..d8022c1 100644
+index f6b5dfc..6a52ed9 100644
 --- a/src/libretro/net/mp.hpp
 +++ b/src/libretro/net/mp.hpp
-@@ -21,6 +21,10 @@
+@@ -14,13 +14,19 @@
+     with melonDS DS. If not, see http://www.gnu.org/licenses/.
+ */
+ #pragma once
++#include <chrono>
+ #include <cstdint>
++#include <unordered_map>
+ #include <queue>
+ #include <optional>
+ #include <vector>
  #include <libretro.h>
  
  namespace MelonDsDs {
@@ -805,6 +910,44 @@ index f6b5dfc..d8022c1 100644
  // timestamp, aid, and isReply, respectively.
  constexpr size_t HeaderSize = sizeof(uint64_t) + sizeof(uint8_t) + sizeof(uint8_t);
  
+@@ -48,6 +54,13 @@ public:
+     [[nodiscard]] uint64_t Length() const noexcept {
+         return _data.size();
+     };
++    /// Netpacket client id of the console that sent this packet (received packets only).
++    [[nodiscard]] uint16_t SenderId() const noexcept {
++        return _senderId;
++    };
++    void SetSenderId(uint16_t senderId) noexcept {
++        _senderId = senderId;
++    };
+ 
+     std::vector<uint8_t> ToBuf() const;
+ private:
+@@ -55,6 +68,7 @@ private:
+     uint8_t _aid;
+     Packet::Type _type;
+     std::vector<uint8_t> _data;
++    uint16_t _senderId = 0;
+ };
+ 
+ class MpState {
+@@ -66,6 +80,8 @@ public:
+     void SendPacket(const Packet &p) noexcept;
+     std::optional<Packet> NextPacket() noexcept;
+     std::optional<Packet> NextPacketBlock() noexcept;
++    /// True once every console heard from recently is in `replied`, so the host can stop waiting for replies.
++    bool AllPeersReplied(const std::vector<uint16_t> &replied) noexcept;
+ private:
+     bool _warnedHighLatency = false;
+     int _timeoutCount = 0;
+@@ -73,5 +89,6 @@ private:
+     retro_netpacket_poll_receive_t _pollFn;
+     std::optional<uint16_t> _hostId;
+     std::queue<Packet> receivedPackets;
++    std::unordered_map<uint16_t, std::chrono::steady_clock::time_point> _lastHeard;
+ };
+ }
 diff --git a/src/libretro/nx_nds_radio.h b/src/libretro/nx_nds_radio.h
 new file mode 100644
 index 0000000..9d5cc94
@@ -820,7 +963,7 @@ index 0000000..9d5cc94
 +#define NX_NDS_RADIO_ON 1       // the game powered the radio on
 +#define NX_NDS_RADIO_HOSTING 2  // the game sent a beacon: it created a group (once per ON)
 diff --git a/src/libretro/platform/mp.cpp b/src/libretro/platform/mp.cpp
-index 30ee4c2..ca3c0aa 100644
+index 30ee4c2..220580f 100644
 --- a/src/libretro/platform/mp.cpp
 +++ b/src/libretro/platform/mp.cpp
 @@ -18,6 +18,7 @@
@@ -831,7 +974,15 @@ index 30ee4c2..ca3c0aa 100644
  #include <fmt/base.h>
  #include <retro_assert.h>
  
-@@ -85,11 +86,49 @@ bool MelonDsDs::CoreState::MpActive() const noexcept {
+@@ -81,15 +82,57 @@ std::optional<MelonDsDs::Packet> MelonDsDs::CoreState::MpNextPacketBlock() noexc
+     return _mpState.NextPacketBlock();
+ }
+ 
++bool MelonDsDs::CoreState::MpAllPeersReplied(const std::vector<uint16_t> &replied) noexcept {
++    return _mpState.AllPeersReplied(replied);
++}
++
+ bool MelonDsDs::CoreState::MpActive() const noexcept {
      return _mpState.IsReady();
  }
  
