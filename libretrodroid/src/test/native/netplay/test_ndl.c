@@ -453,6 +453,126 @@ static int case_drops_are_counted(uint16_t port) {
 	return 0;
 }
 
+/* ---- Search and the automatic route ---- */
+
+static int case_prefer_settled_then_lower_id(uint16_t port) {
+	(void)port;
+	ndl_room_info settled_high = {900, true}, unsettled_low = {5, false};
+	CHECK(ndl_prefer(settled_high, unsettled_low));
+	CHECK(!ndl_prefer(unsettled_low, settled_high));
+	ndl_room_info a = {7, false}, b = {9, false};
+	CHECK(ndl_prefer(a, b) && !ndl_prefer(b, a));
+	ndl_room_info c = {7, true}, d = {9, true};
+	CHECK(ndl_prefer(c, d) && !ndl_prefer(d, c));
+	CHECK(!ndl_prefer(a, a));
+	return 0;
+}
+
+static ndl_config auto_config(const char* name, uint16_t port, uint16_t search_port) {
+	ndl_config c = config(NDL_AUTO, name, port, 8);
+	c.search_port = search_port;
+	return c;
+}
+
+static int case_auto_joins_a_sheet_host(uint16_t port) {
+	uint16_t sp = free_udp_port();
+	ndl_config c = config(NDL_HOST, "sheet", port, 8);
+	c.search_port = sp;
+	room[1] = ndl_create(&c);
+	CHECK(room[1] != NULL && ndl_in_room(room[1]));
+	c = auto_config("auto", port, sp);
+	room[2] = ndl_create(&c);
+	CHECK(room[2] != NULL);
+	ndl_radio_changed(room[2], NDL_RADIO_ON);
+	advance(400);
+	CHECK(wait_in_room(room[2], true, 2000));
+	CHECK(ndl_client_id(room[2]) == 2);
+	CHECK(wait_count(room[1], 2, 2000));
+	return 0;
+}
+
+/* An AUTO phone whose game hosts and one whose game only looks, in the same room. */
+static int auto_pair(uint16_t port, uint16_t sp) {
+	ndl_config c = auto_config("hosting", port, sp);
+	room[1] = ndl_create(&c);
+	CHECK(room[1] != NULL);
+	ndl_radio_changed(room[1], NDL_RADIO_HOSTING);
+	advance(400);
+	CHECK(wait_in_room(room[1], true, 2000));
+	CHECK(ndl_client_id(room[1]) == 1);
+	c = auto_config("looking", port, sp);
+	room[2] = ndl_create(&c);
+	CHECK(room[2] != NULL);
+	ndl_radio_changed(room[2], NDL_RADIO_ON);
+	advance(400);
+	CHECK(wait_in_room(room[2], true, 2000));
+	CHECK(ndl_client_id(room[2]) == 2);
+	CHECK(wait_count(room[1], 2, 2000));
+	CHECK(wait_count(room[2], 2, 2000));
+	return 0;
+}
+
+static int case_auto_host_opens_when_none(uint16_t port) {
+	CHECK(auto_pair(port, free_udp_port()) == 0);
+	const char msg[] = "found you";
+	CHECK(ndl_send(room[2], msg, sizeof(msg), NDL_BROADCAST) == 0);
+	inbox in = {0};
+	CHECK(take_until(room[1], &in, 1, 1000) == 1);
+	CHECK(in.sender[0] == 2);
+	return 0;
+}
+
+static int case_auto_idle_without_radio(uint16_t port) {
+	ndl_config c = auto_config("quiet", port, free_udp_port());
+	room[1] = ndl_create(&c);
+	CHECK(room[1] != NULL);
+	advance(3000);
+	CHECK(!ndl_in_room(room[1]));
+	CHECK(ndl_test_sent(room[1]) == 0);
+	/* Radio on without a room around: it asks. */
+	ndl_radio_changed(room[1], NDL_RADIO_ON);
+	advance(400);
+	CHECK(ndl_test_sent(room[1]) > 0);
+	CHECK(!ndl_in_room(room[1]));
+	return 0;
+}
+
+static int case_linger_then_leave(uint16_t port) {
+	CHECK(auto_pair(port, free_udp_port()) == 0);
+	ndl_radio_changed(room[2], NDL_RADIO_OFF);
+	advance(9900);
+	CHECK(ndl_in_room(room[2]));
+	CHECK(ndl_member_count(room[1]) == 2);
+	advance(200);
+	CHECK(wait_in_room(room[2], false, 1000));
+	CHECK(wait_count(room[1], 1, 1000));
+	CHECK(ndl_in_room(room[1]));
+	/* Out for good while the radio stays off. */
+	advance(2000);
+	CHECK(!ndl_in_room(room[2]));
+	return 0;
+}
+
+static int case_leave_now_skips_linger(uint16_t port) {
+	CHECK(auto_pair(port, free_udp_port()) == 0);
+	ndl_radio_changed(room[2], NDL_RADIO_OFF);
+	ndl_leave_now(room[2]);
+	CHECK(!ndl_in_room(room[2]));
+	CHECK(wait_count(room[1], 1, 1000));
+	/* Radio back on: it searches and joins again. */
+	ndl_radio_changed(room[2], NDL_RADIO_ON);
+	advance(1200);
+	CHECK(wait_in_room(room[2], true, 2000));
+	CHECK(wait_count(room[1], 2, 2000));
+	/* A leave with the radio still on stays out until the next radio on. */
+	ndl_leave_now(room[2]);
+	CHECK(!ndl_in_room(room[2]));
+	advance(2000);
+	CHECK(!ndl_in_room(room[2]));
+	CHECK(wait_count(room[1], 1, 1000));
+	return 0;
+}
+
 static void run(const char* name, int (*fn)(uint16_t)) {
 	uint16_t port = free_udp_port();
 	int ok = fn(port) == 0;
@@ -477,6 +597,12 @@ int main(void) {
 	run("oversize_send_rejected", case_oversize_send_rejected);
 	run("keepalive_rtt_reported", case_keepalive_rtt_reported);
 	run("drops_are_counted", case_drops_are_counted);
+	run("prefer_settled_then_lower_id", case_prefer_settled_then_lower_id);
+	run("auto_joins_a_sheet_host", case_auto_joins_a_sheet_host);
+	run("auto_host_opens_when_none", case_auto_host_opens_when_none);
+	run("auto_idle_without_radio", case_auto_idle_without_radio);
+	run("linger_then_leave", case_linger_then_leave);
+	run("leave_now_skips_linger", case_leave_now_skips_linger);
 	if (fails) {
 		printf("%d test(s) failed\n", fails);
 		return 1;

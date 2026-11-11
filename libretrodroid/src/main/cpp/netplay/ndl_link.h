@@ -23,7 +23,8 @@
  * and a late packet is worse than a lost one, so nothing is retransmitted.
  *
  * Wire (one message per datagram): ['N']['D'][version 1][type u8][sender u16 BE][dest u16 BE] + payload.
- *   ASK 1, ANSWER 2 (room_id u32 BE, settled u8, members u8, room_port u16 BE): the search, not used by the sheet modes.
+ *   ASK 1 (to the search port), ANSWER 2 (room_id u32 BE, settled u8, members u8, room_port u16 BE): the search. Every
+ *   holder answers on the search port (a sheet host too, so the automatic route finds it); only AUTO asks.
  *   JOIN 3 (name, up to 16 bytes); ACCEPT 4 (dest = the new id; payload members u8); REFUSE 5 (room full).
  *   DATA 6 (a core packet); LEAVE 7; KEEPALIVE 8 (from the holder: payload members u8, plus the
  *   member's probe stamp u32 BE when echoing; from a member: the probe stamp u32 BE, or empty from older builds).
@@ -71,10 +72,23 @@ typedef struct {
 
 typedef struct ndl_link ndl_link;
 
+/* A room as a search answer tells of it. Settled: a sheet session's room, or one with another member. */
+typedef struct {
+	uint32_t room_id;
+	bool settled;
+} ndl_room_info;
+
+/* True when a is the room to be in rather than b: settled beats unsettled, else the lower id. Every phone that sees
+ * the same two rooms picks the same one. */
+bool ndl_prefer(ndl_room_info a, ndl_room_info b);
+
 typedef void (*ndl_deliver_fn)(const uint8_t* buf, size_t len, uint16_t sender, void* ctx);
 
 /* Starts the network thread. HOST opens its room before returning (settled); JOIN asks host_ip every 1 s, 30 times.
- * AUTO is accepted and stays idle. NULL when the socket, wake pipe or thread cannot be set up. */
+ * AUTO sends nothing until the radio is on, then searches (300 ms of answers): it joins the preferred room found, or
+ * opens one when the radio is HOSTING, else searches again after 700 ms. A lone AUTO holder searches every 2 s and
+ * moves to a room it should prefer. Radio off keeps a room for 10 s, then leaves. NULL when the socket, wake pipe or
+ * thread cannot be set up. */
 ndl_link* ndl_create(const ndl_config* cfg);
 
 /* Stops and joins the thread, then sends LEAVE when in a room. NULL is fine. */
@@ -125,6 +139,8 @@ int ndl_take(ndl_link* l, ndl_deliver_fn fn, void* ctx);
 /* Freezes the network thread (no receive, no keepalive, no timeout) and makes ndl_destroy skip its LEAVE, as if the
  * phone vanished. */
 void ndl_test_freeze(ndl_link* l, bool frozen);
+/* Datagrams this link has sent so far, of any type. */
+uint32_t ndl_test_sent(ndl_link* l);
 #endif
 
 #ifdef __cplusplus

@@ -12,6 +12,7 @@ import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.BuildConfig
 import com.nxredux.mobile.DebugLogFile
 import com.nxredux.mobile.R
+import com.nxredux.mobile.lowLatencyWifiLock
 import com.nxredux.mobile.cheats.CheatSet
 import com.nxredux.mobile.cheats.DolphinCheats
 import com.nxredux.mobile.gametime.GameTimeRecorder
@@ -213,6 +214,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     private var playerName = ""
     /** Held while a 3DS game may hold a local wireless room ([holdBroadcasts]). */
     private var broadcasts: WifiManager.MulticastLock? = null
+    /** Held while a DS game may use local wireless outside a session (a session's is [GameNetplay]'s). */
+    private var dsWifi: WifiManager.WifiLock? = null
 
     private fun holdBroadcasts() {
         if (broadcasts != null) return
@@ -470,6 +473,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // A DS room runs under its own MAC (a seed kept per install) so rooms tell its members apart.
             val ndsMac = if (coreId == "melondsds" && (n3dsAuto != null || linkKind == NetplayLinkKind.NDSLINK)) NetplayLinkOptions.ndsMac(AndroidAppSettings(activity).ndsMacSeed) else null
             if (ndsMac != null) com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(WifiNetworks.network(activity.getSystemService(ConnectivityManager::class.java))?.networkHandle ?: 0L)
+            // The DS waits on every member's reply each frame: Wi-Fi power saving's late wake-ups would slow the room.
+            if (ndsMac != null && np == null && dsWifi == null) dsWifi = lowLatencyWifiLock(activity, "nxredux:nds-wireless")?.also { runCatching { it.acquire() } }
             val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsAuto, n3dsBroadcast, ndsMac) else when (linkKind) {
                 null -> NetplayLinkOptions.forPair(np)
                 NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)
@@ -1030,6 +1035,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     fun onDestroy() {
         broadcasts?.let { runCatching { if (it.isHeld) it.release() } }
         broadcasts = null
+        dsWifi?.let { runCatching { if (it.isHeld) it.release() } }
+        dsWifi = null
         cacheHoldsDrained = true
         releaseCacheHolds()
     }

@@ -53,6 +53,19 @@
 #define NDL_HOLDER_ID 1
 #define NDL_DGRAM_MAX (NDL_HDR_SIZE + NDL_MAX_PAYLOAD)
 
+/* The automatic route, as the 3DS link's. */
+#define NDL_SEARCH_WAIT_MS 300
+#define NDL_SEARCH_AGAIN_MS 700
+#define NDL_ALONE_SEARCH_MS 2000
+/* A game drops and restarts its radio between its own menus: the room outlives those gaps. */
+#define NDL_LINGER_MS 10000
+/* The holder just answered, so a few unanswered JOINs mean it went away: search again rather than knock for 30 s. */
+#define NDL_AUTO_JOIN_TRIES 3
+/* A room that refused this phone is asked again only after a pause. */
+#define NDL_REFUSED_WAIT_MS 5000
+#define NDL_OPEN_RETRY_MS 1000
+#define NDL_ANSWER_SIZE 8
+
 enum {
 	T_ASK = 1,
 	T_ANSWER = 2,
@@ -97,9 +110,23 @@ struct ndl_link {
 	atomic_bool frozen;
 
 	int fd;
+	int sfd; /* holder: bound to the search port, answers ASK */
 	ndl_mode mode;
 	ndl_role role;
 	ndl_radio radio;
+
+	/* AUTO. */
+	uint64_t radio_off_ms; /* when the radio went off, 0 while it is on */
+	bool parked;		   /* left at once: no search until the radio comes on again */
+	uint64_t search_until; /* a search is waiting for answers until then, 0 = none */
+	uint64_t next_search_ms;
+	uint64_t next_alone_ms;
+	bool found;
+	ndl_room_info found_info;
+	struct sockaddr_in found_addr;
+#ifdef NDL_TESTING
+	uint32_t test_sent;
+#endif
 
 	/* Holder: members[id], id 2..max_members (members[1] is this phone, never used). */
 	ndl_member members[NDL_MAX_MEMBERS + 1];
@@ -147,16 +174,26 @@ static size_t encode(uint8_t* out, uint8_t type, uint16_t sender, uint16_t dest,
 	return NDL_HDR_SIZE + n;
 }
 
-static void send_to(ndl_link* l, const struct sockaddr_in* to, uint8_t type, uint16_t sender, uint16_t dest,
+static void send_on(ndl_link* l, int fd, const struct sockaddr_in* to, uint8_t type, uint16_t sender, uint16_t dest,
 					const void* payload, size_t n) {
-	if (l->fd < 0)
+	if (fd < 0)
 		return;
 	uint8_t buf[NDL_DGRAM_MAX];
 	size_t len = encode(buf, type, sender, dest, payload, n);
 	ssize_t r;
 	do {
-		r = sendto(l->fd, buf, len, 0, (const struct sockaddr*)to, sizeof(*to));
+		r = sendto(fd, buf, len, 0, (const struct sockaddr*)to, sizeof(*to));
 	} while (r < 0 && errno == EINTR);
+#ifdef NDL_TESTING
+	l->test_sent++;
+#else
+	(void)l;
+#endif
+}
+
+static void send_to(ndl_link* l, const struct sockaddr_in* to, uint8_t type, uint16_t sender, uint16_t dest,
+					const void* payload, size_t n) {
+	send_on(l, l->fd, to, type, sender, dest, payload, n);
 }
 
 static bool same_addr(const struct sockaddr_in* a, const struct sockaddr_in* b) {
@@ -165,21 +202,35 @@ static bool same_addr(const struct sockaddr_in* a, const struct sockaddr_in* b) 
 
 /* ---- Socket ---- */
 
+static void close_search_socket(ndl_link* l) {
+	if (l->sfd >= 0) {
+		close(l->sfd);
+		l->sfd = -1;
+	}
+}
+
+/* Both: a link without its room socket has nothing to answer searches for. */
 static void close_socket(ndl_link* l) {
+	close_search_socket(l);
 	if (l->fd >= 0) {
 		close(l->fd);
 		l->fd = -1;
 	}
 }
 
-/* UDP, non-blocking, bound to port on every address (0: any free port). No SO_REUSEADDR: on Linux it would let a
- * second socket share the room port and take half its datagrams. */
-static int open_socket(const ndl_config* cfg, uint16_t port) {
+/* UDP, non-blocking, bound to port on every address (0: any free port). The room socket takes no SO_REUSEADDR: on
+ * Linux it would let a second socket share the room port and take half its datagrams. The search socket does (reuse),
+ * since asks are broadcast and reach every socket on the port, and a holder that is closing must not block the next. */
+static int open_socket(const ndl_config* cfg, uint16_t port, bool reuse) {
 	int fd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (fd < 0)
 		return -1;
 	if (cfg->bind_socket)
 		cfg->bind_socket(fd, cfg->bind_ctx);
+	if (reuse) {
+		int on = 1;
+		setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+	}
 	int buf = 256 * 1024;
 	setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &buf, sizeof(buf));
 	setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &buf, sizeof(buf));
@@ -271,37 +322,134 @@ static void member_lost_room(ndl_link* l, const char* why) {
 	queue_clear(l);
 }
 
+/* Opens the room on the room port, answering searches on the search port. Lock held, no socket open. */
+static bool open_room(ndl_link* l) {
+	l->fd = open_socket(&l->cfg, l->cfg.room_port, false);
+	if (l->fd < 0) {
+		NP_LOG("DS link: cannot open the room on port %u (errno %d)", l->cfg.room_port, errno);
+		return false;
+	}
+	if (l->cfg.search_port) {
+		l->sfd = open_socket(&l->cfg, l->cfg.search_port, true);
+		if (l->sfd < 0)
+			NP_LOG("DS link: the search port %u is taken (errno %d), the room will not be found", l->cfg.search_port,
+				   errno);
+	}
+	l->role = R_HOLDER;
+	l->my_id = NDL_HOLDER_ID;
+	l->next_alone_ms = now_ms(l) + NDL_ALONE_SEARCH_MS;
+	NP_LOG("DS link: room open on port %u (up to %d)", l->cfg.room_port, l->max_members);
+	return true;
+}
+
+/* Starts knocking on the room at holder from the room socket, opening it (any port) when there is none. */
+static bool start_join(ndl_link* l, const struct sockaddr_in* holder) {
+	l->holder = *holder;
+	if (l->fd < 0)
+		l->fd = open_socket(&l->cfg, 0, false);
+	if (l->fd < 0) {
+		NP_LOG("DS link: cannot open a socket (errno %d)", errno);
+		return false;
+	}
+	l->role = R_JOINING;
+	l->join_tries = 0;
+	l->next_join_ms = 0;
+	return true;
+}
+
+static void auto_reset(ndl_link* l) {
+	l->search_until = 0;
+	l->next_search_ms = 0;
+	l->found = false;
+	l->parked = false;
+}
+
 /* Leaves, closes the socket and starts mode. Lock held. */
 static void apply_mode(ndl_link* l, ndl_mode m) {
 	leave_room(l);
 	close_socket(l);
+	auto_reset(l);
 	l->mode = m;
 	if (m == NDL_HOST) {
-		l->fd = open_socket(&l->cfg, l->cfg.room_port);
-		if (l->fd < 0) {
-			NP_LOG("DS link: cannot open the room on port %u (errno %d)", l->cfg.room_port, errno);
-			return;
-		}
-		l->role = R_HOLDER;
-		l->my_id = NDL_HOLDER_ID;
-		NP_LOG("DS link: room open on port %u (up to %d)", l->cfg.room_port, l->max_members);
+		open_room(l);
 	} else if (m == NDL_JOIN) {
-		memset(&l->holder, 0, sizeof(l->holder));
-		l->holder.sin_family = AF_INET;
-		l->holder.sin_port = htons(l->cfg.room_port);
-		if (inet_pton(AF_INET, l->cfg.host_ip, &l->holder.sin_addr) != 1) {
+		struct sockaddr_in h;
+		memset(&h, 0, sizeof(h));
+		h.sin_family = AF_INET;
+		h.sin_port = htons(l->cfg.room_port);
+		if (inet_pton(AF_INET, l->cfg.host_ip, &h.sin_addr) != 1) {
 			NP_LOG("DS link: bad room address '%s'", l->cfg.host_ip);
 			return;
 		}
-		l->fd = open_socket(&l->cfg, 0);
-		if (l->fd < 0) {
-			NP_LOG("DS link: cannot open a socket (errno %d)", errno);
-			return;
-		}
-		l->role = R_JOINING;
-		l->join_tries = 0;
-		l->next_join_ms = 0;
+		start_join(l, &h);
 	}
+	/* AUTO opens nothing until the game's radio comes on (tick). */
+}
+
+/* ---- Search (lock held) ---- */
+
+static bool holder_settled(ndl_link* l) {
+	return l->mode == NDL_HOST || holder_count(l) > 1;
+}
+
+/* Asks the network for a room from the room socket (the answers come back to it), opening one when there is none. */
+static void start_search(ndl_link* l) {
+	if (l->fd < 0)
+		l->fd = open_socket(&l->cfg, 0, false);
+	if (l->fd < 0) {
+		NP_LOG("DS link: cannot open a socket (errno %d)", errno);
+		l->next_search_ms = now_ms(l) + NDL_OPEN_RETRY_MS;
+		return;
+	}
+	int on = 1;
+	setsockopt(l->fd, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on));
+	struct sockaddr_in to;
+	memset(&to, 0, sizeof(to));
+	to.sin_family = AF_INET;
+	to.sin_port = htons(l->cfg.search_port);
+	/* The network's own broadcast address leaves through that network whatever the default route is (a Wi-Fi without
+	 * internet next to mobile data); the limited one covers a wrong or missing address. */
+	if (l->cfg.broadcast[0] && inet_pton(AF_INET, l->cfg.broadcast, &to.sin_addr) == 1)
+		send_to(l, &to, T_ASK, 0, NDL_BROADCAST, NULL, 0);
+	to.sin_addr.s_addr = htonl(INADDR_BROADCAST);
+	send_to(l, &to, T_ASK, 0, NDL_BROADCAST, NULL, 0);
+	l->found = false;
+	l->search_until = now_ms(l) + NDL_SEARCH_WAIT_MS;
+}
+
+static void search_answer(ndl_link* l, const struct sockaddr_in* from, const uint8_t* p, size_t n) {
+	if (n < NDL_ANSWER_SIZE)
+		return;
+	ndl_room_info r;
+	r.room_id = ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
+	r.settled = p[4] != 0;
+	uint16_t port = (uint16_t)((p[6] << 8) | p[7]);
+	/* This phone's own room, heard through its own search port. */
+	if (r.room_id == l->room_id || port == 0)
+		return;
+	if (l->found && !ndl_prefer(r, l->found_info))
+		return;
+	l->found = true;
+	l->found_info = r;
+	l->found_addr = *from;
+	l->found_addr.sin_port = htons(port);
+}
+
+/* An ASK on the search socket: a holder tells of its room. */
+static void search_ask(ndl_link* l, const struct sockaddr_in* from, const uint8_t* buf, size_t n) {
+	if (l->role != R_HOLDER || n < NDL_HDR_SIZE || buf[0] != 'N' || buf[1] != 'D' || buf[2] != NDL_VERSION ||
+		buf[3] != T_ASK)
+		return;
+	uint8_t a[NDL_ANSWER_SIZE];
+	a[0] = (uint8_t)(l->room_id >> 24);
+	a[1] = (uint8_t)(l->room_id >> 16);
+	a[2] = (uint8_t)(l->room_id >> 8);
+	a[3] = (uint8_t)l->room_id;
+	a[4] = holder_settled(l);
+	a[5] = (uint8_t)holder_count(l);
+	a[6] = (uint8_t)(l->cfg.room_port >> 8);
+	a[7] = (uint8_t)l->cfg.room_port;
+	send_on(l, l->sfd, from, T_ANSWER, NDL_HOLDER_ID, 0, a, sizeof(a));
 }
 
 /* ---- Inbound (network thread, lock held) ---- */
@@ -401,6 +549,7 @@ static void member_handle(ndl_link* l, const struct sockaddr_in* from, uint8_t t
 			NP_LOG("DS link: joined the room as %d", dest);
 		} else if (type == T_REFUSE) {
 			l->role = R_IDLE;
+			l->next_search_ms = now + NDL_REFUSED_WAIT_MS;
 			NP_LOG("DS link: the room is full");
 		}
 		return;
@@ -460,6 +609,13 @@ static void handle_datagram(ndl_link* l, const struct sockaddr_in* from, const u
 		l->drops.bad++;
 		return;
 	}
+	if (type == T_ANSWER) {
+		if (l->search_until)
+			search_answer(l, from, payload, pn);
+		return;
+	}
+	if (type == T_ASK)
+		return;
 	if (l->role == R_HOLDER)
 		holder_handle(l, from, type, dest, payload, pn);
 	else if (l->role == R_JOINING || l->role == R_MEMBER)
@@ -468,8 +624,78 @@ static void handle_datagram(ndl_link* l, const struct sockaddr_in* from, const u
 
 /* ---- Timers (network thread, lock held) ---- */
 
+static bool auto_wanted(ndl_link* l, uint64_t now) {
+	if (l->parked)
+		return false;
+	if (l->radio != NDL_RADIO_OFF)
+		return true;
+	/* Only a room already held or joined outlives the radio. */
+	return l->role != R_IDLE && l->radio_off_ms && now - l->radio_off_ms < NDL_LINGER_MS;
+}
+
+/* The automatic route: in a room while the game's radio is on. A game that hosts opens the room when the network has
+ * none; a game that only looks joins the room it finds. */
+static void auto_tick(ndl_link* l, uint64_t now) {
+	if (!auto_wanted(l, now)) {
+		if (l->role != R_IDLE || l->fd >= 0) {
+			if (l->role == R_HOLDER || l->role == R_MEMBER)
+				NP_LOG("DS link: radio off, leaving the room");
+			leave_room(l);
+			close_socket(l);
+		}
+		l->search_until = 0;
+		l->radio_off_ms = 0;
+		return;
+	}
+	bool done = l->search_until && now >= l->search_until;
+	if (done)
+		l->search_until = 0;
+
+	if (l->role == R_HOLDER) {
+		if (holder_count(l) > 1)
+			return;
+		/* Two phones that hosted at once each hold a room: alone in this one, move to the room every phone picks. */
+		if (done && l->found) {
+			ndl_room_info mine = {l->room_id, false};
+			if (ndl_prefer(l->found_info, mine)) {
+				NP_LOG("DS link: another room is the one to be in, moving to it");
+				leave_room(l);
+				close_socket(l);
+				start_join(l, &l->found_addr);
+			}
+			return;
+		}
+		if (!l->search_until && now >= l->next_alone_ms) {
+			l->next_alone_ms = now + NDL_ALONE_SEARCH_MS;
+			start_search(l);
+		}
+		return;
+	}
+	if (l->role != R_IDLE)
+		return; /* joining or a member: the room's own timers run it */
+
+	if (done) {
+		if (l->found) {
+			if (!start_join(l, &l->found_addr))
+				l->next_search_ms = now + NDL_OPEN_RETRY_MS;
+		} else if (l->radio == NDL_RADIO_HOSTING) {
+			/* The asking socket is on a free port; the room needs its own. */
+			close_socket(l);
+			if (!open_room(l))
+				l->next_search_ms = now + NDL_OPEN_RETRY_MS;
+		} else {
+			l->next_search_ms = now + NDL_SEARCH_AGAIN_MS;
+		}
+		return;
+	}
+	if (!l->search_until && now >= l->next_search_ms)
+		start_search(l);
+}
+
 static void tick(ndl_link* l) {
 	uint64_t now = now_ms(l);
+	if (l->mode == NDL_AUTO)
+		auto_tick(l, now);
 	if (l->role == R_HOLDER) {
 		bool dropped = false;
 		for (int id = 2; id <= l->max_members; id++) {
@@ -504,9 +730,11 @@ static void tick(ndl_link* l) {
 	} else if (l->role == R_JOINING) {
 		if (now < l->next_join_ms)
 			return;
-		if (l->join_tries >= NDL_JOIN_TRIES) {
+		if (l->join_tries >= (l->mode == NDL_AUTO ? NDL_AUTO_JOIN_TRIES : NDL_JOIN_TRIES)) {
 			l->role = R_IDLE;
-			NP_LOG("DS link: no answer from %s, gave up", l->cfg.host_ip);
+			char ip[INET_ADDRSTRLEN] = "";
+			inet_ntop(AF_INET, &l->holder.sin_addr, ip, sizeof(ip));
+			NP_LOG("DS link: no answer from %s, gave up", ip);
 			return;
 		}
 		send_to(l, &l->holder, T_JOIN, 0, NDL_HOLDER_ID, l->cfg.name, strnlen(l->cfg.name, 16));
@@ -517,25 +745,63 @@ static void tick(ndl_link* l) {
 
 /* ---- Network thread ---- */
 
+/* Reads the room socket (or the search socket) dry, taking the lock per datagram. */
+static void read_socket(ndl_link* l, bool search, uint8_t* buf, size_t cap) {
+	for (;;) {
+		pthread_mutex_lock(&l->mu);
+		int fd = search ? l->sfd : l->fd;
+		if (fd < 0) {
+			pthread_mutex_unlock(&l->mu);
+			return;
+		}
+		struct sockaddr_in from;
+		socklen_t fl = sizeof(from);
+		ssize_t n = recvfrom(fd, buf, cap, 0, (struct sockaddr*)&from, &fl);
+		if (n < 0) {
+			pthread_mutex_unlock(&l->mu);
+			if (errno == EINTR)
+				continue;
+			/* EAGAIN, or an ICMP error left on the socket by a peer that went away. */
+			return;
+		}
+		if (fl >= sizeof(from) && from.sin_family == AF_INET) {
+			if (search)
+				search_ask(l, &from, buf, (size_t)n);
+			else
+				handle_datagram(l, &from, buf, (size_t)n);
+		}
+		pthread_mutex_unlock(&l->mu);
+	}
+}
+
 static void* net_thread(void* arg) {
 	ndl_link* l = arg;
 	uint8_t buf[NDL_DGRAM_MAX + 1];
 	while (!atomic_load(&l->stop)) {
 		pthread_mutex_lock(&l->mu);
 		int fd = l->fd;
+		int sfd = l->sfd;
 		pthread_mutex_unlock(&l->mu);
 
-		struct pollfd p[2];
+		struct pollfd p[3];
 		int np = 0;
 		p[np].fd = l->wake.rd;
 		p[np].events = POLLIN;
 		p[np].revents = 0;
 		np++;
-		if (fd >= 0 && !atomic_load(&l->frozen)) {
-			p[np].fd = fd;
-			p[np].events = POLLIN;
-			p[np].revents = 0;
-			np++;
+		if (!atomic_load(&l->frozen)) {
+			if (fd >= 0) {
+				p[np].fd = fd;
+				p[np].events = POLLIN;
+				p[np].revents = 0;
+				np++;
+			}
+			if (sfd >= 0) {
+				p[np].fd = sfd;
+				p[np].events = POLLIN;
+				p[np].revents = 0;
+				np++;
+			}
 		}
 		poll(p, (nfds_t)np, NDL_POLL_MS);
 		if (p[0].revents & POLLIN)
@@ -545,26 +811,8 @@ static void* net_thread(void* arg) {
 		if (atomic_load(&l->frozen))
 			continue;
 
-		for (;;) {
-			pthread_mutex_lock(&l->mu);
-			if (l->fd < 0) {
-				pthread_mutex_unlock(&l->mu);
-				break;
-			}
-			struct sockaddr_in from;
-			socklen_t fl = sizeof(from);
-			ssize_t n = recvfrom(l->fd, buf, sizeof(buf), 0, (struct sockaddr*)&from, &fl);
-			if (n < 0) {
-				pthread_mutex_unlock(&l->mu);
-				if (errno == EINTR)
-					continue;
-				/* EAGAIN, or an ICMP error left on the socket by a peer that went away. */
-				break;
-			}
-			if (fl >= sizeof(from) && from.sin_family == AF_INET)
-				handle_datagram(l, &from, buf, (size_t)n);
-			pthread_mutex_unlock(&l->mu);
-		}
+		read_socket(l, false, buf, sizeof(buf));
+		read_socket(l, true, buf, sizeof(buf));
 
 		pthread_mutex_lock(&l->mu);
 		tick(l);
@@ -594,6 +842,7 @@ ndl_link* ndl_create(const ndl_config* cfg) {
 	l->max_members =
 		(cfg->max_members >= 2 && cfg->max_members <= NDL_MAX_MEMBERS) ? cfg->max_members : NDL_MAX_MEMBERS;
 	l->fd = -1;
+	l->sfd = -1;
 	l->my_id = -1;
 	l->mode = NDL_OFF;
 	l->radio = NDL_RADIO_OFF;
@@ -653,8 +902,17 @@ void ndl_radio_changed(ndl_link* l, ndl_radio r) {
 	if (!l)
 		return;
 	pthread_mutex_lock(&l->mu);
+	if (r == NDL_RADIO_OFF) {
+		if (l->radio != NDL_RADIO_OFF)
+			l->radio_off_ms = now_ms(l);
+	} else {
+		l->radio_off_ms = 0;
+		if (r != l->radio)
+			l->parked = false;
+	}
 	l->radio = r;
 	pthread_mutex_unlock(&l->mu);
+	np_wake_poke(&l->wake);
 }
 
 void ndl_leave_now(ndl_link* l) {
@@ -662,6 +920,14 @@ void ndl_leave_now(ndl_link* l) {
 		return;
 	pthread_mutex_lock(&l->mu);
 	leave_room(l);
+	/* Nobody may find a room that is gone. */
+	close_search_socket(l);
+	if (l->mode == NDL_AUTO) {
+		close_socket(l);
+		l->search_until = 0;
+		l->radio_off_ms = 0;
+		l->parked = true;
+	}
 	pthread_mutex_unlock(&l->mu);
 }
 
@@ -787,7 +1053,20 @@ int ndl_take(ndl_link* l, ndl_deliver_fn fn, void* ctx) {
 	return taken;
 }
 
+bool ndl_prefer(ndl_room_info a, ndl_room_info b) {
+	if (a.settled != b.settled)
+		return a.settled;
+	return a.room_id < b.room_id;
+}
+
 #ifdef NDL_TESTING
+uint32_t ndl_test_sent(ndl_link* l) {
+	pthread_mutex_lock(&l->mu);
+	uint32_t n = l->test_sent;
+	pthread_mutex_unlock(&l->mu);
+	return n;
+}
+
 void ndl_test_freeze(ndl_link* l, bool frozen) {
 	atomic_store(&l->frozen, frozen);
 	np_wake_poke(&l->wake);
