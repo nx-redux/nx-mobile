@@ -36,6 +36,8 @@ namespace libretrodroid::dslink {
     void configure(const std::vector<Variable>& vars);   // the nx_nds_link* variables: create, replace or end the link
     void radio(unsigned state); // NX_ENVIRONMENT_SET_NDS_RADIO, from inside retro_run
     void preFrame();            // start/stop the core around a room, deliver queued packets; never holds the frame
+    void frameBegin();          // around retro_run while a room is open: timing stats for the diagnostics line
+    void frameEnd();
     void stopCore();            // the core's stop() if its session is open, then the link ends; before retro_unload_game
     void shutdown();            // leaves the room at once; the link itself ends in stopCore
     bool inRoom();

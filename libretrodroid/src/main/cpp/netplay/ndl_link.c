@@ -113,6 +113,11 @@ struct ndl_link {
 	uint64_t sent_ms;
 	int join_tries;
 	uint64_t next_join_ms;
+	/* Round trips of the keepalive probe since the last ndl_stats_rtt. */
+	int rtt_n;
+	int rtt_min;
+	int rtt_max;
+	int64_t rtt_sum;
 
 	/* Inbound queue, a ring. */
 	ndl_slot* q;
@@ -355,6 +360,13 @@ static void holder_handle(ndl_link* l, const struct sockaddr_in* from, uint8_t t
 	l->members[id].heard_ms = now;
 	if (type == T_DATA) {
 		holder_relay(l, id, dest, payload, n);
+	} else if (type == T_KEEPALIVE) {
+		if (n >= 4) {
+			uint8_t echo[5];
+			echo[0] = (uint8_t)holder_count(l);
+			memcpy(echo + 1, payload, 4);
+			send_to(l, from, T_KEEPALIVE, NDL_HOLDER_ID, (uint16_t)id, echo, sizeof(echo));
+		}
 	} else if (type == T_LEAVE) {
 		NP_LOG("DS link: member %d left", id);
 		memset(&l->members[id], 0, sizeof(l->members[id]));
@@ -390,6 +402,20 @@ static void member_handle(ndl_link* l, const struct sockaddr_in* from, uint8_t t
 	case T_KEEPALIVE:
 		if (n >= 1)
 			l->count = payload[0];
+		if (n >= 5) {
+			/* Our own send time, echoed: the difference is the round trip (32-bit wrap is harmless). */
+			uint32_t sent = ((uint32_t)payload[1] << 24) | ((uint32_t)payload[2] << 16) | ((uint32_t)payload[3] << 8) |
+							(uint32_t)payload[4];
+			int rtt = (int)(uint32_t)((uint32_t)now - sent);
+			if (rtt < 0)
+				rtt = 0;
+			if (l->rtt_n == 0 || rtt < l->rtt_min)
+				l->rtt_min = rtt;
+			if (l->rtt_n == 0 || rtt > l->rtt_max)
+				l->rtt_max = rtt;
+			l->rtt_sum += rtt;
+			l->rtt_n++;
+		}
 		break;
 	case T_LEAVE:
 		member_lost_room(l, "the room closed");
@@ -450,7 +476,9 @@ static void tick(ndl_link* l) {
 			return;
 		}
 		if (now - l->sent_ms >= NDL_KEEPALIVE_MS) {
-			send_to(l, &l->holder, T_KEEPALIVE, (uint16_t)l->my_id, NDL_HOLDER_ID, NULL, 0);
+			uint32_t stamp = (uint32_t)now;
+			uint8_t probe[4] = {(uint8_t)(stamp >> 24), (uint8_t)(stamp >> 16), (uint8_t)(stamp >> 8), (uint8_t)stamp};
+			send_to(l, &l->holder, T_KEEPALIVE, (uint16_t)l->my_id, NDL_HOLDER_ID, probe, sizeof(probe));
 			l->sent_ms = now;
 		}
 	} else if (l->role == R_JOINING) {
@@ -642,6 +670,27 @@ int ndl_member_count(ndl_link* l) {
 	int n = l->role == R_HOLDER ? holder_count(l) : l->role == R_MEMBER ? l->count : 0;
 	pthread_mutex_unlock(&l->mu);
 	return n;
+}
+
+void ndl_stats_rtt(ndl_link* l, int* min_ms, int* avg_ms, int* max_ms) {
+	int mn = -1, av = -1, mx = -1;
+	if (l) {
+		pthread_mutex_lock(&l->mu);
+		if (l->rtt_n > 0) {
+			mn = l->rtt_min;
+			mx = l->rtt_max;
+			av = (int)(l->rtt_sum / l->rtt_n);
+		}
+		l->rtt_n = 0;
+		l->rtt_sum = 0;
+		pthread_mutex_unlock(&l->mu);
+	}
+	if (min_ms)
+		*min_ms = mn;
+	if (avg_ms)
+		*avg_ms = av;
+	if (max_ms)
+		*max_ms = mx;
 }
 
 int ndl_send(ndl_link* l, const void* buf, size_t len, uint16_t dest) {

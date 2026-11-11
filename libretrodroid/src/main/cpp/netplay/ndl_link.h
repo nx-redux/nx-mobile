@@ -25,7 +25,8 @@
  * Wire (one message per datagram): ['N']['D'][version 1][type u8][sender u16 BE][dest u16 BE] + payload.
  *   ASK 1, ANSWER 2 (room_id u32 BE, settled u8, members u8, room_port u16 BE): the search, not used by the sheet modes.
  *   JOIN 3 (name, up to 16 bytes); ACCEPT 4 (dest = the new id; payload members u8); REFUSE 5 (room full).
- *   DATA 6 (a core packet); LEAVE 7; KEEPALIVE 8 (from the holder: payload members u8).
+ *   DATA 6 (a core packet); LEAVE 7; KEEPALIVE 8 (from the holder: payload members u8, plus the
+ *   member's probe stamp u32 BE when echoing; from a member: the probe stamp u32 BE, or empty from older builds).
  * Each side sends a KEEPALIVE every 500 ms; 3 s without hearing a member drops it, 3 s without hearing the holder makes
  * a member leave.
  *
@@ -89,6 +90,10 @@ bool ndl_in_room(ndl_link* l);
 int ndl_client_id(ndl_link* l);
 /* Members in the room including this phone, 0 when not in a room. */
 int ndl_member_count(ndl_link* l);
+
+/* Round trip of the member's keepalive probe to the holder since the last call, in ms; -1 each when there is no sample
+ * (the holder, or nothing came back). Resets what it reports. */
+void ndl_stats_rtt(ndl_link* l, int* min_ms, int* avg_ms, int* max_ms);
 
 /* One core packet to dest (a member id, or NDL_BROADCAST for everyone else), sent from the calling thread.
  * 0 sent; -1 when not in a room, len is 0 or above NDL_MAX_PAYLOAD, or dest is this phone or 0. */

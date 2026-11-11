@@ -17,6 +17,9 @@
 
 #include "dslinkhooks.h"
 
+#include <algorithm>
+#include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
@@ -60,6 +63,28 @@ Settings current;
 std::mutex linkMutex;
 ndl_link* theLink = nullptr;
 
+// Frame timing diagnostics, emulation thread only: the core waits for the others inside retro_run, so network delay
+// shows up as long frames and a long span between its first and last poll.
+using Clock = std::chrono::steady_clock;
+
+struct Stats {
+    bool active = false;                  // a frame is open
+    Clock::time_point frameStart, firstPoll, lastPoll, windowStart;
+    bool windowOpen = false;
+    unsigned polls = 0;                   // this frame
+    uint64_t framePktsIn = 0, framePktsOut = 0;
+
+    uint64_t frames = 0, over17 = 0, over33 = 0;
+    uint64_t sumUs = 0, maxUs = 0, sumPolls = 0, maxPolls = 0, maxSpanUs = 0;
+    uint64_t pktsIn = 0, pktsOut = 0, bytesIn = 0, bytesOut = 0;
+
+    void clearWindow() {
+        frames = over17 = over33 = 0;
+        sumUs = maxUs = sumPolls = maxPolls = maxSpanUs = 0;
+        pktsIn = pktsOut = bytesIn = bytesOut = 0;
+    }
+} stats;
+
 void destroyLink() {
     ndl_link* old;
     {
@@ -77,22 +102,33 @@ void destroyLink() {
 void endCoreSession() {
     if (!coreStarted) return;
     coreStarted = false;   // first: nothing reaches the core from here on
+    stats.active = false;
+    stats.windowOpen = false;
     if (callbacks.stop != nullptr) callbacks.stop();
 }
 
 void deliver(const uint8_t* buf, size_t len, uint16_t sender, void*) {
+    if (stats.active) { stats.pktsIn++; stats.bytesIn += len; }
     if (coreStarted && callbacks.receive != nullptr) callbacks.receive(buf, len, sender);
 }
 
 // The core sends unreliable, unsequenced packets with a flush hint: every send is a datagram at once anyway.
 void coreSend(int flags, const void* buf, size_t len, uint16_t clientId) {
     (void) flags;
-    if (coreStarted) ndl_send(theLink, buf, len, clientId);
+    if (!coreStarted) return;
+    if (stats.active) { stats.pktsOut++; stats.bytesOut += len; }
+    ndl_send(theLink, buf, len, clientId);
 }
 
 // melonDS DS waits inside retro_run for the others' packets and polls until they arrive: hand over all of them.
 void corePollReceive() {
-    if (coreStarted) ndl_take(theLink, deliver, nullptr);
+    if (!coreStarted) return;
+    if (stats.active) {
+        Clock::time_point now = Clock::now();
+        if (stats.polls++ == 0) stats.firstPoll = now;
+        stats.lastPoll = now;
+    }
+    ndl_take(theLink, deliver, nullptr);
 }
 
 const std::string* find(const std::vector<Variable>& vars, const char* key) {
@@ -208,6 +244,48 @@ void preFrame() {
         LOGI("DS link: core stopped");
     }
     if (coreStarted) ndl_take(theLink, deliver, nullptr);
+}
+
+void frameBegin() {
+    if (!coreStarted) return;
+    stats.frameStart = Clock::now();
+    if (!stats.windowOpen) {
+        stats.windowOpen = true;
+        stats.windowStart = stats.frameStart;
+        stats.clearWindow();
+    }
+    stats.polls = 0;
+    stats.active = true;
+}
+
+void frameEnd() {
+    if (!stats.active) return;
+    stats.active = false;
+    Clock::time_point now = Clock::now();
+    auto us = [](Clock::duration d) { return (uint64_t) std::chrono::duration_cast<std::chrono::microseconds>(d).count(); };
+    uint64_t frameUs = us(now - stats.frameStart);
+    uint64_t spanUs = stats.polls > 1 ? us(stats.lastPoll - stats.firstPoll) : 0;
+    stats.frames++;
+    if (frameUs > 17000) stats.over17++;
+    if (frameUs > 33000) stats.over33++;
+    stats.sumUs += frameUs;
+    stats.maxUs = std::max(stats.maxUs, frameUs);
+    stats.sumPolls += stats.polls;
+    stats.maxPolls = std::max<uint64_t>(stats.maxPolls, stats.polls);
+    stats.maxSpanUs = std::max(stats.maxSpanUs, spanUs);
+
+    uint64_t windowUs = us(now - stats.windowStart);
+    if (windowUs < 1000000 || stats.frames == 0) return;
+    int rttMin, rttAvg, rttMax;
+    ndl_stats_rtt(theLink, &rttMin, &rttAvg, &rttMax);
+    double sec = (double) windowUs / 1e6;
+    LOGI("DS link: stats frames=%llu over17=%llu over33=%llu maxFrameMs=%.1f avgFrameMs=%.2f avgPolls=%.1f maxPolls=%llu "
+         "maxWaitMs=%.1f pktsIn/s=%.0f pktsOut/s=%.0f bytesIn/s=%.0f bytesOut/s=%.0f members=%d rttMs=%d/%d/%d",
+         (unsigned long long) stats.frames, (unsigned long long) stats.over17, (unsigned long long) stats.over33,
+         stats.maxUs / 1000.0, stats.sumUs / 1000.0 / stats.frames, (double) stats.sumPolls / stats.frames,
+         (unsigned long long) stats.maxPolls, stats.maxSpanUs / 1000.0, stats.pktsIn / sec, stats.pktsOut / sec,
+         stats.bytesIn / sec, stats.bytesOut / sec, ndl_member_count(theLink), rttMin, rttAvg, rttMax);
+    stats.windowOpen = false;
 }
 
 void stopCore() {

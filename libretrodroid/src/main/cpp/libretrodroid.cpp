@@ -996,7 +996,9 @@ void LibretroDroid::runFrame(bool np, bool lk, float frameSeconds) {
         currentInput()->advancePointers(frameSeconds);
     }
     if (!np && !lk && !memoryCheats.empty()) applyMemoryCheats();   // never in netplay or link: the peer's RAM would differ
+    dslink::frameBegin();
     core->retro_run();
+    dslink::frameEnd();
     gldebug::pollErrors();
     rethrowVideoCallbackError();
     auto& achievements = Achievements::getInstance();

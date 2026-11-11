@@ -387,6 +387,20 @@ static int case_oversize_send_rejected(uint16_t port) {
 	return 0;
 }
 
+static int case_keepalive_rtt_reported(uint16_t port) {
+	CHECK(room_open(port, 1) == 0);
+	int mn, av, mx;
+	ndl_stats_rtt(room[2], &mn, &av, &mx);   /* clear whatever the join left */
+	advance(1500);                          /* a few member keepalives, each echoed by the holder */
+	ndl_stats_rtt(room[2], &mn, &av, &mx);
+	CHECK(mn >= 0 && mn <= av && av <= mx);
+	ndl_stats_rtt(room[2], &mn, &av, &mx);  /* read resets */
+	CHECK(mn == -1 && av == -1 && mx == -1);
+	ndl_stats_rtt(room[1], &mn, &av, &mx);  /* the holder has nothing to measure */
+	CHECK(mn == -1 && av == -1 && mx == -1);
+	return 0;
+}
+
 static void run(const char* name, int (*fn)(uint16_t)) {
 	uint16_t port = free_udp_port();
 	int ok = fn(port) == 0;
@@ -408,6 +422,7 @@ int main(void) {
 	run("full_room_refuses", case_full_room_refuses);
 	run("bad_datagrams_are_ignored", case_bad_datagrams_are_ignored);
 	run("oversize_send_rejected", case_oversize_send_rejected);
+	run("keepalive_rtt_reported", case_keepalive_rtt_reported);
 	if (fails) {
 		printf("%d test(s) failed\n", fails);
 		return 1;
