@@ -777,6 +777,7 @@ void LibretroDroid::step() {
     // never freed under them. A paused step runs too.
     if (audio) audio->setPlaybackSpeed(speed);
     const bool lk = gbalink::active();               // GBA link: speed 1, held while either side pauses
+    const bool dsRoom = dslink::inRoom();            // DS room: no rewind, it would replace state the others rely on
     const bool npSession = netplay::active();
     const bool np = !lk && npSession;                // netplay: one lockstep frame per step
     stepNetplayActive = npSession ? 1 : 0;
@@ -791,7 +792,7 @@ void LibretroDroid::step() {
     // FF, which stops (its clock resynced) and picks up again when the rewind ends. Paused while rewinding (speed 0)
     // takes the paused path below.
     applyRewindConfig();
-    const bool rewindHeld = !np && !lk && rewindingWanted.load() && rewind.enabled();
+    const bool rewindHeld = !np && !lk && !dsRoom && rewindingWanted.load() && rewind.enabled();
     const bool rewinding = rewindHeld && speed > 0;
     if (!rewindHeld) rewindEmptyLatched = false;
     applyRewinding(rewinding);
@@ -840,7 +841,7 @@ void LibretroDroid::step() {
         }
         for (size_t i = 0; i < runs; i++) {
             runFrame(np, lk, frameSeconds);
-            if (!np && !lk) rewind.capture(rewindSerialize);
+            if (!np && !lk && !dsRoom) rewind.capture(rewindSerialize);
         }
         rewindPlayed += runs;   // the probe's clock (RewindProbe): a paused step plays none
         hitchProbe.ranCore(HitchProbe::Clock::now(), runs);
@@ -859,7 +860,7 @@ void LibretroDroid::step() {
                 audio->setSlowdownSpeed(1.0);
             }
         }
-        if (speed > 0) rewindState = (np || lk) ? REWIND_STATUS_OFF : rewind.enabled() ? REWIND_STATUS_READY : offStatus();
+        if (speed > 0) rewindState = (np || lk || dsRoom) ? REWIND_STATUS_OFF : rewind.enabled() ? REWIND_STATUS_READY : offStatus();
     }
     auto& achievements = Achievements::getInstance();
     if (speed == 0 && achievements.isEnabled()) achievements.onFrame(true);   // menu open: keep the session alive
