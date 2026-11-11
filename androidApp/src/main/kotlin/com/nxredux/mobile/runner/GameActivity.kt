@@ -808,7 +808,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val rejoin = dsRejoinAfterMenu
         dsRejoinAfterMenu = false
         if (focusPaused) { wii.syncMotionSensors(); shortcuts.pushMicSource(); return }   // another app has the focus: focusResume plays on later
-        if (rejoin) LibretroNetplay.dsRejoin()   // the cap left a sheet session's room
+        if (rejoin && netplayNow != null) LibretroNetplay.dsRejoin()   // the cap left a sheet session's room, unless the session has ended since
         wii.syncMotionSensors()
         releaseCore()
     }
@@ -1437,6 +1437,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun quitWithAutoState(chosen: Boolean, autoState: Boolean = true) {
         if (quitting) return   // single-shot: a second job could serialize after the core is destroyed
         quitting = true
+        syncDsMenuCap()   // the cap must not leave the room mid-quit
         markClosing()
         GameHeartbeat.start(this)   // the menu may be waiting for this process to end: its saves can take a while
         rumbles.forEach { it.release() }
