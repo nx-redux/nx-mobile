@@ -103,10 +103,8 @@ class AndroidGpuDriversTest {
     }
 
     @Test fun availability() {
-        assertNull(AndroidGpuDrivers.unavailableReason(true, "Adreno (TM) 750", 34))
-        assertEquals("Custom drivers need a Snapdragon (Adreno) GPU", AndroidGpuDrivers.unavailableReason(true, "Mali-G715", 34))
-        assertEquals("Custom drivers need a Snapdragon (Adreno) GPU", AndroidGpuDrivers.unavailableReason(true, null, 34))
-        assertEquals("Custom drivers need Android 9 or later", AndroidGpuDrivers.unavailableReason(true, "Adreno (TM) 630", 27))
-        assertEquals("", AndroidGpuDrivers.unavailableReason(false, "Adreno (TM) 750", 34))
+        assertNull(AndroidGpuDrivers.unavailableReason(true, 34))
+        assertEquals("Custom drivers need Android 9 or later", AndroidGpuDrivers.unavailableReason(true, 27))
+        assertEquals("", AndroidGpuDrivers.unavailableReason(false, 34))
     }
 }

@@ -143,11 +143,14 @@ class AndroidGpuDrivers(private val root: File, private val sdkInt: Int) {
         private const val MAX_META = 1024 * 1024
         private const val ID_LENGTH = 16
 
-        /** Null when custom drivers are available here, else why not (shown as is); "" when the feature is off (no row at all). */
-        fun unavailableReason(enabled: Boolean, glRenderer: String?, sdkInt: Int): String? = when {
+        /**
+         * Null when custom drivers are available here, else why not (shown as is); "" when the feature is off (no row at all).
+         * The app does not check that a package matches the phone's GPU: a package for the wrong GPU fails to start and the
+         * launch falls back.
+         */
+        fun unavailableReason(enabled: Boolean, sdkInt: Int): String? = when {
             !enabled -> ""
             sdkInt < 28 -> "Custom drivers need Android 9 or later"
-            glRenderer?.contains("Adreno", ignoreCase = true) != true -> "Custom drivers need a Snapdragon (Adreno) GPU"
             else -> null
         }
     }
