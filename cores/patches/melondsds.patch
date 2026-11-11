@@ -447,7 +447,7 @@ index bb52319..f36755a 100644
          /// the console can't emulate a frame until it finishes.
          std::optional<uint32_t> _shaderCompileTaskId = std::nullopt;
 diff --git a/src/libretro/core/tasks.cpp b/src/libretro/core/tasks.cpp
-index 87bfa2a..7e7212d 100644
+index 87bfa2a..171ef11 100644
 --- a/src/libretro/core/tasks.cpp
 +++ b/src/libretro/core/tasks.cpp
 @@ -24,6 +24,8 @@
@@ -459,7 +459,7 @@ index 87bfa2a..7e7212d 100644
  #include <retro_assert.h>
  #include <streams/file_stream.h>
  
-@@ -242,9 +244,42 @@ void MelonDsDs::CoreState::FlushFirmware(string_view firmwarePath, string_view w
+@@ -242,9 +244,43 @@ void MelonDsDs::CoreState::FlushFirmware(string_view firmwarePath, string_view w
          }
  
          retro_assert(firmwarePath.rfind("//notfound") == std::string_view::npos);
@@ -469,6 +469,7 @@ index 87bfa2a..7e7212d 100644
          Firmware firmwareCopy(firmware);
 -        // TODO: Apply the original values of the settings that were overridden
 -        if (filestream_write_file(firmwarePath.data(), firmware.Buffer(), firmware.Length())) {
++        // TODO: The other overridden settings (alarm, language, touch calibration, DNS) still reach the dump as set.
 +        const bool macOverridden = Config.MacAddress().has_value();
 +        const bool nameOverridden = Config.UsernameMode() != MelonDsDs::UsernameMode::Firmware;
 +        if (macOverridden || nameOverridden) {

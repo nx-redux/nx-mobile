@@ -163,6 +163,13 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsLeaveN
     dslink::leaveNow();   // sends LEAVE from this thread; never throws
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsRejoin(
+    JNIEnv* env,
+    jclass obj
+) {
+    dslink::rejoin();   // may open a socket from this thread; never throws
+}
+
 JNIEXPORT jintArray JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_linkStatus(
     JNIEnv* env,
     jclass obj

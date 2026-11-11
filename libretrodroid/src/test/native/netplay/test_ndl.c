@@ -97,6 +97,23 @@ static void count_bind(int fd, void* ctx) {
 	(*(int*)ctx)++;
 }
 
+/* ---- Core packets ---- */
+
+/* A melonDS DS packet: its 10-byte header ([timestamp u64][aid u8][type u8], type 0) and then text. */
+typedef struct {
+	uint8_t b[64];
+	size_t n;
+} pkt;
+
+static pkt core_pk(const char* text) {
+	pkt p;
+	memset(&p, 0, sizeof(p));
+	size_t tl = strlen(text) + 1;
+	memcpy(p.b + 10, text, tl);
+	p.n = 10 + tl;
+	return p;
+}
+
 /* ---- Collected deliveries ---- */
 
 typedef struct {
@@ -233,6 +250,7 @@ static int case_broadcast_reaches_every_other_member(uint16_t port) {
 	uint8_t msg[2000];
 	for (size_t i = 0; i < sizeof(msg); i++)
 		msg[i] = (uint8_t)(i * 7 + 3);
+	msg[9] = 2; /* a command frame */
 	CHECK(ndl_client_id(room[3]) == 3);
 	CHECK(ndl_send(room[3], msg, sizeof(msg), NDL_BROADCAST) == 0);
 	for (int i = 1; i <= 4; i++) {
@@ -252,22 +270,22 @@ static int case_broadcast_reaches_every_other_member(uint16_t port) {
 
 static int case_directed_reaches_only_its_member(uint16_t port) {
 	CHECK(room_open(port, 3) == 0);
-	const char msg[] = "to the holder";
-	CHECK(ndl_send(room[2], msg, sizeof(msg), 1) == 0);
+	pkt msg = core_pk("to the holder");
+	CHECK(ndl_send(room[2], msg.b, msg.n, 1) == 0);
 	inbox in = {0};
 	CHECK(take_until(room[1], &in, 1, 1000) == 1);
-	CHECK(in.len[0] == sizeof(msg) && memcmp(in.buf[0], msg, sizeof(msg)) == 0);
+	CHECK(in.len[0] == msg.n && memcmp(in.buf[0], msg.b, msg.n) == 0);
 	CHECK(in.sender[0] == 2);
 	for (int i = 2; i <= 4; i++) {
 		inbox none = {0};
 		CHECK(take_until(room[i], &none, 1, 100) == 0);
 	}
 	/* Member to member goes through the holder and reaches only that member. */
-	const char msg2[] = "two to four";
-	CHECK(ndl_send(room[2], msg2, sizeof(msg2), 4) == 0);
+	pkt msg2 = core_pk("two to four");
+	CHECK(ndl_send(room[2], msg2.b, msg2.n, 4) == 0);
 	inbox in4 = {0};
 	CHECK(take_until(room[4], &in4, 1, 1000) == 1);
-	CHECK(in4.sender[0] == 2 && in4.len[0] == sizeof(msg2));
+	CHECK(in4.sender[0] == 2 && in4.len[0] == msg2.n);
 	for (int i = 1; i <= 3; i++) {
 		inbox none = {0};
 		CHECK(take_until(room[i], &none, 1, 100) == 0);
@@ -282,8 +300,8 @@ static int case_leave_tells_the_others(uint16_t port) {
 	CHECK(ndl_client_id(room[4]) == -1);
 	for (int i = 1; i <= 3; i++)
 		CHECK(wait_count(room[i], 3, 1000));
-	const char msg[] = "after the leave";
-	CHECK(ndl_send(room[1], msg, sizeof(msg), NDL_BROADCAST) == 0);
+	pkt msg = core_pk("after the leave");
+	CHECK(ndl_send(room[1], msg.b, msg.n, NDL_BROADCAST) == 0);
 	for (int i = 2; i <= 3; i++) {
 		inbox in = {0};
 		CHECK(take_until(room[i], &in, 1, 1000) == 1);
@@ -291,7 +309,7 @@ static int case_leave_tells_the_others(uint16_t port) {
 	}
 	inbox none = {0};
 	CHECK(take_until(room[4], &none, 1, 150) == 0);
-	CHECK(ndl_send(room[4], msg, sizeof(msg), NDL_BROADCAST) == -1);
+	CHECK(ndl_send(room[4], msg.b, msg.n, NDL_BROADCAST) == -1);
 	return 0;
 }
 
@@ -308,8 +326,8 @@ static int case_member_timeout_drops_silent_member(uint16_t port) {
 	CHECK(ndl_in_room(room[2]) && ndl_in_room(room[4]));
 	/* The dropped member gets nothing more. */
 	drain(room[3]);
-	const char msg[] = "without three";
-	CHECK(ndl_send(room[2], msg, sizeof(msg), NDL_BROADCAST) == 0);
+	pkt msg = core_pk("without three");
+	CHECK(ndl_send(room[2], msg.b, msg.n, NDL_BROADCAST) == 0);
 	inbox in1 = {0}, in4 = {0};
 	CHECK(take_until(room[1], &in1, 1, 1000) == 1);
 	CHECK(take_until(room[4], &in4, 1, 1000) == 1);
@@ -348,7 +366,7 @@ static int case_full_room_refuses(uint16_t port) {
 	CHECK(ndl_client_id(room[3]) == -1);
 	CHECK(ndl_member_count(room[1]) == 2);
 	CHECK(ndl_in_room(room[2]) && ndl_client_id(room[2]) == 2 && ndl_member_count(room[2]) == 2);
-	/* A refused joiner stops asking. */
+	/* A refused joiner waits before asking again. */
 	advance(2000);
 	CHECK(!ndl_in_room(room[3]));
 	CHECK(ndl_member_count(room[1]) == 2);
@@ -385,11 +403,11 @@ static int case_bad_datagrams_are_ignored(uint16_t port) {
 	uint8_t data[NDL_HDR_SIZE + 3] = {'N', 'D', 1, 6, 0, 2, 0xFF, 0xFF, 'x', 'y', 'z'};
 	raw_send(port, data, sizeof(data));
 	nap_ms(100);
-	const char msg[] = "still fine";
-	CHECK(ndl_send(room[2], msg, sizeof(msg), NDL_BROADCAST) == 0);
+	pkt msg = core_pk("still fine");
+	CHECK(ndl_send(room[2], msg.b, msg.n, NDL_BROADCAST) == 0);
 	inbox in1 = {0}, in3 = {0};
 	CHECK(take_until(room[1], &in1, 1, 1000) == 1);
-	CHECK(in1.sender[0] == 2 && in1.len[0] == sizeof(msg) && memcmp(in1.buf[0], msg, sizeof(msg)) == 0);
+	CHECK(in1.sender[0] == 2 && in1.len[0] == msg.n && memcmp(in1.buf[0], msg.b, msg.n) == 0);
 	CHECK(take_until(room[3], &in3, 1, 1000) == 1);
 	CHECK(in3.sender[0] == 2);
 	for (int i = 1; i <= 3; i++) {
@@ -430,7 +448,7 @@ static int case_drops_are_counted(uint16_t port) {
 	ndl_drop_counts d;
 	ndl_stats_drops(room[1], &d);   /* clear what the join left */
 	/* DATA from an address that is no member, and a datagram with bad magic. */
-	uint8_t data[NDL_HDR_SIZE + 3] = {'N', 'D', 1, 6, 0, 2, 0xFF, 0xFF, 'x', 'y', 'z'};
+	uint8_t data[NDL_HDR_SIZE + 12] = {'N', 'D', 1, 6, 0, 2, 0xFF, 0xFF};
 	raw_send(port, data, sizeof(data));
 	uint8_t bad[NDL_HDR_SIZE + 3];
 	memcpy(bad, data, sizeof(bad));
@@ -445,8 +463,8 @@ static int case_drops_are_counted(uint16_t port) {
 	CHECK(d.unknown == 0 && d.bad == 0);
 	/* A delivered packet shows in the queue's high-water mark. */
 	ndl_stats_drops(room[2], &d);
-	const char msg[] = "hi";
-	CHECK(ndl_send(room[1], msg, sizeof(msg), 2) == 0);
+	pkt msg = core_pk("hi");
+	CHECK(ndl_send(room[1], msg.b, msg.n, 2) == 0);
 	nap_ms(100);
 	ndl_stats_drops(room[2], &d);
 	CHECK(d.queue_hwm == 1);
@@ -514,8 +532,8 @@ static int auto_pair(uint16_t port, uint16_t sp) {
 
 static int case_auto_host_opens_when_none(uint16_t port) {
 	CHECK(auto_pair(port, free_udp_port()) == 0);
-	const char msg[] = "found you";
-	CHECK(ndl_send(room[2], msg, sizeof(msg), NDL_BROADCAST) == 0);
+	pkt msg = core_pk("found you");
+	CHECK(ndl_send(room[2], msg.b, msg.n, NDL_BROADCAST) == 0);
 	inbox in = {0};
 	CHECK(take_until(room[1], &in, 1, 1000) == 1);
 	CHECK(in.sender[0] == 2);
@@ -573,6 +591,99 @@ static int case_leave_now_skips_linger(uint16_t port) {
 	return 0;
 }
 
+static int case_short_data_dropped(uint16_t port) {
+	CHECK(room_open(port, 2) == 0);
+	ndl_drop_counts d;
+	ndl_stats_drops(room[1], &d);
+	/* Shorter than the core's header, and a header with an unknown type: the holder neither takes nor relays them. */
+	const char shrt[] = "hi";
+	CHECK(ndl_send(room[2], shrt, sizeof(shrt), NDL_BROADCAST) == 0);
+	pkt typed = core_pk("type three");
+	typed.b[9] = 3;
+	CHECK(ndl_send(room[2], typed.b, typed.n, NDL_BROADCAST) == 0);
+	inbox none1 = {0}, none3 = {0};
+	CHECK(take_until(room[1], &none1, 1, 150) == 0);
+	CHECK(take_until(room[3], &none3, 1, 50) == 0);
+	ndl_stats_drops(room[1], &d);
+	CHECK(d.bad == 2);
+	/* The same from the holder to a member. */
+	ndl_stats_drops(room[2], &d);
+	CHECK(ndl_send(room[1], shrt, sizeof(shrt), 2) == 0);
+	inbox none2 = {0};
+	CHECK(take_until(room[2], &none2, 1, 150) == 0);
+	ndl_stats_drops(room[2], &d);
+	CHECK(d.bad == 1);
+	/* Exactly the header, a reply frame: delivered. */
+	pkt bare = core_pk("");
+	bare.n = 10;
+	bare.b[9] = 1;
+	CHECK(ndl_send(room[2], bare.b, bare.n, NDL_BROADCAST) == 0);
+	inbox in1 = {0}, in3 = {0};
+	CHECK(take_until(room[1], &in1, 1, 1000) == 1);
+	CHECK(take_until(room[3], &in3, 1, 1000) == 1);
+	CHECK(in1.len[0] == 10 && in3.len[0] == 10);
+	return 0;
+}
+
+static int case_join_retries_after_holder_gone(uint16_t port) {
+	CHECK(room_open(port, 1) == 0);
+	ndl_test_freeze(room[1], true);
+	ndl_destroy(room[1]);
+	room[1] = NULL;
+	advance(3500);
+	CHECK(wait_in_room(room[2], false, 1000));
+	/* Still asking, past the first try budget's worth of the holder's silence. */
+	uint32_t sent = ndl_test_sent(room[2]);
+	advance(2000);
+	CHECK(ndl_test_sent(room[2]) > sent);
+	/* The holder back on the same address: the joiner is in again. */
+	ndl_config c = config(NDL_HOST, "holder", port, 8);
+	room[1] = ndl_create(&c);
+	CHECK(room[1] != NULL);
+	advance(1100);
+	CHECK(wait_in_room(room[2], true, 2000));
+	CHECK(wait_count(room[1], 2, 2000));
+	/* The user's own leave stops it for good. */
+	ndl_set_mode(room[2], NDL_OFF);
+	CHECK(wait_count(room[1], 1, 1000));
+	sent = ndl_test_sent(room[2]);
+	advance(2000);
+	CHECK(ndl_test_sent(room[2]) == sent);
+	CHECK(!ndl_in_room(room[2]));
+	return 0;
+}
+
+static int case_rejoin_after_leave_now_host_and_join(uint16_t port) {
+	CHECK(room_open(port, 1) == 0);
+	/* The joiner leaves (backgrounded): parked until it comes back. */
+	ndl_leave_now(room[2]);
+	CHECK(!ndl_in_room(room[2]));
+	CHECK(wait_count(room[1], 1, 1000));
+	advance(2000);
+	CHECK(!ndl_in_room(room[2]));
+	ndl_rejoin(room[2]);
+	advance(1100);
+	CHECK(wait_in_room(room[2], true, 2000));
+	CHECK(wait_count(room[1], 2, 2000));
+	/* The holder leaves: its member keeps asking, and the reopened room takes it back. */
+	ndl_leave_now(room[1]);
+	CHECK(!ndl_in_room(room[1]));
+	CHECK(wait_in_room(room[2], false, 1000));
+	advance(2000);
+	CHECK(!ndl_in_room(room[1]) && !ndl_in_room(room[2]));
+	ndl_rejoin(room[1]);
+	CHECK(ndl_in_room(room[1]) && ndl_client_id(room[1]) == 1);
+	advance(1100);
+	CHECK(wait_in_room(room[2], true, 2000));
+	CHECK(wait_count(room[1], 2, 2000));
+	/* Rejoin while in a room changes nothing. */
+	ndl_rejoin(room[1]);
+	ndl_rejoin(room[2]);
+	CHECK(ndl_in_room(room[1]) && ndl_in_room(room[2]));
+	CHECK(ndl_client_id(room[2]) == 2);
+	return 0;
+}
+
 static void run(const char* name, int (*fn)(uint16_t)) {
 	uint16_t port = free_udp_port();
 	int ok = fn(port) == 0;
@@ -597,6 +708,9 @@ int main(void) {
 	run("oversize_send_rejected", case_oversize_send_rejected);
 	run("keepalive_rtt_reported", case_keepalive_rtt_reported);
 	run("drops_are_counted", case_drops_are_counted);
+	run("short_data_dropped", case_short_data_dropped);
+	run("join_retries_after_holder_gone", case_join_retries_after_holder_gone);
+	run("rejoin_after_leave_now_host_and_join", case_rejoin_after_leave_now_host_and_join);
 	run("prefer_settled_then_lower_id", case_prefer_settled_then_lower_id);
 	run("auto_joins_a_sheet_host", case_auto_joins_a_sheet_host);
 	run("auto_host_opens_when_none", case_auto_host_opens_when_none);

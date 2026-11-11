@@ -65,6 +65,9 @@
 #define NDL_REFUSED_WAIT_MS 5000
 #define NDL_OPEN_RETRY_MS 1000
 #define NDL_ANSWER_SIZE 8
+/* melonDS DS's own packet header: [timestamp u64][aid u8][type u8], type 0..2. The core asserts on anything else. */
+#define NDL_CORE_HDR 10
+#define NDL_CORE_TYPE_MAX 2
 
 enum {
 	T_ASK = 1,
@@ -313,6 +316,10 @@ static void leave_room(ndl_link* l) {
 	queue_clear(l);
 }
 
+static bool start_join(ndl_link* l, const struct sockaddr_in* holder);
+
+/* A sheet joiner knocks again with a fresh budget: the holder may only have gone to the background or stalled, and
+ * comes back on the same address. Only the user's own leave (ndl_leave_now, ndl_set_mode) stops it. */
 static void member_lost_room(ndl_link* l, const char* why) {
 	NP_LOG("DS link: out of the room (%s)", why);
 	memset(l->members, 0, sizeof(l->members));
@@ -320,6 +327,8 @@ static void member_lost_room(ndl_link* l, const char* why) {
 	l->my_id = -1;
 	l->count = 0;
 	queue_clear(l);
+	if (l->mode == NDL_JOIN && start_join(l, &l->holder))
+		NP_LOG("DS link: asking the room again");
 }
 
 /* Opens the room on the room port, answering searches on the search port. Lock held, no socket open. */
@@ -369,6 +378,7 @@ static void apply_mode(ndl_link* l, ndl_mode m) {
 	leave_room(l);
 	close_socket(l);
 	auto_reset(l);
+	memset(&l->holder, 0, sizeof(l->holder));
 	l->mode = m;
 	if (m == NDL_HOST) {
 		open_room(l);
@@ -548,9 +558,15 @@ static void member_handle(ndl_link* l, const struct sockaddr_in* from, uint8_t t
 			l->sent_ms = now;
 			NP_LOG("DS link: joined the room as %d", dest);
 		} else if (type == T_REFUSE) {
-			l->role = R_IDLE;
-			l->next_search_ms = now + NDL_REFUSED_WAIT_MS;
 			NP_LOG("DS link: the room is full");
+			if (l->mode == NDL_JOIN) {
+				/* A place may free up: ask again after a pause. */
+				l->join_tries = 0;
+				l->next_join_ms = now + NDL_REFUSED_WAIT_MS;
+			} else {
+				l->role = R_IDLE;
+				l->next_search_ms = now + NDL_REFUSED_WAIT_MS;
+			}
 		}
 		return;
 	}
@@ -605,7 +621,8 @@ static void handle_datagram(ndl_link* l, const struct sockaddr_in* from, const u
 	uint16_t dest = (uint16_t)((buf[6] << 8) | buf[7]);
 	const uint8_t* payload = buf + NDL_HDR_SIZE;
 	size_t pn = n - NDL_HDR_SIZE;
-	if (type == T_DATA && pn == 0) {
+	/* A short or mistyped core packet would trip melonDS DS's asserts in every phone it reaches. */
+	if (type == T_DATA && (pn < NDL_CORE_HDR || payload[NDL_CORE_HDR - 1] > NDL_CORE_TYPE_MAX)) {
 		l->drops.bad++;
 		return;
 	}
@@ -929,6 +946,23 @@ void ndl_leave_now(ndl_link* l) {
 		l->parked = true;
 	}
 	pthread_mutex_unlock(&l->mu);
+}
+
+void ndl_rejoin(ndl_link* l) {
+	if (!l)
+		return;
+	pthread_mutex_lock(&l->mu);
+	if (l->role == R_IDLE) {
+		if (l->mode == NDL_HOST) {
+			/* The room socket may still hold the port: reopen from scratch. */
+			close_socket(l);
+			open_room(l);
+		} else if (l->mode == NDL_JOIN && l->holder.sin_family == AF_INET) {
+			start_join(l, &l->holder);
+		}
+	}
+	pthread_mutex_unlock(&l->mu);
+	np_wake_poke(&l->wake);
 }
 
 bool ndl_in_room(ndl_link* l) {

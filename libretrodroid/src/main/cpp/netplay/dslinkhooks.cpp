@@ -431,4 +431,9 @@ void leaveNow() {
     ndl_leave_now(theLink);
 }
 
+void rejoin() {
+    std::lock_guard<std::mutex> guard(linkMutex);
+    ndl_rejoin(theLink);
+}
+
 }

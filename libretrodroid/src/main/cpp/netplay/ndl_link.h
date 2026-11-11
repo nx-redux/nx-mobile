@@ -26,8 +26,8 @@
  *   ASK 1 (to the search port), ANSWER 2 (room_id u32 BE, settled u8, members u8, room_port u16 BE): the search. Every
  *   holder answers on the search port (a sheet host too, so the automatic route finds it); only AUTO asks.
  *   JOIN 3 (name, up to 16 bytes); ACCEPT 4 (dest = the new id; payload members u8); REFUSE 5 (room full).
- *   DATA 6 (a core packet); LEAVE 7; KEEPALIVE 8 (from the holder: payload members u8, plus the
- *   member's probe stamp u32 BE when echoing; from a member: the probe stamp u32 BE, or empty from older builds).
+ *   DATA 6 (a core packet, at least melonDS DS's 10-byte header); LEAVE 7; KEEPALIVE 8 (from the holder: payload
+ *   members u8, plus the member's probe stamp u32 BE when echoing; from a member: the probe stamp u32 BE).
  * Each side sends a KEEPALIVE every 500 ms; 3 s without hearing a member drops it, 3 s without hearing the holder makes
  * a member leave.
  *
@@ -84,7 +84,8 @@ bool ndl_prefer(ndl_room_info a, ndl_room_info b);
 
 typedef void (*ndl_deliver_fn)(const uint8_t* buf, size_t len, uint16_t sender, void* ctx);
 
-/* Starts the network thread. HOST opens its room before returning (settled); JOIN asks host_ip every 1 s, 30 times.
+/* Starts the network thread. HOST opens its room before returning (settled); JOIN asks host_ip every 1 s, 30 times,
+ * and again with a fresh 30 whenever it loses the room (the holder went silent, closed it or refused).
  * AUTO sends nothing until the radio is on, then searches (300 ms of answers): it joins the preferred room found, or
  * opens one when the radio is HOSTING, else searches again after 700 ms. A lone AUTO holder searches every 2 s and
  * moves to a room it should prefer. Radio off keeps a room for 10 s, then leaves. NULL when the socket, wake pipe or
@@ -103,6 +104,10 @@ void ndl_radio_changed(ndl_link* l, ndl_radio r);
  * next radio ON). */
 void ndl_leave_now(ndl_link* l);
 
+/* Undoes ndl_leave_now for a sheet session: HOST reopens its room, JOIN starts asking its holder again. Nothing while
+ * in a room, and nothing in AUTO, which waits for the next radio ON. */
+void ndl_rejoin(ndl_link* l);
+
 bool ndl_in_room(ndl_link* l);
 /* This phone's member id, -1 when not in a room. */
 int ndl_client_id(ndl_link* l);
@@ -118,7 +123,7 @@ typedef struct {
 	uint32_t queue;		/* inbound queue full */
 	uint32_t unknown;	/* holder: from an address that is no member (and not a JOIN) */
 	uint32_t wrong_src; /* member: from an address that is not the holder */
-	uint32_t bad;		/* bad magic, version or length, or an empty DATA */
+	uint32_t bad;		/* bad magic, version or length, or a DATA too short or mistyped for the core */
 	uint32_t echo;		/* a member's own packet relayed back */
 	uint32_t dest;		/* addressed to another member, or to one that is gone */
 	uint32_t queue_hwm; /* most packets waiting in the inbound queue at once (not a drop) */
