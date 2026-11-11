@@ -439,7 +439,7 @@ index bb52319..4654f01 100644
          /// the console can't emulate a frame until it finishes.
          std::optional<uint32_t> _shaderCompileTaskId = std::nullopt;
 diff --git a/src/libretro/core/tasks.cpp b/src/libretro/core/tasks.cpp
-index 87bfa2a..a4a4df8 100644
+index 87bfa2a..7e7212d 100644
 --- a/src/libretro/core/tasks.cpp
 +++ b/src/libretro/core/tasks.cpp
 @@ -24,6 +24,8 @@
@@ -451,33 +451,47 @@ index 87bfa2a..a4a4df8 100644
  #include <retro_assert.h>
  #include <streams/file_stream.h>
  
-@@ -242,9 +244,28 @@ void MelonDsDs::CoreState::FlushFirmware(string_view firmwarePath, string_view w
+@@ -242,9 +244,42 @@ void MelonDsDs::CoreState::FlushFirmware(string_view firmwarePath, string_view w
          }
  
          retro_assert(firmwarePath.rfind("//notfound") == std::string_view::npos);
 +        // The dump on disk still has the console's own MAC and nickname, which the core overrides in memory (to tell
-+        // phones apart in local play); writing the overridden ones would make that permanent.
++        // phones apart in local play). Writing the overridden ones would change the player's own dump, so when an
++        // override is active the write happens only with a trustworthy original to take them back from.
          Firmware firmwareCopy(firmware);
 -        // TODO: Apply the original values of the settings that were overridden
 -        if (filestream_write_file(firmwarePath.data(), firmware.Buffer(), firmware.Length())) {
-+        void* originalBuffer = nullptr;
-+        int64_t originalLength = 0;
-+        if (filestream_read_file(firmwarePath.data(), &originalBuffer, &originalLength) && originalBuffer != nullptr) {
-+            Firmware original(static_cast<const uint8_t*>(originalBuffer), static_cast<uint32_t>(originalLength));
-+            if (original.Buffer() != nullptr) {
-+                if (Config.MacAddress()) {
-+                    firmwareCopy.GetHeader().MacAddr = original.GetHeader().MacAddr;
++        const bool macOverridden = Config.MacAddress().has_value();
++        const bool nameOverridden = Config.UsernameMode() != MelonDsDs::UsernameMode::Firmware;
++        if (macOverridden || nameOverridden) {
++            void* originalBuffer = nullptr;
++            int64_t originalLength = 0;
++            bool restored = false;
++            if (filestream_read_file(firmwarePath.data(), &originalBuffer, &originalLength) && originalBuffer != nullptr
++                && originalLength == static_cast<int64_t>(firmware.Length())) {
++                Firmware original(static_cast<const uint8_t*>(originalBuffer), static_cast<uint32_t>(originalLength));
++                if (original.Buffer() != nullptr
++                    && original.GetHeader().Identifier == firmware.GetHeader().Identifier
++                    && original.GetHeader().UserSettingsOffset == firmware.GetHeader().UserSettingsOffset) {
++                    if (macOverridden) {
++                        firmwareCopy.GetHeader().MacAddr = original.GetHeader().MacAddr;
++                    }
++                    if (nameOverridden) {
++                        Firmware::UserData& copyData = firmwareCopy.GetEffectiveUserData();
++                        const Firmware::UserData& originalData = original.GetEffectiveUserData();
++                        copyData.NameLength = originalData.NameLength;
++                        memcpy(copyData.Nickname, originalData.Nickname, sizeof(copyData.Nickname));
++                    }
++                    firmwareCopy.UpdateChecksums();
++                    restored = true;
 +                }
-+                if (Config.UsernameMode() != MelonDsDs::UsernameMode::Firmware) {
-+                    Firmware::UserData& copyData = firmwareCopy.GetEffectiveUserData();
-+                    const Firmware::UserData& originalData = original.GetEffectiveUserData();
-+                    copyData.NameLength = originalData.NameLength;
-+                    memcpy(copyData.Nickname, originalData.Nickname, sizeof(copyData.Nickname));
-+                }
-+                firmwareCopy.UpdateChecksums();
++            }
++            free(originalBuffer);
++            if (!restored) {
++                retro::warn("Firmware \"{}\" couldn't be read back as the same dump; not writing it, so the overridden MAC and nickname stay out of it", firmwarePath);
++                return;
 +            }
 +        }
-+        free(originalBuffer);
 +        if (filestream_write_file(firmwarePath.data(), firmwareCopy.Buffer(), firmwareCopy.Length())) {
              // ...then write the whole thing back.
              retro::debug("Flushed {}-byte firmware to \"{}\"", firmware.Length(), firmwarePath);
