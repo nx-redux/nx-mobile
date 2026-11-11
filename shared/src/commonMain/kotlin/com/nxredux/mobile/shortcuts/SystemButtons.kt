@@ -62,13 +62,13 @@ object SystemButtons {
     /**
      * The role a pad's key stands in for while nothing is bound: many pads send SELECT as Back and have no SELECT key,
      * a few send START as the Menu key; on a pad with its own START the Menu key is MENU. A pad with its own SELECT
-     * keeps its Back as Back (a handheld's separate Back button). An AYANEO handheld's logo button is MENU: its pad
-     * has no mode button.
+     * keeps its Back as Back (a handheld's separate Back button). An AYANEO handheld's small button beside its logo
+     * button is MENU ([KeyCodes.AYANEO_EQ]): its pad has no mode button.
      */
-    fun standIn(keyCode: Int, keys: PadKeys): SystemRole? = when (keyCode) {
-        KeyCodes.BACK -> SystemRole.SELECT.takeIf { !keys.hasSelect }
-        KeyCodes.MENU -> if (keys.hasStart) SystemRole.MENU else SystemRole.START
-        KeyCodes.AYANEO_AYA -> SystemRole.MENU
+    fun standIn(key: PhysicalKey, keys: PadKeys): SystemRole? = when {
+        key.keyCode == KeyCodes.BACK -> SystemRole.SELECT.takeIf { !keys.hasSelect }
+        key.keyCode == KeyCodes.MENU -> if (keys.hasStart) SystemRole.MENU else SystemRole.START
+        key.keyCode == KeyCodes.AYANEO_EQ || (key.keyCode == 0 && key.scanCode == KeyCodes.AYANEO_EQ) -> SystemRole.MENU
         else -> null
     }
 
@@ -79,11 +79,12 @@ object SystemButtons {
      */
     fun translate(map: SystemButtonMap, model: String, keyCode: Int, scanCode: Int, keys: PadKeys? = null): Int? {
         val bound = map.bound[model]
+        val key = PhysicalKey.of(keyCode, scanCode)
         if (bound != null) {
-            val role = roleOf(map, model, PhysicalKey.of(keyCode, scanCode))
+            val role = roleOf(map, model, key)
             if (role != null) return role.keyCode.takeIf { it != keyCode }
         }
-        val role = keys?.let { standIn(keyCode, it) } ?: return null
+        val role = keys?.let { standIn(key, it) } ?: return null
         return role.keyCode.takeIf { bound?.containsKey(role) != true }
     }
 

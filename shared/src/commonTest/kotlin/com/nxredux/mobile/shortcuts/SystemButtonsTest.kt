@@ -81,8 +81,10 @@ class SystemButtonsTest {
         assertEquals(SystemRole.MENU.keyCode, SystemButtons.translate(SystemButtonMap(), m, KeyCodes.MENU, 0, full))
         assertEquals(SystemRole.START.keyCode, SystemButtons.translate(SystemButtonMap(), m, KeyCodes.MENU, 0, noStart))
         assertNull(SystemButtons.translate(SystemButtonMap(), m, KeyCodes.BUTTON_A, 0, noSelect))
-        // An AYANEO handheld's logo button, which Android has no key for.
-        assertEquals(SystemRole.MENU.keyCode, SystemButtons.translate(SystemButtonMap(), m, KeyCodes.AYANEO_AYA, 0, full))
+        // An AYANEO handheld's small button beside its logo button, as its own key code or as a scan code alone; the logo button stays free.
+        assertEquals(SystemRole.MENU.keyCode, SystemButtons.translate(SystemButtonMap(), m, KeyCodes.AYANEO_EQ, 0, full))
+        assertEquals(SystemRole.MENU.keyCode, SystemButtons.translate(SystemButtonMap(), m, 0, 0x2f1, full))
+        assertNull(SystemButtons.translate(SystemButtonMap(), m, 754, 0, full))
     }
 
     // A binding wins: Back bound as MENU is MENU, and a role bound to another button no longer takes its stand-in.
