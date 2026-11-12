@@ -10393,6 +10393,131 @@ class AppStateTest {
         assertEquals(MenuCategory.HOME, s.category)
     }
 
+    /** The screen is the Games tab pushed over the menu: its one tab, titled Games, no hidden tabs offered. */
+    private fun AppState.pushedGames(): Screen.Games = assertIs<Screen.Games>(screen.value).also {
+        assertEquals(ListSource.AllGames, it.source)
+        val bar = assertNotNull(it.tabBar)
+        assertTrue(bar.pushed, "not pushed")
+        assertEquals(listOf(MenuCategory.GAMES), bar.categories)
+        assertEquals(emptyList(), bar.hidden)
+    }
+
+    @Test fun hiding_the_games_tab_takes_it_out_of_the_row_and_into_menu() = runTest {
+        val state = hiddenTabsState(MenuCategory.GAMES, data = FakeUserData(recents = listOf(Recent(tetris))))
+        val s = assertIs<Screen.Systems>(state.screen.value)
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.TOOLS), s.tabs.map { it.category })
+        assertEquals(listOf(MenuCategory.GAMES), s.hidden)
+        state.select(0); state.onButton(NxButton.MENU)                        // Continue: Pin, then Games
+        assertEquals(listOf(ContextKind.PIN, ContextKind.OPEN_GAMES), menuKinds(state))
+        assertEquals("Games", state.screen.value.contextMenu?.items?.last()?.label)
+        state.onButton(NxButton.B)
+        state.openTabMenu()                                                   // the long press on the tab row
+        assertEquals(listOf(ContextKind.OPEN_GAMES), menuKinds(state))
+    }
+
+    @Test fun a_hidden_games_tab_opens_over_the_menu_and_b_returns() = runTest {
+        val state = hiddenTabsState(MenuCategory.GAMES, data = FakeUserData(recents = listOf(Recent(tetris)), pins = listOf(Shortcut(mario, "Mario"))))
+        state.select(1)
+        val under = assertIs<Screen.Systems>(state.screen.value).rows[1]
+        choose(state, ContextKind.OPEN_GAMES)
+        val pushed = state.pushedGames()
+        assertNull(pushed.menu)
+        assertEquals(0, state.selection.value.index)                          // a push opens on its first item
+        assertEquals("Games", tabBarTitle(assertNotNull(pushed.tabBar)))      // the bottom row is the menu's title row
+        assertTrue(pushed.entries.size > 2)
+        state.select(1)
+        for (b in listOf(NxButton.L1, NxButton.R1, NxButton.LEFT, NxButton.RIGHT)) { state.onButton(b); state.pushedGames() }
+        state.swipeTab(1); state.pushedGames()                                // no tab to swipe to
+        assertEquals(1, state.selection.value.index)
+        val letter = { state.pushedGames().entries[state.selection.value.index].game.shownName.first().uppercaseChar() }
+        val before = letter()
+        state.onButton(NxButton.R2)                                           // L2 / R2 still jump by letter
+        assertTrue(letter() > before, "R2 did not jump: still on $before")
+        state.openHiddenTab(MenuCategory.CONSOLES)                            // over a pushed tab: nothing stacks (Consoles shows anyway)
+        state.pushedGames()
+        state.onButton(NxButton.MENU)                                         // the game's own menu, no hidden tabs
+        assertTrue(menuKinds(state).isNotEmpty())
+        assertTrue(menuKinds(state).none { it == ContextKind.OPEN_GAMES || it == ContextKind.OPEN_CONSOLES })
+        state.onButton(NxButton.B)
+        state.openTabMenu()                                                   // no long-press menu over a pushed tab
+        assertNull(state.pushedGames().menu)
+        state.onButton(NxButton.B)
+        val back = assertIs<Screen.Systems>(state.screen.value)
+        assertFalse(back.pushed)
+        assertEquals(MenuCategory.HOME, back.category)
+        assertEquals(under, back.rows[state.selection.value.index])           // the tab and row it was opened from
+        assertEquals(listOf(MenuCategory.GAMES), back.hidden)
+    }
+
+    @Test fun a_game_launched_from_a_pushed_games_tab_ends_the_push() = runTest {
+        val runner = RecordingRunner()
+        val state = hiddenTabsState(MenuCategory.GAMES, runner = runner)
+        state.openHiddenTab(MenuCategory.GAMES)
+        state.select(state.pushedGames().entries.indexOfFirst { it.system.tag == "GB" })
+        state.onButton(NxButton.A); advanceUntilIdle()
+        assertEquals(1, runner.launched.size)
+        val s = assertIs<Screen.Systems>(state.screen.value)                 // the tab underneath, in place
+        assertFalse(s.pushed)
+        assertEquals(MenuCategory.HOME, s.category)
+    }
+
+    @Test fun a_hidden_games_tab_opened_over_consoles_returns_to_its_row() = runTest {
+        val state = hiddenTabsState(MenuCategory.GAMES)
+        state.onConsoles(); state.select(2)
+        state.openTabMenu()
+        assertEquals(listOf(ContextKind.OPEN_GAMES), menuKinds(state))
+        state.onButton(NxButton.A)
+        state.pushedGames()
+        state.onButton(NxButton.B)
+        assertEquals(MenuCategory.CONSOLES, state.category())
+        assertEquals(2, state.selection.value.index)
+    }
+
+    @Test fun a_hidden_tab_opened_over_the_games_tab_returns_to_its_game() = runTest {
+        val state = hiddenTabsState(MenuCategory.CONSOLES)
+        state.selectTab(1); state.select(2)
+        val game = state.highlighted()
+        assertEquals(listOf(MenuCategory.CONSOLES), state.gamesTab().tabBar?.hidden)
+        state.onButton(NxButton.MENU)                                         // the game's items, then the hidden tab
+        assertEquals(ContextKind.OPEN_CONSOLES, menuKinds(state).last())
+        state.onButton(NxButton.B)
+        state.openTabMenu()                                                   // the long press on the tab row: the hidden tab alone
+        assertEquals(listOf(ContextKind.OPEN_CONSOLES), menuKinds(state))
+        state.onButton(NxButton.A)
+        assertEquals(MenuCategory.CONSOLES, state.pushedMenu().category)
+        state.onButton(NxButton.B)
+        assertEquals(1, state.gamesTab().tabBar?.index)
+        assertEquals(game, state.highlighted())                               // the same game
+    }
+
+    @Test fun hiding_the_games_tab_while_it_shows_moves_to_the_next_tab() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = hiddenTabsState(settings = settings)
+        state.selectTab(1); state.gamesTab()
+        settings.showGamesTab = false
+        state.onForeground(); advanceUntilIdle()                              // the rows rebuilt and swapped in
+        assertEquals(MenuCategory.CONSOLES, state.category())                 // the next after Games, not Home
+    }
+
+    @Test fun hiding_the_remembered_games_tab_in_layouts_lands_on_the_next_tab() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = hiddenTabsState(MenuCategory.TOOLS, settings = settings)
+        state.selectTab(1); state.gamesTab()
+        state.openTabMenu(); state.onButton(NxButton.A)                       // Tools pushed over the Games tab
+        val settingsRow = state.pushedMenu().rows.indexOfFirst { (it as? MainRow.Tool)?.row?.kind == ToolKind.SETTINGS }
+        state.select(settingsRow); state.onButton(NxButton.A)
+        state.openLayoutsPage(SettingsSection.LAYOUT_GAMES_TAB)
+        state.selectLayoutsRow(SettingsKind.TAB_SHOWN, MenuCategory.GAMES); state.onButton(NxButton.A)
+        assertFalse(settings.showGamesTab)
+        repeat(4) { if (state.screen.value !is Screen.Systems) state.onButton(NxButton.B) }
+        assertEquals(MenuCategory.TOOLS, state.pushedMenu().category)         // back to the pushed Tools
+        state.onButton(NxButton.B)                                            // the remembered tab, Games, is gone
+        val s = assertIs<Screen.Systems>(state.screen.value)
+        assertFalse(s.pushed)
+        assertEquals(MenuCategory.CONSOLES, s.category)
+        assertEquals(listOf(MenuCategory.GAMES, MenuCategory.TOOLS), s.hidden)
+    }
+
     // --- Home ---
 
     /** Game time answering the stats reads from [window] and [paths]; [gate] holds each window read until completed. */

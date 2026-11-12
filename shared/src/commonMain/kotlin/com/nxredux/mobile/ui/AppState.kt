@@ -1971,24 +1971,28 @@ class AppState(
         return Screen.Games(ListSource.AllGames, tab.games, tabBar = TabBar(tabs.map { it.category }, index, hidden = hidden))
     }
 
-    /** The pushed hidden tab as a one-tab menu, or null (dropping [pushedTab]) when it is shown again or has no content left. */
-    private fun pushedScreen(): Screen.Systems? {
+    /**
+     * The pushed hidden tab as a one-tab menu (the Games tab: its game list under the menu's title row), or null (dropping
+     * [pushedTab]) when it is shown again or has no content left.
+     */
+    private fun pushedScreen(): Screen? {
         val c = pushedTab ?: return null
         val tab = kidsMenuTabs.firstOrNull { it.category == c }?.takeIf { menuTabs.none { v -> v.category == c } }
         if (tab == null) { pushedTab = null; return null }
+        if (c == MenuCategory.GAMES) return Screen.Games(ListSource.AllGames, tab.games, tabBar = TabBar(listOf(c), 0, pushed = true))
         return Screen.Systems(listOf(tab), 0, pushed = true)
     }
 
     /**
      * Opens [category], a tab Layouts hides that has content, over the main menu (the handheld's pushTabOverTab): its rows
      * in its own layout, orientation and background, on its first item. Only from the menu itself: never over a pushed
-     * tab, a context menu or a visible tab, and never Home (only Consoles, Collections or Tools push). B ([popHiddenTab])
-     * returns to the tab underneath, focus where it was.
+     * tab, a context menu or a visible tab, and never Home (only Games, Consoles, Collections or Tools push). From the
+     * Games tab too. B ([popHiddenTab]) returns to the tab underneath, focus where it was (the Games tab: on its game).
      */
     internal fun openHiddenTab(category: MenuCategory) {
         if (category == MenuCategory.HOME) return
-        val s = _screen.value as? Screen.Systems ?: return
-        if (s.pushed || s.menu != null || s.search != null) return
+        val s = _screen.value
+        if (!menuFree(s) || s.menuPushed) return
         if (menuTabs.any { it.category == category } || kidsMenuTabs.none { it.category == category }) return
         rememberMenuSelection()
         pushedTab = category
@@ -2014,7 +2018,7 @@ class AppState(
         if (pushedTab == null) return
         pushedTab = null
         switcher.dropPushedSnapshot()
-        if ((_screen.value as? Screen.Systems)?.pushed == true) showMenu(menuScreen(menuCategory))
+        if (_screen.value.menuPushed) showMenu(menuScreen(menuCategory))
     }
 
     /** On the main menu: remember the current tab and its row (the Games tab: its game too, [gamesTabGame]). */
@@ -4503,7 +4507,7 @@ class AppState(
      * tab. Read live for the menu's items; the screen carries the same list ([Screen.Systems.hidden]) for the UI's hints.
      */
     internal fun hiddenTabs(): List<MenuCategory> =
-        if ((_screen.value as? Screen.Systems)?.pushed == true) emptyList() else hiddenMenuTabs(kidsMenuTabs, menuTabs)
+        if (_screen.value.menuPushed) emptyList() else hiddenMenuTabs(kidsMenuTabs, menuTabs)
 
     /** Layouts → [c] tab as stored: Show (true) or Hide. */
     private fun tabSetting(c: MenuCategory): Boolean = when (c) {
@@ -5742,8 +5746,8 @@ class AppState(
     /** MENU or a long press on row [index] (null = the highlighted row): a game list's menu, or a pinned or recent main-menu row's. */
     fun openContextMenu(index: Int? = null) { contextMenus.openContextMenu(index) }
 
-    /** A long press on the tab row or the single-tab title: the hidden-tab menu. */
-    fun openTabMenu() { contextMenus.openTabMenu() }
+    /** A long press on the tab row or the single-tab title: the hidden-tab menu (not under the Games tab's panels). */
+    fun openTabMenu() { if (!_panelOpen.value) contextMenus.openTabMenu() }
 
     fun closeContextMenu() = contextMenus.closeContextMenu()
 

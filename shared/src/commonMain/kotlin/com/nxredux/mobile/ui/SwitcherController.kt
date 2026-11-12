@@ -245,6 +245,6 @@ internal class SwitcherController(
 
     /** The page under the switcher was a hidden tab pushed over the menu, now dropped: the snapshot goes with it. */
     fun dropPushedSnapshot() {
-        if ((beforeSwitcher?.first as? Screen.Systems)?.pushed == true) beforeSwitcher = null
+        if (beforeSwitcher?.first?.menuPushed == true) beforeSwitcher = null
     }
 }

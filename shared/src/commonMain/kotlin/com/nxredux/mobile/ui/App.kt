@@ -706,9 +706,13 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     val bar = s.tabBar
     val kidsOpen = state.kidsModeState.collectAsState().value is KidsMode.Open   // a Kids play window: the lock icon, as the menu's
     val labels = remember(bar?.categories) { bar?.categories.orEmpty().map { it.label.uppercase() } }   // the bottom tabs in capitals, as the menu's
-    // No long press: the hidden-tab menu opens from a Systems tab only ([AppState.openTabMenu]).
-    val tabRow: (@Composable (State<List<Hint>>) -> Unit)? = if (bar == null) null else { hints ->
-        MenuBottomRow(labels, bar.index, state::selectTab, tabBarTitle(bar), null, state::onButton, showHints = chrome.buttonHints && !chrome.noBar) { hints.value }
+    // A long press on the row: the hidden-tab menu, as on any tab ([AppState.openTabMenu]); the bar carries the hidden tabs
+    // (none while pushed), so it follows every rebuild. Kept across recompositions so the game list frame can skip.
+    val showBarHints = chrome.buttonHints && !chrome.noBar
+    val tabRow: (@Composable (State<List<Hint>>) -> Unit)? = remember(bar, labels, showBarHints, state) {
+        if (bar == null) null else { hints ->
+            MenuBottomRow(labels, bar.index, state::selectTab, tabBarTitle(bar), state::openTabMenu.takeIf { bar.hidden.isNotEmpty() }, state::onButton, showHints = showBarHints) { hints.value }
+        }
     }
     // A finger's swipe: List, Minimal, Grid and the vertical stacks scroll vertically, so a sideways swipe moves between the
     // tabs, as on the main menu's pages ([MainMenuScreen]); a horizontal Carousel or Backdrop keeps it for its own row.
