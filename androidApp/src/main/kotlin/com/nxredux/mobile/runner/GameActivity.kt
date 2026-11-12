@@ -1147,7 +1147,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             // The core keeps its Default: a layout, proportion, rotation or fold is the app's to draw, at once.
             renderer.n3dsComposeLayout = N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen, n3dsSkinStack())
             renderer.n3dsProportion = n3dsProportion(screen = screen)
-            applyOptions(listOf(Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(input.n3dsHotkeys.stylus))))
+            applyOptions(listOf(
+                Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(input.n3dsHotkeys.stylus)),
+                // Stylus mode steers the core's pointer with the right stick, which is the C-stick alone outside it.
+                Variable(N3dsOptions.ANALOG_FUNCTION, N3dsOptions.analogFunction(input.n3dsHotkeys.stylus)),
+            ))
             renderer.relayoutFrontend()
             return
         }
