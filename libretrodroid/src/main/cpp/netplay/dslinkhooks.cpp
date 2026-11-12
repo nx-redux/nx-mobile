@@ -51,6 +51,18 @@ void bindToWifi(int fd, void*) {
     if (rc != 0) LOGW("DS link: cannot bind a socket to the Wi-Fi network (errno %d)", errno);
 }
 
+// The phone-to-phone cable (ndl_cable), kept here so a link made later starts with it.
+std::atomic<int> cableState { NDL_CABLE_NONE };
+// The cable's network is 10.99.0.0/30 (the app's USB link VPN).
+constexpr const char* CABLE_BROADCAST = "10.99.0.3";
+
+// A socket pinned to the Wi-Fi skips the cable's VPN for everything but its broadcast address, so one that sends to
+// the cable is let go of first (it then follows the app's routes, where the cable's two addresses lead to the cable).
+void routeSocket(int fd, bool cable, void*) {
+    if (!cable) return bindToWifi(fd, nullptr);
+    if (android_setsocknetwork(NETWORK_UNSPECIFIED, fd) != 0) LOGW("DS link: cannot move a socket to the cable (errno %d)", errno);
+}
+
 constexpr uint16_t ROOM_PORT = 24874;
 constexpr uint16_t SEARCH_PORT = 24875;
 
@@ -329,6 +341,7 @@ void configure(const std::vector<Variable>& vars) {
     cfg.max_members = NDL_MAX_MEMBERS;
     cfg.clock = nullptr;
     cfg.bind_socket = bindToWifi;
+    cfg.route_socket = routeSocket;
     cfg.bind_ctx = nullptr;
 
     ndl_link* created = ndl_create(&cfg);
@@ -336,6 +349,7 @@ void configure(const std::vector<Variable>& vars) {
         LOGE("DS link: cannot start %s on port %u", modeName(wanted.mode), (unsigned) wanted.port);
         return;
     }
+    ndl_set_cable(created, (ndl_cable) cableState.load(), CABLE_BROADCAST);
     ndl_radio_changed(created, (ndl_radio) lastRadio);
     {
         std::lock_guard<std::mutex> guard(linkMutex);
@@ -435,6 +449,14 @@ void frameEnd() {
          stats.maxUs / 1000.0, stats.sumUs / 1000.0 / stats.frames, (double) stats.sumPolls / stats.frames,
          (unsigned long long) stats.maxPolls, stats.maxSpanUs / 1000.0, stats.pktsIn / sec, stats.pktsOut / sec,
          stats.bytesIn / sec, stats.bytesOut / sec, ndl_member_count(theLink), rttMin, rttAvg, rttMax, (unsigned) drops.queue_hwm, dropText);
+}
+
+void setCable(int state) {
+    if (state < NDL_CABLE_NONE || state > NDL_CABLE_UP) return;
+    if (cableState.exchange(state) == state) return;
+    std::lock_guard<std::mutex> guard(linkMutex);
+    ndl_set_cable(theLink, (ndl_cable) state, CABLE_BROADCAST);
+    LOGI("DS link: cable %s", state == NDL_CABLE_UP ? "up" : state == NDL_CABLE_COMING ? "coming" : "none");
 }
 
 void stopCore() {

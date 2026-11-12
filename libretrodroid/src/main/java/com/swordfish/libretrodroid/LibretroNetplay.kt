@@ -118,6 +118,8 @@ object LibretroNetplay {
     @JvmStatic external fun dsRejoin()
     /** The DS link: the Wi-Fi `Network.networkHandle` its sockets bind to (0 = the default network). Set before the core loads. */
     @JvmStatic external fun dsSetNetwork(handle: Long)
+    /** The DS link: the phone-to-phone cable beside the Wi-Fi. 0 none, 1 coming up (a room found on the Wi-Fi waits a few seconds for it), 2 up (rooms are looked for on it too, and one found there is the one joined). Any thread. */
+    @JvmStatic external fun dsSetCable(state: Int)
 
     init {
         System.loadLibrary("libretrodroid")

@@ -69,6 +69,10 @@ typedef struct {
 	/* Called on every socket the link creates, before bind: lets the platform pin it to one network (the default one
 	 * can be mobile data, which would carry replies away from the LAN). NULL = nothing. */
 	void (*bind_socket)(int fd, void* ctx);
+	/* Called before a socket sends to the other kind of address than its last send (cable: on the cable's network, see
+	 * ndl_set_cable): a socket pinned to one network cannot reach the other, so the platform moves it. A new socket is
+	 * off the cable. NULL = nothing. */
+	void (*route_socket)(int fd, bool cable, void* ctx);
 	void* bind_ctx;
 } ndl_config;
 
@@ -101,6 +105,14 @@ void ndl_destroy(ndl_link* l);
 void ndl_set_mode(ndl_link* l, ndl_mode m);
 
 void ndl_radio_changed(ndl_link* l, ndl_radio r);
+
+/* A phone-to-phone cable: its own two-address network (a /30) beside the Wi-Fi. */
+typedef enum { NDL_CABLE_NONE = 0, NDL_CABLE_COMING = 1, NDL_CABLE_UP = 2 } ndl_cable;
+
+/* AUTO: the cable's state and its network's broadcast address. UP: a search asks there too, and a room that answers
+ * from the cable is the one joined. COMING: a room found elsewhere is left unjoined for a few seconds, so the cable can
+ * come up first and carry it. */
+void ndl_set_cable(ndl_link* l, ndl_cable state, const char* broadcast);
 
 /* Leaves at once, without the radio-off linger. The link then stays out of rooms until ndl_set_mode (or, in AUTO, the
  * next radio ON). */

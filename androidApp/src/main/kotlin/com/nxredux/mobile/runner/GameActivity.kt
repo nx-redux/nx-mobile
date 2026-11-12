@@ -344,6 +344,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val wii = WiiDolphinController(this, input, saves)
     private val launchPipeline = LaunchPipeline(LaunchState())
     private val dsRoom = DsRoomWatcher(lifecycleScope, { DsPresence.of(LibretroNetplay.dsPresence()) }, ::onDsPresenceChanged)
+    private val dsCable = DsCable(this, lifecycleScope)
     // A sheet session's room has no Disconnect to come back from: the cap's leave is undone when the menu closes.
     private var dsRejoinAfterMenu = false
     private val dsMenuCap = DsMenuCap(lifecycleScope, onTick = { seconds -> withMenu { it.setIdleSeconds(seconds) } }) {
@@ -620,6 +621,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         launchPipeline.dsRoomChanged(presence == DsPresence.ROOM)
         launchPipeline.dsWirelessChanged(presence != DsPresence.OUT)
         if (launchPipeline.dsAutoRoute) {
+            if (presence != DsPresence.OUT) dsCable.wirelessOn()
             speed.setSession(netplay = dsWireless)
             shortcuts.refreshTouchShortcuts()
             withMenu { it.setDsWireless(dsWireless) }
@@ -952,6 +954,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun onDestroy() {
         runCatching { unregisterReceiver(kidsWarn) }   // not registered when onCreate stopped early
         dsRoom.stop()   // launchPipeline.onDestroy lets the Wi-Fi lock go
+        dsCable.close()
         renderer.cancelGeometryWatch()
         res3d.cancelTick()
         rumbles.forEach { it.release() }

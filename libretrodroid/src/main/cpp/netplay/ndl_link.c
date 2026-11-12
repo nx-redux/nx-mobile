@@ -57,6 +57,8 @@
 #define NDL_SEARCH_WAIT_MS 300
 #define NDL_SEARCH_AGAIN_MS 700
 #define NDL_ALONE_SEARCH_MS 2000
+/* A cable link takes a few seconds from the first sign of the other phone: a room on the Wi-Fi waits that long for it. */
+#define NDL_CABLE_HOLD_MS 6000
 /* A game drops and restarts its radio between its own menus: the room outlives those gaps. */
 #define NDL_LINGER_MS 10000
 /* The holder just answered, so a few unanswered JOINs mean it went away: search again rather than knock for 30 s. */
@@ -126,9 +128,14 @@ struct ndl_link {
 	uint64_t search_until; /* a search is waiting for answers until then, 0 = none */
 	uint64_t next_search_ms;
 	uint64_t next_alone_ms;
+	bool fd_cable, sfd_cable; /* the socket's last send went to the cable (cfg.route_socket) */
 	bool found;
+	bool found_cable; /* the found room answered from the cable */
 	ndl_room_info found_info;
 	struct sockaddr_in found_addr;
+	ndl_cable cable;
+	uint32_t cable_broadcast;  /* host order, 0 = none */
+	uint64_t cable_hold_until; /* COMING: a room found off the cable is not joined before then */
 #ifdef NDL_TESTING
 	uint32_t test_sent;
 #endif
@@ -179,10 +186,23 @@ static size_t encode(uint8_t* out, uint8_t type, uint16_t sender, uint16_t dest,
 	return NDL_HDR_SIZE + n;
 }
 
+/* The cable's network is a /30: its two phones and its broadcast address. */
+static bool on_cable(const ndl_link* l, const struct sockaddr_in* a) {
+	return l->cable_broadcast && (ntohl(a->sin_addr.s_addr) & ~3u) == (l->cable_broadcast & ~3u);
+}
+
 static void send_on(ndl_link* l, int fd, const struct sockaddr_in* to, uint8_t type, uint16_t sender, uint16_t dest,
 					const void* payload, size_t n) {
 	if (fd < 0)
 		return;
+	if (l->cfg.route_socket) {
+		bool cable = on_cable(l, to);
+		bool* routed = fd == l->sfd ? &l->sfd_cable : &l->fd_cable;
+		if (cable != *routed) {
+			l->cfg.route_socket(fd, cable, l->cfg.bind_ctx);
+			*routed = cable;
+		}
+	}
 	uint8_t buf[NDL_DGRAM_MAX];
 	size_t len = encode(buf, type, sender, dest, payload, n);
 	ssize_t r;
@@ -208,6 +228,7 @@ static bool same_addr(const struct sockaddr_in* a, const struct sockaddr_in* b) 
 /* ---- Socket ---- */
 
 static void close_search_socket(ndl_link* l) {
+	l->sfd_cable = false;
 	if (l->sfd >= 0) {
 		close(l->sfd);
 		l->sfd = -1;
@@ -217,6 +238,7 @@ static void close_search_socket(ndl_link* l) {
 /* Both: a link without its room socket has nothing to answer searches for. */
 static void close_socket(ndl_link* l) {
 	close_search_socket(l);
+	l->fd_cable = false;
 	if (l->fd >= 0) {
 		close(l->fd);
 		l->fd = -1;
@@ -425,6 +447,10 @@ static void start_search(ndl_link* l) {
 		send_to(l, &to, T_ASK, 0, NDL_BROADCAST, NULL, 0);
 	to.sin_addr.s_addr = htonl(INADDR_BROADCAST);
 	send_to(l, &to, T_ASK, 0, NDL_BROADCAST, NULL, 0);
+	if (l->cable == NDL_CABLE_UP && l->cable_broadcast) {
+		to.sin_addr.s_addr = htonl(l->cable_broadcast);
+		send_to(l, &to, T_ASK, 0, NDL_BROADCAST, NULL, 0);
+	}
 	l->found = false;
 	l->search_until = now_ms(l) + NDL_SEARCH_WAIT_MS;
 }
@@ -439,9 +465,12 @@ static void search_answer(ndl_link* l, const struct sockaddr_in* from, const uin
 	/* This phone's own room, heard through its own search port. */
 	if (r.room_id == l->room_id || port == 0)
 		return;
-	if (l->found && !ndl_prefer(r, l->found_info))
+	/* A room reached over the cable answers on the Wi-Fi as well: the cable carries it. */
+	bool cable = on_cable(l, from);
+	if (l->found && (cable == l->found_cable ? !ndl_prefer(r, l->found_info) : l->found_cable))
 		return;
 	l->found = true;
+	l->found_cable = cable;
 	l->found_info = r;
 	l->found_addr = *from;
 	l->found_addr.sin_port = htons(port);
@@ -696,7 +725,9 @@ static void auto_tick(ndl_link* l, uint64_t now) {
 		return; /* joining or a member: the room's own timers run it */
 
 	if (done) {
-		if (l->found) {
+		if (l->found && !l->found_cable && now < l->cable_hold_until) {
+			l->next_search_ms = now + NDL_SEARCH_AGAIN_MS;
+		} else if (l->found) {
 			if (!start_join(l, &l->found_addr))
 				l->next_search_ms = now + NDL_OPEN_RETRY_MS;
 		} else if (l->radio == NDL_RADIO_HOSTING) {
@@ -932,10 +963,26 @@ void ndl_radio_changed(ndl_link* l, ndl_radio r) {
 		 * (a state loaded from before the wireless). */
 		if (r != l->radio || r == NDL_RADIO_ON)
 			l->parked = false;
+		if (l->radio == NDL_RADIO_OFF && l->cable == NDL_CABLE_COMING)
+			l->cable_hold_until = now_ms(l) + NDL_CABLE_HOLD_MS;
 	}
 	l->radio = r;
 	pthread_mutex_unlock(&l->mu);
 	np_wake_poke(&l->wake);
+}
+
+void ndl_set_cable(ndl_link* l, ndl_cable state, const char* broadcast) {
+	if (!l)
+		return;
+	struct in_addr a;
+	pthread_mutex_lock(&l->mu);
+	l->cable_broadcast = broadcast && inet_pton(AF_INET, broadcast, &a) == 1 ? ntohl(a.s_addr) : 0;
+	if (state != NDL_CABLE_COMING)
+		l->cable_hold_until = 0;
+	else if (l->cable != NDL_CABLE_COMING && l->radio != NDL_RADIO_OFF)
+		l->cable_hold_until = now_ms(l) + NDL_CABLE_HOLD_MS;
+	l->cable = state;
+	pthread_mutex_unlock(&l->mu);
 }
 
 void ndl_leave_now(ndl_link* l) {

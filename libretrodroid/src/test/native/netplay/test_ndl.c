@@ -510,6 +510,78 @@ static int case_auto_joins_a_sheet_host(uint16_t port) {
 	return 0;
 }
 
+/* A sheet room on the loopback and an AUTO phone beside it whose cable is in [state] on [cable_broadcast]. */
+static int cable_pair(uint16_t port, ndl_cable state, const char* cable_broadcast) {
+	uint16_t sp = free_udp_port();
+	ndl_config c = config(NDL_HOST, "sheet", port, 8);
+	c.search_port = sp;
+	room[1] = ndl_create(&c);
+	CHECK(room[1] != NULL && ndl_in_room(room[1]));
+	c = auto_config("auto", port, sp);
+	room[2] = ndl_create(&c);
+	CHECK(room[2] != NULL);
+	ndl_set_cable(room[2], state, cable_broadcast);
+	ndl_radio_changed(room[2], NDL_RADIO_ON);
+	return 0;
+}
+
+/* A cable on its way: a room found on the other network waits for it, then is joined anyway. */
+static int case_cable_coming_holds_a_room_elsewhere(uint16_t port) {
+	CHECK(cable_pair(port, NDL_CABLE_COMING, "10.99.0.3") == 0);
+	advance(3000);
+	CHECK(!ndl_in_room(room[2]));
+	advance(4000);
+	CHECK(wait_in_room(room[2], true, 2000));
+	return 0;
+}
+
+/* The room answers from the cable's own network: nothing to wait for. */
+static int case_cable_room_is_joined_at_once(uint16_t port) {
+	CHECK(cable_pair(port, NDL_CABLE_COMING, "127.0.0.3") == 0);
+	advance(400);
+	CHECK(wait_in_room(room[2], true, 2000));
+	return 0;
+}
+
+static void note_route(int fd, bool cable, void* ctx) {
+	(void)fd;
+	*(int*)ctx = cable ? 1 : -1;
+}
+
+/* A socket is moved to the cable before it sends there, and not for an address off it. */
+static int case_cable_sends_move_the_socket(uint16_t port) {
+	uint16_t sp = free_udp_port();
+	ndl_config c = config(NDL_HOST, "sheet", port, 8);
+	c.search_port = sp;
+	room[1] = ndl_create(&c);
+	CHECK(room[1] != NULL);
+	int routed = 0;
+	c = auto_config("auto", port, sp);
+	c.route_socket = note_route;
+	c.bind_ctx = &routed;
+	room[2] = ndl_create(&c);
+	CHECK(room[2] != NULL);
+	ndl_radio_changed(room[2], NDL_RADIO_ON);
+	advance(400);
+	CHECK(wait_in_room(room[2], true, 2000));
+	CHECK(routed == 0);
+	ndl_leave_now(room[2]);
+	ndl_set_cable(room[2], NDL_CABLE_UP, "127.0.0.3");
+	ndl_radio_changed(room[2], NDL_RADIO_ON);
+	advance(400);
+	CHECK(wait_in_room(room[2], true, 2000));
+	CHECK(routed == 1);
+	return 0;
+}
+
+/* The cable is up and its room is elsewhere: no wait either. */
+static int case_cable_up_does_not_hold(uint16_t port) {
+	CHECK(cable_pair(port, NDL_CABLE_UP, "10.99.0.3") == 0);
+	advance(400);
+	CHECK(wait_in_room(room[2], true, 2000));
+	return 0;
+}
+
 /* An AUTO phone whose game hosts and one whose game only looks, in the same room. */
 static int auto_pair(uint16_t port, uint16_t sp) {
 	ndl_config c = auto_config("hosting", port, sp);
@@ -753,6 +825,10 @@ int main(void) {
 	run("prefer_settled_then_lower_id", case_prefer_settled_then_lower_id);
 	run("auto_joins_a_sheet_host", case_auto_joins_a_sheet_host);
 	run("auto_host_opens_when_none", case_auto_host_opens_when_none);
+	run("cable_coming_holds_a_room_elsewhere", case_cable_coming_holds_a_room_elsewhere);
+	run("cable_room_is_joined_at_once", case_cable_room_is_joined_at_once);
+	run("cable_up_does_not_hold", case_cable_up_does_not_hold);
+	run("cable_sends_move_the_socket", case_cable_sends_move_the_socket);
 	run("auto_idle_without_radio", case_auto_idle_without_radio);
 	run("linger_then_leave", case_linger_then_leave);
 	run("leave_now_skips_linger", case_leave_now_skips_linger);
