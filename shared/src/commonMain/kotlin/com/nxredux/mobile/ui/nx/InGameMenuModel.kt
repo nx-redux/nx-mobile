@@ -451,8 +451,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     /**
-     * Seconds until a menu left open in a DS room leaves it by itself, shown on the Disconnect row (a sheet session:
-     * in the root's note); null when nothing counts down.
+     * Seconds until a menu left open in a DS room leaves it by itself, shown on the Disconnect row; null when nothing
+     * counts down.
      */
     var idleSeconds: Int? = null
         private set
@@ -1567,11 +1567,21 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         PageKind.Root, gameTitle,
         // No save states after netplay, so no resume point to choose about: Quit quits.
         listOf(MenuRow.Action("Continue", MenuAction.CONTINUE), MenuRow.Action("Quit", MenuAction.QUIT_ONLY)),
+    ) else if (netplay && netplayLink) MenuPage(
+        // A link session, each player on their own game and save: the root a DS game's own wireless gets ([dsWireless]).
+        // Disconnect ends the link here; a DS room's idle count shows on it.
+        PageKind.Root, gameTitle,
+        listOf(
+            MenuRow.Action(NetplayText.CONTINUE, MenuAction.CONTINUE),
+            MenuRow.Action(idleSeconds?.let { NetplayText.dsDisconnectIn(it) } ?: NetplayText.DS_DISCONNECT, MenuAction.LEAVE_NETPLAY),
+            // No resume point from a linked game: resumed alone, it would be in the middle of the link.
+            MenuRow.Action("Quit", MenuAction.QUIT_ONLY),
+        ),
+        footer = NetplayText.LINK_DISCONNECT_TEXT,
     ) else if (netplay) MenuPage(
         PageKind.Root, NetplayText.LEAVE_TITLE,
         listOf(MenuRow.Action(NetplayText.CONTINUE, MenuAction.CONTINUE), MenuRow.Action(NetplayText.LEAVE, MenuAction.LEAVE_NETPLAY)),
-        footer = (if (netplayLink) NetplayText.LEAVE_LINK_TEXT else NetplayText.LEAVE_TEXT) +
-            (idleSeconds?.let { " " + NetplayText.dsSheetIdleText(it) } ?: ""),
+        footer = NetplayText.LEAVE_TEXT,
     ) else if (dsWireless) MenuPage(
         PageKind.Root, gameTitle,
         listOf(

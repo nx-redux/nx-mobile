@@ -869,6 +869,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     override fun onStop() {
+        // Read before the leave: a state taken with the game's wireless on would resume in the middle of a link that is gone.
+        val wirelessOn = dsWireless
         LibretroNetplay.dsLeaveNow()
         dsRoom.check()   // an open menu pauses the core now that the room is gone
         dsMenuCap.sync(false)
@@ -882,7 +884,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // clears this screen. A quit writes its own; a game that never got ready writes nothing (writeAutoStateOnStop);
         // one that failed after starting and leaves through its dialog keeps the last good resume point.
         // API 26–27: onSaveInstanceState already ran; the outcome of the write is recorded in its bundle.
-        saves.onStop(writeAuto = !quitting && !wii.endedByCore && !relaunching && !(isFinishing && failShown))
+        saves.onStop(writeAuto = !quitting && !wii.endedByCore && !relaunching && !(isFinishing && failShown) && !wirelessOn)
         if (isFinishing) { input.gcClearTriggers(); stopAchievements() }
         input.onStop()   // the pen and 3DS hotkey ticks stop; onStart restarts them
         // A Presentation stays up while its activity is stopped: no second screen in the background.
