@@ -242,7 +242,7 @@ object NdsOptions {
     private val otherRows: List<FrontendOption> = listOf(
         row(
             BIG_SCREEN, "Big Screen", NdsScreen.entries, NdsScreen.TOP,
-            "The screen shown big in picture in picture, large screen\nand single screen, and first in stacked and side by side.\nR2 swaps it.",
+            "The screen shown big in picture in picture, large screen\nand single screen, and first in stacked and side by side.\nL3 swaps it.",
         ),
         row(
             PIP_CORNER, "Inset Corner", PipCorner.entries, PipCorner.TOP_RIGHT,

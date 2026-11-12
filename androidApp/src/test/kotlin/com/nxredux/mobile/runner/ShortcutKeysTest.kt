@@ -137,7 +137,7 @@ class ShortcutKeysTest {
     @Test fun builtInChordBeatsAKeyBoundAlone3ds() {
         val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(null, r1), tag = "3DS")
         assertEquals(KeyVerdict.Pass, k.onDown(select))
-        // SELECT+R1 swaps the 3DS screens: R1 is the console's while SELECT is held, its release too.
+        // SELECT+R1 toggles the 3DS stylus: R1 is the console's while SELECT is held, its release too.
         assertEquals(KeyVerdict.Pass, k.onDown(r1))
         assertEquals(KeyVerdict.Pass, k.onUp(r1))
         k.onUp(select)

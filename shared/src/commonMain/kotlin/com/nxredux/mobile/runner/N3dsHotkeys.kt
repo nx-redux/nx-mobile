@@ -20,7 +20,7 @@ data class N3dsKeyEvent(val key: N3dsKey, val down: Boolean)
 sealed interface N3dsAction {
     /** SELECT + Left (-1) / Right (+1): the next citra_layout_option ([N3dsOptions.cycleLayout]). */
     data class CycleLayout(val delta: Int) : N3dsAction
-    /** SELECT + L: stylus mode turned on or off. */
+    /** SELECT + R: stylus mode turned on or off. */
     data class Stylus(val on: Boolean) : N3dsAction
 }
 
@@ -29,8 +29,8 @@ data class N3dsDecision(val forward: Boolean, val action: N3dsAction? = null)
 
 /**
  * NX Redux's DS controls on the 3DS, before the core ([NdsHotkeys] for the DS), on SELECT chords: L2/R2 are the New 3DS's
- * ZL/ZR there, so they always reach the core. SELECT + R is Azahar's swap-screens button (sent as L3), SELECT + Left/Right
- * cycles the core's layout, SELECT + L toggles stylus mode.
+ * ZL/ZR there, so they always reach the core. SELECT + L is Azahar's swap-screens button (sent as L3), SELECT + Left/Right
+ * cycles the core's layout, SELECT + R toggles stylus mode: the left hand has the screens, the right hand the stylus.
  *
  * Many 3DS games pause on Select, so unlike the DS, SELECT is held back and never reaches the core while held: a chord
  * (START too, the host's menu chord) consumes it for that hold; released with no chord after a hold of at most
@@ -64,8 +64,8 @@ class N3dsHotkeys {
     var stylus = false
         private set
     /**
-     * A pad skin shows (host-set): its touch screen is under the finger and it places the screens, so SELECT + L (stylus)
-     * and SELECT + Left / Right (layout) are kept from the core and do nothing; SELECT + R still swaps.
+     * A pad skin shows (host-set): its touch screen is under the finger and it places the screens, so SELECT + R (stylus)
+     * and SELECT + Left / Right (layout) are kept from the core and do nothing; SELECT + L still swaps.
      */
     var skinShown = false
     /**
@@ -101,7 +101,7 @@ class N3dsHotkeys {
 
     private val selectCancelled: Boolean get() = selectMs > SELECT_CANCEL_MS
 
-    /** Stylus mode on or off: SELECT + L1, or the pad's STYLUS pill. Off lifts a touch held. */
+    /** Stylus mode on or off: SELECT + R1, or the pad's STYLUS pill. Off lifts a touch held. */
     fun toggleStylus(): N3dsAction.Stylus {
         stylus = !stylus
         resetCursor()
@@ -129,9 +129,9 @@ class N3dsHotkeys {
         if (chord && select == Select.PENDING) select = Select.CHORD   // the core never sees this SELECT
         var key: N3dsKey? = null
         val decision = when {
-            chord && button == NxButton.R1 -> { key = N3dsKey.L3; N3dsDecision(false) }
+            chord && button == NxButton.L1 -> { key = N3dsKey.L3; N3dsDecision(false) }
             chord && skinShown && !(skinLayouts && button.isHorizontal()) -> N3dsDecision(false)
-            chord && button == NxButton.L1 -> N3dsDecision(false, toggleStylus())
+            chord && button == NxButton.R1 -> N3dsDecision(false, toggleStylus())
             chord -> N3dsDecision(false, N3dsAction.CycleLayout(if (button == NxButton.RIGHT) 1 else -1))
             stylus && button.isDirection -> {
                 if (held.isEmpty()) heldMs = 0L
