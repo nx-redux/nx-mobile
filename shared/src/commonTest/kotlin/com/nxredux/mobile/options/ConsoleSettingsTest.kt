@@ -12,19 +12,19 @@ class ConsoleSettingsTest {
             listOf(
                 NdsOptions.LAYOUT_PORTRAIT, NdsOptions.LAYOUT_PORTRAIT_CONTROLLER, NdsOptions.LAYOUT_LANDSCAPE,
                 NdsOptions.MODE_3D, NdsOptions.MAX_SCALE_3D, NdsOptions.SCALE_3D,
-                NdsOptions.BIG_SCREEN, NdsOptions.PIP_CORNER, NdsOptions.PIP_SIZE, NdsOptions.PIP_OPACITY,
+                NdsOptions.BIG_SCREEN, NdsOptions.PIP_CORNER, NdsOptions.PIP_SIZE, NdsOptions.PIP_OPACITY, NdsOptions.LOCAL_WIRELESS,
             ),
             rows.map { it.key },
         )
         assertEquals(
             listOf(
                 "Layout (portrait)", "Layout (portrait, controller)", "Layout (landscape)",
-                "3D Resolution", "Max Scale", "Scale", "Big Screen", "Inset Corner", "Inset Size", "Inset Opacity",
+                "3D Resolution", "Max Scale", "Scale", "Big Screen", "Inset Corner", "Inset Size", "Inset Opacity", "Local Wireless",
             ),
             rows.map { it.label },
         )
         assertTrue(rows.none { it.label.startsWith("DS") })
-        assertEquals(NdsOptions.table, rows)                  // one definition
+        assertEquals(NdsOptions.table + NdsOptions.localWirelessRow, rows)                  // one definition
     }
 
     @Test fun dc_offers_graphics_api_and_the_shared_controller_layout_row() {

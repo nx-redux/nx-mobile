@@ -285,6 +285,11 @@ class AndroidAppSettings(context: Context) : AppSettings {
             if (value) DebugLogFile.start(app) else DebugLogFile.stop()
         }
 
+    /** The MAC seed of a DS link room's members: random once, then kept. */
+    val ndsMacSeed: Int
+        get() = if (prefs.contains(KEY_NDS_MAC_SEED)) prefs.getInt(KEY_NDS_MAC_SEED, 0)
+        else kotlin.random.Random.nextInt(0, 1 shl 24).also { prefs.edit { putInt(KEY_NDS_MAC_SEED, it) } }
+
     override var cableLinkDelayPin: Int
         get() = prefs.getInt(KEY_CABLE_LINK_DELAY, NetplayCores.CABLE_LINK_DELAY_DEFAULT).coerceIn(0, NetplayCores.CABLE_LINK_DELAY_MAX)
         set(value) = prefs.edit { putInt(KEY_CABLE_LINK_DELAY, value.coerceIn(0, NetplayCores.CABLE_LINK_DELAY_MAX)) }
@@ -427,6 +432,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_GAME_RUMBLE = "game_rumble"
         private const val KEY_DEBUG_LOG = "debug_log"
         private const val KEY_PLAYER_NAME = "player_name"
+        private const val KEY_NDS_MAC_SEED = "nds_mac_seed"
         private const val KEY_CABLE_LINK_DELAY = "cable_link_delay"
         private const val KEY_CABLE_LINK_DELAY_OVERLAY = "cable_link_delay_overlay"
         private const val KEY_ANDROID_KEYBOARD = "android_keyboard"

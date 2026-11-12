@@ -25,6 +25,7 @@ object NetplayCores {
         // GBA link: the netpacket interface over TCP 55437. Both folders run either core (the same raw flash save).
         "GBA" to listOf("gpsp", "mgba"), "MGBA" to listOf("mgba", "gpsp"),
         "3DS" to listOf("azahar"),   // 3DS link: local wireless through Azahar's own room (UDP 24872), phone to phone
+        "NDS" to listOf("melondsds"),   // DS link: local wireless through melonDS DS's own room (UDP 24874), phone to phone
     )
 
     fun supported(tag: String): Boolean = CoreRegistry.handheldTag(tag) in table
@@ -62,7 +63,7 @@ object NetplayCores {
     private val LINK: Map<String, NetplayLinkKind> =
         mapOf(
             "gambatte" to NetplayLinkKind.GBLINK, "gpsp" to NetplayLinkKind.NETPACKET, "mgba" to NetplayLinkKind.NETPACKET,
-            "azahar" to NetplayLinkKind.N3DSLINK,
+            "azahar" to NetplayLinkKind.N3DSLINK, "melondsds" to NetplayLinkKind.NDSLINK,
         )
 
     /** How [core]'s link session talks; null for a lockstep core. */
@@ -143,7 +144,7 @@ object NetplayCores {
 }
 
 /**
- * A link session's backend: gambatte runs its own socket; gpSP and mGBA use the runner's GBA link; Azahar hosts or joins
- * its own multiplayer room, which carries the games' local wireless.
+ * A link session's backend: gambatte runs its own socket; gpSP and mGBA use the runner's GBA link; Azahar and melonDS DS host
+ * or join their own multiplayer rooms, which carry the games' local wireless.
  */
-enum class NetplayLinkKind { GBLINK, NETPACKET, N3DSLINK }
+enum class NetplayLinkKind { GBLINK, NETPACKET, N3DSLINK, NDSLINK }

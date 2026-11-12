@@ -1414,7 +1414,7 @@ class InGameMenuModelTest {
         val m = model().openConsoleSettings()
         assertEquals("Display", m.state.page.title)
         assertEquals(
-            ConsoleSettings.tableFor("NDS").filter { it != BottomScreenOptions.row && it.key != NdsOptions.SCALE_3D && OptionGroup.of(it.key) == OptionGroup.DISPLAY }.map { it.label },
+            ConsoleSettings.tableFor("NDS").filter { it != BottomScreenOptions.row && !it.atLaunch && it.key != NdsOptions.SCALE_3D && OptionGroup.of(it.key) == OptionGroup.DISPLAY }.map { it.label },
             m.state.page.rows.map { it.label }.dropLast(3),   // then the picture rows the DS screens take
         )
         assertEquals(
@@ -1982,6 +1982,113 @@ class InGameMenuModelTest {
         m.press(NxButton.UP)
         assertEquals(MenuEffect.Close, m.press(NxButton.A))
         assertEquals(MenuEffect.Close, m.press(NxButton.B))
+    }
+
+    @Test fun ds_wireless_root_is_continue_disconnect_quit() {
+        val m = model()
+        m.setDsWireless(true)
+        assertEquals("Tetris", m.state.page.title)
+        assertEquals(listOf("Continue", "Disconnect", "Quit"), m.state.page.rows.map { it.label })
+        assertEquals("Disconnect leaves local multiplayer. The game plays on.", m.state.page.footer)
+        assertFalse(m.panelBeside)
+        assertEquals(MenuEffect.Close, m.press(NxButton.A))
+        m.press(NxButton.DOWN)
+        assertEquals(MenuEffect.DisconnectDs, m.press(NxButton.A))
+        assertEquals(MenuEffect.DisconnectDs, m.activate(1))
+        m.press(NxButton.DOWN)
+        assertEquals(MenuEffect.QuitWithoutResume, m.press(NxButton.A))   // no resume point from a wireless session
+        assertEquals(MenuEffect.QuitWithoutResume, m.activate(2))
+        assertEquals(PageKind.Root, m.state.page.kind)
+    }
+
+    @Test fun ds_wireless_root_counts_down_to_the_idle_leave() {
+        val m = model()
+        m.setDsWireless(true)
+        m.press(NxButton.DOWN)
+        m.setIdleSeconds(45)
+        assertEquals(listOf("Continue", "Disconnect (45s)", "Quit"), m.state.page.rows.map { it.label })
+        assertEquals("Disconnect leaves local multiplayer. The game plays on.", m.state.page.footer)
+        assertEquals(1, m.state.page.selected)   // the countdown never moves the selection
+        m.setIdleSeconds(44)
+        assertEquals("Disconnect (44s)", m.state.page.rows[1].label)
+        assertEquals(1, m.state.page.selected)
+        assertEquals(MenuEffect.DisconnectDs, m.press(NxButton.A))
+        m.setIdleSeconds(null)
+        assertEquals(listOf("Continue", "Disconnect", "Quit"), m.state.page.rows.map { it.label })
+        assertEquals(1, m.state.page.selected)
+    }
+
+    @Test fun sheet_session_root_counts_down_to_the_idle_leave() {
+        val m = model()
+        m.netplay = true
+        m.refresh()
+        m.setIdleSeconds(9)
+        assertEquals("Leaving ends the netplay session. Leaves the room in 9 s with the menu open. Continue rejoins.", m.state.page.footer)
+        m.setIdleSeconds(null)
+        assertEquals("Leaving ends the netplay session.", m.state.page.footer)
+    }
+
+    @Test fun ds_wireless_disconnect_row_takes_one_tap_and_hints_select() {
+        val m = model()
+        m.setDsWireless(true)
+        val row = m.state.page.rows[1]
+        assertFalse(inGameRowTakesTwoTaps(row))
+        assertEquals(listOf(NxButton.A, NxButton.B), hintsFor(m.state.page, row).map { it.button })
+    }
+
+    @Test fun ds_wireless_off_brings_the_full_root_back() {
+        val m = model()
+        val full = m.state.page.rows.map { it.label }
+        m.setDsWireless(true)
+        m.press(NxButton.DOWN)                                // on Disconnect
+        m.setDsWireless(false)
+        assertEquals(full, m.state.page.rows.map { it.label })
+        assertEquals(0, m.state.page.selected)                // Disconnect is gone: back on Continue
+        assertTrue(m.panelBeside)
+    }
+
+    @Test fun ds_wireless_on_returns_an_open_sub_page_to_the_root() {
+        val m = model()
+        m.activate(m.state.page.rows.indexOfFirst { it.label == "Options" })
+        m.setDsWireless(true)
+        assertEquals(PageKind.Root, m.state.page.kind)
+        assertEquals(listOf("Continue", "Disconnect", "Quit"), m.state.page.rows.map { it.label })
+    }
+
+    @Test fun ds_wireless_on_ends_a_shortcut_capture() {
+        val m = shortcuts()
+        m.selectRow("Toggle FF")
+        m.press(NxButton.A)
+        assertTrue(m.capturingShortcut)
+        m.setDsWireless(true)
+        assertFalse(m.capturingShortcut)                      // the next press is the reduced root's, not a binding
+        assertEquals(PageKind.Root, m.state.page.kind)
+        assertEquals(listOf("Continue", "Disconnect", "Quit"), m.state.page.rows.map { it.label })
+    }
+
+    @Test fun b_menu_and_x_never_disconnect() {
+        val m = model()
+        m.setDsWireless(true)
+        m.press(NxButton.DOWN)                                // on Disconnect
+        val effects = listOf(NxButton.X, NxButton.MENU, NxButton.B).map(m::press)
+        assertTrue(effects.all { it == null || it == MenuEffect.Close }, "$effects")
+    }
+
+    @Test fun ds_wireless_hides_the_session_breaking_panel_actions() {
+        val m = model()
+        m.setDsWireless(true)
+        assertNull(m.panelEvent(GamePanelEvent.SetFastForward(true)))
+        assertNull(m.panelEvent(GamePanelEvent.Reset))
+        assertEquals(PageKind.Root, m.state.page.kind)        // Reset pushed nothing
+    }
+
+    @Test fun ds_wireless_is_ignored_in_a_sheet_session() {
+        val m = model()
+        m.netplay = true
+        m.refresh()
+        m.setDsWireless(true)
+        assertFalse(m.dsWireless)
+        assertEquals(listOf("Continue", "Leave"), m.state.page.rows.map { it.label })
     }
 
     /**

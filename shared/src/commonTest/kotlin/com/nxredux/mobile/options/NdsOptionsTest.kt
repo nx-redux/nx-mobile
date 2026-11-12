@@ -82,8 +82,8 @@ class NdsOptionsTest {
     @Test fun only_nds_gets_the_ds_rows() {
         val pad = listOf(BottomScreenOptions.row, PadOptions.layoutRow) + (SpeedOptions.table + AudioOptions.rows)
         val dsPad = listOf(BottomScreenOptions.row, PadOptions.layoutRow) + (SpeedOptions.table + AudioOptions.rows)
-        assertEquals(NdsOptions.table + dsPad + FrontendOptions.table, FrontendOptions.allFor("NDS"))
-        assertEquals(NdsOptions.table + dsPad + FrontendOptions.table, FrontendOptions.allFor(" nds "))
+        assertEquals(NdsOptions.table + NdsOptions.localWirelessRow + dsPad + FrontendOptions.table, FrontendOptions.allFor("NDS"))
+        assertEquals(NdsOptions.table + NdsOptions.localWirelessRow + dsPad + FrontendOptions.table, FrontendOptions.allFor(" nds "))
         assertEquals(pad + FrontendOptions.table, FrontendOptions.allFor("GBA"))
         assertEquals(pad + FrontendOptions.table, FrontendOptions.allFor(""))
         assertEquals("medium", FrontendOptions.fromConfig(emptyMap(), "NDS")[PIP_SIZE])

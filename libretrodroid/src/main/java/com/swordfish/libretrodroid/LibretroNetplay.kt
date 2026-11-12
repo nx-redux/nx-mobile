@@ -108,6 +108,17 @@ object LibretroNetplay {
     /** [state, secondsLeft, reason]: LINK_* and REASON_*. */
     @JvmStatic external fun linkStatus(): IntArray
 
+    /** The DS link (`cpp/netplay/ndl_link.h`): this phone is in a local wireless room. Any thread. */
+    @JvmStatic external fun dsInRoom(): Boolean
+    /** The DS link: 0 out of any room, 1 looking for or about to open one, 2 in a room. Any thread. */
+    @JvmStatic external fun dsPresence(): Int
+    /** The DS link: leave the room at once, without the radio-off linger (backgrounded, like closing the lid). Any thread. */
+    @JvmStatic external fun dsLeaveNow()
+    /** The DS link: back in front after [dsLeaveNow], a sheet session's host reopens its room and a joiner asks its host again (nothing in the automatic route, which waits for the game's radio). Any thread. */
+    @JvmStatic external fun dsRejoin()
+    /** The DS link: the Wi-Fi `Network.networkHandle` its sockets bind to (0 = the default network). Set before the core loads. */
+    @JvmStatic external fun dsSetNetwork(handle: Long)
+
     init {
         System.loadLibrary("libretrodroid")
     }

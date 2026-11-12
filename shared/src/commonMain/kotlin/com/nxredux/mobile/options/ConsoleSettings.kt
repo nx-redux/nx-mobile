@@ -15,7 +15,7 @@ object ConsoleSettings {
      * 3D Resolution scales, [biosFiles] (the ".bin" names in the PS2 BIOS folder) the PS2 BIOS row's choices.
      */
     fun tableFor(tag: String, screen: ScreenClass? = null, displayMax: Int? = null, biosFiles: List<String> = emptyList()): List<FrontendOption> = when {
-        NdsOptions.appliesTo(tag) -> NdsOptions.tableFor(screen, displayMax = displayMax)
+        NdsOptions.appliesTo(tag) -> NdsOptions.tableFor(screen, displayMax = displayMax) + NdsOptions.localWirelessRow
         N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRowsFor(screen) + N3dsOptions.resolutionRows(displayMax) + N3dsOptions.newControlsRow + N3dsOptions.localWirelessRow
         WiiOptions.appliesTo(tag) -> WiiOptions.table
         Ps2Options.appliesTo(tag) -> Ps2Options.rowsFor(biosFiles) + Ps2Options.resolutionRows(displayMax)
@@ -43,5 +43,5 @@ object ConsoleSettings {
 
     /** Every console's rows (keys are unique across them); built when read, as [NdsOptions.table]. */
     val all: List<FrontendOption> get() =
-        NdsOptions.table + N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + N3dsOptions.newControlsRow + N3dsOptions.localWirelessRow + WiiOptions.table + Ps2Options.biosRow(emptyList()) + Ps2Options.resolutionRows(null) + GraphicsApiOptions.row + BottomScreenOptions.row + PadOptions.all + SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row
+        NdsOptions.table + NdsOptions.localWirelessRow + N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + N3dsOptions.newControlsRow + N3dsOptions.localWirelessRow + WiiOptions.table + Ps2Options.biosRow(emptyList()) + Ps2Options.resolutionRows(null) + GraphicsApiOptions.row + BottomScreenOptions.row + PadOptions.all + SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row
 }

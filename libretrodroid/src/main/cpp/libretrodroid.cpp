@@ -56,6 +56,7 @@
 #include "sharedcontexts.h"
 #include "netplay/netplayhooks.h"
 #include "netplay/linkhooks.h"
+#include "netplay/dslinkhooks.h"
 #include "sensorstate.h"
 #include "vulkanbridge.h"
 
@@ -187,6 +188,11 @@ bool LibretroDroid::unserializeState(int8_t *data, size_t size) {
     std::lock_guard<std::mutex> lock(coreLock);
 
     if (core == nullptr || !gameLoaded) return false;
+    // The others' games would see this one jump in time and drop it.
+    if (dslink::inRoom()) {
+        Environment::getInstance().pushCoreMessage("Leave local multiplayer to load a state");
+        return false;
+    }
     // A core may run emulation (and GL) inside it (Azahar drains its async work with RunLoop): the paused view's context.
     TeardownContext context;
     if (!core->retro_unserialize(data, size)) return false;
@@ -479,6 +485,7 @@ void LibretroDroid::create(
     hardwareFrame.store(false);
 
     gbalink::forgetCore();   // the new core registers its netpacket interface itself (retro_init or load)
+    dslink::forgetCore();
     core = std::make_unique<Core>(soFilePath);
 
     core->retro_set_video_refresh(&callback_hw_video_refresh);
@@ -521,6 +528,9 @@ void LibretroDroid::loadGame(const retro_game_info& gameInfo) {
     }
 
     afterGameLoad();
+    // After the load: melonDS DS registers its netpacket interface during it.
+    dsLinkVariablesSeen = Environment::getInstance().getVariablesGeneration();
+    dslink::configure(getVariables());
 }
 
 void LibretroDroid::loadGameFromPath(const std::string& gamePath) {
@@ -639,6 +649,7 @@ void LibretroDroid::releaseCore() {
 void LibretroDroid::destroy() {
     netplay::shutdown();   // before the lock: it joins the engine thread; a no-op without a session
     gbalink::shutdown();   // the GBA link too: DISCONNECT, join its thread; a no-op without a session
+    dslink::shutdown();    // the DS room hears this phone leave now; the link itself ends with the core below
     std::lock_guard<std::mutex> lock(coreLock);
 
     LOGD("Performing libretrodroid destroy");
@@ -656,9 +667,11 @@ void LibretroDroid::destroy() {
     Achievements::getInstance().resetSession(false);   // under coreLock: no later step() can touch a client of a destroyed view
 
     gbalink::stopCore();   // the core hears the link end (disconnected, stop) before retro_unload_game
+    dslink::stopCore();
     releaseCore();
     SharedContexts::destroyAll();   // worker contexts the core left, while the session's is still current
     gbalink::forgetCore();   // no netpacket callback may point into an unloaded core
+    dslink::forgetCore();
 
     video = nullptr;
     rumble = nullptr;
@@ -764,6 +777,7 @@ void LibretroDroid::step() {
     // never freed under them. A paused step runs too.
     if (audio) audio->setPlaybackSpeed(speed);
     const bool lk = gbalink::active();               // GBA link: speed 1, held while either side pauses
+    const bool dsRoom = dslink::inRoom();            // DS room: no rewind, it would replace state the others rely on
     const bool npSession = netplay::active();
     const bool np = !lk && npSession;                // netplay: one lockstep frame per step
     stepNetplayActive = npSession ? 1 : 0;
@@ -778,7 +792,7 @@ void LibretroDroid::step() {
     // FF, which stops (its clock resynced) and picks up again when the rewind ends. Paused while rewinding (speed 0)
     // takes the paused path below.
     applyRewindConfig();
-    const bool rewindHeld = !np && !lk && rewindingWanted.load() && rewind.enabled();
+    const bool rewindHeld = !np && !lk && !dsRoom && rewindingWanted.load() && rewind.enabled();
     const bool rewinding = rewindHeld && speed > 0;
     if (!rewindHeld) rewindEmptyLatched = false;
     applyRewinding(rewinding);
@@ -800,6 +814,13 @@ void LibretroDroid::step() {
         if (!netplay::preFrame(*core, local)) speed = 0;   // waiting: redraw the last frame
     }
     if (lk && !gbalink::preFrame()) speed = 0;                         // a pause: redraw the last frame
+    // The sheet's Leave arrives as a variable: picked up here, on the core's thread, between frames.
+    const unsigned variablesGeneration = Environment::getInstance().getVariablesGeneration();
+    if (variablesGeneration != dsLinkVariablesSeen) {
+        dsLinkVariablesSeen = variablesGeneration;
+        dslink::configure(getVariables());
+    }
+    dslink::preFrame();
 
     // A stick-driven pointer moves once per emulated frame, so its speed is per second of game time.
     const float frameSeconds = fpsSync ? 1.0f / static_cast<float>(fpsSync->getContentRefreshRate()) : 1.0f / 60.0f;
@@ -820,7 +841,7 @@ void LibretroDroid::step() {
         }
         for (size_t i = 0; i < runs; i++) {
             runFrame(np, lk, frameSeconds);
-            if (!np && !lk) rewind.capture(rewindSerialize);
+            if (!np && !lk && !dsRoom) rewind.capture(rewindSerialize);
         }
         rewindPlayed += runs;   // the probe's clock (RewindProbe): a paused step plays none
         hitchProbe.ranCore(HitchProbe::Clock::now(), runs);
@@ -839,7 +860,7 @@ void LibretroDroid::step() {
                 audio->setSlowdownSpeed(1.0);
             }
         }
-        if (speed > 0) rewindState = (np || lk) ? REWIND_STATUS_OFF : rewind.enabled() ? REWIND_STATUS_READY : offStatus();
+        if (speed > 0) rewindState = (np || lk || dsRoom) ? REWIND_STATUS_OFF : rewind.enabled() ? REWIND_STATUS_READY : offStatus();
     }
     auto& achievements = Achievements::getInstance();
     if (speed == 0 && achievements.isEnabled()) achievements.onFrame(true);   // menu open: keep the session alive
@@ -975,7 +996,9 @@ void LibretroDroid::runFrame(bool np, bool lk, float frameSeconds) {
         currentInput()->advancePointers(frameSeconds);
     }
     if (!np && !lk && !memoryCheats.empty()) applyMemoryCheats();   // never in netplay or link: the peer's RAM would differ
+    dslink::frameBegin();
     core->retro_run();
+    dslink::frameEnd();
     gldebug::pollErrors();
     rethrowVideoCallbackError();
     auto& achievements = Achievements::getInstance();
@@ -1264,6 +1287,7 @@ void LibretroDroid::reset() {
     std::lock_guard<std::mutex> lock(coreLock);
 
     if (core == nullptr) return;
+    dslink::leaveNow();   // a reset DS starts with its radio off: it leaves the room as the game would
     core->retro_reset();
     // A bare retro_reset left the old game's snapshots to rewind into, and fpsSync's clock counting from before.
     rewind.clear();

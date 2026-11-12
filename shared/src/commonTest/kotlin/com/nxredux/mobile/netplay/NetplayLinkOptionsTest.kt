@@ -122,6 +122,45 @@ class NetplayLinkOptionsTest {
         assertEquals(mapOf("mgba_link_mode" to "cable"), NetplayLinkOptions.forSolo("mgba", "x"))
     }
 
+    @Test fun a_ds_mac_is_the_seeds_low_three_bytes_under_the_nintendo_prefix() {
+        assertEquals("00:08:BF:0A:0B:0C", NetplayLinkOptions.ndsMac(0x0A0B0C))
+        assertEquals("00:08:BF:FF:FF:FF", NetplayLinkOptions.ndsMac(-1))
+    }
+
+    @Test fun a_solo_ds_game_gets_automatic_local_wireless_under_its_room_name() {
+        val mac = "00:08:BF:0A:0B:0C"
+        assertEquals(
+            mapOf(
+                "nx_nds_link" to "auto", "nx_nds_link_name" to "Ana-0042", "nx_nds_link_port" to "24874",
+                "nx_nds_link_broadcast" to "192.168.1.255", "melonds_mac_address_mode" to mac,
+            ),
+            NetplayLinkOptions.forSolo("melondsds", "Ana-0042", "192.168.1.255", mac),
+        )
+        assertEquals(emptyMap(), NetplayLinkOptions.forSolo("melondsds", null, null, null))
+    }
+
+    @Test fun a_ds_session_hosts_or_joins_with_its_own_mac() {
+        val mac = "00:08:BF:01:02:03"
+        assertEquals(
+            mapOf("nx_nds_link_port" to "24874", "nx_nds_link" to "host", "nx_nds_link_name" to "Player 1", "melonds_mac_address_mode" to mac),
+            NetplayLinkOptions.forSession(session(NetplayRole.HOST, "melondsds"), null, null, mac),
+        )
+        assertEquals(
+            mapOf("nx_nds_link_port" to "24874", "nx_nds_link" to "join", "nx_nds_link_name" to "Ana-0042", "nx_nds_link_ip" to "192.168.1.7"),
+            NetplayLinkOptions.forSession(session(NetplayRole.CLIENT, "melondsds", peer = "192.168.1.7"), null, "Ana-0042"),
+        )
+        assertFalse(NetplaySession(NetplayRole.HOST, "1.2.3.4", "melondsds", "melondsds").locksOptions)
+    }
+
+    @Test fun the_ds_local_wireless_row_defaults_on() {
+        val row = com.nxredux.mobile.options.NdsOptions.localWirelessRow
+        assertEquals("nx_nds_local_wireless", row.key)
+        assertEquals("on", row.default)
+        assertEquals(true, com.nxredux.mobile.options.NdsOptions.localWireless(emptyMap()))
+        assertEquals(false, com.nxredux.mobile.options.NdsOptions.localWireless(mapOf(com.nxredux.mobile.options.NdsOptions.LOCAL_WIRELESS to "off")))
+        assertTrue(row in com.nxredux.mobile.options.ConsoleSettings.tableFor("NDS"))
+    }
+
     @Test fun gpsp_and_mgba_run_the_agreed_mode_for_the_transport() {
         assertEquals(mapOf("gpsp_serial" to "auto_cable"), NetplayLinkOptions.forSession(session(NetplayRole.HOST, "gpsp", usb = true), "auto"))
         assertEquals(mapOf("gpsp_serial" to "auto"), NetplayLinkOptions.forSession(session(NetplayRole.CLIENT, "gpsp"), "lockstep"))

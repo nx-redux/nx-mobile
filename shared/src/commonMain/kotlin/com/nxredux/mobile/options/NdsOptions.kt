@@ -179,6 +179,25 @@ object NdsOptions {
     /** [FOLD_NOTE] on its own line for a device that [canHalfFold]; nothing elsewhere, where it never applies. */
     fun foldNote(canHalfFold: Boolean): String = if (canHalfFold) "\n$FOLD_NOTE" else ""
 
+    /**
+     * Local Wireless (default on): a game's local multiplayer finds other NX Redux devices on the same network, through the
+     * core's own room. Read when the game starts.
+     */
+    const val LOCAL_WIRELESS = "nx_nds_local_wireless"
+    const val LOCAL_WIRELESS_ON = "on"
+    const val LOCAL_WIRELESS_OFF = "off"
+
+    val localWirelessRow = FrontendOption(
+        LOCAL_WIRELESS, "Local Wireless", listOf(LOCAL_WIRELESS_ON, LOCAL_WIRELESS_OFF), LOCAL_WIRELESS_ON,
+        "A game's local multiplayer finds other NX Redux\ndevices on the same Wi-Fi: start the game on each\ndevice and use its local play menu.\n" +
+            "Nothing is sent until a game turns its wireless on.\nA save state can't be loaded while a game is linked.\n" +
+            "Turn it off on a network you share with people\nyou don't want to play with.",
+        brief = "Local multiplayer with nearby devices",
+        visual = false, valueLabels = listOf("On", "Off"), atLaunch = true,
+    )
+
+    fun localWireless(values: Map<String, String>): Boolean = values[LOCAL_WIRELESS] != LOCAL_WIRELESS_OFF
+
     fun appliesTo(tag: String): Boolean = tag.trim().uppercase() == "NDS"
 
     private fun <E : NdsChoice> row(key: String, label: String, all: List<E>, default: E, info: String, brief: String = "") =
