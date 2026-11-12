@@ -287,4 +287,59 @@ class NetplayLinkOptionsTest {
         )
         assertFalse(NetplaySession(NetplayRole.HOST, "1.2.3.4", "ppsspp", "ppsspp").locksOptions)
     }
+
+    private val pspSelf = "192.168.1.5"
+    private val pspBroadcast = "192.168.1.255"
+    private fun pspSessionOptions(role: NetplayRole) = NetplayLinkOptions.forSession(session(role, "ppsspp"), null)
+
+    @Test fun psp_wlan_is_never_on_without_the_link() {
+        for (sessionOptions in listOf(null, pspSessionOptions(NetplayRole.HOST), pspSessionOptions(NetplayRole.CLIENT))) {
+            for (localWireless in listOf(false, true)) {
+                for (self in listOf(null, pspSelf)) {
+                    for (broadcast in listOf(null, pspBroadcast)) {
+                        val o = NetplayLinkOptions.forPsp(sessionOptions, localWireless, self, broadcast, 0x123456)
+                        val wlan = o["ppsspp_enable_wlan"]
+                        assertTrue(wlan == "enabled" || wlan == "disabled", "$o")
+                        assertEquals(wlan == "enabled", NetplayLinkOptions.PSP_MODE in o, "$o")
+                    }
+                }
+            }
+        }
+    }
+
+    @Test fun psp_without_local_wireless_or_a_session_is_wlan_off_only() {
+        assertEquals(mapOf("ppsspp_enable_wlan" to "disabled"), NetplayLinkOptions.forPsp(null, false, pspSelf, pspBroadcast, 7))
+    }
+
+    @Test fun psp_automatic_route_needs_both_addresses() {
+        val off = mapOf("ppsspp_enable_wlan" to "disabled")
+        assertEquals(off, NetplayLinkOptions.forPsp(null, true, null, pspBroadcast, 7))
+        assertEquals(off, NetplayLinkOptions.forPsp(null, true, pspSelf, null, 7))
+        assertEquals(off, NetplayLinkOptions.forPsp(null, true, null, null, 7))
+        assertEquals(
+            NetplayLinkOptions.pspNetwork(NetplayLinkOptions.pspMac(7)) +
+                mapOf(NetplayLinkOptions.PSP_MODE to "auto", NetplayLinkOptions.PSP_BROADCAST to pspBroadcast, NetplayLinkOptions.PSP_SELF to pspSelf),
+            NetplayLinkOptions.forPsp(null, true, pspSelf, pspBroadcast, 7),
+        )
+    }
+
+    @Test fun psp_session_is_linked_whatever_local_wireless_says() {
+        val join = pspSessionOptions(NetplayRole.CLIENT)
+        val linked = NetplayLinkOptions.forPsp(join, false, pspSelf, pspBroadcast, 7)
+        assertEquals(
+            join + NetplayLinkOptions.pspNetwork(NetplayLinkOptions.pspMac(7)) +
+                mapOf(NetplayLinkOptions.PSP_BROADCAST to pspBroadcast, NetplayLinkOptions.PSP_SELF to pspSelf),
+            linked,
+        )
+        assertEquals("join", linked[NetplayLinkOptions.PSP_MODE])
+        // Without an address the session still runs; the runner then has no finder to announce on.
+        val bare = NetplayLinkOptions.forPsp(pspSessionOptions(NetplayRole.HOST), false, null, pspBroadcast, 7)
+        assertEquals("host", bare[NetplayLinkOptions.PSP_MODE])
+        assertEquals("enabled", bare["ppsspp_enable_wlan"])
+        assertFalse(NetplayLinkOptions.PSP_SELF in bare || NetplayLinkOptions.PSP_BROADCAST in bare)
+    }
+
+    @Test fun psp_mac_is_the_seed_behind_0200() {
+        assertEquals("020000abcdef", NetplayLinkOptions.pspMac(0xabcdef))
+    }
 }

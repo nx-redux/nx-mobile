@@ -56,8 +56,8 @@ object NetplayLinkOptions {
 
     /**
      * This install's PSP MAC from [seed], 12 lowercase hex digits: the locally administered prefix 02 (PPSSPP's MAC match
-     * ignores the first octet, so the rest carries the seed) and the seed's four bytes behind a zero octet, so two phones
-     * never share one.
+     * ignores the first octet, so the rest carries the seed), a zero octet, then the seed as eight hex digits. The seed is
+     * the DS one, drawn below 2^24, so those are a zero octet and its three bytes, and two phones never share one.
      */
     fun pspMac(seed: Int): String = "0200" + (7 downTo 0).map { "0123456789abcdef"[(seed shr (it * 4)) and 0xF] }.joinToString("")
 
@@ -82,6 +82,23 @@ object NetplayLinkOptions {
         hostIp?.let { put(PSP_IP, it) }
         broadcast?.let { put(PSP_BROADCAST, it) }
         self?.let { put(PSP_SELF, it) }
+    }
+
+    /**
+     * The options a PSP launch sends for its ad hoc network. Linked, in a sheet session ([sessionOptions], [forSession]'s,
+     * whatever [localWireless] says) or outside one with Local Wireless on and both Wi-Fi addresses known (the runner
+     * needs them to find the others and to tell its own traffic apart): WLAN on ([pspNetwork] with [macSeed]'s
+     * [pspMac]), the link's variables, and [broadcast] and [self] when both are known. Otherwise only WLAN off: WLAN on
+     * without the link variables would never find the others.
+     */
+    fun forPsp(sessionOptions: Map<String, String>?, localWireless: Boolean, self: String?, broadcast: String?, macSeed: Int): Map<String, String> {
+        val addresses = if (self != null && broadcast != null) mapOf(PSP_BROADCAST to broadcast, PSP_SELF to self) else emptyMap()
+        val link = when {
+            sessionOptions != null -> sessionOptions + addresses
+            localWireless && addresses.isNotEmpty() -> pspLink(N3DS_AUTO, null, broadcast, self)
+            else -> return mapOf("ppsspp_enable_wlan" to "disabled")
+        }
+        return pspNetwork(pspMac(macSeed)) + link
     }
 
     /**

@@ -321,7 +321,8 @@ internal class GameNetplay(private val host: GameNetplayHost) {
      * netplay link: Leave. The link ends and the game plays on ([linkEnded]); the menu stays open on the normal root and
      * the player leaves later with Quit. A GBA link's engine sends DISCONNECT and shuts down off main; [NetplayRun.leave]
      * detaches it first, so no Ended notice follows. GB link has no engine: gambatte's network serial stops on its mode's
-     * variable update, read at the next frame (the menu holds frames, so on Continue); Azahar leaves its room the same way. Set past [GameActivity.applyOptions]'
+     * variable update, read at the next frame (the menu holds frames, so on Continue); Azahar leaves its room the same way, and
+     * the runner takes a PSP game out of ad hoc for good (its presence goes out, so states work again). Set past [GameActivity.applyOptions]'
      * guard and not stored: the link options are this launch's ([GameActivity.graphicsForcedOptions]), never the user's config.
      */
     private fun leaveLink() {

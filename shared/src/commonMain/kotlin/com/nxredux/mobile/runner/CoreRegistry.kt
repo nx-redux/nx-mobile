@@ -87,7 +87,7 @@ object CoreRegistry {
         players = 4,
         name = "Mupen64Plus-Next",
     )
-    private val PSP_NETWORK_OPTIONS: Set<String> = (1..12).map { it.toString().padStart(2, '0') }.let { nn ->
+    internal val PSP_NETWORK_OPTIONS: Set<String> = (1..12).map { it.toString().padStart(2, '0') }.let { nn ->
         setOf(
             "ppsspp_enable_wlan", "ppsspp_enable_builtin_pro_ad_hoc_server", "ppsspp_change_pro_ad_hoc_server_address",
             "ppsspp_enable_upnp", "ppsspp_upnp_use_original_port", "ppsspp_port_offset", "ppsspp_wlan_channel",

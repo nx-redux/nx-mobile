@@ -217,11 +217,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     /** A 3DS launch's player name (Settings → System → Player name, else the device's). */
     private var playerName = ""
     /**
-     * Held while a game may hold a local wireless room ([holdBroadcasts]): a sheet session from launch, a DS or 3DS game
-     * on the automatic route only while its wireless is on ([dsWirelessChanged]).
+     * Held while a game may hold a local wireless room ([holdBroadcasts]): a sheet session and a PSP game on the automatic
+     * route from launch, a DS or 3DS game on the automatic route only while its wireless is on ([dsWirelessChanged]).
      */
     private var broadcasts: WifiManager.MulticastLock? = null
-    /** Held while a DS or 3DS game is in a room outside a session ([dsRoomChanged]; a session's is [GameNetplay]'s). */
+    /** Held while a DS, 3DS or PSP game is in a room outside a session ([dsRoomChanged]; a session's is [GameNetplay]'s). */
     private var dsWifi: WifiManager.WifiLock? = null
     /**
      * Follows the Wi-Fi for a linked game: the network the link's sockets are pinned to is a handle that dies when the
@@ -238,6 +238,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             override fun onAvailable(network: Network) {
                 current = network
                 com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(network.networkHandle)
+                pspAddressChanged(cm, network)
+            }
+            override fun onLinkPropertiesChanged(network: Network, linkProperties: android.net.LinkProperties) {
+                if (network == current) pspAddressChanged(cm, network)
             }
             override fun onLost(network: Network) {
                 if (network != current) return
@@ -250,13 +254,43 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         runCatching { cm.registerNetworkCallback(request, watch) }.onSuccess { wifiWatch = watch }
     }
 
+    /** A linked PSP game's Wi-Fi addresses as last given to the runner; null when it is not one. */
+    @Volatile private var pspAddresses: Pair<String, String>? = null
+
+    /**
+     * A linked PSP game on a Wi-Fi whose address changed (another access point, a new lease): the runner gets its own
+     * address and the broadcast again, as variables, so it stops hearing its own announcements as another device's and
+     * this device's server is announced, and logged in to, at the new address. The runner takes a same-role change live.
+     */
+    private fun pspAddressChanged(cm: ConnectivityManager, network: Network) {
+        val was = pspAddresses ?: return
+        val link = WifiNetworks.address(cm, network)
+        val self = link?.address?.hostAddress ?: return
+        val broadcast = WifiNetworks.broadcast(link)?.hostAddress ?: return
+        if (was == self to broadcast) return
+        pspAddresses = self to broadcast
+        NxLog.i(TAG_LOG, "PSP link: the Wi-Fi address is now $self")
+        host.activity.runOnUiThread {
+            host.retroView?.let { view ->
+                view.queueEvent {
+                    runCatching {
+                        view.updateVariables(Variable(NetplayLinkOptions.PSP_SELF, self), Variable(NetplayLinkOptions.PSP_BROADCAST, broadcast))
+                    }.onFailure { NxLog.w(TAG_LOG, "PSP link: giving the runner the new address failed", it) }
+                }
+            }
+        }
+    }
+
     private fun unwatchWifi() {
         val cm = host.activity.applicationContext.getSystemService(ConnectivityManager::class.java)
         wifiWatch?.let { runCatching { cm?.unregisterNetworkCallback(it) } }
         wifiWatch = null
     }
 
-    /** A DS or 3DS game with a local wireless link: a sheet session's, or Local Wireless on outside one. */
+    /**
+     * A DS, 3DS or PSP game with a local wireless link: a sheet session's, or Local Wireless on outside one. The runner's
+     * link plumbing (presence, leave, the Wi-Fi it is pinned to) is the same for the three.
+     */
     var dsLinked = false
         private set
     /** [dsLinked] outside a sheet session: the game's own radio finds rooms (the automatic route). */
@@ -285,9 +319,15 @@ internal class LaunchPipeline(private val host: LaunchHost) {
      * Wi-Fi chip passes up every broadcast on the network, which in solo play or in the background only costs battery.
      */
     fun dsWirelessChanged(on: Boolean) {
-        if (!dsAutoRoute) return
+        if (!dsAutoRoute || broadcastsFromLaunch) return
         if (on) holdBroadcasts() else dropBroadcasts()
     }
+
+    /**
+     * A PSP game on the automatic route keeps the broadcasts lock from launch: its finder has a second to hear a server
+     * once the game enters ad hoc, and the presence watcher would take the lock only up to half a second into that.
+     */
+    private var broadcastsFromLaunch = false
 
     private fun dropBroadcasts() {
         broadcasts?.let { runCatching { if (it.isHeld) it.release() } }
@@ -546,19 +586,28 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val n3dsRoomName = if (coreId != "azahar" && coreId != "melondsds") null else NetplayLinkOptions.n3dsRoomName(playerName, kotlin.random.Random.nextInt(10000))
             val n3dsAuto = n3dsRoomName?.takeIf { if (coreId == "melondsds") NdsOptions.localWireless(frontendValues) else N3dsOptions.localWireless(frontendValues) }
             // A room answers other devices' searches, which arrive as broadcasts: Android drops those without this lock.
-            // A game outside a session takes it when its wireless goes on ([dsWirelessChanged]).
+            // A DS or 3DS game outside a session takes it when its wireless goes on ([dsWirelessChanged]), a PSP one at launch (below).
             if (linkKind == NetplayLinkKind.N3DSLINK || linkKind == NetplayLinkKind.NDSLINK || linkKind == NetplayLinkKind.PSPLINK) holdBroadcasts()
             val n3dsBroadcast = n3dsAuto?.let { WifiNetworks.broadcast(WifiNetworks.address(activity.getSystemService(ConnectivityManager::class.java)))?.hostAddress }
             // A DS room runs under its own MAC (a seed kept per install) so rooms tell its members apart.
             val ndsMac = if (coreId == "melondsds" && (n3dsAuto != null || linkKind == NetplayLinkKind.NDSLINK)) NetplayLinkOptions.ndsMac(AndroidAppSettings(activity).ndsMacSeed) else null
             // PSP: the ad hoc link runs in a sheet session, or outside one while Local Wireless is on and the Wi-Fi has an address
-            // (the runner needs it to find the others and to tell its own traffic apart). WLAN is never on without the link variables.
+            // ([NetplayLinkOptions.forPsp]); WLAN is never on without the link variables.
             val pspWifi = if (isPsp) WifiNetworks.address(activity.getSystemService(ConnectivityManager::class.java)) else null
             val pspSelf = pspWifi?.address?.hostAddress
             val pspBroadcast = WifiNetworks.broadcast(pspWifi)?.hostAddress
-            val pspSession = isPsp && linkKind == NetplayLinkKind.PSPLINK
-            val pspAuto = isPsp && !pspSession && np == null && PspOptions.localWireless(frontendValues) && pspSelf != null && pspBroadcast != null
-            dsLinked = ndsMac != null || (coreId == "azahar" && (n3dsAuto != null || linkKind == NetplayLinkKind.N3DSLINK)) || pspAuto || pspSession
+            val pspOptions = if (!isPsp) emptyMap() else NetplayLinkOptions.forPsp(
+                sessionOptions = np?.takeIf { linkKind == NetplayLinkKind.PSPLINK }?.let { NetplayLinkOptions.forSession(it, null) },
+                localWireless = np == null && PspOptions.localWireless(frontendValues),
+                self = pspSelf, broadcast = pspBroadcast, macSeed = AndroidAppSettings(activity).ndsMacSeed,
+            )
+            val pspLinked = NetplayLinkOptions.PSP_MODE in pspOptions
+            if (pspLinked && pspSelf != null && pspBroadcast != null) pspAddresses = pspSelf to pspBroadcast
+            if (pspLinked && np == null) {
+                broadcastsFromLaunch = true
+                holdBroadcasts()
+            }
+            dsLinked = ndsMac != null || (coreId == "azahar" && (n3dsAuto != null || linkKind == NetplayLinkKind.N3DSLINK)) || pspLinked
             if (dsLinked) {
                 com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(WifiNetworks.network(activity.getSystemService(ConnectivityManager::class.java))?.networkHandle ?: 0L)
                 watchWifi()
@@ -578,13 +627,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     val mode = gameNetplay.connectLink(np, own) ?: return refuse(NetplayText.FAILED_CONNECT, NetplayText.FAILED)
                     NetplayLinkOptions.forSession(np, mode)
                 }
-                NetplayLinkKind.PSPLINK -> NetplayLinkOptions.forSession(np, null) + (pspBroadcast?.let { b -> pspSelf?.let { me -> mapOf(NetplayLinkOptions.PSP_BROADCAST to b, NetplayLinkOptions.PSP_SELF to me) } } ?: emptyMap())
-            }) + when {
-                !isPsp -> emptyMap()
-                pspAuto -> NetplayLinkOptions.pspNetwork(NetplayLinkOptions.pspMac(AndroidAppSettings(activity).ndsMacSeed)) + NetplayLinkOptions.pspLink(NetplayLinkOptions.N3DS_AUTO, null, pspBroadcast, pspSelf)
-                pspSession -> NetplayLinkOptions.pspNetwork(NetplayLinkOptions.pspMac(AndroidAppSettings(activity).ndsMacSeed))
-                else -> mapOf("ppsspp_enable_wlan" to "disabled")   // WLAN on with no link variables would never find the others
-            }
+                NetplayLinkKind.PSPLINK -> emptyMap()   // pspOptions
+            }) + pspOptions
             val frontend = FrontendSettings.parse(frontendValues)
             return LaunchConfig(
                 coreFile, np, tag, title, coreId, descriptor, players, content, romFileName, home, sessionDir, extraction,
