@@ -10203,12 +10203,15 @@ class AppStateTest {
         val settings = MemorySettings(ContentRef("Home")).apply { menuStyles = emptyMap() }
         val state = state(settings)
         state.load()
-        assertTrue(settings.showGamesTab)   // a fake that does not override it reads the default
+        assertTrue(settings.showGamesTab)   // this fake stores it (its override), starting shown
+        assertEquals(state.openLayoutsPage(SettingsSection.LAYOUT_GAME_LISTS).let { assertIs<Screen.Settings>(state.screen.value).shot },
+            state.openLayoutsPage(SettingsSection.LAYOUT_GAMES_TAB).let { assertIs<Screen.Settings>(state.screen.value).shot })   // the game lists' picture
         assertEquals(listOf("Visible"), state.openLayoutsPage(SettingsSection.LAYOUT_GAMES_TAB).map { it.label })
         assertEquals(MenuCategory.GAMES, SettingsSection.LAYOUT_GAMES_TAB.tab)
         state.selectLayoutsRow(SettingsKind.TAB_SHOWN, MenuCategory.GAMES); state.onButton(NxButton.A)
         assertFalse(settings.showGamesTab)
         assertEquals(listOf("Visible"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })
+        assertNull(assertIs<Screen.Settings>(state.screen.value).shot)   // hidden: no picture
         assertTrue(settings.menuStyles.isEmpty())
     }
 

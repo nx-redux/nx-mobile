@@ -4329,6 +4329,7 @@ class AppState(
         val s = deps.settings
         section.tab?.let { c ->
             if (!tabSetting(c)) return null
+            if (c == MenuCategory.GAMES) return gameListsShot()   // follows Layouts -> Game lists, never menuStyles
             val style = MenuStyles.styleOf(s.menuStyles, c)
             val vertical = style == MenuStyle.CAROUSEL && c != MenuCategory.HOME && MenuStyles.orientationOf(s.menuOrientations, c) == MenuOrientation.VERTICAL
             return LayoutShot.Tab(c, style, stats = c != MenuCategory.HOME || s.menuHomeStats, vertical = vertical, art = consoleShotArt(c))
