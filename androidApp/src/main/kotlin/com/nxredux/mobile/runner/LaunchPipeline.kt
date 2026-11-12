@@ -40,6 +40,7 @@ import com.nxredux.mobile.options.OverlayResolver
 import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.options.Ps2Options
+import com.nxredux.mobile.options.PspOptions
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.VulkanFallback
 import com.nxredux.mobile.options.WiiOptions
@@ -537,16 +538,24 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val linkKind = np?.linkKind
             // 3DS: the player's name in Azahar's room. Outside a session the game's local wireless finds other devices
             // itself unless the console's Local Wireless option is off ([N3dsOptions.LOCAL_WIRELESS]).
-            if (coreId == "azahar" || coreId == "melondsds") playerName = PlayerName.resolve(AndroidAppSettings(activity).playerName, AndroidDeviceInfo.deviceName(activity))
+            val isPsp = coreId == "ppsspp"
+            if (coreId == "azahar" || coreId == "melondsds" || isPsp) playerName = PlayerName.resolve(AndroidAppSettings(activity).playerName, AndroidDeviceInfo.deviceName(activity))
             val n3dsRoomName = if (coreId != "azahar" && coreId != "melondsds") null else NetplayLinkOptions.n3dsRoomName(playerName, kotlin.random.Random.nextInt(10000))
             val n3dsAuto = n3dsRoomName?.takeIf { if (coreId == "melondsds") NdsOptions.localWireless(frontendValues) else N3dsOptions.localWireless(frontendValues) }
             // A room answers other devices' searches, which arrive as broadcasts: Android drops those without this lock.
             // A game outside a session takes it when its wireless goes on ([dsWirelessChanged]).
-            if (linkKind == NetplayLinkKind.N3DSLINK || linkKind == NetplayLinkKind.NDSLINK) holdBroadcasts()
+            if (linkKind == NetplayLinkKind.N3DSLINK || linkKind == NetplayLinkKind.NDSLINK || linkKind == NetplayLinkKind.PSPLINK) holdBroadcasts()
             val n3dsBroadcast = n3dsAuto?.let { WifiNetworks.broadcast(WifiNetworks.address(activity.getSystemService(ConnectivityManager::class.java)))?.hostAddress }
             // A DS room runs under its own MAC (a seed kept per install) so rooms tell its members apart.
             val ndsMac = if (coreId == "melondsds" && (n3dsAuto != null || linkKind == NetplayLinkKind.NDSLINK)) NetplayLinkOptions.ndsMac(AndroidAppSettings(activity).ndsMacSeed) else null
-            dsLinked = ndsMac != null || (coreId == "azahar" && (n3dsAuto != null || linkKind == NetplayLinkKind.N3DSLINK))
+            // PSP: the ad hoc link runs in a sheet session, or outside one while Local Wireless is on and the Wi-Fi has an address
+            // (the runner needs it to find the others and to tell its own traffic apart). WLAN is never on without the link variables.
+            val pspWifi = if (isPsp) WifiNetworks.address(activity.getSystemService(ConnectivityManager::class.java)) else null
+            val pspSelf = pspWifi?.address?.hostAddress
+            val pspBroadcast = WifiNetworks.broadcast(pspWifi)?.hostAddress
+            val pspSession = isPsp && linkKind == NetplayLinkKind.PSPLINK
+            val pspAuto = isPsp && !pspSession && np == null && PspOptions.localWireless(frontendValues) && pspSelf != null && pspBroadcast != null
+            dsLinked = ndsMac != null || (coreId == "azahar" && (n3dsAuto != null || linkKind == NetplayLinkKind.N3DSLINK)) || pspAuto || pspSession
             if (dsLinked) {
                 com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(WifiNetworks.network(activity.getSystemService(ConnectivityManager::class.java))?.networkHandle ?: 0L)
                 watchWifi()
@@ -555,7 +564,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 if (np != null) com.swordfish.libretrodroid.LibretroNetplay.dsSetCable(if (np.overUsb) 2 else 0)
             }
             dsAutoRoute = dsLinked && np == null
-            val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsAuto, n3dsBroadcast, ndsMac) else when (linkKind) {
+            val linkOptions: Map<String, String> = (if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsAuto, n3dsBroadcast, ndsMac) else when (linkKind) {
                 null -> NetplayLinkOptions.forPair(np)
                 NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)
                 NetplayLinkKind.N3DSLINK -> NetplayLinkOptions.forSession(np, null, n3dsRoomName)
@@ -565,6 +574,12 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     val mode = gameNetplay.connectLink(np, own) ?: return refuse(NetplayText.FAILED_CONNECT, NetplayText.FAILED)
                     NetplayLinkOptions.forSession(np, mode)
                 }
+                NetplayLinkKind.PSPLINK -> NetplayLinkOptions.forSession(np, null) + (pspBroadcast?.let { b -> pspSelf?.let { me -> mapOf(NetplayLinkOptions.PSP_BROADCAST to b, NetplayLinkOptions.PSP_SELF to me) } } ?: emptyMap())
+            }) + when {
+                !isPsp -> emptyMap()
+                pspAuto -> NetplayLinkOptions.pspNetwork(NetplayLinkOptions.pspMac(AndroidAppSettings(activity).ndsMacSeed)) + NetplayLinkOptions.pspLink(NetplayLinkOptions.N3DS_AUTO, null, pspBroadcast, pspSelf)
+                pspSession -> NetplayLinkOptions.pspNetwork(NetplayLinkOptions.pspMac(AndroidAppSettings(activity).ndsMacSeed))
+                else -> mapOf("ppsspp_enable_wlan" to "disabled")   // WLAN on with no link variables would never find the others
             }
             val frontend = FrontendSettings.parse(frontendValues)
             return LaunchConfig(
@@ -788,7 +803,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         // gpsp: never unload the core between games, so its recompiler cache stays mapped near it.
                         keepCoreLoaded = cfg.descriptor?.keepLoaded == true
                         // 3DS: the console's profile name is the player's (Settings → System → Player name).
-                        if (gameCoreId == "azahar" || gameCoreId == "melondsds") username = playerName
+                        if (gameCoreId == "azahar" || gameCoreId == "melondsds" || gameCoreId == "ppsspp") username = playerName
                         shader = renderer.shaderFor(cfg.frontend)
                         saveRAMState = prepared.sram
                         rtcState = prepared.rtc   // the clock file, applied after the battery save

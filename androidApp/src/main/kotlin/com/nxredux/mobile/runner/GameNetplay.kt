@@ -232,7 +232,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
     /**
      * netplay: starts this screen's session once the first frame is up ([run] set first, so onDestroy shuts down
      * what started). A GBA link's engine started before the load ([connectLink]); its status ticks from now. GB link has
-     * no engine: gambatte runs it. Nor has a 3DS link: Azahar runs its own room.
+     * no engine: gambatte runs it. Nor has a 3DS or PSP link: Azahar runs its own room, PPSSPP the runner's ad hoc server.
      */
     private suspend fun start(np: NetplaySession): Boolean {
         holdWifi(np)
@@ -248,7 +248,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
                 ).also { run = it }.start()
             }
             NetplayLinkKind.NETPACKET -> (run as? NetplayLinkGame)?.let { it.begin(); it.live } ?: false
-            NetplayLinkKind.GBLINK, NetplayLinkKind.N3DSLINK, NetplayLinkKind.NDSLINK -> true
+            NetplayLinkKind.GBLINK, NetplayLinkKind.N3DSLINK, NetplayLinkKind.NDSLINK, NetplayLinkKind.PSPLINK -> true
         }
     }
 
@@ -331,6 +331,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
             NetplayLinkKind.GBLINK -> Variable(NetplayLinkOptions.GB_MODE, NetplayLinkOptions.GB_OFF)
             NetplayLinkKind.N3DSLINK -> Variable(NetplayLinkOptions.N3DS_MODE, NetplayLinkOptions.N3DS_OFF)
             NetplayLinkKind.NDSLINK -> Variable(NetplayLinkOptions.NDS_MODE, NetplayLinkOptions.N3DS_OFF)
+            NetplayLinkKind.PSPLINK -> Variable(NetplayLinkOptions.PSP_MODE, NetplayLinkOptions.N3DS_OFF)
             else -> null
         }
         if (off != null) host.retroView?.let { view ->

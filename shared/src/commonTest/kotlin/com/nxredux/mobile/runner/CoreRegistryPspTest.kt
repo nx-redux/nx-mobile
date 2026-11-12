@@ -26,4 +26,14 @@ class CoreRegistryPspTest {
         )
         assertTrue(RestartOnlyOptions.ppsspp.none { it in gone })
     }
+
+    /** The app forces the ad hoc network options ([com.nxredux.mobile.netplay.NetplayLinkOptions.pspNetwork]) and hides their rows. */
+    @Test fun the_ad_hoc_network_options_are_locked() {
+        val nn = (1..12).map { it.toString().padStart(2, '0') }
+        val want = setOf(
+            "ppsspp_enable_wlan", "ppsspp_enable_builtin_pro_ad_hoc_server", "ppsspp_change_pro_ad_hoc_server_address",
+            "ppsspp_enable_upnp", "ppsspp_upnp_use_original_port", "ppsspp_port_offset", "ppsspp_wlan_channel",
+        ) + nn.map { "ppsspp_change_mac_address$it" } + nn.map { "ppsspp_pro_ad_hoc_server_address$it" }
+        assertTrue(psp.lockedOptions.containsAll(want), "missing: ${want - psp.lockedOptions}")
+    }
 }

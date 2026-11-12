@@ -248,4 +248,43 @@ class NetplayLinkOptionsTest {
         assertFalse(NetplaySession(NetplayRole.HOST, "1.2.3.4", "mgba", "mgba").savesAtCheckpoints)
         assertEquals(emptyMap(), NetplayLinkOptions.forPair(NetplaySession(NetplayRole.HOST, "1.2.3.4", "mgba", "mgba")))
     }
+
+    @Test fun psp_mac_is_twelve_hex_digits_led_by_02_and_unique_per_seed_in_the_last_five_octets() {
+        val a = NetplayLinkOptions.pspMac(1)
+        val b = NetplayLinkOptions.pspMac(2)
+        assertTrue(Regex("[0-9a-f]{12}").matches(a), a)
+        assertTrue(a.startsWith("02") && b.startsWith("02"))
+        assertEquals(a, NetplayLinkOptions.pspMac(1))
+        assertTrue(a.substring(2) != b.substring(2))
+        assertTrue(NetplayLinkOptions.pspMac(0x7fffffff).startsWith("02"))
+        assertTrue(Regex("[0-9a-f]{12}").matches(NetplayLinkOptions.pspMac(-5)))
+    }
+
+    @Test fun psp_network_forces_the_ad_hoc_options() {
+        val want = mapOf(
+            "ppsspp_enable_wlan" to "enabled", "ppsspp_enable_builtin_pro_ad_hoc_server" to "disabled",
+            "ppsspp_enable_upnp" to "disabled", "ppsspp_port_offset" to "10000",
+        ) + "02a1b2c3d4e5".mapIndexed { i, c -> "ppsspp_change_mac_address" + (i + 1).toString().padStart(2, '0') to c.toString() }
+        assertEquals(want, NetplayLinkOptions.pspNetwork("02a1b2c3d4e5"))
+    }
+
+    @Test fun psp_link_carries_the_mode_and_the_wifi_addresses() {
+        assertEquals(
+            mapOf("nx_psp_link" to "auto", "nx_psp_link_broadcast" to "192.168.1.255", "nx_psp_link_self" to "192.168.1.24"),
+            NetplayLinkOptions.pspLink("auto", null, "192.168.1.255", "192.168.1.24"),
+        )
+        val join = NetplayLinkOptions.pspLink("join", "192.168.1.5", "192.168.1.255", "192.168.1.24")
+        assertEquals("192.168.1.5", join["nx_psp_link_ip"])
+        assertEquals("join", join["nx_psp_link"])
+        assertEquals(mapOf("nx_psp_link" to "host"), NetplayLinkOptions.pspLink("host", null, null, null))
+    }
+
+    @Test fun psp_session_options_follow_the_role() {
+        assertEquals(mapOf("nx_psp_link" to "host"), NetplayLinkOptions.forSession(session(NetplayRole.HOST, "ppsspp"), null))
+        assertEquals(
+            mapOf("nx_psp_link" to "join", "nx_psp_link_ip" to "192.168.1.7"),
+            NetplayLinkOptions.forSession(session(NetplayRole.CLIENT, "ppsspp", peer = "192.168.1.7"), null),
+        )
+        assertFalse(NetplaySession(NetplayRole.HOST, "1.2.3.4", "ppsspp", "ppsspp").locksOptions)
+    }
 }

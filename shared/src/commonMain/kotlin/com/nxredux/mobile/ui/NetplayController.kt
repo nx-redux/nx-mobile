@@ -162,11 +162,11 @@ class NetplayController(
 
     /**
      * The Connection row's choices for [tag]: Wi-Fi (not for an MGBA game without a Wi-Fi mode, which links over the real
-     * cable alone), the USB cable where this device has one, and Cable Link over Wi-Fi for a GBA game.
+     * cable alone), the USB cable where this device has one (not for a PSP game), and Cable Link over Wi-Fi for a GBA game.
      */
     private fun connections(tag: String): List<NetplayLink> = buildList {
         if (!NetplayCores.usbOnly(tag, wl)) add(NetplayLink.WIFI)
-        if (platform.usb?.available == true) add(NetplayLink.USB)
+        if (platform.usb?.available == true && !NetplayCores.wifiOnly(tag)) add(NetplayLink.USB)
         if (platform.cableLinkAvailable && NetplayCores.cableLinkOffered(tag)) add(NetplayLink.CABLE_LINK_WIFI)
     }
 

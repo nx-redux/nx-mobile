@@ -48,6 +48,42 @@ object NetplayLinkOptions {
     /** This install's DS MAC from [seed]: Nintendo's prefix and the seed's low three bytes, so two phones never share one. */
     fun ndsMac(seed: Int): String = "00:08:BF:%02X:%02X:%02X".format((seed shr 16) and 0xFF, (seed shr 8) and 0xFF, seed and 0xFF)
 
+    /** The PSP ad hoc link's variables, read by the runner and the PPSSPP core ([pspLink]). */
+    const val PSP_MODE = "nx_psp_link"
+    const val PSP_IP = "nx_psp_link_ip"
+    const val PSP_BROADCAST = "nx_psp_link_broadcast"
+    const val PSP_SELF = "nx_psp_link_self"
+
+    /**
+     * This install's PSP MAC from [seed], 12 lowercase hex digits: the locally administered prefix 02 (PPSSPP's MAC match
+     * ignores the first octet, so the rest carries the seed) and the seed's four bytes behind a zero octet, so two phones
+     * never share one.
+     */
+    fun pspMac(seed: Int): String = "0200" + (7 downTo 0).map { "0123456789abcdef"[(seed shr (it * 4)) and 0xF] }.joinToString("")
+
+    /**
+     * The PPSSPP network options a linked game runs under, forced by the app: WLAN on, no built-in server (the runner's
+     * ad hoc server answers), no UPnP, the port offset the link's ports sit behind, and [mac] (12 hex digits) as the console's MAC.
+     */
+    fun pspNetwork(mac: String): Map<String, String> = buildMap {
+        put("ppsspp_enable_wlan", "enabled")
+        put("ppsspp_enable_builtin_pro_ad_hoc_server", "disabled")
+        put("ppsspp_enable_upnp", "disabled")
+        put("ppsspp_port_offset", "10000")
+        mac.forEachIndexed { i, c -> put("ppsspp_change_mac_address" + (i + 1).toString().padStart(2, '0'), c.toString()) }
+    }
+
+    /**
+     * The PSP link's launch variables: [mode] ("auto", "host" or "join"), the host's address for a join ([hostIp]), the
+     * Wi-Fi network's [broadcast] address and this device's own address ([self]; always sent together with the broadcast).
+     */
+    fun pspLink(mode: String, hostIp: String?, broadcast: String?, self: String?): Map<String, String> = buildMap {
+        put(PSP_MODE, mode)
+        hostIp?.let { put(PSP_IP, it) }
+        broadcast?.let { put(PSP_BROADCAST, it) }
+        self?.let { put(PSP_SELF, it) }
+    }
+
     /**
      * This player's name in Azahar's room: the [player] name in the characters a room takes (ASCII letters, digits,
      * space, dot, underscore, hyphen), then [number] as four digits. The room turns away a second member with the same
@@ -207,6 +243,8 @@ object NetplayLinkOptions {
             }
             ndsMac?.let { put(NDS_MAC_MODE, it) }
         }
+        NetplayLinkKind.PSPLINK ->
+            if (session.role == NetplayRole.HOST) pspLink(N3DS_HOST, null, null, null) else pspLink(N3DS_JOIN, session.peerIp, null, null)
         null -> emptyMap()
     }
 }
