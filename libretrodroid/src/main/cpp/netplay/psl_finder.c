@@ -59,18 +59,34 @@ void psl_init(psl* s, int mode, uint32_t self_ip, uint32_t tie, uint32_t host_ip
 
 void psl_set_self(psl* s, uint32_t self_ip) { s->self_ip = self_ip; }
 
+void psl_set_net(psl* s, uint32_t broadcast_ip) { s->broadcast_ip = broadcast_ip; }
+
+/* The subnet mask (host order) self and the broadcast share: the broadcast's host part is all ones, so it is at most
+ * the broadcast's low run of ones, and must take in every bit where the two differ. Taking the whole run may count a
+ * network bit that happens to be one as host, which only widens what is accepted. 0 when there is none to be had. */
+static uint32_t net_mask(const psl* s) {
+    const uint32_t self = host_order(s->self_ip), bcast = host_order(s->broadcast_ip);
+    if (self == 0 || bcast == 0 || self == bcast) return 0;
+    int ones = 0;
+    while (ones < 32 && (bcast >> ones) & 1u) ones++;
+    if (ones == 0 || ones == 32) return 0;
+    const uint32_t mask = ~((1u << ones) - 1u);
+    if ((self ^ bcast) & mask) return 0;
+    return mask;
+}
+
 void psl_active(psl* s, int active, int grouped, int64_t now_ms) {
     if (active) {
         if (!s->active) {
             s->listen_from_ms = now_ms;
             s->active = 1;
         }
-        s->grouped = grouped;
     } else {
-        if (s->active) s->left_ms = now_ms;
+        /* The linger runs from the game leaving, or from the server's last other user going if that is later. */
+        if (s->active || (s->grouped && !grouped)) s->left_ms = now_ms;
         s->active = 0;
-        s->grouped = 0;
     }
+    s->grouped = grouped;
 }
 
 void psl_park(psl* s, int parked) {
@@ -82,10 +98,18 @@ void psl_park(psl* s, int parked) {
     }
 }
 
+static const psl_peer* best_server(const psl* s, int64_t now_ms);
+
 void psl_heard(psl* s, const uint8_t* pkt, size_t len, uint32_t from_ip, int64_t now_ms) {
     if (s->mode != PSL_AUTO || len != PSL_PACKET || memcmp(pkt, "NXPL", 4) != 0 || pkt[4] != PSL_VERSION ||
         from_ip == s->self_ip)
         return;
+    const uint32_t tie = ((uint32_t)pkt[12] << 24) | ((uint32_t)pkt[13] << 16) | ((uint32_t)pkt[14] << 8) | pkt[15];
+    /* This device's own announcement, back from an address it no longer knows as its own (the Wi-Fi changed). */
+    if (tie == s->tie) return;
+    const uint32_t mask = net_mask(s);
+    if (mask != 0 && (host_order(from_ip) & mask) != (host_order(s->self_ip) & mask)) return;
+    const psl_peer* followed = s->active && !s->serving ? best_server(s, now_ms) : NULL;
     psl_peer* slot = NULL;
     for (int i = 0; i < PSL_MAX_PEERS; i++) {
         if (s->peers[i].used && s->peers[i].ip == from_ip) { slot = &s->peers[i]; break; }
@@ -104,12 +128,34 @@ void psl_heard(psl* s, const uint8_t* pkt, size_t len, uint32_t from_ip, int64_t
     slot->used = 1;
     slot->ip = from_ip;
     slot->flags = pkt[5];
-    slot->tie = ((uint32_t)pkt[12] << 24) | ((uint32_t)pkt[13] << 16) | ((uint32_t)pkt[14] << 8) | pkt[15];
+    slot->tie = tie;
     slot->heard_ms = now_ms;
     if (slot->flags & PSL_F_SERVING) {
         s->heard_server = 1;
         s->server_heard_ms = now_ms;
+    } else if (slot == followed) {
+        /* It stopped: no waiting out its expiry. Any other server still heard counts as before. */
+        s->listen_from_ms = now_ms;
+        s->heard_server = 0;
+        for (int i = 0; i < PSL_MAX_PEERS; i++) {
+            const psl_peer* p = &s->peers[i];
+            if (!p->used || !(p->flags & PSL_F_SERVING)) continue;
+            if (!s->heard_server || p->heard_ms > s->server_heard_ms) s->server_heard_ms = p->heard_ms;
+            s->heard_server = 1;
+        }
     }
+}
+
+static void pack(const psl* s, int flags, uint8_t out[PSL_PACKET]) {
+    memset(out, 0, PSL_PACKET);
+    memcpy(out, "NXPL", 4);
+    out[4] = PSL_VERSION;
+    out[5] = (uint8_t)flags;
+    memcpy(out + 8, &s->self_ip, 4);
+    out[12] = (uint8_t)(s->tie >> 24);
+    out[13] = (uint8_t)(s->tie >> 16);
+    out[14] = (uint8_t)(s->tie >> 8);
+    out[15] = (uint8_t)s->tie;
 }
 
 size_t psl_pack(const psl* s, uint8_t out[PSL_PACKET]) {
@@ -123,15 +169,12 @@ size_t psl_pack(const psl* s, uint8_t out[PSL_PACKET]) {
     } else {
         return 0;
     }
-    memset(out, 0, PSL_PACKET);
-    memcpy(out, "NXPL", 4);
-    out[4] = PSL_VERSION;
-    out[5] = (uint8_t)flags;
-    memcpy(out + 8, &s->self_ip, 4);
-    out[12] = (uint8_t)(s->tie >> 24);
-    out[13] = (uint8_t)(s->tie >> 16);
-    out[14] = (uint8_t)(s->tie >> 8);
-    out[15] = (uint8_t)s->tie;
+    pack(s, flags, out);
+    return PSL_PACKET;
+}
+
+size_t psl_pack_goodbye(const psl* s, uint8_t out[PSL_PACKET]) {
+    pack(s, 0, out);
     return PSL_PACKET;
 }
 
@@ -163,7 +206,8 @@ psl_choice psl_step(psl* s, int64_t now_ms) {
         return c;
     }
     if (!s->active) {
-        if (s->serving && now_ms - s->left_ms >= PSL_LINGER_MS) s->serving = 0;
+        /* Not while another device is on this server: ending it would end their match. */
+        if (s->serving && !s->grouped && now_ms - s->left_ms >= PSL_LINGER_MS) s->serving = 0;
         if (s->serving) {
             c.server_ip = s->self_ip;
             c.serve = c.settled = c.announce = 1;
