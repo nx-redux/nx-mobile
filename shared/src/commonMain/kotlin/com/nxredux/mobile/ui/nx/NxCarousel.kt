@@ -34,6 +34,9 @@ import androidx.compose.ui.unit.sp
 import com.nxredux.mobile.ui.GridTile
 import com.nxredux.mobile.ui.INFO_SEPARATOR
 import com.nxredux.mobile.ui.InfoLine
+import com.nxredux.mobile.ui.InfoKind
+import com.nxredux.mobile.ui.NO_GENRE
+import kotlin.math.max
 import kotlin.math.min
 
 private const val CAPTION_GAP = 16f     // dp between the centre tile's bottom edge and the caption
@@ -73,8 +76,9 @@ fun NxCarousel(
     badge: (Int) -> String? = { null },
     lit: () -> Boolean = { true },
     cardInfo: ((Int) -> List<InfoLine>)? = null,
-    // A game list: the neighbours on the screen's centre line, and the game's stats ([captionInfo]) under its name, one
-    // line each in the vertical stack's style ([StackCaption]); the card itself the stack's, its picture alone.
+    // A game list: the neighbours on the screen's centre line; of the game's lines ([captionInfo], [carouselGameLines])
+    // the time and achievements in the selected card over a shade, its details under its name, one line each in the
+    // vertical stack's style ([StackCaption]).
     gameList: Boolean = false,
     drained: Boolean = false,   // Home's: no ring, the selected card in colour and the rest grey ([NxMenuTile]'s drained)
 ) {
@@ -89,7 +93,7 @@ fun NxCarousel(
         // A game list's selected title follows Appearance → Text size (the room below follows it too).
         val nameSize = if (gameList) nxCardTitleSize() else CAROUSEL_TITLE_SP
         val nameStyle = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = nameSize, textAlign = TextAlign.Center)
-        // A game list's stats at 80% of its name, as the vertical stack's ([NxCarouselStack]'s infoShare).
+        // A game list's details at 80% of its name, as the vertical stack's lines ([NxCarouselStack]'s infoShare).
         val infoStyle = TextStyle(fontFamily = font, fontSize = if (gameList) nameSize * STACK_INFO_SHARE else 14.sp, textAlign = TextAlign.Center)
         val room = rememberCaptionRoom(CAPTION_GAP, nameStyle, infoStyle, infoRows = if (gameList) 0 else CAROUSEL_INFO_ROWS).takeIf { cardInfo == null } ?: 0f
         // One size in both orientations, shrunk only so the tile and the caption room fit the body's height (the shown
@@ -121,24 +125,29 @@ fun NxCarousel(
         fun selectedTop(drawn: Float) =
             if (centreLine != null) rowSelectedTopOn(centreLine, area, g.itemH, CAPTION_GAP, drawn) else rowSelectedTop(area, g.itemH, CAPTION_GAP, drawn)
         val selTop = remember(glide, area, g.itemH, centreLine) { { selectedTop(glide.value()) } }
-        // The swipe band: from the highest a selected tile goes (its name's two lines, the info and every spare line)
-        // down to the neighbours' bottom, so it covers every drawn tile.
-        val bandTop = min(nbTop, selectedTop(room - CAPTION_GAP + spare))
+        // The swipe band: from the highest a selected tile goes (its name's two lines, the info and every spare line; a
+        // game list's caption up to [carouselCaptionMax], its rows cut to that) down to the neighbours' bottom, so it
+        // covers every drawn tile.
+        val tallest = room - CAPTION_GAP + spare
+        val bandTop = min(nbTop, selectedTop(if (gameList) max(tallest, carouselCaptionMax(area, g.itemH)) else tallest))
         val bandH = nbTop + g.itemH - bandTop
 
         val hasLongPress = onLongPress != null
+        // A game list's lines split by kind ([carouselGameLines]): the card's stats, the caption's details.
+        val stats = if (gameList) remember(captionInfo) { { carouselGameLines(captionInfo()).picture } } else null
+        val details = if (gameList) remember(captionInfo) { { carouselGameLines(captionInfo()).underTitle } } else captionInfo
         val logoInset = remember(g) { rowLogoInset(g) }
         val toolSize = carouselToolSize(g)
 
         // The window spans the target too, and the selection is lit while [lit] says so.
         NxRow(count, selectedIndex, pos, g, bandTop, bandH, onSelect, onOpen, onLongPress, litSelection = lit) { i, isLit, at, taps ->
-            CarouselItem(tiles[i], i, isLit, at, g, nbTop, bandTop, selTop, logoInset, toolSize, portrait, taps, hasLongPress, badge(i), cardInfo, drained)
+            CarouselItem(tiles[i], i, isLit, at, g, nbTop, bandTop, selTop, logoInset, toolSize, portrait, taps, hasLongPress, badge(i), cardInfo, stats, drained)
         }
 
-        // A game list's stats under the name as the stack's (a row each, [STACK_CAPTION_GAP] apart), only the whole
-        // rows that fit under the tile at its highest ([carouselCaptionMax]): the caption never reaches the bottom row.
+        // A game list's details under the name as the stack's lines (a row each, [STACK_CAPTION_GAP] apart), only the
+        // whole rows that fit under the tile at its highest ([carouselCaptionMax]): the caption never reaches the bottom row.
         if (cardInfo == null) RowCaption(
-            captionTitle, captionInfo, glide, nameStyle, 2, infoStyle, inset, avail, availPx, spare,
+            captionTitle, details, glide, nameStyle, 2, infoStyle, inset, avail, availPx, spare,
             selTop, g.itemH + CAPTION_GAP, colors.accent,   // the selected game's name in the accent, as Home's cards
             stackRows = gameList, rowGap = if (gameList) STACK_CAPTION_GAP else 0.dp,
             maxDrawn = if (gameList) carouselCaptionMax(area, g.itemH) else Float.POSITIVE_INFINITY,
@@ -150,7 +159,7 @@ fun NxCarousel(
 private fun BoxScope.CarouselItem(
     tile: GridTile, i: Int, lit: Boolean, at: () -> Float, g: RowGeometry, nbTop: Float, bandTop: Float, selTop: () -> Float,
     logoInset: Pair<Float, Float>, toolSize: ToolTileSize, portrait: Boolean, taps: ItemTaps, hasLongPress: Boolean,
-    badge: String?, cardInfo: ((Int) -> List<InfoLine>)?, drained: Boolean,
+    badge: String?, cardInfo: ((Int) -> List<InfoLine>)?, stats: (() -> List<InfoLine>)?, drained: Boolean,
 ) {
     val colors = LocalNxColors.current
     val geometry by rememberUpdatedState(g)
@@ -168,12 +177,13 @@ private fun BoxScope.CarouselItem(
             // The window spans the target too: during a slide an item rowItem hides must not take a touch.
             .shownItemTaps(i, taps, hasLongPress) { rowItem(RowStyle.CAROUSEL, i - shownAt(), geometry).visible },
     ) {
-        // A game list's card is its picture alone, as the vertical stack's: its name and stats are below it.
+        // A game list's selected card holds its stats ([stats], the selection's), shaded as the Grid's; its name is below.
         NxMenuTile(
-            tile, lit = lit, caption = cardInfo != null,
-            info = remember(cardInfo, i) { cardInfo?.let { ci -> { ci(i) } } ?: NoTileInfo }, logoInset = logoInset, portrait = portrait,
+            tile, lit = lit, caption = cardInfo != null || stats != null,
+            info = remember(cardInfo, stats, i) { cardInfo?.let { ci -> { ci(i) } } ?: stats ?: NoTileInfo }, logoInset = logoInset, portrait = portrait,
             modifier = Modifier.fillMaxSize(), toolSize = toolSize, homeCaption = cardInfo != null,
-            statsSize = 13.sp, drained = drained, heroName = drained && cardInfo != null,
+            gameFade = stats != null, statsOnly = stats != null,
+            statsSize = if (stats != null) nxCardStatsSize() else 13.sp, drained = drained, heroName = drained && cardInfo != null,
         )
         badge?.let { HomeBadge(it, portrait, Modifier.align(Alignment.TopStart), lit = lit || !drained) }
         // The neighbour's black layer, on the tile's own rounded shape (the ring outside stays bright). Drained, the
@@ -195,6 +205,20 @@ private fun BoxScope.CarouselItem(
  */
 internal fun carouselCaptionRows(title: String?, info: List<InfoLine>, gameList: Boolean = false): List<List<InfoLine>> =
     if (title == null) emptyList() else if (gameList) stackCaptionRows(info) else backdropCaptionRows(info)
+
+/** A game list Carousel's lines ([carouselGameLines]): those in the selected card's [picture], those [underTitle]. */
+internal data class CarouselGameLines(val picture: List<InfoLine>, val underTitle: List<InfoLine>)
+
+/**
+ * A game list Carousel's selected game's [lines] by kind: the play time and the achievements (the count, the next goal)
+ * in its picture; its details (the genre, "<year> · <publisher>": the stored ScreenScraper facts) under its name. The
+ * genre's stand-in for a game with no genre stored ([NO_GENRE]) alone is no detail: nothing goes under the name then.
+ */
+internal fun carouselGameLines(lines: List<InfoLine>): CarouselGameLines {
+    val (details, stats) = lines.partition { it.kind == InfoKind.GENRE || it.kind == InfoKind.RELEASE }
+    val shown = details.takeUnless { d -> d.all { it.kind == InfoKind.GENRE && it.text == NO_GENRE } }.orEmpty()
+    return CarouselGameLines(stats, shown)
+}
 
 /**
  * The most a game list Carousel's caption may take under its selected tile, dp, in a box [areaDp] tall with tiles

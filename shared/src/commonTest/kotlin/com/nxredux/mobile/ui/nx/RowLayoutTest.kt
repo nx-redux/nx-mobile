@@ -2,6 +2,7 @@ package com.nxredux.mobile.ui.nx
 
 import com.nxredux.mobile.ui.InfoKind
 import com.nxredux.mobile.ui.InfoLine
+import com.nxredux.mobile.ui.NO_GENRE
 import kotlin.math.min
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -264,6 +265,23 @@ class RowLayoutTest {
         assertEquals(emptyList(), carouselCaptionRows(null, info, gameList = true))
         assertEquals(emptyList(), carouselCaptionRows("Name", emptyList(), gameList = true))
         assertEquals(listOf(info.take(2), info.drop(2)), carouselCaptionRows("Name", info))   // any other Carousel's: as before
+    }
+
+    // A game list's horizontal Carousel: the time and achievements in the picture, the game's details under its name.
+    @Test fun aGameListCarouselSplitsItsLinesByKind() {
+        val time = InfoLine(InfoKind.TIME, "Today - 1h")
+        val ach = InfoLine(InfoKind.ACHIEVEMENTS, "3 of 10")
+        val next = InfoLine(InfoKind.NEXT, "Next: First")
+        val genre = InfoLine(InfoKind.GENRE, "Platform")
+        val release = InfoLine(InfoKind.RELEASE, "1991 · Sega")
+        assertEquals(CarouselGameLines(listOf(time), emptyList()), carouselGameLines(listOf(time)))                 // stats only
+        assertEquals(CarouselGameLines(listOf(ach, next), emptyList()), carouselGameLines(listOf(ach, next)))      // achievements only
+        assertEquals(CarouselGameLines(emptyList(), listOf(genre, release)), carouselGameLines(listOf(genre, release)))   // details only
+        assertEquals(CarouselGameLines(listOf(time, ach), listOf(genre, release)), carouselGameLines(listOf(time, ach, genre, release)))
+        assertEquals(CarouselGameLines(emptyList(), emptyList()), carouselGameLines(emptyList()))
+        // No details stored: the genre pill's stand-in ([NO_GENRE]) is not a detail, nothing goes under the name.
+        assertEquals(CarouselGameLines(listOf(time), emptyList()), carouselGameLines(listOf(time, InfoLine(InfoKind.GENRE, NO_GENRE))))
+        assertEquals(listOf(InfoLine(InfoKind.GENRE, NO_GENRE), release), carouselGameLines(listOf(InfoLine(InfoKind.GENRE, NO_GENRE), release)).underTitle)
     }
 
     // The caption's room under the selected tile: what is left of the box once the tile sits at its highest (its ring's
