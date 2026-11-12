@@ -4524,6 +4524,19 @@ class AppState(
         return all.mapIndexed { i, e -> labels[i]?.let { e.copy(label = it) } ?: e }
     }
 
+    /**
+     * The Games tab's rows ([AllGames.entries]) of [systemsCache] and [androidConsole], built once per library state:
+     * kept while both are the same objects, rebuilt when either is replaced.
+     */
+    internal fun allGames(): List<Listed> {
+        val android = androidConsole
+        allGamesOf?.takeIf { it.systems === systemsCache && it.android === android }?.let { return it.entries }
+        return AllGames.entries(systemsCache, android).also { allGamesOf = AllGamesCache(systemsCache, android, it) }
+    }
+
+    private class AllGamesCache(val systems: List<SystemFolder>, val android: SystemFolder?, val entries: List<Listed>)
+    private var allGamesOf: AllGamesCache? = null
+
     private fun showList(source: ListSource, entries: List<Listed>, select: Int = 0) {
         val screen = Screen.Games(source, entries)
         landing(_screen.value, screen)
@@ -4557,6 +4570,7 @@ class AppState(
         ListSource.Hidden -> hiddenEntries()
         is ListSource.Search -> GameSearch.search(searchCorpus(), source.query)
         is ListSource.Filtered -> GameSearch.filter(entriesFor(source.parent), source.query)
+        ListSource.AllGames -> allGames()
     }
 
     /**
@@ -4636,6 +4650,7 @@ class AppState(
             ListSource.Recent -> showSystemsNow()
             is ListSource.Collection -> showSystemsNow(select = { it is MainRow.Collection && it.name == source.name })
             ListSource.Hidden -> backToLibraryRow(SettingsKind.HIDDEN)
+            ListSource.AllGames -> showSystemsNow()
             is ListSource.Search -> showSystemsNow()   // the tab and row remembered when the search opened
             is ListSource.Filtered -> leaveListSearch(source)
         }

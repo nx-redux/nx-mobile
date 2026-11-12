@@ -187,6 +187,26 @@ class ContextMenusTest {
         assertEquals(listOf(ContextKind.UNPIN, ContextKind.CHANGE_ART), ContextMenus.itemsFor(ListSource.Console(s), e, pinned = true, art = ArtMenuItem.CHANGE).map { it.kind })
     }
 
+    @Test fun allGamesOffersSearchItemsForRomsAndAndroidItemsForApps() {
+        val rom = entry("GB", file = "Tetris.gb")
+        for ((pinned, art) in listOf(false to ArtMenuItem.FETCH, true to ArtMenuItem.CHANGE)) {
+            for (canResume in listOf(false, true)) {
+                assertEquals(
+                    ContextMenus.itemsFor(ListSource.Search("x"), rom, pinned, art, netplay = true, canResume = canResume, netplayLeads = canResume),
+                    ContextMenus.itemsFor(ListSource.AllGames, rom, pinned, art, netplay = true, canResume = canResume, netplayLeads = canResume),
+                )
+            }
+        }
+        val s = SystemFolder("Android", ANDROID_TAG, null, emptyList(), android = true)
+        val app = Listed(s, GameEntry(ContentRef("app:a/A"), "a/A", "Alpha", folder = ContentRef("app:"), sourceId = "android", relativeDir = ""))
+        for ((pinned, art) in listOf(false to ArtMenuItem.FETCH, true to ArtMenuItem.CHANGE)) {
+            assertEquals(
+                ContextMenus.itemsFor(ListSource.Console(s), app, pinned, art),
+                ContextMenus.itemsFor(ListSource.AllGames, app, pinned, art),
+            )
+        }
+    }
+
     @Test fun a_search_list_offers_the_collection_items_without_remove() {
         val entry = entry("GB", file = "Tetris.gb")
         val items = ContextMenus.itemsFor(ListSource.Search("mario"), entry, pinned = false, art = ArtMenuItem.FETCH, netplay = true).map { it.kind }

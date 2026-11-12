@@ -127,6 +127,10 @@ object ContextMenus {
             artItem(art)?.let(::add)
         }
         is ListSource.Filtered -> itemsFor(source.parent, entry, pinned, art, netplay, canResume, netplayLeads)   // its list's own
+        // Every console's games: a ROM's items are a search's, an Android game's those of the Android console's list.
+        ListSource.AllGames ->
+            if (entry.system.android) listOfNotNull(if (pinned) unpin else pin, artItem(art))
+            else itemsFor(ListSource.Search(""), entry, pinned, art, netplay, canResume, netplayLeads)
         ListSource.Hidden -> emptyList()   // A unhides directly; UNHIDE stays in the enum for act's exhaustive when
         }
     }
