@@ -4,6 +4,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class RaRequestsTest {
+    @Test fun userAgentNamesNxRedux() {
+        assertEquals("NXRedux/0.5.1 (Android 14) rcheevos/12.2.1", RaRequests.userAgent("0.5.1", "Android 14"))
+    }
     @Test fun login_forms() {
         assertEquals("r=login2&u=me&t=tok", RaRequests.login2("me", "tok"))
         assertEquals("r=login2&u=me&p=p%40ss%20word", RaRequests.loginWithPassword("me", "p@ss word"))

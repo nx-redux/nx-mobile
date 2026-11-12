@@ -10,7 +10,11 @@ import com.nxredux.mobile.achievements.RaDownloadPhase
 import com.nxredux.mobile.achievements.RaGameFetch
 import com.nxredux.mobile.achievements.RaGamesCache
 import com.nxredux.mobile.achievements.RaGameView
+import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.achievements.RaPrefetch
+import com.nxredux.mobile.achievements.RaProfile
+import com.nxredux.mobile.achievements.RaProfileUnlock
+import com.nxredux.mobile.achievements.RaProfiles
 import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.achievements.RaState
 import com.nxredux.mobile.achievements.RaStoreException
@@ -259,13 +263,47 @@ internal class RaScreenController(
     private var raGameScreen: Screen.RaGame? = null      // the game page (list and filter) an achievement was opened from
     private var raGameSelection = ListSelection(0, 0)    // its row, remembered while on that achievement
 
+    private val _raProfile = MutableStateFlow<RaProfile?>(null)
+    /** The signed-in player's summary beside the RetroAchievements page ([RaProfile]); null signed out or before its first read. */
+    val raProfile: StateFlow<RaProfile?> = _raProfile.asStateFlow()
+    private var raProfileJob: Job? = null
+
+    /** The summary is on screen: beside the page, or as its own page. */
+    private fun profileShown(): Boolean = screen.value.let { it is Screen.RetroAchievements || it is Screen.RaProfile }
+
     /** The RetroAchievements page on the row last used there. */
     fun showRetroAchievements() {
         val c = achievements ?: run { host.showTools(); return }
         screen.value = Screen.RetroAchievements()
         selection.value = raSelection.clampedTo(raRows(c.state.value, c.download.value).size)
+        refreshRaProfile()   // reads the games' snapshot too, so Achievements opens from it at once
+    }
+
+    /**
+     * Reads the profile again in the background: the cached games (the browser's snapshot, else a read of its own)
+     * and the latest unlocks, each with its points and badge from its game's set. A failed read keeps what is shown.
+     */
+    private fun refreshRaProfile() {
+        val c = achievements ?: return
+        if (!host.raSignedIn()) { raProfileJob?.cancel(); _raProfile.value = null; return }
         val user = settings.raUsername
-        if (games.peek(user) == null) scope.launch { games.load(user) }   // so Achievements opens from it at once
+        raProfileJob?.cancel()
+        raProfileJob = scope.launch {
+            tryOrNull {
+                val gen = games.generation
+                // With no snapshot the games are read for the sums alone: Achievements still makes its own first read.
+                val list = games.peek(user) ?: games.load(user) ?: readRaGames(c)
+                val sets = HashMap<String, Pair<Map<Int, RaAchievement>, Map<String, String>>>()   // a game's set and badge listing, read once
+                val recent = c.recentUnlocks(RaProfiles.RECENT).map { u ->
+                    val (byId, badges) = sets.getOrPut(u.hash) {
+                        tryOr({ emptyList() }) { c.achievements(u.hash) }.associateBy { it.id } to tryOr({ emptyMap() }) { c.badgeListing(u.hash) }
+                    }
+                    val a = byId[u.id]
+                    RaProfileUnlock(u.title, u.game, u.at, a?.points ?: 0, a?.let { raBadgeModel(badges, it) })
+                }
+                if (settings.raUsername == user && gen == games.generation) _raProfile.value = RaProfiles.of(list, recent)
+            }
+        }
     }
 
     /** The game data download's progress page, on its first row. */
@@ -315,7 +353,7 @@ internal class RaScreenController(
 
     /**
      * The settings page's rows, from the settings and the controller's last status, in groups: Account (Sign in or Sign
-     * out with the status under it, Enable achievements, Download all game data), Notifications, Achievements (the sort
+     * out with the status under it, Enable achievements, Download all game data), Notifications (with an unlock's sound and screenshot), Achievements (the sort
      * order) and Reset. Each value row carries its values ([raSettingValue]).
      */
     private fun raSettingsRows(): List<RaSettingsRow> {
@@ -338,6 +376,8 @@ internal class RaScreenController(
             value(RaSettingKind.NOTIFICATIONS, "Show notifications", if (s.raShowNotifications) "On" else "Off"),
             value(RaSettingKind.NOTIFICATION_SECONDS, "Notification duration", "${s.raNotificationSeconds} s"),
             value(RaSettingKind.PROGRESS_SECONDS, "Progress duration", if (s.raProgressSeconds == 0) "Off" else "${s.raProgressSeconds} s"),
+            value(RaSettingKind.UNLOCK_SOUND, "Unlock sound", if (s.raUnlockSound) "On" else "Off"),
+            value(RaSettingKind.UNLOCK_SCREENSHOT, "Screenshot on unlock", if (s.raUnlockScreenshot) "On" else "Off"),
             RaSettingsRow(RaSettingKind.GAP, ""),
             RaSettingsRow(RaSettingKind.SECTION, "Achievements"),
             value(RaSettingKind.SORT_ORDER, "Achievement sort order", s.raSortOrder.label),
@@ -365,6 +405,8 @@ internal class RaScreenController(
             RaSettingKind.SORT_ORDER -> cycle(RaSortOrder.entries, s.raSortOrder, { it.label }) { s.raSortOrder = it }
             RaSettingKind.ENABLED -> cycle(listOf(false, true), s.raEnabled, onOff) { s.raEnabled = it }
             RaSettingKind.NOTIFICATIONS -> cycle(listOf(false, true), s.raShowNotifications, onOff) { s.raShowNotifications = it }
+            RaSettingKind.UNLOCK_SOUND -> cycle(listOf(false, true), s.raUnlockSound, onOff) { s.raUnlockSound = it }
+            RaSettingKind.UNLOCK_SCREENSHOT -> cycle(listOf(false, true), s.raUnlockScreenshot, onOff) { s.raUnlockScreenshot = it }
             else -> null
         }
     }
@@ -444,7 +486,7 @@ internal class RaScreenController(
      * for any other screen.
      */
     fun raParent(screen: Screen): RaParent? = when (screen) {
-        is Screen.RaSettings, is Screen.RaConsoles -> RaParent(Screen.RetroAchievements(), raPageRow(screen) ?: 0)
+        is Screen.RaSettings, is Screen.RaConsoles, Screen.RaProfile -> RaParent(Screen.RetroAchievements(), raPageRow(screen) ?: 0)
         is Screen.RaGames -> raConsolesScreen?.let { RaParent(it, raConsolesSelection.index) }
         is Screen.RaGame -> raGamesScreen?.let { RaParent(it, raGamesSelection.index) }
         is Screen.RaAchievement -> RaParent(raGameScreen ?: Screen.RaGame(screen.game, listOf(screen.achievement), badges = screen.badges), raGameSelection.index)
@@ -515,7 +557,7 @@ internal class RaScreenController(
                 // A value row as on Settings: a picker row (many or long values) opens its picker, the others step
                 // forward with wrap-around.
                 RaSettingKind.ENABLED, RaSettingKind.NOTIFICATIONS, RaSettingKind.NOTIFICATION_SECONDS, RaSettingKind.PROGRESS_SECONDS,
-                RaSettingKind.SORT_ORDER -> raSettingValue(row?.kind)?.let { v ->
+                RaSettingKind.UNLOCK_SOUND, RaSettingKind.UNLOCK_SCREENSHOT, RaSettingKind.SORT_ORDER -> raSettingValue(row?.kind)?.let { v ->
                     if (row != null && raSettingsTouchRow(row).control == NxSettingControl.PICKER) openRaPicker(row) else v.change(1)
                 }
                 RaSettingKind.SIGN_IN ->
@@ -535,6 +577,7 @@ internal class RaScreenController(
                     // The non-credential defaults; the username and token stay.
                     settings.raEnabled = false; settings.raShowNotifications = true
                     settings.raNotificationSeconds = 3; settings.raProgressSeconds = 1; settings.raSortOrder = RaSortOrder.DEFAULT
+                    settings.raUnlockSound = true; settings.raUnlockScreenshot = false
                     refreshRaSettings()
                 }
                 RaSettingKind.SECTION, RaSettingKind.GAP, null -> Unit
@@ -624,6 +667,7 @@ internal class RaScreenController(
                 if (read == games.peek(user)) continue
                 games.put(user, read, gen)
                 applyRaGames(read)
+                if (profileShown()) refreshRaProfile()   // its sums are these games'
             }
         }
     }
@@ -634,6 +678,7 @@ internal class RaScreenController(
      */
     fun raDataChanged() {
         val c = achievements ?: return
+        if (profileShown()) refreshRaProfile()   // a sync just ended: the summary on screen takes it at once
         val user = settings.raUsername
         if (games.peek(user) != null) refreshRaGames(c, user)
     }
@@ -642,6 +687,7 @@ internal class RaScreenController(
     private fun forgetRaGames() {
         games.clear()
         raRefreshJob?.cancel(); raRefreshJob = null
+        raProfileJob?.cancel(); _raProfile.value = null
         raConsolesScreen = null; raGamesScreen = null
     }
 
@@ -746,6 +792,7 @@ internal class RaScreenController(
                 val action = raRows(c.state.value, c.download.value).getOrNull(selection.value.index) ?: return
                 raSelection = selection.value
                 when (action) {
+                    RaAction.PROFILE -> { screen.value = Screen.RaProfile; selection.value = ListSelection(0, 0); refreshRaProfile() }
                     RaAction.ACHIEVEMENTS -> openRaConsoles()
                     RaAction.SYNC -> c.syncNow()
                     RaAction.SETTINGS -> openRaSettings()
@@ -772,6 +819,7 @@ internal class RaScreenController(
 
     /** The browser screens: UP/DOWN move, A opens, Y (a game) toggles locked-only, B goes up one level. */
     fun onRaBrowserButton(s: Screen, button: NxButton) {
+        if (s is Screen.RaProfile) { if (button == NxButton.B) raBack(s); return }   // a page to read: only Back
         when (button) {
             NxButton.UP -> selection.value = selection.value.up()
             NxButton.DOWN -> selection.value = selection.value.down()
@@ -804,7 +852,7 @@ internal class RaScreenController(
             }
             is Screen.RaGame -> returnToRaGames(s)
             is Screen.RaGames -> returnToRaConsoles()
-            is Screen.RaConsoles -> showRetroAchievements()
+            is Screen.RaConsoles, Screen.RaProfile -> showRetroAchievements()
             is Screen.RaSettings -> onRaSettingsButton(s, NxButton.B)
             is Screen.RetroAchievements -> onRaButton(s, NxButton.B)
             else -> Unit

@@ -49,7 +49,7 @@ class RaUiTest {
         // No state words: the title, the points as its pill, the description under it (none when blank or worth no points).
         assertEquals(NxRichRow("A", "d", thumbnail = null, titleBadge = "5"), raAchievementRow(a, emptyMap()))
         assertEquals(NxRichRow("A", null, thumbnail = null, titleBadge = null), raAchievementRow(a.copy(description = " ", points = 0), emptyMap()))
-        assertEquals(listOf(RaAction.ACHIEVEMENTS, RaAction.SYNC, RaAction.SETTINGS), raRows(RaState.Idle(status)))
+        assertEquals(listOf(RaAction.PROFILE, RaAction.ACHIEVEMENTS, RaAction.SYNC, RaAction.SETTINGS), raRows(RaState.Idle(status)))
         assertEquals(emptyList(), raRows(RaState.Authenticating))
     }
     @Test fun tones_map_to_list_tones_and_colours() {

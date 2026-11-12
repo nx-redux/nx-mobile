@@ -44,7 +44,7 @@ class AndroidRaHttp(private val userAgent: String) : RaHttp {
 
     private fun open(url: String, method: String) = (URL(url).openConnection() as HttpURLConnection).apply {
         requestMethod = method; connectTimeout = 15_000; readTimeout = 30_000; instanceFollowRedirects = true
-        setRequestProperty("User-Agent", userAgent)   // RA asks clients to identify themselves: "NXReduxMobile/<version>"
+        setRequestProperty("User-Agent", userAgent)   // RA asks clients to identify themselves ([RaRequests.userAgent])
     }
 
     private companion object {

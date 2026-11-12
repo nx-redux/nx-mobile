@@ -250,10 +250,14 @@ class AppStateTest {
     }
 
     /** Tools -> RetroAchievements, wherever it sorts among the tools. */
+    /** The RetroAchievements page with the highlight on Achievements (it opens on Profile, the row above), where these tests count their rows from. */
     private fun openRa(state: AppState) {
         state.openTools()
         state.select(state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.RETRO_ACHIEVEMENTS })
         state.openSelected()
+        if (state.screen.value is Screen.RetroAchievements && state.selection.value.index == RaAction.entries.indexOf(RaAction.PROFILE)) {
+            state.select(RaAction.entries.indexOf(RaAction.ACHIEVEMENTS))
+        }
     }
 
     private fun menuKinds(state: AppState) = state.screen.value.contextMenu?.items?.map { it.kind } ?: emptyList()
@@ -6476,7 +6480,7 @@ class AppStateTest {
         openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
         assertIs<Screen.RaSettings>(state.screen.value)
         val tap = { i: Int -> state.raParentTap(Screen.RetroAchievements(), i) }
-        nxTap(0, selected = false, opens = true, tap, tap)               // Achievements on the dimmed left
+        nxTap(RaAction.entries.indexOf(RaAction.ACHIEVEMENTS), selected = false, opens = true, tap, tap)   // Achievements on the dimmed left
         advanceUntilIdle()
         assertIs<Screen.RaConsoles>(state.screen.value)
     }
@@ -7102,6 +7106,22 @@ class AppStateTest {
     }
     private fun TestScope.stateWithAchievementsHttp(): Pair<AppState, FakeRaHttp> = raFixture().let { it.state to it.http }
 
+    @Test fun the_page_opens_on_profile_and_back_returns_to_its_row() = runTest {
+        val (state, _) = stateWithAchievements()
+        state.openTools(); state.select(1); state.openSelected()
+        assertIs<Screen.RetroAchievements>(state.screen.value)
+        state.openSelected()                                                   // Profile, the first word
+        assertEquals(Screen.RaProfile, state.screen.value)
+        assertEquals(RaParent(Screen.RetroAchievements(), RaAction.entries.indexOf(RaAction.PROFILE)), state.raParent(state.screen.value))
+        state.onButton(NxButton.A); state.onButton(NxButton.DOWN)              // a page to read: nothing to open or move
+        assertEquals(Screen.RaProfile, state.screen.value)
+        state.onButton(NxButton.B)
+        assertIs<Screen.RetroAchievements>(state.screen.value)
+        assertEquals(RaAction.entries.indexOf(RaAction.PROFILE), state.selection.value.index)
+        state.openSelected(); assertTrue(state.back())                         // the system back leaves it too
+        assertIs<Screen.RetroAchievements>(state.screen.value)
+    }
+
     @Test fun tools_lists_retroachievements_by_name_and_opens_its_page() = runTest {
         val (state, _) = stateWithAchievements()
         state.openTools()
@@ -7109,10 +7129,11 @@ class AppStateTest {
         assertTrue(state.screen.value.toolRows().all { it.secondary == null })   // titles only
         state.select(1); state.openSelected()
         assertIs<Screen.RetroAchievements>(state.screen.value)
-        state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()   // Settings
+        assertEquals(RaAction.entries.indexOf(RaAction.PROFILE), state.selection.value.index)   // the page opens on Profile
+        repeat(3) { state.onButton(NxButton.DOWN) }; state.openSelected()   // Settings
         assertIs<Screen.RaSettings>(state.screen.value)
         assertTrue(state.back()); assertIs<Screen.RetroAchievements>(state.screen.value)
-        assertEquals(2, state.selection.value.index)   // Settings stays highlighted
+        assertEquals(RaAction.entries.indexOf(RaAction.SETTINGS), state.selection.value.index)   // Settings stays highlighted
         assertTrue(state.back()); state.screen.value.toolRows()
         assertEquals(1, state.selection.value.index)   // RetroAchievements stays highlighted
     }
@@ -7233,7 +7254,7 @@ class AppStateTest {
         val page = { i: Int -> state.raParentTap(Screen.RetroAchievements(), i) }
         nxTap(raPageRow(Screen.RaSettings(emptyList()))!!, selected = false, opens = true, page, page)   // Settings on the page
         assertIs<Screen.RaSettings>(state.screen.value)                                   // RetroAchievements Settings, split
-        nxTap(0, selected = false, opens = true, page, page)                               // Achievements again
+        nxTap(RaAction.entries.indexOf(RaAction.ACHIEVEMENTS), selected = false, opens = true, page, page)   // Achievements again
         advanceUntilIdle()
         assertIs<Screen.RaConsoles>(state.screen.value)
     }
@@ -7263,7 +7284,7 @@ class AppStateTest {
         assertTrue(state.back()); assertTrue(state.back()); assertIs<Screen.RaGames>(state.screen.value)
         assertTrue(state.back()); assertIs<Screen.RaConsoles>(state.screen.value)
         assertTrue(state.back()); assertIs<Screen.RetroAchievements>(state.screen.value)
-        assertEquals(0, state.selection.value.index)   // Achievements stays highlighted
+        assertEquals(RaAction.entries.indexOf(RaAction.ACHIEVEMENTS), state.selection.value.index)   // Achievements stays highlighted
     }
 
     // --- The Achievements snapshot: shown at once, refreshed quietly ---
@@ -7708,7 +7729,7 @@ class AppStateTest {
         advanceTimeBy(100); assertFalse(state.loading.value)   // a fast load never flickers the overlay
         advanceTimeBy(100); assertTrue(state.loading.value)
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A); state.openSelected()   // ignored while loading
-        assertEquals(0, state.selection.value.index)
+        assertEquals(RaAction.entries.indexOf(RaAction.ACHIEVEMENTS), state.selection.value.index)
         gate.complete(Unit); runCurrent()
         assertIs<Screen.RaConsoles>(state.screen.value)
         assertFalse(state.loading.value)
@@ -7774,14 +7795,15 @@ class AppStateTest {
         assertEquals(
             listOf(
                 "Account", "Sign out", "Enable achievements", "Download all game data", "",
-                "Notifications", "Show notifications", "Notification duration", "Progress duration", "",
+                "Notifications", "Show notifications", "Notification duration", "Progress duration", "Unlock sound", "Screenshot on unlock", "",
                 "Achievements", "Achievement sort order", "",
                 "Reset", "Reset account data", "Erase all achievement data", "Reset settings to defaults",
             ),
             s.rows.map { it.label },
         )
         assertEquals("Signed in as me", s.rows[1].secondary); assertEquals("Off", s.rows[2].secondary); assertTrue(s.rows[2].enabled); assertTrue(s.rows[3].enabled)
-        assertEquals("3 s", s.rows[7].secondary); assertEquals("1 s", s.rows[8].secondary); assertEquals("Unlocked first", s.rows[11].secondary)
+        assertEquals("3 s", s.rows[7].secondary); assertEquals("1 s", s.rows[8].secondary); assertEquals("Unlocked first", s.rows[13].secondary)
+        assertEquals("On", s.rows[9].secondary); assertEquals("Off", s.rows[10].secondary)   // the chime by default, the screenshot by choice
         assertEquals(SettingChoices(listOf("Off", "On"), 0), s.rows[2].choices)
         assertEquals(2, state.selection.value.index)   // opens on Enable, not Sign out
         state.openSelected()   // Enable → On: A flips the switch
@@ -8015,7 +8037,7 @@ class AppStateTest {
         state.openSelected(); assertTrue(state.raSettings().signingIn)                           // Sign in: the prompt answers first
         tap(0); assertTrue(state.raSettings().signingIn)
         state.onButton(NxButton.B)
-        tap(1)                                                                                    // Sync now: back on the page, run there
+        tap(RaAction.entries.indexOf(RaAction.SYNC))                                              // Sync now: back on the page, run there
         assertIs<Screen.RetroAchievements>(state.screen.value)
         tap(0); assertIs<Screen.RetroAchievements>(state.screen.value)                           // only from a level beside the page
     }

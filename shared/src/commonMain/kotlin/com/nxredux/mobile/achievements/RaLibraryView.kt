@@ -114,6 +114,25 @@ object RaLibraryView {
         return ids.size
     }
 
+    /**
+     * The latest [limit] unlocks (confirmed or pending) with a known time, newest first, over every cached game. Each
+     * achievement counts once (multi-disc sibling hashes share a set); a prefetched unlock has no time and is left out.
+     */
+    suspend fun recentUnlocks(store: RaStore, journal: RaJournal, confirmed: RaJournal, user: String, limit: Int): List<RaRecentUnlock> {
+        val pendingByHash = journal.entries(user).groupBy { it.m }
+        val confirmedByHash = confirmed.entries(user).groupBy { it.m }
+        val seen = HashSet<Int>()
+        val all = ArrayList<RaRecentUnlock>()
+        for (hash in store.list(RaPaths.GAMES).filter(RaPaths::isHash)) {
+            val rows = rowsOf(store, hash, pendingByHash[hash].orEmpty(), confirmedByHash[hash].orEmpty())
+            val timed = rows.filter { r -> r.state != RaAchievementState.LOCKED && (r.at ?: 0L) > 0L && r.id !in seen }
+            if (timed.isEmpty()) continue
+            val title = RaGamePointers.read(store, hash)?.title?.ifEmpty { null } ?: RaSetsCache.summary(store, hash)?.title.orEmpty()
+            timed.forEach { r -> seen += r.id; all += RaRecentUnlock(hash, title, r.id, r.title, r.at ?: 0L) }
+        }
+        return all.sortedByDescending { it.at }.take(limit)
+    }
+
     fun raType(server: String?): RaType? = when (server?.lowercase()) { "missable" -> RaType.MISSABLE; "progression" -> RaType.PROGRESSION; "win_condition", "win" -> RaType.WIN; else -> null }
 
     /**
