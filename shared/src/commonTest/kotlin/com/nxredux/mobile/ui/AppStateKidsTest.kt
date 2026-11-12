@@ -898,7 +898,7 @@ class AppStateKidsTest {
         val all = ContextKind.entries.map { ContextItem(it, it.name) }
         assertEquals(
             setOf(ContextKind.PLAY_FROM_START, ContextKind.NETPLAY, ContextKind.PIN, ContextKind.UNPIN, ContextKind.REMOVE_RECENT,
-                ContextKind.ACHIEVEMENTS, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.USE_TOP_SCREEN),
+                ContextKind.ACHIEVEMENTS, ContextKind.OPEN_GAMES, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.USE_TOP_SCREEN),
             ContextMenus.kidsPlayItems(all).map { it.kind }.toSet(),
         )
     }

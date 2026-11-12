@@ -16,6 +16,11 @@ class MenuTabsTest {
     private val stats = HomeStats(null, null, signedIn = false, top = null, computed = false)
     private val fresh = buildHome(null, emptyList(), emptyList(), stats, slots = 3)
 
+    @Test fun gamesSitsBetweenHomeAndConsoles() {
+        assertEquals(listOf("HOME", "GAMES", "CONSOLES", "COLLECTIONS", "TOOLS", "APPS"), MenuCategory.entries.map { it.name })
+        assertEquals("Games", MenuCategory.GAMES.label)
+    }
+
     @Test fun tabsComeInTheFixedOrderWithHomeFirst() {
         val home = buildHome(MainRow.Continue(listed("Kirby"), ResumeInfo.NONE), listOf(listed("Zelda")), emptyList(), stats, slots = 3)
         val tabs = buildMenuTabs(home, consoles = consoles, collections = listOf(MainRow.Collection("Co-op", count = 2)), tools = tools)
@@ -105,7 +110,7 @@ class MenuTabsTest {
     }
 
     @Test fun labels() {
-        assertEquals(listOf("Home", "Consoles", "Collections", "Tools", "Apps"), MenuCategory.entries.map { it.label })
+        assertEquals(listOf("Home", "Games", "Consoles", "Collections", "Tools", "Apps"), MenuCategory.entries.map { it.label })
     }
 
     // The rows skip the Continue game when it is pinned too ([buildHome] leaves it out); the others keep their order.

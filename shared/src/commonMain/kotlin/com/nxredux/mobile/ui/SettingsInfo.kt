@@ -105,7 +105,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     )
     SettingsKind.RESET_DEFAULTS -> resetText(section)
     // Layouts' group rows: no text on the row (their pages' rows say what each group holds).
-    SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
+    SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_GAMES_TAB, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER -> SettingText("")
     SettingsKind.GAME_INFO -> SettingText(
         "Game details or achievements under a game",

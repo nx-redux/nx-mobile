@@ -62,6 +62,7 @@ internal fun hiddenMenuTabs(all: List<MenuTab>, visible: List<MenuTab>): List<Me
 internal val MenuCategory.label: String
     get() = when (this) {
         MenuCategory.HOME -> "Home"
+        MenuCategory.GAMES -> "Games"
         MenuCategory.CONSOLES -> "Consoles"
         MenuCategory.COLLECTIONS -> "Collections"
         MenuCategory.TOOLS -> "Tools"

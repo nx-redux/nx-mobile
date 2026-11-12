@@ -557,7 +557,7 @@ enum class SettingsKind { PLAYER_NAME, HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, U
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
     SYSTEM_BUTTONS, SYSTEM_BUTTON_BIND,
-    LAYOUT_HOME, LAYOUT_CONSOLES, LAYOUT_COLLECTIONS, LAYOUT_TOOLS, LAYOUT_GAME_LISTS, LAYOUT_TITLE_HINTS, LAYOUT_SWITCHER, TEXT_SIZE,
+    LAYOUT_HOME, LAYOUT_GAMES_TAB, LAYOUT_CONSOLES, LAYOUT_COLLECTIONS, LAYOUT_TOOLS, LAYOUT_GAME_LISTS, LAYOUT_TITLE_HINTS, LAYOUT_SWITCHER, TEXT_SIZE,
     // A group's label and the space before it (System's General, Launcher, Developer, About, Licenses): never selected.
     SECTION, GAP,
     // System's Licenses group: a paragraph (never selected) and the row that opens the website's full list.
@@ -587,7 +587,8 @@ enum class SettingsSection(val label: String, val parent: SettingsSection? = nul
     // An import's results; Done and B go back to Saves ([AppState.leaveSubPage]), past Import saves.
     IMPORT_RESULT("Import results", IMPORT_SAVES),
     // Layouts' groups: a tab's options, the game lists', the page title's and hints', the Game Switcher's.
-    LAYOUT_HOME("Home", MAIN_MENU, SettingsKind.LAYOUT_HOME), LAYOUT_CONSOLES("Consoles", MAIN_MENU, SettingsKind.LAYOUT_CONSOLES),
+    LAYOUT_HOME("Home", MAIN_MENU, SettingsKind.LAYOUT_HOME), LAYOUT_GAMES_TAB("Games", MAIN_MENU, SettingsKind.LAYOUT_GAMES_TAB),
+    LAYOUT_CONSOLES("Consoles", MAIN_MENU, SettingsKind.LAYOUT_CONSOLES),
     LAYOUT_COLLECTIONS("Collections", MAIN_MENU, SettingsKind.LAYOUT_COLLECTIONS), LAYOUT_TOOLS("Tools", MAIN_MENU, SettingsKind.LAYOUT_TOOLS),
     LAYOUT_GAME_LISTS("Game lists", MAIN_MENU, SettingsKind.LAYOUT_GAME_LISTS), LAYOUT_TITLE_HINTS("Title and hints", MAIN_MENU, SettingsKind.LAYOUT_TITLE_HINTS),
     LAYOUT_SWITCHER("Game Switcher", MAIN_MENU, SettingsKind.LAYOUT_SWITCHER);
@@ -598,6 +599,7 @@ enum class SettingsSection(val label: String, val parent: SettingsSection? = nul
     /** A Layouts group's tab (Home, Consoles, Collections, Tools); null for the others. */
     val tab: MenuCategory? get() = when (this) {
         LAYOUT_HOME -> MenuCategory.HOME
+        LAYOUT_GAMES_TAB -> MenuCategory.GAMES
         LAYOUT_CONSOLES -> MenuCategory.CONSOLES
         LAYOUT_COLLECTIONS -> MenuCategory.COLLECTIONS
         LAYOUT_TOOLS -> MenuCategory.TOOLS
@@ -3851,7 +3853,7 @@ class AppState(
             SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
         ).filterNotNull()
         SettingsSection.MAIN_MENU -> layoutsRows()
-        SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS ->
+        SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_GAMES_TAB, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS ->
             layoutTabRows(section.tab!!)
         SettingsSection.LAYOUT_GAME_LISTS -> layoutGameListRows()
         SettingsSection.LAYOUT_TITLE_HINTS -> layoutTitleHintRows()
@@ -4069,6 +4071,7 @@ class AppState(
                 flip(tabSetting(c), show = true) { on ->
                     when (c) {
                         MenuCategory.HOME -> s.showHomeTab = on
+                        MenuCategory.GAMES -> s.showGamesTab = on
                         MenuCategory.CONSOLES -> s.showConsolesTab = on
                         MenuCategory.COLLECTIONS -> s.showCollectionsTab = on
                         MenuCategory.TOOLS -> s.showToolsTab = on
@@ -4226,7 +4229,8 @@ class AppState(
         val s = deps.settings
         val tabs = MenuCategory.entries.filter { it != MenuCategory.APPS }.map { c ->   // Kids Mode's Apps: no Layouts group
             val group = SettingsSection.entries.first { it.tab == c }
-            SettingsRow(group.opener!!, group.label, if (tabSetting(c)) menuStyleLabel(MenuStyles.styleOf(s.menuStyles, c)) else "Hidden")
+            SettingsRow(group.opener!!, group.label, if (!tabSetting(c)) "Hidden"
+                else menuStyleLabel(if (c == MenuCategory.GAMES) gameListLayout().first else MenuStyles.styleOf(s.menuStyles, c)))   // Games follows the game lists
         }
         val chrome = when {
             s.menuPageTitle && s.menuButtonHints -> "Show"
@@ -4253,6 +4257,8 @@ class AppState(
         val s = deps.settings
         fun shown(on: Boolean) = if (on) "Show" else "Hide"
         val on = tabSetting(c)
+        // The Games tab's layout is the game lists' (Layouts -> Game lists): its page has the one row.
+        if (c == MenuCategory.GAMES) return listOf(SettingsRow(SettingsKind.TAB_SHOWN, "Visible", shown(on), category = c))
         val style = MenuStyles.styleOf(s.menuStyles, c)
         val home = c == MenuCategory.HOME
         val layout = SettingsRow(SettingsKind.MENU_STYLE, "Layout", menuStyleLabel(style), category = c).takeIf { on }
@@ -4351,6 +4357,7 @@ class AppState(
     /** Layouts → [c] tab as stored: Show (true) or Hide. */
     private fun tabSetting(c: MenuCategory): Boolean = when (c) {
         MenuCategory.HOME -> deps.settings.showHomeTab
+        MenuCategory.GAMES -> deps.settings.showGamesTab
         MenuCategory.CONSOLES -> deps.settings.showConsolesTab
         MenuCategory.COLLECTIONS -> deps.settings.showCollectionsTab
         MenuCategory.TOOLS -> deps.settings.showToolsTab
@@ -5137,7 +5144,7 @@ class AppState(
                     SettingsKind.ADD_EXTRA -> pickExtra()
                     SettingsKind.EXTRA -> settingsUi.refreshSettings(confirm = row.extra)
                     SettingsKind.RESCAN -> rescanFromSettings()
-                    SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
+                    SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_GAMES_TAB, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
                     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER ->
                         SettingsSection.entries.firstOrNull { it.opener == row.kind }?.let { settingsUi.openSubPage(s, it) }
                     SettingsKind.DEFAULTS -> settingsUi.openSubPage(s, SettingsSection.DEFAULT_EMULATORS)

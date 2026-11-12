@@ -214,7 +214,7 @@ class AppStateTest {
         override var sgdbApiKey: String? = null
         override var tgdbApiKey: String? = null
         override var artReplaceExisting = false
-        override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = AccentPreset.DEFAULT
+        override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showGamesTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = AccentPreset.DEFAULT
         override var secondaryAccent: SecondaryAccent = SecondaryAccent.DEFAULT
         override var switcherLayout = com.nxredux.mobile.settings.SwitcherLayout.DEFAULT
         override var optionTextSize = com.nxredux.mobile.settings.OptionTextSize.DEFAULT
@@ -5772,7 +5772,7 @@ class AppStateTest {
         state.load()
         fun page(section: SettingsSection) = state.openLayoutsPage(section).map { it.label }
         assertEquals(
-            listOf("Home", "Consoles", "Collections", "Tools", "Game lists", "Title and hints", "Game Switcher", "Extra info", "Game info", "Reset to defaults"),
+            listOf("Home", "Games", "Consoles", "Collections", "Tools", "Game lists", "Title and hints", "Game Switcher", "Extra info", "Game info", "Reset to defaults"),
             page(SettingsSection.MAIN_MENU),
         )
         assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Most played shelf", "Stats", "Layout"), page(SettingsSection.LAYOUT_HOME))   // Home never has an orientation row
@@ -5907,18 +5907,18 @@ class AppStateTest {
         state.openSettings(SettingsSection.MAIN_MENU)
         val rows = assertIs<Screen.Settings>(state.screen.value).rows
         assertEquals(
-            listOf("Home", "Consoles", "Collections", "Tools", "Game lists", "Title and hints", "Game Switcher", "Extra info", "Game info", RESET_DEFAULTS_LABEL),
+            listOf("Home", "Games", "Consoles", "Collections", "Tools", "Game lists", "Title and hints", "Game Switcher", "Extra info", "Game info", RESET_DEFAULTS_LABEL),
             rows.map { it.label },
         )
         assertEquals("Grid", rows[0].secondary)                              // a shown tab: its layout
-        assertEquals(menuStyleLabel(settings.gameListStyle), rows[4].secondary)
-        assertEquals("Show", rows[5].secondary)                              // the title and the hints both shown
-        assertEquals(settings.switcherLayout.label, rows[6].secondary)
+        assertEquals(menuStyleLabel(settings.gameListStyle), rows[5].secondary)
+        assertEquals("Show", rows[6].secondary)                              // the title and the hints both shown
+        assertEquals(settings.switcherLayout.label, rows[7].secondary)
         settings.showToolsTab = false; settings.menuButtonHints = false
         state.openSettings(SettingsSection.MAIN_MENU)
         val after = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals("Hidden", after[3].secondary)
-        assertEquals("Title only", after[5].secondary)
+        assertEquals("Hidden", after[4].secondary)
+        assertEquals("Title only", after[6].secondary)
     }
 
     @Test fun layouts_home_opens_its_page_with_the_picture_following_the_layout() = runTest {
@@ -5996,14 +5996,14 @@ class AppStateTest {
         val state = state(MemorySettings(ContentRef("Home")))
         state.load()
         state.openSettings(SettingsSection.MAIN_MENU)
-        state.select(2); state.onButton(NxButton.A)                          // Collections
+        state.select(3); state.onButton(NxButton.A)                          // Collections
         val page = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsSection.LAYOUT_COLLECTIONS, page.section)
         assertEquals(MenuCategory.COLLECTIONS, assertIs<LayoutShot.Tab>(page.shot).category)
         assertEquals(listOf("Visible", "Layout"), page.rows.map { it.label }.take(2))
         state.onButton(NxButton.B)
         assertEquals(SettingsSection.MAIN_MENU, assertIs<Screen.Settings>(state.screen.value).section)
-        assertEquals(2, state.selection.value.index)
+        assertEquals(3, state.selection.value.index)
     }
 
     @Test fun layouts_a_hidden_tab_shows_only_its_tab_row_and_no_picture() = runTest {
@@ -6172,7 +6172,7 @@ class AppStateTest {
         assertEquals(SettingsSection.MAIN_MENU, page.section)
         assertEquals("Layouts", page.section.label)   // the page's title
         assertEquals(
-            listOf("Home" to "Grid", "Consoles" to "List", "Collections" to "List", "Tools" to "List", "Game lists" to "List", "Title and hints" to "Show",
+            listOf("Home" to "Grid", "Games" to "List", "Consoles" to "List", "Collections" to "List", "Tools" to "List", "Game lists" to "List", "Title and hints" to "Show",
                 "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Details", "Reset to defaults" to null),
             page.rows.map { it.label to it.secondary },
         )
@@ -8082,6 +8082,7 @@ class AppStateTest {
         when (tab.category) {
             MenuCategory.HOME -> tab.rows.filterIsInstance<MainRow.Pin>().map { "pin:${it.entry.game.shownName}" }
             MenuCategory.COLLECTIONS -> listOf("collections")
+            MenuCategory.GAMES -> listOf("games")
             MenuCategory.TOOLS -> listOf("tools")
             MenuCategory.APPS -> listOf("apps")
             MenuCategory.CONSOLES -> tab.rows.map { (it as MainRow.System).system.tag }
@@ -10182,20 +10183,33 @@ class AppStateTest {
         state.openSettings(SettingsSection.MAIN_MENU)
         // No Pinned row; Home first. Home, Collections and Tools are unset (their defaults: Minimal, Minimal, and Grid).
         assertEquals(
-            listOf("Home" to "Minimal", "Consoles" to "Grid", "Collections" to "Minimal", "Tools" to "Grid", "Game lists" to "List", "Title and hints" to "Show",
+            listOf("Home" to "Minimal", "Games" to "List", "Consoles" to "Grid", "Collections" to "Minimal", "Tools" to "Grid", "Game lists" to "List", "Title and hints" to "Show",
                 "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Details", "Reset to defaults" to null),
             state.layoutsRows().map { it.label to it.secondary },
         )
         // Every group's rows, in Layouts' order, each page ending with Done.
-        val groups = listOf(SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS,
+        val groups = listOf(SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_GAMES_TAB, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS,
             SettingsSection.LAYOUT_GAME_LISTS, SettingsSection.LAYOUT_TITLE_HINTS, SettingsSection.LAYOUT_SWITCHER)
         val rows = groups.flatMap { g -> state.openLayoutsPage(g) }
-        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Most played shelf", "Stats", "Layout", "Visible", "Layout", "Visible", "Layout", "Visible", "Layout", "List art", "Backdrop art", "Layout options", "Layout", "Page title", "Button hints", "Layout"), rows.map { it.label })
+        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Most played shelf", "Stats", "Layout", "Visible", "Visible", "Layout", "Visible", "Layout", "Visible", "Layout", "List art", "Backdrop art", "Layout options", "Layout", "Page title", "Button hints", "Layout"), rows.map { it.label })
         val styles = rows.filter { it.kind == SettingsKind.MENU_STYLE }
         assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS), styles.map { it.category })
         assertTrue(styles.all { it.enabled })
         assertEquals(1, rows.count { it.kind == SettingsKind.GAME_LIST_STYLE })
-        assertEquals(listOf("Show", "Show", "Show", "Show", "Show", "Minimal", "Show", "Grid", "Show", "Minimal", "Show", "Grid", "Screenshot", "3D box art", "Show", "List", "Show", "Show", "Full screen"), rows.map { it.secondary })
+        assertEquals(listOf("Show", "Show", "Show", "Show", "Show", "Minimal", "Show", "Show", "Grid", "Show", "Minimal", "Show", "Grid", "Screenshot", "3D box art", "Show", "List", "Show", "Show", "Full screen"), rows.map { it.secondary })
+    }
+
+    @Test fun theGamesTabsLayoutsPageHasOnlyVisibleAndTheTabShowsByDefault() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { menuStyles = emptyMap() }
+        val state = state(settings)
+        state.load()
+        assertTrue(settings.showGamesTab)   // a fake that does not override it reads the default
+        assertEquals(listOf("Visible"), state.openLayoutsPage(SettingsSection.LAYOUT_GAMES_TAB).map { it.label })
+        assertEquals(MenuCategory.GAMES, SettingsSection.LAYOUT_GAMES_TAB.tab)
+        state.selectLayoutsRow(SettingsKind.TAB_SHOWN, MenuCategory.GAMES); state.onButton(NxButton.A)
+        assertFalse(settings.showGamesTab)
+        assertEquals(listOf("Visible"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })
+        assertTrue(settings.menuStyles.isEmpty())
     }
 
     @Test fun layouts_page_defaults_to_carousel_tools_grid_and_cycles_four_main_menu_styles() = runTest {
@@ -10209,7 +10223,7 @@ class AppStateTest {
         assertEquals(listOf("Visible", "Layout"), state.openLayoutsPage(SettingsSection.LAYOUT_TOOLS).map { it.label })
         assertEquals(listOf("List art", "Backdrop art", "Layout options", "Layout"), state.openLayoutsPage(SettingsSection.LAYOUT_GAME_LISTS).map { it.label })
         // Layouts' group rows carry each layout: Tools' own default is Grid, Home's and Collections' Minimal; the fixture's game list is List.
-        assertEquals(listOf("Minimal", "Carousel", "Minimal", "Grid", "List"), state.openLayoutsPage(SettingsSection.MAIN_MENU).take(5).map { it.secondary })
+        assertEquals(listOf("Minimal", "List", "Carousel", "Minimal", "Grid"), state.openLayoutsPage(SettingsSection.MAIN_MENU).take(5).map { it.secondary })
         state.selectLayoutsRow(SettingsKind.MENU_STYLE, MenuCategory.CONSOLES); state.onButton(NxButton.RIGHT)   // Consoles: Carousel to Minimal, no Backdrop
         assertEquals(MenuStyle.MINIMAL, settings.menuStyles[MenuCategory.CONSOLES])
         state.onButton(NxButton.RIGHT)                                    // and Minimal wraps to List
@@ -10427,6 +10441,7 @@ class AppStateTest {
     private fun MemorySettings.setTabShown(c: MenuCategory, shown: Boolean) {
         when (c) {
             MenuCategory.HOME -> showHomeTab = shown
+            MenuCategory.GAMES -> showGamesTab = shown
             MenuCategory.CONSOLES -> showConsolesTab = shown
             MenuCategory.COLLECTIONS -> showCollectionsTab = shown
             MenuCategory.TOOLS -> showToolsTab = shown
@@ -10487,7 +10502,7 @@ class AppStateTest {
         fun page(section: SettingsSection) = state.openLayoutsPage(section).map { it.label to it.secondary }
         assertEquals(
             listOf(
-                "Home" to "Minimal", "Consoles" to "Carousel", "Collections" to "Minimal", "Tools" to "Grid", "Game lists" to "Carousel", "Title and hints" to "Show",
+                "Home" to "Minimal", "Games" to "Carousel", "Consoles" to "Carousel", "Collections" to "Minimal", "Tools" to "Grid", "Game lists" to "Carousel", "Title and hints" to "Show",
                 "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Details", "Reset to defaults" to null,
             ),
             page(SettingsSection.MAIN_MENU),

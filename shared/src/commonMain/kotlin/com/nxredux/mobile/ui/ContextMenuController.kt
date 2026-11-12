@@ -393,7 +393,7 @@ internal class ContextMenuController(
             ContextKind.RENAME_COLLECTION -> { m.collection?.let { setMenu(m.copy(prompt = MenuPrompt.RenameCollection(it), promptFocus = -1)) } ?: closeContextMenu(); return }
             // A confirm has no field: its focus starts on Delete.
             ContextKind.DELETE_COLLECTION -> { m.collection?.let { setMenu(m.copy(prompt = MenuPrompt.DeleteCollection(it), promptFocus = -1)) } ?: closeContextMenu(); return }
-            ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS -> {
+            ContextKind.OPEN_GAMES, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS -> {
                 closeContextMenu()
                 ContextMenus.tabOf(kind)?.let(host::openHiddenTab)
                 return
@@ -404,7 +404,7 @@ internal class ContextMenuController(
         }
         when (kind) {
             ContextKind.PIN_TOOL, ContextKind.UNPIN_TOOL, ContextKind.ADD_TO_TOOLS, ContextKind.REMOVE_FROM_TOOLS,
-            ContextKind.RENAME_COLLECTION, ContextKind.DELETE_COLLECTION, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS, ContextKind.ACHIEVEMENTS, ContextKind.USE_TOP_SCREEN -> Unit   // handled above
+            ContextKind.RENAME_COLLECTION, ContextKind.DELETE_COLLECTION, ContextKind.OPEN_GAMES, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS, ContextKind.ACHIEVEMENTS, ContextKind.USE_TOP_SCREEN -> Unit   // handled above
             ContextKind.EMULATOR -> consoleOf(m)?.let { ContextMenus.emulatorMenu(it) }?.let { setMenu(m.copy(sub = it)) } ?: closeContextMenu()
             ContextKind.CONSOLE -> ContextMenus.consoleMenu(m.game.game.fileName)?.let { setMenu(m.copy(sub = it)) } ?: run {
                 closeContextMenu()
@@ -576,7 +576,7 @@ internal class ContextMenuController(
             ContextKind.REMOVE_FROM_COLLECTION, ContextKind.REMOVE_RECENT, ContextKind.GAME_SETTINGS, ContextKind.FETCH_ART, ContextKind.CHANGE_ART,
             ContextKind.PIN_TOOL, ContextKind.UNPIN_TOOL, ContextKind.ADD_TO_TOOLS, ContextKind.REMOVE_FROM_TOOLS,
             ContextKind.RENAME_COLLECTION, ContextKind.DELETE_COLLECTION, ContextKind.NETPLAY, ContextKind.PLAY_FROM_START,
-            ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS, ContextKind.ACHIEVEMENTS, ContextKind.USE_TOP_SCREEN -> closeContextMenu()
+            ContextKind.OPEN_GAMES, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS, ContextKind.ACHIEVEMENTS, ContextKind.USE_TOP_SCREEN -> closeContextMenu()
         }
     }
 

@@ -387,7 +387,7 @@ internal class SettingsController(
             s.gameListStyle = MenuStyles.DEFAULT_GAME_LIST_STYLE
             s.gameListOrientation = MenuStyles.DEFAULT_ORIENTATION
             s.gameListVerticalAlignment = VerticalListAlignment.DEFAULT
-            s.showHomeTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showConsolesTab = MenuStyles.DEFAULT_TAB_SHOWN
+            s.showHomeTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showConsolesTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showGamesTab = MenuStyles.DEFAULT_TAB_SHOWN
             s.showCollectionsTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showToolsTab = MenuStyles.DEFAULT_TAB_SHOWN
             s.showNewShelf = true; s.showNotStartedShelf = true; s.showMostPlayedShelf = true
             s.showNetplayHint = true

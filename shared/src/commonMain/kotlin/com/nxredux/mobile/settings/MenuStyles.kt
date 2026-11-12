@@ -33,6 +33,7 @@ object MenuStyles {
         MenuCategory.TOOLS, MenuCategory.APPS -> MenuStyle.GRID
         MenuCategory.HOME, MenuCategory.COLLECTIONS -> MenuStyle.MINIMAL
         MenuCategory.CONSOLES -> MenuStyle.CAROUSEL
+        MenuCategory.GAMES -> DEFAULT_GAME_LIST_STYLE   // never the tab's real style: it follows the game lists
     }
 
     /** [category]'s style: its [defaultStyleOf] when it has none stored. */

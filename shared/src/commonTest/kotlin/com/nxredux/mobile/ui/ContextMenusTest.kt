@@ -254,6 +254,14 @@ class ContextMenusTest {
         assertEquals(listOf(ContextKind.UNPIN), ContextMenus.pinRowItems().map { it.kind })
     }
 
+    @Test fun aHiddenGamesTabIsOfferedFirst() {
+        assertEquals(
+            listOf(ContextItem(ContextKind.OPEN_GAMES, "Games"), ContextItem(ContextKind.OPEN_TOOLS, "Tools")),
+            ContextMenus.hiddenTabItems(listOf(MenuCategory.TOOLS, MenuCategory.GAMES)),
+        )
+        assertEquals(MenuCategory.GAMES, ContextMenus.tabOf(ContextKind.OPEN_GAMES))
+    }
+
     @Test fun hiddenTabItemsComeInTheTabsOrder() {
         assertEquals(
             listOf(ContextItem(ContextKind.OPEN_CONSOLES, "Consoles"), ContextItem(ContextKind.OPEN_COLLECTIONS, "Collections"), ContextItem(ContextKind.OPEN_TOOLS, "Tools")),

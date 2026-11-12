@@ -155,7 +155,7 @@ internal fun tabPicture(
 ): DrawableResource =
     if (style == MenuStyle.MINIMAL) minimalTabPicture(category, stats)
     else if (!vertical || style != MenuStyle.CAROUSEL) horizontalTabPicture(category, style, stats, art) else when (category) {
-        MenuCategory.CONSOLES -> byArt(
+        MenuCategory.CONSOLES, MenuCategory.GAMES -> byArt(
             art, Res.drawable.onboarding_tab_consoles_carousel_vertical, Res.drawable.onboarding_tab_consoles_carousel_vertical_background,
             Res.drawable.onboarding_tab_consoles_carousel_vertical_none,
         )
@@ -167,7 +167,7 @@ internal fun tabPicture(
 /** A Minimal tab: its names alone (no art, so no orientation or Consoles background); Home with its stats strip or not. */
 private fun minimalTabPicture(category: MenuCategory, stats: Boolean): DrawableResource = when (category) {
     MenuCategory.HOME -> if (stats) Res.drawable.onboarding_tab_home_minimal else Res.drawable.onboarding_tab_home_minimal_nostats
-    MenuCategory.CONSOLES -> Res.drawable.onboarding_tab_consoles_minimal
+    MenuCategory.CONSOLES, MenuCategory.GAMES -> Res.drawable.onboarding_tab_consoles_minimal
     MenuCategory.COLLECTIONS -> Res.drawable.onboarding_tab_collections_minimal
     MenuCategory.TOOLS, MenuCategory.APPS -> Res.drawable.onboarding_tab_tools_minimal
 }
@@ -175,7 +175,7 @@ private fun minimalTabPicture(category: MenuCategory, stats: Boolean): DrawableR
 private fun horizontalTabPicture(category: MenuCategory, style: MenuStyle, stats: Boolean, art: ConsoleArt): DrawableResource = when (category) {
     MenuCategory.HOME -> if (stats) pick(style, Res.drawable.onboarding_tab_home_list, Res.drawable.onboarding_tab_home_grid, Res.drawable.onboarding_tab_home_carousel)
         else pick(style, Res.drawable.onboarding_tab_home_list_nostats, Res.drawable.onboarding_tab_home_grid_nostats, Res.drawable.onboarding_tab_home_carousel_nostats)
-    MenuCategory.CONSOLES -> pick(
+    MenuCategory.CONSOLES, MenuCategory.GAMES -> pick(
         style,
         byArt(art, Res.drawable.onboarding_tab_consoles_list, Res.drawable.onboarding_tab_consoles_list_background, Res.drawable.onboarding_tab_consoles_list_none),
         Res.drawable.onboarding_tab_consoles_grid,   // the Grid has no controllers or background

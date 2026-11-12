@@ -496,7 +496,7 @@ internal data class MainMenuListBand(val shade: Boolean, val info: Boolean)
 /** The List band for [category]'s tab ([MainMenuListBand]): none on Consoles, Collections and Tools, shaded with its info elsewhere. */
 internal fun mainMenuListBand(category: MenuCategory?): MainMenuListBand = when (category) {
     MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS, MenuCategory.APPS -> MainMenuListBand(shade = false, info = false)
-    MenuCategory.HOME, null -> MainMenuListBand(shade = true, info = true)
+    MenuCategory.HOME, MenuCategory.GAMES, null -> MainMenuListBand(shade = true, info = true)
 }
 
 /** The lines of Home's stats header a main menu Grid's title takes: the name, then the count. */
