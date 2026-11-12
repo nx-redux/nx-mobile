@@ -20,6 +20,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +58,16 @@ import kotlinx.coroutines.flow.Flow
  */
 internal val nxKeyboardTop = mutableStateOf<Float?>(null)
 
+/**
+ * A prompt's box has its buttons on screen. False on a short screen under the keyboard, where the box is its fields
+ * alone: the keyboard's Done and the pad's START and B answer it, and the pad's highlight has no button to go to
+ * ([com.nxredux.mobile.ui.keyboard.TextEntryController]).
+ */
+internal val nxPromptButtonsShown = mutableStateOf(true)
+
+/** Inside a modal: it is in that short room, so its content drops its labels for words inside the fields. */
+val LocalModalTight = compositionLocalOf { false }
+
 @Composable
 fun NxModal(
     caption: String?, kind: ModalKind, onButton: (NxButton) -> Unit,
@@ -89,6 +102,10 @@ fun NxModal(
     var rootHeight by remember { mutableFloatStateOf(0f) }
     val keyboardTop = listOfNotNull(nxKeyboardTop.value, if (padVisible && imeBottom > 0 && rootHeight > 0f) rootHeight - imeBottom else null).minOrNull()
     val covered = if (keyboardTop != null) with(density) { (bottom - keyboardTop).coerceAtLeast(0f).toDp() } else 0.dp
+    // A short screen under a keyboard: less than a prompt's own height is left, so the box is its fields alone, each
+    // named inside itself. The keyboard's Done confirms; B, START or a tap outside answer it too.
+    val tight = keyboardTop != null && with(density) { keyboardTop.toDp() } < TIGHT_ROOM
+    DisposableEffect(tight) { nxPromptButtonsShown.value = !tight; onDispose { nxPromptButtonsShown.value = true } }
     Box(
         Modifier.fillMaxSize().then(if (!padVisible) Modifier.imePadding() else Modifier).background(LocalNxColors.current.scrimModal)
             .onGloballyPositioned { c -> bottom = c.positionInRoot().y + c.size.height; rootHeight = c.findRootCoordinates().size.height.toFloat() }
@@ -99,28 +116,31 @@ fun NxModal(
         Column(
             // 24dp from every screen edge: a tall card (long notes in landscape) stops short of the top and bottom too.
             // Above a keyboard the space is short: 8dp there, so a prompt's field and buttons fit without scrolling.
-            Modifier.padding(horizontal = 24.dp, vertical = if (covered > 0.dp) 8.dp else 24.dp).widthIn(max = maxWidth).fillMaxWidth().background(LocalNxColors.current.modalPanel, RoundedCornerShape(24.dp))
+            Modifier.padding(horizontal = 24.dp, vertical = if (tight) 4.dp else if (covered > 0.dp) 8.dp else 24.dp).widthIn(max = maxWidth).fillMaxWidth().background(LocalNxColors.current.modalPanel, RoundedCornerShape(24.dp))
                 .pointerInput(Unit) { detectTapGestures { } }   // taps inside stay inside
-                .padding(8.dp),
+                .padding(if (tight) 6.dp else 8.dp),
         ) {
             // The card: its text scrolls; the buttons under it on the panel stay pinned, so a landscape keyboard leaving
             // ~125dp still shows them.
-            Column(Modifier.weight(1f, fill = false).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(LocalNxColors.current.modalCard).padding(16.dp)) {
+            Column(Modifier.weight(1f, fill = false).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(LocalNxColors.current.modalCard).padding(if (tight) 10.dp else 16.dp)) {
                 Column(Modifier.weight(1f, fill = false).fillMaxWidth().nxScrollFade(scroll).verticalScroll(scroll)) {
-                    if (caption != null) {
+                    if (caption != null && !tight) {
                         // The title, brighter than anything the card labels under it.
                         Text(caption, color = colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = nxModalText(), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Spacer(Modifier.height(8.dp))
                     }
-                    content()
+                    CompositionLocalProvider(LocalModalTight provides tight) { content() }
                 }
             }
             // The actions, on the panel under the card: what the card says or sets up, these do.
-            NxModalFooter(footer, onFooter, buttonFocus)
+            if (!tight) NxModalFooter(footer, onFooter, buttonFocus)
             if (below != null) below()
         }
     }
 }
+
+/** The room over a keyboard under which a prompt's box no longer fits as it is: a one-field prompt's own height. */
+private val TIGHT_ROOM = 200.dp
 
 /** How far one d-pad press scrolls a modal's card: about three lines of dialog text. */
 private val SCROLL_STEP = 72.dp

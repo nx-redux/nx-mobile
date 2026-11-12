@@ -44,7 +44,10 @@ fun NxTextPrompt(title: String, value: String, onValueChange: (String) -> Unit, 
             caption = title, kind = ModalKind.PROMPT, confirmLabel = keyboard.confirmLabel, onButton = { keyboard.answer(if (it == NxButton.B) NxButton.B else NxButton.A) },
             buttonFocus = entry.buttonFocus(),
         ) {
-            NxEntryField(entry.fields[0].value, entry.fields[0].password, entry.cursor, entry.focus == EntryFocus.Field, onTap = { keyboard.tapField(0) })
+            NxEntryField(
+                entry.fields[0].value, entry.fields[0].password, entry.cursor, entry.focus == EntryFocus.Field, onTap = { keyboard.tapField(0) },
+                placeholder = title.takeIf { LocalModalTight.current },
+            )
         }
         return
     }

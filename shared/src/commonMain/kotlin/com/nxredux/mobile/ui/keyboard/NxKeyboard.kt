@@ -32,9 +32,12 @@ import com.nxredux.mobile.ui.AppState
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxFont
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxHintBar
 import com.nxredux.mobile.ui.nx.nxTextScale
+import com.nxredux.mobile.ui.nx.touchOnly
 
 /**
  * What the buttons do on the keyboard right now, for its hint row: on a key, typing and the shortcuts; in the field,
@@ -65,6 +68,16 @@ private fun label(key: Key, entry: TextEntry): String = when (key) {
     Key.Done -> "Done"
 }
 
+/** A key's height where the screen has the room. */
+private val KEY_HEIGHT = 40.dp
+/** The least a key shrinks to on a short screen: still a fingertip's target on a small handheld. */
+private val KEY_MIN_HEIGHT = 22.dp
+/** The share of the window's height the keyboard (keys and hint row) may take. */
+private const val KEYBOARD_MAX_SHARE = 0.58f
+/** The hint row's height under the keys, and the room over them. */
+private val KEYBOARD_HINTS_ROOM = 40.dp
+private val KEYBOARD_TOP = 8.dp
+
 /**
  * The NX keyboard: [entry]'s page of keys, the pad's highlight lit while it is on a key, a tap moving it there and typing ([onKey]);
  * its hint row under the keys, a tapped hint sent as its button ([onHint]).
@@ -74,10 +87,18 @@ fun NxKeyboard(entry: TextEntry, onKey: (KeyPos) -> Unit, onHint: (NxButton) -> 
     val colors = LocalNxColors.current
     val rows = NxKeys.rows(entry.page, entry.twoFields)
     val lit = (entry.focus as? EntryFocus.Keys)?.at
-    val keyHeight = 40.dp * nxTextScale()
+    val gap = 6.dp
+    // A short screen: the keys give way, so the prompt's box above them and the hint row under them both stay in sight.
+    val window = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
+    // With no pad there is no hint row under the keys: they keep the same room below as above.
+    val under = if (touchOnly()) KEYBOARD_TOP else KEYBOARD_HINTS_ROOM * nxTextScale()
+    val keyHeight = (KEY_HEIGHT * nxTextScale()).let { full ->
+        if (window <= 0.dp) full
+        else ((window * KEYBOARD_MAX_SHARE - under - KEYBOARD_TOP - gap * (rows.size - 1)) / rows.size).coerceIn(KEY_MIN_HEIGHT, full)
+    }
     val haptics = LocalHapticFeedback.current
-    Column(modifier.fillMaxWidth().background(colors.modalPanel).navigationBarsPadding().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier.fillMaxWidth().background(colors.modalPanel).navigationBarsPadding().padding(top = KEYBOARD_TOP), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(horizontal = 8.dp).padding(bottom = if (touchOnly()) KEYBOARD_TOP else 0.dp), verticalArrangement = Arrangement.spacedBy(gap)) {
             rows.forEachIndexed { r, row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     row.forEachIndexed { c, key ->

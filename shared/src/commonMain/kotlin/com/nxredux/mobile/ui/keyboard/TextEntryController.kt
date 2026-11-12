@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui.keyboard
 
+import com.nxredux.mobile.ui.nx.nxPromptButtonsShown
 import com.nxredux.mobile.ui.nx.NxButton
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,7 +37,10 @@ internal class TextEntryController(private val spec: () -> PromptSpec?, private 
     fun press(button: NxButton, repeat: Boolean = false): NxButton? {
         sync()
         val e = _entry.value ?: return button
-        return apply(e.press(button, repeat))
+        val step = e.press(button, repeat)
+        // The box shows no buttons (a short screen): the highlight stays where it is rather than go onto one unseen.
+        if (step.entry.focus is EntryFocus.Button && !nxPromptButtonsShown.value) return null
+        return apply(step)
     }
 
     /** A tap on the key at [at]; the button the prompt hears, as [press]. */
