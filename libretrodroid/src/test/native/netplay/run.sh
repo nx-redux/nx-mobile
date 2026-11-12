@@ -4,7 +4,7 @@
 # Logs and failed-check details go to out/<test>.log, shown only on failure.
 cd "$(dirname "$0")"
 status=0
-for t in test_tcp test_engine test_link test_ndl; do
+for t in test_tcp test_engine test_link test_ndl test_psl; do
 	if ./out/$t 2> out/$t.log; then
 		echo "$t: ALL PASS"
 	else
