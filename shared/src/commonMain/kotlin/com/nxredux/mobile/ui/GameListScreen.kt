@@ -185,14 +185,14 @@ fun GameListScreen(
 }
 
 /**
- * A game list's hints, in order: [jump] (the Games tab: L2 / R2 jump by letter) first, then MENU Options ([menuAvailable]),
+ * A game list's hints, in order: [jump] (the Games tab: L2 / R2 jump by letter, hinted on R2) first, then MENU Options ([menuAvailable]),
  * X Achievements ([achievements]), Y Netplay ([netplay]: the hint shown and the game has it), and A [openLabel] or
  * Resume ([resume]) when the highlighted game can be opened ([canOpen]).
  */
 internal fun gameListHints(
     menuAvailable: Boolean, achievements: Boolean, netplay: Boolean, canOpen: Boolean, resume: Boolean, openLabel: String, jump: Boolean,
 ): List<Hint> = buildList {
-    if (jump) add(Hint(NxButton.L2, "Jump"))
+    if (jump) add(Hint(NxButton.R2, "Jump"))   // R2: a tap jumps to the next letter (L2's previous does nothing at the top)
     // No B Back: B still leaves, the bar keeps its room for what the game offers.
     if (menuAvailable) add(Hint(NxButton.MENU, "Options"))
     if (achievements) add(Hint(NxButton.X, "Achievements"))   // the panel (no touch stand-in: the trophy icon is one)

@@ -5719,7 +5719,7 @@ class AppState(
             override fun openArtPanel(entry: Listed, fetchFirst: Boolean) = this@AppState.openArtPanel(entry, fetchFirst)
             override fun netplayOffered(entry: Listed): Boolean = this@AppState.netplay?.offers(entry) == true
             override fun openNetplay(entry: Listed) = this@AppState.openNetplay(entry)
-            override val netplayInMenu: Boolean get() = !launcherChrome().netplayHint || _screen.value is Screen.Systems   // the main menu has no hint bar
+            override val netplayInMenu: Boolean get() = !launcherChrome().netplayHint || _screen.value.isMainMenu   // the main menu (the Games tab too) has no hint bar
             override val achievementsInMenu: Boolean get() = hasAchievements && !deps.settings.gameListAchievementsPanel
             override fun openAchievements() = ra.openRaPanel()
             override suspend fun canResume(entry: Listed): Boolean = deps.userData.resumeInfo(entry.system.tag, entry.game.fileName).canResume
@@ -6201,7 +6201,7 @@ class AppState(
             is Screen.FilePicker -> s.prompt?.let { one("folder", "Folder name", it, ::filePickerDraft) }
             is Screen.Settings -> s.nameDraft?.let { one("player-name", "Player name", it, ::playerNameDraft) }
             is Screen.Systems -> s.search?.let { one("search", "Search", it, ::searchDraft, "Search") } ?: menuPromptSpec(s.menu)
-            is Screen.Games -> s.search?.let { one("list-search", "Search", it, ::searchDraft, "Search") } ?: menuPromptSpec(s.menu)
+            is Screen.Games -> s.search?.let { one(if (s.isTab) "search" else "list-search", "Search", it, ::searchDraft, "Search") } ?: menuPromptSpec(s.menu)   // the tab's is the global search
             else -> menuPromptSpec(s.contextMenu)
         }
     }

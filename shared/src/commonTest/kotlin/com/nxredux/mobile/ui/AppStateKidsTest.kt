@@ -203,7 +203,15 @@ class AppStateKidsTest {
         val settings = MemorySettings()
         val kids = KidsController(settings, Platform(SAT, 10 * 60))
         assertIs<KidsMode.Open>(kids.mode.value)
-        val st = state(settings, kids)
+        val roms = FakeRomsSource(
+            dirs = mapOf(
+                "Home" to listOf("Roms"),
+                "Home/Roms" to listOf("Game Boy (GB)", "Game Boy Advance (GBA)"),
+                "Home/Roms/Game Boy (GB)" to listOf("Tetris.gb", "Alpha.gb"),
+                "Home/Roms/Game Boy Advance (GBA)" to listOf("Mario.gba"),
+            ),
+        )
+        val st = state(settings, kids, roms = roms)
         st.load()
         val tabs = tabsOf(st)
         assertTrue(MenuCategory.GAMES in tabs)
@@ -213,13 +221,17 @@ class AppStateKidsTest {
         st.selectTab(tabs.indexOf(MenuCategory.GAMES))
         val games = assertIs<Screen.Games>(st.screen.value)
         assertEquals(ListSource.AllGames, games.source)
-        assertTrue(games.entries.isNotEmpty())
+        assertEquals(listOf("Alpha", "Mario", "Tetris"), games.entries.map { it.game.shownName })   // every playable game, both consoles
     }
 
-    /** Locked: the Kids tiles screen, not the menu, so no tab row and no Games tab. */
+    /** Locked: the Kids tiles screen, not the menu: neither a tab tap nor MENU's hidden-tab item reaches the Games tab. */
     @Test fun kids_locked_shows_no_games_tab() = runTest {
         val (st) = lockedState()
+        st.selectTab(1)                                               // Games' place in the tab row
         assertSame(Screen.KidsHome, st.screen.value)
+        val (hidden) = lockedState(MemorySettings().apply { showGamesTab = false })
+        hidden.openHiddenTab(MenuCategory.GAMES)                      // MENU's "Games" item, with the tab hidden
+        assertSame(Screen.KidsHome, hidden.screen.value)
     }
 
     @Test fun parentShowsTools() = runTest {

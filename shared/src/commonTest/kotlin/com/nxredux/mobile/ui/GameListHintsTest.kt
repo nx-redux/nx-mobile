@@ -24,11 +24,12 @@ class GameListHintsTest {
         assertEquals(listOf(Hint(NxButton.MENU, "Options")), hints(achievements = false, netplay = false, canOpen = false))
     }
 
+    // Jump is on R2 (next letter), so a tap on it moves forward even at the top of the list; the bar puts R2 last, in pad order.
     @Test fun theGamesTabLeadsWithJump() {
         val tab = hints(jump = true)
-        assertEquals(Hint(NxButton.L2, "Jump"), tab.first())
+        assertEquals(Hint(NxButton.R2, "Jump"), tab.first())
         assertEquals(hints(), tab.drop(1))
-        assertEquals(listOf(Hint(NxButton.L2, "Jump")), hints(menuAvailable = false, achievements = false, netplay = false, canOpen = false, jump = true))
+        assertEquals(listOf(Hint(NxButton.R2, "Jump")), hints(menuAvailable = false, achievements = false, netplay = false, canOpen = false, jump = true))
     }
 
     @Test fun theGamesTabsBottomRowIsTheMenusTitleWhenPushedOrAlone() {

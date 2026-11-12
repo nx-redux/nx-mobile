@@ -1706,6 +1706,28 @@ class AppStateTest {
         assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu { showNetplayHint = false })
     }
 
+    // The Games tab is the main menu too and has no hint bar: Netplay leads its game's menu, once, whatever the hints.
+    @Test fun netplay_leads_the_games_tabs_game_menu_whatever_the_hints() = runTest {
+        val src = FakeRomsSource(
+            dirs = mapOf("Home" to listOf("Roms"), "Home/Roms" to listOf("Super Nintendo (SFC)"), "Home/Roms/Super Nintendo (SFC)" to listOf("Super Mario Kart (USA).sfc")),
+        )
+        suspend fun tabMenu(configure: MemorySettings.() -> Unit): List<ContextKind> {
+            val state = AppState(
+                AppDeps(MemorySettings(ContentRef("Home")).apply(configure), src, RecordingRunner(), NoopPicker(), NoUserData, compute = UnconfinedTestDispatcher(testScheduler), netplay = com.nxredux.mobile.netplay.FakeNetplayPlatform()),
+                CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
+            )
+            state.load(); advanceUntilIdle()
+            state.selectTab(1); state.gamesTab()
+            state.onButton(NxButton.MENU)
+            return menuKinds(state)
+        }
+        for (configure in listOf<MemorySettings.() -> Unit>({ menuButtonHints = true }, { menuButtonHints = false }, { showNetplayHint = false })) {
+            val kinds = tabMenu(configure)
+            assertEquals(ContextKind.NETPLAY, kinds.first(), kinds.toString())
+            assertEquals(1, kinds.count { it == ContextKind.NETPLAY }, kinds.toString())
+        }
+    }
+
     // Recent and Search are always icons, so Title and hints has no rows for them; without netplay, no hint rows at all.
     @Test fun title_and_hints_has_no_recent_or_search_rows() = runTest {
         val settings = MemorySettings(ContentRef("Home")).apply { menuButtonHints = true }
@@ -10061,6 +10083,27 @@ class AppStateTest {
         assertEquals(MenuCategory.CONSOLES, s().category)                     // Home pressed: the first visible tab
     }
 
+    @Test fun with_only_home_hidden_the_menu_opens_on_the_games_tab_and_stays_on_its_game() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = hiddenTabsState(MenuCategory.HOME, settings = settings, data = FakeUserData(recents = listOf(Recent(tetris))))
+        val opened = state.gamesTab()
+        assertEquals(0, assertNotNull(opened.tabBar).index)                  // the first visible tab
+        assertEquals(listOf(MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.TOOLS), opened.tabBar?.categories)
+        state.select(1)
+        val game = state.highlighted()
+        state.onHomeLayout(LAND); advanceUntilIdle()                          // a Home frame: Home rebuilt, not shown
+        assertEquals(0, state.gamesTab().tabBar?.index)
+        assertEquals(game, state.highlighted())
+        settings.menuStyles = LIST_TABS + (MenuCategory.HOME to MenuStyle.CAROUSEL)
+        state.onForeground(); advanceUntilIdle()                              // Home rebuilt in another layout
+        assertEquals(0, state.gamesTab().tabBar?.index)
+        assertEquals(game, state.highlighted())
+        state.goHome()                                                        // Home pressed: the first visible tab, this one
+        assertEquals(0, state.gamesTab().tabBar?.index)
+        state.onButton(NxButton.R1)
+        assertEquals(MenuCategory.CONSOLES, state.category())
+    }
+
     @Test fun a_single_tab_never_switches_and_up_stays() = runTest {
         val settings = MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + (MenuCategory.TOOLS to MenuStyle.CAROUSEL) }
         val state = hiddenTabsState(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, settings = settings)
@@ -10327,6 +10370,11 @@ class AppStateTest {
         state.onAppOnTop(false)
         state.onButton(NxButton.MENU)
         assertEquals(listOf(ContextKind.PIN, ContextKind.OPEN_CONSOLES), menuKinds(state))
+        state.onButton(NxButton.B)
+        state.onAppOnTop(true)
+        state.selectTab(1); state.gamesTab()                                  // the Games tab: its game's menu ends with it too
+        state.onButton(NxButton.MENU)
+        assertEquals(ContextKind.USE_TOP_SCREEN, menuKinds(state).last(), menuKinds(state).toString())
     }
 
     @Test fun a_long_press_on_pick_a_game_with_tools_hidden_offers_tools() = runTest {
@@ -14782,6 +14830,19 @@ class AppStateTest {
         assertNotNull(state.textEntry.value)
         state.onButton(NxButton.A)   // the highlight starts on g
         assertEquals("g", assertIs<Screen.Systems>(state.screen.value).search)
+    }
+
+    @Test fun keyboard_search_on_the_games_tab_is_the_global_search() = runTest {
+        val state = keyboardSearchState()
+        state.selectTab(1); state.gamesTab()
+        state.onButton(NxButton.START)
+        assertNotNull(state.textEntry.value)
+        assertEquals("Search", state.textEntryConfirmLabel)
+        state.onButton(NxButton.A)   // the highlight starts on g
+        assertEquals("g", state.gamesTab().search)
+        state.onButton(NxButton.START)   // the keyboard's START confirms: the global search's results
+        assertEquals(ListSource.Search("g"), assertIs<Screen.Games>(state.screen.value).source)
+        assertNull(state.textEntry.value)
     }
 
     @Test fun keyboard_start_submits_search_as_a_did() = runTest {

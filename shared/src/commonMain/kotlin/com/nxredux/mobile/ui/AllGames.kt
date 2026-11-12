@@ -13,5 +13,7 @@ internal object AllGames {
         (systems + listOfNotNull(android))
             .filter { !it.unassigned && (it.core != null || it.android) }
             .flatMap { s -> s.games.map { Listed(s, it) } }
-            .sortedWith(compareBy({ it.game.shownName.lowercase() }, { it.system.tag }))
+            .map { it.game.shownName.lowercase() to it }                     // each key lowered once, not per comparison
+            .sortedWith(compareBy({ it.first }, { it.second.system.tag }))
+            .map { it.second }
 }
