@@ -1091,9 +1091,9 @@ class AppStateTest {
         while (step(state) != OnboardingStep.GAME_LISTS) { state.select(state.selection.value.count - 1); state.onButton(NxButton.A) }
         state.select(0)
         while (settings.gameListStyle != MenuStyle.BACKDROP) state.onButton(NxButton.RIGHT)
-        assertEquals(listOf("Layout", "Orientation", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })
+        assertEquals(listOf("Layout", "Orientation", "Games tab", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })
         state.select(1); state.onButton(NxButton.RIGHT)                    // Vertical: the alignment row comes
-        assertEquals(listOf("Layout", "Orientation", "Alignment", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })
+        assertEquals(listOf("Layout", "Orientation", "Alignment", "Games tab", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })
         state.select(2); state.onButton(NxButton.RIGHT)                    // Right
         assertEquals(VerticalListAlignment.RIGHT, settings.gameListVerticalAlignment)
         assertEquals(LayoutShot.Games(MenuStyle.BACKDROP, vertical = true, right = true), assertIs<Screen.Onboarding>(state.screen.value).shot)
@@ -1109,6 +1109,33 @@ class AppStateTest {
         repeat(MenuStyles.GAME_LIST_STYLES.size) { state.onButton(NxButton.RIGHT); seen += settings.gameListStyle }
         assertEquals(MenuStyles.GAME_LIST_STYLES.toSet(), seen)
         assertEquals(LayoutShot.Games(settings.gameListStyle), assertIs<Screen.Onboarding>(state.screen.value).shot)
+    }
+
+    @Test fun the_game_lists_onboarding_page_asks_about_the_games_tab() = runTest {
+        val (state, settings) = atCustomise(controller = true)
+        while (step(state) != OnboardingStep.GAME_LISTS) { state.select(state.selection.value.count - 1); state.onButton(NxButton.A) }
+        val page = assertIs<Screen.Onboarding>(state.screen.value)
+        assertTrue("A tab that lists every game from every console." in page.details)
+        assertEquals("Layout", page.rows[0].label)   // the existing rows keep their place
+        val i = page.rows.lastIndex - 1
+        assertEquals("Games tab" to "Show", page.rows[i].let { it.label to it.secondary })
+        assertEquals("Continue", page.rows.last().label)
+        assertEquals("Games tab", page.touchRows!![i].label)
+        assertEquals("Continue", page.touchRows!!.last().label)
+        state.select(i); state.onButton(NxButton.RIGHT)
+        assertFalse(settings.showGamesTab)
+        assertEquals("Hide", assertIs<Screen.Onboarding>(state.screen.value).rows[i].secondary)
+        state.onButton(NxButton.A)                          // A steps it back
+        assertTrue(settings.showGamesTab)
+        state.select(state.selection.value.count - 1); state.onButton(NxButton.A)
+        assertTrue(step(state) != OnboardingStep.GAME_LISTS)
+    }
+
+    @Test fun skipping_customise_leaves_the_games_tab_shown() = runTest {
+        val (state, settings) = atCustomise(yes = false)
+        state.select(1); state.onButton(NxButton.A)         // Use the defaults
+        assertEquals(OnboardingStep.ACCENT, step(state))
+        assertTrue(settings.showGamesTab)
     }
 
     // With a controller there is no pad page, but title and hints are offered.
@@ -10760,6 +10787,30 @@ class AppStateTest {
         assertTrue(styles.all { it.enabled })
         assertEquals(1, rows.count { it.kind == SettingsKind.GAME_LIST_STYLE })
         assertEquals(listOf("Show", "Show", "Show", "Show", "Show", "Minimal", "Show", "Show", "Grid", "Show", "Minimal", "Show", "Grid", "Screenshot", "3D box art", "Show", "List", "Show", "Show", "Full screen"), rows.map { it.secondary })
+    }
+
+    @Test fun the_games_tabs_layouts_page_has_only_visible() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings)
+        state.load()
+        state.openLayoutsPage(SettingsSection.LAYOUT_GAMES_TAB)
+        val page = assertIs<Screen.Settings>(state.screen.value)
+        assertEquals(listOf(SettingsKind.TAB_SHOWN to "Visible"), page.rows.map { it.kind to it.label })
+        assertEquals("Its layout follows Layouts \u2192 Game lists.", page.banner)
+        state.selectLayoutsRow(SettingsKind.TAB_SHOWN, MenuCategory.GAMES); state.onButton(NxButton.A)
+        assertFalse(settings.showGamesTab)
+        assertEquals("Hide", assertIs<Screen.Settings>(state.screen.value).rows.single().secondary)
+        state.openLayoutsPage(SettingsSection.MAIN_MENU)
+        assertEquals("Hidden", assertIs<Screen.Settings>(state.screen.value).rows.first { it.kind == SettingsKind.LAYOUT_GAMES_TAB }.secondary)
+    }
+
+    @Test fun layouts_reset_shows_the_games_tab_again() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { showGamesTab = false }
+        val state = state(settings)
+        state.load()
+        state.openSettings(SettingsSection.MAIN_MENU)
+        state.select(assertIs<Screen.Settings>(state.screen.value).rows.lastIndex); state.onButton(NxButton.A); state.onButton(NxButton.A)
+        assertTrue(settings.showGamesTab)
     }
 
     @Test fun theGamesTabsLayoutsPageHasOnlyVisibleAndTheTabShowsByDefault() = runTest {

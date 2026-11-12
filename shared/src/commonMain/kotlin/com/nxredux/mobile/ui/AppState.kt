@@ -2414,13 +2414,17 @@ class AppState(
         val kinds = onboardingValueKinds(step)
         return rows.mapIndexed { i, row ->
             val kind = kinds.getOrNull(i)?.takeIf { row.cycleable }
-            val value = kind?.let { settingValue(SettingsRow(it, "", category = ONBOARDING_TAB_STEPS[step])) }
+            val value = kind?.let { settingValue(SettingsRow(it, "", category = onboardingKindCategory(step, it))) }
             val labels = value?.labels
             if (kind == null || labels == null) NxSettingRow(row.label, value = row.secondary, enabled = row.enabled)   // a status (System buttons' Found) on the right
-            else settingsTouchRow(SettingsRow(kind, row.label, row.secondary, category = ONBOARDING_TAB_STEPS[step]), SettingChoices(labels, value.index))
+            else settingsTouchRow(SettingsRow(kind, row.label, row.secondary, category = onboardingKindCategory(step, kind)), SettingChoices(labels, value.index))
                 .copy(detail = "")
         }
     }
+
+    /** The tab a value row of [step] belongs to: the step's own, or the Games tab for the Game lists step's Games tab row. */
+    private fun onboardingKindCategory(step: OnboardingStep?, kind: SettingsKind): MenuCategory? =
+        if (kind == SettingsKind.TAB_SHOWN) MenuCategory.GAMES else ONBOARDING_TAB_STEPS[step]
 
     /** The Settings value each of [step]'s rows steps, top to bottom: a value page's, or a layout page's ([onboardingLayoutKinds]). */
     private fun onboardingValueKinds(step: OnboardingStep): List<SettingsKind> =
@@ -2438,7 +2442,7 @@ class AppState(
             is NxSettingEvent.Info -> return
         }
         val kind = onboardingValueKinds(s.step).getOrNull(row)?.takeIf { s.rows.getOrNull(row)?.cycleable == true } ?: return
-        val value = settingValue(SettingsRow(kind, "", category = ONBOARDING_TAB_STEPS[s.step])) ?: return
+        val value = settingValue(SettingsRow(kind, "", category = onboardingKindCategory(s.step, kind))) ?: return
         val choose = { i: Int ->
             when {
                 kind == SettingsKind.MENU_STYLE || kind == SettingsKind.GAME_LIST_STYLE -> if (i != value.index) stepOnboardingLayout(i - value.index) else select(row)
@@ -2607,7 +2611,11 @@ class AppState(
             ),
             onboardingLayoutRows(step),
         )
-        OnboardingStep.GAME_LISTS -> Triple("Game lists layout", listOf("How a console's or a collection's games lay out."), onboardingLayoutRows(step))
+        OnboardingStep.GAME_LISTS -> Triple(
+            "Game lists layout",
+            listOf("How a console's or a collection's games lay out.", "A tab that lists every game from every console."),
+            onboardingLayoutRows(step),
+        )
         // The accent and the secondary accent: value rows that step in place (the page recolours), then Continue.
         OnboardingStep.ACCENT -> Triple(
             "Pick your accents", listOf("The accent colours the selection everywhere; the secondary accent, the lit details beside it."),
@@ -2698,6 +2706,7 @@ class AppState(
             SettingsKind.MENU_ORIENTATION.takeIf { category != null && category != MenuCategory.HOME && MenuStyles.styleOf(s.menuStyles, category) == MenuStyle.CAROUSEL },
             SettingsKind.GAME_LIST_ORIENTATION.takeIf { category == null && gameListTurns(gameListLayout().first) },
             SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT.takeIf { category == null && gameListsShot().vertical },
+            SettingsKind.TAB_SHOWN.takeIf { category == null },   // the Games tab, on the Game lists step
         )
     }
 
@@ -2711,6 +2720,7 @@ class AppState(
                 SettingsKind.MENU_ORIENTATION -> NxRow("Orientation", secondary = orientationLabel(MenuStyles.orientationOf(s.menuOrientations, category!!)), cycleable = true)
                 SettingsKind.GAME_LIST_ORIENTATION -> NxRow("Orientation", secondary = orientationLabel(s.gameListOrientation), cycleable = true)
                 SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT -> NxRow("Alignment", secondary = verticalAlignmentLabel(s.gameListVerticalAlignment), cycleable = true)
+                SettingsKind.TAB_SHOWN -> NxRow("Games tab", secondary = if (s.showGamesTab) "Show" else "Hide", cycleable = true)
                 else -> NxRow("Layout", secondary = menuStyleLabel(onboardingLayout(step)), cycleable = true)
             }
         } + NxRow("Continue")
@@ -2735,7 +2745,7 @@ class AppState(
         when (val kind = onboardingLayoutKinds(step).getOrNull(row) ?: return) {
             // The layout is onboarding's own: it resets the orientation (and alignment) with it, from its own list.
             SettingsKind.MENU_STYLE, SettingsKind.GAME_LIST_STYLE -> return stepOnboardingLayout(by)
-            else -> settingValue(SettingsRow(kind, "", category = ONBOARDING_TAB_STEPS[step]))?.step(by)
+            else -> settingValue(SettingsRow(kind, "", category = onboardingKindCategory(step, kind)))?.step(by)
         }
         showOnboarding(row)
     }
@@ -3798,6 +3808,7 @@ class AppState(
 
     /** A page's note under its title ([Screen.Settings.banner]): Saves', where they live. */
     private fun settingsBanner(section: SettingsSection): String? {
+        if (section == SettingsSection.LAYOUT_GAMES_TAB) return "Its layout follows Layouts \u2192 Game lists."
         if (section != SettingsSection.SAVES) return null
         val home = home()
         val media = deps.homes?.media
