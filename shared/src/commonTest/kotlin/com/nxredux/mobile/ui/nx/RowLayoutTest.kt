@@ -284,6 +284,15 @@ class RowLayoutTest {
         assertEquals(listOf(InfoLine(InfoKind.GENRE, NO_GENRE), release), carouselGameLines(listOf(InfoLine(InfoKind.GENRE, NO_GENRE), release)).underTitle)
     }
 
+    // A game list Carousel card: shaded with its stats block only while lit with stats to show; unlit, the lines unread.
+    @Test fun aCarouselCardIsShadedOnlyWithStatsToShow() {
+        val time = InfoLine(InfoKind.TIME, "Today - 1h")
+        assertTrue(carouselCardShaded(lit = true) { listOf(time) })
+        assertFalse(carouselCardShaded(lit = true) { emptyList() })                                        // never played
+        assertFalse(carouselCardShaded(lit = true) { carouselGameLines(listOf(InfoLine(InfoKind.GENRE, "Sports"))).picture })   // details only
+        assertTrue(carouselCardShaded(lit = false) { error("an unlit card's lines are not read") })
+    }
+
     // The caption's room under the selected tile: what is left of the box once the tile sits at its highest (its ring's
     // room from the top, or the neighbours' top if higher), less the gap and a margin over the bottom row.
     @Test fun aCarouselCaptionMayTakeWhatIsLeftUnderTheTileAtItsHighest() {

@@ -100,7 +100,7 @@ class GameTileLayersTest {
         assertEquals(2, gridTileDetailRows(tileH = 200f, nameH = 32f, rowH = 13f, statRows = 1, details = 2))
         assertEquals(2, gridTileDetailRows(tileH = 10f + 32f + 3 * 13f + 8f, nameH = 32f, rowH = 13f, statRows = 1, details = 2))
         assertEquals(1, gridTileDetailRows(tileH = 10f + 32f + 3 * 13f + 7f, nameH = 32f, rowH = 13f, statRows = 1, details = 2))
-        assertEquals(2, gridTileDetailRows(tileH = 10f + 32f + 2 * 13f + 8f, nameH = 32f, rowH = 13f, statRows = 0, details = 5).coerceAtMost(2))
+        assertEquals(2, gridTileDetailRows(tileH = 10f + 32f + 2 * 13f + 8f, nameH = 32f, rowH = 13f, statRows = 0, details = 5))
         assertEquals(0, gridTileDetailRows(tileH = 60f, nameH = 32f, rowH = 13f, statRows = 1, details = 2))   // a small tile: none
         assertEquals(0, gridTileDetailRows(tileH = 200f, nameH = 32f, rowH = 13f, statRows = 1, details = 0))
     }

@@ -178,11 +178,13 @@ private fun BoxScope.CarouselItem(
             .shownItemTaps(i, taps, hasLongPress) { rowItem(RowStyle.CAROUSEL, i - shownAt(), geometry).visible },
     ) {
         // A game list's selected card holds its stats ([stats], the selection's), shaded as the Grid's; its name is below.
+        // No stats to show (a game never played): no shade either ([carouselCardShaded]).
+        val shaded = stats != null && carouselCardShaded(lit, stats)
         NxMenuTile(
-            tile, lit = lit, caption = cardInfo != null || stats != null,
+            tile, lit = lit, caption = cardInfo != null || shaded,
             info = remember(cardInfo, stats, i) { cardInfo?.let { ci -> { ci(i) } } ?: stats ?: NoTileInfo }, logoInset = logoInset, portrait = portrait,
             modifier = Modifier.fillMaxSize(), toolSize = toolSize, homeCaption = cardInfo != null,
-            gameFade = stats != null, statsOnly = stats != null,
+            gameFade = shaded, statsOnly = stats != null,
             statsSize = if (stats != null) nxCardStatsSize() else 13.sp, drained = drained, heroName = drained && cardInfo != null,
         )
         badge?.let { HomeBadge(it, portrait, Modifier.align(Alignment.TopStart), lit = lit || !drained) }
@@ -219,6 +221,12 @@ internal fun carouselGameLines(lines: List<InfoLine>): CarouselGameLines {
     val shown = details.takeUnless { d -> d.all { it.kind == InfoKind.GENRE && it.text == NO_GENRE } }.orEmpty()
     return CarouselGameLines(stats, shown)
 }
+
+/**
+ * Whether a game list Carousel card keeps its shade and stats block: lit, only with stats to show ([picture], read only
+ * then); an unlit card draws neither whatever this says, so it keeps its layers as before.
+ */
+internal fun carouselCardShaded(lit: Boolean, picture: () -> List<InfoLine>): Boolean = !lit || picture().isNotEmpty()
 
 /**
  * The most a game list Carousel's caption may take under its selected tile, dp, in a box [areaDp] tall with tiles

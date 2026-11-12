@@ -61,6 +61,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.EaseOut
 import com.nxredux.mobile.ui.GridTile
 import com.nxredux.mobile.ui.InfoLine
+import com.nxredux.mobile.ui.firstGenre
 import com.nxredux.mobile.ui.artLess
 import com.nxredux.mobile.ui.TileFit
 import com.nxredux.mobile.ui.tileArt
@@ -396,7 +397,7 @@ private fun GameTile(
                     } else if (info.isNotEmpty() || gridDetails.isNotEmpty()) {
                         // A Grid tile's details over its stats line, which keeps its place at the bottom.
                         for (line in gridDetails) {
-                            val text = infoText(listOf(line), sub, icon = minOf(14.dp, rowDp))
+                            val text = infoText(firstGenre(listOf(line)), sub, icon = minOf(14.dp, rowDp))   // one genre: the row is not fitted
                             TileText(text.text, sub, statsSize, maxLines = 1, align = TextAlign.Start, inlineContent = text.inlineContent, lineHeight = LINE_HEIGHT)
                         }
                         if (info.isNotEmpty()) {

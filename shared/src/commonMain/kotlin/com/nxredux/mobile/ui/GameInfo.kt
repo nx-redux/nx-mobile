@@ -163,7 +163,7 @@ internal fun rowTileInfo(rows: List<MainRow>, gameInfo: Map<String, GameInfo>, n
 internal fun entryTileInfo(entries: List<Listed>, gameInfo: Map<String, GameInfo>, now: Long, meta: GameMeta = GameMeta.NONE): (Int) -> List<InfoLine> =
     { i ->
         val game = entries.getOrNull(i)?.game
-        gameTileLines(gameInfoFor(gameInfo, now, game, full = false), if (meta === GameMeta.NONE) emptyList() else gameInfoFor(gameInfo, now, game, full = true, meta))
+        gameTileLines(gameInfoFor(gameInfo, now, game, full = false), if (!meta.shown) emptyList() else gameInfoFor(gameInfo, now, game, full = true, meta))
     }
 
 /**
