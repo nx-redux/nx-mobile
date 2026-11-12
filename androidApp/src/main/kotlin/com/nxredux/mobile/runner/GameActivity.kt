@@ -604,7 +604,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             }
             launchPipeline.start()
             if (launchPipeline.dsLinked && !isDestroyed) dsRoom.start()
-            if (launchPipeline.dsCableRoute && !isDestroyed) dsCable.watch()
+            if (launchPipeline.dsAutoRoute && !isDestroyed) dsCable.watch()
         }
     }
 

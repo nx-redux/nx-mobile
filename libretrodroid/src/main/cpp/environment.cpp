@@ -849,7 +849,7 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             return true;
 
         case NX_ENVIRONMENT_SET_3DS_LINK:
-            libretrodroid::dslink::setCoreRoom(static_cast<const nx_3ds_link_interface*>(data));
+            libretrodroid::dslink::setCoreRoom(static_cast<nx_3ds_link_interface*>(data));
             return true;
 
         default:

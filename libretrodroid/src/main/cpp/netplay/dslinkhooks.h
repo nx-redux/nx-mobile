@@ -37,7 +37,7 @@ namespace libretrodroid::dslink {
     void configure(const std::vector<Variable>& vars);   // the nx_nds_link* variables: create, replace or end the link
     // A core that runs its own room (Azahar, nx_3ds_link.h): presence, inRoom, leaveNow, rejoin and shutdown go to it.
     // nullptr: that room is gone. The calls are made under this module's lock, never after the nullptr returns.
-    void setCoreRoom(const struct ::nx_3ds_link_interface* room);
+    void setCoreRoom(struct ::nx_3ds_link_interface* room);
     void setCable(int state);   // ndl_cable: the phone-to-phone cable beside the Wi-Fi; any thread
     void setNetwork(int64_t handle);   // the Wi-Fi network handle the link's sockets bind to; 0 = the default network
     void radio(unsigned state); // NX_ENVIRONMENT_SET_NDS_RADIO, from inside retro_run

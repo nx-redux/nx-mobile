@@ -69,6 +69,11 @@ std::mutex coreRoomMutex;
 nx_3ds_link_interface coreRoom {};
 bool hasCoreRoom = false;
 
+// The same for a core's own room (nx_3ds_link.h).
+void routeCoreSocket(int fd, int cable) {
+    routeSocket(fd, cable != 0, nullptr);
+}
+
 constexpr uint16_t ROOM_PORT = 24874;
 constexpr uint16_t SEARCH_PORT = 24875;
 
@@ -459,16 +464,23 @@ void frameEnd() {
          stats.bytesIn / sec, stats.bytesOut / sec, ndl_member_count(theLink), rttMin, rttAvg, rttMax, (unsigned) drops.queue_hwm, dropText);
 }
 
-void setCoreRoom(const nx_3ds_link_interface* room) {
+void setCoreRoom(nx_3ds_link_interface* room) {
     std::lock_guard<std::mutex> guard(coreRoomMutex);
     hasCoreRoom = room != nullptr && room->presence != nullptr && room->leave != nullptr && room->rejoin != nullptr;
+    if (hasCoreRoom) room->route_socket = routeCoreSocket;
     coreRoom = hasCoreRoom ? *room : nx_3ds_link_interface {};
+    // The cable as it stands, and its network, before the room's first socket.
+    if (hasCoreRoom && coreRoom.set_cable != nullptr) coreRoom.set_cable(cableState.load(), CABLE_BROADCAST);
     LOGI("link: core room %s", hasCoreRoom ? "registered" : "cleared");
 }
 
 void setCable(int state) {
     if (state < NDL_CABLE_NONE || state > NDL_CABLE_UP) return;
     if (cableState.exchange(state) == state) return;
+    {
+        std::lock_guard<std::mutex> guard(coreRoomMutex);
+        if (hasCoreRoom && coreRoom.set_cable != nullptr) coreRoom.set_cable(state, CABLE_BROADCAST);
+    }
     std::lock_guard<std::mutex> guard(linkMutex);
     ndl_set_cable(theLink, (ndl_cable) state, CABLE_BROADCAST);
     LOGI("DS link: cable %s", state == NDL_CABLE_UP ? "up" : state == NDL_CABLE_COMING ? "coming" : "none");

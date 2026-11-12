@@ -60,6 +60,9 @@ import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.AndroidDeviceInfo
 import com.nxredux.mobile.netplay.WifiNetworks
 import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.wifi.WifiManager
 import com.nxredux.mobile.settings.PlayerName
 import com.nxredux.mobile.settings.GameRumble
@@ -219,14 +222,36 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     private var broadcasts: WifiManager.MulticastLock? = null
     /** Held while a DS or 3DS game is in a room outside a session ([dsRoomChanged]; a session's is [GameNetplay]'s). */
     private var dsWifi: WifiManager.WifiLock? = null
+    /**
+     * Follows the Wi-Fi for a linked game: the network the link's sockets are pinned to is a handle that dies when the
+     * phone joins another access point, and a socket made after that would go unpinned.
+     */
+    private var wifiWatch: ConnectivityManager.NetworkCallback? = null
+
+    private fun watchWifi() {
+        if (wifiWatch != null) return
+        val cm = host.activity.applicationContext.getSystemService(ConnectivityManager::class.java) ?: return
+        val watch = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) = pin()
+            override fun onLost(network: Network) = pin()
+            private fun pin() = com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(WifiNetworks.network(cm)?.networkHandle ?: 0L)
+        }
+        // The request's default NOT_VPN keeps the USB cable's VPN (it carries the Wi-Fi transport too) out of it.
+        val request = NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build()
+        runCatching { cm.registerNetworkCallback(request, watch) }.onSuccess { wifiWatch = watch }
+    }
+
+    private fun unwatchWifi() {
+        val cm = host.activity.applicationContext.getSystemService(ConnectivityManager::class.java)
+        wifiWatch?.let { runCatching { cm?.unregisterNetworkCallback(it) } }
+        wifiWatch = null
+    }
+
     /** A DS or 3DS game with a local wireless link: a sheet session's, or Local Wireless on outside one. */
     var dsLinked = false
         private set
     /** [dsLinked] outside a sheet session: the game's own radio finds rooms (the automatic route). */
     var dsAutoRoute = false
-        private set
-    /** [dsAutoRoute] with the room in the runner (the DS): it can run over the phone-to-phone cable ([DsCable]). */
-    var dsCableRoute = false
         private set
 
     /**
@@ -513,10 +538,12 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val n3dsBroadcast = n3dsAuto?.let { WifiNetworks.broadcast(WifiNetworks.address(activity.getSystemService(ConnectivityManager::class.java)))?.hostAddress }
             // A DS room runs under its own MAC (a seed kept per install) so rooms tell its members apart.
             val ndsMac = if (coreId == "melondsds" && (n3dsAuto != null || linkKind == NetplayLinkKind.NDSLINK)) NetplayLinkOptions.ndsMac(AndroidAppSettings(activity).ndsMacSeed) else null
-            if (ndsMac != null) com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(WifiNetworks.network(activity.getSystemService(ConnectivityManager::class.java))?.networkHandle ?: 0L)
             dsLinked = ndsMac != null || (coreId == "azahar" && (n3dsAuto != null || linkKind == NetplayLinkKind.N3DSLINK))
+            if (dsLinked) {
+                com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(WifiNetworks.network(activity.getSystemService(ConnectivityManager::class.java))?.networkHandle ?: 0L)
+                watchWifi()
+            }
             dsAutoRoute = dsLinked && np == null
-            dsCableRoute = ndsMac != null && np == null
             val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsAuto, n3dsBroadcast, ndsMac) else when (linkKind) {
                 null -> NetplayLinkOptions.forPair(np)
                 NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)
@@ -1075,6 +1102,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
 
     /** onDestroy: the RomCache holds this game took go, and one taken later (an unpack or copy that outlived the screen) at once. */
     fun onDestroy() {
+        unwatchWifi()
         dropBroadcasts()
         dsWifi?.let { runCatching { if (it.isHeld) it.release() } }
         dsWifi = null
