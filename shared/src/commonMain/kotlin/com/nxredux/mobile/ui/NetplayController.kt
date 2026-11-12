@@ -49,12 +49,14 @@ sealed interface NetplayPage {
      * when Wi-Fi is the only choice, then no tabs), the Emulator tabs under them ([emulators]: "Auto" then the core names;
      * null for a tag with one netplay core) at [pick], Host Game and Join Game side by side, and with [needWifi] the
      * "Connect to Wi-Fi first" line and a Wi-Fi settings row. Over USB there is no Wi-Fi row; on Cable Link no Emulator
-     * tabs (it always runs mGBA). [selected] indexes [rows], the pad's focus: Host and Join share a line.
+     * tabs (it always runs mGBA). [selected] indexes [rows], the pad's focus: Host and Join share a line. [pad]: the
+     * last input was a pad press, so the focus is drawn (a ring); a tap puts it away.
      */
     data class Role(
         val title: String, val emulators: List<String>?, val pick: Int, val selected: Int, val needWifi: Boolean,
         val connection: NetplayLink? = null,
         val connections: List<NetplayLink> = emptyList(),
+        val pad: Boolean = true,
     ) : NetplayPage {
         val rows: List<NetplayRoleRow>
             get() = buildList {
@@ -208,20 +210,20 @@ class NetplayController(
     /** A tap on a Connection tab. */
     fun pickConnection(link: NetplayLink) {
         val p = _page.value as? NetplayPage.Role ?: return
-        setConnection(p.copy(selected = p.rows.indexOf(NetplayRoleRow.CONNECTION).coerceAtLeast(0)), link)
+        setConnection(p.copy(selected = p.rows.indexOf(NetplayRoleRow.CONNECTION).coerceAtLeast(0), pad = false), link)
     }
 
     /** A tap on an Emulator tab. */
     fun pickEmulator(index: Int) {
         val p = _page.value as? NetplayPage.Role ?: return
         if (index !in p.emulators.orEmpty().indices) return
-        showRole(p.copy(pick = index, selected = p.rows.indexOf(NetplayRoleRow.EMULATOR).coerceAtLeast(0)))
+        showRole(p.copy(pick = index, selected = p.rows.indexOf(NetplayRoleRow.EMULATOR).coerceAtLeast(0), pad = false))
     }
 
     /** A tap on row [index] of the Role page or the host list: highlights it (a second tap is A). */
     fun select(index: Int) {
         when (val p = _page.value) {
-            is NetplayPage.Role -> if (index in p.rows.indices) showRole(p.copy(selected = index))
+            is NetplayPage.Role -> if (index in p.rows.indices) showRole(p.copy(selected = index, pad = false))
             is NetplayPage.Hosts -> if (index in p.hosts.indices) { hostIndex = index; showHosts() }
             else -> Unit
         }
@@ -244,7 +246,9 @@ class NetplayController(
 
     // --- Role ---
 
-    private fun onRole(p: NetplayPage.Role, button: NxButton) {
+    private fun onRole(shown: NetplayPage.Role, button: NxButton) {
+        // Any pad press brings the focus ring back, also one that moves nothing.
+        val p = if (shown.pad) shown else shown.copy(pad = true).also(::showRole)
         val rows = p.rows
         val row = rows.getOrNull(p.selected)
         when (button) {

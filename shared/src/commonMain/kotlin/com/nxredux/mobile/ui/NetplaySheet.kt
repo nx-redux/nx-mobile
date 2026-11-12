@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import com.nxredux.mobile.ui.nx.FooterMode
+import com.nxredux.mobile.ui.nx.LocalFooterMode
 import com.nxredux.mobile.ui.nx.nxHighlight
 import com.nxredux.mobile.ui.nx.nxModalButton
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -68,41 +70,53 @@ fun NetplaySheet(
     when (page) {
         is NetplayPage.Role -> {
             val rows = page.rows
-            val focus = rows.getOrNull(page.selected)
+            // The ring only where there is a pad to move it with, and only while the pad is what was last used.
+            val focus = rows.getOrNull(page.selected).takeIf { page.pad && LocalFooterMode.current == FooterMode.HINTS }
             NxModal(
-                caption = page.title, kind = ModalKind.MENU, onButton = onButton,
+                // The title is the sheet's own: brighter than the modal caption, so the labels under it read as labels.
+                caption = null, kind = ModalKind.MENU, onButton = onButton,
                 // Host and Join on the panel, apart from the card's choices.
                 below = {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        listOf(NetplayRoleRow.HOST to NetplayText.HOST, NetplayRoleRow.JOIN to NetplayText.JOIN).forEach { (row, label) ->
-                            SheetAction(label, focused = focus == row, modifier = Modifier.weight(1f)) { onSelect(rows.indexOf(row)); onButton(NxButton.A) }
+                    // Host first and filled: a join needs a host, and the sheet opens on it. The rings' own room makes the gap.
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        SheetAction(NetplayText.HOST, SheetWeight.MAIN, ring = focus == NetplayRoleRow.HOST, modifier = Modifier.weight(1f)) {
+                            onSelect(rows.indexOf(NetplayRoleRow.HOST)); onButton(NxButton.A)
+                        }
+                        SheetAction(NetplayText.JOIN, SheetWeight.SECOND, ring = focus == NetplayRoleRow.JOIN, modifier = Modifier.weight(1f)) {
+                            onSelect(rows.indexOf(NetplayRoleRow.JOIN)); onButton(NxButton.A)
                         }
                     }
                     if (NetplayRoleRow.WIFI in rows) {
-                        Spacer(Modifier.height(8.dp))
-                        SheetAction(NetplayText.WIFI_SETTINGS, focused = focus == NetplayRoleRow.WIFI, modifier = Modifier.fillMaxWidth(), quiet = true) {
+                        SheetAction(NetplayText.WIFI_SETTINGS, SheetWeight.QUIET, ring = focus == NetplayRoleRow.WIFI, modifier = Modifier.fillMaxWidth()) {
                             onSelect(rows.indexOf(NetplayRoleRow.WIFI)); onButton(NxButton.A)
                         }
                     }
                 },
             ) {
                 val tabs = NetplayRoleRow.CONNECTION in rows || NetplayRoleRow.EMULATOR in rows
+                // Everything keeps the ring's room at its sides, so it lines up with the tab tracks.
+                val inset = Modifier.padding(horizontal = SheetRingRoom)
+                Text(page.title, inset, color = colors.listText, fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = nxModalText(), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (page.needWifi && page.connection != NetplayLink.USB) {
-                    Text(NetplayText.NEED_WIFI, color = colors.listText, fontFamily = font, fontSize = nxDialogBody())
-                    if (tabs) Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(4.dp))
+                    Text(NetplayText.NEED_WIFI, inset, color = colors.hint, fontFamily = font, fontSize = nxDialogBody())
                 }
+                if (tabs) Spacer(Modifier.height(10.dp))
                 if (NetplayRoleRow.CONNECTION in rows) {
                     SheetTabs(
                         NetplayText.CONNECTION, page.connections.map(::connectionLabel), page.connections.indexOf(page.connection),
-                        focused = focus == NetplayRoleRow.CONNECTION, onPick = { i -> page.connections.getOrNull(i)?.let(onConnection) },
+                        ring = focus == NetplayRoleRow.CONNECTION, onPick = { i -> page.connections.getOrNull(i)?.let(onConnection) },
                     )
-                    if (NetplayRoleRow.EMULATOR in rows) Spacer(Modifier.height(12.dp))
+                    if (NetplayRoleRow.EMULATOR in rows) Spacer(Modifier.height(6.dp))
                 }
                 if (NetplayRoleRow.EMULATOR in rows) {
-                    SheetTabs(NetplayText.EMULATOR, page.emulators.orEmpty(), page.pick, focused = focus == NetplayRoleRow.EMULATOR, onPick = onEmulator)
+                    SheetTabs(NetplayText.EMULATOR, page.emulators.orEmpty(), page.pick, ring = focus == NetplayRoleRow.EMULATOR, onPick = onEmulator)
                     if (page.pick == 0) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(NetplayText.AUTO_NOTE, color = colors.hint, fontFamily = font, fontSize = nxModalSmall())
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            NetplayText.AUTO_NOTE, inset.fillMaxWidth().border(1.dp, colors.inkLine, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 8.dp),
+                            color = colors.hint, fontFamily = font, fontSize = nxModalSmall(),
+                        )
                     }
                 }
             }
@@ -147,34 +161,49 @@ private fun SheetList(rows: List<NxRow>, selected: Int, onButton: (NxButton) -> 
     )
 }
 
+/** The pad's ring: its stroke, and its gap from the control. */
+private val SheetRingStroke = 2.dp
+private val SheetRingGap = 3.dp
+/** The room a control keeps round it for the ring, shown or not, so nothing moves when the pad arrives. */
+private val SheetRingRoom = SheetRingStroke + SheetRingGap
+/** A tab track's corners, and its plate's inside the track's 4 dp. */
+private val SheetTrackCorner = 12.dp
+private val SheetPlateCorner = 8.dp
+
 /**
- * One choice of a few, as tabs in a row under their [caption]: the picked one ([picked]) filled, on the accent while the
- * pad is on the tabs ([focused], LEFT / RIGHT change it), the others the word alone. A tap picks.
+ * The pad's focus: a ring round a control of [corner] (null: a pill), apart from the accent, which says what the sheet
+ * is for.
  */
 @Composable
-private fun SheetTabs(caption: String, labels: List<String>, picked: Int, focused: Boolean, onPick: (Int) -> Unit) {
+private fun Modifier.sheetRing(shown: Boolean, corner: androidx.compose.ui.unit.Dp? = null): Modifier {
+    val shape = if (corner == null) RoundedCornerShape(50) else RoundedCornerShape(corner + SheetRingRoom)
+    return (if (shown) border(SheetRingStroke, LocalNxColors.current.main, shape) else this).padding(SheetRingRoom)
+}
+
+/**
+ * One choice of a few, as a segmented control under its [caption]: a sunken track, the picked one ([picked]) a raised
+ * plate in the ink, never the accent (that is the sheet's one action's). [ring]: the pad is on it (LEFT / RIGHT move the
+ * plate). A tap picks.
+ */
+@Composable
+private fun SheetTabs(caption: String, labels: List<String>, picked: Int, ring: Boolean, onPick: (Int) -> Unit) {
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
-    val shape = RoundedCornerShape(50)
-    Text(caption, color = colors.hint, fontFamily = font, fontSize = nxModalSmall())
-    Spacer(Modifier.height(4.dp))
+    val plate = RoundedCornerShape(SheetPlateCorner)
+    Text(caption, Modifier.padding(horizontal = SheetRingRoom), color = colors.hint, fontFamily = font, fontSize = nxModalSmall())
     Row(
-        Modifier.fillMaxWidth().border(1.dp, colors.inkRing, shape).padding(3.dp),
+        Modifier.fillMaxWidth().sheetRing(ring, SheetTrackCorner).background(colors.modalPanel, RoundedCornerShape(SheetTrackCorner)).padding(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         labels.forEachIndexed { i, label ->
             val on = i == picked
-            val ground = when {
-                on && focused -> Modifier.background(nxHighlight(), shape)
-                on -> Modifier.background(colors.inkRing, shape)
-                else -> Modifier
-            }
             Box(
-                Modifier.weight(1f).heightIn(min = SheetControlHeight * nxTextScale() - 6.dp).clip(shape).then(ground).clickable { onPick(i) }.padding(horizontal = 8.dp),
+                Modifier.weight(1f).heightIn(min = SheetControlHeight * nxTextScale() - 8.dp).clip(plate)
+                    .then(if (on) Modifier.background(colors.inkFaint, plate) else Modifier).clickable { onPick(i) }.padding(horizontal = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    label, color = if (on && focused) colors.onAccent else if (on) colors.listText else colors.hint, fontFamily = font,
+                    label, color = if (on) colors.listText else colors.hint, fontFamily = font,
                     fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, fontSize = nxModalButton(), maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -182,19 +211,25 @@ private fun SheetTabs(caption: String, labels: List<String>, picked: Int, focuse
     }
 }
 
-/** A button of the Role page: on the accent pill while the pad is on it ([focused]), else outlined ([quiet]: the word alone). A tap presses it. */
+/** How much a Role page button asks for the eye: the sheet's one main action, a second one beside it, or a plain word. */
+private enum class SheetWeight { MAIN, SECOND, QUIET }
+
+/** A button of the Role page: [weight] sets its look, which the pad never changes; [ring]: the pad is on it. A tap presses it. */
 @Composable
-private fun SheetAction(label: String, focused: Boolean, modifier: Modifier = Modifier, quiet: Boolean = false, onClick: () -> Unit) {
+private fun SheetAction(label: String, weight: SheetWeight, ring: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val colors = LocalNxColors.current
     val shape = RoundedCornerShape(50)
-    val ground = when {
-        focused -> Modifier.background(nxHighlight(), shape)
-        quiet -> Modifier
-        else -> Modifier.border(1.dp, colors.inkRing, shape)
+    val ground = when (weight) {
+        SheetWeight.MAIN -> Modifier.background(nxHighlight(), shape)
+        SheetWeight.SECOND -> Modifier.border(1.dp, colors.inkRing, shape)
+        SheetWeight.QUIET -> Modifier
     }
-    Box(modifier.heightIn(min = SheetControlHeight * nxTextScale()).clip(shape).then(ground).clickable(onClick = onClick).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+    Box(
+        modifier.sheetRing(ring).heightIn(min = SheetControlHeight * nxTextScale()).clip(shape).then(ground).clickable(onClick = onClick).padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
         Text(
-            label, color = if (focused) colors.onAccent else colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold,
+            label, color = if (weight == SheetWeight.MAIN) colors.onAccent else colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold,
             fontSize = nxModalButton(), maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }

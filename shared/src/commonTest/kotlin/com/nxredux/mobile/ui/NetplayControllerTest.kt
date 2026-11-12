@@ -543,6 +543,22 @@ class NetplayControllerTest {
         assertEquals(NetplayRoleRow.HOST, on())
     }
 
+    @Test fun a_tap_puts_the_pad_focus_away_and_a_pad_press_brings_it_back() = runTest {
+        val c = controller(FakeNetplayPlatform())
+        c.open(sonic)
+        assertTrue(assertIs<NetplayPage.Role>(c.page.value).pad)
+        c.pickEmulator(1)
+        assertFalse(assertIs<NetplayPage.Role>(c.page.value).pad)
+        c.press(NxButton.LEFT)   // on the Emulator tabs: back to Auto, and the ring is back
+        val role = assertIs<NetplayPage.Role>(c.page.value)
+        assertTrue(role.pad)
+        assertEquals(0, role.pick)
+        c.select(role.rows.indexOf(NetplayRoleRow.JOIN))
+        assertFalse(assertIs<NetplayPage.Role>(c.page.value).pad)
+        c.press(NxButton.RIGHT)   // on Join Game already: nothing moves, the ring still shows
+        assertTrue(assertIs<NetplayPage.Role>(c.page.value).pad)
+    }
+
     @Test fun a_tap_on_an_emulator_tab_picks_it() = runTest {
         val c = controller(FakeNetplayPlatform())
         c.open(sonic)

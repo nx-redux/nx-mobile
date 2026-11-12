@@ -118,7 +118,7 @@ fun NxModal(
                 NxModalFooter(footer, onFooter, buttonFocus, confirmKey, cancelKey)
             }
             // A sheet's own actions, on the panel under the card: what the card sets up, these do.
-            if (below != null) Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 12.dp, bottom = 8.dp)) { below() }
+            if (below != null) Column(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 4.dp)) { below() }
         }
     }
 }
