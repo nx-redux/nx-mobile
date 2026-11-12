@@ -253,7 +253,7 @@ internal class SettingsController(
     fun openSettings(section: SettingsSection) {
         if (!host.kidsToolsAllowed()) return   // Kids Mode: Settings only for a parent
         when (screen.value) {
-            is Screen.Systems -> host.rememberMenuSelection()
+            is Screen.Systems, is Screen.Games -> host.rememberMenuSelection()   // the main menu's tab (a game list's: nothing)
             is Screen.SettingsMenu -> settingsMenuSelection = selection.value
             else -> Unit
         }

@@ -23,11 +23,21 @@ class MenuTabsTest {
 
     @Test fun tabsComeInTheFixedOrderWithHomeFirst() {
         val home = buildHome(MainRow.Continue(listed("Kirby"), ResumeInfo.NONE), listOf(listed("Zelda")), emptyList(), stats, slots = 3)
-        val tabs = buildMenuTabs(home, consoles = consoles, collections = listOf(MainRow.Collection("Co-op", count = 2)), tools = tools)
+        val tabs = buildMenuTabs(home, games = emptyList(), consoles = consoles, collections = listOf(MainRow.Collection("Co-op", count = 2)), tools = tools)
         assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS), tabs.map { it.category })
         assertEquals(home.top + MainRow.Pin(listed("Zelda")), tabs[0].rows)
         assertEquals(listOf(MainRow.Collection("Co-op", count = 2)), tabs[2].rows)
         assertEquals(listOf(MainRow.Tool(tools.single())), tabs[3].rows)
+    }
+
+    @Test fun gamesTabIsLeftOutWhileEmptyAndSitsAfterHome() {
+        val none = buildMenuTabs(fresh, games = emptyList(), consoles = consoles, collections = emptyList(), tools = tools)
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.TOOLS), none.map { it.category })
+        val games = listOf(listed("Kirby"), listed("Zelda"))
+        val tabs = buildMenuTabs(fresh, games = games, consoles = consoles, collections = emptyList(), tools = tools)
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.TOOLS), tabs.map { it.category })
+        assertEquals(MenuTab(MenuCategory.GAMES, emptyList(), games), tabs[1])   // its games, no rows
+        assertEquals(emptyList(), tabs.filter { it.category != MenuCategory.GAMES }.flatMap { it.games })
     }
 
     // Every pin is on Home: the top section (the squares, "+N" for the rest), then every pinned game as a row game.
@@ -54,7 +64,7 @@ class MenuTabsTest {
     }
 
     @Test fun homeAndToolsAreAlwaysThere() {
-        val tabs = buildMenuTabs(fresh, consoles = emptyList(), collections = emptyList(), tools = tools)
+        val tabs = buildMenuTabs(fresh, games = emptyList(), consoles = emptyList(), collections = emptyList(), tools = tools)
         assertEquals(listOf(MenuCategory.HOME, MenuCategory.TOOLS), tabs.map { it.category })
     }
 

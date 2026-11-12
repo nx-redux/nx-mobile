@@ -163,7 +163,7 @@ internal class ContextMenuController(
             is Screen.ToolApps -> s.copy(menu = m)
             else -> s
         }
-        if (m == null && s is Screen.Systems && s.menu != null) host.menuClosed()
+        if (m == null && s.isMainMenu && s.contextMenu != null) host.menuClosed()   // the Games tab too
     }
 
     /** The menu's game; every game item is offered only on a menu with an entry ([act] closes a tool menu otherwise). */

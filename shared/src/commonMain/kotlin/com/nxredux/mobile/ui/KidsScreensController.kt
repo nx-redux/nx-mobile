@@ -404,7 +404,7 @@ internal class KidsScreensController(
             s is Screen.KidsPin && s.purpose != PinPurpose.UNLOCK -> if (!kidsToolsAllowed) host.showSystemsNow(MenuCategory.HOME)
             isKidsScreen(s) -> host.showSystemsNow(MenuCategory.HOME)
             !kidsToolsAllowed && !kidsOpenScreen(s) -> host.showSystemsNow(MenuCategory.HOME)
-            s is Screen.Systems -> host.showSystemsNow()
+            s.isMainMenu -> host.showSystemsNow()
         }
     }
 

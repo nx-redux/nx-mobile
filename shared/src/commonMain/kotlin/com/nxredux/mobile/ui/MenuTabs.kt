@@ -3,19 +3,30 @@ package com.nxredux.mobile.ui
 import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuStyle
 
-/** A main menu tab: its category and its items. */
-data class MenuTab(val category: MenuCategory, val rows: List<MainRow>)
+/**
+ * A main menu tab: its category and its items. The Games tab has no [rows]: its body is a game list of [games]
+ * ([AllGames.entries]), shown as a [Screen.Games] carrying the tab row ([TabBar]).
+ */
+data class MenuTab(val category: MenuCategory, val rows: List<MainRow>, val games: List<Listed> = emptyList())
 
 /**
- * The main menu's tabs in their fixed order (Home, Consoles, Collections, Tools). Home and Tools always show; an empty
- * Consoles or Collections tab is left out. Home lists every pin ([homeTabRows]). Every tab with content; Layouts'
- * Show/Hide is applied after ([visibleMenuTabs]).
+ * The tab row a main menu tab that is a game list (the Games tab) carries: the shown tabs' [categories], this one at
+ * [index]. [pushed]: opened over the menu from MENU as a hidden tab. [hidden]: the tabs Layouts hides that have content
+ * (as [Screen.Systems.hidden]).
+ */
+data class TabBar(val categories: List<MenuCategory>, val index: Int, val pushed: Boolean = false, val hidden: List<MenuCategory> = emptyList())
+
+/**
+ * The main menu's tabs in their fixed order (Home, Games, Consoles, Collections, Tools). Home and Tools always show; an
+ * empty Games, Consoles or Collections tab is left out. Home lists every pin ([homeTabRows]); Games holds every game
+ * ([games]). Every tab with content; Layouts' Show/Hide is applied after ([visibleMenuTabs]).
  */
 internal fun buildMenuTabs(
-    home: Home, consoles: List<MainRow.System>, collections: List<MainRow.Collection>, tools: List<ToolRow>,
+    home: Home, games: List<Listed>, consoles: List<MainRow.System>, collections: List<MainRow.Collection>, tools: List<ToolRow>,
     homeStyle: MenuStyle = MenuStyle.GRID,
 ): List<MenuTab> = buildList {
     add(MenuTab(MenuCategory.HOME, homeTabRows(home, homeStyle)))
+    if (games.isNotEmpty()) add(MenuTab(MenuCategory.GAMES, emptyList(), games))
     if (consoles.isNotEmpty()) add(MenuTab(MenuCategory.CONSOLES, consoles))
     if (collections.isNotEmpty()) add(MenuTab(MenuCategory.COLLECTIONS, collections))
     add(MenuTab(MenuCategory.TOOLS, tools.map(MainRow::Tool)))

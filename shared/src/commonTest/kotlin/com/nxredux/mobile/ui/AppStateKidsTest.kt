@@ -187,7 +187,7 @@ class AppStateKidsTest {
         val off = state(MemorySettings().apply { kidsEnabled = false }, null)
         off.load()
         val all = tabsOf(off)
-        assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS), all)
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS), all)
         val kids = KidsController(settings, Platform(SAT, 10 * 60))
         assertIs<KidsMode.Open>(kids.mode.value)
         val st = state(settings, kids)
@@ -536,7 +536,7 @@ class AppStateKidsTest {
         kids.unlock(com.nxredux.mobile.kids.UnlockChip.MIN30)
         assertEquals(platform.epochMs + 30 * 60_000L, settings.kidsUnlockUntil)
         assertEquals(KidsMode.Open(platform.epochMs + 30 * 60_000L), kids.mode.value)
-        assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS), tabsOf(st))
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS), tabsOf(st))
         kids.lock()
         assertEquals(0L, settings.kidsUnlockUntil)
         assertIs<KidsMode.Locked>(kids.mode.value)
@@ -658,7 +658,7 @@ class AppStateKidsTest {
         st.kidsLockPressed(); st.typePin("123456")
         st.kidsUnlockChip(UnlockChip.HOUR1)
         assertEquals(KidsMode.Open(platform.epochMs + 60 * 60_000L), kids.mode.value)
-        assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS), tabsOf(st))   // no Tools
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS), tabsOf(st))   // no Tools
     }
 
     @Test fun unlockSheetActionsNeedTheSheet() = runTest {
