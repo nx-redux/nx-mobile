@@ -232,9 +232,17 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         if (wifiWatch != null) return
         val cm = host.activity.applicationContext.getSystemService(ConnectivityManager::class.java) ?: return
         val watch = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) = pin()
-            override fun onLost(network: Network) = pin()
-            private fun pin() = com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(WifiNetworks.network(cm)?.networkHandle ?: 0L)
+            // The callback's own network: what the manager answers inside a callback can still be the old one.
+            private var current: Network? = null
+            override fun onAvailable(network: Network) {
+                current = network
+                com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(network.networkHandle)
+            }
+            override fun onLost(network: Network) {
+                if (network != current) return
+                current = null
+                com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(0L)
+            }
         }
         // The request's default NOT_VPN keeps the USB cable's VPN (it carries the Wi-Fi transport too) out of it.
         val request = NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build()
@@ -542,6 +550,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             if (dsLinked) {
                 com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(WifiNetworks.network(activity.getSystemService(ConnectivityManager::class.java))?.networkHandle ?: 0L)
                 watchWifi()
+                // A sheet session on the USB cable has no cable watcher of its own (the sheet brought the cable up): the
+                // link is told here, so its sockets leave the Wi-Fi for the cable's addresses.
+                if (np != null) com.swordfish.libretrodroid.LibretroNetplay.dsSetCable(if (np.overUsb) 2 else 0)
             }
             dsAutoRoute = dsLinked && np == null
             val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsAuto, n3dsBroadcast, ndsMac) else when (linkKind) {

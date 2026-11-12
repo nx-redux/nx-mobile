@@ -145,7 +145,7 @@ JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsPresen
     JNIEnv* env,
     jclass obj
 ) {
-    return dslink::presence();   // the same short locks as dsInRoom
+    return dslink::presence();   // short locks; never throws
 }
 
 JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsInRoom(
@@ -175,7 +175,7 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsLeaveN
     JNIEnv* env,
     jclass obj
 ) {
-    dslink::leaveNow();   // sends LEAVE from this thread; never throws
+    dslink::leaveNow();   // the DS link sends LEAVE from this thread, a core's room leaves on its own; never throws
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsRejoin(

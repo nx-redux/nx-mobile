@@ -108,7 +108,7 @@ object LibretroNetplay {
     /** [state, secondsLeft, reason]: LINK_* and REASON_*. */
     @JvmStatic external fun linkStatus(): IntArray
 
-    /** The DS link (`cpp/netplay/ndl_link.h`): this phone is in a local wireless room. Any thread. */
+    /** The DS link (`cpp/netplay/ndl_link.h`), or a core's own room (Azahar's, for the 3DS; so for every `ds` call here): this phone is in a local wireless room. Any thread. */
     @JvmStatic external fun dsInRoom(): Boolean
     /** The DS link: 0 out of any room, 1 looking for or about to open one, 2 in a room. Any thread. */
     @JvmStatic external fun dsPresence(): Int

@@ -1087,10 +1087,10 @@ index 0000000..e160fc7
 +#endif
 diff --git a/src/citra_libretro/nx_3ds_link.h b/src/citra_libretro/nx_3ds_link.h
 new file mode 100644
-index 0000000..90c5669
+index 0000000..b94614d
 --- /dev/null
 +++ b/src/citra_libretro/nx_3ds_link.h
-@@ -0,0 +1,35 @@
+@@ -0,0 +1,36 @@
 +// Copyright Citra Emulator Project / Azahar Emulator Project
 +// Licensed under GPLv2 or any later version
 +// Refer to the license.txt file included.
@@ -1114,8 +1114,9 @@ index 0000000..90c5669
 +struct nx_3ds_link_interface {
 +    /// One of NX_3DS_LINK_*.
 +    int (*presence)(void);
-+    /// Leaves the room at once and stays out: until the game turns its wireless on again
-+    /// (automatic), or until rejoin (a session).
++    /// Leaves the room and stays out: until the game turns its wireless on again (automatic), or
++    /// until rejoin (a session). Returns at once; presence is out from then, and the room is left
++    /// within a moment, on the room's own thread.
 +    void (*leave)(void);
 +    /// A session goes back to its room after leave. Nothing on the automatic route.
 +    void (*rejoin)(void);
@@ -1292,10 +1293,10 @@ index 0000000..0e6cf75
 +} // namespace LibRetro
 diff --git a/src/citra_libretro/room_link.cpp b/src/citra_libretro/room_link.cpp
 new file mode 100644
-index 0000000..99139e0
+index 0000000..1c7c11d
 --- /dev/null
 +++ b/src/citra_libretro/room_link.cpp
-@@ -0,0 +1,686 @@
+@@ -0,0 +1,708 @@
 +// Copyright Citra Emulator Project / Azahar Emulator Project
 +// Licensed under GPLv2 or any later version
 +// Refer to the license.txt file included.
@@ -1394,13 +1395,18 @@ index 0000000..99139e0
 +std::atomic<Clock::rep> cable_hold_until{0};
 +// The frontend's way to put a socket on the cable's network or back on the Wi-Fi.
 +std::atomic<void (*)(int, int)> route{nullptr};
-+// The open room's own socket, -1 without one.
++// The open room's own socket, -1 without one. The room opening and the cable changing each put
++// it on a network: one at a time, so the later of the two decides.
 +std::atomic<int> room_socket{-1};
++std::mutex room_socket_mutex;
++// A session's leave, which waits on the network: off the caller's thread.
++std::thread leaver;
 +
 +/// The cable's network is a /30: its two phones and its broadcast address.
 +bool OnCable(u32 address) {
 +    const u32 broadcast = cable_broadcast;
-+    return broadcast != 0 && (address & ~3u) == (broadcast & ~3u);
++    // Only with a cable: a Wi-Fi may use the same addresses.
++    return cable != NX_3DS_CABLE_NONE && broadcast != 0 && (address & ~3u) == (broadcast & ~3u);
 +}
 +
 +bool OnCable(const std::string& ip) {
@@ -1422,6 +1428,7 @@ index 0000000..99139e0
 +    return cable == NX_3DS_CABLE_COMING && until != 0 &&
 +           Clock::now() < Clock::time_point(Clock::duration(until));
 +}
++
 +// The last refusal shown: a room that keeps refusing is not reported again.
 +std::atomic<int> shown_refusal{-1};
 +RoomMember::CallbackHandle<RoomMember::State> state_handle;
@@ -1729,22 +1736,8 @@ index 0000000..99139e0
 +}
 +
 +void OnWireless(WirelessState state) {
-+    if (state != WirelessState::Off) {
-+        // The game uses its wireless again: a leave the frontend made is over.
-+        parked = false;
-+        if (!wireless_on && cable == NX_3DS_CABLE_COMING)
-+            HoldForCable();
-+        {
-+            std::scoped_lock lock(mac_mutex);
-+            if (!console_mac)
-+                console_mac = Service::CFG::GetConsoleMacAddress(Core::System::GetInstance());
-+        }
-+        if (!worker_running.exchange(true)) {
-+            if (worker.joinable())
-+                worker.join();
-+            worker = std::thread(AutoLoop);
-+        }
-+    }
++    const bool was_on = wireless_on;
++    // Before the worker starts: one on its way out sees the wireless on and stays.
 +    switch (state) {
 +    case WirelessState::On:
 +        wireless_on = true;
@@ -1759,6 +1752,22 @@ index 0000000..99139e0
 +        wireless_off_at = Clock::now().time_since_epoch().count();
 +        break;
 +    }
++    if (state == WirelessState::Off)
++        return;
++    // The game uses its wireless again: a leave the frontend made is over.
++    parked = false;
++    if (!was_on && cable == NX_3DS_CABLE_COMING)
++        HoldForCable();
++    {
++        std::scoped_lock lock(mac_mutex);
++        if (!console_mac)
++            console_mac = Service::CFG::GetConsoleMacAddress(Core::System::GetInstance());
++    }
++    if (!worker_running.exchange(true)) {
++        if (worker.joinable())
++            worker.join();
++        worker = std::thread(AutoLoop);
++    }
 +}
 +
 +void StopWorker() {
@@ -1771,6 +1780,8 @@ index 0000000..99139e0
 +
 +void LeaveRoom() {
 +    std::scoped_lock control(control_mutex);
++    if (leaver.joinable())
++        leaver.join();
 +    parked = false;
 +    Service::NWM::wireless_hook = nullptr;
 +    wireless_on = false;
@@ -1796,7 +1807,7 @@ index 0000000..99139e0
 +    if (Linked())
 +        return NX_3DS_LINK_ROOM;
 +    if (now == Mode::Auto)
-+        return WirelessWanted() ? NX_3DS_LINK_SEEKING : NX_3DS_LINK_OUT;
++        return wireless_on ? NX_3DS_LINK_SEEKING : NX_3DS_LINK_OUT;
 +    return NX_3DS_LINK_SEEKING;
 +}
 +
@@ -1809,10 +1820,16 @@ index 0000000..99139e0
 +    // Automatic: the worker holds the member and the room, and leaves on its next turn.
 +    if (now != Mode::Session)
 +        return;
-+    StopWorker(); // a knock still under way
-+    // The session's room stays open: its host comes back to it, and the others keep each other.
-+    if (auto member = Network::GetRoomMember().lock(); member && InRoom(*member))
-+        member->Leave();
++    // Ending a knock and leaving both wait on the network, and the caller is the frontend's main
++    // thread. The session's room stays open: its host comes back to it, and the others keep each
++    // other.
++    if (leaver.joinable())
++        leaver.join();
++    leaver = std::thread([] {
++        StopWorker();
++        if (auto member = Network::GetRoomMember().lock(); member && InRoom(*member))
++            member->Leave();
++    });
 +}
 +
 +void Rejoin() {
@@ -1821,6 +1838,8 @@ index 0000000..99139e0
 +        return;
 +    LOG_INFO(Frontend, "3DS link: back to the session's room");
 +    refused = false;
++    if (leaver.joinable())
++        leaver.join();
 +    StopWorker();
 +    worker = std::thread(JoinLoop, session_ip, room_port);
 +}
@@ -1829,6 +1848,7 @@ index 0000000..99139e0
 +    in_addr address{};
 +    cable_broadcast =
 +        broadcast && inet_pton(AF_INET, broadcast, &address) == 1 ? ntohl(address.s_addr) : 0;
++    std::scoped_lock socket(room_socket_mutex);
 +    const int before = cable.exchange(state);
 +    if (state != NX_3DS_CABLE_COMING)
 +        cable_hold_until = 0;
@@ -1844,6 +1864,7 @@ index 0000000..99139e0
 +
 +void OnSocket(int fd, bool server, const std::string& address) {
 +    if (server) {
++        std::scoped_lock socket(room_socket_mutex);
 +        room_socket = fd;
 +        Route(fd, cable == NX_3DS_CABLE_UP);
 +    } else {
@@ -1934,6 +1955,7 @@ index 0000000..99139e0
 +            Notice(std::string("Local wireless: ") + Reason(error));
 +    });
 +
++    std::scoped_lock control(control_mutex);
 +    if (automatic) {
 +        wireless_on = false;
 +        wireless_hosting = false;
@@ -1975,8 +1997,9 @@ index 0000000..99139e0
 +    // First: the frontend makes no call into a room that is going.
 +    SetLinkInterface(nullptr);
 +    route = nullptr;
-+    Network::socket_hook = nullptr;
 +    LeaveRoom();
++    // After the worker is gone: it calls the hook from inside a join.
++    Network::socket_hook = nullptr;
 +    Network::Shutdown();
 +    network_up = false;
 +}
@@ -2376,7 +2399,7 @@ index 003b3fd..b8b7ee4 100644
  };
  
 diff --git a/src/core/hle/service/nwm/nwm_uds.cpp b/src/core/hle/service/nwm/nwm_uds.cpp
-index e602bd3..4988fb2 100644
+index e602bd3..3360ea5 100644
 --- a/src/core/hle/service/nwm/nwm_uds.cpp
 +++ b/src/core/hle/service/nwm/nwm_uds.cpp
 @@ -22,6 +22,7 @@
@@ -2387,7 +2410,7 @@ index e602bd3..4988fb2 100644
  #include "core/hle/service/nwm/uds_beacon.h"
  #include "core/hle/service/nwm/uds_connection.h"
  #include "core/hle/service/nwm/uds_data.h"
-@@ -538,6 +539,65 @@ void NWM_UDS::HandleDeauthenticationFrame(const Network::WifiPacket& packet) {
+@@ -538,6 +539,69 @@ void NWM_UDS::HandleDeauthenticationFrame(const Network::WifiPacket& packet) {
      SignalEventAsync(connection_status_event);
  }
  
@@ -2419,6 +2442,10 @@ index e602bd3..4988fb2 100644
 +    connection_status.network_node_id = node_id;
 +    node_map.clear();
 +    SignalEventAsync(connection_status_event);
++    // As a disconnect the game asked for: whoever waits on a bound channel wakes too.
++    for (auto& bind_node : channel_data) {
++        SignalEventAsync(bind_node.second.event);
++    }
 +}
 +
 +void NWM_UDS::OnRoomMembersChanged() {
@@ -2453,7 +2480,7 @@ index e602bd3..4988fb2 100644
  void NWM_UDS::HandleDataFrame(const Network::WifiPacket& packet) {
      switch (GetFrameEtherType(packet.data)) {
      case EtherType::EAPoL:
-@@ -598,6 +658,8 @@ boost::optional<Network::MacAddress> NWM_UDS::GetNodeMacAddress(u16 dest_node_id
+@@ -598,6 +662,8 @@ boost::optional<Network::MacAddress> NWM_UDS::GetNodeMacAddress(u16 dest_node_id
  
  void NWM_UDS::ShutdownHLE() {
      initialized = false;
@@ -2462,7 +2489,7 @@ index e602bd3..4988fb2 100644
  
      for (auto& bind_node : channel_data) {
          SignalEventAsync(bind_node.second.event);
-@@ -698,6 +760,8 @@ ResultVal<std::shared_ptr<Kernel::Event>> NWM_UDS::Initialize(
+@@ -698,6 +764,8 @@ ResultVal<std::shared_ptr<Kernel::Event>> NWM_UDS::Initialize(
  
      current_node = node;
      initialized = true;
@@ -2471,7 +2498,7 @@ index e602bd3..4988fb2 100644
  
      recv_buffer_memory = std::move(sharedmem);
      ASSERT_MSG(recv_buffer_memory->GetSize() == sharedmem_size, "Invalid shared memory size.");
-@@ -939,6 +1003,8 @@ void NWM_UDS::Unbind(Kernel::HLERequestContext& ctx) {
+@@ -939,6 +1007,8 @@ void NWM_UDS::Unbind(Kernel::HLERequestContext& ctx) {
  Result NWM_UDS::BeginHostingNetwork(std::span<const u8> network_info_buffer,
                                      std::vector<u8> passphrase) {
      // TODO(Subv): Store the passphrase and verify it when attempting a connection.
@@ -2480,7 +2507,7 @@ index e602bd3..4988fb2 100644
  
      {
          std::scoped_lock lock(connection_status_mutex);
-@@ -1734,14 +1800,34 @@ NWM_UDS::NWM_UDS(Core::System& system) : ServiceFramework("nwm::UDS"), system(sy
+@@ -1734,14 +1804,34 @@ NWM_UDS::NWM_UDS(Core::System& system) : ServiceFramework("nwm::UDS"), system(sy
      if (auto room_member = Network::GetRoomMember().lock()) {
          wifi_packet_received = room_member->BindOnWifiPacketReceived(
              [this](const Network::WifiPacket& packet) { OnWifiPacketReceived(packet); });
