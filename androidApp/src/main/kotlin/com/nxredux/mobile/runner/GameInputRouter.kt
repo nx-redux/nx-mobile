@@ -807,7 +807,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         if (btn == NxButton.HOME) { if (down && isWii) pressWiiHome(); return }
         // SELECT + START held together also opens it (the on-screen pad is P1, port 0).
         if (inputs.menuChord(0, btn, down)) { toggleMenu(); return }
-        if (isNds && !routeNds(btn, down)) return   // R2, L2, SELECT + a direction and the stylus inputs stay out of the core
+        if (isNds && !routeNds(btn, down)) return   // L3, R2, L2, the SELECT chords and the stylus inputs stay out of the core
         if (isN3ds && !routeN3ds(btn, down)) return  // SELECT (held back for chords), its chords and the stylus inputs: routeN3ds sends what they become
         val view = retroView ?: return
         if (gcPad && (btn == NxButton.L2 || btn == NxButton.R2)) { gcTrigger(btn, down); return }
@@ -863,7 +863,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
                 val sx = event.getAxisValue(MotionEvent.AXIS_X)
                 val sy = event.getAxisValue(MotionEvent.AXIS_Y)
                 if (ndsHotkeys.onStick(sx, sy)) wakePen() else view.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, sx, sy, 0)
-                view.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, event.getAxisValue(MotionEvent.AXIS_Z), event.getAxisValue(MotionEvent.AXIS_RZ), 0)
+                val rx = event.getAxisValue(MotionEvent.AXIS_Z)
+                val ry = event.getAxisValue(MotionEvent.AXIS_RZ)
+                if (ndsHotkeys.onRightStick(rx, ry)) wakePen() else view.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, rx, ry, 0)
                 // Consumed: unhandled, Android would synthesise d-pad keys from the hat and stick, and they would pass
                 // routeNds a second time (a SELECT chord firing twice). routeNdsHat sends those directions itself.
                 return true
@@ -1038,7 +1040,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         if (port == 0) host.shortcutKeys?.let { keys -> if (shortcut(keys.onDown(keyCode, repeat = !first), keyCode, port)) return true }
         // The hotkeys and stylus see the console button the key is (its printed letter on DS/3DS), as the core will.
         val placed = PadKeymap.buttonFor(positionOf(event, keyCode))
-        if (isNds) placed?.let { b ->
+        if (isNds) (placed ?: ndsThumbButton(keyCode))?.let { b ->
             if (b == NxButton.L2 || b == NxButton.R2) { if (first && routeTriggerKey(b, down = true)) routeNds(b, down = true); return true }
             if (!routeNds(b, down = true, repeat = !first)) return true
         }
@@ -1073,7 +1075,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         PadKeymap.buttonFor(keyCode)?.let { inputs.menuChord(port, it, down = false) }
         if (port == 0) host.shortcutKeys?.let { keys -> if (shortcut(keys.onUp(keyCode), keyCode, port)) return true }
         val placed = PadKeymap.buttonFor(positionOf(event, keyCode))   // as on the down
-        if (isNds) placed?.let { b ->
+        if (isNds) (placed ?: ndsThumbButton(keyCode))?.let { b ->
             if (b == NxButton.L2 || b == NxButton.R2) { if (routeTriggerKey(b, down = false)) routeNds(b, down = false); return true }
             if (!routeNds(b, down = false)) return true
         }
@@ -1102,6 +1104,16 @@ private val RELEASED_BUTTONS = listOf(
  * face swap touches them), so the release matches what was sent.
  */
 private val RELEASED_THUMB_KEYS = listOf(KeyEvent.KEYCODE_BUTTON_THUMBL, KeyEvent.KEYCODE_BUTTON_THUMBR)
+
+/**
+ * A physical stick click as the DS hotkeys' button: L3 swaps the screens and R3 taps with the stylus ([NdsHotkeys]).
+ * [PadKeymap.buttonFor] leaves the clicks out, so on other consoles they reach the core as themselves.
+ */
+internal fun ndsThumbButton(keyCode: Int): NxButton? = when (keyCode) {
+    KeyEvent.KEYCODE_BUTTON_THUMBL -> NxButton.L3
+    KeyEvent.KEYCODE_BUTTON_THUMBR -> NxButton.R3
+    else -> null
+}
 
 /** The 3DS SWAP key's downs: a held key's repeats go where its first down went, never read as a release. */
 internal class N3dsSwapKey {

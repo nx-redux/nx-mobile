@@ -12,7 +12,7 @@ class N3dsHotkeysTest {
     private fun N3dsHotkeys.down(b: NxButton) = onButton(b, down = true)
     private fun N3dsHotkeys.up(b: NxButton) = onButton(b, down = false)
     private fun N3dsHotkeys.chordStylus() = also {
-        down(NxButton.SELECT); down(NxButton.L1); up(NxButton.L1); up(NxButton.SELECT); takeKeys()
+        down(NxButton.SELECT); down(NxButton.R1); up(NxButton.R1); up(NxButton.SELECT); takeKeys()
     }
     private fun stylusOn() = N3dsHotkeys().chordStylus()
     private fun near(expected: Float, actual: Float) = assertTrue(abs(expected - actual) < 0.001f, "expected $expected, got $actual")
@@ -28,9 +28,9 @@ class N3dsHotkeysTest {
     @Test fun under_a_skin_select_l_does_nothing() {
         val h = N3dsHotkeys().apply { skinShown = true }
         h.down(NxButton.SELECT)
-        assertEquals(keep, h.down(NxButton.L1))                                 // kept from the core, no Stylus action
+        assertEquals(keep, h.down(NxButton.R1))                                 // kept from the core, no Stylus action
         assertFalse(h.stylus)
-        h.up(NxButton.L1); h.up(NxButton.SELECT); h.tick(N3dsHotkeys.SELECT_TAP_MS)
+        h.up(NxButton.R1); h.up(NxButton.SELECT); h.tick(N3dsHotkeys.SELECT_TAP_MS)
         assertEquals(emptyList(), h.takeKeys())                                 // a chord: no SELECT tap
     }
 
@@ -42,7 +42,7 @@ class N3dsHotkeysTest {
         h.up(NxButton.RIGHT)
         assertEquals(N3dsDecision(false, N3dsAction.CycleLayout(-1)), h.down(NxButton.LEFT))
         h.up(NxButton.LEFT)
-        assertEquals(keep, h.down(NxButton.L1))   // the stylus still not, under a skin
+        assertEquals(keep, h.down(NxButton.R1))   // the stylus still not, under a skin
         assertFalse(h.stylus)
     }
 
@@ -59,8 +59,8 @@ class N3dsHotkeysTest {
     @Test fun under_a_skin_select_r_still_swaps() {
         val h = N3dsHotkeys().apply { skinShown = true }
         h.down(NxButton.SELECT)
-        assertEquals(keep, h.down(NxButton.R1))
-        h.up(NxButton.R1); h.up(NxButton.SELECT)
+        assertEquals(keep, h.down(NxButton.L1))
+        h.up(NxButton.L1); h.up(NxButton.SELECT)
         assertEquals(listOf(press(N3dsKey.L3), release(N3dsKey.L3)), h.takeKeys())
     }
 
@@ -127,9 +127,9 @@ class N3dsHotkeysTest {
         val h = N3dsHotkeys()
         h.down(NxButton.SELECT)
         h.tick(5_000)
-        assertEquals(keep, h.down(NxButton.R1))
+        assertEquals(keep, h.down(NxButton.L1))
         assertEquals(listOf(press(N3dsKey.L3)), h.takeKeys())
-        h.up(NxButton.R1)
+        h.up(NxButton.L1)
         h.up(NxButton.SELECT)
         assertEquals(listOf(release(N3dsKey.L3)), h.takeKeys())
     }
@@ -170,13 +170,13 @@ class N3dsHotkeysTest {
     @Test fun select_released_mid_chord_ends_the_chord_and_the_held_button_goes_where_it_went() {
         val h = N3dsHotkeys()
         h.down(NxButton.SELECT)
-        h.down(NxButton.R1)
+        h.down(NxButton.L1)
         assertEquals(listOf(press(N3dsKey.L3)), h.takeKeys())
         h.up(NxButton.SELECT)
         assertEquals(emptyList(), h.takeKeys())                                 // no Select tap after a chord
-        assertEquals(keep, h.up(NxButton.R1))
+        assertEquals(keep, h.up(NxButton.L1))
         assertEquals(listOf(release(N3dsKey.L3)), h.takeKeys())                 // released as it was pressed
-        assertEquals(forward, h.down(NxButton.R1))                              // R alone is the game's
+        assertEquals(forward, h.down(NxButton.L1))                              // L alone is the game's
     }
 
     @Test fun select_with_other_buttons_lets_them_through_and_still_taps() {
@@ -195,7 +195,7 @@ class N3dsHotkeysTest {
         h.up(NxButton.SELECT)
         h.down(NxButton.SELECT)
         assertEquals(listOf(press(N3dsKey.SELECT), release(N3dsKey.SELECT)), h.takeKeys())
-        h.down(NxButton.L1)                                                     // and the new hold can be a chord
+        h.down(NxButton.R1)                                                     // and the new hold can be a chord
         assertTrue(h.stylus)
     }
 
@@ -229,12 +229,12 @@ class N3dsHotkeysTest {
     @Test fun select_r_goes_to_the_core_as_l3_the_swap_screens_button() {
         val h = N3dsHotkeys()
         h.down(NxButton.SELECT)
-        assertEquals(keep, h.down(NxButton.R1))
+        assertEquals(keep, h.down(NxButton.L1))
         assertEquals(listOf(press(N3dsKey.L3)), h.takeKeys())
-        assertTrue(h.consumes(NxButton.R1))
-        h.up(NxButton.R1)
+        assertTrue(h.consumes(NxButton.L1))
+        h.up(NxButton.L1)
         assertEquals(listOf(release(N3dsKey.L3)), h.takeKeys())
-        assertFalse(h.consumes(NxButton.R1))
+        assertFalse(h.consumes(NxButton.L1))
     }
 
     @Test fun l2_r2_are_zl_zr_and_always_reach_the_core() {
@@ -252,8 +252,8 @@ class N3dsHotkeysTest {
     @Test fun select_r_is_l3_in_stylus_mode_too() {
         val h = stylusOn()
         h.down(NxButton.SELECT)
-        h.down(NxButton.R1)
-        h.up(NxButton.R1)
+        h.down(NxButton.L1)
+        h.up(NxButton.L1)
         assertEquals(listOf(press(N3dsKey.L3), release(N3dsKey.L3)), h.takeKeys())
     }
 
@@ -261,15 +261,15 @@ class N3dsHotkeysTest {
         val h = N3dsHotkeys()
         assertFalse(h.stylus)                                                   // off at every launch
         h.down(NxButton.SELECT)
-        assertEquals(N3dsDecision(false, N3dsAction.Stylus(true)), h.down(NxButton.L1))
-        assertEquals(keep, h.up(NxButton.L1))
+        assertEquals(N3dsDecision(false, N3dsAction.Stylus(true)), h.down(NxButton.R1))
+        assertEquals(keep, h.up(NxButton.R1))
         assertTrue(h.stylus)
-        assertEquals(N3dsDecision(false, N3dsAction.Stylus(false)), h.down(NxButton.L1))
+        assertEquals(N3dsDecision(false, N3dsAction.Stylus(false)), h.down(NxButton.R1))
         assertFalse(h.stylus)
-        h.up(NxButton.L1)
+        h.up(NxButton.R1)
         h.up(NxButton.SELECT)
         assertEquals(emptyList(), h.takeKeys())
-        assertEquals(forward, h.down(NxButton.L1))                              // L alone is the game's
+        assertEquals(forward, h.down(NxButton.R1))                              // R alone is the game's
     }
 
     @Test fun a_release_goes_where_its_press_went() {
@@ -306,7 +306,7 @@ class N3dsHotkeysTest {
         val h = stylusOn()
         h.down(NxButton.A)
         h.down(NxButton.SELECT)
-        h.down(NxButton.L1)
+        h.down(NxButton.R1)
         assertEquals(listOf(press(N3dsKey.R3), release(N3dsKey.R3)), h.takeKeys())
         assertEquals(keep, h.up(NxButton.A))
         assertEquals(emptyList(), h.takeKeys())
@@ -368,7 +368,7 @@ class N3dsHotkeysTest {
         h.down(NxButton.A)
         h.down(NxButton.SELECT)
         h.tick(1_000)                                                           // SELECT held back, never in the core
-        h.down(NxButton.R1)
+        h.down(NxButton.L1)
         h.down(NxButton.RIGHT)                                                  // a chord: cycles, no cursor
         h.takeKeys()
         h.releaseAll()

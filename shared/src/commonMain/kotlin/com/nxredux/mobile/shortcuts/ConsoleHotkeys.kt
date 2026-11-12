@@ -9,7 +9,7 @@ data class ClaimedInput(val binding: ShortcutBinding, val note: String)
 
 /**
  * The inputs each console's built-in hotkeys claim; they win over user bindings. Restated in key codes from
- * `NdsHotkeys` (R2, L2, SELECT + d-pad), `N3dsHotkeys` (SELECT + Left/Right/L1/R1, L3 swap) and androidApp's `WiiShortcuts`
+ * `NdsHotkeys` (L3, R2, L2, SELECT + d-pad/L1/R1), `N3dsHotkeys` (SELECT + Left/Right/L1/R1, L3 swap) and androidApp's `WiiShortcuts`
  * (L3 recentre, R3 Home), which work in NxButton or platform key terms `shared` can't share.
  */
 object ConsoleHotkeys {
@@ -26,8 +26,12 @@ object ConsoleHotkeys {
     )
 
     private val nds = listOf(
+        single(KeyCodes.BUTTON_THUMBL, "L3 swaps screens"),
+        single(KeyCodes.BUTTON_THUMBR, "R3 taps with the stylus"),
         single(KeyCodes.BUTTON_R2, "R2 swaps the DS screens"),
         single(KeyCodes.BUTTON_L2, "L2 is the stylus"),
+        chord(KeyCodes.BUTTON_L1, "SELECT+L1 swaps the DS screens"),
+        chord(KeyCodes.BUTTON_R1, "SELECT+R1 toggles the stylus"),
         chord(KeyCodes.DPAD_LEFT, "SELECT+Left cycles the DS layout"),
         chord(KeyCodes.DPAD_RIGHT, "SELECT+Right cycles the DS layout"),
         chord(KeyCodes.DPAD_UP, "SELECT+Up moves the DS inset"),
@@ -37,8 +41,8 @@ object ConsoleHotkeys {
     private val n3ds = listOf(
         chord(KeyCodes.DPAD_LEFT, "SELECT+Left cycles the 3DS layout"),
         chord(KeyCodes.DPAD_RIGHT, "SELECT+Right cycles the 3DS layout"),
-        chord(KeyCodes.BUTTON_L1, "SELECT+L1 toggles the stylus"),
-        chord(KeyCodes.BUTTON_R1, "SELECT+R1 swaps the 3DS screens"),
+        chord(KeyCodes.BUTTON_L1, "SELECT+L1 swaps the 3DS screens"),
+        chord(KeyCodes.BUTTON_R1, "SELECT+R1 toggles the stylus"),
         single(KeyCodes.BUTTON_THUMBL, "L3 swaps screens"),
     )
 

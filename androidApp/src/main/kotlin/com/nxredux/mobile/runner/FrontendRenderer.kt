@@ -915,7 +915,7 @@ internal class FrontendRenderer(
     private class SkinDs(val top: PxRect, val bottom: PxRect, val regions: List<NdsRegion>)
 
     /**
-     * 3DS SWAP (the skin's SWAP, SELECT + R, a pad's left-stick click) [down] or up under a pad skin with the screens as regions
+     * 3DS SWAP (the skin's SWAP, SELECT + L, a pad's left-stick click) [down] or up under a pad skin with the screens as regions
      * ([skinDsLayout]): a press trades the screens' glasses (touch follows the bottom screen) and the core never sees it.
      * False otherwise: the key is someone else's (split's, else Azahar's own).
      */

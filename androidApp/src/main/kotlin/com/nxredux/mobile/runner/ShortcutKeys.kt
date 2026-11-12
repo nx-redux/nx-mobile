@@ -21,8 +21,8 @@ sealed interface KeyVerdict {
  * the game's. MENU still opens the menu, except that with a MENU combo bound ([holdsMenu]) MENU waits for its release
  * and opens the menu only on a tap: released within [MENU_TAP_MS] ([now]) with no combo fired while it was held. Built-in
  * hotkeys never match: [EffectiveShortcuts.bindings] leaves them out ([EffectiveShortcuts.blocked]), and a key bound
- * alone stays the console's while its built-in chord's modifier is held ([claimed]: SELECT+R1 still swaps the 3DS
- * screens with R1 bound alone). A fired key's repeats are swallowed, never fired again.
+ * alone stays the console's while its built-in chord's modifier is held ([claimed]: SELECT+R1 still toggles the 3DS
+ * stylus with R1 bound alone). A fired key's repeats are swallowed, never fired again.
  */
 class ShortcutKeys(private val effective: EffectiveShortcuts, claimed: List<ClaimedInput>, private val now: () -> Long) {
     /** The built-in chords (`ConsoleHotkeys.claimed`), which a key bound alone must not take from the console. */

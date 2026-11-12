@@ -6,13 +6,13 @@ import kotlin.math.min
 
 /** A frontend action an NDS input asks for. */
 sealed interface NdsAction {
-    /** R2: the other screen becomes the big one. */
+    /** L3, SELECT + L1 or R2: the other screen becomes the big one. */
     data object SwapScreens : NdsAction
     /** SELECT + Left (-1) / Right (+1): the next layout for the current orientation. */
     data class CycleLayout(val delta: Int) : NdsAction
     /** SELECT + Up (-1) / Down (+1): the picture-in-picture inset to the next corner, clockwise. */
     data class CycleCorner(val delta: Int) : NdsAction
-    /** L2: stylus mode turned on or off. */
+    /** SELECT + R1 or L2: stylus mode turned on or off. */
     data class Stylus(val on: Boolean) : NdsAction
 }
 
@@ -27,10 +27,12 @@ data class NdsPen(val x: Float, val y: Float, val pressed: Boolean) {
 }
 
 /**
- * NX Redux's DS controls (nxredux.com/emulators/nintendo-ds), before the core: R2 swaps screens, SELECT + Left/Right
- * cycles the layout, SELECT + Up/Down moves the inset, L2 toggles stylus mode. In stylus mode the
- * d-pad and left stick move a pen on the bottom screen, faster the longer a direction is held (DraStic-like), and A
- * touches at it. A release always goes where its press went. R2 and L2 never reach the core. Pure: the host feeds events and ticks, and applies actions.
+ * NX Redux's DS controls (nxredux.com/emulators/nintendo-ds), before the core. As on the 3DS ([N3dsHotkeys]): L3 or
+ * SELECT + L1 swaps screens, SELECT + R1 toggles stylus mode, SELECT + Left/Right cycles the layout; R2 (swap) and L2
+ * (stylus) too, and SELECT + Up/Down moves the inset. In stylus mode the right stick, the left stick and the d-pad move
+ * a pen on the bottom screen (the d-pad faster the longer a direction is held, DraStic-like), and R3 or A touches at it.
+ * A release always goes where its press went. L3, R2 and L2 never reach the core. Pure: the host feeds events and
+ * ticks, and applies actions.
  */
 class NdsHotkeys {
     companion object {
@@ -57,8 +59,10 @@ class NdsHotkeys {
     private var heldMs = 0L                      // how long a direction has been held
     private var stickX = 0f
     private var stickY = 0f
+    private var rightX = 0f
+    private var rightY = 0f
 
-    /** Stylus mode on or off: L2, or the pad's STYLUS pill. Off lifts the pen. */
+    /** Stylus mode on or off: SELECT + R1, L2, or the pad's STYLUS pill. Off lifts the pen. */
     fun toggleStylus(): NdsAction.Stylus {
         stylus = !stylus
         resetPen()   // off: lift the pen; on: a stick already held does not move it at once
@@ -78,12 +82,14 @@ class NdsHotkeys {
                 held.remove(button)
                 if (held.isEmpty()) heldMs = 0L
             }
-            if (button == NxButton.A && wasConsumed) pen = pen.copy(pressed = false)
+            if ((button == NxButton.A || button == NxButton.R3) && wasConsumed) pen = pen.copy(pressed = false)
             return NdsDecision(forward = !wasConsumed)
         }
         val decision = when {
-            button == NxButton.R2 -> NdsDecision(false, NdsAction.SwapScreens)
+            button == NxButton.R2 || button == NxButton.L3 -> NdsDecision(false, NdsAction.SwapScreens)
+            selectHeld && button == NxButton.L1 -> NdsDecision(false, NdsAction.SwapScreens)
             button == NxButton.L2 -> NdsDecision(false, toggleStylus())
+            selectHeld && button == NxButton.R1 -> NdsDecision(false, toggleStylus())
             selectHeld && (button == NxButton.LEFT || button == NxButton.RIGHT) ->
                 if (skinShown && !skinLayouts) NdsDecision(false)   // the skin places the screens: kept, nothing to cycle
                 else NdsDecision(false, NdsAction.CycleLayout(if (button == NxButton.RIGHT) 1 else -1))
@@ -94,7 +100,7 @@ class NdsHotkeys {
                 held += button
                 NdsDecision(false)
             }
-            stylus && button == NxButton.A -> {
+            stylus && (button == NxButton.A || button == NxButton.R3) -> {
                 pen = pen.copy(pressed = true)
                 NdsDecision(false)
             }
@@ -114,9 +120,27 @@ class NdsHotkeys {
         return stylus
     }
 
-    /** Moves the pen by [dtMs] of held directions and stick; true when it moved. */
+    /** The right stick; true when stylus mode takes it (then it is not forwarded). */
+    fun onRightStick(x: Float, y: Float): Boolean {
+        rightX = x
+        rightY = y
+        return stylus
+    }
+
+    /** Moves the pen by [dtMs] of held directions and sticks; true when it moved. */
     fun tick(dtMs: Long): Boolean {
         if (!stylus || dtMs <= 0L) return false
+        return move(dtMs)
+    }
+
+    private fun stickStep(x: Float, y: Float, dt: Float): Pair<Float, Float> {
+        val magnitude = hypot(x, y)
+        if (magnitude <= STICK_DEADZONE) return 0f to 0f
+        val speed = min(1f, (magnitude - STICK_DEADZONE) / (1f - STICK_DEADZONE)) * PEN_MAX_SPEED
+        return x / magnitude * speed * dt to y / magnitude * speed * dt
+    }
+
+    private fun move(dtMs: Long): Boolean {
         val dt = dtMs / 1000f
         var dx = 0f
         var dy = 0f
@@ -128,12 +152,8 @@ class NdsHotkeys {
             dx += hx * speed * dt
             dy += hy * speed * dt
         }
-        val magnitude = hypot(stickX, stickY)
-        if (magnitude > STICK_DEADZONE) {
-            val speed = min(1f, (magnitude - STICK_DEADZONE) / (1f - STICK_DEADZONE)) * PEN_MAX_SPEED
-            dx += stickX / magnitude * speed * dt
-            dy += stickY / magnitude * speed * dt
-        }
+        stickStep(stickX, stickY, dt).let { (sx, sy) -> dx += sx; dy += sy }
+        stickStep(rightX, rightY, dt).let { (sx, sy) -> dx += sx; dy += sy }
         if (dx == 0f && dy == 0f) return false
         val x = (pen.x + dx).coerceIn(0f, MAX_X)
         val y = (pen.y + dy).coerceIn(0f, MAX_Y)
@@ -159,12 +179,14 @@ class NdsHotkeys {
         resetPen()
     }
 
-    /** Stops the pen: no held direction, a centred stick, the pen lifted. Consumed presses stay consumed. */
+    /** Stops the pen: no held direction, centred sticks, the pen lifted. Consumed presses stay consumed. */
     private fun resetPen() {
         held.clear()
         heldMs = 0L
         stickX = 0f
         stickY = 0f
+        rightX = 0f
+        rightY = 0f
         pen = pen.copy(pressed = false)
     }
 }

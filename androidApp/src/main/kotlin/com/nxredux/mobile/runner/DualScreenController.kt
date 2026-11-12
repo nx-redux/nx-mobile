@@ -379,7 +379,7 @@ internal class DualScreenController(
     }
 
     /**
-     * 3DS SWAP (the skin's SWAP, SELECT + R, a pad's left-stick click) [down] or up: split, a press swaps the displays and the core
+     * 3DS SWAP (the skin's SWAP, SELECT + L, a pad's left-stick click) [down] or up: split, a press swaps the displays and the core
      * never sees it (Azahar's own swap would turn its frame under the fixed cuts). False when not split: Azahar's key.
      */
     fun onN3dsSwapPressed(down: Boolean): Boolean {

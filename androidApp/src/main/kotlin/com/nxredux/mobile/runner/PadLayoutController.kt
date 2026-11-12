@@ -550,7 +550,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val pack = skinPack ?: return
         skinView = addSkinView(root, game, pack, bare = false) { onSkinResized() }
         skinShownState.value = true
-        // no stylus mode under a skin: a touch off its buttons is the touch screen (DS and 3DS); nor the 3DS's SELECT + L
+        // no stylus mode under a skin: a touch off its buttons is the touch screen (DS and 3DS); nor the 3DS's SELECT + R
         // / Left / Right chords ([N3dsHotkeys.skinShown])
         if (input.ndsStylusOn.value) input.toggleNdsStylus()
         if (input.n3dsStylusOn.value) input.toggleN3dsStylus()

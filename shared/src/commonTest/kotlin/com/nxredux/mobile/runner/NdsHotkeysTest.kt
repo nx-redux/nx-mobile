@@ -19,6 +19,55 @@ class NdsHotkeysTest {
         assertEquals(NdsDecision(false), h.up(NxButton.R2))
     }
 
+    @Test fun l3_and_select_l1_swap_as_on_the_3ds() {
+        val h = NdsHotkeys()
+        assertEquals(NdsDecision(false, NdsAction.SwapScreens), h.down(NxButton.L3))
+        assertEquals(NdsDecision(false), h.up(NxButton.L3))
+        assertEquals(NdsDecision(true), h.down(NxButton.L1))                    // L alone is the game's
+        assertEquals(NdsDecision(true), h.up(NxButton.L1))
+        h.down(NxButton.SELECT)
+        assertEquals(NdsDecision(false, NdsAction.SwapScreens), h.down(NxButton.L1))
+        assertEquals(NdsDecision(false), h.up(NxButton.L1))
+    }
+
+    @Test fun select_r1_toggles_the_stylus() {
+        val h = NdsHotkeys()
+        assertEquals(NdsDecision(true), h.down(NxButton.R1))                    // R alone is the game's
+        h.up(NxButton.R1)
+        h.down(NxButton.SELECT)
+        assertEquals(NdsDecision(false, NdsAction.Stylus(true)), h.down(NxButton.R1))
+        assertEquals(NdsDecision(false), h.up(NxButton.R1))
+        assertTrue(h.stylus)
+        assertEquals(NdsDecision(false, NdsAction.Stylus(false)), h.down(NxButton.R1))
+        assertFalse(h.stylus)
+    }
+
+    @Test fun the_right_stick_moves_the_pen_in_stylus_mode_only() {
+        val h = NdsHotkeys()
+        assertFalse(h.onRightStick(1f, 0f))                                     // not taken: it goes on to the core
+        val x = h.pen.x
+        assertFalse(h.tick(100))
+        near(x, h.pen.x)
+        val s = stylusOn()
+        assertTrue(s.onRightStick(1f, 0f))
+        assertTrue(s.tick(100))
+        near(x + NdsHotkeys.PEN_MAX_SPEED * 0.1f, s.pen.x)
+        s.onRightStick(0f, 0f)
+        assertFalse(s.tick(100))
+    }
+
+    @Test fun r3_taps_at_the_pen_in_stylus_mode_only() {
+        val h = NdsHotkeys()
+        assertEquals(NdsDecision(true), h.down(NxButton.R3))
+        assertFalse(h.pen.pressed)
+        h.up(NxButton.R3)
+        val s = stylusOn()
+        assertEquals(NdsDecision(false), s.down(NxButton.R3))
+        assertTrue(s.pen.pressed)
+        assertEquals(NdsDecision(false), s.up(NxButton.R3))
+        assertFalse(s.pen.pressed)
+    }
+
     @Test fun l2_toggles_the_stylus_and_never_reaches_the_core() {
         val h = NdsHotkeys()
         assertFalse(h.stylus)                                                   // off at every launch
