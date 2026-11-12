@@ -46,7 +46,9 @@ namespace {
 
 constexpr int MODE_OFF = -1;
 constexpr int TICK_MS = PSL_ANNOUNCE_MS / 5;
-constexpr int MAX_DRAIN = 32;   // packets read per tick: a flood cannot keep the thread from stepping
+constexpr int MAX_DRAIN = 32;   // datagrams read per tick, whatever their size: a flood cannot keep the thread from stepping
+// What a waiting server() allows the finder: its listen window, then a step and the server starting to listen.
+constexpr int SERVER_WAIT_MS = PSL_LISTEN_MS + 500;
 
 struct Settings {
     int mode = MODE_OFF;     // PSL_AUTO / PSL_HOST / PSL_JOIN
@@ -70,7 +72,8 @@ bool hasCore = false;
 psl election;
 bool parked = false;
 // The core's last active report, kept while parked so it can be replayed at unpark: psl_active must not be told
-// "active" while parked, or the listen window would already have run out when the device comes back.
+// "active" while parked, or the listen window would already have run out when the device comes back. coreGrouped can
+// be 1 with coreActive 0: the game left ad hoc while others still play on this device's server.
 int coreActive = 0, coreGrouped = 0;
 // Automatic route, while parked: the game has been out of ad hoc since the leave, so its next trigger brings the
 // device back (a game still in ad hoc at the leave must leave it first).
@@ -147,6 +150,7 @@ Settings read(const std::vector<Variable>& vars) {
 // A fresh election for the settings, carrying over what the core has already reported. Under mutex.
 void resetElectionLocked() {
     psl_init(&election, settings.mode == MODE_OFF ? PSL_AUTO : settings.mode, settings.self, processTie(), settings.hostIp);
+    psl_set_net(&election, settings.broadcast);
     if (parked) psl_park(&election, 1);
     else if (coreActive) psl_active(&election, 1, coreGrouped, nowMs());
 }
@@ -184,7 +188,10 @@ int openSocket() {
     }
     int one = 1;
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
-    setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &one, sizeof(one));
+    // Without it every announcement fails (EACCES); sendAnnouncement says so when they do.
+    if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &one, sizeof(one)) != 0) {
+        LOGW("PSP link: cannot allow broadcasts on the finder's socket (errno %d)", errno);
+    }
     dslink::routeCoreSocket(fd, 0);
     sockaddr_in addr {};
     addr.sin_family = AF_INET;
@@ -206,11 +213,32 @@ void logChoice(const psl_choice& was, const psl_choice& now) {
     }
 }
 
+// Sends one finder packet to the broadcast address. A failure is logged once per run of failures: they repeat every
+// tick while the Wi-Fi is down.
+void sendAnnouncement(int fd, const uint8_t* out, size_t len, uint32_t broadcast, bool& failing) {
+    if (len == 0 || broadcast == 0 || fd < 0) return;
+    sockaddr_in to {};
+    to.sin_family = AF_INET;
+    to.sin_addr.s_addr = broadcast;
+    to.sin_port = htons(PSL_PORT);
+    if (sendto(fd, out, len, 0, (sockaddr*) &to, sizeof(to)) < 0) {
+        if (!failing) LOGW("PSP link: cannot send to %s (errno %d)", text(broadcast).c_str(), errno);
+        failing = true;
+    } else if (failing) {
+        LOGI("PSP link: sending to %s again", text(broadcast).c_str());
+        failing = false;
+    }
+}
+
 void runFinder() {
     // Without a socket the election still runs: host and join need none, and an automatic device then serves alone.
     int fd = openSocket();
     int64_t lastAnnounce = 0;
     bool announced = false;
+    // The last packet sent said serving: when this device stops serving, one more packet tells its followers.
+    bool announcedServing = false;
+    bool sendFailing = false;
+    psl_choice lastStep {};
     std::unique_lock<std::mutex> lock(mutex);
     while (!stopping) {
         bool route = rebind;
@@ -224,7 +252,7 @@ void runFinder() {
             uint32_t from;
         } packets[MAX_DRAIN];
         int count = 0;
-        while (fd >= 0 && count < MAX_DRAIN) {
+        for (int reads = 0; fd >= 0 && reads < MAX_DRAIN; reads++) {
             sockaddr_in from {};
             socklen_t fromLen = sizeof(from);
             // One byte over the packet size, so a longer datagram reads as longer and is refused, not cut to fit.
@@ -243,22 +271,30 @@ void runFinder() {
         const int64_t now = nowMs();
         for (int i = 0; i < count; i++) psl_heard(&election, packets[i].data, (size_t) packets[i].len, packets[i].from, now);
         const psl_choice choice = psl_step(&election, now);   // before psl_pack: it reads what the step updates
-        uint8_t out[PSL_PACKET];
-        size_t outLen = 0;
-        if (!announced || now - lastAnnounce >= PSL_ANNOUNCE_MS) {
-            outLen = psl_pack(&election, out);
-            if (outLen > 0) {
-                lastAnnounce = now;
-                announced = true;
-            }
-        }
-        const uint32_t broadcast = settings.broadcast;
         const psl_choice was = published;
-        const nx_psp_link_interface link = core;
-        const bool live = hasCore;
         const bool starting = choice.serve && !was.serve;
         const bool stoppingServer = !choice.serve && was.serve;
         const bool relogin = was.settled && (!choice.settled || choice.server_ip != was.server_ip);
+        // A change is announced at once, not at the next slot: a device listening for a server hears it inside its
+        // window, and one following this device's server hears it stop. A server is announced more often for the same
+        // reason. A new server on this device is announced once it listens (below), so nobody logs in to it too early.
+        const bool moved = choice.serve != lastStep.serve || choice.server_ip != lastStep.server_ip;
+        lastStep = choice;
+        const int64_t every = choice.serve ? PSL_SERVING_ANNOUNCE_MS : PSL_ANNOUNCE_MS;
+        uint8_t out[PSL_PACKET];
+        size_t outLen = 0;
+        if (!starting && (moved || !announced || now - lastAnnounce >= every)) {
+            outLen = psl_pack(&election, out);
+            if (outLen == 0 && announcedServing) outLen = psl_pack_goodbye(&election, out);
+            if (outLen > 0) {
+                lastAnnounce = now;
+                announced = true;
+                announcedServing = (out[5] & PSL_F_SERVING) != 0;
+            }
+        }
+        const uint32_t broadcast = settings.broadcast;
+        const nx_psp_link_interface link = core;
+        const bool live = hasCore;
         // A new server on this device is answered only once it listens, so a client never asks it too early.
         if (!starting) {
             published = choice;
@@ -266,22 +302,27 @@ void runFinder() {
         }
         lock.unlock();
 
-        if (outLen > 0 && broadcast != 0 && fd >= 0) {
-            sockaddr_in to {};
-            to.sin_family = AF_INET;
-            to.sin_addr.s_addr = broadcast;
-            to.sin_port = htons(PSL_PORT);
-            sendto(fd, out, outLen, 0, (sockaddr*) &to, sizeof(to));
-        }
+        sendAnnouncement(fd, out, outLen, broadcast, sendFailing);
         logChoice(was, choice);
         if (live && starting) {
             link.serve(1);
-            // Published even when stopping meanwhile, so the finder's exit stops this server again.
-            std::lock_guard<std::mutex> guard(mutex);
-            if (hasCore) {
-                published = choice;
-                changed.notify_all();
+            uint32_t to;
+            {
+                // Published even when stopping meanwhile, so the finder's exit stops this server again.
+                std::lock_guard<std::mutex> guard(mutex);
+                if (hasCore) {
+                    published = choice;
+                    changed.notify_all();
+                }
+                outLen = psl_pack(&election, out);
+                to = settings.broadcast;
             }
+            if (outLen > 0) {
+                lastAnnounce = nowMs();
+                announced = true;
+                announcedServing = (out[5] & PSL_F_SERVING) != 0;
+            }
+            sendAnnouncement(fd, out, outLen, to, sendFailing);
         }
         if (live && stoppingServer) link.serve(0);
         if (live && relogin) link.relogin();
@@ -291,13 +332,18 @@ void runFinder() {
     }
 
     // Stopping, the lock held. A finder ended by new settings takes back what it told the core; one ended because
-    // the core is going (hasCore already false, published already cleared) calls nothing.
+    // the core is going (hasCore already false, published already cleared) calls nothing. Either way a server this
+    // device announced says it stopped.
     const psl_choice was = published;
     const nx_psp_link_interface link = core;
     const bool live = hasCore;
     published = psl_choice {};
     changed.notify_all();
+    uint8_t out[PSL_PACKET];
+    const size_t outLen = announcedServing ? psl_pack_goodbye(&election, out) : 0;
+    const uint32_t broadcast = settings.broadcast;
     lock.unlock();
+    sendAnnouncement(fd, out, outLen, broadcast, sendFailing);
     if (live) {
         logChoice(was, psl_choice {});
         if (was.serve) link.serve(0);
@@ -340,13 +386,17 @@ void unparkLocked() {
     LOGI("PSP link: back");
 }
 
-// A session comes back; the automatic route waits for the game to re-enter ad hoc instead (coreActiveReport).
+// A session comes back; the automatic route waits for the game to re-enter ad hoc instead (coreActiveReport), and a
+// link switched off stays out (configure). The core is told only when the runner comes back itself, so the two never
+// part: the core's own idea of its route is read from the variables a frame later than the runner's.
 void adapterRejoin() {
-    nx_psp_link_interface link;
+    nx_psp_link_interface link {};
     {
         std::lock_guard<std::mutex> guard(mutex);
-        if (parked && settings.mode != PSL_AUTO) unparkLocked();
-        link = core;
+        if (parked && (settings.mode == PSL_HOST || settings.mode == PSL_JOIN)) {
+            unparkLocked();
+            link = core;
+        }
     }
     if (link.rejoin != nullptr) link.rejoin();
 }
@@ -360,7 +410,7 @@ int coreServer(uint32_t* ip, uint32_t* self) {
     std::unique_lock<std::mutex> lock(mutex);
     if (!hasCore || settings.mode == MODE_OFF) return 0;
     const unsigned start = generation;
-    changed.wait_for(lock, std::chrono::milliseconds(PSL_LISTEN_MS + 200),
+    changed.wait_for(lock, std::chrono::milliseconds(SERVER_WAIT_MS),
                      [start] { return published.settled || generation != start; });
     if (generation != start || !published.settled || published.server_ip == 0) return 0;
     if (ip != nullptr) *ip = published.server_ip;
@@ -372,13 +422,16 @@ void coreActiveReport(int active, int grouped) {
     std::lock_guard<std::mutex> guard(mutex);
     if (!hasCore) return;
     active = active != 0;
-    grouped = active && grouped != 0;
+    grouped = grouped != 0;
     const bool changedReport = active != coreActive || grouped != coreGrouped;
     // Kept even while off: settings that turn the link on later carry it into their election.
     coreActive = active;
     coreGrouped = grouped;
     if (settings.mode == MODE_OFF) return;
-    if (changedReport) LOGI("PSP link: game %s", !active ? "left ad hoc" : grouped ? "in a group" : "in ad hoc");
+    if (changedReport) {
+        LOGI("PSP link: game %s", !active ? (grouped ? "left ad hoc, others still on its server" : "left ad hoc")
+                                          : grouped ? "in a group, or others on its server" : "in ad hoc");
+    }
     if (parked) {
         if (settings.mode != PSL_AUTO) return;
         if (!active) outSinceLeave = true;
@@ -460,6 +513,7 @@ void setCore(nx_psp_link_interface* link) {
 void configure(const std::vector<Variable>& vars) {
     std::lock_guard<std::mutex> life(lifeMutex);
     const Settings wanted = read(vars);
+    nx_psp_link_interface leaving {};
     {
         std::lock_guard<std::mutex> guard(mutex);
         if (wanted == settings) return;
@@ -467,10 +521,25 @@ void configure(const std::vector<Variable>& vars) {
         settings.broadcast = wanted.broadcast;
         if (wanted.self != settings.self) psl_set_self(&election, wanted.self);
         settings.self = wanted.self;
+        psl_set_net(&election, wanted.broadcast);
         if (sameRole) {
             LOGI("PSP link: self %s, broadcast %s", text(wanted.self).c_str(), text(wanted.broadcast).c_str());
             return;
         }
+        // Switched off (the sheet's Disconnect): the game leaves ad hoc as for a leave, and stays out, so its presence
+        // is out and states work again. The mode is off from here, under the same hold as the park, so no rejoin
+        // between brings either side back.
+        if (wanted.mode == MODE_OFF && settings.mode != MODE_OFF && hasCore && !parked) {
+            parked = true;
+            outSinceLeave = !coreActive;
+            psl_park(&election, 1);
+            leaving = core;
+        }
+        if (wanted.mode == MODE_OFF) settings.mode = MODE_OFF;
+    }
+    if (leaving.leave != nullptr) {
+        LOGI("PSP link: switched off, left");
+        leaving.leave();
     }
     // A new role starts the election over; the old finder first takes back what it told the core.
     stopFinder();

@@ -17,9 +17,12 @@ struct nx_psp_link_interface {
     void (*serve)(int on);    /* start or stop the built-in ad hoc server; returns once it listens or has stopped */
     void (*relogin)(void);    /* the server changed or is gone: drop its connection, tell the game if it was in a group */
     /* The frontend's, filled in while it answers the call. */
-    int  (*server)(uint32_t* ip, uint32_t* self);  /* blocks up to PSL_LISTEN_MS + 200; 1: *ip is the server, *self this
+    int  (*server)(uint32_t* ip, uint32_t* self);  /* blocks up to PSL_LISTEN_MS + 500; 1: *ip is the server, *self this
                                                       device's address on the routed network (network order); 0: none */
-    void (*active)(int active, int grouped);       /* the game reached Scan/Create/Connect/Join; is in a group; left ad hoc */
+    /* active: the game reached Scan/Create/Connect/Join, 0 once it left ad hoc. grouped: the game is in a group, or
+     * this device's server has a user other than this device, so the server must not stop; it can stay 1 with active
+     * 0 while others play on the server of a game that left ad hoc. Only changes are told, from any thread. */
+    void (*active)(int active, int grouped);
     void (*route_socket)(int fd, int cable);
 };
 /* *data NULL: the core's link is gone; make no further calls. */
