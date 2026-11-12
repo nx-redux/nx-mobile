@@ -114,9 +114,11 @@ void psl_heard(psl* s, const uint8_t* pkt, size_t len, uint32_t from_ip, int64_t
 
 size_t psl_pack(const psl* s, uint8_t out[PSL_PACKET]) {
     int flags;
-    if (s->mode == PSL_HOST) {
+    if (s->parked) {
+        return 0;
+    } else if (s->mode == PSL_HOST) {
         flags = PSL_F_SERVING | PSL_F_SESSION;
-    } else if (s->mode == PSL_AUTO && !s->parked && (s->active || s->serving)) {
+    } else if (s->mode == PSL_AUTO && (s->active || s->serving)) {
         flags = (s->serving ? PSL_F_SERVING : 0) | (s->grouped ? PSL_F_GROUPED : 0);
     } else {
         return 0;
@@ -146,6 +148,10 @@ static const psl_peer* best_server(const psl* s, int64_t now_ms) {
 
 psl_choice psl_step(psl* s, int64_t now_ms) {
     psl_choice c = {0, 0, 0, 0};
+    if (s->parked) {  /* a session's host or joiner too: a leave ends what it serves or follows */
+        s->serving = 0;
+        return c;
+    }
     if (s->mode == PSL_HOST) {
         c.server_ip = s->self_ip;
         c.serve = c.settled = c.announce = 1;
@@ -154,10 +160,6 @@ psl_choice psl_step(psl* s, int64_t now_ms) {
     if (s->mode == PSL_JOIN) {
         c.server_ip = s->host_ip;
         c.settled = 1;
-        return c;
-    }
-    if (s->parked) {
-        s->serving = 0;
         return c;
     }
     if (!s->active) {

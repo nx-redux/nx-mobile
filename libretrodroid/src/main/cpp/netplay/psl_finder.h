@@ -71,7 +71,9 @@ typedef struct psl {
 void   psl_init(psl*, int mode, uint32_t self_ip, uint32_t tie, uint32_t host_ip);
 void   psl_set_self(psl*, uint32_t self_ip);                 /* the Wi-Fi address changed */
 void   psl_active(psl*, int active, int grouped, int64_t now_ms);  /* trigger reached / in a group / left */
-void   psl_park(psl*, int parked);                           /* Disconnect: no server, no announce, unsettled */
+/* Disconnect: no server, no announce, unsettled, in every mode (a session's host stops serving, its joiner stops
+ * following); unparking gives host and join their fixed choice back. */
+void   psl_park(psl*, int parked);
 void   psl_heard(psl*, const uint8_t* pkt, size_t len, uint32_t from_ip, int64_t now_ms);
 size_t psl_pack(const psl*, uint8_t out[PSL_PACKET]);        /* 0 when nothing is to be announced */
 psl_choice psl_step(psl*, int64_t now_ms);

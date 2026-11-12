@@ -200,6 +200,29 @@ static void host_and_join_fixed(void) {
     }
 }
 
+/* A session's host or joiner that leaves stops serving, announcing and following its server until it comes back. */
+static void host_and_join_parked(void) {
+    psl h, j;
+    uint8_t pkt[PSL_PACKET];
+    psl_init(&h, PSL_HOST, ip4(10, 0, 0, 1), 5, 0);
+    psl_init(&j, PSL_JOIN, ip4(10, 0, 0, 2), 5, ip4(10, 0, 0, 9));
+    psl_park(&h, 1);
+    psl_park(&j, 1);
+    psl_choice c = psl_step(&h, 1000);
+    assert(c.serve == 0 && c.settled == 0 && c.announce == 0);
+    assert(psl_pack(&h, pkt) == 0);
+    c = psl_step(&j, 1000);
+    assert(c.serve == 0 && c.settled == 0 && c.announce == 0);
+    assert(psl_pack(&j, pkt) == 0);
+    psl_park(&h, 0);
+    psl_park(&j, 0);
+    c = psl_step(&h, 2000);
+    assert(c.serve == 1 && c.settled == 1 && c.announce == 1 && c.server_ip == ip4(10, 0, 0, 1));
+    assert(psl_pack(&h, pkt) == PSL_PACKET);
+    c = psl_step(&j, 2000);
+    assert(c.serve == 0 && c.settled == 1 && c.announce == 0 && c.server_ip == ip4(10, 0, 0, 9));
+}
+
 static void parked_is_silent(void) {
     psl s;
     uint8_t pkt[PSL_PACKET];
@@ -242,6 +265,7 @@ int main(void) {
     server_expires_reelect();
     linger_then_stop();
     host_and_join_fixed();
+    host_and_join_parked();
     parked_is_silent();
     inactive_is_silent();
     printf("ALL PASS\n");

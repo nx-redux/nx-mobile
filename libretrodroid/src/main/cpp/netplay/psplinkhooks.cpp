@@ -72,6 +72,9 @@ bool parked = false;
 // The core's last active report, kept while parked so it can be replayed at unpark: psl_active must not be told
 // "active" while parked, or the listen window would already have run out when the device comes back.
 int coreActive = 0, coreGrouped = 0;
+// Automatic route, while parked: the game has been out of ad hoc since the leave, so its next trigger brings the
+// device back (a game still in ad hoc at the leave must leave it first).
+bool outSinceLeave = false;
 // The choice server() answers from, and the core has been told about (serve, relogin).
 psl_choice published {};
 // Bumped whenever the finder stops: a waiting server() gives up and answers 0.
@@ -320,6 +323,7 @@ void adapterLeave() {
     {
         std::lock_guard<std::mutex> guard(mutex);
         parked = true;
+        outSinceLeave = !coreActive;
         psl_park(&election, 1);
         link = core;
     }
@@ -327,18 +331,23 @@ void adapterLeave() {
     if (link.leave != nullptr) link.leave();
 }
 
+// Back from a leave, with the core's last report replayed at a fresh time, so the listen window starts now. Under mutex.
+void unparkLocked() {
+    parked = false;
+    psl_park(&election, 0);
+    if (coreActive) psl_active(&election, 1, coreGrouped, nowMs());
+    maybeStartLocked();
+    LOGI("PSP link: back");
+}
+
+// A session comes back; the automatic route waits for the game to re-enter ad hoc instead (coreActiveReport).
 void adapterRejoin() {
     nx_psp_link_interface link;
     {
         std::lock_guard<std::mutex> guard(mutex);
-        parked = false;
-        psl_park(&election, 0);
-        // With a fresh time, so the listen window starts now.
-        if (coreActive) psl_active(&election, 1, coreGrouped, nowMs());
-        maybeStartLocked();
+        if (parked && settings.mode != PSL_AUTO) unparkLocked();
         link = core;
     }
-    LOGI("PSP link: rejoined");
     if (link.rejoin != nullptr) link.rejoin();
 }
 
@@ -370,7 +379,12 @@ void coreActiveReport(int active, int grouped) {
     coreGrouped = grouped;
     if (settings.mode == MODE_OFF) return;
     if (changedReport) LOGI("PSP link: game %s", !active ? "left ad hoc" : grouped ? "in a group" : "in ad hoc");
-    if (parked) return;
+    if (parked) {
+        if (settings.mode != PSL_AUTO) return;
+        if (!active) outSinceLeave = true;
+        else if (outSinceLeave) unparkLocked();
+        return;
+    }
     psl_active(&election, active, grouped, nowMs());
     maybeStartLocked();
 }
@@ -405,6 +419,7 @@ void dropCore() {
     core = nx_psp_link_interface {};
     parked = false;
     coreActive = coreGrouped = 0;
+    outSinceLeave = false;
     resetElectionLocked();
     stopping = false;
 }
