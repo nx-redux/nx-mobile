@@ -42,6 +42,7 @@
 #include "netplay/linkhooks.h"
 #include "netplay/dslinkhooks.h"
 #include "netplay/nx_nds_radio.h"
+#include "netplay/nx_3ds_link.h"
 #include "sensorstate.h"
 #include "vulkanbridge.h"
 
@@ -845,6 +846,10 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
         case NX_ENVIRONMENT_SET_NDS_RADIO:
             if (data == nullptr) return false;
             libretrodroid::dslink::radio(*static_cast<const unsigned*>(data));
+            return true;
+
+        case NX_ENVIRONMENT_SET_3DS_LINK:
+            libretrodroid::dslink::setCoreRoom(static_cast<nx_3ds_link_interface*>(data));
             return true;
 
         default:
