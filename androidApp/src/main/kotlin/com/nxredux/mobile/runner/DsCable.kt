@@ -20,10 +20,10 @@ import kotlinx.coroutines.withContext
 import kotlin.concurrent.thread
 
 /**
- * A DS game on the automatic route and the phone-to-phone USB cable: from the first time the game's wireless comes on,
- * the cable is started when another phone is on the port and the room search is told how far it is ([DsCableAuto]).
- * The cable itself is the menu process's ([PrefsProvider.usbCableAuto]); Android's one-time VPN consent is asked here,
- * over the game. The cable this started stops with the game.
+ * A DS game on the automatic route and the phone-to-phone USB cable: the room search is told of a phone on the port
+ * from the game's start, and the cable is started when the game's wireless comes on ([DsCableAuto]). The cable itself
+ * is the menu process's ([PrefsProvider.usbCableAuto]); Android's VPN consent is asked here, over the game, when the
+ * app does not hold it. The cable this started stops with the game.
  *
  * Made with the activity (it registers for the consent's result). Main thread.
  */
@@ -36,23 +36,26 @@ class DsCable(private val activity: ComponentActivity, private val scope: Corout
         consent?.complete(r.resultCode == Activity.RESULT_OK)
     }
 
-    /** The game's wireless is on: the cable is watched from here to the game's end. */
-    fun wirelessOn() {
+    /** The game's wireless is on (looking for a room, or in one). */
+    @Volatile var wireless = false
+
+    /** The game runs: the USB port is watched from here to the game's end. */
+    fun watch() {
         if (job != null) return
-        job = scope.launch { watch() }
+        job = scope.launch { poll() }
     }
 
-    private suspend fun watch() {
+    private suspend fun poll() {
         val app = activity.applicationContext
         suspend fun ask(start: Boolean) = withContext(Dispatchers.IO) {
             runCatching { PrefsProvider.usbCableAuto(app, start) }.onFailure { NxLog.w(TAG, "no answer on the USB cable", it) }.getOrNull()
         }
         while (scope.isActive) {
             ask(start = false)?.let { answer ->
-                var step = auto.step(answer.status, SystemClock.elapsedRealtime())
+                var step = auto.step(answer.status, wireless, SystemClock.elapsedRealtime())
                 if (step.start && consented()) ask(start = true)?.let { started ->
                     started.token?.let { token = it; NxLog.i(TAG, "DS link: USB cable started for this game") }
-                    step = auto.step(started.status, SystemClock.elapsedRealtime())
+                    step = auto.step(started.status, wireless, SystemClock.elapsedRealtime())
                 }
                 LibretroNetplay.dsSetCable(step.cable.code)
             }
@@ -60,7 +63,7 @@ class DsCable(private val activity: ComponentActivity, private val scope: Corout
         }
     }
 
-    /** Android's VPN consent (the cable's network is a VPN), asked once ever; false when the player says no. */
+    /** Android's VPN consent (the cable's network is a VPN), asked when the app does not hold it; false when the player says no. */
     private suspend fun consented(): Boolean {
         val intent = runCatching { VpnService.prepare(activity) }.getOrNull() ?: return true
         val answer = CompletableDeferred<Boolean>()

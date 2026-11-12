@@ -535,6 +535,17 @@ static int case_cable_coming_holds_a_room_elsewhere(uint16_t port) {
 	return 0;
 }
 
+/* The cable comes up while a room elsewhere is held: asked on the cable now, the room is joined there. */
+static int case_cable_up_ends_the_hold(uint16_t port) {
+	CHECK(cable_pair(port, NDL_CABLE_COMING, "10.99.0.3") == 0);
+	advance(2000);
+	CHECK(!ndl_in_room(room[2]));
+	ndl_set_cable(room[2], NDL_CABLE_UP, "127.0.0.3");
+	advance(400);
+	CHECK(wait_in_room(room[2], true, 2000));
+	return 0;
+}
+
 /* The room answers from the cable's own network: nothing to wait for. */
 static int case_cable_room_is_joined_at_once(uint16_t port) {
 	CHECK(cable_pair(port, NDL_CABLE_COMING, "127.0.0.3") == 0);
@@ -548,7 +559,7 @@ static void note_route(int fd, bool cable, void* ctx) {
 	*(int*)ctx = cable ? 1 : -1;
 }
 
-/* A socket is moved to the cable before it sends there, and not for an address off it. */
+/* A socket is moved to the cable before it sends there. */
 static int case_cable_sends_move_the_socket(uint16_t port) {
 	uint16_t sp = free_udp_port();
 	ndl_config c = config(NDL_HOST, "sheet", port, 8);
@@ -826,6 +837,7 @@ int main(void) {
 	run("auto_joins_a_sheet_host", case_auto_joins_a_sheet_host);
 	run("auto_host_opens_when_none", case_auto_host_opens_when_none);
 	run("cable_coming_holds_a_room_elsewhere", case_cable_coming_holds_a_room_elsewhere);
+	run("cable_up_ends_the_hold", case_cable_up_ends_the_hold);
 	run("cable_room_is_joined_at_once", case_cable_room_is_joined_at_once);
 	run("cable_up_does_not_hold", case_cable_up_does_not_hold);
 	run("cable_sends_move_the_socket", case_cable_sends_move_the_socket);

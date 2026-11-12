@@ -199,7 +199,7 @@ sealed interface MenuEffect {
     data object QuitWithoutResume : MenuEffect
     /**
      * netplay: Leave on the "Leave netplay?" root. Lockstep: the host ends the session and quits without an auto state.
-     * A link session ([InGameMenuModel.netplayLink]): the host ends the link and the game plays on, the menu open on the
+     * A link session ([InGameMenuModel.netplayLink], its Disconnect): the host ends the link and the game plays on, the menu open on the
      * normal root once the host calls [InGameMenuModel.endNetplay].
      */
     data object LeaveNetplay : MenuEffect

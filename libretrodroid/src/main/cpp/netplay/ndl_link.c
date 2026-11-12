@@ -981,8 +981,15 @@ void ndl_set_cable(ndl_link* l, ndl_cable state, const char* broadcast) {
 		l->cable_hold_until = 0;
 	else if (l->cable != NDL_CABLE_COMING && l->radio != NDL_RADIO_OFF)
 		l->cable_hold_until = now_ms(l) + NDL_CABLE_HOLD_MS;
+	/* A search under way asked before the cable was there: its answers are dropped and the next one asks the cable too. */
+	if (state == NDL_CABLE_UP && l->cable != NDL_CABLE_UP && l->role == R_IDLE) {
+		l->search_until = 0;
+		l->found = false;
+		l->next_search_ms = 0;
+	}
 	l->cable = state;
 	pthread_mutex_unlock(&l->mu);
+	np_wake_poke(&l->wake);
 }
 
 void ndl_leave_now(ndl_link* l) {

@@ -349,10 +349,11 @@ void configure(const std::vector<Variable>& vars) {
         LOGE("DS link: cannot start %s on port %u", modeName(wanted.mode), (unsigned) wanted.port);
         return;
     }
-    ndl_set_cable(created, (ndl_cable) cableState.load(), CABLE_BROADCAST);
     ndl_radio_changed(created, (ndl_radio) lastRadio);
     {
+        // The cable's state is read under the lock setCable takes: one set meanwhile lands on this link or the read.
         std::lock_guard<std::mutex> guard(linkMutex);
+        ndl_set_cable(created, (ndl_cable) cableState.load(), CABLE_BROADCAST);
         theLink = created;
     }
     LOGI("DS link: %s on port %u", modeName(wanted.mode), (unsigned) wanted.port);

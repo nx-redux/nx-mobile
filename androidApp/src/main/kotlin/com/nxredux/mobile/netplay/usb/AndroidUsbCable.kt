@@ -48,7 +48,7 @@ object UsbCables {
  * The Android [UsbCable]: finds the other end (an NX Redux handheld's nxlink interface, a phone already in accessory
  * mode, another phone to switch into it, or this phone as that accessory), brings up the VPN for 10.99.0.0/30
  * ([UsbLinkVpnService]) and runs the HELLO and the relay ([UsbLinkEngine]). Android's dialogs (VPN consent, USB
- * permission) restart the 30 s wait. Once Up, a brief drop (the device detaching and re-attaching) is ridden out: the
+ * permission) restart the wait (30 s, or a game's own start's ten minutes). Once Up, a brief drop (the device detaching and re-attaching) is ridden out: the
  * engine and its transport go, the VPN stays, and the same side looks for the other end again for 28 s; a new engine on
  * the same TUN that says UP in time carries on with the state still Up, anything else is [UsbLinkState.Lost]. Every
  * drop counts in [drops], ridden out or not.
@@ -74,7 +74,7 @@ class AndroidUsbCable(context: Context) : UsbCable {
     /** The running start's wait for the other end: the sheet's [LINK_WAIT_MS], or a game's [UsbSearch.AUTO_WAIT_MS]. */
     @Volatile private var waitMs = LINK_WAIT_MS
     @Volatile private var autoSeenMs = 0L
-    /** Bumped by every [start]: a newer sheet start makes an older game screen's [stopIf] a no-op. */
+    /** Bumped by every start ([start], [startAuto]): a newer one makes an older game screen's [stopIf] a no-op. */
     private val generation = UsbCableGeneration()
     @Volatile private var engine: UsbLinkEngine? = null
     @Volatile private var opened: UsbTransport? = null

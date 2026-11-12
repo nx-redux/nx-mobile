@@ -12,6 +12,10 @@ data class UsbAutoStatus(val peer: UsbPeer, val link: UsbAutoLink)
  * A DS game on the automatic route with a phone on its USB port: when the cable is started for it, and what the room
  * search is told ([Cable], the native ndl_cable). Two phones on a cable meet over it; any more meet on the Wi-Fi.
  *
+ * The search is told of a phone on the port before the game's wireless comes on, so the first search already waits for
+ * the cable; the cable itself starts with the wireless. Only a phone in sight counts: something that merely hosts this
+ * phone may be a computer, and the phone that sees the other switches it into sight.
+ *
  * Pure: the host asks the cable's owner for [UsbAutoStatus] every second or so and feeds [step].
  */
 class DsCableAuto {
@@ -21,23 +25,24 @@ class DsCableAuto {
     data class Step(val cable: Cable, val start: Boolean)
 
     private var refused = false
-    private var linking = false
+    private var active = false
     private var nextStartMs = 0L
 
     /** The player said no to Android's consent: not asked again in this game. */
     fun refuse() { refused = true }
 
-    fun step(status: UsbAutoStatus, nowMs: Long): Step {
+    /** [wirelessOn]: the game's wireless is on (looking for a room, or in one). */
+    fun step(status: UsbAutoStatus, wirelessOn: Boolean, nowMs: Long): Step {
         when (status.link) {
-            UsbAutoLink.UP -> { linking = false; return Step(Cable.UP, false) }
-            UsbAutoLink.REFUSED -> { refused = true; linking = false }
-            // Only a phone in sight is worth holding a Wi-Fi room back for: a computer on the port never links.
-            UsbAutoLink.LINKING -> { linking = true; return Step(if (status.peer == UsbPeer.SEEN) Cable.COMING else Cable.NONE, false) }
-            UsbAutoLink.IDLE -> if (linking) { linking = false; nextStartMs = nowMs + RETRY_MS }
+            UsbAutoLink.UP -> { active = true; return Step(Cable.UP, false) }
+            UsbAutoLink.REFUSED -> { refused = true; active = false }
+            UsbAutoLink.LINKING -> active = true
+            UsbAutoLink.IDLE -> if (active) { active = false; nextStartMs = nowMs + RETRY_MS }
         }
-        val start = !refused && status.peer != UsbPeer.NONE && nowMs >= nextStartMs
+        val seen = status.peer == UsbPeer.SEEN && !refused
+        val start = seen && wirelessOn && status.link == UsbAutoLink.IDLE && nowMs >= nextStartMs
         if (start) nextStartMs = nowMs + RETRY_MS
-        return Step(Cable.NONE, start)
+        return Step(if (seen) Cable.COMING else Cable.NONE, start)
     }
 
     companion object {

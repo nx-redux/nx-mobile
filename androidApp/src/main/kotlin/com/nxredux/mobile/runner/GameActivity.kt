@@ -345,12 +345,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val launchPipeline = LaunchPipeline(LaunchState())
     private val dsRoom = DsRoomWatcher(lifecycleScope, { DsPresence.of(LibretroNetplay.dsPresence()) }, ::onDsPresenceChanged)
     private val dsCable = DsCable(this, lifecycleScope)
-    // A sheet session's room has no Disconnect to come back from: the cap's leave is undone when the menu closes.
-    private var dsRejoinAfterMenu = false
+    // The cap is the Disconnect row pressed for the player: the automatic route leaves the room, a sheet session ends its link.
     private val dsMenuCap = DsMenuCap(lifecycleScope, onTick = { seconds -> withMenu { it.setIdleSeconds(seconds) } }) {
-        // Set before leaving: disconnectDs syncs the cap off, cancelling the countdown this runs in.
-        if (!launchPipeline.dsAutoRoute) dsRejoinAfterMenu = true
-        disconnectDs()
+        if (launchPipeline.dsAutoRoute) disconnectDs() else leaveNetplay()
     }
     override val slotsUi: androidx.compose.runtime.State<List<SlotUi>> get() = saves.slotsUi
     override var lastSlotCache: Int?
@@ -607,6 +604,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             }
             launchPipeline.start()
             if (launchPipeline.dsLinked && !isDestroyed) dsRoom.start()
+            if (launchPipeline.dsAutoRoute && !isDestroyed) dsCable.watch()
         }
     }
 
@@ -621,7 +619,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         launchPipeline.dsRoomChanged(presence == DsPresence.ROOM)
         launchPipeline.dsWirelessChanged(presence != DsPresence.OUT)
         if (launchPipeline.dsAutoRoute) {
-            if (presence != DsPresence.OUT) dsCable.wirelessOn()
+            dsCable.wireless = presence != DsPresence.OUT
             speed.setSession(netplay = dsWireless)
             shortcuts.refreshTouchShortcuts()
             withMenu { it.setDsWireless(dsWireless) }
@@ -743,7 +741,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun focusResume() {
         if (!focusPaused) return
         focusPaused = false
-        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) { LibretroNetplay.dsRejoin(); dsRejoinAfterMenu = false }   // a sheet session's room again
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) LibretroNetplay.dsRejoin()   // a sheet session's room again
         syncKeepScreenOn()
         if (menuOpen || quitting || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
         releaseCore()
@@ -811,10 +809,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         closeSkinEdit()
         syncKeepScreenOn()
         syncDsMenuCap()
-        val rejoin = dsRejoinAfterMenu
-        dsRejoinAfterMenu = false
         if (focusPaused) { wii.syncMotionSensors(); shortcuts.pushMicSource(); return }   // another app has the focus: focusResume plays on later
-        if (rejoin && netplayNow != null) LibretroNetplay.dsRejoin()   // the cap left a sheet session's room, unless the session has ended since
         wii.syncMotionSensors()
         releaseCore()
     }
@@ -865,14 +860,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             while (true) { delay(CARE_TICK_MS); care.tick(running = !corePaused() && !quitting) }
         }
         // onStop left the DS room; still focus paused, focusResume goes back instead.
-        if (!focusPaused) { LibretroNetplay.dsRejoin(); dsRejoinAfterMenu = false }
+        if (!focusPaused) LibretroNetplay.dsRejoin()
         // onStop closed the session: back in the foreground, a new one on the same game (background time is not play)
         gameTime?.let { if (!isFinishing && !quitting) { it.resume(); startGameTimeTicker(it) } }
     }
 
     override fun onStop() {
-        // Read before the leave: a state taken with the game's wireless on would resume in the middle of a link that is gone.
-        val wirelessOn = dsWireless
+        // Asked of the link itself, before the leave: a state taken in a room would resume in the middle of a link that is
+        // gone. A wireless that is only on (a game that keeps it on while played alone) still gets its resume point.
+        val inRoom = launchPipeline.dsAutoRoute && DsPresence.of(LibretroNetplay.dsPresence()) == DsPresence.ROOM
         LibretroNetplay.dsLeaveNow()
         dsRoom.check()   // an open menu pauses the core now that the room is gone
         dsMenuCap.sync(false)
@@ -886,7 +882,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // clears this screen. A quit writes its own; a game that never got ready writes nothing (writeAutoStateOnStop);
         // one that failed after starting and leaves through its dialog keeps the last good resume point.
         // API 26–27: onSaveInstanceState already ran; the outcome of the write is recorded in its bundle.
-        saves.onStop(writeAuto = !quitting && !wii.endedByCore && !relaunching && !(isFinishing && failShown) && !wirelessOn)
+        saves.onStop(writeAuto = !quitting && !wii.endedByCore && !relaunching && !(isFinishing && failShown) && !inRoom)
         if (isFinishing) { input.gcClearTriggers(); stopAchievements() }
         input.onStop()   // the pen and 3DS hotkey ticks stop; onStart restarts them
         // A Presentation stays up while its activity is stopped: no second screen in the background.
