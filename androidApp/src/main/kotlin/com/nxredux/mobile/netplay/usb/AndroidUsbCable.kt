@@ -48,7 +48,7 @@ object UsbCables {
  * The Android [UsbCable]: finds the other end (an NX Redux handheld's nxlink interface, a phone already in accessory
  * mode, another phone to switch into it, or this phone as that accessory), brings up the VPN for 10.99.0.0/30
  * ([UsbLinkVpnService]) and runs the HELLO and the relay ([UsbLinkEngine]). Android's dialogs (VPN consent, USB
- * permission) restart the 30 s wait. Once Up, a brief drop (the device detaching and re-attaching) is ridden out: the
+ * permission) restart the wait (30 s, or a game's own start's ten minutes). Once Up, a brief drop (the device detaching and re-attaching) is ridden out: the
  * engine and its transport go, the VPN stays, and the same side looks for the other end again for 28 s; a new engine on
  * the same TUN that says UP in time carries on with the state still Up, anything else is [UsbLinkState.Lost]. Every
  * drop counts in [drops], ridden out or not.
@@ -71,7 +71,10 @@ class AndroidUsbCable(context: Context) : UsbCable {
         private set
 
     private var job: Job? = null
-    /** Bumped by every [start]: a newer sheet start makes an older game screen's [stopIf] a no-op. */
+    /** The running start's wait for the other end: the sheet's [LINK_WAIT_MS], or a game's [UsbSearch.AUTO_WAIT_MS]. */
+    @Volatile private var waitMs = LINK_WAIT_MS
+    @Volatile private var autoSeenMs = 0L
+    /** Bumped by every start ([start], [startAuto]): a newer one makes an older game screen's [stopIf] a no-op. */
     private val generation = UsbCableGeneration()
     @Volatile private var engine: UsbLinkEngine? = null
     @Volatile private var opened: UsbTransport? = null
@@ -88,12 +91,66 @@ class AndroidUsbCable(context: Context) : UsbCable {
     override val available: Boolean
         get() = context.packageManager.hasSystemFeature(PackageManager.FEATURE_USB_HOST) || ourAccessory() != null
 
-    @Synchronized override fun start() {
+    @Synchronized override fun start() = begin(LINK_WAIT_MS)
+
+    /**
+     * A game's own start (its DS wireless came on with something on the USB port): only when no link runs and Android's
+     * VPN consent is already given, and waiting [UsbSearch.AUTO_WAIT_MS] for the other end. The token to [stopIf] it
+     * with, or null when nothing was started (a link that already runs is used as it is, and left to its starter).
+     */
+    @Synchronized fun startAuto(): Long? {
+        val s = _state.value
+        if (s is UsbLinkState.Consent || (job?.isActive == true && s !is UsbLinkState.Lost)) return null
+        if (runCatching { VpnService.prepare(context) }.getOrNull() != null) return null
+        begin(UsbSearch.AUTO_WAIT_MS)
+        val token = token()
+        autoSeenMs = SystemClock.elapsedRealtime()
+        // A game that is killed never stops its cable: it asks every second while it lives ([autoSeen]).
+        scope.launch {
+            while (true) {
+                delay(AUTO_CHECK_MS)
+                synchronized(this@AndroidUsbCable) {
+                    if (!generation.isCurrent(token) || job == null) return@launch
+                    if (SystemClock.elapsedRealtime() - autoSeenMs > AUTO_QUIET_MS) {
+                        NxLog.i(TAG, "the game that started the cable is gone: stopping it")
+                        stop()
+                        return@launch
+                    }
+                }
+            }
+        }
+        return token
+    }
+
+    /** A game asked about the cable: the one that started it is still there. */
+    fun autoSeen() { autoSeenMs = SystemClock.elapsedRealtime() }
+
+    /** What the USB port shows of another phone, before any link. */
+    fun peer(): UsbPeer {
+        val usb = usb ?: return UsbPeer.NONE
+        if (!available) return UsbPeer.NONE
+        val inputs = inputDeviceIds()
+        val seen = ourAccessory() != null || usb.deviceList.values.any {
+            (UsbIds.isAccessoryMode(it.vendorId, it.productId) && it.interfaceCount > 0) || aoaCandidate(it, inputs)
+        }
+        return if (seen) UsbPeer.SEEN else if (usbDevice()) UsbPeer.MAYBE else UsbPeer.NONE
+    }
+
+    /** [state] as a game asks about it ([startAuto]). */
+    fun autoLink(): UsbAutoLink = when (val s = _state.value) {
+        is UsbLinkState.Up -> UsbAutoLink.UP
+        UsbLinkState.Consent, UsbLinkState.Permission, is UsbLinkState.Starting -> UsbAutoLink.LINKING
+        UsbLinkState.Off, UsbLinkState.Lost -> UsbAutoLink.IDLE
+        is UsbLinkState.Failed -> if (s.reason == UsbFail.NO_LINK || s.reason == UsbFail.PEER_HOST) UsbAutoLink.IDLE else UsbAutoLink.REFUSED
+    }
+
+    private fun begin(wait: Long) {
         generation.bump()
         if (job?.isActive == true) {
-            // A run still looking (or behind a dialog) is kept; a Lost or a stale Up left by an earlier game is not.
+            // A run still looking (or behind a dialog) is kept; a Lost or a stale Up left by an earlier game is not, nor
+            // is a game's long wait when the sheet asks.
             val s = _state.value
-            if (s !is UsbLinkState.Lost && s !is UsbLinkState.Up) return
+            if (s !is UsbLinkState.Lost && s !is UsbLinkState.Up && waitMs == wait) return
             stop()
         }
         if (_state.value is UsbLinkState.Consent) return
@@ -107,6 +164,7 @@ class AndroidUsbCable(context: Context) : UsbCable {
             askConsent(consent)
             return
         }
+        waitMs = wait
         _state.value = UsbLinkState.Starting(handheld = nxlinkDevice() != null)
         job = scope.launch { runLink() }
     }
@@ -145,7 +203,8 @@ class AndroidUsbCable(context: Context) : UsbCable {
     private class End(val side: UsbSide, val transport: UsbTransport, val handheld: Boolean, val deadline: Long)
 
     private suspend fun CoroutineScope.runLink() {
-        val end = findEnd() ?: return
+        val wait = waitMs
+        val end = findEnd(UsbSearch(null, firstWaitMs = wait)) ?: return
         // Handed over under the cable's monitor: a stop() either ran before (this run closes the transport) or after
         // (its teardown closes [opened]).
         synchronized(this@AndroidUsbCable) {
@@ -178,7 +237,7 @@ class AndroidUsbCable(context: Context) : UsbCable {
             e.start()
             e.startTun(PollingTunInput(pfd.fileDescriptor))
         }
-        when (withTimeoutOrNull(LINK_WAIT_MS) { events.receive() }) {
+        when (withTimeoutOrNull(wait) { events.receive() }) {
             UsbLinkEngine.Event.UP -> {
                 network = awaitVpnNetwork()
                 post(UsbLinkState.Up(UsbHello.localIp(end.side), UsbHello.peerIp(end.side)))
@@ -258,7 +317,7 @@ class AndroidUsbCable(context: Context) : UsbCable {
      * accessory; a handheld's nxlink; a phone already in accessory mode; else one AOA switch of a phone-like device (never
      * a peripheral). [search] limits a reattach to its own side, with no AOA switch.
      */
-    private suspend fun CoroutineScope.findEnd(search: UsbSearch = UsbSearch(null)): End? {
+    private suspend fun CoroutineScope.findEnd(search: UsbSearch): End? {
         val usb = usb ?: return null
         var deadline = SystemClock.elapsedRealtime() + search.windowMs
         var switched = !search.aoaSwitch
@@ -298,10 +357,7 @@ class AndroidUsbCable(context: Context) : UsbCable {
             }
             if (!switched) {
                 val inputs = inputDeviceIds()
-                devices.firstOrNull {
-                    it.deviceName !in tried && UsbIds.nxlinkInterface(it) == null && !UsbIds.isAccessoryMode(it.vendorId, it.productId) &&
-                        !UsbIds.isHandheldAdbGadget(it.vendorId, it.productId) && UsbIds.isAoaCandidate(UsbIds.interfaceClasses(it)) && !UsbIds.isInputDevice(it.vendorId, it.productId, inputs)
-                }?.let { d ->
+                devices.firstOrNull { it.deviceName !in tried && aoaCandidate(it, inputs) }?.let { d ->
                     tried += d.deviceName
                     if (!permittedDevice(d)) return denied(search)
                     usb.openDevice(d)?.let { c ->
@@ -345,6 +401,11 @@ class AndroidUsbCable(context: Context) : UsbCable {
         val im = context.getSystemService(InputManager::class.java) ?: return emptyList()
         return im.inputDeviceIds.toList().mapNotNull { id -> im.getInputDevice(id) }.filter { d -> !d.isVirtual }.map { d -> d.vendorId to d.productId }
     }
+
+    /** A phone-like device the AOA switch may be tried on: never a handheld, a phone already switched, or a peripheral. */
+    private fun aoaCandidate(d: UsbDevice, inputs: List<Pair<Int, Int>>): Boolean =
+        UsbIds.nxlinkInterface(d) == null && !UsbIds.isAccessoryMode(d.vendorId, d.productId) &&
+            !UsbIds.isHandheldAdbGadget(d.vendorId, d.productId) && UsbIds.isAoaCandidate(UsbIds.interfaceClasses(d)) && !UsbIds.isInputDevice(d.vendorId, d.productId, inputs)
 
     private fun nxlinkDevice(): UsbDevice? = usb?.deviceList?.values?.firstOrNull { UsbIds.nxlinkInterface(it) != null }
 
@@ -440,6 +501,9 @@ class AndroidUsbCable(context: Context) : UsbCable {
         /** How long a reattach skips the dropped device's name while Android still lists it (removal takes about 1 s). */
         const val STALE_MS = 2_000L
         const val VPN_WAIT_MS = 5_000L
+        const val AUTO_CHECK_MS = 2_000L
+        /** A game asks every second; this long without is a game that is gone (or frozen in the background). */
+        const val AUTO_QUIET_MS = 6_000L
         /** UsbManager's hidden ACTION_USB_STATE, a sticky broadcast. */
         const val USB_STATE = "android.hardware.usb.action.USB_STATE"
     }

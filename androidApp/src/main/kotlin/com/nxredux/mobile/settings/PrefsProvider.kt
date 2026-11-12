@@ -7,7 +7,10 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Binder
 import android.os.Bundle
+import com.nxredux.mobile.netplay.usb.UsbAutoLink
+import com.nxredux.mobile.netplay.usb.UsbAutoStatus
 import com.nxredux.mobile.netplay.usb.UsbCables
+import com.nxredux.mobile.netplay.usb.UsbPeer
 import com.nxredux.mobile.storage.DataRoot
 
 /**
@@ -30,6 +33,12 @@ class PrefsProvider : ContentProvider() {
             }
             // Kids Mode: Parent mode lives in this process's memory only; the game process asks before it refuses a game.
             METHOD_KIDS_PARENT -> return encode(mapOf(RESULT_OK to com.nxredux.mobile.kids.AndroidKids.parentNow()))
+            METHOD_USB_CABLE_AUTO -> {
+                val cable = UsbCables.get(context)
+                cable.autoSeen()
+                val token = if (decode(extras ?: Bundle())[ARG_START] == true) cable.startAuto() else null
+                return encode(mapOf(RESULT_PEER to cable.peer().name, RESULT_LINK to cable.autoLink().name, RESULT_TOKEN to (token ?: NO_TOKEN)))
+            }
             METHOD_USB_CABLE_STOP_IF -> {
                 (decode(extras ?: Bundle())[ARG_TOKEN] as? Long)?.let { UsbCables.get(context).stopIf(it) }
                 return encode(mapOf(RESULT_OK to true))
@@ -97,6 +106,16 @@ class PrefsProvider : ContentProvider() {
         /** [ARG_TOKEN]: the game's netplay session over USB has ended; the menu's cable stops unless a newer start took it. */
         const val METHOD_USB_CABLE_STOP_IF = "usbCableStopIf"
         const val ARG_TOKEN = "token"
+        /**
+         * A game on the automatic route asks about the cable, and with [ARG_START] starts it for itself. Results
+         * [RESULT_PEER] and [RESULT_LINK] (enum names), and [RESULT_TOKEN] when this call started it.
+         */
+        const val METHOD_USB_CABLE_AUTO = "usbCableAuto"
+        const val ARG_START = "start"
+        const val RESULT_PEER = "peer"
+        const val RESULT_LINK = "link"
+        const val RESULT_TOKEN = "token"
+        private const val NO_TOKEN = -1L
 
         /** Kids Mode: the main process holds Parent mode now; result [RESULT_OK]. The `arg` name is unused. */
         const val METHOD_KIDS_PARENT = "kidsParent"
@@ -109,6 +128,16 @@ class PrefsProvider : ContentProvider() {
         /** From the game process: [UsbCables]'s `stopIf(token)` in the main process, where the cable runs. Blocking. */
         fun usbCableStopIf(context: Context, token: Long) {
             channel(context).call(METHOD_USB_CABLE_STOP_IF, "", mapOf(ARG_TOKEN to token))
+        }
+
+        /** [UsbCableAnswer.token]: the start this call made, for [usbCableStopIf]; null when it made none. */
+        class UsbCableAnswer(val status: UsbAutoStatus, val token: Long?)
+
+        /** From the game process: the cable as [UsbCables] has it, started for this game when [start] (and none runs). Blocking. */
+        fun usbCableAuto(context: Context, start: Boolean): UsbCableAnswer {
+            val r = channel(context).call(METHOD_USB_CABLE_AUTO, "", mapOf(ARG_START to start))
+            val status = UsbAutoStatus(UsbPeer.valueOf(r[RESULT_PEER] as String), UsbAutoLink.valueOf(r[RESULT_LINK] as String))
+            return UsbCableAnswer(status, (r[RESULT_TOKEN] as? Long)?.takeIf { it != NO_TOKEN })
         }
 
         /** The calls from the game process, over the content resolver. */

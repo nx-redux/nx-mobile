@@ -301,7 +301,8 @@ internal class InGameMenuController(
             it.layoutLocked = AndroidAppSettings(activity).padSkin.let { on ->
                 com.nxredux.mobile.options.N3dsOptions.lockedLayoutRows(on, activity.screenClass()) + com.nxredux.mobile.options.NdsOptions.lockedLayoutRows(on, activity.screenClass())
             }
-            // netplay: the root is "Leave netplay?" only; Continue / Quit once the session has ended. An ended link
+            // netplay: the root is "Leave netplay?" only (a link session's: Continue / Disconnect / Quit); Continue / Quit
+            // once the session has ended. An ended link
             // session's game is a local one ([netplayNow] null): the normal root.
             if (netplayNow != null) {
                 it.netplay = true; it.netplayLink = netplay?.endsAsLocalGame == true; it.netplayEnded = netplayEnded; it.netplayQuitOnly = netplayQuitOnly; it.refresh()
@@ -575,7 +576,11 @@ internal class InGameMenuController(
             MenuEffect.Close -> closeMenu()
             MenuEffect.Quit -> quitWithAutoState(chosen = true, autoState = true)
             // Quit's "Quit": the battery save as ever, the resume point on disk left as it is.
-            MenuEffect.QuitWithoutResume -> quitWithAutoState(chosen = true, autoState = false)
+            MenuEffect.QuitWithoutResume -> {
+                // A live link session's Quit: the other side is told now, as Disconnect would, not left to time out.
+                if (netplayNow != null && netplay?.endsAsLocalGame == true && !netplayEnded) host.leaveNetplay()
+                quitWithAutoState(chosen = true, autoState = false)
+            }
             MenuEffect.LeaveNetplay -> host.leaveNetplay()
             MenuEffect.DisconnectDs -> host.disconnectDs()
             is MenuEffect.SaveSlot -> saveToSlot(effect.slot)

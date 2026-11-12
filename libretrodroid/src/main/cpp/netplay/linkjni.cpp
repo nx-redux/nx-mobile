@@ -163,6 +163,14 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsSetNet
     dslink::setNetwork((int64_t) handle);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsSetCable(
+    JNIEnv* env,
+    jclass obj,
+    jint state
+) {
+    dslink::setCable((int) state);
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsLeaveNow(
     JNIEnv* env,
     jclass obj
