@@ -250,6 +250,7 @@ static int case_broadcast_reaches_every_other_member(uint16_t port) {
 	uint8_t msg[2000];
 	for (size_t i = 0; i < sizeof(msg); i++)
 		msg[i] = (uint8_t)(i * 7 + 3);
+	msg[8] = 0; /* no console number, */
 	msg[9] = 2; /* a command frame */
 	CHECK(ndl_client_id(room[3]) == 3);
 	CHECK(ndl_send(room[3], msg, sizeof(msg), NDL_BROADCAST) == 0);
@@ -610,6 +611,10 @@ static int case_presence_follows_radio_and_leave(uint16_t port) {
 	ndl_radio_changed(room[2], NDL_RADIO_ON);
 	ndl_leave_now(room[2]);
 	CHECK(ndl_presence_now(room[2]) == NDL_OUT);
+	/* The game turning its wireless on ends the leave, even when no off was seen in between (a loaded state). */
+	ndl_radio_changed(room[2], NDL_RADIO_ON);
+	CHECK(ndl_presence_now(room[2]) != NDL_OUT);
+	ndl_leave_now(room[2]);
 	/* A sheet host is in its room until it leaves. */
 	ndl_destroy(room[3]);
 	c = config(NDL_HOST, "sheet", free_udp_port(), 8);
@@ -631,11 +636,15 @@ static int case_short_data_dropped(uint16_t port) {
 	pkt typed = core_pk("type three");
 	typed.b[9] = 3;
 	CHECK(ndl_send(room[2], typed.b, typed.n, NDL_BROADCAST) == 0);
+	/* A console number past the last one a DS group has: the core would index its reply table with it. */
+	pkt numbered = core_pk("aid sixteen");
+	numbered.b[8] = 16;
+	CHECK(ndl_send(room[2], numbered.b, numbered.n, NDL_BROADCAST) == 0);
 	inbox none1 = {0}, none3 = {0};
 	CHECK(take_until(room[1], &none1, 1, 150) == 0);
 	CHECK(take_until(room[3], &none3, 1, 50) == 0);
 	ndl_stats_drops(room[1], &d);
-	CHECK(d.bad == 2);
+	CHECK(d.bad == 3);
 	/* The same from the holder to a member. */
 	ndl_stats_drops(room[2], &d);
 	CHECK(ndl_send(room[1], shrt, sizeof(shrt), 2) == 0);

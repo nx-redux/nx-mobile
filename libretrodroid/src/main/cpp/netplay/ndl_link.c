@@ -65,9 +65,11 @@
 #define NDL_REFUSED_WAIT_MS 5000
 #define NDL_OPEN_RETRY_MS 1000
 #define NDL_ANSWER_SIZE 8
-/* melonDS DS's own packet header: [timestamp u64][aid u8][type u8], type 0..2. The core asserts on anything else. */
+/* melonDS DS's own packet header: [timestamp u64][aid u8][type u8], type 0..2. The core asserts on anything else,
+ * and indexes its table of replies with the aid: a DS group numbers its consoles 1..15. */
 #define NDL_CORE_HDR 10
 #define NDL_CORE_TYPE_MAX 2
+#define NDL_CORE_AID_MAX 15
 
 enum {
 	T_ASK = 1,
@@ -621,8 +623,10 @@ static void handle_datagram(ndl_link* l, const struct sockaddr_in* from, const u
 	uint16_t dest = (uint16_t)((buf[6] << 8) | buf[7]);
 	const uint8_t* payload = buf + NDL_HDR_SIZE;
 	size_t pn = n - NDL_HDR_SIZE;
-	/* A short or mistyped core packet would trip melonDS DS's asserts in every phone it reaches. */
-	if (type == T_DATA && (pn < NDL_CORE_HDR || payload[NDL_CORE_HDR - 1] > NDL_CORE_TYPE_MAX)) {
+	/* A short, mistyped or misnumbered core packet would trip melonDS DS's asserts, or write outside its tables, in
+	 * every phone it reaches. Anyone on the network can send one. */
+	if (type == T_DATA && (pn < NDL_CORE_HDR || payload[NDL_CORE_HDR - 1] > NDL_CORE_TYPE_MAX ||
+						   payload[NDL_CORE_HDR - 2] > NDL_CORE_AID_MAX)) {
 		l->drops.bad++;
 		return;
 	}
@@ -924,7 +928,9 @@ void ndl_radio_changed(ndl_link* l, ndl_radio r) {
 			l->radio_off_ms = now_ms(l);
 	} else {
 		l->radio_off_ms = 0;
-		if (r != l->radio)
+		/* On comes only from the game switching its wireless on, which ends a leave even when no off came between
+		 * (a state loaded from before the wireless). */
+		if (r != l->radio || r == NDL_RADIO_ON)
 			l->parked = false;
 	}
 	l->radio = r;
@@ -1071,11 +1077,14 @@ int ndl_send(ndl_link* l, const void* buf, size_t len, uint16_t dest) {
 
 int ndl_take(ndl_link* l, ndl_deliver_fn fn, void* ctx) {
 	if (!l || !fn)
-		return 0;
+		return -1;
 	static _Thread_local uint8_t buf[NDL_MAX_PAYLOAD];
 	pthread_mutex_lock(&l->mu);
 	int pending = l->q_len;
+	bool in = l->role == R_HOLDER || l->role == R_MEMBER;
 	pthread_mutex_unlock(&l->mu);
+	if (!in)
+		return -1;
 	int taken = 0;
 	/* Only what was queued on entry, so a fast sender cannot keep the core in here. */
 	while (taken < pending) {

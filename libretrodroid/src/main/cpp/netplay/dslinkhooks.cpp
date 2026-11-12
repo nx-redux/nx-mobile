@@ -237,19 +237,17 @@ void coreSend(int flags, const void* buf, size_t len, uint16_t clientId) {
 // melonDS DS waits inside retro_run for the others' packets and polls until they arrive: hand over all of them.
 void corePollReceive() {
     if (!coreStarted) return;
-    // The core can wait here for a whole frame's worth of ticks: once this phone is out of the room, end the session
-    // now, or the frame that would notice it never comes.
-    if (!ndl_in_room(theLink)) {
-        endCoreSession();
-        LOGI("DS link: core stopped");
-        return;
-    }
     if (stats.active) {
         Clock::time_point now = Clock::now();
         if (stats.polls++ == 0) stats.firstPoll = now;
         stats.lastPoll = now;
     }
-    ndl_take(theLink, deliver, nullptr);
+    // The core can wait here for a whole frame's worth of ticks: once this phone is out of the room, end the session
+    // now, or the frame that would notice it never comes.
+    if (ndl_take(theLink, deliver, nullptr) < 0) {
+        endCoreSession();
+        LOGI("DS link: core stopped");
+    }
 }
 
 const std::string* find(const std::vector<Variable>& vars, const char* key) {
@@ -297,7 +295,7 @@ void copyField(char (&dst)[N], const std::string& src) {
 bool setNetpacket(const nl_netpacket_callback* cb) {
     callbacks = cb != nullptr ? *cb : nl_netpacket_callback {};
     registered = callbacks.start != nullptr && callbacks.receive != nullptr;
-    LOGI("DS link: netpacket interface %s", registered ? "registered" : "cleared");
+    LOGI("link: netpacket interface %s", registered ? "registered" : "cleared");
     return true;
 }
 

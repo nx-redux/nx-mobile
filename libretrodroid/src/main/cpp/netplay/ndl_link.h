@@ -45,7 +45,9 @@
 extern "C" {
 #endif
 
-#define NDL_MAX_PAYLOAD 2400
+/* melonDS DS's 10-byte packet header and a frame its 2048-byte receive buffer holds: a longer one from the network
+ * would be copied past that buffer. */
+#define NDL_MAX_PAYLOAD 2058
 #define NDL_HDR_SIZE 8
 #define NDL_BROADCAST 0xFFFF
 #define NDL_MAX_MEMBERS 8
@@ -142,8 +144,8 @@ void ndl_stats_drops(ndl_link* l, ndl_drop_counts* out);
  * 0 sent; -1 when not in a room, len is 0 or above NDL_MAX_PAYLOAD, or dest is this phone or 0. */
 int ndl_send(ndl_link* l, const void* buf, size_t len, uint16_t dest);
 
-/* Emulation thread: hands every packet queued so far to fn, in arrival order, and returns how many. The lock is never
- * held while fn runs. */
+/* Emulation thread: hands every packet queued so far to fn, in arrival order, and returns how many; -1 when this
+ * phone is in no room. The lock is never held while fn runs. */
 int ndl_take(ndl_link* l, ndl_deliver_fn fn, void* ctx);
 
 #ifdef NDL_TESTING

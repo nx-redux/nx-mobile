@@ -664,11 +664,13 @@ private fun SplitBody(
     modifier: Modifier,
 ) {
     BoxWithConstraints(modifier.fillMaxWidth()) {
-        // The words' pane grows for a row longer than its usual share holds (Disconnect with its countdown).
+        // The root's words' pane grows for a row longer than its usual share holds (Disconnect with its countdown). A
+        // deeper page keeps the share: its pane is the dimmed parent, and its rows draw no values to make room for.
         val wordsNeed = rememberWordListWidth(split.panes.left, menuWordSize(), opened = true) + (nxListInset() - MenuPillPadding) + 12.dp
+        val grows = split.panes.left.kind == PageKind.Root
         SplitPanes(
             // No divider: the list and the panel (or the page) are one surface.
-            leftShare = maxOf(SETTINGS_SPLIT_LEFT, wordsNeed / maxWidth).coerceAtMost(WORDS_PANE_MAX_SHARE),
+            leftShare = if (grows) maxOf(SETTINGS_SPLIT_LEFT, wordsNeed / maxWidth).coerceAtMost(WORDS_PANE_MAX_SHARE) else SETTINGS_SPLIT_LEFT,
             divider = false,
             left = {
                 val l = leftPane(state, split, onSelect, onActivate, onChange)

@@ -212,7 +212,10 @@ internal interface LaunchHost : GameScreenHost {
 internal class LaunchPipeline(private val host: LaunchHost) {
     /** A 3DS launch's player name (Settings → System → Player name, else the device's). */
     private var playerName = ""
-    /** Held while a 3DS game may hold a local wireless room ([holdBroadcasts]). */
+    /**
+     * Held while a game may hold a local wireless room ([holdBroadcasts]): a 3DS game or a sheet session from launch, a
+     * DS game on the automatic route only while its wireless is on ([dsWirelessChanged]).
+     */
     private var broadcasts: WifiManager.MulticastLock? = null
     /** Held while a DS game is in a room outside a session ([dsRoomChanged]; a session's is [GameNetplay]'s). */
     private var dsWifi: WifiManager.WifiLock? = null
@@ -235,6 +238,20 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             dsWifi?.let { runCatching { if (it.isHeld) it.release() } }
             dsWifi = null
         }
+    }
+
+    /**
+     * The automatic route's broadcasts lock, only while the game's wireless is on (seeking, or in a room): with it the
+     * Wi-Fi chip passes up every broadcast on the network, which in solo play or in the background only costs battery.
+     */
+    fun dsWirelessChanged(on: Boolean) {
+        if (!dsAutoRoute) return
+        if (on) holdBroadcasts() else dropBroadcasts()
+    }
+
+    private fun dropBroadcasts() {
+        broadcasts?.let { runCatching { if (it.isHeld) it.release() } }
+        broadcasts = null
     }
 
     private fun holdBroadcasts() {
@@ -488,7 +505,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val n3dsRoomName = if (coreId != "azahar" && coreId != "melondsds") null else NetplayLinkOptions.n3dsRoomName(playerName, kotlin.random.Random.nextInt(10000))
             val n3dsAuto = n3dsRoomName?.takeIf { if (coreId == "melondsds") NdsOptions.localWireless(frontendValues) else N3dsOptions.localWireless(frontendValues) }
             // A room answers other devices' searches, which arrive as broadcasts: Android drops those without this lock.
-            if (n3dsAuto != null || linkKind == NetplayLinkKind.N3DSLINK || linkKind == NetplayLinkKind.NDSLINK) holdBroadcasts()
+            // A DS game outside a session takes it when its wireless goes on ([dsWirelessChanged]).
+            val dsAuto = coreId == "melondsds" && np == null
+            if ((n3dsAuto != null && !dsAuto) || linkKind == NetplayLinkKind.N3DSLINK || linkKind == NetplayLinkKind.NDSLINK) holdBroadcasts()
             val n3dsBroadcast = n3dsAuto?.let { WifiNetworks.broadcast(WifiNetworks.address(activity.getSystemService(ConnectivityManager::class.java)))?.hostAddress }
             // A DS room runs under its own MAC (a seed kept per install) so rooms tell its members apart.
             val ndsMac = if (coreId == "melondsds" && (n3dsAuto != null || linkKind == NetplayLinkKind.NDSLINK)) NetplayLinkOptions.ndsMac(AndroidAppSettings(activity).ndsMacSeed) else null
@@ -1053,8 +1072,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
 
     /** onDestroy: the RomCache holds this game took go, and one taken later (an unpack or copy that outlived the screen) at once. */
     fun onDestroy() {
-        broadcasts?.let { runCatching { if (it.isHeld) it.release() } }
-        broadcasts = null
+        dropBroadcasts()
         dsWifi?.let { runCatching { if (it.isHeld) it.release() } }
         dsWifi = null
         cacheHoldsDrained = true

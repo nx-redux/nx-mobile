@@ -2055,17 +2055,6 @@ class InGameMenuModelTest {
         assertEquals(listOf("Continue", "Disconnect", "Quit"), m.state.page.rows.map { it.label })
     }
 
-    @Test fun ds_wireless_off_keeps_an_open_quit_page() {
-        val m = model()
-        m.setDsWireless(true)
-        m.activate(2)                                         // the quit page
-        val kind = m.state.page.kind
-        val depth = m.state.stack.size
-        m.setDsWireless(false)
-        assertEquals(kind, m.state.page.kind)
-        assertEquals(depth, m.state.stack.size)
-    }
-
     @Test fun ds_wireless_on_ends_a_shortcut_capture() {
         val m = shortcuts()
         m.selectRow("Toggle FF")

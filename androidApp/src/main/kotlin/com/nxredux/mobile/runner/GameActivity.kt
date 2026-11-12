@@ -611,13 +611,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /**
      * DS local wireless: the game's radio went out, seeking (hosting or looking for a room) or into a room. The low-latency
-     * Wi-Fi lock is held only in a room; a sheet session has it from its launch. On the automatic route, seeking and a room
+     * Wi-Fi lock is held only in a room and the broadcasts lock only while not out; a sheet session has both from its launch. On the automatic route, seeking and a room
      * play as a session (no save, load, speed or reset shortcuts: they would break it for every member, or the room about
      * to form) and the menu is Continue, Disconnect, Quit; out, the full menu and shortcuts return. A menu open meanwhile
      * holds the core the way the room now asks: running for the members, or paused once alone.
      */
     private fun onDsPresenceChanged(presence: DsPresence) {
         launchPipeline.dsRoomChanged(presence == DsPresence.ROOM)
+        launchPipeline.dsWirelessChanged(presence != DsPresence.OUT)
         if (launchPipeline.dsAutoRoute) {
             speed.setSession(netplay = dsWireless)
             shortcuts.refreshTouchShortcuts()

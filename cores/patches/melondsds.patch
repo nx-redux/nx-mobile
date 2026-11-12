@@ -405,21 +405,23 @@ index df32f07..065e0fc 100644
  
      // ...then load the game.
 diff --git a/src/libretro/core/core.hpp b/src/libretro/core/core.hpp
-index bb52319..ab38e60 100644
+index bb52319..e53199d 100644
 --- a/src/libretro/core/core.hpp
 +++ b/src/libretro/core/core.hpp
-@@ -96,7 +96,10 @@ namespace MelonDsDs {
+@@ -96,7 +96,12 @@ namespace MelonDsDs {
          bool MpSendPacket(const Packet &p) noexcept;
          std::optional<Packet> MpNextPacket() noexcept;
          std::optional<Packet> MpNextPacketBlock() noexcept;
 +        bool MpAllPeersReplied(const std::vector<uint16_t> &replied) noexcept;
          bool MpActive() const noexcept;
-+        bool MpHostGone() const noexcept;
++        /// The host of the group this console is in has left; then the goodbye it never sent, once.
++        bool MpHostGone() noexcept;
 +        std::optional<Packet> MpTakeHostFarewell() noexcept;
++        void MpHostWaitEnded() noexcept;
  
          void WriteNdsSave(std::span<const std::byte> savedata, uint32_t writeoffset, uint32_t writelen) noexcept;
          void WriteGbaSave(std::span<const std::byte> savedata, uint32_t writeoffset, uint32_t writelen) noexcept;
-@@ -147,6 +150,14 @@ namespace MelonDsDs {
+@@ -147,6 +152,14 @@ namespace MelonDsDs {
              int type
          ) noexcept;
          [[gnu::hot]] static void RenderAudio(melonDS::NDS& nds) noexcept;
@@ -434,7 +436,7 @@ index bb52319..ab38e60 100644
          [[gnu::cold]] bool InitErrorScreen(const config_exception& e) noexcept;
          [[gnu::cold]] void RenderErrorScreen() noexcept;
          [[gnu::cold]] void InitContent(unsigned type, std::span<const retro_game_info> game);
-@@ -196,6 +207,14 @@ namespace MelonDsDs {
+@@ -196,6 +209,14 @@ namespace MelonDsDs {
          /// \see UpdateSystemAvInfo
          bool _nudgeMaxHeight = false;
          uint32_t _flushTaskId = 0;
@@ -676,7 +678,7 @@ index fabccaa..d817085 100644
      }
  }
 diff --git a/src/libretro/libretro.cpp b/src/libretro/libretro.cpp
-index b56f23a..e984bc4 100644
+index b56f23a..4edc321 100644
 --- a/src/libretro/libretro.cpp
 +++ b/src/libretro/libretro.cpp
 @@ -20,12 +20,14 @@
@@ -710,7 +712,18 @@ index b56f23a..e984bc4 100644
      try {
          MelonDsDs::Core.Reset();
      }
-@@ -354,6 +358,7 @@ int DeconstructPacket(u8 *data, u64 *timestamp, const std::optional<MelonDsDs::P
+@@ -345,7 +349,9 @@ extern "C" void MelonDsDs::MpStopped() noexcept {
+ }
+ 
+ int DeconstructPacket(u8 *data, u64 *timestamp, const std::optional<MelonDsDs::Packet> &o_p) {
+-    if (!o_p.has_value()) {
++    // melonDS's receive buffer; a longer frame can only be a forged one.
++    constexpr uint64_t RX_BUFFER_LENGTH = 2048;
++    if (!o_p.has_value() || o_p->Length() > RX_BUFFER_LENGTH) {
+         return 0;
+     }
+     memcpy(data, o_p->Data(), o_p->Length());
+@@ -354,6 +360,7 @@ int DeconstructPacket(u8 *data, u64 *timestamp, const std::optional<MelonDsDs::P
  }
  
  int Platform::MP_SendPacket(u8* data, int len, u64 timestamp, void*) {
@@ -718,7 +731,7 @@ index b56f23a..e984bc4 100644
      return MelonDsDs::Core.MpSendPacket(MelonDsDs::Packet(data, len, timestamp, 0, MelonDsDs::Packet::Type::Other)) ? len : 0;
  }
  
-@@ -384,6 +389,15 @@ int Platform::MP_SendAck(u8* data, int len, u64 timestamp, void*) {
+@@ -384,6 +391,16 @@ int Platform::MP_SendAck(u8* data, int len, u64 timestamp, void*) {
  
  int Platform::MP_RecvHostPacket(u8* data, u64 * timestamp, void*) {
      std::optional<MelonDsDs::Packet> o_p = MelonDsDs::Core.MpNextPacketBlock();
@@ -727,6 +740,7 @@ index b56f23a..e984bc4 100644
 +    if (!o_p.has_value() && MelonDsDs::Core.MpHostGone()) {
 +        // First the goodbye the host never sent, so the game ends its session as it does after a clean leave.
 +        o_p = MelonDsDs::Core.MpTakeHostFarewell();
++        MelonDsDs::Core.MpHostWaitEnded();
 +        if (!o_p.has_value()) {
 +            return -1;
 +        }
@@ -734,7 +748,7 @@ index b56f23a..e984bc4 100644
      return DeconstructPacket(data, timestamp, o_p);
  }
  
-@@ -392,8 +406,14 @@ u16 Platform::MP_RecvReplies(u8* packets, u64 timestamp, u16 aidmask, void*) {
+@@ -392,8 +409,14 @@ u16 Platform::MP_RecvReplies(u8* packets, u64 timestamp, u16 aidmask, void*) {
          return 0;
      }
      u16 ret = 0;
@@ -750,7 +764,7 @@ index b56f23a..e984bc4 100644
          std::optional<MelonDsDs::Packet> o_p = MelonDsDs::Core.MpNextPacketBlock();
          if(!o_p.has_value()) {
              return ret;
-@@ -405,9 +425,16 @@ u16 Platform::MP_RecvReplies(u8* packets, u64 timestamp, u16 aidmask, void*) {
+@@ -405,9 +428,17 @@ u16 Platform::MP_RecvReplies(u8* packets, u64 timestamp, u16 aidmask, void*) {
          if(p.PacketType() != MelonDsDs::Packet::Type::Reply) {
              continue;
          }
@@ -760,7 +774,8 @@ index b56f23a..e984bc4 100644
 +        if(std::find(replied.begin(), replied.end(), p.SenderId()) == replied.end()) {
 +            replied.push_back(p.SenderId());
 +        }
-+        if(p.Aid() != 0 && p.Length() != 0) {
++        // The aid comes off the network and indexes melonDS's table of 15 replies.
++        if(p.Aid() != 0 && p.Aid() < 16 && p.Length() != 0) {
 +            ret |= 1<<p.Aid();
 +            memcpy(&packets[(p.Aid()-1)*1024], p.Data(), std::min(p.Length(), (uint64_t)1024));
 +        }
@@ -846,7 +861,7 @@ index 0000000..cfaa783
 +
 +#endif //MELONDS_DS_LIBRETRO_VIEWS_H
 diff --git a/src/libretro/net/mp.cpp b/src/libretro/net/mp.cpp
-index caa185d..3521cde 100644
+index caa185d..2f4cda8 100644
 --- a/src/libretro/net/mp.cpp
 +++ b/src/libretro/net/mp.cpp
 @@ -15,7 +15,8 @@
@@ -859,36 +874,73 @@ index caa185d..3521cde 100644
  #include <libretro.h>
  #include <retro_assert.h>
  #include <retro_endianness.h>
-@@ -25,6 +26,11 @@ using namespace MelonDsDs;
+@@ -25,6 +26,16 @@ using namespace MelonDsDs;
  // the player gets notified they are not supposed to use a VPN.
  constexpr int SUCCESSIVE_TIMEOUTS_WARNING = 6;
  constexpr long RECV_TIMEOUT_MS = 25;
 +// A console silent this long has left; the host stops waiting for its replies.
 +constexpr long PEER_FORGET_MS = 2000;
++// A host silent this long has left. No shorter than the frontend's own limit for a silent member, so a host that
++// only stalls is not dropped before its room would drop it.
++constexpr long HOST_GONE_MS = 3000;
 +// melonDS puts a 12-byte header before each 802.11 frame; the 802.11 header is 24 bytes.
++constexpr size_t RECEIVED_PACKETS_MAX = 512;
++constexpr size_t HOSTS_MAX = 16;
 +constexpr size_t RX_HEADER_LENGTH = 12;
 +constexpr size_t FRAME_HEAD_LENGTH = RX_HEADER_LENGTH + 24;
  
  uint64_t swapToNetwork(uint64_t n) {
      return swap_if_little64(n);
-@@ -106,8 +112,16 @@ void MpState::SetPollFn(retro_netpacket_poll_receive_t pollFn) noexcept {
+@@ -95,6 +106,11 @@ bool MpState::IsReady() const noexcept {
+ void MpState::SetSendFn(retro_netpacket_send_t sendFn) noexcept {
+     if (sendFn != nullptr) {
+         retro::set_warn_message("LAN Multiplayer will NOT work using VPNs or tunnels such as Hamachi!");
++        // A new session knows nobody yet. Not on stop: the host's last frame is still owed its goodbye then.
++        _hosts.clear();
++        _hostWaitStart.reset();
++        _lastHeard.clear();
++        receivedPackets = {};
+     }
+     _sendFn = sendFn;
+ }
+@@ -106,9 +122,36 @@ void MpState::SetPollFn(retro_netpacket_poll_receive_t pollFn) noexcept {
  void MpState::PacketReceived(const void *buf, size_t len, uint16_t client_id) noexcept {
      retro_assert(IsReady());
      Packet p = Packet::parsePk(buf, len);
 +    p.SetSenderId(client_id);
-+    _lastHeard[client_id] = std::chrono::steady_clock::now();
++    const auto now = std::chrono::steady_clock::now();
++    // Only the consoles of this host's group reply to it; another group in the room must not be waited for.
++    if(p.PacketType() == Packet::Type::Reply) {
++        _lastHeard[client_id] = now;
++    }
      if(p.PacketType() == Packet::Type::Cmd) {
          _hostId = client_id;
-+        _lastCommand = _lastHeard[client_id];
+         //retro::debug("Host client id is {}", client_id);
 +        if(p.Length() >= FRAME_HEAD_LENGTH) {
 +            const uint8_t* head = (const uint8_t*)p.Data();
-+            _hostFrameHead.assign(head, head + FRAME_HEAD_LENGTH);
-+            _hostTimestamp = p.Timestamp();
++            GroupId group;
++            // A command's second address is its group's BSSID, the host's own address.
++            std::copy_n(head + RX_HEADER_LENGTH + 10, group.size(), group.begin());
++            // Group ids come off the network: a forged stream of them must not grow the table.
++            if(_hosts.size() >= HOSTS_MAX && _hosts.find(group) == _hosts.end()) {
++                _hosts.erase(std::min_element(_hosts.begin(), _hosts.end(), [](const auto& a, const auto& b) {
++                    return a.second.lastCommand < b.second.lastCommand;
++                }));
++            }
++            Host& host = _hosts[group];
++            host.senderId = client_id;
++            host.lastCommand = now;
++            host.frameHead.assign(head, head + FRAME_HEAD_LENGTH);
++            host.timestamp = p.Timestamp();
 +        }
-         //retro::debug("Host client id is {}", client_id);
++    }
++    // Nothing takes packets while the game's wireless is off in a room: keep the newest only.
++    if(receivedPackets.size() >= RECEIVED_PACKETS_MAX) {
++        receivedPackets.pop();
      }
      receivedPackets.push(std::move(p));
-@@ -132,9 +146,15 @@ std::optional<Packet> MpState::NextPacket() noexcept {
+ }
+@@ -132,9 +175,15 @@ std::optional<Packet> MpState::NextPacket() noexcept {
  std::optional<Packet> MpState::NextPacketBlock() noexcept {
      retro_assert(IsReady());
      if (receivedPackets.empty()) {
@@ -905,34 +957,52 @@ index caa185d..3521cde 100644
              if(!receivedPackets.empty()) {
                  return NextPacket();
              }
-@@ -151,6 +171,49 @@ std::optional<Packet> MpState::NextPacketBlock() noexcept {
+@@ -151,14 +200,80 @@ std::optional<Packet> MpState::NextPacketBlock() noexcept {
      return std::nullopt;
  }
  
-+bool MpState::HostGone() const noexcept {
-+    return !IsReady() || std::chrono::steady_clock::now() - _lastCommand > std::chrono::milliseconds(PEER_FORGET_MS);
+-void MpState::SendPacket(const Packet &p) noexcept {
++bool MpState::HostGone(const GroupId& group) noexcept {
++    if (!IsReady()) {
++        return true;
++    }
++    // Silence counts from the first unanswered wait: a console that has just joined has heard no command yet.
++    const auto now = std::chrono::steady_clock::now();
++    const auto host = _hosts.find(group);
++    const auto lastCommand = host != _hosts.end() ? host->second.lastCommand : std::chrono::steady_clock::time_point {};
++    // The host spoke since the last wait began: this is a new silence. Other groups' frames don't count.
++    if (_hostWaitStart.has_value() && lastCommand > *_hostWaitStart) {
++        _hostWaitStart.reset();
++    }
++    if (!_hostWaitStart.has_value()) {
++        _hostWaitStart = now;
++    }
++    return now - std::max(lastCommand, *_hostWaitStart) > std::chrono::milliseconds(HOST_GONE_MS);
 +}
 +
-+std::optional<Packet> MpState::TakeHostFarewell() noexcept {
-+    if (_hostFrameHead.size() < FRAME_HEAD_LENGTH) {
++void MpState::HostWaitEnded() noexcept {
++    _hostWaitStart.reset();
++}
++
++std::optional<Packet> MpState::TakeHostFarewell(const GroupId& group) noexcept {
++    const auto host = _hosts.find(group);
++    if (host == _hosts.end() || host->second.frameHead.size() < FRAME_HEAD_LENGTH) {
 +        return std::nullopt;
 +    }
-+    constexpr size_t MAC_LENGTH = 6;
 +    constexpr size_t FRAME_LENGTH = 24 + 2 + 4;   // 802.11 header, reason code, checksum
 +    std::vector<uint8_t> frame(RX_HEADER_LENGTH + FRAME_LENGTH, 0);
 +    // Rate and channel as the host's last frame had them: melonDS drops a frame on another channel.
-+    std::copy_n(_hostFrameHead.begin(), RX_HEADER_LENGTH, frame.begin());
++    std::copy_n(host->second.frameHead.begin(), RX_HEADER_LENGTH, frame.begin());
 +    frame[10] = FRAME_LENGTH & 0xFF;
 +    frame[11] = FRAME_LENGTH >> 8;
 +    uint8_t* dot11 = frame.data() + RX_HEADER_LENGTH;
 +    dot11[0] = 0xC0;                                                      // deauthentication
-+    std::fill_n(dot11 + 4, MAC_LENGTH, 0xFF);                             // to everyone
-+    const uint8_t* hostMac = _hostFrameHead.data() + RX_HEADER_LENGTH + 10;
-+    std::copy_n(hostMac, MAC_LENGTH, dot11 + 10);                         // from the host
-+    std::copy_n(hostMac, MAC_LENGTH, dot11 + 16);                         // its group
++    std::fill_n(dot11 + 4, group.size(), 0xFF);                           // to everyone
++    std::copy_n(group.begin(), group.size(), dot11 + 10);                 // from the host
++    std::copy_n(group.begin(), group.size(), dot11 + 16);                 // its group
 +    dot11[24] = 3;                                                        // reason: the sender is leaving
-+    const uint64_t timestamp = _hostTimestamp != 0 ? _hostTimestamp : 1;  // melonDS ignores a frame stamped 0
-+    _hostFrameHead.clear();
++    const uint64_t timestamp = host->second.timestamp != 0 ? host->second.timestamp : 1;  // melonDS ignores a frame stamped 0
++    _hosts.erase(host);
 +    return Packet(frame.data(), frame.size(), timestamp, 0, Packet::Type::Other);
 +}
 +
@@ -952,18 +1022,36 @@ index caa185d..3521cde 100644
 +    return all;
 +}
 +
- void MpState::SendPacket(const Packet &p) noexcept {
++void MpState::SendPacket(const Packet &p, const GroupId& group) noexcept {
      retro_assert(IsReady());
      uint16_t dest = RETRO_NETPACKET_BROADCAST;
+     if(p.PacketType() == Packet::Type::Cmd) {
+         _hostId = std::nullopt;
+     }
+-    if(p.PacketType() == Packet::Type::Reply && _hostId.has_value()) {
+-        dest = _hostId.value();
++    if(p.PacketType() == Packet::Type::Reply) {
++        // To its own group's host: the last console that sent a command may be another group's.
++        const auto host = _hosts.find(group);
++        if(host != _hosts.end()) {
++            dest = host->second.senderId;
++        } else if(_hostId.has_value()) {
++            dest = _hostId.value();
++        }
+     }
+     _sendFn(RETRO_NETPACKET_UNSEQUENCED | RETRO_NETPACKET_UNRELIABLE | RETRO_NETPACKET_FLUSH_HINT, p.ToBuf().data(), p.Length() + HeaderSize, dest);
+ }
 diff --git a/src/libretro/net/mp.hpp b/src/libretro/net/mp.hpp
-index f6b5dfc..dd948bc 100644
+index f6b5dfc..11a7ca6 100644
 --- a/src/libretro/net/mp.hpp
 +++ b/src/libretro/net/mp.hpp
-@@ -14,13 +14,19 @@
+@@ -14,13 +14,21 @@
      with melonDS DS. If not, see http://www.gnu.org/licenses/.
  */
  #pragma once
++#include <array>
 +#include <chrono>
++#include <map>
  #include <cstdint>
 +#include <unordered_map>
  #include <queue>
@@ -979,7 +1067,7 @@ index f6b5dfc..dd948bc 100644
  // timestamp, aid, and isReply, respectively.
  constexpr size_t HeaderSize = sizeof(uint64_t) + sizeof(uint8_t) + sizeof(uint8_t);
  
-@@ -48,6 +54,13 @@ public:
+@@ -48,6 +56,13 @@ public:
      [[nodiscard]] uint64_t Length() const noexcept {
          return _data.size();
      };
@@ -993,7 +1081,7 @@ index f6b5dfc..dd948bc 100644
  
      std::vector<uint8_t> ToBuf() const;
  private:
-@@ -55,6 +68,7 @@ private:
+@@ -55,17 +70,31 @@ private:
      uint8_t _aid;
      Packet::Type _type;
      std::vector<uint8_t> _data;
@@ -1001,29 +1089,48 @@ index f6b5dfc..dd948bc 100644
  };
  
  class MpState {
-@@ -66,6 +80,13 @@ public:
-     void SendPacket(const Packet &p) noexcept;
+ public:
++    /// A DS group's id: its host's address, which every frame of the group carries.
++    using GroupId = std::array<uint8_t, 6>;
+     void PacketReceived(const void *buf, size_t len, uint16_t client_id) noexcept;
+     void SetSendFn(retro_netpacket_send_t sendFn) noexcept;
+     void SetPollFn(retro_netpacket_poll_receive_t pollFn) noexcept;
+     bool IsReady() const noexcept;
+-    void SendPacket(const Packet &p) noexcept;
++    /// [group]: the group this console is in, whose host a reply goes to.
++    void SendPacket(const Packet &p, const GroupId& group) noexcept;
      std::optional<Packet> NextPacket() noexcept;
      std::optional<Packet> NextPacketBlock() noexcept;
 +    /// True once every console heard from recently is in `replied`, so the host can stop waiting for replies.
 +    bool AllPeersReplied(const std::vector<uint16_t> &replied) noexcept;
-+    /// True when the console that sends the commands has left: the session ended, or it has been silent too long.
-+    bool HostGone() const noexcept;
-+    /// The deauthentication frame the host would have sent had it left cleanly, once per host; a game cut off
-+    /// without one can wait on its wireless forever.
-+    std::optional<Packet> TakeHostFarewell() noexcept;
++    /// True when the host of [group] has left: the session ended, or it has been silent too long. A room can carry
++    /// several groups, each with its own host.
++    bool HostGone(const GroupId& group) noexcept;
++    /// The deauthentication frame the host of [group] would have sent had it left cleanly, once per host; a game cut
++    /// off without one can wait on its wireless forever.
++    std::optional<Packet> TakeHostFarewell(const GroupId& group) noexcept;
++    /// The wait for the host is over: it was given up.
++    void HostWaitEnded() noexcept;
  private:
      bool _warnedHighLatency = false;
      int _timeoutCount = 0;
-@@ -73,5 +94,10 @@ private:
+@@ -73,5 +102,18 @@ private:
      retro_netpacket_poll_receive_t _pollFn;
      std::optional<uint16_t> _hostId;
      std::queue<Packet> receivedPackets;
++    // The consoles that answer this host's commands, and when each last did.
 +    std::unordered_map<uint16_t, std::chrono::steady_clock::time_point> _lastHeard;
-+    std::chrono::steady_clock::time_point _lastCommand;
-+    // The start of the host's last command frame (melonDS's 12-byte header, then the 802.11 header) and its timestamp.
-+    std::vector<uint8_t> _hostFrameHead;
-+    uint64_t _hostTimestamp = 0;
++    struct Host {
++        uint16_t senderId = 0;
++        std::chrono::steady_clock::time_point lastCommand;
++        // The start of its last command frame (melonDS's 12-byte header, then the 802.11 header) and its timestamp.
++        std::vector<uint8_t> frameHead;
++        uint64_t timestamp = 0;
++    };
++    // The hosts heard in this room, by group.
++    std::map<GroupId, Host> _hosts;
++    // When this console began waiting for a command of its group that hasn't come.
++    std::optional<std::chrono::steady_clock::time_point> _hostWaitStart;
  };
  }
 diff --git a/src/libretro/nx_nds_radio.h b/src/libretro/nx_nds_radio.h
@@ -1041,7 +1148,7 @@ index 0000000..9d5cc94
 +#define NX_NDS_RADIO_ON 1       // the game powered the radio on
 +#define NX_NDS_RADIO_HOSTING 2  // the game sent a beacon: it created a group (once per ON)
 diff --git a/src/libretro/platform/mp.cpp b/src/libretro/platform/mp.cpp
-index 30ee4c2..b3218aa 100644
+index 30ee4c2..8f0541a 100644
 --- a/src/libretro/platform/mp.cpp
 +++ b/src/libretro/platform/mp.cpp
 @@ -18,6 +18,7 @@
@@ -1052,7 +1159,38 @@ index 30ee4c2..b3218aa 100644
  #include <fmt/base.h>
  #include <retro_assert.h>
  
-@@ -81,15 +82,65 @@ std::optional<MelonDsDs::Packet> MelonDsDs::CoreState::MpNextPacketBlock() noexc
+@@ -56,12 +57,29 @@ void MelonDsDs::CoreState::MpStopped() noexcept {
+     retro::info("Stopping multiplayer on libretro side");
+ }
+ 
++namespace {
++    // The group this console is in: the BSSID its wireless is set to.
++    MelonDsDs::MpState::GroupId GroupOf(melonDS::NDS* console) noexcept {
++        MelonDsDs::MpState::GroupId group {};
++        if (console == nullptr) {
++            return group;
++        }
++        constexpr u32 W_BSSID = 0x04808020;
++        for (u32 i = 0; i < 3; i++) {
++            const u16 word = console->Wifi.Read(W_BSSID + i * 2);
++            group[i * 2] = word & 0xFF;
++            group[i * 2 + 1] = word >> 8;
++        }
++        return group;
++    }
++}
++
+ bool MelonDsDs::CoreState::MpSendPacket(const MelonDsDs::Packet &p) noexcept {
+     ZoneScopedN(TracyFunction);
+     if(!_mpState.IsReady()) {
+         return false;
+     }
+-    _mpState.SendPacket(p);
++    _mpState.SendPacket(p, GroupOf(Console.get()));
+     return true;
+ }
+ 
+@@ -81,15 +99,69 @@ std::optional<MelonDsDs::Packet> MelonDsDs::CoreState::MpNextPacketBlock() noexc
      return _mpState.NextPacketBlock();
  }
  
@@ -1060,12 +1198,16 @@ index 30ee4c2..b3218aa 100644
 +    return _mpState.AllPeersReplied(replied);
 +}
 +
-+bool MelonDsDs::CoreState::MpHostGone() const noexcept {
-+    return _mpState.HostGone();
++bool MelonDsDs::CoreState::MpHostGone() noexcept {
++    return _mpState.HostGone(GroupOf(Console.get()));
 +}
 +
 +std::optional<MelonDsDs::Packet> MelonDsDs::CoreState::MpTakeHostFarewell() noexcept {
-+    return _mpState.TakeHostFarewell();
++    return _mpState.TakeHostFarewell(GroupOf(Console.get()));
++}
++
++void MelonDsDs::CoreState::MpHostWaitEnded() noexcept {
++    _mpState.HostWaitEnded();
 +}
 +
  bool MelonDsDs::CoreState::MpActive() const noexcept {
