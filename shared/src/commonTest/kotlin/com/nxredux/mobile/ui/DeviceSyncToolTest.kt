@@ -1,6 +1,8 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.achievements.RaController
 import com.nxredux.mobile.achievements.RaSortOrder
+import com.nxredux.mobile.achievements.fakePlatform
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.library.ensurePath
 import com.nxredux.mobile.scraper.StoredGameInfo
@@ -109,7 +111,7 @@ class DeviceSyncToolTest {
     )
 
     /** [withCollections]: the home has an empty `Collections/`. [onboardingAt]: onboarding to do, resumed at that step. */
-    private fun TestScope.rig(withCollections: Boolean = false, onboardingAt: OnboardingStep? = null, info: Boolean = false): Rig {
+    private fun TestScope.rig(withCollections: Boolean = false, onboardingAt: OnboardingStep? = null, info: Boolean = false, signedIn: Boolean = false): Rig {
         val source = FakeRomsSource(
             dirs = mapOf(
                 "Home" to listOf("Roms") + if (withCollections) listOf("Collections") else emptyList(),
@@ -138,7 +140,14 @@ class DeviceSyncToolTest {
             ).also { artwork = it }
         }
         val state = AppState(
-            AppDeps(settings, source, runner, Picker, data, compute = UnconfinedTestDispatcher(testScheduler), deviceSync = sync, artwork = factory),
+            AppDeps(
+                settings, source, runner, Picker, data, compute = UnconfinedTestDispatcher(testScheduler), deviceSync = sync, artwork = factory,
+                // A signed-in player: X opens the achievements panel on a game list.
+                achievements = if (!signedIn) null else {
+                    settings.raUsername = "me"; settings.raToken = "t"
+                    RaController(fakePlatform(), settings, { null }, scope, now = { 0L })
+                },
+            ),
             scope,
         )
         state.load()
@@ -477,6 +486,22 @@ class DeviceSyncToolTest {
         val after = assertIs<Screen.Games>(r.state.screen.value)
         assertTrue(after.isTab)
         assertEquals("Zelda", after.entries[r.state.selection.value.index].game.shownName)
+    }
+
+    // A Systems tab never has a game list's panels; the Games tab has: the scan waits until the panel closes.
+    @Test fun roms_arriving_under_a_panel_on_the_games_tab_rescan_when_it_closes() = runTest {
+        val r = rig(signedIn = true); r.openDeviceSync()
+        r.state.goHome()
+        r.state.selectTab(1)
+        assertTrue(assertIs<Screen.Games>(r.state.screen.value).isTab)
+        r.state.toggleRaPanel()                                         // the achievements panel over the tab
+        assertNotNull(r.state.raPanel.value)
+        val before = r.source.listings
+        receiveRoms(r)
+        assertEquals(before, r.source.listings)                         // not under the panel
+        r.state.toggleRaPanel()
+        assertTrue(r.source.listings > before)                          // closed: the scan at once
+        assertTrue(assertIs<Screen.Games>(r.state.screen.value).isTab)
     }
 
     // Leaving the tool by Home, not B, still scans: the menu showing again takes the pending ROMs.

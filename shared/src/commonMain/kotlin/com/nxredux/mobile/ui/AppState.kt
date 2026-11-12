@@ -553,8 +553,8 @@ sealed interface Screen {
 /** This game list is the main menu's Games tab: every game, under the tab row ([Screen.Games.tabBar]). */
 val Screen.Games.isTab: Boolean get() = source == ListSource.AllGames
 
-/** The main menu: a [Screen.Systems], or the Games tab ([isTab]) while it is the tab shown. */
-internal val Screen.isMainMenu: Boolean get() = this is Screen.Systems || (this is Screen.Games && isTab)
+/** The main menu: a [Screen.Systems], or the Games tab ([isTab]) while it is the tab shown (the app's dual-screen rule too). */
+val Screen.isMainMenu: Boolean get() = this is Screen.Systems || (this is Screen.Games && isTab)
 
 /** The tab the main menu shows ([isMainMenu]); null on any other screen (or a menu with no tab). */
 internal val Screen.menuTab: MenuCategory?
@@ -992,6 +992,11 @@ class AppState(
     /** An installed library's "Add N Android games to Consoles?" dialog over the main menu (A Yes, B Not now); null when not showing. */
     val androidGamesAsk: StateFlow<AndroidGamesAsk?> = _androidGamesAsk.asStateFlow()
     private var androidAskGuard: Job? = null   // active for [ANDROID_ASK_GUARD_MILLIS] after the dialog shows: its answers are ignored
+    /**
+     * A game list's panel is open (the achievements panel or the art panel): on the Games tab the menu is then not free
+     * ([menuFree]). Declared before its readers; it follows the panels from where they are built ([artPanel]).
+     */
+    private val _panelOpen = MutableStateFlow(false)
     private var updateAskGuard: Job? = null   // as [androidAskGuard], for the update dialog (declared first: [updatePopup] may set it while built)
     private val _updateScroll = MutableSharedFlow<Int>(extraBufferCapacity = 8)
     /** The update dialog's (or About's confirm's) d-pad up (-1) / down (+1), for notes taller than the dialog. */
@@ -1005,7 +1010,7 @@ class AppState(
      */
     val updatePopup: StateFlow<AppRelease?> = deps.updater?.let { u ->
         var shown = false
-        combine(u.popup, _androidGamesAsk, _error, _screen) { release, ask, error, screen -> release?.takeIf { updatePopupFits(ask, error, screen) } }
+        combine(u.popup, _androidGamesAsk, _error, _screen, _panelOpen) { release, ask, error, screen, panel -> release?.takeIf { !panel && updatePopupFits(ask, error, screen) } }
             .onEach {
                 // Guarded from before it draws: the check lands while the menu is in use, so a press may be on its way.
                 if (it != null && !shown) { updateAskGuard?.cancel(); updateAskGuard = scope.launch { delay(ANDROID_ASK_GUARD_MILLIS) } }
@@ -1595,7 +1600,7 @@ class AppState(
             // Home, Back from a list the sync ended under, the end of a Loading the sync ended during. B on the tool and
             // leaving setup's sync step take them first themselves.
             scope.launch {
-                _screen.collect { s -> if (romsPending && menuFree(s)) { romsPending = false; rescan() } }
+                combine(_screen, _panelOpen) { s, _ -> s }.collect { s -> if (romsPending && menuFree(s)) { romsPending = false; rescan() } }
             }
         }
     }
@@ -2073,10 +2078,13 @@ class AppState(
         }
     }
 
-    /** The main menu with nothing over it: no context menu, no START prompt (the Games tab: nor a Layout dropdown). */
+    /**
+     * The main menu with nothing over it: no context menu, no START prompt (the Games tab: nor a Layout dropdown, the
+     * achievements panel or the art panel).
+     */
     private fun menuFree(s: Screen): Boolean = s.isMainMenu && s.contextMenu == null && when (s) {
         is Screen.Systems -> s.search == null
-        is Screen.Games -> s.search == null && s.layoutMenu == null
+        is Screen.Games -> s.search == null && s.layoutMenu == null && !_panelOpen.value
         else -> false
     }
 
@@ -5614,6 +5622,17 @@ class AppState(
     /** The art panel; null while closed (always, without a controller). */
     val artPanel: StateFlow<ArtPanel?> = artPanels?.panel ?: noArtPanel
 
+    init {
+        // [_panelOpen] follows the two panels; one closing over the Games tab lets the Android games question ask.
+        scope.launch {
+            combine(raPanel, artPanel) { r, a -> r != null || a != null }.collect { open ->
+                val was = _panelOpen.value
+                _panelOpen.value = open
+                if (was && !open) maybeAskAndroidGames()
+            }
+        }
+    }
+
     /** Opens the art panel on [entry] over the game list; [fetchFirst]: Fetch art, else Change art. */
     private fun openArtPanel(entry: Listed, fetchFirst: Boolean) {
         val panels = artPanels ?: return
@@ -6389,14 +6408,17 @@ class AppState(
         if (deps.launcher == null || home() == null || deps.settings.androidGamesAsked || firstSetup) return
         if (_androidGamesAsk.value != null) return
         val s = _screen.value.takeIf { it.isMainMenu } ?: return   // any tab, the Games tab too
-        if (s.contextMenu != null) return
+        if (s.contextMenu != null || _panelOpen.value) return   // nor over the Games tab's panels (asked when they close)
         val ask = androidGamesAskFor(installedCache ?: return) ?: return
         androidAskGuard?.cancel()
         androidAskGuard = scope.launch { delay(ANDROID_ASK_GUARD_MILLIS) }
         _androidGamesAsk.value = ask
     }
 
-    /** The update dialog may show over [screen]: the main menu with no context menu, the Android games question or a Problem over it. */
+    /**
+     * The update dialog may show over [screen]: the main menu with no context menu, the Android games question or a Problem
+     * over it (nor, on the Games tab, a panel: [updatePopup] waits on [_panelOpen] too).
+     */
     private fun updatePopupFits(ask: AndroidGamesAsk?, error: String?, screen: Screen): Boolean =
         ask == null && error == null && screen.isMainMenu && screen.contextMenu == null
 
@@ -6449,7 +6471,10 @@ class AppState(
         if (u.hostBusy === updateHost) u.hostBusy = { "" }
     }
 
-    /** What the host holds an install for: the Netplay sheet; "" off the main menu (a game list may be about to launch); null when free. */
+    /**
+     * What the host holds an install for: the Netplay sheet; "" off the main menu (a game list may be about to launch); null
+     * when free, the Games tab included (it is the menu, as Home is, where A launches too).
+     */
     private fun updateHostBusy(): String? = when {
         netplay?.page?.value != null -> "Close Netplay to install"
         !_screen.value.isMainMenu -> ""

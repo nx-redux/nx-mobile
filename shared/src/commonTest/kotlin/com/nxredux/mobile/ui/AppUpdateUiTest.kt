@@ -1,7 +1,9 @@
 package com.nxredux.mobile.ui
 
 import androidx.compose.ui.graphics.ImageBitmap
+import com.nxredux.mobile.achievements.RaController
 import com.nxredux.mobile.achievements.RaSortOrder
+import com.nxredux.mobile.achievements.fakePlatform
 import com.nxredux.mobile.launcher.AppLauncher
 import com.nxredux.mobile.launcher.InstalledApp
 import com.nxredux.mobile.library.FakeRomsSource
@@ -144,6 +146,7 @@ class AppUpdateUiTest {
     private fun TestScope.rig(
         platform: FakePlatform = FakePlatform(), withUpdater: Boolean = true, launcher: AppLauncher? = null,
         settings: Settings = Settings(), netplay: FakeNetplayPlatform? = null, load: Boolean = true, now: () -> Long = { NOW },
+        signedIn: Boolean = false,   // an achievements controller and a signed-in player: X opens the panel on a game list
     ): Rig {
         // The controller's polls run in the background scope, so an unfinished wait does not keep the test running.
         val updater = UpdateController(platform, CoroutineScope(backgroundScope.coroutineContext + UnconfinedTestDispatcher(testScheduler)), now = now)
@@ -151,6 +154,10 @@ class AppUpdateUiTest {
             AppDeps(
                 settings, source, Runner(), Picker, compute = UnconfinedTestDispatcher(testScheduler), launcher = launcher,
                 netplay = netplay, updater = updater.takeIf { withUpdater },
+                achievements = if (!signedIn) null else {
+                    settings.raUsername = "me"; settings.raToken = "t"
+                    RaController(fakePlatform(), settings, { null }, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), now = { 0L })
+                },
             ),
             CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
         )
@@ -291,6 +298,19 @@ class AppUpdateUiTest {
         assertTrue(assertIs<Screen.Games>(r.state.screen.value).isTab)
     }
 
+    // A Systems tab never has a game list's panels; the Games tab has: the dialog waits behind one, as behind a menu.
+    @Test fun the_popup_waits_while_a_panel_is_open_on_the_games_tab() = runTest {
+        val r = rig(signedIn = true)
+        r.state.selectTab(1)
+        assertEquals("0.4.0", r.state.updatePopup.value?.version)
+        r.state.toggleRaPanel()                                             // the achievements panel over the tab
+        assertNotNull(r.state.raPanel.value)
+        assertNull(r.state.updatePopup.value)
+        r.state.toggleRaPanel()                                             // closed: the dialog shows again
+        assertNull(r.state.raPanel.value)
+        assertEquals("0.4.0", r.state.updatePopup.value?.version)
+    }
+
     @Test fun no_updater_no_popup_and_no_row() = runTest {
         val r = rig(withUpdater = false)
         assertNull(r.state.updatePopup.value)
@@ -426,6 +446,10 @@ class AppUpdateUiTest {
         val np = FakeNetplayPlatform()
         val r = rig(netplay = np)
         assertNull(r.updater.hostBusy())                                    // the main menu, nothing over it
+        r.state.selectTab(1)
+        assertTrue(assertIs<Screen.Games>(r.state.screen.value).isTab)
+        assertNull(r.updater.hostBusy())                                    // the Games tab is the menu too: no install held, as on Home
+        r.state.selectTab(0)
         val systems = assertIs<Screen.Systems>(r.state.screen.value).tabs.flatMap { it.rows }.flatMap { (it as? MainRow.System)?.systems.orEmpty() }
         pastGuard()
         r.state.onButton(NxButton.B)                                        // the popup's Not now

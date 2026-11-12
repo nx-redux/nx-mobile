@@ -6968,12 +6968,12 @@ class AppStateTest {
     private fun TestScope.raFixture(
         home: RaHomeTree? = null, index: LibraryIndex? = null, hasher: FakeRaHasher = FakeRaHasher(), roms: FakeRomsSource = source, ownKeyboard: Boolean = false,
         store: FakeRaStore = FakeRaStore(), settings: MemorySettings = MemorySettings(ContentRef("Home")),   // a home, so the main menu (and its Tools tab) is built
-        files: PrivateFiles = MemoryPrivateFiles(), log: (String) -> Unit = {},
+        files: PrivateFiles = MemoryPrivateFiles(), log: (String) -> Unit = {}, launcher: AppLauncher? = null,
     ): RaFixture {
         val http = FakeRaHttp()
         val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
         val controller = RaController(if (home == null) fakePlatform(store, http, hasher) else fakePlatform(store, http, hasher, home = home), settings, { index }, scope, now = { 0L })
-        val deps = AppDeps(settings, roms, RecordingRunner(), NoopPicker(), achievements = controller, ownKeyboard = ownKeyboard, compute = UnconfinedTestDispatcher(testScheduler), privateFiles = files, log = log)
+        val deps = AppDeps(settings, roms, RecordingRunner(), NoopPicker(), achievements = controller, ownKeyboard = ownKeyboard, compute = UnconfinedTestDispatcher(testScheduler), privateFiles = files, log = log, launcher = launcher)
         return RaFixture(AppState(deps, scope).also { it.load() }, store, http, controller, hasher)
     }
     private fun TestScope.stateWithAchievements(): Pair<AppState, FakeRaStore> = raFixture().let { it.state to it.store }
@@ -7437,8 +7437,8 @@ class AppStateTest {
     // --- The achievements panel over a game list (the trophy icon, X) ---
 
     /** A fixture signed in as "me" with Tetris.gb's two achievements cached, the game info read. */
-    private fun TestScope.panelFixture(signedIn: Boolean = true, index: LibraryIndex? = null, hasher: FakeRaHasher = FakeRaHasher(), roms: FakeRomsSource = source): RaFixture {
-        val f = raFixture(index = index, hasher = hasher, roms = roms)
+    private fun TestScope.panelFixture(signedIn: Boolean = true, index: LibraryIndex? = null, hasher: FakeRaHasher = FakeRaHasher(), roms: FakeRomsSource = source, launcher: AppLauncher? = null): RaFixture {
+        val f = raFixture(index = index, hasher = hasher, roms = roms, launcher = launcher)
         if (signedIn) { f.state.settings.raUsername = "me"; f.state.settings.raToken = "t" }
         val hash = "a".repeat(32)
         f.store.put(RaPaths.sets(hash), setsJson(1, title = "Tetris", achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"},{"ID":2,"Title":"Second","Points":10,"BadgeName":"2"}"""))
@@ -9669,6 +9669,22 @@ class AppStateTest {
         launcher.apps = listOf(gAlpha)                                       // a game installed while away
         state.onForeground(); advanceUntilIdle()
         assertEquals(listOf("a/A"), assertNotNull(state.androidGamesAsk.value).ids)
+    }
+
+    // A Systems tab never has a game list's panels; the Games tab has: the question waits until the panel closes.
+    @Test fun the_android_games_question_waits_while_a_panel_is_open_on_the_games_tab() = runTest {
+        val launcher = FakeLauncher()
+        val f = panelFixture(launcher = launcher)
+        f.state.selectTab(1); f.state.gamesTab()
+        f.state.onButton(NxButton.X); advanceUntilIdle()
+        assertNotNull(f.state.raPanel.value)
+        launcher.apps = listOf(gAlpha)                                       // a game installed while away
+        f.state.onForeground(); advanceUntilIdle()
+        assertNotNull(f.state.raPanel.value)
+        assertNull(f.state.androidGamesAsk.value)                            // not over the panel
+        assertTrue(f.state.back()); advanceUntilIdle()                       // B closes the panel: the question now
+        assertNull(f.state.raPanel.value)
+        assertEquals(listOf("a/A"), assertNotNull(f.state.androidGamesAsk.value).ids)
     }
 
     @Test fun an_offline_extra_back_rescans_from_the_games_tab_and_lands_on_its_game() = runTest {
