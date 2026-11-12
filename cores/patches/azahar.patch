@@ -1293,7 +1293,7 @@ index 0000000..0e6cf75
 +} // namespace LibRetro
 diff --git a/src/citra_libretro/room_link.cpp b/src/citra_libretro/room_link.cpp
 new file mode 100644
-index 0000000..1c7c11d
+index 0000000..9362d75
 --- /dev/null
 +++ b/src/citra_libretro/room_link.cpp
 @@ -0,0 +1,708 @@
@@ -1498,8 +1498,8 @@ index 0000000..1c7c11d
 +    for (int i = 0; i < 100 && !cancel && member.GetState() == RoomMember::State::Joining; ++i)
 +        std::this_thread::sleep_for(std::chrono::milliseconds(50));
 +    if (member.IsConnected())
-+        LOG_INFO(Frontend, "3DS link: in the room at {}:{} over {}", ip, port,
-+                 OnCable(ip) ? "the cable" : "the Wi-Fi");
++        LOG_INFO(Frontend, "3DS link: in the room at {}:{} ({})", ip, port,
++                 ip == "127.0.0.1" ? "its own" : OnCable(ip) ? "over the cable" : "over the Wi-Fi");
 +    return member.IsConnected();
 +}
 +
