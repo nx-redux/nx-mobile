@@ -53,21 +53,24 @@ fun NxSignInPrompt(
         // The NX keyboard types: both fields drawn from its entry, the caret in the active one; the box's buttons answer past it.
         NxModal(
             caption = caption, kind = ModalKind.PROMPT, confirmLabel = "Sign in", buttonFocus = entry.buttonFocus(),
-            confirmKey = NxButton.START, cancelKey = NxButton.B,
             onButton = { keyboard.answer(if (it == NxButton.B) NxButton.B else NxButton.A) },
         ) {
             // Above the keyboard the box can be too short for both fields: the one being typed is scrolled into view.
             val inView = remember { List(entry.fields.size) { BringIntoViewRequester() } }
             LaunchedEffect(entry.active) { inView.getOrNull(entry.active)?.bringIntoView() }
+            val tight = LocalModalTight.current
             entry.fields.forEachIndexed { i, f ->
-                if (i > 0) Spacer(Modifier.height(12.dp))
+                if (i > 0) Spacer(Modifier.height(if (tight) 6.dp else 12.dp))
                 Column(Modifier.bringIntoViewRequester(inView[i])) {
-                    Text(f.label, color = colors.hint, fontFamily = LocalNxFont.current, fontSize = nxModalSmall())
-                    Spacer(Modifier.height(4.dp))
+                    if (!tight) {
+                        Text(f.label, color = colors.hint, fontFamily = LocalNxFont.current, fontSize = nxModalSmall())
+                        Spacer(Modifier.height(4.dp))
+                    }
                     NxEntryField(
                         f.value, f.password, entry.cursor.takeIf { entry.active == i },
                         focused = entry.active == i && entry.focus == EntryFocus.Field, onTap = { keyboard.tapField(i) },
                         revealed = f.password && entry.reveal, onReveal = if (f.password) keyboard.toggleReveal else null,
+                        placeholder = f.label.takeIf { tight },
                     )
                 }
             }

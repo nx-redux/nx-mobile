@@ -60,14 +60,15 @@ private const val PASSWORD_DOT = '•'
 
 /**
  * A prompt's field while the NX keyboard types it: the text as the keyboard edits it (dots for a [password]), no
- * platform text field, so Android's keyboard never opens. A blinking caret at [cursor] (null: not the active field);
- * the selection outline while the pad's highlight is in it ([focused]); it scrolls to keep the caret in sight. A tap
- * makes it the field typed in.
+ * platform text field, so Android's keyboard never opens. A blinking caret at [cursor] (null: not the active field)
+ * and an outline round the field typed in; the outline at full strength while the pad's highlight is in it
+ * ([focused]); it scrolls to keep the caret in sight. A tap makes it the field typed in. [placeholder]: the field's
+ * name, shown dim inside it while it is empty, where the box has no room for a label over it.
  */
 @Composable
 fun NxEntryField(
     value: String, password: Boolean, cursor: Int?, focused: Boolean, onTap: () -> Unit, modifier: Modifier = Modifier,
-    revealed: Boolean = false, onReveal: (() -> Unit)? = null,
+    revealed: Boolean = false, onReveal: (() -> Unit)? = null, placeholder: String? = null,
 ) {
     val colors = LocalNxColors.current
     val shown = if (password && !revealed) PASSWORD_DOT.toString().repeat(value.length) else value
@@ -92,12 +93,13 @@ fun NxEntryField(
     }
     Row(
         modifier.fillMaxWidth().background(colors.fieldGround, shape)
-            .then(if (focused) Modifier.border(2.dp, colors.listText, shape) else Modifier)
+            .then(if (focused) Modifier.border(2.dp, colors.listText, shape) else if (cursor != null) Modifier.border(2.dp, colors.inkOpen, shape) else Modifier)
             .pointerInput(onTap) { detectTapGestures { onTap() } }
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.weight(1f).onSizeChanged { viewport.value = it.width }.horizontalScroll(scroll)) {
+            if (placeholder != null && value.isEmpty()) Text(placeholder, color = colors.hint, fontFamily = LocalNxFont.current, fontSize = nxModalText(), maxLines = 1, softWrap = false)
             Text(
                 shown, color = colors.listText, fontFamily = LocalNxFont.current, fontSize = nxModalText(), maxLines = 1, softWrap = false,
                 onTextLayout = { layout = it },

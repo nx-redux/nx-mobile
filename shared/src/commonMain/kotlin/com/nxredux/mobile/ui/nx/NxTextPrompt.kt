@@ -1,6 +1,7 @@
 package com.nxredux.mobile.ui.nx
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,9 +42,12 @@ fun NxTextPrompt(title: String, value: String, onValueChange: (String) -> Unit, 
         // The NX keyboard types: the field is drawn from its entry, and the box's buttons answer past the keyboard.
         NxModal(
             caption = title, kind = ModalKind.PROMPT, confirmLabel = keyboard.confirmLabel, onButton = { keyboard.answer(if (it == NxButton.B) NxButton.B else NxButton.A) },
-            buttonFocus = entry.buttonFocus(), confirmKey = NxButton.START, cancelKey = NxButton.B,
+            buttonFocus = entry.buttonFocus(),
         ) {
-            NxEntryField(entry.fields[0].value, entry.fields[0].password, entry.cursor, entry.focus == EntryFocus.Field, onTap = { keyboard.tapField(0) })
+            NxEntryField(
+                entry.fields[0].value, entry.fields[0].password, entry.cursor, entry.focus == EntryFocus.Field, onTap = { keyboard.tapField(0) },
+                placeholder = title.takeIf { LocalModalTight.current },
+            )
         }
         return
     }
@@ -66,7 +70,9 @@ fun NxTextPrompt(title: String, value: String, onValueChange: (String) -> Unit, 
             cursorBrush = SolidColor(colors.listText),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { onConfirm() }),
-            modifier = Modifier.fillMaxWidth().focusRequester(focus).background(LocalNxColors.current.fieldGround, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
+            // The one field, and always the one typed in: outlined as the NX keyboard's active field.
+            modifier = Modifier.fillMaxWidth().focusRequester(focus).background(colors.fieldGround, RoundedCornerShape(12.dp))
+                .border(2.dp, colors.inkOpen, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
         )
     }
 }
