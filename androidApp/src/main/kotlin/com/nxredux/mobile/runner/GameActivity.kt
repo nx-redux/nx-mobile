@@ -606,7 +606,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             }
             launchPipeline.start()
             if (launchPipeline.dsLinked && !isDestroyed) dsRoom.start()
-            if (launchPipeline.dsAutoRoute && !isDestroyed) dsCable.watch()
+            if (launchPipeline.dsCableAuto && !isDestroyed) dsCable.watch()
         }
     }
 
@@ -621,7 +621,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         launchPipeline.dsRoomChanged(presence == DsPresence.ROOM)
         launchPipeline.dsWirelessChanged(presence != DsPresence.OUT)
         if (launchPipeline.dsAutoRoute) {
-            dsCable.wireless = presence != DsPresence.OUT
+            if (launchPipeline.dsCableAuto) dsCable.wireless = presence != DsPresence.OUT
             speed.setSession(netplay = dsWireless)
             shortcuts.refreshTouchShortcuts()
             withMenu { it.setDsWireless(dsWireless) }

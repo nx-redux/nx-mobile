@@ -262,6 +262,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     /** [dsLinked] outside a sheet session: the game's own radio finds rooms (the automatic route). */
     var dsAutoRoute = false
         private set
+    /** [dsAutoRoute] for a core whose link can use the phone-to-phone cable ([NetplayCores.cableAuto]): its watcher runs only then. */
+    var dsCableAuto = false
+        private set
 
     /**
      * The automatic route's low-latency Wi-Fi lock, only while in a room: the DS waits on every member's reply each frame,
@@ -561,9 +564,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 watchWifi()
                 // A sheet session on the USB cable has no cable watcher of its own (the sheet brought the cable up): the
                 // link is told here, so its sockets leave the Wi-Fi for the cable's addresses.
-                if (np != null) com.swordfish.libretrodroid.LibretroNetplay.dsSetCable(if (np.overUsb) 2 else 0)
+                if (np != null && NetplayCores.cableAuto(coreId)) com.swordfish.libretrodroid.LibretroNetplay.dsSetCable(if (np.overUsb) 2 else 0)
             }
             dsAutoRoute = dsLinked && np == null
+            dsCableAuto = dsAutoRoute && NetplayCores.cableAuto(coreId)
             val linkOptions: Map<String, String> = (if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsAuto, n3dsBroadcast, ndsMac) else when (linkKind) {
                 null -> NetplayLinkOptions.forPair(np)
                 NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)

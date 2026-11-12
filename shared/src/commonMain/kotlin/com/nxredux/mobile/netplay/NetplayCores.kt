@@ -72,6 +72,9 @@ object NetplayCores {
     fun link(core: String): NetplayLinkKind? = LINK[core]
     fun isLink(core: String): Boolean = core in LINK
 
+    /** [core]'s automatic route can bring up the phone-to-phone USB cable (its watcher and VPN consent); a PSP game's link has no cable yet. */
+    fun cableAuto(core: String): Boolean = core == "melondsds" || core == "azahar"
+
     /** A PSP game's sessions run over Wi-Fi alone: the cable carries no ad hoc traffic. */
     fun wifiOnly(tag: String): Boolean = tag.trim().uppercase() == "PSP"
 
