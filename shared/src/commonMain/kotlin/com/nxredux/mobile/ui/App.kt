@@ -733,7 +733,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
             showTag = s.source == ListSource.Hidden || s.source is ListSource.Search || s.source == ListSource.AllGames,   // a search, and every game, mix consoles
             emptyText = if (s.source is ListSource.Search || s.source is ListSource.Filtered) "No results" else null,
             info = { gameInfoFor(listInfo, now, current()?.game, full = true, meta) },   // Grid shows none (its tiles have tileInfo)
-            style = style, orientation = orientation, alignment = state.settings.gameListVerticalAlignment, onGridLayout = onGridLayout, onPageRows = onPageRows, tileInfo = remember(s.entries, listInfo, now) { entryTileInfo(s.entries, listInfo, now) }, layoutKey = s.source,
+            style = style, orientation = orientation, alignment = state.settings.gameListVerticalAlignment, onGridLayout = onGridLayout, onPageRows = onPageRows, tileInfo = remember(s.entries, listInfo, now, meta) { entryTileInfo(s.entries, listInfo, now, meta) }, layoutKey = s.source,
             artBox = artLayout.list.boxed,
             backdropArt = artLayout.backdrop,
             // The Games tab's Search icon is START's there: the global search.

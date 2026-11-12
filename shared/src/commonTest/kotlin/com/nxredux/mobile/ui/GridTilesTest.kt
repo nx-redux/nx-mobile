@@ -5,6 +5,7 @@ import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.runner.ContentRef
+import com.nxredux.mobile.scraper.StoredGameInfo
 import com.nxredux.mobile.ui.nx.consolePad
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -245,5 +246,31 @@ class GridTilesTest {
         assertEquals(byRow(2), byEntry(0))
         assertEquals(emptyList(), byEntry(2))                                               // no info yet
         assertEquals(emptyList(), byEntry(-1))
+    }
+
+    // A game list Grid's tile: its count-only stats, then its details (the ones a Carousel puts under its name).
+    @Test fun aGridTileHasItsStatsThenItsDetails() {
+        val time = InfoLine(InfoKind.TIME, "Today")
+        val ach = InfoLine(InfoKind.ACHIEVEMENTS, "3 of 35")
+        val genre = InfoLine(InfoKind.GENRE, "Platform")
+        val release = InfoLine(InfoKind.RELEASE, "1991 · Sega")
+        assertEquals(listOf(time, ach), gameTileLines(listOf(time, ach), listOf(time, ach, InfoLine(InfoKind.NEXT, "Next: X"))))   // stats only
+        assertEquals(listOf(genre, release), gameTileLines(emptyList(), listOf(genre, release)))                                   // details only
+        assertEquals(listOf(time, genre, release), gameTileLines(listOf(time), listOf(time, genre, release)))                     // both
+        assertEquals(emptyList(), gameTileLines(emptyList(), emptyList()))                                                         // none
+        assertEquals(listOf(time), gameTileLines(listOf(time), listOf(time, InfoLine(InfoKind.GENRE, NO_GENRE))))                  // the genre's stand-in is no detail
+    }
+
+    // The details read from the stored facts, lazily per tile, only while the menus show them (Extra info: [GameMeta.shown]).
+    @Test fun aGridTilesDetailsFollowTheStoredFacts() {
+        val zelda = listed("Zelda")
+        val kirby = listed("Kirby")
+        val now = 10 * 86_400_000L
+        val info = mapOf(zelda.game.path to GameInfo(now, null, null))
+        val stored = mapOf(zelda.game.path to StoredGameInfo(null, "Adventure", "1986", "Nintendo", null, null, 0L))
+        val tiles = entryTileInfo(listOf(zelda, kirby), info, now, GameMeta(stored, always = false, shown = true))
+        assertEquals(listOf(InfoKind.TIME, InfoKind.GENRE, InfoKind.RELEASE), tiles(0).map { it.kind })
+        assertEquals(emptyList(), tiles(1))                                                  // no stats, no facts: the stand-in alone
+        assertEquals(listOf(InfoKind.TIME), entryTileInfo(listOf(zelda), info, now, GameMeta.NONE)(0).map { it.kind })   // Extra info off
     }
 }

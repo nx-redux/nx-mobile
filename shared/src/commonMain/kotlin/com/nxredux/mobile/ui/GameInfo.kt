@@ -5,6 +5,7 @@ import com.nxredux.mobile.gametime.GameTimeFormat
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.scraper.StoredGameInfo
+import com.nxredux.mobile.ui.nx.carouselGameLines
 
 /** What the menu shows under a selected game: last played and total time (game time), and RetroAchievements progress. */
 data class GameInfo(val lastPlayedAt: Long?, val totalMs: Long?, val ra: RaProgress?, val plays: Long? = null)
@@ -154,6 +155,19 @@ internal fun MainRow?.listed(): Listed? = when (this) {
 internal fun rowTileInfo(rows: List<MainRow>, gameInfo: Map<String, GameInfo>, now: Long): (Int) -> List<InfoLine> =
     { i -> gameInfoFor(gameInfo, now, rows.getOrNull(i).game(), full = false) }
 
-/** A game list Grid's per-tile info: entry index to that game's tile info, as [rowTileInfo]. */
-internal fun entryTileInfo(entries: List<Listed>, gameInfo: Map<String, GameInfo>, now: Long): (Int) -> List<InfoLine> =
-    { i -> gameInfoFor(gameInfo, now, entries.getOrNull(i)?.game, full = false) }
+/**
+ * A game list Grid's per-tile info: entry index to that game's tile info, as [rowTileInfo], then its details from the
+ * stored facts ([meta], as Layouts → Extra info and Game info let the menus show them: [gameTileLines]). Read lazily
+ * per tile, where its caption shows.
+ */
+internal fun entryTileInfo(entries: List<Listed>, gameInfo: Map<String, GameInfo>, now: Long, meta: GameMeta = GameMeta.NONE): (Int) -> List<InfoLine> =
+    { i ->
+        val game = entries.getOrNull(i)?.game
+        gameTileLines(gameInfoFor(gameInfo, now, game, full = false), if (meta === GameMeta.NONE) emptyList() else gameInfoFor(gameInfo, now, game, full = true, meta))
+    }
+
+/**
+ * A game list Grid tile's lines: its count-only [stats] (the time, the achievement count), then the details of its
+ * [full] info (the genre, "<year> · <publisher>": what a Carousel puts under its name, [carouselGameLines]).
+ */
+internal fun gameTileLines(stats: List<InfoLine>, full: List<InfoLine>): List<InfoLine> = stats + carouselGameLines(full).underTitle
