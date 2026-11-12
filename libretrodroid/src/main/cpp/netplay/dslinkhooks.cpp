@@ -69,11 +69,6 @@ std::mutex coreRoomMutex;
 nx_3ds_link_interface coreRoom {};
 bool hasCoreRoom = false;
 
-// The same for a core's own room (nx_3ds_link.h).
-void routeCoreSocket(int fd, int cable) {
-    routeSocket(fd, cable != 0, nullptr);
-}
-
 constexpr uint16_t ROOM_PORT = 24874;
 constexpr uint16_t SEARCH_PORT = 24875;
 
@@ -313,6 +308,10 @@ void copyField(char (&dst)[N], const std::string& src) {
     dst[N - 1] = '\0';
 }
 
+}
+
+void routeCoreSocket(int fd, int cable) {
+    routeSocket(fd, cable != 0, nullptr);
 }
 
 bool setNetpacket(const nl_netpacket_callback* cb) {

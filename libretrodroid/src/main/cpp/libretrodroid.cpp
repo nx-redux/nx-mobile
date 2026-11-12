@@ -57,6 +57,7 @@
 #include "netplay/netplayhooks.h"
 #include "netplay/linkhooks.h"
 #include "netplay/dslinkhooks.h"
+#include "netplay/psplinkhooks.h"
 #include "sensorstate.h"
 #include "vulkanbridge.h"
 
@@ -485,6 +486,7 @@ void LibretroDroid::create(
     hardwareFrame.store(false);
 
     gbalink::forgetCore();   // the new core registers its netpacket interface itself (retro_init or load)
+    psplink::forgetCore();
     dslink::forgetCore();
     core = std::make_unique<Core>(soFilePath);
 
@@ -531,6 +533,7 @@ void LibretroDroid::loadGame(const retro_game_info& gameInfo) {
     // After the load: melonDS DS registers its netpacket interface during it.
     dsLinkVariablesSeen = Environment::getInstance().getVariablesGeneration();
     dslink::configure(getVariables());
+    psplink::configure(getVariables());
 }
 
 void LibretroDroid::loadGameFromPath(const std::string& gamePath) {
@@ -617,6 +620,8 @@ void LibretroDroid::addVirtualFiles(std::vector<VFSFile> virtualFiles) {
 }
 
 void LibretroDroid::releaseCore() {
+    // Before the core's teardown, so the PSP finder's thread is joined while the core's code is still loaded.
+    psplink::forgetCore();
     if (core != nullptr) {
         if (gameLoaded) core->retro_unload_game();
         if (coreInitialized) core->retro_deinit();
@@ -671,6 +676,7 @@ void LibretroDroid::destroy() {
     releaseCore();
     SharedContexts::destroyAll();   // worker contexts the core left, while the session's is still current
     gbalink::forgetCore();   // no netpacket callback may point into an unloaded core
+    psplink::forgetCore();
     dslink::forgetCore();
 
     video = nullptr;
@@ -819,6 +825,7 @@ void LibretroDroid::step() {
     if (variablesGeneration != dsLinkVariablesSeen) {
         dsLinkVariablesSeen = variablesGeneration;
         dslink::configure(getVariables());
+        psplink::configure(getVariables());
     }
     dslink::preFrame();
 

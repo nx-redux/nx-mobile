@@ -25,6 +25,7 @@
 #include "../utils/javautils.h"
 #include "../utils/jnistring.h"
 #include "dslinkhooks.h"
+#include "psplinkhooks.h"
 
 extern "C" {
 #include "np_link.h"
@@ -161,6 +162,7 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsSetNet
     jlong handle
 ) {
     dslink::setNetwork((int64_t) handle);
+    psplink::setNetwork((int64_t) handle);   // after dslink: it re-routes onto the handle dslink now holds
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsSetCable(
