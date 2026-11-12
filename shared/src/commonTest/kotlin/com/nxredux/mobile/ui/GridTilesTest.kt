@@ -273,4 +273,28 @@ class GridTilesTest {
         assertEquals(emptyList(), tiles(1))                                                  // no stats, no facts: the stand-in alone
         assertEquals(listOf(InfoKind.TIME), entryTileInfo(listOf(zelda), info, now, GameMeta.NONE)(0).map { it.kind })   // Extra info off
     }
+
+    // Layouts → Game info preferring achievements: where the details have their own place (a horizontal Carousel's
+    // caption, a Grid tile's rows) they show for a game with achievements too; the achievements keep theirs.
+    @Test fun gameInfoDoesNotHideDetailsThatHaveTheirOwnPlace() {
+        val zelda = listed("Zelda")
+        val now = 10 * 86_400_000L
+        val info = mapOf(zelda.game.path to GameInfo(now, null, RaProgress(3, 35, next = "Next one")))
+        val stored = mapOf(zelda.game.path to StoredGameInfo(null, "Adventure", "1986", "Nintendo", null, null, 0L))
+        for (always in listOf(false, true)) {
+            val meta = GameMeta(stored, always = always, shown = true)
+            val apart = gameInfoApart(info, now, zelda.game, meta)
+            assertEquals(listOf(InfoKind.TIME, InfoKind.ACHIEVEMENTS, InfoKind.NEXT, InfoKind.GENRE, InfoKind.RELEASE), apart.map { it.kind }, "always=$always")
+            val split = com.nxredux.mobile.ui.nx.carouselGameLines(apart)
+            assertEquals(listOf(InfoKind.TIME, InfoKind.ACHIEVEMENTS, InfoKind.NEXT), split.picture.map { it.kind })
+            assertEquals(listOf(InfoKind.GENRE, InfoKind.RELEASE), split.underTitle.map { it.kind })
+            assertEquals(listOf(InfoKind.TIME, InfoKind.ACHIEVEMENTS, InfoKind.GENRE, InfoKind.RELEASE), entryTileInfo(listOf(zelda), info, now, meta)(0).map { it.kind }, "always=$always")
+        }
+        // Every other place keeps the setting: achievements preferred, no facts; details preferred, no achievements.
+        assertEquals(listOf(InfoKind.TIME, InfoKind.ACHIEVEMENTS, InfoKind.NEXT), gameInfoFor(info, now, zelda.game, full = true, GameMeta(stored, always = false, shown = true)).map { it.kind })
+        assertEquals(listOf(InfoKind.TIME, InfoKind.GENRE, InfoKind.RELEASE), gameInfoFor(info, now, zelda.game, full = true, GameMeta(stored, always = true, shown = true)).map { it.kind })
+        // Extra info off: nothing.
+        assertEquals(emptyList(), gameInfoApart(emptyMap(), now, zelda.game, GameMeta.NONE))
+        assertEquals(emptyList(), entryTileInfo(listOf(zelda), emptyMap(), now, GameMeta.NONE)(0))
+    }
 }

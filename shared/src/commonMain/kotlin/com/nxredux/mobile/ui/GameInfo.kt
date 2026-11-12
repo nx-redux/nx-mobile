@@ -157,14 +157,27 @@ internal fun rowTileInfo(rows: List<MainRow>, gameInfo: Map<String, GameInfo>, n
 
 /**
  * A game list Grid's per-tile info: entry index to that game's tile info, as [rowTileInfo], then its details from the
- * stored facts ([meta], as Layouts → Extra info and Game info let the menus show them: [gameTileLines]). Read lazily
+ * stored facts ([meta], as Layouts → Extra info lets the menus show them, whatever Game info says: [gameTileLines]). Read lazily
  * per tile, where its caption shows.
  */
 internal fun entryTileInfo(entries: List<Listed>, gameInfo: Map<String, GameInfo>, now: Long, meta: GameMeta = GameMeta.NONE): (Int) -> List<InfoLine> =
     { i ->
         val game = entries.getOrNull(i)?.game
-        gameTileLines(gameInfoFor(gameInfo, now, game, full = false), if (!meta.shown) emptyList() else gameInfoFor(gameInfo, now, game, full = true, meta))
+        // The details have their own rows: Layouts → Game info does not trade them for the achievements here.
+        gameTileLines(gameInfoFor(gameInfo, now, game, full = false), if (!meta.shown) emptyList() else gameInfoFor(gameInfo, now, game, full = true, meta.copy(always = true)))
     }
+
+/**
+ * [game]'s full info where its details have a place of their own (a game list's horizontal Carousel: the time and
+ * achievements in the picture, the details under the name, [carouselGameLines]): both, whatever Layouts → Game info
+ * says ([GameMeta.always] trades one for the other only where they share a place). Extra info off ([meta] not shown):
+ * no details.
+ */
+internal fun gameInfoApart(gameInfo: Map<String, GameInfo>, now: Long, game: GameEntry?, meta: GameMeta): List<InfoLine> {
+    val stats = carouselGameLines(gameInfoFor(gameInfo, now, game, full = true, meta.copy(always = false))).picture
+    val details = if (!meta.shown) emptyList() else carouselGameLines(gameInfoFor(gameInfo, now, game, full = true, meta.copy(always = true))).underTitle
+    return stats + details
+}
 
 /**
  * A game list Grid tile's lines: its count-only [stats] (the time, the achievement count), then the details of its
