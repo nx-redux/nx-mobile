@@ -720,7 +720,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     val swipeable = style == MenuStyle.LIST || style == MenuStyle.MINIMAL || style == MenuStyle.GRID || orientation == MenuOrientation.VERTICAL
     val swipe = Modifier.tabSwipe(bar != null && pagedTabs(s) != null && swipeable && s.menu == null && s.search == null && s.layoutMenu == null, state::swipeTab)
     // The Games tab's title: the highlighted game's console, read where the title is drawn.
-    val titleFor: (() -> String)? = if (s.isTab) remember(s.entries) { { gamesTabTitle(s.entries, selection.value.index) } } else null
+    val titleFor: (() -> String)? = if (s.isTab) remember(s.entries, selection) { { gamesTabTitle(s.entries, selection.value.index) } } else null
     CompositionLocalProvider(LocalLauncherChrome provides chrome) {
         GameListScreen(
             listTitle(s.source), s.entries, index,

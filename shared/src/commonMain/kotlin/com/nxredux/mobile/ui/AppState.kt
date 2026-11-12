@@ -2071,7 +2071,10 @@ class AppState(
      * Games tab's open Layout dropdown stays open on its choice too.
      */
     private fun keptSearch(prev: Screen, menu: Screen): Screen {
-        if (prev is Screen.Games && prev.isTab && prev.layoutMenu != null && menu is Screen.Games && menu.isTab) return menu.copy(layoutMenu = prev.layoutMenu)
+        if (prev is Screen.Games && prev.isTab && prev.layoutMenu != null && menu is Screen.Games && menu.isTab) {
+            // On a choice the dropdown still lists ([applyDualMenu] closes it when the choices change, so this only guards).
+            return menu.copy(layoutMenu = prev.layoutMenu.coerceIn(0, GameListLayouts.choices(_dualMenu.value).lastIndex))
+        }
         val draft = when (prev) {
             is Screen.Systems -> prev.search
             is Screen.Games -> prev.search.takeIf { prev.isTab }
