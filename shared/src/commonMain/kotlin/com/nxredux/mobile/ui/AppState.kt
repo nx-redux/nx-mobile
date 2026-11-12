@@ -1578,7 +1578,8 @@ class AppState(
             // Files arrived (saves, states, their pictures): Continue's resume point and slot picture are read again. Game
             // info files may be among them: a cached absence would have the top screen fetch one and write over it.
             scope.launch { c.received.collect { gameInfoStore?.forgetCached(); _gameMeta.value = emptyMap(); metaFor = null; refreshMainRows() } }
-            // ROM files arrived: a plain Systems page rescans at once; anywhere else (the tool itself) waits until it is left.
+            // ROM files arrived: the main menu with nothing over it (the Games tab too) rescans at once; anywhere else (the
+            // tool itself) waits until it is left.
             // Collections changed (merged by this phone's writer, or pushed by a peer phone into its home `Collections/`): a
             // store copy takes in a daemon-written home file, then the tab is listed again and those counts redone.
             scope.launch {
@@ -1589,12 +1590,12 @@ class AppState(
                     refreshMainRows()
                 }
             }
-            scope.launch { c.romsArrived.collect { val s = _screen.value; if (s is Screen.Systems && s.menu == null && s.search == null) rescan() else { romsPending = true; libraryDirty = true } } }
-            // Pending ROMs scan as soon as a plain Systems page shows again, however the user got there: B on the tool,
+            scope.launch { c.romsArrived.collect { if (menuFree(_screen.value)) rescan() else { romsPending = true; libraryDirty = true } } }
+            // Pending ROMs scan as soon as the main menu shows again with nothing over it, however the user got there: B on the tool,
             // Home, Back from a list the sync ended under, the end of a Loading the sync ended during. B on the tool and
             // leaving setup's sync step take them first themselves.
             scope.launch {
-                _screen.collect { s -> if (romsPending && s is Screen.Systems && s.menu == null && s.search == null) { romsPending = false; rescan() } }
+                _screen.collect { s -> if (romsPending && menuFree(s)) { romsPending = false; rescan() } }
             }
         }
     }
@@ -2029,7 +2030,7 @@ class AppState(
     private fun showMenu(menu: Screen, at: Int = -1) {
         if (kidsUi.kidsLocked) return kidsUi.showKidsHome()   // Kids Mode while Locked: the tiles screen is the main menu
         val prev = _screen.value
-        val screen = if (menu is Screen.Systems) (prev as? Screen.Systems)?.search?.let { menu.copy(search = it) } ?: menu else menu
+        val screen = keptSearch(prev, menu)
         val category = screen.menuTab
         // Another tab (or the menu from another screen): its grid reports its own columns on its first layout (the Games
         // tab's list its rows on a page too). The same tab rebuilt in place keeps them, as its grid stays laid out.
@@ -2052,7 +2053,36 @@ class AppState(
         maybeAskAndroidGames()
         // The menu came up (not rebuilt in place, which a count landing does while the install-permission screen is up):
         // the daily check, or a held install's retry. A foreground over it does the same ([onForeground]).
-        if (!prev.isMainMenu && screen is Screen.Systems && screen.menu == null && !firstSetup) updaterOnMainMenu()
+        if (!prev.isMainMenu && screen.isMainMenu && screen.contextMenu == null && !firstSetup) updaterOnMainMenu()
+    }
+
+    /**
+     * [menu] with START's open prompt and draft of [prev] (the main menu rebuilt in place), on either kind of tab. The
+     * Games tab's [Screen.Games.search] is that prompt ([openSearch]); a game list's own search is never carried.
+     */
+    private fun keptSearch(prev: Screen, menu: Screen): Screen {
+        val draft = when (prev) {
+            is Screen.Systems -> prev.search
+            is Screen.Games -> prev.search.takeIf { prev.isTab }
+            else -> null
+        } ?: return menu
+        return when (menu) {
+            is Screen.Systems -> menu.copy(search = draft)
+            is Screen.Games -> if (menu.isTab) menu.copy(search = draft) else menu
+            else -> menu
+        }
+    }
+
+    /** The main menu with nothing over it: no context menu, no START prompt (the Games tab: nor a Layout dropdown). */
+    private fun menuFree(s: Screen): Boolean = s.isMainMenu && s.contextMenu == null && when (s) {
+        is Screen.Systems -> s.search == null
+        is Screen.Games -> s.search == null && s.layoutMenu == null
+        else -> false
+    }
+
+    /** The Games tab showing: remember its game before a scan or load replaces the screen, so the menu lands on it again. */
+    private fun rememberGamesTab() {
+        if ((_screen.value as? Screen.Games)?.isTab == true) rememberMenuSelection()
     }
 
     /** The main menu showed: this instance becomes the updater's host again (another may have taken it, or let it go), then tells it. */
@@ -3211,7 +3241,7 @@ class AppState(
      */
     fun rescan(kept: (() -> Unit)? = null, then: ((List<SystemFolder>) -> Unit)? = null) {   // [then] last: a trailing lambda stays the success step
         val root = home() ?: run { showPickFolder(); return }
-        if ((_screen.value as? Screen.Games)?.isTab == true) rememberMenuSelection()   // the scan lands on the tab's game again
+        rememberGamesTab()   // the scan lands on the tab's game again
         _screen.value = Screen.Loading
         scope.launch { scanNow(root, then, kept) }
     }
@@ -3588,7 +3618,7 @@ class AppState(
             val switched = libraryIndex.snapshot?.let { it.home != home()?.value } == true
             if (!converted && !switched) return@launch
             val now = _screen.value
-            if (now is Screen.Systems && now.menu == null && now.search == null) load() else libraryDirty = true
+            if (menuFree(now)) { rememberGamesTab(); load() } else libraryDirty = true
         }
     }
 
@@ -4709,7 +4739,7 @@ class AppState(
      */
     fun showSearch(query: String) {
         val q = query.trim()
-        if (q.isEmpty() || _screen.value !is Screen.Systems) return
+        if (q.isEmpty() || !_screen.value.isMainMenu) return
         lastSearch = q
         rememberMenuSelection()
         intendNav(NavMotion.FORWARD)
@@ -4722,11 +4752,16 @@ class AppState(
      */
     val canSearch: Boolean get() = searchCorpus().any { it.games.isNotEmpty() }
 
-    /** START on the main menu (content or tab row): the search prompt, on the last search. Not over a menu. */
+    /**
+     * START on the main menu (content or tab row): the search prompt, on the last search. Not over a menu. On the Games
+     * tab it is the list's [Screen.Games.search] field, which there is this prompt (the tab has no list search of its own).
+     */
     fun openSearch() {
-        val s = _screen.value as? Screen.Systems ?: return
-        if (s.menu != null || s.search != null || !canSearch) return
-        _screen.value = s.copy(search = lastSearch)
+        when (val s = _screen.value) {
+            is Screen.Systems -> if (s.menu == null && s.search == null && canSearch) _screen.value = s.copy(search = lastSearch)
+            is Screen.Games -> if (s.isTab && s.menu == null && s.search == null && s.layoutMenu == null && canSearch) _screen.value = s.copy(search = lastSearch)
+            else -> Unit
+        }
     }
 
     /** Player name's text as typed in its prompt, cut to what a console holds. */
@@ -4747,10 +4782,11 @@ class AppState(
      * The search prompt has the buttons: A searches (blank: stays open), B closes, and START too (it toggles the prompt,
      * as NX Redux's KB_START_CANCELS); the rest are the text field's.
      */
-    private fun onSearchButton(s: Screen.Systems, draft: String, button: NxButton) {
+    private fun onSearchButton(s: Screen, draft: String, button: NxButton) {
+        val closed = when (s) { is Screen.Systems -> s.copy(search = null); is Screen.Games -> s.copy(search = null); else -> return }
         when (button) {
-            NxButton.A -> if (draft.isNotBlank()) { _screen.value = s.copy(search = null); showSearch(draft) }
-            NxButton.B, NxButton.START -> _screen.value = s.copy(search = null)
+            NxButton.A -> if (draft.isNotBlank()) { _screen.value = closed; showSearch(draft) }
+            NxButton.B, NxButton.START -> _screen.value = closed
             else -> Unit
         }
     }
@@ -4824,6 +4860,7 @@ class AppState(
     /** The Layout icon: opens the dropdown on the layout in use, or closes it when open. */
     fun toggleLayoutMenu() {
         val s = _screen.value as? Screen.Games ?: return
+        if (s.isTab) return   // the Games tab has no Layout dropdown: its layout is Layouts → Game lists'
         if (s.menu != null || s.search != null || !deps.settings.gameListLayoutOptions) return
         _screen.value = s.copy(layoutMenu = if (s.layoutMenu != null) null else GameListLayouts.indexOf(deps.settings.gameListStyle, deps.settings.gameListOrientation, deps.settings.gameListVerticalAlignment, _dualMenu.value))
     }
@@ -4939,8 +4976,9 @@ class AppState(
         // Back on a list or a page: Home's rows are rebuilt all the same (the page stays as it is; [swapMainRows] only acts
         // on the menu), so B to the menu shows Continue's new resume frame, not the one read when the game launched.
         if (switcherBack != null) { switcherBack(); return }
-        val s = _screen.value as? Screen.Systems ?: run { scope.launch { refreshMainRows() }; switcher.reopenSwitcher(); return }
-        if (s.menu != null) { switcher.dropSwitcherReturn(); return }
+        // The main menu: any tab, the Games tab too.
+        val s = _screen.value.takeIf { it.isMainMenu } ?: run { scope.launch { refreshMainRows() }; switcher.reopenSwitcher(); return }
+        if (s.contextMenu != null) { switcher.dropSwitcherReturn(); return }
         if (!firstSetup) updaterOnMainMenu()   // back over the menu (from a game, or the install-permission screen)
         scope.launch { refreshMainRows(); switcher.reopenSwitcher() }   // Continue's save (its resume frame) may be new since the rows were built
         val root = home() ?: return
@@ -4949,6 +4987,7 @@ class AppState(
             val ix = libraryIndex.current() ?: return@launch
             if (backOnline(ix)) {
                 if (_screen.value !== s) return@launch   // the user moved on during the check
+                rememberGamesTab()   // the scan lands on the tab's game again, as [rescan]'s
                 _screen.value = Screen.Loading
                 scanNow(root, null)
                 return@launch
@@ -5803,14 +5842,14 @@ class AppState(
     }
 
     /**
-     * L1 / R1 on a game list, every layout: the previous / next letter's first game ([ListJumps.letter]), a held key's
-     * repeat jumping on. Only a console's list is in name order: Recently Played, a collection, Hidden and a search's
-     * results are not, so there they do nothing.
+     * L1 / R1 on a console's game list, L2 / R2 on the Games tab, every layout: the previous ([step] -1) / next (1)
+     * letter's first game ([ListJumps.letter]), a held key's repeat jumping on. Only a console's list and the Games tab
+     * are in name order: Recently Played, a collection, Hidden and a search's results are not, so there they do nothing.
      */
-    private fun letterJump(s: Screen.Games, button: NxButton) {
-        if (s.source !is ListSource.Console) return
+    private fun letterJump(s: Screen.Games, step: Int) {
+        if (s.source !is ListSource.Console && !s.isTab) return
         val sel = _selection.value
-        val next = ListJumps.letter(s.entries.map { it.shown }, sel.index, if (button == NxButton.R1) 1 else -1)
+        val next = ListJumps.letter(s.entries.map { it.shown }, sel.index, step)
         if (next != sel.index) { _selection.value = sel.copy(index = next); refreshResume() }
     }
 
@@ -5853,8 +5892,8 @@ class AppState(
 
     /**
      * The d-pad on a laid-out Grid (main menu tab or game list) steps by tiles. Past the first / last tile the main menu
-     * switches tab (a fresh press only, never a key [repeat]: a held key stops at the edge); a game list stops. On the main
-     * menu UP from the top row ([gridAtTop]) stays instead of wrapping. False when the screen is not a laid-out Grid (the caller does the List step).
+     * (the Games tab too) switches tab (a fresh press only, never a key [repeat]: a held key stops at the edge); any other
+     * game list stops. On the main menu UP from the top row ([gridAtTop]) stays instead of wrapping. False when the screen is not a laid-out Grid (the caller does the List step).
      */
     private fun gridMove(button: NxButton, repeat: Boolean = false): Boolean {
         if (gridColumns <= 0 || currentStyle() != MenuStyle.GRID) return false
@@ -5865,11 +5904,11 @@ class AppState(
         val next = gridStep(sel.index, sel.count, gridColumns, button)
         if (next == null) {
             // A pushed tab has no tab to switch to: its Grid wraps LEFT / RIGHT at its ends instead (a fresh press only).
-            if (s is Screen.Systems && s.pushed) {
+            if (s.menuPushed) {
                 if (!repeat) { _selection.value = sel.copy(index = if (button == NxButton.RIGHT) 0 else sel.count - 1); refreshResume() }
                 return true
             }
-            if (s is Screen.Systems && !repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1)
+            if (s.isMainMenu && !repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1)   // the Games tab too
             return true
         }
         _selection.value = sel.copy(index = next)
@@ -5880,8 +5919,8 @@ class AppState(
     /**
      * The d-pad on a Carousel row (main menu tab or game list) or a game list's Backdrop row: LEFT / RIGHT step one
      * item, UP / DOWN do nothing (on the main menu UP reaches the tab row while it shows: the row is its top). A row needs
-     * no layout report, so it works from the first frame. Past the first / last item the main menu switches tab (a fresh
-     * press only, never a key [repeat]); a game list stops. A Vertical one is a stack ([stackMove]). False when the screen is not a row.
+     * no layout report, so it works from the first frame. Past the first / last item the main menu (the Games tab too)
+     * switches tab (a fresh press only, never a key [repeat]); any other game list stops. A Vertical one is a stack ([stackMove]). False when the screen is not a row.
      */
     private fun rowMove(button: NxButton, repeat: Boolean): Boolean {
         val style = currentStyle()
@@ -5892,7 +5931,7 @@ class AppState(
         if (button == NxButton.UP || button == NxButton.DOWN) return true
         val sel = _selection.value
         val next = rowStep(sel.index, sel.count, button)
-        if (next == null) { if (s is Screen.Systems && !repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1); return true }
+        if (next == null) { if (s.isMainMenu && !repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1); return true }
         _selection.value = sel.copy(index = next)
         refreshResume()
         return true
@@ -5902,14 +5941,14 @@ class AppState(
      * The d-pad on a Vertical Carousel stack (main menu tab or game list) or a game list's Backdrop stack ([stackStep]):
      * UP / DOWN step one item; past an end a fresh press wraps (UP on the first to the last, DOWN on the last to the
      * first), a held key's [repeat] stops there, as the List. UP reaches the tab row only from an empty main menu stack. LEFT / RIGHT: on the main menu
-     * a fresh press switches tab (never a key [repeat]); a game list pages ([pageMove]). False for any other button.
+     * (the Games tab too) a fresh press switches tab (never a key [repeat]); any other game list pages ([pageMove]). False for any other button.
      */
     private fun stackMove(s: Screen, button: NxButton, repeat: Boolean): Boolean {
         when (button) {
             NxButton.LEFT, NxButton.RIGHT -> {
-                when (s) {
-                    is Screen.Systems -> if (!repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1)
-                    is Screen.Games -> pageMove(button)   // a game list's stack pages, as its List
+                when {
+                    s.isMainMenu -> if (!repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1)   // the Games tab too
+                    s is Screen.Games -> pageMove(button)   // a game list's stack pages, as its List
                     else -> Unit
                 }
                 return true
@@ -5984,7 +6023,7 @@ class AppState(
         _screen.value.contextMenu?.let { contextMenus.onMenuButton(it, button); return }
         (_screen.value as? Screen.Systems)?.let { s -> s.search?.let { onSearchButton(s, it, button); return } }
         (_screen.value as? Screen.Games)?.let { s ->
-            s.search?.let { onListSearchButton(s, it, button); return }
+            s.search?.let { if (s.isTab) onSearchButton(s, it, button) else onListSearchButton(s, it, button); return }   // the tab's is START's
             s.layoutMenu?.let { onLayoutMenuButton(s, it, button); return }
             if (artPanel.value != null) { artPanels?.onButton(button); return }   // the art panel takes every press while open
             ra.raPanel.value?.let { ra.onRaPanelButton(it, button); return }
@@ -6024,11 +6063,11 @@ class AppState(
                 if (_screen.value !is Screen.Systems || _selection.value.count > 0) { _selection.value = _selection.value.up(wrap = !repeat || !launcherList()); refreshResume() }
             }
             NxButton.DOWN -> if (!rowMove(button, repeat) && !gridMove(button)) { _selection.value = _selection.value.down(wrap = !repeat || !launcherList()); refreshResume() }
-            // The main menu: LEFT / RIGHT are L1 / R1 (a Grid or row switches only past its ends), on a fresh press only: a held
-            // key's repeats never switch tabs. A List or Minimal game list pages ([pageMove]).
-            NxButton.LEFT, NxButton.RIGHT -> if (!rowMove(button, repeat) && !gridMove(button, repeat)) when (_screen.value) {
-                is Screen.Games -> pageMove(button)   // a List or Minimal game list pages
-                is Screen.Systems -> if (!repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1)
+            // The main menu (the Games tab too): LEFT / RIGHT are L1 / R1 (a Grid or row switches only past its ends), on a
+            // fresh press only: a held key's repeats never switch tabs. Any other List or Minimal game list pages ([pageMove]).
+            NxButton.LEFT, NxButton.RIGHT -> if (!rowMove(button, repeat) && !gridMove(button, repeat)) when {
+                _screen.value.isMainMenu -> if (!repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1)
+                _screen.value is Screen.Games -> pageMove(button)   // a List or Minimal game list pages
                 else -> Unit
             }
             NxButton.A -> openSelected()
@@ -6039,13 +6078,17 @@ class AppState(
                 else -> Unit
             }
             NxButton.SELECT -> switcher.openSwitcher()
-            NxButton.START -> if (_screen.value is Screen.Games) openListSearch() else openSearch()   // a game list searches its own games
+            // A game list searches its own games; the main menu, the Games tab too, every game (START's global search).
+            NxButton.START -> if (_screen.value.let { it is Screen.Games && !it.isTab }) openListSearch() else openSearch()
             NxButton.X -> if (_screen.value is Screen.Games) ra.openRaPanel()   // the highlighted game's achievements
             NxButton.MENU -> openContextMenu()
+            // L1 / R1: the main menu's tabs (on the Games tab a fresh press only, as LEFT / RIGHT); a console's list jumps by letter.
             NxButton.L1, NxButton.R1 -> when (val s = _screen.value) {
-                is Screen.Games -> if (s.isTab) switchTab(if (button == NxButton.R1) 1 else -1) else letterJump(s, button)
+                is Screen.Games -> if (!s.isTab) letterJump(s, if (button == NxButton.R1) 1 else -1) else if (!repeat) switchTab(if (button == NxButton.R1) 1 else -1)
                 else -> switchTab(if (button == NxButton.R1) 1 else -1)
             }
+            // L2 / R2: the Games tab jumps by letter (its L1 / R1 are the tabs'); nothing anywhere else.
+            NxButton.L2, NxButton.R2 -> (_screen.value as? Screen.Games)?.takeIf { it.isTab }?.let { letterJump(it, if (button == NxButton.R2) 1 else -1) }
             else -> Unit
         }
     }
@@ -6179,6 +6222,8 @@ class AppState(
                 if (s.layoutMenu != null) { _screen.value = s.copy(layoutMenu = null); return true }
                 if (artPanel.value != null) { artPanels?.onButton(NxButton.B); return true }   // closes it, or keeps on its question
                 if (ra.backRaPanel()) return true
+                // The Games tab is the main menu: its B is the menu's (nothing to pop), a pushed one's goes back under it.
+                if (s.isTab) return if (s.tabBar?.pushed == true) { popHiddenTab(); true } else false
                 // Lands only on the main menu (Hidden and Unassigned go to Settings); a Minimal list's title drops back into a Minimal tab's row.
                 intendNav(if (styleOf(s) == MenuStyle.MINIMAL) NavMotion.MINIMAL_BACK else NavMotion.BACK)
                 leaveList(s.source)
@@ -6326,7 +6371,8 @@ class AppState(
      */
     private suspend fun applyAndroidConsole() {
         val next = buildAndroidConsole()
-        androidConsole = next
+        // Only a changed console replaces the field: an equal rebuild (every return to the app) keeps the Games tab's list.
+        if (next != androidConsole) androidConsole = next
         if (allMenuTabs.isNotEmpty() && next != menuAndroidConsole) {   // before the menu's first build, that build takes it
             refreshMainRows()
         }
@@ -6342,8 +6388,8 @@ class AppState(
     private fun maybeAskAndroidGames() {
         if (deps.launcher == null || home() == null || deps.settings.androidGamesAsked || firstSetup) return
         if (_androidGamesAsk.value != null) return
-        val s = _screen.value as? Screen.Systems ?: return
-        if (s.menu != null) return
+        val s = _screen.value.takeIf { it.isMainMenu } ?: return   // any tab, the Games tab too
+        if (s.contextMenu != null) return
         val ask = androidGamesAskFor(installedCache ?: return) ?: return
         androidAskGuard?.cancel()
         androidAskGuard = scope.launch { delay(ANDROID_ASK_GUARD_MILLIS) }
@@ -6352,7 +6398,7 @@ class AppState(
 
     /** The update dialog may show over [screen]: the main menu with no context menu, the Android games question or a Problem over it. */
     private fun updatePopupFits(ask: AndroidGamesAsk?, error: String?, screen: Screen): Boolean =
-        ask == null && error == null && screen is Screen.Systems && screen.menu == null
+        ask == null && error == null && screen.isMainMenu && screen.contextMenu == null
 
     /** The update dialog is drawn and still fits what shows now (so a press is its answer). */
     private fun updatePopupShows(): Boolean =
@@ -6406,7 +6452,7 @@ class AppState(
     /** What the host holds an install for: the Netplay sheet; "" off the main menu (a game list may be about to launch); null when free. */
     private fun updateHostBusy(): String? = when {
         netplay?.page?.value != null -> "Close Netplay to install"
-        _screen.value !is Screen.Systems -> ""
+        !_screen.value.isMainMenu -> ""
         else -> null
     }
 

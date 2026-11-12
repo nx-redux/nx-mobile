@@ -259,6 +259,38 @@ class AppUpdateUiTest {
         assertNull(r.state.updatePopup.value)                               // a failed automatic check says nothing
     }
 
+    @Test fun the_menu_checks_when_it_comes_up_on_the_games_tab_or_comes_back_over_it() = runTest {
+        var clock = NOW
+        val p = FakePlatform().apply { feedError = IllegalStateException("offline") }
+        val r = rig(p, now = { clock })
+        assertEquals(1, p.fetches)
+        clock += UpdatePolicy.RETRY_MS
+        r.state.selectTab(1)                                                // a tab switch onto the Games tab: no check
+        assertTrue(assertIs<Screen.Games>(r.state.screen.value).isTab)
+        assertEquals(1, p.fetches)
+        r.state.onForeground(); runCurrent()                                // back over the Games tab: due again
+        assertEquals(2, p.fetches)
+        clock += UpdatePolicy.RETRY_MS
+        r.state.onButton(NxButton.START); r.state.searchDraft("mario"); r.state.onButton(NxButton.A)   // a list off the menu
+        assertEquals(ListSource.Search("mario"), assertIs<Screen.Games>(r.state.screen.value).source)
+        assertEquals(2, p.fetches)
+        r.state.onButton(NxButton.B)                                        // the menu comes up on the Games tab
+        assertTrue(assertIs<Screen.Games>(r.state.screen.value).isTab)
+        assertEquals(3, p.fetches)
+    }
+
+    @Test fun the_popup_shows_over_the_games_tab() = runTest {
+        val r = rig()
+        r.state.selectTab(1)
+        assertTrue(assertIs<Screen.Games>(r.state.screen.value).isTab)
+        assertEquals("0.4.0", r.state.updatePopup.value?.version)
+        pastGuard()
+        r.state.onButton(NxButton.B)                                        // the dialog's Not now, not the tab's B
+        assertNull(r.state.updatePopup.value)
+        assertEquals("0.4.0", r.platform.silenced)
+        assertTrue(assertIs<Screen.Games>(r.state.screen.value).isTab)
+    }
+
     @Test fun no_updater_no_popup_and_no_row() = runTest {
         val r = rig(withUpdater = false)
         assertNull(r.state.updatePopup.value)

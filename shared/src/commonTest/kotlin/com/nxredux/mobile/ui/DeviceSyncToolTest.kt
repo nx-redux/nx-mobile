@@ -464,6 +464,21 @@ class DeviceSyncToolTest {
         assertTrue(r.source.listings > before)
     }
 
+    @Test fun roms_arriving_while_the_games_tab_shows_rescan_at_once_on_the_same_game() = runTest {
+        val r = rig(); r.openDeviceSync()
+        r.state.goHome()
+        r.state.selectTab(1)
+        val tab = assertIs<Screen.Games>(r.state.screen.value)
+        assertTrue(tab.isTab)
+        r.state.select(tab.entries.indexOfFirst { it.game.shownName == "Zelda" })
+        val before = r.source.listings
+        receiveRoms(r)
+        assertTrue(r.source.listings > before)                          // rescanned at once
+        val after = assertIs<Screen.Games>(r.state.screen.value)
+        assertTrue(after.isTab)
+        assertEquals("Zelda", after.entries[r.state.selection.value.index].game.shownName)
+    }
+
     // Leaving the tool by Home, not B, still scans: the menu showing again takes the pending ROMs.
     @Test fun roms_arriving_in_the_tool_rescan_when_it_is_left_by_home() = runTest {
         val r = rig(); r.openDeviceSync()

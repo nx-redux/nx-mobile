@@ -291,6 +291,20 @@ class AppStateKidsTest {
         assertIs<Screen.Systems>(st.screen.value)
     }
 
+    /** The lock on the Games tab asks the PIN as on any other tab. */
+    @Test fun lockIconOnTheGamesTabAsksThePin() = runTest {
+        val settings = MemorySettings()
+        val kids = KidsController(settings, Platform(SAT, 10 * 60))
+        val st = state(settings, kids)
+        st.load()
+        st.selectTab(tabsOf(st).indexOf(MenuCategory.GAMES))
+        assertTrue(assertIs<Screen.Games>(st.screen.value).isTab)
+        st.kidsParentPressed()
+        assertEquals(PinPurpose.UNLOCK, assertIs<Screen.KidsPin>(st.screen.value).purpose)
+        st.onButton(NxButton.B)
+        assertTrue(assertIs<Screen.Games>(st.screen.value).isTab)             // back on the tab
+    }
+
     @Test fun lockIconDoesNothingWhenLockedOrOff() = runTest {
         val (st) = lockedState()
         st.kidsParentPressed()
