@@ -9,7 +9,8 @@ object NetplayText {
     const val HOST = "Host Game"
     const val JOIN = "Join Game"
     const val EMULATOR = "Emulator"
-    const val AUTO = "Auto (match the other device)"
+    const val AUTO = "Auto"
+    const val AUTO_NOTE = "Auto runs the emulator the other device runs"
     const val NEED_WIFI = "Connect to Wi-Fi first"
     const val WIFI_SETTINGS = "Wi-Fi settings"
     const val SAME_WIFI = "Other device must be on the same Wi-Fi"
@@ -49,6 +50,7 @@ object NetplayText {
     const val GAME_DAMAGED = "The other phone's game\narrived damaged.\n\nPlease try again."
     /** The Connection row's third value, GBA games only. */
     const val CABLE_LINK = "Cable Link over Wi-Fi"
+    const val CABLE_LINK_TAB = "Cable Link"
     /** A sent or received game's progress on the waiting pages. */
     fun transfer(sending: Boolean, done: Long, total: Long): String {
         val percent = if (total <= 0) 0 else (done * 100 / total).coerceIn(0, 100)

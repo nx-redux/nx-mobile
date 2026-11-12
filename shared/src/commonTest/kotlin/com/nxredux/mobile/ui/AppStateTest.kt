@@ -1305,8 +1305,9 @@ class AppStateTest {
         val games = assertIs<Screen.Games>(state.screen.value)
         state.onButton(NxButton.Y)
         assertEquals("Super Mario Kart", assertIs<NetplayPage.Role>(controller.page.value).title)   // the shown name
-        state.onButton(NxButton.DOWN)   // the sheet takes the pad, not the list
-        assertEquals(1, assertIs<NetplayPage.Role>(controller.page.value).selected)
+        val before = assertIs<NetplayPage.Role>(controller.page.value).selected
+        state.onButton(NxButton.RIGHT)   // the sheet takes the pad, not the list: Host Game to Join Game
+        assertEquals(before + 1, assertIs<NetplayPage.Role>(controller.page.value).selected)
         assertTrue(state.back())        // Back closes the sheet, the list stays
         assertNull(controller.page.value)
         assertSame(games, state.screen.value)

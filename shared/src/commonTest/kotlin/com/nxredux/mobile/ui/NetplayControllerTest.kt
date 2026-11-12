@@ -61,7 +61,7 @@ class NetplayControllerTest {
         val c = controller(FakeNetplayPlatform())
         c.open(sonic)
         assertEquals(
-            NetplayPage.Role("Sonic The Hedgehog (USA)", listOf("Auto (match the other device)", "PicoDrive", "Genesis Plus GX"), pick = 0, selected = 0, needWifi = false),
+            NetplayPage.Role("Sonic The Hedgehog (USA)", listOf("Auto", "PicoDrive", "Genesis Plus GX"), pick = 0, selected = 1, needWifi = false),
             c.page.value,
         )
         c.open(entry("FC", "Contra (USA).nes"))
@@ -74,15 +74,15 @@ class NetplayControllerTest {
         val c = controller(FakeNetplayPlatform())
         c.open(ruby); runCurrent()
         val role = assertIs<NetplayPage.Role>(c.page.value)
-        assertEquals(listOf("Auto (match the other device)", "gpSP", "mGBA"), role.emulators)
-        assertEquals(listOf(NetplayRoleRow.HOST, NetplayRoleRow.JOIN, NetplayRoleRow.EMULATOR), role.rows)
+        assertEquals(listOf("Auto", "gpSP", "mGBA"), role.emulators)
+        assertEquals(listOf(NetplayRoleRow.EMULATOR, NetplayRoleRow.HOST, NetplayRoleRow.JOIN), role.rows)
     }
 
     @Test fun mgba_pinned_over_wifi_is_refused_with_the_cable_only_text() = runTest {
         val p = FakeNetplayPlatform()
         val c = controller(p)
         c.open(ruby); runCurrent()
-        c.press(NxButton.DOWN, NxButton.DOWN, NxButton.RIGHT, NxButton.RIGHT, NxButton.UP, NxButton.UP)   // Emulator = mGBA, on Host
+        c.press(NxButton.UP, NxButton.RIGHT, NxButton.RIGHT, NxButton.DOWN)   // Emulator = mGBA, on Host
         assertEquals(2, assertIs<NetplayPage.Role>(c.page.value).pick)
         c.press(NxButton.A)
         val err = assertIs<NetplayPage.Error>(c.page.value)
@@ -90,7 +90,7 @@ class NetplayControllerTest {
         assertEquals(0, p.adverts.size)
         c.press(NxButton.B)
         assertEquals(2, assertIs<NetplayPage.Role>(c.page.value).pick)                     // back on the Role page, pick kept
-        c.press(NxButton.DOWN, NxButton.A)                                                  // Join Game
+        c.press(NxButton.RIGHT, NxButton.A)                                                  // Join Game
         assertEquals(NetplayText.cableOnly("mGBA"), assertIs<NetplayPage.Error>(c.page.value).text)
         assertEquals(0, p.browsing)
     }
@@ -100,7 +100,7 @@ class NetplayControllerTest {
         val p = FakeNetplayPlatform().apply { connectTo = { cEnd } }
         val c = controller(p)
         c.open(ruby); runCurrent()
-        c.press(NxButton.DOWN, NxButton.A)   // Join on Auto over Wi-Fi: mGBA is not a choice for a game without a Wi-Fi mode
+        c.press(NxButton.RIGHT, NxButton.A)   // Join on Auto over Wi-Fi: mGBA is not a choice for a game without a Wi-Fi mode
         p.found.emit(FoundHost("10.0.0.1", "Pokemon Ruby (USA)")); runCurrent()
         c.press(NxButton.A); runCurrent()
         assertEquals("core=gpsp,tag=GBA,wl=none", HelloCodec.parse(h.readLine(1000))!!.caps)
@@ -115,7 +115,7 @@ class NetplayControllerTest {
         runCurrent()
         assertIs<NetplayPage.Role>(c.page.value)
         assertEquals(listOf("Pokemon Ruby (USA).gba"), p.probes)
-        c.press(NxButton.DOWN, NxButton.A)   // Join on Auto over Wi-Fi: with a Wi-Fi mode either core can link
+        c.press(NxButton.RIGHT, NxButton.A)   // Join on Auto over Wi-Fi: with a Wi-Fi mode either core can link
         p.found.emit(FoundHost("10.0.0.1", "Pokemon Ruby (USA)")); runCurrent()
         c.press(NxButton.A); runCurrent()
         assertEquals("core=gpsp,tag=GBA,wl=rfu,auto=1", HelloCodec.parse(h.readLine(1000))!!.caps)
@@ -126,7 +126,7 @@ class NetplayControllerTest {
         val p = FakeNetplayPlatform().apply { gbaMode = "poke" }
         val c = controller(p)
         c.open(ruby); runCurrent()
-        c.press(NxButton.DOWN, NxButton.DOWN, NxButton.RIGHT, NxButton.RIGHT, NxButton.UP, NxButton.UP, NxButton.A)   // Emulator = mGBA, Host
+        c.press(NxButton.UP, NxButton.RIGHT, NxButton.RIGHT, NxButton.DOWN, NxButton.A)   // Emulator = mGBA, Host
         runCurrent()
         assertIs<NetplayPage.Hosting>(c.page.value)
         assertEquals(1, p.adverts.size)
@@ -136,7 +136,7 @@ class NetplayControllerTest {
         val p = FakeNetplayPlatform().apply { gbaMode = "poke" }
         val c = controller(p)
         c.open(ruby); runCurrent()
-        c.press(NxButton.DOWN, NxButton.DOWN, NxButton.RIGHT, NxButton.RIGHT, NxButton.UP, NxButton.UP, NxButton.A)   // Emulator = mGBA, Host
+        c.press(NxButton.UP, NxButton.RIGHT, NxButton.RIGHT, NxButton.DOWN, NxButton.A)   // Emulator = mGBA, Host
         runCurrent()
         val (h, cEnd) = PipeChannel.pair()
         p.lan.pending.send(h)
@@ -167,7 +167,7 @@ class NetplayControllerTest {
         val system = SystemFolder("Sega Genesis", "GPGX", CoreRegistry.forTag("GPGX"), emptyList(), folderName = "Sega Genesis (MD)")
         val game = GameEntry(ContentRef("Home/Roms/Sega Genesis (MD)/Sonic.md"), "Sonic.md", "Sonic", folder = ContentRef("Home/Roms/Sega Genesis (MD)"), sourceId = GamePath.HOME, relativeDir = "Roms/Sega Genesis (MD)")
         c.open(Listed(system, game))
-        c.press(NxButton.DOWN, NxButton.A)
+        c.press(NxButton.RIGHT, NxButton.A)
         p.found.emit(FoundHost("10.0.0.1", "Sonic")); runCurrent()
         c.press(NxButton.A); runCurrent()
         assertTrue(HelloCodec.parse(h.readLine(1000))!!.caps.contains("tag=GPGX"))
@@ -176,13 +176,13 @@ class NetplayControllerTest {
     @Test fun emulator_row_cycles_with_left_and_right() = runTest {
         val c = controller(FakeNetplayPlatform())
         c.open(sonic)
-        c.press(NxButton.DOWN, NxButton.DOWN, NxButton.RIGHT)
+        c.press(NxButton.UP, NxButton.RIGHT)
         assertEquals(1, assertIs<NetplayPage.Role>(c.page.value).pick)
         c.press(NxButton.RIGHT, NxButton.RIGHT)
         assertEquals(0, assertIs<NetplayPage.Role>(c.page.value).pick)   // wraps
         c.press(NxButton.LEFT)
         assertEquals(2, assertIs<NetplayPage.Role>(c.page.value).pick)
-        c.press(NxButton.UP, NxButton.LEFT)   // on Join Game: LEFT changes nothing
+        c.press(NxButton.DOWN, NxButton.LEFT)   // on Host Game: LEFT changes nothing
         assertEquals(2, assertIs<NetplayPage.Role>(c.page.value).pick)
     }
 
@@ -196,14 +196,14 @@ class NetplayControllerTest {
         assertEquals(NetplayText.NEED_WIFI, assertIs<NetplayPage.Error>(c.page.value).text)
         c.press(NxButton.B)
         assertIs<NetplayPage.Role>(c.page.value)
-        c.press(NxButton.DOWN, NxButton.A)   // Join Game
+        c.press(NxButton.RIGHT, NxButton.A)   // Join Game
         assertEquals(NetplayText.NEED_WIFI, assertIs<NetplayPage.Error>(c.page.value).text)
         c.press(NxButton.A)
-        c.press(NxButton.DOWN, NxButton.A)   // Host, Join, Wi-Fi settings
+        c.press(NxButton.DOWN, NxButton.A)   // under Host and Join: Wi-Fi settings
         assertEquals(1, p.wifiSettingsOpened)
         assertEquals(0, p.adverts.size)
         p.wifiInfo = WifiInfo("10.0.0.1", "Pixel")   // back from Android's settings, now on Wi-Fi
-        c.press(NxButton.UP, NxButton.UP, NxButton.A)
+        c.press(NxButton.UP, NxButton.LEFT, NxButton.A)
         runCurrent()
         assertIs<NetplayPage.Hosting>(c.page.value)
     }
@@ -221,7 +221,7 @@ class NetplayControllerTest {
         assertEquals("Super Mario Kart (USA)", hostP.adverts.single().game)
         assertEquals(listOf(true), hostP.screenOn)
 
-        client.open(kart); client.press(NxButton.DOWN, NxButton.A); runCurrent()
+        client.open(kart); client.press(NxButton.RIGHT, NxButton.A); runCurrent()
         assertEquals(NetplayPage.Hosts(emptyList(), 0, NetplayText.SEARCHING), client.page.value)
         clientP.found.emit(FoundHost("10.0.0.1", "Super Mario Kart (USA)")); runCurrent()
         assertEquals(listOf(FoundHost("10.0.0.1", "Super Mario Kart (USA)")), assertIs<NetplayPage.Hosts>(client.page.value).hosts)
@@ -240,7 +240,7 @@ class NetplayControllerTest {
         val (h, cEnd) = PipeChannel.pair()
         val p = FakeNetplayPlatform().apply { connectTo = { cEnd } }
         val c = controller(p)
-        c.open(kart); c.press(NxButton.DOWN, NxButton.A)
+        c.open(kart); c.press(NxButton.RIGHT, NxButton.A)
         val other = FoundHost("10.0.0.1", "Super Metroid (USA)")
         p.found.emit(other); runCurrent()
         c.press(NxButton.A)
@@ -260,7 +260,7 @@ class NetplayControllerTest {
         val (h, cEnd) = PipeChannel.pair()
         val p = FakeNetplayPlatform().apply { connectTo = { cEnd } }
         val c = controller(p)
-        c.open(kart); c.press(NxButton.DOWN, NxButton.A)
+        c.open(kart); c.press(NxButton.RIGHT, NxButton.A)
         p.found.emit(FoundHost("10.0.0.1", "super mario kart")); runCurrent()
         c.press(NxButton.A); runCurrent()
         assertEquals(NetplayText.JOIN, assertIs<NetplayPage.Progress>(c.page.value).title)
@@ -273,7 +273,7 @@ class NetplayControllerTest {
         val (h, cEnd) = PipeChannel.pair()
         val p = FakeNetplayPlatform().apply { connectTo = { cEnd } }
         val c = controller(p)
-        c.open(kart); c.press(NxButton.DOWN, NxButton.A)
+        c.open(kart); c.press(NxButton.RIGHT, NxButton.A)
         val found = FoundHost("10.0.0.1", "Super Mario Kart (USA)")
         p.found.emit(found); runCurrent()
         c.press(NxButton.A); runCurrent()
@@ -290,7 +290,7 @@ class NetplayControllerTest {
     @Test fun connect_failure_shows_connect_failed_after_three_tries() = runTest {
         val p = FakeNetplayPlatform().apply { connectTo = { throw NetplayIoException("timeout") } }
         val c = controller(p)
-        c.open(kart); c.press(NxButton.DOWN, NxButton.A)
+        c.open(kart); c.press(NxButton.RIGHT, NxButton.A)
         p.found.emit(FoundHost("10.0.0.1", "Super Mario Kart (USA)")); runCurrent()
         c.press(NxButton.A); runCurrent()
         assertEquals(NetplayText.CONNECTING, assertIs<NetplayPage.Progress>(c.page.value).line)
@@ -304,7 +304,7 @@ class NetplayControllerTest {
     @Test fun no_host_after_120_seconds() = runTest {
         val p = FakeNetplayPlatform()
         val c = controller(p)
-        c.open(kart); c.press(NxButton.DOWN, NxButton.A); runCurrent()
+        c.open(kart); c.press(NxButton.RIGHT, NxButton.A); runCurrent()
         assertEquals(1, p.browsing)
         advanceTimeBy(119_000)
         assertEquals(NetplayText.SEARCHING, assertIs<NetplayPage.Hosts>(c.page.value).empty)
@@ -437,7 +437,7 @@ class NetplayControllerTest {
     @Test fun wifi_lost_while_browsing_stops_and_says_so() = runTest {
         val p = FakeNetplayPlatform()
         val c = controller(p)
-        c.open(kart); c.press(NxButton.DOWN, NxButton.A); runCurrent()
+        c.open(kart); c.press(NxButton.RIGHT, NxButton.A); runCurrent()
         assertEquals(1, p.browsing)
         p.wifiInfo = null
         advanceTimeBy(NetplayController.WIFI_POLL_MS + 1); runCurrent()
@@ -453,7 +453,7 @@ class NetplayControllerTest {
         val (_, cEnd) = PipeChannel.pair()
         val p = FakeNetplayPlatform().apply { connectTo = { cEnd } }
         val c = controller(p)
-        c.open(kart); c.press(NxButton.DOWN, NxButton.A)
+        c.open(kart); c.press(NxButton.RIGHT, NxButton.A)
         p.found.emit(FoundHost("10.0.0.1", "Super Mario Kart (USA)")); runCurrent()
         c.press(NxButton.A); runCurrent()
         assertIs<NetplayPage.Progress>(c.page.value)
@@ -469,7 +469,7 @@ class NetplayControllerTest {
         val p = FakeNetplayPlatform().apply { connectTo = { cEnd } }
         val c = controller(p)
         c.open(sonic)
-        c.press(NxButton.DOWN, NxButton.DOWN, NxButton.RIGHT, NxButton.RIGHT, NxButton.UP, NxButton.A)   // Emulator = Genesis Plus GX, then Join
+        c.press(NxButton.UP, NxButton.RIGHT, NxButton.RIGHT, NxButton.DOWN, NxButton.RIGHT, NxButton.A)   // Emulator = Genesis Plus GX, then Join
         p.found.emit(FoundHost("10.0.0.1", "Sonic The Hedgehog (USA)")); runCurrent()
         c.press(NxButton.A); runCurrent()
         assertEquals("core=genesis_plus_gx,tag=MD", HelloCodec.parse(h.readLine(1000))!!.caps)
@@ -483,7 +483,7 @@ class NetplayControllerTest {
         val host = controller(hostP, hostLaunches)
         val client = controller(clientP, clientLaunches)
         host.open(sonic); host.press(NxButton.A); runCurrent()
-        client.open(sonic); client.press(NxButton.DOWN, NxButton.A); runCurrent()
+        client.open(sonic); client.press(NxButton.RIGHT, NxButton.A); runCurrent()
         clientP.found.emit(FoundHost("10.0.0.1", "Sonic The Hedgehog (USA)")); runCurrent()
         client.press(NxButton.A); runCurrent()
         assertEquals(listOf(NetplaySession(NetplayRole.HOST, "10.0.0.2", "picodrive", "picodrive")), hostLaunches.all.map { it.second })
@@ -497,7 +497,7 @@ class NetplayControllerTest {
         val p = FakeNetplayPlatform().apply { connectTo = { ends.removeFirst() } }
         val launches = Launches()
         val c = controller(p, launches)
-        c.open(sonic); c.press(NxButton.DOWN, NxButton.A)
+        c.open(sonic); c.press(NxButton.RIGHT, NxButton.A)
         p.found.emit(FoundHost("10.0.0.1", "Sonic The Hedgehog (USA)")); runCurrent()
         c.press(NxButton.A); runCurrent()
         assertEquals("picodrive", HelloCodec.parse(h1.readLine(1000))!!.core)
@@ -526,6 +526,34 @@ class NetplayControllerTest {
         assertFalse(p.adverts.single().stopped)
     }
 
+    @Test fun host_and_join_share_a_line_and_the_pad_comes_back_to_the_one_it_left() = runTest {
+        val c = controller(FakeNetplayPlatform())
+        c.open(sonic)
+        fun on() = assertIs<NetplayPage.Role>(c.page.value).let { it.rows[it.selected] }
+        assertEquals(NetplayRoleRow.HOST, on())
+        c.press(NxButton.RIGHT)
+        assertEquals(NetplayRoleRow.JOIN, on())
+        c.press(NxButton.RIGHT)
+        assertEquals(NetplayRoleRow.JOIN, on())   // nothing further right
+        c.press(NxButton.UP)
+        assertEquals(NetplayRoleRow.EMULATOR, on())
+        c.press(NxButton.DOWN)
+        assertEquals(NetplayRoleRow.JOIN, on())
+        c.press(NxButton.LEFT)
+        assertEquals(NetplayRoleRow.HOST, on())
+    }
+
+    @Test fun a_tap_on_an_emulator_tab_picks_it() = runTest {
+        val c = controller(FakeNetplayPlatform())
+        c.open(sonic)
+        c.pickEmulator(2)
+        val role = assertIs<NetplayPage.Role>(c.page.value)
+        assertEquals(2, role.pick)
+        assertEquals(NetplayRoleRow.EMULATOR, role.rows[role.selected])
+        c.pickEmulator(7)   // no such tab
+        assertEquals(2, assertIs<NetplayPage.Role>(c.page.value).pick)
+    }
+
     @Test fun taps_select_rows_on_role_and_host_list() = runTest {
         val p = FakeNetplayPlatform()
         val c = controller(p)
@@ -534,7 +562,7 @@ class NetplayControllerTest {
         assertEquals(2, assertIs<NetplayPage.Role>(c.page.value).selected)
         c.select(9)   // no such row
         assertEquals(2, assertIs<NetplayPage.Role>(c.page.value).selected)
-        c.select(1); c.press(NxButton.A)
+        c.select(2); c.press(NxButton.A)   // Join Game
         p.found.emit(FoundHost("10.0.0.3", "A")); p.found.emit(FoundHost("10.0.0.4", "B")); runCurrent()
         c.select(1)
         assertEquals(1, assertIs<NetplayPage.Hosts>(c.page.value).selected)

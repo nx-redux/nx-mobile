@@ -325,7 +325,10 @@ internal fun MenuLocals(state: AppState, look: MenuLook, footer: FooterMode, tou
 /** The Netplay sheet over the game list it was opened on ([page]); it takes every press while it shows. */
 @Composable
 internal fun NetplayOverlay(state: AppState, page: NetplayPage) =
-    NetplaySheet(page, onButton = state::onButton, onSelect = { i -> state.netplay?.select(i) })
+    NetplaySheet(
+        page, onButton = state::onButton, onSelect = { i -> state.netplay?.select(i) },
+        onConnection = { link -> state.netplay?.pickConnection(link) }, onEmulator = { i -> state.netplay?.pickEmulator(i) },
+    )
 
 /**
  * The wall clock for the "Today" / "2 days ago" labels: read once, then again when one of [gameInfo]'s labels turns

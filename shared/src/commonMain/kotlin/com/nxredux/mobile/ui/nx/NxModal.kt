@@ -64,6 +64,7 @@ fun NxModal(
     buttonFocus: Int = -1,
     confirmKey: NxButton? = null,
     cancelKey: NxButton? = null,
+    below: (@Composable ColumnScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = LocalNxColors.current
@@ -116,6 +117,8 @@ fun NxModal(
                 }
                 NxModalFooter(footer, onFooter, buttonFocus, confirmKey, cancelKey)
             }
+            // A sheet's own actions, on the panel under the card: what the card sets up, these do.
+            if (below != null) Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 12.dp, bottom = 8.dp)) { below() }
         }
     }
 }
