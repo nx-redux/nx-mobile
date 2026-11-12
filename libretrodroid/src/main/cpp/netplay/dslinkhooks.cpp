@@ -16,6 +16,7 @@
  */
 
 #include "dslinkhooks.h"
+#include "nx_3ds_link.h"
 
 #include <algorithm>
 #include <atomic>
@@ -62,6 +63,11 @@ void routeSocket(int fd, bool cable, void*) {
     if (!cable) return bindToWifi(fd, nullptr);
     if (android_setsocknetwork(NETWORK_UNSPECIFIED, fd) != 0) LOGW("DS link: cannot move a socket to the cable (errno %d)", errno);
 }
+
+// A core's own room (Azahar's). Held across each call into it, so the core's nullptr returns only once none is running.
+std::mutex coreRoomMutex;
+nx_3ds_link_interface coreRoom {};
+bool hasCoreRoom = false;
 
 constexpr uint16_t ROOM_PORT = 24874;
 constexpr uint16_t SEARCH_PORT = 24875;
@@ -319,6 +325,7 @@ void forgetCore() {
     lastRadio = NDL_RADIO_OFF;
     destroyLink();
     current = Settings {};
+    setCoreRoom(nullptr);
 }
 
 void configure(const std::vector<Variable>& vars) {
@@ -452,6 +459,13 @@ void frameEnd() {
          stats.bytesIn / sec, stats.bytesOut / sec, ndl_member_count(theLink), rttMin, rttAvg, rttMax, (unsigned) drops.queue_hwm, dropText);
 }
 
+void setCoreRoom(const nx_3ds_link_interface* room) {
+    std::lock_guard<std::mutex> guard(coreRoomMutex);
+    hasCoreRoom = room != nullptr && room->presence != nullptr && room->leave != nullptr && room->rejoin != nullptr;
+    coreRoom = hasCoreRoom ? *room : nx_3ds_link_interface {};
+    LOGI("link: core room %s", hasCoreRoom ? "registered" : "cleared");
+}
+
 void setCable(int state) {
     if (state < NDL_CABLE_NONE || state > NDL_CABLE_UP) return;
     if (cableState.exchange(state) == state) return;
@@ -466,27 +480,51 @@ void stopCore() {
     current = Settings {};
 }
 
+// The core's own room, when it has one: its presence is the DS link's numbering (nx_3ds_link.h, ndl_presence_now).
+bool coreRoomPresence(int& out) {
+    std::lock_guard<std::mutex> guard(coreRoomMutex);
+    if (!hasCoreRoom) return false;
+    out = coreRoom.presence();
+    return true;
+}
+
+bool coreRoomLeave() {
+    std::lock_guard<std::mutex> guard(coreRoomMutex);
+    if (hasCoreRoom) coreRoom.leave();
+    return hasCoreRoom;
+}
+
 void shutdown() {
+    if (coreRoomLeave()) return;
     std::lock_guard<std::mutex> guard(linkMutex);
     ndl_leave_now(theLink);
 }
 
 bool inRoom() {
+    int core;
+    if (coreRoomPresence(core)) return core == NX_3DS_LINK_ROOM;
     std::lock_guard<std::mutex> guard(linkMutex);
     return ndl_in_room(theLink);
 }
 
 int presence() {
+    int core;
+    if (coreRoomPresence(core)) return core;
     std::lock_guard<std::mutex> guard(linkMutex);
     return ndl_presence_now(theLink);
 }
 
 void leaveNow() {
+    if (coreRoomLeave()) return;
     std::lock_guard<std::mutex> guard(linkMutex);
     ndl_leave_now(theLink);
 }
 
 void rejoin() {
+    {
+        std::lock_guard<std::mutex> guard(coreRoomMutex);
+        if (hasCoreRoom) return coreRoom.rejoin();
+    }
     std::lock_guard<std::mutex> guard(linkMutex);
     ndl_rejoin(theLink);
 }

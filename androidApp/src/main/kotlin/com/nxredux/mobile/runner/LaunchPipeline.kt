@@ -213,17 +213,20 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     /** A 3DS launch's player name (Settings → System → Player name, else the device's). */
     private var playerName = ""
     /**
-     * Held while a game may hold a local wireless room ([holdBroadcasts]): a 3DS game or a sheet session from launch, a
-     * DS game on the automatic route only while its wireless is on ([dsWirelessChanged]).
+     * Held while a game may hold a local wireless room ([holdBroadcasts]): a sheet session from launch, a DS or 3DS game
+     * on the automatic route only while its wireless is on ([dsWirelessChanged]).
      */
     private var broadcasts: WifiManager.MulticastLock? = null
-    /** Held while a DS game is in a room outside a session ([dsRoomChanged]; a session's is [GameNetplay]'s). */
+    /** Held while a DS or 3DS game is in a room outside a session ([dsRoomChanged]; a session's is [GameNetplay]'s). */
     private var dsWifi: WifiManager.WifiLock? = null
-    /** A DS game with a link: a sheet session's, or Local Wireless on outside one. */
+    /** A DS or 3DS game with a local wireless link: a sheet session's, or Local Wireless on outside one. */
     var dsLinked = false
         private set
     /** [dsLinked] outside a sheet session: the game's own radio finds rooms (the automatic route). */
     var dsAutoRoute = false
+        private set
+    /** [dsAutoRoute] with the room in the runner (the DS): it can run over the phone-to-phone cable ([DsCable]). */
+    var dsCableRoute = false
         private set
 
     /**
@@ -505,15 +508,15 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val n3dsRoomName = if (coreId != "azahar" && coreId != "melondsds") null else NetplayLinkOptions.n3dsRoomName(playerName, kotlin.random.Random.nextInt(10000))
             val n3dsAuto = n3dsRoomName?.takeIf { if (coreId == "melondsds") NdsOptions.localWireless(frontendValues) else N3dsOptions.localWireless(frontendValues) }
             // A room answers other devices' searches, which arrive as broadcasts: Android drops those without this lock.
-            // A DS game outside a session takes it when its wireless goes on ([dsWirelessChanged]).
-            val dsAuto = coreId == "melondsds" && np == null
-            if ((n3dsAuto != null && !dsAuto) || linkKind == NetplayLinkKind.N3DSLINK || linkKind == NetplayLinkKind.NDSLINK) holdBroadcasts()
+            // A game outside a session takes it when its wireless goes on ([dsWirelessChanged]).
+            if (linkKind == NetplayLinkKind.N3DSLINK || linkKind == NetplayLinkKind.NDSLINK) holdBroadcasts()
             val n3dsBroadcast = n3dsAuto?.let { WifiNetworks.broadcast(WifiNetworks.address(activity.getSystemService(ConnectivityManager::class.java)))?.hostAddress }
             // A DS room runs under its own MAC (a seed kept per install) so rooms tell its members apart.
             val ndsMac = if (coreId == "melondsds" && (n3dsAuto != null || linkKind == NetplayLinkKind.NDSLINK)) NetplayLinkOptions.ndsMac(AndroidAppSettings(activity).ndsMacSeed) else null
             if (ndsMac != null) com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(WifiNetworks.network(activity.getSystemService(ConnectivityManager::class.java))?.networkHandle ?: 0L)
-            dsLinked = ndsMac != null
-            dsAutoRoute = ndsMac != null && np == null
+            dsLinked = ndsMac != null || (coreId == "azahar" && (n3dsAuto != null || linkKind == NetplayLinkKind.N3DSLINK))
+            dsAutoRoute = dsLinked && np == null
+            dsCableRoute = ndsMac != null && np == null
             val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsAuto, n3dsBroadcast, ndsMac) else when (linkKind) {
                 null -> NetplayLinkOptions.forPair(np)
                 NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)

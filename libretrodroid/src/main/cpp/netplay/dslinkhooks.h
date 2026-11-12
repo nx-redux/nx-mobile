@@ -23,6 +23,7 @@
 #include "nl_netpacket.h"
 
 struct Variable;
+struct nx_3ds_link_interface;
 
 // The run loop's side of the DS link (ndl_link.h): melonDS DS's netpacket interface (env 78), the radio state it
 // reports, the core's start/stop around a room, and packet delivery.
@@ -34,6 +35,9 @@ namespace libretrodroid::dslink {
     bool setNetpacket(const nl_netpacket_callback* callbacks);   // SET_NETPACKET_INTERFACE; NULL clears it
     void forgetCore();          // the core is gone or about to be replaced: drop its callbacks and the link
     void configure(const std::vector<Variable>& vars);   // the nx_nds_link* variables: create, replace or end the link
+    // A core that runs its own room (Azahar, nx_3ds_link.h): presence, inRoom, leaveNow, rejoin and shutdown go to it.
+    // nullptr: that room is gone. The calls are made under this module's lock, never after the nullptr returns.
+    void setCoreRoom(const struct ::nx_3ds_link_interface* room);
     void setCable(int state);   // ndl_cable: the phone-to-phone cable beside the Wi-Fi; any thread
     void setNetwork(int64_t handle);   // the Wi-Fi network handle the link's sockets bind to; 0 = the default network
     void radio(unsigned state); // NX_ENVIRONMENT_SET_NDS_RADIO, from inside retro_run
