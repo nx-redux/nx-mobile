@@ -64,6 +64,7 @@ import com.nxredux.mobile.ui.nx.LocalHasTouchscreen
 import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.nav_icon_layout
 import com.nxredux.mobile.shared.res.menu_icon_achievements
+import com.nxredux.mobile.shared.res.menu_icon_lock
 import com.nxredux.mobile.shared.res.nav_icon_recent
 import com.nxredux.mobile.shared.res.nav_icon_search
 import com.nxredux.mobile.ui.nx.LocalLauncherChrome
@@ -152,6 +153,7 @@ fun GameListScreen(
     // The Games tab: the main menu's bottom row in the hint bar's place, given the hints ([GameListFrame]'s tabRow).
     tabRow: (@Composable (hints: State<List<Hint>>) -> Unit)? = null,
     onKidsLock: (() -> Unit)? = null,     // the Games tab in a Kids play window: the lock icon, as the main menu's
+    titleFor: (() -> String)? = null,     // the Games tab: its title as it is now (the highlighted game's console), read where drawn
 ) {
     val index = rememberUpdatedState(selectedIndex)
     val resume = rememberUpdatedState(canResume)
@@ -179,7 +181,7 @@ fun GameListScreen(
             emptyText = emptyText.takeIf { entries.isEmpty() }, artBox = artBox,
             onSearch = onSearch, onLayout = onLayout, layoutOpen = layoutOpen,
             onAchievements = onAchievements, achievementsOpen = achievementsOpen, minimalOpening = minimalOpening,
-            tabRow = tabRow, onKidsLock = onKidsLock,
+            tabRow = tabRow, onKidsLock = onKidsLock, titleFor = titleFor,
         )
     }
 }
@@ -212,11 +214,11 @@ internal fun gameListInfoInBarRow(emptyBarRoom: Boolean, touch: Boolean): Boolea
 internal val NoGameInfo: () -> List<InfoLine> = { emptyList() }
 
 /**
- * A game list's page under its grey [title], in its [style]: the body of [GameListScreen]. The Games tab ([tabRow]) is
- * laid out as every main menu tab: no title (as with Layouts → Page title Off), the main menu's top-right icons (Recent
- * and, in a Kids play window, the lock; no Search, Layout or trophy) fixed while the pages slide between tabs, and the
- * main menu's bottom row ([MenuBottomRow], given the [hints]) where a game list has its hint bar, shown as the main
- * menu shows it ([LauncherChrome.tabRow]). The style's items are built only for the style shown,
+ * A game list's page under its grey [title], in its [style]: the body of [GameListScreen]. The Games tab ([tabRow]) has
+ * a console list's top: the title row ([titleFor]: the highlighted game's console, read where it is drawn), the
+ * selected game's info under it, the same icons (and, in a Kids play window, the main menu's lock), all following
+ * Layouts → Page title as a console list's; and the main menu's bottom row ([MenuBottomRow], given the [hints]) where
+ * a game list has its hint bar, shown as the main menu shows it ([LauncherChrome.tabRow]). The style's items are built only for the style shown,
  * once per [dataKey]: [gridTiles] (Grid, Carousel), [backdropGames] (Backdrop's games row), [listRows] (List; App draws the selected
  * game's screenshot behind it) and [minimalRows] (Minimal: the names alone, on plain black).
  */
@@ -240,19 +242,17 @@ internal fun GameListFrame(
     minimalOpening: MinimalOpening? = null,   // Minimal: this list's selected row opening as a folder: the others fade
     tabRow: (@Composable (hints: State<List<Hint>>) -> Unit)? = null,   // the Games tab: the main menu's bottom row, no hint bar
     onKidsLock: (() -> Unit)? = null,   // the Games tab: the main menu's lock icon (a Kids play window)
+    titleFor: (() -> String)? = null,   // the Games tab: [title] as it is now, read only where it is drawn
 ) {
     // Layouts → Page title and Button hints, in effect ([LocalLauncherChrome]): hidden, the hint bar keeps its room; the
-    // title's goes to the body (a List gets more rows, the other styles centre in it). The Games tab has no title.
-    val shown = LocalLauncherChrome.current
+    // title's goes to the body (a List gets more rows, the other styles centre in it). The Games tab's as a console list's.
+    val chrome = LocalLauncherChrome.current
     val tabbed = tabRow != null
-    val chrome = if (tabbed) shown.copy(listTitle = false) else shown
-    // The page's icons, built once for the title row's right or, with Page title Off, the page's top right. The Games
-    // tab's: the main menu's, less Search (START still searches).
+    val titleOf = remember(title, titleFor) { titleFor ?: { title } }
+    // The page's icons, built once for the title row's right or, with Page title Off, the page's top right.
     val touch = touchOnly()
-    val titleIcons =
-        if (tabbed) launcherTopActions(onHint, canSearch = false, recent = recentIcon, onKidsLock = onKidsLock)
-        else gameListTitleIcons(chrome, hints.value, onHint, recentIcon, touch, LocalHasTouchscreen.current, onSearch, onLayout, layoutOpen, onAchievements, achievementsOpen)
-    // The Games tab's fixed parts (its top band and icons) stay put while the pages slide between tabs, as the main menu's.
+    val titleIcons = gameListTitleIcons(chrome, hints.value, onHint, recentIcon, touch, LocalHasTouchscreen.current, onSearch, onLayout, layoutOpen, onAchievements, achievementsOpen, onKidsLock)
+    // The Games tab's top band stays put while the pages slide between tabs, as the main menu's.
     val fixed = if (tabbed) Modifier.pageFixed() else Modifier
     // The Games tab has no hint bar: its hints go to the bottom row, and the body runs down to it.
     val barHints = if (tabbed) emptyList() else hints.value
@@ -307,7 +307,7 @@ internal fun GameListFrame(
                     val iconsRoom = MENU_TAB_ROW_HEIGHT * titleIcons.size - TOP_ICON_INSET
                     Box(Modifier.fillMaxWidth().height(height.dp)) {
                         Column(Modifier.fillMaxWidth().padding(start = titleStart, end = inset.end + iconsRoom, top = ((height - block) / 2).dp)) {
-                            Box(Modifier.height(lh.dp), contentAlignment = Alignment.CenterStart) {
+                            Box(Modifier.height(lh.dp), contentAlignment = Alignment.CenterStart) { WithTitle(titleOf) { title ->
                                 Text(
                                     title, style = titleStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     // Where a B morph back to a Minimal tab starts (while this page shows); hidden while the name flies in.
@@ -316,7 +316,7 @@ internal fun GameListFrame(
                                         if (minimalPage?.live?.value == true) morphPlace(it).let { (at, s) -> minimalPage.morph.title = MorphText(title, at, it.size.width.toFloat(), s, titleStyle) }
                                     }.graphicsLayer { alpha = if (flown.value < 1f) 0f else 1f },
                                 )
-                            }
+                            } }
                             // Each line [pitch] under the last: the boxes may overlap, as the main menu's.
                             val facts = info()
                             HomeFactsLine(if (next) facts.filter { !it.ownRow } else facts, size, Modifier.offset(y = (pitch - lh).dp).fillMaxWidth().height(lh.dp))
@@ -326,7 +326,7 @@ internal fun GameListFrame(
                     }
                 } else if (chrome.listTitle) {
                     val titleStyle = menuTitleStyle()
-                    MenuTitleRow(
+                    WithTitle(titleOf) { title -> MenuTitleRow(
                         title, overArt = style == MenuStyle.BACKDROP, textStart = titleStart,
                         // Where a B morph back to a Minimal tab starts (while this page shows); hidden while the name flies in.
                         textModifier = Modifier.onGloballyPositioned {
@@ -334,7 +334,7 @@ internal fun GameListFrame(
                             if (minimalPage?.live?.value == true) morphPlace(it).let { (at, s) -> minimalPage.morph.title = MorphText(title, at, it.size.width.toFloat(), s, titleStyle) }
                         }.graphicsLayer { alpha = if (flown.value < 1f) 0f else 1f },
                         trailing = { NxTopIcons(titleIcons) },
-                    )
+                    ) }
                 }
                 // Hidden: a List runs up into its room; a Grid, Carousel or Backdrop (row or stack) takes it into its box,
                 // sized as with the title, centred in the taller box. A Backdrop's picture stays put. With the page's icons
@@ -407,31 +407,31 @@ internal fun GameListFrame(
                         )
                     }
                     // List: the rows fade where more scrolls in (no band, no arrows), between a main menu List's gaps.
-                    // The Games tab's List: as a main menu tab's ([MainMenuScreen]), the rows down to the bottom row, no
-                    // info band (the hint bar's row is the tab row); half a row off the bottom with the row hidden.
-                    MenuStyle.LIST -> if (tabbed) {
+                    // The Games tab's List with its tab row shown: a console list's rows, down to the tab row in the hint
+                    // bar's place (no info band: that row is the tab row's).
+                    MenuStyle.LIST -> if (tabbed && chrome.tabRow) {
                         val rows = remember(dataKey) { listRows() }
                         BoxWithConstraints(Modifier.weight(1f)) {
                             MainListBody(
                                 rows, selectedIndex, if (iconsUp) MENU_TAB_ROW_HEIGHT else 0.dp, onSelect, onOpen, onLongPress,
                                 endRoom = if (artBox) listArtLabelEnd(maxWidth.value, inset.end.value).dp else 0.dp, onPageRows = onPageRows,
-                                bottomRows = if (shown.tabRow) 0f else MENU_LIST_BOTTOM_ROWS,
+                                gapRows = if (topStats) HOME_LIST_GAP_ROWS else 0f,
                             )
                         }
                     } else {
                         val rows = remember(dataKey) { listRows() }
                         // The selected game's info shows under the title ([topStats]); with Page title Off, in the hint bar's
-                        // row when there is no bar (hints hidden, or touch only), only that row shaded. Extra info off leaves
-                        // nothing for it, so its room goes too.
-                        val barHidden = gameListInfoInBarRow(chrome.emptyBarRoom, touchOnly())
-                        val inRow = barHidden && chrome.extraInfo && !topStats
+                        // row when there is no bar (hints hidden, or touch only; the Games tab has none), only that row
+                        // shaded. Extra info off leaves nothing for it, so its room goes too.
+                        val barHidden = tabbed || gameListInfoInBarRow(chrome.emptyBarRoom, touchOnly())
+                        val inRow = gameListInfoInRow(tabRowShown = false, barHidden, chrome.extraInfo, topStats)
                         GameInfoPlacement(if (inRow) info else NoGameInfo, Modifier.weight(1f), textStart = textStart, ground = if (inRow) BandGround.SHADE_WITH_INFO else BandGround.BAR, shade = false) { scaffoldModifier, infoBand ->
                             // The band's room goes to the rows; only its line in the bar's row ([NxHintsBand.barInfo]) stays.
                             val band = NxHintsBand(reserve = 0.dp, overlap = 0.dp, barInfo = infoBand.barInfo) {}
                             // The rows as the main menu's List draws them ([MainListBody]): the pill on the gutter, whole-row
                             // fades, the selection free until the third row from an edge; under the page's icons with no title.
                             NxScreenScaffold(
-                                rows = emptyList(), selectedIndex = 0, hints = hints.value,
+                                rows = emptyList(), selectedIndex = 0, hints = barHints,
                                 onSelect = onSelect, onOpen = onOpen, modifier = scaffoldModifier, onHint = onHint,
                                 band = band, hideHints = barHidden, hintShade = inRow, keepBarRoom = true,   // hidden hints keep the bar's row, empty unless the info is in it
                                 grid = { m ->
@@ -449,13 +449,13 @@ internal fun GameListFrame(
                     }
                 }
                 // The Games tab: the main menu's bottom row where the hint bar would be (hidden as the main menu hides it).
-                if (tabRow != null && shown.tabRow) tabRow(hints)
+                if (tabRow != null && chrome.tabRow) tabRow(hints)
             }
             // Page title Off, the icons the title row would hold sit at the page's top right over the body
             // (the title room above the list is [MENU_TAB_ROW_HEIGHT] tall), ending on the page inset like the title row's.
             if (iconsUp) NxTopIcons(
                 titleIcons,
-                Modifier.align(Alignment.TopEnd).then(fixed).height(MENU_TAB_ROW_HEIGHT)
+                Modifier.align(Alignment.TopEnd).height(MENU_TAB_ROW_HEIGHT)
                     .padding(end = inset.end - TOP_ICON_INSET).nxListTopCut(topCut),
             )
             emptyText?.let {
@@ -464,7 +464,7 @@ internal fun GameListFrame(
                 }
             }
             // The folder's name landing in the title (none with Page title Off: it fades where it was).
-            if (flight != null && flown.value < 1f) {
+            if (flight != null && flown.value < 1f) WithTitle(titleOf) { title ->
                 MinimalFlight(flight, title, menuTitleStyle(), { titleText[0]?.takeIf { it.isAttached && chrome.listTitle }?.let(::morphPlace) }, { flown.value }, { pageBox[0] })
             }
         }
@@ -483,6 +483,7 @@ internal fun gameListTitleIcons(
     chrome: LauncherChrome, hints: List<Hint>, onHint: ((NxButton) -> Unit)?, recentIcon: Boolean, touch: Boolean,
     touchscreen: Boolean = false, onSearch: (() -> Unit)? = null, onLayout: (() -> Unit)? = null, layoutOpen: Boolean = false,
     onAchievements: (() -> Unit)? = null, achievementsOpen: Boolean = false,
+    onKidsLock: (() -> Unit)? = null,   // the Games tab in a Kids play window: the main menu's lock, after the rest
 ): List<TopIconAction> {
     if (onHint == null) return emptyList()
     val launcher = if (touchscreen) buildList {
@@ -493,8 +494,13 @@ internal fun gameListTitleIcons(
     }
     // Recent, always an icon; the page's own icons on touch only (a pad has the button).
     else launcherTopActions(onHint, canSearch = false, recent = recentIcon)
-    return launcher + if (touch) hints.touchIcons(onHint) else emptyList()
+    val lock = onKidsLock?.let { listOf(TopIconAction(Res.drawable.menu_icon_lock, "Parent", onClick = it)) }.orEmpty()
+    return launcher + lock + if (touch) hints.touchIcons(onHint) else emptyList()
 }
+
+/** [content] given the title as it is now ([titleOf] read here), so a title that follows the selection recomposes only this. */
+@Composable
+private fun WithTitle(titleOf: () -> String, content: @Composable (String) -> Unit) = content(titleOf())
 
 /** Laid out [by] higher than it would sit, taking that much less room: drawn into the room above it (the title row's). */
 internal fun Modifier.pullUp(by: Dp): Modifier = layout { m, c ->
@@ -521,6 +527,37 @@ internal fun gameListChrome(chrome: LauncherChrome, dual: Boolean): LauncherChro
  * screens ([dual]), only while the highlighted game ([info]) has a set, as the top screen's achievements block.
  */
 internal fun gameListTrophy(available: Boolean, dual: Boolean, info: GameInfo?): Boolean = available && (!dual || hasRaSet(info))
+
+/** Where the trophy icon may show at all ([gameListTrophy]): [signedIn] to RetroAchievements and Layouts → Achievements panel [panelShown]. */
+internal fun gameListTrophyAvailable(signedIn: Boolean, panelShown: Boolean): Boolean = signedIn && panelShown
+
+/** Which of a game list's Search and Layout icons it offers ([gameListIcons]). */
+internal data class GameListIcons(val search: Boolean, val layout: Boolean)
+
+/**
+ * A game list's Search icon: its own search where its [source] can be searched; on the Games tab ([tab]) START's global
+ * search, while there are games to search ([canSearch]). Its Layout icon: with Layouts → Layout options on ([layoutOptions]).
+ */
+internal fun gameListIcons(source: ListSource, tab: Boolean, canSearch: Boolean, layoutOptions: Boolean): GameListIcons =
+    GameListIcons(search = if (tab) canSearch else source.searchable, layout = layoutOptions)
+
+/**
+ * Whether a List shows the selected game's info in the hint bar's row: the bar hidden ([barHidden]: hints hidden, touch
+ * only, or the Games tab, which has no bar), Extra info on ([extraInfo]) and not already under the title ([topStats]).
+ * Never where the Games tab's tab row stands in that row ([tabRowShown]).
+ */
+internal fun gameListInfoInRow(tabRowShown: Boolean, barHidden: Boolean, extraInfo: Boolean, topStats: Boolean): Boolean =
+    !tabRowShown && barHidden && extraInfo && !topStats
+
+/**
+ * The Games tab's title: the highlighted game's ([index] in [entries]) console, as that console's own list is titled
+ * ([listTitle]: a merged console's shared display name, "Android" for Android games); a system with no name, its tag as
+ * the List's console line shows it ([tagLine]); "Games" with no game highlighted.
+ */
+internal fun gamesTabTitle(entries: List<Listed>, index: Int): String {
+    val system = entries.getOrNull(index)?.system ?: return listTitle(ListSource.AllGames)
+    return listTitle(ListSource.Console(system)).ifBlank { CoreRegistry.handheldTag(system.tag) }
+}
 
 /** A Grid's tiles with the info on the line under the title ([gameListTopStats]): none in the selected tile. */
 private val NoTileInfo: (Int) -> List<InfoLine> = { emptyList() }

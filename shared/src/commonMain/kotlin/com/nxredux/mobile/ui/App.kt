@@ -674,8 +674,8 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
  * page, and the second display's top screen while the main menu is there ([MenuTopScreen]). [gameInfo]: the launcher's
  * ([launcherGameInfo]); [now]: [rememberNow]'s clock; [live]: the page is the one showing.
  * The Games tab ([Screen.Games.isTab]) is drawn as a game list over the main menu's bottom row ([GameListFrame]): the
- * tab row (or the menu's title row, pushed or alone), START's prompt the main menu's global search, L2 Jump first in
- * the hints, and no Search, Layout or trophy icon (X still opens the panel).
+ * tab row (or the menu's title row, pushed or alone), a console list's top titled by the highlighted game's console
+ * ([gamesTabTitle]), START's prompt (and the Search icon) the main menu's global search, L2 Jump first in the hints.
  */
 @Composable
 internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSelection>, resume: State<ResumeInfo>, gameInfo: Map<String, GameInfo>, now: Long, live: Boolean = true) {
@@ -700,7 +700,8 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     val meta = launcherGameMeta(storedMeta, remember(s) { !state.settings.menuInfoAchievements }, chrome.extraInfo)
     // Unfiltered by Extra info: whether the highlighted game has a set decides the dual trophy, not what the list shows.
     val allInfo by state.gameInfo.collectAsState()
-    val trophyAvailable = state.hasAchievements && state.settings.gameListAchievementsPanel
+    val trophyAvailable = gameListTrophyAvailable(state.hasAchievements, state.settings.gameListAchievementsPanel)
+    val icons = gameListIcons(s.source, s.isTab, state.canSearch, state.settings.gameListLayoutOptions)
     val trophy by remember(s, allInfo, dual, trophyAvailable) { derivedStateOf { gameListTrophy(trophyAvailable, dual, current()?.let { allInfo[it.game.path] }) } }
     // The Games tab: the main menu's bottom row with the tab's hints at its right (as many as the main menu fits).
     val bar = s.tabBar
@@ -717,7 +718,9 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     // A finger's swipe: List, Minimal, Grid and the vertical stacks scroll vertically, so a sideways swipe moves between the
     // tabs, as on the main menu's pages ([MainMenuScreen]); a horizontal Carousel or Backdrop keeps it for its own row.
     val swipeable = style == MenuStyle.LIST || style == MenuStyle.MINIMAL || style == MenuStyle.GRID || orientation == MenuOrientation.VERTICAL
-    val swipe = Modifier.tabSwipe(bar != null && pagedTabs(s) != null && swipeable && s.menu == null && s.search == null, state::swipeTab)
+    val swipe = Modifier.tabSwipe(bar != null && pagedTabs(s) != null && swipeable && s.menu == null && s.search == null && s.layoutMenu == null, state::swipeTab)
+    // The Games tab's title: the highlighted game's console, read where the title is drawn.
+    val titleFor: (() -> String)? = if (s.isTab) remember(s.entries) { { gamesTabTitle(s.entries, selection.value.index) } } else null
     CompositionLocalProvider(LocalLauncherChrome provides chrome) {
         GameListScreen(
             listTitle(s.source), s.entries, index,
@@ -733,13 +736,14 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
             style = style, orientation = orientation, alignment = state.settings.gameListVerticalAlignment, onGridLayout = onGridLayout, onPageRows = onPageRows, tileInfo = remember(s.entries, listInfo, now) { entryTileInfo(s.entries, listInfo, now) }, layoutKey = s.source,
             artBox = artLayout.list.boxed,
             backdropArt = artLayout.backdrop,
-            onSearch = state::openListSearch.takeIf { s.source.searchable && !s.isTab },
-            onLayout = state::toggleLayoutMenu.takeIf { state.settings.gameListLayoutOptions && !s.isTab }, layoutOpen = s.layoutMenu != null,
+            // The Games tab's Search icon is START's there: the global search.
+            onSearch = (if (s.isTab) state::openSearch else state::openListSearch).takeIf { icons.search },
+            onLayout = state::toggleLayoutMenu.takeIf { icons.layout }, layoutOpen = s.layoutMenu != null,
             // Layouts → Achievements panel Hide: no icon or hint (X and the game's menu still open it).
             onAchievements = state::toggleRaPanel.takeIf { trophy }, achievementsOpen = raPanel != null,
             minimalOpening = minimalOpening.value?.takeIf { it.page == s.source },
             jumpHint = s.isTab, tabRow = tabRow,
-            onKidsLock = state::kidsParentPressed.takeIf { s.isTab && kidsOpen },
+            onKidsLock = state::kidsParentPressed.takeIf { s.isTab && kidsOpen }, titleFor = titleFor,
         )
     }
     RaPanelOverlay(raPanel.takeIf { state.screen.value === s }, onRow = state::openRaPanelRow, onButton = state::onButton)

@@ -9670,15 +9670,75 @@ class AppStateTest {
         assertEquals("ch", state.gamesTab().search)
     }
 
-    @Test fun the_games_tab_has_no_list_search_and_no_layout_dropdown() = runTest {
+    @Test fun the_games_tab_has_no_list_search() = runTest {
         val state = letteredTab(MemorySettings(ContentRef("Home")).apply { gameListLayoutOptions = true })
         state.openListSearch()
         assertNull(state.gamesTab().search)
-        state.toggleLayoutMenu()
-        assertNull(state.gamesTab().layoutMenu)
         state.onButton(NxButton.START)                                       // the global prompt, never a Filtered list
         state.searchDraft("al"); state.onButton(NxButton.A)
         assertEquals(ListSource.Search("al"), assertIs<Screen.Games>(state.screen.value).source)
+    }
+
+    // The Layout icon opens the game lists' Layout dropdown on the tab too, as on a console's list.
+    @Test fun the_layout_dropdown_works_on_the_games_tab_and_holds_the_tabs_keys() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply {
+            gameListLayoutOptions = true; gameListStyle = MenuStyle.LIST; gameListOrientation = MenuOrientation.HORIZONTAL
+        }
+        val state = letteredTab(settings)
+        state.onButton(NxButton.R2)                                          // Bravo
+        val at = state.selection.value.index
+        state.toggleLayoutMenu()
+        assertEquals(0, state.gamesTab().layoutMenu)                         // on the layout in use
+        // Open, the tab's keys are the dropdown's: no tab switch, jump, search, menu or panel.
+        for (b in listOf(NxButton.R1, NxButton.L1, NxButton.R2, NxButton.L2, NxButton.LEFT, NxButton.RIGHT, NxButton.START, NxButton.X, NxButton.Y, NxButton.MENU)) {
+            state.onButton(b)
+            val tab = state.gamesTab()
+            assertEquals(0, tab.layoutMenu, "$b closed the dropdown")
+            assertNull(tab.search, "$b searched"); assertNull(tab.menu, "$b opened a menu")
+            assertEquals(at, state.selection.value.index, "$b moved the highlight")
+        }
+        assertNull(state.raPanel.value)
+        state.swipeTab(1); state.selectTab(2)                                // nor a swipe or a tap on the tab row
+        assertEquals(0, state.gamesTab().layoutMenu)
+        repeat(3) { state.onButton(NxButton.DOWN) }
+        assertEquals(3, state.gamesTab().layoutMenu)
+        state.onButton(NxButton.A)                                           // Carousel, vertical left
+        assertNull(state.gamesTab().layoutMenu)
+        assertEquals(MenuStyle.CAROUSEL, settings.gameListStyle)
+        assertEquals(MenuOrientation.VERTICAL, settings.gameListOrientation)
+        assertEquals(MenuOrientation.VERTICAL, state.currentOrientation())  // the tab redraws in it
+        assertEquals("Bravo", state.highlighted())                           // on the same game
+        state.toggleLayoutMenu()
+        state.pickLayout(1)                                                  // a tap: Grid
+        assertEquals(MenuStyle.GRID, settings.gameListStyle)
+        assertEquals("Bravo", state.highlighted())
+        state.toggleLayoutMenu()
+        assertTrue(state.back())                                             // B closes the dropdown first
+        assertNull(state.gamesTab().layoutMenu)
+        state.toggleLayoutMenu()
+        state.onButton(NxButton.B)
+        assertNull(state.gamesTab().layoutMenu)
+        state.toggleLayoutMenu(); state.toggleLayoutMenu()                   // the icon again closes it
+        assertNull(state.gamesTab().layoutMenu)
+        settings.gameListLayoutOptions = false                               // Layout options off: no dropdown
+        state.toggleLayoutMenu()
+        assertNull(state.gamesTab().layoutMenu)
+    }
+
+    @Test fun the_games_tabs_layout_dropdown_survives_a_menu_rebuild() = runTest {
+        val settings = androidSettings("a/A").apply { gameListLayoutOptions = true }
+        val state = state(settings, src = fourGames(), launcher = FakeLauncher(listOf(gAlpha, gGamma)))
+        state.load(); advanceUntilIdle()
+        state.selectTab(1)
+        state.toggleLayoutMenu()
+        state.onButton(NxButton.DOWN)
+        val before = state.gamesTab()
+        settings.androidConsoleApps = listOf("a/A", "g/G")
+        state.onForeground(); advanceUntilIdle()                             // a new Android console: the menu rebuilt
+        val after = state.gamesTab()
+        assertNotSame(before.entries, after.entries)
+        assertTrue(after.entries.any { it.game.shownName == "Gamma" })
+        assertEquals(1, after.layoutMenu)                                    // still open, on the same choice
     }
 
     @Test fun b_in_the_games_tab_is_the_menus_b() = runTest {

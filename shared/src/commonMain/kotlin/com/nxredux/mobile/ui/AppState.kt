@@ -2067,9 +2067,11 @@ class AppState(
 
     /**
      * [menu] with START's open prompt and draft of [prev] (the main menu rebuilt in place), on either kind of tab. The
-     * Games tab's [Screen.Games.search] is that prompt ([openSearch]); a game list's own search is never carried.
+     * Games tab's [Screen.Games.search] is that prompt ([openSearch]); a game list's own search is never carried. The
+     * Games tab's open Layout dropdown stays open on its choice too.
      */
     private fun keptSearch(prev: Screen, menu: Screen): Screen {
+        if (prev is Screen.Games && prev.isTab && prev.layoutMenu != null && menu is Screen.Games && menu.isTab) return menu.copy(layoutMenu = prev.layoutMenu)
         val draft = when (prev) {
             is Screen.Systems -> prev.search
             is Screen.Games -> prev.search.takeIf { prev.isTab }
@@ -4880,10 +4882,12 @@ class AppState(
     private fun freshSource(source: ListSource): ListSource =
         (source as? ListSource.Console)?.let { c -> consoleGroup(c.system)?.let { ListSource.Console(it) } } ?: source
 
-    /** The Layout icon: opens the dropdown on the layout in use, or closes it when open. */
+    /**
+     * The Layout icon: opens the dropdown on the layout in use, or closes it when open; on the Games tab too, whose
+     * layout is the game lists' (while it is open the tab's own keys are the dropdown's: [onPageButton], [tabRowOf]).
+     */
     fun toggleLayoutMenu() {
         val s = _screen.value as? Screen.Games ?: return
-        if (s.isTab) return   // the Games tab has no Layout dropdown: its layout is Layouts → Game lists'
         if (s.menu != null || s.search != null || !deps.settings.gameListLayoutOptions) return
         _screen.value = s.copy(layoutMenu = if (s.layoutMenu != null) null else GameListLayouts.indexOf(deps.settings.gameListStyle, deps.settings.gameListOrientation, deps.settings.gameListVerticalAlignment, _dualMenu.value))
     }
