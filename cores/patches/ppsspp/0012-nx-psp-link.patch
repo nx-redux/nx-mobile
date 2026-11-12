@@ -20,10 +20,10 @@ index 22106d5..5cb7c7e 100644
  	HLE/sceResmgr.cpp
 diff --git a/Core/HLE/NxPspLink.cpp b/Core/HLE/NxPspLink.cpp
 new file mode 100644
-index 0000000..4fa5725
+index 0000000..1d998e4
 --- /dev/null
 +++ b/Core/HLE/NxPspLink.cpp
-@@ -0,0 +1,229 @@
+@@ -0,0 +1,232 @@
 +// Copyright (c) 2012- PPSSPP Project.
 +
 +// This program is free software: you can redistribute it and/or modify
@@ -239,8 +239,11 @@ index 0000000..4fa5725
 +	StopServerLocked();
 +}
 +
-+void ResumeServer() {
++void ResetServer(void (*init)()) {
++	// One hold for the three steps: a serve(1) in between would start a server reading the tables init replaces.
 +	std::lock_guard<std::mutex> guard(serverMutex);
++	StopServerLocked();
++	init();
 +	if (enabled && serveWanted) {
 +		StartServerLocked();
 +	}
@@ -255,10 +258,10 @@ index 0000000..4fa5725
 +}  // namespace NxPspLink
 diff --git a/Core/HLE/NxPspLink.h b/Core/HLE/NxPspLink.h
 new file mode 100644
-index 0000000..3dcab8e
+index 0000000..817483a
 --- /dev/null
 +++ b/Core/HLE/NxPspLink.h
-@@ -0,0 +1,58 @@
+@@ -0,0 +1,59 @@
 +// Copyright (c) 2012- PPSSPP Project.
 +
 +// This program is free software: you can redistribute it and/or modify
@@ -311,8 +314,9 @@ index 0000000..3dcab8e
 +
 +// adhocServerThread is started and stopped from the frontend's thread too, so boot and shutdown go through these.
 +void StopServer();
-+// After a reset: the frontend still counts on the server it asked for.
-+void ResumeServer();
++// At boot and after a reset: stops the server, runs init (__AdhocServerInit, whose tables the server reads), and
++// starts it again if the frontend still counts on it, all without letting serve() in between.
++void ResetServer(void (*init)());
 +// From the server thread, once it listens or has given up.
 +void ServerReady();
 +
@@ -448,7 +452,7 @@ index 3eccae0..f43691f 100644
  
  static void __ApctlState(u64 userdata, int cyclesLate) {
 diff --git a/Core/HLE/sceNetAdhoc.cpp b/Core/HLE/sceNetAdhoc.cpp
-index 299408c..825dc54 100644
+index 299408c..41f8d68 100644
 --- a/Core/HLE/sceNetAdhoc.cpp
 +++ b/Core/HLE/sceNetAdhoc.cpp
 @@ -63,6 +63,7 @@
@@ -495,9 +499,10 @@ index 299408c..825dc54 100644
  	netAdhocctlInited = false;
  	adhocctlHandlers.clear();
  	__AdhocNotifInit();
-+	// Before the server's database is reset: the link's server can be running here already.
-+	NxPspLink::StopServer();
- 	__AdhocServerInit();
+-	__AdhocServerInit();
++	// The link's server can be running here already (a reset, or a host registered before the boot), and the
++	// frontend can start it at any time: it's stopped around the reset of its database, and back after it.
++	NxPspLink::ResetServer(__AdhocServerInit);
  
  	// Create built-in AdhocServer Thread. The flag is set here rather than by the thread, so that a
  	// shutdown that clears it before the thread gets going can't be undone.
@@ -508,16 +513,7 @@ index 299408c..825dc54 100644
  	if (relayThread.joinable()) {
  		relayThread.join();
  	}
-@@ -1846,6 +1844,8 @@ void __NetAdhocInit() {
- 
- 			UPnP_Remove(IP_PROTOCOL_TCP, config.port);
- 		});
-+	} else {
-+		NxPspLink::ResumeServer();
- 	}
- }
- 
-@@ -1918,7 +1918,9 @@ int sceNetAdhocctlInit(MIPSState *mips, int stackSize, int prio, u32 productAddr
+@@ -1918,7 +1916,9 @@ int sceNetAdhocctlInit(MIPSState *mips, int stackSize, int prio, u32 productAddr
  
  	adhocctlEvents.clear();
  	netAdhocctlInited = true; //needed for cleanup during AdhocctlTerm even when it failed to connect to Adhoc Server (since it's being faked as success)
@@ -528,7 +524,7 @@ index 299408c..825dc54 100644
  
  	// Create fake PSP Thread for callback
  	// TODO: Should use a separated threads for friendFinder, matchingEvent, and matchingInput and created on AdhocctlInit & AdhocMatchingStart instead of here
-@@ -2781,6 +2783,8 @@ int sceNetAdhocctlScan(MIPSState *mips) {
+@@ -2781,6 +2781,8 @@ int sceNetAdhocctlScan(MIPSState *mips) {
  
  	// Library initialized
  	if (netAdhocctlInited) {
@@ -537,7 +533,7 @@ index 299408c..825dc54 100644
  		int us = adhocDefaultDelay;
  		if ((adhocctlState == ADHOCCTL_STATE_CONNECTED) || (adhocctlState == ADHOCCTL_STATE_GAMEMODE)) {
  			// Returns 0 and reports ALREADY_CONNECTED through the handlers, as on the PSP (pspautotests
-@@ -3097,6 +3101,7 @@ int NetAdhocctl_Term() {
+@@ -3097,6 +3099,7 @@ int NetAdhocctl_Term() {
  		friendFinderRunning = false;
  		friendFinderStop();
  		adhocctlInServerGroup = false;
@@ -545,7 +541,7 @@ index 299408c..825dc54 100644
  
  		// TODO: May need to block current thread to make sure all Adhocctl callbacks have been fully executed before terminating Adhoc PSPThread (ie. threadAdhocID).
  
-@@ -3263,6 +3268,8 @@ int sceNetAdhocctlGetPeerInfo(MIPSState *mips, const char *mac, int size, u32 pe
+@@ -3263,6 +3266,8 @@ int sceNetAdhocctlGetPeerInfo(MIPSState *mips, const char *mac, int size, u32 pe
  int NetAdhocctl_Create(const char *groupName) {
  	// Library initialized
  	if (netAdhocctlInited) {
