@@ -73,8 +73,8 @@ fun NxCarousel(
     badge: (Int) -> String? = { null },
     lit: () -> Boolean = { true },
     cardInfo: ((Int) -> List<InfoLine>)? = null,
-    // A game list: the neighbours on the screen's centre line, and the selected card holds the game's stats
-    // ([captionInfo]) over a shade, its name alone under it.
+    // A game list: the neighbours on the screen's centre line, and the game's stats ([captionInfo]) under its name, one
+    // line each in the vertical stack's style ([StackCaption]); the card itself the stack's, its picture alone.
     gameList: Boolean = false,
     drained: Boolean = false,   // Home's: no ring, the selected card in colour and the rest grey ([NxMenuTile]'s drained)
 ) {
@@ -89,7 +89,8 @@ fun NxCarousel(
         // A game list's selected title follows Appearance → Text size (the room below follows it too).
         val nameSize = if (gameList) nxCardTitleSize() else CAROUSEL_TITLE_SP
         val nameStyle = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = nameSize, textAlign = TextAlign.Center)
-        val infoStyle = TextStyle(fontFamily = font, fontSize = 14.sp, textAlign = TextAlign.Center)
+        // A game list's stats at 80% of its name, as the vertical stack's ([NxCarouselStack]'s infoShare).
+        val infoStyle = TextStyle(fontFamily = font, fontSize = if (gameList) nameSize * STACK_INFO_SHARE else 14.sp, textAlign = TextAlign.Center)
         val room = rememberCaptionRoom(CAPTION_GAP, nameStyle, infoStyle, infoRows = if (gameList) 0 else CAROUSEL_INFO_ROWS).takeIf { cardInfo == null } ?: 0f
         // One size in both orientations, shrunk only so the tile and the caption room fit the body's height (the shown
         // title's; a hidden title's room left out), the block centred in the whole box.
@@ -128,16 +129,19 @@ fun NxCarousel(
         val hasLongPress = onLongPress != null
         val logoInset = remember(g) { rowLogoInset(g) }
         val toolSize = carouselToolSize(g)
-        val stats = captionInfo.takeIf { gameList }
 
         // The window spans the target too, and the selection is lit while [lit] says so.
         NxRow(count, selectedIndex, pos, g, bandTop, bandH, onSelect, onOpen, onLongPress, litSelection = lit) { i, isLit, at, taps ->
-            CarouselItem(tiles[i], i, isLit, at, g, nbTop, bandTop, selTop, logoInset, toolSize, portrait, taps, hasLongPress, badge(i), cardInfo, stats, drained)
+            CarouselItem(tiles[i], i, isLit, at, g, nbTop, bandTop, selTop, logoInset, toolSize, portrait, taps, hasLongPress, badge(i), cardInfo, drained)
         }
 
+        // A game list's stats under the name as the stack's (a row each, [STACK_CAPTION_GAP] apart), only the whole
+        // rows that fit under the tile at its highest ([carouselCaptionMax]): the caption never reaches the bottom row.
         if (cardInfo == null) RowCaption(
-            captionTitle, if (gameList) NoTileInfo else captionInfo, glide, nameStyle, 2, infoStyle, inset, avail, availPx, spare,
+            captionTitle, captionInfo, glide, nameStyle, 2, infoStyle, inset, avail, availPx, spare,
             selTop, g.itemH + CAPTION_GAP, colors.accent,   // the selected game's name in the accent, as Home's cards
+            stackRows = gameList, rowGap = if (gameList) STACK_CAPTION_GAP else 0.dp,
+            maxDrawn = if (gameList) carouselCaptionMax(area, g.itemH) else Float.POSITIVE_INFINITY,
         )
     }
 }
@@ -146,7 +150,7 @@ fun NxCarousel(
 private fun BoxScope.CarouselItem(
     tile: GridTile, i: Int, lit: Boolean, at: () -> Float, g: RowGeometry, nbTop: Float, bandTop: Float, selTop: () -> Float,
     logoInset: Pair<Float, Float>, toolSize: ToolTileSize, portrait: Boolean, taps: ItemTaps, hasLongPress: Boolean,
-    badge: String?, cardInfo: ((Int) -> List<InfoLine>)?, stats: (() -> List<InfoLine>)?, drained: Boolean,
+    badge: String?, cardInfo: ((Int) -> List<InfoLine>)?, drained: Boolean,
 ) {
     val colors = LocalNxColors.current
     val geometry by rememberUpdatedState(g)
@@ -164,13 +168,12 @@ private fun BoxScope.CarouselItem(
             // The window spans the target too: during a slide an item rowItem hides must not take a touch.
             .shownItemTaps(i, taps, hasLongPress) { rowItem(RowStyle.CAROUSEL, i - shownAt(), geometry).visible },
     ) {
-        // A game list's selected card holds the stats ([stats], the selection's), shaded as the Grid's; its name is below.
+        // A game list's card is its picture alone, as the vertical stack's: its name and stats are below it.
         NxMenuTile(
-            tile, lit = lit, caption = cardInfo != null || stats != null,
-            info = remember(cardInfo, stats, i) { cardInfo?.let { ci -> { ci(i) } } ?: stats ?: NoTileInfo }, logoInset = logoInset, portrait = portrait,
+            tile, lit = lit, caption = cardInfo != null,
+            info = remember(cardInfo, i) { cardInfo?.let { ci -> { ci(i) } } ?: NoTileInfo }, logoInset = logoInset, portrait = portrait,
             modifier = Modifier.fillMaxSize(), toolSize = toolSize, homeCaption = cardInfo != null,
-            gameFade = stats != null, statsOnly = stats != null,
-            statsSize = if (stats != null) nxCardStatsSize() else 13.sp, drained = drained, heroName = drained && cardInfo != null,
+            statsSize = 13.sp, drained = drained, heroName = drained && cardInfo != null,
         )
         badge?.let { HomeBadge(it, portrait, Modifier.align(Alignment.TopStart), lit = lit || !drained) }
         // The neighbour's black layer, on the tile's own rounded shape (the ring outside stays bright). Drained, the
@@ -185,12 +188,21 @@ private fun BoxScope.CarouselItem(
 
 /**
  * The Carousel caption's info rows under a [title], none without either. As on the handheld: the time and the
- * achievement count on the first row, the next goal on the second, an empty row left out. With Layouts → Extra info
- * hidden the info is empty ([com.nxredux.mobile.ui.launcherGameInfo]), so the caption is the name alone and its drawn
- * height ([rememberCaptionDrawnHeight]) the name's, which [rowSelectedTop] centres on.
+ * achievement count on the first row, the next goal on the second, an empty row left out; a game list's ([gameList])
+ * one line a row, as its vertical stack's caption ([stackCaptionRows]). With Layouts → Extra info hidden the info is
+ * empty ([com.nxredux.mobile.ui.launcherGameInfo]), so the caption is the name alone and its drawn height
+ * ([rememberCaptionHeights]) the name's, which [rowSelectedTop] centres on.
  */
-internal fun carouselCaptionRows(title: String?, info: List<InfoLine>): List<List<InfoLine>> =
-    if (title == null) emptyList() else backdropCaptionRows(info)
+internal fun carouselCaptionRows(title: String?, info: List<InfoLine>, gameList: Boolean = false): List<List<InfoLine>> =
+    if (title == null) emptyList() else if (gameList) stackCaptionRows(info) else backdropCaptionRows(info)
+
+/**
+ * The most a game list Carousel's caption may take under its selected tile, dp, in a box [areaDp] tall with tiles
+ * [itemH] tall: what is left once the tile sits at its highest ([rowSelectedTopOn]: its ring's room, or the neighbours'
+ * top if that is higher), less the gap over the caption and a margin over the bottom row (the hint bar, the tab row).
+ */
+internal fun carouselCaptionMax(areaDp: Float, itemH: Float): Float =
+    (areaDp - itemH - min(GRID_RING_ROOM, rowNeighbourTop(areaDp, itemH)) - CAPTION_GAP - CAPTION_SPARE_MARGIN).coerceAtLeast(0f)
 
 /**
  * A row's caption room in dp: [gap] under the slot, [nameLines] lines of the name in [name] (its most: the Carousel's
@@ -208,26 +220,28 @@ internal fun rememberCaptionRoom(gap: Float, name: TextStyle, info: TextStyle, i
 }
 
 /**
- * A row caption's height as drawn, dp: [title] in [name] at the caption's width ([availPx], the Texts' own
- * max width), up to [nameLines] lines, then the [fitted] info rows in [info], each up to its own lines; the same styles,
- * width and line limits the caption's Texts use, measured before layout so the row never sits a frame wrong. A row's
- * trophy (an inline icon shorter than the line) doesn't change its height. 0 with no [title] (no caption drawn).
+ * A row caption's heights as drawn, dp: [title] in [name] at the caption's width ([availPx], the Texts' own
+ * max width), up to [nameLines] lines, then each of the [fitted] info rows in [info], up to its own lines; the same
+ * styles, width and line limits the caption's Texts use, measured before layout so the row never sits a frame wrong
+ * ([captionDrawnHeight] adds them up). A row's trophy (an inline icon shorter than the line) doesn't change its height.
+ * 0 and none with no [title] (no caption drawn).
  */
 @Composable
-internal fun rememberCaptionDrawnHeight(
+internal fun rememberCaptionHeights(
     title: String?, name: TextStyle, nameLines: Int, fitted: List<CaptionInfoRow>, info: TextStyle, availPx: Int,
-): Float {
+): Pair<Float, List<Float>> {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     return remember(title, name, nameLines, fitted, info, availPx, density) {
-        if (title == null) return@remember 0f
+        if (title == null) return@remember 0f to emptyList()
         val c = Constraints(maxWidth = availPx.coerceAtLeast(0))
-        var px = measurer.measure(title, name, TextOverflow.Ellipsis, maxLines = nameLines, constraints = c).size.height
-        for (row in fitted) {
-            val text = row.lines.joinToString(INFO_SEPARATOR) { it.text }
-            px += measurer.measure(text, info, TextOverflow.Ellipsis, maxLines = row.maxLines, constraints = c).size.height
+        with(density) {
+            val nameH = measurer.measure(title, name, TextOverflow.Ellipsis, maxLines = nameLines, constraints = c).size.height.toDp().value
+            nameH to fitted.map { row ->
+                val text = row.lines.joinToString(INFO_SEPARATOR) { it.text }
+                measurer.measure(text, info, TextOverflow.Ellipsis, maxLines = row.maxLines, constraints = c).size.height.toDp().value
+            }
         }
-        with(density) { px.toDp().value }
     }
 }
 

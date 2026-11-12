@@ -257,6 +257,39 @@ class RowLayoutTest {
         }
     }
 
+    // A game list's horizontal Carousel: the info under the name, one line a row as the vertical stack's caption.
+    @Test fun aGameListCarouselsCaptionHasTheStacksRows() {
+        val info = listOf(InfoLine(InfoKind.TIME, "Today - 1h"), InfoLine(InfoKind.ACHIEVEMENTS, "3 of 10"), InfoLine(InfoKind.NEXT, "Next: First"))
+        assertEquals(stackCaptionRows(info), carouselCaptionRows("Name", info, gameList = true))
+        assertEquals(emptyList(), carouselCaptionRows(null, info, gameList = true))
+        assertEquals(emptyList(), carouselCaptionRows("Name", emptyList(), gameList = true))
+        assertEquals(listOf(info.take(2), info.drop(2)), carouselCaptionRows("Name", info))   // any other Carousel's: as before
+    }
+
+    // The caption's room under the selected tile: what is left of the box once the tile sits at its highest (its ring's
+    // room from the top, or the neighbours' top if higher), less the gap and a margin over the bottom row.
+    @Test fun aCarouselCaptionMayTakeWhatIsLeftUnderTheTileAtItsHighest() {
+        val e = 0.01f
+        assertEquals(300f - 120f - GRID_RING_ROOM - 16f - CAPTION_SPARE_MARGIN, carouselCaptionMax(300f, 120f), e)
+        // A box the tile nearly fills: the neighbours' top is the higher, and nothing is left below zero.
+        assertEquals(0f, carouselCaptionMax(124f, 120f), e)
+    }
+
+    // Whole info rows, in order, while the name and the rows (each with the gap before it) fit; the name always shows.
+    @Test fun captionRowsAreCutToWhatFits() {
+        val rows = listOf(16f, 16f, 32f)
+        assertEquals(3, captionRowsWithin(40f, rows, 3f, 1000f))
+        assertEquals(3, captionRowsWithin(40f, rows, 3f, 40f + 19f + 19f + 35f))
+        assertEquals(2, captionRowsWithin(40f, rows, 3f, 40f + 19f + 19f + 34f))
+        assertEquals(1, captionRowsWithin(40f, rows, 3f, 60f))
+        assertEquals(0, captionRowsWithin(40f, rows, 3f, 50f))
+        assertEquals(0, captionRowsWithin(80f, rows, 3f, 50f))   // a name taller than the room: still no rows
+        assertEquals(0, captionRowsWithin(40f, emptyList(), 3f, 1000f))
+        // The drawn height of what is kept: the name, then each row with its gap.
+        assertEquals(40f + 19f + 19f, captionDrawnHeight(40f, rows.take(2), 3f), 0.01f)
+        assertEquals(40f, captionDrawnHeight(40f, emptyList(), 3f), 0.01f)
+    }
+
     // Layouts → Extra info hidden: the selected game's info is empty, so the Carousel's and Backdrop's
     // captions have no info rows (none fitted, none measured): the drawn caption is the name alone, and the selected
     // tile sits half the info lines lower than with them, centred on what is drawn. Home's captions (Continue, a pin)
