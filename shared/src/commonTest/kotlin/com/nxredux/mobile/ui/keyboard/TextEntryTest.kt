@@ -74,20 +74,15 @@ class TextEntryTest {
         assertEquals(EntryFocus.Keys(KeyPos(0, 0)), inField.press(NxButton.DOWN).entry.focus)
     }
 
-    @Test fun upFromFieldsReachesButtons() {
+    @Test fun upFromFieldsStopsAtTheFirst() {
         val onPassword = signIn.copy(active = 1, cursor = 0, focus = EntryFocus.Field)
         val onUser = onPassword.press(NxButton.UP).entry
         assertEquals(0, onUser.active)
         assertEquals(EntryFocus.Field, onUser.focus)
-        val onConfirm = onUser.press(NxButton.UP).entry
-        assertEquals(EntryFocus.Button(0), onConfirm.focus)
-        val onCancel = onConfirm.press(NxButton.RIGHT).entry
-        assertEquals(EntryFocus.Button(1), onCancel.focus)
-        assertEquals(EntryOutcome.Cancel, onCancel.press(NxButton.A).outcome)
-        assertEquals(EntryOutcome.Confirm, onConfirm.press(NxButton.A).outcome)
-        val back = onConfirm.press(NxButton.DOWN).entry
-        assertEquals(EntryFocus.Field, back.focus)
-        assertEquals(0, back.active)
+        // The box has no buttons above its fields: the highlight stays, and nothing is answered.
+        val step = onUser.press(NxButton.UP)
+        assertEquals(onUser, step.entry)
+        assertEquals(EntryOutcome.None, step.outcome)
     }
 
     @Test fun doneKeyAndNextKeyMatchStartAndSelect() {
@@ -169,13 +164,6 @@ class TextEntryTest {
         val e = signIn.copy(fields = listOf(EntryField("Username", "me"), EntryField("Password", "hunter2", password = true))).toggleReveal()
         assertTrue(e.reveal)
         assertFalse(e.toString().contains("hunter2"))
-    }
-
-    @Test fun leftIsConfirmRightIsCancelOnTheButtons() {
-        val onCancel = signIn.copy(focus = EntryFocus.Button(1))
-        assertEquals(EntryFocus.Button(0), onCancel.press(NxButton.LEFT).entry.focus)
-        assertEquals(EntryFocus.Button(0), onCancel.press(NxButton.LEFT).entry.press(NxButton.LEFT).entry.focus)
-        assertEquals(EntryFocus.Button(1), onCancel.press(NxButton.RIGHT).entry.focus)
     }
 
     @Test fun aHeldDeleteClearsAndAHeldBNeverCancels() {

@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -58,13 +57,6 @@ import kotlinx.coroutines.flow.Flow
  */
 internal val nxKeyboardTop = mutableStateOf<Float?>(null)
 
-/**
- * A prompt's box has its buttons on screen. False on a short screen under the keyboard, where the box is its fields
- * alone: the keyboard's Done and the pad's START and B answer it, and the pad's highlight has no button to go to
- * ([com.nxredux.mobile.ui.keyboard.TextEntryController]).
- */
-internal val nxPromptButtonsShown = mutableStateOf(true)
-
 /** Inside a modal: it is in that short room, so its content drops its labels for words inside the fields. */
 val LocalModalTight = compositionLocalOf { false }
 
@@ -75,6 +67,8 @@ fun NxModal(
     maxWidth: Dp = 420.dp,
     scrollSteps: Flow<Int>? = null,
     buttonFocus: Int = -1,
+    /** False: no footer under the card (a prompt the NX keyboard types: its Done key, START and B answer it). */
+    actions: Boolean = true,
     below: (@Composable ColumnScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -105,7 +99,6 @@ fun NxModal(
     // A short screen under a keyboard: less than a prompt's own height is left, so the box is its fields alone, each
     // named inside itself. The keyboard's Done confirms; B, START or a tap outside answer it too.
     val tight = keyboardTop != null && with(density) { keyboardTop.toDp() } < TIGHT_ROOM
-    DisposableEffect(tight) { nxPromptButtonsShown.value = !tight; onDispose { nxPromptButtonsShown.value = true } }
     Box(
         Modifier.fillMaxSize().then(if (!padVisible) Modifier.imePadding() else Modifier).background(LocalNxColors.current.scrimModal)
             .onGloballyPositioned { c -> bottom = c.positionInRoot().y + c.size.height; rootHeight = c.findRootCoordinates().size.height.toFloat() }
@@ -133,7 +126,7 @@ fun NxModal(
                 }
             }
             // The actions, on the panel under the card: what the card says or sets up, these do.
-            if (!tight) NxModalFooter(footer, onFooter, buttonFocus)
+            if (!tight && actions) NxModalFooter(footer, onFooter, buttonFocus)
             if (below != null) below()
         }
     }

@@ -8,11 +8,10 @@ data class EntryField(val label: String, val value: String, val password: Boolea
     override fun toString(): String = "EntryField(label=$label, value=***, password=$password)"
 }
 
-/** Where the pad's highlight is: on a key, in the active field (moving its cursor), or on the box's buttons (0 confirm, 1 Cancel). */
+/** Where the pad's highlight is: on a key, or in the active field (moving its cursor). The box has no buttons: Done, START and B answer it. */
 sealed interface EntryFocus {
     data class Keys(val at: KeyPos) : EntryFocus
     data object Field : EntryFocus
-    data class Button(val index: Int) : EntryFocus
 }
 
 /** What a press asks of the prompt's host: an [Edit] of a field's text, [Confirm], [Cancel], the clipboard ([Paste]), or nothing. */
@@ -84,9 +83,8 @@ private fun TextEntry.next(): EntryStep = if (!twoFields) none() else EntryStep(
 private fun TextEntry.cursorBy(d: Int) = copy(cursor = (cursor + d).coerceIn(0, text.length))
 
 /**
- * A pad press: the keyboard's mapping (spec), the d-pad moving the highlight on keys, the field or the box's buttons. A
- * held direction's [repeat] moves within where the highlight is, never across into the field or onto the buttons: an
- * overshoot there would leave A confirming half-typed text.
+ * A pad press: the keyboard's mapping (spec), the d-pad moving the highlight on the keys or in the field. A held
+ * direction's [repeat] moves within where the highlight is, never across between the keys and the fields.
  */
 fun TextEntry.press(button: NxButton, repeat: Boolean = false): EntryStep {
     when (button) {
@@ -118,15 +116,8 @@ fun TextEntry.press(button: NxButton, repeat: Boolean = false): EntryStep {
             NxButton.RIGHT -> EntryStep(cursorBy(1), EntryOutcome.None)
             NxButton.DOWN -> EntryStep(copy(focus = EntryFocus.Keys(keyAt)), EntryOutcome.None)
             NxButton.A -> EntryStep(if (fields[active].password) toggleReveal() else this, EntryOutcome.None)
-            NxButton.UP -> EntryStep(if (active > 0) toField(active - 1) else copy(focus = EntryFocus.Button(0)), EntryOutcome.None)
-            else -> none()
-        }
-        is EntryFocus.Button -> if (repeat && button.isDirection) none() else when (button) {
-            // As every dialog's buttons: LEFT is the confirm button, RIGHT Cancel.
-            NxButton.LEFT -> EntryStep(copy(focus = EntryFocus.Button(0)), EntryOutcome.None)
-            NxButton.RIGHT -> EntryStep(copy(focus = EntryFocus.Button(1)), EntryOutcome.None)
-            NxButton.DOWN -> EntryStep(toField(0, EntryFocus.Field), EntryOutcome.None)
-            NxButton.A -> EntryStep(this, if (f.index == 0) EntryOutcome.Confirm else EntryOutcome.Cancel)
+            // The first field is the top: nothing above it to go to.
+            NxButton.UP -> EntryStep(if (active > 0) toField(active - 1) else this, EntryOutcome.None)
             else -> none()
         }
     }
@@ -173,6 +164,3 @@ fun TextEntry.withValues(values: List<String>): TextEntry {
     val cursor = if (changed) values[active].length else cursor.coerceIn(0, values[active].length)
     return copy(fields = fields, cursor = cursor)
 }
-
-/** The box's button the highlight is on, as the modal's footer counts them (0 confirm, 1 Cancel); -1 on a key or a field. */
-fun TextEntry.buttonFocus(): Int = (focus as? EntryFocus.Button)?.index ?: -1

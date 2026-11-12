@@ -326,6 +326,9 @@ class RaController(
      */
     suspend fun games(library: LibraryIndex? = null): List<RaGameView> =
         withContext(work) { RaLibraryView.games(platform.store, journal, confirmed, library ?: index(), settings.raUsername) }
+    /** The latest unlocks over every cached game ([RaLibraryView.recentUnlocks]): never on the main thread. */
+    suspend fun recentUnlocks(limit: Int): List<RaRecentUnlock> =
+        withContext(work) { RaLibraryView.recentUnlocks(platform.store, journal, confirmed, settings.raUsername, limit) }
     suspend fun achievements(hash: String): List<RaAchievement> = withContext(work) { RaLibraryView.achievements(platform.store, journal, confirmed, hash, settings.raUsername) }
 
     /** The menu's per-game progress; empty when signed out or the cache won't read. */

@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import com.nxredux.mobile.ui.nx.symmetricCutoutInset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
@@ -489,6 +490,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override var achievements: AchievementsBridge? = null   // null: off, signed out, or a console RA does not cover
         private set
     override val notifications = NotificationQueue()
+    private val unlockMoments by lazy { UnlockMoments(applicationContext) }
     private val notificationState = mutableStateOf(Pair<List<NxToast>, NxProgressPill?>(emptyList(), null))
     override var notificationsView: ComposeView? = null
         private set
@@ -1533,12 +1535,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             }
         }
         achievements = AchievementsBridge(controller, settings, lifecycleScope).also { it.prepare(consoleId, hashJob, pointer, launch) }
+        if (settings.raUnlockSound) unlockMoments.prepare()
     }
 
     /** Idempotent; onDestroy and a finishing onStop both reach it (a quit detaches it itself: quitWithAutoState). */
     private fun stopAchievements() {
         achievements?.stop()
         achievements = null
+        unlockMoments.release()
     }
 
     /** The Options row and Achievements page: hidden without a session, "Not recognised" while there is no set. */
@@ -1561,6 +1565,20 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
     }
 
+    /** An unlock's chime and screenshot, each by its own setting (never tied to the toast's). Main thread. */
+    private fun onUnlockMoment(a: RaAchievement) {
+        if (settings.raUnlockSound) unlockMoments.play()
+        if (!settings.raUnlockScreenshot) return
+        val game = intentTitle ?: "Game"
+        // The game's picture alone, at its own size: the toast is drawn over the view, never in its surface.
+        saves.captureThumbnail(fullSize = true) { picture ->
+            picture ?: return@captureThumbnail
+            lifecycleScope.launch(Dispatchers.IO) {
+                try { unlockMoments.save(picture, game, a.title) } finally { picture.recycle() }
+            }
+        }
+    }
+
     private fun onAchievementEvent(e: RaEvent) {
         val b = achievements ?: return
         val now = SystemClock.elapsedRealtime()
@@ -1570,7 +1588,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Off: only the session notices (loaded, unknown, sign-in, offline, first-time setup, synced) still show.
         val shown = settings.raShowNotifications
         when (e) {
-            is RaEvent.Unlocked -> if (shown) notifications.push("Achievement Unlocked\n${e.a.title}", badge(e.a), toastMs, now)
+            is RaEvent.Unlocked -> {
+                if (shown) notifications.push("Achievement Unlocked\n${e.a.title}", badge(e.a), toastMs, now)
+                onUnlockMoment(e.a)
+            }
             is RaEvent.Progress -> if (shown) notifications.progress(e.a.title, e.a.progress ?: "", badge(e.a), settings.raProgressSeconds * 1000L, now)
             RaEvent.ProgressHide -> notifications.hideProgress()
             RaEvent.Mastered -> if (shown) notice("Game Mastered!")
@@ -1638,7 +1659,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                         else WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical
                     // Over the bare skin buttons and over a pad skin (their shoulders or shell hold the corners),
                     // top-centre below any cutout; elsewhere the corners.
-                    val placement = nxNotificationPlacement(padLayout.overlayPadShown.value || padLayout.skinShownState.value)
+                    // In portrait over a pad (bare buttons or a skin) the overlay ends at the picture's bottom instead, so the
+                    // toasts sit bottom-left of the picture as in landscape, never over the pad under it.
+                    val overPad = padLayout.overlayPadShown.value || padLayout.skinShownState.value
+                    val picture = renderer.pictureBox.value
+                    val onPicture = overPad && picture != null && config.orientation == Configuration.ORIENTATION_PORTRAIT
+                    val placement = nxNotificationPlacement(overPad, onPicture)
                     // Kept off the top corners ([nxTopCentreMaxWidth]) from the cutout inset and this view's size.
                     val density = LocalDensity.current
                     val dir = LocalLayoutDirection.current
@@ -1650,7 +1676,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     var origin by remember { mutableStateOf(IntOffset.Zero) }   // this view's top-left in the window
                     BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow().round() }) {
                         val maxW = nxTopCentreMaxWidth(maxWidth.value, maxHeight.value, inset).dp
-                        NxNotifications(toasts, pill, safeSides = sides, placement = placement, topCentreMaxWidth = maxW, onAction = input::onNoticeAction, onDismiss = input::onNoticeDismiss)
+                        val underPicture = if (onPicture && picture != null) with(density) { (constraints.maxHeight - (picture.bottom - origin.y)).coerceAtLeast(0).toDp() } else 0.dp
+                        NxNotifications(
+                            toasts, pill, modifier = Modifier.padding(bottom = underPicture),
+                            safeSides = if (underPicture > 0.dp) WindowInsetsSides.Horizontal + WindowInsetsSides.Top else sides,
+                            placement = placement, topCentreMaxWidth = maxW, onAction = input::onNoticeAction, onDismiss = input::onNoticeDismiss,
+                        )
                         // Top-right of the picture ([pictureIndicatorAnchor]); not under the menu. This view sits over
                         // the pad skin, so a skin's shell never covers them. The speed indicator and a Cable Link
                         // session's delay share the corner: shortcuts do nothing in a session, so never both.

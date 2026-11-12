@@ -609,7 +609,13 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     DeviceSyncScreen(it, onHint = state::onButton, setup = setup, onSetupTap = state::syncSetupTap)
                 }
             } ?: Box(Modifier.fillMaxSize())
-            is Screen.RetroAchievements -> state.achievements?.let { c -> SettingsHintBar { WithIndex(selection) { RetroAchievementsScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton) } } } ?: Box(Modifier.fillMaxSize())
+            is Screen.RetroAchievements -> state.achievements?.let { c ->
+                SettingsHintBar {
+                    RaPageWithProfile(state, c, split = settingsSplit(splitWindow())) {
+                        WithIndex(selection) { RetroAchievementsScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton) }
+                    }
+                }
+            } ?: Box(Modifier.fillMaxSize())
             is Screen.RaDownload -> state.achievements?.let { c -> WithIndex(selection) { RaDownloadScreen(s, c, it, state::select, {}, onHint = state::onButton) } } ?: Box(Modifier.fillMaxSize())
             // The page on Settings' insets: the plates' edges on both sides (the title and the list's thumbnails then sit on the
             // words' edge, [nxListInset] in), the hint bar on that same edge, as the RetroAchievements split's right page.
@@ -624,9 +630,9 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                 else WithIndex(selection) { GameTimeSessionsScreen(s, it, state::select, onHint = state::onButton) }
             // The RetroAchievements levels: on a split window a column browser, the level it came from on the left (the
             // same rule as the two-pane Settings); else one page.
-            is Screen.RaConsoles, is Screen.RaGames, is Screen.RaGame, is Screen.RaAchievement, is Screen.RaSettings ->
+            is Screen.RaConsoles, is Screen.RaGames, is Screen.RaGame, is Screen.RaAchievement, is Screen.RaSettings, Screen.RaProfile ->
                 if (raSplitView(splitWindow(), s)) RaSplitScreen(state, s) { RaLevelPage(state, s, selection, split = true) }
-                else if (s is Screen.RaAchievement) RaLevelPage(state, s, selection, split = false)   // its own detail page
+                else if (s is Screen.RaAchievement || s is Screen.RaProfile) RaLevelPage(state, s, selection, split = false)   // its own detail page
                 else SettingsHintBar { NarrowRaPage(state, s, selection) }
             // Artwork and its pages: on a split window Settings' wide stage (its words on the left, the page or the
             // highlighted word's preview on the right); on a narrow or portrait window one page. Either way the Settings

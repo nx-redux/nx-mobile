@@ -1,6 +1,5 @@
 package com.nxredux.mobile.ui.keyboard
 
-import com.nxredux.mobile.ui.nx.nxPromptButtonsShown
 import com.nxredux.mobile.ui.nx.NxButton
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -8,7 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * An open prompt as the keyboard sees it: its identity ([id]; another one starts a fresh entry), its [fields] as the
- * host holds them, a setter per field and the box's confirm button's [confirmLabel].
+ * host holds them, a setter per field and its confirm word ([confirmLabel]: the keyboard's Done key and the START hint read it).
  */
 internal class PromptSpec(val id: Any, val fields: List<EntryField>, val setters: List<(String) -> Unit>, val confirmLabel: String)
 
@@ -21,7 +20,7 @@ internal class TextEntryController(private val spec: () -> PromptSpec?, private 
     val entry: StateFlow<TextEntry?> = _entry.asStateFlow()
     private var current: PromptSpec? = null
 
-    /** The box's confirm word for the open prompt ("OK" with none). */
+    /** The open prompt's confirm word ("OK" with none). */
     val confirmLabel: String get() = current?.confirmLabel ?: "OK"
 
     /** Follows the open prompt: a new one starts fresh, the same one takes the host's values (a change made elsewhere). */
@@ -37,10 +36,7 @@ internal class TextEntryController(private val spec: () -> PromptSpec?, private 
     fun press(button: NxButton, repeat: Boolean = false): NxButton? {
         sync()
         val e = _entry.value ?: return button
-        val step = e.press(button, repeat)
-        // The box shows no buttons (a short screen): the highlight stays where it is rather than go onto one unseen.
-        if (step.entry.focus is EntryFocus.Button && !nxPromptButtonsShown.value) return null
-        return apply(step)
+        return apply(e.press(button, repeat))
     }
 
     /** A tap on the key at [at]; the button the prompt hears, as [press]. */

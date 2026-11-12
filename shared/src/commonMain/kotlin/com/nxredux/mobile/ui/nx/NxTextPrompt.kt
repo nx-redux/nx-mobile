@@ -28,7 +28,6 @@ import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.keyboard.EntryFocus
 import com.nxredux.mobile.ui.keyboard.LocalPromptKeyboard
 import com.nxredux.mobile.ui.keyboard.NxEntryField
-import com.nxredux.mobile.ui.keyboard.buttonFocus
 
 /**
  * NX-styled one-line text prompt (Rename Rom, New Collection): a text field in the shared modal frame that takes focus
@@ -39,10 +38,9 @@ import com.nxredux.mobile.ui.keyboard.buttonFocus
 fun NxTextPrompt(title: String, value: String, onValueChange: (String) -> Unit, onConfirm: () -> Unit, onCancel: () -> Unit, buttonFocus: Int = -1) {
     val keyboard = LocalPromptKeyboard.current
     keyboard.entry?.let { entry ->
-        // The NX keyboard types: the field is drawn from its entry, and the box's buttons answer past the keyboard.
+        // The NX keyboard types: the field is drawn from its entry; its Done key confirms, a tap outside cancels.
         NxModal(
-            caption = title, kind = ModalKind.PROMPT, confirmLabel = keyboard.confirmLabel, onButton = { keyboard.answer(if (it == NxButton.B) NxButton.B else NxButton.A) },
-            buttonFocus = entry.buttonFocus(),
+            caption = title, kind = ModalKind.PROMPT, actions = false, onButton = { keyboard.answer(if (it == NxButton.B) NxButton.B else NxButton.A) },
         ) {
             NxEntryField(
                 entry.fields[0].value, entry.fields[0].password, entry.cursor, entry.focus == EntryFocus.Field, onTap = { keyboard.tapField(0) },

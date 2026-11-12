@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.achievements.RA_SCREENSHOT_FOLDER
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -50,13 +51,16 @@ fun RaSettingsScreen(
     }
 }
 
+/** Under the RetroAchievements sign-in's fields: the password buys a token (RaController.login) and only that is kept. */
+internal const val RA_PASSWORD_NOTE = "Your password is only used to sign in. It is never stored."
+
 /** The settings page's sign-in prompt and confirm, whichever is open. */
 @Composable
 internal fun RaSettingsDialogs(screen: Screen.RaSettings, state: AppState, onHint: (NxButton) -> Unit) {
     if (screen.signingIn) {
         NxSignInPrompt(
             screen.draftUser, screen.draftPassword, state::raDraftUser, state::raDraftPassword,
-            onConfirm = { onHint(NxButton.A) }, onCancel = { onHint(NxButton.B) },
+            onConfirm = { onHint(NxButton.A) }, onCancel = { onHint(NxButton.B) }, note = RA_PASSWORD_NOTE,
         )
     }
     screen.confirm?.let { c ->
@@ -113,6 +117,8 @@ internal fun raSettingInfo(row: RaSettingsRow): SettingText = when (row.kind) {
     RaSettingKind.NOTIFICATIONS -> quiet("Show unlock and progress notices in games")
     RaSettingKind.NOTIFICATION_SECONDS -> quiet("How long achievement notices stay")
     RaSettingKind.PROGRESS_SECONDS -> quiet("How long a progress notice stays")
+    RaSettingKind.UNLOCK_SOUND -> quiet("Play a chime when an achievement unlocks")
+    RaSettingKind.UNLOCK_SCREENSHOT -> quiet("Save the game's picture when an achievement unlocks, to Pictures/$RA_SCREENSHOT_FOLDER")
     RaSettingKind.SORT_ORDER -> quiet("How achievements are sorted, here and in the in-game menu")
     RaSettingKind.RESET_ACCOUNT -> SettingText(
         "Forgets unsynced unlocks",

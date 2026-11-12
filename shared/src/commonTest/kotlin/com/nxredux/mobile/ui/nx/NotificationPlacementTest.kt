@@ -23,6 +23,11 @@ class NotificationPlacementTest {
         assertEquals(Alignment.TopStart to Alignment.BottomStart, p.pill to p.toasts)
     }
 
+    @Test fun inPortraitOverThePictureTheCornersEvenWithAPad() {
+        assertEquals(NxNotificationPlacement.CORNERS, nxNotificationPlacement(overlayPadShown = true, onPicture = true))
+        assertEquals(NxNotificationPlacement.CORNERS, nxNotificationPlacement(overlayPadShown = false, onPicture = true))
+    }
+
     // A cutout on one side only would pad the column off centre, into the far row ([nxTopCentreMaxWidth] already keeps
     // both rows' symmetric inset): top-centre keeps only the vertical safe sides, so it stays centred on the screen.
     @Test fun topCentreIsNotInsetSideways() {

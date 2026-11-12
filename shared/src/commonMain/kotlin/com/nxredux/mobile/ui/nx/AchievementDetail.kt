@@ -44,8 +44,8 @@ internal fun achievementBadgeSize(available: Dp, textHeight: Dp): Dp =
 /**
  * One achievement in full, NX Redux style: a centred column with the badge ([badgePath], the locked variant while
  * locked), the bold name, the description, then dim lines for points, when it was unlocked or a locked one's progress
- * (no bare state word: the badge shows it, [achievementStateLine]), unlock rate, type and whether its notifications are
- * muted. Sizes are the shared roles of the list label of the space it
+ * (no bare state word: the badge shows it, [achievementStateLine]), unlock rate and whether its notifications are
+ * muted, then its type as a small pill. Sizes are the shared roles of the list label of the space it
  * gets: the name a headline, the description and the info lines the secondary size. The text keeps its size and the
  * badge takes the height left (up to [AchievementBadgeMax]), so the page fits without scrolling; it only scrolls where
  * even the smallest badge does not fit. Shared by the game list's achievements panel and the Tools achievement browser
@@ -73,8 +73,12 @@ fun AchievementDetail(a: RaAchievement, badgePath: String?, muted: Boolean, modi
             DetailLine("${a.points} points", colors.hint, body, align = align)
             stateLine(a)?.let { DetailLine(it, colors.hint, body, align = align) }
             DetailLine("${raRarityPercent(a.rarity)}% unlock rate", colors.hint, body, align = align)
-            a.type?.let { DetailLine("[${it.label}]", colors.hint, body, align = align) }
             if (muted) DetailLine("Muted", colors.hint, body, align = align)
+            // The type is a tag, not a sentence: a hollow pill under the lines, as the list's points.
+            a.type?.let {
+                Spacer(Modifier.height(8.dp))
+                NxCountPill(it.label, lit = false, fontSize = body * 0.85f)
+            }
         }
         val scroll = rememberScrollState()
         // A long description fades where more scrolls in (the lists' cue).

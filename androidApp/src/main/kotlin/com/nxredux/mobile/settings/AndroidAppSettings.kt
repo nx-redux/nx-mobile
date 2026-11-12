@@ -120,6 +120,14 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = prefs.getInt(KEY_RA_PROGRESS_SECONDS, 1).coerceIn(0, 5)
         set(value) = prefs.edit { putInt(KEY_RA_PROGRESS_SECONDS, value) }
 
+    override var raUnlockSound: Boolean
+        get() = prefs.getBoolean(KEY_RA_UNLOCK_SOUND, true)
+        set(value) = prefs.edit { putBoolean(KEY_RA_UNLOCK_SOUND, value) }
+
+    override var raUnlockScreenshot: Boolean
+        get() = prefs.getBoolean(KEY_RA_UNLOCK_SCREENSHOT, false)
+        set(value) = prefs.edit { putBoolean(KEY_RA_UNLOCK_SCREENSHOT, value) }
+
     override var raSortOrder: RaSortOrder
         get() = prefs.getString(KEY_RA_SORT_ORDER, null)?.let { runCatching { RaSortOrder.valueOf(it) }.getOrNull() } ?: RaSortOrder.DEFAULT
         set(value) = prefs.edit { putString(KEY_RA_SORT_ORDER, value.name) }
@@ -396,6 +404,8 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_RA_NOTIFICATIONS = "ra_notifications"
         private const val KEY_RA_NOTIFICATION_SECONDS = "ra_notification_seconds"
         private const val KEY_RA_PROGRESS_SECONDS = "ra_progress_seconds"
+        private const val KEY_RA_UNLOCK_SOUND = "ra_unlock_sound"
+        private const val KEY_RA_UNLOCK_SCREENSHOT = "ra_unlock_screenshot"
         private const val KEY_RA_SORT_ORDER = "ra_sort_order"
         private const val KEY_SS_USERNAME = "ss_username"
         private const val KEY_SS_PASSWORD = "ss_password"

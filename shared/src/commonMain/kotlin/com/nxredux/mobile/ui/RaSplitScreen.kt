@@ -39,6 +39,21 @@ internal fun RaSplitScreen(state: AppState, s: Screen, page: @Composable () -> U
     if (parent?.screen is Screen.RetroAchievements && c != null) RaPageShare(c, panes) else panes(SETTINGS_SPLIT_LEFT)
 }
 
+/**
+ * The RetroAchievements [page] itself on a split window ([split]) with the signed-in player's summary beside it
+ * ([RaProfilePane]): there as soon as the page opens, the pad staying on the page's words. One whole page while there
+ * is no summary (signed out, not read yet), on a narrow window, and while a sync, sign-in or reset fills it.
+ */
+@Composable
+internal fun RaPageWithProfile(state: AppState, c: RaController, split: Boolean, page: @Composable () -> Unit) {
+    val profile by state.raProfile.collectAsState()
+    val ra by c.state.collectAsState()
+    val p = profile
+    if (!split || p == null || raProgressLine(ra) != null) return page()
+    // Beside the page the summary is a preview of its Profile word (A opens it, where a long one scrolls).
+    RaPageShare(c) { share -> SplitPanes(left = page, right = { RaProfilePane(p) }, leftShare = share, divider = false) }
+}
+
 /** [panes] with the left pane's share wide enough for the page's word block, head included ([raSplitLeftWidth]). */
 @Composable
 private fun RaPageShare(c: RaController, panes: @Composable (Float) -> Unit) {
@@ -78,6 +93,7 @@ internal fun RaLevelPage(state: AppState, s: Screen, selection: State<ListSelect
         is Screen.RaGames -> WithIndex(selection) { RaGamesScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, split = split) }
         is Screen.RaGame -> c?.let { WithIndex(selection) { RaGameScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton, split = split) } } ?: Box(Modifier.fillMaxSize())
         is Screen.RaAchievement -> c?.let { RaAchievementScreen(s, c, onHint = state::onButton, split = split) } ?: Box(Modifier.fillMaxSize())
+        Screen.RaProfile -> RaProfileScreen(state, onHint = state::onButton, split = split)
         is Screen.RaSettings -> {
             val truncated by state.settingInfoTruncated.collectAsState()   // the selected row's cut-off line: its X Info hint
             WithIndex(selection) {

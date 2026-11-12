@@ -234,6 +234,14 @@ interface AppSettings {
     var raNotificationSeconds: Int
     /** Progress pill duration, 0 (off)..5 s. */
     var raProgressSeconds: Int
+    /** A chime when an achievement unlocks in a game (default on). */
+    var raUnlockSound: Boolean
+        get() = true
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /** The game's picture saved when an achievement unlocks (default off). */
+    var raUnlockScreenshot: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
     var raSortOrder: com.nxredux.mobile.achievements.RaSortOrder
 
     // ScreenScraper (artwork fetching): the user's optional login; "" / null = none.

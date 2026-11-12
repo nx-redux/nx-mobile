@@ -8,6 +8,12 @@ object RaRequests {
     /** RCHEEVOS_VERSION_STRING at the pin; `l=` on startsession. */
     const val RCHEEVOS_VERSION = "12.2.1"
 
+    /**
+     * How every request names this client to RetroAchievements, in the form its server reads: the client and its
+     * [version], the [os] ("Android 14"), then the rcheevos the requests are built to.
+     */
+    fun userAgent(version: String, os: String) = "NXRedux/$version ($os) rcheevos/$RCHEEVOS_VERSION"
+
     fun login2(user: String, token: String) = "r=login2&u=${encode(user)}&t=${encode(token)}"
     fun loginWithPassword(user: String, password: String) = "r=login2&u=${encode(user)}&p=${encode(password)}"
     fun gameId(hash: String) = "r=gameid&m=${encode(hash)}"
