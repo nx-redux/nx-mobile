@@ -53,7 +53,6 @@ fun NxSignInPrompt(
         // The NX keyboard types: both fields drawn from its entry, the caret in the active one; the box's buttons answer past it.
         NxModal(
             caption = caption, kind = ModalKind.PROMPT, confirmLabel = "Sign in", buttonFocus = entry.buttonFocus(),
-            confirmKey = NxButton.START, cancelKey = NxButton.B,
             onButton = { keyboard.answer(if (it == NxButton.B) NxButton.B else NxButton.A) },
         ) {
             // Above the keyboard the box can be too short for both fields: the one being typed is scrolled into view.

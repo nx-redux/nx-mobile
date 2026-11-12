@@ -39,15 +39,19 @@ import com.nxredux.mobile.ui.nx.nxTextScale
 /**
  * What the buttons do on the keyboard right now, for its hint row: on a key, typing and the shortcuts; in the field,
  * the cursor; on the box's buttons, A as that button's word ([confirmLabel] or Cancel). START (done) and B (cancel)
- * are on the box's own words ([com.nxredux.mobile.ui.nx.NxModal]), not here.
+ * answer the box from anywhere, so they are in every row: the box's own buttons carry no glyphs.
  */
-fun keyboardHints(entry: TextEntry, confirmLabel: String): List<Hint> = when (val f = entry.focus) {
-    is EntryFocus.Keys -> listOf(Hint(NxButton.A, "Type"), Hint(NxButton.X, "Delete"), Hint(NxButton.Y, "Space"))
-    // A password's field: A shows or hides it.
-    EntryFocus.Field -> if (entry.fields[entry.active].password) listOf(
-        Hint(NxButton.LEFT, "Move cursor"), Hint(NxButton.A, if (entry.reveal) "Hide" else "Show"), Hint(NxButton.X, "Delete"), Hint(NxButton.Y, "Space"),
-    ) else listOf(Hint(NxButton.LEFT, "Move cursor"), Hint(NxButton.X, "Delete"), Hint(NxButton.Y, "Space"))
-    is EntryFocus.Button -> listOf(Hint(NxButton.A, if (f.index == 0) confirmLabel else "Cancel"))
+fun keyboardHints(entry: TextEntry, confirmLabel: String): List<Hint> {
+    val answers = listOf(Hint(NxButton.START, confirmLabel), Hint(NxButton.B, "Cancel"))
+    return when (val f = entry.focus) {
+        is EntryFocus.Keys -> listOf(Hint(NxButton.A, "Type"), Hint(NxButton.X, "Delete"), Hint(NxButton.Y, "Space")) + answers
+        // A password's field: A shows or hides it.
+        EntryFocus.Field -> (if (entry.fields[entry.active].password) listOf(
+            Hint(NxButton.LEFT, "Move cursor"), Hint(NxButton.A, if (entry.reveal) "Hide" else "Show"), Hint(NxButton.X, "Delete"), Hint(NxButton.Y, "Space"),
+        ) else listOf(Hint(NxButton.LEFT, "Move cursor"), Hint(NxButton.X, "Delete"), Hint(NxButton.Y, "Space"))) + answers
+        // On a button A is that button's word: the other answer keeps its own.
+        is EntryFocus.Button -> if (f.index == 0) listOf(Hint(NxButton.A, confirmLabel), answers[1]) else listOf(Hint(NxButton.A, "Cancel"), answers[0])
+    }
 }
 
 private fun label(key: Key, entry: TextEntry): String = when (key) {

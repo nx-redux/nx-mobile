@@ -60,9 +60,9 @@ private const val PASSWORD_DOT = '•'
 
 /**
  * A prompt's field while the NX keyboard types it: the text as the keyboard edits it (dots for a [password]), no
- * platform text field, so Android's keyboard never opens. A blinking caret at [cursor] (null: not the active field);
- * the selection outline while the pad's highlight is in it ([focused]); it scrolls to keep the caret in sight. A tap
- * makes it the field typed in.
+ * platform text field, so Android's keyboard never opens. A blinking caret at [cursor] (null: not the active field)
+ * and an outline round the field typed in; the outline at full strength while the pad's highlight is in it
+ * ([focused]); it scrolls to keep the caret in sight. A tap makes it the field typed in.
  */
 @Composable
 fun NxEntryField(
@@ -92,7 +92,7 @@ fun NxEntryField(
     }
     Row(
         modifier.fillMaxWidth().background(colors.fieldGround, shape)
-            .then(if (focused) Modifier.border(2.dp, colors.listText, shape) else Modifier)
+            .then(if (focused) Modifier.border(2.dp, colors.listText, shape) else if (cursor != null) Modifier.border(2.dp, colors.inkOpen, shape) else Modifier)
             .pointerInput(onTap) { detectTapGestures { onTap() } }
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

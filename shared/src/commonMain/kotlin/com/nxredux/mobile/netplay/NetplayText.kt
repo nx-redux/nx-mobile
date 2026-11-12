@@ -51,6 +51,7 @@ object NetplayText {
     /** The Connection row's third value, GBA games only. */
     const val CABLE_LINK = "Cable Link over Wi-Fi"
     const val CABLE_LINK_TAB = "Cable Link"
+    const val CABLE_LINK_NOTE = "Cable Link runs mGBA on both devices"
     /** A sent or received game's progress on the waiting pages. */
     fun transfer(sending: Boolean, done: Long, total: Long): String {
         val percent = if (total <= 0) 0 else (done * 100 / total).coerceIn(0, 100)

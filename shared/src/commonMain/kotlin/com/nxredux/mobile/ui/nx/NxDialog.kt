@@ -37,10 +37,10 @@ fun NxDialog(
 }
 
 /**
- * A choice among [choices], side by side as setup's buttons ([SetupButtons]: the words, the highlighted one on the
- * accent pill) in the shared modal frame: a tap on one calls [onChoose] with its index, a tap on the scrim (or B)
- * [onCancel]. [selected] is the highlighted button, held by the caller so a pad-driven host moves it with its own input
- * (LEFT/RIGHT or UP/DOWN, A [onChoose]); a menu, it has no hints. [text], when not blank, sits above the buttons.
+ * A choice among [choices], side by side on the panel under the card ([NxModalActionRow]: the first the accent's, the
+ * rest outlined) in the shared modal frame: a tap on one calls [onChoose] with its index, a tap on the scrim (or B)
+ * [onCancel]. [selected] is the one the pad is on (its ring), held by the caller so a pad-driven host moves it with its
+ * own input (LEFT/RIGHT or UP/DOWN, A [onChoose]); a menu, it has no hints. [text], when not blank, is the card's.
  */
 @Composable
 fun NxChoiceDialog(title: String, text: String, choices: List<String>, selected: Int, onChoose: (Int) -> Unit, onCancel: () -> Unit) {
@@ -48,11 +48,8 @@ fun NxChoiceDialog(title: String, text: String, choices: List<String>, selected:
     NxModal(
         caption = title, kind = ModalKind.MENU,
         onButton = { if (it == NxButton.B) onCancel() else if (it == NxButton.A && selected in choices.indices) onChoose(selected) },
+        below = { NxModalActionRow(choices, selected, onPress = onChoose) },
     ) {
-        if (text.isNotBlank()) {
-            Text(text, color = colors.listText, fontFamily = LocalNxFont.current, fontSize = nxDialogBody())
-            Spacer(Modifier.height(16.dp))
-        }
-        SetupButtons(choices, 0, selected, NxTextSizes.listLabel(NxListPitch) * nxTextScale(), onSelect = {}, onOpen = onChoose, rest = LocalNxColors.current.listText)
+        if (text.isNotBlank()) Text(text, color = colors.listText, fontFamily = LocalNxFont.current, fontSize = nxDialogBody())
     }
 }
