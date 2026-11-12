@@ -198,6 +198,30 @@ class AppStateKidsTest {
         assertEquals(all - MenuCategory.TOOLS, tabsOf(st))
     }
 
+    /** A play window: the menu shows Games beside Consoles, no Tools; the Games tab lists every game. */
+    @Test fun a_play_window_shows_the_games_tab_beside_consoles() = runTest {
+        val settings = MemorySettings()
+        val kids = KidsController(settings, Platform(SAT, 10 * 60))
+        assertIs<KidsMode.Open>(kids.mode.value)
+        val st = state(settings, kids)
+        st.load()
+        val tabs = tabsOf(st)
+        assertTrue(MenuCategory.GAMES in tabs)
+        assertTrue(MenuCategory.CONSOLES in tabs)
+        assertFalse(MenuCategory.TOOLS in tabs)
+        assertEquals(tabs.indexOf(MenuCategory.HOME) + 1, tabs.indexOf(MenuCategory.GAMES))
+        st.selectTab(tabs.indexOf(MenuCategory.GAMES))
+        val games = assertIs<Screen.Games>(st.screen.value)
+        assertEquals(ListSource.AllGames, games.source)
+        assertTrue(games.entries.isNotEmpty())
+    }
+
+    /** Locked: the Kids tiles screen, not the menu, so no tab row and no Games tab. */
+    @Test fun kids_locked_shows_no_games_tab() = runTest {
+        val (st) = lockedState()
+        assertSame(Screen.KidsHome, st.screen.value)
+    }
+
     @Test fun parentShowsTools() = runTest {
         val settings = MemorySettings()
         val platform = Platform(MON, 10 * 60)
