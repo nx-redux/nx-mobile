@@ -965,7 +965,7 @@ class AppStateTest {
         state.select(state.selection.value.count - 1); state.onButton(NxButton.A)   // Continue
         assertEquals(OnboardingStep.ACCENT, step(state))
         assertEquals(true, settings.padSkin); assertEquals(PadTheme.NX_OBSIDIAN, settings.padTheme)
-        assertEquals(false, settings.menuPageTitle); assertEquals(false, settings.menuButtonHints)
+        assertEquals(false, settings.menuPageTitle); assertEquals(true, settings.menuButtonHints)
         for ((_, c) in tabs) assertEquals(MenuStyle.LIST, MenuStyles.styleOf(settings.menuStyles, c))
         assertEquals(MenuStyle.BACKDROP, settings.gameListStyle)
     }
@@ -1015,11 +1015,11 @@ class AppStateTest {
     @Test fun the_page_title_and_hints_rows_flip_in_place() = runTest {
         val (state, settings) = atCustomise(controller = true)
         assertEquals(OnboardingStep.TITLE, step(state))
-        assertEquals(listOf("Page title" to "Show", "Button hints" to "Hide", "Continue" to null), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label to it.secondary })
+        assertEquals(listOf("Page title" to "Show", "Button hints" to "Show", "Continue" to null), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label to it.secondary })
         state.select(0); state.onButton(NxButton.A)
         assertEquals(false, settings.menuPageTitle)
         state.select(1); state.onButton(NxButton.RIGHT)
-        assertEquals(true, settings.menuButtonHints)
+        assertEquals(false, settings.menuButtonHints)
         assertEquals(OnboardingStep.TITLE, step(state))
         assertEquals(1, state.selection.value.index)                       // the row stays selected
         state.select(2); state.onButton(NxButton.A)
@@ -6167,7 +6167,7 @@ class AppStateTest {
         assertEquals(SettingsSection.MAIN_MENU, page.section)
         assertEquals("Layouts", page.section.label)   // the page's title
         assertEquals(
-            listOf("Home" to "Grid", "Consoles" to "List", "Collections" to "List", "Tools" to "List", "Game lists" to "List", "Title and hints" to "Title only",
+            listOf("Home" to "Grid", "Consoles" to "List", "Collections" to "List", "Tools" to "List", "Game lists" to "List", "Title and hints" to "Show",
                 "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Details", "Reset to defaults" to null),
             page.rows.map { it.label to it.secondary },
         )
@@ -6178,7 +6178,7 @@ class AppStateTest {
         assertEquals(listOf("Visible" to "Show", "Layout" to "List"), group(SettingsSection.LAYOUT_TOOLS))
         assertEquals(listOf("List art" to "Screenshot", "Backdrop art" to "3D box art", "Layout options" to "Show", "Layout" to "List"), group(SettingsSection.LAYOUT_GAME_LISTS))
         assertEquals(
-            listOf("Page title" to "Show", "Button hints" to "Hide"),
+            listOf("Page title" to "Show", "Button hints" to "Show"),
             group(SettingsSection.LAYOUT_TITLE_HINTS),
         )
         assertEquals(listOf("Layout" to "Full screen"), group(SettingsSection.LAYOUT_SWITCHER))
@@ -10159,7 +10159,7 @@ class AppStateTest {
         state.openSettings(SettingsSection.MAIN_MENU)
         // No Pinned row; Home first. Home, Collections and Tools are unset (their defaults: Minimal, Minimal, and Grid).
         assertEquals(
-            listOf("Home" to "Minimal", "Consoles" to "Grid", "Collections" to "Minimal", "Tools" to "Grid", "Game lists" to "List", "Title and hints" to "Title only",
+            listOf("Home" to "Minimal", "Consoles" to "Grid", "Collections" to "Minimal", "Tools" to "Grid", "Game lists" to "List", "Title and hints" to "Show",
                 "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Details", "Reset to defaults" to null),
             state.layoutsRows().map { it.label to it.secondary },
         )
@@ -10172,7 +10172,7 @@ class AppStateTest {
         assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS), styles.map { it.category })
         assertTrue(styles.all { it.enabled })
         assertEquals(1, rows.count { it.kind == SettingsKind.GAME_LIST_STYLE })
-        assertEquals(listOf("Show", "Show", "Show", "Show", "Show", "Minimal", "Show", "Grid", "Show", "Minimal", "Show", "Grid", "Screenshot", "3D box art", "Show", "List", "Show", "Hide", "Full screen"), rows.map { it.secondary })
+        assertEquals(listOf("Show", "Show", "Show", "Show", "Show", "Minimal", "Show", "Grid", "Show", "Minimal", "Show", "Grid", "Screenshot", "3D box art", "Show", "List", "Show", "Show", "Full screen"), rows.map { it.secondary })
     }
 
     @Test fun layouts_page_defaults_to_carousel_tools_grid_and_cycles_four_main_menu_styles() = runTest {
@@ -10450,7 +10450,7 @@ class AppStateTest {
         assertEquals(BackdropArt.BOX3D, settings.backdropArt)
         assertEquals(listOf(true, true, true, true), listOf(settings.showHomeTab, settings.showConsolesTab, settings.showCollectionsTab, settings.showToolsTab))
         assertEquals(true, settings.menuPageTitle)
-        assertEquals(false, settings.menuButtonHints)
+        assertEquals(true, settings.menuButtonHints)
         assertEquals(true, settings.menuExtraInfo)
         assertEquals(true, settings.menuHomeStats)
     }
@@ -10464,7 +10464,7 @@ class AppStateTest {
         fun page(section: SettingsSection) = state.openLayoutsPage(section).map { it.label to it.secondary }
         assertEquals(
             listOf(
-                "Home" to "Minimal", "Consoles" to "Carousel", "Collections" to "Minimal", "Tools" to "Grid", "Game lists" to "Carousel", "Title and hints" to "Title only",
+                "Home" to "Minimal", "Consoles" to "Carousel", "Collections" to "Minimal", "Tools" to "Grid", "Game lists" to "Carousel", "Title and hints" to "Show",
                 "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Details", "Reset to defaults" to null,
             ),
             page(SettingsSection.MAIN_MENU),
@@ -10484,7 +10484,7 @@ class AppStateTest {
             page(SettingsSection.LAYOUT_GAME_LISTS),
         )
         assertEquals(
-            listOf("Page title" to "Show", "Button hints" to "Hide"),
+            listOf("Page title" to "Show", "Button hints" to "Show"),
             page(SettingsSection.LAYOUT_TITLE_HINTS),
         )
         assertEquals(listOf("Layout" to "Full screen"), page(SettingsSection.LAYOUT_SWITCHER))

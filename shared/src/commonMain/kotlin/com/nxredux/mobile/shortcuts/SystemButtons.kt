@@ -25,6 +25,9 @@ data class PhysicalKey(val keyCode: Int, val scanCode: Int, val device: String =
     }
 }
 
+/** What a pad says of its own buttons: whether it has a SELECT and a START key ([SystemButtons.standIn] fills in for one it lacks). */
+data class PadKeys(val hasSelect: Boolean, val hasStart: Boolean)
+
 /** Every model's overrides ([bound]: a role on a key other than its standard one). */
 data class SystemButtonMap(val bound: Map<String, Map<SystemRole, PhysicalKey>> = emptyMap())
 
@@ -56,11 +59,33 @@ object SystemButtons {
 
     fun reset(map: SystemButtonMap, model: String): SystemButtonMap = map.copy(bound = map.bound - model)
 
-    /** The key code this press should become: its role's standard code when it's bound on [model], null to leave it alone. */
-    fun translate(map: SystemButtonMap, model: String, keyCode: Int, scanCode: Int): Int? {
-        if (map.bound[model] == null) return null
-        val role = roleOf(map, model, PhysicalKey.of(keyCode, scanCode)) ?: return null
-        return role.keyCode.takeIf { it != keyCode }
+    /**
+     * The role a pad's key stands in for while nothing is bound: many pads send SELECT as Back and have no SELECT key,
+     * a few send START as the Menu key; on a pad with its own START the Menu key is MENU. On a pad with its own SELECT
+     * a Back is a separate button (a Retroid handheld's): MENU, as B already goes back. An AYANEO handheld's small button beside its logo
+     * button is MENU ([KeyCodes.AYANEO_EQ]): its pad has no mode button.
+     */
+    fun standIn(key: PhysicalKey, keys: PadKeys): SystemRole? = when {
+        key.keyCode == KeyCodes.BACK -> if (keys.hasSelect) SystemRole.MENU else SystemRole.SELECT
+        key.keyCode == KeyCodes.MENU -> if (keys.hasStart) SystemRole.MENU else SystemRole.START
+        key.keyCode == KeyCodes.AYANEO_EQ || (key.keyCode == 0 && key.scanCode == KeyCodes.AYANEO_EQ) -> SystemRole.MENU
+        else -> null
+    }
+
+    /**
+     * The key code this press should become, null to leave it alone: its role's standard code when it's bound on
+     * [model]; else, with the pad's [keys], the role it stands in for ([standIn]) unless that role is bound to
+     * another button there (a bound role keeps to its button).
+     */
+    fun translate(map: SystemButtonMap, model: String, keyCode: Int, scanCode: Int, keys: PadKeys? = null): Int? {
+        val bound = map.bound[model]
+        val key = PhysicalKey.of(keyCode, scanCode)
+        if (bound != null) {
+            val role = roleOf(map, model, key)
+            if (role != null) return role.keyCode.takeIf { it != keyCode }
+        }
+        val role = keys?.let { standIn(key, it) } ?: return null
+        return role.keyCode.takeIf { bound?.containsKey(role) != true }
     }
 
     /** [translate] for a press from [device], which is no pad: the role some pad model keeps on that device's button. */
