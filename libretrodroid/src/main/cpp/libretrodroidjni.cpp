@@ -1125,6 +1125,20 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setPreferV
     LibretroDroid::getInstance().setPreferVulkan(enabled);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setVulkanDriver(
+    JNIEnv* env,
+    jclass obj,
+    jstring driverDir,
+    jstring libraryName,
+    jstring hookLibDir,
+    jstring tmpDir
+) {
+    LibretroDroid::getInstance().setVulkanDriver(JniString(env, driverDir).stdString(),
+                                                 JniString(env, libraryName).stdString(),
+                                                 JniString(env, hookLibDir).stdString(),
+                                                 JniString(env, tmpDir).stdString());
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setVulkanSwapchainFrames(
     JNIEnv* env,
     jclass obj,

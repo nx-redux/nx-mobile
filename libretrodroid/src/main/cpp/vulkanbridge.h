@@ -37,6 +37,7 @@
 
 #include "libretro.h"
 #include "libretro_vulkan.h"
+#include "vulkandispatch.h"
 #include "vulkanframe.h"
 
 struct AImageReader;
@@ -87,13 +88,26 @@ public:
     void setMaxFrame(unsigned width, unsigned height) { maxFrameWidth = width; maxFrameHeight = height; }
     // The core renders into a swapchain on the bridge's surface (Dolphin): frames are bounded by the surface instead.
     void setSwapchainFrames(bool value) { swapchainFrames = value; }
+    // The next initialize() loads [library] from [dir] through libadrenotools instead of the system driver; empty [dir]
+    // and [library]: the system driver. [hookLibDir]: the app's nativeLibraryDir; [tmpDir]: patched libraries below
+    // API 29. One-shot like setSwapchainFrames: destroy() forgets it. A custom driver that fails to load fails
+    // initialize(); the host decides whether to retry on the system driver.
+    void setDriver(const std::string& dir, const std::string& library, const std::string& hookLibDir,
+                   const std::string& tmpDir);
 
 private:
     std::atomic<unsigned> maxFrameWidth { 0 };
     std::atomic<unsigned> maxFrameHeight { 0 };
     bool swapchainFrames = false;
+    std::string driverDir;
+    std::string driverLibrary;
+    std::string driverHookLibDir;
+    std::string driverTmpDir;
 
     VulkanBridge() = default;
+
+    // Every Vulkan call the bridge makes, from the loader this session runs on (initialize() to destroy()).
+    VulkanDispatch vk;
 
     struct Slot {
         AHardwareBuffer* buffer = nullptr;
@@ -109,6 +123,8 @@ private:
     static constexpr unsigned SYNC_COUNT = 2;
 
     bool createInstance();
+    bool bindInstance();   // the instance-level table for [instance]; false when a required entry point is missing
+    void logDriver();
     bool createSurface(unsigned width, unsigned height);
     bool createDevice();
     bool createFrameResources();
@@ -186,9 +202,6 @@ private:
     bool useSyncFd = false;
     bool queueFamilyForeign = false;
     bool loggedFirstFrame = false;
-
-    PFN_vkGetAndroidHardwareBufferPropertiesANDROID pGetAhbProperties = nullptr;
-    PFN_vkGetSemaphoreFdKHR pGetSemaphoreFd = nullptr;
 };
 
 }

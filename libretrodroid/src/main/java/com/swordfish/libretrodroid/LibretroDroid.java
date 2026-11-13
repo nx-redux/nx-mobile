@@ -126,6 +126,13 @@ public class LibretroDroid {
     public static native void setPreferVulkan(boolean enabled);
     /** The next core renders into a swapchain on the bridge's surface (Dolphin): its frames are bounded by that surface. Set before create(). */
     public static native void setVulkanSwapchainFrames(boolean enabled);
+    /**
+     * The next core's Vulkan bridge loads libraryName from driverDir through libadrenotools instead of the system driver
+     * (both null: the system driver). hookLibDir: the app's nativeLibraryDir (the hook libraries); tmpDir: a writable
+     * directory for patched libraries below API 29. A driver that fails to load fails the launch with
+     * ERROR_GL_NOT_COMPATIBLE: the host decides whether to retry on the system driver. Set before create().
+     */
+    public static native void setVulkanDriver(String driverDir, String libraryName, String hookLibDir, String tmpDir);
     /** Offer libretro video views to the next core loaded. */
     public static native void setVideoViewsEnabled(boolean enabled);
     /** The core's video view map, 6 ints per view (x, y, width, height, screen, eye); empty when there is none. */

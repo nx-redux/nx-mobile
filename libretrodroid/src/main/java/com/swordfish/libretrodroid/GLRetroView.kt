@@ -396,6 +396,13 @@ class GLRetroView(
         LibretroDroid.setGlDebugOutput(data.glDebugOutput)
         LibretroDroid.setPreferVulkan(data.preferVulkan)
         LibretroDroid.setVulkanSwapchainFrames(data.vulkanSwapchainFrames)
+        // The hooks must come from nativeLibraryDir (libadrenotools); the temp directory is only used below API 29.
+        LibretroDroid.setVulkanDriver(
+            data.vulkanDriverDir,
+            data.vulkanDriverLibrary,
+            context.applicationInfo.nativeLibraryDir,
+            java.io.File(context.cacheDir, "gpu_driver_tmp").absolutePath + "/",
+        )
         LibretroDroid.setVideoViewsEnabled(data.videoViews)
         LibretroDroid.setKeepCoreLoaded(data.keepCoreLoaded)
         LibretroDroid.setUsername(data.username)

@@ -450,6 +450,11 @@ void LibretroDroid::create(
     preferVulkan = false;
     VulkanBridge::get().setSwapchainFrames(vulkanSwapchainFrames);
     vulkanSwapchainFrames = false;
+    VulkanBridge::get().setDriver(vulkanDriverDir, vulkanDriverLibrary, vulkanDriverHookLibDir, vulkanDriverTmpDir);
+    vulkanDriverDir.clear();
+    vulkanDriverLibrary.clear();
+    vulkanDriverHookLibDir.clear();
+    vulkanDriverTmpDir.clear();
     Environment::getInstance().setPreferVulkan(offerVulkan);
 
     openglESVersion = GLESVersion;

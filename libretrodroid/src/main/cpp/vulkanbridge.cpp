@@ -15,6 +15,8 @@
  *     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+// No prototypes: every Vulkan call goes through the dispatch table (vk), and liblibretrodroid does not link libvulkan.
+#define VK_NO_PROTOTYPES 1
 #include "vulkanbridge.h"
 
 #include <media/NdkImageReader.h>
@@ -93,35 +95,58 @@ VulkanBridge& VulkanBridge::get() {
 }
 
 bool VulkanBridge::isSupported() {
+    // Always the system driver: whether a custom one loads is decided per launch, by initialize().
     static const bool supported = [] {
+        VulkanDispatch vk;
+        if (!VulkanDispatch::loadSystem(vk)) {
+            LOGI("Vulkan bridge: unsupported (no Vulkan loader)");
+            return false;
+        }
         VkApplicationInfo app { VK_STRUCTURE_TYPE_APPLICATION_INFO };
         app.apiVersion = VK_API_VERSION_1_1;
         VkInstanceCreateInfo info { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
         info.pApplicationInfo = &app;
         VkInstance probe = VK_NULL_HANDLE;
-        if (vkCreateInstance(&info, nullptr, &probe) != VK_SUCCESS) {
+        if (vk.createInstance(&info, nullptr, &probe) != VK_SUCCESS) {
             LOGI("Vulkan bridge: unsupported (no Vulkan 1.1 instance)");
+            vk.close();
+            return false;
+        }
+        vk.bindInstance(probe);
+        if (const char* missing = vk.missingInstanceFunction()) {
+            LOGI("Vulkan bridge: unsupported (loader lacks %s)", missing);
+            if (vk.destroyInstance != nullptr) vk.destroyInstance(probe, nullptr);
+            vk.close();
             return false;
         }
         uint32_t count = 0;
-        vkEnumeratePhysicalDevices(probe, &count, nullptr);
+        vk.enumeratePhysicalDevices(probe, &count, nullptr);
         std::vector<VkPhysicalDevice> gpus(count);
-        if (count > 0) vkEnumeratePhysicalDevices(probe, &count, gpus.data());
+        if (count > 0) vk.enumeratePhysicalDevices(probe, &count, gpus.data());
         bool found = false;
         if (!gpus.empty()) {
             uint32_t extCount = 0;
-            vkEnumerateDeviceExtensionProperties(gpus[0], nullptr, &extCount, nullptr);
+            vk.enumerateDeviceExtensionProperties(gpus[0], nullptr, &extCount, nullptr);
             std::vector<VkExtensionProperties> exts(extCount);
-            vkEnumerateDeviceExtensionProperties(gpus[0], nullptr, &extCount, exts.data());
+            vk.enumerateDeviceExtensionProperties(gpus[0], nullptr, &extCount, exts.data());
             for (const auto& ext : exts) {
                 if (strcmp(ext.extensionName, "VK_ANDROID_external_memory_android_hardware_buffer") == 0) found = true;
             }
         }
-        vkDestroyInstance(probe, nullptr);
+        vk.destroyInstance(probe, nullptr);
+        vk.close();
         LOGI("Vulkan bridge: %s", found ? "supported" : "unsupported (no GPU with AHardwareBuffer import)");
         return found;
     }();
     return supported;
+}
+
+void VulkanBridge::setDriver(const std::string& dir, const std::string& library, const std::string& hookLibDir,
+                             const std::string& tmpDir) {
+    driverDir = dir;
+    driverLibrary = library;
+    driverHookLibDir = hookLibDir;
+    driverTmpDir = tmpDir;
 }
 
 void VulkanBridge::setNegotiation(const retro_hw_render_context_negotiation_interface_vulkan* value) {
@@ -148,18 +173,16 @@ bool VulkanBridge::createInstance() {
 
     // Android 9+ loaders are 1.1; 8.x is 1.0 (no vkEnumerateInstanceVersion).
     uint32_t loaderVersion = VK_API_VERSION_1_0;
-    auto enumerateVersion = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(
-        vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkEnumerateInstanceVersion"));
-    if (enumerateVersion != nullptr) enumerateVersion(&loaderVersion);
+    if (vk.enumerateInstanceVersion != nullptr) vk.enumerateInstanceVersion(&loaderVersion);
     // libretro_vulkan.h: a frontend may bump the instance version; 1.1 is what Android's AHB path is specified on.
     uint32_t wanted = std::min(loaderVersion, (uint32_t) VK_API_VERSION_1_1);
     if (app.apiVersion < wanted) app.apiVersion = wanted;
     instanceApiVersion = app.apiVersion;
 
     uint32_t count = 0;
-    vkEnumerateInstanceExtensionProperties(nullptr, &count, nullptr);
+    vk.enumerateInstanceExtensionProperties(nullptr, &count, nullptr);
     std::vector<VkExtensionProperties> available(count);
-    vkEnumerateInstanceExtensionProperties(nullptr, &count, available.data());
+    vk.enumerateInstanceExtensionProperties(nullptr, &count, available.data());
     instanceExtensions.clear();
     for (const char* name : WANTED_INSTANCE_EXTENSIONS) {
         for (const auto& p : available) {
@@ -172,10 +195,10 @@ bool VulkanBridge::createInstance() {
     }
 
     if (negotiation != nullptr && negotiation->interface_version >= 2 && negotiation->create_instance != nullptr) {
-        instance = negotiation->create_instance(vkGetInstanceProcAddr, &app, &createInstanceWrapper, this);
+        instance = negotiation->create_instance(vk.getInstanceProcAddr, &app, &createInstanceWrapper, this);
         ownsInstance = true;
         LOGI("Vulkan bridge: instance from the core's create_instance: %p", (void*) instance);
-        return instance != VK_NULL_HANDLE;
+        return instance != VK_NULL_HANDLE && bindInstance();
     }
 
     std::vector<const char*> names;
@@ -184,11 +207,20 @@ bool VulkanBridge::createInstance() {
     info.pApplicationInfo = &app;
     info.enabledExtensionCount = (uint32_t) names.size();
     info.ppEnabledExtensionNames = names.data();
-    VkResult r = vkCreateInstance(&info, nullptr, &instance);
+    VkResult r = vk.createInstance(&info, nullptr, &instance);
     LOGI("Vulkan bridge: vkCreateInstance api %u.%u (loader %u.%u): %s", VK_VERSION_MAJOR(app.apiVersion),
          VK_VERSION_MINOR(app.apiVersion), VK_VERSION_MAJOR(loaderVersion), VK_VERSION_MINOR(loaderVersion),
          resultName(r));
-    return r == VK_SUCCESS;
+    return r == VK_SUCCESS && bindInstance();
+}
+
+bool VulkanBridge::bindInstance() {
+    vk.bindInstance(instance);
+    if (const char* missing = vk.missingInstanceFunction()) {
+        LOGE("Vulkan bridge: the %s loader lacks %s", vk.custom ? "custom driver's" : "system", missing);
+        return false;
+    }
+    return true;
 }
 
 VkInstance VulkanBridge::createInstanceWrapper(void* opaque, const VkInstanceCreateInfo* createInfo) {
@@ -200,7 +232,7 @@ VkInstance VulkanBridge::createInstanceWrapper(void* opaque, const VkInstanceCre
     info.enabledExtensionCount = (uint32_t) names.size();
     info.ppEnabledExtensionNames = names.data();
     VkInstance result = VK_NULL_HANDLE;
-    VkResult r = vkCreateInstance(&info, nullptr, &result);
+    VkResult r = self->vk.createInstance(&info, nullptr, &result);
     LOGI("Vulkan bridge: create_instance wrapper: %s", resultName(r));
     return r == VK_SUCCESS ? result : VK_NULL_HANDLE;
 }
@@ -221,12 +253,9 @@ bool VulkanBridge::createSurface(unsigned width, unsigned height) {
         return false;
     }
 
-    auto createSurface = reinterpret_cast<PFN_vkCreateAndroidSurfaceKHR>(
-        vkGetInstanceProcAddr(instance, "vkCreateAndroidSurfaceKHR"));
-    if (createSurface == nullptr) return false;
     VkAndroidSurfaceCreateInfoKHR info { VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR };
     info.window = window;
-    VkResult r = createSurface(instance, &info, nullptr, &surface);
+    VkResult r = vk.createAndroidSurfaceKHR(instance, &info, nullptr, &surface);
     LOGI("Vulkan bridge: offscreen surface %ux%u (AImageReader): %s", width, height, resultName(r));
     return r == VK_SUCCESS;
 }
@@ -260,7 +289,7 @@ VkDevice VulkanBridge::createDeviceWrapper(VkPhysicalDevice physicalDevice, void
     }
 
     VkDevice result = VK_NULL_HANDLE;
-    VkResult r = vkCreateDevice(physicalDevice, &info, nullptr, &result);
+    VkResult r = self->vk.createDevice(physicalDevice, &info, nullptr, &result);
     LOGI("Vulkan bridge: create_device wrapper (%u queue infos, family %u): %s; extensions: %s",
          info.queueCreateInfoCount, info.queueCreateInfoCount > 0 ? info.pQueueCreateInfos[0].queueFamilyIndex : 0,
          resultName(r), joined.c_str());
@@ -269,24 +298,24 @@ VkDevice VulkanBridge::createDeviceWrapper(VkPhysicalDevice physicalDevice, void
 
 bool VulkanBridge::createDevice() {
     uint32_t count = 0;
-    vkEnumeratePhysicalDevices(instance, &count, nullptr);
+    vk.enumeratePhysicalDevices(instance, &count, nullptr);
     if (count == 0) {
         LOGE("Vulkan bridge: no Vulkan physical device");
         return false;
     }
     std::vector<VkPhysicalDevice> gpus(count);
-    vkEnumeratePhysicalDevices(instance, &count, gpus.data());
+    vk.enumeratePhysicalDevices(instance, &count, gpus.data());
     gpu = gpus[0];
 
     VkPhysicalDeviceProperties props {};
-    vkGetPhysicalDeviceProperties(gpu, &props);
+    vk.getPhysicalDeviceProperties(gpu, &props);
     LOGI("Vulkan bridge: GPU %s, Vulkan %u.%u.%u, driver 0x%08x", props.deviceName, VK_VERSION_MAJOR(props.apiVersion),
          VK_VERSION_MINOR(props.apiVersion), VK_VERSION_PATCH(props.apiVersion), props.driverVersion);
 
     uint32_t extCount = 0;
-    vkEnumerateDeviceExtensionProperties(gpu, nullptr, &extCount, nullptr);
+    vk.enumerateDeviceExtensionProperties(gpu, nullptr, &extCount, nullptr);
     std::vector<VkExtensionProperties> exts(extCount);
-    vkEnumerateDeviceExtensionProperties(gpu, nullptr, &extCount, exts.data());
+    vk.enumerateDeviceExtensionProperties(gpu, nullptr, &extCount, exts.data());
     availableDeviceExtensions.clear();
     for (const auto& e : exts) availableDeviceExtensions.emplace_back(e.extensionName);
 
@@ -298,7 +327,7 @@ bool VulkanBridge::createDevice() {
     retro_vulkan_context context {};
     bool created = false;
     if (negotiation != nullptr && negotiation->interface_version >= 2 && negotiation->create_device2 != nullptr) {
-        created = negotiation->create_device2(&context, instance, gpu, surface, vkGetInstanceProcAddr,
+        created = negotiation->create_device2(&context, instance, gpu, surface, vk.getInstanceProcAddr,
                                               &createDeviceWrapper, this);
         LOGI("Vulkan bridge: core create_device2: %d", created);
     } else if (negotiation != nullptr && negotiation->create_device != nullptr) {
@@ -313,7 +342,7 @@ bool VulkanBridge::createDevice() {
         }
         // No features required, but as a struct, never null: ParaLLEl-RDP (Granite) copies *required_features unconditionally.
         const VkPhysicalDeviceFeatures noFeatures {};
-        created = negotiation->create_device(&context, instance, gpu, surface, vkGetInstanceProcAddr,
+        created = negotiation->create_device(&context, instance, gpu, surface, vk.getInstanceProcAddr,
                                              required.data(), (unsigned) required.size(), nullptr, 0, &noFeatures);
         LOGI("Vulkan bridge: core create_device (v1): %d", created);
     } else {
@@ -329,25 +358,24 @@ bool VulkanBridge::createDevice() {
     LOGI("Vulkan bridge: device %p queue %p family %u (presentation family %u)", (void*) device, (void*) queue, queueFamily,
          context.presentation_queue_family_index);
 
-    pGetAhbProperties = reinterpret_cast<PFN_vkGetAndroidHardwareBufferPropertiesANDROID>(
-        vkGetDeviceProcAddr(device, "vkGetAndroidHardwareBufferPropertiesANDROID"));
-    pGetSemaphoreFd = reinterpret_cast<PFN_vkGetSemaphoreFdKHR>(vkGetDeviceProcAddr(device, "vkGetSemaphoreFdKHR"));
+    vk.bindDevice(device);
+    if (const char* missing = vk.missingDeviceFunction()) {
+        LOGE("Vulkan bridge: the %s lacks %s", vk.custom ? "custom driver" : "system driver", missing);
+        return false;
+    }
+    logDriver();
     queueFamilyForeign = contains(enabledDeviceExtensions, "VK_EXT_queue_family_foreign");
 
-    if (pGetAhbProperties == nullptr || !contains(enabledDeviceExtensions, "VK_ANDROID_external_memory_android_hardware_buffer")) {
+    if (vk.getAndroidHardwareBufferPropertiesANDROID == nullptr || !contains(enabledDeviceExtensions, "VK_ANDROID_external_memory_android_hardware_buffer")) {
         LOGE("Vulkan bridge: the core's device lacks AHardwareBuffer import (the core did not enable the frontend's required device extensions)");
         return false;
     }
 
     // GPU-side wait (sync_file into EGL) when the device can export one; a CPU fence wait otherwise.
     bool canExport = false;
-    if (pGetSemaphoreFd != nullptr && contains(enabledDeviceExtensions, "VK_KHR_external_semaphore_fd")) {
-        auto query = reinterpret_cast<PFN_vkGetPhysicalDeviceExternalSemaphoreProperties>(
-            vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceExternalSemaphoreProperties"));
-        if (query == nullptr) {
-            query = reinterpret_cast<PFN_vkGetPhysicalDeviceExternalSemaphoreProperties>(
-                vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceExternalSemaphorePropertiesKHR"));
-        }
+    if (vk.getSemaphoreFdKHR != nullptr && contains(enabledDeviceExtensions, "VK_KHR_external_semaphore_fd")) {
+        // The 1.1 core name, else the KHR one (bindInstance tries both).
+        auto query = vk.getPhysicalDeviceExternalSemaphoreProperties;
         if (query != nullptr) {
             VkPhysicalDeviceExternalSemaphoreInfo semInfo { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_SEMAPHORE_INFO };
             semInfo.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT;
@@ -361,28 +389,49 @@ bool VulkanBridge::createDevice() {
     return true;
 }
 
+void VulkanBridge::logDriver() {
+    // driverName / driverInfo (Vulkan 1.2 or VK_KHR_driver_properties): tells Turnip from the stock driver, and a custom
+    // driver whose hook silently fell back to the stock one.
+    VkPhysicalDeviceProperties props {};
+    vk.getPhysicalDeviceProperties(gpu, &props);
+    const bool properties2 = instanceApiVersion >= VK_API_VERSION_1_1 ||
+        contains(instanceExtensions, "VK_KHR_get_physical_device_properties2");
+    const bool driverProperties = props.apiVersion >= VK_API_VERSION_1_2 ||
+        contains(availableDeviceExtensions, "VK_KHR_driver_properties");
+    if (!properties2 || !driverProperties || vk.getPhysicalDeviceProperties2 == nullptr) {
+        LOGI("Vulkan bridge: %s driver (no driver properties)", vk.custom ? "custom" : "system");
+        return;
+    }
+    VkPhysicalDeviceDriverProperties driver { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES };
+    VkPhysicalDeviceProperties2 props2 { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
+    props2.pNext = &driver;
+    vk.getPhysicalDeviceProperties2(gpu, &props2);
+    LOGI("Vulkan bridge: %s driver: driverID %d, driverName '%s', driverInfo '%s'", vk.custom ? "custom" : "system",
+         (int) driver.driverID, driver.driverName, driver.driverInfo);
+}
+
 bool VulkanBridge::createFrameResources() {
     VkCommandPoolCreateInfo poolInfo { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     poolInfo.queueFamilyIndex = queueFamily;
-    if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) return false;
+    if (vk.createCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) return false;
 
     VkCommandBufferAllocateInfo alloc { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
     alloc.commandPool = commandPool;
     alloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     alloc.commandBufferCount = SYNC_COUNT;
-    if (vkAllocateCommandBuffers(device, &alloc, commandBuffers) != VK_SUCCESS) return false;
+    if (vk.allocateCommandBuffers(device, &alloc, commandBuffers) != VK_SUCCESS) return false;
 
     for (unsigned i = 0; i < SYNC_COUNT; i++) {
         VkFenceCreateInfo fenceInfo { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
-        if (vkCreateFence(device, &fenceInfo, nullptr, &fences[i]) != VK_SUCCESS) return false;
+        if (vk.createFence(device, &fenceInfo, nullptr, &fences[i]) != VK_SUCCESS) return false;
         fenceSubmitted[i] = false;
         if (useSyncFd) {
             VkExportSemaphoreCreateInfo exportInfo { VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO };
             exportInfo.handleTypes = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT;
             VkSemaphoreCreateInfo semInfo { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
             semInfo.pNext = &exportInfo;
-            if (vkCreateSemaphore(device, &semInfo, nullptr, &exportSemaphores[i]) != VK_SUCCESS) {
+            if (vk.createSemaphore(device, &semInfo, nullptr, &exportSemaphores[i]) != VK_SUCCESS) {
                 LOGW("Vulkan bridge: exportable semaphore failed: falling back to sync=cpu");
                 useSyncFd = false;
             }
@@ -395,6 +444,19 @@ bool VulkanBridge::initialize(unsigned width, unsigned height) {
     if (isReady()) return true;
     surfaceWidth = width;
     surfaceHeight = height;
+
+    // No fall-through to the system driver when a custom one fails: the host decides (and says so to the player).
+    const bool customDriver = !driverDir.empty() || !driverLibrary.empty();
+    const bool loaded = customDriver
+        ? VulkanDispatch::loadCustom(vk, driverDir, driverLibrary, driverHookLibDir, driverTmpDir)
+        : VulkanDispatch::loadSystem(vk);
+    if (!loaded) {
+        if (customDriver) LOGE("Vulkan bridge: custom driver %s could not be loaded", driverLibrary.c_str());
+        else LOGE("Vulkan bridge: the system Vulkan loader could not be loaded");
+        destroy();
+        return false;
+    }
+    if (customDriver) LOGI("Vulkan bridge: custom driver %s loaded through libadrenotools", driverLibrary.c_str());
 
     if (!createInstance() || !createSurface(width, height) || !createDevice() || !createFrameResources()) {
         LOGE("Vulkan bridge: initialization failed");
@@ -409,8 +471,8 @@ bool VulkanBridge::initialize(unsigned width, unsigned height) {
     iface.instance = instance;
     iface.gpu = gpu;
     iface.device = device;
-    iface.get_device_proc_addr = vkGetDeviceProcAddr;
-    iface.get_instance_proc_addr = vkGetInstanceProcAddr;
+    iface.get_device_proc_addr = vk.getDeviceProcAddr;
+    iface.get_instance_proc_addr = vk.getInstanceProcAddr;
     iface.queue = queue;
     iface.queue_index = queueFamily;
     iface.set_image = &cbSetImage;
@@ -450,7 +512,7 @@ bool VulkanBridge::allocateSlot(Slot& slot, unsigned width, unsigned height) {
         VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_FORMAT_PROPERTIES_ANDROID };
     VkAndroidHardwareBufferPropertiesANDROID props { VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID };
     props.pNext = &formatProps;
-    VkResult r = pGetAhbProperties(device, slot.buffer, &props);
+    VkResult r = vk.getAndroidHardwareBufferPropertiesANDROID(device, slot.buffer, &props);
     if (r != VK_SUCCESS) {
         LOGE("Vulkan bridge: vkGetAndroidHardwareBufferPropertiesANDROID: %s", resultName(r));
         return false;
@@ -474,7 +536,7 @@ bool VulkanBridge::allocateSlot(Slot& slot, unsigned width, unsigned height) {
     imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    r = vkCreateImage(device, &imageInfo, nullptr, &slot.image);
+    r = vk.createImage(device, &imageInfo, nullptr, &slot.image);
     if (r != VK_SUCCESS) {
         LOGE("Vulkan bridge: vkCreateImage (AHB): %s", resultName(r));
         return false;
@@ -492,12 +554,12 @@ bool VulkanBridge::allocateSlot(Slot& slot, unsigned width, unsigned height) {
     while (allocInfo.memoryTypeIndex < 32 && !(props.memoryTypeBits & (1u << allocInfo.memoryTypeIndex))) {
         allocInfo.memoryTypeIndex++;
     }
-    r = vkAllocateMemory(device, &allocInfo, nullptr, &slot.memory);
+    r = vk.allocateMemory(device, &allocInfo, nullptr, &slot.memory);
     if (r != VK_SUCCESS) {
         LOGE("Vulkan bridge: vkAllocateMemory (AHB import): %s", resultName(r));
         return false;
     }
-    r = vkBindImageMemory(device, slot.image, slot.memory, 0);
+    r = vk.bindImageMemory(device, slot.image, slot.memory, 0);
     if (r != VK_SUCCESS) {
         LOGE("Vulkan bridge: vkBindImageMemory (AHB): %s", resultName(r));
         return false;
@@ -515,8 +577,8 @@ bool VulkanBridge::allocateSlot(Slot& slot, unsigned width, unsigned height) {
 void VulkanBridge::freeSlot(Slot& slot) {
     if (slot.glFence != nullptr && eglGetCurrentContext() != EGL_NO_CONTEXT) glDeleteSync(slot.glFence);
     slot.glFence = nullptr;
-    if (slot.image != VK_NULL_HANDLE) vkDestroyImage(device, slot.image, nullptr);
-    if (slot.memory != VK_NULL_HANDLE) vkFreeMemory(device, slot.memory, nullptr);
+    if (slot.image != VK_NULL_HANDLE) vk.destroyImage(device, slot.image, nullptr);
+    if (slot.memory != VK_NULL_HANDLE) vk.freeMemory(device, slot.memory, nullptr);
     if (slot.buffer != nullptr) AHardwareBuffer_release(slot.buffer);
     slot = Slot {};
 }
@@ -540,7 +602,7 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
     if (slot.width != w || slot.height != h || slot.image == VK_NULL_HANDLE) {
         {
             std::lock_guard<std::mutex> lock(queueMutex);
-            vkQueueWaitIdle(queue);
+            vk.queueWaitIdle(queue);
         }
         freeSlot(slot);
         if (!allocateSlot(slot, w, h)) {
@@ -561,10 +623,10 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
         // The core may wait on this fence from its own thread (wait_sync_index): never reset under it.
         std::lock_guard<std::mutex> lock(fenceMutex[index]);
         if (fenceSubmitted[index]) {
-            vkWaitForFences(device, 1, &fences[index], VK_TRUE, UINT64_MAX);
+            vk.waitForFences(device, 1, &fences[index], VK_TRUE, UINT64_MAX);
             fenceSubmitted[index] = false;
         }
-        vkResetFences(device, 1, &fences[index]);
+        vk.resetFences(device, 1, &fences[index]);
     }
 
     retro_vulkan_image frameImage;
@@ -589,10 +651,10 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
     }
 
     VkCommandBuffer cmd = commandBuffers[index];
-    vkResetCommandBuffer(cmd, 0);
+    vk.resetCommandBuffer(cmd, 0);
     VkCommandBufferBeginInfo begin { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    vkBeginCommandBuffer(cmd, &begin);
+    vk.beginCommandBuffer(cmd, &begin);
 
     const uint32_t foreign = queueFamilyForeign ? VK_QUEUE_FAMILY_FOREIGN_EXT : VK_QUEUE_FAMILY_EXTERNAL;
     bool transferSource = frameSrcFamily != VK_QUEUE_FAMILY_IGNORED && frameSrcFamily != queueFamily;
@@ -623,7 +685,7 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
     pre[1].image = slot.image;
     pre[1].subresourceRange = dstRange;
 
-    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+    vk.cmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
                          0, nullptr, 0, nullptr, 2, pre);
 
     if (frameImage.create_info.format == VK_FORMAT_R8G8B8A8_UNORM) {
@@ -631,7 +693,7 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
         region.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, srcRange.baseMipLevel, srcRange.baseArrayLayer, 1 };
         region.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
         region.extent = { w, h, 1 };
-        vkCmdCopyImage(cmd, frameImage.create_info.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        vk.cmdCopyImage(cmd, frameImage.create_info.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                        slot.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
     } else {
         // BGRA8 (or anything else blittable): a blit converts the channel order.
@@ -640,7 +702,7 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
         blit.srcOffsets[1] = { (int32_t) w, (int32_t) h, 1 };
         blit.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
         blit.dstOffsets[1] = { (int32_t) w, (int32_t) h, 1 };
-        vkCmdBlitImage(cmd, frameImage.create_info.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        vk.cmdBlitImage(cmd, frameImage.create_info.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                        slot.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_NEAREST);
     }
 
@@ -667,10 +729,10 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
     post[1].image = slot.image;
     post[1].subresourceRange = dstRange;
 
-    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+    vk.cmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0,
                          0, nullptr, 0, nullptr, 2, post);
-    vkEndCommandBuffer(cmd);
+    vk.endCommandBuffer(cmd);
 
     frameCommands.push_back(cmd);   // after the core's own (set_command_buffers)
 
@@ -692,7 +754,7 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
     VkResult r;
     {
         std::lock_guard<std::mutex> lock(queueMutex);
-        r = vkQueueSubmit(queue, 1, &submit, fences[index]);
+        r = vk.queueSubmit(queue, 1, &submit, fences[index]);
     }
     if (r != VK_SUCCESS) {
         LOGE("Vulkan bridge: vkQueueSubmit: %s", resultName(r));
@@ -710,16 +772,16 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
         getFd.semaphore = exportSemaphores[index];
         getFd.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT;
         int fd = -1;
-        r = pGetSemaphoreFd(device, &getFd, &fd);
+        r = vk.getSemaphoreFdKHR(device, &getFd, &fd);
         if (r != VK_SUCCESS) {
             LOGW("Vulkan bridge: vkGetSemaphoreFdKHR: %s; waiting on the CPU from now on", resultName(r));
             useSyncFd = false;
-            vkWaitForFences(device, 1, &fences[index], VK_TRUE, UINT64_MAX);
+            vk.waitForFences(device, 1, &fences[index], VK_TRUE, UINT64_MAX);
         } else {
             out.syncFd = fd;
         }
     } else {
-        vkWaitForFences(device, 1, &fences[index], VK_TRUE, UINT64_MAX);
+        vk.waitForFences(device, 1, &fences[index], VK_TRUE, UINT64_MAX);
     }
 
     out.buffer = slot.buffer;
@@ -754,36 +816,35 @@ void VulkanBridge::afterGlDraw() {
 
 void VulkanBridge::destroy() {
     if (device != VK_NULL_HANDLE) {
-        {
+        if (vk.deviceWaitIdle != nullptr) {
             std::lock_guard<std::mutex> lock(queueMutex);
-            vkDeviceWaitIdle(device);
+            vk.deviceWaitIdle(device);
         }
         for (auto& slot : slots) freeSlot(slot);
         for (unsigned i = 0; i < SYNC_COUNT; i++) {
             std::lock_guard<std::mutex> lock(fenceMutex[i]);
-            if (fences[i] != VK_NULL_HANDLE) vkDestroyFence(device, fences[i], nullptr);
-            if (exportSemaphores[i] != VK_NULL_HANDLE) vkDestroySemaphore(device, exportSemaphores[i], nullptr);
+            if (fences[i] != VK_NULL_HANDLE) vk.destroyFence(device, fences[i], nullptr);
+            if (exportSemaphores[i] != VK_NULL_HANDLE) vk.destroySemaphore(device, exportSemaphores[i], nullptr);
             fences[i] = VK_NULL_HANDLE;
             exportSemaphores[i] = VK_NULL_HANDLE;
             fenceSubmitted[i] = false;
         }
-        if (commandPool != VK_NULL_HANDLE) vkDestroyCommandPool(device, commandPool, nullptr);
+        if (commandPool != VK_NULL_HANDLE) vk.destroyCommandPool(device, commandPool, nullptr);
         commandPool = VK_NULL_HANDLE;
         // The core frees its auxiliary resources, then the device (the frontend's, per libretro_vulkan.h) goes.
         if (negotiation != nullptr && negotiation->destroy_device != nullptr) negotiation->destroy_device();
-        vkDestroyDevice(device, nullptr);
+        // Null only when the driver lacked it (bindDevice): the device is then leaked rather than called through null.
+        if (vk.destroyDevice != nullptr) vk.destroyDevice(device, nullptr);
         LOGI("Vulkan bridge: device destroyed");
     }
     device = VK_NULL_HANDLE;
     queue = VK_NULL_HANDLE;
     gpu = VK_NULL_HANDLE;
-    if (surface != VK_NULL_HANDLE && instance != VK_NULL_HANDLE) {
-        auto destroySurface = reinterpret_cast<PFN_vkDestroySurfaceKHR>(
-            vkGetInstanceProcAddr(instance, "vkDestroySurfaceKHR"));
-        if (destroySurface != nullptr) destroySurface(instance, surface, nullptr);
+    if (surface != VK_NULL_HANDLE && instance != VK_NULL_HANDLE && vk.destroySurfaceKHR != nullptr) {
+        vk.destroySurfaceKHR(instance, surface, nullptr);
     }
     surface = VK_NULL_HANDLE;
-    if (instance != VK_NULL_HANDLE && ownsInstance) vkDestroyInstance(instance, nullptr);
+    if (instance != VK_NULL_HANDLE && ownsInstance && vk.destroyInstance != nullptr) vk.destroyInstance(instance, nullptr);
     instance = VK_NULL_HANDLE;
     if (imageReader != nullptr) AImageReader_delete(imageReader);   // also releases its window
     imageReader = nullptr;
@@ -799,14 +860,18 @@ void VulkanBridge::destroy() {
     }
     enabledDeviceExtensions.clear();
     availableDeviceExtensions.clear();
-    pGetAhbProperties = nullptr;
-    pGetSemaphoreFd = nullptr;
     useSyncFd = false;
     lastSlot = -1;
     swapchainFrames = false;
     maxFrameWidth = 0;
     maxFrameHeight = 0;
     iface = {};
+    // Last: nothing above may call through the table after its loader is closed.
+    vk.close();
+    driverDir.clear();
+    driverLibrary.clear();
+    driverHookLibDir.clear();
+    driverTmpDir.clear();
 }
 
 // --- retro_hw_render_interface_vulkan ---
@@ -841,7 +906,7 @@ void VulkanBridge::cbWaitSyncIndex(void* handle) {
     // Held across the GPU wait: bridgeFrame never takes queueMutex while holding it, so a core holding lock_queue is safe.
     std::lock_guard<std::mutex> lock(self->fenceMutex[index]);
     if (self->fenceSubmitted[index]) {
-        vkWaitForFences(self->device, 1, &self->fences[index], VK_TRUE, UINT64_MAX);
+        self->vk.waitForFences(self->device, 1, &self->fences[index], VK_TRUE, UINT64_MAX);
     }
 }
 
