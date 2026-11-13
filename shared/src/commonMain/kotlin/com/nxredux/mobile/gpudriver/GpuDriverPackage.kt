@@ -6,7 +6,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-/** An installed Adreno Vulkan driver, as described by its package's meta.json. */
+/** An installed custom Vulkan driver, as described by its package's meta.json. */
 data class GpuDriver(
     val id: String,
     val name: String,
@@ -35,6 +35,9 @@ object GpuDriverPackage {
 
     /** The most a package may unpack to. */
     const val MAX_UNPACKED_BYTES = 100L * 1024 * 1024
+
+    /** The most entries (files and folders) a package may hold: it needs meta.json and one library, so a few more are plenty. */
+    const val MAX_ENTRIES = 64
 
     private const val EM_AARCH64 = 183
     private val json = Json { ignoreUnknownKeys = true }

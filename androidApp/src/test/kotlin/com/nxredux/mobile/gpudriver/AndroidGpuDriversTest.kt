@@ -72,6 +72,20 @@ class AndroidGpuDriversTest {
         assertEquals(emptyList<String>(), root.list()?.toList() ?: emptyList<String>())
     }
 
+    @Test fun tooManyEntriesAreRejectedBeforeTheRestIsRead() {
+        val extra = (1..GpuDriverPackage.MAX_ENTRIES).map { "pad/$it.txt" to ByteArray(1) }
+        var opened = 0
+        val r = drivers.install { opened++; ByteArrayInputStream(zip(listOf("meta.json" to meta.toByteArray(), "vulkan.ad07XX.so" to elf()) + extra)) }
+        assertEquals(PackageCheck.Rejected("This package has too many files to be a driver."), r)
+        assertEquals(1, opened)   // the scan stopped; nothing unpacked
+        assertEquals(emptyList<String>(), root.list()?.toList() ?: emptyList<String>())
+    }
+
+    @Test fun aPackageAtTheEntryCapInstalls() {
+        val extra = (1..GpuDriverPackage.MAX_ENTRIES - 2).map { "pad/$it.txt" to ByteArray(1) }
+        assertTrue(install(zip(listOf("meta.json" to meta.toByteArray(), "vulkan.ad07XX.so" to elf()) + extra)) is PackageCheck.Ok)
+    }
+
     @Test fun notAZipIsRejected() {
         val r = install("hello".toByteArray())
         assertEquals(PackageCheck.Rejected("This file isn't a zip."), r)

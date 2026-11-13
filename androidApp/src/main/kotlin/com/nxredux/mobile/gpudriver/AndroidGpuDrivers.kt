@@ -53,7 +53,8 @@ class AndroidGpuDrivers(private val root: File, private val sdkInt: Int) {
         }
     }
 
-    fun remove(id: String) {
+    /** Deletes the driver [id]'s folder; under the install's lock, so it never races an install of the same package. */
+    fun remove(id: String): Unit = synchronized(lock) {
         if (id.isNotEmpty() && '/' !in id && '\\' !in id && id != "..") directory(id).deleteRecursively()
     }
 
@@ -78,7 +79,7 @@ class AndroidGpuDrivers(private val root: File, private val sdkInt: Int) {
             val buf = ByteArray(BUFFER)
             while (true) {
                 val e = zip.nextEntry ?: break
-                count++
+                if (++count > GpuDriverPackage.MAX_ENTRIES) return Scan.Bad(TOO_MANY_ENTRIES)   // before reading it: an absurd archive stops here
                 if (!GpuDriverPackage.safeEntry(e.name)) return Scan.Bad("This package has unsafe file paths.")
                 if (e.isDirectory) continue
                 var size = 0L
@@ -112,11 +113,13 @@ class AndroidGpuDrivers(private val root: File, private val sdkInt: Int) {
         work.mkdirs()
         val base = work.canonicalFile.toPath()
         var total = 0L
+        var entries = 0
         open().use { raw ->
             val zip = ZipInputStream(raw)
             val buf = ByteArray(BUFFER)
             while (true) {
                 val e = zip.nextEntry ?: break
+                if (++entries > GpuDriverPackage.MAX_ENTRIES) return TOO_MANY_ENTRIES   // the file changed since the scan
                 if (!GpuDriverPackage.safeEntry(e.name)) return "This package has unsafe file paths."
                 val out = File(work, e.name).canonicalFile
                 if (!out.toPath().startsWith(base) || out.toPath() == base) return "This package has unsafe file paths."
@@ -138,6 +141,7 @@ class AndroidGpuDrivers(private val root: File, private val sdkInt: Int) {
 
     companion object {
         private const val TMP = ".tmp"
+        private const val TOO_MANY_ENTRIES = "This package has too many files to be a driver."
         private const val BUFFER = 64 * 1024
         private const val HEAD = 20
         private const val MAX_META = 1024 * 1024
