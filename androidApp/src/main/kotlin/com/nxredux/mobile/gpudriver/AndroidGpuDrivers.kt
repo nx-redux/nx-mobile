@@ -12,8 +12,6 @@ import java.util.zip.ZipInputStream
  * lists and removes.
  */
 class AndroidGpuDrivers(private val root: File, private val sdkInt: Int) {
-    private val lock = Any()
-
     /** The installed drivers sorted by name; a folder without a readable meta.json is skipped, a `.tmp` folder ignored. */
     fun installed(): List<GpuDriver> {
         val dirs = root.listFiles { f -> f.isDirectory } ?: return emptyList()
@@ -140,6 +138,11 @@ class AndroidGpuDrivers(private val root: File, private val sdkInt: Int) {
     }
 
     companion object {
+        /**
+         * One per process, not per instance: an install sweeps every `.tmp` folder first, so a recreated activity's
+         * instance must wait for an install the old one is still unpacking.
+         */
+        private val lock = Any()
         private const val TMP = ".tmp"
         private const val TOO_MANY_ENTRIES = "This package has too many files to be a driver."
         private const val BUFFER = 64 * 1024

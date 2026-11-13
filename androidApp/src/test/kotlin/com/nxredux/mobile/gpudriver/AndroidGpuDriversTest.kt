@@ -5,6 +5,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import kotlin.concurrent.thread
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -114,6 +115,31 @@ class AndroidGpuDriversTest {
         assertTrue(File(root, "abc.tmp").exists())
         install(valid())
         assertFalse(File(root, "abc.tmp").exists())
+    }
+
+    @Test fun aSecondInstanceWaitsForAnInstallStillUnpacking() {
+        // A recreated activity has its own AndroidGpuDrivers: its install must not sweep the first one's work folder.
+        val other = AndroidGpuDrivers(root, 34)
+        val otherMeta = meta.replace("\"Turnip\"", "\"Other\"")
+        val otherZip = zip(listOf("meta.json" to otherMeta.toByteArray(), "vulkan.ad07XX.so" to elf()))
+        var otherResult: PackageCheck? = null
+        var otherThread: Thread? = null
+        var tmpSurvived = false
+        var opened = 0
+        val bytes = valid()
+        val r = drivers.install {
+            if (++opened == 2) {   // the unpack pass: the work folder exists
+                otherThread = thread { otherResult = other.install { ByteArrayInputStream(otherZip) } }
+                otherThread!!.join(300)
+                tmpSurvived = root.listFiles()!!.any { it.name.endsWith(".tmp") }
+            }
+            ByteArrayInputStream(bytes)
+        }
+        otherThread!!.join(10_000)
+        assertTrue(tmpSurvived)
+        assertTrue(r.toString(), r is PackageCheck.Ok)
+        assertTrue(otherResult.toString(), otherResult is PackageCheck.Ok)
+        assertEquals(listOf("Other", "Turnip"), drivers.installed().map { it.name })
     }
 
     @Test fun availability() {
