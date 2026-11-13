@@ -387,7 +387,7 @@ internal fun GameListFrame(
                             ) else NxCarousel(
                                 tiles, selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
                                 captionTitle = captionTitle, captionInfo = info, modifier = m, layoutKey = layoutKey, titleRoom = titleRoom,
-                                gameList = true, drained = true,
+                                gameList = true, gameDetails = chrome.extraInfo, drained = true,   // Extra info off: no details to keep room for
                             )
                         }
                     }

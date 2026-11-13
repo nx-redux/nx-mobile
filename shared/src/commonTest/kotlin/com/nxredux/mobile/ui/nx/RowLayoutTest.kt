@@ -300,7 +300,7 @@ class RowLayoutTest {
     // room from the top, or the neighbours' top if higher), less the gap and a margin over the bottom row.
     @Test fun aCarouselCaptionMayTakeWhatIsLeftUnderTheTileAtItsHighest() {
         val e = 0.01f
-        assertEquals(300f - 120f - GRID_RING_ROOM - 16f - CAPTION_SPARE_MARGIN, carouselCaptionMax(300f, 120f), e)
+        assertEquals(300f - 120f - GRID_RING_ROOM - CAPTION_GAP - CAPTION_SPARE_MARGIN, carouselCaptionMax(300f, 120f), e)
         // A box the tile nearly fills: the neighbours' top is the higher, and nothing is left below zero.
         assertEquals(0f, carouselCaptionMax(124f, 120f), e)
     }
@@ -413,11 +413,11 @@ class RowLayoutTest {
         assertEquals(300f * 240f / 340f, carouselRowPlace(900f, 0f, 30f).g.itemH, 1e-3f)
     }
 
-    // The cases, each box ≈ the screen less ~124 dp of title and tab rows (measured on the cover screen's
-    // capture; a console list's hint bar instead of the tab row leaves ~14 dp more), the caption room the default text
-    // size's two 18 sp name lines (≈ 21.1 dp each) and the 16 dp gap, the need a name line and two 14.4 sp detail rows
-    // (≈ 16.9 dp) 3 dp apart.
-    private val capRoom = 16f + 2 * 21.1f
+    // The cases, each box ≈ the screen less ~124 dp of title and bottom rows (measured on the cover screen's capture; a
+    // game list's hint bar is the tab row's 44 dp, so a console list's box is the Games tab's), the caption room the
+    // default text size's two 18 sp name lines (≈ 21.1 dp each) and the caption gap, the need a name line and two 14.4 sp
+    // detail rows (≈ 16.9 dp) 3 dp apart.
+    private val capRoom = CAPTION_GAP + 2 * 21.1f
     private val capName = 21.1f
     private val capDetails = listOf(16.9f, 16.9f)
     private val capNeed = carouselCaptionNeed(capName, 2 * capName, capDetails[0], STACK_CAPTION_GAP.value)
@@ -435,14 +435,41 @@ class RowLayoutTest {
         assertEquals(10f + 2 * (gap + 30f), carouselCaptionNeed(10f, 20f, 30f, gap), 1e-4f)
     }
 
+    // Extra info off (no game in the list can show details): the need is the name alone, its two lines; on, today's.
+    @Test fun withNoDetailsTheNeedIsTheNameAlone() {
+        val gap = STACK_CAPTION_GAP.value
+        assertEquals(2 * capName, carouselCaptionNeed(capName, 2 * capName, capDetails[0], gap, details = false), 1e-4f)
+        assertEquals(carouselCaptionNeed(capName, 2 * capName, capDetails[0], gap), carouselCaptionNeed(capName, 2 * capName, capDetails[0], gap, details = true))
+    }
+
+    // A capped box with Extra info off keeps no room for detail rows: a taller tile than with it on, both with the
+    // breathing room over the tile and under the caption (the name alone, one line or two, wherever the centre line is).
+    @Test fun withNoDetailsACappedTileIsTallerAndStillBreathes() {
+        val gap = STACK_CAPTION_GAP.value
+        for (box in listOf(276f, 256f, 236f, 196f)) {
+            val on = capped(box)
+            val offNeed = carouselCaptionNeed(capName, 2 * capName, capDetails[0], gap, details = false)
+            val off = carouselRowPlace(box, 0f, capRoom, maxItemH = carouselItemHMax(box, offNeed))
+            assertTrue(on.capped && off.capped, "$box")
+            assertTrue(off.g.itemH > on.g.itemH, "$box")
+            val m = carouselMargins(box, off.g.itemH, offNeed, off.capped)
+            for (drawn in listOf(capName, 2 * capName)) for (line in listOf(box / 2 - 30f, box / 2, box / 2 + 30f)) {
+                val top = rowSelectedTopOn(line, box, off.g.itemH, CAPTION_GAP, drawn, m.top, m.bottom)
+                assertTrue(top >= CAROUSEL_TOP_BREATH - 1e-3f, "$box/$drawn/$line top $top")
+                assertTrue(box - (top + off.g.itemH + CAPTION_GAP + drawn) >= CAROUSEL_BOTTOM_BREATH - 1e-3f, "$box/$drawn/$line bottom")
+            }
+        }
+    }
+
     // Capped, a one-line name keeps both detail rows and a two-line name exactly one, at the default text size and at
-    // Small (0.75: 15.8 dp name lines, 12.7 dp rows), on the cover glass, 480 × 360, 427 × 320 and a phone in landscape.
+    // Small (0.75: 15.8 dp name lines, 12.7 dp rows), on the cover glass (as estimated, and as the capture suggests),
+    // 480 × 360 (and a phone in landscape) and 427 × 320.
     @Test fun aCappedCaptionKeepsTwoRowsUnderOneNameLineAndOneUnderTwo() {
         val gap = STACK_CAPTION_GAP.value
         for ((name, row) in listOf(21.1f to 16.9f, 15.8f to 12.7f)) {
             val need = carouselCaptionNeed(name, 2 * name, row, gap)
-            val room = 16f + 2 * name
-            for (box in listOf(256f, 236f, 250f, 196f, 210f)) {
+            val room = CAPTION_GAP + 2 * name
+            for (box in listOf(276f, 256f, 236f, 196f)) {
                 val place = carouselRowPlace(box, 0f, room, maxItemH = carouselItemHMax(box, need))
                 val max = carouselCaptionMax(box, place.g.itemH, carouselMargins(box, place.g.itemH, need, place.capped))
                 assertEquals(2, captionRowsWithin(name, listOf(row, row), gap, max), "$name/$box one line")
@@ -473,10 +500,10 @@ class RowLayoutTest {
     }
 
     // Cover glass (≈ 440 × 380, laid out landscape), the 3.33" 960 × 720 handheld at density 2 (480 × 360) and 2.25
-    // (≈ 427 × 320), its console lists, and a phone in landscape (800 × 360): today the caption has room for the name
+    // (≈ 427 × 320), and a phone in landscape (800 × 360, the 480 × 360 box): today the caption has room for the name
     // alone; capped, the tile keeps its shape, its gaps and neighbours scale with it, and both detail rows fit.
     @Test fun aGameListCarouselLeavesItsCaptionRoomForTheNameAndTwoDetailRows() {
-        for (box in listOf(380f - 124f, 360f - 124f, 360f - 110f, 320f - 124f, 320f - 110f)) {
+        for (box in listOf(380f - 124f, 360f - 124f, 320f - 124f)) {
             val before = carouselRowPlace(box, 0f, capRoom)
             val after = capped(box)
             assertEquals(0, rowsUnder(box, before), "$box before")
@@ -510,8 +537,8 @@ class RowLayoutTest {
         val gap = STACK_CAPTION_GAP.value
         for ((name, row) in listOf(21.1f to 16.9f, 15.8f to 12.7f)) {
             val need = carouselCaptionNeed(name, 2 * name, row, gap)
-            val room = 16f + 2 * name
-            for (box in listOf(256f, 236f, 250f, 196f, 210f)) {
+            val room = CAPTION_GAP + 2 * name
+            for (box in listOf(276f, 256f, 236f, 196f)) {
                 val place = carouselRowPlace(box, 0f, room, maxItemH = carouselItemHMax(box, need))
                 assertTrue(place.capped, "$box")
                 val h = place.g.itemH
@@ -523,14 +550,14 @@ class RowLayoutTest {
                     assertEquals(rows, captionRowsWithin(nameH, listOf(row, row), gap, max), "$name/$box/$nameH")
                     val drawn = captionDrawnHeight(nameH, List(rows) { row }, gap)
                     for (line in listOf(box / 2 - 30f, box / 2, box / 2 + 30f)) {
-                        val top = rowSelectedTopOn(line, box, h, 16f, drawn, m.top, m.bottom)
-                        val bottom = box - (top + h + 16f + drawn)
+                        val top = rowSelectedTopOn(line, box, h, CAPTION_GAP, drawn, m.top, m.bottom)
+                        val bottom = box - (top + h + CAPTION_GAP + drawn)
                         assertTrue(top >= CAROUSEL_TOP_BREATH - 1e-3f, "$name/$box/$nameH/$line top $top")
                         assertTrue(bottom >= CAROUSEL_BOTTOM_BREATH - 1e-3f, "$name/$box/$nameH/$line bottom $bottom")
                     }
                 }
-                val full = rowSelectedTopOn(box / 2, box, h, 16f, need, m.top, m.bottom)
-                assertEquals(full, box - (full + h + 16f + need), 1.5f)                                   // about equal
+                val full = rowSelectedTopOn(box / 2, box, h, CAPTION_GAP, need, m.top, m.bottom)
+                assertEquals(full, box - (full + h + CAPTION_GAP + need), 1.5f)                                   // about equal
             }
         }
     }
@@ -540,8 +567,9 @@ class RowLayoutTest {
     @Test fun anUncappedCarouselKeepsTodaysMargins() {
         assertFalse(capped(636f, portraitW = 393f).capped)
         assertFalse(capped(356f).capped)
-        assertEquals(CaptionMargins(GRID_RING_ROOM, CAPTION_SPARE_MARGIN), carouselMargins(356f, 211.8f, capNeed, capped = false))
-        assertEquals(carouselCaptionMax(356f, 211.8f), carouselCaptionMax(356f, 211.8f, carouselMargins(356f, 211.8f, capNeed, capped = false)), 1e-4f)
+        val h = capped(356f).g.itemH
+        assertEquals(CaptionMargins(GRID_RING_ROOM, CAPTION_SPARE_MARGIN), carouselMargins(356f, h, capNeed, capped = false))
+        assertEquals(carouselCaptionMax(356f, h), carouselCaptionMax(356f, h, carouselMargins(356f, h, capNeed, capped = false)), 1e-4f)
         // The default placement (no margins) is today's.
         assertEquals(rowSelectedTopOn(300f, 600f, 200f, 8f, 40f), rowSelectedTopOn(300f, 600f, 200f, 8f, 40f, null, 0f), 1e-4f)
     }
@@ -554,9 +582,9 @@ class RowLayoutTest {
         assertTrue(place.capped)
         val m = carouselMargins(box, place.g.itemH, capNeed, capped = true)
         assertEquals(CaptionMargins(GRID_RING_ROOM, CAPTION_SPARE_MARGIN), m)
-        assertEquals(44f, carouselCaptionMax(box, place.g.itemH, m), 1e-3f)
+        assertEquals(box - CAROUSEL_MIN_HEIGHT_SHARE * box - GRID_RING_ROOM - CAPTION_GAP - CAPTION_SPARE_MARGIN, carouselCaptionMax(box, place.g.itemH, m), 1e-3f)
         // Between: a box with half the breathing room to spare keeps margins between today's and the full ones.
-        val mid = carouselMargins(200f, 200f - 16f - capNeed - CAPTION_NEED_SLACK - 18f, capNeed, capped = true)
+        val mid = carouselMargins(200f, 200f - CAPTION_GAP - capNeed - CAPTION_NEED_SLACK - 18f, capNeed, capped = true)
         assertEquals(18f, mid.top + mid.bottom, 1e-3f)
         assertTrue(mid.top > GRID_RING_ROOM && mid.top < CAROUSEL_TOP_BREATH)
     }

@@ -39,7 +39,7 @@ import com.nxredux.mobile.ui.NO_GENRE
 import kotlin.math.max
 import kotlin.math.min
 
-private const val CAPTION_GAP = 16f     // dp between the centre tile's bottom edge and the caption
+internal const val CAPTION_GAP = 16f     // dp between the centre tile's bottom edge and the caption
 /** The Carousel caption's info rows ([carouselCaptionRows]): the time and trophies, then the next goal. */
 private const val CAROUSEL_INFO_ROWS = 2
 /** The dp a game caption's extra lines ([CaptionInfoRows]) keep clear above the body's bottom (the hint bar). */
@@ -80,6 +80,9 @@ fun NxCarousel(
     // the time and achievements in the selected card over a shade, its details under its name, one line each in the
     // vertical stack's style ([StackCaption]).
     gameList: Boolean = false,
+    // A game list that can show details under the name (Layouts → Extra info on, not the dual-screen menu): its tile's
+    // cap keeps room for them ([carouselCaptionNeed]); false, for the name alone.
+    gameDetails: Boolean = true,
     drained: Boolean = false,   // Home's: no ring, the selected card in colour and the rest grey ([NxMenuTile]'s drained)
 ) {
     val colors = LocalNxColors.current
@@ -99,9 +102,9 @@ fun NxCarousel(
         // One size in both orientations, shrunk only so the tile and the caption room fit the body's height (the shown
         // title's; a hidden title's room left out), the block centred in the whole box.
         // A game list's selection is capped so its caption has room for a name line and two detail rows under it, or a
-        // two-line name and one ([carouselCaptionNeed], [carouselItemHMax]), measured in their styles;
-        // where the box leaves that room already, nothing changes.
-        val need = if (gameList) rememberCaptionNeed(nameStyle, infoStyle) else null
+        // two-line name and one ([carouselCaptionNeed], [carouselItemHMax]), measured in their styles; a list that can
+        // show no details ([gameDetails] false), for the name alone. Where the box leaves that room already, nothing changes.
+        val need = if (gameList) rememberCaptionNeed(nameStyle, infoStyle, gameDetails) else null
         val (g, top, capped) = carouselRowPlace(
             maxHeight.value, titleRoom.value, room, portraitW = maxWidth.value.takeIf { portrait },   // portrait: the neighbours show
             maxItemH = need?.let { carouselItemHMax(maxHeight.value, it) },
@@ -248,10 +251,19 @@ internal fun carouselCardShaded(lit: Boolean, picture: () -> List<InfoLine>): Bo
  */
 internal data class CaptionMargins(val top: Float, val bottom: Float)
 
-/** The visible room a capped game list Carousel keeps between the top row and its selected tile, dp ([carouselMargins]). */
+/**
+ * The margin a capped game list Carousel keeps between its box's top and its selected tile at its highest, dp
+ * ([carouselMargins]). The visible gap to the top row is larger: that row carries its own empty room.
+ */
 internal const val CAROUSEL_TOP_BREATH = 12f
-/** The visible room a capped game list Carousel keeps between its caption's last row and the bottom row, dp. */
+/**
+ * The margin a capped game list Carousel keeps between its caption's last row and its box's bottom, dp. The visible gap
+ * to the bottom row (the tab row, the hint bar) is larger: that row carries its own empty room.
+ */
 internal const val CAROUSEL_BOTTOM_BREATH = 12f
+
+/** The dp [carouselItemHMax] (and so [carouselMargins]) leaves over a caption's need, so a rounding never cuts a row. */
+internal const val CAPTION_NEED_SLACK = 1f
 
 /**
  * A game list Carousel's [CaptionMargins] in a box [areaDp] tall with tiles [itemH] tall. Uncapped (![capped]), today's:
@@ -291,9 +303,6 @@ internal const val CAROUSEL_MIN_HEIGHT_SHARE = 0.4f
 internal fun carouselItemHMax(areaDp: Float, needDp: Float): Float =
     max(areaDp - CAROUSEL_TOP_BREATH - CAPTION_GAP - CAROUSEL_BOTTOM_BREATH - needDp - CAPTION_NEED_SLACK, CAROUSEL_MIN_HEIGHT_SHARE * areaDp)
 
-/** The dp [carouselItemHMax] leaves over a caption's need. */
-internal const val CAPTION_NEED_SLACK = 1f
-
 /**
  * A row's caption room in dp: [gap] under the slot, [nameLines] lines of the name in [name] (its most: the Carousel's
  * two, Backdrop's one) and [infoRows] info lines in [info] (two for both), measured in those styles, so it follows the
@@ -311,25 +320,29 @@ internal fun rememberCaptionRoom(gap: Float, name: TextStyle, info: TextStyle, i
 
 /**
  * A game list Carousel caption's need in dp ([carouselItemHMax]), the taller of a one-line name ([nameH]) with both detail
- * rows ([rowH], [gap] before each) and a two-line name ([twoLineNameH]) with one, so a long name keeps its genre.
+ * rows ([rowH], [gap] before each) and a two-line name ([twoLineNameH]) with one, so a long name keeps its genre. A list
+ * that can show no details ([details] false: Layouts → Extra info off, or the dual-screen menu) needs the name alone, its
+ * two lines. The need is the list's, not the selected game's: a game with no details in a list that can show them keeps
+ * the same need, so the tile never resizes from game to game.
  */
-internal fun carouselCaptionNeed(nameH: Float, twoLineNameH: Float, rowH: Float, gap: Float): Float =
-    max(captionDrawnHeight(nameH, listOf(rowH, rowH), gap), captionDrawnHeight(twoLineNameH, listOf(rowH), gap))
+internal fun carouselCaptionNeed(nameH: Float, twoLineNameH: Float, rowH: Float, gap: Float, details: Boolean = true): Float =
+    if (!details) twoLineNameH
+    else max(captionDrawnHeight(nameH, listOf(rowH, rowH), gap), captionDrawnHeight(twoLineNameH, listOf(rowH), gap))
 
 /**
  * [carouselCaptionNeed] measured in the caption's styles: one and two lines of the name in [name] (as
  * [rememberCaptionRoom] measures them), a detail row in [info]; so it follows the text size.
  */
 @Composable
-private fun rememberCaptionNeed(name: TextStyle, info: TextStyle): Float {
+private fun rememberCaptionNeed(name: TextStyle, info: TextStyle, details: Boolean): Float {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    return remember(name, info, density) {
+    return remember(name, info, details, density) {
         with(density) {
             val nameH = measurer.measure("A", name).size.height.toDp().value
             val twoLines = measurer.measure("A\nA", name, maxLines = 2).size.height.toDp().value
             val rowH = measurer.measure("A", info).size.height.toDp().value
-            carouselCaptionNeed(nameH, twoLines, rowH, STACK_CAPTION_GAP.value)
+            carouselCaptionNeed(nameH, twoLines, rowH, STACK_CAPTION_GAP.value, details)
         }
     }
 }

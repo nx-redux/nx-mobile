@@ -314,8 +314,8 @@ internal data class CarouselRowPlace(val g: RowGeometry, val top: Float, val cap
  */
 internal fun carouselRowPlace(boxDp: Float, titleRoomDp: Float, captionDp: Float, portraitW: Float? = null, maxItemH: Float? = null): CarouselRowPlace {
     val spec = rowGeometry(RowStyle.CAROUSEL, false, titleRoomSizingBody(boxDp, titleRoomDp), captionDp)
-    val capped = spec.scaledBy(min(1f, CAROUSEL_MAX_W / spec.itemW))
-    val sides = capped.copy(scale = CAROUSEL_SIDE_SCALE, taper = CAROUSEL_TAPER)
+    val widthCapped = spec.scaledBy(min(1f, CAROUSEL_MAX_W / spec.itemW))
+    val sides = widthCapped.copy(scale = CAROUSEL_SIDE_SCALE, taper = CAROUSEL_TAPER)
     val uncapped = sides.let { g ->
         portraitW?.let { w -> g.scaledBy(min(1f, CAROUSEL_TILE_MAX_SHARE * w / g.itemW)) } ?: g
     }
