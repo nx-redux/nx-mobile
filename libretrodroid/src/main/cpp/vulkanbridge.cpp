@@ -120,6 +120,89 @@ const char* const WANTED_INSTANCE_EXTENSIONS[] = {
     "VK_KHR_external_semaphore_capabilities",
 };
 
+// The AHardwareBuffer a bridge slot uses (and the preflight tries): the format and usage the GLES side samples.
+bool allocateSharedBuffer(unsigned width, unsigned height, AHardwareBuffer** out) {
+    AHardwareBuffer_Desc desc {};
+    desc.width = width;
+    desc.height = height;
+    desc.layers = 1;
+    desc.format = AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM;
+    desc.usage = AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE | AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT;
+    if (AHardwareBuffer_allocate(&desc, out) != 0 || *out == nullptr) {
+        LOGE("Vulkan bridge: AHardwareBuffer_allocate %ux%u failed", width, height);
+        *out = nullptr;
+        return false;
+    }
+    return true;
+}
+
+// Imports [buffer] into [device] as a bridge slot does: its properties, an image bound to a dedicated import of its
+// memory. [image] and [memory] are set as they are made, so the caller frees whatever exists after a failure.
+bool importSharedBuffer(const VulkanDispatch& vk, VkDevice device, AHardwareBuffer* buffer, unsigned width,
+                        unsigned height, VkImage* image, VkDeviceMemory* memory,
+                        VkAndroidHardwareBufferPropertiesANDROID* propsOut) {
+    VkAndroidHardwareBufferFormatPropertiesANDROID formatProps {
+        VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_FORMAT_PROPERTIES_ANDROID };
+    VkAndroidHardwareBufferPropertiesANDROID props { VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID };
+    props.pNext = &formatProps;
+    VkResult r = vk.getAndroidHardwareBufferPropertiesANDROID(device, buffer, &props);
+    if (r != VK_SUCCESS) {
+        LOGE("Vulkan bridge: vkGetAndroidHardwareBufferPropertiesANDROID: %s", resultName(r));
+        return false;
+    }
+    if (formatProps.format != VK_FORMAT_R8G8B8A8_UNORM) {
+        LOGW("Vulkan bridge: AHB reports Vulkan format %d (external format 0x%llx), expected R8G8B8A8_UNORM",
+             (int) formatProps.format, (unsigned long long) formatProps.externalFormat);
+    }
+
+    VkExternalMemoryImageCreateInfo externalInfo { VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO };
+    externalInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID;
+    VkImageCreateInfo imageInfo { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+    imageInfo.pNext = &externalInfo;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+    imageInfo.extent = { width, height, 1 };
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    r = vk.createImage(device, &imageInfo, nullptr, image);
+    if (r != VK_SUCCESS) {
+        *image = VK_NULL_HANDLE;
+        LOGE("Vulkan bridge: vkCreateImage (AHB): %s", resultName(r));
+        return false;
+    }
+
+    VkImportAndroidHardwareBufferInfoANDROID importInfo { VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID };
+    importInfo.buffer = buffer;
+    VkMemoryDedicatedAllocateInfo dedicated { VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO };
+    dedicated.pNext = &importInfo;
+    dedicated.image = *image;
+    VkMemoryAllocateInfo allocInfo { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+    allocInfo.pNext = &dedicated;
+    allocInfo.allocationSize = props.allocationSize;
+    allocInfo.memoryTypeIndex = 0;
+    while (allocInfo.memoryTypeIndex < 32 && !(props.memoryTypeBits & (1u << allocInfo.memoryTypeIndex))) {
+        allocInfo.memoryTypeIndex++;
+    }
+    r = vk.allocateMemory(device, &allocInfo, nullptr, memory);
+    if (r != VK_SUCCESS) {
+        *memory = VK_NULL_HANDLE;
+        LOGE("Vulkan bridge: vkAllocateMemory (AHB import): %s", resultName(r));
+        return false;
+    }
+    r = vk.bindImageMemory(device, *image, *memory, 0);
+    if (r != VK_SUCCESS) {
+        LOGE("Vulkan bridge: vkBindImageMemory (AHB): %s", resultName(r));
+        return false;
+    }
+    if (propsOut != nullptr) *propsOut = props;
+    return true;
+}
+
 // Instance extensions [wanted] that the loader has, merged into [into] without duplicates.
 void mergeNames(std::vector<const char*>& into, const std::vector<std::string>& wanted) {
     for (const auto& name : wanted) {
@@ -184,6 +267,141 @@ bool VulkanBridge::isSupported() {
         return found;
     }();
     return supported;
+}
+
+bool VulkanBridge::probeCustomDriver(const std::string& dir, const std::string& library, const std::string& hookLibDir,
+                                     const std::string& tmpDir) {
+    // A table of its own, like isSupported(): the bridge's (and a session's) is never touched. The loader handle is the
+    // process-wide cached one, so the launch that follows reuses it; it is never closed.
+    VulkanDispatch vk;
+    VkInstance instance = VK_NULL_HANDLE;
+    VkDevice device = VK_NULL_HANDLE;
+    AHardwareBuffer* buffer = nullptr;
+    VkImage image = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    std::string failure;   // the reason, logged once below; empty: passed
+
+    [&] {
+        if (!VulkanDispatch::loadCustom(vk, dir, library, hookLibDir, tmpDir)) { failure = "the loader could not be opened"; return; }
+
+        uint32_t loaderVersion = VK_API_VERSION_1_0;
+        if (vk.enumerateInstanceVersion != nullptr) vk.enumerateInstanceVersion(&loaderVersion);
+        VkApplicationInfo app { VK_STRUCTURE_TYPE_APPLICATION_INFO };
+        app.pApplicationName = "nx-mobile";
+        app.pEngineName = "libretrodroid";
+        app.apiVersion = std::min(loaderVersion, (uint32_t) VK_API_VERSION_1_1);
+
+        uint32_t count = 0;
+        vk.enumerateInstanceExtensionProperties(nullptr, &count, nullptr);
+        std::vector<VkExtensionProperties> available(count);
+        vk.enumerateInstanceExtensionProperties(nullptr, &count, available.data());
+        std::vector<const char*> names;
+        for (const char* name : WANTED_INSTANCE_EXTENSIONS) {
+            for (const auto& p : available) {
+                if (strcmp(p.extensionName, name) == 0) { names.push_back(name); break; }
+            }
+        }
+        const auto enabled = [&](const char* name) {
+            return std::any_of(names.begin(), names.end(), [&](const char* n) { return strcmp(n, name) == 0; });
+        };
+        if (!enabled("VK_KHR_surface") || !enabled("VK_KHR_android_surface")) {
+            failure = "the loader lacks VK_KHR_surface/VK_KHR_android_surface";
+            return;
+        }
+        VkInstanceCreateInfo info { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
+        info.pApplicationInfo = &app;
+        info.enabledExtensionCount = (uint32_t) names.size();
+        info.ppEnabledExtensionNames = names.data();
+        VkResult r = vk.createInstance(&info, nullptr, &instance);
+        if (r != VK_SUCCESS) {
+            instance = VK_NULL_HANDLE;
+            failure = std::string("vkCreateInstance: ") + resultName(r);
+            return;
+        }
+        vk.bindInstance(instance);
+        const char* missing = vk.missingInstanceFunction();
+        if (missing == nullptr) missing = vk.missingSurfaceFunction();
+        if (missing != nullptr) { failure = std::string("the loader lacks ") + missing; return; }
+        if (!customDriverMapped(dir, library, tmpDir)) {
+            failure = "it is not loaded (libadrenotools fell back to the system driver)";
+            return;
+        }
+
+        count = 0;
+        vk.enumeratePhysicalDevices(instance, &count, nullptr);
+        if (count == 0) { failure = "no Vulkan physical device"; return; }
+        std::vector<VkPhysicalDevice> gpus(count);
+        vk.enumeratePhysicalDevices(instance, &count, gpus.data());
+        VkPhysicalDevice gpu = gpus[0];
+        VkPhysicalDeviceProperties props {};
+        vk.getPhysicalDeviceProperties(gpu, &props);
+        LOGI("Vulkan bridge: preflight of %s: GPU %s, Vulkan %u.%u.%u", library.c_str(), props.deviceName,
+             VK_VERSION_MAJOR(props.apiVersion), VK_VERSION_MINOR(props.apiVersion), VK_VERSION_PATCH(props.apiVersion));
+
+        uint32_t extCount = 0;
+        vk.enumerateDeviceExtensionProperties(gpu, nullptr, &extCount, nullptr);
+        std::vector<VkExtensionProperties> exts(extCount);
+        vk.enumerateDeviceExtensionProperties(gpu, nullptr, &extCount, exts.data());
+        std::vector<const char*> deviceNames;
+        for (const char* name : FRONTEND_DEVICE_EXTENSIONS) {
+            for (const auto& e : exts) {
+                if (strcmp(e.extensionName, name) == 0) { deviceNames.push_back(name); break; }
+            }
+        }
+        if (deviceNames.empty() || strcmp(deviceNames[0], "VK_ANDROID_external_memory_android_hardware_buffer") != 0) {
+            failure = "the device lacks VK_ANDROID_external_memory_android_hardware_buffer";
+            return;
+        }
+        // One queue of family 0: nothing is submitted, the device only has to exist for the import below.
+        const float priority = 1.0f;
+        VkDeviceQueueCreateInfo queueInfo { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
+        queueInfo.queueFamilyIndex = 0;
+        queueInfo.queueCount = 1;
+        queueInfo.pQueuePriorities = &priority;
+        VkDeviceCreateInfo deviceInfo { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
+        deviceInfo.queueCreateInfoCount = 1;
+        deviceInfo.pQueueCreateInfos = &queueInfo;
+        deviceInfo.enabledExtensionCount = (uint32_t) deviceNames.size();
+        deviceInfo.ppEnabledExtensionNames = deviceNames.data();
+        r = vk.createDevice(gpu, &deviceInfo, nullptr, &device);
+        if (r != VK_SUCCESS) {
+            device = VK_NULL_HANDLE;
+            failure = std::string("vkCreateDevice: ") + resultName(r);
+            return;
+        }
+        vk.bindDevice(device);
+        if (const char* missingDevice = vk.missingDeviceFunction()) {
+            failure = std::string("the driver lacks ") + missingDevice;
+            return;
+        }
+        if (vk.getAndroidHardwareBufferPropertiesANDROID == nullptr) {
+            failure = "the driver lacks vkGetAndroidHardwareBufferPropertiesANDROID";
+            return;
+        }
+
+        // The shared buffer exactly as a bridge slot makes and imports it (malisx2 on a Mali-G76 fails here).
+        const unsigned size = 64;
+        if (!allocateSharedBuffer(size, size, &buffer)) { failure = "AHardwareBuffer_allocate failed"; return; }
+        if (!importSharedBuffer(vk, device, buffer, size, size, &image, &memory, nullptr)) {
+            failure = "it cannot share frames with the display (AHardwareBuffer import)";
+            return;
+        }
+    }();
+
+    // Reverse order; the loader stays open (vk.close() never closes a custom driver's handle).
+    if (image != VK_NULL_HANDLE) vk.destroyImage(device, image, nullptr);
+    if (memory != VK_NULL_HANDLE) vk.freeMemory(device, memory, nullptr);
+    if (device != VK_NULL_HANDLE && vk.destroyDevice != nullptr) vk.destroyDevice(device, nullptr);
+    if (buffer != nullptr) AHardwareBuffer_release(buffer);
+    if (instance != VK_NULL_HANDLE && vk.destroyInstance != nullptr) vk.destroyInstance(instance, nullptr);
+    vk.close();
+
+    if (!failure.empty()) {
+        LOGE("Vulkan bridge: preflight: custom driver %s cannot start: %s", library.c_str(), failure.c_str());
+        return false;
+    }
+    LOGI("Vulkan bridge: preflight: custom driver %s passed", library.c_str());
+    return true;
 }
 
 void VulkanBridge::setDriver(const std::string& dir, const std::string& library, const std::string& hookLibDir,
@@ -560,73 +778,9 @@ bool VulkanBridge::initialize(unsigned width, unsigned height) {
 }
 
 bool VulkanBridge::allocateSlot(Slot& slot, unsigned width, unsigned height) {
-    AHardwareBuffer_Desc desc {};
-    desc.width = width;
-    desc.height = height;
-    desc.layers = 1;
-    desc.format = AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM;
-    desc.usage = AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE | AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT;
-    if (AHardwareBuffer_allocate(&desc, &slot.buffer) != 0 || slot.buffer == nullptr) {
-        LOGE("Vulkan bridge: AHardwareBuffer_allocate %ux%u failed", width, height);
-        return false;
-    }
-
-    VkAndroidHardwareBufferFormatPropertiesANDROID formatProps {
-        VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_FORMAT_PROPERTIES_ANDROID };
+    if (!allocateSharedBuffer(width, height, &slot.buffer)) return false;
     VkAndroidHardwareBufferPropertiesANDROID props { VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID };
-    props.pNext = &formatProps;
-    VkResult r = vk.getAndroidHardwareBufferPropertiesANDROID(device, slot.buffer, &props);
-    if (r != VK_SUCCESS) {
-        LOGE("Vulkan bridge: vkGetAndroidHardwareBufferPropertiesANDROID: %s", resultName(r));
-        return false;
-    }
-    if (formatProps.format != VK_FORMAT_R8G8B8A8_UNORM) {
-        LOGW("Vulkan bridge: AHB reports Vulkan format %d (external format 0x%llx), expected R8G8B8A8_UNORM",
-             (int) formatProps.format, (unsigned long long) formatProps.externalFormat);
-    }
-
-    VkExternalMemoryImageCreateInfo externalInfo { VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO };
-    externalInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID;
-    VkImageCreateInfo imageInfo { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
-    imageInfo.pNext = &externalInfo;
-    imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-    imageInfo.extent = { width, height, 1 };
-    imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = 1;
-    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    r = vk.createImage(device, &imageInfo, nullptr, &slot.image);
-    if (r != VK_SUCCESS) {
-        LOGE("Vulkan bridge: vkCreateImage (AHB): %s", resultName(r));
-        return false;
-    }
-
-    VkImportAndroidHardwareBufferInfoANDROID importInfo { VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID };
-    importInfo.buffer = slot.buffer;
-    VkMemoryDedicatedAllocateInfo dedicated { VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO };
-    dedicated.pNext = &importInfo;
-    dedicated.image = slot.image;
-    VkMemoryAllocateInfo allocInfo { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
-    allocInfo.pNext = &dedicated;
-    allocInfo.allocationSize = props.allocationSize;
-    allocInfo.memoryTypeIndex = 0;
-    while (allocInfo.memoryTypeIndex < 32 && !(props.memoryTypeBits & (1u << allocInfo.memoryTypeIndex))) {
-        allocInfo.memoryTypeIndex++;
-    }
-    r = vk.allocateMemory(device, &allocInfo, nullptr, &slot.memory);
-    if (r != VK_SUCCESS) {
-        LOGE("Vulkan bridge: vkAllocateMemory (AHB import): %s", resultName(r));
-        return false;
-    }
-    r = vk.bindImageMemory(device, slot.image, slot.memory, 0);
-    if (r != VK_SUCCESS) {
-        LOGE("Vulkan bridge: vkBindImageMemory (AHB): %s", resultName(r));
-        return false;
-    }
+    if (!importSharedBuffer(vk, device, slot.buffer, width, height, &slot.image, &slot.memory, &props)) return false;
 
     slot.width = width;
     slot.height = height;

@@ -58,6 +58,21 @@ object GpuDriverChoice {
         return Launch(driverId, forceGles || netplayForcesGles || (driverId == null && coreFailedOnSystem))
     }
 
+    /**
+     * The launch after the native preflight of [launch]'s driver (named [driverName]), run before any core is loaded.
+     * [launch] is unchanged when there is no driver or [preflightOk]. Otherwise this same launch goes on without the
+     * driver: on the system driver with [SYSTEM_DRIVER_NOTICE], or on OpenGL ES with [GLES_NOTICE] when the core's
+     * system-driver Vulkan already failed here ([coreFailedOnSystem]): what [afterStartFailure] would relaunch into, with
+     * no relaunch and nothing recorded. [clearMarker]: the launch's crash marker, written before the preflight, goes.
+     */
+    data class Preflight(val launch: Launch, val notice: String?, val clearMarker: Boolean)
+
+    fun afterPreflight(launch: Launch, preflightOk: Boolean, driverName: String, coreFailedOnSystem: Boolean): Preflight = when {
+        launch.driverId == null || preflightOk -> Preflight(launch, null, false)
+        coreFailedOnSystem -> Preflight(Launch(null, true), named(GLES_NOTICE, driverName), true)
+        else -> Preflight(Launch(null, launch.vulkanFailed), named(SYSTEM_DRIVER_NOTICE, driverName), true)
+    }
+
     /** What to do after a failed start. */
     enum class Next {
         /** Relaunch on Vulkan with the system driver. */

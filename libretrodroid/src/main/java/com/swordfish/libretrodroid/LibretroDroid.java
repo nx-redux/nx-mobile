@@ -133,6 +133,13 @@ public class LibretroDroid {
      * ERROR_GL_NOT_COMPATIBLE: the host decides whether to retry on the system driver. Set before create().
      */
     public static native void setVulkanDriver(String driverDir, String libraryName, String hookLibDir, String tmpDir);
+    /**
+     * Before any core is loaded: whether the custom driver libraryName in driverDir (arguments as setVulkanDriver's) can
+     * start the Vulkan bridge: its loader, an instance and a device with the bridge's extensions, and one AHardwareBuffer
+     * imported as the bridge's frames are. Leaves the loader open for the launch that follows; false logs the reason.
+     * Blocking (a driver load): any thread but the GL one is fine.
+     */
+    public static native boolean probeVulkanDriver(String driverDir, String libraryName, String hookLibDir, String tmpDir);
     /** Offer libretro video views to the next core loaded. */
     public static native void setVideoViewsEnabled(boolean enabled);
     /** The core's video view map, 6 ints per view (x, y, width, height, screen, eye); empty when there is none. */

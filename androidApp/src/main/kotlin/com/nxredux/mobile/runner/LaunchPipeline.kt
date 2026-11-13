@@ -202,6 +202,8 @@ internal interface LaunchHost : GameScreenHost {
      * Nothing once the screen is destroyed; a write in flight then is cleared by it ([GpuDriverMarkerGuard]).
      */
     fun markDriverLaunch(marker: String): Boolean
+    /** Clears the marker [markDriverLaunch] wrote (blocking, off the main thread): the driver failed its preflight. */
+    fun clearDriverLaunchMarker()
     fun quitGame(chosen: Boolean, autoState: Boolean)
     fun isLandscape(): Boolean
     fun screenClass(): ScreenClass
@@ -883,6 +885,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 Ps2Options.biosOption(frontendValues[Ps2Options.BIOS], prepared.biosPresent.filter { it.endsWith(".bin", ignoreCase = true) })
             } else emptyMap()
             var driverCrashNotice: String? = null   // GpuDriverCrashSettle's, toasted once the launch is read
+            var preflightNotice: String? = null   // a custom driver that failed its preflight (GpuDriverChoice.afterPreflight)
             val data = try {
                 withContext(Dispatchers.IO) {
                     // The name the core sees: an arcade zip in lowercase (fbneo matches the driver name case-sensitively).
@@ -902,7 +905,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     if (mayLoadDriver) driverCrashNotice = GpuDriverCrashSettle.settle(settings, setOf(Process.myPid()))
                     val driverStore = AndroidGpuDrivers(AndroidGpuDrivers.root(activity.filesDir), Build.VERSION.SDK_INT)
                     val drivers = if (mayLoadDriver) driverStore.installed() else emptyList()
-                    val launch = GpuDriverChoice.launch(
+                    var launch = GpuDriverChoice.launch(
                         apiValue, frontendValues[GpuDriverOptions.KEY], settings.gpuDriver, drivers.mapTo(HashSet()) { it.id },
                         GpuDriverCrash.crashed(settings.gpuDriverCrashes, gamePath.orEmpty()), available = driversAvailable,
                         forceGles = activity.intent.getBooleanExtra(EXTRA_FORCE_GLES, false),
@@ -910,15 +913,30 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         coreFailedOnSystem = cfg.descriptor?.id in settings.vulkanFailedCores,
                         netplayForcesGles = cfg.np != null && NetplayCores.forcesGles(cfg.descriptor?.id),
                     )
-                    val graphics = GraphicsApiOptions.resolve(apiValue, cfg.descriptor?.vulkan, { LibretroDroid.isVulkanSupported() }, launch.vulkanFailed)
-                    launchedOnVulkan = graphics.preferVulkan
-                    val driver = if (graphics.preferVulkan) drivers.firstOrNull { it.id == launch.driverId } else null
-                    launchedDriver = driver
+                    var graphics = GraphicsApiOptions.resolve(apiValue, cfg.descriptor?.vulkan, { LibretroDroid.isVulkanSupported() }, launch.vulkanFailed)
+                    var driver = if (graphics.preferVulkan) drivers.firstOrNull { it.id == launch.driverId } else null
                     if (driver != null && gamePath != null) {
                         NxLog.i(TAG_LOG, "GPU driver: ${driver.name} (${driver.id}, ${driver.libraryName})")
-                        // Committed before the view exists: on disk before this driver can take the process down.
+                        // Committed before the view exists: on disk before this driver can take the process down. Also
+                        // before the preflight below, so a driver that crashes the preflight is recorded like one that
+                        // crashes its first frames.
                         markDriverLaunch(GpuDriverCrash.encode(GpuDriverCrash.Marker(Process.myPid(), gamePath, cfg.title, driver.id, driver.name)))
+                        // Before any core is loaded: a driver that cannot start the bridge is caught here, and this same
+                        // launch goes on without it (a core torn down after a failed start can crash: PPSSPP, mupen64plus).
+                        // Retried on every launch. The in-process relaunch stays for what the preflight cannot see.
+                        val ok = GLRetroView.probeVulkanDriver(activity, driverStore.directory(driver.id).absolutePath + "/", driver.libraryName)
+                        val after = GpuDriverChoice.afterPreflight(launch, ok, driver.name, cfg.descriptor?.id in settings.vulkanFailedCores)
+                        if (after.clearMarker) clearDriverLaunchMarker()
+                        if (after.launch != launch) {
+                            NxLog.w(TAG_LOG, "the GPU driver ${driver.name} failed its preflight: this launch goes on without it")
+                            launch = after.launch
+                            graphics = GraphicsApiOptions.resolve(apiValue, cfg.descriptor?.vulkan, { LibretroDroid.isVulkanSupported() }, launch.vulkanFailed)
+                            driver = null
+                        }
+                        preflightNotice = after.notice
                     }
+                    launchedOnVulkan = graphics.preferVulkan
+                    launchedDriver = driver
                     launchEnv = graphics.env
                     // netplay link: the link options are this launch's too (a session's port, mode and peer; a solo mGBA's cable): never saved.
                     graphicsForcedOptions = graphics.forcedOptions.keys + cfg.linkOptions.keys
@@ -1014,6 +1032,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 copyToast?.cancel()
             }
             driverCrashNotice?.let { toast(it) }
+            preflightNotice?.let { toast(it) }
             return data
         }
     }

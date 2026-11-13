@@ -87,4 +87,28 @@ class GpuDriverChoiceTest {
         assertEquals("Turnip 100% couldn't start, so this game is using OpenGL ES.", GpuDriverChoice.named(GpuDriverChoice.GLES_NOTICE, "Turnip 100%"))
         assertEquals("Turnip v25 could not start for this game. Set Display → GPU driver to System driver.", GpuDriverChoice.named(GpuDriverChoice.NETPLAY_FAIL, "Turnip v25"))
     }
+
+    @Test fun passedPreflightKeepsTheDriver() {
+        val l = launch()
+        assertEquals(GpuDriverChoice.Preflight(l, null, false), GpuDriverChoice.afterPreflight(l, true, "Turnip", false))
+    }
+
+    @Test fun failedPreflightGoesOnOnTheSystemDriverWithTheNotice() {
+        val p = GpuDriverChoice.afterPreflight(launch(), false, "Turnip", false)
+        assertEquals(GpuDriverChoice.Launch(null, false), p.launch)   // Vulkan on the system driver: nothing recorded
+        assertEquals("Turnip couldn't start, so this game is using the system driver.", p.notice)
+        assertEquals(true, p.clearMarker)
+    }
+
+    @Test fun failedPreflightOnACoreThatFailedOnTheSystemDriverGoesToGles() {
+        val p = GpuDriverChoice.afterPreflight(launch(coreFailed = true), false, "Turnip", true)
+        assertEquals(GpuDriverChoice.Launch(null, true), p.launch)
+        assertEquals("Turnip couldn't start, so this game is using OpenGL ES.", p.notice)
+        assertEquals(true, p.clearMarker)
+    }
+
+    @Test fun noDriverNoPreflightEffect() {
+        val l = launch(apiValue = GraphicsApiOptions.GLES)
+        assertEquals(GpuDriverChoice.Preflight(l, null, false), GpuDriverChoice.afterPreflight(l, false, "Turnip", false))
+    }
 }

@@ -401,7 +401,7 @@ class GLRetroView(
             data.vulkanDriverDir,
             data.vulkanDriverLibrary,
             context.applicationInfo.nativeLibraryDir,
-            java.io.File(context.cacheDir, "gpu_driver_tmp").absolutePath + "/",
+            driverTmpDir(context),
         )
         LibretroDroid.setVideoViewsEnabled(data.videoViews)
         LibretroDroid.setKeepCoreLoaded(data.keepCoreLoaded)
@@ -1150,6 +1150,18 @@ class GLRetroView(
 
     companion object {
         private val TAG_LOG = GLRetroView::class.java.simpleName
+
+        // Patched libraries for libadrenotools below API 29 (memfd from 29).
+        private fun driverTmpDir(context: Context): String = java.io.File(context.cacheDir, "gpu_driver_tmp").absolutePath + "/"
+
+        /**
+         * Before the view (and its core) exists: whether the custom Vulkan driver [library] in [driverDir] can start the
+         * bridge ([LibretroDroid.probeVulkanDriver]), with the hook and temp directories a launch uses. Blocking: not
+         * on the main thread.
+         */
+        @JvmStatic
+        fun probeVulkanDriver(context: Context, driverDir: String, library: String): Boolean =
+            LibretroDroid.probeVulkanDriver(driverDir, library, context.applicationInfo.nativeLibraryDir, driverTmpDir(context))
         private const val EMULATION_THREAD_TIMEOUT_SECONDS = 10L
         private const val DESTROY_TIMEOUT_SECONDS = 5L
         private const val SECONDARY_TEARDOWN_TIMEOUT_MS = 500L

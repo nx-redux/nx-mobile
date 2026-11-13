@@ -2147,6 +2147,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         override fun relaunchOnSystemDriver() = game.relaunchOnSystemDriver()
         override fun clearDriverMarkerLater() = game.clearDriverMarkerLater()
         override fun markDriverLaunch(marker: String) = game.driverMarker.mark(marker)
+        override fun clearDriverLaunchMarker() { game.driverMarker.clear() }
         override fun quitGame(chosen: Boolean, autoState: Boolean) = game.quitWithAutoState(chosen, autoState)
         override fun toast(msg: String) = game.toast(msg)
         override fun isLandscape() = game.isLandscape()

@@ -1148,6 +1148,25 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setVulkanD
                                                  JniString(env, tmpDir).stdString());
 }
 
+JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_probeVulkanDriver(
+    JNIEnv* env,
+    jclass obj,
+    jstring driverDir,
+    jstring libraryName,
+    jstring hookLibDir,
+    jstring tmpDir
+) {
+    try {
+        return VulkanBridge::probeCustomDriver(JniString(env, driverDir).stdString(),
+                                               JniString(env, libraryName).stdString(),
+                                               JniString(env, hookLibDir).stdString(),
+                                               JniString(env, tmpDir).stdString());
+    } catch (std::exception& exception) {
+        LOGE("Error in probeVulkanDriver: %s", exception.what());
+        return false;
+    }
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setVulkanSwapchainFrames(
     JNIEnv* env,
     jclass obj,

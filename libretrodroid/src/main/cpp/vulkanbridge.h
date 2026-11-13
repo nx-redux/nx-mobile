@@ -53,6 +53,14 @@ public:
     // Vulkan is offered, so a core that picks Vulkan can always get it. Cached after the first call.
     static bool isSupported();
 
+    // Before any core is loaded: whether the custom driver [library] in [dir] (arguments as setDriver's) can start the
+    // bridge. On its own table and the process-wide cached loader: instance with the bridge's instance extensions, the
+    // /proc/self/maps check, a device with the bridge's device extensions, and one AHardwareBuffer allocated and imported
+    // exactly as a frame slot is. Everything it made is destroyed; the loader stays open for the launch. False: the
+    // reason logged. Any thread; never touches the bridge's own state.
+    static bool probeCustomDriver(const std::string& dir, const std::string& library, const std::string& hookLibDir,
+                                  const std::string& tmpDir);
+
     // From RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE (the core keeps the struct alive).
     void setNegotiation(const retro_hw_render_context_negotiation_interface_vulkan* negotiation);
 
