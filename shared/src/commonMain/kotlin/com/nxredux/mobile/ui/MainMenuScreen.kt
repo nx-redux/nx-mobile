@@ -344,30 +344,19 @@ fun MainMenuScreen(
             // The tabs at the bottom, in the hint bar's place: the selected word lit, no underline. A long press offers the
             // hidden tabs. One tab or a pushed tab: its title stands there instead.
             if (shown.tabRow) {
-                val longPress = onTabMenu?.let { f -> Modifier.pointerInput(f) { detectTapGestures(onLongPress = { f() }) } } ?: Modifier
-                // Still while the page slides between tabs; it changes when a swipe commits ([pageFixed]). Its words on the page
-                // inset in every layout, as the names and tiles ([nxPageInset]). Its top [TAB_ROW_PULL] is given to the page
-                // above ([pullUp]): the words stay put, every layout's content ends that much nearer them.
-                Box(Modifier.pullUp(TAB_ROW_PULL).pageFixed().onSizeChanged { tabRowPx.intValue = it.height }) {
-                    // With Button hints on and buttons to press, a few hints at the row's right (the main menu has no bar):
-                    // Netplay first on Home's netplay game (its Layouts row), then Recent, then Search; one upright, two
-                    // sideways, and only as many as the words leave room for.
-                    val barHints = if (!shown.buttonHints || shown.noBar) null else {
-                        val netplayNow by remember(canNetplay) { derivedStateOf { canNetplay() } }
-                        val portrait = LocalPortrait.current
-                        remember(home, shown.netplayHint, netplayNow, canSearch, portrait) {
-                            listOfNotNull(
-                                Hint(NxButton.Y, "Netplay").takeIf { home && shown.netplayHint && netplayNow },
-                                Hint(NxButton.SELECT, "Recent"),
-                                Hint(NxButton.START, "Search").takeIf { canSearch },
-                            ).take(if (portrait) 1 else 2)
-                        }
+                MenuBottomRow(
+                    labels, screen.tab, onTab, title, onTabMenu, onHint, showHints = shown.buttonHints && !shown.noBar,
+                    modifier = Modifier.onSizeChanged { tabRowPx.intValue = it.height },
+                ) {
+                    // Netplay first on Home's netplay game (its Layouts row), then Recent, then Search.
+                    val netplayNow by remember(canNetplay) { derivedStateOf { canNetplay() } }
+                    remember(home, shown.netplayHint, netplayNow, canSearch) {
+                        listOfNotNull(
+                            Hint(NxButton.Y, "Netplay").takeIf { home && shown.netplayHint && netplayNow },
+                            Hint(NxButton.SELECT, "Recent"),
+                            Hint(NxButton.START, "Search").takeIf { canSearch },
+                        )
                     }
-                    if (title == null) MenuTabRow(
-                        labels, screen.tab, onTab, onLongPress = onTabMenu, underline = false, labelSize = nxHintLabelSize(),   // a hint's size, as the game lists' bar in its place
-                        hints = barHints?.let { h -> { room -> NxFittedHints(h, room, onHint) } },
-                    )
-                    else MenuTitleRow(title, modifier = longPress, textStart = nxPageInset().start)
                 }
             }
         }
@@ -393,6 +382,35 @@ fun MainMenuScreen(
 }
 
 
+/**
+ * The main menu's bottom row, in the hint bar's place: the tabs ([labels], [selected] lit, no underline; a long press
+ * [onTabMenu]), or the [title] standing there instead (one tab, a pushed tab). Still while the page slides between tabs;
+ * it changes when a swipe commits ([pageFixed]). Its words on the page inset in every layout, as the names and tiles
+ * ([nxPageInset]). Its top [TAB_ROW_PULL] is given to the page above ([pullUp]): the words stay put, every layout's
+ * content ends that much nearer them. With Button hints on and buttons to press ([showHints]: the chrome in effect's, not
+ * the body's), a few of [hints] at the row's right (the main menu has no bar): one upright, two sideways, and only as
+ * many as the words leave room for. The main menu's own and the Games tab's ([GameListScreen]'s tabRow).
+ */
+@Composable
+internal fun MenuBottomRow(
+    labels: List<String>, selected: Int, onTab: (Int) -> Unit, title: String?, onTabMenu: (() -> Unit)?, onHint: ((NxButton) -> Unit)?,
+    showHints: Boolean, modifier: Modifier = Modifier, hints: @Composable () -> List<Hint> = { emptyList() },
+) {
+    val longPress = onTabMenu?.let { f -> Modifier.pointerInput(f) { detectTapGestures(onLongPress = { f() }) } } ?: Modifier
+    Box(Modifier.pullUp(TAB_ROW_PULL).pageFixed().then(modifier)) {
+        val barHints = if (!showHints) null else {
+            val all = hints()
+            val portrait = LocalPortrait.current
+            remember(all, portrait) { all.take(if (portrait) 1 else 2) }
+        }
+        if (title == null) MenuTabRow(
+            labels, selected, onTab, onLongPress = onTabMenu, underline = false, labelSize = nxHintLabelSize(),   // a hint's size, as the game lists' bar in its place
+            hints = barHints?.let { h -> { room -> NxFittedHints(h, room, onHint) } },
+        )
+        else MenuTitleRow(title, modifier = longPress, textStart = nxPageInset().start)
+    }
+}
+
 /** [ground] from clear at the top to solid at the bottom on a smoothstep (zero slope at both ends): List Home's art fade. */
 internal fun smoothFadeStops(ground: Color): Array<Pair<Float, Color>> = Array(SMOOTH_FADE_STOPS) { i ->
     val y = i / (SMOOTH_FADE_STOPS - 1f)
@@ -412,7 +430,7 @@ internal fun mainMenuListEdges(tabRow: Boolean, barShown: Boolean): Pair<Float, 
 }
 
 /** The room a main menu tab's List keeps under its last row while the tab row is hidden, in row pitches (as List Home's). */
-private const val MENU_LIST_BOTTOM_ROWS = 0.5f
+internal const val MENU_LIST_BOTTOM_ROWS = 0.5f
 
 /** How far a main menu Carousel's row moves down so it centres on the screen: half a hint bar, less half a tab row. */
 internal fun mainMenuCarouselShift(tabRow: Boolean, barShown: Boolean): Dp =
@@ -449,6 +467,13 @@ internal fun topIconsRoom(tabRow: Boolean, topIcons: Boolean): TopIconsRoom = wh
 internal fun mainMenuTitle(screen: Screen.Systems): String? = when {
     screen.pushed -> screen.category?.label
     screen.tabs.size < 2 -> APP_NAME
+    else -> null
+}
+
+/** [mainMenuTitle] for the Games tab's bar ([TabBar]): a pushed tab's label, one tab's app name, else null (the tab row). */
+internal fun tabBarTitle(bar: TabBar): String? = when {
+    bar.pushed -> bar.categories.getOrNull(bar.index)?.label
+    bar.categories.size < 2 -> APP_NAME
     else -> null
 }
 
@@ -495,7 +520,8 @@ internal data class MainMenuListBand(val shade: Boolean, val info: Boolean)
 
 /** The List band for [category]'s tab ([MainMenuListBand]): none on Consoles, Collections and Tools, shaded with its info elsewhere. */
 internal fun mainMenuListBand(category: MenuCategory?): MainMenuListBand = when (category) {
-    MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS, MenuCategory.APPS -> MainMenuListBand(shade = false, info = false)
+    // GAMES: never drawn here, the Games tab is a game list.
+    MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS, MenuCategory.APPS, MenuCategory.GAMES -> MainMenuListBand(shade = false, info = false)
     MenuCategory.HOME, null -> MainMenuListBand(shade = true, info = true)
 }
 

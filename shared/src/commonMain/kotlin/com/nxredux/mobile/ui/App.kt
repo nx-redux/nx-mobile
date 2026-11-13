@@ -103,6 +103,7 @@ import com.nxredux.mobile.library.path
 import com.nxredux.mobile.settings.ConsoleArt
 import com.nxredux.mobile.settings.GameListArt
 import com.nxredux.mobile.settings.MenuCategory
+import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
 import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.ui.nx.ListSelection
@@ -130,7 +131,9 @@ import com.nxredux.mobile.ui.nx.NxScreenBackground
 import com.nxredux.mobile.ui.nx.NxTheme
 import com.nxredux.mobile.ui.nx.NxColors
 import com.nxredux.mobile.ui.nx.FooterMode
+import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.NxButton
+import com.nxredux.mobile.ui.nx.tabSwipe
 import com.nxredux.mobile.ui.nx.NxTextPrompt
 import com.nxredux.mobile.ui.nx.PadEvent
 import com.nxredux.mobile.ui.nx.PadVibrationProvider
@@ -138,7 +141,6 @@ import com.nxredux.mobile.ui.nx.footerModeFor
 import com.nxredux.mobile.ui.nx.LocalHasTouchscreen
 import com.nxredux.mobile.ui.nx.rememberHasTouchscreen
 import com.nxredux.mobile.ui.nx.rememberControllerConnected
-import com.nxredux.mobile.ui.nx.rememberSeparateController
 import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.background
 import org.jetbrains.compose.resources.painterResource
@@ -187,10 +189,11 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}, keyboard: Boolean 
     val skin = remember(padTheme, skinPacks) { padTheme.skin?.let(skinPacks) }
     // Appearance → Pad skin, likewise; hidden while first setup and onboarding have not asked yet, previewed on its step.
     // Keyed on what it reads, never the selection: a selection key would recompose this whole root on every step.
-    val skinDualMenu by state.skinDualMenu.collectAsState()
-    val menuPad = remember(screen, skinDualMenu) { state.menuPadShown() }
-    val look = rememberMenuLook(state, screen)   // the accents and the launcher chrome's settings, likewise
+    // Any controller connected (a clip-on and built-in controls too): no skin, as in a game ([com.nxredux.mobile.ui.nx.menuSkinShown]).
     val controllerConnected = rememberControllerConnected()   // once, above the shell: survives rotation and pad/no-pad flips
+    val skinDualMenu by state.skinDualMenu.collectAsState()
+    val menuPad = remember(screen, skinDualMenu) { state.menuPadShown() } && !controllerConnected
+    val look = rememberMenuLook(state, screen)   // the accents and the launcher chrome's settings, likewise
     LaunchedEffect(controllerConnected) { state.onControllerConnected(controllerConnected) }   // a Shortcuts bind row's line
     val touchscreen = rememberHasTouchscreen()   // for a game list's Recent, Search and Layout icons
     // Bars and the cutout above and below only (the side cutout is in each page's inset: [nxPageInset]), never the IME: the shell must not shrink for the keyboard (NxModal pads for it where needed).
@@ -210,11 +213,10 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}, keyboard: Boolean 
                     val footer = footerModeFor(controllerConnected, LocalPadBelow.current)
                     // AppState needs it too: the tab row's focus follows whether Page title's Hide is in effect.
                     LaunchedEffect(footer) { state.onFooterMode(footer) }
-                    // Onboarding's customise pages follow the device: the pad is a choice in portrait without a controller
-                    // (a clip-on counts as none).
+                    // Onboarding's customise pages follow the device: the pad is a choice only without a controller (a
+                    // clip-on counts too: the menu shows no skin with one, so its page would preview nothing).
                     val portrait = LocalPortrait.current
-                    val separate = rememberSeparateController()
-                    LaunchedEffect(portrait, separate) { state.onPadContext(portrait, separate) }
+                    LaunchedEffect(portrait, controllerConnected) { state.onPadContext(portrait, controllerConnected) }
                     MenuLocals(state, look, footer, touchscreen) {
                         // A parent with the full menu while Kids Mode is on: the bar above every page, its button back to Kids Mode.
                         val kidsMode by state.kidsModeState.collectAsState()
@@ -242,7 +244,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}, keyboard: Boolean 
                                 val minimalPage = remember { MinimalPage(minimalMorph, isLive, nav.motion) }
                                 CompositionLocalProvider(LocalMinimalPage provides minimalPage, LocalTabSwipe provides tabSwipe) {
                                     // The main menu's tabs side by side for a sideways swipe ([TabPager]); the info is the current map for both pages.
-                                    if (live && page is Screen.Systems && tabPaged(page)) TabPager(state, page, pageSelection, pageResume, gameInfo, isLive, tabSwipe)
+                                    if (live && page != null && pagedTabs(page) != null) TabPager(state, page, pageSelection, pageResume, gameInfo, isLive, tabSwipe)
                                     else page?.let { PageContent(state, it, pageSelection, pageResume, gameInfo, isLive) }
                                 }
                                 // The page sliding out takes no taps: they would act on the page sliding in.
@@ -382,8 +384,15 @@ private fun pageTransition(motion: NavMotion): ContentTransform {
 /** A List's game picture (a game list's, List Home's) under a black of this alpha ([ListArtBackground]), so the names read. */
 private const val LIST_ART_DIM = 0.68f   // role: a List's game art dim: the picture shows at 32%
 
-/** Whether [s] pages between its tabs ([TabPager]): a main menu of two tabs or more, no tab pushed over it. */
-private fun tabPaged(s: Screen.Systems): Boolean = !s.pushed && s.tabs.size > 1
+/**
+ * The tabs [s] pages between ([TabPager]) and the one it shows: a main menu (a [Screen.Systems] tab or the Games tab) of
+ * two tabs or more, no tab pushed over it; null otherwise.
+ */
+internal fun pagedTabs(s: Screen): Pair<List<MenuCategory>, Int>? = when (s) {
+    is Screen.Systems -> if (s.pushed || s.tabs.size < 2) null else s.tabs.map { it.category } to s.tab
+    is Screen.Games -> s.tabBar?.takeIf { !it.pushed && it.categories.size > 1 }?.let { it.categories to it.index }
+    else -> null
+}
 
 /**
  * The main menu's tabs side by side: the tab showing ([screen]'s) and the ones either side of it, each tab's page its
@@ -396,15 +405,17 @@ private fun tabPaged(s: Screen.Systems): Boolean = !s.pushed && s.tabs.size > 1
  */
 @Composable
 private fun TabPager(
-    state: AppState, screen: Screen.Systems, selection: State<ListSelection>, resume: State<ResumeInfo>,
+    state: AppState, screen: Screen, selection: State<ListSelection>, resume: State<ResumeInfo>,
     gameInfo: State<Map<String, GameInfo>>, live: State<Boolean>, swipe: TabSwipe,
 ) {
-    val n = screen.tabs.size
+    // Either kind of tab: a Systems tab or the Games tab, each page beside it either kind too ([AppState.tabPage]).
+    val (tabs, tab) = pagedTabs(screen) ?: return
+    val n = tabs.size
     val scope = rememberCoroutineScope()
-    val lastTab = remember { intArrayOf(screen.tab) }
+    val lastTab = remember { intArrayOf(tab) }
     SideEffect {
-        if (screen.tab != lastTab[0]) {
-            lastTab[0] = screen.tab
+        if (tab != lastTab[0]) {
+            lastTab[0] = tab
             val step = swipe.pending
             swipe.pending = 0
             // The new tab was the page beside: it carries on from there (an L1 / R1 or a tap: no swipe, no slide).
@@ -414,13 +425,13 @@ private fun TabPager(
     }
     val notLive = remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize().onSizeChanged { swipe.width = it.width.toFloat() }) {
-        val shown = listOf((screen.tab - 1).mod(n), (screen.tab + 1).mod(n), screen.tab).distinct()
-        for (i in shown) key(screen.tabs[i].category) {
-            val current = i == screen.tab
+        val shown = listOf((tab - 1).mod(n), (tab + 1).mod(n), tab).distinct()
+        for (i in shown) key(tabs[i]) {
+            val current = i == tab
             val isCurrent = rememberUpdatedState(current)
             // Where it sits: the showing page at 0, the next one a page right, the previous a page left (with two tabs,
             // the other is both: on the side the drag uncovers).
-            val side = rememberUpdatedState(if (current) 0 else if (i == (screen.tab + 1).mod(n)) 1 else -1)
+            val side = rememberUpdatedState(if (current) 0 else if (i == (tab + 1).mod(n)) 1 else -1)
             val both = rememberUpdatedState(!current && n == 2)
             val slide = remember(swipe) {
                 PageSlide(
@@ -581,7 +592,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                 s.menu?.let { ContextMenuOverlay(it, onButton = state::onButton, onSelect = state::menuSelect, onOpen = state::menuOpen, onDraft = state::menuDraft, onColumns = state::onMenuLayout) }
                 s.search?.let { NxTextPrompt("Search", it, state::searchDraft, onConfirm = { state.onButton(NxButton.A) }, onCancel = { state.onButton(NxButton.B) }) }
             }
-            is Screen.Games -> GamesPage(state, s, selection, resume, gameInfo, now)
+            is Screen.Games -> GamesPage(state, s, selection, resume, gameInfo, now, shows)
             // Its info follows Extra info, as the menus'. List: a row tap selects, a second tap resumes.
             is Screen.Switcher -> GameSwitcherScreen(
                 s, state::onButton, info = gameInfoFor(gameInfo, now, s.entries.getOrNull(s.index)?.game, full = true, meta),
@@ -660,15 +671,21 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
  * A game list page ([Screen.Games]) with all its overlays: the list in the game list style, the achievements panel, the
  * Layout dropdown, the search prompt and the context menu (with its rename / new collection drafts). The single screen's
  * page, and the second display's top screen while the main menu is there ([MenuTopScreen]). [gameInfo]: the launcher's
- * ([launcherGameInfo]); [now]: [rememberNow]'s clock.
+ * ([launcherGameInfo]); [now]: [rememberNow]'s clock; [live]: the page is the one showing.
+ * The Games tab ([Screen.Games.isTab]) is drawn as a game list over the main menu's bottom row ([GameListFrame]): the
+ * tab row (or the menu's title row, pushed or alone), a console list's top titled by the highlighted game's console
+ * ([gamesTabTitle]), START's prompt (and the Search icon) the main menu's global search, L2 Jump first in the hints.
  */
 @Composable
-internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSelection>, resume: State<ResumeInfo>, gameInfo: Map<String, GameInfo>, now: Long) {
+internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSelection>, resume: State<ResumeInfo>, gameInfo: Map<String, GameInfo>, now: Long, live: Boolean = true) {
     val style = state.styleOf(s)
     val orientation = state.orientationOf(s)
     // A Grid reports its columns only while its page is the one showing (a page sliding out never overwrites the count).
-    val onGridLayout: (Int) -> Unit = remember(s) { { columns -> if (state.screen.value === s) state.onGridLayout(columns) } }
-    val onPageRows: (Int) -> Unit = remember(s) { { rows -> if (state.screen.value === s) state.onPageRows(rows) } }   // likewise LEFT / RIGHT's page
+    // The Games tab, as a main menu tab: its page beside the one showing in the pager holds an equal copy of the screen and
+    // keeps it once it shows, so an equal screen counts, and new reporters when it starts showing make it report again.
+    val shows = { shown: Screen -> shown === s || (s.isTab && shown == s) }
+    val onGridLayout: (Int) -> Unit = remember(s, live) { { columns -> if (shows(state.screen.value)) state.onGridLayout(columns) } }
+    val onPageRows: (Int) -> Unit = remember(s, live) { { rows -> if (shows(state.screen.value)) state.onPageRows(rows) } }   // likewise LEFT / RIGHT's page
     val index = { selection.value.index }
     val minimalOpening = state.minimalOpening.collectAsState()   // a Minimal page's row being opened (its page draws the band)
     val raPanel by state.raPanel.collectAsState()   // the achievements panel over the list
@@ -682,8 +699,27 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     val meta = launcherGameMeta(storedMeta, remember(s) { !state.settings.menuInfoAchievements }, chrome.extraInfo)
     // Unfiltered by Extra info: whether the highlighted game has a set decides the dual trophy, not what the list shows.
     val allInfo by state.gameInfo.collectAsState()
-    val trophyAvailable = state.hasAchievements && state.settings.gameListAchievementsPanel
+    val trophyAvailable = gameListTrophyAvailable(state.hasAchievements, state.settings.gameListAchievementsPanel)
+    val icons = gameListIcons(s.source, s.isTab, state.canSearch, state.settings.gameListLayoutOptions)
     val trophy by remember(s, allInfo, dual, trophyAvailable) { derivedStateOf { gameListTrophy(trophyAvailable, dual, current()?.let { allInfo[it.game.path] }) } }
+    // The Games tab: the main menu's bottom row with the tab's hints at its right (as many as the main menu fits).
+    val bar = s.tabBar
+    val kidsOpen = state.kidsModeState.collectAsState().value is KidsMode.Open   // a Kids play window: the lock icon, as the menu's
+    val labels = remember(bar?.categories) { bar?.categories.orEmpty().map { it.label.uppercase() } }   // the bottom tabs in capitals, as the menu's
+    // A long press on the row: the hidden-tab menu, as on any tab ([AppState.openTabMenu]); the bar carries the hidden tabs
+    // (none while pushed), so it follows every rebuild. Kept across recompositions so the game list frame can skip.
+    val showBarHints = chrome.buttonHints && !chrome.noBar
+    val tabRow: (@Composable (State<List<Hint>>) -> Unit)? = remember(bar, labels, showBarHints, state) {
+        if (bar == null) null else { hints ->
+            MenuBottomRow(labels, bar.index, state::selectTab, tabBarTitle(bar), state::openTabMenu.takeIf { bar.hidden.isNotEmpty() }, state::onButton, showHints = showBarHints) { hints.value }
+        }
+    }
+    // A finger's swipe: List, Minimal, Grid and the vertical stacks scroll vertically, so a sideways swipe moves between the
+    // tabs, as on the main menu's pages ([MainMenuScreen]); a horizontal Carousel or Backdrop keeps it for its own row.
+    val swipeable = style == MenuStyle.LIST || style == MenuStyle.MINIMAL || style == MenuStyle.GRID || orientation == MenuOrientation.VERTICAL
+    val swipe = Modifier.tabSwipe(bar != null && pagedTabs(s) != null && swipeable && s.menu == null && s.search == null && s.layoutMenu == null, state::swipeTab)
+    // The Games tab's title: the highlighted game's console, read where the title is drawn.
+    val titleFor: (() -> String)? = if (s.isTab) remember(s.entries, selection) { { gamesTabTitle(s.entries, selection.value.index) } } else null
     CompositionLocalProvider(LocalLauncherChrome provides chrome) {
         GameListScreen(
             listTitle(s.source), s.entries, index,
@@ -692,18 +728,23 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
             canNetplay = { state.canNetplay(current()) },
             openLabel = if (s.source == ListSource.Hidden) "Unhide" else "Open",
             onSelect = state::select, onOpen = { state.openSelected() }, onHint = state::onButton,
-            onLongPress = { state.openContextMenu(it) },
-            showTag = s.source == ListSource.Hidden || s.source is ListSource.Search,   // a search mixes consoles
+            onLongPress = { state.openContextMenu(it) }, modifier = swipe,
+            showTag = s.source == ListSource.Hidden || s.source is ListSource.Search || s.source == ListSource.AllGames,   // a search, and every game, mix consoles
             emptyText = if (s.source is ListSource.Search || s.source is ListSource.Filtered) "No results" else null,
-            info = { gameInfoFor(listInfo, now, current()?.game, full = true, meta) },   // Grid shows none (its tiles have tileInfo)
-            style = style, orientation = orientation, alignment = state.settings.gameListVerticalAlignment, onGridLayout = onGridLayout, onPageRows = onPageRows, tileInfo = remember(s.entries, listInfo, now) { entryTileInfo(s.entries, listInfo, now) }, layoutKey = s.source,
+            // A Grid and a horizontal Carousel both its stats and its details, each in its own place ([gameListInfo]); a
+            // Grid's header keeps the stats, its selected tile the details ([gridHeaderInfo], [gridTileInfo]).
+            info = { gameListInfo(style, orientation, listInfo, now, current()?.game, meta) },
+            style = style, orientation = orientation, alignment = state.settings.gameListVerticalAlignment, onGridLayout = onGridLayout, onPageRows = onPageRows, tileInfo = remember(s.entries, listInfo, now, meta) { entryTileInfo(s.entries, listInfo, now, meta) }, layoutKey = s.source,
             artBox = artLayout.list.boxed,
             backdropArt = artLayout.backdrop,
-            onSearch = state::openListSearch.takeIf { s.source.searchable },
-            onLayout = state::toggleLayoutMenu.takeIf { state.settings.gameListLayoutOptions }, layoutOpen = s.layoutMenu != null,
+            // The Games tab's Search icon is START's there: the global search.
+            onSearch = (if (s.isTab) state::openSearch else state::openListSearch).takeIf { icons.search },
+            onLayout = state::toggleLayoutMenu.takeIf { icons.layout }, layoutOpen = s.layoutMenu != null,
             // Layouts → Achievements panel Hide: no icon or hint (X and the game's menu still open it).
             onAchievements = state::toggleRaPanel.takeIf { trophy }, achievementsOpen = raPanel != null,
             minimalOpening = minimalOpening.value?.takeIf { it.page == s.source },
+            jumpHint = s.isTab, tabRow = tabRow,
+            onKidsLock = state::kidsParentPressed.takeIf { s.isTab && kidsOpen }, titleFor = titleFor,
         )
     }
     RaPanelOverlay(raPanel.takeIf { state.screen.value === s }, onRow = state::openRaPanelRow, onButton = state::onButton)
@@ -718,7 +759,8 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
             onPick = state::pickLayout, onDismiss = { state.onButton(NxButton.B) },
         )
     }
-    s.search?.let { NxTextPrompt("Search ${listTitle(s.source.base)}", it, state::searchDraft, onConfirm = { state.onButton(NxButton.A) }, onCancel = { state.onButton(NxButton.B) }) }
+    // The Games tab's is START's global search (the main menu's prompt); any other list's is its own search.
+    s.search?.let { NxTextPrompt(if (s.isTab) "Search" else "Search ${listTitle(s.source.base)}", it, state::searchDraft, onConfirm = { state.onButton(NxButton.A) }, onCancel = { state.onButton(NxButton.B) }) }
     s.menu?.let { ContextMenuOverlay(it, onButton = state::onButton, onSelect = state::menuSelect, onOpen = state::menuOpen, onDraft = state::menuDraft, onColumns = state::onMenuLayout) }
 }
 

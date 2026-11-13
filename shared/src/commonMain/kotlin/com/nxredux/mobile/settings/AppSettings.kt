@@ -67,7 +67,7 @@ enum class GameRumble(val label: String) {
  * A main menu tab, in the tab row's fixed order. Layouts can hide any; an empty Consoles or Collections tab is left out, and with none left Home shows.
  * APPS is Kids Mode's (the allowed apps, while Kids Mode is on and not locked): drawn before Tools, never in Layouts.
  */
-enum class MenuCategory { HOME, CONSOLES, COLLECTIONS, TOOLS, APPS }
+enum class MenuCategory { HOME, GAMES, CONSOLES, COLLECTIONS, TOOLS, APPS }
 
 /**
  * How a main menu tab, or a game list, lays out its items (Appearance -> Layouts). BACKDROP is the game lists' only
@@ -279,6 +279,10 @@ interface AppSettings {
     /** Layouts → Home tab, Consoles tab, Collections tab, Tools tab: Show (true, the default) or Hide. A hidden tab stays reachable from MENU. */
     var showHomeTab: Boolean
     var showConsolesTab: Boolean
+    /** Layouts → Games tab: Show (true, the default) or Hide. */
+    var showGamesTab: Boolean
+        get() = true
+        set(value) {}
     var showCollectionsTab: Boolean
     var showToolsTab: Boolean
     /** Layouts → New shelf, Not started shelf: Home shows that shelf (true, the default) or not. Pick up again always shows. */

@@ -253,7 +253,7 @@ internal class SettingsController(
     fun openSettings(section: SettingsSection) {
         if (!host.kidsToolsAllowed()) return   // Kids Mode: Settings only for a parent
         when (screen.value) {
-            is Screen.Systems -> host.rememberMenuSelection()
+            is Screen.Systems, is Screen.Games -> host.rememberMenuSelection()   // the main menu's tab (a game list's: nothing)
             is Screen.SettingsMenu -> settingsMenuSelection = selection.value
             else -> Unit
         }
@@ -387,7 +387,7 @@ internal class SettingsController(
             s.gameListStyle = MenuStyles.DEFAULT_GAME_LIST_STYLE
             s.gameListOrientation = MenuStyles.DEFAULT_ORIENTATION
             s.gameListVerticalAlignment = VerticalListAlignment.DEFAULT
-            s.showHomeTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showConsolesTab = MenuStyles.DEFAULT_TAB_SHOWN
+            s.showHomeTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showConsolesTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showGamesTab = MenuStyles.DEFAULT_TAB_SHOWN
             s.showCollectionsTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showToolsTab = MenuStyles.DEFAULT_TAB_SHOWN
             s.showNewShelf = true; s.showNotStartedShelf = true; s.showMostPlayedShelf = true
             s.showNetplayHint = true

@@ -204,7 +204,7 @@ internal class KidsScreensController(
      */
     fun kidsParentPressed() {
         val k = kids ?: return
-        if (kidsMode !is KidsMode.Open || screen.value !is Screen.Systems) return
+        if (kidsMode !is KidsMode.Open || !screen.value.isMainMenu) return   // any tab, the Games tab too
         screen.value = Screen.KidsPin(PinPurpose.UNLOCK, waitUntil = k.waitUntil)
         selection.value = ListSelection(0, KIDS_PIN_KEYS.size)
         kidsUnlockInput()
@@ -404,7 +404,7 @@ internal class KidsScreensController(
             s is Screen.KidsPin && s.purpose != PinPurpose.UNLOCK -> if (!kidsToolsAllowed) host.showSystemsNow(MenuCategory.HOME)
             isKidsScreen(s) -> host.showSystemsNow(MenuCategory.HOME)
             !kidsToolsAllowed && !kidsOpenScreen(s) -> host.showSystemsNow(MenuCategory.HOME)
-            s is Screen.Systems -> host.showSystemsNow()
+            s.isMainMenu -> host.showSystemsNow()
         }
     }
 

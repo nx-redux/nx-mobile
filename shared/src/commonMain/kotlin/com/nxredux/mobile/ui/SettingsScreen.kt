@@ -179,7 +179,7 @@ internal fun settingsTouchPage(screen: Screen.Settings): Boolean =
 private val OPENER_KINDS = setOf(
     SettingsKind.HOME, SettingsKind.DEFAULTS, SettingsKind.EMULATORS, SettingsKind.SAVES, SettingsKind.IMPORT_SAVES,
     SettingsKind.BUTTON_LAYOUT, SettingsKind.BUTTON_LAYOUT_ORIENTATION, SettingsKind.SHORTCUTS, SettingsKind.SYSTEM_BUTTONS, SettingsKind.ANDROID_GAMES, SettingsKind.HIDDEN, SettingsKind.UNASSIGNED,
-    SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
+    SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_GAMES_TAB, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER,
     SettingsKind.KIDS_PIN, SettingsKind.KIDS_DAY, SettingsKind.KIDS_APPS,
 )

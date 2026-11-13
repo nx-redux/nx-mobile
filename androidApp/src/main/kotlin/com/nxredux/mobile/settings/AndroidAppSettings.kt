@@ -172,6 +172,9 @@ class AndroidAppSettings(context: Context) : AppSettings {
     override var showConsolesTab: Boolean
         get() = prefs.getBoolean(KEY_SHOW_CONSOLES_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
         set(value) = prefs.edit { putBoolean(KEY_SHOW_CONSOLES_TAB, value) }
+    override var showGamesTab: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_GAMES_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
+        set(value) = prefs.edit { putBoolean(KEY_SHOW_GAMES_TAB, value) }
     override var showCollectionsTab: Boolean
         get() = prefs.getBoolean(KEY_SHOW_COLLECTIONS_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
         set(value) = prefs.edit { putBoolean(KEY_SHOW_COLLECTIONS_TAB, value) }
@@ -419,6 +422,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_SHOW_CONSOLES_TAB = "show_consoles_tab"
         private const val KEY_SHOW_COLLECTIONS_TAB = "show_collections_tab"
         private const val KEY_SHOW_TOOLS_TAB = "show_tools_tab"
+        private const val KEY_SHOW_GAMES_TAB = "show_games_tab"
         private const val KEY_SHOW_NEW_SHELF = "show_new_shelf"
         private const val KEY_SHOW_NOT_STARTED_SHELF = "show_not_started_shelf"
         private const val KEY_SHOW_MOST_PLAYED_SHELF = "show_most_played_shelf"

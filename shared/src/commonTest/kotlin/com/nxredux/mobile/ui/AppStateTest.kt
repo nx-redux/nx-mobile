@@ -146,6 +146,7 @@ import kotlin.test.assertNotEquals
 import com.nxredux.mobile.ui.nx.NxPadA
 import com.nxredux.mobile.ui.nx.padA
 import kotlin.test.assertSame
+import kotlin.test.assertNotSame
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -214,7 +215,7 @@ class AppStateTest {
         override var sgdbApiKey: String? = null
         override var tgdbApiKey: String? = null
         override var artReplaceExisting = false
-        override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = AccentPreset.DEFAULT
+        override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showGamesTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = AccentPreset.DEFAULT
         override var secondaryAccent: SecondaryAccent = SecondaryAccent.DEFAULT
         override var switcherLayout = com.nxredux.mobile.settings.SwitcherLayout.DEFAULT
         override var optionTextSize = com.nxredux.mobile.settings.OptionTextSize.DEFAULT
@@ -1015,6 +1016,19 @@ class AppStateTest {
         assertTrue("Turn your phone upright to see the pad." !in assertIs<Screen.Onboarding>(state.screen.value).details)
     }
 
+    // A controller connected on the pad page (or a resumed pad step with one): the menu shows no pad, and the page says why.
+    @Test fun the_pad_page_with_a_controller_says_to_disconnect_it() = runTest {
+        val (state, _) = atCustomise()
+        assertEquals(OnboardingStep.PAD, step(state))
+        val line = "Disconnect your controller to see the pad."
+        assertTrue(line !in assertIs<Screen.Onboarding>(state.screen.value).details)
+        state.onPadContext(portrait = true, controller = true)
+        assertEquals(OnboardingStep.PAD, step(state))
+        assertEquals(line, assertIs<Screen.Onboarding>(state.screen.value).details.last())
+        state.onPadContext(portrait = true, controller = false)            // disconnected: the pad shows, the line goes
+        assertTrue(line !in assertIs<Screen.Onboarding>(state.screen.value).details)
+    }
+
     // The page title and the button hints are value rows on one page (one picture above shows the pair): each flips in place.
     @Test fun the_page_title_and_hints_rows_flip_in_place() = runTest {
         val (state, settings) = atCustomise(controller = true)
@@ -1090,9 +1104,9 @@ class AppStateTest {
         while (step(state) != OnboardingStep.GAME_LISTS) { state.select(state.selection.value.count - 1); state.onButton(NxButton.A) }
         state.select(0)
         while (settings.gameListStyle != MenuStyle.BACKDROP) state.onButton(NxButton.RIGHT)
-        assertEquals(listOf("Layout", "Orientation", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })
+        assertEquals(listOf("Layout", "Orientation", "Games tab", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })
         state.select(1); state.onButton(NxButton.RIGHT)                    // Vertical: the alignment row comes
-        assertEquals(listOf("Layout", "Orientation", "Alignment", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })
+        assertEquals(listOf("Layout", "Orientation", "Alignment", "Games tab", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })
         state.select(2); state.onButton(NxButton.RIGHT)                    // Right
         assertEquals(VerticalListAlignment.RIGHT, settings.gameListVerticalAlignment)
         assertEquals(LayoutShot.Games(MenuStyle.BACKDROP, vertical = true, right = true), assertIs<Screen.Onboarding>(state.screen.value).shot)
@@ -1108,6 +1122,33 @@ class AppStateTest {
         repeat(MenuStyles.GAME_LIST_STYLES.size) { state.onButton(NxButton.RIGHT); seen += settings.gameListStyle }
         assertEquals(MenuStyles.GAME_LIST_STYLES.toSet(), seen)
         assertEquals(LayoutShot.Games(settings.gameListStyle), assertIs<Screen.Onboarding>(state.screen.value).shot)
+    }
+
+    @Test fun the_game_lists_onboarding_page_asks_about_the_games_tab() = runTest {
+        val (state, settings) = atCustomise(controller = true)
+        while (step(state) != OnboardingStep.GAME_LISTS) { state.select(state.selection.value.count - 1); state.onButton(NxButton.A) }
+        val page = assertIs<Screen.Onboarding>(state.screen.value)
+        assertTrue("A tab that lists every game from every console." in page.details)
+        assertEquals("Layout", page.rows[0].label)   // the existing rows keep their place
+        val i = page.rows.lastIndex - 1
+        assertEquals("Games tab" to "Show", page.rows[i].let { it.label to it.secondary })
+        assertEquals("Continue", page.rows.last().label)
+        assertEquals("Games tab", page.touchRows!![i].label)
+        assertEquals("Continue", page.touchRows!!.last().label)
+        state.select(i); state.onButton(NxButton.RIGHT)
+        assertFalse(settings.showGamesTab)
+        assertEquals("Hide", assertIs<Screen.Onboarding>(state.screen.value).rows[i].secondary)
+        state.onButton(NxButton.A)                          // A steps it back
+        assertTrue(settings.showGamesTab)
+        state.select(state.selection.value.count - 1); state.onButton(NxButton.A)
+        assertTrue(step(state) != OnboardingStep.GAME_LISTS)
+    }
+
+    @Test fun skipping_customise_leaves_the_games_tab_shown() = runTest {
+        val (state, settings) = atCustomise(yes = false)
+        state.select(1); state.onButton(NxButton.A)         // Use the defaults
+        assertEquals(OnboardingStep.ACCENT, step(state))
+        assertTrue(settings.showGamesTab)
     }
 
     // With a controller there is no pad page, but title and hints are offered.
@@ -1676,6 +1717,28 @@ class AppStateTest {
             home(configure).also { it.onButton(NxButton.MENU) }.let(::menuKinds)
         assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu {})
         assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu { showNetplayHint = false })
+    }
+
+    // The Games tab is the main menu too and has no hint bar: Netplay leads its game's menu, once, whatever the hints.
+    @Test fun netplay_leads_the_games_tabs_game_menu_whatever_the_hints() = runTest {
+        val src = FakeRomsSource(
+            dirs = mapOf("Home" to listOf("Roms"), "Home/Roms" to listOf("Super Nintendo (SFC)"), "Home/Roms/Super Nintendo (SFC)" to listOf("Super Mario Kart (USA).sfc")),
+        )
+        suspend fun tabMenu(configure: MemorySettings.() -> Unit): List<ContextKind> {
+            val state = AppState(
+                AppDeps(MemorySettings(ContentRef("Home")).apply(configure), src, RecordingRunner(), NoopPicker(), NoUserData, compute = UnconfinedTestDispatcher(testScheduler), netplay = com.nxredux.mobile.netplay.FakeNetplayPlatform()),
+                CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
+            )
+            state.load(); advanceUntilIdle()
+            state.selectTab(1); state.gamesTab()
+            state.onButton(NxButton.MENU)
+            return menuKinds(state)
+        }
+        for (configure in listOf<MemorySettings.() -> Unit>({ menuButtonHints = true }, { menuButtonHints = false }, { showNetplayHint = false })) {
+            val kinds = tabMenu(configure)
+            assertEquals(ContextKind.NETPLAY, kinds.first(), kinds.toString())
+            assertEquals(1, kinds.count { it == ContextKind.NETPLAY }, kinds.toString())
+        }
     }
 
     // Recent and Search are always icons, so Title and hints has no rows for them; without netplay, no hint rows at all.
@@ -4462,7 +4525,7 @@ class AppStateTest {
     @Test fun tools_tab_follows_the_consoles_and_lists_the_tools() = runTest {
         val state = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
         val main = assertIs<Screen.Systems>(state.screen.value)
-        assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.TOOLS), main.tabs.map { it.category })
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.TOOLS), main.tabs.map { it.category })
         state.onConsoles()
         assertEquals(main.systems.size, state.selection.value.count)   // the Consoles tab: one row per console
         state.onButton(NxButton.R1)
@@ -4480,7 +4543,11 @@ class AppStateTest {
         assertEquals(MenuCategory.TOOLS, tab())
         state.swipeTab(1)                                              // past the last: Home
         assertEquals(MenuCategory.HOME, tab())
-        assertEquals(MenuCategory.CONSOLES, state.tabPage(1)?.first?.category)   // the page beside, before the swipe lands on it
+        assertEquals(MenuCategory.GAMES, state.tabPage(1)?.first?.menuTab)   // the page beside, before the swipe lands on it
+        assertEquals(MenuCategory.CONSOLES, state.tabPage(2)?.first?.menuTab)
+        state.swipeTab(1)
+        assertEquals(MenuCategory.GAMES, state.screen.value.menuTab)         // the Games tab: a game list
+        assertEquals(MenuCategory.CONSOLES, state.tabPage(2)?.first?.menuTab)   // its page beside
         state.swipeTab(1)
         assertEquals(MenuCategory.CONSOLES, tab())
     }
@@ -4493,8 +4560,8 @@ class AppStateTest {
         state.onGridLayout(3)
         assertEquals(3, state.selection.value.count)         // NDS, GB, GBA (a still grid, one row of 3)
         state.onButton(NxButton.RIGHT); assertEquals(1, state.selection.value.index); state.onButton(NxButton.LEFT)
-        state.onButton(NxButton.LEFT)                        // past the first console: the previous tab (Home)
-        assertEquals(MenuCategory.HOME, assertIs<Screen.Systems>(state.screen.value).category)
+        state.onButton(NxButton.LEFT)                        // past the first console: the previous tab (Games)
+        assertEquals(MenuCategory.GAMES, state.screen.value.menuTab)
     }
 
     @Test fun grid_right_past_the_last_tile_switches_to_the_next_tab() = runTest {
@@ -4754,7 +4821,7 @@ class AppStateTest {
         val state = homeFixture(MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + (MenuCategory.HOME to MenuStyle.LIST) })
         state.onButton(NxButton.UP)
         assertEquals(state.selection.value.count - 1, state.selection.value.index)
-        state.onButton(NxButton.RIGHT); assertEquals(MenuCategory.CONSOLES, state.category())
+        state.onButton(NxButton.RIGHT); assertEquals(MenuCategory.GAMES, state.screen.value.menuTab)   // the next tab
     }
 
     private fun carouselHome() = MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + (MenuCategory.HOME to MenuStyle.CAROUSEL) }
@@ -4920,7 +4987,8 @@ class AppStateTest {
         state.onButton(NxButton.L1); assertEquals(MenuCategory.CONSOLES, state.category())
         state.onGridLayout(2)                                            // the Grid reports again
         state.onButton(NxButton.LEFT); state.onButton(NxButton.LEFT)     // past the Grid's start: the tab before
-        assertEquals(MenuCategory.HOME, state.category())
+        assertEquals(MenuCategory.GAMES, state.screen.value.menuTab)
+        state.onButton(NxButton.L1); assertEquals(MenuCategory.HOME, state.category())
         state.select(0); state.onButton(NxButton.UP)                     // Home's top: stays
         assertEquals(0, state.selection.value.index); assertEquals(MenuCategory.HOME, state.category())
     }
@@ -5127,7 +5195,7 @@ class AppStateTest {
         state.onButton(NxButton.L1)
         assertEquals(MenuCategory.CONSOLES, assertIs<Screen.Systems>(state.screen.value).category)
         state.onButton(NxButton.LEFT)                                                                // a fresh LEFT: the tab before
-        assertEquals(MenuCategory.HOME, assertIs<Screen.Systems>(state.screen.value).category)
+        assertEquals(MenuCategory.GAMES, state.screen.value.menuTab)
     }
 
     @Test fun list_game_list_keeps_its_up_wrap_with_a_stored_vertical() = runTest {
@@ -5244,13 +5312,13 @@ class AppStateTest {
         val state = state(MemorySettings(ContentRef("Home")))
         state.load()
         val main = assertIs<Screen.Systems>(state.screen.value)
-        assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.TOOLS), main.tabs.map { it.category })   // Settings is a tool, not a tab
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.TOOLS), main.tabs.map { it.category })   // Settings is a tool, not a tab
         state.onConsoles()
         val systems = main.systems
         assertEquals(systems.size, state.selection.value.count)
         state.select(systems.size + 1)                                  // past the end: clamped to the last console
         assertEquals(systems.size - 1, state.selection.value.index)
-        state.onButton(NxButton.L1); state.onButton(NxButton.L1)        // wraps to the last tab
+        state.onButton(NxButton.L1); state.onButton(NxButton.L1); state.onButton(NxButton.L1)   // past Games and Home: wraps to the last tab
         assertEquals(MenuCategory.TOOLS, assertIs<Screen.Systems>(state.screen.value).category)
         state.screen.value.toolRows()
     }
@@ -5772,7 +5840,7 @@ class AppStateTest {
         state.load()
         fun page(section: SettingsSection) = state.openLayoutsPage(section).map { it.label }
         assertEquals(
-            listOf("Home", "Consoles", "Collections", "Tools", "Game lists", "Title and hints", "Game Switcher", "Extra info", "Game info", "Reset to defaults"),
+            listOf("Home", "Games", "Consoles", "Collections", "Tools", "Game lists", "Title and hints", "Game Switcher", "Extra info", "Game info", "Reset to defaults"),
             page(SettingsSection.MAIN_MENU),
         )
         assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Most played shelf", "Stats", "Layout"), page(SettingsSection.LAYOUT_HOME))   // Home never has an orientation row
@@ -5907,18 +5975,18 @@ class AppStateTest {
         state.openSettings(SettingsSection.MAIN_MENU)
         val rows = assertIs<Screen.Settings>(state.screen.value).rows
         assertEquals(
-            listOf("Home", "Consoles", "Collections", "Tools", "Game lists", "Title and hints", "Game Switcher", "Extra info", "Game info", RESET_DEFAULTS_LABEL),
+            listOf("Home", "Games", "Consoles", "Collections", "Tools", "Game lists", "Title and hints", "Game Switcher", "Extra info", "Game info", RESET_DEFAULTS_LABEL),
             rows.map { it.label },
         )
         assertEquals("Grid", rows[0].secondary)                              // a shown tab: its layout
-        assertEquals(menuStyleLabel(settings.gameListStyle), rows[4].secondary)
-        assertEquals("Show", rows[5].secondary)                              // the title and the hints both shown
-        assertEquals(settings.switcherLayout.label, rows[6].secondary)
+        assertEquals(menuStyleLabel(settings.gameListStyle), rows[5].secondary)
+        assertEquals("Show", rows[6].secondary)                              // the title and the hints both shown
+        assertEquals(settings.switcherLayout.label, rows[7].secondary)
         settings.showToolsTab = false; settings.menuButtonHints = false
         state.openSettings(SettingsSection.MAIN_MENU)
         val after = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals("Hidden", after[3].secondary)
-        assertEquals("Title only", after[5].secondary)
+        assertEquals("Hidden", after[4].secondary)
+        assertEquals("Title only", after[6].secondary)
     }
 
     @Test fun layouts_home_opens_its_page_with_the_picture_following_the_layout() = runTest {
@@ -5996,14 +6064,14 @@ class AppStateTest {
         val state = state(MemorySettings(ContentRef("Home")))
         state.load()
         state.openSettings(SettingsSection.MAIN_MENU)
-        state.select(2); state.onButton(NxButton.A)                          // Collections
+        state.select(3); state.onButton(NxButton.A)                          // Collections
         val page = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsSection.LAYOUT_COLLECTIONS, page.section)
         assertEquals(MenuCategory.COLLECTIONS, assertIs<LayoutShot.Tab>(page.shot).category)
         assertEquals(listOf("Visible", "Layout"), page.rows.map { it.label }.take(2))
         state.onButton(NxButton.B)
         assertEquals(SettingsSection.MAIN_MENU, assertIs<Screen.Settings>(state.screen.value).section)
-        assertEquals(2, state.selection.value.index)
+        assertEquals(3, state.selection.value.index)
     }
 
     @Test fun layouts_a_hidden_tab_shows_only_its_tab_row_and_no_picture() = runTest {
@@ -6172,7 +6240,7 @@ class AppStateTest {
         assertEquals(SettingsSection.MAIN_MENU, page.section)
         assertEquals("Layouts", page.section.label)   // the page's title
         assertEquals(
-            listOf("Home" to "Grid", "Consoles" to "List", "Collections" to "List", "Tools" to "List", "Game lists" to "List", "Title and hints" to "Show",
+            listOf("Home" to "Grid", "Games" to "List", "Consoles" to "List", "Collections" to "List", "Tools" to "List", "Game lists" to "List", "Title and hints" to "Show",
                 "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Details", "Reset to defaults" to null),
             page.rows.map { it.label to it.secondary },
         )
@@ -6962,12 +7030,12 @@ class AppStateTest {
     private fun TestScope.raFixture(
         home: RaHomeTree? = null, index: LibraryIndex? = null, hasher: FakeRaHasher = FakeRaHasher(), roms: FakeRomsSource = source, ownKeyboard: Boolean = false,
         store: FakeRaStore = FakeRaStore(), settings: MemorySettings = MemorySettings(ContentRef("Home")),   // a home, so the main menu (and its Tools tab) is built
-        files: PrivateFiles = MemoryPrivateFiles(), log: (String) -> Unit = {},
+        files: PrivateFiles = MemoryPrivateFiles(), log: (String) -> Unit = {}, launcher: AppLauncher? = null,
     ): RaFixture {
         val http = FakeRaHttp()
         val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
         val controller = RaController(if (home == null) fakePlatform(store, http, hasher) else fakePlatform(store, http, hasher, home = home), settings, { index }, scope, now = { 0L })
-        val deps = AppDeps(settings, roms, RecordingRunner(), NoopPicker(), achievements = controller, ownKeyboard = ownKeyboard, compute = UnconfinedTestDispatcher(testScheduler), privateFiles = files, log = log)
+        val deps = AppDeps(settings, roms, RecordingRunner(), NoopPicker(), achievements = controller, ownKeyboard = ownKeyboard, compute = UnconfinedTestDispatcher(testScheduler), privateFiles = files, log = log, launcher = launcher)
         return RaFixture(AppState(deps, scope).also { it.load() }, store, http, controller, hasher)
     }
     private fun TestScope.stateWithAchievements(): Pair<AppState, FakeRaStore> = raFixture().let { it.state to it.store }
@@ -7431,8 +7499,8 @@ class AppStateTest {
     // --- The achievements panel over a game list (the trophy icon, X) ---
 
     /** A fixture signed in as "me" with Tetris.gb's two achievements cached, the game info read. */
-    private fun TestScope.panelFixture(signedIn: Boolean = true, index: LibraryIndex? = null, hasher: FakeRaHasher = FakeRaHasher(), roms: FakeRomsSource = source): RaFixture {
-        val f = raFixture(index = index, hasher = hasher, roms = roms)
+    private fun TestScope.panelFixture(signedIn: Boolean = true, index: LibraryIndex? = null, hasher: FakeRaHasher = FakeRaHasher(), roms: FakeRomsSource = source, launcher: AppLauncher? = null): RaFixture {
+        val f = raFixture(index = index, hasher = hasher, roms = roms, launcher = launcher)
         if (signedIn) { f.state.settings.raUsername = "me"; f.state.settings.raToken = "t" }
         val hash = "a".repeat(32)
         f.store.put(RaPaths.sets(hash), setsJson(1, title = "Tetris", achievements = """{"ID":1,"Title":"First","Points":5,"BadgeName":"1"},{"ID":2,"Title":"Second","Points":10,"BadgeName":"2"}"""))
@@ -8082,6 +8150,7 @@ class AppStateTest {
         when (tab.category) {
             MenuCategory.HOME -> tab.rows.filterIsInstance<MainRow.Pin>().map { "pin:${it.entry.game.shownName}" }
             MenuCategory.COLLECTIONS -> listOf("collections")
+            MenuCategory.GAMES -> listOf("games")
             MenuCategory.TOOLS -> listOf("tools")
             MenuCategory.APPS -> listOf("apps")
             MenuCategory.CONSOLES -> tab.rows.map { (it as MainRow.System).system.tag }
@@ -8092,14 +8161,14 @@ class AppStateTest {
         val data = FakeUserData(recents = listOf(Recent("/Roms/Game Boy (GB)/gone.gb"), Recent(tetris)), pins = listOf(Shortcut(mario, "Mario"), Shortcut("/Roms/Game Boy (GB)/gone.gb", "Gone")))
         val state = state(MemorySettings(ContentRef("Home")), src = sourceWithCollections(), data = data)
         state.load()
-        assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS), assertIs<Screen.Systems>(state.screen.value).tabs.map { it.category })
-        assertEquals(listOf("pin:Mario", "GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS), assertIs<Screen.Systems>(state.screen.value).tabs.map { it.category })
+        assertEquals(listOf("pin:Mario", "games", "GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
         assertEquals("Tetris", assertIs<MainRow.Continue>(state.screen.value.homeRows[0]).entry.game.shownName)   // the gone recent is passed over
         assertEquals(mario, assertIs<MainRow.Pin>(state.screen.value.homeRows.filterNot { it is MainRow.Shelf }.last()).entry.game.path)   // the pins end the rows (before the shelves): no All pinned tile
         assertEquals(2, data.pins.size)                                   // an unresolvable pin is hidden, not dropped
         val bare = state(MemorySettings(ContentRef("Home")), data = FakeUserData(recents = listOf(Recent("/Roms/Game Boy (GB)/gone.gb"))))
         bare.load()
-        assertEquals(listOf("GB", "GBA", "NDS", "tools"), rowKinds(bare))   // no resolvable recent, no Collections folder, no pins
+        assertEquals(listOf("games", "GB", "GBA", "NDS", "tools"), rowKinds(bare))   // no resolvable recent, no Collections folder, no pins
         assertEquals(listOf(MainRow.PickAGame), bare.screen.value.homeRows.filterNot { it is MainRow.Shelf })
     }
 
@@ -8107,20 +8176,20 @@ class AppStateTest {
         val src = sourceWithCollections()
         val state = state(MemorySettings(ContentRef("Home")), src = src)
         state.load()
-        assertEquals(listOf("GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
+        assertEquals(listOf("games", "GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
         src.delete("Home/Collections/RPGs.txt"); src.delete("Home/Collections/Racing.txt")   // outside the app
         state.rescan()                                                   // Collections/ is listed again: no names now
-        assertEquals(listOf("GB", "GBA", "NDS", "tools"), rowKinds(state))
+        assertEquals(listOf("games", "GB", "GBA", "NDS", "tools"), rowKinds(state))
     }
 
     @Test fun a_rescan_after_a_collection_appeared_brings_the_tab_in() = runTest {
         val src = sourceWithCollections().apply { delete("Home/Collections/RPGs.txt"); delete("Home/Collections/Racing.txt") }
         val state = state(MemorySettings(ContentRef("Home")), src = src)
         state.load()
-        assertEquals(listOf("GB", "GBA", "NDS", "tools"), rowKinds(state))
+        assertEquals(listOf("games", "GB", "GBA", "NDS", "tools"), rowKinds(state))
         src.writeText(ContentRef("Home/Collections"), "RPGs.txt", "$mk\n")   // outside the app
         state.rescan()
-        assertEquals(listOf("GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
+        assertEquals(listOf("games", "GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
         assertEquals(listOf("RPGs"), state.openCollectionsTab())
     }
 
@@ -8198,15 +8267,15 @@ class AppStateTest {
         }
         val state = state(MemorySettings(ContentRef("Home")), src = hiding)
         state.load()
-        assertEquals(listOf("GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
+        assertEquals(listOf("games", "GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
         hide = true
         state.rescan()                                                   // the scan lists; only Collections/ is hidden
-        assertEquals(listOf("GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
+        assertEquals(listOf("games", "GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
         assertEquals(listOf("Racing", "RPGs"), state.openCollectionsTab())   // no proof there is nothing: the names as last listed
         src.listingFault = ListingFault.UNAVAILABLE                      // every listing hidden: the Collections tab stays too
         state.rescan()
         state.dismissError()
-        assertEquals(listOf("GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
+        assertEquals(listOf("games", "GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
     }
 
     @Test fun a_pin_rows_menu_button_opens_its_menu() = runTest {
@@ -8221,7 +8290,7 @@ class AppStateTest {
         val data = FakeUserData(pins = listOf(Shortcut(mario, "Mario"), Shortcut("/Roms/Commodore 64 (C64)/Boulder Dash 2.chd", "Boulder")), hidden = listOf(mario))
         val state = state(MemorySettings(ContentRef("Home")), data = data)
         state.load()
-        assertEquals(listOf("GB", "NDS", "tools"), rowKinds(state))      // GBA's only game is hidden: the console goes too
+        assertEquals(listOf("games", "GB", "NDS", "tools"), rowKinds(state))      // GBA's only game is hidden: the console goes too
         assertEquals(2, data.pins.size)
     }
 
@@ -8244,7 +8313,7 @@ class AppStateTest {
         state.select(assertIs<Screen.Systems>(state.screen.value).rows.indexOfFirst { (it as MainRow.System).system.tag == "GB" })
         state.onButton(NxButton.A); state.onButton(NxButton.A)          // Game Boy -> Tetris
         assertEquals("Tetris.gb", runner.launched.last().fileName)
-        state.onButton(NxButton.B); state.onButton(NxButton.L1)         // back on Home
+        state.onButton(NxButton.B); state.onButton(NxButton.L1); state.onButton(NxButton.L1)   // back on Home, past Games
         advanceUntilIdle()
         assertEquals("Tetris", assertIs<MainRow.Continue>(state.screen.value.homeRows[0]).entry.game.shownName)   // the launched game, now last
     }
@@ -8300,7 +8369,7 @@ class AppStateTest {
         st.load()
         assertEquals(emptyList<String>(), early)                         // still no tree access before the first show
         assertTrue(MenuCategory.COLLECTIONS !in firstShow.single())
-        assertEquals(listOf("GB", "GBA", "NDS", "collections", "tools"), rowKinds(st))
+        assertEquals(listOf("games", "GB", "GBA", "NDS", "collections", "tools"), rowKinds(st))
         assertEquals(1, st.selection.value.index)                        // still on GBA
     }
 
@@ -8312,7 +8381,7 @@ class AppStateTest {
         state.onConsoles()
         state.onButton(NxButton.A); state.onButton(NxButton.A)           // GB -> Tetris
         assertTrue(state.back())
-        state.onButton(NxButton.L1)
+        state.onButton(NxButton.L1); state.onButton(NxButton.L1)          // Home, past Games
         assertEquals(tetris, assertIs<MainRow.Continue>(state.screen.value.homeRows[0]).entry.game.path)
     }
 
@@ -8326,7 +8395,7 @@ class AppStateTest {
         assertEquals("Tetris.gb", runner.launched.single().fileName)
         assertTrue(data.recents.isEmpty())
         assertTrue(state.back())
-        state.onButton(NxButton.L1)
+        state.onButton(NxButton.L1); state.onButton(NxButton.L1)          // Home, past Games
         assertEquals(listOf(MainRow.PickAGame), state.screen.value.homeRows.filterNot { it is MainRow.Shelf })   // no Continue
     }
 
@@ -8427,12 +8496,12 @@ class AppStateTest {
         val state = state(MemorySettings(ContentRef("Home")), data = data, runner = runner)
         state.load(); advanceUntilIdle()
         state.onHomeLayout(LAND); advanceUntilIdle()                     // landscape: Mario, Tetris row games
-        assertEquals(listOf("pin:Mario", "pin:Tetris", "GB", "GBA", "NDS", "tools"), rowKinds(state))
+        assertEquals(listOf("pin:Mario", "pin:Tetris", "games", "GB", "GBA", "NDS", "tools"), rowKinds(state))
         state.selectHome { it is MainRow.Pin && it.entry.game.path == mario }; state.onButton(NxButton.A)   // the pin launches Mario
         assertEquals("GBA", runner.launched.single().systemTag)
         val home = state.screen.value.homeRows
         assertEquals(mario, assertIs<MainRow.Continue>(home[0]).entry.game.path)   // Pick a game became Continue
-        assertEquals(listOf("pin:Tetris", "GB", "GBA", "NDS", "tools"), rowKinds(state))   // Mario is Continue: out of the row
+        assertEquals(listOf("pin:Tetris", "games", "GB", "GBA", "NDS", "tools"), rowKinds(state))   // Mario is Continue: out of the row
         assertEquals(0, state.selection.value.index)                     // the launched pin is Continue now: focus follows it
     }
 
@@ -8500,11 +8569,11 @@ class AppStateTest {
         state.onButton(NxButton.MENU)
         assertEquals(ContextKind.UNPIN, menuKinds(state)[0]); state.onButton(NxButton.B)
         assertTrue(state.back())
-        assertEquals(listOf("pin:Tetris", "GB", "GBA", "NDS", "tools"), rowKinds(state))
+        assertEquals(listOf("pin:Tetris", "games", "GB", "GBA", "NDS", "tools"), rowKinds(state))
         state.selectTab(0); state.selectHome { it is MainRow.Pin }; choose(state, ContextKind.UNPIN)   // MENU on the pinned row (on Home)
         assertEquals(emptyList<Shortcut>(), data.pins)
         assertEquals("Unpinned", state.notice.value)
-        assertEquals(listOf("GB", "GBA", "NDS", "tools"), rowKinds(state))
+        assertEquals(listOf("games", "GB", "GBA", "NDS", "tools"), rowKinds(state))
         assertNull(assertIs<Screen.Systems>(state.screen.value).menu)
     }
 
@@ -8534,13 +8603,13 @@ class AppStateTest {
         src.writeText(ContentRef("Home/Collections"), "RPGs.txt", "$mario\n")     // RPGs holds Mario only
         val state = state(MemorySettings(ContentRef("Home")), src = src, data = data)
         state.load()
-        assertEquals(listOf("GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))   // Mario is Continue: not in the Pinned row
+        assertEquals(listOf("games", "GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))   // Mario is Continue: not in the Pinned row
         state.onConsoles(); state.select(1); state.onButton(NxButton.A)  // GBA list: Mario only
         choose(state, ContextKind.HIDE)
         assertEquals(listOf(mario), data.hidden)
         assertEquals("Hidden. Unhide in Tools › Settings › Library", state.notice.value)
         assertIs<Screen.Systems>(state.screen.value)                     // the list emptied: back on the main menu
-        assertEquals(listOf("GB", "NDS", "collections", "tools"), rowKinds(state))   // no recent, no pin, no GBA
+        assertEquals(listOf("games", "GB", "NDS", "collections", "tools"), rowKinds(state))   // no recent, no pin, no GBA
         assertTrue(state.selection.value.index in assertIs<Screen.Systems>(state.screen.value).rows.indices)
         state.openCollectionsTab(); state.select(1); state.onButton(NxButton.A)   // Collections -> RPGs
         state.screen.value.collectionNames()                             // RPGs resolves to nothing now: the tab stays
@@ -8599,7 +8668,7 @@ class AppStateTest {
         val data = FakeUserData(hidden = listOf(mario), pins = listOf(Shortcut(mario, "Mario")))
         val state = state(MemorySettings(ContentRef("Home")), data = data)
         state.load()
-        assertEquals(listOf("GB", "NDS", "tools"), rowKinds(state))
+        assertEquals(listOf("games", "GB", "NDS", "tools"), rowKinds(state))
         state.openSettings(SettingsSection.LIBRARY)
         val rows = assertIs<Screen.Settings>(state.screen.value).rows
         state.select(rows.indexOfFirst { it.kind == SettingsKind.HIDDEN }); state.openSelected()
@@ -8609,7 +8678,7 @@ class AppStateTest {
         val settings = assertIs<Screen.Settings>(state.screen.value)
         assertTrue(settings.rows.none { it.kind == SettingsKind.HIDDEN })
         assertTrue(state.back()); assertTrue(state.back())               // Settings menu -> the Tools tab of the main menu
-        assertEquals(listOf("pin:Mario", "GB", "GBA", "NDS", "tools"), rowKinds(state))
+        assertEquals(listOf("pin:Mario", "games", "GB", "GBA", "NDS", "tools"), rowKinds(state))
     }
 
     private fun openHiddenList(state: AppState) {
@@ -8668,7 +8737,7 @@ class AppStateTest {
         assertNull(state.notice.value)
         state.onButton(NxButton.MENU); state.onButton(NxButton.A)        // remove the last one
         assertIs<Screen.Systems>(state.screen.value)
-        assertEquals(listOf("GB", "GBA", "NDS", "tools"), rowKinds(state))
+        assertEquals(listOf("games", "GB", "GBA", "NDS", "tools"), rowKinds(state))
     }
 
     @Test fun collection_counts_come_after_the_menu_and_an_unreadable_file_gives_none() = runTest {
@@ -8872,7 +8941,7 @@ class AppStateTest {
         assertEquals(listOf(Shortcut(tetris, "Zed Tetris")), data.pins)
         assertTrue(LibraryIndexCodec.decode(store.text!!)!!.systems.first { it.tag == "GB" }.games.any { it.file == "Tetris.gb" && it.name == "Zed Tetris" })
         assertTrue(state.back())
-        assertEquals(listOf("GB", "tools"), rowKinds(state))             // Tetris is Continue: not in the Pinned row
+        assertEquals(listOf("games", "GB", "tools"), rowKinds(state))             // Tetris is Continue: not in the Pinned row
     }
 
     @Test fun rename_with_a_blank_or_unchanged_name_writes_nothing() = runTest {
@@ -8977,7 +9046,7 @@ class AppStateTest {
         assertEquals("$tetris\n", src.textAt("Home/Collections/Puzzle.txt"))
         assertEquals("Added to Puzzle", state.notice.value)
         assertTrue(state.back())
-        assertEquals(listOf("GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
+        assertEquals(listOf("games", "GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
         assertEquals(listOf("Puzzle", "Racing", "RPGs"), state.openCollectionsTab())   // the new collection is re-listed
     }
 
@@ -8997,7 +9066,7 @@ class AppStateTest {
         state.menuDraft("Favourites"); state.onButton(NxButton.A)
         assertEquals("$tetris\n", source.textAt("Home/Collections/Favourites.txt"))
         assertTrue(state.back())
-        assertEquals(listOf("GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
+        assertEquals(listOf("games", "GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
     }
 
     // --- Collections tab: Rename and Delete ---
@@ -9147,7 +9216,7 @@ class AppStateTest {
         state.load()
         assertEquals(listOf("RPGs"), state.openCollectionsTab())
         choose(state, ContextKind.DELETE_COLLECTION); state.onButton(NxButton.A)
-        assertEquals(listOf("GB", "GBA", "NDS", "tools"), rowKinds(state))
+        assertEquals(listOf("games", "GB", "GBA", "NDS", "tools"), rowKinds(state))
         val s = assertIs<Screen.Systems>(state.screen.value)
         assertNull(s.menu)
         assertTrue(s.category != MenuCategory.COLLECTIONS)
@@ -9174,12 +9243,12 @@ class AppStateTest {
         val state = state(MemorySettings(ContentRef("Home")))
         state.load()
         state.onConsoles()
-        assertEquals(listOf("GB", "GBA", "NDS", "tools"), rowKinds(state))
+        assertEquals(listOf("games", "GB", "GBA", "NDS", "tools"), rowKinds(state))
         state.select(2); state.onButton(NxButton.A)                      // NDS list
         choose(state, ContextKind.ADD_TO_COLLECTION); state.onButton(NxButton.A)   // New Collection…
         state.menuDraft("Puzzle"); state.onButton(NxButton.A)
         assertTrue(state.back())
-        assertEquals(listOf("GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
+        assertEquals(listOf("games", "GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
         assertEquals(MenuCategory.CONSOLES, assertIs<Screen.Systems>(state.screen.value).category)
         assertEquals(2, state.selection.value.index)                     // NDS
     }
@@ -9314,11 +9383,13 @@ class AppStateTest {
     @Test fun the_main_menu_opens_on_the_first_tab_and_l1_r1_step_the_tabs_with_wrap() = runTest {
         val state = pinnedLibrary()
         val s = assertIs<Screen.Systems>(state.screen.value)
-        assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.TOOLS), s.tabs.map { it.category })
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.TOOLS), s.tabs.map { it.category })
         assertEquals(MenuCategory.HOME, s.category)
         state.onButton(NxButton.R1)
+        assertEquals(MenuCategory.GAMES, state.screen.value.menuTab)
+        state.onButton(NxButton.R1)
         assertEquals(MenuCategory.CONSOLES, assertIs<Screen.Systems>(state.screen.value).category)
-        state.onButton(NxButton.L1); state.onButton(NxButton.L1)
+        state.onButton(NxButton.L1); state.onButton(NxButton.L1); state.onButton(NxButton.L1)
         assertEquals(MenuCategory.TOOLS, assertIs<Screen.Systems>(state.screen.value).category)
     }
 
@@ -9331,9 +9402,499 @@ class AppStateTest {
         assertEquals(2, state.selection.value.count)
     }
 
+    // --- The Games tab: every game as a game list, in the tab row between Home and Consoles ---
+
+    /** One console (GB) of four games, Alpha to Delta. */
+    private fun fourGames() = FakeRomsSource(
+        dirs = mapOf(
+            "Home" to listOf("Roms"),
+            "Home/Roms" to listOf("Game Boy (GB)"),
+            "Home/Roms/Game Boy (GB)" to listOf("Alpha.gb", "Bravo.gb", "Charlie.gb", "Delta.gb"),
+        ),
+    )
+
+    /** The screen is the Games tab (a game list of every game, with the tab row). */
+    private fun AppState.gamesTab(): Screen.Games =
+        assertIs<Screen.Games>(screen.value).also { assertTrue(it.isTab, "not the Games tab: ${it.source}"); assertEquals(ListSource.AllGames, it.source) }
+    private fun AppState.highlighted(): String = gamesTab().entries[selection.value.index].game.shownName
+
+    @Test fun r1_from_home_lands_on_the_games_tab_as_a_game_list() = runTest {
+        val state = pinnedLibrary()
+        state.onButton(NxButton.R1)
+        val g = assertIs<Screen.Games>(state.screen.value)
+        assertEquals(ListSource.AllGames, g.source)
+        assertEquals(listOf("Mario", "Tetris"), g.entries.map { it.game.shownName })
+        val bar = assertNotNull(g.tabBar)
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.TOOLS), bar.categories)
+        assertEquals(1, bar.index)
+        assertEquals(ListSelection(0, 2), state.selection.value)
+        state.onButton(NxButton.R1)
+        assertEquals(MenuCategory.CONSOLES, state.category())
+        state.onButton(NxButton.L1)
+        state.gamesTab()
+        state.onButton(NxButton.L1)
+        assertEquals(MenuCategory.HOME, state.category())
+    }
+
+    @Test fun a_tab_tap_opens_the_games_tab() = runTest {
+        val state = pinnedLibrary()
+        state.selectTab(1)
+        assertEquals(1, state.gamesTab().tabBar?.index)
+        state.selectTab(2)
+        assertEquals(MenuCategory.CONSOLES, state.category())
+        state.selectTab(0)
+        assertEquals(MenuCategory.HOME, state.category())
+    }
+
+    @Test fun the_games_tab_remembers_its_game_not_its_row() = runTest {
+        val state = state(MemorySettings(ContentRef("Home")), src = fourGames())
+        state.load(); advanceUntilIdle()
+        state.selectTab(1); state.select(2)
+        assertEquals("Charlie", state.highlighted())
+        state.onButton(NxButton.R1)                                          // Consoles
+        state.openSystem(assertIs<Screen.Systems>(state.screen.value).systems.single())
+        assertEquals("Alpha", assertIs<Screen.Games>(state.screen.value).entries[state.selection.value.index].game.shownName)
+        choose(state, ContextKind.HIDE); advanceUntilIdle()                  // Alpha hidden: every game after it moves up a row
+        state.onButton(NxButton.B)                                           // Consoles again
+        state.onButton(NxButton.L1)
+        assertEquals(listOf("Bravo", "Charlie", "Delta"), state.gamesTab().entries.map { it.game.shownName })
+        assertEquals("Charlie", state.highlighted())                         // the game, not row 2 (Delta now)
+    }
+
+    @Test fun the_games_tab_survives_a_library_change_while_showing() = runTest {
+        val src = fourGames()
+        val state = state(MemorySettings(ContentRef("Home")), src = src)
+        state.load(); advanceUntilIdle()
+        state.selectTab(1); state.select(1)
+        assertEquals("Bravo", state.highlighted())
+        src.writeBytes(ContentRef("Home/Roms/Game Boy (GB)"), "Aardvark.gb", byteArrayOf(1))   // sorts first
+        state.rescan(); advanceUntilIdle()
+        assertEquals(listOf("Aardvark", "Alpha", "Bravo", "Charlie", "Delta"), state.gamesTab().entries.map { it.game.shownName })
+        assertEquals("Bravo", state.highlighted())                           // still Bravo, a row further down
+        assertEquals(1, state.gamesTab().tabBar?.index)
+        choose(state, ContextKind.HIDE); advanceUntilIdle()                  // Bravo hidden from the tab: the nearest row
+        assertEquals(listOf("Aardvark", "Alpha", "Charlie", "Delta"), state.gamesTab().entries.map { it.game.shownName })
+        assertEquals("Charlie", state.highlighted())
+    }
+
+    @Test fun the_last_game_gone_drops_the_tab() = runTest {
+        val state = pinnedLibrary()                                          // Mario and Tetris
+        state.selectTab(1)
+        choose(state, ContextKind.HIDE); advanceUntilIdle()                  // Mario: the tab stays, on Tetris
+        assertEquals(listOf("Tetris"), state.gamesTab().entries.map { it.game.shownName })
+        assertEquals("Tetris", state.highlighted())
+        choose(state, ContextKind.HIDE); advanceUntilIdle()                  // the last game: no Games (nor Consoles) tab
+        val s = assertIs<Screen.Systems>(state.screen.value)
+        assertTrue(s.tabs.none { it.category == MenuCategory.GAMES }, s.tabs.map { it.category }.toString())
+        assertEquals(MenuCategory.TOOLS, s.category)                         // the next tab there is
+
+        // Remembered, not showing: the library emptied by a scan lands on the next tab too.
+        val src = twoConsoles()
+        val other = state(MemorySettings(ContentRef("Home")), src = src)
+        other.load(); advanceUntilIdle()
+        other.selectTab(1); other.gamesTab()
+        src.delete("Home/Roms/Game Boy (GB)/Tetris.gb"); src.delete("Home/Roms/Game Boy Advance (GBA)/Mario.gba")
+        other.rescan(); advanceUntilIdle()
+        val t = assertIs<Screen.Systems>(other.screen.value)
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.TOOLS), t.tabs.map { it.category })
+        assertEquals(MenuCategory.TOOLS, t.category)
+    }
+
+    @Test fun a_launch_from_the_games_tab_returns_to_it() = runTest {
+        val runner = RecordingRunner()
+        val state = state(MemorySettings(ContentRef("Home")), src = fourGames(), runner = runner, data = FakeUserData())
+        state.load(); advanceUntilIdle()
+        state.selectTab(1); state.select(2)
+        state.onButton(NxButton.A); advanceUntilIdle()
+        assertEquals("Charlie.gb", runner.launched.single().fileName)
+        state.onForeground(); advanceUntilIdle()                             // back from the game: the menu's rows rebuilt
+        assertEquals(1, state.gamesTab().tabBar?.index)
+        assertEquals("Charlie", state.highlighted())
+    }
+
+    @Test fun all_games_is_built_once_per_library_state() = runTest {
+        val src = fourGames()
+        val settings = androidSettings("a/A")
+        val state = state(settings, src = src, launcher = FakeLauncher(listOf(gAlpha, gGamma)))
+        state.load(); advanceUntilIdle()
+        val first = state.allGames()
+        assertEquals(listOf("Alpha", "Alpha", "Bravo", "Charlie", "Delta"), first.map { it.game.shownName })   // the Android Alpha too
+        assertSame(first, state.allGames())
+        state.selectTab(1); state.onButton(NxButton.L1); state.selectTab(1)   // tab switches build nothing
+        assertSame(first, state.gamesTab().entries)
+        assertSame(first, state.allGames())
+        src.writeBytes(ContentRef("Home/Roms/Game Boy (GB)"), "Echo.gb", byteArrayOf(1))
+        state.rescan(); advanceUntilIdle()                                   // a new library: rebuilt
+        val rescanned = state.allGames()
+        assertNotSame(first, rescanned)
+        assertTrue(rescanned.any { it.game.shownName == "Echo" })
+        assertSame(rescanned, state.allGames())
+        settings.androidConsoleApps = listOf("a/A", "g/G")
+        state.onForeground(); advanceUntilIdle()                             // a new Android console: rebuilt
+        val more = state.allGames()
+        assertNotSame(rescanned, more)
+        assertEquals(listOf("Alpha", "Gamma"), more.filter { it.system.android }.map { it.game.shownName })
+    }
+
+    // --- The Games tab's keys (Task 5) ---
+
+    /** One console (GB) of five games over three letters: Alpha, Apex, Bravo, Bust, Charlie. */
+    private fun letteredGames() = FakeRomsSource(
+        dirs = mapOf(
+            "Home" to listOf("Roms"),
+            "Home/Roms" to listOf("Game Boy (GB)"),
+            "Home/Roms/Game Boy (GB)" to listOf("Alpha.gb", "Apex.gb", "Bravo.gb", "Bust.gb", "Charlie.gb"),
+        ),
+    )
+
+    private fun TestScope.letteredTab(settings: MemorySettings = MemorySettings(ContentRef("Home"))): AppState =
+        state(settings, src = letteredGames()).also { it.load(); advanceUntilIdle(); it.selectTab(1); it.gamesTab() }
+
+    @Test fun in_the_games_tab_l2_r2_jump_by_letter_and_l1_r1_switch_tabs() = runTest {
+        val state = letteredTab()
+        assertEquals("Alpha", state.highlighted())
+        state.onButton(NxButton.R2)
+        assertEquals("Bravo", state.highlighted())                           // the first B game
+        state.onButton(NxButton.R2)
+        assertEquals("Charlie", state.highlighted())
+        state.onButton(NxButton.L2)
+        assertEquals("Bravo", state.highlighted())
+        state.onButton(NxButton.L2)
+        assertEquals("Alpha", state.highlighted())
+        state.onButton(NxButton.R1)
+        assertEquals(MenuCategory.CONSOLES, state.category())                // R1 leaves to Consoles
+        state.onButton(NxButton.L1)
+        state.gamesTab()
+        state.onButton(NxButton.L1)
+        assertEquals(MenuCategory.HOME, state.category())
+    }
+
+    @Test fun l2_r2_do_nothing_outside_the_games_tab() = runTest {
+        val state = state(MemorySettings(ContentRef("Home")), src = letteredGames())
+        state.load(); advanceUntilIdle()
+        val home = state.screen.value
+        val homeAt = state.selection.value
+        state.onButton(NxButton.R2); state.onButton(NxButton.L2)
+        assertSame(home, state.screen.value)
+        assertEquals(homeAt, state.selection.value)
+        state.selectTab(2)                                                   // Consoles
+        state.openSystem(assertIs<Screen.Systems>(state.screen.value).systems.single())
+        val list = assertIs<Screen.Games>(state.screen.value)
+        state.select(1)
+        state.onButton(NxButton.R2)
+        assertSame(list, state.screen.value)
+        assertEquals(1, state.selection.value.index)
+        state.onButton(NxButton.L2)
+        assertEquals(1, state.selection.value.index)
+        state.onButton(NxButton.R1)                                          // a console's list: L1 / R1 still jump by letter
+        assertEquals(2, state.selection.value.index)
+        assertSame(list, state.screen.value)
+    }
+
+    @Test fun left_right_in_the_games_tab_switch_tabs_in_a_list_and_move_in_a_grid() = runTest {
+        val state = letteredTab()                                            // List
+        state.onButton(NxButton.RIGHT)
+        assertEquals(MenuCategory.CONSOLES, state.category())
+        state.onButton(NxButton.LEFT)
+        state.gamesTab()
+        state.onButton(NxButton.LEFT)
+        assertEquals(MenuCategory.HOME, state.category())
+
+        val settings = MemorySettings(ContentRef("Home")).apply { gameListStyle = MenuStyle.GRID }
+        val grid = letteredTab(settings)
+        grid.onGridLayout(3)
+        grid.onButton(NxButton.RIGHT)
+        assertEquals("Apex", grid.highlighted())                             // one tile
+        grid.onButton(NxButton.RIGHT)
+        assertEquals("Bravo", grid.highlighted())
+        grid.onButton(NxButton.RIGHT)                                        // the row's end: the next tab
+        assertEquals(MenuCategory.CONSOLES, grid.category())
+        grid.onButton(NxButton.LEFT)
+        assertEquals("Bravo", grid.highlighted())                            // back on its game
+        grid.onGridLayout(3)
+        grid.onButton(NxButton.LEFT); grid.onButton(NxButton.LEFT)
+        assertEquals("Alpha", grid.highlighted())
+        grid.onButton(NxButton.LEFT)                                         // the row's start: the tab before
+        assertEquals(MenuCategory.HOME, grid.category())
+
+        // A console's List game list still pages with LEFT / RIGHT.
+        val list = state(MemorySettings(ContentRef("Home")), src = letteredGames())
+        list.load(); advanceUntilIdle()
+        list.selectTab(2)
+        list.openSystem(assertIs<Screen.Systems>(list.screen.value).systems.single())
+        list.onPageRows(2)
+        list.onButton(NxButton.RIGHT)
+        assertEquals(2, list.selection.value.index)
+        assertIs<Screen.Games>(list.screen.value)
+    }
+
+    @Test fun a_held_direction_or_shoulder_never_switches_tab_from_the_games_tab() = runTest {
+        val state = letteredTab()
+        for (b in listOf(NxButton.RIGHT, NxButton.LEFT, NxButton.R1, NxButton.L1)) {
+            state.onButton(b, repeat = true)
+            state.gamesTab()
+        }
+        state.onButton(NxButton.R2, repeat = true); state.onButton(NxButton.R2, repeat = true); state.onButton(NxButton.R2, repeat = true)
+        assertEquals("Charlie", state.highlighted())                         // a held R2 stops on the last letter, in the tab
+        state.onButton(NxButton.L2, repeat = true); state.onButton(NxButton.L2, repeat = true); state.onButton(NxButton.L2, repeat = true)
+        assertEquals("Alpha", state.highlighted())
+
+        val grid = letteredTab(MemorySettings(ContentRef("Home")).apply { gameListStyle = MenuStyle.GRID })
+        grid.onGridLayout(3)
+        repeat(4) { grid.onButton(NxButton.RIGHT, repeat = true) }
+        assertEquals("Bravo", grid.highlighted())                            // held: stops at the row's end
+        grid.onButton(NxButton.LEFT, repeat = true); grid.onButton(NxButton.LEFT, repeat = true); grid.onButton(NxButton.LEFT, repeat = true)
+        assertEquals("Alpha", grid.highlighted())
+
+        val carousel = letteredTab(MemorySettings(ContentRef("Home")).apply { gameListStyle = MenuStyle.CAROUSEL; gameListOrientation = MenuOrientation.VERTICAL })
+        carousel.onButton(NxButton.RIGHT, repeat = true)
+        carousel.gamesTab()
+        carousel.onButton(NxButton.RIGHT)                                    // a vertical stack: a fresh press switches tab
+        assertEquals(MenuCategory.CONSOLES, carousel.category())
+    }
+
+    @Test fun start_in_the_games_tab_is_the_global_search() = runTest {
+        val state = letteredTab()
+        state.select(2)                                                      // Bravo
+        state.onButton(NxButton.START)
+        assertEquals("", state.gamesTab().search)                            // the menu's search prompt, over the tab
+        assertTrue(state.textEntryOpen)
+        state.searchDraft("bu")
+        state.onButton(NxButton.A)
+        val results = assertIs<Screen.Games>(state.screen.value)
+        assertEquals(ListSource.Search("bu"), results.source)                // the global search's results, not a Filtered list
+        assertEquals(listOf("Bust"), results.entries.map { it.game.shownName })
+        assertTrue(state.back())
+        assertEquals("Bravo", state.highlighted())                           // back on the tab, on its game
+        state.onButton(NxButton.START)
+        assertEquals("bu", state.gamesTab().search)                          // the last search, as on any tab
+        state.onButton(NxButton.START)                                       // START closes it again
+        assertNull(state.gamesTab().search)
+        state.onButton(NxButton.START)
+        assertTrue(state.back())
+        assertNull(state.gamesTab().search)
+    }
+
+    @Test fun the_global_search_draft_on_the_games_tab_survives_a_menu_rebuild() = runTest {
+        val state = letteredTab()
+        state.onButton(NxButton.START)
+        state.searchDraft("ch")
+        state.onForeground(); advanceUntilIdle()
+        assertEquals("ch", state.gamesTab().search)
+    }
+
+    @Test fun the_games_tab_has_no_list_search() = runTest {
+        val state = letteredTab(MemorySettings(ContentRef("Home")).apply { gameListLayoutOptions = true })
+        state.openListSearch()
+        assertNull(state.gamesTab().search)
+        state.onButton(NxButton.START)                                       // the global prompt, never a Filtered list
+        state.searchDraft("al"); state.onButton(NxButton.A)
+        assertEquals(ListSource.Search("al"), assertIs<Screen.Games>(state.screen.value).source)
+    }
+
+    // The Layout icon opens the game lists' Layout dropdown on the tab too, as on a console's list.
+    @Test fun the_layout_dropdown_works_on_the_games_tab_and_holds_the_tabs_keys() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply {
+            gameListLayoutOptions = true; gameListStyle = MenuStyle.LIST; gameListOrientation = MenuOrientation.HORIZONTAL
+        }
+        val state = letteredTab(settings)
+        state.onButton(NxButton.R2)                                          // Bravo
+        val at = state.selection.value.index
+        state.toggleLayoutMenu()
+        assertEquals(0, state.gamesTab().layoutMenu)                         // on the layout in use
+        // Open, the tab's keys are the dropdown's: no tab switch, jump, search, menu or panel.
+        for (b in listOf(NxButton.R1, NxButton.L1, NxButton.R2, NxButton.L2, NxButton.LEFT, NxButton.RIGHT, NxButton.START, NxButton.X, NxButton.Y, NxButton.MENU)) {
+            state.onButton(b)
+            val tab = state.gamesTab()
+            assertEquals(0, tab.layoutMenu, "$b closed the dropdown")
+            assertNull(tab.search, "$b searched"); assertNull(tab.menu, "$b opened a menu")
+            assertEquals(at, state.selection.value.index, "$b moved the highlight")
+        }
+        assertNull(state.raPanel.value)
+        state.swipeTab(1); state.selectTab(2)                                // nor a swipe or a tap on the tab row
+        assertEquals(0, state.gamesTab().layoutMenu)
+        repeat(3) { state.onButton(NxButton.DOWN) }
+        assertEquals(3, state.gamesTab().layoutMenu)
+        state.onButton(NxButton.A)                                           // Carousel, vertical left
+        assertNull(state.gamesTab().layoutMenu)
+        assertEquals(MenuStyle.CAROUSEL, settings.gameListStyle)
+        assertEquals(MenuOrientation.VERTICAL, settings.gameListOrientation)
+        assertEquals(MenuOrientation.VERTICAL, state.currentOrientation())  // the tab redraws in it
+        assertEquals("Bravo", state.highlighted())                           // on the same game
+        state.toggleLayoutMenu()
+        state.pickLayout(1)                                                  // a tap: Grid
+        assertEquals(MenuStyle.GRID, settings.gameListStyle)
+        assertEquals("Bravo", state.highlighted())
+        state.toggleLayoutMenu()
+        assertTrue(state.back())                                             // B closes the dropdown first
+        assertNull(state.gamesTab().layoutMenu)
+        state.toggleLayoutMenu()
+        state.onButton(NxButton.B)
+        assertNull(state.gamesTab().layoutMenu)
+        state.toggleLayoutMenu(); state.toggleLayoutMenu()                   // the icon again closes it
+        assertNull(state.gamesTab().layoutMenu)
+        settings.gameListLayoutOptions = false                               // Layout options off: no dropdown
+        state.toggleLayoutMenu()
+        assertNull(state.gamesTab().layoutMenu)
+    }
+
+    @Test fun the_games_tabs_layout_dropdown_survives_a_menu_rebuild() = runTest {
+        val settings = androidSettings("a/A").apply { gameListLayoutOptions = true }
+        val state = state(settings, src = fourGames(), launcher = FakeLauncher(listOf(gAlpha, gGamma)))
+        state.load(); advanceUntilIdle()
+        state.selectTab(1)
+        state.toggleLayoutMenu()
+        state.onButton(NxButton.DOWN)
+        val before = state.gamesTab()
+        settings.androidConsoleApps = listOf("a/A", "g/G")
+        state.onForeground(); advanceUntilIdle()                             // a new Android console: the menu rebuilt
+        val after = state.gamesTab()
+        assertNotSame(before.entries, after.entries)
+        assertTrue(after.entries.any { it.game.shownName == "Gamma" })
+        assertEquals(1, after.layoutMenu)                                    // still open, on the same choice
+    }
+
+    @Test fun b_in_the_games_tab_is_the_menus_b() = runTest {
+        val state = letteredTab()
+        val tab = state.gamesTab()
+        assertFalse(state.back())                                            // nothing to close, not pushed: the menu's B
+        assertSame(tab, state.screen.value)
+        state.openContextMenu()
+        assertNotNull(state.gamesTab().menu)
+        assertTrue(state.back())                                             // the game's menu closes first
+        assertNull(state.gamesTab().menu)
+        assertFalse(state.back())
+        state.gamesTab()
+    }
+
+    @Test fun x_opens_the_achievements_panel_in_the_games_tab() = runTest {
+        val f = panelFixture()
+        f.state.selectTab(1)
+        val at = f.state.gamesTab().entries.indexOfFirst { it.game.fileName == "Tetris.gb" }
+        f.state.select(at)
+        f.state.onButton(NxButton.X); advanceUntilIdle()
+        assertEquals(listOf("First", "Second"), assertNotNull(f.state.raPanel.value).visible.map { it.title })
+        assertTrue(f.state.back())                                           // B closes the panel first
+        assertNull(f.state.raPanel.value)
+        assertFalse(f.state.back())
+        f.state.gamesTab()
+    }
+
+    // --- The menu's duties on the Games tab ---
+
+    @Test fun the_android_games_question_is_asked_over_the_games_tab() = runTest {
+        val launcher = FakeLauncher()
+        val state = state(MemorySettings(ContentRef("Home")), src = fourGames(), launcher = launcher)
+        state.load(); advanceUntilIdle()
+        state.selectTab(1); state.gamesTab()
+        assertNull(state.androidGamesAsk.value)
+        launcher.apps = listOf(gAlpha)                                       // a game installed while away
+        state.onForeground(); advanceUntilIdle()
+        assertEquals(listOf("a/A"), assertNotNull(state.androidGamesAsk.value).ids)
+    }
+
+    // A Systems tab never has a game list's panels; the Games tab has: the question waits until the panel closes.
+    @Test fun the_android_games_question_waits_while_a_panel_is_open_on_the_games_tab() = runTest {
+        val launcher = FakeLauncher()
+        val f = panelFixture(launcher = launcher)
+        f.state.selectTab(1); f.state.gamesTab()
+        f.state.onButton(NxButton.X); advanceUntilIdle()
+        assertNotNull(f.state.raPanel.value)
+        launcher.apps = listOf(gAlpha)                                       // a game installed while away
+        f.state.onForeground(); advanceUntilIdle()
+        assertNotNull(f.state.raPanel.value)
+        assertNull(f.state.androidGamesAsk.value)                            // not over the panel
+        assertTrue(f.state.back()); advanceUntilIdle()                       // B closes the panel: the question now
+        assertNull(f.state.raPanel.value)
+        assertEquals(listOf("a/A"), assertNotNull(f.state.androidGamesAsk.value).ids)
+    }
+
+    @Test fun an_offline_extra_back_rescans_from_the_games_tab_and_lands_on_its_game() = runTest {
+        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
+        val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
+        val card = CardSource(source, looseMounted = false)
+        val store = MemoryLibraryIndexStore()
+        val st = state(settings, card, store = store)
+        st.load()
+        st.dismissNotice()
+        st.selectTab(1)
+        st.select(st.gamesTab().entries.indexOfFirst { it.game.shownName == "Tetris" })
+        val writes = store.writes
+        card.looseMounted = true
+        st.onForeground(); advanceUntilIdle()
+        assertEquals(writes + 1, store.writes)                               // rescanned
+        assertTrue(st.gamesTab().entries.any { it.game.shownName == "Kirby" })
+        assertEquals("Tetris", st.highlighted())                             // Kirby sorts before it: the same game, not the row
+    }
+
+    @Test fun a_grant_on_resume_reloads_the_games_tab() = runTest {
+        val saf = ContentRef("${tree}primary%3ANXRedux")
+        val src = fileSource(mapOf(
+            saf.value to listOf("Roms"),
+            "${saf.value}/Roms" to listOf("Game Boy Advance (GBA)"),
+            "${saf.value}/Roms/Game Boy Advance (GBA)" to listOf("Mario.gba"),
+        ))
+        val access = FakeAllFilesAccess(isGranted = false)
+        val settings = MemorySettings(saf)
+        val st = state(settings, src, allFiles = access, localFiles = FakeLocalFiles(dirs = listOf("/storage/emulated/0/NXRedux")))
+        st.load()
+        st.selectTab(1)
+        assertEquals(listOf("Mario"), st.gamesTab().entries.map { it.game.shownName })
+        access.isGranted = true
+        st.onAllFilesAccessChanged(); advanceUntilIdle()
+        assertEquals(fileHome, settings.treeRef)
+        assertEquals(listOf("Tetris"), st.gamesTab().entries.map { it.game.shownName })   // reloaded from the file home, on the tab
+    }
+
+    @Test fun android_games_coming_and_going_keep_the_games_tab_on_its_game() = runTest {
+        val launcher = FakeLauncher(listOf(gAlpha))
+        val state = state(androidSettings("a/A", "g/G"), src = fourGames(), launcher = launcher)
+        state.load(); advanceUntilIdle()
+        state.selectTab(1)
+        state.select(state.gamesTab().entries.indexOfFirst { it.game.shownName == "Charlie" })
+        launcher.apps = listOf(gAlpha, gGamma)                               // Gamma installed
+        state.onForeground(); advanceUntilIdle()
+        assertTrue(state.gamesTab().entries.any { it.game.shownName == "Gamma" })
+        assertEquals("Charlie", state.highlighted())
+        launcher.apps = listOf(gGamma)                                       // the Android Alpha uninstalled: a row above goes
+        state.onForeground(); advanceUntilIdle()
+        assertEquals(listOf("Alpha", "Bravo", "Charlie", "Delta", "Gamma"), state.gamesTab().entries.map { it.game.shownName })
+        assertEquals(ListSource.AllGames, state.gamesTab().source)
+        assertEquals("Charlie", state.highlighted())
+    }
+
+    @Test fun the_games_tab_list_is_not_rebuilt_on_a_return_with_the_same_apps() = runTest {
+        val launcher = FakeLauncher(listOf(gAlpha))
+        val state = state(androidSettings("a/A", "g/G"), src = fourGames(), launcher = launcher)
+        state.load(); advanceUntilIdle()
+        state.onForeground(); advanceUntilIdle()
+        val first = state.allGames()
+        state.onForeground(); advanceUntilIdle()
+        assertSame(first, state.allGames())                                  // the same apps: the same list
+        state.onForeground(); advanceUntilIdle()
+        assertSame(first, state.allGames())
+        launcher.apps = listOf(gAlpha, gGamma)
+        state.onForeground(); advanceUntilIdle()
+        assertNotSame(first, state.allGames())                               // a real change: rebuilt
+    }
+
+    @Test fun the_remembered_games_tab_losing_its_last_game_lands_on_the_next_tab() = runTest {
+        val src = FakeRomsSource(dirs = mapOf("Home" to listOf("Roms"), "Home/Roms" to listOf("Game Boy (GB)"), "Home/Roms/Game Boy (GB)" to listOf("Tetris.gb")))
+        val state = state(MemorySettings(ContentRef("Home")), src = src)
+        state.load(); advanceUntilIdle()
+        state.selectTab(1); state.gamesTab()
+        state.onButton(NxButton.START); state.searchDraft("tetris"); state.onButton(NxButton.A)   // a list off the tab, the tab remembered
+        assertEquals(ListSource.Search("tetris"), assertIs<Screen.Games>(state.screen.value).source)
+        choose(state, ContextKind.HIDE); advanceUntilIdle()                  // the library's last game
+        while (state.screen.value !is Screen.Systems && state.back()) Unit
+        val s = assertIs<Screen.Systems>(state.screen.value)                 // never an empty Games tab
+        assertTrue(s.tabs.none { it.category == MenuCategory.GAMES }, s.tabs.map { it.category }.toString())
+        assertEquals(MenuCategory.TOOLS, s.category)
+    }
+
     @Test fun b_from_a_console_list_lands_on_consoles_on_that_console() = runTest {
         val state = pinnedLibrary()
-        state.onButton(NxButton.R1); state.onButton(NxButton.DOWN)   // Consoles, second console
+        state.onButton(NxButton.R1); state.onButton(NxButton.R1); state.onButton(NxButton.DOWN)   // Consoles (past Games), second console
         val chosen = assertIs<MainRow.System>(assertIs<Screen.Systems>(state.screen.value).rows[1])
         state.onButton(NxButton.A)
         assertIs<Screen.Games>(state.screen.value)
@@ -9421,7 +9982,7 @@ class AppStateTest {
         state.onButton(NxButton.A)
         advanceUntilIdle()
         val s = assertIs<Screen.Systems>(state.screen.value)
-        assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.TOOLS), s.tabs.map { it.category })
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.TOOLS), s.tabs.map { it.category })
         assertEquals(MenuCategory.HOME, s.category)
         assertEquals(listOf(MainRow.PickAGame), s.rows.filterNot { it is MainRow.Shelf })                  // nothing played, no pins left: a fresh Home
         assertEquals(0, state.selection.value.index)
@@ -9577,12 +10138,12 @@ class AppStateTest {
 
     @Test fun hidden_tabs_leave_the_tab_row() = runTest {
         val state = hiddenTabsState(MenuCategory.CONSOLES)
-        assertEquals(listOf(MenuCategory.HOME, MenuCategory.TOOLS), assertIs<Screen.Systems>(state.screen.value).tabs.map { it.category })
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.TOOLS), assertIs<Screen.Systems>(state.screen.value).tabs.map { it.category })
     }
 
     @Test fun with_home_hidden_the_menu_opens_on_the_first_visible_tab_and_home_rebuilds_are_harmless() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
-        val state = hiddenTabsState(MenuCategory.HOME, settings = settings, data = FakeUserData(recents = listOf(Recent(tetris))))
+        val state = hiddenTabsState(MenuCategory.HOME, MenuCategory.GAMES, settings = settings, data = FakeUserData(recents = listOf(Recent(tetris))))
         fun s() = assertIs<Screen.Systems>(state.screen.value)
         assertEquals(listOf(MenuCategory.CONSOLES, MenuCategory.TOOLS), s().tabs.map { it.category })
         assertEquals(MenuCategory.CONSOLES, s().category)
@@ -9595,9 +10156,30 @@ class AppStateTest {
         assertEquals(MenuCategory.CONSOLES, s().category)                     // Home pressed: the first visible tab
     }
 
+    @Test fun with_only_home_hidden_the_menu_opens_on_the_games_tab_and_stays_on_its_game() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = hiddenTabsState(MenuCategory.HOME, settings = settings, data = FakeUserData(recents = listOf(Recent(tetris))))
+        val opened = state.gamesTab()
+        assertEquals(0, assertNotNull(opened.tabBar).index)                  // the first visible tab
+        assertEquals(listOf(MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.TOOLS), opened.tabBar?.categories)
+        state.select(1)
+        val game = state.highlighted()
+        state.onHomeLayout(LAND); advanceUntilIdle()                          // a Home frame: Home rebuilt, not shown
+        assertEquals(0, state.gamesTab().tabBar?.index)
+        assertEquals(game, state.highlighted())
+        settings.menuStyles = LIST_TABS + (MenuCategory.HOME to MenuStyle.CAROUSEL)
+        state.onForeground(); advanceUntilIdle()                              // Home rebuilt in another layout
+        assertEquals(0, state.gamesTab().tabBar?.index)
+        assertEquals(game, state.highlighted())
+        state.goHome()                                                        // Home pressed: the first visible tab, this one
+        assertEquals(0, state.gamesTab().tabBar?.index)
+        state.onButton(NxButton.R1)
+        assertEquals(MenuCategory.CONSOLES, state.category())
+    }
+
     @Test fun a_single_tab_never_switches_and_up_stays() = runTest {
         val settings = MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + (MenuCategory.TOOLS to MenuStyle.CAROUSEL) }
-        val state = hiddenTabsState(MenuCategory.HOME, MenuCategory.CONSOLES, settings = settings)
+        val state = hiddenTabsState(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, settings = settings)
         val s = assertIs<Screen.Systems>(state.screen.value)
         assertEquals(listOf(MenuCategory.TOOLS), s.tabs.map { it.category })
         assertEquals("NX Redux", mainMenuTitle(s))
@@ -9661,7 +10243,7 @@ class AppStateTest {
     }
 
     @Test fun a_hidden_home_is_never_pushed() = runTest {
-        val state = hiddenTabsState(MenuCategory.HOME, data = FakeUserData(recents = listOf(Recent(tetris))))
+        val state = hiddenTabsState(MenuCategory.HOME, MenuCategory.GAMES, data = FakeUserData(recents = listOf(Recent(tetris))))
         state.openHiddenTab(MenuCategory.HOME)
         val s = assertIs<Screen.Systems>(state.screen.value)
         assertFalse(s.pushed)
@@ -9861,6 +10443,11 @@ class AppStateTest {
         state.onAppOnTop(false)
         state.onButton(NxButton.MENU)
         assertEquals(listOf(ContextKind.PIN, ContextKind.OPEN_CONSOLES), menuKinds(state))
+        state.onButton(NxButton.B)
+        state.onAppOnTop(true)
+        state.selectTab(1); state.gamesTab()                                  // the Games tab: its game's menu ends with it too
+        state.onButton(NxButton.MENU)
+        assertEquals(ContextKind.USE_TOP_SCREEN, menuKinds(state).last(), menuKinds(state).toString())
     }
 
     @Test fun a_long_press_on_pick_a_game_with_tools_hidden_offers_tools() = runTest {
@@ -9883,7 +10470,7 @@ class AppStateTest {
 
     @Test fun hiding_tools_never_locks_out_settings() = runTest {
         val state = hiddenTabsState(MenuCategory.TOOLS)
-        assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES), assertIs<Screen.Systems>(state.screen.value).tabs.map { it.category })
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES), assertIs<Screen.Systems>(state.screen.value).tabs.map { it.category })
         state.openTabMenu()                                                   // a long press on the tab row
         assertEquals(listOf(ContextKind.OPEN_TOOLS), menuKinds(state))
         state.onButton(NxButton.A)
@@ -9937,12 +10524,12 @@ class AppStateTest {
     }
 
     @Test fun every_tab_hidden_leaves_home_and_offers_the_rest() = runTest {
-        val state = hiddenTabsState(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.TOOLS)
+        val state = hiddenTabsState(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.TOOLS)
         val s = assertIs<Screen.Systems>(state.screen.value)
         assertEquals(listOf(MenuCategory.HOME), s.tabs.map { it.category })
         assertEquals("NX Redux", mainMenuTitle(s))
         state.openTabMenu()
-        assertEquals(listOf(ContextKind.OPEN_CONSOLES, ContextKind.OPEN_TOOLS), menuKinds(state))
+        assertEquals(listOf(ContextKind.OPEN_GAMES, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_TOOLS), menuKinds(state))
     }
 
     @Test fun home_pressed_on_a_pushed_tab_lands_on_the_first_tab() = runTest {
@@ -9952,6 +10539,131 @@ class AppStateTest {
         val s = assertIs<Screen.Systems>(state.screen.value)
         assertFalse(s.pushed)
         assertEquals(MenuCategory.HOME, s.category)
+    }
+
+    /** The screen is the Games tab pushed over the menu: its one tab, titled Games, no hidden tabs offered. */
+    private fun AppState.pushedGames(): Screen.Games = assertIs<Screen.Games>(screen.value).also {
+        assertEquals(ListSource.AllGames, it.source)
+        val bar = assertNotNull(it.tabBar)
+        assertTrue(bar.pushed, "not pushed")
+        assertEquals(listOf(MenuCategory.GAMES), bar.categories)
+        assertEquals(emptyList(), bar.hidden)
+    }
+
+    @Test fun hiding_the_games_tab_takes_it_out_of_the_row_and_into_menu() = runTest {
+        val state = hiddenTabsState(MenuCategory.GAMES, data = FakeUserData(recents = listOf(Recent(tetris))))
+        val s = assertIs<Screen.Systems>(state.screen.value)
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.TOOLS), s.tabs.map { it.category })
+        assertEquals(listOf(MenuCategory.GAMES), s.hidden)
+        state.select(0); state.onButton(NxButton.MENU)                        // Continue: Pin, then Games
+        assertEquals(listOf(ContextKind.PIN, ContextKind.OPEN_GAMES), menuKinds(state))
+        assertEquals("Games", state.screen.value.contextMenu?.items?.last()?.label)
+        state.onButton(NxButton.B)
+        state.openTabMenu()                                                   // the long press on the tab row
+        assertEquals(listOf(ContextKind.OPEN_GAMES), menuKinds(state))
+    }
+
+    @Test fun a_hidden_games_tab_opens_over_the_menu_and_b_returns() = runTest {
+        val state = hiddenTabsState(MenuCategory.GAMES, data = FakeUserData(recents = listOf(Recent(tetris)), pins = listOf(Shortcut(mario, "Mario"))))
+        state.select(1)
+        val under = assertIs<Screen.Systems>(state.screen.value).rows[1]
+        choose(state, ContextKind.OPEN_GAMES)
+        val pushed = state.pushedGames()
+        assertNull(pushed.menu)
+        assertEquals(0, state.selection.value.index)                          // a push opens on its first item
+        assertEquals("Games", tabBarTitle(assertNotNull(pushed.tabBar)))      // the bottom row is the menu's title row
+        assertTrue(pushed.entries.size > 2)
+        state.select(1)
+        for (b in listOf(NxButton.L1, NxButton.R1, NxButton.LEFT, NxButton.RIGHT)) { state.onButton(b); state.pushedGames() }
+        state.swipeTab(1); state.pushedGames()                                // no tab to swipe to
+        assertEquals(1, state.selection.value.index)
+        val letter = { state.pushedGames().entries[state.selection.value.index].game.shownName.first().uppercaseChar() }
+        val before = letter()
+        state.onButton(NxButton.R2)                                           // L2 / R2 still jump by letter
+        assertTrue(letter() > before, "R2 did not jump: still on $before")
+        state.openHiddenTab(MenuCategory.CONSOLES)                            // over a pushed tab: nothing stacks (Consoles shows anyway)
+        state.pushedGames()
+        state.onButton(NxButton.MENU)                                         // the game's own menu, no hidden tabs
+        assertTrue(menuKinds(state).isNotEmpty())
+        assertTrue(menuKinds(state).none { it == ContextKind.OPEN_GAMES || it == ContextKind.OPEN_CONSOLES })
+        state.onButton(NxButton.B)
+        state.openTabMenu()                                                   // no long-press menu over a pushed tab
+        assertNull(state.pushedGames().menu)
+        state.onButton(NxButton.B)
+        val back = assertIs<Screen.Systems>(state.screen.value)
+        assertFalse(back.pushed)
+        assertEquals(MenuCategory.HOME, back.category)
+        assertEquals(under, back.rows[state.selection.value.index])           // the tab and row it was opened from
+        assertEquals(listOf(MenuCategory.GAMES), back.hidden)
+    }
+
+    @Test fun a_game_launched_from_a_pushed_games_tab_ends_the_push() = runTest {
+        val runner = RecordingRunner()
+        val state = hiddenTabsState(MenuCategory.GAMES, runner = runner)
+        state.openHiddenTab(MenuCategory.GAMES)
+        state.select(state.pushedGames().entries.indexOfFirst { it.system.tag == "GB" })
+        state.onButton(NxButton.A); advanceUntilIdle()
+        assertEquals(1, runner.launched.size)
+        val s = assertIs<Screen.Systems>(state.screen.value)                 // the tab underneath, in place
+        assertFalse(s.pushed)
+        assertEquals(MenuCategory.HOME, s.category)
+    }
+
+    @Test fun a_hidden_games_tab_opened_over_consoles_returns_to_its_row() = runTest {
+        val state = hiddenTabsState(MenuCategory.GAMES)
+        state.onConsoles(); state.select(2)
+        state.openTabMenu()
+        assertEquals(listOf(ContextKind.OPEN_GAMES), menuKinds(state))
+        state.onButton(NxButton.A)
+        state.pushedGames()
+        state.onButton(NxButton.B)
+        assertEquals(MenuCategory.CONSOLES, state.category())
+        assertEquals(2, state.selection.value.index)
+    }
+
+    @Test fun a_hidden_tab_opened_over_the_games_tab_returns_to_its_game() = runTest {
+        val state = hiddenTabsState(MenuCategory.CONSOLES)
+        state.selectTab(1); state.select(2)
+        val game = state.highlighted()
+        assertEquals(listOf(MenuCategory.CONSOLES), state.gamesTab().tabBar?.hidden)
+        state.onButton(NxButton.MENU)                                         // the game's items, then the hidden tab
+        assertEquals(ContextKind.OPEN_CONSOLES, menuKinds(state).last())
+        state.onButton(NxButton.B)
+        state.openTabMenu()                                                   // the long press on the tab row: the hidden tab alone
+        assertEquals(listOf(ContextKind.OPEN_CONSOLES), menuKinds(state))
+        state.onButton(NxButton.A)
+        assertEquals(MenuCategory.CONSOLES, state.pushedMenu().category)
+        state.onButton(NxButton.B)
+        assertEquals(1, state.gamesTab().tabBar?.index)
+        assertEquals(game, state.highlighted())                               // the same game
+    }
+
+    @Test fun hiding_the_games_tab_while_it_shows_moves_to_the_next_tab() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = hiddenTabsState(settings = settings)
+        state.selectTab(1); state.gamesTab()
+        settings.showGamesTab = false
+        state.onForeground(); advanceUntilIdle()                              // the rows rebuilt and swapped in
+        assertEquals(MenuCategory.CONSOLES, state.category())                 // the next after Games, not Home
+    }
+
+    @Test fun hiding_the_remembered_games_tab_in_layouts_lands_on_the_next_tab() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = hiddenTabsState(MenuCategory.TOOLS, settings = settings)
+        state.selectTab(1); state.gamesTab()
+        state.openTabMenu(); state.onButton(NxButton.A)                       // Tools pushed over the Games tab
+        val settingsRow = state.pushedMenu().rows.indexOfFirst { (it as? MainRow.Tool)?.row?.kind == ToolKind.SETTINGS }
+        state.select(settingsRow); state.onButton(NxButton.A)
+        state.openLayoutsPage(SettingsSection.LAYOUT_GAMES_TAB)
+        state.selectLayoutsRow(SettingsKind.TAB_SHOWN, MenuCategory.GAMES); state.onButton(NxButton.A)
+        assertFalse(settings.showGamesTab)
+        repeat(4) { if (state.screen.value !is Screen.Systems) state.onButton(NxButton.B) }
+        assertEquals(MenuCategory.TOOLS, state.pushedMenu().category)         // back to the pushed Tools
+        state.onButton(NxButton.B)                                            // the remembered tab, Games, is gone
+        val s = assertIs<Screen.Systems>(state.screen.value)
+        assertFalse(s.pushed)
+        assertEquals(MenuCategory.CONSOLES, s.category)
+        assertEquals(listOf(MenuCategory.GAMES, MenuCategory.TOOLS), s.hidden)
     }
 
     // --- Home ---
@@ -9990,7 +10702,7 @@ class AppStateTest {
         val state = state(MemorySettings(ContentRef("Home")), src = sourceWithCollections(), data = FakeUserData(recents = listOf(Recent(tetris))))
         state.load(); advanceUntilIdle()
         val s = assertIs<Screen.Systems>(state.screen.value)
-        assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS), s.tabs.map { it.category })
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS), s.tabs.map { it.category })
         assertEquals(MenuCategory.HOME, s.category)
         assertEquals("Tetris", assertIs<MainRow.Continue>(s.rows[0]).entry.game.shownName)
         assertEquals(0, state.selection.value.index)
@@ -10182,20 +10894,60 @@ class AppStateTest {
         state.openSettings(SettingsSection.MAIN_MENU)
         // No Pinned row; Home first. Home, Collections and Tools are unset (their defaults: Minimal, Minimal, and Grid).
         assertEquals(
-            listOf("Home" to "Minimal", "Consoles" to "Grid", "Collections" to "Minimal", "Tools" to "Grid", "Game lists" to "List", "Title and hints" to "Show",
+            listOf("Home" to "Minimal", "Games" to "List", "Consoles" to "Grid", "Collections" to "Minimal", "Tools" to "Grid", "Game lists" to "List", "Title and hints" to "Show",
                 "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Details", "Reset to defaults" to null),
             state.layoutsRows().map { it.label to it.secondary },
         )
         // Every group's rows, in Layouts' order, each page ending with Done.
-        val groups = listOf(SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS,
+        val groups = listOf(SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_GAMES_TAB, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS,
             SettingsSection.LAYOUT_GAME_LISTS, SettingsSection.LAYOUT_TITLE_HINTS, SettingsSection.LAYOUT_SWITCHER)
         val rows = groups.flatMap { g -> state.openLayoutsPage(g) }
-        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Most played shelf", "Stats", "Layout", "Visible", "Layout", "Visible", "Layout", "Visible", "Layout", "List art", "Backdrop art", "Layout options", "Layout", "Page title", "Button hints", "Layout"), rows.map { it.label })
+        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Most played shelf", "Stats", "Layout", "Visible", "Visible", "Layout", "Visible", "Layout", "Visible", "Layout", "List art", "Backdrop art", "Layout options", "Layout", "Page title", "Button hints", "Layout"), rows.map { it.label })
         val styles = rows.filter { it.kind == SettingsKind.MENU_STYLE }
         assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS), styles.map { it.category })
         assertTrue(styles.all { it.enabled })
         assertEquals(1, rows.count { it.kind == SettingsKind.GAME_LIST_STYLE })
-        assertEquals(listOf("Show", "Show", "Show", "Show", "Show", "Minimal", "Show", "Grid", "Show", "Minimal", "Show", "Grid", "Screenshot", "3D box art", "Show", "List", "Show", "Show", "Full screen"), rows.map { it.secondary })
+        assertEquals(listOf("Show", "Show", "Show", "Show", "Show", "Minimal", "Show", "Show", "Grid", "Show", "Minimal", "Show", "Grid", "Screenshot", "3D box art", "Show", "List", "Show", "Show", "Full screen"), rows.map { it.secondary })
+    }
+
+    @Test fun the_games_tabs_layouts_page_has_only_visible() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings)
+        state.load()
+        state.openLayoutsPage(SettingsSection.LAYOUT_GAMES_TAB)
+        val page = assertIs<Screen.Settings>(state.screen.value)
+        assertEquals(listOf(SettingsKind.TAB_SHOWN to "Visible"), page.rows.map { it.kind to it.label })
+        assertEquals("Its layout follows Layouts \u2192 Game lists.", page.banner)
+        state.selectLayoutsRow(SettingsKind.TAB_SHOWN, MenuCategory.GAMES); state.onButton(NxButton.A)
+        assertFalse(settings.showGamesTab)
+        assertEquals("Hide", assertIs<Screen.Settings>(state.screen.value).rows.single().secondary)
+        state.openLayoutsPage(SettingsSection.MAIN_MENU)
+        assertEquals("Hidden", assertIs<Screen.Settings>(state.screen.value).rows.first { it.kind == SettingsKind.LAYOUT_GAMES_TAB }.secondary)
+    }
+
+    @Test fun layouts_reset_shows_the_games_tab_again() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { showGamesTab = false }
+        val state = state(settings)
+        state.load()
+        state.openSettings(SettingsSection.MAIN_MENU)
+        state.select(assertIs<Screen.Settings>(state.screen.value).rows.lastIndex); state.onButton(NxButton.A); state.onButton(NxButton.A)
+        assertTrue(settings.showGamesTab)
+    }
+
+    @Test fun theGamesTabsLayoutsPageHasOnlyVisibleAndTheTabShowsByDefault() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { menuStyles = emptyMap() }
+        val state = state(settings)
+        state.load()
+        assertTrue(settings.showGamesTab)   // this fake stores it (its override), starting shown
+        assertEquals(state.openLayoutsPage(SettingsSection.LAYOUT_GAME_LISTS).let { assertIs<Screen.Settings>(state.screen.value).shot },
+            state.openLayoutsPage(SettingsSection.LAYOUT_GAMES_TAB).let { assertIs<Screen.Settings>(state.screen.value).shot })   // the game lists' picture
+        assertEquals(listOf("Visible"), state.openLayoutsPage(SettingsSection.LAYOUT_GAMES_TAB).map { it.label })
+        assertEquals(MenuCategory.GAMES, SettingsSection.LAYOUT_GAMES_TAB.tab)
+        state.selectLayoutsRow(SettingsKind.TAB_SHOWN, MenuCategory.GAMES); state.onButton(NxButton.A)
+        assertFalse(settings.showGamesTab)
+        assertEquals(listOf("Visible"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })
+        assertNull(assertIs<Screen.Settings>(state.screen.value).shot)   // hidden: no picture
+        assertTrue(settings.menuStyles.isEmpty())
     }
 
     @Test fun layouts_page_defaults_to_carousel_tools_grid_and_cycles_four_main_menu_styles() = runTest {
@@ -10209,7 +10961,7 @@ class AppStateTest {
         assertEquals(listOf("Visible", "Layout"), state.openLayoutsPage(SettingsSection.LAYOUT_TOOLS).map { it.label })
         assertEquals(listOf("List art", "Backdrop art", "Layout options", "Layout"), state.openLayoutsPage(SettingsSection.LAYOUT_GAME_LISTS).map { it.label })
         // Layouts' group rows carry each layout: Tools' own default is Grid, Home's and Collections' Minimal; the fixture's game list is List.
-        assertEquals(listOf("Minimal", "Carousel", "Minimal", "Grid", "List"), state.openLayoutsPage(SettingsSection.MAIN_MENU).take(5).map { it.secondary })
+        assertEquals(listOf("Minimal", "List", "Carousel", "Minimal", "Grid"), state.openLayoutsPage(SettingsSection.MAIN_MENU).take(5).map { it.secondary })
         state.selectLayoutsRow(SettingsKind.MENU_STYLE, MenuCategory.CONSOLES); state.onButton(NxButton.RIGHT)   // Consoles: Carousel to Minimal, no Backdrop
         assertEquals(MenuStyle.MINIMAL, settings.menuStyles[MenuCategory.CONSOLES])
         state.onButton(NxButton.RIGHT)                                    // and Minimal wraps to List
@@ -10427,6 +11179,7 @@ class AppStateTest {
     private fun MemorySettings.setTabShown(c: MenuCategory, shown: Boolean) {
         when (c) {
             MenuCategory.HOME -> showHomeTab = shown
+            MenuCategory.GAMES -> showGamesTab = shown
             MenuCategory.CONSOLES -> showConsolesTab = shown
             MenuCategory.COLLECTIONS -> showCollectionsTab = shown
             MenuCategory.TOOLS -> showToolsTab = shown
@@ -10487,7 +11240,7 @@ class AppStateTest {
         fun page(section: SettingsSection) = state.openLayoutsPage(section).map { it.label to it.secondary }
         assertEquals(
             listOf(
-                "Home" to "Minimal", "Consoles" to "Carousel", "Collections" to "Minimal", "Tools" to "Grid", "Game lists" to "Carousel", "Title and hints" to "Show",
+                "Home" to "Minimal", "Games" to "Carousel", "Consoles" to "Carousel", "Collections" to "Minimal", "Tools" to "Grid", "Game lists" to "Carousel", "Title and hints" to "Show",
                 "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Details", "Reset to defaults" to null,
             ),
             page(SettingsSection.MAIN_MENU),
@@ -12206,7 +12959,7 @@ class AppStateTest {
         assertEquals(MenuCategory.HOME, assertIs<Screen.Systems>(state.screen.value).category)   // still on Home
         assertEquals(last, state.selection.value.index)
         state.onButton(NxButton.RIGHT)                                   // fresh: the next tab
-        assertEquals(MenuCategory.CONSOLES, assertIs<Screen.Systems>(state.screen.value).category)
+        assertEquals(MenuCategory.GAMES, state.screen.value.menuTab)
         state.onButton(NxButton.L1)
         assertEquals(last, state.selection.value.index)                  // Home kept its place
     }
@@ -12578,7 +13331,7 @@ class AppStateTest {
         assertEquals(MenuCategory.TOOLS, state.category())
         state.select(state.screen.value.let { assertIs<Screen.Systems>(it) }.rows.indexOfFirst { it is MainRow.Tool && it.row.kind == ToolKind.SETTINGS })
         choose(state, ContextKind.UNPIN_TOOL); advanceUntilIdle()
-        while (state.category() != MenuCategory.HOME) state.onButton(NxButton.L1)   // back to Home
+        while (state.screen.value.menuTab != MenuCategory.HOME) state.onButton(NxButton.L1)   // back to Home (through Games)
         assertTrue(state.screen.value.homeRows.none { it is MainRow.MoreTools })
         assertEquals(8, state.selection.value.index)
         assertIs<MainRow.PinnedTool>(state.homeFocus())
@@ -13872,7 +14625,7 @@ class AppStateTest {
     @Test fun search_with_no_matches_shows_an_empty_list_and_b_returns_to_the_row() = runTest {
         val state = AppState(AppDeps(MemorySettings(ContentRef("Home")), searchSource(), RecordingRunner(), NoopPicker(), compute = UnconfinedTestDispatcher(testScheduler)), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
         state.load()
-        state.onButton(NxButton.R1)   // another tab than the first
+        state.onButton(NxButton.R1); state.onButton(NxButton.R1)   // another tab than the first (Consoles, past Games)
         val before = assertIs<Screen.Systems>(state.screen.value)
         state.onButton(NxButton.DOWN)
         val row = state.selection.value.index
@@ -14123,6 +14876,19 @@ class AppStateTest {
         assertNotNull(state.textEntry.value)
         state.onButton(NxButton.A)   // the highlight starts on g
         assertEquals("g", assertIs<Screen.Systems>(state.screen.value).search)
+    }
+
+    @Test fun keyboard_search_on_the_games_tab_is_the_global_search() = runTest {
+        val state = keyboardSearchState()
+        state.selectTab(1); state.gamesTab()
+        state.onButton(NxButton.START)
+        assertNotNull(state.textEntry.value)
+        assertEquals("Search", state.textEntryConfirmLabel)
+        state.onButton(NxButton.A)   // the highlight starts on g
+        assertEquals("g", state.gamesTab().search)
+        state.onButton(NxButton.START)   // the keyboard's START confirms: the global search's results
+        assertEquals(ListSource.Search("g"), assertIs<Screen.Games>(state.screen.value).source)
+        assertNull(state.textEntry.value)
     }
 
     @Test fun keyboard_start_submits_search_as_a_did() = runTest {

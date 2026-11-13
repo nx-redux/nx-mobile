@@ -39,4 +39,25 @@ class GameListTopStatsTest {
         assertTrue(gameListTrophy(available = true, dual = false, null))
         assertFalse(gameListTrophy(available = false, dual = false, set))
     }
+
+    // The title over the selected game's lines: its block centred in the header; alone (no lines to draw), on the
+    // icons' centre line, the header's height (so the list) the same either way.
+    @Test fun a_title_alone_sits_on_the_icons_centre() {
+        val time = InfoLine(InfoKind.TIME, "2h")
+        val ownRow = listOf(InfoLine(InfoKind.NEXT, "Win"), InfoLine(InfoKind.RELEASE, "1998"))
+        // Text scale 1 without achievements: a 44 dp header, a 35 dp block (the title and one line) of 18 dp boxes.
+        fun one(facts: List<InfoLine>) = gameListTitleTop(facts, next = false, height = 44f, block = 35f, lineH = 18f, pitch = 17.5f, iconsH = 44f)
+        assertEquals(4.5f, one(listOf(time)))   // a first-row line: today's top
+        assertEquals(13f, one(emptyList()))   // no lines: the 18 dp box centred on the 44 dp icons
+        assertEquals(4.5f, one(ownRow))   // next off: the own-row kinds are drawn on the first row
+        // With achievements: a 61 dp header, the next goal's row kept under the first.
+        fun two(facts: List<InfoLine>, pitch: Float = 17.5f) = gameListTitleTop(facts, next = true, height = 61f, block = 53f, lineH = 18f, pitch = pitch, iconsH = 44f)
+        assertEquals(4f, two(listOf(time)))   // a first-row line
+        assertEquals(4f, two(listOf(time) + ownRow))
+        assertEquals(13f, two(emptyList()))   // no lines
+        assertEquals(13f, two(ownRow))   // only own-row lines: the first row is empty, the title alone (box 13–31, the row below from 39)
+        assertEquals(4f, two(ownRow, pitch = 8f))   // were the row below (from 20) to meet the lone title: today's top
+        // A huge font: a box taller than the icons never goes above the block's top.
+        assertEquals(4f, gameListTitleTop(emptyList(), next = false, height = 150f, block = 142f, lineH = 54f, pitch = 50f, iconsH = 44f))
+    }
 }

@@ -169,9 +169,16 @@ internal fun Modifier.nxStackEdgeFade(fade: Dp): Modifier =
         )
     }
 
+/** A game-list caption's info rows' size as a share of its name's: the stacks' and the horizontal Carousel's. */
+internal const val STACK_INFO_SHARE = 0.8f
+
+/** Between a game-list stack's caption lines (the name and each info row), as the horizontal Carousel's game caption. */
+internal val STACK_CAPTION_GAP = 3.dp
+
 /**
  * A vertical stack's caption info rows: every segment on a row of its own (the time, the trophy count, the next goal).
- * The column beside the stack is narrow, so the time and the count together would cut the count short.
+ * The column beside the stack is narrow, so the time and the count together would cut the count short. A game list's
+ * horizontal Carousel uses them too ([carouselCaptionRows]).
  */
 internal fun stackCaptionRows(lines: List<InfoLine>): List<List<InfoLine>> = lines.map { listOf(it) }
 
@@ -207,7 +214,7 @@ internal fun StackCaption(
     val width = (bodyW - g.captionRight - g.captionX).coerceAtLeast(0f)
     Column(
         Modifier.stackCaptionPlace(g).width(width.dp).captionTap(),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
+        verticalArrangement = Arrangement.spacedBy(STACK_CAPTION_GAP),
         horizontalAlignment = if (end) Alignment.End else Alignment.Start,
     ) {
         Text(title, color = colors.accent, maxLines = 3, overflow = TextOverflow.Ellipsis, style = nameStyle)   // the selected game's name in the accent
