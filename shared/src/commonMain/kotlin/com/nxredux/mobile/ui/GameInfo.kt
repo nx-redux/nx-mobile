@@ -5,6 +5,9 @@ import com.nxredux.mobile.gametime.GameTimeFormat
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.scraper.StoredGameInfo
+import com.nxredux.mobile.settings.MenuOrientation
+import com.nxredux.mobile.settings.MenuStyle
+import com.nxredux.mobile.ui.nx.carouselGameLines
 
 /** What the menu shows under a selected game: last played and total time (game time), and RetroAchievements progress. */
 data class GameInfo(val lastPlayedAt: Long?, val totalMs: Long?, val ra: RaProgress?, val plays: Long? = null)
@@ -154,6 +157,41 @@ internal fun MainRow?.listed(): Listed? = when (this) {
 internal fun rowTileInfo(rows: List<MainRow>, gameInfo: Map<String, GameInfo>, now: Long): (Int) -> List<InfoLine> =
     { i -> gameInfoFor(gameInfo, now, rows.getOrNull(i).game(), full = false) }
 
-/** A game list Grid's per-tile info: entry index to that game's tile info, as [rowTileInfo]. */
-internal fun entryTileInfo(entries: List<Listed>, gameInfo: Map<String, GameInfo>, now: Long): (Int) -> List<InfoLine> =
-    { i -> gameInfoFor(gameInfo, now, entries.getOrNull(i)?.game, full = false) }
+/**
+ * A game list Grid's per-tile info: entry index to that game's tile info, as [rowTileInfo], then its details from the
+ * stored facts ([meta], as Layouts → Extra info lets the menus show them, whatever Game info says: [gameTileLines]). Read lazily
+ * per tile, where its caption shows.
+ */
+internal fun entryTileInfo(entries: List<Listed>, gameInfo: Map<String, GameInfo>, now: Long, meta: GameMeta = GameMeta.NONE): (Int) -> List<InfoLine> =
+    { i ->
+        val game = entries.getOrNull(i)?.game
+        // The details have their own rows: Layouts → Game info does not trade them for the achievements here.
+        gameTileLines(gameInfoFor(gameInfo, now, game, full = false), if (!meta.shown) emptyList() else gameInfoFor(gameInfo, now, game, full = true, meta.copy(always = true)))
+    }
+
+/**
+ * [game]'s full info where its details have a place of their own (a game list's horizontal Carousel: the time and
+ * achievements in the picture, the details under the name, [carouselGameLines]): both, whatever Layouts → Game info
+ * says ([GameMeta.always] trades one for the other only where they share a place). Extra info off ([meta] not shown):
+ * no details.
+ */
+internal fun gameInfoApart(gameInfo: Map<String, GameInfo>, now: Long, game: GameEntry?, meta: GameMeta): List<InfoLine> {
+    val stats = carouselGameLines(gameInfoFor(gameInfo, now, game, full = true, meta.copy(always = false))).picture
+    val details = if (!meta.shown) emptyList() else carouselGameLines(gameInfoFor(gameInfo, now, game, full = true, meta.copy(always = true))).underTitle
+    return stats + details
+}
+
+/**
+ * A game list's selected [game]'s info in [style] and [orientation]: where its stats and details have places of their
+ * own (a horizontal Carousel: the picture and under the name; a Grid: the line under the title and the selected tile,
+ * [gridHeaderInfo]) both, whatever Layouts → Game info says ([gameInfoApart]); elsewhere as it says ([gameInfoFor]).
+ */
+internal fun gameListInfo(style: MenuStyle, orientation: MenuOrientation, gameInfo: Map<String, GameInfo>, now: Long, game: GameEntry?, meta: GameMeta): List<InfoLine> =
+    if (style == MenuStyle.GRID || style == MenuStyle.CAROUSEL && orientation == MenuOrientation.HORIZONTAL) gameInfoApart(gameInfo, now, game, meta)
+    else gameInfoFor(gameInfo, now, game, full = true, meta)
+
+/**
+ * A game list Grid tile's lines: its count-only [stats] (the time, the achievement count), then the details of its
+ * [full] info (the genre, "<year> · <publisher>": what a Carousel puts under its name, [carouselGameLines]).
+ */
+internal fun gameTileLines(stats: List<InfoLine>, full: List<InfoLine>): List<InfoLine> = stats + carouselGameLines(full).underTitle

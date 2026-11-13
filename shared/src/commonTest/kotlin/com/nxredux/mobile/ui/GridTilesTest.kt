@@ -5,6 +5,9 @@ import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.runner.ContentRef
+import com.nxredux.mobile.scraper.StoredGameInfo
+import com.nxredux.mobile.settings.MenuOrientation
+import com.nxredux.mobile.settings.MenuStyle
 import com.nxredux.mobile.ui.nx.consolePad
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -245,5 +248,109 @@ class GridTilesTest {
         assertEquals(byRow(2), byEntry(0))
         assertEquals(emptyList(), byEntry(2))                                               // no info yet
         assertEquals(emptyList(), byEntry(-1))
+    }
+
+    // A game list Grid's tile: its count-only stats, then its details (the ones a Carousel puts under its name).
+    @Test fun aGridTileHasItsStatsThenItsDetails() {
+        val time = InfoLine(InfoKind.TIME, "Today")
+        val ach = InfoLine(InfoKind.ACHIEVEMENTS, "3 of 35")
+        val genre = InfoLine(InfoKind.GENRE, "Platform")
+        val release = InfoLine(InfoKind.RELEASE, "1991 · Sega")
+        assertEquals(listOf(time, ach), gameTileLines(listOf(time, ach), listOf(time, ach, InfoLine(InfoKind.NEXT, "Next: X"))))   // stats only
+        assertEquals(listOf(genre, release), gameTileLines(emptyList(), listOf(genre, release)))                                   // details only
+        assertEquals(listOf(time, genre, release), gameTileLines(listOf(time), listOf(time, genre, release)))                     // both
+        assertEquals(emptyList(), gameTileLines(emptyList(), emptyList()))                                                         // none
+        assertEquals(listOf(time), gameTileLines(listOf(time), listOf(time, InfoLine(InfoKind.GENRE, NO_GENRE))))                  // the genre's stand-in is no detail
+    }
+
+    // The details read from the stored facts, lazily per tile, only while the menus show them (Extra info: [GameMeta.shown]).
+    @Test fun aGridTilesDetailsFollowTheStoredFacts() {
+        val zelda = listed("Zelda")
+        val kirby = listed("Kirby")
+        val now = 10 * 86_400_000L
+        val info = mapOf(zelda.game.path to GameInfo(now, null, null))
+        val stored = mapOf(zelda.game.path to StoredGameInfo(null, "Adventure", "1986", "Nintendo", null, null, 0L))
+        val tiles = entryTileInfo(listOf(zelda, kirby), info, now, GameMeta(stored, always = false, shown = true))
+        assertEquals(listOf(InfoKind.TIME, InfoKind.GENRE, InfoKind.RELEASE), tiles(0).map { it.kind })
+        assertEquals(emptyList(), tiles(1))                                                  // no stats, no facts: the stand-in alone
+        assertEquals(listOf(InfoKind.TIME), entryTileInfo(listOf(zelda), info, now, GameMeta.NONE)(0).map { it.kind })   // Extra info off
+    }
+
+    // Layouts → Game info preferring achievements: where the details have their own place (a horizontal Carousel's
+    // caption, a Grid tile's rows) they show for a game with achievements too; the achievements keep theirs.
+    @Test fun gameInfoDoesNotHideDetailsThatHaveTheirOwnPlace() {
+        val zelda = listed("Zelda")
+        val now = 10 * 86_400_000L
+        val info = mapOf(zelda.game.path to GameInfo(now, null, RaProgress(3, 35, next = "Next one")))
+        val stored = mapOf(zelda.game.path to StoredGameInfo(null, "Adventure", "1986", "Nintendo", null, null, 0L))
+        for (always in listOf(false, true)) {
+            val meta = GameMeta(stored, always = always, shown = true)
+            val apart = gameInfoApart(info, now, zelda.game, meta)
+            assertEquals(listOf(InfoKind.TIME, InfoKind.ACHIEVEMENTS, InfoKind.NEXT, InfoKind.GENRE, InfoKind.RELEASE), apart.map { it.kind }, "always=$always")
+            val split = com.nxredux.mobile.ui.nx.carouselGameLines(apart)
+            assertEquals(listOf(InfoKind.TIME, InfoKind.ACHIEVEMENTS, InfoKind.NEXT), split.picture.map { it.kind })
+            assertEquals(listOf(InfoKind.GENRE, InfoKind.RELEASE), split.underTitle.map { it.kind })
+            assertEquals(listOf(InfoKind.TIME, InfoKind.ACHIEVEMENTS, InfoKind.GENRE, InfoKind.RELEASE), entryTileInfo(listOf(zelda), info, now, meta)(0).map { it.kind }, "always=$always")
+        }
+        // Every other place keeps the setting: achievements preferred, no facts; details preferred, no achievements.
+        assertEquals(listOf(InfoKind.TIME, InfoKind.ACHIEVEMENTS, InfoKind.NEXT), gameInfoFor(info, now, zelda.game, full = true, GameMeta(stored, always = false, shown = true)).map { it.kind })
+        assertEquals(listOf(InfoKind.TIME, InfoKind.GENRE, InfoKind.RELEASE), gameInfoFor(info, now, zelda.game, full = true, GameMeta(stored, always = true, shown = true)).map { it.kind })
+        // Extra info off: nothing.
+        assertEquals(emptyList(), gameInfoApart(emptyMap(), now, zelda.game, GameMeta.NONE))
+        assertEquals(emptyList(), entryTileInfo(listOf(zelda), emptyMap(), now, GameMeta.NONE)(0))
+    }
+
+    // A game list Grid with the stats line under its title ([gameListTopStats]): the stats there, the details in the
+    // selected tile, whatever Layouts → Game info says; without that line, the tile its details over its stats as before.
+    @Test fun aGridsDetailsGoInTheTileAndItsStatsInTheHeader() {
+        val statsOnly = listed("Kirby")
+        val detailsOnly = listed("Zelda")
+        val both = listed("Sonic")
+        val none = listed("Metroid")
+        val games = listOf(statsOnly, detailsOnly, both, none)
+        val now = 10 * 86_400_000L
+        val info = mapOf(
+            statsOnly.game.path to GameInfo(now, null, RaProgress(3, 35, next = "Next one")),
+            both.game.path to GameInfo(now, null, RaProgress(1, 20, next = "First")),
+        )
+        val stored = mapOf(
+            detailsOnly.game.path to StoredGameInfo(null, "Adventure", "1986", "Nintendo", null, null, 0L),
+            both.game.path to StoredGameInfo(null, "Platform", "1991", "Sega", null, null, 0L),
+        )
+        val stats = listOf(InfoKind.TIME, InfoKind.ACHIEVEMENTS, InfoKind.NEXT)
+        val details = listOf(InfoKind.GENRE, InfoKind.RELEASE)
+        for (always in listOf(false, true)) {
+            val meta = GameMeta(stored, always = always, shown = true)
+            val tileInfo = entryTileInfo(games, info, now, meta)
+            fun header(i: Int, topStats: Boolean) =
+                gridHeaderInfo(topStats, gameListInfo(MenuStyle.GRID, MenuOrientation.HORIZONTAL, info, now, games[i].game, meta)).map { it.kind }
+            fun tile(i: Int, topStats: Boolean) = gridTileInfo(topStats, tileInfo)(i).map { it.kind }
+            // The stats line shown: the header the stats only, the tile the details only.
+            assertEquals(stats, header(0, true), "always=$always")
+            assertEquals(emptyList(), tile(0, true), "always=$always")
+            assertEquals(emptyList(), header(1, true), "always=$always")
+            assertEquals(details, tile(1, true), "always=$always")
+            assertEquals(stats, header(2, true), "always=$always")
+            assertEquals(details, tile(2, true), "always=$always")
+            assertEquals(emptyList(), header(3, true), "always=$always")
+            assertEquals(emptyList(), tile(3, true), "always=$always")
+            // No stats line (Page title hidden): the tile as before, its count-only stats then its details.
+            assertEquals(listOf(InfoKind.TIME, InfoKind.ACHIEVEMENTS), tile(0, false), "always=$always")
+            assertEquals(details, tile(1, false), "always=$always")
+            assertEquals(listOf(InfoKind.TIME, InfoKind.ACHIEVEMENTS) + details, tile(2, false), "always=$always")
+            assertEquals(emptyList(), tile(3, false), "always=$always")
+        }
+        // Extra info off: nothing in either place.
+        for (topStats in listOf(false, true)) {
+            assertEquals(emptyList(), gridTileInfo(topStats, entryTileInfo(games, emptyMap(), now, GameMeta.NONE))(2))
+            assertEquals(emptyList(), gridHeaderInfo(topStats, gameListInfo(MenuStyle.GRID, MenuOrientation.HORIZONTAL, emptyMap(), now, both.game, GameMeta.NONE)))
+        }
+        // Every other style's info is as it was: a horizontal Carousel both apart, the rest as Game info says.
+        val meta = GameMeta(stored, always = true, shown = true)
+        assertEquals(gameInfoApart(info, now, both.game, meta), gameListInfo(MenuStyle.CAROUSEL, MenuOrientation.HORIZONTAL, info, now, both.game, meta))
+        for (style in listOf(MenuStyle.LIST, MenuStyle.MINIMAL, MenuStyle.BACKDROP)) {
+            assertEquals(gameInfoFor(info, now, both.game, full = true, meta), gameListInfo(style, MenuOrientation.HORIZONTAL, info, now, both.game, meta))
+        }
+        assertEquals(gameInfoFor(info, now, both.game, full = true, meta), gameListInfo(MenuStyle.CAROUSEL, MenuOrientation.VERTICAL, info, now, both.game, meta))
     }
 }

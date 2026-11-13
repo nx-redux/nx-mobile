@@ -187,7 +187,7 @@ class AppStateKidsTest {
         val off = state(MemorySettings().apply { kidsEnabled = false }, null)
         off.load()
         val all = tabsOf(off)
-        assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS), all)
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS), all)
         val kids = KidsController(settings, Platform(SAT, 10 * 60))
         assertIs<KidsMode.Open>(kids.mode.value)
         val st = state(settings, kids)
@@ -196,6 +196,42 @@ class AppStateKidsTest {
         assertFalse(assertIs<Screen.Systems>(st.screen.value).hidden.contains(MenuCategory.TOOLS))   // not offered as a hidden tab either
         st.openHiddenTab(MenuCategory.TOOLS)
         assertEquals(all - MenuCategory.TOOLS, tabsOf(st))
+    }
+
+    /** A play window: the menu shows Games beside Consoles, no Tools; the Games tab lists every game. */
+    @Test fun a_play_window_shows_the_games_tab_beside_consoles() = runTest {
+        val settings = MemorySettings()
+        val kids = KidsController(settings, Platform(SAT, 10 * 60))
+        assertIs<KidsMode.Open>(kids.mode.value)
+        val roms = FakeRomsSource(
+            dirs = mapOf(
+                "Home" to listOf("Roms"),
+                "Home/Roms" to listOf("Game Boy (GB)", "Game Boy Advance (GBA)"),
+                "Home/Roms/Game Boy (GB)" to listOf("Tetris.gb", "Alpha.gb"),
+                "Home/Roms/Game Boy Advance (GBA)" to listOf("Mario.gba"),
+            ),
+        )
+        val st = state(settings, kids, roms = roms)
+        st.load()
+        val tabs = tabsOf(st)
+        assertTrue(MenuCategory.GAMES in tabs)
+        assertTrue(MenuCategory.CONSOLES in tabs)
+        assertFalse(MenuCategory.TOOLS in tabs)
+        assertEquals(tabs.indexOf(MenuCategory.HOME) + 1, tabs.indexOf(MenuCategory.GAMES))
+        st.selectTab(tabs.indexOf(MenuCategory.GAMES))
+        val games = assertIs<Screen.Games>(st.screen.value)
+        assertEquals(ListSource.AllGames, games.source)
+        assertEquals(listOf("Alpha", "Mario", "Tetris"), games.entries.map { it.game.shownName })   // every playable game, both consoles
+    }
+
+    /** Locked: the Kids tiles screen, not the menu: neither a tab tap nor MENU's hidden-tab item reaches the Games tab. */
+    @Test fun kids_locked_shows_no_games_tab() = runTest {
+        val (st) = lockedState()
+        st.selectTab(1)                                               // Games' place in the tab row
+        assertSame(Screen.KidsHome, st.screen.value)
+        val (hidden) = lockedState(MemorySettings().apply { showGamesTab = false })
+        hidden.openHiddenTab(MenuCategory.GAMES)                      // MENU's "Games" item, with the tab hidden
+        assertSame(Screen.KidsHome, hidden.screen.value)
     }
 
     @Test fun parentShowsTools() = runTest {
@@ -289,6 +325,20 @@ class AppStateKidsTest {
         assertSame(Screen.KidsUnlock, st.screen.value)
         st.onButton(NxButton.B)                                            // the sheet without a choice: the menu again
         assertIs<Screen.Systems>(st.screen.value)
+    }
+
+    /** The lock on the Games tab asks the PIN as on any other tab. */
+    @Test fun lockIconOnTheGamesTabAsksThePin() = runTest {
+        val settings = MemorySettings()
+        val kids = KidsController(settings, Platform(SAT, 10 * 60))
+        val st = state(settings, kids)
+        st.load()
+        st.selectTab(tabsOf(st).indexOf(MenuCategory.GAMES))
+        assertTrue(assertIs<Screen.Games>(st.screen.value).isTab)
+        st.kidsParentPressed()
+        assertEquals(PinPurpose.UNLOCK, assertIs<Screen.KidsPin>(st.screen.value).purpose)
+        st.onButton(NxButton.B)
+        assertTrue(assertIs<Screen.Games>(st.screen.value).isTab)             // back on the tab
     }
 
     @Test fun lockIconDoesNothingWhenLockedOrOff() = runTest {
@@ -536,7 +586,7 @@ class AppStateKidsTest {
         kids.unlock(com.nxredux.mobile.kids.UnlockChip.MIN30)
         assertEquals(platform.epochMs + 30 * 60_000L, settings.kidsUnlockUntil)
         assertEquals(KidsMode.Open(platform.epochMs + 30 * 60_000L), kids.mode.value)
-        assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS), tabsOf(st))
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS), tabsOf(st))
         kids.lock()
         assertEquals(0L, settings.kidsUnlockUntil)
         assertIs<KidsMode.Locked>(kids.mode.value)
@@ -658,7 +708,7 @@ class AppStateKidsTest {
         st.kidsLockPressed(); st.typePin("123456")
         st.kidsUnlockChip(UnlockChip.HOUR1)
         assertEquals(KidsMode.Open(platform.epochMs + 60 * 60_000L), kids.mode.value)
-        assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS), tabsOf(st))   // no Tools
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS), tabsOf(st))   // no Tools
     }
 
     @Test fun unlockSheetActionsNeedTheSheet() = runTest {
@@ -898,7 +948,7 @@ class AppStateKidsTest {
         val all = ContextKind.entries.map { ContextItem(it, it.name) }
         assertEquals(
             setOf(ContextKind.PLAY_FROM_START, ContextKind.NETPLAY, ContextKind.PIN, ContextKind.UNPIN, ContextKind.REMOVE_RECENT,
-                ContextKind.ACHIEVEMENTS, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.USE_TOP_SCREEN),
+                ContextKind.ACHIEVEMENTS, ContextKind.OPEN_GAMES, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.USE_TOP_SCREEN),
             ContextMenus.kidsPlayItems(all).map { it.kind }.toSet(),
         )
     }

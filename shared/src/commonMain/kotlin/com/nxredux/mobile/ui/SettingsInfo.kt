@@ -79,7 +79,8 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     SettingsKind.PAD_SKIN -> quiet(
         "The handheld drawn around the game, or full screen",
         "On draws the Pad theme's handheld around the game and the menus. Off runs the game full screen with see-through " +
-            "buttons over it, and the menus without an on-screen pad.",
+            "buttons over it, and the menus without an on-screen pad. With a controller connected, the game and the menus " +
+            "show no skin or on-screen pad either way.",
     )
     SettingsKind.PAD_THEME -> quiet(
         "The skin of the on-screen pad",
@@ -105,13 +106,14 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     )
     SettingsKind.RESET_DEFAULTS -> resetText(section)
     // Layouts' group rows: no text on the row (their pages' rows say what each group holds).
-    SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
+    SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_GAMES_TAB, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER -> SettingText("")
     SettingsKind.GAME_INFO -> SettingText(
         "Game details or achievements under a game",
         "What shows under a game's play time. Details: its genre, year and publisher. Achievements: its " +
             "RetroAchievements progress and next goal when you are signed in and the game has achievements, else its " +
-            "details. The details come from ScreenScraper (Artwork → Fetch art and info when browsing).",
+            "details. A horizontal Carousel and a Grid show both: the details have their own place there. The details " +
+            "come from ScreenScraper (Artwork → Fetch art and info when browsing).",
     )
     SettingsKind.EXTRA_INFO -> SettingText(
         "Additional game info",

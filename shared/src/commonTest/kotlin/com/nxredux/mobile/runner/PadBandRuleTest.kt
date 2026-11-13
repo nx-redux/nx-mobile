@@ -53,12 +53,4 @@ class PadBandRuleTest {
         assertFalse(PadBandRule.controllerLayout("GBA", portrait = true, controllerNames = xbox))
         assertTrue(PadBandRule.controllerLayout("3DS", portrait = true, controllerNames = xbox))   // the 3DS has one too
     }
-
-    // Onboarding's pad pages: a clip-on counts as no controller, as the pad band rule has it.
-    @Test fun only_a_controller_that_is_not_clip_on_counts_as_one() {
-        assertFalse(PadBandRule.separateController(emptyList()))
-        assertFalse(PadBandRule.separateController(listOf("GameSir Pocket Taco")))
-        assertTrue(PadBandRule.separateController(listOf("Xbox Wireless Controller")))
-        assertFalse(PadBandRule.separateController(listOf("Xbox Wireless Controller", "8BitDo FlipPad")))
-    }
 }

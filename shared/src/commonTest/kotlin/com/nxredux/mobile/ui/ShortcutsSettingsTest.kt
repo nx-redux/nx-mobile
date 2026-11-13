@@ -367,9 +367,9 @@ class ShortcutsSettingsTest {
         assertNull(s.capturingShortcut.value)
         assertEquals(mapOf(ShortcutAction.TOGGLE_FF to ShortcutBinding(null, KeyCodes.BUTTON_R1)), Shortcuts.decodeBase(settings.shortcuts).bindings)
         assertFalse(s.captureKey(KeyCodes.BUTTON_MODE, true))
-        val tab = assertIs<Screen.Systems>(s.screen.value).tab
+        val tab = assertIs<Screen.Systems>(s.screen.value).category
         s.onButton(NxButton.R1)                                 // the menu takes the pad again: R1 switches tabs
-        assertTrue(assertIs<Screen.Systems>(s.screen.value).tab != tab)
+        assertTrue(s.screen.value.menuTab != tab)
     }
 
     @Test fun leavingThePageEndsACapture() = runTest {

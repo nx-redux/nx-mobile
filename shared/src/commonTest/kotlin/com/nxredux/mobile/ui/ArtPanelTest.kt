@@ -131,6 +131,14 @@ class ArtPanelTest {
         opt(ArtSlot.HERO, SourceId.SGDB, "h1"),
     )
 
+    // AppSettings' default getter: a fake that does not override showGamesTab reads true, and a set is dropped.
+    @Test fun theGamesTabShowsByDefault() {
+        val settings = Settings()
+        assertTrue(settings.showGamesTab)
+        settings.showGamesTab = false
+        assertTrue(settings.showGamesTab)
+    }
+
     @Test fun fetch_first_runs_wide_fetch_then_lists_screenshot_options() = runTest {
         val port = FakePort(mixed).apply { fetchGate = CompletableDeferred() }
         val c = ArtPanelController(this, port, Settings(), onPicked = {})

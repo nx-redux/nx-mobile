@@ -61,12 +61,14 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.EaseOut
 import com.nxredux.mobile.ui.GridTile
 import com.nxredux.mobile.ui.InfoLine
+import com.nxredux.mobile.ui.firstGenre
 import com.nxredux.mobile.ui.artLess
 import com.nxredux.mobile.ui.TileFit
 import com.nxredux.mobile.ui.tileArt
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import kotlin.math.abs
+import kotlin.math.floor
 
 internal const val NX_TILE_CORNER = 14f      // a menu tile's corner radius, dp
 internal const val NX_TILE_RING = 3f         // the room kept around a tile for a selected game's ring, dp
@@ -94,6 +96,20 @@ internal fun gameFadeAlpha(fromBottom: Float, solid: Float, reach: Float): Float
     val t = (fromBottom - solid) / (reach - solid)
     return GAME_FADE_EDGE * (1f - (3 * t * t - 2 * t * t * t))
 }
+
+/**
+ * How many of a game list Grid tile's [details] rows ([rowH] dp each) it holds: whole rows while the caption's top room,
+ * its name ([nameH] dp: its two lines), the rows, its [statRows] stats line and the bottom padding fit the tile ([tileH]
+ * dp); the last rows are left out first, never over the name or out of the tile.
+ */
+internal fun gridTileDetailRows(tileH: Float, nameH: Float, rowH: Float, statRows: Int, details: Int): Int {
+    if (rowH <= 0f) return 0
+    val room = tileH - TILE_TOP_ROOM - nameH - statRows * rowH - CAPTION_BOTTOM
+    return floor(room / rowH + 1e-4f).toInt().coerceIn(0, details)
+}
+
+/** The room a Grid tile's caption keeps over its name, dp (as the caption's side padding). */
+private const val TILE_TOP_ROOM = 10f
 
 /** The shade's solid height, dp: the caption title's bottom over the tile's, the bottom padding and the [infoLineDp] info line. */
 internal fun gameFadeSolid(infoLineDp: Float): Float = CAPTION_BOTTOM + infoLineDp
@@ -268,6 +284,15 @@ private fun GameTile(
         val named = !statsOnly && GameTileLayer.TITLE !in layers   // the caption carries the name unless the centred title does
         // Stats only: the info's rows (time and achievements, then the next goal), each a line of its own.
         val statRows = if (statsOnly && caption && lit) backdropCaptionRows(info()) else emptyList()
+        // A game list Grid's tile ([gameFade], not stats only): its stats line, and over it its details ([carouselGameLines]:
+        // the genre, the release), a row each, as many whole rows as the tile holds under its name's two lines.
+        val gridLines = if (gameFade && !statsOnly && !homeCaption && caption) carouselGameLines(info()) else null
+        val density = LocalDensity.current
+        val gridRowDp = with(density) { (statsSize * LINE_HEIGHT).toDp().value }
+        val gridDetails = gridLines?.underTitle?.let { d ->
+            val nameDp = with(density) { (titleSize * LINE_HEIGHT).toDp().value } * 2
+            d.take(gridTileDetailRows(maxHeight.value, nameDp, gridRowDp, statRows = if (gridLines.picture.isEmpty()) 0 else 1, details = d.size))
+        }.orEmpty()
         for (layer in layers) when (layer) {
             GameTileLayer.PICTURE -> if (icon != null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Image(
@@ -309,7 +334,9 @@ private fun GameTile(
             GameTileLayer.EDGE -> Box(Modifier.fillMaxSize().border(1.dp, colors.inkEdge, RoundedCornerShape(NX_TILE_CORNER.dp)))
             GameTileLayer.FADE -> if (gameFade) {
                 val infoDp = with(LocalDensity.current) { (statsSize * LINE_HEIGHT).toDp().value }
-                Box(Modifier.fillMaxSize().gameFade(colors.background, maxHeight.value, gameFadeSolid(infoDp * statRows.size.coerceAtLeast(1))))
+                // Solid under every line drawn: the stat rows, or a Grid tile's stats line and the details over it.
+                val lines = if (gridLines != null) (if (gridLines.picture.isEmpty()) 0 else 1) + gridDetails.size else statRows.size
+                Box(Modifier.fillMaxSize().gameFade(colors.background, maxHeight.value, gameFadeSolid(infoDp * lines.coerceAtLeast(1))))
             } else if (homeCaption) Box(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(HOME_CAPTION_SHARE).homeCaptionFade(colors.background),
             ) else Box(
@@ -331,7 +358,7 @@ private fun GameTile(
                 val statsSp = if (homeCaption) nxCardStatsSize() else INFO_SP
                 val statsLine = if (homeCaption) HOME_INFO_LINE else LINE_HEIGHT
                 val lineDp = with(LocalDensity.current) { (statsSp * statsLine).toDp() }
-                val info = if (statsOnly) emptyList() else info()
+                val info = if (statsOnly) emptyList() else gridLines?.picture ?: info()
                 // Home's info on its handheld rows (the time and the achievements, then the next goal), a line each.
                 val allHomeRows = if (homeCaption) backdropCaptionRows(info) else emptyList()
                 val infoText = infoText(info, sub, icon = minOf(12.dp, lineDp))
@@ -367,12 +394,19 @@ private fun GameTile(
                     if (homeCaption) for (row in homeRows) {
                         val text = infoText(row, sub, icon = minOf(12.dp, lineDp))
                         TileText(text.text, sub, statsSp, maxLines = 1, align = TextAlign.Start, inlineContent = text.inlineContent, lineHeight = statsLine)
-                    } else if (info.isNotEmpty()) {
-                        val text = if (gameFade) infoText(info, sub, icon = minOf(14.dp, rowDp)) else infoText
-                        TileText(
-                            text.text, sub, if (gameFade) statsSize else INFO_SP, maxLines = 1, align = TextAlign.Start,
-                            inlineContent = text.inlineContent, lineHeight = LINE_HEIGHT,
-                        )
+                    } else if (info.isNotEmpty() || gridDetails.isNotEmpty()) {
+                        // A Grid tile's details over its stats line, which keeps its place at the bottom.
+                        for (line in gridDetails) {
+                            val text = infoText(firstGenre(listOf(line)), sub, icon = minOf(14.dp, rowDp))   // one genre: the row is not fitted
+                            TileText(text.text, sub, statsSize, maxLines = 1, align = TextAlign.Start, inlineContent = text.inlineContent, lineHeight = LINE_HEIGHT)
+                        }
+                        if (info.isNotEmpty()) {
+                            val text = if (gameFade) infoText(info, sub, icon = minOf(14.dp, rowDp)) else infoText
+                            TileText(
+                                text.text, sub, if (gameFade) statsSize else INFO_SP, maxLines = 1, align = TextAlign.Start,
+                                inlineContent = text.inlineContent, lineHeight = LINE_HEIGHT,
+                            )
+                        }
                     }
                     for (row in statRows) {
                         val text = infoText(row, sub, icon = minOf(14.dp, rowDp))

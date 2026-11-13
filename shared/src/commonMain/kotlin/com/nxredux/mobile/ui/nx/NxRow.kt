@@ -3,6 +3,7 @@ package com.nxredux.mobile.ui.nx
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -122,10 +123,12 @@ internal fun Modifier.shownItemTaps(i: Int, taps: ItemTaps, hasLongPress: Boolea
 
 /**
  * A row's caption, centred under the selected item: [captionTitle] (up to [nameLines] lines) and its info rows
- * ([backdropCaptionRows]: the time and the achievements, then the next goal, one row each, a row without data left out),
+ * ([carouselCaptionRows]: the time and the achievements, then the next goal, one row each, a row without data left out;
+ * [stackRows], a game list's Carousel: one line a row as the vertical stack's, [rowGap] apart and under the name),
  * [below] dp under the selected item's top ([selTop]: its height and the gap). Fitted, then measured as drawn so the row
  * is placed right on the first frame ([GlideCaptionHeight] glides [glide] to it); too long for the width, "Next: <name>"
- * takes the room under the reserve, down to the body's bottom less a margin ([spare]). Reads the caption itself (the
+ * takes the room under the reserve, down to the body's bottom less a margin ([spare]). Only the whole info rows that fit
+ * in [maxDrawn] dp with the name show ([captionRowsWithin]), the last ones left out first. Reads the caption itself (the
  * info only under a title), so a selection step recomposes only this and the items.
  */
 @Composable
@@ -133,20 +136,43 @@ internal fun RowCaption(
     captionTitle: () -> String?, captionInfo: () -> List<InfoLine>, glide: CaptionGlide,
     nameStyle: TextStyle, nameLines: Int, infoStyle: TextStyle, inset: PageInset, avail: Dp, availPx: Int, spare: Float,
     selTop: () -> Float, below: Float, textColor: Color,
+    stackRows: Boolean = false, rowGap: Dp = 0.dp, maxDrawn: Float = Float.POSITIVE_INFINITY,
 ) {
     val title = captionTitle()
-    val infoRows = if (title != null) backdropCaptionRows(captionInfo()) else emptyList()
-    val fitted = rememberFittedCaptionRows(infoRows, infoStyle, 12.dp, avail, spare.dp)
-    val drawn = rememberCaptionDrawnHeight(title, nameStyle, nameLines, fitted, infoStyle, availPx)
+    val infoRows = if (title != null) carouselCaptionRows(title, captionInfo(), gameList = stackRows) else emptyList()
+    val allFitted = rememberFittedCaptionRows(infoRows, infoStyle, 12.dp, avail, spare.dp)
+    val (nameH, rowHs) = rememberCaptionHeights(title, nameStyle, nameLines, allFitted, infoStyle, availPx)
+    val keep = captionRowsWithin(nameH, rowHs, rowGap.value, maxDrawn)
+    val fitted = if (keep < allFitted.size) allFitted.take(keep) else allFitted
+    val drawn = if (title == null) 0f else captionDrawnHeight(nameH, rowHs.take(keep), rowGap.value)
     GlideCaptionHeight(glide, drawn, ROW_SLIDE_MS)
     if (title != null) {
         Column(
             Modifier.fillMaxWidth().offset { IntOffset(0, (selTop() + below).dp.roundToPx()) }
                 .padding(start = inset.start, end = inset.end).wrapContentWidth().captionTap(),   // the tap target is the text, not the strip
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(rowGap),
         ) {
             Text(title, color = textColor, maxLines = nameLines, overflow = TextOverflow.Ellipsis, style = nameStyle)
             CaptionFittedRows(fitted, infoStyle, 12.dp)
         }
     }
 }
+
+/**
+ * How many of a caption's info rows ([rowHs], dp, in order) show under its name ([nameH] dp) within [maxH] dp, each row
+ * with [gap] dp before it: whole rows from the first while they fit, the name always drawn.
+ */
+internal fun captionRowsWithin(nameH: Float, rowHs: List<Float>, gap: Float, maxH: Float): Int {
+    var h = nameH
+    var n = 0
+    for (r in rowHs) {
+        h += gap + r
+        if (h > maxH) break
+        n++
+    }
+    return n
+}
+
+/** A caption's drawn height, dp: its name ([nameH]), then each of [rowHs] with [gap] before it. */
+internal fun captionDrawnHeight(nameH: Float, rowHs: List<Float>, gap: Float): Float = nameH + rowHs.sumOf { (gap + it).toDouble() }.toFloat()

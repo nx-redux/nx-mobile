@@ -89,9 +89,19 @@ fun splitWindow(): DpSize = LocalScreenArea.current ?: LocalWindowSize.current
 val LocalPosture = compositionLocalOf<Posture> { Posture.Flat }
 
 /**
- * The main menu's frame. [skin] (a pad skin's pack, NX Carbon) with [showPad]: the skin's menu layout, the whole device
+ * Whether the main menu tries its skin ([HandheldShell]): a skin is picked ([skinPicked]) and the pad shown
+ * ([showPad], [com.nxredux.mobile.ui.AppState.menuPadShown]), with no controller connected ([controllerConnected]: any
+ * gamepad, a clip-on and built-in controls too, as in a game); half-folded ([tabletop]) only for its two-screen layout
+ * ([canTwo]). It shows when one of the skin's menu layouts also fits the window.
+ */
+fun menuSkinShown(skinPicked: Boolean, showPad: Boolean, controllerConnected: Boolean, canTwo: Boolean, tabletop: Boolean): Boolean =
+    skinPicked && showPad && !controllerConnected && (canTwo || !tabletop)
+
+/**
+ * The main menu's frame. [skin] (a pad skin's pack, NX Carbon) with [showPad] and no [controllerConnected]
+ * ([menuSkinShown]): the skin's menu layout, the whole device
  * drawn round the screen, which fills its glass ([skinPad] draws it and takes its buttons); half-folded only its
- * two-screen layout, split at the hinge. Everywhere else (no skin, the pad off, or no menu layout fits) the screen fills
+ * two-screen layout, split at the hinge. Everywhere else (no skin, the pad off, a controller, or no menu layout fits) the screen fills
  * the area, with no on-screen pad. The caller wraps this in the safe-drawing insets.
  */
 @Composable
@@ -128,7 +138,9 @@ fun HandheldShell(
             // Half-folded only the two-screen layout (a tablet-class window: the Fold's inner screen) keeps the skin, split at the hinge.
             val hingeY = (posture as? Posture.Tabletop)?.let { (it.hingeTop + it.hingeBottom) / 2f }
             val canTwo = top != null && tablet && twoScreens && portrait
-            val skinPlaced = if (skin != null && showPad && (canTwo || posture !is Posture.Tabletop)) {
+            // App already folds the controller into [showPad] (it needs that for the keyboard's docking too); checked here
+            // again so the shell's own rule ([menuSkinShown]) holds for any caller that passes the pad alone.
+            val skinPlaced = if (skin != null && menuSkinShown(skinPicked = true, showPad, controllerConnected, canTwo, tabletop = posture is Posture.Tabletop)) {
                 val w = constraints.maxWidth
                 // the skin runs up under the cutout (the shell starts below it), its screen too: the frame keeps its own top
                 // margin and the glass reaches under the camera; the page inside clears it ([cutoutPad] below)
@@ -212,7 +224,7 @@ fun HandheldShell(
                     }
                 }
             } else {
-                // No skin here (Pad skin Off, Menu pad Off, or none of its menu layouts fits): the screen fills the area.
+                // No skin here (Pad skin Off, Menu pad Off, a controller connected, or none of its menu layouts fits): the screen fills the area.
                 CompositionLocalProvider(LocalPortrait provides portrait, LocalPadBelow provides false, LocalWindowSize provides window) { movableScreen(screenSlot) }
             }
         }
