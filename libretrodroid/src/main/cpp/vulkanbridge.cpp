@@ -885,7 +885,8 @@ void VulkanBridge::destroy() {
     maxFrameWidth = 0;
     maxFrameHeight = 0;
     iface = {};
-    // Last: nothing above may call through the table after its loader is closed.
+    // Last: nothing above may call through the table once it is reset (the system loader closed; a custom driver stays
+    // loaded for the process, see VulkanDispatch::close).
     vk.close();
     driverDir.clear();
     driverLibrary.clear();

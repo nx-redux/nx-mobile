@@ -25,6 +25,8 @@
 
 #include <cerrno>
 #include <cstring>
+#include <map>
+#include <mutex>
 
 #ifdef LIBRETRODROID_ADRENOTOOLS
 #include <adrenotools/driver.h>
@@ -40,6 +42,14 @@ namespace {
 std::string withSlash(const std::string& dir) {
     return (!dir.empty() && dir.back() != '/') ? dir + "/" : dir;
 }
+
+#ifdef LIBRETRODROID_ADRENOTOOLS
+// Handles from adrenotools_open_libvulkan, keyed by driver directory (with slash) + library, never dlclosed: the next
+// launch of the same driver in this process reuses its handle, a different driver gets its own (the old one stays
+// loaded). The game process ends after each game, so this holds at most the drivers one process has tried.
+std::mutex customHandlesMutex;
+std::map<std::string, void*> customHandles;
+#endif
 
 }
 
@@ -60,6 +70,7 @@ bool VulkanDispatch::bindGlobal() {
 bool VulkanDispatch::loadSystem(VulkanDispatch& out) {
     out.close();
     out.handle = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+    out.ownsHandle = out.handle != nullptr;
     if (out.handle == nullptr) {
         const char* err = dlerror();
         LOGE("Vulkan bridge: dlopen(libvulkan.so) failed: %s", err != nullptr ? err : "(no reason)");
@@ -112,20 +123,32 @@ bool VulkanDispatch::loadCustom(VulkanDispatch& out, const std::string& driverDi
         }
     }
 
-    LOGI("Vulkan bridge: adrenotools_open_libvulkan driver %s%s, hooks %s, tmp %s", dir.c_str(), library.c_str(),
-         hooks.c_str(), useTmp ? tmp.c_str() : "(memfd)");
-    dlerror();
-    errno = 0;
-    out.handle = adrenotools_open_libvulkan(RTLD_NOW | RTLD_LOCAL, ADRENOTOOLS_DRIVER_CUSTOM,
-                                            useTmp ? tmp.c_str() : nullptr, hooks.c_str(), dir.c_str(),
-                                            library.c_str(), nullptr, nullptr);
-    if (out.handle == nullptr) {
-        // Null below API 28 (linkernsbypass cannot run), or a namespace / hook / driver load failure.
-        const char* err = dlerror();
-        LOGE("Vulkan bridge: adrenotools_open_libvulkan returned null (API %d): dlerror %s, errno %d (%s)",
-             android_get_device_api_level(), err != nullptr ? err : "(none)", errno, strerror(errno));
-        return false;
+    {
+        std::lock_guard<std::mutex> lock(customHandlesMutex);
+        auto cached = customHandles.find(path);
+        if (cached != customHandles.end()) {
+            LOGI("Vulkan bridge: reusing the custom loader for %s (%p)", path.c_str(), cached->second);
+            out.handle = cached->second;
+        } else {
+            LOGI("Vulkan bridge: adrenotools_open_libvulkan driver %s%s, hooks %s, tmp %s", dir.c_str(),
+                 library.c_str(), hooks.c_str(), useTmp ? tmp.c_str() : "(memfd)");
+            dlerror();
+            errno = 0;
+            out.handle = adrenotools_open_libvulkan(RTLD_NOW | RTLD_LOCAL, ADRENOTOOLS_DRIVER_CUSTOM,
+                                                    useTmp ? tmp.c_str() : nullptr, hooks.c_str(), dir.c_str(),
+                                                    library.c_str(), nullptr, nullptr);
+            if (out.handle == nullptr) {
+                // Null below API 28 (linkernsbypass cannot run), or a namespace / hook / driver load failure.
+                const char* err = dlerror();
+                LOGE("Vulkan bridge: adrenotools_open_libvulkan returned null (API %d): dlerror %s, errno %d (%s)",
+                     android_get_device_api_level(), err != nullptr ? err : "(none)", errno, strerror(errno));
+                return false;
+            }
+            // Cached (and so never closed) from here on, also when the steps below fail.
+            customHandles.emplace(path, out.handle);
+        }
     }
+    out.ownsHandle = false;
     out.getInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(out.handle, "vkGetInstanceProcAddr"));
     if (out.getInstanceProcAddr == nullptr) {
         const char* err = dlerror();
@@ -185,7 +208,7 @@ const char* VulkanDispatch::missingDeviceFunction() const {
 }
 
 void VulkanDispatch::close() {
-    if (handle != nullptr) dlclose(handle);
+    if (handle != nullptr && ownsHandle) dlclose(handle);
     *this = VulkanDispatch {};
 }
 

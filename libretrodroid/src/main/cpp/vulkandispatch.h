@@ -105,7 +105,8 @@ struct VulkanDispatch {
     static bool loadSystem(VulkanDispatch& out);
     // libadrenotools: [library] from [driverDir], hooked through the hook libraries in [hookLibDir] (the app's
     // nativeLibraryDir); [tmpDir] holds patched libraries below API 29 (memfd from 29). Directories may omit the trailing
-    // slash. False (out left closed, the reason logged) when anything fails: the caller decides what happens next.
+    // slash. A driver this process loaded before is not opened again: its cached handle is reused. False (out left
+    // closed, the reason logged) when anything fails: the caller decides what happens next.
     static bool loadCustom(VulkanDispatch& out, const std::string& driverDir, const std::string& library,
                            const std::string& hookLibDir, const std::string& tmpDir);
 
@@ -116,10 +117,13 @@ struct VulkanDispatch {
     const char* missingInstanceFunction() const;
     const char* missingSurfaceFunction() const;
     const char* missingDeviceFunction() const;
-    void close();                             // dlclose the handle; every pointer back to null
+    // Every pointer back to null. dlcloses the system loader; a custom driver's handle stays loaded for the life of the
+    // process (cached for its next launch): libadrenotools drivers are not written to be unloaded.
+    void close();
 
 private:
     void* handle = nullptr;
+    bool ownsHandle = false;                  // true for the system loader only: close() may dlclose it
     bool bindGlobal();
 };
 
