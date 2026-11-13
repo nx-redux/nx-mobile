@@ -56,7 +56,7 @@ fun EmulatorConsolesScreen(
 }
 
 /**
- * One tag's (or game's) settings: Display, Controls, Gameplay and Audio, then Emulator (the core's), as touch rows ([emulatorTouchRow], the in-game
+ * One tag's (or game's) settings: Display, Controls, Gameplay, Multiplayer and Audio, then Emulator (the core's), as touch rows ([emulatorTouchRow], the in-game
  * menu's options); LEFT/RIGHT change a value, written at once. [onSetting] takes the controls' and info icons' taps.
  */
 @Composable

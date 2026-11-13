@@ -57,7 +57,7 @@ object EmulatorRows {
         val core = page.core
         if (category != null) return core.orEmpty().let { CoreOptionFilter.inCategory(it, category) }.map { EmulatorRow.Core(it, inCategory = true) }
         return buildList {
-            // The app's settings by what they are for, a header per group (Display, Controls, Gameplay, Audio), a gap between.
+            // The app's settings by what they are for, a header per group (Display, Controls, Gameplay, Multiplayer, Audio), a gap between.
             OptionGroup.grouped(page.console) { it.option.key }.forEachIndexed { i, (group, rows) ->
                 if (i > 0) add(EmulatorRow.Gap)
                 add(EmulatorRow.Header(group.label))

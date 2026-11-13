@@ -1302,13 +1302,13 @@ class InGameMenuModelTest {
         assertEquals(MenuRow.Submenu("Display", DISPLAY), m.state.page.rows.first())
     }
 
-    /** The in-game Options → group pages' rows for [tag], by group name (every group shown). */
+    /** The in-game Options → group pages' rows for [tag], by group name (every group shown; Multiplayer's rows are all read at launch, so never). */
     private fun inGameGroups(tag: String): Map<String, List<String>> {
         val m = model()
         m.setFrontend(FrontendOptions.defaults(tag), emptyList(), emptySet(), tag)
         m.select(4); m.activate(4)
         assertEquals(FULL_OPTIONS, m.state.page.rows.map { it.label })
-        return OptionGroup.entries.associate { g ->
+        return (OptionGroup.entries - OptionGroup.MULTIPLAYER).associate { g ->
             assertNull(m.activate(m.optionsRow(g.label)))
             val rows = m.state.page.rows.map { it.label }
             m.press(NxButton.B)
@@ -1342,6 +1342,16 @@ class InGameMenuModelTest {
         assertEquals(PICTURE_ROWS, wii.getValue("Display"))                   // no Wii Screen
         assertEquals(listOf("Wii Controller", "Motion Controls", "Controller Layout", "Pad Opacity (landscape)"), wii.getValue("Controls"))
         assertEquals(SPEED_ROWS + "Frame Skip", wii.getValue("Gameplay"))
+    }
+
+    // Local Wireless is read when the game starts, so Multiplayer (its only row) has no page in the running game.
+    @Test fun multiplayer_has_no_in_game_page() {
+        for (tag in listOf("NDS", "PSP")) {
+            val m = model()
+            m.setFrontend(FrontendOptions.defaults(tag), emptyList(), emptySet(), tag)
+            m.select(4); m.activate(4)
+            assertEquals(false, "Multiplayer" in m.state.page.rows.map { it.label }, tag)
+        }
     }
 
     // Bottom screen (every console) shows on the running game's Display page only while a second display is
