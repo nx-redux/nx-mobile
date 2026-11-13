@@ -88,8 +88,8 @@ object SkinGroups {
         // a piece's strip, across the frame's inside under its glass ([SkinSolver]'s piece strip)
         val p = spec.pieces.firstOrNull { it.strip != null } ?: return PxRect(0f, 0f, 0f, 0f)
         val s = p.strip!!
-        val inner = p.glass?.let { maxOf(it.w, p.w - 2 * 20) } ?: p.w
-        val x = p.x + (p.glass?.let { (p.w - inner) / 2f } ?: 0f) * p.scale
+        val (inset, inner) = pieceStripSpan(p)
+        val x = p.x + inset * p.scale
         val cy = p.y + (p.h - s.y) * p.scale
         return PxRect(x, cy - s.hh * p.scale, inner * p.scale, s.hh * 2f * p.scale)
     }

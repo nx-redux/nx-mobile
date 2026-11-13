@@ -456,7 +456,7 @@ internal class InGameMenuController(
         // panel glass, a DS / 3DS touch screen; the picture on the top screen): the menu alone there, no tabs, as on a dual screen.
         val inPanel = dual.menuHost() == MenuHost.PANEL || padLayout.menuBottomGlass() != null
         val second = dual.menuOnSecond()
-        val placement = MenuPlacement(second, inPanel, dual.presentation)
+        val placement = MenuPlacement(second, inPanel, dual.presentation, padLayout.menuBottomGlass()?.rect, padLayout.menuTopGlass()?.rect)
         if (menuPlacement == placement) return
         menuModel?.takeIf { it.inPanel != inPanel }?.let { it.setInPanel(inPanel); menuState.value = it.state }
         val root = findViewById<FrameLayout>(R.id.root)

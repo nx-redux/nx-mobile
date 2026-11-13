@@ -620,8 +620,19 @@ const Video::ShaderChainEntry& Video::ensurePlainShader() {
     return *plainShader;
 }
 
+const Video::ShaderChainEntry& Video::ensurePlainSharpShader() {
+    if (!plainSharpShader) {
+        auto chain = ShaderManager::getShader({ ShaderManager::Type::SHADER_SHARP, { } });
+        plainSharpShader = createShaderChainEntry(chain.passes.front());
+    }
+    return *plainSharpShader;
+}
+
 void Video::drawPlain(const RegionQuad& quad, unsigned screenWidth, unsigned screenHeight) {
-    const auto& s = ensurePlainShader();
+    bool down = regionDownscales(quad, getTextureWidth(), getTextureHeight(), (float) screenWidth, (float) screenHeight);
+    // Upscaled while the view's shader is Sharp: sharp bilinear too, so a fractional scale draws even pixels.
+    bool sharp = !down && loadedShaderType.has_value() && loadedShaderType->type == ShaderManager::Type::SHADER_SHARP;
+    const auto& s = sharp ? ensurePlainSharpShader() : ensurePlainShader();
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, (GLsizei) screenWidth, (GLsizei) screenHeight);
@@ -633,12 +644,11 @@ void Video::drawPlain(const RegionQuad& quad, unsigned screenWidth, unsigned scr
     glVertexAttribPointer(s.gvCoordinateHandle, 2, GL_FLOAT, GL_FALSE, 0, coordinates.data());
     glEnableVertexAttribArray(s.gvCoordinateHandle);
 
-    // The unshaded (inset) screen samples nearest, or linearly when it is downscaled; the sharpness the other regions
-    // use is put back afterwards.
+    // The unshaded screen samples nearest, or linearly when it is downscaled or drawn sharp bilinear; the sharpness
+    // the other regions use is put back afterwards.
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, frameTexture());
-    GLint plainFilter = regionDownscales(quad, getTextureWidth(), getTextureHeight(),
-                                         (float) screenWidth, (float) screenHeight) ? GL_LINEAR : GL_NEAREST;
+    GLint plainFilter = (down || sharp) ? GL_LINEAR : GL_NEAREST;
     applyFrameFilter(plainFilter);
     glUniform1i(s.gTextureHandle, 0);
     glUniform2f(s.gTextureSizeHandle, getTextureStorageWidth(), getTextureStorageHeight());
@@ -980,6 +990,7 @@ Video::~Video() {
     if (glContext != EGL_NO_CONTEXT && eglGetCurrentContext() == glContext) {
         for (const auto& entry : shadersChain) glDeleteProgram(entry.gProgram);
         if (plainShader) glDeleteProgram(plainShader->gProgram);
+        if (plainSharpShader) glDeleteProgram(plainSharpShader->gProgram);
         immersiveMode.releaseGlObjects();
         if (renderer) renderer->releaseGlObjects();
         releaseComposition();

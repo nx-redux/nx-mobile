@@ -180,6 +180,10 @@ class N3dsOptionsTest {
             // room for both at full width: the same size
             assertEquals("1", N3dsOptions.stackedSmallProportion(stacked, false, false, screen, false, PxRect(0f, 0f, 1848f, 3000f)), "$screen tall")
         }
+        // too short for the full-width top screen over even a half-size touch screen: Stacked keeps two equal screens
+        // fitted to the height (Large would go to half size), never turning into Large
+        assertEquals("1", N3dsOptions.stackedSmallProportion(stacked, false, false, ScreenClass.REGULAR_PHONE, false, PxRect(0f, 0f, 1848f, 1500f)))
+        assertEquals("2", N3dsOptions.stackedSmallProportion(v(N3dsOptions.LAYOUT_PORTRAIT to "large"), false, false, ScreenClass.REGULAR_PHONE, false, PxRect(0f, 0f, 1848f, 1500f)))
         val inner = ScreenClass.NEAR_SQUARE_TABLET
         assertEquals("1", N3dsOptions.stackedSmallProportion(stacked, false, false, inner, false, null))   // not Auto, or no space yet
         assertEquals("1", N3dsOptions.stackedSmallProportion(v(N3dsOptions.LAYOUT_LANDSCAPE to "stacked"), true, false, inner, false, space))

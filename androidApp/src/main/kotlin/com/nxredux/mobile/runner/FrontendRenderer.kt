@@ -595,7 +595,8 @@ internal class FrontendRenderer(
         view.composition = composition
         val g = composition?.let { floatArrayOf(it.width.toFloat(), it.height.toFloat(), it.width / it.height.toFloat(), packed[3]) } ?: packed
         val origin = IntArray(2).also { game.getLocationInWindow(it) }
-        syncSkinFill(view, FrontendSettings.parse(frontendValues))
+        val s = FrontendSettings.parse(frontendValues)   // once for this layout
+        syncSkinFill(view, s)
         val frame = coreFrame(g)   // null before the first frame (0x0)
         frame?.let(padLayout::onFrame)
         val room = padLayout.padRoom()
@@ -606,10 +607,10 @@ internal class FrontendRenderer(
         val space = pictureSpace(room, w, h, overlayH, hiddenBandReach(NdsOptions.appliesTo(gameTag) || N3dsOptions.appliesTo(gameTag)))
         val skinDs = skinDsLayout(g)
         ndsFilled = false
-        val nds = skinDs?.regions ?: ndsLayout(w, h, g, space, room, overlayH, screen) ?: n3dsSplitLayout(w, h)
+        val nds = skinDs?.regions ?: ndsLayout(w, h, g, space, room, overlayH, screen, s.scaling) ?: n3dsSplitLayout(w, h)
         // Auto fills the space at a fractional scale: the DS screens ([ndsLayout]), or one picture fitted ([picture]).
         setAutoFill(ndsFilled || (nds == null && !padLayout.skinShown && frame != null &&
-            FrontendSettings.parse(frontendValues).scaling == ScreenScaling.AUTO))
+            s.scaling == ScreenScaling.AUTO))
         // An area too small for one DS screen pixel (NdsLayout returns no regions) is only ever a transient mid-resize
         // size. Keep whatever is drawn now rather than letting an empty list flip a split game to the whole 256x384
         // frame (and the overlay back on) for that moment; the next size change lays it out again.
@@ -619,6 +620,8 @@ internal class FrontendRenderer(
         // Before its first frame a DS game's frame size is unknown (0x0): it stays split as it started, overlay off.
         if (nds == null && ndsSplit && !gameReady) return
         ndsRegions = nds ?: emptyList()
+        // the bare pad over the DS / 3DS touch screen gives it the taps beside its buttons (not under a skin: its own glass)
+        padLayout.setBareTouchScreen(ndsRegions.takeIf { skinDs == null }?.firstOrNull { it.touch }?.dst)
         val secondDs = secondDsRegions(g)
         secondNdsRegions = secondDs.takeIf { isNds }.orEmpty()
         secondThumbScreens = secondDs
@@ -652,7 +655,6 @@ internal class FrontendRenderer(
             return
         }
         if (view.screenRegions.isNotEmpty()) view.screenRegions = emptyList()
-        val s = FrontendSettings.parse(frontendValues)
         val overlayAspect = overlayFile?.aspect
         val box: PxRect
         val shown: PxRect
@@ -843,7 +845,7 @@ internal class FrontendRenderer(
      * (256x384, or 256N x 384N from the GL renderer). The dual-screen modes keep their own layouts.
      * Empty when the area is too small for a screen pixel (the caller keeps the current layout then).
      */
-    private fun ndsLayout(w: Float, h: Float, g: FloatArray, space: PxRect, room: PadRoom, overlayH: Float, screen: ScreenClass): List<NdsRegion>? {
+    private fun ndsLayout(w: Float, h: Float, g: FloatArray, space: PxRect, room: PadRoom, overlayH: Float, screen: ScreenClass, scaling: ScreenScaling): List<NdsRegion>? {
         if (!NdsOptions.appliesTo(gameTag)) return null
         val frameW = g[0].roundToInt()
         val frameH = g[1].roundToInt()
@@ -867,7 +869,7 @@ internal class FrontendRenderer(
         val choice = settings.layoutShown(landscape, ndsControllerMode(), screen)
         // Screen Scaling Native: whole-number scales; the rest fill the space (Large in portrait: the top screen the full
         // width, the touch screen moved down under it).
-        val native = FrontendSettings.parse(frontendValues).scaling == ScreenScaling.NATIVE
+        val native = scaling == ScreenScaling.NATIVE
         val regions = NdsLayout.scaledRegions(
             space, h, choice, landscape, screen, settings, NDS_INSET_MARGIN_DP * resources.displayMetrics.density, native,
         )

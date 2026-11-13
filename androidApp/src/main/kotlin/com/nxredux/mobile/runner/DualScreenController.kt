@@ -630,6 +630,7 @@ internal class DualScreenController(
         panelWasShown = shown
         if (shown) refreshDualPanel() else dualPanel.value = null
         syncPanelClock()
+        owner.placeMenu()   // an open menu follows the skin's bottom and top screens (a relayout, the board gone)
     }
 
     /** The panel is up, on either display (PANEL, PANEL_UP). */

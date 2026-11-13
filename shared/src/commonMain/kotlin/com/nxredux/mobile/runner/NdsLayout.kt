@@ -82,8 +82,8 @@ object NdsLayout {
     /**
      * The regions of [layout] in [space] (game-area pixels), in draw order; empty when not even one screen at scale 1 fits.
      * [screen] only matters for Single screen and Picture in picture, which take one step less than the most that fits on
-     * a wide tablet in landscape (phones and both Fold screens keep the most that fits). The bottom screen takes touches, except as a picture-in-picture inset. R2 swaps which
-     * screen is the main one ([NdsSettings.big]).
+     * a wide tablet in landscape (phones and both Fold screens keep the most that fits). The bottom screen takes touches, except as a picture-in-picture inset. L2 (or L3, SELECT + L1)
+     * swaps which screen is the main one ([NdsSettings.big]).
      */
     fun regions(
         space: PxRect,

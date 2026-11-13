@@ -56,7 +56,7 @@ fun NxRichListBody(
                 icons != null -> ({ Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) { icons() } })
                 else -> null
             }
-            SettingsRowsBlock(block, listOfNotNull(title.takeIf { it.isNotEmpty() }, titleSuffix).joinToString(" "), Modifier.weight(1f), header, listBottom = true) {
+            SettingsRowsBlock(block, listOfNotNull(title.takeIf { it.isNotEmpty() }, titleSuffix).joinToString(" "), Modifier.weight(1f), header, listBottom = rows.isNotEmpty()) {   // no rows, no list to end with the inset: the block keeps it
                 if (rows.isNotEmpty()) BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val pitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)
                     // Rich rows at their own pitch (1.5 plain rows), as many as there are up to the room; past it the list

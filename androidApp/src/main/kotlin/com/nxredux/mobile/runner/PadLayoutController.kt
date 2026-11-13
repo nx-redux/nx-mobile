@@ -240,6 +240,16 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         return p.pieces.any { r -> r.dst.x < pic.x + pic.width && pic.x < r.dst.x + r.dst.width && r.dst.y < pic.y + pic.height && pic.y < r.dst.y + r.dst.height }
     }
 
+    /**
+     * The DS / 3DS touch screen as laid out ([gameRect], game-area px; null: none drawn on this display) under the bare
+     * buttons: a tap there beside a button is the screen's ([PadSkinView.touchScreenArea]).
+     */
+    fun setBareTouchScreen(gameRect: PxRect?) {
+        val view = bareView ?: return
+        val top = (findViewById<FrameLayout>(R.id.gameContainer).layoutParams as? FrameLayout.LayoutParams)?.topMargin ?: 0   // the bare view covers the root
+        view.touchScreenArea = gameRect?.let { it.copy(y = it.y + top) }
+    }
+
     fun setOverlayClear(clear: Boolean) {
         overlayClear.value = clear
         syncBareAlpha()
@@ -767,8 +777,12 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      */
     private fun portraitGameTop(): Int = if (overlayPadLayout && dsStackShown()) 0 else cutoutTop
 
-    /** A DS or 3DS game whose portrait layout (no controller: the overlay pad) is a stack of its two screens. */
+    /**
+     * A DS or 3DS game whose portrait layout (no controller: the overlay pad) is a stack of its two screens, filling the
+     * width (Screen Scaling other than Native: Native's whole-number stack is centred and keeps clear of the cutout).
+     */
     private fun dsStackShown(): Boolean {
+        if (FrontendSettings.parse(frontendValues).scaling == com.nxredux.mobile.options.ScreenScaling.NATIVE) return false
         val tag = layoutTag()
         val screen = activity.windowShape().screenClass
         return when {

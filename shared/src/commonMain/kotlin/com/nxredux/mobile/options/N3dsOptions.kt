@@ -230,7 +230,10 @@ object N3dsOptions {
         if (tabletop) return "1"
         return when (appLayoutFor(values, landscape, controllerMode, screen)) {
             "large" -> if (landscape || space == null) "2" else proportionText(fillProportion(space.width, space.height))
-            "stacked" -> if (landscape || space == null) "1" else proportionText(fillProportion(space.width, space.height))
+            // Stacked too short for the full-width top over even a half-size touch screen: two equal screens fitted to
+            // the height, as Stacked always was, never Large's half size
+            "stacked" -> if (landscape || space == null || !fullWidthFits(space.width, space.height)) "1"
+                else proportionText(fillProportion(space.width, space.height))
             else -> "1"
         }
     }
@@ -248,6 +251,10 @@ object N3dsOptions {
         // Up to the next hundredth: the bottom never comes out bigger than the height left (a hair under 1 tolerated).
         return ceil((top / bottom).coerceIn(1f, 2f) * 100f - 0.001f) / 100f
     }
+
+    /** Whether a [spaceW] x [spaceH] space holds the full-width top screen over a half-size touch screen ([fillProportion]'s fill). */
+    internal fun fullWidthFits(spaceW: Float, spaceH: Float): Boolean =
+        spaceW > 0f && spaceH > 0f && SCREEN_HEIGHT * (spaceW / TOP_WIDTH) * 1.5f <= spaceH
 
     /** [proportion] as the core option's text: two decimals, a whole one without ("1", "2"). */
     fun proportionText(proportion: Float): String {

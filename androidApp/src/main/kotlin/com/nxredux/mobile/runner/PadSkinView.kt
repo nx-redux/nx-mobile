@@ -337,6 +337,11 @@ internal class PadSkinView(
         super.onDetachedFromWindow()
     }
 
+    /** The DS / 3DS touch screen under this (bare) pad, view px: its controls take a touch there only on themselves ([SkinPadTouch.tightArea]). */
+    var touchScreenArea: com.nxredux.mobile.options.PxRect?
+        get() = touch.tightArea
+        set(value) { touch.tightArea = value }
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
         val i = e.actionIndex
