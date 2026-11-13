@@ -219,6 +219,22 @@ internal class DualScreenController(
     var dualMode = DualMode.OFF
         private set
     private var panelUp = false                  // the panel is flipped up over the DS/3DS screen (session only)
+    // The panel is flipped up over the DS / 3DS touch screen on the skin's two-screen board, no second display (session only).
+    private var boardPanelUp = false
+
+    /** The DS / 3DS touch screen on the skin's two-screen board with no second display ([PadLayoutController.boardTouchGlass]). */
+    private fun boardTouchGlass(): PlacedGlass? = padLayout.boardTouchGlass().takeIf { dualMode == DualMode.OFF }
+
+    /** The Panel pill's tap: the panel over the touch screen, in the board's glass or on the dual screen ([panelUp]). */
+    private fun flipPanelUp() {
+        if (boardTouchGlass() != null) { boardPanelUp = true; syncPanel() } else { panelUp = true; syncDual() }
+    }
+
+    /** The Game pill's tap (or the game running again): the touch screen back, wherever the panel was flipped up. */
+    private fun flipPanelDown() {
+        if (boardPanelUp) { boardPanelUp = false; syncPanel() }
+        if (panelUp) { panelUp = false; syncDual() }
+    }
     var pictureOn = PictureOn.MAIN       // the wider display: the picture there, touch things on the other
         private set
     var n3dsPicture = NdsScreen.TOP      // the 3DS screen on the picture screen while split (session only)
@@ -576,10 +592,15 @@ internal class DualScreenController(
         val p = presentation
         val onMain = pictureOn == PictureOn.SECOND
         // A skin's glass holds it on main: the fold board's panel glass, or the landscape skin's screen ([SkinDual]).
+        // The DS / 3DS two-screen board: its touch screen holds the panel while flipped up, else the Panel pill on its corner.
+        val board = boardTouchGlass()
+        if (board == null) boardPanelUp = false
         val glass = SkinDual.panelGlass(padLayout.skinPlacement().takeIf { padLayout.skinShown }, dualMode, pictureOn)
+            ?: board?.takeIf { boardPanelUp }
         val spot = SkinDual.panelSpot(dualMode, pictureOn, p != null, glass)
         panelSpot = spot
         val shown = panelShown()
+        // the board's Game pill is its own, at the window's corner ([syncBoardPill]), not in the panel
         val content = if (shown) panelContent(gamePill = dualMode == DualMode.PANEL_UP, onSecond = spot == PanelSpot.SECOND_DISPLAY) else null
         p?.showPanelPill(dualMode == DualMode.SPLIT && !onMain)
         p?.showPanel(content.takeIf { spot == PanelSpot.SECOND_DISPLAY })
@@ -590,7 +611,10 @@ internal class DualScreenController(
             pill = p != null && dualMode == DualMode.SPLIT && onMain, glass = glass.takeIf { spot == PanelSpot.SKIN_GLASS },
         )
         placeMainPanelPill()
+        syncBoardPill(board != null)
         val inGlass = mainPanelGlass.value
+        // The panel's shortcuts stand in for the skin's strip under it (a one-screen game on the fold board).
+        padLayout.panelSkinGlass = inGlass
         // The pad went from under the fingers (a panel over the window), or the panel came or moved in a glass beside it:
         // nothing it held may stick.
         if ((mainPanelCoversWindow() && !wasCovering) || (inGlass != null && inGlass.rect != oldGlass?.rect)) input.releaseAllGameInput()
@@ -639,7 +663,7 @@ internal class DualScreenController(
                             // Not beside the corner buttons: their row carries it ([cornerPanel]).
                             mainPanelPill.value && !padLayout.cornerShown.value -> PanelPill(
                                 "Panel", Modifier.windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.End + WindowInsetsSides.Bottom)).padding(10.dp),
-                            ) { panelUp = true; syncDual() }
+                            ) { flipPanelUp() }
                         }
                     }
                 }
@@ -717,9 +741,43 @@ internal class DualScreenController(
      * same header and panel in its place (with the list beside it), so the touch screen never shows two.
      */
     fun syncMainPanelHost() {
+        boardPillHost?.visibility = if (menuOpen) View.GONE else View.VISIBLE   // the board's pill under no open menu
         val host = mainPanelHost ?: return
         val shown = if (mainPanel.value != null) !menuOpen || menuOnSecond() else mainPanelPill.value
         host.visibility = if (shown) View.VISIBLE else View.GONE
+    }
+
+    /** The DS / 3DS board's switch pill ([syncBoardPill]); null off the board. */
+    private var boardPillHost: ComposeView? = null
+    /** Its word: Panel while the touch screen shows the game, Game while the panel is flipped up over it. */
+    private val boardPillGame = mutableStateOf(false)
+
+    /**
+     * On the skin's two-screen board ([boardTouchGlass]) the Panel pill, and the Game pill once the panel is up over the
+     * touch screen, at one spot: the window's bottom-right, outside the touch screen (clear of a cutout there), over the
+     * skin's shell. [on]: the board is up; else the pill goes.
+     */
+    private fun syncBoardPill(on: Boolean) {
+        val root = findViewById<FrameLayout>(R.id.root)
+        if (!on) { boardPillHost?.let { root.removeView(it) }; boardPillHost = null; return }
+        boardPillGame.value = boardPanelUp
+        if (boardPillHost == null) {
+            val theme = panelTheme()
+            val view = ComposeView(activity).apply {
+                setContent {
+                    theme {
+                        PanelPill(
+                            if (boardPillGame.value) "Game" else "Panel",
+                            Modifier.windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.End + WindowInsetsSides.Bottom)).padding(10.dp),
+                        ) { if (boardPillGame.value) flipPanelDown() else flipPanelUp() }
+                    }
+                }
+            }
+            boardPillHost = view
+            // over the skin (which would take its touches) and the panel in its glass; the menu and notifications come later
+            root.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END))
+        }
+        syncMainPanelHost()
     }
 
     /**
@@ -828,7 +886,7 @@ internal class DualScreenController(
     }
 
     /** The Panel pill for the corner buttons' row, while it shows: its tap flips the panel up over the touch screen. */
-    fun cornerPanel(): (() -> Unit)? = if (mainPanelPill.value) ({ panelUp = true; syncDual() }) else null
+    fun cornerPanel(): (() -> Unit)? = if (mainPanelPill.value) ({ flipPanelUp() }) else null
 
     /** The slot picked on the panel's strip; null: the last used one ([panelSlotNow]). */
     private var panelSlot: Int? = null
@@ -873,22 +931,22 @@ internal class DualScreenController(
             is GamePanelEvent.Touch -> if (!sessionLocked || !e.down) {
                 owner.onPanelTouch(e.action, e.down, panelSlotNow())
                 // A held action runs the game: a panel flipped up over the DS/3DS screen gives the screen back, as for FF.
-                if (e.down && panelUp && (e.action == ShortcutAction.HOLD_FF || e.action == ShortcutAction.HOLD_REWIND)) { panelUp = false; syncDual() }
+                if (e.down && (panelUp || boardPanelUp) && (e.action == ShortcutAction.HOLD_FF || e.action == ShortcutAction.HOLD_REWIND)) flipPanelDown()
             }
             is GamePanelEvent.SelectTab -> { dualPanelTab = e.tab; refreshDualPanel() }
             is GamePanelEvent.SetPlayer -> owner.handleMenuEffect(MenuEffect.SetPlayer(e.slot, e.key))
             is GamePanelEvent.SetCheat -> owner.handleMenuEffect(MenuEffect.SetCheat(e.index, e.on))
-            GamePanelEvent.ShowGame -> { panelUp = false; syncDual() }
+            GamePanelEvent.ShowGame -> flipPanelDown()
             // Hidden in netplay; a stale tap there does nothing. The tiles follow through the speed's onTiles.
             is GamePanelEvent.SetFastForward, is GamePanelEvent.SetRewind -> GamePanelModel.speedEffect(e)?.takeIf { !sessionLocked }?.let {
                 owner.handleMenuEffect(it)
                 // The game runs with it on: a panel flipped up over the DS/3DS screen gives the screen back.
-                if (panelUp) { panelUp = false; syncDual() }
+                flipPanelDown()
             }
             is GamePanelEvent.SetMic -> if (netplayNow == null && owner.micTile() != null) {
                 owner.handleMenuEffect(MenuEffect.SetMic(e.on))
                 // The game hears it now: a panel flipped up over the DS/3DS screen gives the screen back, as for FF.
-                if (panelUp) { panelUp = false; syncDual() }
+                flipPanelDown()
             }
             GamePanelEvent.Reset -> if (!sessionLocked) owner.askReset()
         }

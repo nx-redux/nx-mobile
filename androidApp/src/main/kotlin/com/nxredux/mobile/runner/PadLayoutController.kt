@@ -16,6 +16,8 @@ import com.nxredux.mobile.layout.CoreFrame
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.skin.SkinDual
 import com.nxredux.mobile.skin.menuRoom
+import com.nxredux.mobile.skin.menuRect
+import com.nxredux.mobile.skin.GlassScreen
 import com.nxredux.mobile.skin.SkinChoice
 import com.nxredux.mobile.skin.OverlayMode
 import com.nxredux.mobile.skin.SkinPlacement
@@ -188,7 +190,23 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     fun refreshSkinShortcuts() { skinViews().forEach { it.shortcuts = host.padShortcuts } }
     /** The in-game menu is open: the skin's strip shortcuts are hidden ([PadSkinView.stripHidden]). */
     var skinStripHidden: Boolean = false
-        set(value) { field = value; skinViews().forEach { it.stripHidden = value } }
+        set(value) { field = value; syncStripHidden() }
+
+    /**
+     * The skin's glass the game panel sits in (a one-screen game on the fold board), else null. Its Shortcuts tab holds
+     * what the strip's buttons would, so the strip is hidden there too ([PadSkinView.stripHidden]); and the in-game menu
+     * opens in it, as in the panel's place on a dual screen, the picture left on the top screen ([skinMenuRoom]).
+     */
+    var panelSkinGlass: com.nxredux.mobile.skin.PlacedGlass? = null
+        set(value) { if (field == value) return; field = value; syncStripHidden() }
+
+    /** The strip hides for either: the menu open, or the panel in the skin's glass. */
+    private fun stripHiddenNow(): Boolean = skinStripHidden || panelSkinGlass != null
+
+    private fun syncStripHidden() {
+        val hidden = stripHiddenNow()
+        skinViews().forEach { it.stripHidden = hidden }
+    }
     /** The in-game menu sits in the skin: stacked screens draw as one glass in the frame ([PadSkinView.underMenu]). */
     var skinUnderMenu: Boolean = false
         set(value) { field = value; skinView?.underMenu = value }
@@ -518,7 +536,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         // under the menu and the notifications, over the game
         val below = listOfNotNull(menuView, notificationsView).map { root.indexOfChild(it) }.filter { it >= 0 }.minOrNull() ?: -1
         root.addView(view, below, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        view.stripHidden = skinStripHidden
+        view.stripHidden = stripHiddenNow()
         if (!bare) view.underMenu = skinUnderMenu
         view.shortcuts = host.padShortcuts
         return view
@@ -641,7 +659,49 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     val skinShown: Boolean get() = skinView != null
 
     /** The room the in-game menu takes over the shown skin ([com.nxredux.mobile.skin.menuRoom]), window px; null with none. */
-    fun skinMenuRoom(): PxRect? = if (skinShown) skinPlacement()?.menuRoom() else null
+    fun skinMenuRoom(): PxRect? {
+        if (!skinShown) return null
+        val p = skinPlacement() ?: return null
+        // the bottom screen's glass (and the strip under it) where the skin has one: the menu takes its place
+        return menuBottomGlass()?.let { p.menuRect(it) } ?: p.menuRoom()
+    }
+
+    /** The glass whose corners the menu's room takes ([skinMenuRoom]): the bottom screen's, else the biggest (a DS's top screen). */
+    fun skinMenuGlass(): com.nxredux.mobile.skin.PlacedGlass? {
+        if (!skinShown) return null
+        return menuBottomGlass() ?: skinPlacement()?.glasses?.maxByOrNull { it.rect.width * it.rect.height }
+    }
+
+    /**
+     * The skin's bottom screen the in-game menu opens in, as on a dual screen (the top one left to the paused picture):
+     * the game panel's glass ([panelSkinGlass], a one-screen game on the fold board), or a DS / 3DS touch screen's on a
+     * two-screen board ([SkinFamily.FLEX]: the unfolded Fold, a tablet, a Flip half-folded). Null elsewhere: the phone's
+     * layouts keep the menu across their screens ([com.nxredux.mobile.skin.menuRoom]).
+     */
+    fun menuBottomGlass(): com.nxredux.mobile.skin.PlacedGlass? {
+        if (!skinShown) return null
+        return panelSkinGlass ?: boardTouchGlass()
+    }
+
+    /**
+     * A DS / 3DS touch screen's glass on a two-screen board ([SkinFamily.FLEX]: the unfolded Fold, a tablet, a Flip
+     * half-folded), its top screen in a glass above: the bottom screen of the skin's own dual screen. Null elsewhere.
+     */
+    fun boardTouchGlass(): com.nxredux.mobile.skin.PlacedGlass? {
+        if (!skinShown) return null
+        val p = skinPlacement() ?: return null
+        val tag = layoutTag()
+        if (!NdsOptions.appliesTo(tag) && !N3dsOptions.appliesTo(tag)) return null
+        if (p.spec.family != com.nxredux.mobile.skin.SkinFamily.FLEX || p.glass(GlassScreen.TOP) == null) return null
+        return p.glass(GlassScreen.TOUCH)
+    }
+
+    /** The skin's top screen the paused picture shows on while the menu is in [menuBottomGlass]: a one-screen game's picture glass, a DS / 3DS top screen. */
+    fun menuTopGlass(): com.nxredux.mobile.skin.PlacedGlass? {
+        if (menuBottomGlass() == null) return null
+        val p = skinPlacement() ?: return null
+        return p.glass(GlassScreen.PICTURE) ?: p.glass(GlassScreen.TOP)
+    }
     /** The skin's view while shown: a panel in its glass sits right above it. */
     val skinViewNow: View? get() = skinView
     /** [skinShown] as state, for the notifications (top-centre over a skin). */

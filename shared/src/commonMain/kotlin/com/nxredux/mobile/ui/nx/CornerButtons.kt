@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -80,7 +83,7 @@ fun CornerButtons(
     }
 }
 
-/** A corner pill with its [label]: a touch shortcut's, the Panel pill, or the panel's Game pill ([GamePillCorner]). */
+/** A corner pill with its [label]: a touch shortcut's, or the Panel pill in the corner buttons' row. */
 @Composable
 private fun CornerPill(label: String, on: Boolean, modifier: Modifier = Modifier, onPress: (Boolean) -> Unit) {
     CornerButton(on, RoundedCornerShape(50), modifier.height(CORNER_BUTTON_HEIGHT).widthIn(min = CORNER_BUTTON_HEIGHT), onPress) {
@@ -92,12 +95,15 @@ private fun CornerPill(label: String, on: Boolean, modifier: Modifier = Modifier
 }
 
 /**
- * The game panel's Game pill, where the Panel pill it answers sits ([CornerButtons]' bottom-right corner, the same
- * size and look): the two switch pills land on one spot.
+ * The game panel's Game pill, the Panel pill it answers' look ([PanelPill]) at its spot: bottom-right, clear of a
+ * cutout on those sides, 10 dp in. The two switch pills land on one spot and look the same.
  */
 @Composable
 fun BoxScope.GamePillCorner(onClick: () -> Unit) {
-    CornerPill("Game", on = false, Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(CORNER_MARGIN)) { down -> if (!down) onClick() }
+    PanelPill(
+        "Game", Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.End + WindowInsetsSides.Bottom)).padding(10.dp),
+        onClick = onClick,
+    )
 }
 
 /** One corner button: the see-through fill (lit while [on]) and its ring; [onPress] true on the press, false on the release. */

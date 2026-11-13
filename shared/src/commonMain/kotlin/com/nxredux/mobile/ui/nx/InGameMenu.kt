@@ -275,7 +275,10 @@ private fun InGameMenuContent(
         val inset = nxPageInset()
         Column(Modifier.weight(1f).fillMaxWidth().padding(start = inset.pillStart, end = inset.pillEnd)) {
         // The game header on every page, where the dual-screen panel draws it; without a panel the standard page title.
-        if (panel != null) GamePanelHeaderBar(panel.state.header) else NxPageTitle(page.title)
+        // (on a short menu, a pad skin's small touch screen, its one-line form, as the panel's)
+        if (panel != null) {
+            if (LocalWindowSize.current.height < GP_COMPACT_BELOW) GamePanelCompactHeader(panel.state.header) else GamePanelHeaderBar(panel.state.header)
+        } else NxPageTitle(page.title)
         // The tab row across the menu on the root: the Menu tab is the words (beside the slot card or the Options
         // preview); another tab takes the whole width.
         if (tabsAbove && beside != null) MenuTabs(beside, focused = state.panelFocus == PanelFocus.Tabs)
