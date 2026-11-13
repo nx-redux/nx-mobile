@@ -188,9 +188,9 @@ internal fun mainMenuStackGeometry(
     require(slot != BackdropSlot.BOX) { "the box art slot is a game list's" }
     data class Spec(val w: Float, val h: Float, val s: Float, val gap: Float, val cap: Float)
     val spec = when (slot) {
-        // The horizontal Carousel's logo slot on this body ([backdropSlotGeometry], portrait's width cap too),
+        // The horizontal Carousel's logo slot on this body ([backdropSlotGeometry], the width cap too),
         // so a console is the same size, and its pad, whichever way the Carousel runs.
-        BackdropSlot.LOGO -> backdropSlotGeometry(BackdropSlot.LOGO, bodyH, portraitW = bodyW.takeIf { portrait })
+        BackdropSlot.LOGO -> backdropSlotGeometry(BackdropSlot.LOGO, bodyH, portraitW = bodyW)
             .let { Spec(it.itemW, it.itemH, 0.5f, 16f, countRoom(1f, countLine)) }
         BackdropSlot.COLLECTION -> Spec(400f, 100f, 0.5f, 14f, 0f)
         else -> Spec(TOOL_SLOT_W, 140f, 0.6f, 10f, 0f)
