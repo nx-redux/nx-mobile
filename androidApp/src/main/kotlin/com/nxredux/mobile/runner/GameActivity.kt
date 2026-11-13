@@ -107,6 +107,7 @@ import com.nxredux.mobile.options.VulkanFallback
 import com.nxredux.mobile.gpudriver.GpuDriver
 import com.nxredux.mobile.gpudriver.GpuDriverChoice
 import com.nxredux.mobile.gpudriver.GpuDriverCrash
+import com.nxredux.mobile.gpudriver.GpuDriverMarkerGuard
 import com.nxredux.mobile.settings.ProviderPreferences
 import com.nxredux.mobile.settings.Prefs
 import com.nxredux.mobile.settings.AndroidAppSettings
@@ -317,8 +318,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     @Volatile private var launchedOnVulkan = false
     /** The custom GPU driver this launch loads ([GpuDriverChoice]); null: the system driver (or not on Vulkan). */
     @Volatile private var launchedDriver: GpuDriver? = null
-    /** This launch wrote the custom-driver crash marker ([GpuDriverCrash]): it clears it ([clearDriverMarker]). */
-    @Volatile private var driverMarked = false
+    /** This launch's custom-driver crash marker ([GpuDriverCrash]): written by the launch, cleared by this screen. */
+    private val driverMarker = GpuDriverMarkerGuard { settings.gpuDriverMarker = it }
     /** Clears the marker once the game has presented frames for [GpuDriverCrash.CLEAR_AFTER_MS]. */
     private var driverMarkerClear: Job? = null
     /**
@@ -978,7 +979,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         rumbles.forEach { it.release() }
         wii.onDestroy()
         if (isFinishing || relaunching) endGameTime()   // Back/finish without Quit (quit already ended it), or the GLES relaunch
-        clearDriverMarker()   // a normal exit or a recreation: this launch did not die on its driver
+        // A normal exit or a recreation: this launch did not die on its driver. Abandoned first, so a launch still writing
+        // its marker (Back while loading) writes none, or the clear below waits for that write and undoes it.
+        driverMarkerClear?.cancel()
+        driverMarkerClear = null
+        val clearMarker = driverMarker.abandon()
         if (isFinishing) launchRecords.drop(launchId)   // quit before the first frame: the launch never started
         if (BuildConfig.DEBUG && isFinishing) debugReportStopped()
         input.gcClearTriggers()   // a latched soft press never outlives the game
@@ -1004,7 +1009,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val app = applicationContext
         if (endsProcess) { ending = true; GameHeartbeat.start(app) }   // a finish without Quit (Back) beats from here
         // After the core's last write (destroyed above); a Binder call to the menu process, so not on this thread.
-        if (endUse || endsProcess) thread(name = if (endsProcess) "game-process-end" else "data-use-end") {
+        if (endUse || endsProcess || clearMarker) thread(name = if (endsProcess) "game-process-end" else if (endUse) "data-use-end" else "gpu-marker-clear") {
+            // First: it may wait for a marker commit in flight, and its clear must be queued before endProcess waits for the sends.
+            if (clearMarker) driverMarker.clear()
             if (endUse) runCatching { DataRoot.useEnd(app) }.onFailure { NxLog.w(TAG_LOG, "could not end the data use", it) }
             if (endsProcess) endProcess()
         }
@@ -1116,21 +1123,23 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /** The game has presented its first frame: this launch's crash marker goes once it has run [GpuDriverCrash.CLEAR_AFTER_MS]. */
     private fun clearDriverMarkerLater() {
-        if (!driverMarked || driverMarkerClear != null) return
+        if (driverMarkerClear != null) return
         driverMarkerClear = lifecycleScope.launch {
             delay(GpuDriverCrash.CLEAR_AFTER_MS)
-            NxLog.i(TAG_LOG, "the GPU driver ran ${GpuDriverCrash.CLEAR_AFTER_MS / 1000} s: its launch marker is cleared")
-            clearDriverMarker()
+            driverMarkerClear = null
+            if (driverMarker.clear()) NxLog.i(TAG_LOG, "the GPU driver ran ${GpuDriverCrash.CLEAR_AFTER_MS / 1000} s: its launch marker is cleared")
         }
     }
 
-    /** Forgets this launch's crash marker (applied: never blocks), and the timer that would have. Nothing when it wrote none. */
+    /**
+     * Forgets this launch's crash marker, and the timer that would have. Nothing when it wrote none. On the main thread:
+     * only once the launch's [GpuDriverMarkerGuard.mark] has returned (a relaunch comes after the view exists), so it
+     * never waits on the marker's commit; the clear itself is applied.
+     */
     private fun clearDriverMarker() {
         driverMarkerClear?.cancel()
         driverMarkerClear = null
-        if (!driverMarked) return
-        driverMarked = false
-        settings.gpuDriverMarker = null
+        driverMarker.clear()
     }
 
     /** [title]: "Netplay failed" for a netplay session's failures, which may come mid-game. */
@@ -2092,7 +2101,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         override var ndsFellBack by game::ndsFellBack
         override var launchedOnVulkan by game::launchedOnVulkan
         override var launchedDriver by game::launchedDriver
-        override var driverMarked by game::driverMarked
         override var launchEnv by game::launchEnv
         override var graphicsForcedOptions by game::graphicsForcedOptions
         override var frontendValues by game::frontendValues
@@ -2128,6 +2136,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         override fun relaunchOnGles(record: Boolean, notice: String) = game.relaunchOnGles(record, notice)
         override fun relaunchOnSystemDriver() = game.relaunchOnSystemDriver()
         override fun clearDriverMarkerLater() = game.clearDriverMarkerLater()
+        override fun markDriverLaunch(marker: String) = game.driverMarker.mark(marker)
         override fun quitGame(chosen: Boolean, autoState: Boolean) = game.quitWithAutoState(chosen, autoState)
         override fun toast(msg: String) = game.toast(msg)
         override fun isLandscape() = game.isLandscape()

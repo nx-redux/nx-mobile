@@ -162,8 +162,6 @@ internal interface LaunchHost : GameScreenHost {
     var launchedOnVulkan: Boolean
     /** The custom GPU driver this launch loads; null: the system driver, or not on Vulkan. */
     var launchedDriver: GpuDriver?
-    /** This launch wrote the custom-driver crash marker ([GpuDriverCrash]); cleared by the screen. */
-    var driverMarked: Boolean
     var launchEnv: Map<String, String?>
     var graphicsForcedOptions: Set<String>
     var frontendValues: Map<String, String>
@@ -199,6 +197,11 @@ internal interface LaunchHost : GameScreenHost {
     fun relaunchOnSystemDriver()
     /** The first frame is up: the crash marker goes after [GpuDriverCrash.CLEAR_AFTER_MS]. */
     fun clearDriverMarkerLater()
+    /**
+     * Writes the custom-driver crash marker ([GpuDriverCrash.encode]), blocking until it is on disk: off the main thread.
+     * Nothing once the screen is destroyed; a write in flight then is cleared by it ([GpuDriverMarkerGuard]).
+     */
+    fun markDriverLaunch(marker: String): Boolean
     fun quitGame(chosen: Boolean, autoState: Boolean)
     fun isLandscape(): Boolean
     fun screenClass(): ScreenClass
@@ -914,8 +917,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     if (driver != null && gamePath != null) {
                         NxLog.i(TAG_LOG, "GPU driver: ${driver.name} (${driver.id}, ${driver.libraryName})")
                         // Committed before the view exists: on disk before this driver can take the process down.
-                        settings.gpuDriverMarker = GpuDriverCrash.encode(GpuDriverCrash.Marker(Process.myPid(), gamePath, cfg.title, driver.id, driver.name))
-                        driverMarked = true
+                        markDriverLaunch(GpuDriverCrash.encode(GpuDriverCrash.Marker(Process.myPid(), gamePath, cfg.title, driver.id, driver.name)))
                     }
                     launchEnv = graphics.env
                     // netplay link: the link options are this launch's too (a session's port, mode and peer; a solo mGBA's cable): never saved.
