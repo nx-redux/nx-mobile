@@ -25,6 +25,8 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cerrno>
+#include <cstdio>
 #include <cstring>
 #include <cstdlib>
 
@@ -33,6 +35,48 @@
 namespace libretrodroid {
 
 namespace {
+
+// The last path component of [dir], without trailing slashes ("" for none).
+std::string lastComponent(std::string dir) {
+    while (!dir.empty() && dir.back() == '/') dir.pop_back();
+    const size_t slash = dir.rfind('/');
+    return slash == std::string::npos ? dir : dir.substr(slash + 1);
+}
+
+bool endsWith(const std::string& s, const std::string& suffix) {
+    return s.size() >= suffix.size() && s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+// Whether the custom driver [library] from [driverDir] is mapped into this process. libadrenotools' hook falls back
+// to the system ICD, silently, when the custom one fails to load, and still hands back a working loader: only the
+// process's mappings tell the two apart (driverID cannot: a Qualcomm package reports the stock driver's). The linker
+// may name the directory differently (/data/data/... for /data/user/0/...), so the match is on the directory's last
+// component + library; a copy in [tmpDir] (patched libraries below API 29) counts too.
+bool customDriverMapped(const std::string& driverDir, const std::string& library, const std::string& tmpDir) {
+    const std::string driverSuffix = "/" + lastComponent(driverDir) + "/" + library;
+    const std::string tmpLast = lastComponent(tmpDir);
+    const std::string tmpSuffix = tmpLast.empty() ? std::string() : "/" + tmpLast + "/" + library;
+    FILE* maps = fopen("/proc/self/maps", "re");
+    if (maps == nullptr) {
+        LOGE("Vulkan bridge: cannot read /proc/self/maps: %s", strerror(errno));
+        return false;
+    }
+    bool found = false;
+    char* line = nullptr;
+    size_t capacity = 0;
+    while (!found && getline(&line, &capacity, maps) > 0) {
+        const char* slash = strchr(line, '/');
+        if (slash == nullptr) continue;
+        std::string path(slash);
+        while (!path.empty() && (path.back() == '\n' || path.back() == ' ')) path.pop_back();
+        const std::string deleted = " (deleted)";
+        if (endsWith(path, deleted)) path.resize(path.size() - deleted.size());
+        found = endsWith(path, driverSuffix) || (!tmpSuffix.empty() && endsWith(path, tmpSuffix));
+    }
+    free(line);
+    fclose(maps);
+    return found;
+}
 
 bool contains(const std::vector<std::string>& list, const char* name) {
     return std::find(list.begin(), list.end(), std::string(name)) != list.end();
@@ -459,9 +503,22 @@ bool VulkanBridge::initialize(unsigned width, unsigned height) {
         destroy();
         return false;
     }
-    if (customDriver) LOGI("Vulkan bridge: custom driver %s loaded through libadrenotools", driverLibrary.c_str());
+    if (customDriver) LOGI("Vulkan bridge: loader for custom driver %s opened through libadrenotools", driverLibrary.c_str());
 
-    if (!createInstance() || !createSurface(width, height) || !createDevice() || !createFrameResources()) {
+    if (!createInstance()) {
+        LOGE("Vulkan bridge: initialization failed");
+        destroy();
+        return false;
+    }
+    // Every launch, also on a cached loader: the ICD is loaded by now (the loader opens it before an instance exists,
+    // on the core's create_instance path too). Failing here is the same custom-driver start failure as any other.
+    if (customDriver && !customDriverMapped(driverDir, driverLibrary, driverTmpDir)) {
+        LOGE("Vulkan bridge: custom driver %s is not loaded (libadrenotools fell back to the system driver): failing "
+             "the custom driver start", driverLibrary.c_str());
+        destroy();
+        return false;
+    }
+    if (!createSurface(width, height) || !createDevice() || !createFrameResources()) {
         LOGE("Vulkan bridge: initialization failed");
         destroy();
         return false;
