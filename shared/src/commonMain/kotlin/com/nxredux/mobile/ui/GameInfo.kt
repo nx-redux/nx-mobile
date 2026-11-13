@@ -5,6 +5,8 @@ import com.nxredux.mobile.gametime.GameTimeFormat
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.scraper.StoredGameInfo
+import com.nxredux.mobile.settings.MenuOrientation
+import com.nxredux.mobile.settings.MenuStyle
 import com.nxredux.mobile.ui.nx.carouselGameLines
 
 /** What the menu shows under a selected game: last played and total time (game time), and RetroAchievements progress. */
@@ -178,6 +180,15 @@ internal fun gameInfoApart(gameInfo: Map<String, GameInfo>, now: Long, game: Gam
     val details = if (!meta.shown) emptyList() else carouselGameLines(gameInfoFor(gameInfo, now, game, full = true, meta.copy(always = true))).underTitle
     return stats + details
 }
+
+/**
+ * A game list's selected [game]'s info in [style] and [orientation]: where its stats and details have places of their
+ * own (a horizontal Carousel: the picture and under the name; a Grid: the line under the title and the selected tile,
+ * [gridHeaderInfo]) both, whatever Layouts → Game info says ([gameInfoApart]); elsewhere as it says ([gameInfoFor]).
+ */
+internal fun gameListInfo(style: MenuStyle, orientation: MenuOrientation, gameInfo: Map<String, GameInfo>, now: Long, game: GameEntry?, meta: GameMeta): List<InfoLine> =
+    if (style == MenuStyle.GRID || style == MenuStyle.CAROUSEL && orientation == MenuOrientation.HORIZONTAL) gameInfoApart(gameInfo, now, game, meta)
+    else gameInfoFor(gameInfo, now, game, full = true, meta)
 
 /**
  * A game list Grid tile's lines: its count-only [stats] (the time, the achievement count), then the details of its

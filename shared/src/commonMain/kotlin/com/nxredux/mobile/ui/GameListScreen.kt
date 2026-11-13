@@ -1,6 +1,7 @@
 package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.ui.nx.HomeFactsLine
+import com.nxredux.mobile.ui.nx.carouselGameLines
 import com.nxredux.mobile.ui.nx.HOME_GRID_HEADER_PAD
 import com.nxredux.mobile.ui.nx.homeStripPitch
 import com.nxredux.mobile.ui.nx.homeStripLineH
@@ -318,7 +319,8 @@ internal fun GameListFrame(
                                 )
                             } }
                             // Each line [pitch] under the last: the boxes may overlap, as the main menu's.
-                            val facts = info()
+                            // A Grid's header: the stats alone, its details in the selected tile ([gridHeaderInfo]).
+                            val facts = if (style == MenuStyle.GRID) gridHeaderInfo(topStats, info()) else info()
                             HomeFactsLine(if (next) facts.filter { !it.ownRow } else facts, size, Modifier.offset(y = (pitch - lh).dp).fillMaxWidth().height(lh.dp))
                             if (next) HomeFactsLine(facts.filter { it.ownRow }, size, Modifier.offset(y = (2 * (pitch - lh)).dp).fillMaxWidth().height(lh.dp))
                         }
@@ -357,10 +359,11 @@ internal fun GameListFrame(
                 when (style) {
                     MenuStyle.GRID -> {
                         val tiles = remember(dataKey) { gridTiles() }
+                        val shownTileInfo = remember(topStats, tileInfo) { gridTileInfo(topStats, tileInfo) }
                         slot { m ->
                             NxTileGrid(
                                 tiles, selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
-                                onColumns = onGridLayout, tileInfo = if (topStats) NoTileInfo else tileInfo,
+                                onColumns = onGridLayout, tileInfo = shownTileInfo,
                                 modifier = m, layoutKey = layoutKey, games = true,   // on the gutter, in line with the title
                             )
                         }
@@ -559,5 +562,17 @@ internal fun gamesTabTitle(entries: List<Listed>, index: Int): String {
     return listTitle(ListSource.Console(system)).ifBlank { CoreRegistry.handheldTag(system.tag) }
 }
 
-/** A Grid's tiles with the info on the line under the title ([gameListTopStats]): none in the selected tile. */
-private val NoTileInfo: (Int) -> List<InfoLine> = { emptyList() }
+/**
+ * A game list Grid's line under its title: with that line shown ([topStats], [gameListTopStats]) the stats of the
+ * selected game's [info] alone (the time, the achievements, the next goal: [carouselGameLines]' picture half), its details
+ * going in the selected tile ([gridTileInfo]), so they never show twice. [info] has both whatever Layouts → Game info
+ * says ([gameListInfo]). Without the line, [info] as it is (not drawn there).
+ */
+internal fun gridHeaderInfo(topStats: Boolean, info: List<InfoLine>): List<InfoLine> = if (topStats) carouselGameLines(info).picture else info
+
+/**
+ * A game list Grid's per-tile info, read lazily per tile as [tileInfo] ([entryTileInfo]): with the stats on the line under
+ * the title ([topStats]) a tile's details alone (the genre, the release), else its stats line and details as they are.
+ */
+internal fun gridTileInfo(topStats: Boolean, tileInfo: (Int) -> List<InfoLine>): (Int) -> List<InfoLine> =
+    if (topStats) { i -> carouselGameLines(tileInfo(i)).underTitle } else tileInfo
