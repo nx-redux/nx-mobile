@@ -104,6 +104,9 @@ import com.nxredux.mobile.options.ScreenScaling
 import com.nxredux.mobile.options.SpeedOptions
 import com.nxredux.mobile.options.SpeedSettings
 import com.nxredux.mobile.options.VulkanFallback
+import com.nxredux.mobile.gpudriver.GpuDriver
+import com.nxredux.mobile.gpudriver.GpuDriverChoice
+import com.nxredux.mobile.gpudriver.GpuDriverCrash
 import com.nxredux.mobile.settings.ProviderPreferences
 import com.nxredux.mobile.settings.Prefs
 import com.nxredux.mobile.settings.AndroidAppSettings
@@ -207,6 +210,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private const val FINISH_WHEN_HIDDEN_MS = 1_500L   // a quit still on screen this long after asking for the menu finishes anyway
         const val EXTRA_OWN_TASK = "own_task"        // Boolean: launcher mode, the game runs in its own task
         const val EXTRA_FORCE_GLES = "force_gles"    // Boolean: the relaunch after Vulkan could not start (VulkanFallback)
+        const val EXTRA_FORCE_SYSTEM_DRIVER = "force_system_driver"   // Boolean: the relaunch after a custom driver could not start
         // netplay: a Wi-Fi netplay launch (GameSession.netplay); all absent for every other launch. The run core is EXTRA_CORE_ID.
         const val EXTRA_NETPLAY_ROLE = "netplay_role"            // NetplayRole name: "HOST" | "CLIENT"
         const val EXTRA_NETPLAY_PEER = "netplay_peer"            // the other device's IPv4 address
@@ -311,6 +315,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override val isDolphin: Boolean get() = gameCoreId == WiiDolphinController.DOLPHIN_ID
     /** This launch asked the core for Vulkan (Display → Graphics API): a failure to start it relaunches on GLES. */
     @Volatile private var launchedOnVulkan = false
+    /** The custom GPU driver this launch loads ([GpuDriverChoice]); null: the system driver (or not on Vulkan). */
+    @Volatile private var launchedDriver: GpuDriver? = null
+    /** This launch wrote the custom-driver crash marker ([GpuDriverCrash]): it clears it ([clearDriverMarker]). */
+    @Volatile private var driverMarked = false
+    /** Clears the marker once the game has presented frames for [GpuDriverCrash.CLEAR_AFTER_MS]. */
+    private var driverMarkerClear: Job? = null
     /**
      * This screen is being recreated to start the game again on OpenGL ES ([relaunchOnGles]): it writes no auto state
      * and shows no failure dialog.
@@ -968,6 +978,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         rumbles.forEach { it.release() }
         wii.onDestroy()
         if (isFinishing || relaunching) endGameTime()   // Back/finish without Quit (quit already ended it), or the GLES relaunch
+        clearDriverMarker()   // a normal exit or a recreation: this launch did not die on its driver
         if (isFinishing) launchRecords.drop(launchId)   // quit before the first frame: the launch never started
         if (BuildConfig.DEBUG && isFinishing) debugReportStopped()
         input.gcClearTriggers()   // a latched soft press never outlives the game
@@ -1075,14 +1086,51 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * live one the intent. The old screen's onDestroy (the core's native destroy, the session release) runs before the
      * new onCreate; not finishing, it keeps the launch for it.
      */
-    private fun relaunchOnGles() {
+    private fun relaunchOnGles(record: Boolean = true, notice: String = VulkanFallback.NOTICE) {
         if (isFinishing || relaunching || failShown) return
         relaunching = true
-        settings.recordVulkanFailure(gameCoreId)
+        clearDriverMarker()
+        // [record] false: a custom driver failed on a core whose system-driver failure is already recorded.
+        if (record) settings.recordVulkanFailure(gameCoreId)
         NxLog.w(TAG_LOG, "Vulkan could not start for $gameCoreId: starting again on OpenGL ES")
-        android.widget.Toast.makeText(applicationContext, VulkanFallback.NOTICE, android.widget.Toast.LENGTH_LONG).show()
+        android.widget.Toast.makeText(applicationContext, notice, android.widget.Toast.LENGTH_LONG).show()
         intent = Intent(intent).putExtra(EXTRA_FORCE_GLES, true)
         recreate()
+    }
+
+    /**
+     * The custom GPU driver ([launchedDriver]) could not start: as [relaunchOnGles], but the new screen runs Vulkan on the
+     * system driver ([EXTRA_FORCE_SYSTEM_DRIVER]); nothing is recorded, and the driver is not blamed for a crash. If that
+     * fails too, the relaunch after it goes to OpenGL ES ([GpuDriverChoice.afterStartFailure]).
+     */
+    private fun relaunchOnSystemDriver() {
+        if (isFinishing || relaunching || failShown) return
+        val driver = launchedDriver ?: return relaunchOnGles()
+        relaunching = true
+        clearDriverMarker()
+        NxLog.w(TAG_LOG, "the GPU driver ${driver.name} could not start for $gameCoreId: starting again on the system driver")
+        android.widget.Toast.makeText(applicationContext, GpuDriverChoice.named(GpuDriverChoice.SYSTEM_DRIVER_NOTICE, driver.name), android.widget.Toast.LENGTH_LONG).show()
+        intent = Intent(intent).putExtra(EXTRA_FORCE_SYSTEM_DRIVER, true)
+        recreate()
+    }
+
+    /** The game has presented its first frame: this launch's crash marker goes once it has run [GpuDriverCrash.CLEAR_AFTER_MS]. */
+    private fun clearDriverMarkerLater() {
+        if (!driverMarked || driverMarkerClear != null) return
+        driverMarkerClear = lifecycleScope.launch {
+            delay(GpuDriverCrash.CLEAR_AFTER_MS)
+            NxLog.i(TAG_LOG, "the GPU driver ran ${GpuDriverCrash.CLEAR_AFTER_MS / 1000} s: its launch marker is cleared")
+            clearDriverMarker()
+        }
+    }
+
+    /** Forgets this launch's crash marker (applied: never blocks), and the timer that would have. Nothing when it wrote none. */
+    private fun clearDriverMarker() {
+        driverMarkerClear?.cancel()
+        driverMarkerClear = null
+        if (!driverMarked) return
+        driverMarked = false
+        settings.gpuDriverMarker = null
     }
 
     /** [title]: "Netplay failed" for a netplay session's failures, which may come mid-game. */
@@ -2043,6 +2091,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         override var ndsRenderMode by game::ndsRenderMode
         override var ndsFellBack by game::ndsFellBack
         override var launchedOnVulkan by game::launchedOnVulkan
+        override var launchedDriver by game::launchedDriver
+        override var driverMarked by game::driverMarked
         override var launchEnv by game::launchEnv
         override var graphicsForcedOptions by game::graphicsForcedOptions
         override var frontendValues by game::frontendValues
@@ -2075,7 +2125,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
 
         override fun fail(message: String, title: String) = game.fail(message, title)
-        override fun relaunchOnGles() = game.relaunchOnGles()
+        override fun relaunchOnGles(record: Boolean, notice: String) = game.relaunchOnGles(record, notice)
+        override fun relaunchOnSystemDriver() = game.relaunchOnSystemDriver()
+        override fun clearDriverMarkerLater() = game.clearDriverMarkerLater()
         override fun quitGame(chosen: Boolean, autoState: Boolean) = game.quitWithAutoState(chosen, autoState)
         override fun toast(msg: String) = game.toast(msg)
         override fun isLandscape() = game.isLandscape()

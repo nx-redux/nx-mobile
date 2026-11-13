@@ -13,6 +13,18 @@ object GpuDriverChoice {
     /** The settings value meaning "the phone's own driver". */
     const val SYSTEM = "system"
 
+    /** The toast of [Next.SYSTEM_DRIVER]'s relaunch; the driver's name replaces `%s`. */
+    const val SYSTEM_DRIVER_NOTICE = "%s couldn't start, so this game is using the system driver."
+
+    /** The toast of [Next.GLES_NO_RECORD]'s relaunch; the driver's name replaces `%s`. */
+    const val GLES_NOTICE = "%s couldn't start, so this game is using OpenGL ES."
+
+    /** [Next.FAIL_MESSAGE] when a custom driver was in use; the driver's name replaces `%s`. */
+    const val NETPLAY_FAIL = "%s could not start for this game. Set Display → GPU driver to System driver."
+
+    /** [template] with the driver's [name] in place of `%s` (a name may hold a `%`, so no format string). */
+    fun named(template: String, name: String): String = template.replace("%s", name)
+
     /**
      * The driver id to load, null for the system driver. [cfgValue] [SYSTEM] is the system driver; an installed id is
      * that driver; anything else (default, unset, an id no longer installed) follows [appWide] when installed. A driver

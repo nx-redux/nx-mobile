@@ -143,6 +143,9 @@ class AndroidGpuDrivers(private val root: File, private val sdkInt: Int) {
         private const val MAX_META = 1024 * 1024
         private const val ID_LENGTH = 16
 
+        /** Where the app keeps its drivers: `filesDir/gpu_drivers`. */
+        fun root(filesDir: File): File = File(filesDir, "gpu_drivers")
+
         /**
          * Null when custom drivers are available here, else why not (shown as is); "" when the feature is off (no row at all).
          * The app does not check that a package matches the phone's GPU: a package for the wrong GPU fails to start and the

@@ -65,4 +65,26 @@ class GpuDriverChoiceTest {
 
     @Test fun systemFailureGoesToGlesAndRecords() =
         assertEquals(GpuDriverChoice.Next.GLES_RECORD, GpuDriverChoice.afterStartFailure(true, null, false, false))
+
+    /** The three extras together: custom → system driver → OpenGL ES → the error, never a loop. */
+    @Test fun relaunchChainEnds() {
+        fun launch(forceGles: Boolean, forceSystem: Boolean, coreFailed: Boolean) = GpuDriverChoice.launch(
+            GraphicsApiOptions.VULKAN, "d1", null, setOf("d1"), emptySet(), available = true, forceGles = forceGles,
+            forceSystem = forceSystem, coreFailedOnSystem = coreFailed, netplayForcesGles = false)
+        val first = launch(forceGles = false, forceSystem = false, coreFailed = false)
+        assertEquals("d1", first.driverId)
+        assertEquals(GpuDriverChoice.Next.SYSTEM_DRIVER, GpuDriverChoice.afterStartFailure(!first.vulkanFailed, first.driverId, false, false))
+        val second = launch(forceGles = false, forceSystem = true, coreFailed = false)
+        assertEquals(GpuDriverChoice.Launch(null, false), second)
+        assertEquals(GpuDriverChoice.Next.GLES_RECORD, GpuDriverChoice.afterStartFailure(!second.vulkanFailed, second.driverId, false, false))
+        val third = launch(forceGles = true, forceSystem = true, coreFailed = true)
+        assertEquals(GpuDriverChoice.Launch(null, true), third)
+        assertEquals(GpuDriverChoice.Next.SHOW_ERROR, GpuDriverChoice.afterStartFailure(!third.vulkanFailed, third.driverId, true, false))
+    }
+
+    @Test fun noticesNameTheDriver() {
+        assertEquals("Turnip v25 couldn't start, so this game is using the system driver.", GpuDriverChoice.named(GpuDriverChoice.SYSTEM_DRIVER_NOTICE, "Turnip v25"))
+        assertEquals("Turnip 100% couldn't start, so this game is using OpenGL ES.", GpuDriverChoice.named(GpuDriverChoice.GLES_NOTICE, "Turnip 100%"))
+        assertEquals("Turnip v25 could not start for this game. Set Display → GPU driver to System driver.", GpuDriverChoice.named(GpuDriverChoice.NETPLAY_FAIL, "Turnip v25"))
+    }
 }
