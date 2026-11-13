@@ -9,8 +9,9 @@
 # server, the runner's leave and a login that finds no server each tell a game in a group or joining one that it is
 # disconnected, and end a scan that can no longer be answered as one that found nothing; after a leave the device
 # stays off the server until rejoin or, on the automatic route, until the game re-enters ad hoc; with nx_psp_link
-# switched off it stays off. The runner hears from the core when another device is on this device's server, even
-# after the game left ad hoc, so it keeps that server.
+# switched off it stays off, and a session turned into the automatic route comes back by that route's rule. The
+# runner hears from the core when another device is on this device's server, even after the game left ad hoc, so it
+# keeps that server.
 # The core reports its presence, and refuses save states while in ad hoc. Without a frontend that answers the call,
 # the core behaves as upstream.
 diff --git a/Core/CMakeLists.txt b/Core/CMakeLists.txt
@@ -64,10 +65,10 @@ index 06f990f..e0f6f74 100644
  
 diff --git a/Core/HLE/NxPspLink.cpp b/Core/HLE/NxPspLink.cpp
 new file mode 100644
-index 0000000..76ac40a
+index 0000000..04287d2
 --- /dev/null
 +++ b/Core/HLE/NxPspLink.cpp
-@@ -0,0 +1,395 @@
+@@ -0,0 +1,397 @@
 +// Copyright (c) 2012- PPSSPP Project.
 +
 +// This program is free software: you can redistribute it and/or modify
@@ -125,7 +126,9 @@ index 0000000..76ac40a
 +// frontend, so leave() and rejoin(), which the frontend calls holding its own lock, never wait on anything here.
 +static std::mutex parkMutex;
 +static std::atomic<bool> parked(false);
-+// Automatic route, while parked: the game has been out of ad hoc since the leave, so its next trigger brings it back.
++// While parked: the game has been out of ad hoc since the leave, so on the automatic route its next trigger brings it
++// back. Kept on a session too: the frontend can turn a session into the automatic route after its leave, and reads the
++// new route a frame before this core does.
 +static bool outSinceLeave = false;
 +static std::atomic<int> route(ROUTE_AUTO);
 +
@@ -334,10 +337,10 @@ index 0000000..76ac40a
 +	{
 +		// The frontend sees the same changes and unparks on the same ones.
 +		std::lock_guard<std::mutex> guard(parkMutex);
-+		if (parked && route == ROUTE_AUTO) {
++		if (parked) {
 +			if (!active) {
 +				outSinceLeave = true;
-+			} else if (outSinceLeave) {
++			} else if (outSinceLeave && route == ROUTE_AUTO) {
 +				parked = false;
 +				back = true;
 +			}
@@ -465,10 +468,10 @@ index 0000000..76ac40a
 +#endif
 diff --git a/Core/HLE/NxPspLink.h b/Core/HLE/NxPspLink.h
 new file mode 100644
-index 0000000..af74c19
+index 0000000..5387ad1
 --- /dev/null
 +++ b/Core/HLE/NxPspLink.h
-@@ -0,0 +1,83 @@
+@@ -0,0 +1,84 @@
 +// Copyright (c) 2012- PPSSPP Project.
 +
 +// This program is free software: you can redistribute it and/or modify
@@ -526,7 +529,8 @@ index 0000000..af74c19
 +// route, by the game leaving ad hoc and coming back. Any thread.
 +bool Parked();
 +// From check_variables, the route nx_psp_link names: the automatic route comes back after a leave when the game
-+// re-enters ad hoc, a session's by rejoin(), as the frontend does; a link switched off never comes back.
++// re-enters ad hoc, a session's by rejoin(), as the frontend does; a link switched off never comes back. A session
++// turned into the automatic route arrives parked (the frontend's leave() comes first) and comes back by that rule.
 +enum Route { ROUTE_AUTO, ROUTE_SESSION, ROUTE_OFF };
 +void SetRoute(Route route);
 +// For the poll, which does on the CPU thread what leave() and rejoin() ask from other threads.
@@ -1093,7 +1097,7 @@ index cf87163..0a0cfc9 100644
  	       $(COREDIR)/HLE/sceOpenPSID.cpp \
  	       $(COREDIR)/HLE/sceResmgr.cpp \
 diff --git a/libretro/libretro.cpp b/libretro/libretro.cpp
-index 0e5c502..32056e4 100644
+index 0e5c502..17fadf5 100644
 --- a/libretro/libretro.cpp
 +++ b/libretro/libretro.cpp
 @@ -50,6 +50,7 @@
@@ -1104,7 +1108,7 @@ index 0e5c502..32056e4 100644
  #include "Core/ELF/ParamSFO.h"
  
  #include "GPU/GPUState.h"
-@@ -523,6 +524,34 @@ static void check_dynamic_variables(CoreParameter &coreParam) {
+@@ -523,6 +524,35 @@ static void check_dynamic_variables(CoreParameter &coreParam) {
  
  extern int DefaultDepthRaster();
  
@@ -1123,7 +1127,8 @@ index 0e5c502..32056e4 100644
 +   g_Config.bAdhocUseUdp = false;
 +
 +   // The frontend brings a session back after a leave by rejoin(), and the automatic route when the game re-enters
-+   // ad hoc; switched off, it has left for good. The core's presence follows the same rule.
++   // ad hoc; switched off, it has left for good. A session's Disconnect may turn it into the automatic route instead.
++   // The core's presence follows the same rule.
 +   struct retro_variable var = {0};
 +   var.key = "nx_psp_link";
 +   NxPspLink::Route route = NxPspLink::ROUTE_AUTO;
@@ -1139,7 +1144,7 @@ index 0e5c502..32056e4 100644
  static void check_variables(CoreParameter &coreParam)
  {
     check_dynamic_variables(coreParam);
-@@ -1089,6 +1118,8 @@ static void check_variables(CoreParameter &coreParam)
+@@ -1089,6 +1119,8 @@ static void check_variables(CoreParameter &coreParam)
     else
        g_Config.sProAdhocServer = changeProAdhocServer;
  
@@ -1148,7 +1153,7 @@ index 0e5c502..32056e4 100644
     g_Config.bTexHardwareScaling = g_Config.sTextureShaderName != "Off";
  
     if (gpu && (g_Config.iTexScalingType != iTexScalingType_prev
-@@ -1611,6 +1642,11 @@ bool retro_load_game(const struct retro_game_info *game) {
+@@ -1611,6 +1643,11 @@ bool retro_load_game(const struct retro_game_info *game) {
     coreParam.gpuCore         = ctx->GetGPUCore();
     check_variables(coreParam);
  
@@ -1160,7 +1165,7 @@ index 0e5c502..32056e4 100644
     // TODO: OpenGL goes black when inited with software rendering,
     // therefore start without, set back after init, and reset.
     softwareRenderInitHack    = ctx->GetGPUCore() == GPUCORE_GLES && g_Config.bSoftwareRendering;
-@@ -1649,6 +1685,7 @@ bool retro_load_game(const struct retro_game_info *game) {
+@@ -1649,6 +1686,7 @@ bool retro_load_game(const struct retro_game_info *game) {
        // Can't really fail, the errors normally happen later during InitUpdate
        ERROR_LOG(Log::Boot, "%s", g_bootErrorString.c_str());
        g_pendingBoot = false;
@@ -1168,7 +1173,7 @@ index 0e5c502..32056e4 100644
        return false;
     }
  
-@@ -1656,6 +1693,9 @@ bool retro_load_game(const struct retro_game_info *game) {
+@@ -1656,6 +1694,9 @@ bool retro_load_game(const struct retro_game_info *game) {
  }
  
  void retro_unload_game(void) {
@@ -1178,7 +1183,7 @@ index 0e5c502..32056e4 100644
     if (Libretro::useEmuThread) {
        Libretro::EmuThreadStop();
     }
-@@ -1892,6 +1932,11 @@ bool retro_serialize(void *data, size_t size) {
+@@ -1892,6 +1933,11 @@ bool retro_serialize(void *data, size_t size) {
     if (!gpu) // The HW renderer isn't ready on first pass.
        return false;
  
@@ -1190,7 +1195,7 @@ index 0e5c502..32056e4 100644
     // TODO: Libretro API extension to use the savestate queue
     if (useEmuThread) {
        EmuThreadPause(); // Does nothing if already paused
-@@ -1914,6 +1959,9 @@ bool retro_serialize(void *data, size_t size) {
+@@ -1914,6 +1960,9 @@ bool retro_serialize(void *data, size_t size) {
  }
  
  bool retro_unserialize(const void *data, size_t size) {

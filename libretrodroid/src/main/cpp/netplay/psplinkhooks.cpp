@@ -75,8 +75,9 @@ bool parked = false;
 // "active" while parked, or the listen window would already have run out when the device comes back. coreGrouped can
 // be 1 with coreActive 0: the game left ad hoc while others still play on this device's server.
 int coreActive = 0, coreGrouped = 0;
-// Automatic route, while parked: the game has been out of ad hoc since the leave, so its next trigger brings the
-// device back (a game still in ad hoc at the leave must leave it first).
+// While parked: the game has been out of ad hoc since the leave. On the automatic route its next trigger then brings the
+// device back (a game still in ad hoc at the leave must leave it first). Kept on a session too, which a Disconnect can
+// turn into the automatic route while parked (configure).
 bool outSinceLeave = false;
 // The choice server() answers from, and the core has been told about (serve, relogin).
 psl_choice published {};
@@ -141,7 +142,8 @@ Settings read(const std::vector<Variable>& vars) {
     else if (*mode == "host") s.mode = PSL_HOST;
     else if (*mode == "join") s.mode = PSL_JOIN;
     else return s;
-    s.hostIp = address(vars, "nx_psp_link_ip");
+    // Only a join has a host: a session left for the automatic route keeps its old variable.
+    if (s.mode == PSL_JOIN) s.hostIp = address(vars, "nx_psp_link_ip");
     s.broadcast = address(vars, "nx_psp_link_broadcast");
     s.self = address(vars, "nx_psp_link_self");
     return s;
@@ -433,9 +435,8 @@ void coreActiveReport(int active, int grouped) {
                                           : grouped ? "in a group, or others on its server" : "in ad hoc");
     }
     if (parked) {
-        if (settings.mode != PSL_AUTO) return;
         if (!active) outSinceLeave = true;
-        else if (outSinceLeave) unparkLocked();
+        else if (outSinceLeave && settings.mode == PSL_AUTO) unparkLocked();
         return;
     }
     psl_active(&election, active, grouped, nowMs());
@@ -526,19 +527,24 @@ void configure(const std::vector<Variable>& vars) {
             LOGI("PSP link: self %s, broadcast %s", text(wanted.self).c_str(), text(wanted.broadcast).c_str());
             return;
         }
-        // Switched off (the sheet's Disconnect): the game leaves ad hoc as for a leave, and stays out, so its presence
-        // is out and states work again. The mode is off from here, under the same hold as the park, so no rejoin
-        // between brings either side back.
-        if (wanted.mode == MODE_OFF && settings.mode != MODE_OFF && hasCore && !parked) {
+        // The sheet's Disconnect: switched off, or a session turned into the automatic route. Either way the game leaves
+        // ad hoc as for a leave, so its presence is out and states work again. Off it stays out; on the automatic route
+        // it comes back as there, once the game has left ad hoc and re-entered it (coreActiveReport), never by a rejoin.
+        // The new mode is set under the same hold as the park, so no rejoin between brings either side back, and the
+        // game's reports from here count toward the automatic route's return.
+        const bool session = settings.mode == PSL_HOST || settings.mode == PSL_JOIN;
+        const bool toOff = wanted.mode == MODE_OFF && settings.mode != MODE_OFF;
+        const bool toAuto = wanted.mode == PSL_AUTO && session;
+        if ((toOff || toAuto) && hasCore && !parked) {
             parked = true;
             outSinceLeave = !coreActive;
             psl_park(&election, 1);
             leaving = core;
         }
-        if (wanted.mode == MODE_OFF) settings.mode = MODE_OFF;
+        if (toOff || toAuto) settings.mode = wanted.mode;
     }
     if (leaving.leave != nullptr) {
-        LOGI("PSP link: switched off, left");
+        LOGI("PSP link: %s, left", wanted.mode == MODE_OFF ? "switched off" : "session over, automatic once the game re-enters ad hoc");
         leaving.leave();
     }
     // A new role starts the election over; the old finder first takes back what it told the core.
