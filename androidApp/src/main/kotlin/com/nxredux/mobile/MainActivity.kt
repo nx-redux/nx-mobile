@@ -73,6 +73,7 @@ import com.nxredux.mobile.skinlayout.SkinLayoutActivity
 import com.nxredux.mobile.runner.AndroidEmulatorConfigStore
 import com.nxredux.mobile.runner.AndroidMicAccess
 import com.nxredux.mobile.runner.CoreHangNotice
+import com.nxredux.mobile.gpudriver.AndroidGpuDriverStore
 import com.nxredux.mobile.gpudriver.GpuDriverCrashSettle
 import com.nxredux.mobile.runner.GameExitCheck
 import com.nxredux.mobile.runner.AndroidUserDataStore
@@ -479,6 +480,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 pasteText = { AndroidDeviceInfo.clipboardText(applicationContext) },
                 promptOnSecondDisplay = { promptOnSecond },
                 log = { NxLog.i("NXAPP", it) },
+                // Settings → System → GPU driver: its zip comes through Save import's picker.
+                gpuDrivers = AndroidGpuDriverStore(this) { onRef -> savePickers.openZip(onRef) },
             ),
             scope,
             kids,
