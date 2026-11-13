@@ -607,7 +607,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             }
             launchPipeline.start()
             if (launchPipeline.dsLinked && !isDestroyed) dsRoom.start()
-            if (launchPipeline.dsCableAuto && !isDestroyed) dsCable.watch()
+            if (launchPipeline.dsCableAuto && !isDestroyed) dsCable.watch(launchPipeline.dsCableWithGame)
         }
     }
 
@@ -1496,9 +1496,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (kind != NetplayLinkKind.PSPLINK && launchPipeline.dsAutoRoute) {
             LibretroNetplay.dsLeaveNow()
             dsRoom.check()
-            if (launchPipeline.dsCableAuto) dsCable.watch()
+            if (launchPipeline.dsCableAuto) dsCable.watch(launchPipeline.dsCableWithGame)
         }
-        if (kind == NetplayLinkKind.PSPLINK && launchPipeline.dsCableAuto) dsCable.watch()
+        if (kind == NetplayLinkKind.PSPLINK && launchPipeline.dsCableAuto) dsCable.watch(launchPipeline.dsCableWithGame)
         return left
     }
 

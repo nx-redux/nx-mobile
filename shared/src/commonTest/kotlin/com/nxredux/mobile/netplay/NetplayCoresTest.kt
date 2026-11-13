@@ -234,4 +234,12 @@ class NetplayCoresTest {
         assertTrue(NetplayCores.cableAuto("ppsspp"))
         assertFalse(NetplayCores.cableAuto("snes9x"))
     }
+
+    @Test
+    fun only_psp_starts_its_cable_with_the_game() {
+        assertTrue(NetplayCores.cableWithGame("ppsspp"))
+        assertFalse(NetplayCores.cableWithGame("melondsds"))
+        assertFalse(NetplayCores.cableWithGame("azahar"))
+        assertFalse(NetplayCores.cableWithGame("snes9x"))
+    }
 }

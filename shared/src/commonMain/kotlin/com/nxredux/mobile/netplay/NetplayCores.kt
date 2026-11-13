@@ -75,6 +75,13 @@ object NetplayCores {
     /** [core]'s automatic route can bring up the phone-to-phone USB cable (its watcher and VPN consent). */
     fun cableAuto(core: String): Boolean = core == "melondsds" || core == "azahar" || core == "ppsspp"
 
+    /**
+     * [core]'s automatic route starts the cable from the game's start with a phone on the port, not when the game's
+     * wireless comes on, and counts it up only while a phone is on the port ([com.nxredux.mobile.netplay.usb.DsCableAuto]):
+     * PSP, whose devices group on the network of their first login.
+     */
+    fun cableWithGame(core: String): Boolean = core == "ppsspp"
+
     /** An MGBA game without a Wi-Fi link mode links over the real cable alone, so the USB cable alone (the handheld's `--modes usb`). */
     fun usbOnly(tag: String, wl: String?): Boolean = tag.trim().uppercase() == "MGBA" && wl !in GbaWifiLink.WIFI_MODES
 

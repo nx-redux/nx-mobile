@@ -334,6 +334,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     /** [dsAutoRoute] for a core whose link can use the phone-to-phone cable ([NetplayCores.cableAuto]): its watcher runs only then. */
     var dsCableAuto = false
         private set
+    /** The launch's core starts its cable with the game ([NetplayCores.cableWithGame]): the watcher's rule, whenever it runs. */
+    var dsCableWithGame = false
+        private set
 
     /**
      * The automatic route's low-latency Wi-Fi lock, only while in a room: the DS waits on every member's reply each frame,
@@ -674,6 +677,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val n3dsAuto = n3dsRoomName?.takeIf { if (coreId == "melondsds") NdsOptions.localWireless(frontendValues) else N3dsOptions.localWireless(frontendValues) }
             dsLocalWireless = n3dsAuto != null
             dsCableCore = NetplayCores.cableAuto(coreId)
+            dsCableWithGame = NetplayCores.cableWithGame(coreId)
             // A room answers other devices' searches, which arrive as broadcasts: Android drops those without this lock.
             // A DS or 3DS game outside a session takes it when its wireless goes on ([dsWirelessChanged]), a PSP one at launch (below).
             if (linkKind == NetplayLinkKind.N3DSLINK || linkKind == NetplayLinkKind.NDSLINK || linkKind == NetplayLinkKind.PSPLINK) holdBroadcasts()
