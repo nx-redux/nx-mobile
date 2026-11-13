@@ -150,7 +150,7 @@ internal class FilePickerController(
             else -> when (button) {
                 NxButton.UP -> step(p, -1)
                 NxButton.DOWN -> step(p, 1)
-                NxButton.LEFT, NxButton.RIGHT -> switchSide(p)   // either way, wrapping: entries ↔ actions
+                NxButton.LEFT, NxButton.RIGHT -> sideways(p, if (button == NxButton.RIGHT) 1 else -1)   // entries ↔ the actions, side by side
                 NxButton.A -> activate(p, p.rows.getOrNull(selection.value.index))
                 NxButton.B -> up(p)
                 NxButton.X -> { if (p.dir != null && p.mode != FilePickMode.ImportZip) screen.value = p.copy(prompt = "") }
@@ -235,29 +235,38 @@ internal class FilePickerController(
     }
 
     /** B: up one level; at a volume's root the volume list (with one storage, cancel); at the volume list, cancel. */
-    /** The entry the highlight left for the actions ([switchSide]), where the next sideways press takes it back. */
+    /** The entry the highlight left for the actions ([sideways]), where the next sideways press takes it back. */
     private var entryBeforeActions = -1
 
     /**
-     * LEFT or RIGHT: from the folder's entries to the actions pinned under them (Use this folder / Save here, else Create
-     * new folder), and from the actions back to the entry the highlight left (else the first entry), wrapping either way.
+     * LEFT ([by] -1) or RIGHT (+1). From the folder's entries: to the first action, pinned under them. On the actions,
+     * which sit side by side (Use this folder / Save here, then New folder): to the one beside, and past either end back
+     * to the entry the highlight left (else the first folder or zip).
      */
-    private fun switchSide(p: Screen.FilePicker) {
-        val first = p.rows.indexOfFirst { it is PickerRow.Action || it == PickerRow.NewFolder }
+    private fun sideways(p: Screen.FilePicker, by: Int) {
+        val first = firstAction(p)
         if (first < 0) return
         val at = selection.value.index
-        val index = if (at < first) { entryBeforeActions = at; first } else {
-            entryBeforeActions.takeIf { it in 0 until first }
+        val index = when {
+            at < first -> { entryBeforeActions = at; first }
+            at + by in first..p.rows.lastIndex -> at + by
+            else -> entryBeforeActions.takeIf { it in 0 until first }
                 ?: p.rows.indexOfFirst { it is PickerRow.Folder || it is PickerRow.Zip }.takeIf { it >= 0 } ?: 0
         }
         selection.value = selection.value.copy(index = index)
     }
 
-    /** UP ([by] -1) or DOWN (+1), wrapping, over the rows that take the selection: a file is passed over. */
+    /** Where the actions (always the last rows) start; -1: none. */
+    private fun firstAction(p: Screen.FilePicker): Int = p.rows.indexOfFirst { it is PickerRow.Action || it == PickerRow.NewFolder }
+
+    /** UP ([by] -1) or DOWN (+1), wrapping, over the rows that take the selection: a file is passed over; the actions are one line. */
     private fun step(p: Screen.FilePicker, by: Int) {
         val n = p.rows.size
         if (n == 0) return
         var i = selection.value.index
+        // The side-by-side actions are one line: UP leaves from the first of them, DOWN from the last (wrapping to the top).
+        val first = firstAction(p)
+        if (first >= 0 && i >= first) i = if (by < 0) first else n - 1
         repeat(n) {
             i = (i + by + n) % n
             if (p.rows[i] !is PickerRow.File) { selection.value = selection.value.copy(index = i); return }

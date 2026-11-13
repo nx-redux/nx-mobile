@@ -195,8 +195,8 @@ internal fun SetupBlockPage(
 
 /**
  * A setup page's buttons, in a modal footer's language ([NxModalAction]): the first is the page's main action on the
- * accent pill ([nxHighlight], its on-pill text) whether or not the pad is on it, the others outlined; a page whose only
- * button is **Skip** has no main action, so that one is outlined too. The pad's place ([first] + its place is
+ * accent pill ([nxHighlight], its on-pill text) whether or not the pad is on it (a lone Skip too: the page's only
+ * action), the others outlined. The pad's place ([first] + its place is
  * [selected]) is the modal's white ring round the button ([nxPadRing], shown only where there is a pad). Each word
  * stays on its text edge, the pill reaching [nxListInset] past it either side (the ring's room hangs outside it), so the
  * words keep their places and spacing; a tap target [SETUP_BUTTON_TAP] tall. A tap selects and opens it.
@@ -211,11 +211,10 @@ internal fun SetupButtons(
     val inset = nxListInset()
     val pill = nxHighlight()
     val rings = nxPadRings()
-    val hasMain = !(labels.size == 1 && labels[0] == "Skip")
     Row(verticalAlignment = Alignment.CenterVertically) {
         labels.forEachIndexed { i, text ->
             val index = first + i
-            val main = hasMain && i == 0
+            val main = i == 0
             Box(
                 Modifier.heightIn(min = SETUP_BUTTON_TAP).clickable { onSelect(index); onOpen(index) },
                 contentAlignment = Alignment.CenterStart,

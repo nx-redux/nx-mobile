@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui.nx
 
+import com.nxredux.mobile.ui.SetupButtons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -16,6 +17,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -48,6 +50,7 @@ fun NxDetailListBody(
     actionsAtTop: Boolean = false,   // the action rows at the title's right instead ([NxTitleActions]): a landscape setup page
     titleActions: Int = 0,   // the last this many rows at the title's right, the action rows (if any) the ones before them; not with actionsAtTop
     actionsOutlined: Boolean = true,   // the action rows under the options with the button ring
+    actionsSideBySide: Boolean = false,   // pill rows: the bottom-pinned actions side by side as setup's buttons ([SetupButtons]): the first on the accent, the rest outlined, the pad's place a ring (the folder picker)
     landscapeColumns: IntRange? = null,   // these detail lines in columns on a landscape body (a long console list)
     landscapeColumnCount: Int = 2,
     landscapeWidth: Float = 1f,   // a landscape body's details and rows at most this share of its width (setup: long lines wrap)
@@ -124,7 +127,8 @@ fun NxDetailListBody(
             val slack = 2f / LocalDensity.current.density
             val headHeight = if (split) 0.dp else headHeight
             val headGap = if (headHere > 0) rowHeight * NX_OPTIONS_GAP else 0.dp
-            val tailHeight = with(LocalDensity.current) { nxRowsSlotPx(listPitch.roundToPx(), tail.size).toDp() }
+            val tailHeight = if (actionsSideBySide && tail.isNotEmpty()) maxOf(SIDE_BY_SIDE_ACTIONS_HEIGHT, listPitch)
+                else with(LocalDensity.current) { nxRowsSlotPx(listPitch.roundToPx(), tail.size).toDp() }
             val tailGap = if (tail.isNotEmpty()) listPitch * NX_OPTIONS_GAP else 0.dp
             val listHeight = maxHeight - headHeight - headGap - tailHeight - tailGap
             // Under details the list keeps a fixed gap from the last detail line.
@@ -166,7 +170,9 @@ fun NxDetailListBody(
                     val tailStart = body.size - tail.size
                     // Quiet actions: the word alone while unlit, the selected one on the pill (touch too).
                     val tailLit = if (listSelected < 0) -1 else listSelected - tailStart
-                    NxList(
+                    if (actionsSideBySide) Box(Modifier.fillMaxWidth().height(tailHeight), contentAlignment = Alignment.CenterStart) {
+                        SetupButtons(tail.map { it.label }, tailStart, listSelected, label, onSelect, onOpen)
+                    } else NxList(
                         tail, tailLit, { onSelect(it + tailStart) }, { onOpen(it + tailStart) },
                         Modifier.fillMaxWidth().height(tailHeight), rowHeightOverride = listPitch, textSizeOverride = label, outlined = actionsOutlined,
                         restInk = if (quietRows) colors.inkDim else null,
@@ -320,3 +326,6 @@ private val NxTouchButtonsGap = 16.dp
 
 /** Setup's pages in landscape: the details and rows at most this share of the width, so long lines wrap. */
 const val NxSetupLandscapeWidth = 0.8f
+
+/** The side-by-side actions' line: a setup button's tap target. */
+private val SIDE_BY_SIDE_ACTIONS_HEIGHT = 48.dp
