@@ -96,6 +96,8 @@ class UsbHello(val side: UsbSide) {
         const val DEAD_MS = 3000L
         const val HOST_IP = "10.99.0.1"
         const val DEVICE_IP = "10.99.0.2"
+        /** The cable network's broadcast address (10.99.0.0/30): the PSP link announces there. */
+        const val BROADCAST_IP = "10.99.0.3"
 
         fun localIp(side: UsbSide): String = if (side == UsbSide.HOST) HOST_IP else DEVICE_IP
         fun peerIp(side: UsbSide): String = if (side == UsbSide.HOST) DEVICE_IP else HOST_IP

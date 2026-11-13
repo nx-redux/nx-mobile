@@ -228,10 +228,10 @@ class NetplayCoresTest {
         assertEquals(NetplayLinkKind.NETPACKET, NetplaySession(NetplayRole.HOST, "10.0.0.2", "mgba", "gpsp").linkKind)
     }
 
-    @Test fun only_the_ds_and_3ds_automatic_routes_use_the_phone_to_phone_cable() {
+    @Test fun only_the_ds_3ds_and_psp_automatic_routes_use_the_phone_to_phone_cable() {
         assertTrue(NetplayCores.cableAuto("melondsds"))
         assertTrue(NetplayCores.cableAuto("azahar"))
-        assertFalse(NetplayCores.cableAuto("ppsspp"))
+        assertTrue(NetplayCores.cableAuto("ppsspp"))
         assertFalse(NetplayCores.cableAuto("snes9x"))
     }
 }
