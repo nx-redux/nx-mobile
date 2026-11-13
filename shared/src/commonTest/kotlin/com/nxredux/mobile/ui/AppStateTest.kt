@@ -199,6 +199,8 @@ class AppStateTest {
         override var toolApps: List<String> = emptyList()
         override var androidConsoleApps: List<String> = emptyList()
         override var androidGamesAsked = false
+        override var mainMenuTipHidden = true   // the first-launch tips: hidden unless a test turns them on
+        override var gameListTipHidden = true
         override var allFilesAsked = false
         override var onboardingDone: Boolean? = true   // done: tests of other things never meet onboarding ([freshInstall] does)
         override var onboardingStep: String? = null
@@ -14314,6 +14316,36 @@ class AppStateTest {
         assertNull(androidRow(state))
         state.load(); advanceUntilIdle()
         assertNull(state.androidGamesAsk.value)
+    }
+
+    // First-launch tips: the main menu's on the main menu, then a game list's on a game list. A held button doesn't
+    // answer them; Got it closes one for this launch, Don't show again (B) for good.
+    @Test fun the_first_launch_tips_show_on_the_main_menu_then_on_a_game_list() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { mainMenuTipHidden = false; gameListTipHidden = false }
+        val state = searchState(settings); runCurrent()
+        assertEquals(FirstTip.MAIN_MENU, state.firstTip.value)
+        state.onButton(NxButton.A); runCurrent()                               // a press from before: not an answer
+        assertEquals(FirstTip.MAIN_MENU, state.firstTip.value)
+        advanceTimeBy(ANDROID_ASK_GUARD_MILLIS + 1); runCurrent()
+        state.onButton(NxButton.A); runCurrent()                               // Got it
+        assertNull(state.firstTip.value)
+        assertFalse(settings.mainMenuTipHidden)                                // shows again next launch
+        state.openSystem(assertIs<Screen.Systems>(state.screen.value).systems.first { it.tag == "SFC" }); runCurrent()
+        assertEquals(FirstTip.GAME_LIST, state.firstTip.value)
+        advanceTimeBy(ANDROID_ASK_GUARD_MILLIS + 1); runCurrent()
+        state.onButton(NxButton.B); runCurrent()                               // Don't show again
+        assertNull(state.firstTip.value)
+        assertTrue(settings.gameListTipHidden)
+        state.back(); runCurrent()
+        assertNull(state.firstTip.value)                                       // each once a launch
+    }
+
+    @Test fun a_hidden_tip_never_shows() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { mainMenuTipHidden = true; gameListTipHidden = false }
+        val state = searchState(settings); runCurrent()
+        assertNull(state.firstTip.value)
+        state.openSystem(assertIs<Screen.Systems>(state.screen.value).systems.first { it.tag == "SFC" }); runCurrent()
+        assertEquals(FirstTip.GAME_LIST, state.firstTip.value)
     }
 
     @Test fun the_games_question_ignores_a_and_b_just_after_it_shows() = runTest {
