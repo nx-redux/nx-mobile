@@ -275,7 +275,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         }
 
     override var menuInfoAchievements: Boolean
-        get() = prefs.getBoolean(KEY_MENU_INFO_ACHIEVEMENTS, false)
+        get() = prefs.getBoolean(KEY_MENU_INFO_ACHIEVEMENTS, MenuStyles.DEFAULT_INFO_ACHIEVEMENTS)
         set(value) = prefs.edit { putBoolean(KEY_MENU_INFO_ACHIEVEMENTS, value) }
 
     override var screenCare: Boolean

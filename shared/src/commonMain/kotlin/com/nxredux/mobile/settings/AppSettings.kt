@@ -464,12 +464,12 @@ interface AppSettings {
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
     /**
-     * Layouts → Game info: what a game's caption shows under its play time. Off (the default, Details): its genre and
-     * release. On (Achievements): its achievements where it has some to show, else the genre and release. Defaulted,
-     * like [debugLog].
+     * Layouts → Game info: what a game's caption shows under its play time. Off (Details): its genre and release. On
+     * (Achievements, the default: [MenuStyles.DEFAULT_INFO_ACHIEVEMENTS]): its achievements where it has some to show,
+     * else the genre and release. Defaulted, like [debugLog].
      */
     var menuInfoAchievements: Boolean
-        get() = false
+        get() = MenuStyles.DEFAULT_INFO_ACHIEVEMENTS
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
     /**
