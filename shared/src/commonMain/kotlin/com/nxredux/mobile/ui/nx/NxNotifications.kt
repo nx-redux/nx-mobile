@@ -34,7 +34,8 @@ private val NotificationShape = RoundedCornerShape(10.dp)
 /**
  * Where the in-game notifications sit ([pill] / [toasts] are their anchors). [CORNERS]: the progress pill top-left, the
  * toasts bottom-left. [TOP_CENTRE]: both top-centre, the toasts stacked under the pill, clear of the landscape
- * overlay pad's system row in the top corners and its d-pad bottom-left.
+ * overlay pad's system row in the top corners and its d-pad bottom-left (in portrait over a pad too: at the top, never
+ * down on a DS / 3DS touch screen).
  */
 enum class NxNotificationPlacement(val pill: Alignment, val toasts: Alignment) {
     CORNERS(Alignment.TopStart, Alignment.BottomStart),
@@ -51,13 +52,12 @@ fun nxNotificationInsetSides(placement: NxNotificationPlacement): WindowInsetsSi
     else WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical
 
 /**
- * [NxNotificationPlacement.TOP_CENTRE] while the landscape overlay pad (the clusters over the game) is shown, else the
- * corners. [onPicture]: a portrait screen whose picture's place is known: the host ends the overlay at the picture's
- * bottom, so the corners are the picture's own and clear of the pad under it (top-centre's width is the landscape
- * pad's: on a portrait screen it leaves a toast a few words wide).
+ * [NxNotificationPlacement.TOP_CENTRE] while a pad is shown: the landscape overlay pad (the clusters over the game), or
+ * [onPicture], a portrait screen over a pad whose picture's place is known (bottom-left would put the toasts on a DS /
+ * 3DS touch screen; the host lifts top-centre's width cap there, which is the landscape pad's). Else the corners.
  */
 fun nxNotificationPlacement(overlayPadShown: Boolean, onPicture: Boolean = false): NxNotificationPlacement =
-    if (overlayPadShown && !onPicture) NxNotificationPlacement.TOP_CENTRE else NxNotificationPlacement.CORNERS
+    if (overlayPadShown || onPicture) NxNotificationPlacement.TOP_CENTRE else NxNotificationPlacement.CORNERS
 
 /**
  * The in-game notification overlay: the progress [pill] and the [toasts] (newest at the bottom) where [placement] puts

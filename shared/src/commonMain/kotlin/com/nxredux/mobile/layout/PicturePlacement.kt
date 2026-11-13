@@ -3,7 +3,6 @@ package com.nxredux.mobile.layout
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.options.frontendLayout
 import kotlin.math.floor
-import kotlin.math.min
 
 /**
  * The core's video frame: [width] x [height] in its own pixels, [aspect] the display aspect (0 = unknown,
@@ -13,36 +12,14 @@ data class CoreFrame(val width: Float, val height: Float, val aspect: Float, val
 
 /**
  * Where the game picture goes under Screen Scaling Auto (Native, Aspect and Fullscreen keep [frontendLayout] in the
- * whole game area): sized for [scale] and centred in [space]:
- * whole-height consoles take the largest whole multiple of their displayed lines, native handhelds the largest
- * whole multiple of the core size, the rest fit at their aspect. DS and 3DS are placed like a fill here (their
- * screens are laid out separately). With an overlay ([overlayAspect]) the returned rect is the overlay's box,
- * fitted in [space]; the game sits inside it by the usual in-box rule.
+ * whole game area): every console fitted at its aspect to the available [space], centred (a fractional scale; Native
+ * is the whole-number one). With an overlay ([overlayAspect]) the returned rect is the overlay's box, fitted in
+ * [space]; the game sits inside it by the usual in-box rule.
  */
-fun picture(
-    space: PxRect,
-    frame: CoreFrame,
-    scale: ConsoleScale,
-    overlayAspect: Float?,
-): PxRect {
+fun picture(space: PxRect, frame: CoreFrame, overlayAspect: Float?): PxRect {
     if (space.width <= 0f || space.height <= 0f) return PxRect(space.x, space.y, 0f, 0f)
     if (overlayAspect != null && overlayAspect > 0f) return fitIn(space, overlayAspect)
-
-    val aspect = if (frame.aspect > 0f) frame.aspect else frame.width / frame.height
-    return when (scale) {
-        ConsoleScale.WHOLE_HEIGHT -> {
-            val lines = if (frame.rotated) frame.width else frame.height
-            val k = floor(min(space.height / lines, space.width / (lines * aspect))).coerceAtLeast(1f)
-            centred(space, k * lines * aspect, k * lines)
-        }
-        ConsoleScale.NATIVE -> {
-            val w = if (frame.rotated) frame.height else frame.width
-            val h = if (frame.rotated) frame.width else frame.height
-            val k = floor(min(space.width / w, space.height / h))
-            if (k >= 1f) centred(space, k * w, k * h) else fitIn(space, aspect)
-        }
-        ConsoleScale.FILL, ConsoleScale.DS, ConsoleScale.N3DS -> fitIn(space, aspect)
-    }
+    return fitIn(space, if (frame.aspect > 0f) frame.aspect else frame.width / frame.height)
 }
 
 /** A [width] x [height] picture centred in [space], at a whole-pixel position (rounded down), so a whole-number scale

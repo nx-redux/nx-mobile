@@ -26,7 +26,6 @@ import com.nxredux.mobile.layout.CoreFrame
 import com.nxredux.mobile.layout.DsKind
 import com.nxredux.mobile.layout.PadRoom
 import com.nxredux.mobile.layout.ScreenClass
-import com.nxredux.mobile.layout.consoleScale
 import com.nxredux.mobile.layout.overlayClear
 import com.nxredux.mobile.layout.picture
 import com.nxredux.mobile.layout.pictureSpace
@@ -293,13 +292,35 @@ internal class FrontendRenderer(
     fun shaderFor(s: FrontendSettings): ShaderConfig =
         if (s.sharp || (skinFill && !s.linear)) ShaderConfig.Sharp else ShaderConfig.Default(linear = s.linear)
 
-    /** A pad skin is shown and its screen is filled at the picture's shape (Auto / Aspect): see [shaderFor]. */
+    /**
+     * A picture at a fractional size: a pad skin's screen filled at the picture's shape (Auto / Aspect), or a picture
+     * filling its space under Auto ([autoFill]): see [shaderFor].
+     */
     private var skinFill = false
+
+    /**
+     * The picture is drawn at a fractional scale: the DS screens under Screen Scaling other than Native
+     * ([NdsLayout.scaledRegions]), or any console's picture fitted under Auto ([picture]).
+     */
+    private var autoFill = false
+
+    /** Counts [relayoutFrontend] calls: one that started another inside it (a 3DS proportion change) stops there. */
+    private var layoutGeneration = 0
+
+    /** The DS layout just made ([ndsLayout]) fills its space at a fractional scale; reset before each. */
+    private var ndsFilled = false
+
+    /** [autoFill] for the layout just made, the view's shader following it when it changes. */
+    private fun setAutoFill(fill: Boolean) {
+        if (fill == autoFill) return
+        autoFill = fill
+        retroView?.let { syncSkinFill(it, FrontendSettings.parse(frontendValues)) }
+    }
 
     /** [skinFill] for this layout, the view's shader following it when it changes. */
     private fun syncSkinFill(view: GLRetroView, s: FrontendSettings) {
-        val fill = padLayout.skinShown && padLayout.skinPlacement() != null &&
-            (s.scaling == ScreenScaling.AUTO || s.scaling == ScreenScaling.ASPECT)
+        val fill = autoFill || (padLayout.skinShown && padLayout.skinPlacement() != null &&
+            (s.scaling == ScreenScaling.AUTO || s.scaling == ScreenScaling.ASPECT))
         if (fill == skinFill) return
         skinFill = fill
         val shader = shaderFor(s)
@@ -558,6 +579,7 @@ internal class FrontendRenderer(
      * out. [geometry]: the view's, when the caller has just read it.
      */
     fun relayoutFrontend(geometry: FloatArray? = null) {
+        val generation = ++layoutGeneration
         val view = retroView ?: return
         if (!view.isAttachedToWindow) return   // the GL thread is gone once detached
         val game = findViewById<FrameLayout>(R.id.gameContainer)
@@ -583,7 +605,11 @@ internal class FrontendRenderer(
         // The DS / 3DS may reach a third into portrait's bare-button band (the Fold's 6x + 3x), the rest a quarter.
         val space = pictureSpace(room, w, h, overlayH, hiddenBandReach(NdsOptions.appliesTo(gameTag) || N3dsOptions.appliesTo(gameTag)))
         val skinDs = skinDsLayout(g)
+        ndsFilled = false
         val nds = skinDs?.regions ?: ndsLayout(w, h, g, space, room, overlayH, screen) ?: n3dsSplitLayout(w, h)
+        // Auto fills the space at a fractional scale: the DS screens ([ndsLayout]), or one picture fitted ([picture]).
+        setAutoFill(ndsFilled || (nds == null && !padLayout.skinShown && frame != null &&
+            FrontendSettings.parse(frontendValues).scaling == ScreenScaling.AUTO))
         // An area too small for one DS screen pixel (NdsLayout returns no regions) is only ever a transient mid-resize
         // size. Keep whatever is drawn now rather than letting an empty list flip a split game to the whole 256x384
         // frame (and the overlay back on) for that moment; the next size change lays it out again.
@@ -647,7 +673,7 @@ internal class FrontendRenderer(
             offset = PointF(0f, 0f)
             shown = box
         } else if (s.scaling == ScreenScaling.AUTO && frame != null) {
-            val placed = placedFor(room, picture(space, frame, consoleScale(gameTag), overlayAspect), h, overlayH)
+            val placed = placedFor(room, picture(space, frame, overlayAspect), h, overlayH)
             // The offsets as Native / Aspect / Fullscreen scale them: to the overlay's box, else the game area.
             val unit = (if (overlayAspect != null && overlayAspect > 0f) placed.height else h) / BRICK_HEIGHT
             box = placed
@@ -666,6 +692,8 @@ internal class FrontendRenderer(
         if (isN3ds) {
             reportN3ds3d(w, h, screen, halfFolded = false, g, flat = shown, secondDs)
             host.onN3dsPictureSpace()   // after the report: it read this frame against the proportion it was drawn at
+            // It laid out again with a new proportion (the app's own 3DS frame): that layout stands, not this stale one.
+            if (generation != layoutGeneration) return
         }
         if (isPs2) reportPs2Resolution(w, h, screen, shown, g)
         if (viewport != lastViewport) {
@@ -683,7 +711,8 @@ internal class FrontendRenderer(
         fitPad(room, covered, frameKnown = frame != null, h, overlayH)
         onPictureLaidOut?.invoke()
         val scale = frame?.let { shown.height / (if (it.rotated) it.width else it.height) }
-        logLayout(w, h, shape, room.name, spaceAndPicture(space, shown), "${s.scaling} frame=${frame?.let { "${it.width.roundToInt()}x${it.height.roundToInt()}" }} scale=${scale?.let { "%.2f".format(java.util.Locale.US, it) }}")
+        val n3ds = if (isN3ds) " 3ds views=${composition != null} proportion=$n3dsProportion" else ""
+        logLayout(w, h, shape, room.name, spaceAndPicture(space, shown), "${s.scaling} frame=${frame?.let { "${it.width.roundToInt()}x${it.height.roundToInt()}" }} scale=${scale?.let { "%.2f".format(java.util.Locale.US, it) }}$n3ds")
     }
 
     /**
@@ -834,10 +863,14 @@ internal class FrontendRenderer(
         if (dualMode == DualMode.PANEL_UP) return DualScreen.ndsPanelUp(w, h, NdsSettings.parse(frontendValues)).withMap(screenMap)
         val landscape = isLandscape()
         val settings = NdsSettings.parse(frontendValues)
-        val regions = NdsLayout.regions(
-            space, settings.layoutShown(landscape, ndsControllerMode(), screen), landscape, screen, settings,
-            NDS_INSET_MARGIN_DP * resources.displayMetrics.density,
+        val choice = settings.layoutShown(landscape, ndsControllerMode(), screen)
+        // Screen Scaling Native: whole-number scales; the rest fill the space (Large in portrait: the top screen the full
+        // width, the touch screen moved down under it).
+        val native = FrontendSettings.parse(frontendValues).scaling == ScreenScaling.NATIVE
+        val regions = NdsLayout.scaledRegions(
+            space, h, choice, landscape, screen, settings, NDS_INSET_MARGIN_DP * resources.displayMetrics.density, native,
         )
+        ndsFilled = !native && regions.isNotEmpty()
         if (room != PadRoom.HIDDEN_BAND || regions.isEmpty()) return regions.withMap(screenMap)
         // The band hidden: the screens as one picture, at the top when they reach into the overlay, else centred above it.
         val shown = regions.shownRect()

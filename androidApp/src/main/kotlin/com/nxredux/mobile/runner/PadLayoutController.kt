@@ -29,6 +29,7 @@ import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsOptions
+import com.nxredux.mobile.options.NdsLayoutChoice
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_CONTENT_URI
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_FILE_NAME
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_GAME_PATH
@@ -271,13 +272,14 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             host.onSkinPlaced()
             return
         }
+        overlayPadLayout = mode == OverlayMode.BARE
         if (portrait) {
             // Portrait: the game full screen under the skin's see-through buttons, no pad with a controller. A clip-on
             // controller keeps its room empty below the game ([portraitBandPx]), so the game is not under it.
             val bandPx = portraitBandPx(names)
             game.layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-            ).apply { bottomMargin = bandPx; topMargin = cutoutTop }
+            ).apply { bottomMargin = bandPx; topMargin = portraitGameTop() }
         } else {
             // Landscape: full-screen game, the buttons over it only when no controller is attached.
             game.layoutParams = FrameLayout.LayoutParams(
@@ -683,6 +685,29 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     }
 
     /** Portrait keeps the game below a top camera cutout; landscape leaves the (centred) picture full-screen. */
+    /** The layout is the overlay pad: no pad skin, no controller ([OverlayMode.BARE]). */
+    private var overlayPadLayout = false
+
+    /**
+     * The game's top in portrait: below a top camera cutout ([cutoutTop]), except a DS / 3DS screen stack (Large screen,
+     * Stacked) under the overlay pad, which starts at the very top (under the cutout) for the height it needs. A
+     * single screen, the other layouts and every other console have the height without it.
+     */
+    private fun portraitGameTop(): Int = if (overlayPadLayout && dsStackShown()) 0 else cutoutTop
+
+    /** A DS or 3DS game whose portrait layout (no controller: the overlay pad) is a stack of its two screens. */
+    private fun dsStackShown(): Boolean {
+        val tag = layoutTag()
+        val screen = activity.windowShape().screenClass
+        return when {
+            NdsOptions.appliesTo(tag) -> NdsOptions.layoutShown(frontendValues, landscape = false, controllerMode = false, screen) in
+                setOf(NdsLayoutChoice.LARGE, NdsLayoutChoice.STACKED)
+            N3dsOptions.appliesTo(tag) -> N3dsOptions.appLayoutFor(frontendValues, landscape = false, controllerMode = false, screen) in
+                setOf("large", "stacked")
+            else -> false
+        }
+    }
+
     fun applyGameTopMargin(orientation: Int) {
         // Below Android 11 the portrait band's height (a clip-on controller's room) read the cutout
         // ([windowShape]) before it was known: lay it out again whole, unless the band comes out the same (a rotation
@@ -699,9 +724,16 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             applyLayout(orientation)
             return
         }
+        syncGameTop(orientation)
+    }
+
+    /** The game's top margin for [orientation] ([portraitGameTop]) without a skin, set when it differs: a DS / 3DS layout change moves it. */
+    fun syncGameTop(orientation: Int) {
+        if (skinShown) return
+        val portrait = orientation == Configuration.ORIENTATION_PORTRAIT
         val game = findViewById<FrameLayout>(R.id.gameContainer)
         val lp = game.layoutParams as? FrameLayout.LayoutParams ?: return
-        val top = if (portrait) cutoutTop else 0
+        val top = if (portrait) portraitGameTop() else 0
         if (lp.topMargin != top) {
             lp.topMargin = top
             game.layoutParams = lp

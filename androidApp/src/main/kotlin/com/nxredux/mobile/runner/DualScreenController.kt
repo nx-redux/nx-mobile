@@ -36,7 +36,6 @@ import com.nxredux.mobile.cheats.CheatSet
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.layout.CoreFrame
-import com.nxredux.mobile.layout.consoleScale
 import com.nxredux.mobile.launcher.TopScreenTaken
 import com.nxredux.mobile.options.BottomScreenOptions
 import com.nxredux.mobile.options.FrontendSettings
@@ -365,7 +364,7 @@ internal class DualScreenController(
         if (g[0] <= 0f || g[1] <= 0f) return null
         val frame = CoreFrame(g[0], g[1], g[2], rotated = abs(sin(g[3])) > 0.5f)
         val s = FrontendSettings.parse(frontendValues)
-        return DualScreen.scaledFrame(w, h, frame, consoleScale(owner.layoutTag()), s.scaling, s.offsetX, s.offsetY).takeIf { it.width > 0f && it.height > 0f }
+        return DualScreen.scaledFrame(w, h, frame, s.scaling, s.offsetX, s.offsetY).takeIf { it.width > 0f && it.height > 0f }
     }
 
     /**

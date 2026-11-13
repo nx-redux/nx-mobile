@@ -1,8 +1,6 @@
 package com.nxredux.mobile.runner
 
-import com.nxredux.mobile.layout.ConsoleScale
 import com.nxredux.mobile.layout.CoreFrame
-import com.nxredux.mobile.layout.picture
 import com.nxredux.mobile.options.BRICK_HEIGHT
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsScreen
@@ -106,13 +104,12 @@ object DualScreen {
     }
 
     /**
-     * The whole core [frame] placed on an [areaW] x [areaH] display by Screen Scaling, Auto at the console's [scale] as on
+     * The whole core [frame] placed on an [areaW] x [areaH] display by Screen Scaling, Auto fitted to the display as on
      * the main display, moved by the screen offsets ([offsetX], [offsetY], in units of the display height / 768).
      */
-    fun scaledFrame(areaW: Float, areaH: Float, frame: CoreFrame, scale: ConsoleScale, scaling: ScreenScaling, offsetX: Int = 0, offsetY: Int = 0): PxRect {
+    fun scaledFrame(areaW: Float, areaH: Float, frame: CoreFrame, scaling: ScreenScaling, offsetX: Int = 0, offsetY: Int = 0): PxRect {
         if (scaling != ScreenScaling.AUTO) return frontendLayout(areaW, areaH, frame.width.toInt(), frame.height.toInt(), frame.aspect, scaling, offsetX, offsetY, null).content
-        val placed = if (scale == ConsoleScale.WHOLE_HEIGHT || scale == ConsoleScale.NATIVE) picture(PxRect(0f, 0f, areaW, areaH), frame, scale, null)
-            else fullFrame(areaW, areaH, if (frame.aspect > 0f) frame.aspect else frame.width / frame.height)
+        val placed = fullFrame(areaW, areaH, if (frame.aspect > 0f) frame.aspect else frame.width / frame.height)
         val unit = areaH / BRICK_HEIGHT
         return placed.copy(x = placed.x + offsetX * unit, y = placed.y + offsetY * unit)
     }
