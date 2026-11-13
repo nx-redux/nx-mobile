@@ -24,7 +24,12 @@ import com.nxredux.mobile.ui.nx.NxTextPrompt
 internal fun filePickerHints(s: Screen.FilePicker, selected: Int = -1): List<Hint> = buildList {
     // The d-pad's sideways jump between the folder's entries and the actions under them: the way it goes from here.
     val actions = s.rows.indexOfFirst { it is PickerRow.Action || it == PickerRow.NewFolder }
-    if (actions >= 0) add(if (selected >= actions) Hint(NxButton.LEFT, "Folders") else Hint(NxButton.RIGHT, "Actions"))
+    // The actions sit side by side: from the first, LEFT goes back; from the last, RIGHT does; in between, neither says.
+    if (actions >= 0) when {
+        selected < actions -> add(Hint(NxButton.RIGHT, "Actions"))
+        selected == actions -> add(Hint(NxButton.LEFT, "Folders"))
+        selected == s.rows.lastIndex -> add(Hint(NxButton.RIGHT, "Folders"))
+    }
     // A says what it does on the selected row.
     when (val row = s.rows.getOrNull(selected)) {
         is PickerRow.Folder, is PickerRow.Volume, PickerRow.Up -> add(Hint(NxButton.A, "Open"))
@@ -49,7 +54,7 @@ internal fun pickerListRows(rows: List<PickerRow>): List<NxRow> = rows.map {
     NxRow(it.label, enabled = it != PickerRow.Empty && it !is PickerRow.File, icon = icon)   // a file: shown dimmed, never picked
 }
 
-/** How many of [rows] are actions (Use this folder / Save here, Create new folder), pinned under the scrolling list. */
+/** How many of [rows] are actions (Use this folder / Save here, New folder), pinned side by side under the scrolling list. */
 internal fun pickerPinnedRows(rows: List<PickerRow>): Int = rows.takeLastWhile { it is PickerRow.Action || it == PickerRow.NewFolder }.size
 
 /**
@@ -71,8 +76,8 @@ fun FilePickerScreen(
             // A file is shown, not picked: a tap on it neither selects nor opens.
             onSelect = { if (screen.rows.getOrNull(it) !is PickerRow.File) onSelect(it) },
             onOpen = { if (screen.rows.getOrNull(it) !is PickerRow.File) onOpen(it) }, onHint = onHint, rowsAtTop = true, pinnedBottom = pickerPinnedRows(screen.rows),
-            actionsOutlined = false,   // the actions as plain rows, no ring; one column in either orientation
-            quietRows = true,   // unlit folders in inkName, the actions the word alone in inkDim
+            actionsSideBySide = true,   // the actions as a modal footer: side by side, the first on the accent, the next outlined
+            quietRows = true,   // unlit folders in inkName
             fromLine = 0.5f,   // from half the body down, as setup's pages; its actions stay at the bottom
             modifier = Modifier.padding(start = inset.pillStart, end = inset.pillEnd),
         ) }
