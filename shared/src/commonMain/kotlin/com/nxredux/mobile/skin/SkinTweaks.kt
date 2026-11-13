@@ -47,7 +47,7 @@ object SkinTweaks {
      * strip's buttons and labels), which is no part of the game's picture. A glass with no strip over it is whole.
      */
     fun screenAreas(p: SkinPlacement): List<PxRect> {
-        val ids = (listOfNotNull(p.spec.frame?.strip) + p.spec.pieces.mapNotNull { it.strip }).flatMap { s -> s.labels.map { it.id } }.toSet()
+        val ids = SkinGroups.stripsOf(p.spec).flatMap { s -> s.labels.map { it.id } }.toSet()
         val rows = p.controls.filter { it.spec.id in ids }.map { hit(it) } + p.pieces.filter { it.strip }.map { it.dst }
         return p.glasses.map { g ->
             val r = g.rect
@@ -313,7 +313,7 @@ object SkinTweaks {
 
     /** Each group's pieces and controls in [p] (indexes into its lists), in [groups]' order: the strip's are its strip pieces and its first buttons. */
     private fun members(p: SkinPlacement, groups: List<SkinGroup>): Pair<List<List<Int>>, List<List<Int>>> {
-        val stripN = p.spec.frame?.strip?.labels?.size ?: 0
+        val stripN = SkinGroups.stripsOf(p.spec).sumOf { it.labels.size }   // their buttons come first ([SkinSolver])
         val pieceAt = groups.map { g ->
             val strip = g.id == SkinGroups.STRIP
             p.pieces.indices.filter { if (strip) p.pieces[it].strip else p.pieces[it].piece in g.pieces }

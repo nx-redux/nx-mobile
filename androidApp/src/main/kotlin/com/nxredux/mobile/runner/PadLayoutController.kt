@@ -210,6 +210,18 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     /** The picture clears the bare buttons: they are drawn solid ([syncBareAlpha]). */
     val overlayClear = mutableStateOf(false)
 
+    /**
+     * Whether a bare button as drawn (its piece; not a hit area, nor an empty shortcut slot) sits over [picture]
+     * (game-area px): one the player moved onto the game keeps Pad Opacity even while the picture clears the band.
+     */
+    fun bareOver(picture: PxRect): Boolean {
+        val p = bareView?.placement ?: return false
+        val game = findViewById<FrameLayout>(R.id.gameContainer)
+        val top = (game.layoutParams as? FrameLayout.LayoutParams)?.topMargin ?: 0   // the bare view covers the root
+        val pic = picture.copy(y = picture.y + top)
+        return p.pieces.any { r -> r.dst.x < pic.x + pic.width && pic.x < r.dst.x + r.dst.width && r.dst.y < pic.y + pic.height && pic.y < r.dst.y + r.dst.height }
+    }
+
     fun setOverlayClear(clear: Boolean) {
         overlayClear.value = clear
         syncBareAlpha()

@@ -1863,7 +1863,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val picture = edit.picture.asImageBitmap()
         val parts = edit.parts?.asImageBitmap()
         val backdrop = frame?.asImageBitmap()
-        val alpha = padLayout.padLandscapeAlpha.value   // the bare buttons at the overlay's opacity, as in the game
         menu.menuRouter.releaseAll()
         val view = ComposeView(this).apply {
             setContent {
@@ -1882,7 +1881,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                                 relayoutPad()
                             },
                             onClose = ::closeSkinEdit,
-                            bareAlpha = alpha,
                         )
                     }
                 }

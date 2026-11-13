@@ -804,7 +804,8 @@ internal class FrontendRenderer(
      * their band. A [frameKnown] picture lets the pads that waited for it show.
      */
     private fun fitPad(room: PadRoom, picture: PxRect, frameKnown: Boolean, areaH: Float, overlayH: Float) {
-        if (room == PadRoom.HIDDEN_BAND) padLayout.setOverlayClear(frameKnown && overlayClear(picture.y + picture.height, areaH, overlayH))
+        // solid only while the picture clears the band and no button the player moved sits over it
+        if (room == PadRoom.HIDDEN_BAND) padLayout.setOverlayClear(frameKnown && overlayClear(picture.y + picture.height, areaH, overlayH) && !padLayout.bareOver(picture))
         if (frameKnown) padLayout.onPictureKnown()
         // After the viewport and regions above: queued on the GL thread in order, so the first picture drawn is placed.
         // A fold's 3DS switch keeps it held until the core's new frame size is laid out ([watchGeometry]).
