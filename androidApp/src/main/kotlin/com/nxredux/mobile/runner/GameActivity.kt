@@ -322,6 +322,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val driverMarker = GpuDriverMarkerGuard { settings.gpuDriverMarker = it }
     /** Clears the marker once the game has presented frames for [GpuDriverCrash.CLEAR_AFTER_MS]. */
     private var driverMarkerClear: Job? = null
+    private var presentedFrame = false   // the first frame is up (clearDriverMarkerLater has run): main thread
     /**
      * This screen is being recreated to start the game again on OpenGL ES ([relaunchOnGles]): it writes no auto state
      * and shows no failure dialog.
@@ -1123,6 +1124,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /** The game has presented its first frame: this launch's crash marker goes once it has run [GpuDriverCrash.CLEAR_AFTER_MS]. */
     private fun clearDriverMarkerLater() {
+        presentedFrame = true
         if (driverMarkerClear != null) return
         driverMarkerClear = lifecycleScope.launch {
             delay(GpuDriverCrash.CLEAR_AFTER_MS)
@@ -1152,6 +1154,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         launchRecords.drop(launchId)   // refused: the launcher must not record it
         if (isFinishing || isDestroyed || failShown) return   // observeErrors can report more than once: one dialog, never a stack
         failShown = true
+        // The game never presented a frame: whatever ends this screen now (Back, or a crash in the core's teardown, as
+        // mupen64plus_next's retro_deinit after a start that failed before context_reset) is not the driver's crash.
+        // The dialog only leaves by finishing, so the launch is abandoned here; off the main thread, as in onDestroy.
+        if (!presentedFrame) {
+            driverMarkerClear?.cancel()
+            driverMarkerClear = null
+            if (driverMarker.abandon()) thread(name = "gpu-marker-clear") { driverMarker.clear() }
+        }
         rumbles.forEach { it.release() }
         // A controller's A only focuses the button (Android clicks on ENTER): A, B and BACK leave on release. A release
         // needs its press here first, so a button held from the game as the dialog opens does not close it unseen.
