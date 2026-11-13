@@ -1473,6 +1473,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     // ------------------------------------------------------------------ netplay
 
+    // The launch's link state (Local Wireless, the Wi-Fi addresses, the route) lives in the pipeline.
+    override fun leavePspSession(): Map<String, String> = launchPipeline.leavePspSession()
+
     /**
      * netplay link: the session ended (the other player left, it dropped, or this player left). Each player ran their own game on their own
      * save (never a copy: [NetplaySession.onCopy]), so from here it is the normal launch of that game: save states, the
@@ -1481,8 +1484,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * Achievements need nothing here: a link session ran them from launch ([NetplaySession.allowsAchievements]). [localCheats]:
      * the cheat load a normal launch starts at once ([LaunchPipeline]), for a session that held it back.
      */
-    override fun leavePspSession(): Map<String, String> = launchPipeline.leavePspSession()
-
     override fun becomeLocal(localCheats: (() -> Job)?) {
         speed.setSession(netplay = false)   // the shortcuts work again
         shortcuts.onSessionEnded()
