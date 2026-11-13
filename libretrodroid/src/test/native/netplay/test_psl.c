@@ -421,6 +421,408 @@ static void off_subnet_ignored(void) {
     assert(psl_step(&s, 200).server_ip == ip4(192, 168, 1, 20));
 }
 
+/* The cable: an app-owned /30, host end .1, device end .2, broadcast .3. */
+#define CABLE_A  ip4(10, 99, 0, 1)
+#define CABLE_B  ip4(10, 99, 0, 2)
+#define CABLE_BC ip4(10, 99, 0, 3)
+#define WIFI_A   ip4(192, 168, 1, 10)
+#define WIFI_B   ip4(192, 168, 1, 20)
+
+/* An automatic device on the Wi-Fi that is serving alone. */
+static void make_wifi_server(psl* s, uint32_t self, uint32_t tie, int64_t now) {
+    make_auto(s, self, tie, 0, now);
+    psl_set_net(s, ip4(192, 168, 1, 255));
+    psl_choice c = psl_step(s, now + PSL_LISTEN_MS);
+    assert(c.serve == 1 && c.cable == 0 && c.self == self);
+}
+
+static void cable_coming_holds_wifi_server(void) {
+    psl s;
+    uint8_t pkt[PSL_PACKET];
+    make_wifi_server(&s, WIFI_A, 5, 0);
+    psl_set_cable(&s, PSL_CABLE_COMING, 0, 0, 2000);
+    psl_choice c = psl_step(&s, 2000);
+    assert(c.serve == 0 && c.settled == 0 && c.held == 1 && c.cable == 0);
+    /* Still announced as active, but no longer serving: Wi-Fi peers stop following it. */
+    assert(psl_pack(&s, pkt) == PSL_PACKET && !(pkt[5] & PSL_F_SERVING));
+    /* The stopped server was on the Wi-Fi: its goodbye carries the Wi-Fi address. */
+    assert(psl_pack_goodbye(&s, pkt) == PSL_PACKET && pkt[5] == 0);
+    uint32_t ip;
+    memcpy(&ip, pkt + 8, 4);
+    assert(ip == WIFI_A);
+}
+
+static void cable_coming_blocks_serving(void) {
+    psl s;
+    make_auto(&s, WIFI_A, 5, 0, 0);
+    psl_set_cable(&s, PSL_CABLE_COMING, 0, 0, 100);
+    psl_choice c = psl_step(&s, 3000);
+    assert(c.serve == 0 && c.settled == 0 && c.held == 1);
+    /* A Wi-Fi server is not followed either. */
+    hear(&s, WIFI_B, 1, PSL_F_SERVING | PSL_F_SESSION, 3100);
+    c = psl_step(&s, 3100);
+    assert(c.serve == 0 && c.settled == 0 && c.held == 1 && c.server_ip == 0);
+
+    /* The game's trigger while COMING arms it too. */
+    psl t;
+    psl_init(&t, PSL_AUTO, WIFI_A, 5, 0);
+    psl_set_cable(&t, PSL_CABLE_COMING, 0, 0, 0);
+    assert(psl_step(&t, 5000).held == 0);
+    psl_active(&t, 1, 0, 10000);
+    c = psl_step(&t, 10000 + PSL_CABLE_HOLD_MS - 1);
+    assert(c.held == 1 && c.serve == 0);
+    c = psl_step(&t, 10000 + PSL_CABLE_HOLD_MS + PSL_LISTEN_MS);
+    assert(c.held == 0 && c.serve == 1);
+}
+
+static void cable_coming_hold_expires(void) {
+    psl s;
+    make_auto(&s, WIFI_A, 5, 0, 0);
+    psl_set_cable(&s, PSL_CABLE_COMING, 0, 0, 1000);
+    psl_choice c = psl_step(&s, 1000 + PSL_CABLE_HOLD_MS - 1);
+    assert(c.held == 1 && c.serve == 0 && c.settled == 0);
+    c = psl_step(&s, 1000 + PSL_CABLE_HOLD_MS);
+    assert(c.held == 0 && c.serve == 0 && c.settled == 0 && c.announce == 1);
+    c = psl_step(&s, 1000 + PSL_CABLE_HOLD_MS + PSL_LISTEN_MS - 1);
+    assert(c.held == 0 && c.serve == 0 && c.settled == 0);
+    c = psl_step(&s, 1000 + PSL_CABLE_HOLD_MS + PSL_LISTEN_MS);
+    assert(c.serve == 1 && c.server_ip == WIFI_A && c.cable == 0);
+
+    /* Staying COMING does not arm it again; only a new transition into COMING does. */
+    psl_set_cable(&s, PSL_CABLE_COMING, 0, 0, 20000);
+    c = psl_step(&s, 20000);
+    assert(c.held == 0 && c.serve == 1);
+    psl_set_cable(&s, PSL_CABLE_NONE, 0, 0, 21000);
+    psl_set_cable(&s, PSL_CABLE_COMING, 0, 0, 22000);
+    c = psl_step(&s, 22000);
+    assert(c.held == 1 && c.serve == 0);
+
+    /* Leaving ad hoc and coming back while COMING arms it again. */
+    psl a;
+    make_auto(&a, WIFI_A, 5, 0, 0);
+    psl_set_cable(&a, PSL_CABLE_COMING, 0, 0, 0);
+    assert(psl_step(&a, PSL_CABLE_HOLD_MS + PSL_LISTEN_MS).serve == 1);
+    psl_active(&a, 1, 0, 9000);   /* still active: not a trigger */
+    assert(psl_step(&a, 9000).held == 0);
+    psl_active(&a, 0, 0, 9100);
+    psl_active(&a, 1, 0, 9200);
+    assert(psl_step(&a, 9200).held == 1);
+
+    /* A lingering server whose last user went comes back into ad hoc ungrouped: that trigger holds too. */
+    psl l;
+    make_auto(&l, WIFI_A, 5, 0, 0);
+    assert(psl_step(&l, PSL_LISTEN_MS).serve == 1);
+    psl_active(&l, 0, 1, 2000);
+    psl_set_cable(&l, PSL_CABLE_COMING, 0, 0, 2100);
+    assert(psl_step(&l, 2100).serve == 1);   /* grouped and out of ad hoc: kept */
+    psl_active(&l, 1, 0, 2200);
+    psl_choice d = psl_step(&l, 2200);
+    assert(d.held == 1 && d.serve == 0);
+}
+
+/* The hold ends without the cable: the election resumes, listening afresh. */
+static void cable_none_ends_hold(void) {
+    psl s;
+    make_auto(&s, WIFI_A, 5, 0, 0);
+    psl_set_cable(&s, PSL_CABLE_COMING, 0, 0, 0);
+    assert(psl_step(&s, 2000).held == 1);
+    psl_set_cable(&s, PSL_CABLE_NONE, 0, 0, 3000);
+    psl_choice c = psl_step(&s, 3000 + PSL_LISTEN_MS - 1);
+    assert(c.held == 0 && c.serve == 0 && c.settled == 0);
+    c = psl_step(&s, 3000 + PSL_LISTEN_MS);
+    assert(c.serve == 1 && c.cable == 0);
+}
+
+/* UP without a known cable address is no cable: it neither holds nor switches. */
+static void cable_up_without_self_is_none(void) {
+    psl s;
+    make_auto(&s, WIFI_A, 5, 0, 0);
+    psl_set_cable(&s, PSL_CABLE_UP, 0, CABLE_BC, 0);
+    psl_choice c = psl_step(&s, PSL_LISTEN_MS);
+    assert(c.held == 0 && c.serve == 1 && c.cable == 0 && c.self == WIFI_A);
+    /* Counted as NONE, it ends a hold the way NONE does, without a move to the cable. */
+    psl_set_cable(&s, PSL_CABLE_COMING, 0, 0, 2000);
+    assert(psl_step(&s, 2000).held == 1);
+    psl_set_cable(&s, PSL_CABLE_UP, 0, CABLE_BC, 2100);
+    c = psl_step(&s, 2100);
+    assert(c.held == 0 && c.cable == 0);
+}
+
+static void cable_up_ends_hold_and_switches(void) {
+    psl s;
+    make_auto(&s, WIFI_A, 5, 0, 0);
+    psl_set_cable(&s, PSL_CABLE_COMING, 0, 0, 0);
+    assert(psl_step(&s, 1000).held == 1);
+    psl_set_cable(&s, PSL_CABLE_UP, CABLE_A, CABLE_BC, 2000);
+    psl_choice c = psl_step(&s, 2000);
+    assert(c.held == 0 && c.cable == 1 && c.serve == 0 && c.settled == 0 && c.self == CABLE_A);
+    c = psl_step(&s, 2000 + PSL_LISTEN_MS - 1);
+    assert(c.serve == 0 && c.settled == 0);
+    c = psl_step(&s, 2000 + PSL_LISTEN_MS);
+    assert(c.serve == 1 && c.cable == 1 && c.server_ip == CABLE_A);
+}
+
+static void cable_up_kept_off_while_grouped(void) {
+    psl s;
+    make_auto(&s, WIFI_A, 5, 1, 0);
+    assert(psl_step(&s, PSL_LISTEN_MS).serve == 1);
+    psl_set_cable(&s, PSL_CABLE_COMING, 0, 0, 2000);
+    psl_choice c = psl_step(&s, 2000);
+    assert(c.held == 0 && c.serve == 1 && c.cable == 0);
+    psl_set_cable(&s, PSL_CABLE_UP, CABLE_A, CABLE_BC, 3000);
+    for (int64_t t = 3000; t < 30000; t += 1000) {
+        c = psl_step(&s, t);
+        assert(c.serve == 1 && c.cable == 0 && c.server_ip == WIFI_A && c.self == WIFI_A);
+    }
+
+    /* A grouped follower stays with its Wi-Fi server too. */
+    psl f;
+    make_auto(&f, WIFI_B, 9, 0, 0);
+    hear(&f, WIFI_A, 5, PSL_F_SERVING | PSL_F_GROUPED, 100);
+    psl_active(&f, 1, 1, 200);
+    psl_set_cable(&f, PSL_CABLE_UP, CABLE_B, CABLE_BC, 300);
+    hear(&f, WIFI_A, 5, PSL_F_SERVING | PSL_F_GROUPED, 300);
+    c = psl_step(&f, 300);
+    assert(c.cable == 0 && c.settled == 1 && c.server_ip == WIFI_A);
+}
+
+static void cable_up_switches_once_ungrouped(void) {
+    psl s;
+    uint8_t pkt[PSL_PACKET];
+    make_auto(&s, WIFI_A, 5, 1, 0);
+    psl_choice prev = psl_step(&s, PSL_LISTEN_MS);
+    assert(prev.serve == 1);
+    psl_set_cable(&s, PSL_CABLE_UP, CABLE_A, CABLE_BC, 2000);
+    assert(psl_step(&s, 2000).cable == 0);
+    psl_active(&s, 1, 0, 5000);
+    psl_choice c = psl_step(&s, 5000);
+    assert(c.cable == 1 && c.serve == 0 && c.settled == 0 && c.held == 0);
+    /* The server left behind was on the Wi-Fi: the previous choice says so, and the goodbye carries its address. */
+    assert(prev.cable == 0);
+    psl_pack_goodbye(&s, pkt);
+    uint32_t ip;
+    memcpy(&ip, pkt + 8, 4);
+    assert(ip == WIFI_A && pkt[5] == 0);
+    /* Announcing now goes on the cable, from the cable address. */
+    assert(psl_pack(&s, pkt) == PSL_PACKET);
+    memcpy(&ip, pkt + 8, 4);
+    assert(ip == CABLE_A);
+    c = psl_step(&s, 5000 + PSL_LISTEN_MS);
+    assert(c.serve == 1 && c.cable == 1 && c.server_ip == CABLE_A);
+}
+
+static void cable_mode_ignores_wifi_sources(void) {
+    psl s;
+    make_auto(&s, WIFI_A, 5, 0, 0);
+    psl_set_net(&s, ip4(192, 168, 1, 255));
+    psl_set_cable(&s, PSL_CABLE_UP, CABLE_A, CABLE_BC, 0);
+    assert(psl_step(&s, 0).cable == 1);
+    hear(&s, WIFI_B, 1, PSL_F_SERVING | PSL_F_SESSION, 100);
+    hear(&s, ip4(10, 99, 0, 6), 1, PSL_F_SERVING | PSL_F_SESSION, 100);   /* another /30 */
+    hear(&s, CABLE_A, 1, PSL_F_SERVING, 100);                             /* itself */
+    psl_choice c = psl_step(&s, 100);
+    assert(c.settled == 0 && c.serve == 0);
+    hear(&s, CABLE_B, 9, PSL_F_SERVING, 200);
+    c = psl_step(&s, 200);
+    assert(c.settled == 1 && c.serve == 0 && c.server_ip == CABLE_B && c.cable == 1);
+}
+
+static void wifi_mode_ignores_cable_sources(void) {
+    /* Without a cable broadcast given, the cable is 10.99.0.0/30. */
+    psl s;
+    make_auto(&s, WIFI_A, 5, 0, 0);
+    hear(&s, CABLE_B, 1, PSL_F_SERVING | PSL_F_SESSION, 100);
+    psl_choice c = psl_step(&s, 100);
+    assert(c.settled == 0);
+    hear(&s, ip4(10, 0, 0, 2), 1, PSL_F_SERVING, 100);   /* no subnet filter set: any other source */
+    assert(psl_step(&s, 100).server_ip == ip4(10, 0, 0, 2));
+
+    /* With a subnet filter and a cable broadcast given: that cable's /30 is not the Wi-Fi either. */
+    psl w;
+    make_auto(&w, ip4(10, 99, 0, 9), 5, 0, 0);
+    psl_set_net(&w, ip4(10, 99, 0, 255));
+    psl_set_cable(&w, PSL_CABLE_NONE, 0, ip4(10, 99, 0, 7), 0);
+    hear(&w, ip4(10, 99, 0, 5), 1, PSL_F_SERVING, 100);
+    assert(psl_step(&w, 100).settled == 0);
+    hear(&w, ip4(10, 99, 0, 2), 1, PSL_F_SERVING, 100);   /* on the Wi-Fi subnet, not that cable */
+    assert(psl_step(&w, 100).server_ip == ip4(10, 99, 0, 2));
+}
+
+static void cable_down_back_to_wifi(void) {
+    psl s;
+    make_auto(&s, WIFI_A, 5, 0, 0);
+    psl_set_net(&s, ip4(192, 168, 1, 255));
+    psl_set_cable(&s, PSL_CABLE_UP, CABLE_A, CABLE_BC, 0);
+    hear(&s, CABLE_B, 1, PSL_F_SERVING, 100);
+    assert(psl_step(&s, 100).server_ip == CABLE_B);
+    psl_set_cable(&s, PSL_CABLE_NONE, 0, 0, 2000);
+    hear(&s, CABLE_B, 1, PSL_F_SERVING, 2000);   /* a straggler from the cable */
+    psl_choice c = psl_step(&s, 2000);
+    assert(c.cable == 0 && c.settled == 0 && c.serve == 0 && c.self == WIFI_A);
+    c = psl_step(&s, 2000 + PSL_LISTEN_MS - 1);
+    assert(c.settled == 0);
+    c = psl_step(&s, 2000 + PSL_LISTEN_MS);
+    assert(c.serve == 1 && c.cable == 0 && c.server_ip == WIFI_A);
+
+    /* A cable server whose cable goes: it stops; the previous choice says it served on the cable. */
+    psl t;
+    uint8_t pkt[PSL_PACKET];
+    make_auto(&t, WIFI_A, 5, 0, 0);
+    psl_set_cable(&t, PSL_CABLE_UP, CABLE_A, CABLE_BC, 0);
+    psl_step(&t, 0);
+    psl_choice prev = psl_step(&t, PSL_LISTEN_MS);
+    assert(prev.serve == 1 && prev.cable == 1);
+    psl_set_cable(&t, PSL_CABLE_COMING, 0, 0, 2000);   /* a pull with the phone still on the port */
+    c = psl_step(&t, 2000);
+    assert(c.serve == 0 && c.cable == 0 && c.held == 1);
+    psl_pack_goodbye(&t, pkt);
+    uint32_t ip;
+    memcpy(&ip, pkt + 8, 4);
+    assert(ip == CABLE_A);
+}
+
+static void choice_self_is_cable_self(void) {
+    psl s;
+    make_auto(&s, WIFI_A, 5, 0, 0);
+    assert(psl_step(&s, 0).self == WIFI_A);
+    psl_set_cable(&s, PSL_CABLE_UP, CABLE_B, CABLE_BC, 100);
+    psl_choice c = psl_step(&s, 100);
+    assert(c.self == CABLE_B && c.cable == 1);
+    psl_set_self(&s, ip4(192, 168, 1, 11));   /* the Wi-Fi changing does not touch the cable */
+    c = psl_step(&s, 100 + PSL_LISTEN_MS);
+    assert(c.self == CABLE_B && c.server_ip == CABLE_B && c.serve == 1);
+}
+
+static void session_on_cable_by_self(void) {
+    psl h, j;
+    psl_init(&h, PSL_HOST, CABLE_A, 5, 0);
+    psl_init(&j, PSL_JOIN, CABLE_B, 5, CABLE_A);
+    psl_choice c = psl_step(&h, 0);
+    assert(c.cable == 1 && c.serve == 1 && c.settled == 1 && c.server_ip == CABLE_A && c.self == CABLE_A);
+    c = psl_step(&j, 0);
+    assert(c.cable == 1 && c.serve == 0 && c.settled == 1 && c.server_ip == CABLE_A && c.self == CABLE_B);
+    /* The cable state does not move them. */
+    psl_set_cable(&h, PSL_CABLE_NONE, 0, 0, 100);
+    psl_set_cable(&j, PSL_CABLE_NONE, 0, 0, 100);
+    assert(psl_step(&h, 100).cable == 1 && psl_step(&j, 100).cable == 1);
+
+    psl hw, jw;
+    psl_init(&hw, PSL_HOST, WIFI_A, 5, 0);
+    psl_init(&jw, PSL_JOIN, WIFI_B, 5, WIFI_A);
+    psl_set_cable(&hw, PSL_CABLE_UP, CABLE_A, CABLE_BC, 0);
+    psl_set_cable(&jw, PSL_CABLE_UP, CABLE_B, CABLE_BC, 0);
+    c = psl_step(&hw, 0);
+    assert(c.cable == 0 && c.serve == 1 && c.server_ip == WIFI_A && c.self == WIFI_A);
+    c = psl_step(&jw, 0);
+    assert(c.cable == 0 && c.settled == 1 && c.server_ip == WIFI_A && c.self == WIFI_B);
+
+    /* A cable given by its broadcast is that /30, not the default one. */
+    psl ho;
+    psl_init(&ho, PSL_HOST, ip4(10, 99, 0, 5), 5, 0);
+    assert(psl_step(&ho, 0).cable == 0);
+    psl_set_cable(&ho, PSL_CABLE_UP, ip4(10, 99, 0, 5), ip4(10, 99, 0, 7), 0);
+    assert(psl_step(&ho, 0).cable == 1);
+    psl hd;
+    psl_init(&hd, PSL_HOST, CABLE_A, 5, 0);
+    psl_set_cable(&hd, PSL_CABLE_NONE, 0, ip4(10, 99, 0, 7), 0);
+    assert(psl_step(&hd, 0).cable == 0);
+}
+
+static void no_wifi_self_never_serves(void) {
+    psl s;
+    uint8_t pkt[PSL_PACKET];
+    make_auto(&s, 0, 5, 0, 0);
+    psl_choice c = psl_step(&s, 5000);
+    assert(c.serve == 0 && c.settled == 0 && c.announce == 0 && c.cable == 0);
+    assert(psl_pack(&s, pkt) == 0);
+    hear(&s, WIFI_B, 1, PSL_F_SERVING | PSL_F_SESSION, 5100);
+    c = psl_step(&s, 5100);
+    assert(c.serve == 0 && c.settled == 0 && c.server_ip == 0);
+    /* The cable still works. */
+    psl_set_cable(&s, PSL_CABLE_UP, CABLE_A, CABLE_BC, 6000);
+    c = psl_step(&s, 6000 + PSL_LISTEN_MS);
+    assert(c.serve == 1 && c.cable == 1 && c.server_ip == CABLE_A);
+    assert(psl_pack(&s, pkt) == PSL_PACKET);
+    /* And without it there is no Wi-Fi server to fall back to. */
+    psl_set_cable(&s, PSL_CABLE_NONE, 0, 0, 8000);
+    c = psl_step(&s, 20000);
+    assert(c.serve == 0 && c.settled == 0 && c.cable == 0);
+
+    /* A Wi-Fi server that loses its address stops. */
+    psl w;
+    make_auto(&w, WIFI_A, 5, 0, 0);
+    assert(psl_step(&w, PSL_LISTEN_MS).serve == 1);
+    psl_set_self(&w, 0);
+    c = psl_step(&w, 2000);
+    assert(c.serve == 0 && c.settled == 0);
+}
+
+static void hold_never_applies_to_sessions(void) {
+    psl h, j;
+    psl_init(&h, PSL_HOST, WIFI_A, 5, 0);
+    psl_init(&j, PSL_JOIN, WIFI_B, 5, WIFI_A);
+    psl_active(&h, 1, 0, 0);
+    psl_active(&j, 1, 0, 0);
+    psl_set_cable(&h, PSL_CABLE_COMING, 0, 0, 100);
+    psl_set_cable(&j, PSL_CABLE_COMING, 0, 0, 100);
+    psl_active(&h, 0, 0, 200);
+    psl_active(&j, 0, 0, 200);
+    psl_active(&h, 1, 0, 300);
+    psl_active(&j, 1, 0, 300);
+    psl_choice c = psl_step(&h, 400);
+    assert(c.held == 0 && c.serve == 1 && c.settled == 1);
+    c = psl_step(&j, 400);
+    assert(c.held == 0 && c.settled == 1 && c.server_ip == WIFI_A);
+
+    /* Nor to a grouped automatic device. */
+    psl g;
+    make_auto(&g, WIFI_A, 5, 1, 0);
+    assert(psl_step(&g, PSL_LISTEN_MS).serve == 1);
+    psl_set_cable(&g, PSL_CABLE_COMING, 0, 0, 2000);
+    c = psl_step(&g, 2000);
+    assert(c.held == 0 && c.serve == 1);
+}
+
+/* Two devices that hear each other on the Wi-Fi and are then cabled: both move, one serves, the other follows it. */
+static void two_cabled_devices_one_server(void) {
+    psl d[2];
+    const uint32_t wifi[2] = {WIFI_A, WIFI_B};
+    const uint32_t cable[2] = {CABLE_A, CABLE_B};
+    const uint32_t ties[2] = {7, 3};
+    for (int i = 0; i < 2; i++) {
+        make_auto(&d[i], wifi[i], ties[i], 0, 0);
+        psl_set_net(&d[i], ip4(192, 168, 1, 255));
+    }
+    psl_choice c[2];
+    for (int64_t now = 0; now <= 12000; now += 100) {
+        if (now == 3000) {
+            for (int i = 0; i < 2; i++) psl_set_cable(&d[i], PSL_CABLE_COMING, 0, 0, now);
+        }
+        if (now == 4000) {
+            for (int i = 0; i < 2; i++) psl_set_cable(&d[i], PSL_CABLE_UP, cable[i], CABLE_BC, now);
+        }
+        uint8_t pkt[2][PSL_PACKET];
+        size_t len[2];
+        for (int i = 0; i < 2; i++) {
+            c[i] = psl_step(&d[i], now);
+            len[i] = c[i].announce ? psl_pack(&d[i], pkt[i]) : 0;
+        }
+        /* A packet reaches the other only when both are on the same network, from the sender's address there. */
+        for (int i = 0; i < 2; i++) {
+            const int j = 1 - i;
+            if (len[j] > 0 && c[j].cable == c[i].cable) psl_heard(&d[i], pkt[j], len[j], c[j].self, now);
+        }
+        if (now == 2900) {
+            assert(c[0].settled && c[1].settled && c[0].cable == 0 && c[0].server_ip == c[1].server_ip);
+        }
+    }
+    assert(c[0].cable == 1 && c[1].cable == 1);
+    assert(c[0].serve + c[1].serve == 1);
+    const int server = c[0].serve ? 0 : 1;
+    assert(server == 1);   /* the lower tie */
+    for (int i = 0; i < 2; i++) assert(c[i].settled && c[i].server_ip == cable[server] && c[i].self == cable[i]);
+}
+
 int main(void) {
     pack_parse_roundtrip();
     junk_ignored();
@@ -445,6 +847,22 @@ int main(void) {
     goodbye_packet();
     own_tie_ignored();
     off_subnet_ignored();
+    cable_coming_holds_wifi_server();
+    cable_coming_blocks_serving();
+    cable_coming_hold_expires();
+    cable_none_ends_hold();
+    cable_up_without_self_is_none();
+    cable_up_ends_hold_and_switches();
+    cable_up_kept_off_while_grouped();
+    cable_up_switches_once_ungrouped();
+    cable_mode_ignores_wifi_sources();
+    wifi_mode_ignores_cable_sources();
+    cable_down_back_to_wifi();
+    choice_self_is_cable_self();
+    session_on_cable_by_self();
+    no_wifi_self_never_serves();
+    hold_never_applies_to_sessions();
+    two_cabled_devices_one_server();
     printf("ALL PASS\n");
     return 0;
 }
