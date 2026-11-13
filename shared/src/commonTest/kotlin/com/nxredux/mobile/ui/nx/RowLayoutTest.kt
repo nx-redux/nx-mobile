@@ -423,7 +423,10 @@ class RowLayoutTest {
     private val capNeed = carouselCaptionNeed(capName, 2 * capName, capDetails[0], STACK_CAPTION_GAP.value)
 
     private fun capped(box: Float, portraitW: Float? = null) = carouselRowPlace(box, 0f, capRoom, portraitW, maxItemH = carouselItemHMax(box, capNeed))
-    private fun rowsUnder(box: Float, itemH: Float, nameH: Float = capName) = captionRowsWithin(nameH, capDetails, STACK_CAPTION_GAP.value, carouselCaptionMax(box, itemH))
+    private fun rowsUnder(box: Float, place: CarouselRowPlace, nameH: Float = capName): Int {
+        val m = carouselMargins(box, place.g.itemH, capNeed, place.capped)
+        return captionRowsWithin(nameH, capDetails, STACK_CAPTION_GAP.value, carouselCaptionMax(box, place.g.itemH, m))
+    }
 
     // The need: a name line and both detail rows, or a two-line name and one row, whichever is taller.
     @Test fun aCarouselCaptionsNeedIsTheTallerOfOneNameLineWithTwoRowsAndTwoWithOne() {
@@ -440,8 +443,8 @@ class RowLayoutTest {
             val need = carouselCaptionNeed(name, 2 * name, row, gap)
             val room = 16f + 2 * name
             for (box in listOf(256f, 236f, 250f, 196f, 210f)) {
-                val g = carouselRowPlace(box, 0f, room, maxItemH = carouselItemHMax(box, need)).g
-                val max = carouselCaptionMax(box, g.itemH)
+                val place = carouselRowPlace(box, 0f, room, maxItemH = carouselItemHMax(box, need))
+                val max = carouselCaptionMax(box, place.g.itemH, carouselMargins(box, place.g.itemH, need, place.capped))
                 assertEquals(2, captionRowsWithin(name, listOf(row, row), gap, max), "$name/$box one line")
                 assertEquals(1, captionRowsWithin(2 * name, listOf(row, row), gap, max), "$name/$box two lines")
             }
@@ -455,13 +458,17 @@ class RowLayoutTest {
         val g = capped(box).g
         assertEquals(CAROUSEL_MIN_HEIGHT_SHARE * box, g.itemH, 1e-3f)
         assertTrue(carouselRowPlace(box, 0f, capRoom).g.itemH > g.itemH)            // the floor binds, below today's tile
-        assertEquals(1, rowsUnder(box, g.itemH))
-        assertEquals(0, rowsUnder(box, g.itemH, nameH = 2 * capName))
+        assertEquals(1, rowsUnder(box, capped(box)))
+        assertEquals(0, rowsUnder(box, capped(box), nameH = 2 * capName))
     }
 
-    // The tallest tile that leaves its caption the need under it at its highest (and a dp's slack), never below the floor.
+    // The tallest tile that leaves its caption the need under it at its highest, with the breathing room over the tile
+    // and under the caption (and a dp's slack), never below the floor.
     @Test fun aCarouselItemsHeightIsCappedToLeaveItsCaptionTheNeed() {
-        for (box in listOf(196f, 236f, 256f, 356f, 636f)) assertEquals(capNeed + CAPTION_NEED_SLACK, carouselCaptionMax(box, carouselItemHMax(box, capNeed)), 1e-3f, "$box")
+        for (box in listOf(196f, 236f, 256f, 356f, 636f)) {
+            val h = carouselItemHMax(box, capNeed)
+            assertEquals(capNeed + CAPTION_NEED_SLACK, carouselCaptionMax(box, h, carouselMargins(box, h, capNeed, capped = true)), 1e-3f, "$box")
+        }
         assertEquals(CAROUSEL_MIN_HEIGHT_SHARE * 100f, carouselItemHMax(100f, capNeed), 1e-3f)   // a box too short: the floor
     }
 
@@ -472,8 +479,8 @@ class RowLayoutTest {
         for (box in listOf(380f - 124f, 360f - 124f, 360f - 110f, 320f - 124f, 320f - 110f)) {
             val before = carouselRowPlace(box, 0f, capRoom)
             val after = capped(box)
-            assertEquals(0, rowsUnder(box, before.g.itemH), "$box before")
-            assertEquals(2, rowsUnder(box, after.g.itemH), "$box after")
+            assertEquals(0, rowsUnder(box, before), "$box before")
+            assertEquals(2, rowsUnder(box, after), "$box after")
             assertTrue(after.g.itemH < before.g.itemH, "$box")
             val k = after.g.itemH / before.g.itemH
             assertEquals(before.g.itemW / before.g.itemH, after.g.itemW / after.g.itemH, 1e-4f)
@@ -490,9 +497,68 @@ class RowLayoutTest {
     @Test fun theCarouselHeightCapChangesNothingWhereTheCaptionFits() {
         assertEquals(carouselRowPlace(636f, 0f, capRoom, portraitW = 393f), capped(636f, portraitW = 393f))
         assertEquals(carouselRowPlace(356f, 0f, capRoom), capped(356f))
-        assertEquals(2, rowsUnder(356f, capped(356f).g.itemH))
+        assertEquals(2, rowsUnder(356f, capped(356f)))
         assertEquals(carouselRowPlace(900f, 0f, capRoom), capped(900f))
         assertEquals(carouselRowPlace(256f, 0f, capRoom), carouselRowPlace(256f, 0f, capRoom, maxItemH = null))
+    }
+
+    // Breathing room: in a capped box the selected tile, at its highest, sits at least [CAROUSEL_TOP_BREATH] under the top
+    // row and its caption's last row at least [CAROUSEL_BOTTOM_BREATH] over the bottom row, the rows the cap reserved room
+    // for kept (one-line name: both; two-line: one), at Large and Small, wherever the screen's centre line falls; with the
+    // caption at its need the two gaps come out about equal.
+    @Test fun aCappedCarouselBreathesAboveAndBelow() {
+        val gap = STACK_CAPTION_GAP.value
+        for ((name, row) in listOf(21.1f to 16.9f, 15.8f to 12.7f)) {
+            val need = carouselCaptionNeed(name, 2 * name, row, gap)
+            val room = 16f + 2 * name
+            for (box in listOf(256f, 236f, 250f, 196f, 210f)) {
+                val place = carouselRowPlace(box, 0f, room, maxItemH = carouselItemHMax(box, need))
+                assertTrue(place.capped, "$box")
+                val h = place.g.itemH
+                val m = carouselMargins(box, h, need, capped = true)
+                assertEquals(CAROUSEL_TOP_BREATH, m.top, 1e-3f)
+                assertEquals(CAROUSEL_BOTTOM_BREATH, m.bottom, 1e-3f)
+                val max = carouselCaptionMax(box, h, m)
+                for ((nameH, rows) in listOf(name to 2, 2 * name to 1)) {
+                    assertEquals(rows, captionRowsWithin(nameH, listOf(row, row), gap, max), "$name/$box/$nameH")
+                    val drawn = captionDrawnHeight(nameH, List(rows) { row }, gap)
+                    for (line in listOf(box / 2 - 30f, box / 2, box / 2 + 30f)) {
+                        val top = rowSelectedTopOn(line, box, h, 16f, drawn, m.top, m.bottom)
+                        val bottom = box - (top + h + 16f + drawn)
+                        assertTrue(top >= CAROUSEL_TOP_BREATH - 1e-3f, "$name/$box/$nameH/$line top $top")
+                        assertTrue(bottom >= CAROUSEL_BOTTOM_BREATH - 1e-3f, "$name/$box/$nameH/$line bottom $bottom")
+                    }
+                }
+                val full = rowSelectedTopOn(box / 2, box, h, 16f, need, m.top, m.bottom)
+                assertEquals(full, box - (full + h + 16f + need), 1.5f)                                   // about equal
+            }
+        }
+    }
+
+    // Where the cap does not bind, the margins are today's: the ring's room at the top, [CAPTION_SPARE_MARGIN] at the
+    // bottom; and the phone in portrait and the 640 × 480 handheld stay uncapped with the breathing room reserved.
+    @Test fun anUncappedCarouselKeepsTodaysMargins() {
+        assertFalse(capped(636f, portraitW = 393f).capped)
+        assertFalse(capped(356f).capped)
+        assertEquals(CaptionMargins(GRID_RING_ROOM, CAPTION_SPARE_MARGIN), carouselMargins(356f, 211.8f, capNeed, capped = false))
+        assertEquals(carouselCaptionMax(356f, 211.8f), carouselCaptionMax(356f, 211.8f, carouselMargins(356f, 211.8f, capNeed, capped = false)), 1e-4f)
+        // The default placement (no margins) is today's.
+        assertEquals(rowSelectedTopOn(300f, 600f, 200f, 8f, 40f), rowSelectedTopOn(300f, 600f, 200f, 8f, 40f, null, 0f), 1e-4f)
+    }
+
+    // At the 40% floor the breathing room gives way first, down to today's margins, before a row is cut: a 120 dp box
+    // keeps 4 dp over the tile and 8 under the caption, 44 dp of caption, a one-line name and its genre.
+    @Test fun atTheFloorTheBreathingRoomGivesWayBeforeTheRows() {
+        val box = 120f
+        val place = capped(box)
+        assertTrue(place.capped)
+        val m = carouselMargins(box, place.g.itemH, capNeed, capped = true)
+        assertEquals(CaptionMargins(GRID_RING_ROOM, CAPTION_SPARE_MARGIN), m)
+        assertEquals(44f, carouselCaptionMax(box, place.g.itemH, m), 1e-3f)
+        // Between: a box with half the breathing room to spare keeps margins between today's and the full ones.
+        val mid = carouselMargins(200f, 200f - 16f - capNeed - CAPTION_NEED_SLACK - 18f, capNeed, capped = true)
+        assertEquals(18f, mid.top + mid.bottom, 1e-3f)
+        assertTrue(mid.top > GRID_RING_ROOM && mid.top < CAROUSEL_TOP_BREATH)
     }
 
     // A game list Carousel's neighbours centre on the screen's centre line, wherever their box starts; unmeasured, none.

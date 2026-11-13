@@ -102,10 +102,14 @@ fun NxCarousel(
         // two-line name and one ([carouselCaptionNeed], [carouselItemHMax]), measured in their styles;
         // where the box leaves that room already, nothing changes.
         val need = if (gameList) rememberCaptionNeed(nameStyle, infoStyle) else null
-        val (g, top) = carouselRowPlace(
+        val (g, top, capped) = carouselRowPlace(
             maxHeight.value, titleRoom.value, room, portraitW = maxWidth.value.takeIf { portrait },   // portrait: the neighbours show
             maxItemH = need?.let { carouselItemHMax(maxHeight.value, it) },
         )
+        // Capped, the tile and its caption keep the breathing room the cap reserved over and under them
+        // ([carouselMargins]); uncapped, today's margins, the tile placed as before.
+        val margins = carouselMargins(maxHeight.value, g.itemH, need ?: 0f, capped)
+        val captionMax = carouselCaptionMax(maxHeight.value, g.itemH, margins)
         if (g.itemW <= 1f || g.itemH <= 1f || tiles.isEmpty()) return@BoxWithConstraints
 
         val inset = nxPageInset()   // the caption's text inside it
@@ -129,14 +133,17 @@ fun NxCarousel(
         val glide = remember(pos) { CaptionGlide() }
         // A game list's selection, with its name under it, centred on the screen's centre line too, not the box's.
         val centreLine = if (gameList) screenCentreLineTop(screenCentreY, boxTopY, density, 0f) else null
-        fun selectedTop(drawn: Float) =
-            if (centreLine != null) rowSelectedTopOn(centreLine, area, g.itemH, CAPTION_GAP, drawn) else rowSelectedTop(area, g.itemH, CAPTION_GAP, drawn)
-        val selTop = remember(glide, area, g.itemH, centreLine) { { selectedTop(glide.value()) } }
+        fun selectedTop(drawn: Float) = when {
+            capped -> rowSelectedTopOn(centreLine ?: (area / 2), area, g.itemH, CAPTION_GAP, drawn, margins.top, margins.bottom)
+            centreLine != null -> rowSelectedTopOn(centreLine, area, g.itemH, CAPTION_GAP, drawn)
+            else -> rowSelectedTop(area, g.itemH, CAPTION_GAP, drawn)
+        }
+        val selTop = remember(glide, area, g.itemH, centreLine, capped, margins) { { selectedTop(glide.value()) } }
         // The swipe band: from the highest a selected tile goes (its name's two lines, the info and every spare line; a
         // game list's caption up to [carouselCaptionMax], its rows cut to that) down to the neighbours' bottom, so it
         // covers every drawn tile.
         val tallest = room - CAPTION_GAP + spare
-        val bandTop = min(nbTop, selectedTop(if (gameList) max(tallest, carouselCaptionMax(area, g.itemH)) else tallest))
+        val bandTop = min(nbTop, selectedTop(if (gameList) max(tallest, captionMax) else tallest))
         val bandH = nbTop + g.itemH - bandTop
 
         val hasLongPress = onLongPress != null
@@ -157,7 +164,7 @@ fun NxCarousel(
             captionTitle, details, glide, nameStyle, 2, infoStyle, inset, avail, availPx, spare,
             selTop, g.itemH + CAPTION_GAP, colors.accent,   // the selected game's name in the accent, as Home's cards
             stackRows = gameList, rowGap = if (gameList) STACK_CAPTION_GAP else 0.dp,
-            maxDrawn = if (gameList) carouselCaptionMax(area, g.itemH) else Float.POSITIVE_INFINITY,
+            maxDrawn = if (gameList) captionMax else Float.POSITIVE_INFINITY,
         )
     }
 }
@@ -236,24 +243,53 @@ internal fun carouselGameLines(lines: List<InfoLine>): CarouselGameLines {
 internal fun carouselCardShaded(lit: Boolean, picture: () -> List<InfoLine>): Boolean = !lit || picture().isNotEmpty()
 
 /**
- * The most a game list Carousel's caption may take under its selected tile, dp, in a box [areaDp] tall with tiles
- * [itemH] tall: what is left once the tile sits at its highest ([rowSelectedTopOn]: its ring's room, or the neighbours'
- * top if that is higher), less the gap over the caption and a margin over the bottom row (the hint bar, the tab row).
+ * The room a game list Carousel keeps over its selected tile at its highest ([top], from the box's top: the top row) and
+ * under its caption's last row ([bottom], over the box's bottom: the tab row or hint bar), dp.
  */
-internal fun carouselCaptionMax(areaDp: Float, itemH: Float): Float =
-    (areaDp - itemH - min(GRID_RING_ROOM, rowNeighbourTop(areaDp, itemH)) - CAPTION_GAP - CAPTION_SPARE_MARGIN).coerceAtLeast(0f)
+internal data class CaptionMargins(val top: Float, val bottom: Float)
+
+/** The visible room a capped game list Carousel keeps between the top row and its selected tile, dp ([carouselMargins]). */
+internal const val CAROUSEL_TOP_BREATH = 12f
+/** The visible room a capped game list Carousel keeps between its caption's last row and the bottom row, dp. */
+internal const val CAROUSEL_BOTTOM_BREATH = 12f
+
+/**
+ * A game list Carousel's [CaptionMargins] in a box [areaDp] tall with tiles [itemH] tall. Uncapped (![capped]), today's:
+ * the ring's room at the top (or the neighbours' top if that is higher) and [CAPTION_SPARE_MARGIN] at the bottom.
+ * Capped ([carouselItemHMax] reserved it), [CAROUSEL_TOP_BREATH] and [CAROUSEL_BOTTOM_BREATH]; at the
+ * [CAROUSEL_MIN_HEIGHT_SHARE] floor, where the box is short of that room once the caption's [needDp] is under the tile,
+ * the breathing room gives way first, both margins back towards today's in step, before [captionRowsWithin] cuts a row.
+ */
+internal fun carouselMargins(areaDp: Float, itemH: Float, needDp: Float, capped: Boolean): CaptionMargins {
+    val tight = CaptionMargins(min(GRID_RING_ROOM, rowNeighbourTop(areaDp, itemH)), CAPTION_SPARE_MARGIN)
+    if (!capped) return tight
+    val spare = areaDp - itemH - CAPTION_GAP - needDp - CAPTION_NEED_SLACK
+    val least = tight.top + tight.bottom
+    val t = ((spare - least) / (CAROUSEL_TOP_BREATH + CAROUSEL_BOTTOM_BREATH - least)).coerceIn(0f, 1f)
+    return CaptionMargins(tight.top + (CAROUSEL_TOP_BREATH - tight.top) * t, tight.bottom + (CAROUSEL_BOTTOM_BREATH - tight.bottom) * t)
+}
+
+/**
+ * The most a game list Carousel's caption may take under its selected tile, dp, in a box [areaDp] tall with tiles
+ * [itemH] tall: what is left once the tile sits at its highest ([margins]' top: by default its ring's room, or the
+ * neighbours' top if that is higher), less the gap over the caption and the [margins]' bottom over the bottom row (the
+ * hint bar, the tab row).
+ */
+internal fun carouselCaptionMax(areaDp: Float, itemH: Float, margins: CaptionMargins = carouselMargins(areaDp, itemH, 0f, false)): Float =
+    (areaDp - itemH - margins.top - CAPTION_GAP - margins.bottom).coerceAtLeast(0f)
 
 /** A game list Carousel's selected tile is never capped below this share of its box's height ([carouselItemHMax]). */
 internal const val CAROUSEL_MIN_HEIGHT_SHARE = 0.4f
 
 /**
  * The tallest a game list Carousel's selected tile may be in a box [areaDp] tall for its caption to have [needDp] under
- * it at its highest ([carouselCaptionMax]): [carouselCaptionNeed], so the name and its detail rows show above the bottom row.
- * [CAPTION_NEED_SLACK] more, so a rounding of the drawn heights never cuts the last row. Never below
- * [CAROUSEL_MIN_HEIGHT_SHARE] of the box (a box too short for both keeps a tile, its rows cut to what fits).
+ * it ([carouselCaptionNeed]: the name and its detail rows) with [CAROUSEL_TOP_BREATH] over the tile and
+ * [CAROUSEL_BOTTOM_BREATH] under the caption ([carouselMargins]), and [CAPTION_NEED_SLACK] more, so a rounding of the
+ * drawn heights never cuts the last row. Never below [CAROUSEL_MIN_HEIGHT_SHARE] of the box (a box too short for all
+ * of it keeps a tile; the breathing room gives way first, then the rows are cut to what fits).
  */
 internal fun carouselItemHMax(areaDp: Float, needDp: Float): Float =
-    max(areaDp - GRID_RING_ROOM - CAPTION_GAP - CAPTION_SPARE_MARGIN - needDp - CAPTION_NEED_SLACK, CAROUSEL_MIN_HEIGHT_SHARE * areaDp)
+    max(areaDp - CAROUSEL_TOP_BREATH - CAPTION_GAP - CAROUSEL_BOTTOM_BREATH - needDp - CAPTION_NEED_SLACK, CAROUSEL_MIN_HEIGHT_SHARE * areaDp)
 
 /** The dp [carouselItemHMax] leaves over a caption's need. */
 internal const val CAPTION_NEED_SLACK = 1f

@@ -296,8 +296,11 @@ internal const val CAROUSEL_TAPER = 0.8f
 /** A Carousel's selected tile (Home's and a game list's) is never wider than this, dp (its height in proportion). */
 internal const val CAROUSEL_MAX_W = 300f
 
-/** A Carousel row's geometry (Home's and a game list's) and its top in its box ([carouselRowPlace]). */
-internal data class CarouselRowPlace(val g: RowGeometry, val top: Float)
+/**
+ * A Carousel row's geometry (Home's and a game list's) and its top in its box ([carouselRowPlace]); [capped]: a game
+ * list's height cap ([carouselItemHMax]) shrank it.
+ */
+internal data class CarouselRowPlace(val g: RowGeometry, val top: Float, val capped: Boolean = false)
 
 /**
  * The Carousel row (Home's and a game list's) in a box [boxDp] tall with [captionDp] of caption room under it: sized from the shown
@@ -306,16 +309,19 @@ internal data class CarouselRowPlace(val g: RowGeometry, val top: Float)
  * shrunk to at most [CAROUSEL_TILE_MAX_SHARE] of it, so its neighbours show either side. The first
  * neighbours are at [CAROUSEL_SIDE_SCALE], each further one [CAROUSEL_TAPER] of the one before. The selection is never
  * wider than [CAROUSEL_MAX_W]. [maxItemH] (a game list's, [carouselItemHMax]): the selection is never taller, the row
- * (its gaps, its neighbours) scaled down with it; null, no such cap (Home's row).
+ * (its gaps, its neighbours) scaled down with it, and the place says it is [CarouselRowPlace.capped]; null, no such cap
+ * (Home's row).
  */
 internal fun carouselRowPlace(boxDp: Float, titleRoomDp: Float, captionDp: Float, portraitW: Float? = null, maxItemH: Float? = null): CarouselRowPlace {
     val spec = rowGeometry(RowStyle.CAROUSEL, false, titleRoomSizingBody(boxDp, titleRoomDp), captionDp)
     val capped = spec.scaledBy(min(1f, CAROUSEL_MAX_W / spec.itemW))
     val sides = capped.copy(scale = CAROUSEL_SIDE_SCALE, taper = CAROUSEL_TAPER)
-    val g = sides.let { g ->
+    val uncapped = sides.let { g ->
         portraitW?.let { w -> g.scaledBy(min(1f, CAROUSEL_TILE_MAX_SHARE * w / g.itemW)) } ?: g
-    }.let { g -> maxItemH?.let { h -> g.scaledBy(min(1f, h / g.itemH)) } ?: g }
-    return CarouselRowPlace(g, rowBlockTop(boxDp, g.itemH, captionDp))
+    }
+    val cap = maxItemH?.takeIf { uncapped.itemH > it }
+    val g = cap?.let { uncapped.scaledBy(it / uncapped.itemH) } ?: uncapped
+    return CarouselRowPlace(g, rowBlockTop(boxDp, g.itemH, captionDp), capped = cap != null)
 }
 
 /**
@@ -338,12 +344,17 @@ internal fun rowSelectedTop(areaDp: Float, itemH: Float, captionGap: Float, draw
 
 /**
  * A game list Carousel's selected tile top (dp, in its box) for the tile and its drawn caption ([rowSelectedTop]'s) to
- * sit centred on the screen's centre line [centreLine] (dp from the box's top), kept inside the box [areaDp].
+ * sit centred on the screen's centre line [centreLine] (dp from the box's top), kept inside the box [areaDp]: at least
+ * [minTop] from its top (null: the ring's room, or the neighbours' top if higher) and, room allowing, [bottomMargin]
+ * from its bottom (a capped game list's breathing room, [carouselMargins]).
  */
-internal fun rowSelectedTopOn(centreLine: Float, areaDp: Float, itemH: Float, captionGap: Float, drawnCaptionDp: Float): Float {
+internal fun rowSelectedTopOn(
+    centreLine: Float, areaDp: Float, itemH: Float, captionGap: Float, drawnCaptionDp: Float,
+    minTop: Float? = null, bottomMargin: Float = 0f,
+): Float {
     val under = if (drawnCaptionDp > 0f) captionGap + drawnCaptionDp else 0f
-    val lo = min(GRID_RING_ROOM, rowNeighbourTop(areaDp, itemH))
-    return (centreLine - (itemH + under) / 2).coerceAtMost(areaDp - itemH - under).coerceAtLeast(lo)
+    val lo = minTop ?: min(GRID_RING_ROOM, rowNeighbourTop(areaDp, itemH))
+    return (centreLine - (itemH + under) / 2).coerceAtMost(areaDp - itemH - under - bottomMargin).coerceAtLeast(lo)
 }
 
 /**
