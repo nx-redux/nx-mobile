@@ -80,6 +80,8 @@ typedef struct psl {
     int on_cable;             /* automatic mode: the network the election is on */
     int holding;
     int64_t hold_until_ms;
+    int hold_spent;           /* this COMING has had its hold: no other until the cable leaves COMING */
+    int dropped;              /* taken off the cable by its going: leaving its group while COMING holds it */
     uint32_t served_ip;       /* the address this device last served from: where its goodbye comes from */
     psl_peer peers[PSL_MAX_PEERS];
 } psl;
@@ -92,9 +94,11 @@ void   psl_set_net(psl*, uint32_t broadcast_ip);
 /* The cable's state, this device's address on it and its broadcast (0 keeps the one known). UP without an address is
  * no cable. An automatic device moves to the cable when it is up and it is not grouped, and back to the Wi-Fi as soon
  * as it is not up, grouped or not: the peers are forgotten, any server stops and the listen window starts again. A
- * transition into COMING while active, the trigger while COMING, or leaving a group in ad hoc while COMING, holds the
- * Wi-Fi election for PSL_CABLE_HOLD_MS (not for a grouped device): a server started or followed there now would keep
- * the game off the cable. A session's host and joiner are on the network self_ip is on, whatever the cable does. */
+ * transition into COMING while active, the trigger while COMING, or a device taken off the cable by its going leaving
+ * its group while COMING, holds the Wi-Fi election for PSL_CABLE_HOLD_MS (not for a grouped device): a server started
+ * or followed there now would keep the game off the cable. One hold per COMING: a phone on the port that never links
+ * is waited for once, not at every entry into ad hoc or group left, until the cable leaves COMING and comes again. A
+ * session's host and joiner are on the network self_ip is on, whatever the cable does. */
 void   psl_set_cable(psl*, int state, uint32_t cable_self, uint32_t cable_broadcast, int64_t now_ms);
 /* The game reached its trigger / left ad hoc. grouped: the game is in a group, or this device's server has another
  * user; either way the server keeps them (it never yields), and out of ad hoc it lingers until they are gone. */

@@ -106,16 +106,21 @@ static void follow_cable(psl* s, int64_t now_ms) {
     const int want = cable_level(s) == PSL_CABLE_UP;
     if (s->mode != PSL_AUTO || want == s->on_cable || (want && s->grouped)) return;
     s->on_cable = want;
+    s->dropped = !want;
     s->serving = 0;
     s->heard_server = 0;
     s->listen_from_ms = now_ms;
     memset(s->peers, 0, sizeof(s->peers));
 }
 
+/* At most once per COMING: a cable that has not come up by the hold's end is not waited for again at each lobby entry,
+ * since a phone on the port that never links would otherwise cost the hold every time. */
 static void arm_hold(psl* s, int64_t now_ms) {
-    if (s->mode != PSL_AUTO || s->grouped) return;
+    if (s->mode != PSL_AUTO || s->grouped || s->hold_spent) return;
     s->holding = 1;
     s->hold_until_ms = now_ms + PSL_CABLE_HOLD_MS;
+    s->hold_spent = 1;
+    s->dropped = 0;
 }
 
 void psl_set_cable(psl* s, int state, uint32_t cable_self, uint32_t cable_broadcast, int64_t now_ms) {
@@ -124,6 +129,8 @@ void psl_set_cable(psl* s, int state, uint32_t cable_self, uint32_t cable_broadc
     s->cable_self = cable_self;
     if (cable_broadcast != 0) s->cable_broadcast = cable_broadcast;
     const int level = cable_level(s);
+    if (level != PSL_CABLE_COMING) s->hold_spent = 0;
+    if (level == PSL_CABLE_UP) s->dropped = 0;
     if (level != PSL_CABLE_COMING && s->holding) {
         /* The wait is over either way: listen afresh rather than start a server on what was heard while held. */
         s->holding = 0;
@@ -135,9 +142,10 @@ void psl_set_cable(psl* s, int state, uint32_t cable_self, uint32_t cable_broadc
 
 void psl_active(psl* s, int active, int grouped, int64_t now_ms) {
     const int trigger = active && !s->active;
-    /* Out of its group in ad hoc, a device is free to take the cable, so one that is coming is waited for as on the
-     * trigger (a device taken off a dropped cable while grouped gets its hold here). */
-    const int freed = active && s->active && s->grouped && !grouped && !s->holding;
+    /* Out of its group in ad hoc, a device taken off the cable by its going is free to take it again, so one that is
+     * coming is waited for as on the trigger: its hold was not armed while it was grouped. Any other device is waited for
+     * at its entry into ad hoc only, so a phone on the port that never links does not cost a hold at every group left. */
+    const int freed = active && s->active && s->grouped && !grouped && !s->holding && s->dropped;
     if (trigger) {
         s->listen_from_ms = now_ms;
         s->active = 1;

@@ -497,17 +497,6 @@ static void cable_coming_hold_expires(void) {
     c = psl_step(&s, 22000);
     assert(c.held == 1 && c.serve == 0);
 
-    /* Leaving ad hoc and coming back while COMING arms it again. */
-    psl a;
-    make_auto(&a, WIFI_A, 5, 0, 0);
-    psl_set_cable(&a, PSL_CABLE_COMING, 0, 0, 0);
-    assert(psl_step(&a, PSL_CABLE_HOLD_MS + PSL_LISTEN_MS).serve == 1);
-    psl_active(&a, 1, 0, 9000);   /* still active: not a trigger */
-    assert(psl_step(&a, 9000).held == 0);
-    psl_active(&a, 0, 0, 9100);
-    psl_active(&a, 1, 0, 9200);
-    assert(psl_step(&a, 9200).held == 1);
-
     /* A lingering server whose last user went comes back into ad hoc ungrouped: that trigger holds too. */
     psl l;
     make_auto(&l, WIFI_A, 5, 0, 0);
@@ -518,6 +507,127 @@ static void cable_coming_hold_expires(void) {
     psl_active(&l, 1, 0, 2200);
     psl_choice d = psl_step(&l, 2200);
     assert(d.held == 1 && d.serve == 0);
+}
+
+/* A phone on the port whose cable never comes up costs one hold, not one at every lobby entry or group left. */
+static void one_hold_per_coming_episode(void) {
+    psl s;
+    make_auto(&s, WIFI_A, 5, 0, 0);
+    psl_set_cable(&s, PSL_CABLE_COMING, 0, 0, 1000);
+    assert(psl_step(&s, 1000).held == 1);
+    assert(psl_step(&s, 1000 + PSL_CABLE_HOLD_MS + PSL_LISTEN_MS).serve == 1);
+    /* Out of ad hoc and back in, still in the same COMING: no hold. */
+    psl_active(&s, 0, 0, 9000);
+    psl_active(&s, 1, 0, 9100);
+    psl_choice c = psl_step(&s, 9100);
+    assert(c.held == 0 && c.serve == 1);
+    /* Into a group and out of it while COMING: no hold. */
+    psl_active(&s, 1, 1, 10000);
+    psl_step(&s, 10000);
+    psl_active(&s, 1, 0, 11000);
+    c = psl_step(&s, 11000);
+    assert(c.held == 0 && c.serve == 1);
+    /* The cable leaves COMING and comes again: a new wait, so a hold. */
+    psl_set_cable(&s, PSL_CABLE_NONE, 0, 0, 12000);
+    psl_set_cable(&s, PSL_CABLE_COMING, 0, 0, 13000);
+    c = psl_step(&s, 13000);
+    assert(c.held == 1 && c.serve == 0);
+
+    /* COMING from before the game's first entry: that entry holds, the next ones in the same COMING do not. */
+    psl g;
+    psl_init(&g, PSL_AUTO, WIFI_A, 5, 0);
+    psl_set_cable(&g, PSL_CABLE_COMING, 0, 0, 0);
+    psl_active(&g, 1, 0, 5000);
+    assert(psl_step(&g, 5000).held == 1);
+    assert(psl_step(&g, 5000 + PSL_CABLE_HOLD_MS).held == 0);
+    psl_active(&g, 0, 0, 20000);
+    psl_active(&g, 1, 0, 30000);
+    assert(psl_step(&g, 30000).held == 0);
+}
+
+/* Leaving a group while COMING holds only a device the cable's going took off it, and only once. */
+static void freed_hold_only_after_a_dropped_cable(void) {
+    /* Grouped on the Wi-Fi when the phone came on the port: leaving the group is no hold. */
+    psl w;
+    make_auto(&w, WIFI_A, 5, 1, 0);
+    assert(psl_step(&w, PSL_LISTEN_MS).serve == 1);
+    psl_set_cable(&w, PSL_CABLE_COMING, 0, 0, 2000);
+    assert(psl_step(&w, 2000).held == 0);
+    psl_active(&w, 1, 0, 3000);
+    assert(psl_step(&w, 3000).held == 0);
+
+    /* Grouped on the cable when it went to COMING: off it at once, held once it leaves its group, and only once. */
+    psl f;
+    make_auto(&f, WIFI_B, 9, 0, 0);
+    psl_set_cable(&f, PSL_CABLE_UP, CABLE_B, CABLE_BC, 0);
+    hear(&f, CABLE_A, 5, PSL_F_SERVING, 100);
+    assert(psl_step(&f, 100).server_ip == CABLE_A);
+    psl_active(&f, 1, 1, 200);
+    psl_set_cable(&f, PSL_CABLE_COMING, 0, 0, 2000);
+    psl_choice c = psl_step(&f, 2000);
+    assert(c.cable == 0 && c.held == 0);
+    psl_active(&f, 1, 0, 3000);
+    assert(psl_step(&f, 3000).held == 1);
+    assert(psl_step(&f, 3000 + PSL_CABLE_HOLD_MS).held == 0);
+    psl_active(&f, 1, 1, 12000);
+    psl_active(&f, 1, 0, 13000);
+    assert(psl_step(&f, 13000).held == 0);
+
+    /* Dropped to NONE (no phone on the port), the phone back later: the group left after that holds. */
+    psl n;
+    make_auto(&n, WIFI_B, 9, 0, 0);
+    psl_set_cable(&n, PSL_CABLE_UP, CABLE_B, CABLE_BC, 0);
+    psl_active(&n, 1, 1, 200);
+    psl_set_cable(&n, PSL_CABLE_NONE, 0, 0, 2000);
+    assert(psl_step(&n, 2000).cable == 0);
+    psl_set_cable(&n, PSL_CABLE_COMING, 0, 0, 3000);
+    assert(psl_step(&n, 3000).held == 0);
+    psl_active(&n, 1, 0, 4000);
+    assert(psl_step(&n, 4000).held == 1);
+}
+
+/* Stage-1 rules hold on the cable: linger and goodbye, a busy server, this instance's own tie. */
+static void stage_one_rules_on_the_cable(void) {
+    psl s;
+    uint8_t pkt[PSL_PACKET];
+    uint32_t ip;
+    make_auto(&s, WIFI_A, 5, 0, 0);
+    psl_set_cable(&s, PSL_CABLE_UP, CABLE_A, CABLE_BC, 0);
+    psl_choice c = psl_step(&s, PSL_LISTEN_MS);
+    assert(c.serve == 1 && c.cable == 1 && c.server_ip == CABLE_A);
+    psl_active(&s, 0, 0, 5000);
+    c = psl_step(&s, 5000 + PSL_LINGER_MS - 1);
+    assert(c.serve == 1 && c.announce == 1 && c.cable == 1);
+    assert(psl_pack(&s, pkt) == PSL_PACKET && (pkt[5] & PSL_F_SERVING));
+    memcpy(&ip, pkt + 8, 4);
+    assert(ip == CABLE_A);
+    c = psl_step(&s, 5000 + PSL_LINGER_MS);
+    assert(c.serve == 0 && c.announce == 0);
+    assert(psl_pack(&s, pkt) == 0);
+    psl_pack_goodbye(&s, pkt);
+    memcpy(&ip, pkt + 8, 4);
+    assert(ip == CABLE_A && pkt[5] == 0);
+
+    /* A cable server with another device on it keeps it against a better cable server. */
+    psl b;
+    make_auto(&b, WIFI_A, 9, 0, 0);
+    psl_set_cable(&b, PSL_CABLE_UP, CABLE_A, CABLE_BC, 0);
+    assert(psl_step(&b, PSL_LISTEN_MS).serve == 1);
+    psl_active(&b, 1, 1, 1050);
+    hear(&b, CABLE_B, 1, PSL_F_SERVING | PSL_F_SESSION, 1100);
+    c = psl_step(&b, 1100);
+    assert(c.serve == 1 && c.cable == 1 && c.server_ip == CABLE_A);
+
+    /* This instance's own tie from a cable address is not another device. */
+    psl o;
+    make_auto(&o, WIFI_A, 5, 0, 0);
+    psl_set_cable(&o, PSL_CABLE_UP, CABLE_A, CABLE_BC, 0);
+    psl_choice before = psl_step(&o, 100);
+    hear(&o, CABLE_B, 5, PSL_F_SERVING | PSL_F_SESSION, 100);
+    c = psl_step(&o, 100);
+    assert(memcmp(&c, &before, sizeof c) == 0);
+    c = psl_step(&o, PSL_LISTEN_MS);
+    assert(c.serve == 1 && c.server_ip == CABLE_A);
 }
 
 /* The hold ends without the cable: the election resumes, listening afresh. */
@@ -904,6 +1014,9 @@ int main(void) {
     cable_coming_holds_wifi_server();
     cable_coming_blocks_serving();
     cable_coming_hold_expires();
+    one_hold_per_coming_episode();
+    freed_hold_only_after_a_dropped_cable();
+    stage_one_rules_on_the_cable();
     cable_none_ends_hold();
     cable_up_without_self_is_none();
     cable_up_ends_hold_and_switches();
