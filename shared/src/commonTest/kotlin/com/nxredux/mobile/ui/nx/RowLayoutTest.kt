@@ -420,10 +420,44 @@ class RowLayoutTest {
     private val capRoom = 16f + 2 * 21.1f
     private val capName = 21.1f
     private val capDetails = listOf(16.9f, 16.9f)
-    private val capNeed = captionDrawnHeight(capName, capDetails, STACK_CAPTION_GAP.value)
+    private val capNeed = carouselCaptionNeed(capName, 2 * capName, capDetails[0], STACK_CAPTION_GAP.value)
 
     private fun capped(box: Float, portraitW: Float? = null) = carouselRowPlace(box, 0f, capRoom, portraitW, maxItemH = carouselItemHMax(box, capNeed))
-    private fun rowsUnder(box: Float, itemH: Float) = captionRowsWithin(capName, capDetails, STACK_CAPTION_GAP.value, carouselCaptionMax(box, itemH))
+    private fun rowsUnder(box: Float, itemH: Float, nameH: Float = capName) = captionRowsWithin(nameH, capDetails, STACK_CAPTION_GAP.value, carouselCaptionMax(box, itemH))
+
+    // The need: a name line and both detail rows, or a two-line name and one row, whichever is taller.
+    @Test fun aCarouselCaptionsNeedIsTheTallerOfOneNameLineWithTwoRowsAndTwoWithOne() {
+        val gap = STACK_CAPTION_GAP.value
+        assertEquals(2 * 21.1f + gap + 16.9f, carouselCaptionNeed(21.1f, 42.2f, 16.9f, gap), 1e-4f)
+        assertEquals(10f + 2 * (gap + 30f), carouselCaptionNeed(10f, 20f, 30f, gap), 1e-4f)
+    }
+
+    // Capped, a one-line name keeps both detail rows and a two-line name exactly one, at the default text size and at
+    // Small (0.75: 15.8 dp name lines, 12.7 dp rows), on the cover glass, 480 × 360, 427 × 320 and a phone in landscape.
+    @Test fun aCappedCaptionKeepsTwoRowsUnderOneNameLineAndOneUnderTwo() {
+        val gap = STACK_CAPTION_GAP.value
+        for ((name, row) in listOf(21.1f to 16.9f, 15.8f to 12.7f)) {
+            val need = carouselCaptionNeed(name, 2 * name, row, gap)
+            val room = 16f + 2 * name
+            for (box in listOf(256f, 236f, 250f, 196f, 210f)) {
+                val g = carouselRowPlace(box, 0f, room, maxItemH = carouselItemHMax(box, need)).g
+                val max = carouselCaptionMax(box, g.itemH)
+                assertEquals(2, captionRowsWithin(name, listOf(row, row), gap, max), "$name/$box one line")
+                assertEquals(1, captionRowsWithin(2 * name, listOf(row, row), gap, max), "$name/$box two lines")
+            }
+        }
+    }
+
+    // A box too short for the need: the tile held at the 40% floor, the caption keeps what fits under it, from the first
+    // row: a 120 dp box, a 48 dp tile, 44 dp of caption: a one-line name and its genre, a two-line name alone.
+    @Test fun atTheFloorTheCaptionKeepsTheRowsThatFit() {
+        val box = 120f
+        val g = capped(box).g
+        assertEquals(CAROUSEL_MIN_HEIGHT_SHARE * box, g.itemH, 1e-3f)
+        assertTrue(carouselRowPlace(box, 0f, capRoom).g.itemH > g.itemH)            // the floor binds, below today's tile
+        assertEquals(1, rowsUnder(box, g.itemH))
+        assertEquals(0, rowsUnder(box, g.itemH, nameH = 2 * capName))
+    }
 
     // The tallest tile that leaves its caption the need under it at its highest (and a dp's slack), never below the floor.
     @Test fun aCarouselItemsHeightIsCappedToLeaveItsCaptionTheNeed() {

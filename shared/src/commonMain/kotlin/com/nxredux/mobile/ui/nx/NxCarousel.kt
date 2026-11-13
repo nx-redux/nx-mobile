@@ -98,8 +98,9 @@ fun NxCarousel(
         val room = rememberCaptionRoom(CAPTION_GAP, nameStyle, infoStyle, infoRows = if (gameList) 0 else CAROUSEL_INFO_ROWS).takeIf { cardInfo == null } ?: 0f
         // One size in both orientations, shrunk only so the tile and the caption room fit the body's height (the shown
         // title's; a hidden title's room left out), the block centred in the whole box.
-        // A game list's selection is capped so its caption has room for a name line and two detail rows under it
-        // ([carouselItemHMax]), measured in their styles; where the box leaves that room already, nothing changes.
+        // A game list's selection is capped so its caption has room for a name line and two detail rows under it, or a
+        // two-line name and one ([carouselCaptionNeed], [carouselItemHMax]), measured in their styles;
+        // where the box leaves that room already, nothing changes.
         val need = if (gameList) rememberCaptionNeed(nameStyle, infoStyle) else null
         val (g, top) = carouselRowPlace(
             maxHeight.value, titleRoom.value, room, portraitW = maxWidth.value.takeIf { portrait },   // portrait: the neighbours show
@@ -247,7 +248,7 @@ internal const val CAROUSEL_MIN_HEIGHT_SHARE = 0.4f
 
 /**
  * The tallest a game list Carousel's selected tile may be in a box [areaDp] tall for its caption to have [needDp] under
- * it at its highest ([carouselCaptionMax]): the name's line and its two detail rows, so they show above the bottom row.
+ * it at its highest ([carouselCaptionMax]): [carouselCaptionNeed], so the name and its detail rows show above the bottom row.
  * [CAPTION_NEED_SLACK] more, so a rounding of the drawn heights never cuts the last row. Never below
  * [CAROUSEL_MIN_HEIGHT_SHARE] of the box (a box too short for both keeps a tile, its rows cut to what fits).
  */
@@ -273,8 +274,15 @@ internal fun rememberCaptionRoom(gap: Float, name: TextStyle, info: TextStyle, i
 }
 
 /**
- * A game list Carousel caption's need in dp ([carouselItemHMax]): one line of the name in [name] and two detail rows in
- * [info], [STACK_CAPTION_GAP] before each ([captionDrawnHeight]), measured in those styles, so it follows the text size.
+ * A game list Carousel caption's need in dp ([carouselItemHMax]), the taller of a one-line name ([nameH]) with both detail
+ * rows ([rowH], [gap] before each) and a two-line name ([twoLineNameH]) with one, so a long name keeps its genre.
+ */
+internal fun carouselCaptionNeed(nameH: Float, twoLineNameH: Float, rowH: Float, gap: Float): Float =
+    max(captionDrawnHeight(nameH, listOf(rowH, rowH), gap), captionDrawnHeight(twoLineNameH, listOf(rowH), gap))
+
+/**
+ * [carouselCaptionNeed] measured in the caption's styles: one and two lines of the name in [name] (as
+ * [rememberCaptionRoom] measures them), a detail row in [info]; so it follows the text size.
  */
 @Composable
 private fun rememberCaptionNeed(name: TextStyle, info: TextStyle): Float {
@@ -283,14 +291,12 @@ private fun rememberCaptionNeed(name: TextStyle, info: TextStyle): Float {
     return remember(name, info, density) {
         with(density) {
             val nameH = measurer.measure("A", name).size.height.toDp().value
+            val twoLines = measurer.measure("A\nA", name, maxLines = 2).size.height.toDp().value
             val rowH = measurer.measure("A", info).size.height.toDp().value
-            captionDrawnHeight(nameH, List(CAPTION_DETAIL_ROWS) { rowH }, STACK_CAPTION_GAP.value)
+            carouselCaptionNeed(nameH, twoLines, rowH, STACK_CAPTION_GAP.value)
         }
     }
 }
-
-/** The detail rows a game list Carousel's caption keeps room for under its name: the genre, the release. */
-private const val CAPTION_DETAIL_ROWS = 2
 
 /**
  * A row caption's heights as drawn, dp: [title] in [name] at the caption's width ([availPx], the Texts' own
