@@ -97,6 +97,14 @@ class NetplayUsbControllerTest {
         assertEquals(NetplayLink.USB, assertIs<NetplayPage.Role>(c.page.value).connection)
     }
 
+    @Test fun a_psp_game_offers_wifi_only_whatever_cable_is_there() = runTest {
+        val c = controller(FakeNetplayPlatform().apply { usbCable = FakeUsbCable() })
+        c.open(entry("PSP", "Monster Hunter Portable 3rd (Japan).iso"))
+        val role = assertIs<NetplayPage.Role>(c.page.value)
+        assertNull(role.connection)
+        assertTrue(role.connections.isEmpty())
+    }
+
     private val emerald = entry("MGBA", "Pokemon Emerald (USA).gba")
 
     @Test fun mgba_offers_the_cable_only_for_a_game_without_a_wifi_mode() = runTest {

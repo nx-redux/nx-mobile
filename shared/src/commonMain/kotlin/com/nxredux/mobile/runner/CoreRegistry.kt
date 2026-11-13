@@ -87,14 +87,23 @@ object CoreRegistry {
         players = 4,
         name = "Mupen64Plus-Next",
     )
+    internal val PSP_NETWORK_OPTIONS: Set<String> = (1..12).map { it.toString().padStart(2, '0') }.let { nn ->
+        setOf(
+            "ppsspp_enable_wlan", "ppsspp_enable_builtin_pro_ad_hoc_server", "ppsspp_change_pro_ad_hoc_server_address",
+            "ppsspp_enable_upnp", "ppsspp_upnp_use_original_port", "ppsspp_port_offset", "ppsspp_wlan_channel",
+        ) + nn.map { "ppsspp_change_mac_address$it" } + nn.map { "ppsspp_pro_ad_hoc_server_address$it" }
+    }
     private val ppsspp = CoreDescriptor(
         "ppsspp", "libppsspp_libretro_android.so", setOf("iso", "cso", "chd", "pbp", "elf", "prx"),
         biosFiles = listOf("PPSSPP/"),
         // The backend is locked to "auto", which asks GET_PREFERRED_HW_RENDER, so Graphics API picks GL or Vulkan; "none"
         // (software context) is hidden. retro_cheat_set only works with ppsspp_cheats enabled (off by default), so it is
         // locked on: the in-game Cheats row is the switch. VR Mode needs stereo video views, which we never report.
-        defaultOptions = mapOf("ppsspp_backend" to "auto", "ppsspp_cheats" to "enabled", "ppsspp_vr_mode" to "Off"),
-        lockedOptions = setOf("ppsspp_cheats", "ppsspp_backend", "ppsspp_vr_mode"),
+        // The ad hoc network is the app's (PspOptions.LOCAL_WIRELESS and a Netplay sheet session; the launch sends these
+        // through NetplayLinkOptions.pspNetwork): WLAN stays off unless the link is on, and the server, UPnP, port, MAC and
+        // channel rows are locked, so hidden, whether or not it is.
+        defaultOptions = mapOf("ppsspp_backend" to "auto", "ppsspp_cheats" to "enabled", "ppsspp_vr_mode" to "Off", "ppsspp_enable_wlan" to "disabled"),
+        lockedOptions = setOf("ppsspp_cheats", "ppsspp_backend", "ppsspp_vr_mode") + PSP_NETWORK_OPTIONS,
         hiddenValues = mapOf("ppsspp_backend" to setOf("vulkan", "none")),
         vulkan = VulkanSwitch(gles = mapOf("ppsspp_backend" to "auto"), vulkan = mapOf("ppsspp_backend" to "auto")),
         restartOnlyOptions = RestartOnlyOptions.ppsspp,

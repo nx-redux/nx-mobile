@@ -20,7 +20,7 @@ internal enum class DsPresence {
 }
 
 /**
- * DS local wireless: whether this phone is out, seeking a room or in one comes from the link's network thread, which
+ * DS, 3DS and PSP local wireless: whether this phone is out, seeking a room or in one comes from the link's network thread, which
  * tells nobody, so it is read every [TICK_MS] on [scope] (the screen's main-thread scope) and [onChange] runs on each
  * change. The room's comings and goings are seconds apart (searches, a 3 s silence), so a half-second read is soon enough.
  */

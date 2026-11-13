@@ -1293,10 +1293,10 @@ index 0000000..0e6cf75
 +} // namespace LibRetro
 diff --git a/src/citra_libretro/room_link.cpp b/src/citra_libretro/room_link.cpp
 new file mode 100644
-index 0000000..9362d75
+index 0000000..6cf7233
 --- /dev/null
 +++ b/src/citra_libretro/room_link.cpp
-@@ -0,0 +1,708 @@
+@@ -0,0 +1,717 @@
 +// Copyright Citra Emulator Project / Azahar Emulator Project
 +// Licensed under GPLv2 or any later version
 +// Refer to the license.txt file included.
@@ -1782,7 +1782,6 @@ index 0000000..9362d75
 +    std::scoped_lock control(control_mutex);
 +    if (leaver.joinable())
 +        leaver.join();
-+    parked = false;
 +    Service::NWM::wireless_hook = nullptr;
 +    wireless_on = false;
 +    wireless_hosting = false;
@@ -1798,6 +1797,8 @@ index 0000000..9362d75
 +    }
 +    LeaveAndClose();
 +    mode = Mode::Off;
++    // Last: a room the frontend left reads as out the whole way, not as seeking while it closes.
++    parked = false;
 +}
 +
 +int Presence() {
@@ -1985,9 +1986,17 @@ index 0000000..9362d75
 +}
 +
 +void OnOptionsChanged() {
-+    if (mode != Mode::Off && FetchVariable(MODE_KEY, "off") == "off") {
++    const std::string wanted = FetchVariable(MODE_KEY, "off");
++    if (mode != Mode::Off && wanted == "off") {
 +        LeaveRoom();
 +        LOG_INFO(Frontend, "3DS link: left the room");
++    } else if (mode == Mode::Session && wanted == "auto") {
++        // A session left with the console's local wireless on: its room is left as for "off", then
++        // the automatic route starts. Its hook only hears the game's next wireless on, so the game
++        // stays out of every room, the session's included, until it turns its wireless on again.
++        LeaveRoom();
++        Start();
++        LOG_INFO(Frontend, "3DS link: left the session's room, automatic from the game's next wireless on");
 +    }
 +}
 +
@@ -2007,10 +2016,10 @@ index 0000000..9362d75
 +} // namespace LibRetro::RoomLink
 diff --git a/src/citra_libretro/room_link.h b/src/citra_libretro/room_link.h
 new file mode 100644
-index 0000000..e65bd59
+index 0000000..c6ddfc5
 --- /dev/null
 +++ b/src/citra_libretro/room_link.h
-@@ -0,0 +1,27 @@
+@@ -0,0 +1,29 @@
 +// Copyright Citra Emulator Project / Azahar Emulator Project
 +// Licensed under GPLv2 or any later version
 +// Refer to the license.txt file included.
@@ -2030,7 +2039,9 @@ index 0000000..e65bd59
 +/// not replace it.
 +bool Linked();
 +
-+/// Re-reads the link mode; leaves the room when the frontend turned it off.
++/// Re-reads the link mode; leaves the room when the frontend turned it off, and moves a session to
++/// the automatic route (out of rooms until the game turns its wireless on again) when the frontend
++/// asks for it.
 +void OnOptionsChanged();
 +
 +/// Leaves the room and shuts the network down. Call before the system shuts down: the worker is

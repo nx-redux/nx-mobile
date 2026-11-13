@@ -1,0 +1,1241 @@
+# license: modifies PPSSPP (https://github.com/hrydgard/ppsspp), GPL-2.0-or-later (LICENSE.TXT); this patch is distributed under the same license.
+# PSP ad hoc between nx-mobile devices on one Wi-Fi with nobody typing a server address: the frontend's runner
+# (NX_ENVIRONMENT_SET_PSP_LINK, libretro/nx_psp_link.h) finds the other devices and chooses which one runs the ad hoc
+# server. The core takes its server from the runner at each login, starts and stops its built-in server when told,
+# logs in again when the server changes, and reports when the game enters ad hoc mode and joins or leaves a group.
+# A game that only calls sceNetAdhocctlInit touches no network; the login waits for its first Scan / Create /
+# Connect / Join. Every ad hoc socket (the server connection, PDP, PTP, accepted ones, the built-in server's) is
+# routed onto the runner's network, and this device's address is the one on it. A lost server connection, a new
+# server, the runner's leave and a login that finds no server each tell a game in a group or joining one that it is
+# disconnected, and end a scan that can no longer be answered as one that found nothing; after a leave the device
+# stays off the server until rejoin or, on the automatic route, until the game re-enters ad hoc; with nx_psp_link
+# switched off it stays off, and a session turned into the automatic route comes back by that route's rule. The
+# runner hears from the core when another device is on this device's server, even after the game left ad hoc, so it
+# keeps that server.
+# The core reports its presence, and refuses save states while in ad hoc. Without a frontend that answers the call,
+# the core behaves as upstream.
+diff --git a/Core/CMakeLists.txt b/Core/CMakeLists.txt
+index 22106d5..5cb7c7e 100644
+--- a/Core/CMakeLists.txt
++++ b/Core/CMakeLists.txt
+@@ -509,6 +509,8 @@ add_library(Core STATIC
+ 	HLE/proAdhoc.cpp
+ 	HLE/proAdhocServer.h
+ 	HLE/proAdhocServer.cpp
++	HLE/NxPspLink.h
++	HLE/NxPspLink.cpp
+ 	HLE/sceOpenPSID.cpp
+ 	HLE/sceOpenPSID.h
+ 	HLE/sceResmgr.cpp
+diff --git a/Core/HLE/AdhocTransportP2P.cpp b/Core/HLE/AdhocTransportP2P.cpp
+index 06f990f..e0f6f74 100644
+--- a/Core/HLE/AdhocTransportP2P.cpp
++++ b/Core/HLE/AdhocTransportP2P.cpp
+@@ -38,6 +38,7 @@
+ #include "Core/HLE/AdhocTransport.h"
+ #include "Core/HLE/NetAdhocCommon.h"
+ #include "Core/HLE/NetInetConstants.h"
++#include "Core/HLE/NxPspLink.h"
+ 
+ #ifdef _WIN32
+ #undef errno
+@@ -373,6 +374,7 @@ int P2PTransport::PdpCreate(const SceNetEtherAddr *saddr, int port, int bufferSi
+ 		DEBUG_LOG(Log::sceNet, "%s: sock creation failed", __func__);
+ 		return ERROR_NET_NO_SPACE;
+ 	}
++	NxPspLink::RouteSocket(usocket);
+ 
+ 	// Change socket buffer size to be consistent on all platforms.
+ 	// Send Buffer should be smaller than Recv Buffer to prevent faster device from flooding slower device too much.
+@@ -602,6 +604,7 @@ int P2PTransport::PtpOpen(const SceNetEtherAddr *saddr, int sport, const SceNetE
+ 
+ 	// Valid Socket produced
+ 	if (tcpsocket > 0) {
++		NxPspLink::RouteSocket(tcpsocket);
+ 		// Change socket MSS
+ 		setSockMSS(tcpsocket, PSP_ADHOC_PTP_MSS);
+ 
+@@ -806,6 +809,7 @@ int P2PTransport::PtpListen(const SceNetEtherAddr *saddr, int sport, int bufsize
+ 
+ 	// Valid Socket produced
+ 	if (tcpsocket > 0) {
++		NxPspLink::RouteSocket(tcpsocket);
+ 		// Change socket MSS
+ 		setSockMSS(tcpsocket, PSP_ADHOC_PTP_MSS);
+ 
+diff --git a/Core/HLE/NxPspLink.cpp b/Core/HLE/NxPspLink.cpp
+new file mode 100644
+index 0000000..04287d2
+--- /dev/null
++++ b/Core/HLE/NxPspLink.cpp
+@@ -0,0 +1,397 @@
++// Copyright (c) 2012- PPSSPP Project.
++
++// This program is free software: you can redistribute it and/or modify
++// it under the terms of the GNU General Public License as published by
++// the Free Software Foundation, version 2.0 or later versions.
++
++// This program is distributed in the hope that it will be useful,
++// but WITHOUT ANY WARRANTY; without even the implied warranty of
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++// GNU General Public License 2.0 for more details.
++
++// A copy of the GPL 2.0 should have been included with the program.
++// If not, see http://www.gnu.org/licenses/
++
++// Official git repository and contact information can be found at
++// https://github.com/hrydgard/ppsspp and http://www.ppsspp.org/.
++
++#include <atomic>
++#include <chrono>
++#include <condition_variable>
++#include <mutex>
++#include <thread>
++
++#include "Common/Log.h"
++#include "Common/Net/SocketCompat.h"
++#include "Core/HLE/NxPspLink.h"
++#include "Core/HLE/proAdhoc.h"
++#include "Core/HLE/proAdhocServer.h"
++#include "libretro/nx_psp_link.h"
++
++namespace NxPspLink {
++
++// The frontend's presence numbering (nx_3ds_link.h).
++static const int PRESENCE_OUT = 0;
++static const int PRESENCE_SEEKING = 1;
++static const int PRESENCE_ROOM = 2;
++// Binding is quick; this only bounds serve(1) if the thread never gets that far.
++static const int SERVER_READY_TIMEOUT_MS = 2000;
++
++static EnvironmentCallback environment = nullptr;
++// The frontend fills in its half during the SET. Unregister() leaves it, so a thread that saw Enabled() just
++// before still calls a valid function (which answers "none" once the frontend has let go of the core).
++static nx_psp_link_interface iface;
++static std::atomic<bool> enabled(false);
++static std::atomic<uint32_t> selfIp(0);
++// What the frontend was last told: 0 out of ad hoc, 1 in ad hoc, 2 in a group.
++static std::atomic<int> reported(0);
++static std::atomic<bool> reloginPending(false);
++static std::atomic<bool> leavePending(false);
++static std::atomic<bool> rejoinPending(false);
++static std::atomic<bool> serverLost(false);
++
++// The frontend parks its election on leave() and brings it back on the same terms (psplinkhooks.cpp: adapterLeave,
++// adapterRejoin, coreActiveReport); these follow it. Held only for a few assignments, never while calling the
++// frontend, so leave() and rejoin(), which the frontend calls holding its own lock, never wait on anything here.
++static std::mutex parkMutex;
++static std::atomic<bool> parked(false);
++// While parked: the game has been out of ad hoc since the leave, so on the automatic route its next trigger brings it
++// back. Kept on a session too: the frontend can turn a session into the automatic route after its leave, and reads the
++// new route a frame before this core does.
++static bool outSinceLeave = false;
++static std::atomic<int> route(ROUTE_AUTO);
++
++// Kept by the server thread (ServerUsers), read by whoever reports.
++static std::atomic<bool> serverUsers(false);
++// The CPU thread and the server thread both report to the frontend; one at a time, each from the latest state, so the
++// last report is never a stale one. Held while calling the frontend's active(), which takes only the frontend's own
++// lock and never calls back into the core; nothing else is taken under it.
++static std::mutex reportMutex;
++static int sentActive = 0;
++static int sentGrouped = 0;
++
++// Held only to start or stop adhocServerThread, never while calling the frontend.
++static std::mutex serverMutex;
++static bool serveWanted = false;
++static std::mutex readyMutex;
++static std::condition_variable readyCond;
++static bool serverReady = false;
++
++static void StopServerLocked() {
++	adhocServerRunning = false;
++	if (adhocServerThread.joinable()) {
++		adhocServerThread.join();
++	}
++	// Not reported from here (the frontend is never called under serverMutex): the frontend only weighs it while
++	// serving, and the poll's next report, or a new server's first, carries it.
++	serverUsers = false;
++}
++
++static void Report() {
++	std::lock_guard<std::mutex> guard(reportMutex);
++	const int active = reported != 0 ? 1 : 0;
++	const int grouped = reported == 2 || serverUsers ? 1 : 0;
++	if (active == sentActive && grouped == sentGrouped) {
++		return;
++	}
++	sentActive = active;
++	sentGrouped = grouped;
++	iface.active(active, grouped);
++}
++
++static void StartServerLocked() {
++	if (adhocServerThread.joinable()) {
++		if (adhocServerRunning) {
++			return;
++		}
++		// It ended by itself (its port was taken).
++		adhocServerThread.join();
++	}
++	{
++		std::lock_guard<std::mutex> guard(readyMutex);
++		serverReady = false;
++	}
++	// Set here rather than by the thread, as __NetAdhocInit does, so a stop that comes first can't be undone.
++	adhocServerRunning = true;
++	adhocServerThread = std::thread(proAdhocServerThread, SERVER_PORT);
++	std::unique_lock<std::mutex> lock(readyMutex);
++	readyCond.wait_for(lock, std::chrono::milliseconds(SERVER_READY_TIMEOUT_MS), [] { return serverReady; });
++}
++
++static int LinkPresence() {
++	return Presence();
++}
++
++// From the frontend's UI thread, with its lock held and the emulation perhaps paused: only flags, and no log (which
++// goes to the frontend). The poll tells the game and drops the server connection when the game next runs; the
++// frontend stops this device's server itself.
++static void LinkLeave() {
++	std::lock_guard<std::mutex> guard(parkMutex);
++	parked = true;
++	outSinceLeave = reported == 0;
++	rejoinPending = false;
++	leavePending = true;
++}
++
++// The frontend calls this on every return to the foreground; only a session comes back by it.
++static void LinkRejoin() {
++	std::lock_guard<std::mutex> guard(parkMutex);
++	if (!parked || route != ROUTE_SESSION) {
++		return;
++	}
++	parked = false;
++	rejoinPending = true;
++}
++
++// From the frontend's finder thread, which unload joins: waits for nothing but the server thread.
++static void LinkServe(int on) {
++	std::lock_guard<std::mutex> guard(serverMutex);
++	serveWanted = on != 0;
++	if (on) {
++		StartServerLocked();
++	} else {
++		StopServerLocked();
++	}
++	INFO_LOG(Log::sceNet, "NxPspLink: server %s", on ? "on" : "off");
++}
++
++// From the frontend's finder thread. The poll, on the CPU thread, drops the connection and logs in again.
++static void LinkRelogin() {
++	reloginPending = true;
++	INFO_LOG(Log::sceNet, "NxPspLink: log in again");
++}
++
++bool Enabled() {
++	return enabled;
++}
++
++void Register(EnvironmentCallback env) {
++	if (enabled || !env) {
++		return;
++	}
++	iface = nx_psp_link_interface{};
++	iface.presence = LinkPresence;
++	iface.leave = LinkLeave;
++	iface.rejoin = LinkRejoin;
++	iface.serve = LinkServe;
++	iface.relogin = LinkRelogin;
++	selfIp = 0;
++	reported = 0;
++	serverUsers = false;
++	{
++		std::lock_guard<std::mutex> guard(reportMutex);
++		sentActive = 0;
++		sentGrouped = 0;
++	}
++	reloginPending = false;
++	leavePending = false;
++	rejoinPending = false;
++	serverLost = false;
++	{
++		std::lock_guard<std::mutex> guard(parkMutex);
++		parked = false;
++		outSinceLeave = false;
++	}
++	environment = env;
++	// Set before the call: the frontend may call serve() from its own thread before the call returns, and the
++	// server thread then skips its probe for another server.
++	enabled = true;
++	if (!env(NX_ENVIRONMENT_SET_PSP_LINK, &iface)) {
++		// A frontend that doesn't answer never calls serve().
++		enabled = false;
++		return;
++	}
++	if (!iface.server || !iface.active) {
++		ERROR_LOG(Log::sceNet, "NxPspLink: the frontend's half is missing");
++		Unregister();
++		return;
++	}
++	INFO_LOG(Log::sceNet, "NxPspLink: registered");
++}
++
++void Unregister() {
++	if (!enabled) {
++		return;
++	}
++	// Under no lock of ours: the frontend joins its finder thread here, which may be in serve() or relogin().
++	// Still enabled meanwhile, so a server that thread starts skips the probe; the frontend's calls are safe
++	// throughout and answer "none" once it has let go of the core.
++	environment(NX_ENVIRONMENT_SET_PSP_LINK, nullptr);
++	enabled = false;
++	{
++		std::lock_guard<std::mutex> guard(serverMutex);
++		serveWanted = false;
++		StopServerLocked();
++	}
++	reported = 0;
++	{
++		std::lock_guard<std::mutex> guard(reportMutex);
++		sentActive = 0;
++		sentGrouped = 0;
++	}
++	reloginPending = false;
++	leavePending = false;
++	rejoinPending = false;
++	serverLost = false;
++	INFO_LOG(Log::sceNet, "NxPspLink: unregistered");
++}
++
++bool Server(uint32_t *ip, uint32_t *self) {
++	// Parked: the frontend's answer would be "none" after its whole listen window.
++	if (!enabled || parked) {
++		return false;
++	}
++	uint32_t serverIp = 0;
++	uint32_t selfAddr = 0;
++	if (!iface.server(&serverIp, &selfAddr)) {
++		return false;
++	}
++	selfIp = selfAddr;
++	*ip = serverIp;
++	*self = selfAddr;
++	return true;
++}
++
++void Active(bool active, bool grouped) {
++	if (!enabled) {
++		return;
++	}
++	const int state = !active ? 0 : grouped ? 2 : 1;
++	if (reported.exchange(state) == state) {
++		// The server's users may have changed meanwhile; told only if they did.
++		Report();
++		return;
++	}
++	bool back = false;
++	{
++		// The frontend sees the same changes and unparks on the same ones.
++		std::lock_guard<std::mutex> guard(parkMutex);
++		if (parked) {
++			if (!active) {
++				outSinceLeave = true;
++			} else if (outSinceLeave && route == ROUTE_AUTO) {
++				parked = false;
++				back = true;
++			}
++		}
++	}
++	if (back) {
++		INFO_LOG(Log::sceNet, "NxPspLink: back in ad hoc after a leave");
++	}
++	Report();
++}
++
++void Grouped(bool grouped) {
++	if (enabled && reported != 0) {
++		Active(true, grouped);
++	}
++}
++
++void ServerUsers(bool others) {
++	if (serverUsers.exchange(others) == others) {
++		return;
++	}
++	INFO_LOG(Log::sceNet, "NxPspLink: %s", others ? "another device is on this server" : "no other device on this server");
++	// Not once the server is stopping: whoever stops it holds serverMutex, which the frontend is never called under.
++	if (enabled && adhocServerRunning) {
++		Report();
++	}
++}
++
++bool InAdhoc() {
++	return enabled && reported != 0;
++}
++
++void RouteSocket(int fd) {
++	if (enabled && iface.route_socket) {
++		iface.route_socket(fd, 0);
++	}
++}
++
++uint32_t SelfIp() {
++	return selfIp;
++}
++
++bool TakeRelogin() {
++	return enabled && reloginPending.exchange(false);
++}
++
++int Presence() {
++	if (!enabled || parked) {
++		return PRESENCE_OUT;
++	}
++	switch (reported) {
++	case 0: return PRESENCE_OUT;
++	case 2: return PRESENCE_ROOM;
++	default: return PRESENCE_SEEKING;
++	}
++}
++
++bool Parked() {
++	return enabled && parked;
++}
++
++void SetRoute(Route r) {
++	route = r;
++}
++
++bool TakeLeave() {
++	return enabled && leavePending.exchange(false);
++}
++
++bool TakeRejoin() {
++	return enabled && rejoinPending.exchange(false);
++}
++
++void ServerLost() {
++	if (enabled) {
++		serverLost = true;
++	}
++}
++
++bool TakeServerLost() {
++	return enabled && serverLost.exchange(false);
++}
++
++void StopServer() {
++	std::lock_guard<std::mutex> guard(serverMutex);
++	StopServerLocked();
++}
++
++void ResetServer(void (*init)()) {
++	// One hold for the three steps: a serve(1) in between would start a server reading the tables init replaces.
++	std::lock_guard<std::mutex> guard(serverMutex);
++	StopServerLocked();
++	init();
++	if (enabled && serveWanted) {
++		StartServerLocked();
++	}
++}
++
++void ServerReady() {
++	std::lock_guard<std::mutex> guard(readyMutex);
++	serverReady = true;
++	readyCond.notify_all();
++}
++
++}  // namespace NxPspLink
++
++#if !PPSSPP_PLATFORM(WINDOWS)
++// A server whose device has gone without closing the connection would otherwise be noticed only when TCP gives up on
++// the unacknowledged pings, minutes later. The server is on the LAN, where an ack takes milliseconds.
++static const unsigned int SERVER_ACK_TIMEOUT_MS = 10000;
++
++extern "C" int NxPspLinkClientSocket(int domain, int type, int protocol) {
++	int fd = socket(domain, type, protocol);
++	if (fd >= 0 && NxPspLink::Enabled()) {
++		NxPspLink::RouteSocket(fd);
++#ifdef TCP_USER_TIMEOUT
++		if (type == SOCK_STREAM) {
++			unsigned int ms = SERVER_ACK_TIMEOUT_MS;
++			setsockopt(fd, IPPROTO_TCP, TCP_USER_TIMEOUT, &ms, sizeof(ms));
++		}
++#endif
++	}
++	return fd;
++}
++#endif
+diff --git a/Core/HLE/NxPspLink.h b/Core/HLE/NxPspLink.h
+new file mode 100644
+index 0000000..5387ad1
+--- /dev/null
++++ b/Core/HLE/NxPspLink.h
+@@ -0,0 +1,84 @@
++// Copyright (c) 2012- PPSSPP Project.
++
++// This program is free software: you can redistribute it and/or modify
++// it under the terms of the GNU General Public License as published by
++// the Free Software Foundation, version 2.0 or later versions.
++
++// This program is distributed in the hope that it will be useful,
++// but WITHOUT ANY WARRANTY; without even the implied warranty of
++// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++// GNU General Public License 2.0 for more details.
++
++// A copy of the GPL 2.0 should have been included with the program.
++// If not, see http://www.gnu.org/licenses/
++
++// Official git repository and contact information can be found at
++// https://github.com/hrydgard/ppsspp and http://www.ppsspp.org/.
++
++// The ad hoc link to the nx-mobile frontend (libretro/nx_psp_link.h). The frontend finds the other devices and
++// chooses which one runs the ad hoc server; the core takes its server from it and runs this device's when told.
++// Without a frontend that answers, Enabled() is false and nothing here changes what the core does.
++
++#pragma once
++
++#include <cstdint>
++
++namespace NxPspLink {
++
++// retro_environment_t, without pulling libretro.h into the HLE.
++typedef bool (*EnvironmentCallback)(unsigned cmd, void *data);
++
++bool Enabled();
++// Before the PSP boots, so the forced settings are in place for __NetInit.
++void Register(EnvironmentCallback environment);
++// Before the PSP shuts down. Also stops a server the frontend started.
++void Unregister();
++
++// The server to log in to and this device's address on its network, both network order. Blocks up to about
++// 1.5 s while the frontend listens for one, so only from the login thread. False: none this time.
++bool Server(uint32_t *ip, uint32_t *self);
++// The game reached Scan / Create / Connect / Join, is in a group, or left ad hoc. What the frontend is told also
++// carries whether this device's server has another user (ServerUsers); only changes reach it.
++void Active(bool active, bool grouped);
++// The poll's view of the group, reported while the game is in ad hoc.
++void Grouped(bool grouped);
++bool InAdhoc();
++void RouteSocket(int fd);
++// The address last given by Server(); 0 before.
++uint32_t SelfIp();
++// The frontend asked for a new login since the last call.
++bool TakeRelogin();
++
++// The frontend's presence numbering (nx_3ds_link.h): 0 out of ad hoc or left, 1 looking, 2 in a group. Any thread.
++int Presence();
++// The game should be off the server: the frontend's leave() has not been undone by rejoin() or, on the automatic
++// route, by the game leaving ad hoc and coming back. Any thread.
++bool Parked();
++// From check_variables, the route nx_psp_link names: the automatic route comes back after a leave when the game
++// re-enters ad hoc, a session's by rejoin(), as the frontend does; a link switched off never comes back. A session
++// turned into the automatic route arrives parked (the frontend's leave() comes first) and comes back by that rule.
++enum Route { ROUTE_AUTO, ROUTE_SESSION, ROUTE_OFF };
++void SetRoute(Route route);
++// For the poll, which does on the CPU thread what leave() and rejoin() ask from other threads.
++bool TakeLeave();
++bool TakeRejoin();
++// The connection to the server was lost (killAdhocctlClient due to an error), on whatever thread noticed it.
++void ServerLost();
++bool TakeServerLost();
++
++// adhocServerThread is started and stopped from the frontend's thread too, so boot and shutdown go through these.
++void StopServer();
++// At boot and after a reset: stops the server, runs init (__AdhocServerInit, whose tables the server reads), and
++// starts it again if the frontend still counts on it, all without letting serve() in between.
++void ResetServer(void (*init)());
++// From the server thread, once it listens or has given up.
++void ServerReady();
++// From the server thread, whenever its users change: whether a device other than this one is on it. The frontend
++// keeps such a server (it neither hands over nor stops it), even after this device's game left ad hoc.
++void ServerUsers(bool others);
++
++}  // namespace NxPspLink
++
++// ext/CMakeLists.txt builds aemu_postoffice's sock_impl_linux.c with socket() renamed to this, so the connection to
++// the ad hoc server, which that library opens, is routed before it connects.
++extern "C" int NxPspLinkClientSocket(int domain, int type, int protocol);
+diff --git a/Core/HLE/proAdhoc.cpp b/Core/HLE/proAdhoc.cpp
+index 0f2fe5d..962c8a5 100644
+--- a/Core/HLE/proAdhoc.cpp
++++ b/Core/HLE/proAdhoc.cpp
+@@ -57,6 +57,7 @@
+ #include "Core/HLE/AdhocTransport.h"
+ #include "Core/Instance.h"
+ #include "proAdhoc.h"
++#include "Core/HLE/NxPspLink.h"
+ 
+ #include "Core/HLE/NetAdhocCommon.h"
+ 
+@@ -1339,6 +1340,8 @@ void killAdhocctlClient(bool due_to_error, const std::lock_guard<std::mutex> &lo
+ 	auto n = GetI18NCategory(I18NCat::NETWORKING);
+ 	if (due_to_error) {
+ 		g_OSD.Show(OSDType::MESSAGE_ERROR, std::string(n->T("Disconnected from AdhocServer")));
++		// The game is told on the CPU thread, by the poll.
++		NxPspLink::ServerLost();
+ 	}
+ 
+ 	g_adhocServerConnected = false;
+@@ -1399,8 +1402,9 @@ static void AdhocctlKeepalive() {
+ 		}
+ 		const std::lock_guard<std::mutex> adhocctl_guard(adhocctlMutex);
+ 		const uint64_t now = time_now_d() * 1000000.0;
+-		// A failed ping is left for the poll to notice and handle.
+-		if (adhocctlHandle && static_cast<s64>(now - lastAdhocctlPing) >= PSP_ADHOCCTL_PING_TIMEOUT && adhocctl_ping(adhocctlHandle) == ADHOCCTL_CALL_SUCCESS) {
++		// A failed ping is left for the poll to notice and handle. After a leave, while the emulation is paused, the
++		// poll can't drop the connection yet; going quiet lets the server drop it instead.
++		if (adhocctlHandle && !NxPspLink::Parked() && static_cast<s64>(now - lastAdhocctlPing) >= PSP_ADHOCCTL_PING_TIMEOUT && adhocctl_ping(adhocctlHandle) == ADHOCCTL_CALL_SUCCESS) {
+ 			lastAdhocctlPing = now;
+ 		}
+ 	}
+@@ -1449,9 +1453,29 @@ static void ResolveAdhocServer() {
+ 	}
+ }
+ 
++// The server can change between logins, so it's asked for each time. None leaves INADDR_NONE, and this login
++// gives up without connecting.
++static void TakeAdhocServerFromLink() {
++	uint32_t ip = 0;
++	uint32_t self = 0;
++	const bool chosen = NxPspLink::Server(&ip, &self);
++	{
++		const std::lock_guard<std::mutex> adhoc_server_ip_guard(g_adhocServerIPMutex);
++		g_adhocServerIP.in.sin_family = AF_INET;
++		g_adhocServerIP.in.sin_addr.s_addr = chosen ? ip : INADDR_NONE;
++		g_adhocServerIP.in.sin_port = htons(SERVER_PORT);
++	}
++	clearLocalIpCache();
++	if (!chosen) {
++		INFO_LOG(Log::sceNet, "FriendFinder: no ad hoc server from the link this time");
++	}
++}
++
+ static void AdhocctlLogin(bool resolve, bool bind, struct adhocctl_addr_v4 bindAddr, SceNetAdhocctlAdhocId productCode, SceNetAdhocctlNickname nickname, SceNetEtherAddr mac, bool useUdp) {
+ 	SetCurrentThreadName("AdhocctlLogin");
+-	if (resolve) {
++	if (NxPspLink::Enabled()) {
++		TakeAdhocServerFromLink();
++	} else if (resolve) {
+ 		ResolveAdhocServer();
+ 	}
+ 
+@@ -1512,8 +1536,20 @@ static void FinishAdhocctlLogin() {
+ 	// sceNetAdhocctlScan & Create puts this back to true, which will trigger retry
+ 	isAdhocctlNeedLogin = false;
+ 
++	// Left while this login ran: it must not take the device back to the server.
++	if (handle && NxPspLink::Parked()) {
++		INFO_LOG(Log::sceNet, "FriendFinder: Dropping a login made before the link left");
++		destroy_adhocctl_session(handle);
++		handle = nullptr;
++	}
++
+ 	if (!handle) {
+ 		g_adhocServerConnected = false;
++		// With the link a login can fail after the game asked to scan or join (no server chosen yet, one not listening
++		// yet, or parked); its request would come back BUSY and leave it busy for good.
++		if (NxPspLink::Enabled() && NetAdhocctl_ServerLost()) {
++			INFO_LOG(Log::sceNet, "FriendFinder: No ad hoc server for the game's request, the game is told");
++		}
+ 		return;
+ 	}
+ 
+@@ -1554,6 +1590,9 @@ static void FinishAdhocctlLogin() {
+ void friendFinderStart() {
+ 	adhocServerResolved = false;
+ 	adhocctlLoggedIn = false;
++	// A leave or a lost server that came after the last session's poll stopped belongs to that session.
++	NxPspLink::TakeLeave();
++	NxPspLink::TakeServerLost();
+ 	{
+ 		const std::lock_guard<std::mutex> adhocctl_guard(adhocctlMutex);
+ 		lastAdhocctlPing = 0;
+@@ -1591,6 +1630,50 @@ void friendFinderPoll() {
+ 		FinishAdhocctlLogin();
+ 	}
+ 
++	// The frontend's leave(): out of the group and off the server now, and the game is told. A login still running
++	// is dropped when it's collected, and until the link is back a login fails at once (Server()).
++	if (NxPspLink::TakeLeave()) {
++		{
++			const std::lock_guard<std::mutex> adhocctl_guard(adhocctlMutex);
++			if (adhocctlHandle && NetAdhocctl_InServerGroup()) {
++				adhocctl_disconnect(adhocctlHandle);
++			}
++			killAdhocctlClient(false, adhocctl_guard);
++		}
++		NetAdhocctl_ServerLost();
++		INFO_LOG(Log::sceNet, "FriendFinder: Left the ad hoc server for the link");
++	}
++
++	// Lost the server (a failed ping, the server closing the connection, an error reading from it): the group was
++	// on it.
++	if (NxPspLink::TakeServerLost() && NetAdhocctl_ServerLost()) {
++		INFO_LOG(Log::sceNet, "FriendFinder: Lost the ad hoc server, the game is told it's disconnected");
++	}
++
++	// The link's server changed or went away. Left pending while a login runs, since that one may have
++	// taken the old server.
++	if (!adhocctlLoginRunning && NxPspLink::TakeRelogin()) {
++		{
++			const std::lock_guard<std::mutex> adhocctl_guard(adhocctlMutex);
++			killAdhocctlClient(false, adhocctl_guard);
++		}
++		// The group was on the old server.
++		NetAdhocctl_ServerLost();
++		// A game that has only inited stays off the network until its own Scan, Create, Connect or Join.
++		if (NxPspLink::InAdhoc() && !NxPspLink::Parked()) {
++			isAdhocctlNeedLogin = true;
++		}
++	}
++
++	// A session came back after a leave: log in again if the game is in ad hoc. Waits for a running login, which
++	// may be the one dropped for the leave.
++	if (!adhocctlLoginRunning && NxPspLink::TakeRejoin()) {
++		INFO_LOG(Log::sceNet, "FriendFinder: Back on the ad hoc server for the link");
++		if (NxPspLink::InAdhoc() && !NxPspLink::Parked()) {
++			isAdhocctlNeedLogin = true;
++		}
++	}
++
+ 	// Reconnect when disconnected while Adhocctl is still inited
+ 	if (!adhocctlLoginRunning) {
+ 		if (netAdhocctlInited && isAdhocctlNeedLogin && g_Config.bEnableWlan) {
+@@ -1611,6 +1694,10 @@ void friendFinderPoll() {
+ 		}
+ 	}
+ 
++	// The state reaches CONNECTED / GAMEMODE through the handlers' events, and leaves it by several paths (Disconnect,
++	// a game mode timeout, a new login); following it here catches them all.
++	NxPspLink::Grouped(adhocctlState == ADHOCCTL_STATE_CONNECTED || adhocctlState == ADHOCCTL_STATE_GAMEMODE);
++
+ 	uint64_t now = time_now_d() * 1000000.0; // Use time_now_d()*1000000.0 instead of CoreTiming::GetGlobalTimeUsScaled() if the game gets disconnected from AdhocServer too soon when FPS wasn't stable
+ 
+ 	// Calculate EnterGameMode Timeout to prevent waiting forever for disconnected players
+@@ -1946,6 +2033,8 @@ int getRelativeLocalIpFromRoutingTable(const in_addr &target_ip, in_addr &local_
+ 		ERROR_LOG(Log::sceNet, "%s: failed creating socket for fetching routing table decision, %d", __func__, errno);
+ 		return -1;
+ 	}
++	// The answer is then the address on the network the ad hoc sockets use.
++	NxPspLink::RouteSocket(sock);
+ 
+ 	sockaddr_in fetch_sockaddr = {0};
+ 	fetch_sockaddr.sin_family = AF_INET;
+@@ -1980,6 +2069,13 @@ int getRelativeLocalIpFromRoutingTable(const in_addr &target_ip, in_addr &local_
+ }
+ 
+ int getLocalIp(sockaddr_in* SocketAddress) {
++	// The link's address on the network every ad hoc socket is routed to, which the server also sees.
++	const uint32_t linkSelf = NxPspLink::Enabled() ? NxPspLink::SelfIp() : 0;
++	if (linkSelf != 0) {
++		SocketAddress->sin_addr.s_addr = linkSelf;
++		return 0;
++	}
++
+ 	if (isLocalServer) {
+ 		SocketAddress->sin_addr = g_localhostIP.in.sin_addr;
+ 		return 0;
+diff --git a/Core/HLE/proAdhoc.h b/Core/HLE/proAdhoc.h
+index 7f20a77..498ab93 100644
+--- a/Core/HLE/proAdhoc.h
++++ b/Core/HLE/proAdhoc.h
+@@ -829,6 +829,7 @@ extern int one;
+ extern std::atomic<bool> friendFinderRunning;
+ extern SceNetAdhocctlPeerInfo * friends;
+ extern SceNetAdhocctlScanInfo * networks;
++extern SceNetAdhocctlScanInfo * newnetworks;
+ extern u64 adhocctlStartTime;
+ // When CreateEnterGameMode or JoinEnterGameMode was called, in emulated time: its timeout is a PSP-side one.
+ extern u64 gameModeEnterTimeUs;
+diff --git a/Core/HLE/proAdhocServer.cpp b/Core/HLE/proAdhocServer.cpp
+index 2d65b32..efebf6a 100644
+--- a/Core/HLE/proAdhocServer.cpp
++++ b/Core/HLE/proAdhocServer.cpp
+@@ -43,6 +43,7 @@
+ #include "Core/Core.h"
+ #include "Core/Config.h"
+ #include "Core/HLE/proAdhocServer.h"
++#include "Core/HLE/NxPspLink.h"
+ 
+ #ifdef _WIN32
+ #undef errno
+@@ -488,6 +489,23 @@ void __AdhocServerInit() {
+ 	crosslinks = std::vector<db_crosslink>(default_crosslinks, default_crosslinks + ARRAY_SIZE(default_crosslinks));
+ }
+ 
++// With the nx-mobile link the frontend keeps a server that another device is on (NxPspLink::ServerUsers). This
++// device's own client connects to this device's own address, so its connection is the one whose two ends match.
++static void report_other_users()
++{
++	if (!NxPspLink::Enabled())
++		return;
++	bool others = false;
++	for (SceNetAdhocctlUserNode *u = _db_user; u != NULL && !others; u = u->next) {
++		struct sockaddr_in local;
++		socklen_t len = sizeof(local);
++		memset(&local, 0, sizeof(local));
++		if (getsockname(u->stream, (struct sockaddr *)&local, &len) != 0 || local.sin_addr.s_addr != u->resolver.ip)
++			others = true;
++	}
++	NxPspLink::ServerUsers(others);
++}
++
+ /**
+  * Login User into Database (Stream)
+  * @param fd Socket
+@@ -547,6 +565,8 @@ void login_user_stream(int fd, uint32_t ip)
+ 				// Update Status Log
+ 				update_status();
+ 
++				report_other_users();
++
+ 				// Exit Function
+ 				return;
+ 			}
+@@ -722,6 +742,8 @@ void logout_user(SceNetAdhocctlUserNode * user)
+ 
+ 	// Update Status Log
+ 	update_status();
++
++	report_other_users();
+ }
+ 
+ /**
+@@ -1673,8 +1695,10 @@ int proAdhocServerThread(int port) // (int argc, char * argv[])
+ 	// Result
+ 	int result = 0;
+ 
+-	if (net::HostPortExists(g_Config.sProAdhocServer, SERVER_PORT, 200)) {
++	// With the link, the frontend has already chosen this device to serve.
++	if (!NxPspLink::Enabled() && net::HostPortExists(g_Config.sProAdhocServer, SERVER_PORT, 200)) {
+ 		INFO_LOG(Log::sceNet, "AdhocServer: Skipped starting because the server is already available");
++		NxPspLink::ServerReady();
+ 		return 0;
+ 	}
+ 	else {
+@@ -1689,6 +1713,8 @@ int proAdhocServerThread(int port) // (int argc, char * argv[])
+ 
+ 	// Create Listening Socket
+ 	int server = create_listen_socket(port); //SERVER_PORT
++	// serve(1) returns now, so a client never asks this server before it listens.
++	NxPspLink::ServerReady();
+ 
+ 	// Created Listening Socket
+ 	if(server != SOCKET_ERROR)
+@@ -1813,6 +1839,8 @@ int create_listen_socket(uint16_t port)
+ 	// Created Socket
+ 	if(fd != -1)
+ 	{
++		NxPspLink::RouteSocket(fd);
++
+ 		// Ignore SIGPIPE when supported (ie. BSD/MacOS)
+ 		setSockNoSIGPIPE(fd, 1);
+ 
+@@ -1901,6 +1929,8 @@ int server_loop(int server)
+ 				loginresult = accept(server, (struct sockaddr *)&addr, &addrlen);
+ 				if(loginresult != -1)
+ 				{
++					NxPspLink::RouteSocket(loginresult);
++
+ 					// Switch Socket into Non-Blocking Mode
+ 					change_blocking_mode(loginresult, 1);
+ 				}
+diff --git a/Core/HLE/sceNet.cpp b/Core/HLE/sceNet.cpp
+index 3eccae0..f43691f 100644
+--- a/Core/HLE/sceNet.cpp
++++ b/Core/HLE/sceNet.cpp
+@@ -59,6 +59,7 @@
+ #include "Core/HLE/sceNetInet.h"
+ #include "Core/HLE/sceNetResolver.h"
+ #include "Core/HLE/NetAdhocCommon.h"
++#include "Core/HLE/NxPspLink.h"
+ 
+ #include "Core/MIPS/MIPSCodeUtils.h" // for macros to implement __CreateHLELoop
+ 
+@@ -558,6 +559,10 @@ void InitLocalhostIP() {
+ 
+ 	std::string serverStr(StripSpaces(g_Config.sProAdhocServer));
+ 	isLocalServer = (!strcasecmp(serverStr.c_str(), "localhost") || serverStr.find("127.") == 0);
++	// The link's server is reached at this device's LAN address, which the others must be given rather than 127.0.0.1.
++	if (NxPspLink::Enabled()) {
++		isLocalServer = false;
++	}
+ }
+ 
+ static void __ApctlState(u64 userdata, int cyclesLate) {
+diff --git a/Core/HLE/sceNetAdhoc.cpp b/Core/HLE/sceNetAdhoc.cpp
+index 299408c..040bcf2 100644
+--- a/Core/HLE/sceNetAdhoc.cpp
++++ b/Core/HLE/sceNetAdhoc.cpp
+@@ -63,6 +63,7 @@
+ #include "Core/HLE/proAdhocServer.h"
+ #include "Core/HLE/KernelWaitHelpers.h"
+ #include "Core/HLE/NetAdhocCommon.h"
++#include "Core/HLE/NxPspLink.h"
+ 
+ #include "ext/aemu_postoffice/client/postoffice_client.h"
+ #include "ext/aemu_postoffice/adhocctl/client/adhocctl.h"
+@@ -401,11 +402,8 @@ bool __NetAdhocConnected() {
+ }
+ 
+ void __NetAdhocShutdown() {
+-	// Kill AdhocServer Thread
+-	adhocServerRunning = false;
+-	if (adhocServerThread.joinable()) {
+-		adhocServerThread.join();
+-	}
++	// Kill AdhocServer Thread, whoever started it
++	NxPspLink::StopServer();
+ 
+ 	if (relayThread.joinable()) {
+ 		relayThread.join();
+@@ -1700,7 +1698,8 @@ void __NetAdhocDoState(PointerWrap &p) {
+ 			SetupAdhocRelayMode();
+ 		}
+ 		if (netAdhocctlInited && !cur_netAdhocctlInited) {
+-			isAdhocctlNeedLogin = true;
++			// As in sceNetAdhocctlInit: with the link, the game's next Scan, Create, Connect or Join logs in.
++			isAdhocctlNeedLogin = !NxPspLink::Enabled();
+ 			StartFriendFinder();
+ 		} else {
+ 			if (!netAdhocctlInited && cur_netAdhocctlInited) {
+@@ -1708,6 +1707,7 @@ void __NetAdhocDoState(PointerWrap &p) {
+ 				const int loadedState = adhocctlState;
+ 				StopFriendFinder();
+ 				adhocctlState = loadedState;
++				NxPspLink::Active(false, false);
+ 			}
+ 			isAdhocctlNeedLogin = false;
+ 		}
+@@ -1747,6 +1747,73 @@ void NetAdhocctl_GameModeTimedOut() {
+ 	isAdhocctlBusy = false;
+ }
+ 
++static bool AdhocctlEventQueued(u32 flag) {
++	std::lock_guard<std::recursive_mutex> adhocGuard(adhocEvtMtx);
++	return std::any_of(adhocctlEvents.begin(), adhocctlEvents.end(), [flag](const std::pair<u32, u32> &e) {
++		return e.first == flag;
++	});
++}
++
++// A scan whose answer can no longer come ends as one that found nothing, which takes the game back to DISCONNECTED and
++// not busy (__NetTriggerCallbacks, __AdhocctlState, AfterAdhocMipsCall). Left alone, it would keep the game SCANNING
++// and every later Scan BUSY. True if it was ended here.
++static bool EndScanInFlight() {
++	if (adhocctlState != ADHOCCTL_STATE_SCANNING) {
++		return false;
++	}
++	// A Scan still waiting to be sent returns 0 rather than BUSY, or going to a server other than the one it was
++	// made for.
++	bool waiting = false;
++	for (auto &it : adhocctlRequests) {
++		if (it.second.opcode == OPCODE_SCAN) {
++			it.second.opcode = OPCODE_LOGIN;
++			waiting = true;
++		}
++	}
++	// Answered already: its SCAN is queued, or delivered with the state change still to come.
++	if (!waiting && (AdhocctlEventQueued(ADHOCCTL_EVENT_SCAN) || CoreTiming::IsScheduled(adhocctlStateEvent))) {
++		return false;
++	}
++	// Scan emptied the list it shows; what the server sent so far is dropped, or the next scan would add to it.
++	peerlock.lock();
++	freeGroupsRecursive(newnetworks);
++	newnetworks = NULL;
++	peerlock.unlock();
++	notifyAdhocctlHandlers(ADHOCCTL_EVENT_SCAN, 0);
++	return true;
++}
++
++bool NetAdhocctl_ServerLost() {
++	// Mode NONE: never in a group since Init, or a Disconnect or Term (the game's own, or an earlier loss) has
++	// already told it.
++	if (!netAdhocctlInited || adhocctlCurrentMode == ADHOCCTL_MODE_NONE) {
++		return false;
++	}
++	if (EndScanInFlight()) {
++		return true;
++	}
++	// A Create or Connect still on its way (as NetAdhocctl_Disconnect tells it), or a group.
++	const bool joining = isAdhocctlBusy && adhocctlState == ADHOCCTL_STATE_DISCONNECTED;
++	const bool grouped = adhocctlState == ADHOCCTL_STATE_CONNECTED || adhocctlState == ADHOCCTL_STATE_GAMEMODE;
++	if (!adhocctlInServerGroup && !joining && !grouped) {
++		return false;
++	}
++	// A Create or Connect still waiting to be sent returns 0, and the DISCONNECT below ends it.
++	AbandonGroupJoin();
++	adhocctlInServerGroup = false;
++	memset(&parameter.group_name, 0, sizeof(parameter.group_name));
++	adhocctlCurrentMode = ADHOCCTL_MODE_NONE;
++	netAdhocGameModeEntered = false;
++	adhocctlDisconnectFromGameMode = false;
++	// Nothing more from the group: a CONNECT or GAME not yet delivered would put the game back in it.
++	__DropAdhocctlEvents(ADHOCCTL_EVENT_CONNECT);
++	__DropAdhocctlEvents(ADHOCCTL_EVENT_GAME);
++	// The state goes to DISCONNECTED and the game is no longer busy when this is delivered (__NetTriggerCallbacks,
++	// __AdhocctlState, AfterAdhocMipsCall), with or without a handler.
++	notifyAdhocctlHandlers(ADHOCCTL_EVENT_DISCONNECT, 0);
++	return true;
++}
++
+ void __DropAdhocctlEvents(u32 flag) {
+ 	std::lock_guard<std::recursive_mutex> adhocGuard(adhocEvtMtx);
+ 	adhocctlEvents.erase(std::remove_if(adhocctlEvents.begin(), adhocctlEvents.end(), [flag](const std::pair<u32, u32> &e) {
+@@ -1785,14 +1852,12 @@ void __NetAdhocInit() {
+ 	netAdhocctlInited = false;
+ 	adhocctlHandlers.clear();
+ 	__AdhocNotifInit();
+-	__AdhocServerInit();
++	// The link's server can be running here already (a reset, or a host registered before the boot), and the
++	// frontend can start it at any time: it's stopped around the reset of its database, and back after it.
++	NxPspLink::ResetServer(__AdhocServerInit);
+ 
+ 	// Create built-in AdhocServer Thread. The flag is set here rather than by the thread, so that a
+ 	// shutdown that clears it before the thread gets going can't be undone.
+-	adhocServerRunning = false;
+-	if (adhocServerThread.joinable()) {
+-		adhocServerThread.join();
+-	}
+ 	if (relayThread.joinable()) {
+ 		relayThread.join();
+ 	}
+@@ -1918,7 +1983,9 @@ int sceNetAdhocctlInit(MIPSState *mips, int stackSize, int prio, u32 productAddr
+ 
+ 	adhocctlEvents.clear();
+ 	netAdhocctlInited = true; //needed for cleanup during AdhocctlTerm even when it failed to connect to Adhoc Server (since it's being faked as success)
+-	isAdhocctlNeedLogin = true;
++	// With the link, the login waits for the game's first Scan, Create, Connect or Join: some games init at boot,
++	// and a game that goes no further must open no socket and wait for nothing.
++	isAdhocctlNeedLogin = !NxPspLink::Enabled();
+ 
+ 	// Create fake PSP Thread for callback
+ 	// TODO: Should use a separated threads for friendFinder, matchingEvent, and matchingInput and created on AdhocctlInit & AdhocMatchingStart instead of here
+@@ -2781,6 +2848,8 @@ int sceNetAdhocctlScan(MIPSState *mips) {
+ 
+ 	// Library initialized
+ 	if (netAdhocctlInited) {
++		// Like Create: the frontend starts looking for the server.
++		NxPspLink::Active(true, adhocctlState == ADHOCCTL_STATE_CONNECTED || adhocctlState == ADHOCCTL_STATE_GAMEMODE);
+ 		int us = adhocDefaultDelay;
+ 		if ((adhocctlState == ADHOCCTL_STATE_CONNECTED) || (adhocctlState == ADHOCCTL_STATE_GAMEMODE)) {
+ 			// Returns 0 and reports ALREADY_CONNECTED through the handlers, as on the PSP (pspautotests
+@@ -3097,6 +3166,7 @@ int NetAdhocctl_Term() {
+ 		friendFinderRunning = false;
+ 		friendFinderStop();
+ 		adhocctlInServerGroup = false;
++		NxPspLink::Active(false, false);
+ 
+ 		// TODO: May need to block current thread to make sure all Adhocctl callbacks have been fully executed before terminating Adhoc PSPThread (ie. threadAdhocID).
+ 
+@@ -3263,6 +3333,8 @@ int sceNetAdhocctlGetPeerInfo(MIPSState *mips, const char *mac, int size, u32 pe
+ int NetAdhocctl_Create(const char *groupName) {
+ 	// Library initialized
+ 	if (netAdhocctlInited) {
++		// Create, Connect, Join and both game mode entries: the frontend starts looking for the server.
++		NxPspLink::Active(true, adhocctlState == ADHOCCTL_STATE_CONNECTED || adhocctlState == ADHOCCTL_STATE_GAMEMODE);
+ 		// Valid Argument
+ 		if (validNetworkName(groupName)) {
+ 			// While connected, Create and Connect return 0 and report ALREADY_CONNECTED through the handlers
+@@ -3775,6 +3847,7 @@ int RecreatePtpSocket(int ptpId) {
+ 	// Valid Socket produced
+ 	if (tcpsocket < 0)
+ 		return SCE_NET_ADHOC_ERROR_SOCKET_ID_NOT_AVAIL;
++	NxPspLink::RouteSocket(tcpsocket);
+ 
+ 	// Update posix socket fd
+ 	sock->data.ptp.id = tcpsocket;
+@@ -3948,6 +4021,9 @@ int AcceptPtpSocket(int ptpId, int newsocket, sockaddr_in& peeraddr, SceNetEther
+ 	auto socket = adhocSockets[ptpId - 1];
+ 	auto& ptpsocket = socket->data.ptp;
+ 
++	// Both accepts (AdhocTransportP2P.cpp) bring their sockets here.
++	NxPspLink::RouteSocket(newsocket);
++
+ 	// Ignore SIGPIPE when supported (ie. BSD/MacOS)
+ 	setSockNoSIGPIPE(newsocket, 1);
+ 
+diff --git a/Core/HLE/sceNetAdhoc.h b/Core/HLE/sceNetAdhoc.h
+index 09c97c7..dcd48e2 100644
+--- a/Core/HLE/sceNetAdhoc.h
++++ b/Core/HLE/sceNetAdhoc.h
+@@ -146,6 +146,10 @@ void __UpdateAdhocctlHandlers(u32 flags, u32 error);
+ void __DropAdhocctlEvents(u32 flags);
+ // Leaves the server's group without an event, after entering game mode timed out.
+ void NetAdhocctl_GameModeTimedOut();
++// The connection to the server is gone, the link left it, or a login found none. A game in a group or on its way into
++// one gets DISCONNECT and is out of it, as after its own Disconnect; a scan that can't be answered ends with nothing
++// found. Either way no request is left waiting. True if the game was told. CPU thread.
++bool NetAdhocctl_ServerLost();
+ 
+ bool __NetAdhocConnected();
+ 
+diff --git a/ext/CMakeLists.txt b/ext/CMakeLists.txt
+index b7fc53a..af8c57f 100644
+--- a/ext/CMakeLists.txt
++++ b/ext/CMakeLists.txt
+@@ -85,6 +85,9 @@ if(LINUX OR ANDROID OR MACOSX OR IOS OR BSD)
+ 	list(APPEND aemu_postoffice_client_obj
+ 		aemu_postoffice/client/sock_impl_linux.c
+ 	)
++	# Its one socket() opens the connection to the ad hoc server; Core/HLE/NxPspLink.cpp's routes it, with the
++	# nx-mobile link, before it connects. A submodule, so it's renamed here rather than patched.
++	set_source_files_properties(aemu_postoffice/client/sock_impl_linux.c PROPERTIES COMPILE_DEFINITIONS "socket=NxPspLinkClientSocket")
+ endif()
+ 
+ add_library(aemu_postoffice_client STATIC
+diff --git a/libretro/Makefile.common b/libretro/Makefile.common
+index cf87163..0a0cfc9 100644
+--- a/libretro/Makefile.common
++++ b/libretro/Makefile.common
+@@ -845,6 +845,7 @@ SOURCES_CXX += \
+ 	       $(COREDIR)/HLE/sceNetInet.cpp \
+ 	       $(COREDIR)/HLE/sceNetResolver.cpp \
+ 	       $(COREDIR)/HLE/proAdhocServer.cpp \
++	       $(COREDIR)/HLE/NxPspLink.cpp \
+ 	       $(COREDIR)/HLE/proAdhoc.cpp \
+ 	       $(COREDIR)/HLE/sceOpenPSID.cpp \
+ 	       $(COREDIR)/HLE/sceResmgr.cpp \
+diff --git a/libretro/libretro.cpp b/libretro/libretro.cpp
+index 0e5c502..17fadf5 100644
+--- a/libretro/libretro.cpp
++++ b/libretro/libretro.cpp
+@@ -50,6 +50,7 @@
+ #include "Core/CoreTiming.h"
+ #include "Core/HW/Display.h"
+ #include "Core/CwCheat.h"
++#include "Core/HLE/NxPspLink.h"
+ #include "Core/ELF/ParamSFO.h"
+ 
+ #include "GPU/GPUState.h"
+@@ -523,6 +524,35 @@ static void check_dynamic_variables(CoreParameter &coreParam) {
+ 
+ extern int DefaultDepthRaster();
+ 
++// With the nx-mobile link, the frontend chooses the ad hoc server and starts this device's when it should, so the
++// options that would choose one here are overridden. The port offset is the same on every device (each socket binds
++// at the game's port plus it), and not 0: Android refuses the ports under 1024 some games use.
++static void apply_nx_psp_link_config(void)
++{
++   if (!NxPspLink::Enabled())
++      return;
++   g_Config.bEnableAdhocServer = false;
++   g_Config.iPortOffset = 10000;
++   g_Config.bEnableUPnP = false;
++   g_Config.iAdhocServerRelayMode = (int)AdhocServerRelayMode::AlwaysOff;
++   // The server connection over TCP, whose socket is routed (NxPspLinkClientSocket); enet's are not.
++   g_Config.bAdhocUseUdp = false;
++
++   // The frontend brings a session back after a leave by rejoin(), and the automatic route when the game re-enters
++   // ad hoc; switched off, it has left for good. A session's Disconnect may turn it into the automatic route instead.
++   // The core's presence follows the same rule.
++   struct retro_variable var = {0};
++   var.key = "nx_psp_link";
++   NxPspLink::Route route = NxPspLink::ROUTE_AUTO;
++   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
++      if (!strcmp(var.value, "host") || !strcmp(var.value, "join"))
++         route = NxPspLink::ROUTE_SESSION;
++      else if (!strcmp(var.value, "off"))
++         route = NxPspLink::ROUTE_OFF;
++   }
++   NxPspLink::SetRoute(route);
++}
++
+ static void check_variables(CoreParameter &coreParam)
+ {
+    check_dynamic_variables(coreParam);
+@@ -1089,6 +1119,8 @@ static void check_variables(CoreParameter &coreParam)
+    else
+       g_Config.sProAdhocServer = changeProAdhocServer;
+ 
++   apply_nx_psp_link_config();
++
+    g_Config.bTexHardwareScaling = g_Config.sTextureShaderName != "Off";
+ 
+    if (gpu && (g_Config.iTexScalingType != iTexScalingType_prev
+@@ -1611,6 +1643,11 @@ bool retro_load_game(const struct retro_game_info *game) {
+    coreParam.gpuCore         = ctx->GetGPUCore();
+    check_variables(coreParam);
+ 
++   // Before the boot: __NetInit and __NetAdhocInit read the settings the link overrides.
++   if (g_Config.bEnableWlan)
++      NxPspLink::Register(environ_cb);
++   apply_nx_psp_link_config();
++
+    // TODO: OpenGL goes black when inited with software rendering,
+    // therefore start without, set back after init, and reset.
+    softwareRenderInitHack    = ctx->GetGPUCore() == GPUCORE_GLES && g_Config.bSoftwareRendering;
+@@ -1649,6 +1686,7 @@ bool retro_load_game(const struct retro_game_info *game) {
+       // Can't really fail, the errors normally happen later during InitUpdate
+       ERROR_LOG(Log::Boot, "%s", g_bootErrorString.c_str());
+       g_pendingBoot = false;
++      NxPspLink::Unregister();
+       return false;
+    }
+ 
+@@ -1656,6 +1694,9 @@ bool retro_load_game(const struct retro_game_info *game) {
+ }
+ 
+ void retro_unload_game(void) {
++   // First, so the frontend makes no more calls into the core (serve, relogin) while it shuts down.
++   NxPspLink::Unregister();
++
+    if (Libretro::useEmuThread) {
+       Libretro::EmuThreadStop();
+    }
+@@ -1892,6 +1933,11 @@ bool retro_serialize(void *data, size_t size) {
+    if (!gpu) // The HW renderer isn't ready on first pass.
+       return false;
+ 
++   // In ad hoc, a state would resume in the middle of a session that is gone, and loading one closes every ad hoc
++   // socket (__NetAdhocDoState).
++   if (NxPspLink::Presence() != 0)
++      return false;
++
+    // TODO: Libretro API extension to use the savestate queue
+    if (useEmuThread) {
+       EmuThreadPause(); // Does nothing if already paused
+@@ -1914,6 +1960,9 @@ bool retro_serialize(void *data, size_t size) {
+ }
+ 
+ bool retro_unserialize(const void *data, size_t size) {
++   if (NxPspLink::Presence() != 0)
++      return false;
++
+    // The HW renderer isn't ready on first pass.
+    // So we save the data until we are ready to use it.
+    if (!gpu) {
+diff --git a/libretro/nx_psp_link.h b/libretro/nx_psp_link.h
+new file mode 100644
+index 0000000..c395060
+--- /dev/null
++++ b/libretro/nx_psp_link.h
+@@ -0,0 +1,28 @@
++#pragma once
++// nx-mobile private libretro environment call: PSP ad hoc over Wi-Fi. The core hands the frontend its ad hoc link, so
++// the frontend can follow it and leave it as it does Azahar's room (nx_3ds_link.h), and tells the core which device runs
++// the ad hoc server: the frontend runs the finder and the election (psl_finder.h), the core runs the server and the
++// client. *data is a nx_psp_link_interface* whose frontend half the frontend fills in, or NULL when the link is gone and
++// the calls must not be made again. Only the nx-mobile runner answers it; only nx-mobile's patched PPSSPP sends it (its
++// copy must stay byte for byte the same). The calls may come from any thread unless noted.
++#include <stdint.h>
++
++#define NX_ENVIRONMENT_SET_PSP_LINK (0x20000 /* RETRO_ENVIRONMENT_PRIVATE */ | 0x4e5b)
++
++struct nx_psp_link_interface {
++    /* The core's, set before the call. Any thread. */
++    int  (*presence)(void);   /* NX_3DS_LINK_OUT / SEEKING / ROOM numbering (nx_3ds_link.h) */
++    void (*leave)(void);      /* tell the game it is disconnected, leave the server, stay out */
++    void (*rejoin)(void);     /* a session comes back after leave */
++    void (*serve)(int on);    /* start or stop the built-in ad hoc server; returns once it listens or has stopped */
++    void (*relogin)(void);    /* the server changed or is gone: drop its connection, tell the game if it was in a group */
++    /* The frontend's, filled in while it answers the call. */
++    int  (*server)(uint32_t* ip, uint32_t* self);  /* blocks up to PSL_LISTEN_MS + 500; 1: *ip is the server, *self this
++                                                      device's address on the routed network (network order); 0: none */
++    /* active: the game reached Scan/Create/Connect/Join, 0 once it left ad hoc. grouped: the game is in a group, or
++     * this device's server has a user other than this device, so the server must not stop; it can stay 1 with active
++     * 0 while others play on the server of a game that left ad hoc. Only changes are told, from any thread. */
++    void (*active)(int active, int grouped);
++    void (*route_socket)(int fd, int cable);
++};
++/* *data NULL: the core's link is gone; make no further calls. */

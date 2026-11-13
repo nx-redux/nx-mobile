@@ -25,6 +25,7 @@ object NetplayCores {
         // GBA link: the netpacket interface over TCP 55437. Both folders run either core (the same raw flash save).
         "GBA" to listOf("gpsp", "mgba"), "MGBA" to listOf("mgba", "gpsp"),
         "3DS" to listOf("azahar"),   // 3DS link: local wireless through Azahar's own room (UDP 24872), phone to phone
+        "PSP" to listOf("ppsspp"),   // PSP ad hoc over Wi-Fi: the runner's ad hoc server on the host's phone, phone to phone
         "NDS" to listOf("melondsds"),   // DS link: local wireless through melonDS DS's own room (UDP 24874), phone to phone
     )
 
@@ -64,11 +65,18 @@ object NetplayCores {
         mapOf(
             "gambatte" to NetplayLinkKind.GBLINK, "gpsp" to NetplayLinkKind.NETPACKET, "mgba" to NetplayLinkKind.NETPACKET,
             "azahar" to NetplayLinkKind.N3DSLINK, "melondsds" to NetplayLinkKind.NDSLINK,
+            "ppsspp" to NetplayLinkKind.PSPLINK,
         )
 
     /** How [core]'s link session talks; null for a lockstep core. */
     fun link(core: String): NetplayLinkKind? = LINK[core]
     fun isLink(core: String): Boolean = core in LINK
+
+    /** [core]'s automatic route can bring up the phone-to-phone USB cable (its watcher and VPN consent); a PSP game's link has no cable yet. */
+    fun cableAuto(core: String): Boolean = core == "melondsds" || core == "azahar"
+
+    /** A PSP game's sessions run over Wi-Fi alone: the cable carries no ad hoc traffic. */
+    fun wifiOnly(tag: String): Boolean = tag.trim().uppercase() == "PSP"
 
     /** An MGBA game without a Wi-Fi link mode links over the real cable alone, so the USB cable alone (the handheld's `--modes usb`). */
     fun usbOnly(tag: String, wl: String?): Boolean = tag.trim().uppercase() == "MGBA" && wl !in GbaWifiLink.WIFI_MODES
@@ -147,4 +155,4 @@ object NetplayCores {
  * A link session's backend: gambatte runs its own socket; gpSP and mGBA use the runner's GBA link; Azahar and melonDS DS host
  * or join their own multiplayer rooms, which carry the games' local wireless.
  */
-enum class NetplayLinkKind { GBLINK, NETPACKET, N3DSLINK, NDSLINK }
+enum class NetplayLinkKind { GBLINK, NETPACKET, N3DSLINK, NDSLINK, PSPLINK }

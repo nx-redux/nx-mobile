@@ -282,7 +282,7 @@ class AppDeps(
     val allFilesAccess: AllFilesAccess? = null,
     /** Microphone access for DS / 3DS games' Mic toggle (Settings → Library row); null: none, or no mic to use. */
     val micAccess: MicAccess? = null,
-    /** ROMs received over a Cable Link session (Settings → Emulation's Clear link ROM cache row); null: none on this platform. */
+    /** ROMs received over a Cable Link session (the Clear link ROM cache row on mGBA's Emulator Settings page); null: none on this platform. */
     val linkRomCache: LinkRomCache? = null,
     /** Local folders for the list-style picker and the SAF → file conversion; null: Android's pickers only. */
     val localFiles: LocalFiles? = null,
@@ -3984,7 +3984,6 @@ class AppState(
         SettingsSection.EMULATORS -> buildList {
             add(SettingsRow(SettingsKind.DEFAULTS, "Default emulators"))
             add(SettingsRow(SettingsKind.EMULATORS, "Default settings"))
-            addAll(cableLinkRows())
         }
         SettingsSection.SECOND_SCREEN -> listOf(
             SettingsRow(SettingsKind.SECOND_SCREEN_ENABLE, "Enable", if (deps.settings.secondScreen) "On" else "Off"),
@@ -4049,13 +4048,12 @@ class AppState(
      * a launcher, Debug log), then the About and Licenses groups.
      */
     /**
-     * Settings -> Emulation's Cable Link group: the received-ROM cache and the input delay, for trying a game at a fixed
-     * one. Only where Cable Link exists (the platform with a link ROM cache).
+     * The Cable Link rows on mGBA's Emulator Settings page ([EmulatorRows.hostsCableLink]): the input delay, for trying a
+     * game at a fixed one, its overlay, and the received-ROM cache. Only where Cable Link exists (the platform with a link
+     * ROM cache).
      */
     private fun cableLinkRows(): List<SettingsRow> = deps.linkRomCache?.let { cache ->
         listOf(
-            SettingsRow(SettingsKind.GAP, ""),
-            SettingsRow(SettingsKind.SECTION, "Cable Link"),
             SettingsRow(SettingsKind.CABLE_LINK_DELAY, "Input delay", cableLinkDelayLabel(deps.settings.cableLinkDelayPin)),
             SettingsRow(SettingsKind.CABLE_LINK_DELAY_OVERLAY, "Delay overlay", if (deps.settings.cableLinkDelayOverlay) "On" else "Off"),
             SettingsRow(SettingsKind.CLEAR_LINK_ROMS, "Clear link ROM cache", formatBytes(cache.sizeBytes())),
@@ -5386,7 +5384,6 @@ class AppState(
                     SettingsKind.INFO -> Unit   // About: read-only
                     SettingsKind.COPY_INFO -> copyDeviceInfo()
                     SettingsKind.PLAYER_NAME -> _screen.value = s.copy(nameDraft = PlayerName.resolve(deps.settings.playerName, deps.deviceName()))
-                    SettingsKind.CLEAR_LINK_ROMS -> deps.linkRomCache?.let { it.clear(); settingsUi.refreshSettings() }
                     SettingsKind.APP_UPDATE -> deps.updater?.let(::appUpdateRowA)
                     SettingsKind.HOME_SCREEN -> deps.launcher?.let { it.setHome(!it.isHome()); settingsUi.refreshSettings() }
                     SettingsKind.ANDROID_GAMES -> openToolApps(AppPick.GAMES)
@@ -5452,6 +5449,13 @@ class AppState(
         scope, _screen, _selection, _error, deps.coreOptions, deps.emulatorConfigs, deps.coreDefaults,
         host = object : EmulatorSettingsHost {
             override fun showEmulatorsSettings() = settingsUi.showSettingsOn(SettingsSection.EMULATORS, SettingsKind.EMULATORS)
+            override fun appSection(page: EmulatorPage): EmulatorAppSection? =
+                if (!EmulatorRows.hostsCableLink(page)) null
+                else EmulatorAppSection(EmulatorRows.CABLE_LINK_LABEL, cableLinkRows().map { EmulatorRow.App(it, settingsUi.settingChoices(it)) })
+            // Without the value's `after`: it republishes a Settings page, which would leave this one (the controller shows the rows).
+            override fun stepAppRow(row: SettingsRow, delta: Int) { settingValue(row)?.step(delta) }
+            override fun chooseAppRow(row: SettingsRow, index: Int) { settingValue(row)?.setTo(index) }
+            override fun runAppRow(row: SettingsRow) { if (row.kind == SettingsKind.CLEAR_LINK_ROMS) deps.linkRomCache?.clear() }
             override fun restore(screen: Screen, selection: ListSelection) {
                 _screen.value = screen
                 homeTab.publishHomeView()   // a restored main menu: its Home rows' own view
@@ -5468,6 +5472,7 @@ class AppState(
         screenClass = deps.screenClass,
         windowPx = deps.windowPx,
         ps2BiosFiles = deps.ps2BiosFiles,
+        alwaysListed = { if (deps.linkRomCache != null) listOf(EmulatorRows.CABLE_LINK_TAG) else emptyList() },
     )
 
     // --- Tools -> Artwork: AppState hosts the controller (index writes stay here); the pages live in ArtworkScreenController ---

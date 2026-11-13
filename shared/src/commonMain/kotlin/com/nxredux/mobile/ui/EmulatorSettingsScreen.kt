@@ -56,7 +56,8 @@ fun EmulatorConsolesScreen(
 }
 
 /**
- * One tag's (or game's) settings: Display, Controls, Gameplay and Audio, then Emulator (the core's), as touch rows ([emulatorTouchRow], the in-game
+ * One tag's (or game's) settings: Display, Controls, Gameplay, Multiplayer and Audio, then Emulator (the core's), then
+ * the app's own rows the page hosts (mGBA's Cable Link), as touch rows ([emulatorTouchRow], the in-game
  * menu's options); LEFT/RIGHT change a value, written at once. [onSetting] takes the controls' and info icons' taps.
  */
 @Composable
@@ -91,7 +92,7 @@ internal val NxSettingEvent.row: Int get() = when (this) {
 /**
  * An Emulator Settings / Game Settings row as a touch row: a console row its brief line (none: compact)
  * and values, a core option compact with its visible values; the full text (a core's own description) behind the info
- * icon. A category `›`; a group label grey, the gap empty, a notice its text.
+ * icon. A category `›`; a group label grey, the gap empty, a notice its text; a hosted Settings row as Settings draws it.
  */
 internal fun emulatorTouchRow(row: EmulatorRow): NxSettingRow = when (row) {
     is EmulatorRow.Header -> NxSettingRow(row.label, section = true)
@@ -114,6 +115,7 @@ internal fun emulatorTouchRow(row: EmulatorRow): NxSettingRow = when (row) {
     is EmulatorRow.Category -> NxSettingRow(row.label, opens = true)
     is EmulatorRow.Notice -> NxSettingRow(row.text)
     EmulatorRow.Gap -> NxSettingRow("", spacer = true)
+    is EmulatorRow.App -> settingsTouchRow(row.row, row.choices, SettingsSection.EMULATORS)
 }
 
 /** Use emulator settings' line (what A does) and its fuller text. */
@@ -128,6 +130,7 @@ internal fun emulatorNxRow(row: EmulatorRow): NxRow = when (row) {
     is EmulatorRow.Category -> NxRow(row.label, secondary = "›")
     is EmulatorRow.Notice -> NxRow(row.text)
     EmulatorRow.Gap -> NxRow("", spacer = true)
+    is EmulatorRow.App -> settingsNxRow(row.row)
 }
 
 /** "<emulator> — <console> (<TAG>)", or the game's name for Game Settings; an open category is appended. */
@@ -145,12 +148,15 @@ internal fun emulatorOptionsTitle(s: Screen.EmulatorOptions): String {
 internal fun emulatorOptionsHints(row: EmulatorRow?, touch: NxSettingRow? = null, truncated: String? = null, twoPane: Boolean = false): List<Hint> {
     val info = touch != null && nxShowsInfo(touch, truncated)
     val x = if (info) listOf(Hint(NxButton.X, "Info")) else emptyList()
+    fun valueRow() =
+        if (twoPane) listOf(Hint(NxButton.B, "Back")) + (if (touch == null) listOf(Hint(NxButton.A, "Select")) else touch.valueHints(true)) + x
+        // One page: LEFT / RIGHT change it at once, A toggles or opens a picker as before.
+        else listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.B, "Back")) +
+            (if (touch == null) listOf(Hint(NxButton.A, "Select")) else touch.valueHints(false).filter { it.button != NxButton.LEFT }) + x
     return when (row) {
-        is EmulatorRow.Console, is EmulatorRow.Core ->
-            if (twoPane) listOf(Hint(NxButton.B, "Back")) + (if (touch == null) listOf(Hint(NxButton.A, "Select")) else touch.valueHints(true)) + x
-            // One page: LEFT / RIGHT change it at once, A toggles or opens a picker as before.
-            else listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.B, "Back")) +
-                (if (touch == null) listOf(Hint(NxButton.A, "Select")) else touch.valueHints(false).filter { it.button != NxButton.LEFT }) + x
+        is EmulatorRow.Console, is EmulatorRow.Core -> valueRow()
+        // A hosted Settings row: a value row hints as a console row; Clear link ROM cache A Select, as on Settings.
+        is EmulatorRow.App -> if (touch != null && touch.choices.size >= 2) valueRow() else LIST_HINTS + x
         is EmulatorRow.Category, EmulatorRow.UseEmulatorSettings -> LIST_HINTS + x
         else -> listOf(Hint(NxButton.B, "Back"))
     }

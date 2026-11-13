@@ -40,6 +40,8 @@ namespace libretrodroid::dslink {
     void setCoreRoom(struct ::nx_3ds_link_interface* room);
     void setCable(int state);   // ndl_cable: the phone-to-phone cable beside the Wi-Fi; any thread
     void setNetwork(int64_t handle);   // the Wi-Fi network handle the link's sockets bind to; 0 = the default network
+    // A core's own socket onto the cable's network (cable != 0) or the Wi-Fi: the route_socket a core-room core is given.
+    void routeCoreSocket(int fd, int cable);
     void radio(unsigned state); // NX_ENVIRONMENT_SET_NDS_RADIO, from inside retro_run
     void preFrame();            // start/stop the core around a room, deliver queued packets; never holds the frame
     void frameBegin();          // around retro_run while a room is open: timing stats for the diagnostics line

@@ -53,8 +53,11 @@ class CoreRegistryNdsTest {
 
     @Test fun layout_touch_and_cursor_keys_are_locked_to_their_defaults() {
         assertEquals(nds.defaultOptions.keys, nds.lockedOptions)
-        // Dolphin also locks keys it leaves at the core's own default (debug, Bluetooth passthrough, logging): no default to pin.
-        assertTrue(CoreRegistry.all.filter { it.id != "dolphin" }.all { it.defaultOptions.keys.containsAll(it.lockedOptions) })
+        // Dolphin also locks keys it leaves at the core's own default (debug, Bluetooth passthrough, logging): no default to pin;
+        // PPSSPP's ad hoc network rows are the same, the core forcing them while the app only sends the ones it needs.
+        assertTrue(CoreRegistry.all.filter { it.id != "dolphin" }.all { d ->
+            d.defaultOptions.keys.containsAll(if (d.id == "ppsspp") d.lockedOptions - CoreRegistry.PSP_NETWORK_OPTIONS else d.lockedOptions)
+        })
     }
 
     @Test fun improvedPolygonSplittingIsOffAndLocked() {
