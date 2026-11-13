@@ -2481,9 +2481,9 @@ class AppState(
     }
 
     /**
-     * Which customise pages apply here: the pad is a choice on a phone without a controller (built in or connected; a
-     * clip-on counts as none), in either orientation, as it shows when the phone is held upright; title and hints hide
-     * only where buttons exist.
+     * Which customise pages apply here: the pad is a choice on a phone without a controller (built in, connected or
+     * clip-on: the menu shows no skin with any, [com.nxredux.mobile.ui.nx.menuSkinShown]), in either orientation, as it
+     * shows when the phone is held upright; title and hints hide only where buttons exist.
      */
     private fun refreshPadContext() {
         val padPage = !padController

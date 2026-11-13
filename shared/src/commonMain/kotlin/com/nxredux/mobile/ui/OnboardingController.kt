@@ -15,7 +15,7 @@ enum class OnboardingStep {
 
 /**
  * What decides which steps show: the handheld answer ([handheld], null while unanswered), a RetroAchievements sign-in,
- * the customise answer ([customise]), and the device: [padPage] (portrait with no controller: the menu pad is a choice),
+ * the customise answer ([customise]), and the device: [padPage] (no controller, a clip-on included: the menu pad is a choice),
  * [buttons] (a controller, or the pad shown: the page title and hints can hide).
  */
 data class OnboardingContext(

@@ -9,7 +9,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import com.nxredux.mobile.runner.PadBandRule
 
 private fun anyGamepad(im: InputManager?): Boolean {
     if (im == null) return false
@@ -34,30 +33,4 @@ actual fun rememberControllerConnected(): Boolean {
         onDispose { im?.unregisterInputDeviceListener(listener) }
     }
     return connected
-}
-
-private fun gamepadNames(im: InputManager?): List<String> {
-    if (im == null) return emptyList()
-    return im.inputDeviceIds.toList().mapNotNull { id: Int ->
-        val d = im.getInputDevice(id) ?: return@mapNotNull null
-        if (!d.isVirtual && (d.supportsSource(InputDevice.SOURCE_GAMEPAD) || d.supportsSource(InputDevice.SOURCE_JOYSTICK))) d.name else null
-    }
-}
-
-@Composable
-actual fun rememberSeparateController(): Boolean {
-    val context = LocalContext.current
-    val im = remember { context.getSystemService(InputManager::class.java) }
-    var separate by remember { mutableStateOf(PadBandRule.separateController(gamepadNames(im))) }
-    DisposableEffect(im) {
-        val update = { separate = PadBandRule.separateController(gamepadNames(im)) }
-        val listener = object : InputManager.InputDeviceListener {
-            override fun onInputDeviceAdded(deviceId: Int) = update()
-            override fun onInputDeviceRemoved(deviceId: Int) = update()
-            override fun onInputDeviceChanged(deviceId: Int) = update()
-        }
-        im?.registerInputDeviceListener(listener, null)
-        onDispose { im?.unregisterInputDeviceListener(listener) }
-    }
-    return separate
 }

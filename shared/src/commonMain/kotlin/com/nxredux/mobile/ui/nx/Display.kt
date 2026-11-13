@@ -13,10 +13,6 @@ expect fun rememberDisplayYdpi(): Float
 @Composable
 expect fun rememberControllerConnected(): Boolean
 
-/** Whether a controller held apart from the device is connected (a clip-on counts as none, [com.nxredux.mobile.runner.PadBandRule.separateController]). */
-@Composable
-expect fun rememberSeparateController(): Boolean
-
 /**
  * Whether the device has a touchscreen (most Android phones and handhelds). A game list's Recent, Search and Layout
  * icons show only then; without one, Settings → Layouts changes the layout and START searches.

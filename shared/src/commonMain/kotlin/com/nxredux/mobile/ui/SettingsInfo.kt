@@ -79,7 +79,8 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     SettingsKind.PAD_SKIN -> quiet(
         "The handheld drawn around the game, or full screen",
         "On draws the Pad theme's handheld around the game and the menus. Off runs the game full screen with see-through " +
-            "buttons over it, and the menus without an on-screen pad.",
+            "buttons over it, and the menus without an on-screen pad. With a controller connected, the game and the menus " +
+            "show no skin or on-screen pad either way.",
     )
     SettingsKind.PAD_THEME -> quiet(
         "The skin of the on-screen pad",

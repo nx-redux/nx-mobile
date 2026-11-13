@@ -141,7 +141,6 @@ import com.nxredux.mobile.ui.nx.footerModeFor
 import com.nxredux.mobile.ui.nx.LocalHasTouchscreen
 import com.nxredux.mobile.ui.nx.rememberHasTouchscreen
 import com.nxredux.mobile.ui.nx.rememberControllerConnected
-import com.nxredux.mobile.ui.nx.rememberSeparateController
 import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.background
 import org.jetbrains.compose.resources.painterResource
@@ -190,10 +189,11 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}, keyboard: Boolean 
     val skin = remember(padTheme, skinPacks) { padTheme.skin?.let(skinPacks) }
     // Appearance → Pad skin, likewise; hidden while first setup and onboarding have not asked yet, previewed on its step.
     // Keyed on what it reads, never the selection: a selection key would recompose this whole root on every step.
-    val skinDualMenu by state.skinDualMenu.collectAsState()
-    val menuPad = remember(screen, skinDualMenu) { state.menuPadShown() }
-    val look = rememberMenuLook(state, screen)   // the accents and the launcher chrome's settings, likewise
+    // Any controller connected (a clip-on and built-in controls too): no skin, as in a game ([com.nxredux.mobile.ui.nx.menuSkinShown]).
     val controllerConnected = rememberControllerConnected()   // once, above the shell: survives rotation and pad/no-pad flips
+    val skinDualMenu by state.skinDualMenu.collectAsState()
+    val menuPad = remember(screen, skinDualMenu) { state.menuPadShown() } && !controllerConnected
+    val look = rememberMenuLook(state, screen)   // the accents and the launcher chrome's settings, likewise
     LaunchedEffect(controllerConnected) { state.onControllerConnected(controllerConnected) }   // a Shortcuts bind row's line
     val touchscreen = rememberHasTouchscreen()   // for a game list's Recent, Search and Layout icons
     // Bars and the cutout above and below only (the side cutout is in each page's inset: [nxPageInset]), never the IME: the shell must not shrink for the keyboard (NxModal pads for it where needed).
@@ -213,11 +213,10 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}, keyboard: Boolean 
                     val footer = footerModeFor(controllerConnected, LocalPadBelow.current)
                     // AppState needs it too: the tab row's focus follows whether Page title's Hide is in effect.
                     LaunchedEffect(footer) { state.onFooterMode(footer) }
-                    // Onboarding's customise pages follow the device: the pad is a choice in portrait without a controller
-                    // (a clip-on counts as none).
+                    // Onboarding's customise pages follow the device: the pad is a choice only without a controller (a
+                    // clip-on counts too: the menu shows no skin with one, so its page would preview nothing).
                     val portrait = LocalPortrait.current
-                    val separate = rememberSeparateController()
-                    LaunchedEffect(portrait, separate) { state.onPadContext(portrait, separate) }
+                    LaunchedEffect(portrait, controllerConnected) { state.onPadContext(portrait, controllerConnected) }
                     MenuLocals(state, look, footer, touchscreen) {
                         // A parent with the full menu while Kids Mode is on: the bar above every page, its button back to Kids Mode.
                         val kidsMode by state.kidsModeState.collectAsState()
