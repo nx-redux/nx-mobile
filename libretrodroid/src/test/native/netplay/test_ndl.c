@@ -510,6 +510,58 @@ static int case_auto_joins_a_sheet_host(uint16_t port) {
 	return 0;
 }
 
+/* A sheet session turned into the automatic route while the game's wireless is on: the link starts parked, so it asks
+ * nobody and joins no room (not even the sheet host still answering) until the game turns its wireless off and on. */
+static int case_auto_created_parked_waits_for_the_next_radio_on(uint16_t port) {
+	uint16_t sp = free_udp_port();
+	ndl_config c = config(NDL_HOST, "sheet", port, 8);
+	c.search_port = sp;
+	room[1] = ndl_create(&c);
+	CHECK(room[1] != NULL && ndl_in_room(room[1]));
+	c = auto_config("left", port, sp);
+	c.radio = NDL_RADIO_ON;
+	c.parked = true;
+	room[2] = ndl_create(&c);
+	CHECK(room[2] != NULL);
+	/* A game hosting when it left: it opens no room either. */
+	c = auto_config("left-host", free_udp_port(), sp);
+	c.radio = NDL_RADIO_HOSTING;
+	c.parked = true;
+	room[3] = ndl_create(&c);
+	CHECK(room[3] != NULL);
+	CHECK(ndl_presence_now(room[2]) == NDL_OUT);
+	CHECK(ndl_presence_now(room[3]) == NDL_OUT);
+	advance(3000);
+	CHECK(ndl_test_sent(room[2]) == 0);
+	CHECK(ndl_test_sent(room[3]) == 0);
+	CHECK(!ndl_in_room(room[2]) && !ndl_in_room(room[3]));
+	CHECK(ndl_member_count(room[1]) == 1);
+	CHECK(ndl_presence_now(room[2]) == NDL_OUT);
+	/* Off alone keeps it out. */
+	ndl_radio_changed(room[2], NDL_RADIO_OFF);
+	advance(1000);
+	CHECK(ndl_test_sent(room[2]) == 0);
+	CHECK(ndl_presence_now(room[2]) == NDL_OUT);
+	/* The game's wireless on again: it searches and finds the room, as the automatic route does. */
+	ndl_radio_changed(room[2], NDL_RADIO_ON);
+	CHECK(ndl_presence_now(room[2]) == NDL_SEEKING);
+	advance(400);
+	CHECK(ndl_test_sent(room[2]) > 0);
+	CHECK(wait_in_room(room[2], true, 2000));
+	CHECK(wait_count(room[1], 2, 2000));
+	return 0;
+}
+
+/* Parked means nothing outside AUTO: a sheet host still opens its room. */
+static int case_parked_is_auto_only(uint16_t port) {
+	ndl_config c = config(NDL_HOST, "sheet", port, 8);
+	c.parked = true;
+	room[1] = ndl_create(&c);
+	CHECK(room[1] != NULL && ndl_in_room(room[1]));
+	CHECK(ndl_presence_now(room[1]) == NDL_ROOM);
+	return 0;
+}
+
 /* A sheet room on the loopback and an AUTO phone beside it whose cable is in [state] on [cable_broadcast]. */
 static int cable_pair(uint16_t port, ndl_cable state, const char* cable_broadcast) {
 	uint16_t sp = free_udp_port();
@@ -836,6 +888,8 @@ int main(void) {
 	run("prefer_settled_then_lower_id", case_prefer_settled_then_lower_id);
 	run("auto_joins_a_sheet_host", case_auto_joins_a_sheet_host);
 	run("auto_host_opens_when_none", case_auto_host_opens_when_none);
+	run("auto_created_parked_waits_for_the_next_radio_on", case_auto_created_parked_waits_for_the_next_radio_on);
+	run("parked_is_auto_only", case_parked_is_auto_only);
 	run("cable_coming_holds_a_room_elsewhere", case_cable_coming_holds_a_room_elsewhere);
 	run("cable_up_ends_the_hold", case_cable_up_ends_the_hold);
 	run("cable_room_is_joined_at_once", case_cable_room_is_joined_at_once);

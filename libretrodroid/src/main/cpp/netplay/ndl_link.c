@@ -897,7 +897,7 @@ ndl_link* ndl_create(const ndl_config* cfg) {
 	l->sfd = -1;
 	l->my_id = -1;
 	l->mode = NDL_OFF;
-	l->radio = NDL_RADIO_OFF;
+	l->radio = cfg->radio <= NDL_RADIO_HOSTING ? cfg->radio : NDL_RADIO_OFF;
 	l->room_id = (uint32_t)(np_net_now_ms() * 2654435761u) ^ (uint32_t)getpid() ^ (uint32_t)(uintptr_t)l;
 	atomic_init(&l->stop, false);
 	atomic_init(&l->frozen, false);
@@ -910,6 +910,7 @@ ndl_link* ndl_create(const ndl_config* cfg) {
 	}
 	/* Before the thread starts, so a HOST's room is open when this returns. */
 	apply_mode(l, cfg->mode);
+	l->parked = cfg->mode == NDL_AUTO && cfg->parked;
 	if (pthread_create(&l->thread, NULL, net_thread, l) != 0) {
 		NP_LOG("DS link: cannot start the network thread");
 		close_socket(l);

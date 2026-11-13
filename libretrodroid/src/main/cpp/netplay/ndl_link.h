@@ -74,6 +74,11 @@ typedef struct {
 	 * off the cable. NULL = nothing. */
 	void (*route_socket)(int fd, bool cable, void* ctx);
 	void* bind_ctx;
+	/* The game's radio when the link is made, as if ndl_radio_changed had told it. */
+	ndl_radio radio;
+	/* AUTO only: starts as after ndl_leave_now, out of rooms until the next radio ON. Set in the config rather than
+	 * left to a later call, so the network thread never sends a search before it. */
+	bool parked;
 } ndl_config;
 
 typedef struct ndl_link ndl_link;
