@@ -45,21 +45,24 @@ import kotlin.coroutines.CoroutineContext
 /** One page of the Netplay sheet. */
 sealed interface NetplayPage {
     /**
-     * Host Game / Join Game, the Emulator row ([emulators]: "Auto (match the other device)" then the core names; null for a
-     * tag with one netplay core) at [pick], and with [needWifi] the "Connect to Wi-Fi first" line and a Wi-Fi settings row.
-     * [connection]: the Connection row's value (Wi-Fi / USB Cable / Cable Link over Wi-Fi), first; null when Wi-Fi is the
-     * only choice (no row). Over USB there is no Wi-Fi row; on Cable Link no Emulator row (it always runs mGBA).
-     * [selected] indexes [rows].
+     * The Connection tabs ([connections], [connection] the picked one: Wi-Fi / USB Cable / Cable Link over Wi-Fi; null
+     * when Wi-Fi is the only choice, then no tabs), the Emulator tabs under them ([emulators]: "Auto" then the core names;
+     * null for a tag with one netplay core) at [pick], Host Game and Join Game side by side, and with [needWifi] the
+     * "Connect to Wi-Fi first" line and a Wi-Fi settings row. Over USB there is no Wi-Fi row; on Cable Link no Emulator
+     * tabs (it always runs mGBA). [selected] indexes [rows], the pad's focus: Host and Join share a line. [pad]: the
+     * last input was a pad press, so the focus is drawn (a ring); a tap puts it away.
      */
     data class Role(
         val title: String, val emulators: List<String>?, val pick: Int, val selected: Int, val needWifi: Boolean,
         val connection: NetplayLink? = null,
+        val connections: List<NetplayLink> = emptyList(),
+        val pad: Boolean = true,
     ) : NetplayPage {
         val rows: List<NetplayRoleRow>
             get() = buildList {
                 if (connection != null) add(NetplayRoleRow.CONNECTION)
-                add(NetplayRoleRow.HOST); add(NetplayRoleRow.JOIN)
                 if (emulators != null && connection != NetplayLink.CABLE_LINK_WIFI) add(NetplayRoleRow.EMULATOR)
+                add(NetplayRoleRow.HOST); add(NetplayRoleRow.JOIN)
                 if (needWifi && connection != NetplayLink.USB) add(NetplayRoleRow.WIFI)
             }
     }
@@ -83,7 +86,8 @@ sealed interface NetplayPage {
     data class Error(val text: String, val back: NetplayPage?) : NetplayPage
 }
 
-enum class NetplayRoleRow { CONNECTION, HOST, JOIN, EMULATOR, WIFI }
+/** The Role page's things the pad can be on; [line]: the line each sits on, top to bottom (Host and Join share one). */
+enum class NetplayRoleRow(val line: Int) { CONNECTION(0), EMULATOR(1), HOST(2), JOIN(2), WIFI(3) }
 
 /**
  * The Netplay sheet over a game list: picks Host or Join (and the emulator), runs discovery and the handheld's
@@ -110,6 +114,7 @@ class NetplayController(
     private var wl: String? = null
     private var probeJob: Job? = null
     private var role: NetplayPage.Role? = null          // the Role page as last shown (its pick and row survive Host/Join)
+    private var roleAction = NetplayRoleRow.HOST        // Host or Join, whichever the pad was last on: UP / DOWN come back to it
     private var hosts: List<FoundHost> = emptyList()
     private var hostIndex = 0
     private var searchText = NetplayText.SEARCHING
@@ -157,11 +162,11 @@ class NetplayController(
 
     /**
      * The Connection row's choices for [tag]: Wi-Fi (not for an MGBA game without a Wi-Fi mode, which links over the real
-     * cable alone), the USB cable where this device has one, and Cable Link over Wi-Fi for a GBA game.
+     * cable alone), the USB cable where this device has one (not for a PSP game), and Cable Link over Wi-Fi for a GBA game.
      */
     private fun connections(tag: String): List<NetplayLink> = buildList {
         if (!NetplayCores.usbOnly(tag, wl)) add(NetplayLink.WIFI)
-        if (platform.usb?.available == true) add(NetplayLink.USB)
+        if (platform.usb?.available == true && !NetplayCores.wifiOnly(tag)) add(NetplayLink.USB)
         if (platform.cableLinkAvailable && NetplayCores.cableLinkOffered(tag)) add(NetplayLink.CABLE_LINK_WIFI)
     }
 
@@ -174,11 +179,11 @@ class NetplayController(
             platform.lastLink in choices -> platform.lastLink
             else -> choices.firstOrNull()
         }
-        val r = NetplayPage.Role(entry.shown, emulators, pick = 0, selected = 0, needWifi = platform.wifi() == null, connection = connection)
-        showRole(r.copy(selected = r.rows.indexOf(NetplayRoleRow.HOST)))   // Host Game highlighted, below the Connection row
+        val r = NetplayPage.Role(entry.shown, emulators, pick = 0, selected = 0, needWifi = platform.wifi() == null, connection = connection, connections = if (connection != null) choices else emptyList())
+        showRole(r.copy(selected = r.rows.indexOf(NetplayRoleRow.HOST)))   // Host Game highlighted, under the tabs
     }
 
-    /** A pad press while the sheet is open: A selects, B goes back or cancels, UP/DOWN move, LEFT/RIGHT cycle the Emulator. */
+    /** A pad press while the sheet is open: A selects, B goes back or cancels, UP/DOWN move, LEFT/RIGHT change a tab or move between Host and Join. */
     fun onButton(button: NxButton) {
         when (val p = _page.value ?: return) {
             is NetplayPage.Role -> onRole(p, button)
@@ -202,10 +207,23 @@ class NetplayController(
         }
     }
 
+    /** A tap on a Connection tab. */
+    fun pickConnection(link: NetplayLink) {
+        val p = _page.value as? NetplayPage.Role ?: return
+        setConnection(p.copy(selected = p.rows.indexOf(NetplayRoleRow.CONNECTION).coerceAtLeast(0), pad = false), link)
+    }
+
+    /** A tap on an Emulator tab. */
+    fun pickEmulator(index: Int) {
+        val p = _page.value as? NetplayPage.Role ?: return
+        if (index !in p.emulators.orEmpty().indices) return
+        showRole(p.copy(pick = index, selected = p.rows.indexOf(NetplayRoleRow.EMULATOR).coerceAtLeast(0), pad = false))
+    }
+
     /** A tap on row [index] of the Role page or the host list: highlights it (a second tap is A). */
     fun select(index: Int) {
         when (val p = _page.value) {
-            is NetplayPage.Role -> if (index in p.rows.indices) showRole(p.copy(selected = index))
+            is NetplayPage.Role -> if (index in p.rows.indices) showRole(p.copy(selected = index, pad = false))
             is NetplayPage.Hosts -> if (index in p.hosts.indices) { hostIndex = index; showHosts() }
             else -> Unit
         }
@@ -228,19 +246,28 @@ class NetplayController(
 
     // --- Role ---
 
-    private fun onRole(p: NetplayPage.Role, button: NxButton) {
+    private fun onRole(shown: NetplayPage.Role, button: NxButton) {
+        // Any pad press brings the focus ring back, also one that moves nothing.
+        val p = if (shown.pad) shown else shown.copy(pad = true).also(::showRole)
         val rows = p.rows
         val row = rows.getOrNull(p.selected)
         when (button) {
-            NxButton.UP -> showRole(p.copy(selected = (p.selected - 1 + rows.size) % rows.size))
-            NxButton.DOWN -> showRole(p.copy(selected = (p.selected + 1) % rows.size))
+            NxButton.UP, NxButton.DOWN -> {
+                // By line: Host and Join sit side by side, and the pad comes back to the one it left.
+                val lines = rows.map { it.line }.distinct()
+                val to = lines[(lines.indexOf(row?.line ?: 0) + (if (button == NxButton.DOWN) 1 else -1) + lines.size) % lines.size]
+                val target = if (to == NetplayRoleRow.HOST.line) roleAction else rows.first { it.line == to }
+                showRole(p.copy(selected = rows.indexOf(target)))
+            }
             NxButton.LEFT, NxButton.RIGHT -> when (row) {
                 NetplayRoleRow.EMULATOR -> cycle(p, if (button == NxButton.RIGHT) 1 else -1)
-                NetplayRoleRow.CONNECTION -> toggleConnection(p)
+                NetplayRoleRow.CONNECTION -> toggleConnection(p, if (button == NxButton.RIGHT) 1 else -1)
+                NetplayRoleRow.HOST -> if (button == NxButton.RIGHT) showRole(p.copy(selected = rows.indexOf(NetplayRoleRow.JOIN)))
+                NetplayRoleRow.JOIN -> if (button == NxButton.LEFT) showRole(p.copy(selected = rows.indexOf(NetplayRoleRow.HOST)))
                 else -> Unit
             }
             NxButton.A -> when (row) {
-                NetplayRoleRow.CONNECTION -> toggleConnection(p)
+                NetplayRoleRow.CONNECTION -> toggleConnection(p, 1)
                 NetplayRoleRow.HOST -> host(p)
                 NetplayRoleRow.JOIN -> join(p)
                 NetplayRoleRow.EMULATOR -> cycle(p, 1)
@@ -257,17 +284,25 @@ class NetplayController(
         showRole(p.copy(pick = (p.pick + step + n) % n))
     }
 
-    /** The next Connection choice; remembered at once. The highlight stays on the Connection row. */
-    private fun toggleConnection(p: NetplayPage.Role) {
+    /** The Connection choice [step] along; remembered at once. The pad stays on the Connection tabs. */
+    private fun toggleConnection(p: NetplayPage.Role, step: Int) {
+        val choices = entry?.let { connections(it.system.tag) }?.takeIf { it.isNotEmpty() } ?: return
+        setConnection(p, choices[(choices.indexOf(p.connection) + step + choices.size) % choices.size])
+    }
+
+    private fun setConnection(p: NetplayPage.Role, link: NetplayLink) {
         val choices = entry?.let { connections(it.system.tag) } ?: return
-        if (choices.size < 2) return   // one choice (USB Cable only): nothing to switch to, and not remembered
-        val next = choices[(choices.indexOf(p.connection) + 1) % choices.size]
-        platform.lastLink = next
-        showRole(p.copy(connection = next, needWifi = platform.wifi() == null))
+        if (choices.size < 2 || link !in choices) return   // one choice (USB Cable only): nothing to switch to, and not remembered
+        platform.lastLink = link
+        // The rows change with the connection (the Emulator tabs, the Wi-Fi row): the pad stays on the thing it was on.
+        val on = p.rows.getOrNull(p.selected)
+        val next = p.copy(connection = link, connections = choices, needWifi = platform.wifi() == null)
+        showRole(next.copy(selected = next.rows.indexOf(on).coerceAtLeast(0)))
     }
 
     private fun showRole(p: NetplayPage.Role) {
         val r = p.copy(selected = p.selected.coerceIn(0, p.rows.size - 1))
+        r.rows[r.selected].let { if (it.line == NetplayRoleRow.HOST.line) roleAction = it }
         role = r
         _page.value = r
     }

@@ -253,7 +253,7 @@ internal class SettingsController(
     fun openSettings(section: SettingsSection) {
         if (!host.kidsToolsAllowed()) return   // Kids Mode: Settings only for a parent
         when (screen.value) {
-            is Screen.Systems -> host.rememberMenuSelection()
+            is Screen.Systems, is Screen.Games -> host.rememberMenuSelection()   // the main menu's tab (a game list's: nothing)
             is Screen.SettingsMenu -> settingsMenuSelection = selection.value
             else -> Unit
         }
@@ -330,7 +330,7 @@ internal class SettingsController(
     }
 
     /** [row]'s values for its touch control: its [settingValue]'s labels and current one; Use as home screen's and All files access's Off / On. */
-    private fun settingChoices(row: SettingsRow): SettingChoices? {
+    fun settingChoices(row: SettingsRow): SettingChoices? {
         if (row.kind == SettingsKind.HOME_SCREEN) return deps.launcher?.let { SettingChoices(ON_OFF, if (it.isHome()) 1 else 0) }
         if (row.kind == SettingsKind.ALL_FILES || row.kind == SettingsKind.MIC_ACCESS) return SettingChoices(ON_OFF, if (row.secondary == "On") 1 else 0)   // as granted when the row was built
         val v = host.settingValue(row) ?: return null
@@ -387,7 +387,7 @@ internal class SettingsController(
             s.gameListStyle = MenuStyles.DEFAULT_GAME_LIST_STYLE
             s.gameListOrientation = MenuStyles.DEFAULT_ORIENTATION
             s.gameListVerticalAlignment = VerticalListAlignment.DEFAULT
-            s.showHomeTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showConsolesTab = MenuStyles.DEFAULT_TAB_SHOWN
+            s.showHomeTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showConsolesTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showGamesTab = MenuStyles.DEFAULT_TAB_SHOWN
             s.showCollectionsTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showToolsTab = MenuStyles.DEFAULT_TAB_SHOWN
             s.showNewShelf = true; s.showNotStartedShelf = true; s.showMostPlayedShelf = true
             s.showNetplayHint = true

@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * An open prompt as the keyboard sees it: its identity ([id]; another one starts a fresh entry), its [fields] as the
- * host holds them, a setter per field and the box's confirm button's [confirmLabel].
+ * host holds them, a setter per field and its confirm word ([confirmLabel]: the keyboard's Done key and the START hint read it).
  */
 internal class PromptSpec(val id: Any, val fields: List<EntryField>, val setters: List<(String) -> Unit>, val confirmLabel: String)
 
@@ -20,7 +20,7 @@ internal class TextEntryController(private val spec: () -> PromptSpec?, private 
     val entry: StateFlow<TextEntry?> = _entry.asStateFlow()
     private var current: PromptSpec? = null
 
-    /** The box's confirm word for the open prompt ("OK" with none). */
+    /** The open prompt's confirm word ("OK" with none). */
     val confirmLabel: String get() = current?.confirmLabel ?: "OK"
 
     /** Follows the open prompt: a new one starts fresh, the same one takes the host's values (a change made elsewhere). */

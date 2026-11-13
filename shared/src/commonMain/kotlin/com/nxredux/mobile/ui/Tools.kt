@@ -55,6 +55,7 @@ fun toolPageTitleHead(screen: Screen, split: Boolean = false): String? = when (s
     is Screen.RaGame -> subPageTitle(ToolKind.RETRO_ACHIEVEMENTS, screen.game.title, split)
     is Screen.RaAchievement -> subPageTitle(ToolKind.RETRO_ACHIEVEMENTS, screen.game.title, split)   // an achievement names its game
     is Screen.RaSettings -> subPageTitle(ToolKind.RETRO_ACHIEVEMENTS, "Settings", split)
+    Screen.RaProfile -> subPageTitle(ToolKind.RETRO_ACHIEVEMENTS, "Profile", split)
     is Screen.GameTimeSessions -> subPageTitle(ToolKind.GAME_TIME, screen.game.name, split)
     is Screen.ArtworkConsoles -> subPageTitle(ToolKind.ARTWORK, "Fetch by console", split)
     is Screen.ArtworkSettings -> subPageTitle(ToolKind.ARTWORK, "Settings", split)

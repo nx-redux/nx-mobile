@@ -163,7 +163,7 @@ internal class ContextMenuController(
             is Screen.ToolApps -> s.copy(menu = m)
             else -> s
         }
-        if (m == null && s is Screen.Systems && s.menu != null) host.menuClosed()
+        if (m == null && s.isMainMenu && s.contextMenu != null) host.menuClosed()   // the Games tab too
     }
 
     /** The menu's game; every game item is offered only on a menu with an entry ([act] closes a tool menu otherwise). */
@@ -201,8 +201,7 @@ internal class ContextMenuController(
                 val row = s.rows.getOrNull(i)
                 // The hidden tabs after the item's own items; a row without a menu (a console, Pick a game, "+N", an empty
                 // tab) gets one holding just these. A pushed tab never offers them again.
-                val tabs = (if (s.pushed) emptyList() else hiddenTabItems()) +
-                    listOfNotNull(ContextItem(ContextKind.USE_TOP_SCREEN, USE_TOP_SCREEN_LABEL).takeIf { host.appOnTop })
+                val tabs = mainMenuItems(s.pushed)
                 fun show(fromStart: Boolean) {
                     val own = rowMenu(row, fromStart, s.category)?.let(::forKids)
                     val menu = when {
@@ -236,17 +235,26 @@ internal class ContextMenuController(
     }
 
     /**
-     * A long press on the tab row or the single-tab title: the hidden-tab items alone (nothing when none is hidden, or
-     * over a pushed tab). True when the menu opened.
+     * A long press on the tab row or the single-tab title (a [Screen.Systems] tab or the Games tab): the hidden-tab items
+     * alone (nothing when none is hidden, or over a pushed tab). True when the menu opened.
      */
     fun openTabMenu(): Boolean {
-        val s = _screen.value as? Screen.Systems ?: return false
-        if (s.menu != null || s.pushed || s.search != null) return false
+        val s = _screen.value
+        if (s.contextMenu != null || s.menuPushed) return false
+        when (s) {
+            is Screen.Systems -> if (s.search != null) return false
+            is Screen.Games -> if (!s.isTab || s.search != null || s.layoutMenu != null) return false
+            else -> return false
+        }
         val items = hiddenTabItems()
         if (items.isEmpty()) return false
-        _screen.value = s.copy(menu = ContextMenu(null, items, title = APP_NAME))
+        setMenu(ContextMenu(null, items, title = APP_NAME))
         return true
     }
+
+    /** What every main menu menu ends with: the hidden tabs (none over a pushed tab), then Use top screen while an app holds it. */
+    private fun mainMenuItems(pushed: Boolean): List<ContextItem> = (if (pushed) emptyList() else hiddenTabItems()) +
+        listOfNotNull(ContextItem(ContextKind.USE_TOP_SCREEN, USE_TOP_SCREEN_LABEL).takeIf { host.appOnTop })
 
     /** The hidden-tab items, only a kid's ([ContextMenus.kidsPlayItems]) while Kids Mode limits the menu. */
     private fun hiddenTabItems(): List<ContextItem> =
@@ -268,8 +276,10 @@ internal class ContextMenuController(
             canResume = canResume, netplayLeads = host.netplayInMenu,
         )
         // The achievements panel, last, while Layouts hides its icon and hint.
-        val all = (if (host.achievementsInMenu) items + ContextItem(ContextKind.ACHIEVEMENTS, "Achievements") else items)
+        val own = (if (host.achievementsInMenu) items + ContextItem(ContextKind.ACHIEVEMENTS, "Achievements") else items)
             .let { if (host.kidsRestricted) ContextMenus.kidsPlayItems(it) else it }
+        // The Games tab is the main menu: the hidden tabs after the game's items, as a main menu row's ([mainMenuItems]).
+        val all = if (s.isTab) own + mainMenuItems(pushed = s.tabBar?.pushed == true) else own
         if (all.isEmpty()) return
         _screen.value = s.copy(menu = ContextMenu(e, all))
     }
@@ -393,7 +403,7 @@ internal class ContextMenuController(
             ContextKind.RENAME_COLLECTION -> { m.collection?.let { setMenu(m.copy(prompt = MenuPrompt.RenameCollection(it), promptFocus = -1)) } ?: closeContextMenu(); return }
             // A confirm has no field: its focus starts on Delete.
             ContextKind.DELETE_COLLECTION -> { m.collection?.let { setMenu(m.copy(prompt = MenuPrompt.DeleteCollection(it), promptFocus = -1)) } ?: closeContextMenu(); return }
-            ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS -> {
+            ContextKind.OPEN_GAMES, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS -> {
                 closeContextMenu()
                 ContextMenus.tabOf(kind)?.let(host::openHiddenTab)
                 return
@@ -404,7 +414,7 @@ internal class ContextMenuController(
         }
         when (kind) {
             ContextKind.PIN_TOOL, ContextKind.UNPIN_TOOL, ContextKind.ADD_TO_TOOLS, ContextKind.REMOVE_FROM_TOOLS,
-            ContextKind.RENAME_COLLECTION, ContextKind.DELETE_COLLECTION, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS, ContextKind.ACHIEVEMENTS, ContextKind.USE_TOP_SCREEN -> Unit   // handled above
+            ContextKind.RENAME_COLLECTION, ContextKind.DELETE_COLLECTION, ContextKind.OPEN_GAMES, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS, ContextKind.ACHIEVEMENTS, ContextKind.USE_TOP_SCREEN -> Unit   // handled above
             ContextKind.EMULATOR -> consoleOf(m)?.let { ContextMenus.emulatorMenu(it) }?.let { setMenu(m.copy(sub = it)) } ?: closeContextMenu()
             ContextKind.CONSOLE -> ContextMenus.consoleMenu(m.game.game.fileName)?.let { setMenu(m.copy(sub = it)) } ?: run {
                 closeContextMenu()
@@ -576,7 +586,7 @@ internal class ContextMenuController(
             ContextKind.REMOVE_FROM_COLLECTION, ContextKind.REMOVE_RECENT, ContextKind.GAME_SETTINGS, ContextKind.FETCH_ART, ContextKind.CHANGE_ART,
             ContextKind.PIN_TOOL, ContextKind.UNPIN_TOOL, ContextKind.ADD_TO_TOOLS, ContextKind.REMOVE_FROM_TOOLS,
             ContextKind.RENAME_COLLECTION, ContextKind.DELETE_COLLECTION, ContextKind.NETPLAY, ContextKind.PLAY_FROM_START,
-            ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS, ContextKind.ACHIEVEMENTS, ContextKind.USE_TOP_SCREEN -> closeContextMenu()
+            ContextKind.OPEN_GAMES, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS, ContextKind.ACHIEVEMENTS, ContextKind.USE_TOP_SCREEN -> closeContextMenu()
         }
     }
 

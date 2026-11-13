@@ -24,6 +24,8 @@
 #include "../errorcodes.h"
 #include "../utils/javautils.h"
 #include "../utils/jnistring.h"
+#include "dslinkhooks.h"
+#include "psplinkhooks.h"
 
 extern "C" {
 #include "np_link.h"
@@ -138,6 +140,51 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_linkShut
         LOGE("Error in link shutdown: %s", exception.what());
         JavaUtils::throwRetroException(env, ERROR_GENERIC);
     }
+}
+
+JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsPresence(
+    JNIEnv* env,
+    jclass obj
+) {
+    return dslink::presence();   // short locks; never throws
+}
+
+JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsInRoom(
+    JNIEnv* env,
+    jclass obj
+) {
+    return dslink::inRoom() ? JNI_TRUE : JNI_FALSE;   // takes two short locks; never throws
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsSetNetwork(
+    JNIEnv* env,
+    jclass obj,
+    jlong handle
+) {
+    dslink::setNetwork((int64_t) handle);
+    psplink::setNetwork((int64_t) handle);   // after dslink: it re-routes onto the handle dslink now holds
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsSetCable(
+    JNIEnv* env,
+    jclass obj,
+    jint state
+) {
+    dslink::setCable((int) state);
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsLeaveNow(
+    JNIEnv* env,
+    jclass obj
+) {
+    dslink::leaveNow();   // the DS link sends LEAVE from this thread, a core's room leaves on its own; never throws
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsRejoin(
+    JNIEnv* env,
+    jclass obj
+) {
+    dslink::rejoin();   // may open a socket from this thread; never throws
 }
 
 JNIEXPORT jintArray JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_linkStatus(

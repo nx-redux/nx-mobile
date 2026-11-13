@@ -10,9 +10,9 @@ class KeyboardHintsTest {
 
     @Test fun keysHints() {
         val hints = keyboardHints(entry, "Sign in")
-        // START and B are on the prompt's own words, not in the row.
-        assertEquals(listOf(NxButton.A, NxButton.X, NxButton.Y), hints.map { it.button })
-        assertEquals(listOf("Type", "Delete", "Space"), hints.map { it.label })
+        // START and B answer the box from anywhere: in the row, since the box has no buttons.
+        assertEquals(listOf(NxButton.A, NxButton.X, NxButton.Y, NxButton.START, NxButton.B), hints.map { it.button })
+        assertEquals(listOf("Type", "Delete", "Space", "Sign in", "Cancel"), hints.map { it.label })
     }
 
     @Test fun fieldHints() {
@@ -22,9 +22,10 @@ class KeyboardHintsTest {
         assertTrue(hints.none { it.label == "Type" })
     }
 
-    @Test fun buttonHints() {
-        assertEquals("Sign in", keyboardHints(entry.copy(focus = EntryFocus.Button(0)), "Sign in").single { it.button == NxButton.A }.label)
-        assertEquals("Cancel", keyboardHints(entry.copy(focus = EntryFocus.Button(1)), "Sign in").single { it.button == NxButton.A }.label)
+    @Test fun fieldHintsKeepTheAnswers() {
+        val hints = keyboardHints(entry.copy(focus = EntryFocus.Field), "Sign in")
+        assertEquals("Sign in", hints.single { it.button == NxButton.START }.label)
+        assertEquals("Cancel", hints.single { it.button == NxButton.B }.label)
     }
 
     @Test fun passwordFieldHintsShowOrHide() {

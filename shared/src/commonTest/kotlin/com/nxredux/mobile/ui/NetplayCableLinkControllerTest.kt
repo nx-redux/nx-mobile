@@ -74,8 +74,8 @@ class NetplayCableLinkControllerTest {
         c.open(ruby); runCurrent()
         val wifi = assertIs<NetplayPage.Role>(c.page.value)
         assertEquals(NetplayLink.WIFI, wifi.connection)                    // a row now, even without a cable
-        assertEquals(listOf(NetplayRoleRow.CONNECTION, NetplayRoleRow.HOST, NetplayRoleRow.JOIN, NetplayRoleRow.EMULATOR), wifi.rows)
-        c.press(NxButton.UP, NxButton.RIGHT)
+        assertEquals(listOf(NetplayRoleRow.CONNECTION, NetplayRoleRow.EMULATOR, NetplayRoleRow.HOST, NetplayRoleRow.JOIN), wifi.rows)
+        c.press(NxButton.UP, NxButton.UP, NxButton.RIGHT)
         val cable = assertIs<NetplayPage.Role>(c.page.value)
         assertEquals(NetplayLink.CABLE_LINK_WIFI, cable.connection)
         assertEquals(listOf(NetplayRoleRow.CONNECTION, NetplayRoleRow.HOST, NetplayRoleRow.JOIN), cable.rows)   // always mGBA: no Emulator row
@@ -87,7 +87,7 @@ class NetplayCableLinkControllerTest {
         val withUsb = cablePlatform().apply { usbCable = FakeUsbCable() }
         val u = controller(withUsb)
         u.open(ruby); runCurrent()
-        u.press(NxButton.UP, NxButton.RIGHT)
+        u.press(NxButton.UP, NxButton.UP, NxButton.RIGHT)
         assertEquals(NetplayLink.USB, assertIs<NetplayPage.Role>(u.page.value).connection)
         u.press(NxButton.RIGHT)
         assertEquals(NetplayLink.CABLE_LINK_WIFI, assertIs<NetplayPage.Role>(u.page.value).connection)
@@ -122,7 +122,7 @@ class NetplayCableLinkControllerTest {
         assertIs<NetplayPage.Hosting>(host.page.value)
 
         client.open(sapphire); runCurrent()
-        client.press(NxButton.DOWN, NxButton.A); runCurrent()
+        client.press(NxButton.RIGHT, NxButton.A); runCurrent()
         clientP.found.emit(FoundHost("10.0.0.1", "Pokemon Ruby (USA)")); runCurrent()
         client.press(NxButton.A); runCurrent()                              // another game: no "Join anyway?"
 

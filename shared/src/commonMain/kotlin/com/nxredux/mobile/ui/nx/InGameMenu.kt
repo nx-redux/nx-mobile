@@ -295,6 +295,16 @@ private fun InGameMenuContent(
                 }
             }
         }
+        // A session's root says what its rows do, and counts down a menu left open in a DS room. Over the hint bar,
+        // whichever layout the rows are in, so a short glass under a skin still shows it.
+        if (page.kind == PageKind.Root && page.footer.isNotEmpty()) Text(
+            page.footer,
+            color = LocalNxColors.current.hint,
+            fontFamily = LocalNxFont.current,
+            fontSize = NxTextSizes.menuInfo,
+            lineHeight = NxTextSizes.menuInfoLine,
+            modifier = Modifier.padding(start = nxListInset(), end = nxListInset(), top = 4.dp, bottom = 6.dp),
+        )
         }
         // In landscape the menu covers the pad, so each hint is a tap target that sends its button (see
         // [menuHintButton]); off the root page a tap on the bar's empty space is Back.
@@ -653,10 +663,14 @@ private fun SplitBody(
     onOption: (OptionEvent) -> Unit,
     modifier: Modifier,
 ) {
-    Box(modifier.fillMaxWidth()) {
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        // The root's words' pane grows for a row longer than its usual share holds (Disconnect with its countdown). A
+        // deeper page keeps the share: its pane is the dimmed parent, and its rows draw no values to make room for.
+        val wordsNeed = rememberWordListWidth(split.panes.left, menuWordSize(), opened = true) + (nxListInset() - MenuPillPadding) + 12.dp
+        val grows = split.panes.left.kind == PageKind.Root
         SplitPanes(
             // No divider: the list and the panel (or the page) are one surface.
-            leftShare = SETTINGS_SPLIT_LEFT,
+            leftShare = if (grows) maxOf(SETTINGS_SPLIT_LEFT, wordsNeed / maxWidth).coerceAtMost(WORDS_PANE_MAX_SHARE) else SETTINGS_SPLIT_LEFT,
             divider = false,
             left = {
                 val l = leftPane(state, split, onSelect, onActivate, onChange)
@@ -699,6 +713,9 @@ private fun PaneBody(
         else -> key(page.kind) { RowsBody(page, rowHeight, onSelect, onActivate, onChange, Modifier.fillMaxSize(), focused, opened) }
     }
 }
+
+/** The most of the wide menu's width its words' pane takes for a long row. */
+private const val WORDS_PANE_MAX_SHARE = 0.6f
 
 /** Horizontal padding inside a label pill on the root list and the adjust strip (the rows pages use [NxOptionsRow]). */
 private val MenuPillPadding = 10.dp

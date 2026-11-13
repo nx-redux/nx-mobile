@@ -32,25 +32,33 @@ import com.nxredux.mobile.ui.AppState
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxFont
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxHintBar
+import com.nxredux.mobile.ui.nx.nxHighlight
 import com.nxredux.mobile.ui.nx.nxTextScale
+import androidx.compose.ui.text.style.TextOverflow
+import com.nxredux.mobile.ui.nx.touchOnly
 
 /**
  * What the buttons do on the keyboard right now, for its hint row: on a key, typing and the shortcuts; in the field,
- * the cursor; on the box's buttons, A as that button's word ([confirmLabel] or Cancel). START (done) and B (cancel)
- * are on the box's own words ([com.nxredux.mobile.ui.nx.NxModal]), not here.
+ * the cursor. START ([confirmLabel]) and B (cancel) answer the box from anywhere, so they are in every row: the box has
+ * no buttons of its own.
  */
-fun keyboardHints(entry: TextEntry, confirmLabel: String): List<Hint> = when (val f = entry.focus) {
-    is EntryFocus.Keys -> listOf(Hint(NxButton.A, "Type"), Hint(NxButton.X, "Delete"), Hint(NxButton.Y, "Space"))
-    // A password's field: A shows or hides it.
-    EntryFocus.Field -> if (entry.fields[entry.active].password) listOf(
-        Hint(NxButton.LEFT, "Move cursor"), Hint(NxButton.A, if (entry.reveal) "Hide" else "Show"), Hint(NxButton.X, "Delete"), Hint(NxButton.Y, "Space"),
-    ) else listOf(Hint(NxButton.LEFT, "Move cursor"), Hint(NxButton.X, "Delete"), Hint(NxButton.Y, "Space"))
-    is EntryFocus.Button -> listOf(Hint(NxButton.A, if (f.index == 0) confirmLabel else "Cancel"))
+fun keyboardHints(entry: TextEntry, confirmLabel: String): List<Hint> {
+    val answers = listOf(Hint(NxButton.START, confirmLabel), Hint(NxButton.B, "Cancel"))
+    return when (entry.focus) {
+        is EntryFocus.Keys -> listOf(Hint(NxButton.A, "Type"), Hint(NxButton.X, "Delete"), Hint(NxButton.Y, "Space")) + answers
+        // A password's field: A shows or hides it.
+        EntryFocus.Field -> (if (entry.fields[entry.active].password) listOf(
+            Hint(NxButton.LEFT, "Move cursor"), Hint(NxButton.A, if (entry.reveal) "Hide" else "Show"), Hint(NxButton.X, "Delete"), Hint(NxButton.Y, "Space"),
+        ) else listOf(Hint(NxButton.LEFT, "Move cursor"), Hint(NxButton.X, "Delete"), Hint(NxButton.Y, "Space"))) + answers
+    }
 }
 
-private fun label(key: Key, entry: TextEntry): String = when (key) {
+/** A key's word; Done's is the open prompt's own ([confirmLabel]: "Sign in", "Search", "OK"). */
+private fun label(key: Key, entry: TextEntry, confirmLabel: String): String = when (key) {
     is Key.Char -> if (entry.shift) key.c.uppercaseChar().toString() else key.c.toString()
     Key.Shift -> "⇧"
     Key.Symbols -> if (entry.page == KeyPage.LETTERS) "#+=" else "abc"
@@ -58,29 +66,53 @@ private fun label(key: Key, entry: TextEntry): String = when (key) {
     Key.Backspace -> "⌫"
     Key.Paste -> "Paste"
     Key.Next -> "Next"
-    Key.Done -> "Done"
+    Key.Done -> confirmLabel
 }
+
+/** A key's height where the screen has the room. */
+private val KEY_HEIGHT = 40.dp
+/** The least a key shrinks to on a short screen: still a fingertip's target on a small handheld. */
+private val KEY_MIN_HEIGHT = 22.dp
+/** The share of the window's height the keyboard (keys and hint row) may take. */
+private const val KEYBOARD_MAX_SHARE = 0.58f
+/** The hint row's height under the keys, and the room over them. */
+private val KEYBOARD_HINTS_ROOM = 40.dp
+private val KEYBOARD_TOP = 8.dp
 
 /**
  * The NX keyboard: [entry]'s page of keys, the pad's highlight lit while it is on a key, a tap moving it there and typing ([onKey]);
- * its hint row under the keys, a tapped hint sent as its button ([onHint]).
+ * its hint row under the keys, a tapped hint sent as its button ([onHint]). Done is the prompt's one action: it reads
+ * [confirmLabel] and wears the accent, as a modal's main button does.
  */
 @Composable
 fun NxKeyboard(entry: TextEntry, onKey: (KeyPos) -> Unit, onHint: (NxButton) -> Unit, confirmLabel: String, modifier: Modifier = Modifier) {
     val colors = LocalNxColors.current
     val rows = NxKeys.rows(entry.page, entry.twoFields)
     val lit = (entry.focus as? EntryFocus.Keys)?.at
-    val keyHeight = 40.dp * nxTextScale()
+    val gap = 6.dp
+    // A short screen: the keys give way, so the prompt's box above them and the hint row under them both stay in sight.
+    val window = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
+    // With no pad there is no hint row under the keys: they keep the same room below as above.
+    val under = if (touchOnly()) KEYBOARD_TOP else KEYBOARD_HINTS_ROOM * nxTextScale()
+    val keyHeight = (KEY_HEIGHT * nxTextScale()).let { full ->
+        if (window <= 0.dp) full
+        else ((window * KEYBOARD_MAX_SHARE - under - KEYBOARD_TOP - gap * (rows.size - 1)) / rows.size).coerceIn(KEY_MIN_HEIGHT, full)
+    }
     val haptics = LocalHapticFeedback.current
-    Column(modifier.fillMaxWidth().background(colors.modalPanel).navigationBarsPadding().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    // A finger landing between two keys stays on the keyboard: let through, it reaches the prompt's scrim behind and cancels.
+    Column(
+        modifier.fillMaxWidth().background(colors.modalPanel).pointerInput(Unit) { detectTapGestures { } }.navigationBarsPadding().padding(top = KEYBOARD_TOP),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(horizontal = 8.dp).padding(bottom = if (touchOnly()) KEYBOARD_TOP else 0.dp), verticalArrangement = Arrangement.spacedBy(gap)) {
             rows.forEachIndexed { r, row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     row.forEachIndexed { c, key ->
                         val on = lit == KeyPos(r, c)
+                        val action = key == Key.Done
                         Box(
                             Modifier.weight(NxKeys.width(key)).height(keyHeight)
-                                .background(if (on) colors.main else colors.fieldGround, RoundedCornerShape(8.dp))
+                                .background(if (on) colors.main else if (action) nxHighlight() else colors.fieldGround, RoundedCornerShape(8.dp))
                                 .pointerInput(r, c) {
                                     // A light tick under the finger, as a phone's keyboard gives (the system's haptics setting rules it).
                                     detectTapGestures { haptics.performHapticFeedback(HapticFeedbackType.KeyboardTap); onKey(KeyPos(r, c)) }
@@ -88,9 +120,9 @@ fun NxKeyboard(entry: TextEntry, onKey: (KeyPos) -> Unit, onHint: (NxButton) -> 
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                label(key, entry), color = if (on) colors.listTextSelected else colors.listText,
-                                fontFamily = LocalNxFont.current, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-                                fontSize = 16.sp * nxTextScale(), maxLines = 1,
+                                label(key, entry, confirmLabel), color = if (on) colors.listTextSelected else if (action) colors.onAccent else colors.listText,
+                                fontFamily = LocalNxFont.current, fontWeight = if (on || action) FontWeight.SemiBold else FontWeight.Normal,
+                                fontSize = 16.sp * nxTextScale(), maxLines = 1, overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }

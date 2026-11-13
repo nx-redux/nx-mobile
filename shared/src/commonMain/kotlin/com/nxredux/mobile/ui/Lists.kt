@@ -28,6 +28,8 @@ sealed interface ListSource {
     data class Search(val query: String) : ListSource
     /** START's (or the Search icon's) search inside a game list: [parent]'s games matching [query]; B goes back to [parent]. */
     data class Filtered(val parent: ListSource, val query: String) : ListSource
+    /** The Games tab: every playable game of every console, Android games included ([AllGames]). */
+    data object AllGames : ListSource
 }
 
 val ListSource.title: String
@@ -38,13 +40,14 @@ val ListSource.title: String
         ListSource.Hidden -> "Hidden games"
         is ListSource.Search -> "Search: $query"
         is ListSource.Filtered -> "${parent.title}: $query"
+        ListSource.AllGames -> "Games"
     }
 
 /** The list a [ListSource.Filtered] search was made in; any other source itself. */
 val ListSource.base: ListSource get() = (this as? ListSource.Filtered)?.parent ?: this
 
 /** A list START (or the Search icon) searches inside: not Hidden, nor a search's own results (START's or this one's parent). */
-val ListSource.searchable: Boolean get() = base != ListSource.Hidden && base !is ListSource.Search
+val ListSource.searchable: Boolean get() = base != ListSource.Hidden && base !is ListSource.Search && base != ListSource.AllGames
 
 /**
  * A game list's title row: the list's own name ([title]: "ColecoVision", "RPGs", "Recently Played"), not led by the tab

@@ -121,6 +121,14 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = prefs.getInt(KEY_RA_PROGRESS_SECONDS, 1).coerceIn(0, 5)
         set(value) = prefs.edit { putInt(KEY_RA_PROGRESS_SECONDS, value) }
 
+    override var raUnlockSound: Boolean
+        get() = prefs.getBoolean(KEY_RA_UNLOCK_SOUND, true)
+        set(value) = prefs.edit { putBoolean(KEY_RA_UNLOCK_SOUND, value) }
+
+    override var raUnlockScreenshot: Boolean
+        get() = prefs.getBoolean(KEY_RA_UNLOCK_SCREENSHOT, false)
+        set(value) = prefs.edit { putBoolean(KEY_RA_UNLOCK_SCREENSHOT, value) }
+
     override var raSortOrder: RaSortOrder
         get() = prefs.getString(KEY_RA_SORT_ORDER, null)?.let { runCatching { RaSortOrder.valueOf(it) }.getOrNull() } ?: RaSortOrder.DEFAULT
         set(value) = prefs.edit { putString(KEY_RA_SORT_ORDER, value.name) }
@@ -165,6 +173,9 @@ class AndroidAppSettings(context: Context) : AppSettings {
     override var showConsolesTab: Boolean
         get() = prefs.getBoolean(KEY_SHOW_CONSOLES_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
         set(value) = prefs.edit { putBoolean(KEY_SHOW_CONSOLES_TAB, value) }
+    override var showGamesTab: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_GAMES_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
+        set(value) = prefs.edit { putBoolean(KEY_SHOW_GAMES_TAB, value) }
     override var showCollectionsTab: Boolean
         get() = prefs.getBoolean(KEY_SHOW_COLLECTIONS_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
         set(value) = prefs.edit { putBoolean(KEY_SHOW_COLLECTIONS_TAB, value) }
@@ -286,6 +297,11 @@ class AndroidAppSettings(context: Context) : AppSettings {
             if (value) DebugLogFile.start(app) else DebugLogFile.stop()
         }
 
+    /** The MAC seed of a DS link room's members: random once, then kept. */
+    val ndsMacSeed: Int
+        get() = if (prefs.contains(KEY_NDS_MAC_SEED)) prefs.getInt(KEY_NDS_MAC_SEED, 0)
+        else kotlin.random.Random.nextInt(0, 1 shl 24).also { prefs.edit { putInt(KEY_NDS_MAC_SEED, it) } }
+
     override var cableLinkDelayPin: Int
         get() = prefs.getInt(KEY_CABLE_LINK_DELAY, NetplayCores.CABLE_LINK_DELAY_DEFAULT).coerceIn(0, NetplayCores.CABLE_LINK_DELAY_MAX)
         set(value) = prefs.edit { putInt(KEY_CABLE_LINK_DELAY, value.coerceIn(0, NetplayCores.CABLE_LINK_DELAY_MAX)) }
@@ -404,6 +420,8 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_RA_NOTIFICATIONS = "ra_notifications"
         private const val KEY_RA_NOTIFICATION_SECONDS = "ra_notification_seconds"
         private const val KEY_RA_PROGRESS_SECONDS = "ra_progress_seconds"
+        private const val KEY_RA_UNLOCK_SOUND = "ra_unlock_sound"
+        private const val KEY_RA_UNLOCK_SCREENSHOT = "ra_unlock_screenshot"
         private const val KEY_RA_SORT_ORDER = "ra_sort_order"
         private const val KEY_SS_USERNAME = "ss_username"
         private const val KEY_SS_PASSWORD = "ss_password"
@@ -417,6 +435,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_SHOW_CONSOLES_TAB = "show_consoles_tab"
         private const val KEY_SHOW_COLLECTIONS_TAB = "show_collections_tab"
         private const val KEY_SHOW_TOOLS_TAB = "show_tools_tab"
+        private const val KEY_SHOW_GAMES_TAB = "show_games_tab"
         private const val KEY_SHOW_NEW_SHELF = "show_new_shelf"
         private const val KEY_SHOW_NOT_STARTED_SHELF = "show_not_started_shelf"
         private const val KEY_SHOW_MOST_PLAYED_SHELF = "show_most_played_shelf"
@@ -440,6 +459,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_GAME_RUMBLE = "game_rumble"
         private const val KEY_DEBUG_LOG = "debug_log"
         private const val KEY_PLAYER_NAME = "player_name"
+        private const val KEY_NDS_MAC_SEED = "nds_mac_seed"
         private const val KEY_CABLE_LINK_DELAY = "cable_link_delay"
         private const val KEY_CABLE_LINK_DELAY_OVERLAY = "cable_link_delay_overlay"
         private const val KEY_ANDROID_KEYBOARD = "android_keyboard"

@@ -1302,13 +1302,13 @@ class InGameMenuModelTest {
         assertEquals(MenuRow.Submenu("Display", DISPLAY), m.state.page.rows.first())
     }
 
-    /** The in-game Options → group pages' rows for [tag], by group name (every group shown). */
+    /** The in-game Options → group pages' rows for [tag], by group name (every group shown; Multiplayer's rows are all read at launch, so never). */
     private fun inGameGroups(tag: String): Map<String, List<String>> {
         val m = model()
         m.setFrontend(FrontendOptions.defaults(tag), emptyList(), emptySet(), tag)
         m.select(4); m.activate(4)
         assertEquals(FULL_OPTIONS, m.state.page.rows.map { it.label })
-        return OptionGroup.entries.associate { g ->
+        return (OptionGroup.entries - OptionGroup.MULTIPLAYER).associate { g ->
             assertNull(m.activate(m.optionsRow(g.label)))
             val rows = m.state.page.rows.map { it.label }
             m.press(NxButton.B)
@@ -1342,6 +1342,16 @@ class InGameMenuModelTest {
         assertEquals(PICTURE_ROWS, wii.getValue("Display"))                   // no Wii Screen
         assertEquals(listOf("Wii Controller", "Motion Controls", "Controller Layout", "Pad Opacity (landscape)"), wii.getValue("Controls"))
         assertEquals(SPEED_ROWS + "Frame Skip", wii.getValue("Gameplay"))
+    }
+
+    // Local Wireless is read when the game starts, so Multiplayer (its only row) has no page in the running game.
+    @Test fun multiplayer_has_no_in_game_page() {
+        for (tag in listOf("NDS", "PSP")) {
+            val m = model()
+            m.setFrontend(FrontendOptions.defaults(tag), emptyList(), emptySet(), tag)
+            m.select(4); m.activate(4)
+            assertEquals(false, "Multiplayer" in m.state.page.rows.map { it.label }, tag)
+        }
     }
 
     // Bottom screen (every console) shows on the running game's Display page only while a second display is
@@ -1414,7 +1424,7 @@ class InGameMenuModelTest {
         val m = model().openConsoleSettings()
         assertEquals("Display", m.state.page.title)
         assertEquals(
-            ConsoleSettings.tableFor("NDS").filter { it != BottomScreenOptions.row && it.key != NdsOptions.SCALE_3D && OptionGroup.of(it.key) == OptionGroup.DISPLAY }.map { it.label },
+            ConsoleSettings.tableFor("NDS").filter { it != BottomScreenOptions.row && !it.atLaunch && it.key != NdsOptions.SCALE_3D && OptionGroup.of(it.key) == OptionGroup.DISPLAY }.map { it.label },
             m.state.page.rows.map { it.label }.dropLast(3),   // then the picture rows the DS screens take
         )
         assertEquals(
@@ -1984,6 +1994,103 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.Close, m.press(NxButton.B))
     }
 
+    @Test fun ds_wireless_root_is_continue_disconnect_quit() {
+        val m = model()
+        m.setDsWireless(true)
+        assertEquals("Tetris", m.state.page.title)
+        assertEquals(listOf("Continue", "Disconnect", "Quit"), m.state.page.rows.map { it.label })
+        assertEquals("Disconnect leaves local multiplayer. The game plays on.", m.state.page.footer)
+        assertFalse(m.panelBeside)
+        assertEquals(MenuEffect.Close, m.press(NxButton.A))
+        m.press(NxButton.DOWN)
+        assertEquals(MenuEffect.DisconnectDs, m.press(NxButton.A))
+        assertEquals(MenuEffect.DisconnectDs, m.activate(1))
+        m.press(NxButton.DOWN)
+        assertEquals(MenuEffect.QuitWithoutResume, m.press(NxButton.A))   // no resume point from a wireless session
+        assertEquals(MenuEffect.QuitWithoutResume, m.activate(2))
+        assertEquals(PageKind.Root, m.state.page.kind)
+    }
+
+    @Test fun ds_wireless_root_counts_down_to_the_idle_leave() {
+        val m = model()
+        m.setDsWireless(true)
+        m.press(NxButton.DOWN)
+        m.setIdleSeconds(45)
+        assertEquals(listOf("Continue", "Disconnect (45s)", "Quit"), m.state.page.rows.map { it.label })
+        assertEquals("Disconnect leaves local multiplayer. The game plays on.", m.state.page.footer)
+        assertEquals(1, m.state.page.selected)   // the countdown never moves the selection
+        m.setIdleSeconds(44)
+        assertEquals("Disconnect (44s)", m.state.page.rows[1].label)
+        assertEquals(1, m.state.page.selected)
+        assertEquals(MenuEffect.DisconnectDs, m.press(NxButton.A))
+        m.setIdleSeconds(null)
+        assertEquals(listOf("Continue", "Disconnect", "Quit"), m.state.page.rows.map { it.label })
+        assertEquals(1, m.state.page.selected)
+    }
+
+    @Test fun ds_wireless_disconnect_row_takes_one_tap_and_hints_select() {
+        val m = model()
+        m.setDsWireless(true)
+        val row = m.state.page.rows[1]
+        assertFalse(inGameRowTakesTwoTaps(row))
+        assertEquals(listOf(NxButton.A, NxButton.B), hintsFor(m.state.page, row).map { it.button })
+    }
+
+    @Test fun ds_wireless_off_brings_the_full_root_back() {
+        val m = model()
+        val full = m.state.page.rows.map { it.label }
+        m.setDsWireless(true)
+        m.press(NxButton.DOWN)                                // on Disconnect
+        m.setDsWireless(false)
+        assertEquals(full, m.state.page.rows.map { it.label })
+        assertEquals(0, m.state.page.selected)                // Disconnect is gone: back on Continue
+        assertTrue(m.panelBeside)
+    }
+
+    @Test fun ds_wireless_on_returns_an_open_sub_page_to_the_root() {
+        val m = model()
+        m.activate(m.state.page.rows.indexOfFirst { it.label == "Options" })
+        m.setDsWireless(true)
+        assertEquals(PageKind.Root, m.state.page.kind)
+        assertEquals(listOf("Continue", "Disconnect", "Quit"), m.state.page.rows.map { it.label })
+    }
+
+    @Test fun ds_wireless_on_ends_a_shortcut_capture() {
+        val m = shortcuts()
+        m.selectRow("Toggle FF")
+        m.press(NxButton.A)
+        assertTrue(m.capturingShortcut)
+        m.setDsWireless(true)
+        assertFalse(m.capturingShortcut)                      // the next press is the reduced root's, not a binding
+        assertEquals(PageKind.Root, m.state.page.kind)
+        assertEquals(listOf("Continue", "Disconnect", "Quit"), m.state.page.rows.map { it.label })
+    }
+
+    @Test fun b_menu_and_x_never_disconnect() {
+        val m = model()
+        m.setDsWireless(true)
+        m.press(NxButton.DOWN)                                // on Disconnect
+        val effects = listOf(NxButton.X, NxButton.MENU, NxButton.B).map(m::press)
+        assertTrue(effects.all { it == null || it == MenuEffect.Close }, "$effects")
+    }
+
+    @Test fun ds_wireless_hides_the_session_breaking_panel_actions() {
+        val m = model()
+        m.setDsWireless(true)
+        assertNull(m.panelEvent(GamePanelEvent.SetFastForward(true)))
+        assertNull(m.panelEvent(GamePanelEvent.Reset))
+        assertEquals(PageKind.Root, m.state.page.kind)        // Reset pushed nothing
+    }
+
+    @Test fun ds_wireless_is_ignored_in_a_sheet_session() {
+        val m = model()
+        m.netplay = true
+        m.refresh()
+        m.setDsWireless(true)
+        assertFalse(m.dsWireless)
+        assertEquals(listOf("Continue", "Leave"), m.state.page.rows.map { it.label })
+    }
+
     /**
      * Back and B in a live session (Back with the menu closed opens it, the host's backPressed; Back or B inside it is B
      * here): the menu opens on Continue, and B, MENU or X, however often, only close it or do nothing. Only A on Leave
@@ -1998,8 +2105,8 @@ class InGameMenuModelTest {
             assertEquals(0, m.state.page.selected)   // Continue
             val effects = listOf(NxButton.B, NxButton.B, NxButton.MENU, NxButton.X, NxButton.B).map(m::press)
             assertTrue(effects.all { it == null || it == MenuEffect.Close }, "link=$link: $effects")
-            assertEquals(listOf("Continue", "Leave"), m.state.page.rows.map { it.label })
-            // B on the Leave row is not a choice of Leave either.
+            assertEquals(if (link) listOf("Continue", "Disconnect", "Quit") else listOf("Continue", "Leave"), m.state.page.rows.map { it.label })
+            // B on the Leave (or Disconnect) row is not a choice of it either.
             m.press(NxButton.DOWN)
             assertEquals(MenuEffect.Close, m.press(NxButton.B))
         }
@@ -2133,8 +2240,8 @@ class InGameMenuModelTest {
         m.netplay = true
         m.netplayLink = true
         m.refresh()
-        // Live: still Continue / Leave, no panel beside (the second screen's panel is not the menu's).
-        assertEquals(listOf("Continue", "Leave"), m.state.page.rows.map { it.label })
+        // Live: Continue / Disconnect / Quit, no panel beside (the second screen's panel is not the menu's).
+        assertEquals(listOf("Continue", "Disconnect", "Quit"), m.state.page.rows.map { it.label })
         assertFalse(m.panelBeside)
         m.endNetplay(local = true)
         assertTrue(m.panelBeside)
@@ -2149,14 +2256,32 @@ class InGameMenuModelTest {
         assertEquals(before, m.state.page.rows.map { it.label })
     }
 
-    @Test fun a_link_session_root_says_leaving_keeps_you_playing() {
+    @Test fun a_link_session_root_is_continue_disconnect_quit() {
         val m = model()
         m.netplay = true
         m.netplayLink = true
         m.refresh()
-        assertEquals("Leave netplay?", m.state.page.title)
-        assertEquals(listOf("Continue", "Leave"), m.state.page.rows.map { it.label })
-        assertEquals("Leaving ends the link. You keep playing on your own save.", m.state.page.footer)
+        assertEquals("Tetris", m.state.page.title)
+        assertEquals(listOf("Continue", "Disconnect", "Quit"), m.state.page.rows.map { it.label })
+        assertEquals("Disconnect ends the link. You keep playing on your own save.", m.state.page.footer)
+        m.press(NxButton.DOWN)
+        assertEquals(MenuEffect.LeaveNetplay, m.press(NxButton.A))        // the host ends the link, the game plays on
+        m.press(NxButton.DOWN)
+        assertEquals(MenuEffect.QuitWithoutResume, m.press(NxButton.A))   // no resume point from a linked game
+    }
+
+    @Test fun a_link_session_counts_a_ds_rooms_idle_leave_on_disconnect() {
+        val m = model()
+        m.netplay = true
+        m.netplayLink = true
+        m.refresh()
+        m.press(NxButton.DOWN)
+        m.setIdleSeconds(9)
+        assertEquals(listOf("Continue", "Disconnect (9s)", "Quit"), m.state.page.rows.map { it.label })
+        assertEquals(1, m.state.page.selected)
+        assertEquals(MenuEffect.LeaveNetplay, m.press(NxButton.A))
+        m.setIdleSeconds(null)
+        assertEquals("Disconnect", m.state.page.rows[1].label)
     }
 
     @Test fun a_lockstep_session_root_says_leaving_ends_the_session() {

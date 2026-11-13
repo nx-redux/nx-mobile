@@ -95,7 +95,7 @@ fun OnboardingScreen(
     }
     if (screen.prompt) NxSignInPrompt(
         screen.draftUser, screen.draftPassword, onDraftUser, onDraftPassword,
-        onConfirm = { onHint(NxButton.A) }, onCancel = { onHint(NxButton.B) },
+        onConfirm = { onHint(NxButton.A) }, onCancel = { onHint(NxButton.B) }, note = RA_PASSWORD_NOTE,
     )
 }
 

@@ -17,9 +17,8 @@ class LayoutTipTest {
         assertFalse(LayoutTip.due(n3ds = false, skinShown = false, skinLayouts = false, hidden = false)) // not a 3DS game
     }
 
-    @Test fun eachConsoleNamesItsOwnSwap() {   // the 3DS's SELECT + R, the DS's R2 (the swap in the same tip)
-        assertTrue("SELECT + R" in LayoutTip.text(ds = false))
-        assertTrue("R2" in LayoutTip.text(ds = true))
-        assertTrue(LayoutTip.text(ds = true).startsWith("SELECT + Left / Right"))
+    @Test fun namesTheLayoutChordAndTheSwap() {
+        assertTrue(LayoutTip.TEXT.startsWith("SELECT + Left / Right"))
+        assertTrue("L3 or SELECT + L swaps" in LayoutTip.TEXT)
     }
 }

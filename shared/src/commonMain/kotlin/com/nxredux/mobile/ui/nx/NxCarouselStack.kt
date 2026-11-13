@@ -86,7 +86,7 @@ fun NxCarouselStack(
                 StackCaption(
                     captionTitle(), captionInfo(), g, bodyW, bodyH, shadow = false, nameSp = nameSp,
                     splitNext = stackPortraitFamily(screenW, screenH, portrait), alignment = alignment,
-                    infoShare = 0.8f,   // the stats at 80% of the name, as the horizontal Carousel's
+                    infoShare = STACK_INFO_SHARE,   // the stats at 80% of the name, as the horizontal Carousel's
                 )
             },
         )

@@ -22,14 +22,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 
-/** The panel's share of the page's width: 60% of a portrait screen (the list shows beside it), under half a landscape one. */
+/** The panel's base share of the page's width: 60% of a portrait screen (the list shows beside it), under half a landscape one. */
 private const val PANEL_SHARE_PORTRAIT = 0.6f
 private const val PANEL_SHARE_LANDSCAPE = 0.45f
+private const val PANEL_MIN_DP = 320f
+private const val PANEL_MAX_SHARE = 0.8f
 private const val SLIDE_MS = 220
+
+/** The panel's width on a page [pageDp] wide: its [share] of it, at least 320 dp, but never over 80% of the page (the cap wins). */
+internal fun slidePanelWidthDp(pageDp: Float, share: Float): Float =
+    minOf(maxOf(pageDp * share, PANEL_MIN_DP), pageDp * PANEL_MAX_SHARE)
 
 /**
  * A panel sliding in from the right over a game list, its full height, while [visible]: the modals' scrim behind it
- * (a tap on the scrim calls [onDismiss]), the panel 60% of a portrait screen's width and 45% of a landscape one's.
+ * (a tap on the scrim calls [onDismiss]), the panel 60% of a portrait screen's width and 45% of a landscape one's, but at
+ * least 320 dp and at most 80% of the width it slides over (see [slidePanelWidthDp]).
  * Taps inside stay inside. [content] keeps drawing while it slides out, so the caller keeps what it last showed.
  */
 @Composable
@@ -47,7 +54,7 @@ fun SlidePanel(visible: Boolean, onDismiss: () -> Unit, content: @Composable Col
             // screen) is wide and short, yet a portrait one.
             val share = if (LocalPortrait.current) PANEL_SHARE_PORTRAIT else PANEL_SHARE_LANDSCAPE
             Column(
-                Modifier.align(Alignment.TopEnd).width(maxWidth * share).fillMaxHeight()
+                Modifier.align(Alignment.TopEnd).width(slidePanelWidthDp(maxWidth.value, share).dp).fillMaxHeight()
                     .background(LocalNxColors.current.modalPanel, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
                     .pointerInput(Unit) { detectTapGestures { } },   // taps inside stay inside
                 content = content,

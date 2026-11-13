@@ -9,11 +9,16 @@ import java.net.InetAddress
 
 /** The Wi-Fi `Network`, this phone's IPv4 on it and its broadcast address; shared by netplay and Device Sync. */
 internal object WifiNetworks {
-    /** The Wi-Fi network: the active one when it is Wi-Fi, else any connected Wi-Fi network (a VPN may be active). */
+    /**
+     * The Wi-Fi network: the active one when it is Wi-Fi, else any connected Wi-Fi network (a VPN may be active). Never
+     * a VPN running over the Wi-Fi, which carries the Wi-Fi transport too (the USB cable's is one).
+     */
     @Suppress("DEPRECATION")
     fun network(cm: ConnectivityManager?): Network? {
         cm ?: return null
-        fun isWifi(n: Network?) = n != null && cm.getNetworkCapabilities(n)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        fun isWifi(n: Network?) = n != null && cm.getNetworkCapabilities(n)?.let {
+            it.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) && !it.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+        } == true
         cm.activeNetwork?.let { if (isWifi(it)) return it }
         return cm.allNetworks.firstOrNull { isWifi(it) }
     }

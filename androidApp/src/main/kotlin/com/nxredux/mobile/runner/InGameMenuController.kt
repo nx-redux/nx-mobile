@@ -101,6 +101,10 @@ internal interface InGameMenuHost : GameScreenHost {
     val netplayEnded: Boolean
     /** netplay: an ended Cable Link session: the menu stays open with Quit alone. */
     val netplayQuitOnly: Boolean
+    /** DS local wireless on the automatic route: the game's radio is up, so the root is Continue, Disconnect, Quit. */
+    val dsWireless: Boolean
+    /** Seconds until a menu left open in a DS room leaves it by itself; null when nothing counts down. */
+    val dsIdleSeconds: Int?
     // The game's config: the store in use, which layer it is, what is locked, forced or hidden, and its resolved values.
     val configStore: CoreConfigStore?
     var configSource: ConfigSource
@@ -132,6 +136,8 @@ internal interface InGameMenuHost : GameScreenHost {
     fun quitGame(chosen: Boolean, autoState: Boolean)
     /** The menu's Leave: a link session ends and plays on; any other session disconnects and quits. */
     fun leaveNetplay()
+    /** The menu's Disconnect: this phone leaves the DS room; the game runs on and the menu stays open. */
+    fun disconnectDs()
     fun connectDolphinPorts()
     fun onInputDevicesChanged()
     /** The game holds under the opening menu: core, sound, rumble, motion; the battery save is written. */
@@ -295,11 +301,14 @@ internal class InGameMenuController(
             it.layoutLocked = AndroidAppSettings(activity).padSkin.let { on ->
                 com.nxredux.mobile.options.N3dsOptions.lockedLayoutRows(on, activity.screenClass()) + com.nxredux.mobile.options.NdsOptions.lockedLayoutRows(on, activity.screenClass())
             }
-            // netplay: the root is "Leave netplay?" only; Continue / Quit once the session has ended. An ended link
+            // netplay: the root is "Leave netplay?" only (a link session's: Continue / Disconnect / Quit); Continue / Quit
+            // once the session has ended. An ended link
             // session's game is a local one ([netplayNow] null): the normal root.
             if (netplayNow != null) {
                 it.netplay = true; it.netplayLink = netplay?.endsAsLocalGame == true; it.netplayEnded = netplayEnded; it.netplayQuitOnly = netplayQuitOnly; it.refresh()
             }
+            it.setDsWireless(host.dsWireless)   // a DS game's wireless on the automatic route: Continue, Disconnect, Quit
+            it.setIdleSeconds(host.dsIdleSeconds)
         }
         if (retroView != null) {
             // Re-listed on every open so a bundled tree swapped in since launch, or a shader added to the home, is
@@ -567,8 +576,13 @@ internal class InGameMenuController(
             MenuEffect.Close -> closeMenu()
             MenuEffect.Quit -> quitWithAutoState(chosen = true, autoState = true)
             // Quit's "Quit": the battery save as ever, the resume point on disk left as it is.
-            MenuEffect.QuitWithoutResume -> quitWithAutoState(chosen = true, autoState = false)
+            MenuEffect.QuitWithoutResume -> {
+                // A live link session's Quit: the other side is told now, as Disconnect would, not left to time out.
+                if (netplayNow != null && netplay?.endsAsLocalGame == true && !netplayEnded) host.leaveNetplay()
+                quitWithAutoState(chosen = true, autoState = false)
+            }
             MenuEffect.LeaveNetplay -> host.leaveNetplay()
+            MenuEffect.DisconnectDs -> host.disconnectDs()
             is MenuEffect.SaveSlot -> saveToSlot(effect.slot)
             is MenuEffect.LoadSlot -> loadFromSlot(effect.slot)
             is MenuEffect.ToggleMute -> toggleMute(effect.id)

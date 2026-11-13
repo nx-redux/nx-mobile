@@ -12,6 +12,8 @@ enum class OptionGroup(val label: String) {
     CONTROLS("Controls"),
     /** How the game runs: fast forward, rewind (with their audio), Frame Skip, the PS2 BIOS. */
     GAMEPLAY("Gameplay"),
+    /** Playing with other devices: the DS, 3DS and PSP Local Wireless, each read when the game starts. */
+    MULTIPLAYER("Multiplayer"),
     /** Sound: the resampler, the buffer, filling gaps. */
     AUDIO("Audio");
 
@@ -22,12 +24,14 @@ enum class OptionGroup(val label: String) {
             WiiOptions.CONTROLLER, WiiOptions.MOTION, WiiOptions.POINTER_WIDTH, WiiOptions.POINTER_HEIGHT, WiiOptions.POINTER_OFFSET,
         )
         private val GAMEPLAY_KEYS = setOf(SpeedOptions.MAX_FF, SpeedOptions.FF_AUDIO, SpeedOptions.REWIND, SpeedOptions.REWIND_AUDIO, FrameSkipOptions.KEY, Ps2Options.BIOS)
+        private val MULTIPLAYER_KEYS = setOf(NdsOptions.LOCAL_WIRELESS, N3dsOptions.LOCAL_WIRELESS, PspOptions.LOCAL_WIRELESS)
         private val AUDIO_KEYS = setOf(AudioOptions.RESAMPLING, AudioOptions.BUFFER, AudioOptions.FILL_GAPS)
 
         /** The group of the setting stored as [key]; the picture rows (every other one) are [DISPLAY]. */
         fun of(key: String): OptionGroup = when (key) {
             in CONTROL_KEYS -> CONTROLS
             in GAMEPLAY_KEYS -> GAMEPLAY
+            in MULTIPLAYER_KEYS -> MULTIPLAYER
             in AUDIO_KEYS -> AUDIO
             else -> DISPLAY
         }

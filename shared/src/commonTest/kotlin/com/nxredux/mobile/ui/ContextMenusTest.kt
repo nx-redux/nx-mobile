@@ -100,6 +100,7 @@ class ContextMenusTest {
         val gba = entry("GBA")
         val gg = entry("GG", file = "Sonic.gg")
         val nds = entry("NDS", file = "Mario Kart DS.nds")
+        val dc = entry("DC", file = "Daxter.cdi")
         fun netplay(e: Listed, source: ListSource = ListSource.Console(e.system), on: Boolean = true) =
             ContextMenus.itemsFor(source, e, false, netplay = on).filter { it.kind == ContextKind.NETPLAY }
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(sfc))
@@ -108,7 +109,8 @@ class ContextMenusTest {
             .map { it.kind }.let { it[it.indexOf(ContextKind.GAME_SETTINGS) + 1] })   // right after Game Settings
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(gba))   // GBA link
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(gg))   // GG lockstep, as the handheld's GG.pak
-        assertTrue(netplay(nds).isEmpty())
+        assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(nds))   // DS local wireless
+        assertTrue(netplay(dc).isEmpty())
         assertTrue(netplay(sfc, on = false).isEmpty())   // a platform without netplay
         assertTrue(netplay(sfc, ListSource.Recent).isEmpty())
         val u = entry("SFC", unassigned = true, file = "thing.sfc")
@@ -185,6 +187,26 @@ class ContextMenusTest {
         assertEquals(listOf(ContextKind.UNPIN, ContextKind.CHANGE_ART), ContextMenus.itemsFor(ListSource.Console(s), e, pinned = true, art = ArtMenuItem.CHANGE).map { it.kind })
     }
 
+    @Test fun allGamesOffersSearchItemsForRomsAndAndroidItemsForApps() {
+        val rom = entry("GB", file = "Tetris.gb")
+        for ((pinned, art) in listOf(false to ArtMenuItem.FETCH, true to ArtMenuItem.CHANGE)) {
+            for (canResume in listOf(false, true)) {
+                assertEquals(
+                    ContextMenus.itemsFor(ListSource.Search("x"), rom, pinned, art, netplay = true, canResume = canResume, netplayLeads = canResume),
+                    ContextMenus.itemsFor(ListSource.AllGames, rom, pinned, art, netplay = true, canResume = canResume, netplayLeads = canResume),
+                )
+            }
+        }
+        val s = SystemFolder("Android", ANDROID_TAG, null, emptyList(), android = true)
+        val app = Listed(s, GameEntry(ContentRef("app:a/A"), "a/A", "Alpha", folder = ContentRef("app:"), sourceId = "android", relativeDir = ""))
+        for ((pinned, art) in listOf(false to ArtMenuItem.FETCH, true to ArtMenuItem.CHANGE)) {
+            assertEquals(
+                ContextMenus.itemsFor(ListSource.Console(s), app, pinned, art),
+                ContextMenus.itemsFor(ListSource.AllGames, app, pinned, art),
+            )
+        }
+    }
+
     @Test fun a_search_list_offers_the_collection_items_without_remove() {
         val entry = entry("GB", file = "Tetris.gb")
         val items = ContextMenus.itemsFor(ListSource.Search("mario"), entry, pinned = false, art = ArtMenuItem.FETCH, netplay = true).map { it.kind }
@@ -211,8 +233,8 @@ class ContextMenusTest {
         assertEquals(listOf(ContextKind.PLAY_FROM_START, ContextKind.NETPLAY, ContextKind.PIN), lead(src, e).map { it.kind }.take(3))
         assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), lead(src, e, canResume = false).map { it.kind }.take(2))
         assertEquals(listOf(ContextKind.PLAY_FROM_START, ContextKind.PIN), lead(src, e, netplay = false).map { it.kind }.take(2))
-        val nds = entry("NDS", file = "Mario.nds")   // a tag without netplay: never Netplay
-        assertTrue(ContextKind.NETPLAY !in lead(ListSource.Console(nds.system), nds).map { it.kind })
+        val dc = entry("DC", file = "Daxter.cdi")   // a tag without netplay: never Netplay
+        assertTrue(ContextKind.NETPLAY !in lead(ListSource.Console(dc.system), dc).map { it.kind })
     }
 
     @Test fun collection_and_search_menus_list_netplay_once() {
@@ -250,6 +272,14 @@ class ContextMenusTest {
         assertEquals(listOf(ContextKind.NETPLAY, ContextKind.UNPIN), ContextMenus.pinRowItems(netplay = true).map { it.kind })
         assertEquals(listOf(ContextKind.PIN), ContextMenus.homeGameItems(pinned = false, netplay = false).map { it.kind })
         assertEquals(listOf(ContextKind.UNPIN), ContextMenus.pinRowItems().map { it.kind })
+    }
+
+    @Test fun aHiddenGamesTabIsOfferedFirst() {
+        assertEquals(
+            listOf(ContextItem(ContextKind.OPEN_GAMES, "Games"), ContextItem(ContextKind.OPEN_TOOLS, "Tools")),
+            ContextMenus.hiddenTabItems(listOf(MenuCategory.TOOLS, MenuCategory.GAMES)),
+        )
+        assertEquals(MenuCategory.GAMES, ContextMenus.tabOf(ContextKind.OPEN_GAMES))
     }
 
     @Test fun hiddenTabItemsComeInTheTabsOrder() {

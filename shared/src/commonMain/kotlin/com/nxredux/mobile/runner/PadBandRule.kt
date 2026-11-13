@@ -20,9 +20,6 @@ object PadBandRule {
     /** True if the device [name] contains a [ClipOnNames] entry, ignoring case, spaces, hyphens and underscores. */
     fun isClipOn(name: String): Boolean = squash(name).let { n -> ClipOnNames.any { squash(it) in n } }
 
-    /** A controller held apart from the device: one connected and none of them clip-on (a clip-on counts as none). */
-    fun separateController(controllerNames: List<String>): Boolean = controllerNames.isNotEmpty() && controllerNames.none(::isClipOn)
-
     /** False only in [portrait] with a controller connected and none of them clip-on. */
     fun keepPadBand(portrait: Boolean, controllerNames: List<String>): Boolean =
         !portrait || controllerNames.isEmpty() || controllerNames.any(::isClipOn)

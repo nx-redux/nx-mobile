@@ -40,6 +40,11 @@
 #include "corelog.h"
 #include "avtiming.h"
 #include "netplay/linkhooks.h"
+#include "netplay/dslinkhooks.h"
+#include "netplay/nx_nds_radio.h"
+#include "netplay/nx_3ds_link.h"
+#include "netplay/nx_psp_link.h"
+#include "netplay/psplinkhooks.h"
 #include "sensorstate.h"
 #include "vulkanbridge.h"
 
@@ -127,6 +132,7 @@ void Environment::updateVariable(const std::string& key, const std::string& valu
         current.key = key;
         current.value = value;
         dirtyVariables = true;
+        variablesGeneration++;
     }
 }
 
@@ -831,9 +837,26 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             libretrodroid::Achievements::getInstance().setMemoryMap(static_cast<const struct retro_memory_map*>(data));
             return true;
 
-        case NL_ENVIRONMENT_SET_NETPACKET_INTERFACE:   // the GBA link (netplay/linkhooks.h)
+        case NL_ENVIRONMENT_SET_NETPACKET_INTERFACE: {   // the GBA link and the DS link; each idles without its session
             LOGD("Called SET_NETPACKET_INTERFACE");
-            return libretrodroid::gbalink::setNetpacket(static_cast<const nl_netpacket_callback*>(data));
+            const auto* callbacks = static_cast<const nl_netpacket_callback*>(data);
+            libretrodroid::gbalink::setNetpacket(callbacks);
+            libretrodroid::dslink::setNetpacket(callbacks);
+            return true;
+        }
+
+        case NX_ENVIRONMENT_SET_NDS_RADIO:
+            if (data == nullptr) return false;
+            libretrodroid::dslink::radio(*static_cast<const unsigned*>(data));
+            return true;
+
+        case NX_ENVIRONMENT_SET_3DS_LINK:
+            libretrodroid::dslink::setCoreRoom(static_cast<nx_3ds_link_interface*>(data));
+            return true;
+
+        case NX_ENVIRONMENT_SET_PSP_LINK:
+            libretrodroid::psplink::setCore(static_cast<nx_psp_link_interface*>(data));
+            return true;
 
         default:
             LOGD("callback environment has been called: %u", cmd);

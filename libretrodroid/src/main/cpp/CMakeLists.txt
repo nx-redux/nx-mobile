@@ -216,9 +216,19 @@ add_library(libretrodroid SHARED
         netplay/netplayjni.cpp
         netplay/np_link.h
         netplay/np_link.c
+        netplay/ndl_link.h
+        netplay/ndl_link.c
         netplay/nl_netpacket.h
         netplay/linkhooks.h
         netplay/linkhooks.cpp
+        netplay/nx_3ds_link.h
+        netplay/dslinkhooks.h
+        netplay/dslinkhooks.cpp
+        netplay/psl_finder.h
+        netplay/psl_finder.c
+        netplay/nx_psp_link.h
+        netplay/psplinkhooks.h
+        netplay/psplinkhooks.cpp
         netplay/linkjni.cpp
         ${GWL_DIR}/gwl_mode.c
         ${RCHEEVOS_SOURCES}

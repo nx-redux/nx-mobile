@@ -92,4 +92,16 @@ class GameTileLayersTest {
         // Real art: the caption only when lit.
         assertEquals(listOf(PICTURE, EDGE), gameTileLayers(picture = true, lit = false, caption = true, homeCaption = true, artLess = false))
     }
+
+    // A game list Grid's tile: whole detail rows while the name (its two lines), the rows, the stats line and the
+    // padding fit the tile; never past it.
+    @Test fun aGridTileHoldsTheDetailRowsThatFit() {
+        // 10 top + 32 name + 13 a row + 8 bottom.
+        assertEquals(2, gridTileDetailRows(tileH = 200f, nameH = 32f, rowH = 13f, statRows = 1, details = 2))
+        assertEquals(2, gridTileDetailRows(tileH = 10f + 32f + 3 * 13f + 8f, nameH = 32f, rowH = 13f, statRows = 1, details = 2))
+        assertEquals(1, gridTileDetailRows(tileH = 10f + 32f + 3 * 13f + 7f, nameH = 32f, rowH = 13f, statRows = 1, details = 2))
+        assertEquals(2, gridTileDetailRows(tileH = 10f + 32f + 2 * 13f + 8f, nameH = 32f, rowH = 13f, statRows = 0, details = 5))
+        assertEquals(0, gridTileDetailRows(tileH = 60f, nameH = 32f, rowH = 13f, statRows = 1, details = 2))   // a small tile: none
+        assertEquals(0, gridTileDetailRows(tileH = 200f, nameH = 32f, rowH = 13f, statRows = 1, details = 0))
+    }
 }

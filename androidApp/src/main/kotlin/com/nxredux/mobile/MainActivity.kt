@@ -118,6 +118,7 @@ import com.nxredux.mobile.ui.SkinEditRequest
 import com.nxredux.mobile.ui.SkinEditorLauncher
 import com.nxredux.mobile.ui.OnboardingStep
 import com.nxredux.mobile.ui.Screen
+import com.nxredux.mobile.ui.isMainMenu
 import com.nxredux.mobile.ui.nx.BottomScreenButton
 import com.nxredux.mobile.ui.nx.NxTheme
 import com.nxredux.mobile.ui.nx.nxColorsFor
@@ -594,9 +595,9 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 if (showMenuScreen(wanted)) menuRetries = 0 else retryMenuScreen()
             }
         }
-        // Under an app on top only the main menu keeps its two-screen shape: the top screen's details are behind the app,
-        // so a game list goes dual-off and keeps its achievements panel on this screen.
-        state.onDualMenu(active && (launching || (appOnTop && state.screen.value is Screen.Systems) || menuScreen != null))
+        // Under an app on top only the main menu (the Games tab too) keeps its two-screen shape: the top screen's details
+        // are behind the app, so a game list goes dual-off and keeps its achievements panel on this screen.
+        state.onDualMenu(active && (launching || (appOnTop && state.screen.value.isMainMenu) || menuScreen != null))
         // No window on the second display: no prompt is there, so the keyboard setting rules again.
         if (menuScreen == null && promptOnSecond) { promptOnSecond = false; state.refreshKeyboard() }
         val shown = menuScreen ?: return

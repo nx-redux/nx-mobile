@@ -71,15 +71,38 @@ class NetplayUsbControllerTest {
         c.open(kart)
         val role = assertIs<NetplayPage.Role>(c.page.value)
         assertEquals(NetplayLink.WIFI, role.connection)
-        assertEquals(listOf(NetplayRoleRow.CONNECTION, NetplayRoleRow.HOST, NetplayRoleRow.JOIN, NetplayRoleRow.EMULATOR, NetplayRoleRow.WIFI), role.rows)
-        assertEquals(1, role.selected)                                    // Host Game is highlighted, as without the row
-        c.press(NxButton.UP, NxButton.RIGHT)
+        assertEquals(listOf(NetplayRoleRow.CONNECTION, NetplayRoleRow.EMULATOR, NetplayRoleRow.HOST, NetplayRoleRow.JOIN, NetplayRoleRow.WIFI), role.rows)
+        assertEquals(2, role.selected)                                    // Host Game is highlighted, under the tabs
+        c.press(NxButton.UP, NxButton.UP, NxButton.RIGHT)
         val usb = assertIs<NetplayPage.Role>(c.page.value)
         assertEquals(NetplayLink.USB, usb.connection)
-        assertEquals(listOf(NetplayRoleRow.CONNECTION, NetplayRoleRow.HOST, NetplayRoleRow.JOIN, NetplayRoleRow.EMULATOR), usb.rows)   // no Wi-Fi row
+        assertEquals(listOf(NetplayRoleRow.CONNECTION, NetplayRoleRow.EMULATOR, NetplayRoleRow.HOST, NetplayRoleRow.JOIN), usb.rows)   // no Wi-Fi row
         assertEquals(NetplayLink.USB, p.lastLink)                         // remembered
         c.press(NxButton.A)
         assertEquals(NetplayLink.WIFI, assertIs<NetplayPage.Role>(c.page.value).connection)
+    }
+
+    @Test fun a_tap_on_a_connection_tab_picks_it_and_is_remembered() = runTest {
+        val p = FakeNetplayPlatform().apply { usbCable = FakeUsbCable() }
+        val c = controller(p)
+        c.open(kart)
+        val first = assertIs<NetplayPage.Role>(c.page.value)
+        assertEquals(listOf(NetplayLink.WIFI, NetplayLink.USB), first.connections)
+        c.pickConnection(NetplayLink.USB)
+        val role = assertIs<NetplayPage.Role>(c.page.value)
+        assertEquals(NetplayLink.USB, role.connection)
+        assertEquals(NetplayRoleRow.CONNECTION, role.rows[role.selected])
+        assertEquals(NetplayLink.USB, p.lastLink)
+        c.pickConnection(NetplayLink.CABLE_LINK_WIFI)   // not offered here
+        assertEquals(NetplayLink.USB, assertIs<NetplayPage.Role>(c.page.value).connection)
+    }
+
+    @Test fun a_psp_game_offers_wifi_only_whatever_cable_is_there() = runTest {
+        val c = controller(FakeNetplayPlatform().apply { usbCable = FakeUsbCable() })
+        c.open(entry("PSP", "Monster Hunter Portable 3rd (Japan).iso"))
+        val role = assertIs<NetplayPage.Role>(c.page.value)
+        assertNull(role.connection)
+        assertTrue(role.connections.isEmpty())
     }
 
     private val emerald = entry("MGBA", "Pokemon Emerald (USA).gba")
@@ -100,9 +123,9 @@ class NetplayUsbControllerTest {
         c.open(emerald); runCurrent()
         val role = assertIs<NetplayPage.Role>(c.page.value)
         assertEquals(NetplayLink.USB, role.connection)                     // whatever the last choice was
-        assertEquals(listOf(NetplayRoleRow.CONNECTION, NetplayRoleRow.HOST, NetplayRoleRow.JOIN, NetplayRoleRow.EMULATOR), role.rows)
+        assertEquals(listOf(NetplayRoleRow.CONNECTION, NetplayRoleRow.EMULATOR, NetplayRoleRow.HOST, NetplayRoleRow.JOIN), role.rows)
         assertEquals(listOf(NetplayText.AUTO, "mGBA", "gpSP"), role.emulators)
-        c.press(NxButton.UP, NxButton.A, NxButton.RIGHT)
+        c.press(NxButton.UP, NxButton.UP, NxButton.A, NxButton.RIGHT)
         assertEquals(NetplayLink.USB, assertIs<NetplayPage.Role>(c.page.value).connection)   // nothing to switch to
         assertEquals(NetplayLink.WIFI, p.lastLink)                         // the remembered choice is left alone
     }
@@ -122,7 +145,7 @@ class NetplayUsbControllerTest {
         val c = controller(p)
         c.open(emerald); runCurrent()
         assertEquals(NetplayLink.WIFI, assertIs<NetplayPage.Role>(c.page.value).connection)   // the last choice
-        c.press(NxButton.UP, NxButton.A)
+        c.press(NxButton.UP, NxButton.UP, NxButton.A)
         assertEquals(NetplayLink.USB, assertIs<NetplayPage.Role>(c.page.value).connection)
         assertEquals(NetplayLink.USB, p.lastLink)
     }
@@ -146,7 +169,7 @@ class NetplayUsbControllerTest {
         assertEquals(listOf(title to UsbHello.DEVICE_IP), hostP.unicast)
 
         clientP.found.emit(FoundHost(UsbHello.HOST_IP, title))           // the host's unicast discovery
-        client.open(kart); client.press(NxButton.DOWN, NxButton.A); runCurrent()
+        client.open(kart); client.press(NxButton.RIGHT, NxButton.A); runCurrent()
 
         assertEquals(listOf(NetplaySession(NetplayRole.HOST, UsbHello.DEVICE_IP, "snes9x", "snes9x", overUsb = true)), hostLaunches.all.map { it.second })
         assertEquals(listOf(NetplaySession(NetplayRole.CLIENT, UsbHello.HOST_IP, "snes9x", "snes9x", overUsb = true)), clientLaunches.all.map { it.second })
@@ -161,7 +184,7 @@ class NetplayUsbControllerTest {
         val (h, cEnd) = PipeChannel.pair(hostSees = UsbHello.DEVICE_IP, clientSees = UsbHello.HOST_IP)
         val p = usbPlatform(up = deviceUp).apply { connectTo = { cEnd } }
         val c = controller(p)
-        c.open(kart); c.press(NxButton.DOWN, NxButton.A); runCurrent()
+        c.open(kart); c.press(NxButton.RIGHT, NxButton.A); runCurrent()
         assertEquals(NetplayPage.Progress(NetplayText.JOIN, NetplayText.CONNECTING), c.page.value)
         assertEquals(emptyList(), p.connected)
         advanceTimeBy(NetplayController.USB_PEEK_MS + 1); runCurrent()
@@ -173,7 +196,7 @@ class NetplayUsbControllerTest {
         val p = usbPlatform(up = deviceUp)
         val c = controller(p)
         p.found.emit(FoundHost(UsbHello.HOST_IP, "Super Metroid (USA)"))
-        c.open(kart); c.press(NxButton.DOWN, NxButton.A); runCurrent()
+        c.open(kart); c.press(NxButton.RIGHT, NxButton.A); runCurrent()
         assertIs<NetplayPage.JoinAnyway>(c.page.value)
         c.press(NxButton.B)
         assertIs<NetplayPage.Role>(c.page.value)
@@ -307,7 +330,7 @@ class NetplayUsbControllerTest {
     @Test fun close_during_bring_up_stops_the_cable() = runTest {
         val p = usbPlatform(up = null)
         val c = controller(p)
-        c.open(kart); c.press(NxButton.DOWN, NxButton.A); runCurrent()
+        c.open(kart); c.press(NxButton.RIGHT, NxButton.A); runCurrent()
         c.close()
         assertEquals(1, p.usbCable!!.stops)
         assertNull(c.page.value)

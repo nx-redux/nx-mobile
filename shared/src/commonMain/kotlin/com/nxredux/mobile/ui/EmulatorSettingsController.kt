@@ -2,6 +2,7 @@ package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.tryOrNull
 import com.nxredux.mobile.layout.ScreenClass
+import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.options.ConfigFile
 import com.nxredux.mobile.options.ConsoleRow
@@ -48,7 +49,15 @@ sealed interface EmulatorRow {
     data class Notice(val text: String) : EmulatorRow
     /** Half a row of space between two groups (the app's settings, the core settings): drawn empty, never selected. */
     data object Gap : EmulatorRow
+    /**
+     * An app-wide Settings row the page hosts after the emulator's own ([EmulatorAppSection]: mGBA's Cable Link), with its
+     * [choices] as its Settings page would draw them; it changes that setting as Settings does ([EmulatorSettingsHost]).
+     */
+    data class App(val row: SettingsRow, val choices: SettingChoices?) : EmulatorRow
 }
+
+/** App-wide Settings rows a page shows last, under [label]: Cable Link's on mGBA's page ([EmulatorRows.hostsCableLink]). */
+data class EmulatorAppSection(val label: String, val rows: List<EmulatorRow.App>)
 
 /** Rows the selection can land on (headers and notices are skipped). */
 val EmulatorRow.selectable: Boolean get() = this !is EmulatorRow.Header && this !is EmulatorRow.Notice && this != EmulatorRow.Gap
@@ -56,12 +65,29 @@ val EmulatorRow.selectable: Boolean get() = this !is EmulatorRow.Header && this 
 object EmulatorRows {
     const val NO_TABLE = "This emulator's options aren't available outside a game."
 
-    /** [page]'s rows at the top level ([category] null) or inside that category. */
-    fun build(page: EmulatorPage, category: String?): List<EmulatorRow> {
+    /** The header of the Cable Link rows on mGBA's page. */
+    const val CABLE_LINK_LABEL = "Cable Link"
+
+    /** The tag of mGBA's Game Boy Advance page, the one Cable Link's settings are on ([hostsCableLink]). */
+    const val CABLE_LINK_TAG = "MGBA"
+
+    /**
+     * [page] hosts the Cable Link settings: mGBA's own page (not a game's: they are the app's, not one game's) for a tag
+     * Cable Link is offered on. A Cable Link session always runs mGBA ([NetplayCores.CABLE_LINK_CORE]), whatever core the
+     * folder runs, so its settings belong with mGBA's.
+     */
+    fun hostsCableLink(page: EmulatorPage): Boolean =
+        !page.forGame && page.coreId == NetplayCores.CABLE_LINK_CORE && NetplayCores.cableLinkOffered(page.tag)
+
+    /**
+     * [page]'s rows at the top level ([category] null) or inside that category; at the top level, [app]'s rows last
+     * (after a gap, under their header).
+     */
+    fun build(page: EmulatorPage, category: String?, app: EmulatorAppSection? = null): List<EmulatorRow> {
         val core = page.core
         if (category != null) return core.orEmpty().let { CoreOptionFilter.inCategory(it, category) }.map { EmulatorRow.Core(it, inCategory = true) }
         return buildList {
-            // The app's settings by what they are for, a header per group (Display, Controls, Gameplay, Audio), a gap between.
+            // The app's settings by what they are for, a header per group (Display, Controls, Gameplay, Multiplayer, Audio), a gap between.
             OptionGroup.grouped(page.console) { it.option.key }.forEachIndexed { i, (group, rows) ->
                 if (i > 0) add(EmulatorRow.Gap)
                 add(EmulatorRow.Header(group.label))
@@ -83,6 +109,11 @@ object EmulatorRows {
             }
             if (page.console.isNotEmpty() && coreRows.isNotEmpty()) add(EmulatorRow.Gap)   // space between the two groups
             addAll(coreRows)
+            if (app != null && app.rows.isNotEmpty()) {
+                if (isNotEmpty()) add(EmulatorRow.Gap)
+                add(EmulatorRow.Header(app.label))
+                addAll(app.rows)
+            }
             // Last, after a gap: drop this game's own settings for the emulator's.
             if (page.forGame && page.gameFileExists) { if (isNotEmpty()) add(EmulatorRow.Gap); add(EmulatorRow.UseEmulatorSettings) }
         }
@@ -109,6 +140,7 @@ object EmulatorRows {
                 is EmulatorRow.Core -> r is EmulatorRow.Core && r.option.key == previous.option.key
                 is EmulatorRow.Category -> r is EmulatorRow.Category && r.key == previous.key
                 EmulatorRow.UseEmulatorSettings -> r == EmulatorRow.UseEmulatorSettings
+                is EmulatorRow.App -> r is EmulatorRow.App && r.row.kind == previous.row.kind
                 else -> false
             }
         }
@@ -123,6 +155,18 @@ internal interface EmulatorSettingsHost {
 
     /** Back to the game list Game Settings was opened from ([screen] as it was), then rebuilt from its source on the same game. */
     fun restore(screen: Screen, selection: ListSelection)
+
+    /** The app-wide rows [page] shows last ([EmulatorRow.App]), as they stand now; null for a page without (all but mGBA's, with Cable Link). */
+    fun appSection(page: EmulatorPage): EmulatorAppSection?
+
+    /** Hosted row [row]'s setting stepped [delta] places, wrapping, as LEFT / RIGHT on its Settings page; the page is not left. */
+    fun stepAppRow(row: SettingsRow, delta: Int)
+
+    /** Hosted row [row]'s setting set to its choice [index] ([SettingChoices]), as a pick on its Settings page. */
+    fun chooseAppRow(row: SettingsRow, index: Int)
+
+    /** A on hosted row [row] that has no values (Clear link ROM cache): what A does on its Settings page. */
+    fun runAppRow(row: SettingsRow)
 }
 
 /**
@@ -152,6 +196,11 @@ internal class EmulatorSettingsController(
     private val windowPx: () -> Pair<Int, Int>? = { null },
     /** The ".bin" names in the PS2 BIOS folder (Bios/PS2/), read off the main thread: the PS2 BIOS row's choices. */
     private val ps2BiosFiles: () -> List<String> = { emptyList() },
+    /**
+     * Tags whose page is listed even without games: mGBA's for GBA ([EmulatorRows.CABLE_LINK_TAG]) where Cable Link exists, since a
+     * session runs mGBA whatever Game Boy Advance's default is and its settings are on that page.
+     */
+    private val alwaysListed: () -> List<String> = { emptyList() },
     /** The installed custom GPU drivers (null: the feature is unavailable, so no GPU driver row). */
     private val gpuDrivers: () -> List<GpuDriver>? = { null },
     /** The app-wide driver id (Settings -> System -> GPU driver), null for the system driver. */
@@ -168,9 +217,12 @@ internal class EmulatorSettingsController(
     private var gameReturn: Pair<Screen, ListSelection>? = null   // the game list Game Settings came from
 
     companion object {
-        /** One row per core with a tag that has games, sorted by emulator name ([com.nxredux.mobile.runner.CoreDescriptor.name]). */
-        fun listRows(systems: List<SystemFolder>): List<EmulatorListRow> {
-            val present = systems.filter { !it.unassigned && it.gameCount > 0 }.map { it.tag }.distinct()
+        /**
+         * One row per core with a tag that has games, or one of [always] (listed without games), sorted by emulator name
+         * ([com.nxredux.mobile.runner.CoreDescriptor.name]).
+         */
+        fun listRows(systems: List<SystemFolder>, always: List<String> = emptyList()): List<EmulatorListRow> {
+            val present = (systems.filter { !it.unassigned && it.gameCount > 0 }.map { it.tag } + always).distinct()
             return present.groupBy { CoreRegistry.forTag(it)?.id }.mapNotNull { (id, tags) ->
                 id ?: return@mapNotNull null
                 val ordered = CoreRegistry.tagsSharingCore(tags.first()).filter { it in present }
@@ -183,7 +235,7 @@ internal class EmulatorSettingsController(
     fun openList(systems: List<SystemFolder>) {
         val from = screen.value
         scope.launch {
-            val rows = withContext(work) { listRows(systems) }
+            val rows = withContext(work) { listRows(systems, alwaysListed()) }
             if (screen.value !== from) return@launch
             listRows = rows
             showList(null)
@@ -243,7 +295,7 @@ internal class EmulatorSettingsController(
             is Screen.EmulatorConsoles -> showList(listRow)
             is Screen.EmulatorOptions -> when {
                 s.category != null -> {
-                    val rows = EmulatorRows.build(s.page, null)
+                    val rows = rows(s.page, null)
                     screen.value = s.copy(rows = rows, category = null)
                     selection.value = ListSelection(rows.indexOf(rows.firstOrNull { it is EmulatorRow.Category && it.key == s.category }).coerceAtLeast(0), rows.size)
                 }
@@ -279,6 +331,10 @@ internal class EmulatorSettingsController(
     // --- The page ---
 
     private fun defaults(d: CoreDescriptor) = coreDefaults(d.id) + d.defaultOptions
+
+    /** [page]'s rows ([EmulatorRows.build]), the app's own rows ([EmulatorSettingsHost.appSection]) last at the top level. */
+    private fun rows(page: EmulatorPage, category: String?): List<EmulatorRow> =
+        EmulatorRows.build(page, category, if (category == null) host.appSection(page) else null)
 
     private fun build(tag: String, d: CoreDescriptor, game: Listed?, files: Pair<ConfigFile?, ConfigFile?>): EmulatorPage {
         val screen = screenClass()
@@ -319,7 +375,7 @@ internal class EmulatorSettingsController(
             } ?: return@launch
             if (!still()) return@launch
             opened()
-            val rows = EmulatorRows.build(page, null)
+            val rows = rows(page, null)
             screen.value = Screen.EmulatorOptions(page, rows, null, game)
             selection.value = ListSelection(EmulatorRows.firstSelectable(rows), rows.size)
         }
@@ -330,10 +386,12 @@ internal class EmulatorSettingsController(
         when (button) {
             NxButton.UP -> selection.value = ListSelection(EmulatorRows.step(s.rows, selection.value.index, -1), s.rows.size)
             NxButton.DOWN -> selection.value = ListSelection(EmulatorRows.step(s.rows, selection.value.index, 1), s.rows.size)
-            NxButton.LEFT -> change(s, row) { page, key -> nextValue(page, key, -1) }
-            NxButton.RIGHT -> change(s, row) { page, key -> nextValue(page, key, 1) }
+            NxButton.LEFT -> if (row is EmulatorRow.App) stepApp(row, -1) else change(s, row) { page, key -> nextValue(page, key, -1) }
+            NxButton.RIGHT -> if (row is EmulatorRow.App) stepApp(row, 1) else change(s, row) { page, key -> nextValue(page, key, 1) }
             NxButton.A -> when (row) {
                 is EmulatorRow.Console, is EmulatorRow.Core -> change(s, row) { page, key -> nextValue(page, key, 1) }
+                // A value row steps forward, as RIGHT (a picker's A opens it before this: AppState); Clear clears.
+                is EmulatorRow.App -> if (row.choices != null) stepApp(row, 1) else { host.runAppRow(row.row); showAppRows() }
                 is EmulatorRow.Category -> {
                     val rows = EmulatorRows.build(s.page, row.key)
                     screen.value = s.copy(rows = rows, category = row.key)
@@ -357,6 +415,7 @@ internal class EmulatorSettingsController(
             val values = CoreOptionFilter.visibleValues(o)
             Triple(CoreOptionFilter.rowLabel(o, row.inCategory), values.map { v -> CoreOptionFilter.valueLabel(o.copy(value = v)) }, values.indexOf(o.value))
         }
+        is EmulatorRow.App -> row.choices?.takeIf { row.row.enabled }?.let { Triple(row.row.label, it.labels, it.index) }
         else -> null
     }
 
@@ -366,6 +425,7 @@ internal class EmulatorSettingsController(
         val row = s.rows.getOrNull(selection.value.index)
         val (_, labels, current) = choices(s) ?: return
         if (index !in labels.indices || index == current) return
+        if (row is EmulatorRow.App) { host.chooseAppRow(row.row, index); showAppRows(); return }
         val value = when (row) {
             is EmulatorRow.Console -> row.row.option.values[index]
             is EmulatorRow.Core -> CoreOptionFilter.visibleValues(row.option)[index]
@@ -434,7 +494,7 @@ internal class EmulatorSettingsController(
             lock.withLock {
                 val page = withContext(work) { tryOrNull { readPage(s.page.tag, d, s.game) } } ?: return@withLock
                 val cur = screen.value as? Screen.EmulatorOptions
-                if (cur != null && samePage(cur, s) && EmulatorRows.build(page, null).isEmpty()) back(cur.copy(category = null))
+                if (cur != null && samePage(cur, s) && rows(page, null).isEmpty()) back(cur.copy(category = null))
                 else show(s, page)
             }
         }
@@ -471,12 +531,25 @@ internal class EmulatorSettingsController(
         return page.core?.firstOrNull { it.key == key }?.let { CoreOptionFilter.cycle(it, delta) }
     }
 
+    /** A hosted row's setting stepped [delta] places, then shown. */
+    private fun stepApp(row: EmulatorRow.App, delta: Int) {
+        if (row.choices == null || !row.row.enabled) return
+        host.stepAppRow(row.row, delta)
+        showAppRows()
+    }
+
+    /** The open top-level page again with its hosted rows as they stand now (a value changed, the cache cleared); nothing is read. */
+    private fun showAppRows() {
+        val cur = screen.value as? Screen.EmulatorOptions ?: return
+        if (cur.category == null) show(cur, cur.page)
+    }
+
     /** Shows [page] in place of [was]'s when that page is still open, the selection on the same row where it still is. */
     private fun show(was: Screen.EmulatorOptions, page: EmulatorPage) {
         val cur = screen.value as? Screen.EmulatorOptions ?: return
         if (!samePage(cur, was)) return
         val previous = cur.rows.getOrNull(selection.value.index)
-        val rows = EmulatorRows.build(page, cur.category)
+        val rows = rows(page, cur.category)
         screen.value = cur.copy(page = page, rows = rows)
         val at = EmulatorRows.indexOfSame(rows, previous)
             ?: selection.value.index.takeIf { rows.getOrNull(it)?.selectable == true }

@@ -178,8 +178,8 @@ internal object NetplayEngine {
  * [live] is true from a successful [start] until the session ends (an ENDED or FAILED read, [leave], [release]); after
  * that every call is a no-op and the game runs on its own. Blocking engine calls (np_shutdown can take ~0.75 s) run on
  * one process-wide "nx-netplay" thread, in call order, never on the main thread.
- * Cable Link: [delayPin] is the Developer input delay (0 Auto), [onDelay] gets the current delay on every status read
- * (the Developer overlay; null: not shown), and [onEnding] gets the last verified frame when the session ends (an
+ * Cable Link: [delayPin] is mGBA's Cable Link Input delay (0 Auto), [onDelay] gets the current delay on every status read
+ * (its Delay overlay; null: not shown), and [onEnding] gets the last verified frame when the session ends (an
  * ENDED or FAILED read, or [leave]), read before the engine shuts down, which resets it.
  */
 internal class NetplayGame(

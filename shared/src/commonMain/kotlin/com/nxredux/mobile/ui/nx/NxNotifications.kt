@@ -50,9 +50,14 @@ fun nxNotificationInsetSides(placement: NxNotificationPlacement): WindowInsetsSi
     if (placement == NxNotificationPlacement.TOP_CENTRE) WindowInsetsSides.Vertical
     else WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical
 
-/** [NxNotificationPlacement.TOP_CENTRE] while the landscape overlay pad (the clusters over the game) is shown, else the corners. */
-fun nxNotificationPlacement(overlayPadShown: Boolean): NxNotificationPlacement =
-    if (overlayPadShown) NxNotificationPlacement.TOP_CENTRE else NxNotificationPlacement.CORNERS
+/**
+ * [NxNotificationPlacement.TOP_CENTRE] while the landscape overlay pad (the clusters over the game) is shown, else the
+ * corners. [onPicture]: a portrait screen whose picture's place is known: the host ends the overlay at the picture's
+ * bottom, so the corners are the picture's own and clear of the pad under it (top-centre's width is the landscape
+ * pad's: on a portrait screen it leaves a toast a few words wide).
+ */
+fun nxNotificationPlacement(overlayPadShown: Boolean, onPicture: Boolean = false): NxNotificationPlacement =
+    if (overlayPadShown && !onPicture) NxNotificationPlacement.TOP_CENTRE else NxNotificationPlacement.CORNERS
 
 /**
  * The in-game notification overlay: the progress [pill] and the [toasts] (newest at the bottom) where [placement] puts

@@ -24,9 +24,10 @@ import com.nxredux.mobile.ui.nx.NxTone
 
 /**
  * The rows of the RetroAchievements page (idle or beside a running download; a sync, sign-in or reset shows progress
- * instead). [DOWNLOAD]: the game data download's progress page, once there is one this process.
+ * instead). [PROFILE]: the player's summary ([Screen.RaProfile]), first, so the page opens on it. [DOWNLOAD]: the game
+ * data download's progress page, once there is one this process.
  */
-enum class RaAction(val label: String) { ACHIEVEMENTS("Achievements"), SYNC("Sync now"), SETTINGS("Settings"), DOWNLOAD("Progress") }
+enum class RaAction(val label: String) { PROFILE("Profile"), ACHIEVEMENTS("Achievements"), SYNC("Sync now"), SETTINGS("Settings"), DOWNLOAD("Progress") }
 
 /** The destructive actions that ask first. */
 enum class RaConfirm(val title: String, val text: String, val confirmLabel: String) {
@@ -38,6 +39,7 @@ enum class RaConfirm(val title: String, val text: String, val confirmLabel: Stri
 /** The RetroAchievements settings page's row kinds; [SECTION] a group's label and [GAP] the space before one, never selected. */
 enum class RaSettingKind {
     SECTION, GAP, ENABLED, SIGN_IN, SIGN_OUT, DOWNLOAD_ALL, NOTIFICATIONS, NOTIFICATION_SECONDS, PROGRESS_SECONDS,
+    UNLOCK_SOUND, UNLOCK_SCREENSHOT,
     SORT_ORDER, RESET_ACCOUNT, ERASE_ALL, RESET_SETTINGS,
 }
 

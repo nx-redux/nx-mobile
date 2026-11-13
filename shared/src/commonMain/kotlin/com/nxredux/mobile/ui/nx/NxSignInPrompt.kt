@@ -2,7 +2,6 @@ package com.nxredux.mobile.ui.nx
 
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,12 +32,12 @@ import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.keyboard.EntryFocus
 import com.nxredux.mobile.ui.keyboard.LocalPromptKeyboard
 import com.nxredux.mobile.ui.keyboard.NxEntryField
-import com.nxredux.mobile.ui.keyboard.buttonFocus
 
 /**
  * The RetroAchievements sign-in: a username and a masked password field in the shared modal frame. The username takes
  * focus and the soft keyboard on open; Next moves to the password, Done there or A signs in with both as the host holds
- * them; B or the scrim cancels.
+ * them; B or the scrim cancels. Under the NX keyboard the box has no buttons: its Done key reads "Sign in". [note] is a quiet line under the fields (what happens to the password), dropped when the
+ * box is too short for more than the fields.
  */
 @Composable
 fun NxSignInPrompt(
@@ -46,31 +45,31 @@ fun NxSignInPrompt(
     onUsernameChange: (String) -> Unit, onPasswordChange: (String) -> Unit,
     onConfirm: () -> Unit, onCancel: () -> Unit,
     caption: String = "Sign in to RetroAchievements",
+    note: String? = null,
 ) {
     val colors = LocalNxColors.current
     val keyboard = LocalPromptKeyboard.current
     keyboard.entry?.takeIf { it.fields.size == 2 }?.let { entry ->
-        // The NX keyboard types: both fields drawn from its entry, the caret in the active one; the box's buttons answer past it.
+        // The NX keyboard types: both fields drawn from its entry, the caret in the active one; a tap outside cancels.
         NxModal(
-            caption = caption, kind = ModalKind.PROMPT, confirmLabel = "Sign in", buttonFocus = entry.buttonFocus(),
-            confirmKey = NxButton.START, cancelKey = NxButton.B,
+            caption = caption, kind = ModalKind.PROMPT, actions = false,
             onButton = { keyboard.answer(if (it == NxButton.B) NxButton.B else NxButton.A) },
         ) {
             // Above the keyboard the box can be too short for both fields: the one being typed is scrolled into view.
             val inView = remember { List(entry.fields.size) { BringIntoViewRequester() } }
             LaunchedEffect(entry.active) { inView.getOrNull(entry.active)?.bringIntoView() }
+            val tight = LocalModalTight.current
             entry.fields.forEachIndexed { i, f ->
-                if (i > 0) Spacer(Modifier.height(12.dp))
-                Column(Modifier.bringIntoViewRequester(inView[i])) {
-                    Text(f.label, color = colors.hint, fontFamily = LocalNxFont.current, fontSize = nxModalSmall())
-                    Spacer(Modifier.height(4.dp))
-                    NxEntryField(
-                        f.value, f.password, entry.cursor.takeIf { entry.active == i },
-                        focused = entry.active == i && entry.focus == EntryFocus.Field, onTap = { keyboard.tapField(i) },
-                        revealed = f.password && entry.reveal, onReveal = if (f.password) keyboard.toggleReveal else null,
-                    )
-                }
+                if (i > 0) Spacer(Modifier.height(if (tight) 6.dp else 12.dp))
+                // Each field is named inside itself: over the keys there is no room for a label above each and both in sight.
+                NxEntryField(
+                    f.value, f.password, entry.cursor.takeIf { entry.active == i },
+                    focused = entry.active == i && entry.focus == EntryFocus.Field, onTap = { keyboard.tapField(i) },
+                    revealed = f.password && entry.reveal, onReveal = if (f.password) keyboard.toggleReveal else null,
+                    placeholder = f.label, modifier = Modifier.bringIntoViewRequester(inView[i]),
+                )
             }
+            if (note != null && !tight) SignInNote(note)
         }
         return
     }
@@ -97,7 +96,15 @@ fun NxSignInPrompt(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { onConfirm() }),
         )
+        if (note != null && !LocalModalTight.current) SignInNote(note)
     }
+}
+
+/** The line under the fields, in the labels' quiet style. */
+@Composable
+private fun SignInNote(text: String) {
+    Spacer(Modifier.height(10.dp))
+    Text(text, color = LocalNxColors.current.hint, fontFamily = LocalNxFont.current, fontSize = nxModalSmall())
 }
 
 /** One field, styled like [NxTextPrompt]'s: keeps its own cursor, strips line breaks and tabs, reports every change. */

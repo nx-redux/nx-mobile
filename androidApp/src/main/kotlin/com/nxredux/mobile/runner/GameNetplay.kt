@@ -47,6 +47,8 @@ internal interface GameNetplayHost : GameScreenHost {
     fun fail(message: String, title: String = GameActivity.START_FAILED)
     fun quitGame(chosen: Boolean, autoState: Boolean)
     fun becomeLocal(localCheats: (() -> Job)?)
+    /** A DS, 3DS or PSP sheet session's Disconnect: the link variables to send, after which the game may be on the automatic route. */
+    fun leaveLinkSession(kind: NetplayLinkKind): Map<String, String>
     /** Opens the in-game menu (nothing when it is open). */
     fun showMenu()
 }
@@ -232,7 +234,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
     /**
      * netplay: starts this screen's session once the first frame is up ([run] set first, so onDestroy shuts down
      * what started). A GBA link's engine started before the load ([connectLink]); its status ticks from now. GB link has
-     * no engine: gambatte runs it. Nor has a 3DS link: Azahar runs its own room.
+     * no engine: gambatte runs it. Nor has a 3DS or PSP link: Azahar runs its own room, PPSSPP the runner's ad hoc server.
      */
     private suspend fun start(np: NetplaySession): Boolean {
         holdWifi(np)
@@ -248,7 +250,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
                 ).also { run = it }.start()
             }
             NetplayLinkKind.NETPACKET -> (run as? NetplayLinkGame)?.let { it.begin(); it.live } ?: false
-            NetplayLinkKind.GBLINK, NetplayLinkKind.N3DSLINK -> true
+            NetplayLinkKind.GBLINK, NetplayLinkKind.N3DSLINK, NetplayLinkKind.NDSLINK, NetplayLinkKind.PSPLINK -> true
         }
     }
 
@@ -321,19 +323,24 @@ internal class GameNetplay(private val host: GameNetplayHost) {
      * netplay link: Leave. The link ends and the game plays on ([linkEnded]); the menu stays open on the normal root and
      * the player leaves later with Quit. A GBA link's engine sends DISCONNECT and shuts down off main; [NetplayRun.leave]
      * detaches it first, so no Ended notice follows. GB link has no engine: gambatte's network serial stops on its mode's
-     * variable update, read at the next frame (the menu holds frames, so on Continue); Azahar leaves its room the same way. Set past [GameActivity.applyOptions]'
-     * guard and not stored: the link options are this launch's ([GameActivity.graphicsForcedOptions]), never the user's config.
+     * variable update, read at the next frame (the menu holds frames, so on Continue). A DS game leaves the runner's room,
+     * a 3DS game Azahar's room (on its next frame) and the runner takes a PSP game out of ad hoc (its presence goes out, so
+     * states work again): for good, or, with the console's Local Wireless on (for PSP also the Wi-Fi's addresses known),
+     * onto the automatic route, back once the game turns its wireless off and on, or leaves and re-enters ad hoc
+     * ([GameNetplayHost.leaveLinkSession]). Set past [GameActivity.applyOptions]' guard and not stored: the link options
+     * are this launch's ([GameActivity.graphicsForcedOptions]), never the user's config.
      */
     private fun leaveLink() {
         run?.leave()
         if (pillShown) { host.notifications.hideProgress(); pillShown = false; host.publishNotifications() }   // the ticker is gone
-        val off = when (session?.linkKind) {
-            NetplayLinkKind.GBLINK -> Variable(NetplayLinkOptions.GB_MODE, NetplayLinkOptions.GB_OFF)
-            NetplayLinkKind.N3DSLINK -> Variable(NetplayLinkOptions.N3DS_MODE, NetplayLinkOptions.N3DS_OFF)
-            else -> null
+        val off = when (val kind = session?.linkKind) {
+            NetplayLinkKind.GBLINK -> listOf(Variable(NetplayLinkOptions.GB_MODE, NetplayLinkOptions.GB_OFF))
+            NetplayLinkKind.N3DSLINK, NetplayLinkKind.NDSLINK, NetplayLinkKind.PSPLINK ->
+                host.leaveLinkSession(kind).map { (key, value) -> Variable(key, value) }
+            else -> emptyList()
         }
-        if (off != null) host.retroView?.let { view ->
-            view.queueEvent { runCatching { view.updateVariables(off) }.onFailure { NxLog.w("GameActivity", "ending the link failed", it) } }
+        if (off.isNotEmpty()) host.retroView?.let { view ->
+            view.queueEvent { runCatching { view.updateVariables(*off.toTypedArray()) }.onFailure { NxLog.w("GameActivity", "ending the link failed", it) } }
         }
         linkEnded()
     }

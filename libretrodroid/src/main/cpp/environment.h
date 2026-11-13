@@ -93,6 +93,8 @@ public:
     void deinitialize();
 
     void updateVariable(const std::string &key, const std::string &value);
+    // Bumped by every changed value: the run loop re-reads the variables it acts on itself when it moves.
+    unsigned getVariablesGeneration() const { return variablesGeneration.load(); }
 
     void setLanguage(const std::string &androidLanguage);
     /** The player's name for RETRO_ENVIRONMENT_GET_USERNAME; empty answers nothing. Set before create(), kept across it. */
@@ -211,6 +213,7 @@ private:
 
     std::unordered_map<std::string, struct Variable> variables;
     bool dirtyVariables = false;
+    std::atomic<unsigned> variablesGeneration { 0 };
     int nextVariableOrder = 0;
     retro_core_options_update_display_callback_t core_options_update_display_callback = nullptr;
 

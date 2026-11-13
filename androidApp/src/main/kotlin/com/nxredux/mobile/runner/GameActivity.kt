@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import com.nxredux.mobile.ui.nx.symmetricCutoutInset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
@@ -81,6 +82,7 @@ import com.nxredux.mobile.gametime.GameTimeStore
 import com.nxredux.mobile.launcher.bringHomeTaskToFront
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.library.Names
+import com.nxredux.mobile.netplay.NetplayLinkKind
 import com.nxredux.mobile.netplay.NetplayLinkOptions
 import com.nxredux.mobile.netplay.NetplayRole
 import com.nxredux.mobile.netplay.NetplayText
@@ -119,6 +121,7 @@ import com.nxredux.mobile.storage.DataRoot
 import com.nxredux.mobile.test.NxTestResults
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.LibretroDroid
+import com.swordfish.libretrodroid.LibretroNetplay
 import com.swordfish.libretrodroid.NxLog
 import com.swordfish.libretrodroid.ScaleMode
 import com.swordfish.libretrodroid.ScreenRegion
@@ -342,6 +345,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val saves = SaveSession(this, renderer, menu, dual)
     private val wii = WiiDolphinController(this, input, saves)
     private val launchPipeline = LaunchPipeline(LaunchState())
+    private val dsRoom = DsRoomWatcher(lifecycleScope, { DsPresence.of(LibretroNetplay.dsPresence()) }, ::onDsPresenceChanged)
+    private val dsCable = DsCable(this, lifecycleScope)
+    // The cap is the Disconnect row pressed for the player: the automatic route leaves the room, a sheet session ends its link.
+    private val dsMenuCap = DsMenuCap(lifecycleScope, onTick = { seconds -> withMenu { it.setIdleSeconds(seconds) } }) {
+        if (launchPipeline.dsAutoRoute) disconnectDs() else leaveNetplay()
+    }
     override val slotsUi: androidx.compose.runtime.State<List<SlotUi>> get() = saves.slotsUi
     override var lastSlotCache: Int?
         get() = saves.lastSlotCache
@@ -472,13 +481,17 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override val netplay: NetplaySession? get() = gameNetplay.session
     override val netplayEnded: Boolean get() = gameNetplay.ended
     override val netplayQuitOnly: Boolean get() = gameNetplay.quitOnly
+    override val dsWireless: Boolean get() = launchPipeline.dsAutoRoute && dsRoom.current != DsPresence.OUT
+    override val dsIdleSeconds: Int? get() = dsMenuCap.secondsLeft
     override fun showMenu() { if (!menuOpen) menu.toggleMenu() }
     override val netplayNow: NetplaySession? get() = gameNetplay.now
+    override val sessionLocked: Boolean get() = netplayNow != null || dsWireless
 
     // ---- RetroAchievements (see the "achievements" block) ----
     override var achievements: AchievementsBridge? = null   // null: off, signed out, or a console RA does not cover
         private set
     override val notifications = NotificationQueue()
+    private val unlockMoments by lazy { UnlockMoments(applicationContext) }
     private val notificationState = mutableStateOf(Pair<List<NxToast>, NxProgressPill?>(emptyList(), null))
     override var notificationsView: ComposeView? = null
         private set
@@ -593,7 +606,47 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 NxLog.i(TAG_LOG, "the previous game screen is torn down: starting")
             }
             launchPipeline.start()
+            if (launchPipeline.dsLinked && !isDestroyed) dsRoom.start()
+            if (launchPipeline.dsCableAuto && !isDestroyed) dsCable.watch()
         }
+    }
+
+    /**
+     * DS, 3DS and PSP local wireless: the game's radio went out, seeking (hosting or looking for a room) or into a room. The low-latency
+     * Wi-Fi lock is held only in a room and the broadcasts lock only while not out; a sheet session has both from its launch, a PSP game on the automatic route the broadcasts lock. On the automatic route, seeking and a room
+     * play as a session (no save, load, speed or reset shortcuts: they would break it for every member, or the room about
+     * to form) and the menu is Continue, Disconnect, Quit; out, the full menu and shortcuts return. A menu open meanwhile
+     * holds the core the way the room now asks: running for the members, or paused once alone.
+     */
+    private fun onDsPresenceChanged(presence: DsPresence) {
+        launchPipeline.dsRoomChanged(presence == DsPresence.ROOM)
+        launchPipeline.dsWirelessChanged(presence != DsPresence.OUT)
+        if (launchPipeline.dsAutoRoute) {
+            if (launchPipeline.dsCableAuto) dsCable.wireless = presence != DsPresence.OUT
+            speed.setSession(netplay = dsWireless)
+            shortcuts.refreshTouchShortcuts()
+            withMenu { it.setDsWireless(dsWireless) }
+        }
+        if (menuOpen && !quitting) holdCore()
+        syncDsMenuCap()
+    }
+
+    /** The menu open in a room counts toward the cap; anything else stops the count. */
+    private fun syncDsMenuCap() = dsMenuCap.sync(menuOpen && !quitting && dsRoom.current == DsPresence.ROOM)
+
+    /**
+     * A sheet session's room again after a leave for the background or a lost focus. Never on the automatic route, where
+     * the room comes back with the game's wireless: a session that fell back to it may still be a session in Azahar until
+     * its next frame, and a rejoin would put it back in the room it was left for.
+     */
+    private fun rejoinSessionRoom() {
+        if (!launchPipeline.dsAutoRoute) LibretroNetplay.dsRejoin()
+    }
+
+    /** Leaves the room with the game running; the check lands the full menu and the paused core at once. */
+    override fun disconnectDs() {
+        LibretroNetplay.dsLeaveNow()
+        dsRoom.check()
     }
 
     /**
@@ -687,6 +740,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** The game holds as under the menu (see openMenu); an open menu has already paused it. */
     private fun focusPause() {
         if (focusPaused || quitting) return
+        LibretroNetplay.dsLeaveNow()   // a DS room cannot wait out a pause: its members would time out
+        dsRoom.check()   // an open menu pauses the core now that the room is gone
         focusPaused = true
         syncKeepScreenOn()
         if (menuOpen) return
@@ -698,6 +753,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun focusResume() {
         if (!focusPaused) return
         focusPaused = false
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) rejoinSessionRoom()
         syncKeepScreenOn()
         if (menuOpen || quitting || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
         releaseCore()
@@ -708,6 +764,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * local pause stops this device's input instead. The core stops with its rumble latched: still while held, back on release.
      */
     private fun holdCore() {
+        if (LibretroNetplay.dsInRoom()) {
+            // A DS room keeps the core running (its members expect packets); the player just stops playing.
+            input.releaseAllGameInput()
+            retroView?.audioEnabled = false
+            retroView?.frameSpeed = 1
+            rumbles.forEach { it.pause() }
+            shortcuts.pushMicSource()
+            return
+        }
         gameNetplay.run?.takeIf { it.live }?.pause() ?: run { retroView?.frameSpeed = 0 }
         retroView?.audioEnabled = false
         rumbles.forEach { it.pause() }
@@ -741,9 +806,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /** The opening menu holds the game ([InGameMenuController.openMenu]), as [focusPause] does. */
     override fun pauseForMenu() {
+        dsRoom.check()   // the menu opened on the watcher's last poll: a presence changed since reaches the open menu now
         syncKeepScreenOn()
         wii.syncMotionSensors()   // no motion while paused
         holdCore()   // the phone mic closes under the menu too
+        syncDsMenuCap()
         lifecycleScope.launch(Dispatchers.IO) { saves.writeBatterySave(notify = true) }
     }
 
@@ -753,6 +820,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // with it, unsaved, so the game never plays on under it and a menu opened again is not drawn beneath it
         closeSkinEdit()
         syncKeepScreenOn()
+        syncDsMenuCap()
         if (focusPaused) { wii.syncMotionSensors(); shortcuts.pushMicSource(); return }   // another app has the focus: focusResume plays on later
         wii.syncMotionSensors()
         releaseCore()
@@ -803,11 +871,19 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         careTicker = lifecycleScope.launch {
             while (true) { delay(CARE_TICK_MS); care.tick(running = !corePaused() && !quitting) }
         }
+        // onStop left the DS room; still focus paused, focusResume goes back instead.
+        if (!focusPaused) rejoinSessionRoom()
         // onStop closed the session: back in the foreground, a new one on the same game (background time is not play)
         gameTime?.let { if (!isFinishing && !quitting) { it.resume(); startGameTimeTicker(it) } }
     }
 
     override fun onStop() {
+        // Asked of the link itself, before the leave: a state taken in a room would resume in the middle of a link that is
+        // gone. A wireless that is only on (a game that keeps it on while played alone) still gets its resume point.
+        val inRoom = launchPipeline.dsAutoRoute && DsPresence.of(LibretroNetplay.dsPresence()) == DsPresence.ROOM
+        LibretroNetplay.dsLeaveNow()
+        dsRoom.check()   // an open menu pauses the core now that the room is gone
+        dsMenuCap.sync(false)
         careTicker?.cancel(); careTicker = null
         gameTime?.pause()   // the session ends here: a kill in the background loses nothing, a return opens a new one
         gameTimeTicker?.cancel()
@@ -818,7 +894,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // clears this screen. A quit writes its own; a game that never got ready writes nothing (writeAutoStateOnStop);
         // one that failed after starting and leaves through its dialog keeps the last good resume point.
         // API 26–27: onSaveInstanceState already ran; the outcome of the write is recorded in its bundle.
-        saves.onStop(writeAuto = !quitting && !wii.endedByCore && !relaunching && !(isFinishing && failShown))
+        saves.onStop(writeAuto = !quitting && !wii.endedByCore && !relaunching && !(isFinishing && failShown) && !inRoom)
         if (isFinishing) { input.gcClearTriggers(); stopAchievements() }
         input.onStop()   // the pen and 3DS hotkey ticks stop; onStart restarts them
         // A Presentation stays up while its activity is stopped: no second screen in the background.
@@ -885,6 +961,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(kidsWarn) }   // not registered when onCreate stopped early
+        dsRoom.stop()   // launchPipeline.onDestroy lets the Wi-Fi lock go
+        dsCable.close()
         renderer.cancelGeometryWatch()
         res3d.cancelTick()
         rumbles.forEach { it.release() }
@@ -1082,7 +1160,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             // The core keeps its Default: a layout, proportion, rotation or fold is the app's to draw, at once.
             renderer.n3dsComposeLayout = N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen, n3dsSkinStack())
             renderer.n3dsProportion = n3dsProportion(screen = screen)
-            applyOptions(listOf(Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(input.n3dsHotkeys.stylus))))
+            applyOptions(listOf(
+                Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(input.n3dsHotkeys.stylus)),
+                // Stylus mode steers the core's pointer with the right stick, which is the C-stick alone outside it.
+                Variable(N3dsOptions.ANALOG_FUNCTION, N3dsOptions.analogFunction(input.n3dsHotkeys.stylus)),
+            ))
             renderer.relayoutFrontend()
             return
         }
@@ -1139,7 +1221,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun offerLayoutTip() {
         if (!LayoutTip.due((isN3ds || isNds) && !netplayLocks, padLayout.skinShown, input.skinLayouts, settings.layoutTipHidden)) return
         // up until closed: Close, or its button to hide it for good
-        input.showNotice(LayoutTip.text(ds = isNds), com.nxredux.mobile.ui.nx.NotificationQueue.UNTIL_CLOSED, LayoutTip.ACTION) { settings.layoutTipHidden = true }
+        input.showNotice(LayoutTip.TEXT, com.nxredux.mobile.ui.nx.NotificationQueue.UNTIL_CLOSED, LayoutTip.ACTION) { settings.layoutTipHidden = true }
     }
     override val n3dsStackPinned: Boolean get() = !netplayLocks
 
@@ -1376,6 +1458,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun quitWithAutoState(chosen: Boolean, autoState: Boolean = true) {
         if (quitting) return   // single-shot: a second job could serialize after the core is destroyed
         quitting = true
+        syncDsMenuCap()   // the cap must not leave the room mid-quit
         markClosing()
         GameHeartbeat.start(this)   // the menu may be waiting for this process to end: its saves can take a while
         rumbles.forEach { it.release() }
@@ -1399,6 +1482,23 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun loadFromSlot(slot: Int) = saves.loadFromSlot(slot)
 
     // ------------------------------------------------------------------ netplay
+
+    /**
+     * The launch's link state (Local Wireless, the Wi-Fi addresses, the route) lives in the pipeline. A DS or 3DS game that
+     * falls back to the automatic route leaves its room now: Azahar reads the new mode only on its next frame, which an
+     * open menu holds back, and until then its session would still count as in a room for the menu, states and locks
+     * ([rejoinSessionRoom] keeps it out meanwhile). The check lands the presence at once, and the cable watcher a launch
+     * on that route starts (once) starts here.
+     */
+    override fun leaveLinkSession(kind: NetplayLinkKind): Map<String, String> {
+        val left = launchPipeline.leaveLinkSession(kind)
+        if (kind != NetplayLinkKind.PSPLINK && launchPipeline.dsAutoRoute) {
+            LibretroNetplay.dsLeaveNow()
+            dsRoom.check()
+            if (launchPipeline.dsCableAuto) dsCable.watch()
+        }
+        return left
+    }
 
     /**
      * netplay link: the session ended (the other player left, it dropped, or this player left). Each player ran their own game on their own
@@ -1462,12 +1562,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             }
         }
         achievements = AchievementsBridge(controller, settings, lifecycleScope).also { it.prepare(consoleId, hashJob, pointer, launch) }
+        if (settings.raUnlockSound) unlockMoments.prepare()
     }
 
     /** Idempotent; onDestroy and a finishing onStop both reach it (a quit detaches it itself: quitWithAutoState). */
     private fun stopAchievements() {
         achievements?.stop()
         achievements = null
+        unlockMoments.release()
     }
 
     /** The Options row and Achievements page: hidden without a session, "Not recognised" while there is no set. */
@@ -1490,6 +1592,20 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
     }
 
+    /** An unlock's chime and screenshot, each by its own setting (never tied to the toast's). Main thread. */
+    private fun onUnlockMoment(a: RaAchievement) {
+        if (settings.raUnlockSound) unlockMoments.play()
+        if (!settings.raUnlockScreenshot) return
+        val game = intentTitle ?: "Game"
+        // The game's picture alone, at its own size: the toast is drawn over the view, never in its surface.
+        saves.captureThumbnail(fullSize = true) { picture ->
+            picture ?: return@captureThumbnail
+            lifecycleScope.launch(Dispatchers.IO) {
+                try { unlockMoments.save(picture, game, a.title) } finally { picture.recycle() }
+            }
+        }
+    }
+
     private fun onAchievementEvent(e: RaEvent) {
         val b = achievements ?: return
         val now = SystemClock.elapsedRealtime()
@@ -1499,7 +1615,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Off: only the session notices (loaded, unknown, sign-in, offline, first-time setup, synced) still show.
         val shown = settings.raShowNotifications
         when (e) {
-            is RaEvent.Unlocked -> if (shown) notifications.push("Achievement Unlocked\n${e.a.title}", badge(e.a), toastMs, now)
+            is RaEvent.Unlocked -> {
+                if (shown) notifications.push("Achievement Unlocked\n${e.a.title}", badge(e.a), toastMs, now)
+                onUnlockMoment(e.a)
+            }
             is RaEvent.Progress -> if (shown) notifications.progress(e.a.title, e.a.progress ?: "", badge(e.a), settings.raProgressSeconds * 1000L, now)
             RaEvent.ProgressHide -> notifications.hideProgress()
             RaEvent.Mastered -> if (shown) notice("Game Mastered!")
@@ -1567,7 +1686,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                         else WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical
                     // Over the bare skin buttons and over a pad skin (their shoulders or shell hold the corners),
                     // top-centre below any cutout; elsewhere the corners.
-                    val placement = nxNotificationPlacement(padLayout.overlayPadShown.value || padLayout.skinShownState.value)
+                    // In portrait over a pad (bare buttons or a skin) the overlay ends at the picture's bottom instead, so the
+                    // toasts sit bottom-left of the picture as in landscape, never over the pad under it.
+                    val overPad = padLayout.overlayPadShown.value || padLayout.skinShownState.value
+                    val picture = renderer.pictureBox.value
+                    val onPicture = overPad && picture != null && config.orientation == Configuration.ORIENTATION_PORTRAIT
+                    val placement = nxNotificationPlacement(overPad, onPicture)
                     // Kept off the top corners ([nxTopCentreMaxWidth]) from the cutout inset and this view's size.
                     val density = LocalDensity.current
                     val dir = LocalLayoutDirection.current
@@ -1579,7 +1703,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     var origin by remember { mutableStateOf(IntOffset.Zero) }   // this view's top-left in the window
                     BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow().round() }) {
                         val maxW = nxTopCentreMaxWidth(maxWidth.value, maxHeight.value, inset).dp
-                        NxNotifications(toasts, pill, safeSides = sides, placement = placement, topCentreMaxWidth = maxW, onAction = input::onNoticeAction, onDismiss = input::onNoticeDismiss)
+                        val underPicture = if (onPicture && picture != null) with(density) { (constraints.maxHeight - (picture.bottom - origin.y)).coerceAtLeast(0).toDp() } else 0.dp
+                        NxNotifications(
+                            toasts, pill, modifier = Modifier.padding(bottom = underPicture),
+                            safeSides = if (underPicture > 0.dp) WindowInsetsSides.Horizontal + WindowInsetsSides.Top else sides,
+                            placement = placement, topCentreMaxWidth = maxW, onAction = input::onNoticeAction, onDismiss = input::onNoticeDismiss,
+                        )
                         // Top-right of the picture ([pictureIndicatorAnchor]); not under the menu. This view sits over
                         // the pad skin, so a skin's shell never covers them. The speed indicator and a Cable Link
                         // session's delay share the corner: shortcuts do nothing in a session, so never both.
@@ -1680,10 +1809,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /**
      * A Reset shortcut or the dual-screen panel's Reset tile: reset always asks first, so the in-game menu opens on its
      * Reset dialog; a menu opened for it closes again on Cancel. Never before the game is ready (nothing to reset yet),
-     * in netplay or a link session (the model refuses too).
+     * in netplay, a link session or the DS wireless (the model refuses too).
      */
     override fun askReset() {
-        if (quitting || !gameReady || netplayNow != null) return
+        if (quitting || !gameReady || sessionLocked) return
         val opened = !menuOpen
         if (opened) toggleMenu()
         withMenu { it.openResetDialog(closesOnCancel = opened) }
@@ -1784,9 +1913,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun handleMenuEffect(effect: MenuEffect) = menu.handle(effect)
     override fun panelTouchActions() = shortcuts.panelTouchActions()
 
-    /** The second-screen panel's All options: the in-game menu on its Options page (opened for it when closed). */
+    /**
+     * The second-screen panel's All options: the in-game menu on its Options page (opened for it when closed). Not while
+     * the DS wireless is on: the reduced menu has no Options, and a menu opened in a room starts the cap.
+     */
     override fun openOptions() {
-        if (quitting || !gameReady) return
+        if (quitting || !gameReady || dsWireless) return
         if (!menuOpen) toggleMenu()
         withMenu { it.openOptions() }
     }

@@ -347,6 +347,7 @@ private:
     std::atomic<int> stepNetplayActive { -1 };
     static constexpr std::chrono::milliseconds PAUSED_REDRAW_INTERVAL { 50 };
     std::chrono::steady_clock::time_point pausedRedrawAt {};   // GL thread
+    unsigned dsLinkVariablesSeen = 0;   // GL thread: the variables generation the DS link last read
     // UI thread writes it; a threaded core's audio callback reads it.
     std::atomic<bool> audioEnabled { true };
     bool preferLowLatencyAudio = false;

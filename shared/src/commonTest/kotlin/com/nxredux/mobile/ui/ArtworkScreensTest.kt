@@ -836,6 +836,22 @@ class ArtworkScreensTest {
         assertEquals(1, r.http.count("jeuInfos"))
     }
 
+    // One screen, no top details: the highlighted game of a game list is still looked up once the highlight rests, and
+    // its facts land in the game list's meta (a Carousel's caption, a Grid tile's details).
+    @Test fun a_game_lists_highlight_is_looked_up_on_one_screen_too() = runTest {
+        val r = rig(info = true)
+        r.http.on("romnom=Mario.gba", com.nxredux.mobile.scraper.Scrape.json(
+            """{"response":{"jeu":{"id":"7","synopsis":[{"langue":"en","text":"A plumber."}],"dates":[{"region":"us","text":"2001-06-11"}],"medias":[]}}}""",
+        ))
+        r.state.openConsole("GBA")
+        runCurrent()
+        assertNull(r.state.topDetails.value)                                   // no second screen
+        assertEquals(0, r.http.count("jeuInfos"))                              // nothing asked before the rest
+        advanceUntilIdle()
+        assertEquals(1, r.http.count("jeuInfos"))
+        assertEquals("2001", r.state.gameMeta.value.values.single().year)
+    }
+
     @Test fun fetch_game_info_row_turns_the_highlight_fetch_off() = runTest {
         val r = rig(info = true)
         r.state.openArtwork()

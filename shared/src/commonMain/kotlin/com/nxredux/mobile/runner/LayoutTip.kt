@@ -5,8 +5,8 @@ package com.nxredux.mobile.runner
  * each launch until the player hides it for good from its button ([ACTION]).
  */
 object LayoutTip {
-    /** The layout chord, and the console's swap of the screens (the same tip): the DS's R2, the 3DS's SELECT + R. */
-    fun text(ds: Boolean): String = "SELECT + Left / Right changes the screen layout\n" + if (ds) "R2 swaps the screens" else "SELECT + R swaps the screens"
+    /** The layout chord and the swap of the screens, the same on the DS and the 3DS. */
+    const val TEXT = "SELECT + Left / Right changes the screen layout\nL3 or SELECT + L swaps the screens"
     const val ACTION = "Don't show again"
 
 

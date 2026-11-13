@@ -21,15 +21,15 @@ class NetplayCoresTest {
             "FBN" to listOf("fbneo"),
             "N64" to listOf("mupen64plus_next"),
             "GB" to listOf("gambatte"), "GBC" to listOf("gambatte"), "GBA" to listOf("gpsp", "mgba"), "MGBA" to listOf("mgba", "gpsp"),
-            "3DS" to listOf("azahar"),
+            "3DS" to listOf("azahar"), "NDS" to listOf("melondsds"), "PSP" to listOf("ppsspp"),
         )
         want.forEach { (tag, cores) ->
             assertEquals(cores, NetplayCores.offered(tag), tag)
             assertEquals(cores.first(), NetplayCores.defaultCore(tag), tag)
         }
-        for (tag in listOf("NDS", "SGB", "DC")) assertFalse(NetplayCores.supported(tag), tag)
+        for (tag in listOf("SGB", "DC")) assertFalse(NetplayCores.supported(tag), tag)
         assertTrue(NetplayCores.supported("sfc"))
-        assertNull(NetplayCores.defaultCore("NDS"))
+        assertNull(NetplayCores.defaultCore("SGB"))
     }
 
     @Test fun only_mupen64plus_next_runs_frames_before_the_state_sync() {
@@ -43,7 +43,7 @@ class NetplayCoresTest {
     }
 
     @Test fun every_offered_core_is_registered() {
-        listOf("FC", "SFC", "SUPA", "MD", "GG", "GPGX", "32X", "PS", "PSX", "FBN", "N64", "GB", "GBC", "GBA", "MGBA", "3DS").flatMap(NetplayCores::offered).forEach {
+        listOf("FC", "SFC", "SUPA", "MD", "GG", "GPGX", "32X", "PS", "PSX", "FBN", "N64", "GB", "GBC", "GBA", "MGBA", "3DS", "NDS", "PSP").flatMap(NetplayCores::offered).forEach {
             assertTrue(CoreRegistry.forId(it) != null, it)
         }
     }
@@ -53,6 +53,8 @@ class NetplayCoresTest {
         assertEquals(NetplayLinkKind.NETPACKET, NetplayCores.link("gpsp"))
         assertEquals(NetplayLinkKind.NETPACKET, NetplayCores.link("mgba"))
         assertEquals(NetplayLinkKind.N3DSLINK, NetplayCores.link("azahar"))
+        assertEquals(NetplayLinkKind.NDSLINK, NetplayCores.link("melondsds"))
+        assertEquals(NetplayLinkKind.PSPLINK, NetplayCores.link("ppsspp"))
         assertNull(NetplayCores.link("snes9x"))
         assertTrue(NetplayCores.isLink("gpsp"))
         assertFalse(NetplayCores.isLink("picodrive"))
@@ -224,5 +226,12 @@ class NetplayCoresTest {
         val s = NetplaySession(NetplayRole.HOST, "10.0.0.2", "mgba", "gpsp", cableLink = true, otherRomPath = "/c/x.gba")
         assertNull(s.linkKind)
         assertEquals(NetplayLinkKind.NETPACKET, NetplaySession(NetplayRole.HOST, "10.0.0.2", "mgba", "gpsp").linkKind)
+    }
+
+    @Test fun only_the_ds_and_3ds_automatic_routes_use_the_phone_to_phone_cable() {
+        assertTrue(NetplayCores.cableAuto("melondsds"))
+        assertTrue(NetplayCores.cableAuto("azahar"))
+        assertFalse(NetplayCores.cableAuto("ppsspp"))
+        assertFalse(NetplayCores.cableAuto("snes9x"))
     }
 }

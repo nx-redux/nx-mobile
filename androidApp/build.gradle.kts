@@ -146,6 +146,7 @@ dependencies {
     implementation(libs.commons.compress)
     implementation(libs.xz)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.coil.compose)   // AndroidArtFilesTest: how Coil reads a versioned file:// ref
 }
 

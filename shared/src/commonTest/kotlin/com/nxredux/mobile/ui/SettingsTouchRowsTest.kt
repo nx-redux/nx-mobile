@@ -97,7 +97,7 @@ class SettingsTouchRowsTest {
     // Layouts' group rows say nothing on the row (no line, no info icon, no X Info); each group's page says it under its title.
     @Test fun layoutsGroupRowsHaveNoDescription() {
         val groups = SettingsSection.entries.filter { it.layoutGroup }
-        assertEquals(7, groups.size)
+        assertEquals(8, groups.size)
         for (g in groups) {
             val row = settingsTouchRow(SettingsRow(g.opener!!, g.label, "List"), null, SettingsSection.MAIN_MENU)
             assertEquals("", row.info, "$g"); assertEquals("", row.detail, "$g")
