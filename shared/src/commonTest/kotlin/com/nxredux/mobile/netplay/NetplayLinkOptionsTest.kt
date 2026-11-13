@@ -339,6 +339,39 @@ class NetplayLinkOptionsTest {
         assertFalse(NetplayLinkOptions.PSP_SELF in bare || NetplayLinkOptions.PSP_BROADCAST in bare)
     }
 
+    @Test fun psp_session_left_falls_back_to_the_automatic_route_with_local_wireless_and_both_addresses() {
+        assertEquals(
+            mapOf(NetplayLinkOptions.PSP_MODE to "auto", NetplayLinkOptions.PSP_BROADCAST to pspBroadcast, NetplayLinkOptions.PSP_SELF to pspSelf),
+            NetplayLinkOptions.pspSessionLeft(localWireless = true, self = pspSelf, broadcast = pspBroadcast),
+        )
+        // A join's host address is not sent again: the automatic route never reads one.
+        assertFalse(NetplayLinkOptions.PSP_IP in NetplayLinkOptions.pspSessionLeft(true, pspSelf, pspBroadcast))
+    }
+
+    @Test fun psp_session_left_is_off_without_local_wireless_or_an_address() {
+        val off = mapOf(NetplayLinkOptions.PSP_MODE to "off")
+        assertEquals(off, NetplayLinkOptions.pspSessionLeft(localWireless = false, self = pspSelf, broadcast = pspBroadcast))
+        assertEquals(off, NetplayLinkOptions.pspSessionLeft(true, null, pspBroadcast))
+        assertEquals(off, NetplayLinkOptions.pspSessionLeft(true, pspSelf, null))
+        assertEquals(off, NetplayLinkOptions.pspSessionLeft(true, null, null))
+        assertEquals(off, NetplayLinkOptions.pspSessionLeft(false, null, null))
+    }
+
+    @Test fun psp_session_left_is_the_launch_rule_for_the_automatic_route() {
+        // What a game launched outside a session would have run with, on the same setting and addresses.
+        for (localWireless in listOf(false, true)) {
+            for (self in listOf(null, pspSelf)) {
+                for (broadcast in listOf(null, pspBroadcast)) {
+                    val left = NetplayLinkOptions.pspSessionLeft(localWireless, self, broadcast)
+                    val launch = NetplayLinkOptions.forPsp(null, localWireless, self, broadcast, 7)
+                    assertEquals(launch[NetplayLinkOptions.PSP_MODE] ?: "off", left[NetplayLinkOptions.PSP_MODE], "$localWireless $self $broadcast")
+                    assertEquals(launch[NetplayLinkOptions.PSP_SELF], left[NetplayLinkOptions.PSP_SELF])
+                    assertEquals(launch[NetplayLinkOptions.PSP_BROADCAST], left[NetplayLinkOptions.PSP_BROADCAST])
+                }
+            }
+        }
+    }
+
     @Test fun psp_mac_is_the_seed_behind_0200() {
         assertEquals("020000abcdef", NetplayLinkOptions.pspMac(0xabcdef))
     }

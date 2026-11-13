@@ -47,6 +47,8 @@ internal interface GameNetplayHost : GameScreenHost {
     fun fail(message: String, title: String = GameActivity.START_FAILED)
     fun quitGame(chosen: Boolean, autoState: Boolean)
     fun becomeLocal(localCheats: (() -> Job)?)
+    /** A PSP sheet session's Disconnect: the link variables to send, after which the game may be on the automatic route. */
+    fun leavePspSession(): Map<String, String>
     /** Opens the in-game menu (nothing when it is open). */
     fun showMenu()
 }
@@ -321,22 +323,24 @@ internal class GameNetplay(private val host: GameNetplayHost) {
      * netplay link: Leave. The link ends and the game plays on ([linkEnded]); the menu stays open on the normal root and
      * the player leaves later with Quit. A GBA link's engine sends DISCONNECT and shuts down off main; [NetplayRun.leave]
      * detaches it first, so no Ended notice follows. GB link has no engine: gambatte's network serial stops on its mode's
-     * variable update, read at the next frame (the menu holds frames, so on Continue); Azahar leaves its room the same way, and
-     * the runner takes a PSP game out of ad hoc for good (its presence goes out, so states work again). Set past [GameActivity.applyOptions]'
-     * guard and not stored: the link options are this launch's ([GameActivity.graphicsForcedOptions]), never the user's config.
+     * variable update, read at the next frame (the menu holds frames, so on Continue); Azahar leaves its room the same way.
+     * The runner takes a PSP game out of ad hoc (its presence goes out, so states work again): for good, or, with Local
+     * Wireless on and the Wi-Fi's addresses known, onto the automatic route, back once the game leaves and re-enters ad hoc
+     * ([GameNetplayHost.leavePspSession]). Set past [GameActivity.applyOptions]' guard and not stored: the link options
+     * are this launch's ([GameActivity.graphicsForcedOptions]), never the user's config.
      */
     private fun leaveLink() {
         run?.leave()
         if (pillShown) { host.notifications.hideProgress(); pillShown = false; host.publishNotifications() }   // the ticker is gone
         val off = when (session?.linkKind) {
-            NetplayLinkKind.GBLINK -> Variable(NetplayLinkOptions.GB_MODE, NetplayLinkOptions.GB_OFF)
-            NetplayLinkKind.N3DSLINK -> Variable(NetplayLinkOptions.N3DS_MODE, NetplayLinkOptions.N3DS_OFF)
-            NetplayLinkKind.NDSLINK -> Variable(NetplayLinkOptions.NDS_MODE, NetplayLinkOptions.N3DS_OFF)
-            NetplayLinkKind.PSPLINK -> Variable(NetplayLinkOptions.PSP_MODE, NetplayLinkOptions.N3DS_OFF)
-            else -> null
+            NetplayLinkKind.GBLINK -> listOf(Variable(NetplayLinkOptions.GB_MODE, NetplayLinkOptions.GB_OFF))
+            NetplayLinkKind.N3DSLINK -> listOf(Variable(NetplayLinkOptions.N3DS_MODE, NetplayLinkOptions.N3DS_OFF))
+            NetplayLinkKind.NDSLINK -> listOf(Variable(NetplayLinkOptions.NDS_MODE, NetplayLinkOptions.N3DS_OFF))
+            NetplayLinkKind.PSPLINK -> host.leavePspSession().map { (key, value) -> Variable(key, value) }
+            else -> emptyList()
         }
-        if (off != null) host.retroView?.let { view ->
-            view.queueEvent { runCatching { view.updateVariables(off) }.onFailure { NxLog.w("GameActivity", "ending the link failed", it) } }
+        if (off.isNotEmpty()) host.retroView?.let { view ->
+            view.queueEvent { runCatching { view.updateVariables(*off.toTypedArray()) }.onFailure { NxLog.w("GameActivity", "ending the link failed", it) } }
         }
         linkEnded()
     }

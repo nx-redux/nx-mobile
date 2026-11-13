@@ -1481,6 +1481,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * Achievements need nothing here: a link session ran them from launch ([NetplaySession.allowsAchievements]). [localCheats]:
      * the cheat load a normal launch starts at once ([LaunchPipeline]), for a session that held it back.
      */
+    override fun leavePspSession(): Map<String, String> = launchPipeline.leavePspSession()
+
     override fun becomeLocal(localCheats: (() -> Job)?) {
         speed.setSession(netplay = false)   // the shortcuts work again
         shortcuts.onSessionEnded()

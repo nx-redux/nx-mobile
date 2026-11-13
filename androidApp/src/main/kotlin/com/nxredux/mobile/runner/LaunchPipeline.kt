@@ -293,7 +293,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
      */
     var dsLinked = false
         private set
-    /** [dsLinked] outside a sheet session: the game's own radio finds rooms (the automatic route). */
+    /**
+     * [dsLinked] outside a sheet session: the game's own radio finds rooms (the automatic route). Also a PSP game whose
+     * sheet session was left with Local Wireless on ([leavePspSession]).
+     */
     var dsAutoRoute = false
         private set
     /** [dsAutoRoute] for a core whose link can use the phone-to-phone cable ([NetplayCores.cableAuto]): its watcher runs only then. */
@@ -328,6 +331,27 @@ internal class LaunchPipeline(private val host: LaunchHost) {
      * once the game enters ad hoc, and the presence watcher would take the lock only up to half a second into that.
      */
     private var broadcastsFromLaunch = false
+
+    /** A PSP launch's Local Wireless option, a sheet session's included: its Disconnect falls back to the automatic route on it. */
+    private var pspLocalWireless = false
+
+    /**
+     * A PSP sheet session's Disconnect: the link variables to send ([NetplayLinkOptions.pspSessionLeft]). When they are
+     * the automatic route's, this launch runs as one launched on it from here: the presence watcher (already running)
+     * drives the menu, the speed rules and the locks as for a game launched outside a session, the broadcasts lock (held
+     * since launch) stays, and the phone-to-phone cable stays out, as for every PSP game. Main thread.
+     */
+    fun leavePspSession(): Map<String, String> {
+        val addresses = pspAddresses
+        val left = NetplayLinkOptions.pspSessionLeft(pspLocalWireless, addresses?.first, addresses?.second)
+        if (left[NetplayLinkOptions.PSP_MODE] == NetplayLinkOptions.N3DS_AUTO) {
+            broadcastsFromLaunch = true
+            holdBroadcasts()
+            dsCableAuto = false
+            dsAutoRoute = true
+        }
+        return left
+    }
 
     private fun dropBroadcasts() {
         broadcasts?.let { runCatching { if (it.isHeld) it.release() } }
@@ -601,6 +625,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 localWireless = np == null && PspOptions.localWireless(frontendValues),
                 self = pspSelf, broadcast = pspBroadcast, macSeed = AndroidAppSettings(activity).ndsMacSeed,
             )
+            if (isPsp) pspLocalWireless = PspOptions.localWireless(frontendValues)
             val pspLinked = NetplayLinkOptions.PSP_MODE in pspOptions
             if (pspLinked && pspSelf != null && pspBroadcast != null) pspAddresses = pspSelf to pspBroadcast
             if (pspLinked && np == null) {

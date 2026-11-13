@@ -102,6 +102,15 @@ object NetplayLinkOptions {
     }
 
     /**
+     * The variables a PSP sheet session's Disconnect sends: the automatic route, as a launch outside a session would run
+     * ([forPsp]), when [localWireless] is on and both Wi-Fi addresses are known, so the game finds the others again once
+     * it leaves and re-enters ad hoc; otherwise the link off for the rest of the launch. A join's host address is not
+     * sent: the automatic route reads none.
+     */
+    fun pspSessionLeft(localWireless: Boolean, self: String?, broadcast: String?): Map<String, String> =
+        if (localWireless && self != null && broadcast != null) pspLink(N3DS_AUTO, null, broadcast, self) else mapOf(PSP_MODE to N3DS_OFF)
+
+    /**
      * This player's name in Azahar's room: the [player] name in the characters a room takes (ASCII letters, digits,
      * space, dot, underscore, hyphen), then [number] as four digits. The room turns away a second member with the same
      * name, and two devices can carry the same one, hence the number (drawn per launch).
