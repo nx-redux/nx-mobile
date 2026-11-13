@@ -375,6 +375,30 @@ fun NxSettingsList(
 }
 
 /**
+ * One settings row ([row]) drawn as an [NxSettingsList] row, with no lazy list under it: safe inside a vertically
+ * scrolling parent, which measures its children with unbounded height (a lazy list there throws). Taps, events and the
+ * fitted segments are the list's.
+ */
+@Composable
+fun NxSettingsSingleRow(
+    row: NxSettingRow, selected: Boolean,
+    onSelect: () -> Unit, onOpen: () -> Unit, onEvent: (NxSettingEvent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val itemHeight = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)   // Appearance → Text size
+    BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = NxOptionsSidePad).padding(top = 4.dp), contentAlignment = Alignment.TopCenter) {
+        val sizes = nxTouchRowSizes(itemHeight, maxWidth, SETTING_DESC_OF_LABEL)
+        val fitted = remember(row, sizes.segmentsFitLine) { row.fittedTo(sizes.segmentsFitLine) }
+        NxSettingTouchRow(
+            fitted, selected, sizes, index = 0,
+            onTap = { nxSettingRowTap(fitted, 0, { onSelect() }, { onOpen() }) },
+            onEvent = onEvent, onTruncated = { _, _ -> },
+            onButton = { nxTap(0, selected = false, opens = true, { onSelect() }, { onOpen() }) },
+        )
+    }
+}
+
+/**
  * This element [start] wider on its left and [end] on its right than it is given, drawn that far past its slot's edges
  * (a list whose footer runs past the rows). Nothing when both are zero.
  */

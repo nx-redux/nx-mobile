@@ -2,7 +2,7 @@ package com.nxredux.mobile.ui
 
 import androidx.compose.foundation.layout.Box
 import com.nxredux.mobile.ui.nx.nxListInset
-import com.nxredux.mobile.ui.nx.NxSettingsList
+import com.nxredux.mobile.ui.nx.NxSettingsSingleRow
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import androidx.compose.ui.unit.dp
@@ -119,8 +119,10 @@ private fun SyncPage(
 private fun SyncRomsRow(on: Boolean, lit: Boolean, onTap: (open: Boolean) -> Unit) {
     val row = NxSettingRow("Sync ROMs", choices = listOf("Off", "On"), index = if (on) 1 else 0)
     Box(Modifier.offset(x = -nxListInset()).widthIn(max = SETTINGS_FRAME_MAX).padding(bottom = 12.dp)) {
-        NxSettingsList(
-            listOf(row), if (lit) 0 else -1, onSelect = { onTap(false) }, onOpen = { onTap(true) },
+        // One row, not a lazy list: the Settings root this sits in scrolls on a short screen, and a lazy list measured
+        // inside a vertical scroll throws.
+        NxSettingsSingleRow(
+            row, lit, onSelect = { onTap(false) }, onOpen = { onTap(true) },
             onEvent = { e -> if (e is NxSettingEvent.Choose && e.index != row.index) onTap(true) },
             modifier = Modifier.fillMaxWidth(),
         )
