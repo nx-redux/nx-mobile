@@ -368,7 +368,8 @@ internal fun GameListFrame(
                             )
                         }
                     }
-                    // Carousel and Backdrop: the selected game's name and [info] under the centre item.
+                    // Carousel and Backdrop: the selected game's name and [info] at the centre item (a horizontal Carousel's
+                    // stats in its picture and its details under the name, [carouselGameLines]; the others' all in the caption).
                     MenuStyle.CAROUSEL -> {
                         val tiles = remember(dataKey) { gridTiles() }
                         slot { m ->
@@ -427,7 +428,7 @@ internal fun GameListFrame(
                         // row when there is no bar (hints hidden, or touch only; the Games tab has none), only that row
                         // shaded. Extra info off leaves nothing for it, so its room goes too.
                         val barHidden = tabbed || gameListInfoInBarRow(chrome.emptyBarRoom, touchOnly())
-                        val inRow = gameListInfoInRow(tabRowShown = false, barHidden, chrome.extraInfo, topStats)
+                        val inRow = gameListInfoInRow(barHidden, chrome.extraInfo, topStats)
                         GameInfoPlacement(if (inRow) info else NoGameInfo, Modifier.weight(1f), textStart = textStart, ground = if (inRow) BandGround.SHADE_WITH_INFO else BandGround.BAR, shade = false) { scaffoldModifier, infoBand ->
                             // The band's room goes to the rows; only its line in the bar's row ([NxHintsBand.barInfo]) stays.
                             val band = NxHintsBand(reserve = 0.dp, overlap = 0.dp, barInfo = infoBand.barInfo) {}
@@ -547,10 +548,10 @@ internal fun gameListIcons(source: ListSource, tab: Boolean, canSearch: Boolean,
 /**
  * Whether a List shows the selected game's info in the hint bar's row: the bar hidden ([barHidden]: hints hidden, touch
  * only, or the Games tab, which has no bar), Extra info on ([extraInfo]) and not already under the title ([topStats]).
- * Never where the Games tab's tab row stands in that row ([tabRowShown]).
+ * The Games tab's tab row in that row is decided before this is asked: its List never puts the info there.
  */
-internal fun gameListInfoInRow(tabRowShown: Boolean, barHidden: Boolean, extraInfo: Boolean, topStats: Boolean): Boolean =
-    !tabRowShown && barHidden && extraInfo && !topStats
+internal fun gameListInfoInRow(barHidden: Boolean, extraInfo: Boolean, topStats: Boolean): Boolean =
+    barHidden && extraInfo && !topStats
 
 /**
  * The Games tab's title: the highlighted game's ([index] in [entries]) console, as that console's own list is titled

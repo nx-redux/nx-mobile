@@ -60,12 +60,11 @@ class GamesTabTopTest {
         assertFalse(gameListTrophy(gameListTrophyAvailable(signedIn = true, panelShown = false), dual = false, info = null))
     }
 
-    // A List's info in the hint bar's row: a console list's rule, except where the tab row stands in that row.
-    @Test fun theTabsListInfoIsAConsoleListsUnlessTheTabRowHasTheRow() {
+    // A List's info in the hint bar's row: the bar hidden, Extra info on, not already under the title.
+    @Test fun theTabsListInfoIsAConsoleLists() {
         for (barHidden in listOf(true, false)) for (extra in listOf(true, false)) for (top in listOf(true, false)) {
             val console = barHidden && extra && !top
-            assertEquals(console, gameListInfoInRow(tabRowShown = false, barHidden, extra, top))
-            assertFalse(gameListInfoInRow(tabRowShown = true, barHidden, extra, top))
+            assertEquals(console, gameListInfoInRow(barHidden, extra, top))
         }
     }
 }

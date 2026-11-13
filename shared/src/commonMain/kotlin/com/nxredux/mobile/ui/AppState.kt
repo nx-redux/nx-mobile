@@ -2586,10 +2586,12 @@ class AppState(
         // compare), then Continue.
         OnboardingStep.PAD -> Triple(
             "On-screen pad in the menu",
-            // Landscape shows no menu pad: the choice still applies, seen once the phone is upright.
+            // Landscape shows no menu pad: the choice still applies, seen once the phone is upright. Nor does a controller
+            // (one connected on this page, or the step resumed with one): seen once it is disconnected.
             listOfNotNull(
                 "Show the pad below the menu in portrait, and how it looks. Games keep their own pad, and tools always hide it, so their pages keep the whole screen.",
                 if (padPortrait) null else "Turn your phone upright to see the pad.",
+                if (padController) "Disconnect your controller to see the pad." else null,
             ),
             listOfNotNull(
                 NxRow("Pad skin", secondary = if (deps.settings.padSkin) "On" else "Off", cycleable = true),

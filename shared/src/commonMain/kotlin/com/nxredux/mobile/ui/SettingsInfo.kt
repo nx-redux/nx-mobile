@@ -112,7 +112,8 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
         "Game details or achievements under a game",
         "What shows under a game's play time. Details: its genre, year and publisher. Achievements: its " +
             "RetroAchievements progress and next goal when you are signed in and the game has achievements, else its " +
-            "details. The details come from ScreenScraper (Artwork → Fetch art and info when browsing).",
+            "details. A horizontal Carousel and a Grid show both: the details have their own place there. The details " +
+            "come from ScreenScraper (Artwork → Fetch art and info when browsing).",
     )
     SettingsKind.EXTRA_INFO -> SettingText(
         "Additional game info",

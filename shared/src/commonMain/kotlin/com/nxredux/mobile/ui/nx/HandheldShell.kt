@@ -138,6 +138,8 @@ fun HandheldShell(
             // Half-folded only the two-screen layout (a tablet-class window: the Fold's inner screen) keeps the skin, split at the hinge.
             val hingeY = (posture as? Posture.Tabletop)?.let { (it.hingeTop + it.hingeBottom) / 2f }
             val canTwo = top != null && tablet && twoScreens && portrait
+            // App already folds the controller into [showPad] (it needs that for the keyboard's docking too); checked here
+            // again so the shell's own rule ([menuSkinShown]) holds for any caller that passes the pad alone.
             val skinPlaced = if (skin != null && menuSkinShown(skinPicked = true, showPad, controllerConnected, canTwo, tabletop = posture is Posture.Tabletop)) {
                 val w = constraints.maxWidth
                 // the skin runs up under the cutout (the shell starts below it), its screen too: the frame keeps its own top

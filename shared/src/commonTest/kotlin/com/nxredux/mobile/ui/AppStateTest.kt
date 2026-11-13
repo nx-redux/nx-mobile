@@ -1016,6 +1016,19 @@ class AppStateTest {
         assertTrue("Turn your phone upright to see the pad." !in assertIs<Screen.Onboarding>(state.screen.value).details)
     }
 
+    // A controller connected on the pad page (or a resumed pad step with one): the menu shows no pad, and the page says why.
+    @Test fun the_pad_page_with_a_controller_says_to_disconnect_it() = runTest {
+        val (state, _) = atCustomise()
+        assertEquals(OnboardingStep.PAD, step(state))
+        val line = "Disconnect your controller to see the pad."
+        assertTrue(line !in assertIs<Screen.Onboarding>(state.screen.value).details)
+        state.onPadContext(portrait = true, controller = true)
+        assertEquals(OnboardingStep.PAD, step(state))
+        assertEquals(line, assertIs<Screen.Onboarding>(state.screen.value).details.last())
+        state.onPadContext(portrait = true, controller = false)            // disconnected: the pad shows, the line goes
+        assertTrue(line !in assertIs<Screen.Onboarding>(state.screen.value).details)
+    }
+
     // The page title and the button hints are value rows on one page (one picture above shows the pair): each flips in place.
     @Test fun the_page_title_and_hints_rows_flip_in_place() = runTest {
         val (state, settings) = atCustomise(controller = true)
