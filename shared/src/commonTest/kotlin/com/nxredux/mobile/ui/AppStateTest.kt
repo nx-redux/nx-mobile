@@ -10838,23 +10838,6 @@ class AppStateTest {
         assertEquals("On", row().secondary)
     }
 
-    // Settings → Emulation → Cable Link → Clear link ROM cache: its value is the cache's size; A empties it.
-    @Test fun settings_row_shows_size_and_clears() = runTest {
-        val store = com.nxredux.mobile.netplay.cablelink.MemoryCacheStore()
-        store.files["a".repeat(40)] = ByteArray(2048)
-        val cache = com.nxredux.mobile.netplay.cablelink.LinkRomCache(store)
-        val state = state(MemorySettings(ContentRef("Home")), linkRomCache = cache)
-        state.load()
-        state.openSettings(SettingsSection.EMULATORS)
-        fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
-        fun row() = rows().single { it.kind == SettingsKind.CLEAR_LINK_ROMS }
-        assertEquals("Clear link ROM cache" to "2.0 KB", row().label to row().secondary)
-        state.select(rows().indexOf(row()))
-        state.onButton(NxButton.A)
-        assertEquals(0L, cache.sizeBytes())
-        assertEquals("0 B", row().secondary)
-    }
-
     @Test fun no_cable_link_rows_without_a_link_rom_cache() = runTest {
         val state = state(MemorySettings(ContentRef("Home")))
         state.load()
@@ -10863,24 +10846,14 @@ class AppStateTest {
         assertEquals(listOf(SettingsKind.DEFAULTS, SettingsKind.EMULATORS), kinds)
     }
 
-    @Test fun cable_link_input_delay_defaults_to_one_frame() = runTest {
-        val cache = com.nxredux.mobile.netplay.cablelink.LinkRomCache(com.nxredux.mobile.netplay.cablelink.MemoryCacheStore())
-        val state = state(MemorySettings(ContentRef("Home")), linkRomCache = cache)
-        state.load()
-        state.openSettings(SettingsSection.EMULATORS)
-        assertEquals("1 frame", assertIs<Screen.Settings>(state.screen.value).rows.single { it.kind == SettingsKind.CABLE_LINK_DELAY }.secondary)
-    }
-
-    // The Cable Link group lives under Emulation (delay, overlay, cache), not System.
-    @Test fun cable_link_rows_are_in_emulation_not_system() = runTest {
+    // The Cable Link rows (delay, overlay, cache) are mGBA's (EmulatorSettingsControllerTest): neither Emulation nor System lists them.
+    @Test fun cable_link_rows_are_in_neither_emulation_nor_system() = runTest {
         val cache = com.nxredux.mobile.netplay.cablelink.LinkRomCache(com.nxredux.mobile.netplay.cablelink.MemoryCacheStore())
         val state = state(MemorySettings(ContentRef("Home")), linkRomCache = cache)
         state.load()
         val cableKinds = setOf(SettingsKind.CABLE_LINK_DELAY, SettingsKind.CABLE_LINK_DELAY_OVERLAY, SettingsKind.CLEAR_LINK_ROMS)
         state.openSettings(SettingsSection.EMULATORS)
-        val emulation = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals(listOf(SettingsKind.CABLE_LINK_DELAY, SettingsKind.CABLE_LINK_DELAY_OVERLAY, SettingsKind.CLEAR_LINK_ROMS), emulation.map { it.kind }.filter { it in cableKinds })
-        assertEquals("Cable Link", emulation.single { it.kind == SettingsKind.SECTION }.label)
+        assertEquals(listOf(SettingsKind.DEFAULTS, SettingsKind.EMULATORS), assertIs<Screen.Settings>(state.screen.value).rows.map { it.kind })
         state.onButton(NxButton.B); state.openSettings(SettingsSection.SYSTEM)
         assertEquals(false, assertIs<Screen.Settings>(state.screen.value).rows.any { it.kind in cableKinds })
     }

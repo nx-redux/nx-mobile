@@ -4,6 +4,8 @@ import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.SystemFolder
+import com.nxredux.mobile.netplay.cablelink.LinkRomCache
+import com.nxredux.mobile.netplay.cablelink.MemoryCacheStore
 import com.nxredux.mobile.options.BottomScreenOptions
 import com.nxredux.mobile.options.ConfigFile
 import com.nxredux.mobile.options.ConsoleRow
@@ -137,6 +139,34 @@ class EmulatorSettingsControllerTest {
         assertEquals(listOf(EmulatorRow.Core(optB, inCategory = true)), EmulatorRows.build(page(), "video"))
     }
 
+    private val delayRow = EmulatorRow.App(SettingsRow(SettingsKind.CABLE_LINK_DELAY, "Input delay", "1 frame"), SettingChoices(listOf("Auto", "1 frame"), 1))
+    private val clearRow = EmulatorRow.App(SettingsRow(SettingsKind.CLEAR_LINK_ROMS, "Clear link ROM cache", "0 B"), null)
+    private val cableLink = EmulatorAppSection("Cable Link", listOf(delayRow, clearRow))
+
+    // The app's own rows a page hosts (mGBA's Cable Link) come last, after a gap, under their header; a category has none.
+    @Test fun hosted_app_rows_come_last_under_their_header() {
+        assertEquals(
+            listOf(
+                EmulatorRow.Header("Controls"), EmulatorRow.Console(layout), EmulatorRow.Gap,
+                EmulatorRow.Header("Emulator"), EmulatorRow.Core(optA, inCategory = false), EmulatorRow.Category("video", "Video"), EmulatorRow.Gap,
+                EmulatorRow.Header("Cable Link"), delayRow, clearRow,
+            ),
+            EmulatorRows.build(page(), null, cableLink),
+        )
+        assertEquals(listOf(EmulatorRow.Core(optB, inCategory = true)), EmulatorRows.build(page(), "video", cableLink))
+        assertTrue(delayRow.selectable && clearRow.selectable)
+    }
+
+    // Cable Link always runs mGBA, so its settings sit on mGBA's own page, for the tags Cable Link is offered on.
+    @Test fun only_mgbas_page_for_a_cable_link_tag_hosts_cable_link() {
+        fun hosts(tag: String, core: String, forGame: Boolean = false) = EmulatorRows.hostsCableLink(EmulatorPage(tag, core, core, emptyList(), null, forGame, false))
+        assertTrue(hosts("MGBA", "mgba"))
+        assertFalse(hosts("GBA", "gpsp"))
+        assertFalse(hosts("SGB", "mgba"))                    // no Cable Link on the Super Game Boy
+        assertFalse(hosts("GB", "gambatte"))
+        assertFalse(hosts("MGBA", "mgba", forGame = true))   // a game's own settings: these are the app's, not the game's
+    }
+
     // --- pure: list ---
 
     private fun game(name: String) = GameEntry(ContentRef("r/$name"), name, name, folder = ContentRef("r"), sourceId = "home", relativeDir = "")
@@ -195,6 +225,8 @@ class EmulatorSettingsControllerTest {
         override var tgdbApiKey: String? = null
         override var artReplaceExisting = false
         override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = com.nxredux.mobile.settings.MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = com.nxredux.mobile.settings.AccentPreset.DEFAULT; override var secondaryAccent: com.nxredux.mobile.settings.SecondaryAccent = com.nxredux.mobile.settings.SecondaryAccent.DEFAULT
+        override var cableLinkDelayPin = com.nxredux.mobile.netplay.NetplayCores.CABLE_LINK_DELAY_DEFAULT
+        override var cableLinkDelayOverlay = false
     }
     private object Runner : EmulatorRunner { override suspend fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) {} }
     private object Picker : FolderPicker { override fun pickHome() {}; override fun pickExtra() {}; override fun forget(ref: ContentRef) {} }
@@ -227,8 +259,11 @@ class EmulatorSettingsControllerTest {
      * scheduler: one thread, virtual time. On the real Dispatchers.Default a wall-time poll could time out under load,
      * and the work would land on pool threads while the test thread drove the same state.
      */
-    private fun TestScope.TestState(configs: MemoryConfigs, src: FakeRomsSource = source, tables: CoreOptionSource = Tables()) = AppState(
-        AppDeps(MemorySettings(ContentRef("Home")), src, Runner, Picker, coreOptions = tables, emulatorConfigs = configs, compute = UnconfinedTestDispatcher(testScheduler)),
+    private fun TestScope.TestState(
+        configs: MemoryConfigs, src: FakeRomsSource = source, tables: CoreOptionSource = Tables(), linkRomCache: LinkRomCache? = null,
+        settings: MemorySettings = MemorySettings(ContentRef("Home")),
+    ) = AppState(
+        AppDeps(settings, src, Runner, Picker, coreOptions = tables, emulatorConfigs = configs, compute = UnconfinedTestDispatcher(testScheduler), linkRomCache = linkRomCache),
         CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
     )
 
@@ -544,5 +579,118 @@ class EmulatorSettingsControllerTest {
         await { (state.screen.value as? Screen.Games)?.entries?.size == 1 }
         assertEquals(listOf("Sonic"), assertIs<Screen.Games>(state.screen.value).entries.map { it.game.shownName })
         assertEquals(0, state.selection.value.index)   // still on Sonic
+    }
+
+    // --- Cable Link on mGBA's page ---
+
+    private val gbaSource = FakeRomsSource(
+        dirs = mapOf(
+            "Home" to listOf("Roms"),
+            "Home/Roms" to listOf("Game Boy Advance (GBA)"),
+            "Home/Roms/Game Boy Advance (GBA)" to listOf("Mario.gba"),
+        ),
+    )
+    private val cableKinds = listOf(SettingsKind.CABLE_LINK_DELAY, SettingsKind.CABLE_LINK_DELAY_OVERLAY, SettingsKind.CLEAR_LINK_ROMS)
+
+    private fun cacheOf(bytes: Int = 0) = LinkRomCache(MemoryCacheStore().also { if (bytes > 0) it.files["a".repeat(40)] = ByteArray(bytes) })
+    /** GBA games on mGBA ([mgba]: Default emulators picks mGBA (MGBA) for Game Boy Advance, as a player must to see its page) or on gpSP. */
+    private fun TestScope.mgbaState(cache: LinkRomCache?, mgba: Boolean = true) = TestState(
+        MemoryConfigs(), src = gbaSource, tables = Tables(names + ("mgba" to "mGBA")), linkRomCache = cache,
+        settings = MemorySettings(ContentRef("Home")).also { if (mgba) it.defaultTags = mapOf("gba" to "MGBA") },
+    )
+    private fun appRows(state: AppState) = options(state).rows.filterIsInstance<EmulatorRow.App>()
+    private fun appRow(state: AppState, kind: SettingsKind) = appRows(state).single { it.row.kind == kind }
+    private fun selectApp(state: AppState, kind: SettingsKind) {
+        repeat(options(state).rows.size) { if ((selected(state) as? EmulatorRow.App)?.row?.kind != kind) state.onButton(NxButton.DOWN) }
+        assertEquals(kind, (selected(state) as EmulatorRow.App).row.kind)
+    }
+
+    @Test fun mgbas_page_ends_with_cable_link_where_cable_link_exists() = runTest {
+        val state = mgbaState(cacheOf())
+        openCore(state, "mgba")
+        await { state.screen.value is Screen.EmulatorOptions }
+        assertEquals("MGBA" to "mgba", options(state).page.tag to options(state).page.coreId)
+        val rows = options(state).rows
+        assertEquals(cableKinds, rows.takeLast(3).map { (it as EmulatorRow.App).row.kind })
+        assertEquals(EmulatorRow.Header("Cable Link"), rows[rows.size - 4])
+        assertEquals(EmulatorRow.Gap, rows[rows.size - 5])
+        assertEquals(listOf("Input delay", "Delay overlay", "Clear link ROM cache"), appRows(state).map { it.row.label })
+        assertEquals(listOf("1 frame", "Off", "0 B"), appRows(state).map { it.row.secondary })
+    }
+
+    @Test fun mgbas_page_has_no_cable_link_without_a_link_rom_cache() = runTest {
+        val state = mgbaState(null)
+        openCore(state, "mgba")
+        await { state.screen.value is Screen.EmulatorOptions }
+        assertEquals(emptyList(), appRows(state))
+        assertFalse(EmulatorRow.Header("Cable Link") in options(state).rows)
+    }
+
+    @Test fun gpsps_page_has_no_cable_link() = runTest {
+        val state = mgbaState(cacheOf(), mgba = false)
+        openCore(state, "gpsp")
+        await { state.screen.value is Screen.EmulatorOptions }
+        assertEquals("gpsp", options(state).page.coreId)
+        assertEquals(emptyList(), appRows(state))
+    }
+
+    // Each row changes its setting as on its old Settings page, and the page stays, its selection on the row.
+    @Test fun the_cable_link_rows_change_their_settings_on_the_page() = runTest {
+        val state = mgbaState(cacheOf())
+        openCore(state, "mgba")
+        await { state.screen.value is Screen.EmulatorOptions }
+        selectApp(state, SettingsKind.CABLE_LINK_DELAY)
+        state.onButton(NxButton.RIGHT)
+        assertEquals("2 frames", appRow(state, SettingsKind.CABLE_LINK_DELAY).row.secondary)
+        assertEquals(SettingsKind.CABLE_LINK_DELAY, (selected(state) as EmulatorRow.App).row.kind)
+        state.onButton(NxButton.LEFT); state.onButton(NxButton.LEFT)
+        assertEquals("Auto", appRow(state, SettingsKind.CABLE_LINK_DELAY).row.secondary)
+        state.onButton(NxButton.LEFT)   // wraps, as on Settings
+        assertEquals("8 frames", appRow(state, SettingsKind.CABLE_LINK_DELAY).row.secondary)
+        selectApp(state, SettingsKind.CABLE_LINK_DELAY_OVERLAY)
+        state.onButton(NxButton.A)
+        assertEquals("On", appRow(state, SettingsKind.CABLE_LINK_DELAY_OVERLAY).row.secondary)
+        assertIs<Screen.EmulatorOptions>(state.screen.value)
+    }
+
+    @Test fun input_delay_opens_its_picker_and_a_pick_sets_it() = runTest {
+        val state = mgbaState(cacheOf())
+        openCore(state, "mgba")
+        await { state.screen.value is Screen.EmulatorOptions }
+        selectApp(state, SettingsKind.CABLE_LINK_DELAY)
+        state.settingEvent(NxSettingEvent.OpenPicker(state.selection.value.index))
+        val chooser = state.chooser.value ?: error("no chooser")
+        assertEquals("Input delay", chooser.title)
+        assertEquals(listOf("Auto", "1 frame") + (2..8).map { "$it frames" }, chooser.labels)
+        assertEquals(1, chooser.selected)
+        state.chooseValue(0)
+        assertEquals("Auto", appRow(state, SettingsKind.CABLE_LINK_DELAY).row.secondary)
+        assertIs<Screen.EmulatorOptions>(state.screen.value)
+    }
+
+    @Test fun clear_link_rom_cache_empties_it_and_shows_the_new_size() = runTest {
+        val cache = cacheOf(2048)
+        val state = mgbaState(cache)
+        openCore(state, "mgba")
+        await { state.screen.value is Screen.EmulatorOptions }
+        assertEquals("2.0 KB", appRow(state, SettingsKind.CLEAR_LINK_ROMS).row.secondary)
+        selectApp(state, SettingsKind.CLEAR_LINK_ROMS)
+        state.onButton(NxButton.A)
+        assertEquals(0L, cache.sizeBytes())
+        assertEquals("0 B", appRow(state, SettingsKind.CLEAR_LINK_ROMS).row.secondary)
+        assertEquals(SettingsKind.CLEAR_LINK_ROMS, (selected(state) as EmulatorRow.App).row.kind)
+    }
+
+    // The rows draw and explain themselves as on Settings: the same touch row, the same help text behind X.
+    @Test fun the_cable_link_rows_draw_and_explain_as_on_settings() = runTest {
+        val state = mgbaState(cacheOf())
+        openCore(state, "mgba")
+        await { state.screen.value is Screen.EmulatorOptions }
+        for (r in appRows(state)) assertEquals(settingsTouchRow(r.row, r.choices, SettingsSection.EMULATORS), emulatorTouchRow(r))
+        assertEquals("Clear", emulatorTouchRow(appRow(state, SettingsKind.CLEAR_LINK_ROMS)).action)
+        selectApp(state, SettingsKind.CABLE_LINK_DELAY)
+        state.onButton(NxButton.X)
+        assertEquals("Input delay", state.settingInfo.value?.title)
+        assertTrue(state.settingInfo.value?.text.orEmpty().startsWith("How many frames a button press waits"))
     }
 }

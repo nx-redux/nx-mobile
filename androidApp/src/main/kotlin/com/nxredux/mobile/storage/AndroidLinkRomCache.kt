@@ -52,7 +52,7 @@ class AndroidCacheStore(private val dir: File) : CacheStore {
 object LinkRomCaches {
     @Volatile private var cache: LinkRomCache? = null
 
-    /** The one cache of the process; the Settings row and a Cable Link session share it. */
+    /** The one cache of the process; mGBA's Clear link ROM cache row and a Cable Link session share it. */
     fun get(context: Context): LinkRomCache =
         cache ?: synchronized(this) { cache ?: LinkRomCache(AndroidCacheStore(File(context.applicationContext.filesDir, "link-roms"))).also { cache = it } }
 }
