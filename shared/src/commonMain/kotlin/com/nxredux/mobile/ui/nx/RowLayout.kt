@@ -305,15 +305,16 @@ internal data class CarouselRowPlace(val g: RowGeometry, val top: Float)
  * centred in the whole box. On a portrait body [portraitW] wide, the selected tile (and the row's gaps) is
  * shrunk to at most [CAROUSEL_TILE_MAX_SHARE] of it, so its neighbours show either side. The first
  * neighbours are at [CAROUSEL_SIDE_SCALE], each further one [CAROUSEL_TAPER] of the one before. The selection is never
- * wider than [CAROUSEL_MAX_W].
+ * wider than [CAROUSEL_MAX_W]. [maxItemH] (a game list's, [carouselItemHMax]): the selection is never taller, the row
+ * (its gaps, its neighbours) scaled down with it; null, no such cap (Home's row).
  */
-internal fun carouselRowPlace(boxDp: Float, titleRoomDp: Float, captionDp: Float, portraitW: Float? = null): CarouselRowPlace {
+internal fun carouselRowPlace(boxDp: Float, titleRoomDp: Float, captionDp: Float, portraitW: Float? = null, maxItemH: Float? = null): CarouselRowPlace {
     val spec = rowGeometry(RowStyle.CAROUSEL, false, titleRoomSizingBody(boxDp, titleRoomDp), captionDp)
     val capped = spec.scaledBy(min(1f, CAROUSEL_MAX_W / spec.itemW))
     val sides = capped.copy(scale = CAROUSEL_SIDE_SCALE, taper = CAROUSEL_TAPER)
     val g = sides.let { g ->
         portraitW?.let { w -> g.scaledBy(min(1f, CAROUSEL_TILE_MAX_SHARE * w / g.itemW)) } ?: g
-    }
+    }.let { g -> maxItemH?.let { h -> g.scaledBy(min(1f, h / g.itemH)) } ?: g }
     return CarouselRowPlace(g, rowBlockTop(boxDp, g.itemH, captionDp))
 }
 
