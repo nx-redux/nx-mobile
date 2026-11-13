@@ -294,7 +294,8 @@ internal fun GameListFrame(
                 // on the first line, the facts on the second ([HomeFactsLine]), the block centred in the header as
                 // [homeStatsHeader] centres it, short of the icons at the right. With achievements (the trophy icon's rule,
                 // [onAchievements]) a third line is kept for the next goal ("Next: …"), whatever is selected, so the list
-                // never moves; without, the header is two lines and the list has that room.
+                // never moves; without, the header is two lines and the list has that room. A game with no lines to show:
+                // the title alone, on the icons' centre line, in the same header.
                 if (chrome.listTitle && topStats) {
                     val k = nxTextScale()
                     val frame = HomeFrame(0f, 0f, LocalPortrait.current, textScale = LocalDensity.current.fontScale, stripScale = k)
@@ -306,9 +307,15 @@ internal fun GameListFrame(
                     val size = (HOME_STRIP_TYPE.sp * k).sp
                     val titleStyle = TextStyle(fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = size, lineHeight = (HOME_STRIP_TYPE.lineH * k).sp, color = LocalNxColors.current.listText)
                     val iconsRoom = MENU_TAB_ROW_HEIGHT * titleIcons.size - TOP_ICON_INSET
+                    // A Grid's header: the stats alone, its details in the selected tile ([gridHeaderInfo]).
+                    val facts = if (style == MenuStyle.GRID) gridHeaderInfo(topStats, info()) else info()
+                    val blockTop = (height - block) / 2
+                    // No lines to draw under it: the title alone, on the icons' centre line ([gameListTitleTop]); the
+                    // lines keep their places (an outgoing one fades where it was).
+                    val titleShift = gameListTitleTop(facts, height, block, lh) - blockTop
                     Box(Modifier.fillMaxWidth().height(height.dp)) {
-                        Column(Modifier.fillMaxWidth().padding(start = titleStart, end = inset.end + iconsRoom, top = ((height - block) / 2).dp)) {
-                            Box(Modifier.height(lh.dp), contentAlignment = Alignment.CenterStart) { WithTitle(titleOf) { title ->
+                        Column(Modifier.fillMaxWidth().padding(start = titleStart, end = inset.end + iconsRoom, top = blockTop.dp)) {
+                            Box(Modifier.offset(y = titleShift.dp).height(lh.dp), contentAlignment = Alignment.CenterStart) { WithTitle(titleOf) { title ->
                                 Text(
                                     title, style = titleStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     // Where a B morph back to a Minimal tab starts (while this page shows); hidden while the name flies in.
@@ -319,8 +326,6 @@ internal fun GameListFrame(
                                 )
                             } }
                             // Each line [pitch] under the last: the boxes may overlap, as the main menu's.
-                            // A Grid's header: the stats alone, its details in the selected tile ([gridHeaderInfo]).
-                            val facts = if (style == MenuStyle.GRID) gridHeaderInfo(topStats, info()) else info()
                             HomeFactsLine(if (next) facts.filter { !it.ownRow } else facts, size, Modifier.offset(y = (pitch - lh).dp).fillMaxWidth().height(lh.dp))
                             if (next) HomeFactsLine(facts.filter { it.ownRow }, size, Modifier.offset(y = (2 * (pitch - lh)).dp).fillMaxWidth().height(lh.dp))
                         }
@@ -522,6 +527,15 @@ internal fun gameListTopStats(style: MenuStyle, titleShown: Boolean, extraInfo: 
         MenuStyle.LIST, MenuStyle.MINIMAL, MenuStyle.GRID -> true
         MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> false
     }
+
+/**
+ * The title's line box top, dp from the top of a game list's two-line header ([gameListTopStats]), [height] tall: with
+ * the selected game's [facts] to draw under it, the [block] (the title and its [lineH] lines) centred in the header; with
+ * none, the title alone, its box centred on the icons' row ([iconsH], the header's top). The header's height never
+ * changes with it, so the list stays put; only the title moves.
+ */
+internal fun gameListTitleTop(facts: List<InfoLine>, height: Float, block: Float, lineH: Float, iconsH: Float = MENU_TAB_ROW_HEIGHT.value): Float =
+    if (facts.isEmpty()) (iconsH - lineH) / 2 else (height - block) / 2
 
 /** A game list's chrome on two screens ([dual]): Extra info off, since the top screen shows the selected game's stats. */
 internal fun gameListChrome(chrome: LauncherChrome, dual: Boolean): LauncherChrome = if (dual) chrome.copy(extraInfo = false) else chrome

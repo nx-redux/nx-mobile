@@ -39,4 +39,17 @@ class GameListTopStatsTest {
         assertTrue(gameListTrophy(available = true, dual = false, null))
         assertFalse(gameListTrophy(available = false, dual = false, set))
     }
+
+    // The title over the selected game's lines: its block centred in the header; alone (no lines to draw), on the
+    // icons' centre line, the header's height (so the list) the same either way.
+    @Test fun a_title_alone_sits_on_the_icons_centre() {
+        val lines = listOf(InfoLine(InfoKind.TIME, "2h"))
+        // A 44 dp header, a 35 dp block (the title and one line) of 18 dp line boxes: today's top, 4.5 dp down.
+        assertEquals(4.5f, gameListTitleTop(lines, height = 44f, block = 35f, lineH = 18f, iconsH = 44f))
+        // Alone: the 18 dp box centred on the 44 dp icons, its centre where theirs is.
+        assertEquals(13f, gameListTitleTop(emptyList(), height = 44f, block = 35f, lineH = 18f, iconsH = 44f))
+        // A taller header (the next goal's line kept): with lines as today; alone, still on the icons' line.
+        assertEquals(4f, gameListTitleTop(listOf(InfoLine(InfoKind.NEXT, "Win")), height = 61f, block = 53f, lineH = 18f, iconsH = 44f))
+        assertEquals(13f, gameListTitleTop(emptyList(), height = 61f, block = 53f, lineH = 18f, iconsH = 44f))
+    }
 }
