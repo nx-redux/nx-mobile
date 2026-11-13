@@ -721,6 +721,8 @@ static void cable_gone_moves_a_grouped_device(void) {
     psl_active(&f, 1, 0, 3000);
     c = psl_step(&f, 3000);
     assert(c.held == 1 && c.settled == 0);
+    /* Held from leaving the group, not from the drop to COMING while it was grouped. */
+    assert(psl_step(&f, 3000 + PSL_CABLE_HOLD_MS - 1).held == 1);
     c = psl_step(&f, 3000 + PSL_CABLE_HOLD_MS);
     assert(c.held == 0);
 }
@@ -791,6 +793,14 @@ static void no_wifi_self_never_serves(void) {
     psl_set_cable(&s, PSL_CABLE_NONE, 0, 0, 8000);
     c = psl_step(&s, 20000);
     assert(c.serve == 0 && c.settled == 0 && c.cable == 0);
+    /* Waiting for a cable that is coming is a hold all the same, and says so. */
+    psl_set_cable(&s, PSL_CABLE_COMING, 0, 0, 21000);
+    c = psl_step(&s, 21000);
+    assert(c.held == 1 && c.settled == 0 && c.serve == 0 && c.announce == 0);
+    c = psl_step(&s, 21000 + PSL_CABLE_HOLD_MS - 1);
+    assert(c.held == 1);
+    c = psl_step(&s, 21000 + PSL_CABLE_HOLD_MS);
+    assert(c.held == 0 && c.settled == 0 && c.serve == 0);
 
     /* A Wi-Fi server that loses its address stops. */
     psl w;

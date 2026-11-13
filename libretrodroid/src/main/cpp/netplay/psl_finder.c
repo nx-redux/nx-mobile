@@ -280,6 +280,8 @@ psl_choice psl_step(psl* s, int64_t now_ms) {
     /* No address on the Wi-Fi: no server there could be reached, nor this device's own. */
     if (c.self == 0) {
         s->serving = 0;
+        /* The caller keeps the game waiting through a hold: with no Wi-Fi address the cable is all it can wait for. */
+        c.held = s->active && s->holding && !s->on_cable && !s->grouped;
         return c;
     }
     if (!s->active) {
