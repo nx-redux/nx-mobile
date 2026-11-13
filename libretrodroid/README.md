@@ -13,7 +13,9 @@ now lives only in this repository. Upstream copyright headers are kept unchanged
 
 Third-party code under `src/main/cpp/` (git submodules, plus [LZ4](https://github.com/lz4/lz4) v1.10.0 (BSD-2-Clause) vendored unmodified in `lz4/`): [Oboe](https://github.com/google/oboe) (Apache-2.0),
 [libretro-common](https://github.com/libretro/libretro-common) (MIT), [rcheevos](https://github.com/RetroAchievements/rcheevos)
-(MIT), [libchdr](https://github.com/rtissera/libchdr) (BSD-3-Clause).
+(MIT), [libchdr](https://github.com/rtissera/libchdr) (BSD-3-Clause), and
+[libadrenotools](https://github.com/bylaws/libadrenotools) with its [linkernsbypass](https://github.com/bylaws/liblinkernsbypass)
+(both BSD-2-Clause) vendored in `libadrenotools/`, used to load custom Vulkan drivers.
 
 ## Inherited from LibretroDroid
 * 2D and GL cores
