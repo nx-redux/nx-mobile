@@ -527,7 +527,10 @@ interface AppSettings {
     var gpuDriver: String
         get() = com.nxredux.mobile.gpudriver.GpuDriverChoice.SYSTEM
         set(@Suppress("UNUSED_PARAMETER") value) {}
-    /** The custom-driver launch in flight ([com.nxredux.mobile.gpudriver.GpuDriverCrash.encode]); null: none. Defaulted, like [debugLog]. */
+    /**
+     * The custom-driver launch in flight ([com.nxredux.mobile.gpudriver.GpuDriverCrash.encode]); null: none. Setting a
+     * marker is durable when it returns (it guards a launch that may kill the process), so it may block. Defaulted, like [debugLog].
+     */
     var gpuDriverMarker: String?
         get() = null
         set(@Suppress("UNUSED_PARAMETER") value) {}

@@ -362,9 +362,18 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = prefs.getString(KEY_GPU_DRIVER, null) ?: GpuDriverChoice.SYSTEM
         set(value) = prefs.edit { putString(KEY_GPU_DRIVER, value) }
 
+    /**
+     * A marker is committed, not applied: it must be on disk before the launch it guards can kill the process. In the
+     * game process that is [ProviderPreferences]' commit, which waits until the menu process has committed it to its
+     * file (and every apply queued before it); blocking, so never on the main thread. A clear is applied: a marker left
+     * behind only costs a crash record when that process is gone, and the game process's end waits for its sends.
+     */
     override var gpuDriverMarker: String?
         get() = prefs.getString(KEY_GPU_DRIVER_MARKER, null)
-        set(value) = prefs.edit { if (value == null) remove(KEY_GPU_DRIVER_MARKER) else putString(KEY_GPU_DRIVER_MARKER, value) }
+        set(value) {
+            if (value == null) prefs.edit { remove(KEY_GPU_DRIVER_MARKER) }
+            else if (!prefs.edit().putString(KEY_GPU_DRIVER_MARKER, value).commit()) NxLog.w("NXAPP", "the GPU driver launch marker could not be saved")
+        }
 
     override var gpuDriverCrashes: String?
         get() = prefs.getString(KEY_GPU_DRIVER_CRASHES, null)

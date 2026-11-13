@@ -70,6 +70,14 @@ class GpuDriverOptionsTest {
         assertNull(p.console.single { it.option.key == GraphicsApiOptions.KEY }.disabledNote)
     }
 
+    /** The launch reads the stored pick through [FrontendOptions.fromConfig] (the row itself is hidden there): kept raw. */
+    @Test fun launchReadsTheStoredPick() {
+        assertEquals("turnip", FrontendOptions.fromConfig(mapOf(GpuDriverOptions.KEY to "turnip"), "N64")[GpuDriverOptions.KEY])
+        assertEquals("gone", FrontendOptions.fromConfig(mapOf(GpuDriverOptions.KEY to "gone"), "N64")[GpuDriverOptions.KEY])
+        assertEquals(GpuDriverChoice.DEFAULT, FrontendOptions.fromConfig(emptyMap(), "N64")[GpuDriverOptions.KEY])
+        assertNull(FrontendOptions.fromConfig(mapOf(GpuDriverOptions.KEY to "turnip"), "GBA")[GpuDriverOptions.KEY])
+    }
+
     @Test fun allKeepsKeysUnique() {
         val keys = ConsoleSettings.all.map { it.key }
         assertEquals(keys.size, keys.toSet().size)
