@@ -83,7 +83,7 @@ fun CornerButtons(
     }
 }
 
-/** A corner pill with its [label]: a touch shortcut's, or the Panel pill in the corner buttons' row. */
+/** A corner pill with its [label]: a touch shortcut's, the Panel pill in the corner buttons' row, or the panel's Game pill answering it ([GamePillCorner]). */
 @Composable
 private fun CornerPill(label: String, on: Boolean, modifier: Modifier = Modifier, onPress: (Boolean) -> Unit) {
     CornerButton(on, RoundedCornerShape(50), modifier.height(CORNER_BUTTON_HEIGHT).widthIn(min = CORNER_BUTTON_HEIGHT), onPress) {
@@ -95,12 +95,15 @@ private fun CornerPill(label: String, on: Boolean, modifier: Modifier = Modifier
 }
 
 /**
- * The game panel's Game pill, the Panel pill it answers' look ([PanelPill]) at its spot: bottom-right, clear of a
- * cutout on those sides, 10 dp in. The two switch pills land on one spot and look the same.
+ * The game panel's Game pill, in the look and at the spot of the Panel pill it answers, so the two switch pills land on
+ * one spot and look the same: [corner], the corner buttons' pill at their bottom-right ([CornerButtons]: a controller
+ * attached, its row carrying the Panel pill); else the hollow [PanelPill], bottom-right clear of a cutout, 10 dp in.
  */
 @Composable
-fun BoxScope.GamePillCorner(onClick: () -> Unit) {
-    PanelPill(
+fun BoxScope.GamePillCorner(corner: Boolean = false, onClick: () -> Unit) {
+    if (corner) {
+        CornerPill("Game", on = false, Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(CORNER_MARGIN)) { down -> if (!down) onClick() }
+    } else PanelPill(
         "Game", Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.End + WindowInsetsSides.Bottom)).padding(10.dp),
         onClick = onClick,
     )

@@ -839,6 +839,7 @@ internal class DualScreenController(
             cheats = GamePanelModel.cheatRows(cheats.entries),
             noCheatsText = GamePanelModel.noCheatsText(owner.cheatsFolder, cheats.expected),
             showGamePill = dualMode == DualMode.PANEL_UP,
+            gamePillCorner = padLayout.cornerShown.value,   // the Panel pill was the corner buttons' (a controller attached)
         )
     }
 

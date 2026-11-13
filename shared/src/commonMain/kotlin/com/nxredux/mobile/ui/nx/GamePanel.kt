@@ -119,7 +119,7 @@ fun GamePanel(
                 }
             }
         }
-        if (state.showGamePill) GamePillCorner { onEvent(GamePanelEvent.ShowGame) }
+        if (state.showGamePill) GamePillCorner(corner = state.gamePillCorner) { onEvent(GamePanelEvent.ShowGame) }
     }
 }
 
