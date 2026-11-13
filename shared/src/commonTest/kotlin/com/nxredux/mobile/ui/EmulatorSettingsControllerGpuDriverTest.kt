@@ -8,6 +8,7 @@ import com.nxredux.mobile.options.ConfigFile
 import com.nxredux.mobile.options.CoreConfig
 import com.nxredux.mobile.options.CoreOptionSource
 import com.nxredux.mobile.options.CoreOptionTable
+import com.nxredux.mobile.options.EmulatorPage
 import com.nxredux.mobile.options.GpuDriverOptions
 import com.nxredux.mobile.options.GraphicsApiOptions
 import com.nxredux.mobile.options.VulkanFallback
@@ -48,6 +49,10 @@ class EmulatorSettingsControllerGpuDriverTest {
     private object Host : EmulatorSettingsHost {
         override fun showEmulatorsSettings() {}
         override fun restore(screen: Screen, selection: ListSelection) {}
+        override fun appSection(page: EmulatorPage): EmulatorAppSection? = null
+        override fun stepAppRow(row: SettingsRow, delta: Int) {}
+        override fun chooseAppRow(row: SettingsRow, index: Int) {}
+        override fun runAppRow(row: SettingsRow) {}
     }
 
     private val rom = "Zelda.z64"
