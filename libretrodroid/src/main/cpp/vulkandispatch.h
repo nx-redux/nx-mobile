@@ -38,14 +38,17 @@ namespace libretrodroid {
 // Global, may be null (Android 8.x loaders are 1.0).
 #define LIBRETRODROID_VK_GLOBAL_OPTIONAL(X) \
     X(enumerateInstanceVersion, vkEnumerateInstanceVersion)
-// Instance-level: bindInstance().
+// Instance-level, core 1.0: bindInstance().
 #define LIBRETRODROID_VK_INSTANCE(X) \
     X(destroyInstance, vkDestroyInstance) \
     X(enumeratePhysicalDevices, vkEnumeratePhysicalDevices) \
     X(enumerateDeviceExtensionProperties, vkEnumerateDeviceExtensionProperties) \
     X(getPhysicalDeviceProperties, vkGetPhysicalDeviceProperties) \
     X(createDevice, vkCreateDevice) \
-    X(getDeviceProcAddr, vkGetDeviceProcAddr) \
+    X(getDeviceProcAddr, vkGetDeviceProcAddr)
+// Instance-level, VK_KHR_surface / VK_KHR_android_surface: bindInstance(). A loader returns null for these on an instance
+// that did not enable the two extensions (the support probe's), so only an instance created with them checks them.
+#define LIBRETRODROID_VK_SURFACE(X) \
     X(createAndroidSurfaceKHR, vkCreateAndroidSurfaceKHR) \
     X(destroySurfaceKHR, vkDestroySurfaceKHR)
 // Instance-level, may be null: 1.1 core or their KHR extension names (tried second).
@@ -89,6 +92,7 @@ struct VulkanDispatch {
     LIBRETRODROID_VK_GLOBAL(LIBRETRODROID_VK_MEMBER)
     LIBRETRODROID_VK_GLOBAL_OPTIONAL(LIBRETRODROID_VK_MEMBER)
     LIBRETRODROID_VK_INSTANCE(LIBRETRODROID_VK_MEMBER)
+    LIBRETRODROID_VK_SURFACE(LIBRETRODROID_VK_MEMBER)
     LIBRETRODROID_VK_INSTANCE_OPTIONAL(LIBRETRODROID_VK_MEMBER)
     LIBRETRODROID_VK_DEVICE(LIBRETRODROID_VK_MEMBER)
     LIBRETRODROID_VK_DEVICE_OPTIONAL(LIBRETRODROID_VK_MEMBER)
@@ -107,8 +111,10 @@ struct VulkanDispatch {
 
     void bindInstance(VkInstance instance);   // instance-level pointers via getInstanceProcAddr
     void bindDevice(VkDevice device);         // device-level pointers via getDeviceProcAddr
-    // The first required entry point still null after bindInstance / bindDevice (nullptr: all there).
+    // The first required entry point still null after bindInstance / bindDevice (nullptr: all there). The surface pair
+    // is checked only by missingSurfaceFunction(): on an instance created with the surface extensions enabled.
     const char* missingInstanceFunction() const;
+    const char* missingSurfaceFunction() const;
     const char* missingDeviceFunction() const;
     void close();                             // dlclose the handle; every pointer back to null
 

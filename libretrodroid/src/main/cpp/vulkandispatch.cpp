@@ -145,6 +145,7 @@ void VulkanDispatch::bindInstance(VkInstance instance) {
 #define LIBRETRODROID_VK_BIND(member, name) \
     member = reinterpret_cast<PFN_##name>(getInstanceProcAddr(instance, #name));
     LIBRETRODROID_VK_INSTANCE(LIBRETRODROID_VK_BIND)
+    LIBRETRODROID_VK_SURFACE(LIBRETRODROID_VK_BIND)
 #undef LIBRETRODROID_VK_BIND
 #define LIBRETRODROID_VK_BIND_OPTIONAL(member, name) \
     member = reinterpret_cast<PFN_##name>(getInstanceProcAddr(instance, #name)); \
@@ -165,6 +166,13 @@ void VulkanDispatch::bindDevice(VkDevice device) {
 const char* VulkanDispatch::missingInstanceFunction() const {
 #define LIBRETRODROID_VK_MISSING(member, name) if (member == nullptr) return #name;
     LIBRETRODROID_VK_INSTANCE(LIBRETRODROID_VK_MISSING)
+#undef LIBRETRODROID_VK_MISSING
+    return nullptr;
+}
+
+const char* VulkanDispatch::missingSurfaceFunction() const {
+#define LIBRETRODROID_VK_MISSING(member, name) if (member == nullptr) return #name;
+    LIBRETRODROID_VK_SURFACE(LIBRETRODROID_VK_MISSING)
 #undef LIBRETRODROID_VK_MISSING
     return nullptr;
 }

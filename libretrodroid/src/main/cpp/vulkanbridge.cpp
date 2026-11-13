@@ -112,6 +112,7 @@ bool VulkanBridge::isSupported() {
             vk.close();
             return false;
         }
+        // Core entry points only: the probe's instance has no surface extensions, so the surface pair is null here.
         vk.bindInstance(probe);
         if (const char* missing = vk.missingInstanceFunction()) {
             LOGI("Vulkan bridge: unsupported (loader lacks %s)", missing);
@@ -216,7 +217,9 @@ bool VulkanBridge::createInstance() {
 
 bool VulkanBridge::bindInstance() {
     vk.bindInstance(instance);
-    if (const char* missing = vk.missingInstanceFunction()) {
+    const char* missing = vk.missingInstanceFunction();
+    if (missing == nullptr) missing = vk.missingSurfaceFunction();
+    if (missing != nullptr) {
         LOGE("Vulkan bridge: the %s loader lacks %s", vk.custom ? "custom driver's" : "system", missing);
         return false;
     }
