@@ -49,6 +49,31 @@ class SkinGroupsTest {
         assertTrue(strip.pieces.isEmpty())
     }
 
+    // The bottom row's bar reaches into the corners of the round stick and face pieces' boxes (no art there): a sliver
+    // of overlap, so they stay apart; a piece that sits well inside another (a button in its ring) still joins it.
+    @Test
+    fun a_corner_overlap_keeps_groups_apart() {
+        for (id in listOf("large_3ds", "large_3dsr", "flex_3ds", "large_ds", "flex_ds")) {
+            val groups = SkinGroups.of(layout(id)).map { it.controls.toSet() }
+            assertTrue(groups.any { "DPAD" in it && "A" !in it && "MENU" !in it }, "$id ${groups}")
+            assertTrue(groups.any { "A" in it && "B" in it && "X" in it && "Y" in it && "DPAD" !in it && "MENU" !in it }, "$id ${groups}")
+            assertTrue(groups.any { "MENU" in it && "MIC" in it && "SWAP" in it && "DPAD" !in it && "A" !in it }, "$id ${groups}")
+        }
+        val n64 = SkinGroups.of(layout("flex_n64")).map { it.controls.toSet() }
+        assertTrue(n64.any { "A" in it && "CU" in it }, "$n64")   // overlapping a quarter or more: one cluster
+    }
+
+    // The large layouts hang the strip off the touch screen's piece, not the frame: still one free group, so it moves.
+    @Test
+    fun a_piece_strip_is_one_free_group_too() {
+        for (id in listOf("large_3ds", "large_ds")) {
+            val strip = SkinGroups.of(layout(id)).singleOrNull { it.id == SkinGroups.STRIP }
+            assertNotNull(strip, id)
+            assertTrue(strip.free)
+            assertEquals(listOf("TOUCH_1", "TOUCH_2", "TOUCH_3", "TOUCH_4"), strip.controls)
+        }
+    }
+
     @Test
     fun group_ids_are_stable() {
         val ids = SkinGroups.of(layout("stacked_menu")).map { it.id }

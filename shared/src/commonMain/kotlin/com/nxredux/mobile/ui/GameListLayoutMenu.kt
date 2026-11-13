@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -69,7 +71,9 @@ fun GameListLayoutMenu(choices: List<GameListLayout>, current: Int, highlighted:
         Column(
             Modifier.align(Alignment.TopEnd)
                 .padding(top = MENU_TAB_ROW_HEIGHT, end = nxPageInset().end - TOP_ICON_INSET)
-                .width(200.dp).heightIn(max = (maxHeight - MENU_TAB_ROW_HEIGHT - BOTTOM_ROOM).coerceAtLeast(rowH))
+                // as wide as its longest row (its label and the tick), never past the screen less a margin each side
+                .widthIn(max = (maxWidth - MENU_SIDE_MARGIN * 2).coerceAtLeast(rowH)).width(IntrinsicSize.Max)
+                .heightIn(max = (maxHeight - MENU_TAB_ROW_HEIGHT - BOTTOM_ROOM).coerceAtLeast(rowH))
                 .background(LocalNxColors.current.modalPanel, RoundedCornerShape(16.dp))
                 .pointerInput(Unit) { detectTapGestures { } }
                 .padding(6.dp)
@@ -95,3 +99,6 @@ fun GameListLayoutMenu(choices: List<GameListLayout>, current: Int, highlighted:
         }
     }
 }
+
+/** The least room the layout menu keeps from each side of the screen. */
+private val MENU_SIDE_MARGIN = 16.dp

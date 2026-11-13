@@ -21,6 +21,7 @@ import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -299,6 +300,90 @@ class NdsLayoutTest {
         near(big.dst.x + 4f * 0.5f, x0, "x0"); near(big.dst.y + 4f * 0.5f, y0, "y0")
         val (x1, y1) = NdsLayout.pointIn(big, 255f, 191f)
         near(big.dst.x + big.dst.width - 2f, x1, "x1"); near(big.dst.y + big.dst.height - 2f, y1, "y1")
+    }
+
+    // --- Full-width Large: portrait on a tablet / the unfolded Fold, Screen Scaling Auto, the bare buttons ---
+    // The unfolded Fold portrait: a 1848 x 2448 game area, the space above the band (a third of it reached) 1848 x 1762,
+    // where Large is 6x + 3x. The pads are the player's to move, so they don't count.
+
+    private val foldSpace = PxRect(0f, 0f, 1848f, 1762f)
+
+    @Test fun full_width_large_on_the_unfolded_fold_moves_the_3x_touch_screen_down() {
+        val r = NdsLayout.fullWidthLarge(foldSpace, 2448f, NdsScreen.TOP)!!
+        rect(PxRect(0f, 0f, 1848f, 1386f), r[0].dst, "top")         // the whole width
+        rect(PxRect(540f, 1386f, 768f, 576f), r[1].dst, "touch")    // Large's 3x, right under it
+        assertEquals(listOf(NdsScreen.TOP, NdsScreen.BOTTOM), r.map { it.screen })
+        assertEquals(listOf(true, false), r.map { it.shaded })
+        assertEquals(listOf(false, true), r.map { it.touch })
+    }
+
+    @Test fun full_width_large_on_the_fold_cover_moves_the_3x_touch_screen_down() {
+        // the cover in portrait, the game from under the camera cutout: 1248 x 1972, the space above the band 1248 x 1455 (4x + 3x)
+        val r = NdsLayout.fullWidthLarge(PxRect(0f, 0f, 1248f, 1455f), 1972f, NdsScreen.TOP)!!
+        rect(PxRect(0f, 0f, 1248f, 936f), r[0].dst, "top")
+        rect(PxRect(240f, 936f, 768f, 576f), r[1].dst, "touch")
+    }
+
+    // --- Screen Scaling: Native keeps whole-number scales, the rest fill the space ---
+
+    private fun scaled(space: PxRect, areaH: Float, choice: NdsLayoutChoice, landscape: Boolean, native: Boolean, screen: ScreenClass = REGULAR_PHONE) =
+        NdsLayout.scaledRegions(space, areaH, choice, landscape, screen, NdsSettings(), margin, native)
+
+    @Test fun native_keeps_the_whole_number_layouts() {
+        assertScales(6f, 3f, actual = scaled(foldSpace, 2448f, LARGE, false, native = true, NEAR_SQUARE_TABLET))
+        assertScales(4f, 4f, actual = scaled(PxRect(0f, 0f, 1848f, 1700f), 1700f, STACKED, false, native = true, NEAR_SQUARE_TABLET))
+    }
+
+    @Test fun auto_large_in_portrait_is_the_full_width_on_any_screen() {
+        rect(PxRect(0f, 0f, 1848f, 1386f), scaled(foldSpace, 2448f, LARGE, false, native = false, NEAR_SQUARE_TABLET)[0].dst, "fold top")
+        // a regular phone: 1080 wide, a 1080 x 1300 space over a 2300 area
+        val phone = scaled(PxRect(0f, 0f, 1080f, 1300f), 2300f, LARGE, false, native = false)
+        near(1080f, phone[0].dst.width, "phone top width")
+        near(0f, phone[0].dst.x, "phone top x")
+    }
+
+    @Test fun auto_stacked_in_portrait_takes_the_full_width_for_both_screens() {
+        // the Fold cover from under its cutout: 1248 x 1972, both 1248 x 936
+        val cover = scaled(PxRect(0f, 0f, 1248f, 1455f), 1972f, STACKED, false, native = false, STUBBY_PHONE)
+        rect(PxRect(0f, 0f, 1248f, 936f), cover[0].dst, "cover top")
+        rect(PxRect(0f, 936f, 1248f, 936f), cover[1].dst, "cover touch")
+        assertEquals(listOf(true, false), cover.map { it.shaded })
+        assertEquals(listOf(false, true), cover.map { it.touch })
+        // the unfolded Fold: 2 x 1386 is taller than 2448, so as wide as the area's height allows (2 x 1224), centred
+        val inner = scaled(foldSpace, 2448f, STACKED, false, native = false, NEAR_SQUARE_TABLET)
+        rect(PxRect(108f, 0f, 1632f, 1224f), inner[0].dst, "inner top")
+        rect(PxRect(108f, 1224f, 1632f, 1224f), inner[1].dst, "inner touch")
+        // swapped: the touch screen first
+        val swapped = NdsLayout.scaledRegions(PxRect(0f, 0f, 1248f, 1455f), 1972f, STACKED, false, STUBBY_PHONE, NdsSettings(big = NdsScreen.BOTTOM), margin, native = false)
+        assertEquals(listOf(NdsScreen.BOTTOM, NdsScreen.TOP), swapped.map { it.screen })
+    }
+
+    @Test fun auto_fills_the_space_with_the_other_layouts() {
+        val space = PxRect(0f, 0f, 2400f, 1080f)
+        val single = scaled(space, 1080f, SINGLE, true, native = false)
+        near(1080f, single[0].dst.height, "single fills the height")   // 5.6x, not 5x
+        val stacked = scaled(space, 1080f, STACKED, true, native = false)   // landscape Stacked: the pair scaled to the height
+        near(1080f, stacked.shownRect().height, "landscape stacked fills the height")
+        assertEquals(stacked[0].dst.width, stacked[1].dst.width)
+        // landscape Large: the pair scaled to the height
+        near(1080f, scaled(space, 1080f, LARGE, true, native = false).shownRect().height, "landscape large fills the height")
+    }
+
+    @Test fun auto_large_falls_back_to_filling_the_space_when_the_area_is_short() {
+        val r = scaled(foldSpace, 1900f, LARGE, false, native = false, NEAR_SQUARE_TABLET)   // no room to move the touch screen down
+        near(1762f, r.shownRect().height, "the 6x + 3x pair scaled to the space")
+    }
+
+    @Test fun full_width_large_swapped_puts_the_touch_screen_on_top() {
+        val r = NdsLayout.fullWidthLarge(foldSpace, 2448f, NdsScreen.BOTTOM)!!
+        assertEquals(listOf(NdsScreen.BOTTOM, NdsScreen.TOP), r.map { it.screen })
+        assertEquals(listOf(true, false), r.map { it.touch })
+        assertEquals(listOf(false, true), r.map { it.shaded })
+    }
+
+    @Test fun full_width_large_gives_way_when_the_area_is_too_short() {
+        assertNull(NdsLayout.fullWidthLarge(foldSpace, 1900f, NdsScreen.TOP))   // 1386 + 576 is 1962
+        assertNull(NdsLayout.fullWidthLarge(PxRect(0f, 0f, 0f, 0f), 2448f, NdsScreen.TOP))
     }
 
     @Test fun a_ds_frame_is_the_stack_at_any_whole_scale() {

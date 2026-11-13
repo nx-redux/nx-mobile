@@ -2686,7 +2686,7 @@ class InGameMenuModelTest {
         assertNull(m.captureKey(KeyCodes.BUTTON_R2, down = true))
         assertEquals(ShortcutOverrides.NONE, m.shortcutOverrides)
         assertEquals(PageKind.Message, m.state.page.kind)
-        assertTrue("R2 swaps the DS screens" in m.state.page.footer)
+        assertTrue("R2 is the stylus" in m.state.page.footer)
         m.press(NxButton.A)
         assertEquals("None (default)", m.row("Toggle FF").valueLabel)
     }
@@ -2704,7 +2704,7 @@ class InGameMenuModelTest {
         val m = shortcuts(base = ShortcutSet(mapOf(ShortcutAction.TOGGLE_FF to r2), emptyMap()), tag = "NDS")
         val row = m.row("Toggle FF")
         assertEquals("Unavailable", row.valueLabel)
-        assertEquals("R2 swaps the DS screens", row.info)
+        assertEquals("R2 is the stylus", row.info)
     }
 
     @Test fun xClearsToNoneHere() {

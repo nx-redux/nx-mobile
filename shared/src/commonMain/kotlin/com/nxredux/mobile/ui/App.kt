@@ -165,6 +165,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}, keyboard: Boolean 
     val screen by state.screen.collectAsState()
     val error by state.error.collectAsState()
     val androidGamesAsk by state.androidGamesAsk.collectAsState()
+    val firstTip by state.firstTip.collectAsState()
     val updatePopup by state.updatePopup.collectAsState()
     val chooser by state.chooser.collectAsState()   // touch only: a value row's chooser
     // Collected but not read here: each page reads them only where the selection shows ([PageContent]), so a selection
@@ -258,6 +259,11 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}, keyboard: Boolean 
                             androidGamesAsk?.let { ask ->
                                 NxDialog(ask.title, ask.text, onConfirm = { state.answerAndroidGames(true) }, confirmLabel = "Yes",
                                     onCancel = { state.answerAndroidGames(false) }, cancelLabel = "Not now", scrimDismisses = false)
+                            }
+                            // A first-launch tip ([FirstTip]): Got it until the next launch, or Don't show again.
+                            firstTip?.let { tip ->
+                                NxDialog(tip.title, tip.text, onConfirm = { state.answerTip(hide = false) }, confirmLabel = FIRST_TIP_CLOSE,
+                                    onCancel = { state.answerTip(hide = true) }, cancelLabel = FIRST_TIP_HIDE, scrimDismisses = false)
                             }
                             // A newer release, asked once a day at most over the menu; Not now silences that version.
                             updatePopup?.let { r ->

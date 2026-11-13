@@ -220,6 +220,17 @@ interface AppSettings {
      * question or Settings → Library → Android games. One no longer installed is skipped but kept.
      */
     var androidConsoleApps: List<String>
+    /**
+     * The first-launch tips' Don't show again ([com.nxredux.mobile.ui.FirstTip]): the main menu's (MENU, SELECT + START,
+     * START, SELECT) and a game list's (Y, X). Hidden here, so a store that keeps none (a test's) never shows them; the
+     * app's store shows each until its Don't show again.
+     */
+    var mainMenuTipHidden: Boolean
+        get() = true
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    var gameListTipHidden: Boolean
+        get() = true
+        set(@Suppress("UNUSED_PARAMETER") value) {}
     /** The "Add N Android games to Consoles?" question was answered (Yes or Not now); it is never asked again. */
     var androidGamesAsked: Boolean
     /** Android games pinned on Home ([com.nxredux.mobile.launcher.InstalledApp.id]), in the order pinned (never shortcuts.txt). */
@@ -464,12 +475,12 @@ interface AppSettings {
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
     /**
-     * Layouts → Game info: what a game's caption shows under its play time. Off (the default, Details): its genre and
-     * release. On (Achievements): its achievements where it has some to show, else the genre and release. Defaulted,
-     * like [debugLog].
+     * Layouts → Game info: what a game's caption shows under its play time. Off (Details): its genre and release. On
+     * (Achievements, the default: [MenuStyles.DEFAULT_INFO_ACHIEVEMENTS]): its achievements where it has some to show,
+     * else the genre and release. Defaulted, like [debugLog].
      */
     var menuInfoAchievements: Boolean
-        get() = false
+        get() = MenuStyles.DEFAULT_INFO_ACHIEVEMENTS
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
     /**

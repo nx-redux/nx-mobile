@@ -364,24 +364,24 @@ class RowLayoutTest {
         assertEquals(-(60f * 0.5f + 28f) * 0.5f, rowItemDxVar(g, 0, 0.5f, floatArrayOf(60f)), 0.001f)
     }
 
-    // A portrait game list Carousel's selected tile is at most 60% of the width, its shape and gaps scaled
-    // with it, so a neighbour shows either side; landscape (no width) and a wide body keep the spec.
-    @Test fun aPortraitCarouselTileIsHeldToSixtyPercentOfTheWidth() {
+    // A Carousel's selected tile is at most 60% of the body's width, its shape and gaps scaled with it, so a
+    // neighbour shows either side; no width and a wide body keep the spec.
+    @Test fun aCarouselTileIsHeldToSixtyPercentOfTheWidth() {
         val spec = carouselRowPlace(500f, 0f, 60f).g
-        val flip = carouselRowPlace(500f, 0f, 60f, portraitW = 411f).g
+        val flip = carouselRowPlace(500f, 0f, 60f, bodyW = 411f).g
         assertEquals(0.6f * 411f, flip.itemW, 1e-3f)
         assertEquals(spec.itemW / spec.itemH, flip.itemW / flip.itemH, 1e-4f)
         assertEquals(spec.gap * flip.itemW / spec.itemW, flip.gap, 1e-3f)
         // A neighbour's inner edge (at its scale) is inside the screen: its centre less half its width, under half the width.
         val neighbourInner = flip.itemW / 2 + flip.gap
         assertTrue(neighbourInner < 411f / 2 - 40f)
-        assertEquals(spec, carouselRowPlace(500f, 0f, 60f, portraitW = 900f).g)
+        assertEquals(spec, carouselRowPlace(500f, 0f, 60f, bodyW = 900f).g)
     }
 
     // A Carousel (Home's and a game list's): the first neighbour at 0.75 of the selection, each further one 0.8 of the
     // one before (0.6, 0.48), held from there; the gaps edge to edge stay the row's.
     @Test fun aCarouselTapersItsNeighboursOutwards() {
-        val g = carouselRowPlace(500f, 0f, 60f, portraitW = 411f).g
+        val g = carouselRowPlace(500f, 0f, 60f, bodyW = 411f).g
         val scales = (0..4).map { rowItem(RowStyle.CAROUSEL, it.toFloat(), g).scale }
         listOf(1f, 0.75f, 0.6f, 0.48f, 0.48f).zip(scales).forEach { (want, got) -> assertEquals(want, got, 1e-5f) }
         val mid = rowItem(RowStyle.CAROUSEL, 1.5f, g).scale
@@ -402,10 +402,18 @@ class RowLayoutTest {
         assertEquals(-rowItem(RowStyle.CAROUSEL, 2f, g).dx, rowItem(RowStyle.CAROUSEL, -2f, g).dx, 1e-4f)   // both sides
     }
 
+    // A short landscape body (a pad skin's touch screen on the unfolded Fold, ~300 x 236 dp) holds the tile to 60% of
+    // its width too, so the neighbours show: before, only portrait did, and the tile took ~75% of it.
+    @Test fun aShortLandscapeBodyHoldsTheTileToItsShareToo() {
+        val g = carouselRowPlace(236f, 0f, 30f, bodyW = 300f).g
+        assertTrue(g.itemW <= 0.6f * 300f + 1e-3f, "${g.itemW}")
+        assertEquals(340f / 240f, g.itemW / g.itemH, 1e-4f)
+    }
+
     // A Carousel's tile (Home's and a game list's) is never wider than 300 dp, its height in proportion, whatever room it has.
     @Test fun aCarouselTileIsCappedAt300Dp() {
         for ((h, w) in listOf(900f to null, 900f to 2000f, 400f to null)) {
-            val g = carouselRowPlace(h, 0f, 30f, portraitW = w).g
+            val g = carouselRowPlace(h, 0f, 30f, bodyW = w).g
             assertTrue(g.itemW <= 300f + 1e-3f, "$h: ${g.itemW}")
             assertEquals(340f / 240f, g.itemW / g.itemH, 1e-4f)
         }
@@ -422,7 +430,7 @@ class RowLayoutTest {
     private val capDetails = listOf(16.9f, 16.9f)
     private val capNeed = carouselCaptionNeed(capName, 2 * capName, capDetails[0], STACK_CAPTION_GAP.value)
 
-    private fun capped(box: Float, portraitW: Float? = null) = carouselRowPlace(box, 0f, capRoom, portraitW, maxItemH = carouselItemHMax(box, capNeed))
+    private fun capped(box: Float, bodyW: Float? = null) = carouselRowPlace(box, 0f, capRoom, bodyW, maxItemH = carouselItemHMax(box, capNeed))
     private fun rowsUnder(box: Float, place: CarouselRowPlace, nameH: Float = capName): Int {
         val m = carouselMargins(box, place.g.itemH, capNeed, place.capped)
         return captionRowsWithin(nameH, capDetails, STACK_CAPTION_GAP.value, carouselCaptionMax(box, place.g.itemH, m))
@@ -522,7 +530,7 @@ class RowLayoutTest {
     // Where the area already leaves the need, nothing changes: a phone in portrait (393 × ~760, its tile held by the
     // width), the 640 × 480 handheld, a tall body; and no cap (Home's row) is today's row.
     @Test fun theCarouselHeightCapChangesNothingWhereTheCaptionFits() {
-        assertEquals(carouselRowPlace(636f, 0f, capRoom, portraitW = 393f), capped(636f, portraitW = 393f))
+        assertEquals(carouselRowPlace(636f, 0f, capRoom, bodyW = 393f), capped(636f, bodyW = 393f))
         assertEquals(carouselRowPlace(356f, 0f, capRoom), capped(356f))
         assertEquals(2, rowsUnder(356f, capped(356f)))
         assertEquals(carouselRowPlace(900f, 0f, capRoom), capped(900f))
@@ -565,7 +573,7 @@ class RowLayoutTest {
     // Where the cap does not bind, the margins are today's: the ring's room at the top, [CAPTION_SPARE_MARGIN] at the
     // bottom; and the phone in portrait and the 640 × 480 handheld stay uncapped with the breathing room reserved.
     @Test fun anUncappedCarouselKeepsTodaysMargins() {
-        assertFalse(capped(636f, portraitW = 393f).capped)
+        assertFalse(capped(636f, bodyW = 393f).capped)
         assertFalse(capped(356f).capped)
         val h = capped(356f).g.itemH
         assertEquals(CaptionMargins(GRID_RING_ROOM, CAPTION_SPARE_MARGIN), carouselMargins(356f, h, capNeed, capped = false))

@@ -199,6 +199,8 @@ class AppStateTest {
         override var toolApps: List<String> = emptyList()
         override var androidConsoleApps: List<String> = emptyList()
         override var androidGamesAsked = false
+        override var mainMenuTipHidden = true   // the first-launch tips: hidden unless a test turns them on
+        override var gameListTipHidden = true
         override var allFilesAsked = false
         override var onboardingDone: Boolean? = true   // done: tests of other things never meet onboarding ([freshInstall] does)
         override var onboardingStep: String? = null
@@ -4655,8 +4657,8 @@ class AppStateTest {
         assertEquals(2, state.selection.value.index)
     }
 
-    // Dual screen: the top screen has the game's details, so a game list never draws Backdrop or a vertical Carousel.
-    @Test fun a_dual_screen_game_list_draws_backdrop_and_a_vertical_carousel_as_a_horizontal_carousel() = runTest {
+    // Dual screen: the top screen has the game's details, so a game list never draws a vertical Carousel or Backdrop.
+    @Test fun a_dual_screen_game_list_draws_a_vertical_carousel_or_backdrop_across() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), settings)
         state.onConsoles()
@@ -4667,14 +4669,14 @@ class AppStateTest {
         assertEquals(MenuStyle.BACKDROP, state.styleOf(list))
         assertEquals(MenuOrientation.VERTICAL, state.orientationOf(list))
         state.onDualMenu(true)
-        assertEquals(MenuStyle.CAROUSEL, state.styleOf(list))
+        assertEquals(MenuStyle.BACKDROP, state.styleOf(list))
         assertEquals(MenuOrientation.HORIZONTAL, state.orientationOf(list))
         settings.gameListStyle = MenuStyle.CAROUSEL
         assertEquals(MenuOrientation.HORIZONTAL, state.orientationOf(list))
         settings.gameListStyle = MenuStyle.GRID
         assertEquals(MenuStyle.GRID, state.styleOf(list))
         settings.gameListStyle = MenuStyle.BACKDROP
-        assertEquals(MenuStyle.CAROUSEL, state.styleOf(list))
+        assertEquals(MenuStyle.BACKDROP, state.styleOf(list))
         assertEquals(MenuStyle.LIST, state.styleOf(Screen.Systems(emptyList())))   // the main menu tabs are not game lists
         state.onDualMenu(false)
         assertEquals(MenuStyle.BACKDROP, state.styleOf(list))   // the saved layout was never changed
@@ -4683,7 +4685,7 @@ class AppStateTest {
         assertEquals(MenuOrientation.VERTICAL, settings.gameListOrientation)
     }
 
-    @Test fun dual_screen_layouts_hide_backdrop_and_the_vertical_carousel_for_game_lists() = runTest {
+    @Test fun dual_screen_layouts_hide_the_vertical_carousel_and_backdrop_for_game_lists() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = state(settings)
         state.load()
@@ -4695,25 +4697,27 @@ class AppStateTest {
             val turns = !dual && (style == MenuStyle.CAROUSEL || style == MenuStyle.BACKDROP)
             assertEquals(turns, row(SettingsKind.GAME_LIST_ORIENTATION) != null, "dual=$dual $style $o")
             assertEquals(turns && o == MenuOrientation.VERTICAL, row(SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT) != null, "dual=$dual $style $o")
-            val shown = if (dual && style == MenuStyle.BACKDROP) MenuStyle.CAROUSEL else style
+            val shown = style
             assertEquals(menuStyleLabel(shown), row(SettingsKind.GAME_LIST_STYLE)?.secondary, "dual=$dual $style $o")
             val vertical = !dual && turns && o == MenuOrientation.VERTICAL
             assertEquals(LayoutShot.Games(shown, vertical), assertIs<Screen.Settings>(state.screen.value).shot, "dual=$dual $style $o")
             assertEquals(style, settings.gameListStyle); assertEquals(o, settings.gameListOrientation)   // showing never saves
         }
-        // Stepping the layout in dual skips Backdrop: from a saved Backdrop (shown as Carousel) RIGHT is Minimal.
+        // Stepping the layout in dual keeps Backdrop: Grid, Carousel, Backdrop, Minimal.
         state.onDualMenu(true)
         settings.gameListStyle = MenuStyle.GRID
         state.openSettings(SettingsSection.LAYOUT_GAME_LISTS)
         state.select(state.layoutsRows().indexOfFirst { it.kind == SettingsKind.GAME_LIST_STYLE }); state.onButton(NxButton.RIGHT)
         assertEquals(MenuStyle.CAROUSEL, settings.gameListStyle)
         state.onButton(NxButton.RIGHT)
+        assertEquals(MenuStyle.BACKDROP, settings.gameListStyle)
+        state.onButton(NxButton.RIGHT)
         assertEquals(MenuStyle.MINIMAL, settings.gameListStyle)
         settings.gameListStyle = MenuStyle.BACKDROP
         state.openSettings(SettingsSection.LAYOUT_GAME_LISTS)
         state.select(state.layoutsRows().indexOfFirst { it.kind == SettingsKind.GAME_LIST_STYLE }); state.onButton(NxButton.RIGHT)
         assertEquals(MenuStyle.MINIMAL, settings.gameListStyle)
-        // Back on one screen the Backdrop choice returns.
+        // On one screen as well.
         state.onDualMenu(false)
         settings.gameListStyle = MenuStyle.CAROUSEL
         state.openSettings(SettingsSection.LAYOUT_GAME_LISTS)
@@ -4721,20 +4725,24 @@ class AppStateTest {
         assertEquals(MenuStyle.BACKDROP, settings.gameListStyle)
     }
 
-    @Test fun the_dual_screen_layout_dropdown_offers_no_backdrop_or_vertical_carousel() = runTest {
+    @Test fun the_dual_screen_layout_dropdown_offers_no_vertical_carousel_or_backdrop() = runTest {
         val settings = MemorySettings(ContentRef("Home")).apply { gameListStyle = MenuStyle.BACKDROP; gameListOrientation = MenuOrientation.VERTICAL }
         val state = searchState(settings)
         state.onDualMenu(true)
         state.openSystem(assertIs<Screen.Systems>(state.screen.value).systems.first { it.tag == "SFC" })
         state.toggleLayoutMenu()
-        assertEquals(2, assertIs<Screen.Games>(state.screen.value).layoutMenu)   // on the Carousel the list is drawn as
+        assertEquals(3, assertIs<Screen.Games>(state.screen.value).layoutMenu)   // on the Backdrop the list is drawn as (across)
         repeat(5) { state.onButton(NxButton.DOWN) }
-        assertEquals(3, assertIs<Screen.Games>(state.screen.value).layoutMenu)   // Minimal, the last of four
+        assertEquals(4, assertIs<Screen.Games>(state.screen.value).layoutMenu)   // Minimal, the last of five
         state.onButton(NxButton.A)
         assertEquals(MenuStyle.MINIMAL, settings.gameListStyle)
         state.toggleLayoutMenu()
         state.pickLayout(2)
         assertEquals(MenuStyle.CAROUSEL, settings.gameListStyle)
+        assertEquals(MenuOrientation.HORIZONTAL, settings.gameListOrientation)
+        state.toggleLayoutMenu()
+        state.pickLayout(3)
+        assertEquals(MenuStyle.BACKDROP, settings.gameListStyle)
         assertEquals(MenuOrientation.HORIZONTAL, settings.gameListOrientation)
     }
 
@@ -6241,7 +6249,7 @@ class AppStateTest {
         assertEquals("Layouts", page.section.label)   // the page's title
         assertEquals(
             listOf("Home" to "Grid", "Games" to "List", "Consoles" to "List", "Collections" to "List", "Tools" to "List", "Game lists" to "List", "Title and hints" to "Show",
-                "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Details", "Reset to defaults" to null),
+                "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Achievements", "Reset to defaults" to null),
             page.rows.map { it.label to it.secondary },
         )
         fun group(section: SettingsSection) = state.openLayoutsPage(section).map { it.label to it.secondary }
@@ -10895,7 +10903,7 @@ class AppStateTest {
         // No Pinned row; Home first. Home, Collections and Tools are unset (their defaults: Minimal, Minimal, and Grid).
         assertEquals(
             listOf("Home" to "Minimal", "Games" to "List", "Consoles" to "Grid", "Collections" to "Minimal", "Tools" to "Grid", "Game lists" to "List", "Title and hints" to "Show",
-                "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Details", "Reset to defaults" to null),
+                "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Achievements", "Reset to defaults" to null),
             state.layoutsRows().map { it.label to it.secondary },
         )
         // Every group's rows, in Layouts' order, each page ending with Done.
@@ -11197,7 +11205,7 @@ class AppStateTest {
         padSkin = false; padTheme = PadTheme.NX_EMBER; accent = AccentPreset.RED; secondaryAccent = SecondaryAccent.Auto
         menuStyles = mapOf(MenuCategory.CONSOLES to MenuStyle.LIST, MenuCategory.COLLECTIONS to MenuStyle.GRID, MenuCategory.TOOLS to MenuStyle.CAROUSEL)
         menuOrientations = mapOf(MenuCategory.CONSOLES to MenuOrientation.VERTICAL, MenuCategory.COLLECTIONS to MenuOrientation.VERTICAL, MenuCategory.TOOLS to MenuOrientation.VERTICAL)
-        gameListStyle = MenuStyle.BACKDROP; gameListOrientation = MenuOrientation.VERTICAL
+        gameListStyle = MenuStyle.GRID; gameListOrientation = MenuOrientation.VERTICAL
         gameListVerticalAlignment = VerticalListAlignment.RIGHT
         consoleArt = ConsoleArt.NONE; gameListArt = GameListArt.WHEEL; backdropArt = BackdropArt.BOX2D
         showHomeTab = false; showConsolesTab = false; showCollectionsTab = false; showToolsTab = false
@@ -11218,7 +11226,7 @@ class AppStateTest {
         assertEquals(MenuStyle.GRID, MenuStyles.styleOf(settings.menuStyles, MenuCategory.TOOLS))
         for (c in listOf(MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS))
             assertEquals(MenuOrientation.HORIZONTAL, MenuStyles.orientationOf(settings.menuOrientations, c), c.name)
-        assertEquals(MenuStyle.CAROUSEL, settings.gameListStyle)
+        assertEquals(MenuStyle.BACKDROP, settings.gameListStyle)
         assertEquals(MenuOrientation.HORIZONTAL, settings.gameListOrientation)
         assertEquals(VerticalListAlignment.LEFT, settings.gameListVerticalAlignment)
         assertEquals(ConsoleArt.CONTROLLER, settings.consoleArt)
@@ -11240,8 +11248,8 @@ class AppStateTest {
         fun page(section: SettingsSection) = state.openLayoutsPage(section).map { it.label to it.secondary }
         assertEquals(
             listOf(
-                "Home" to "Minimal", "Games" to "Carousel", "Consoles" to "Carousel", "Collections" to "Minimal", "Tools" to "Grid", "Game lists" to "Carousel", "Title and hints" to "Show",
-                "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Details", "Reset to defaults" to null,
+                "Home" to "Minimal", "Games" to "Backdrop", "Consoles" to "Carousel", "Collections" to "Minimal", "Tools" to "Grid", "Game lists" to "Backdrop", "Title and hints" to "Show",
+                "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Achievements", "Reset to defaults" to null,
             ),
             page(SettingsSection.MAIN_MENU),
         )
@@ -11256,7 +11264,7 @@ class AppStateTest {
         )
         assertEquals(listOf("Visible" to "Show", "Layout" to "Grid"), page(SettingsSection.LAYOUT_TOOLS))
         assertEquals(
-            listOf("Backdrop art" to "3D box art", "Layout options" to "Show", "Layout" to "Carousel", "Orientation" to "Horizontal"),
+            listOf("Backdrop art" to "3D box art", "Layout options" to "Show", "Layout" to "Backdrop", "Orientation" to "Horizontal"),
             page(SettingsSection.LAYOUT_GAME_LISTS),
         )
         assertEquals(
@@ -11291,7 +11299,7 @@ class AppStateTest {
         assertTrue(assertIs<Screen.Settings>(state.screen.value).confirmReset)   // asks first
         state.onButton(NxButton.A)
         assertAppearanceAtDefaults(settings)
-        assertEquals(MenuStyle.BACKDROP, settings.gameListStyle)            // Layouts' options stay
+        assertEquals(MenuStyle.GRID, settings.gameListStyle)                // Layouts' options stay
         assertEquals(ConsoleArt.NONE, settings.consoleArt)
         assertEquals(false, settings.menuPageTitle)
         assertEquals(true, settings.menuButtonHints)
@@ -14308,6 +14316,36 @@ class AppStateTest {
         assertNull(androidRow(state))
         state.load(); advanceUntilIdle()
         assertNull(state.androidGamesAsk.value)
+    }
+
+    // First-launch tips: the main menu's on the main menu, then a game list's on a game list. A held button doesn't
+    // answer them; Got it closes one for this launch, Don't show again (B) for good.
+    @Test fun the_first_launch_tips_show_on_the_main_menu_then_on_a_game_list() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { mainMenuTipHidden = false; gameListTipHidden = false }
+        val state = searchState(settings); runCurrent()
+        assertEquals(FirstTip.MAIN_MENU, state.firstTip.value)
+        state.onButton(NxButton.A); runCurrent()                               // a press from before: not an answer
+        assertEquals(FirstTip.MAIN_MENU, state.firstTip.value)
+        advanceTimeBy(ANDROID_ASK_GUARD_MILLIS + 1); runCurrent()
+        state.onButton(NxButton.A); runCurrent()                               // Got it
+        assertNull(state.firstTip.value)
+        assertFalse(settings.mainMenuTipHidden)                                // shows again next launch
+        state.openSystem(assertIs<Screen.Systems>(state.screen.value).systems.first { it.tag == "SFC" }); runCurrent()
+        assertEquals(FirstTip.GAME_LIST, state.firstTip.value)
+        advanceTimeBy(ANDROID_ASK_GUARD_MILLIS + 1); runCurrent()
+        state.onButton(NxButton.B); runCurrent()                               // Don't show again
+        assertNull(state.firstTip.value)
+        assertTrue(settings.gameListTipHidden)
+        state.back(); runCurrent()
+        assertNull(state.firstTip.value)                                       // each once a launch
+    }
+
+    @Test fun a_hidden_tip_never_shows() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { mainMenuTipHidden = true; gameListTipHidden = false }
+        val state = searchState(settings); runCurrent()
+        assertNull(state.firstTip.value)
+        state.openSystem(assertIs<Screen.Systems>(state.screen.value).systems.first { it.tag == "SFC" }); runCurrent()
+        assertEquals(FirstTip.GAME_LIST, state.firstTip.value)
     }
 
     @Test fun the_games_question_ignores_a_and_b_just_after_it_shows() = runTest {

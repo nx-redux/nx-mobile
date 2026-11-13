@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -129,6 +130,8 @@ fun NxRichList(
     onLongPress: ((Int) -> Unit)? = null,
     labelSize: TextUnit = TextUnit.Unspecified,   // the page's list label size ([nxListLabelSize] of its body); else of this list's height
     edgeMargin: Int = 0,   // rows kept in view past the selection ([NxKeepSelectedInView]): 1 under a scroll fade
+    rowPitch: Dp? = null,   // a fixed row height, the list filling what it is given (the next row peeks under a fade); null: rows tile it whole
+    contentBottom: Dp = 0.dp,   // room after the last row, inside the list (the Settings rows block's bottom inset)
 ) {
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
@@ -137,11 +140,13 @@ fun NxRichList(
     BoxWithConstraints(modifier) {
         val density = LocalDensity.current
         val listPitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)   // Appearance → Text size
-        val count = nxRichRowCountFor(maxHeight, listPitch)
-        // Whole-px rows and a list of exactly [count] of them, so it rests on whole rows ([nxRowsSlotPx]).
-        val rowPx = nxFitRowPx(with(density) { maxHeight.roundToPx() }, count)
+        val fixedPx = rowPitch?.let { with(density) { it.roundToPx() } }?.coerceAtLeast(1)
+        val count = if (fixedPx != null) maxOf(1, with(density) { maxHeight.roundToPx() } / fixedPx) else nxRichRowCountFor(maxHeight, listPitch)
+        // Whole-px rows and a list of exactly [count] of them, so it rests on whole rows ([nxRowsSlotPx]); with [rowPitch]
+        // rows of that height and the list all of the room.
+        val rowPx = fixedPx ?: nxFitRowPx(with(density) { maxHeight.roundToPx() }, count)
         val rowHeight = with(density) { rowPx.toDp() }
-        val listHeight = with(density) { nxRowsSlotPx(rowPx, count).toDp() }
+        val listHeight = if (fixedPx != null) maxHeight else with(density) { nxRowsSlotPx(rowPx, count).toDp() }
         // Text follows the plain list's: the title at the list's secondary size, the subtitle a step under it (a caption),
         // only the row is taller, for the thumbnail. Each line's box is [NxTextSizes.line] of
         // its size with the glyphs centred in it, and the two boxes are centred in the row, so the text sits midway with
@@ -161,7 +166,10 @@ fun NxRichList(
         val identity = remember(rows) { nxPillListIdentity(rows) }
         val glide = rememberNxPillGlide(identity, selectedIndex, rows.size, count)
         val pitch = with(density) { rowHeight.roundToPx() }
-        LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().height(listHeight).nxPillGlide(glide, listState, pitch, nxHighlight()), flingBehavior = rememberNxRowSnapFling(listState)) {
+        LazyColumn(
+            state = listState, modifier = Modifier.fillMaxWidth().height(listHeight).nxPillGlide(glide, listState, pitch, nxHighlight()),
+            flingBehavior = rememberNxRowSnapFling(listState), contentPadding = PaddingValues(bottom = contentBottom),
+        ) {
             itemsIndexed(rows) { i, row ->
                 val selected = i == selectedIndex
                 val lit = i == glide.litIndex   // on-pill colours follow the gliding pill

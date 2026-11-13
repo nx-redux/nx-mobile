@@ -70,6 +70,14 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = prefs.getString(KEY_ANDROID_CONSOLE_APPS, "")!!.lineSequence().filter { it.isNotBlank() }.toList()
         set(value) = prefs.edit { putString(KEY_ANDROID_CONSOLE_APPS, value.joinToString("\n")) }
 
+    override var mainMenuTipHidden: Boolean
+        get() = prefs.getBoolean(KEY_MAIN_MENU_TIP_HIDDEN, false)
+        set(value) = prefs.edit { putBoolean(KEY_MAIN_MENU_TIP_HIDDEN, value) }
+
+    override var gameListTipHidden: Boolean
+        get() = prefs.getBoolean(KEY_GAME_LIST_TIP_HIDDEN, false)
+        set(value) = prefs.edit { putBoolean(KEY_GAME_LIST_TIP_HIDDEN, value) }
+
     override var androidGamesAsked: Boolean
         get() = prefs.getBoolean(KEY_ANDROID_GAMES_ASKED, false)
         set(value) = prefs.edit { putBoolean(KEY_ANDROID_GAMES_ASKED, value) }
@@ -275,7 +283,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         }
 
     override var menuInfoAchievements: Boolean
-        get() = prefs.getBoolean(KEY_MENU_INFO_ACHIEVEMENTS, false)
+        get() = prefs.getBoolean(KEY_MENU_INFO_ACHIEVEMENTS, MenuStyles.DEFAULT_INFO_ACHIEVEMENTS)
         set(value) = prefs.edit { putBoolean(KEY_MENU_INFO_ACHIEVEMENTS, value) }
 
     override var screenCare: Boolean
@@ -438,6 +446,8 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_MENU_HOME_STATS = "menu_home_stats"
         private const val KEY_GAME_LIST_LAYOUT_OPTIONS = "game_list_layout_options"
         private const val KEY_GAME_LIST_ACHIEVEMENTS_PANEL = "game_list_achievements_panel"
+        private const val KEY_MAIN_MENU_TIP_HIDDEN = "main_menu_tip_hidden"
+        private const val KEY_GAME_LIST_TIP_HIDDEN = "game_list_tip_hidden"
         private const val KEY_PAD_VIBRATION = "pad_vibration"
         private const val KEY_SHORTCUTS = "shortcuts"
         private const val KEY_SYSTEM_BUTTONS = "system_buttons"

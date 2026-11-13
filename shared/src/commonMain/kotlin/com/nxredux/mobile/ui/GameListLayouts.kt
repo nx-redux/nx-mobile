@@ -35,7 +35,7 @@ object GameListLayouts {
 
     /**
      * The choice of [choices] that [style], its stored [orientation] and [alignment] are drawn as (List, Grid and Minimal
-     * ignore both, a horizontal row the alignment; on two screens Backdrop and a vertical Carousel are a horizontal Carousel).
+     * ignore both, a horizontal row the alignment; on two screens a vertical Carousel or Backdrop is its horizontal one).
      */
     fun indexOf(style: MenuStyle, orientation: MenuOrientation, alignment: VerticalListAlignment, dual: Boolean = false): Int {
         val (st, stored) = if (dual) MenuStyles.dualGameListLayout(style, orientation) else style to orientation

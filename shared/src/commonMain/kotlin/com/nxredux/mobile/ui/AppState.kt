@@ -992,6 +992,13 @@ class AppState(
     /** An installed library's "Add N Android games to Consoles?" dialog over the main menu (A Yes, B Not now); null when not showing. */
     val androidGamesAsk: StateFlow<AndroidGamesAsk?> = _androidGamesAsk.asStateFlow()
     private var androidAskGuard: Job? = null   // active for [ANDROID_ASK_GUARD_MILLIS] after the dialog shows: its answers are ignored
+
+    private val _firstTip = MutableStateFlow<FirstTip?>(null)
+    /** The first-launch tip showing ([FirstTip]): a dialog over the main menu or a game list; null for none. */
+    val firstTip: StateFlow<FirstTip?> = _firstTip.asStateFlow()
+    /** The tips shown this launch: Got it closes one until the next launch. */
+    private val tipsShown = HashSet<FirstTip>()
+    private var tipGuard: Job? = null   // as [androidAskGuard]: a button held from before the tip doesn't answer it
     /**
      * A game list's panel is open (the achievements panel or the art panel): on the Games tab the menu is then not free
      * ([menuFree]). Declared before its readers; it follows the panels from where they are built ([artPanel]).
@@ -5306,7 +5313,7 @@ class AppState(
     fun launchFromTop(entry: Listed): Job? {
         if (loader.active || launches.minimalPending || kidsUi.kidsLocked || textEntryOpen) return null
         if (settingsUi.chooser.value != null || settingsUi.settingInfo.value != null || _capturingShortcut.value != null) return null
-        if (_androidGamesAsk.value != null || _updateConfirm.value != null || updatePopupShows() || _error.value != null) return null
+        if (_androidGamesAsk.value != null || _firstTip.value != null || _updateConfirm.value != null || updatePopupShows() || _error.value != null) return null
         if (netplay?.page?.value != null) return null
         val s = _screen.value as? Screen.Systems ?: return null
         if (s.menu != null || s.search != null) return null
@@ -6030,6 +6037,10 @@ class AppState(
             if (button == NxButton.A) answerAndroidGames(true) else if (button == NxButton.B) answerAndroidGames(false)
             return
         }
+        if (_firstTip.value != null) {   // a first-launch tip: A Got it, B (or its lit Don't show again) never again
+            if (button == NxButton.A) answerTip(hide = false) else if (button == NxButton.B) answerTip(hide = true)
+            return
+        }
         if (_updateConfirm.value != null) { onUpdateDialogButton(button, ::answerUpdateConfirm); return }   // About's confirm: A Update, B Cancel
         if (updatePopupShows()) { onUpdateDialogButton(button, ::answerUpdate); return }   // the update dialog: A Update, B Not now
         // An open prompt with the NX keyboard: the keyboard has every press first; the prompt hears only its confirm (A) or
@@ -6244,6 +6255,7 @@ class AppState(
         if (_capturingShortcut.value != null) { cancelCapture(); return true }   // press to bind: Back cancels it, the page stays
         if (systemButtonWaiting != null) { systemButtonWaiting = null; settingsUi.refreshSettings(); return true }   // likewise System buttons' wait
         if (_androidGamesAsk.value != null) { answerAndroidGames(false); return true }   // the dialog's B: Not now
+        if (_firstTip.value != null) { answerTip(hide = true); return true }   // a tip's B: Don't show again
         if (_updateConfirm.value != null) { answerUpdateConfirm(false); return true }   // About's confirm: Cancel
         if (updatePopupShows()) { answerUpdate(false); return true }   // the update dialog's B: Not now
         netplay?.takeIf { it.page.value != null }?.let { it.onButton(NxButton.B); return true }   // the Netplay sheet: its own B
@@ -6618,9 +6630,54 @@ class AppState(
     fun kidsDayRow(index: Int) = kidsUi.kidsDayRow(index)
     fun kidsDaySetting(event: NxSettingEvent) = kidsUi.kidsDaySetting(event)
 
+    /**
+     * Shows the first-launch tip the screen calls for, if it is due ([FirstTip]): the main menu's on a main menu tab, then a
+     * game list's on a game list or the Games tab. Each once a launch, until its Don't show again; never over another
+     * dialog, a context menu, a prompt or a panel, nor while first setup or Kids Mode has the screen.
+     */
+    private fun maybeShowTip() {
+        if (_firstTip.value != null || firstSetup || loader.active || kidsUi.kidsLocked) return
+        if (_androidGamesAsk.value != null || _updateConfirm.value != null || updatePopupShows() || _error.value != null) return
+        if (netplay?.page?.value != null) return
+        val s = _screen.value
+        val free = s.contextMenu == null && when (s) {
+            is Screen.Systems -> s.isMainMenu && s.search == null
+            is Screen.Games -> s.search == null && s.layoutMenu == null && !_panelOpen.value
+            else -> false
+        }
+        if (!free) return
+        fun due(t: FirstTip) = t !in tipsShown && !when (t) {
+            FirstTip.MAIN_MENU -> deps.settings.mainMenuTipHidden
+            FirstTip.GAME_LIST -> deps.settings.gameListTipHidden
+        }
+        val tip = when {
+            s.isMainMenu && due(FirstTip.MAIN_MENU) -> FirstTip.MAIN_MENU
+            s is Screen.Games && due(FirstTip.GAME_LIST) -> FirstTip.GAME_LIST
+            else -> return
+        }
+        tipsShown += tip
+        tipGuard?.cancel()
+        tipGuard = scope.launch { delay(ANDROID_ASK_GUARD_MILLIS) }
+        _firstTip.value = tip
+    }
+
+    /** The tip's answer: Got it closes it until the next launch; [hide] (Don't show again) never shows it again. */
+    fun answerTip(hide: Boolean) {
+        if (tipGuard?.isActive == true) return
+        val tip = _firstTip.value ?: return
+        if (hide) when (tip) {
+            FirstTip.MAIN_MENU -> deps.settings.mainMenuTipHidden = true
+            FirstTip.GAME_LIST -> deps.settings.gameListTipHidden = true
+        }
+        _firstTip.value = null
+        maybeShowTip()   // the Games tab: its own tip next
+    }
+
     init {
         // Last in the class: every property [KidsScreensController.onKidsMode] reads is set by now.
         kids?.let { k -> scope.launch { k.mode.collect { kidsUi.onKidsMode(it); contextMenus.onKidsRestricted() } } }
+        // The first-launch tips follow the screen (and a panel closing over it).
+        scope.launch { combine(_screen, _panelOpen) { _, _ -> }.collect { maybeShowTip() } }
     }
 }
 

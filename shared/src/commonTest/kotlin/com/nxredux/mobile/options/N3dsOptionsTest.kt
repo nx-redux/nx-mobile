@@ -98,7 +98,7 @@ class N3dsOptionsTest {
 
     @Test fun defaults_per_screen() {
         for (screen in ScreenClass.entries) {
-            assertEquals("stacked", N3dsOptions.appLayoutFor(emptyMap(), false, false, screen))
+            assertEquals("large", N3dsOptions.appLayoutFor(emptyMap(), false, false, screen))   // the overlay pad
             assertEquals("stacked", N3dsOptions.appLayoutFor(emptyMap(), false, true, screen))
         }
         assertEquals("single_screen", N3dsOptions.appLayoutFor(emptyMap(), true, false, phone))
@@ -107,8 +107,8 @@ class N3dsOptionsTest {
             assertEquals("large", N3dsOptions.appLayoutFor(emptyMap(), true, false, screen))
         }
         assertEquals("large", N3dsOptions.appLayoutFor(emptyMap(), true, true, fold))   // landscape has one row
-        assertEquals(listOf("stacked", "stacked", "large"), N3dsOptions.layoutRowsFor(fold).map { it.default })
-        assertEquals(listOf("stacked", "stacked", "single_screen"), N3dsOptions.layoutRowsFor(phone).map { it.default })
+        assertEquals(listOf("large", "stacked", "large"), N3dsOptions.layoutRowsFor(fold).map { it.default })
+        assertEquals(listOf("large", "stacked", "single_screen"), N3dsOptions.layoutRowsFor(phone).map { it.default })
     }
 
     @Test fun cycle_wraps() {
@@ -119,8 +119,8 @@ class N3dsOptionsTest {
         assertEquals(N3dsOptions.LAYOUT_PORTRAIT to "side_by_side", next("single_screen"))
         assertEquals(N3dsOptions.LAYOUT_PORTRAIT to "large", next("side_by_side"))
         assertEquals(N3dsOptions.LAYOUT_PORTRAIT to "side_by_side", next("large", -1))
-        assertEquals(N3dsOptions.LAYOUT_PORTRAIT to "single_screen", next(null))   // unset: from the default (stacked)
-        assertEquals(N3dsOptions.LAYOUT_PORTRAIT to "single_screen", next("bogus"))
+        assertEquals(N3dsOptions.LAYOUT_PORTRAIT to "stacked", next(null))   // unset: from the default (large)
+        assertEquals(N3dsOptions.LAYOUT_PORTRAIT to "stacked", next("bogus"))
         // The row in use is cycled: landscape has one row, controller mode its own in portrait.
         val values = v(N3dsOptions.LAYOUT_LANDSCAPE to "single_screen")
         assertEquals(N3dsOptions.LAYOUT_LANDSCAPE to "side_by_side", N3dsOptions.cycleLayout(values, true, true, 1, phone))
@@ -166,8 +166,28 @@ class N3dsOptionsTest {
         assertEquals("2", N3dsOptions.stackedSmallProportion(large, false, false, phone, false, null))   // no space yet
         assertEquals("2", N3dsOptions.stackedSmallProportion(large, true, false, phone, false, fold))    // landscape
         assertEquals("1", N3dsOptions.stackedSmallProportion(large, false, false, phone, true, fold))    // half-folded
-        assertEquals("1", N3dsOptions.stackedSmallProportion(v(N3dsOptions.LAYOUT_PORTRAIT to "stacked"), false, false, phone, false, fold))
+        assertEquals("1.71", N3dsOptions.stackedSmallProportion(v(N3dsOptions.LAYOUT_PORTRAIT to "stacked"), false, false, phone, false, fold))   // Stacked fills too
         assertEquals("1", N3dsOptions.stackedSmallProportion(v(N3dsOptions.LAYOUT_PORTRAIT to "single_screen"), false, false, phone, false, fold))
+    }
+
+    @Test fun stacked_fills_the_width_in_portrait() {
+        val space = PxRect(0f, 0f, 1848f, 1759f)
+        val stacked = v(N3dsOptions.LAYOUT_PORTRAIT to "stacked", N3dsOptions.LAYOUT_PORTRAIT_CONTROLLER to "stacked")
+        for (screen in ScreenClass.entries) {
+            // Stacked in portrait: the top screen at full width, the touch screen the height left
+            assertEquals("1.71", N3dsOptions.stackedSmallProportion(stacked, false, false, screen, false, space), "$screen")
+            assertEquals("1.71", N3dsOptions.stackedSmallProportion(stacked, false, true, screen, false, space), "$screen controller")
+            // room for both at full width: the same size
+            assertEquals("1", N3dsOptions.stackedSmallProportion(stacked, false, false, screen, false, PxRect(0f, 0f, 1848f, 3000f)), "$screen tall")
+        }
+        // too short for the full-width top screen over even a half-size touch screen: Stacked keeps two equal screens
+        // fitted to the height (Large would go to half size), never turning into Large
+        assertEquals("1", N3dsOptions.stackedSmallProportion(stacked, false, false, ScreenClass.REGULAR_PHONE, false, PxRect(0f, 0f, 1848f, 1500f)))
+        assertEquals("2", N3dsOptions.stackedSmallProportion(v(N3dsOptions.LAYOUT_PORTRAIT to "large"), false, false, ScreenClass.REGULAR_PHONE, false, PxRect(0f, 0f, 1848f, 1500f)))
+        val inner = ScreenClass.NEAR_SQUARE_TABLET
+        assertEquals("1", N3dsOptions.stackedSmallProportion(stacked, false, false, inner, false, null))   // not Auto, or no space yet
+        assertEquals("1", N3dsOptions.stackedSmallProportion(v(N3dsOptions.LAYOUT_LANDSCAPE to "stacked"), true, false, inner, false, space))
+        assertEquals("1", N3dsOptions.stackedSmallProportion(stacked, false, false, inner, true, space))   // half-folded
     }
 
     @Test fun deadzone_reads_the_core_percentage() {

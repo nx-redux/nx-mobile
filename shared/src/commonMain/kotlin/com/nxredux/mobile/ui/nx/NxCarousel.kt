@@ -106,7 +106,7 @@ fun NxCarousel(
         // show no details ([gameDetails] false), for the name alone. Where the box leaves that room already, nothing changes.
         val need = if (gameList) rememberCaptionNeed(nameStyle, infoStyle, gameDetails) else null
         val (g, top, capped) = carouselRowPlace(
-            maxHeight.value, titleRoom.value, room, portraitW = maxWidth.value.takeIf { portrait },   // portrait: the neighbours show
+            maxHeight.value, titleRoom.value, room, bodyW = maxWidth.value,   // held to a share of the width: the neighbours show
             maxItemH = need?.let { carouselItemHMax(maxHeight.value, it) },
         )
         // Capped, the tile and its caption keep the breathing room the cap reserved over and under them

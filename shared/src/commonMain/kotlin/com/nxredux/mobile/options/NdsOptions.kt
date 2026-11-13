@@ -321,7 +321,7 @@ object NdsOptions {
         return PIP_CORNER to next.value
     }
 
-    /** R2: the other screen as the big one. */
+    /** L2 (or L3, SELECT + L1): the other screen as the big one. */
     fun swapBigScreen(values: Map<String, String>): Pair<String, String> = BIG_SCREEN to NdsSettings.parse(values).big.other.value
 
     /** The label a hotkey shows for its new value ("Bottom screen", "Stacked"). */

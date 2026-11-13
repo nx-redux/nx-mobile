@@ -4,12 +4,12 @@ import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.WiiOptions
 
-/** An input the frontend already uses; [note] names it for the player ("R2 swaps the DS screens"). */
+/** An input the frontend already uses; [note] names it for the player ("L2 swaps the DS screens"). */
 data class ClaimedInput(val binding: ShortcutBinding, val note: String)
 
 /**
  * The inputs each console's built-in hotkeys claim; they win over user bindings. Restated in key codes from
- * `NdsHotkeys` (L3, R2, L2, SELECT + d-pad/L1/R1), `N3dsHotkeys` (SELECT + Left/Right/L1/R1, L3 swap) and androidApp's `WiiShortcuts`
+ * `NdsHotkeys` (L3, L2, R2, SELECT + d-pad/L1/R1), `N3dsHotkeys` (SELECT + Left/Right/L1/R1, L3 swap) and androidApp's `WiiShortcuts`
  * (L3 recentre, R3 Home), which work in NxButton or platform key terms `shared` can't share.
  */
 object ConsoleHotkeys {
@@ -28,8 +28,8 @@ object ConsoleHotkeys {
     private val nds = listOf(
         single(KeyCodes.BUTTON_THUMBL, "L3 swaps screens"),
         single(KeyCodes.BUTTON_THUMBR, "R3 taps with the stylus"),
-        single(KeyCodes.BUTTON_R2, "R2 swaps the DS screens"),
-        single(KeyCodes.BUTTON_L2, "L2 is the stylus"),
+        single(KeyCodes.BUTTON_L2, "L2 swaps the DS screens"),
+        single(KeyCodes.BUTTON_R2, "R2 is the stylus"),
         chord(KeyCodes.BUTTON_L1, "SELECT+L1 swaps the DS screens"),
         chord(KeyCodes.BUTTON_R1, "SELECT+R1 toggles the stylus"),
         chord(KeyCodes.DPAD_LEFT, "SELECT+Left cycles the DS layout"),

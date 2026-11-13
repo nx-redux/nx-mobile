@@ -1241,6 +1241,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun onN3dsPictureSpace() {
         if (!isN3ds || netplayLocks || DualScreen.n3dsForcedOptions(dual.dualMode, n3dsSkinStack()) != null) return
         val proportion = n3dsProportion()
+        if (proportion != renderer.n3dsProportion) NxLog.i(TAG_LOG, "3DS proportion ${renderer.n3dsProportion} -> $proportion " +
+            "(layout ${N3dsOptions.appLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass())}, ${screenClass()}, space ${renderer.n3dsPictureSpace})")
         if (renderer.n3dsViews) {
             if (proportion != renderer.n3dsProportion) { renderer.n3dsProportion = proportion; renderer.relayoutFrontend() }
             return
@@ -1296,6 +1298,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val shader = renderer.shaderFor(s)
         if (view.shader != shader) view.shader = shader
         renderer.updateOverlay(s)
+        // A DS / 3DS layout change: a screen stack starts under a top cutout, the rest below it (the area's size follows).
+        padLayout.syncGameTop(resources.configuration.orientation)
         renderer.relayoutFrontend()
         renderer.setHud(s.debugHud)
     }
@@ -1686,8 +1690,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                         else WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical
                     // Over the bare skin buttons and over a pad skin (their shoulders or shell hold the corners),
                     // top-centre below any cutout; elsewhere the corners.
-                    // In portrait over a pad (bare buttons or a skin) the overlay ends at the picture's bottom instead, so the
-                    // toasts sit bottom-left of the picture as in landscape, never over the pad under it.
+                    // In portrait over a pad (bare buttons or a skin) the pill and the toasts go top-centre too, the toasts
+                    // under the pill: at the top, never down on a DS / 3DS touch screen or over the pad.
                     val overPad = padLayout.overlayPadShown.value || padLayout.skinShownState.value
                     val picture = renderer.pictureBox.value
                     val onPicture = overPad && picture != null && config.orientation == Configuration.ORIENTATION_PORTRAIT
@@ -1702,7 +1706,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     // This view's own size: in landscape the root's.
                     var origin by remember { mutableStateOf(IntOffset.Zero) }   // this view's top-left in the window
                     BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow().round() }) {
-                        val maxW = nxTopCentreMaxWidth(maxWidth.value, maxHeight.value, inset).dp
+                        // the landscape pad's system rows only; in portrait the whole width (less the margins)
+                        val maxW = if (onPicture) androidx.compose.ui.unit.Dp.Infinity else nxTopCentreMaxWidth(maxWidth.value, maxHeight.value, inset).dp
                         val underPicture = if (onPicture && picture != null) with(density) { (constraints.maxHeight - (picture.bottom - origin.y)).coerceAtLeast(0).toDp() } else 0.dp
                         NxNotifications(
                             toasts, pill, modifier = Modifier.padding(bottom = underPicture),
@@ -1858,7 +1863,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val picture = edit.picture.asImageBitmap()
         val parts = edit.parts?.asImageBitmap()
         val backdrop = frame?.asImageBitmap()
-        val alpha = padLayout.padLandscapeAlpha.value   // the bare buttons at the overlay's opacity, as in the game
         menu.menuRouter.releaseAll()
         val view = ComposeView(this).apply {
             setContent {
@@ -1877,7 +1881,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                                 relayoutPad()
                             },
                             onClose = ::closeSkinEdit,
-                            bareAlpha = alpha,
                         )
                     }
                 }

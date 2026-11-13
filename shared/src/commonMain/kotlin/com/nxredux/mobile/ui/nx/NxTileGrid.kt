@@ -85,7 +85,8 @@ fun NxTileGrid(
         val g = if (fixed) gridFixedTools(width, height - (GRID_TAB_GAP - TOOL_APPS_GAP), inset.start.value, inset.end.value, density.fontScale)
             else gridMatched(width, height - (GRID_TAB_GAP - GRID_GAP), window.width.value, window.height.value, kind, portrait, inset.start.value, inset.end.value, skin = skin)
         if (!gridDrawable(width, height, g)) return@BoxWithConstraints
-        val columns = g.columns
+        // Tools: the fewest columns that fill the rows in view, the block centred ([toolsColumns]); else every column that fits.
+        val columns = if (fixed) toolsColumns(tiles.size, g.columns, g.rows) else g.columns
         val rows = (tiles.size + columns - 1) / columns
         LaunchedEffect(layoutKey, tiles, columns, onColumns) { onColumns(columns) }   // again for a new reporter (the page now showing)
 
@@ -136,7 +137,8 @@ fun NxTileGrid(
                 .fillMaxWidth().height(with(density) { viewport.toDp() })
                 // A short fixed fade: enough to show more tiles are there without dimming a whole row of them.
                 .nxEdgeFade({ state.canScrollBackward }, { state.canScrollForward }, TILE_GRID_FADE, strong = roomy),
-            state = state, verticalArrangement = if (fixed) Arrangement.Top else Arrangement.Bottom,
+            // Tools that fit: centred in the box (a scrolling drawer starts at its top).
+            state = state, verticalArrangement = if (fixed) (if (fits) Arrangement.Center else Arrangement.Top) else Arrangement.Bottom,
             flingBehavior = if (roomy) rememberNxRowSnapFling(state) else rememberSnapFlingBehavior(state, SnapPosition.Center),
         ) {
             items(rows) { r ->
@@ -144,7 +146,8 @@ fun NxTileGrid(
                 Row(
                     Modifier.fillMaxWidth().height(with(density) { pitchPx.toDp() })
                         .padding(start = g.gutter.dp, end = g.gutterEnd.dp, bottom = g.gap.dp),
-                    horizontalArrangement = Arrangement.spacedBy(g.gap.dp),
+                    // Tools: each row centred, a short last row's tiles in the middle under the others.
+                    horizontalArrangement = if (fixed) Arrangement.spacedBy(g.gap.dp, Alignment.CenterHorizontally) else Arrangement.spacedBy(g.gap.dp),
                 ) {
                     for (c in 0 until columns) {
                         val i = r * columns + c

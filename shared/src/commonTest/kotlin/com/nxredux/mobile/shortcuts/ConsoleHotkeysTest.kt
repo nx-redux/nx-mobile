@@ -19,8 +19,8 @@ class ConsoleHotkeysTest {
 
     @Test fun nds() {
         val n = notes("nds")
-        assertEquals("R2 swaps the DS screens", n[single(KeyCodes.BUTTON_R2)])
-        assertEquals("L2 is the stylus", n[single(KeyCodes.BUTTON_L2)])
+        assertEquals("R2 is the stylus", n[single(KeyCodes.BUTTON_R2)])
+        assertEquals("L2 swaps the DS screens", n[single(KeyCodes.BUTTON_L2)])
         for (d in listOf(KeyCodes.DPAD_UP, KeyCodes.DPAD_DOWN, KeyCodes.DPAD_LEFT, KeyCodes.DPAD_RIGHT)) assertTrue(chord(d) in n)
     }
 

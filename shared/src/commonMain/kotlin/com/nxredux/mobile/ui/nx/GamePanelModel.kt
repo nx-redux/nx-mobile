@@ -102,6 +102,8 @@ data class GamePanelState(
     val noCheatsText: String = "",
     val focus: PanelFocus? = null,
     val showGamePill: Boolean = false,
+    // the Game pill in the corner buttons' look, as the Panel pill it answers there (a controller attached); else the hollow pill
+    val gamePillCorner: Boolean = false,
     /** The Shortcuts tab's save-state slots, in slot order (none: no strip), and the one Save and Load use (1-based). */
     val slots: List<SlotUi> = emptyList(),
     val slot: Int? = null,

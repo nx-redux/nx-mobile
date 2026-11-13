@@ -275,7 +275,10 @@ private fun InGameMenuContent(
         val inset = nxPageInset()
         Column(Modifier.weight(1f).fillMaxWidth().padding(start = inset.pillStart, end = inset.pillEnd)) {
         // The game header on every page, where the dual-screen panel draws it; without a panel the standard page title.
-        if (panel != null) GamePanelHeaderBar(panel.state.header) else NxPageTitle(page.title)
+        // (on a short menu, a pad skin's small touch screen, its one-line form, as the panel's)
+        if (panel != null) {
+            if (LocalWindowSize.current.height < GP_COMPACT_BELOW) GamePanelCompactHeader(panel.state.header) else GamePanelHeaderBar(panel.state.header)
+        } else NxPageTitle(page.title)
         // The tab row across the menu on the root: the Menu tab is the words (beside the slot card or the Options
         // preview); another tab takes the whole width.
         if (tabsAbove && beside != null) MenuTabs(beside, focused = state.panelFocus == PanelFocus.Tabs)
@@ -738,14 +741,16 @@ private fun RowsBody(
     opened: Boolean = false,
 ) {
     val itemHeight = menuWordRowHeight(rowHeight)
-    BoxWithConstraints(
+    Box(
         modifier.fillMaxWidth().padding(start = nxListInset() - MenuPillPadding, end = 12.dp, top = wordListTopPad(itemHeight)),
         contentAlignment = Alignment.TopStart,
     ) {
         MenuWordList(
             rows = page.rows.mapIndexed { i, row -> NxRow(openedLabel(row.label, opened && i == page.selected)) },
             selected = page.selected, rowHeight = itemHeight,
-            shown = minOf(page.rows.size, maxOf(1, (maxHeight / itemHeight).toInt())),
+            // All its rows, as the root list beside it: the pane clips the box, so a row past its foot peeks under the
+            // thin fade (a box of whole rows only would end on a row's edge, the rest hidden with nothing to show it).
+            shown = page.rows.size,
             onSelect = onSelect, onActivate = onActivate, focused = focused,
         )
     }
