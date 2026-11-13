@@ -53,7 +53,10 @@ constexpr int MAX_DRAIN = 32;   // datagrams read per tick, whatever their size:
 constexpr int SERVER_WAIT_MS = PSL_LISTEN_MS + 500;
 // While a cable is coming the election is held, and server() waits through the hold and the listen window after it.
 // A hold that starts during the plain wait takes it this far at most, however often the cable comes and goes meanwhile.
-constexpr int SERVER_WAIT_MAX_MS = SERVER_WAIT_MS + PSL_CABLE_HOLD_MS + SERVER_WAIT_MS;
+// The core sizes a game's request on the same value (nx_psp_link.h).
+constexpr int SERVER_WAIT_MAX_MS = NX_PSP_LINK_SERVER_WAIT_MAX_MS;
+static_assert(SERVER_WAIT_MAX_MS >= SERVER_WAIT_MS + PSL_CABLE_HOLD_MS + SERVER_WAIT_MS,
+              "server() must be able to wait through a hold that starts at the end of its plain wait");
 // A cable that is up but gave no address of this device on it (its routes not there yet) is asked again this often.
 constexpr int PROBE_RETRY_MS = 1000;
 
@@ -96,6 +99,7 @@ bool wake = false;                 // a change the finder should step on now rat
 std::thread finder;
 // The cable as dslink last reported it, kept outside the election so a fresh one (resetElectionLocked) starts with it.
 int cableState = PSL_CABLE_NONE;
+bool cableReported = false;        // dslink has given a state since the core registered
 uint32_t cableSelf = 0;            // this device's end, probed when the cable comes up; 0 when the probe found none
 uint32_t cableBroadcast = 0;       // as dslink gives it; 0 until given, the cable's default then
 unsigned cableSeq = 0;             // bumped by every report, so a probe that ran meanwhile is not applied over it
@@ -165,6 +169,14 @@ uint32_t cableBroadcastLocked() {
     return cableBroadcast != 0 ? cableBroadcast : defaultCableBroadcast();
 }
 
+// The cable as the election is given it. Up with no address of this device on it yet is still coming: the finder's
+// probe finds the address within a second or so, and a cable that is up is no reason to end a hold and settle on the
+// Wi-Fi meanwhile. Under mutex.
+void applyCableLocked(int64_t now) {
+    const int state = cableState == PSL_CABLE_UP && cableSelf == 0 ? PSL_CABLE_COMING : cableState;
+    psl_set_cable(&election, state, cableSelf, cableBroadcast, now);
+}
+
 // One of the cable's two ends (not its network or broadcast address) in the /30 that broadcast closes.
 bool cableEnd(uint32_t ip, uint32_t broadcast) {
     const uint32_t base = ntohl(broadcast) & ~3u, host = ntohl(ip);
@@ -228,7 +240,7 @@ void adoptSessionCableSelfLocked() {
     const bool session = settings.mode == PSL_HOST || settings.mode == PSL_JOIN;
     if (!session || cableState != PSL_CABLE_UP || cableSelf != 0 || !cableEnd(settings.self, cableBroadcastLocked())) return;
     cableSelf = settings.self;
-    psl_set_cable(&election, cableState, cableSelf, cableBroadcast, nowMs());
+    applyCableLocked(nowMs());
     LOGI("PSP link: cable up, self %s (the session's)", text(cableSelf).c_str());
 }
 
@@ -237,7 +249,10 @@ void resetElectionLocked() {
     const int64_t now = nowMs();
     psl_init(&election, settings.mode == MODE_OFF ? PSL_AUTO : settings.mode, settings.self, processTie(), settings.hostIp);
     psl_set_net(&election, settings.broadcast);
-    psl_set_cable(&election, cableState, cableSelf, cableBroadcast, now);
+    // The cable goes in before the core's report, so the replayed entry into ad hoc meets the cable as it stands and
+    // arms a hold for one that is coming, as the game's own entry did. The report's grouped is not in yet when the
+    // cable moves the election; a role change parks the game first (configure), so no grouped game is moved by it.
+    applyCableLocked(now);
     if (parked) psl_park(&election, 1);
     else if (coreActive) psl_active(&election, 1, coreGrouped, now);
     routeIdleLocked();
@@ -344,11 +359,11 @@ void sendAnnouncement(FinderSocket& s, const uint8_t* out, size_t len, bool cabl
 }
 
 // Where a packet for a network goes, 0 for nowhere: the Wi-Fi's broadcast when one is known; the cable's while it is
-// up, or always for a session on it (its cable may never be reported). A cable that is gone has no route of its own,
-// and its broadcast would leave on the default network. Under mutex.
+// up, or for a session on it until a state is reported (until its registration it has none). A cable that is gone
+// has no route of its own, and its broadcast would leave on the default network. Under mutex.
 uint32_t destinationLocked(bool cable) {
     if (!cable) return settings.broadcast;
-    if (settings.mode == PSL_AUTO && cableState != PSL_CABLE_UP) return 0;
+    if (cableState != PSL_CABLE_UP && (settings.mode == PSL_AUTO || cableReported)) return 0;
     return cableBroadcastLocked();
 }
 
@@ -412,7 +427,7 @@ void runFinder() {
         const int64_t now = nowMs();
         if (probed != 0 && probeSeq == cableSeq && cableState == PSL_CABLE_UP && cableSelf == 0) {
             cableSelf = probed;
-            psl_set_cable(&election, cableState, cableSelf, cableBroadcast, now);
+            applyCableLocked(now);
             LOGI("PSP link: cable up, self %s", text(cableSelf).c_str());
         }
         // Packets from either network go in: the module keeps those from the network it is on.
@@ -587,7 +602,7 @@ void adapterRejoin() {
 
 // dslink's cable report (NX_3DS_CABLE_*), with coreRoomMutex held: on every change, and the state as it stands when
 // this adapter registers. Kept outside the election, so every fresh one starts with it. This device's end is probed
-// when the cable is up, before mutex is taken; a cable up with no end found is no cable to the election, and the
+// when the cable is up, before mutex is taken; a cable up with no end found is still coming to the election, and the
 // finder asks again while it runs.
 void adapterSetCable(int state, const char* broadcast) {
     if (state < PSL_CABLE_NONE || state > PSL_CABLE_UP) return;
@@ -597,14 +612,15 @@ void adapterSetCable(int state, const char* broadcast) {
     std::lock_guard<std::mutex> guard(mutex);
     cableState = state;
     cableSelf = self;
+    cableReported = true;
     if (given != 0) cableBroadcast = given;
     cableSeq++;
     nextProbeMs = nowMs() + PROBE_RETRY_MS;
-    psl_set_cable(&election, cableState, cableSelf, cableBroadcast, nowMs());
+    applyCableLocked(nowMs());
     if (state == PSL_CABLE_UP && self != 0) {
         LOGI("PSP link: cable up, self %s", text(self).c_str());
     } else if (state == PSL_CABLE_UP) {
-        LOGW("PSP link: cable up, but no address of this device on it: no cable until one is found");
+        LOGW("PSP link: cable up, but no address of this device on it yet: waited for as a cable that is coming");
         adoptSessionCableSelfLocked();
     } else {
         LOGI("PSP link: cable %s", state == PSL_CABLE_COMING ? "coming" : "none");
@@ -624,8 +640,9 @@ void coreRouteSocket(int fd, int) {
 // The core's half of the interface. Safe whether or not the link is configured: off, server() answers 0 at once.
 // Waits SERVER_WAIT_MS for a server; while the published choice is held for a cable that is coming, through the hold
 // and the listen window after it, but never past SERVER_WAIT_MAX_MS. Given up at once when the finder stops (the
-// core going, new settings) or the device leaves meanwhile. A call made while still parked waits as ever: the core
-// un-parks before it reports the trigger that un-parks the runner.
+// core going, new settings), the device leaves meanwhile, or the game is out of ad hoc: the core tells that before it
+// joins the login thread waiting here, so leaving ad hoc never waits out a hold. A call made while still parked waits
+// as ever: the core un-parks before it reports the trigger that un-parks the runner.
 int coreServer(uint32_t* ip, uint32_t* self) {
     std::unique_lock<std::mutex> lock(mutex);
     if (!hasCore || settings.mode == MODE_OFF) return 0;
@@ -635,13 +652,13 @@ int coreServer(uint32_t* ip, uint32_t* self) {
     const int64_t cap = begin + SERVER_WAIT_MAX_MS;
     int64_t until = begin + SERVER_WAIT_MS;
     for (;;) {
-        if (generation != start || (parked && !parkedAtStart) || published.settled) break;
+        if (generation != start || (parked && !parkedAtStart) || !coreActive || published.settled) break;
         if (published.held) until = std::min(cap, std::max(until, election.hold_until_ms + SERVER_WAIT_MS));
         const int64_t now = nowMs();
         if (now >= until) break;
         changed.wait_for(lock, std::chrono::milliseconds(until - now));
     }
-    if (generation != start || !published.settled || published.server_ip == 0) return 0;
+    if (generation != start || !coreActive || !published.settled || published.server_ip == 0) return 0;
     if (ip != nullptr) *ip = published.server_ip;
     if (self != nullptr) *self = published.self;
     return 1;
@@ -656,6 +673,8 @@ void coreActiveReport(int active, int grouped) {
     // Kept even while off: settings that turn the link on later carry it into their election.
     coreActive = active;
     coreGrouped = grouped;
+    // A server() waiting gives up once the game is out of ad hoc, whatever else this report does.
+    if (changedReport) changed.notify_all();
     if (settings.mode == MODE_OFF) return;
     if (changedReport) {
         LOGI("PSP link: game %s", !active ? (grouped ? "left ad hoc, others still on its server" : "left ad hoc")
@@ -709,6 +728,7 @@ void dropCore() {
     outSinceLeave = false;
     // No cable report reaches an unregistered adapter: the next registration gives the state as it then stands.
     cableState = PSL_CABLE_NONE;
+    cableReported = false;
     cableSelf = cableBroadcast = 0;
     cableSeq++;
     resetElectionLocked();

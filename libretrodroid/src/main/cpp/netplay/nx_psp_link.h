@@ -1,13 +1,18 @@
 #pragma once
-// nx-mobile private libretro environment call: PSP ad hoc over Wi-Fi or the phone-to-phone cable. The core hands the frontend its ad hoc link, so
-// the frontend can follow it and leave it as it does Azahar's room (nx_3ds_link.h), and tells the core which device runs
-// the ad hoc server: the frontend runs the finder and the election (psl_finder.h), the core runs the server and the
-// client. *data is a nx_psp_link_interface* whose frontend half the frontend fills in, or NULL when the link is gone and
-// the calls must not be made again. Only the nx-mobile runner answers it; only nx-mobile's patched PPSSPP sends it (its
-// copy must stay byte for byte the same). The calls may come from any thread unless noted.
+// nx-mobile private libretro environment call: PSP ad hoc over Wi-Fi or the phone-to-phone cable. The core hands the
+// frontend its ad hoc link, so the frontend can follow it and leave it as it does Azahar's room (nx_3ds_link.h), and
+// tells the core which device runs the ad hoc server: the frontend runs the finder and the election (psl_finder.h),
+// the core runs the server and the client. *data is a nx_psp_link_interface* whose frontend half the frontend fills
+// in, or NULL when the link is gone and the calls must not be made again. Only the nx-mobile runner answers it; only
+// nx-mobile's patched PPSSPP sends it (its copy must stay byte for byte the same). The calls may come from any thread
+// unless noted.
 #include <stdint.h>
 
 #define NX_ENVIRONMENT_SET_PSP_LINK (0x20000 /* RETRO_ENVIRONMENT_PRIVATE */ | 0x4e5b)
+
+/* The longest server() blocks, in ms: while the election waits for a cable that is coming, through that wait and a
+ * listen window after it. The core sizes the wait of a game's request on it. */
+#define NX_PSP_LINK_SERVER_WAIT_MAX_MS 9000
 
 struct nx_psp_link_interface {
     /* The core's, set before the call. Any thread. */
@@ -17,7 +22,8 @@ struct nx_psp_link_interface {
     void (*serve)(int on);    /* start or stop the built-in ad hoc server; returns once it listens or has stopped */
     void (*relogin)(void);    /* the server changed or is gone: drop its connection, tell the game if it was in a group */
     /* The frontend's, filled in while it answers the call. */
-    /* Blocks up to 1.5 s (PSL_LISTEN_MS + 500), and up to 9 s while the election waits for a cable that is coming.
+    /* Blocks up to 1.5 s (PSL_LISTEN_MS + 500), up to NX_PSP_LINK_SERVER_WAIT_MAX_MS while the election waits for a
+     * cable that is coming, and gives up once active has been told 0.
      * 1: *ip is the server, *self this device's address on the network the server is on (the Wi-Fi's or the cable's;
      * network order); 0: none. */
     int  (*server)(uint32_t* ip, uint32_t* self);
