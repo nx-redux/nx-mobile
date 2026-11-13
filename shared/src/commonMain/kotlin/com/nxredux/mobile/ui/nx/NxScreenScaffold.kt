@@ -32,7 +32,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.nxredux.mobile.ui.LocalSettingsBlock
-import com.nxredux.mobile.ui.SETTINGS_ROWS_FADE_ROWS
 import com.nxredux.mobile.ui.SettingsBlockMode
 import com.nxredux.mobile.ui.SettingsRowsBlock
 import com.nxredux.mobile.ui.SettingsWordList
@@ -390,7 +389,7 @@ internal fun NxTitledBody(title: String?, modifier: Modifier = Modifier, titleSu
 /**
  * A list page as the Settings rows block ([SettingsRowsBlock]): [title] its first line, [header] under it, the rows at
  * the list pitch (Appearance → Text size) taking only their own height, from the bottom; past the room they scroll under
- * a [SETTINGS_ROWS_FADE_ROWS]-row fade, the selection kept clear of it. Pill-kind rows draw as the section block's words
+ * the block's thin fade ([com.nxredux.mobile.ui.SETTINGS_ROWS_FADE]), the next row peeking, the selection kept a row clear of it. Pill-kind rows draw as the section block's words
  * ([SettingsWordList], no pill), options rows as NX Redux's options row; the hint bar below, as the page's.
  */
 @Composable
@@ -402,11 +401,11 @@ internal fun NxRowsBlockPage(
 ) {
     val pitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)
     Column(modifier.fillMaxSize()) {
-        SettingsRowsBlock(block, title, Modifier.weight(1f), header) {
+        SettingsRowsBlock(block, title, Modifier.weight(1f), header, listBottom = true) {
             if (rowKind == NxRowKind.OPTIONS) {
                 NxOptionsList(
                     rows, selection(), onSelect, onOpen, rowHeight = pitch, listText = NxTextSizes.listLabel(pitch),
-                    modifier = Modifier.fillMaxWidth().height(nxOptionsFitHeight(rows, pitch)), listState = listState,
+                    modifier = Modifier.fillMaxWidth().height(nxOptionsFitHeight(rows, pitch) + com.nxredux.mobile.ui.LocalSettingsRowsBottom.current), listState = listState,
                     onLongPress = onLongPress, scrollFade = true,
                 )
             } else {

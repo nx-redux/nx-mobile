@@ -4,10 +4,9 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.BoxWithConstraints
 import com.nxredux.mobile.ui.nx.PageInset
+import com.nxredux.mobile.ui.nx.LocalInSkin
 import com.nxredux.mobile.ui.nx.nxPageInset
 import com.nxredux.mobile.ui.nx.rememberNxRowSnapFling
-import com.nxredux.mobile.ui.nx.nxRowEdgeMask
-import com.nxredux.mobile.ui.nx.nxRowFade
 import com.nxredux.mobile.ui.nx.LocalNxFontWeights
 import com.nxredux.mobile.ui.nx.nxListLabel
 import com.nxredux.mobile.ui.nx.nxOptionsLabelSize
@@ -38,7 +37,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -134,6 +138,14 @@ fun settingsFrameLeft(stageWidth: Dp, sectionRight: Dp, gutter: Dp): Dp =
  */
 val SETTINGS_BLOCK_BOTTOM = 32.dp
 
+/**
+ * The blocks' bottom inset here ([SETTINGS_BLOCK_BOTTOM]): half of it inside a pad skin's frame, as the side inset
+ * ([com.nxredux.mobile.ui.nx.PAGE_INSET_SKIN]), the frame and its bezel being a margin already (on a skin's small touch
+ * screen the full one left a band of nothing between a scrolling list and the hints).
+ */
+@Composable
+internal fun settingsBlockBottom(): Dp = if (LocalInSkin.current) SETTINGS_BLOCK_BOTTOM / 2 else SETTINGS_BLOCK_BOTTOM
+
 
 /** The label line ("Settings") above the first section: [NxTextSizes.menuInfo], this far above it. */
 private val SETTINGS_LABEL_GAP = 6.dp
@@ -167,9 +179,9 @@ fun SettingsSectionBlock(
  * A block of large words, as the Settings root's: [title] in hint at 13 sp, 6 dp above the [words]; the words at
  * [SETTINGS_SECTION_SIZE], one per 1.2 line, the [current] one in the accent (while [rowsFocused], the
  * [inkOpen][com.nxredux.mobile.ui.nx.NxColors.inkOpen] ink and a "›" after it, [openedLabel]) and the rest inkDim. No Back
- * word: B (or the back gesture) goes back. No pill, no underline, no plate; it never scrolls. A tap on a word calls
+ * word: B (or the back gesture) goes back. No pill, no underline, no plate; it does not scroll itself. A tap on a word calls
  * [onTap] with its index. [markAll]: every word with its open mark (the size probe, [WithSettingsWordBlockSize], so the
- * block is as wide open). [headline] and [description]: a tool's head between the title and the words, as a setup
+ * block is as wide open). Where a page scrolls it ([SettingsRootScreen] on a short screen), the [current] word is kept in view. [headline] and [description]: a tool's head between the title and the words, as a setup
  * page's ([SettingsWordHead]); [extra] under it, above the words (Device Sync's Sync ROMs row).
  */
 @Composable
@@ -187,6 +199,9 @@ fun SettingsWordBlock(
         )
         if (headline != null || description.isNotEmpty()) SettingsWordHead(headline, description)
         extra?.invoke()
+        // the current word kept in view where the page scrolls (a short screen); nothing to do where it all shows
+        val inView = remember { BringIntoViewRequester() }
+        LaunchedEffect(current) { inView.bringIntoView() }
         words.forEachIndexed { i, word ->
             val color = when {
                 i != current -> colors.inkDim
@@ -194,7 +209,7 @@ fun SettingsWordBlock(
                 else -> colors.accent
             }
             // The open word points at its page beside it ("Display ›"), as the in-game menu's open word.
-            SettingsWord(openedLabel(word, (rowsFocused && i == current) || markAll), color, wordStyle) { onTap(i) }
+            SettingsWord(openedLabel(word, (rowsFocused && i == current) || markAll), color, wordStyle, if (i == current) Modifier.bringIntoViewRequester(inView) else Modifier) { onTap(i) }
         }
     }
 }
@@ -264,10 +279,10 @@ private fun settingsWordPitch(style: TextStyle): Dp = with(LocalDensity.current)
 
 /** One word of the block on its own line box, tappable without a ripple. */
 @Composable
-private fun SettingsWord(text: String, color: Color, style: TextStyle, onTap: () -> Unit) {
+private fun SettingsWord(text: String, color: Color, style: TextStyle, modifier: Modifier = Modifier, onTap: () -> Unit) {
     Text(
         text, color = color, style = style, maxLines = 1, softWrap = false,
-        modifier = Modifier.clickable(remember { MutableInteractionSource() }, indication = null, onClick = onTap),
+        modifier = modifier.clickable(remember { MutableInteractionSource() }, indication = null, onClick = onTap),
     )
 }
 
@@ -281,13 +296,15 @@ fun SettingsMark(modifier: Modifier = Modifier) {
 }
 
 /**
- * The Settings screens' background: plain, the small mark at the top right (the gutter in, [SETTINGS_MARK_TOP] down)
+ * The Settings screens' background: plain, the small mark at the top right (the page inset in, [SETTINGS_MARK_TOP] down)
  * and nothing else above; the large centred mark the other tool pages have is not drawn.
  */
 @Composable
 internal fun SettingsBackground() {
     Box(Modifier.fillMaxSize().background(LocalNxColors.current.background)) {
-        SettingsMark(Modifier.align(Alignment.TopEnd).padding(top = SETTINGS_MARK_TOP, end = settingsPlateEnd()))
+        // at the content edge, as the words on the other side (a highlight's edge, [settingsPlateEnd], is a list inset
+        // further out: in a pad skin's glass that left the mark against the frame)
+        SettingsMark(Modifier.align(Alignment.TopEnd).padding(top = SETTINGS_MARK_TOP, end = nxPageInset().end))
     }
 }
 
@@ -336,6 +353,12 @@ fun settingsBlockLine(crumb: String?, title: String?): String =
 /** Between the crumb and the title in the rows block's first line. */
 private const val SETTINGS_CRUMB_SEPARATOR = " / "
 
+/**
+ * The rows block's bottom inset handed to its list ([SettingsRowsBlock]'s listBottom): the list's content ends with it, so
+ * the list itself reaches the hints and, scrolling, its next row peeks right above them, as the root page's does. 0 elsewhere.
+ */
+val LocalSettingsRowsBottom = compositionLocalOf { 0.dp }
+
 /** Set while a Settings page is drawn as the rows block ([SettingsBlockMode]); null everywhere else (a page draws whole). */
 val LocalSettingsBlock = compositionLocalOf<SettingsBlockMode?> { null }
 
@@ -348,6 +371,12 @@ const val SETTINGS_ROWS_FADE_ROWS = 2
 
 /** The dimmed rows' opacities, from the inner one to the one at the edge ([SETTINGS_ROWS_FADE_ROWS] of them). */
 val SETTINGS_ROWS_FADE_STEPS = listOf(0.6f, 0.25f)
+
+/**
+ * The rows block's lists' edge fade where more scrolls beyond: a fixed sliver, the lists filling their room so the next
+ * row peeks under it (no whole-row slots, no row-by-row dimming).
+ */
+val SETTINGS_ROWS_FADE = 24.dp
 
 /** The least room the rows block leaves above it when it fills the height (it then scrolls). */
 val SETTINGS_ROWS_TOP = 24.dp
@@ -420,24 +449,25 @@ private class SectionSizeSlot {
 }
 
 /**
- * The rows block: anchored to the bottom of what it is given, [SETTINGS_BLOCK_BOTTOM] up, so it sits on the section
+ * The rows block: anchored to the bottom of what it is given, [settingsBlockBottom] up, so it sits on the section
  * block's baseline, and growing up as far as [SETTINGS_ROWS_TOP] under the top; past that its rows scroll. Narrow: the
  * gutter in from both sides; wide: the fixed frame's width ([settingsFrameWidth]), its right edge the gutter in. Its
  * first line is [title] in hint at 13 sp (after [mode]'s crumb in inkDim), level with the row labels and 6 dp above the
  * first row; then [header] (a banner, a page's lines), then [rows], which take what is left and scroll there (each list
- * fades the edge it has more beyond over [SETTINGS_ROWS_FADE_ROWS] rows). No pane header, nothing at the top.
+ * fades the edge it has more beyond over [SETTINGS_ROWS_FADE]). No pane header, nothing at the top. [listBottom]: [rows] is one
+ * list that ends its content with the bottom inset ([LocalSettingsRowsBottom]) instead of the block padding it.
  */
 @Composable
 fun SettingsRowsBlock(
     mode: SettingsBlockMode, title: String?, modifier: Modifier = Modifier,
-    header: (@Composable () -> Unit)? = null, rows: @Composable () -> Unit,
+    header: (@Composable () -> Unit)? = null, listBottom: Boolean = false, rows: @Composable () -> Unit,
 ) {
     val colors = LocalNxColors.current
     val scale = nxTextScale()
     Column(
         modifier.fillMaxSize().padding(
             start = if (mode.crumb != null) settingsPlateStart() else 0.dp,   // narrow: the plates' edge on both sides; wide: from the frame's left edge
-            top = SETTINGS_ROWS_TOP, end = settingsPlateEnd(), bottom = SETTINGS_BLOCK_BOTTOM,
+            top = SETTINGS_ROWS_TOP, end = settingsPlateEnd(), bottom = if (listBottom) 0.dp else settingsBlockBottom(),
         ),
         verticalArrangement = Arrangement.Bottom,
     ) {
@@ -455,7 +485,9 @@ fun SettingsRowsBlock(
                 modifier = Modifier.fillMaxWidth().padding(start = nxListInset(), end = nxListInset(), bottom = SETTINGS_LABEL_GAP),
             )
             header?.invoke()
-            Box(Modifier.fillMaxWidth().weight(1f, fill = false)) { rows() }
+            Box(Modifier.fillMaxWidth().weight(1f, fill = false)) {
+                CompositionLocalProvider(LocalSettingsRowsBottom provides if (listBottom) settingsBlockBottom() else 0.dp, content = rows)
+            }
         }
     }
 }
@@ -463,9 +495,9 @@ fun SettingsRowsBlock(
 /** An unselected word-list row's tag against the row's own inkDim (ink-38 × 0.6); the selected row's tag is inkDim. */
 const val SETTINGS_TAG_OF_ROW = 0.6f
 
-/** A list's edge fade: [SETTINGS_ROWS_FADE_ROWS] of its [row] pitch in the rows block, else the list's own [default]. */
+/** A list's edge fade: in the rows block its fixed [SETTINGS_ROWS_FADE] (whatever its [row] pitch), else the list's own [default]. */
 @Composable
-fun settingsRowsFade(row: Dp, default: Dp): Dp = if (LocalSettingsBlock.current != null) row * SETTINGS_ROWS_FADE_ROWS else default
+fun settingsRowsFade(row: Dp, default: Dp): Dp = if (LocalSettingsBlock.current != null) SETTINGS_ROWS_FADE else default
 
 
 /**
@@ -474,7 +506,7 @@ fun settingsRowsFade(row: Dp, default: Dp): Dp = if (LocalSettingsBlock.current 
  * consoles: 3DS, WII · GC) is at a Settings row's description size, medium weight, in its row's inkDim at
  * [SETTINGS_TAG_OF_ROW] (the selected row's in inkDim itself, never the accent), so the edge fade, applied to the whole row,
  * never leaves a tag brighter than its name. A tap selects, a tap on the selected row opens ([nxTap]); the selection is
- * kept in view and the edges fade like the other rows.
+ * kept in view and the edges fade like the other rows ([SETTINGS_ROWS_FADE]).
  */
 @Composable
 internal fun SettingsWordList(
@@ -486,14 +518,13 @@ internal fun SettingsWordList(
     val tapOpens = LocalNxTapOpens.current
     val tagSize = nxDescSize()   // a Settings row's description size
     val tagFont = LocalNxFontWeights.current
-    NxKeepSelectedInView(listState, selection, rows.size, SETTINGS_ROWS_FADE_ROWS)   // the selection clear of the fade
-    val pitchPx = with(LocalDensity.current) { settingsWordPitch(style).roundToPx() }
-    // As tall as a whole number of rows, snapping to a row's top: at rest it ends on a row boundary.
-    BoxWithConstraints(modifier) {
-        val fit = if (constraints.hasBoundedHeight) (constraints.maxHeight / maxOf(1, pitchPx)) * pitchPx else Int.MAX_VALUE
+    NxKeepSelectedInView(listState, selection, rows.size, 1)   // the next row in view past the selection, under the fade
+    // Its own height, held to the room: past it the list scrolls, the next row peeking under the thin fade.
+    Box(modifier) {
         LazyColumn(
-            Modifier.fillMaxWidth().heightIn(max = with(LocalDensity.current) { fit.toDp() }).nxRowEdgeMask(listState),
+            Modifier.fillMaxWidth().nxScrollFade(listState, SETTINGS_ROWS_FADE, strong = true),
             state = listState, flingBehavior = rememberNxRowSnapFling(listState),
+            contentPadding = PaddingValues(bottom = LocalSettingsRowsBottom.current),
         ) {
             itemsIndexed(rows) { i, row ->
                 val selected = i == selection()
@@ -509,7 +540,7 @@ internal fun SettingsWordList(
                 Text(
                     text, color = if (selected) colors.accent else colors.inkDim, style = style, maxLines = 1, softWrap = false,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth().nxRowFade(listState, i, SETTINGS_ROWS_FADE_STEPS).padding(start = nxListInset())
+                    modifier = Modifier.fillMaxWidth().padding(start = nxListInset())
                         .alpha(if (row.enabled) 1f else NX_DISABLED_ALPHA)   // role: a disabled row
                         .clickable(remember { MutableInteractionSource() }, indication = null) { nxTap(i, selected, tapOpens(i), onSelect, onOpen) },
                 )

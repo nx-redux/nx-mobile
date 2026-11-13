@@ -149,7 +149,7 @@ internal fun SetupBlockPage(
                     // At most the Settings rows block's width ([SETTINGS_FRAME_MAX]), from the start gutter: the lines wrap in it and a
                     // row's control stays near its label; the button on the rows' left edge under it.
                     Column(
-                        Modifier.fillMaxHeight().padding(start = plateStart, end = gutter, top = SETTINGS_ROWS_TOP, bottom = SETTINGS_BLOCK_BOTTOM)
+                        Modifier.fillMaxHeight().padding(start = plateStart, end = gutter, top = SETTINGS_ROWS_TOP, bottom = settingsBlockBottom())
                             .widthIn(max = SETTINGS_FRAME_MAX).fillMaxWidth(),
                     ) {
                         SetupGroupRoom(line, if (shown > 0) (-gap).coerceAtLeast(0.dp) else 0.dp, Modifier.weight(1f).fillMaxWidth()) {
@@ -181,7 +181,7 @@ internal fun SetupBlockPage(
                     }
                 }
                 if (side && picture != null) BoxWithConstraints(
-                    Modifier.weight(1f).fillMaxHeight().padding(top = SETTINGS_ROWS_TOP, bottom = SETTINGS_BLOCK_BOTTOM, end = gutter),
+                    Modifier.weight(1f).fillMaxHeight().padding(top = SETTINGS_ROWS_TOP, bottom = settingsBlockBottom(), end = gutter),
                     contentAlignment = Alignment.Center,
                 ) { FramedPictureFit(picture, LAYOUT_PICTURE_AR, maxWidth, maxHeight) }
             }

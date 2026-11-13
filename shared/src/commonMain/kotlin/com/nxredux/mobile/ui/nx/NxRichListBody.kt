@@ -1,5 +1,7 @@
 package com.nxredux.mobile.ui.nx
 
+import com.nxredux.mobile.ui.SETTINGS_ROWS_FADE
+import com.nxredux.mobile.ui.LocalSettingsRowsBottom
 import com.nxredux.mobile.ui.SettingsRowsBlock
 import com.nxredux.mobile.ui.LocalSettingsBlock
 import androidx.compose.foundation.layout.Box
@@ -54,15 +56,18 @@ fun NxRichListBody(
                 icons != null -> ({ Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) { icons() } })
                 else -> null
             }
-            SettingsRowsBlock(block, listOfNotNull(title.takeIf { it.isNotEmpty() }, titleSuffix).joinToString(" "), Modifier.weight(1f), header) {
+            SettingsRowsBlock(block, listOfNotNull(title.takeIf { it.isNotEmpty() }, titleSuffix).joinToString(" "), Modifier.weight(1f), header, listBottom = true) {
                 if (rows.isNotEmpty()) BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val pitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)
-                    val count = nxRichRowCountFor(maxHeight, pitch)
-                    val height = maxHeight / count * minOf(rows.size, count)
+                    // Rich rows at their own pitch (1.5 plain rows), as many as there are up to the room; past it the list
+                    // scrolls, the next row peeking under the block's thin fade.
+                    val rowPitch = pitch * RICH_ROW_OF_PITCH
+                    val bottom = LocalSettingsRowsBottom.current
+                    val height = minOf(maxHeight, rowPitch * rows.size + bottom)
                     NxRichList(
                         rows, selectedIndex, onSelect, onOpen,
-                        Modifier.fillMaxWidth().height(height).nxScrollFade(listState, height = RICH_LIST_FADE, strong = true),
-                        listState = listState, onLongPress = onLongPress, labelSize = nxListLabelSize(pitch), edgeMargin = 1,
+                        Modifier.fillMaxWidth().height(height).nxScrollFade(listState, height = SETTINGS_ROWS_FADE, strong = true),
+                        listState = listState, onLongPress = onLongPress, labelSize = nxListLabelSize(pitch), edgeMargin = 1, rowPitch = rowPitch, contentBottom = bottom,
                     )
                 }
             }
@@ -114,3 +119,6 @@ fun NxRichListBody(
 
 /** The list's edge fade: a short fixed hint that more rows are there, not rows' worth (tall art rows would leave a dark band). */
 private val RICH_LIST_FADE = 24.dp
+
+/** A rich row's height in plain rows ([nxRichRowCountFor]'s 1.5). */
+private const val RICH_ROW_OF_PITCH = 1.5f
