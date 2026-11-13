@@ -269,31 +269,47 @@ internal class LaunchPipeline(private val host: LaunchHost) {
      * Wi-Fi update would replace ([NetplayLinkOptions.pspWifiUpdate]).
      */
     private var pspOnCable = false
+    /**
+     * The game's first frame has come: the core is loaded, so a variables update stays. One queued before the core's
+     * load is cleared by it, so a Wi-Fi address that came up while the game loaded waits for this ([onFirstFrame]).
+     */
+    private var pspRunning = false
 
     /**
-     * A linked PSP game on a Wi-Fi that came up or whose address changed (another access point, a new lease): the runner
-     * gets its own address and the broadcast again, as variables, so it stops hearing its own announcements as another
-     * device's and this device's server is announced, and logged in to, at the new address; a game launched without Wi-Fi
-     * starts serving and following on it. The runner takes a same-role change live. On the main thread, where a session's
-     * Disconnect ([leavePspSession]) reads and sends the same addresses, so the two queue to the runner in order.
+     * A linked PSP game on a Wi-Fi that came up, went without an address or changed it (another access point, a new
+     * lease): the addresses are recorded for a session's Disconnect ([leavePspSession]) and given to the runner
+     * ([pspGive]). On the main thread, where that Disconnect reads and sends the same addresses, so the two queue to the
+     * runner in order.
      */
     private fun pspAddressChanged(cm: ConnectivityManager, network: Network) {
         if (!pspWatched) return
         val link = WifiNetworks.address(cm, network)
-        val self = link?.address?.hostAddress ?: return
-        val broadcast = WifiNetworks.broadcast(link)?.hostAddress ?: return
+        val self = link?.address?.hostAddress
+        val broadcast = WifiNetworks.broadcast(link)?.hostAddress
         host.activity.runOnUiThread {
-            pspWifi = self to broadcast
-            val update = NetplayLinkOptions.pspWifiUpdate(pspOnCable, pspGiven, self, broadcast)
-            if (update.isEmpty()) return@runOnUiThread
-            val view = host.retroView ?: return@runOnUiThread   // not loaded yet: a later change tries again
-            pspGiven = self to broadcast
-            NxLog.i(TAG_LOG, "PSP link: the Wi-Fi address is now $self")
-            val variables = update.map { (key, value) -> Variable(key, value) }.toTypedArray()
-            view.queueEvent {
-                runCatching { view.updateVariables(*variables) }
-                    .onFailure { NxLog.w(TAG_LOG, "PSP link: giving the runner the new address failed", it) }
-            }
+            pspWifi = if (self != null && broadcast != null) self to broadcast else null
+            pspGive()
+        }
+    }
+
+    /**
+     * The runner gets the Wi-Fi's own address and broadcast as variables when they are new to it, so it stops hearing its
+     * own announcements as another device's and this device's server is announced, and logged in to, at the new address;
+     * a game launched without Wi-Fi starts serving and following on it. The runner takes a same-role change live. Only
+     * once the game runs ([pspRunning]). Main thread.
+     */
+    private fun pspGive() {
+        if (!pspRunning) return
+        val wifi = pspWifi
+        val update = NetplayLinkOptions.pspWifiUpdate(pspOnCable, pspGiven, wifi?.first, wifi?.second)
+        if (update.isEmpty()) return
+        val view = host.retroView ?: return
+        pspGiven = wifi
+        NxLog.i(TAG_LOG, "PSP link: the Wi-Fi address is now ${wifi?.first}")
+        val variables = update.map { (key, value) -> Variable(key, value) }.toTypedArray()
+        view.queueEvent {
+            runCatching { view.updateVariables(*variables) }
+                .onFailure { NxLog.w(TAG_LOG, "PSP link: giving the runner the new address failed", it) }
         }
     }
 
@@ -1094,6 +1110,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     private suspend fun onFirstFrame(cfg: LaunchConfig, view: GLRetroView) {
         with(host) {
             onGameReady()
+            // A Wi-Fi address that came up while the game loaded was held back (pspGive): send it now.
+            pspRunning = true
+            pspGive()
             if (BuildConfig.DEBUG) NxTestResults.write(host.activity, "game", "state" to "running", "tag" to gameTag, "core" to gameCoreId)
             activity.intent.getStringExtra(EXTRA_GAME_PATH)?.let { path ->
                 val tag = gameTag
