@@ -681,6 +681,50 @@ static void cable_down_back_to_wifi(void) {
     assert(ip == CABLE_A);
 }
 
+/* A session on a cable that is gone cannot go on, and a game alone in its lobby would stay grouped for good. */
+static void cable_gone_moves_a_grouped_device(void) {
+    psl s;
+    uint8_t pkt[PSL_PACKET];
+    make_auto(&s, WIFI_A, 5, 0, 0);
+    psl_set_cable(&s, PSL_CABLE_UP, CABLE_A, CABLE_BC, 0);
+    assert(psl_step(&s, PSL_LISTEN_MS).serve == 1);
+    psl_active(&s, 1, 1, 1500);   /* another device is on this server */
+    psl_choice prev = psl_step(&s, 1600);
+    assert(prev.serve == 1 && prev.cable == 1 && prev.server_ip == CABLE_A);
+    psl_set_cable(&s, PSL_CABLE_NONE, 0, 0, 2000);
+    psl_choice c = psl_step(&s, 2000);
+    assert(c.cable == 0 && c.serve == 0 && c.settled == 0 && c.self == WIFI_A);
+    /* The goodbye goes on the cable, where the server was. */
+    psl_pack_goodbye(&s, pkt);
+    uint32_t ip;
+    memcpy(&ip, pkt + 8, 4);
+    assert(ip == CABLE_A && pkt[5] == 0);
+    c = psl_step(&s, 2000 + PSL_LISTEN_MS - 1);
+    assert(c.serve == 0 && c.settled == 0);
+    c = psl_step(&s, 2000 + PSL_LISTEN_MS);
+    assert(c.serve == 1 && c.cable == 0 && c.server_ip == WIFI_A);
+
+    /* A grouped follower, the cable dropping to COMING: on the Wi-Fi at once, unheld while grouped. */
+    psl f;
+    make_auto(&f, WIFI_B, 9, 0, 0);
+    psl_set_cable(&f, PSL_CABLE_UP, CABLE_B, CABLE_BC, 0);
+    hear(&f, CABLE_A, 5, PSL_F_SERVING, 100);
+    assert(psl_step(&f, 100).server_ip == CABLE_A);
+    psl_active(&f, 1, 1, 200);
+    psl_set_cable(&f, PSL_CABLE_COMING, 0, 0, 2000);
+    c = psl_step(&f, 2000);
+    assert(c.cable == 0 && c.settled == 0 && c.held == 0 && c.self == WIFI_B);
+    hear(&f, WIFI_A, 5, PSL_F_SERVING, 2100);
+    c = psl_step(&f, 2100);
+    assert(c.cable == 0 && c.settled == 1 && c.server_ip == WIFI_A);
+    /* No longer grouped while the cable is still coming: held, as on any trigger while COMING. */
+    psl_active(&f, 1, 0, 3000);
+    c = psl_step(&f, 3000);
+    assert(c.held == 1 && c.settled == 0);
+    c = psl_step(&f, 3000 + PSL_CABLE_HOLD_MS);
+    assert(c.held == 0);
+}
+
 static void choice_self_is_cable_self(void) {
     psl s;
     make_auto(&s, WIFI_A, 5, 0, 0);
@@ -858,6 +902,7 @@ int main(void) {
     cable_mode_ignores_wifi_sources();
     wifi_mode_ignores_cable_sources();
     cable_down_back_to_wifi();
+    cable_gone_moves_a_grouped_device();
     choice_self_is_cable_self();
     session_on_cable_by_self();
     no_wifi_self_never_serves();

@@ -98,12 +98,13 @@ static uint32_t net_mask(const psl* s) {
     return mask;
 }
 
-/* An automatic device follows the cable from one network to the other, but never while grouped: a game in a group,
- * or another device on this server, is a match the move would end. Peers heard on the old network are no servers to
- * follow on the new one. */
+/* An automatic device follows the cable from one network to the other. Onto the cable only when not grouped: a game
+ * in a group, or another device on this server, is a match the move would end. Off a cable that is gone at once, even
+ * grouped: that match cannot go on, and a game alone in its lobby would otherwise stay grouped there for good. Peers
+ * heard on the old network are no servers to follow on the new one. */
 static void follow_cable(psl* s, int64_t now_ms) {
     const int want = cable_level(s) == PSL_CABLE_UP;
-    if (s->mode != PSL_AUTO || s->grouped || want == s->on_cable) return;
+    if (s->mode != PSL_AUTO || want == s->on_cable || (want && s->grouped)) return;
     s->on_cable = want;
     s->serving = 0;
     s->heard_server = 0;
@@ -134,6 +135,9 @@ void psl_set_cable(psl* s, int state, uint32_t cable_self, uint32_t cable_broadc
 
 void psl_active(psl* s, int active, int grouped, int64_t now_ms) {
     const int trigger = active && !s->active;
+    /* Out of its group in ad hoc, a device is free to take the cable, so one that is coming is waited for as on the
+     * trigger (a device taken off a dropped cable while grouped gets its hold here). */
+    const int freed = active && s->active && s->grouped && !grouped && !s->holding;
     if (trigger) {
         s->listen_from_ms = now_ms;
         s->active = 1;
@@ -144,7 +148,7 @@ void psl_active(psl* s, int active, int grouped, int64_t now_ms) {
     }
     s->grouped = grouped;
     follow_cable(s, now_ms);
-    if (trigger && cable_level(s) == PSL_CABLE_COMING) arm_hold(s, now_ms);
+    if ((trigger || freed) && cable_level(s) == PSL_CABLE_COMING) arm_hold(s, now_ms);
 }
 
 void psl_park(psl* s, int parked) {

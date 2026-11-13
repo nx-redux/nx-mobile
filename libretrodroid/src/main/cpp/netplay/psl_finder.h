@@ -90,11 +90,11 @@ void   psl_set_self(psl*, uint32_t self_ip);                 /* the Wi-Fi addres
  * server to follow is a packet's source. When no mask can be had from the two, every source is accepted. */
 void   psl_set_net(psl*, uint32_t broadcast_ip);
 /* The cable's state, this device's address on it and its broadcast (0 keeps the one known). UP without an address is
- * no cable. An automatic device that is not grouped moves to the cable when it is up and back to the Wi-Fi when it is
- * not: the peers are forgotten, any server stops and the listen window starts again. A transition into COMING while
- * active, or the trigger while COMING, holds the Wi-Fi election for PSL_CABLE_HOLD_MS (not for a grouped device):
- * a server started or followed there now would keep the game off the cable. A session's host and joiner are on the
- * network self_ip is on, whatever the cable does. */
+ * no cable. An automatic device moves to the cable when it is up and it is not grouped, and back to the Wi-Fi as soon
+ * as it is not up, grouped or not: the peers are forgotten, any server stops and the listen window starts again. A
+ * transition into COMING while active, the trigger while COMING, or leaving a group in ad hoc while COMING, holds the
+ * Wi-Fi election for PSL_CABLE_HOLD_MS (not for a grouped device): a server started or followed there now would keep
+ * the game off the cable. A session's host and joiner are on the network self_ip is on, whatever the cable does. */
 void   psl_set_cable(psl*, int state, uint32_t cable_self, uint32_t cable_broadcast, int64_t now_ms);
 /* The game reached its trigger / left ad hoc. grouped: the game is in a group, or this device's server has another
  * user; either way the server keeps them (it never yields), and out of ad hoc it lingers until they are gone. */
