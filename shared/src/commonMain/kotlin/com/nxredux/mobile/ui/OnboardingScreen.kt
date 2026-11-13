@@ -48,6 +48,9 @@ import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxButtonGlyph
+import com.nxredux.mobile.ui.nx.nxPadRings
+import com.nxredux.mobile.ui.nx.nxPadRing
+import com.nxredux.mobile.ui.nx.NxPadRingRoom
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingsList
 import com.nxredux.mobile.ui.nx.NxSignInPrompt
@@ -103,7 +106,7 @@ fun OnboardingScreen(
  * A setup page (onboarding's steps, first setup's folder steps): the step group (the [counter], [headline], [lines] and
  * touch [rows], [picture] (a layout's) under the rows) and the last [buttons] rows (Continue, Skip, Pick folder; two for
  * a real choice: Add folder / Skip) as words pinned to the bottom ([SetupButtons]), in the same place on every step. The
- * rows keep the touch rows' selected plate; the buttons select by brightness alone. Either way
+ * rows keep the touch rows' selected plate; the buttons are a modal footer's ([SetupButtons]). Either way
  * up the group's top sits on a fixed line ([SETUP_LINE] of the body) and grows down, so the counter, title and rows are
  * level from step to step; a group that would come within [SETUP_BUTTON_GAP] of the button moves up instead, and past
  * the top its rows scroll under the rows block's fades.
@@ -191,41 +194,41 @@ internal fun SetupBlockPage(
 }
 
 /**
- * A setup page's buttons, as every action: the selected one ([first] + its place is [selected]) on the pill
- * ([nxHighlight], its on-pill text), the others the word alone in inkDim, with a pad or touch alike (the page opens on
- * its first action, lit). Each word stays on its text edge, the pill reaching [nxListInset] past it either side, so the words
- * keep their places and spacing whichever is lit; a tap target [SETUP_BUTTON_TAP] tall. A tap selects and opens it.
- * [rest]: the unlit words' ink, inkDim on a setup page; a modal's are the list text ([NxModal], [NxChoiceDialog]).
- * [outlined]: the word that keeps the pill's outline while unlit (a modal's first action, so it reads as a button with
- * the focus elsewhere); null: none. [keys]: a pad button's glyph before a word that has a button of its own (a typed
- * prompt's START and B), in [labels]' order; null or missing: the word alone.
+ * A setup page's buttons, in a modal footer's language ([NxModalAction]): the first is the page's main action on the
+ * accent pill ([nxHighlight], its on-pill text) whether or not the pad is on it, the others outlined; a page whose only
+ * button is **Skip** has no main action, so that one is outlined too. The pad's place ([first] + its place is
+ * [selected]) is the modal's white ring round the button ([nxPadRing], shown only where there is a pad). Each word
+ * stays on its text edge, the pill reaching [nxListInset] past it either side (the ring's room hangs outside it), so the
+ * words keep their places and spacing; a tap target [SETUP_BUTTON_TAP] tall. A tap selects and opens it.
+ * [keys]: a pad button's glyph before a word that has a button of its own, in [labels]' order; null or missing: none.
  */
 @Composable
 internal fun SetupButtons(
     labels: List<String>, first: Int, selected: Int, size: TextUnit, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit,
-    rest: Color = LocalNxColors.current.inkDim,
-    outlined: Int? = null,
     keys: List<NxButton?> = emptyList(),
 ) {
     val colors = LocalNxColors.current
     val inset = nxListInset()
     val pill = nxHighlight()
+    val rings = nxPadRings()
+    val hasMain = !(labels.size == 1 && labels[0] == "Skip")
     Row(verticalAlignment = Alignment.CenterVertically) {
         labels.forEachIndexed { i, text ->
             val index = first + i
-            val lit = index == selected
+            val main = hasMain && i == 0
             Box(
                 Modifier.heightIn(min = SETUP_BUTTON_TAP).clickable { onSelect(index); onOpen(index) },
                 contentAlignment = Alignment.CenterStart,
             ) {
-                val ink = if (lit) colors.onAccent else rest
+                val ink = if (main) colors.onAccent else colors.listText
                 val shape = RoundedCornerShape(50)
-                val ground = when {
-                    lit -> Modifier.background(pill, shape)
-                    index == outlined -> Modifier.border(1.dp, colors.inkRing, shape)
-                    else -> Modifier
-                }
-                Row(ground.padding(horizontal = inset, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                val ground = if (main) Modifier.background(pill, shape) else Modifier.border(1.dp, colors.inkRing, shape)
+                // The ring's room outside the pill, so the pill (and the word) keep the place they have without it.
+                Row(
+                    Modifier.offset(x = -NxPadRingRoom).nxPadRing(rings && index == selected).then(ground)
+                        .padding(horizontal = inset, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     keys.getOrNull(i)?.let { key ->
                         NxButtonGlyph(key, with(LocalDensity.current) { size.toDp() }, tint = ink)
                         Spacer(Modifier.width(6.dp))
