@@ -75,6 +75,11 @@ public:
     // In the core's video_cb (RETRO_HW_FRAME_BUFFER_VALID): copies the image from set_image into the next buffer.
     bool bridgeFrame(unsigned width, unsigned height, Frame& out);
 
+    // A custom driver could not create or import the shared AHardwareBuffer before any frame was bridged (Mali's
+    // malisx2: INVALID_EXTERNAL_HANDLE), so nothing it renders can reach the screen: the driver could not start. True
+    // once, after the bridgeFrame that failed; the system driver never reports it (its failed frame is skipped, as before).
+    bool takeCustomSlotFailure();
+
     // After the GL draw that sampled the last bridged buffer: fences it so the copy into it two frames later waits.
     void afterGlDraw();
 
@@ -198,6 +203,9 @@ private:
     unsigned slotIndex = 0;
     int lastSlot = -1;
     uint64_t nextSlotId = 1;
+    bool bridgedAny = false;          // a frame has reached a slot since initialize()
+    bool customSlotFailed = false;    // takeCustomSlotFailure's report, pending
+    bool customSlotReported = false;  // reported once per initialize()
 
     bool useSyncFd = false;
     bool queueFamilyForeign = false;

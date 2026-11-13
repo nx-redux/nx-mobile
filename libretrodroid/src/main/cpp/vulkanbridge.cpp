@@ -487,6 +487,9 @@ bool VulkanBridge::initialize(unsigned width, unsigned height) {
     syncIndex = 0;
     slotIndex = 0;
     lastSlot = -1;
+    bridgedAny = false;
+    customSlotFailed = false;
+    customSlotReported = false;
     {
         std::lock_guard<std::mutex> lock(frameMutex);
         haveImage = false;
@@ -607,6 +610,12 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
         freeSlot(slot);
         if (!allocateSlot(slot, w, h)) {
             freeSlot(slot);
+            // A custom driver that cannot share even the first frame with the GLES side: every frame would stay black.
+            if (vk.custom && !bridgedAny && !customSlotReported) {
+                LOGE("Vulkan bridge: the custom driver cannot share frames with the display: reported as a failed start");
+                customSlotFailed = true;
+                customSlotReported = true;
+            }
             return false;
         }
     }
@@ -797,10 +806,17 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
     }
 
     lastSlot = (int) slotIndex;
+    bridgedAny = true;
     slotIndex = (slotIndex + 1) % SYNC_COUNT;
     syncIndex = (index + 1) % SYNC_COUNT;
 
     return true;
+}
+
+bool VulkanBridge::takeCustomSlotFailure() {
+    const bool failed = customSlotFailed;
+    customSlotFailed = false;
+    return failed;
 }
 
 void VulkanBridge::onGlContextLost() {

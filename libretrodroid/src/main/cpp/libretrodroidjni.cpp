@@ -1029,6 +1029,12 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_step(
         });
         LibretroDroid::getInstance().step();
         LibretroDroid::getInstance().setFrameDrawnHook(nullptr);
+    } catch (libretrodroid::LibretroDroidError& exception) {
+        // Its own code: a custom Vulkan driver that cannot share frames is ERROR_GL_NOT_COMPATIBLE, a failed start.
+        LibretroDroid::getInstance().setFrameDrawnHook(nullptr);
+        LOGE("Error in step: %s", exception.what());
+        JavaUtils::throwRetroException(env, exception.getErrorCode());
+        return;
     } catch (std::exception &exception) {
         LibretroDroid::getInstance().setFrameDrawnHook(nullptr);
         LOGE("Error in step: %s", exception.what());
