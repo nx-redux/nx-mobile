@@ -3,11 +3,12 @@
 # network the link is on and routes every socket the core hands it there. The game's PDP sockets and PTP listen
 # sockets outlive a group, so when the runner asks for a new login (as it does on every move between networks) and
 # after each login they are routed again onto the link's network; a socket left on the old one would send where the
-# new peers are not. While a phone is on
-# the port and its cable is coming up, the runner holds its answer for the server up to 9 s; a game's Scan / Create /
-# Connect / Join now waits for the login that long (and for the connect after it) instead of returning BUSY after
-# 5 s, which some games take as a failure (Tekken 6 calls Connect on entering its lobby). Without a frontend that
-# answers the call, the core behaves as upstream.
+# new peers are not. While a phone is on the port and its cable is coming up, the runner holds its answer for the
+# server up to NX_PSP_LINK_SERVER_WAIT_MAX_MS (nx_psp_link.h); a game's Scan / Create / Connect / Join waits for the
+# login that long, and for the connect after it, since a request that returns BUSY is a failure to some games
+# (Tekken 6 calls Connect on entering its lobby). Leaving ad hoc tells the runner before the login thread is joined, so
+# a held login gives up at once rather than stall the game. Without a frontend that answers the call, the core behaves
+# as upstream.
 diff --git a/Core/HLE/NxPspLink.cpp b/Core/HLE/NxPspLink.cpp
 index 04287d2..2f4c90e 100644
 --- a/Core/HLE/NxPspLink.cpp
@@ -21,26 +22,23 @@ index 04287d2..2f4c90e 100644
  	}
  }
 diff --git a/Core/HLE/NxPspLink.h b/Core/HLE/NxPspLink.h
-index 5387ad1..add9c9d 100644
+index 5387ad1..b5b85e4 100644
 --- a/Core/HLE/NxPspLink.h
 +++ b/Core/HLE/NxPspLink.h
-@@ -34,8 +34,13 @@ void Register(EnvironmentCallback environment);
+@@ -34,8 +34,10 @@ void Register(EnvironmentCallback environment);
  // Before the PSP shuts down. Also stops a server the frontend started.
  void Unregister();
  
 -// The server to log in to and this device's address on its network, both network order. Blocks up to about
 -// 1.5 s while the frontend listens for one, so only from the login thread. False: none this time.
-+// The longest Server() blocks: while the frontend waits for a phone-to-phone cable that is coming, it holds the
-+// answer through that wait and a listen window after it (nx_psp_link.h).
-+const int SERVER_WAIT_MAX_MS = 9000;
-+
 +// The server to log in to and this device's address on its network (the Wi-Fi's or the cable's), both network order.
-+// Blocks up to about 1.5 s while the frontend listens for one, up to SERVER_WAIT_MAX_MS while it waits for a cable,
-+// so only from the login thread. False: none this time.
++// Blocks up to about 1.5 s while the frontend listens for one, up to NX_PSP_LINK_SERVER_WAIT_MAX_MS (nx_psp_link.h)
++// while it waits for a phone-to-phone cable that is coming, so only from the login thread; Active(false) ends that
++// wait. False: none this time.
  bool Server(uint32_t *ip, uint32_t *self);
  // The game reached Scan / Create / Connect / Join, is in a group, or left ad hoc. What the frontend is told also
  // carries whether this device's server has another user (ServerUsers); only changes reach it.
-@@ -43,6 +48,7 @@ void Active(bool active, bool grouped);
+@@ -43,6 +45,7 @@ void Active(bool active, bool grouped);
  // The poll's view of the group, reported while the game is in ad hoc.
  void Grouped(bool grouped);
  bool InAdhoc();
@@ -101,10 +99,18 @@ index 962c8a5..ff7b3db 100644
  		if (NxPspLink::InAdhoc() && !NxPspLink::Parked()) {
  			isAdhocctlNeedLogin = true;
 diff --git a/Core/HLE/sceNetAdhoc.cpp b/Core/HLE/sceNetAdhoc.cpp
-index 040bcf2..00972b8 100644
+index 040bcf2..4909ad5 100644
 --- a/Core/HLE/sceNetAdhoc.cpp
 +++ b/Core/HLE/sceNetAdhoc.cpp
-@@ -133,6 +133,12 @@ static int PspEventDelayUs(u32 flags) {
+@@ -64,6 +64,7 @@
+ #include "Core/HLE/KernelWaitHelpers.h"
+ #include "Core/HLE/NetAdhocCommon.h"
+ #include "Core/HLE/NxPspLink.h"
++#include "libretro/nx_psp_link.h"
+ 
+ #include "ext/aemu_postoffice/client/postoffice_client.h"
+ #include "ext/aemu_postoffice/adhocctl/client/adhocctl.h"
+@@ -133,6 +134,12 @@ static int PspEventDelayUs(u32 flags) {
  // The request goes out to the server then, and the call returns once it's sent.
  static const int ADHOCCTL_REQUEST_US = 30;
  
@@ -112,12 +118,12 @@ index 040bcf2..00972b8 100644
 +// wait, the connect to the server (which aemu_postoffice gives up after 5 s), and a second for the poll to collect it.
 +// Cut short, the request would return BUSY, which some games take as a failure (Tekken 6 entering its lobby throws the
 +// player out); a login that fails tells the waiting game itself (FinishAdhocctlLogin).
-+static const u64 LINK_REQUEST_TIMEOUT_US = (NxPspLink::SERVER_WAIT_MAX_MS + 5000 + 1000) * 1000ULL;
++static const u64 LINK_REQUEST_TIMEOUT_US = (NX_PSP_LINK_SERVER_WAIT_MAX_MS + 5000 + 1000) * 1000ULL;
 +
  static int RemainingEventDelayUs(u32 flags) {
  	s64 left = (s64)(adhocctlRequestTimeUs + PspEventDelayUs(flags)) - (s64)CoreTiming::GetGlobalTimeUs();
  	return left > 0 ? (int)left : 0;
-@@ -673,7 +679,8 @@ static void __AdhocctlNotify(u64 userdata, int cyclesLate) {
+@@ -673,7 +680,8 @@ static void __AdhocctlNotify(u64 userdata, int cyclesLate) {
  		if (call_status == ADHOCCTL_CALL_WOULDBLOCK) {
  			bool retry = true;
  			u64 now = CoreTiming::GetGlobalTimeUs();
@@ -127,24 +133,74 @@ index 040bcf2..00972b8 100644
  				retry = false;
  			}
  
+@@ -1703,11 +1711,12 @@ void __NetAdhocDoState(PointerWrap &p) {
+ 			StartFriendFinder();
+ 		} else {
+ 			if (!netAdhocctlInited && cur_netAdhocctlInited) {
+-				// The thread sets adhocctlState on its way out, so keep the loaded one.
++				// The thread sets adhocctlState on its way out, so keep the loaded one. The frontend is told first: a
++				// login held in Server() for a cable then gives up, and the join below doesn't wait for it.
+ 				const int loadedState = adhocctlState;
++				NxPspLink::Active(false, false);
+ 				StopFriendFinder();
+ 				adhocctlState = loadedState;
+-				NxPspLink::Active(false, false);
+ 			}
+ 			isAdhocctlNeedLogin = false;
+ 		}
+@@ -3162,11 +3171,12 @@ int NetAdhocctl_Term() {
+ 				NetAdhocctl_Disconnect();
+ 		}
+ 
+-		// Stop the adhocctl client
++		// Stop the adhocctl client. The frontend is told first: a login held in Server() for a cable that is coming
++		// then gives up, and the join in friendFinderStop() doesn't stall the game for the rest of that wait.
++		NxPspLink::Active(false, false);
+ 		friendFinderRunning = false;
+ 		friendFinderStop();
+ 		adhocctlInServerGroup = false;
+-		NxPspLink::Active(false, false);
+ 
+ 		// TODO: May need to block current thread to make sure all Adhocctl callbacks have been fully executed before terminating Adhoc PSPThread (ie. threadAdhocID).
+ 
 diff --git a/libretro/nx_psp_link.h b/libretro/nx_psp_link.h
-index c395060..ff4d6f2 100644
+index c395060..f72e528 100644
 --- a/libretro/nx_psp_link.h
 +++ b/libretro/nx_psp_link.h
-@@ -1,5 +1,5 @@
+@@ -1,14 +1,19 @@
  #pragma once
 -// nx-mobile private libretro environment call: PSP ad hoc over Wi-Fi. The core hands the frontend its ad hoc link, so
-+// nx-mobile private libretro environment call: PSP ad hoc over Wi-Fi or the phone-to-phone cable. The core hands the frontend its ad hoc link, so
- // the frontend can follow it and leave it as it does Azahar's room (nx_3ds_link.h), and tells the core which device runs
- // the ad hoc server: the frontend runs the finder and the election (psl_finder.h), the core runs the server and the
- // client. *data is a nx_psp_link_interface* whose frontend half the frontend fills in, or NULL when the link is gone and
-@@ -17,12 +17,16 @@ struct nx_psp_link_interface {
+-// the frontend can follow it and leave it as it does Azahar's room (nx_3ds_link.h), and tells the core which device runs
+-// the ad hoc server: the frontend runs the finder and the election (psl_finder.h), the core runs the server and the
+-// client. *data is a nx_psp_link_interface* whose frontend half the frontend fills in, or NULL when the link is gone and
+-// the calls must not be made again. Only the nx-mobile runner answers it; only nx-mobile's patched PPSSPP sends it (its
+-// copy must stay byte for byte the same). The calls may come from any thread unless noted.
++// nx-mobile private libretro environment call: PSP ad hoc over Wi-Fi or the phone-to-phone cable. The core hands the
++// frontend its ad hoc link, so the frontend can follow it and leave it as it does Azahar's room (nx_3ds_link.h), and
++// tells the core which device runs the ad hoc server: the frontend runs the finder and the election (psl_finder.h),
++// the core runs the server and the client. *data is a nx_psp_link_interface* whose frontend half the frontend fills
++// in, or NULL when the link is gone and the calls must not be made again. Only the nx-mobile runner answers it; only
++// nx-mobile's patched PPSSPP sends it (its copy must stay byte for byte the same). The calls may come from any thread
++// unless noted.
+ #include <stdint.h>
+ 
+ #define NX_ENVIRONMENT_SET_PSP_LINK (0x20000 /* RETRO_ENVIRONMENT_PRIVATE */ | 0x4e5b)
+ 
++/* The longest server() blocks, in ms: while the election waits for a cable that is coming, through that wait and a
++ * listen window after it. The core sizes the wait of a game's request on it. */
++#define NX_PSP_LINK_SERVER_WAIT_MAX_MS 9000
++
+ struct nx_psp_link_interface {
+     /* The core's, set before the call. Any thread. */
+     int  (*presence)(void);   /* NX_3DS_LINK_OUT / SEEKING / ROOM numbering (nx_3ds_link.h) */
+@@ -17,12 +22,17 @@ struct nx_psp_link_interface {
      void (*serve)(int on);    /* start or stop the built-in ad hoc server; returns once it listens or has stopped */
      void (*relogin)(void);    /* the server changed or is gone: drop its connection, tell the game if it was in a group */
      /* The frontend's, filled in while it answers the call. */
 -    int  (*server)(uint32_t* ip, uint32_t* self);  /* blocks up to PSL_LISTEN_MS + 500; 1: *ip is the server, *self this
 -                                                      device's address on the routed network (network order); 0: none */
-+    /* Blocks up to 1.5 s (PSL_LISTEN_MS + 500), and up to 9 s while the election waits for a cable that is coming.
++    /* Blocks up to 1.5 s (PSL_LISTEN_MS + 500), up to NX_PSP_LINK_SERVER_WAIT_MAX_MS while the election waits for a
++     * cable that is coming, and gives up once active has been told 0.
 +     * 1: *ip is the server, *self this device's address on the network the server is on (the Wi-Fi's or the cable's;
 +     * network order); 0: none. */
 +    int  (*server)(uint32_t* ip, uint32_t* self);
