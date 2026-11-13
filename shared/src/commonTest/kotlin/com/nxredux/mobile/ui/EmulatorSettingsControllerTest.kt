@@ -192,6 +192,19 @@ class EmulatorSettingsControllerTest {
         assertEquals(listOf("GBA"), rows[0].tags)
     }
 
+    // A tag listed without games (mGBA's MGBA, where Cable Link exists) joins its core's row, in registry order.
+    @Test fun list_adds_a_tag_listed_without_games() {
+        assertEquals(
+            listOf(EmulatorListRow("gpsp", "gpSP", listOf("GBA")), EmulatorListRow("mgba", "mGBA", listOf("MGBA"))),
+            EmulatorSettingsController.listRows(listOf(system("GBA")), always = listOf("MGBA")),
+        )
+        assertEquals(
+            listOf(EmulatorListRow("mgba", "mGBA", listOf("MGBA", "SGB"))),
+            EmulatorSettingsController.listRows(listOf(system("SGB")), always = listOf("MGBA")),
+        )
+        assertEquals(listOf("gpSP"), EmulatorSettingsController.listRows(listOf(system("GBA"))).map { it.emulator })
+    }
+
     @Test fun list_label_is_the_descriptor_name_without_a_table() {
         assertEquals(listOf("gpSP"), EmulatorSettingsController.listRows(listOf(system("GBA"))).map { it.emulator })
     }
@@ -692,5 +705,24 @@ class EmulatorSettingsControllerTest {
         state.onButton(NxButton.X)
         assertEquals("Input delay", state.settingInfo.value?.title)
         assertTrue(state.settingInfo.value?.text.orEmpty().startsWith("How many frames a button press waits"))
+    }
+
+    // Cable Link sessions run mGBA whatever Game Boy Advance's default is: with gpSP the default, mGBA's page is still listed, Cable Link last.
+    @Test fun with_gpsp_the_default_mgba_is_listed_where_cable_link_exists() = runTest {
+        val state = mgbaState(cacheOf(), mgba = false)
+        val list = openList(state)
+        assertEquals(listOf("gpsp", "mgba"), list.rows.map { it.coreId })
+        assertEquals(listOf("MGBA"), list.rows.single { it.coreId == "mgba" }.tags)
+        state.select(list.rows.indexOfFirst { it.coreId == "mgba" })
+        state.onButton(NxButton.A)
+        await { state.screen.value is Screen.EmulatorOptions }
+        assertEquals("MGBA" to "mgba", options(state).page.tag to options(state).page.coreId)
+        assertEquals(cableKinds, options(state).rows.takeLast(3).map { (it as EmulatorRow.App).row.kind })
+        assertTrue(options(state).page.core.orEmpty().isNotEmpty())   // mGBA's own options too
+    }
+
+    @Test fun with_gpsp_the_default_mgba_is_not_listed_without_cable_link() = runTest {
+        val state = mgbaState(null, mgba = false)
+        assertEquals(listOf("gpsp"), openList(state).rows.map { it.coreId })
     }
 }

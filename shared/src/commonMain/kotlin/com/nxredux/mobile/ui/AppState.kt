@@ -5249,6 +5249,7 @@ class AppState(
         screenClass = deps.screenClass,
         windowPx = deps.windowPx,
         ps2BiosFiles = deps.ps2BiosFiles,
+        alwaysListed = { if (deps.linkRomCache != null) listOf(EmulatorRows.CABLE_LINK_TAG) else emptyList() },
     )
 
     // --- Tools -> Artwork: AppState hosts the controller (index writes stay here); the pages live in ArtworkScreenController ---

@@ -64,6 +64,9 @@ object EmulatorRows {
     /** The header of the Cable Link rows on mGBA's page. */
     const val CABLE_LINK_LABEL = "Cable Link"
 
+    /** The tag of mGBA's Game Boy Advance page, the one Cable Link's settings are on ([hostsCableLink]). */
+    const val CABLE_LINK_TAG = "MGBA"
+
     /**
      * [page] hosts the Cable Link settings: mGBA's own page (not a game's: they are the app's, not one game's) for a tag
      * Cable Link is offered on. A Cable Link session always runs mGBA ([NetplayCores.CABLE_LINK_CORE]), whatever core the
@@ -189,6 +192,11 @@ internal class EmulatorSettingsController(
     private val windowPx: () -> Pair<Int, Int>? = { null },
     /** The ".bin" names in the PS2 BIOS folder (Bios/PS2/), read off the main thread: the PS2 BIOS row's choices. */
     private val ps2BiosFiles: () -> List<String> = { emptyList() },
+    /**
+     * Tags whose page is listed even without games: mGBA's for GBA ([EmulatorRows.CABLE_LINK_TAG]) where Cable Link exists, since a
+     * session runs mGBA whatever Game Boy Advance's default is and its settings are on that page.
+     */
+    private val alwaysListed: () -> List<String> = { emptyList() },
 ) {
     private val lock = Mutex()
     private var listRows: List<EmulatorListRow> = emptyList()
@@ -197,9 +205,12 @@ internal class EmulatorSettingsController(
     private var gameReturn: Pair<Screen, ListSelection>? = null   // the game list Game Settings came from
 
     companion object {
-        /** One row per core with a tag that has games, sorted by emulator name ([com.nxredux.mobile.runner.CoreDescriptor.name]). */
-        fun listRows(systems: List<SystemFolder>): List<EmulatorListRow> {
-            val present = systems.filter { !it.unassigned && it.gameCount > 0 }.map { it.tag }.distinct()
+        /**
+         * One row per core with a tag that has games, or one of [always] (listed without games), sorted by emulator name
+         * ([com.nxredux.mobile.runner.CoreDescriptor.name]).
+         */
+        fun listRows(systems: List<SystemFolder>, always: List<String> = emptyList()): List<EmulatorListRow> {
+            val present = (systems.filter { !it.unassigned && it.gameCount > 0 }.map { it.tag } + always).distinct()
             return present.groupBy { CoreRegistry.forTag(it)?.id }.mapNotNull { (id, tags) ->
                 id ?: return@mapNotNull null
                 val ordered = CoreRegistry.tagsSharingCore(tags.first()).filter { it in present }
@@ -212,7 +223,7 @@ internal class EmulatorSettingsController(
     fun openList(systems: List<SystemFolder>) {
         val from = screen.value
         scope.launch {
-            val rows = withContext(work) { listRows(systems) }
+            val rows = withContext(work) { listRows(systems, alwaysListed()) }
             if (screen.value !== from) return@launch
             listRows = rows
             showList(null)
