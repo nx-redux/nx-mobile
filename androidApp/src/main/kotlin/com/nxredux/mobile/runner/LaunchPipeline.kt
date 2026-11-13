@@ -294,8 +294,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     var dsLinked = false
         private set
     /**
-     * [dsLinked] outside a sheet session: the game's own radio finds rooms (the automatic route). Also a PSP game whose
-     * sheet session was left with Local Wireless on ([leavePspSession]).
+     * [dsLinked] outside a sheet session: the game's own radio finds rooms (the automatic route). Also a DS, 3DS or PSP
+     * game whose sheet session was left with Local Wireless on ([leaveLinkSession]).
      */
     var dsAutoRoute = false
         private set
@@ -335,13 +335,40 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     /** A PSP launch's Local Wireless option, a sheet session's included: its Disconnect falls back to the automatic route on it. */
     private var pspLocalWireless = false
 
+    /** The same for a DS or 3DS launch (the console's own option). */
+    private var dsLocalWireless = false
+
+    /** A DS or 3DS launch's [NetplayCores.cableAuto], for the automatic route a sheet session may fall back to. */
+    private var dsCableCore = false
+
+    /**
+     * A DS, 3DS or PSP sheet session's Disconnect: the link variables to send. When they are the automatic route's, this
+     * launch runs as one launched on it from here (the caller starts what the screen runs for it: the cable watcher).
+     * Main thread.
+     */
+    fun leaveLinkSession(kind: NetplayLinkKind): Map<String, String> {
+        if (kind == NetplayLinkKind.PSPLINK) return leavePspSession()
+        // Read now: the Wi-Fi may have changed since launch, and a session never read it.
+        val broadcast = if (!dsLocalWireless) null else
+            WifiNetworks.broadcast(WifiNetworks.address(host.activity.getSystemService(ConnectivityManager::class.java)))?.hostAddress
+        val left = NetplayLinkOptions.dsSessionLeft(kind, dsLocalWireless, broadcast)
+        if ((left[NetplayLinkOptions.NDS_MODE] ?: left[NetplayLinkOptions.N3DS_MODE]) == NetplayLinkOptions.N3DS_AUTO) {
+            // The session held the broadcasts lock from launch; the automatic route holds it only while the game's
+            // wireless is on, and the link stays out until the game turns it on again ([dsWirelessChanged] takes it then).
+            dropBroadcasts()
+            dsCableAuto = dsCableCore
+            dsAutoRoute = true
+        }
+        return left
+    }
+
     /**
      * A PSP sheet session's Disconnect: the link variables to send ([NetplayLinkOptions.pspSessionLeft]). When they are
      * the automatic route's, this launch runs as one launched on it from here: the presence watcher (already running)
      * drives the menu, the speed rules and the locks as for a game launched outside a session, the broadcasts lock (held
      * since launch) stays, and the phone-to-phone cable stays out, as for every PSP game. Main thread.
      */
-    fun leavePspSession(): Map<String, String> {
+    private fun leavePspSession(): Map<String, String> {
         val addresses = pspAddresses
         val left = NetplayLinkOptions.pspSessionLeft(pspLocalWireless, addresses?.first, addresses?.second)
         if (left[NetplayLinkOptions.PSP_MODE] == NetplayLinkOptions.N3DS_AUTO) {
@@ -609,6 +636,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             if (coreId == "azahar" || coreId == "melondsds" || isPsp) playerName = PlayerName.resolve(AndroidAppSettings(activity).playerName, AndroidDeviceInfo.deviceName(activity))
             val n3dsRoomName = if (coreId != "azahar" && coreId != "melondsds") null else NetplayLinkOptions.n3dsRoomName(playerName, kotlin.random.Random.nextInt(10000))
             val n3dsAuto = n3dsRoomName?.takeIf { if (coreId == "melondsds") NdsOptions.localWireless(frontendValues) else N3dsOptions.localWireless(frontendValues) }
+            dsLocalWireless = n3dsAuto != null
+            dsCableCore = NetplayCores.cableAuto(coreId)
             // A room answers other devices' searches, which arrive as broadcasts: Android drops those without this lock.
             // A DS or 3DS game outside a session takes it when its wireless goes on ([dsWirelessChanged]), a PSP one at launch (below).
             if (linkKind == NetplayLinkKind.N3DSLINK || linkKind == NetplayLinkKind.NDSLINK || linkKind == NetplayLinkKind.PSPLINK) holdBroadcasts()

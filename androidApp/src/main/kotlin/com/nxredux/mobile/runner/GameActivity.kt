@@ -82,6 +82,7 @@ import com.nxredux.mobile.gametime.GameTimeStore
 import com.nxredux.mobile.launcher.bringHomeTaskToFront
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.library.Names
+import com.nxredux.mobile.netplay.NetplayLinkKind
 import com.nxredux.mobile.netplay.NetplayLinkOptions
 import com.nxredux.mobile.netplay.NetplayRole
 import com.nxredux.mobile.netplay.NetplayText
@@ -633,6 +634,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** The menu open in a room counts toward the cap; anything else stops the count. */
     private fun syncDsMenuCap() = dsMenuCap.sync(menuOpen && !quitting && dsRoom.current == DsPresence.ROOM)
 
+    /**
+     * A sheet session's room again after a leave for the background or a lost focus. Never on the automatic route, where
+     * the room comes back with the game's wireless: a session that fell back to it may still be a session in Azahar until
+     * its next frame, and a rejoin would put it back in the room it was left for.
+     */
+    private fun rejoinSessionRoom() {
+        if (!launchPipeline.dsAutoRoute) LibretroNetplay.dsRejoin()
+    }
+
     /** Leaves the room with the game running; the check lands the full menu and the paused core at once. */
     override fun disconnectDs() {
         LibretroNetplay.dsLeaveNow()
@@ -743,7 +753,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun focusResume() {
         if (!focusPaused) return
         focusPaused = false
-        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) LibretroNetplay.dsRejoin()   // a sheet session's room again
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) rejoinSessionRoom()
         syncKeepScreenOn()
         if (menuOpen || quitting || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
         releaseCore()
@@ -862,7 +872,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             while (true) { delay(CARE_TICK_MS); care.tick(running = !corePaused() && !quitting) }
         }
         // onStop left the DS room; still focus paused, focusResume goes back instead.
-        if (!focusPaused) LibretroNetplay.dsRejoin()
+        if (!focusPaused) rejoinSessionRoom()
         // onStop closed the session: back in the foreground, a new one on the same game (background time is not play)
         gameTime?.let { if (!isFinishing && !quitting) { it.resume(); startGameTimeTicker(it) } }
     }
@@ -1473,8 +1483,22 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     // ------------------------------------------------------------------ netplay
 
-    // The launch's link state (Local Wireless, the Wi-Fi addresses, the route) lives in the pipeline.
-    override fun leavePspSession(): Map<String, String> = launchPipeline.leavePspSession()
+    /**
+     * The launch's link state (Local Wireless, the Wi-Fi addresses, the route) lives in the pipeline. A DS or 3DS game that
+     * falls back to the automatic route leaves its room now: Azahar reads the new mode only on its next frame, which an
+     * open menu holds back, and until then its session would still count as in a room for the menu, states and locks
+     * ([rejoinSessionRoom] keeps it out meanwhile). The check lands the presence at once, and the cable watcher a launch
+     * on that route starts (once) starts here.
+     */
+    override fun leaveLinkSession(kind: NetplayLinkKind): Map<String, String> {
+        val left = launchPipeline.leaveLinkSession(kind)
+        if (kind != NetplayLinkKind.PSPLINK && launchPipeline.dsAutoRoute) {
+            LibretroNetplay.dsLeaveNow()
+            dsRoom.check()
+            if (launchPipeline.dsCableAuto) dsCable.watch()
+        }
+        return left
+    }
 
     /**
      * netplay link: the session ended (the other player left, it dropped, or this player left). Each player ran their own game on their own

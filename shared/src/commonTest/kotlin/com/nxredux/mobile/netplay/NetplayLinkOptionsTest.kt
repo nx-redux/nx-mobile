@@ -372,6 +372,53 @@ class NetplayLinkOptionsTest {
         }
     }
 
+    @Test fun ds_session_left_falls_back_to_the_automatic_route_with_local_wireless() {
+        assertEquals(
+            mapOf(NetplayLinkOptions.NDS_MODE to "auto", NetplayLinkOptions.NDS_BROADCAST to "192.168.1.255"),
+            NetplayLinkOptions.dsSessionLeft(NetplayLinkKind.NDSLINK, localWireless = true, broadcast = "192.168.1.255"),
+        )
+        assertEquals(
+            mapOf(NetplayLinkOptions.N3DS_MODE to "auto", NetplayLinkOptions.N3DS_BROADCAST to "192.168.1.255"),
+            NetplayLinkOptions.dsSessionLeft(NetplayLinkKind.N3DSLINK, localWireless = true, broadcast = "192.168.1.255"),
+        )
+        // No Wi-Fi address: the automatic route still runs, searching on the limited broadcast alone.
+        assertEquals(mapOf(NetplayLinkOptions.NDS_MODE to "auto"), NetplayLinkOptions.dsSessionLeft(NetplayLinkKind.NDSLINK, true, null))
+        assertEquals(mapOf(NetplayLinkOptions.N3DS_MODE to "auto"), NetplayLinkOptions.dsSessionLeft(NetplayLinkKind.N3DSLINK, true, null))
+    }
+
+    @Test fun ds_session_left_is_off_without_local_wireless() {
+        assertEquals(mapOf(NetplayLinkOptions.NDS_MODE to "off"), NetplayLinkOptions.dsSessionLeft(NetplayLinkKind.NDSLINK, false, "192.168.1.255"))
+        assertEquals(mapOf(NetplayLinkOptions.NDS_MODE to "off"), NetplayLinkOptions.dsSessionLeft(NetplayLinkKind.NDSLINK, false, null))
+        assertEquals(mapOf(NetplayLinkOptions.N3DS_MODE to "off"), NetplayLinkOptions.dsSessionLeft(NetplayLinkKind.N3DSLINK, false, "192.168.1.255"))
+        assertEquals(mapOf(NetplayLinkOptions.N3DS_MODE to "off"), NetplayLinkOptions.dsSessionLeft(NetplayLinkKind.N3DSLINK, false, null))
+    }
+
+    @Test fun ds_session_left_is_nothing_for_other_links() {
+        for (kind in listOf(NetplayLinkKind.GBLINK, NetplayLinkKind.NETPACKET, NetplayLinkKind.PSPLINK)) {
+            assertEquals(emptyMap(), NetplayLinkOptions.dsSessionLeft(kind, true, "192.168.1.255"), "$kind")
+        }
+    }
+
+    @Test fun ds_session_left_is_the_launch_rule_for_the_automatic_route() {
+        // The mode and broadcast a launch outside a session sends on the same setting and address; name, port and MAC
+        // are the session's already, the same values.
+        val cases = listOf(
+            Triple(NetplayLinkKind.NDSLINK, "melondsds", NetplayLinkOptions.NDS_MODE to NetplayLinkOptions.NDS_BROADCAST),
+            Triple(NetplayLinkKind.N3DSLINK, "azahar", NetplayLinkOptions.N3DS_MODE to NetplayLinkOptions.N3DS_BROADCAST),
+        )
+        for ((kind, core, keys) in cases) {
+            for (localWireless in listOf(false, true)) {
+                for (broadcast in listOf(null, "192.168.1.255")) {
+                    val left = NetplayLinkOptions.dsSessionLeft(kind, localWireless, broadcast)
+                    val launch = NetplayLinkOptions.forSolo(core, if (localWireless) "Ana-0042" else null, broadcast, null)
+                    assertEquals(launch[keys.first] ?: "off", left[keys.first], "$kind $localWireless $broadcast")
+                    assertEquals(launch[keys.second], left[keys.second], "$kind $localWireless $broadcast")
+                    assertEquals(setOf(keys.first) + listOfNotNull(keys.second.takeIf { it in launch }), left.keys)
+                }
+            }
+        }
+    }
+
     @Test fun psp_mac_is_the_seed_behind_0200() {
         assertEquals("020000abcdef", NetplayLinkOptions.pspMac(0xabcdef))
     }
