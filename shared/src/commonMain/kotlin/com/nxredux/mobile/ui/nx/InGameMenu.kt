@@ -738,14 +738,16 @@ private fun RowsBody(
     opened: Boolean = false,
 ) {
     val itemHeight = menuWordRowHeight(rowHeight)
-    BoxWithConstraints(
+    Box(
         modifier.fillMaxWidth().padding(start = nxListInset() - MenuPillPadding, end = 12.dp, top = wordListTopPad(itemHeight)),
         contentAlignment = Alignment.TopStart,
     ) {
         MenuWordList(
             rows = page.rows.mapIndexed { i, row -> NxRow(openedLabel(row.label, opened && i == page.selected)) },
             selected = page.selected, rowHeight = itemHeight,
-            shown = minOf(page.rows.size, maxOf(1, (maxHeight / itemHeight).toInt())),
+            // All its rows, as the root list beside it: the pane clips the box, so a row past its foot peeks under the
+            // thin fade (a box of whole rows only would end on a row's edge, the rest hidden with nothing to show it).
+            shown = page.rows.size,
             onSelect = onSelect, onActivate = onActivate, focused = focused,
         )
     }
