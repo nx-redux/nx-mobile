@@ -55,13 +55,16 @@
 #include "achievements/achievements.h"
 #include "achievements/achievementshash.h"
 #include "microphone/microphoneinterface.h"
+// Outside the namespace block below: these headers open namespace libretrodroid themselves. Included inside it, the
+// exception became libretrodroid::libretrodroid::LibretroDroidError, a type nothing throws, so every
+// catch (LibretroDroidError&) here missed and its error code reached Kotlin as ERROR_GENERIC.
+#include "utils/utils.h"
+#include "utils/libretrodroidexception.h"
 
 namespace libretrodroid {
 
 extern "C" {
-#include "utils/utils.h"
 #include "../../libretro-common/include/libretro.h"
-#include "utils/libretrodroidexception.h"
 }
 
 namespace {
