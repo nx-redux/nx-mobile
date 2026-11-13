@@ -408,6 +408,49 @@ class NetplayLinkOptionsTest {
         }
     }
 
+    @Test fun psp_usb_session_left_sends_the_wifi_addresses_never_the_cables() {
+        assertEquals(
+            mapOf(NetplayLinkOptions.PSP_MODE to "auto", NetplayLinkOptions.PSP_BROADCAST to pspBroadcast, NetplayLinkOptions.PSP_SELF to pspSelf),
+            NetplayLinkOptions.pspSessionLeft(localWireless = true, self = pspSelf, broadcast = pspBroadcast, overUsb = true),
+        )
+        // Without Wi-Fi the session's cable addresses are cleared: the runner keeps a variable an update leaves out, and
+        // would take 10.99.0.x for a Wi-Fi address on the automatic route.
+        assertEquals(
+            mapOf(NetplayLinkOptions.PSP_MODE to "auto", NetplayLinkOptions.PSP_BROADCAST to "", NetplayLinkOptions.PSP_SELF to ""),
+            NetplayLinkOptions.pspSessionLeft(true, null, null, overUsb = true),
+        )
+        assertEquals(
+            mapOf(NetplayLinkOptions.PSP_MODE to "auto", NetplayLinkOptions.PSP_BROADCAST to "", NetplayLinkOptions.PSP_SELF to pspSelf),
+            NetplayLinkOptions.pspSessionLeft(true, pspSelf, null, overUsb = true),
+        )
+        // Off is off, cable or not.
+        assertEquals(mapOf(NetplayLinkOptions.PSP_MODE to "off"), NetplayLinkOptions.pspSessionLeft(false, null, null, overUsb = true))
+    }
+
+    @Test fun psp_wifi_address_goes_to_the_runner_when_new_and_whole() {
+        val given = pspSelf to pspBroadcast
+        // The first address of a launch made without Wi-Fi.
+        assertEquals(
+            mapOf(NetplayLinkOptions.PSP_SELF to pspSelf, NetplayLinkOptions.PSP_BROADCAST to pspBroadcast),
+            NetplayLinkOptions.pspWifiUpdate(onCable = false, given = null, self = pspSelf, broadcast = pspBroadcast),
+        )
+        // A new address on the automatic route, or after a session's Disconnect.
+        assertEquals(
+            mapOf(NetplayLinkOptions.PSP_SELF to "10.0.0.7", NetplayLinkOptions.PSP_BROADCAST to "10.0.0.255"),
+            NetplayLinkOptions.pspWifiUpdate(false, given, "10.0.0.7", "10.0.0.255"),
+        )
+        // The same address again: nothing (the runner would relogin for nothing).
+        assertEquals(emptyMap<String, String>(), NetplayLinkOptions.pspWifiUpdate(false, given, pspSelf, pspBroadcast))
+        // Half an address: nothing.
+        assertEquals(emptyMap<String, String>(), NetplayLinkOptions.pspWifiUpdate(false, null, pspSelf, null))
+        assertEquals(emptyMap<String, String>(), NetplayLinkOptions.pspWifiUpdate(false, null, null, pspBroadcast))
+    }
+
+    @Test fun psp_wifi_address_never_replaces_a_usb_sessions() {
+        assertEquals(emptyMap<String, String>(), NetplayLinkOptions.pspWifiUpdate(onCable = true, given = null, self = pspSelf, broadcast = pspBroadcast))
+        assertEquals(emptyMap<String, String>(), NetplayLinkOptions.pspWifiUpdate(true, "10.0.0.7" to "10.0.0.255", pspSelf, pspBroadcast))
+    }
+
     @Test fun ds_session_left_falls_back_to_the_automatic_route_with_local_wireless() {
         assertEquals(
             mapOf(NetplayLinkOptions.NDS_MODE to "auto", NetplayLinkOptions.NDS_BROADCAST to "192.168.1.255"),

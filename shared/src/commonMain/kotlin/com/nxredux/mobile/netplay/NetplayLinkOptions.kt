@@ -112,10 +112,25 @@ object NetplayLinkOptions {
      * The variables a PSP sheet session's Disconnect sends: the automatic route, as a launch outside a session would run
      * ([forPsp]), when [localWireless] is on, so the game finds the others again once it leaves and re-enters ad hoc
      * (over the cable when there is no Wi-Fi address); otherwise the link off for the rest of the launch. A join's host
-     * address is not sent: the automatic route reads none.
+     * address is not sent: the automatic route reads none. A session [overUsb] ran on the cable's addresses, which the
+     * runner keeps unless an update replaces them, and on the automatic route it would take them for Wi-Fi ones: each
+     * Wi-Fi address not known goes as empty, which the runner reads as none.
      */
-    fun pspSessionLeft(localWireless: Boolean, self: String?, broadcast: String?): Map<String, String> =
-        if (localWireless) pspLink(N3DS_AUTO, null, broadcast, self) else mapOf(PSP_MODE to N3DS_OFF)
+    fun pspSessionLeft(localWireless: Boolean, self: String?, broadcast: String?, overUsb: Boolean = false): Map<String, String> =
+        if (!localWireless) mapOf(PSP_MODE to N3DS_OFF)
+        else if (overUsb) pspLink(N3DS_AUTO, null, broadcast ?: "", self ?: "")
+        else pspLink(N3DS_AUTO, null, broadcast, self)
+
+    /**
+     * What a linked PSP game's runner is given when the Wi-Fi's address becomes [self] with [broadcast]: both, as
+     * variables, when both are known and differ from what it was [given] last (null: none yet, as for a launch without
+     * Wi-Fi). Nothing while a sheet session runs over the USB cable ([onCable]): its addresses are the cable's, and an
+     * update would replace them with addresses the other end has no route to.
+     */
+    fun pspWifiUpdate(onCable: Boolean, given: Pair<String, String>?, self: String?, broadcast: String?): Map<String, String> {
+        if (onCable || self == null || broadcast == null || given == (self to broadcast)) return emptyMap()
+        return mapOf(PSP_SELF to self, PSP_BROADCAST to broadcast)
+    }
 
     /**
      * The variables a DS ([NetplayLinkKind.NDSLINK]) or 3DS ([NetplayLinkKind.N3DSLINK]) sheet session's Disconnect sends:

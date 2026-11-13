@@ -20,7 +20,7 @@ import kotlinx.coroutines.withContext
 import kotlin.concurrent.thread
 
 /**
- * A DS game on the automatic route and the phone-to-phone USB cable: the room search is told of a phone on the port
+ * A DS, 3DS or PSP game on the automatic route and the phone-to-phone USB cable: the link is told of a phone on the port
  * from the game's start, and the cable is started when the game's wireless comes on ([DsCableAuto]). The cable itself
  * is the menu process's ([PrefsProvider.usbCableAuto]); Android's VPN consent is asked here, over the game, when the
  * app does not hold it. The cable this started stops with the game.
