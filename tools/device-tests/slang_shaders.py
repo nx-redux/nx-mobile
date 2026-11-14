@@ -8,6 +8,10 @@ turned on for the runs) and quits. Every game's option file, resume point and th
 
     python3 tools/device-tests/slang_shaders.py --serial c2c658b2
     python3 tools/device-tests/slang_shaders.py --serial c2c658b2 --only SFC,NDS --presets crt/crt-geom
+    python3 tools/device-tests/slang_shaders.py --serial c2c658b2 --only SFC --bundled
+
+--bundled runs every slang preset the app ships (from the repo's assets) and every replaced GLSL name
+(ShaderOptions.REPLACED), which must load as its slang version.
 
 The table shows, per run: frames presented and uneven ones (as pacing.py), the core's work per frame, how long the
 preset took to prepare (parse, translate or read from the cache, decode LUTs), and any shader error from the log.
@@ -49,6 +53,19 @@ ERRORS = re.compile(r"shader .* failed|Slang (shader|program|chain|target)[^\n]*
 READY = re.compile(r"slang passes for GLSL ES (\d+) ready in (\d+) ms")
 
 
+def bundled_presets():
+    """The bundled slang presets (stored values) and the GLSL names ShaderOptions.REPLACED maps onto them."""
+    repo = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
+    assets = os.path.join(repo, "androidApp", "src", "main", "assets", "shaders")
+    found = []
+    for root, _, files in os.walk(os.path.join(assets, "slang")):
+        found += [os.path.relpath(os.path.join(root, f), assets).replace(os.sep, "/") for f in files if f.endswith(".slangp")]
+    options = open(os.path.join(repo, "shared", "src", "commonMain", "kotlin", "com", "nxredux", "mobile", "options",
+                                "ShaderOptions.kt")).read()
+    replaced = re.findall(r'^\s+"([^"]+\.glslp?)" to "slang/', options, re.M)
+    return sorted(found) + replaced
+
+
 def shot_name(tag, preset):
     return "%s-%s.png" % (tag, (preset or "none").replace("/", "_"))
 
@@ -66,7 +83,13 @@ def run_case(args, tag, core, folder, game, presets, out_dir):
     p.prepare()
     try:
         for preset in presets:
-            value = "User/%s/%s.slangp" % (args.library, preset) if preset else "None"
+            # A preset with an extension is a stored value as it is (a bundled one, or a name an older build saved).
+            if not preset:
+                value = "None"
+            elif "." in os.path.basename(preset):
+                value = preset
+            else:
+                value = "User/%s/%s.slangp" % (args.library, preset)
             # The game's own options stay as they are; only its shader is replaced.
             kept = [x for x in (p.saved_cfg or "").splitlines() if x.strip() and not x.strip().startswith("nx_shader")]
             p.write_cfg("".join(x + "\n" for x in kept) + "nx_shader = %s\n" % value)
@@ -140,6 +163,7 @@ def main():
     ap.add_argument("--library", default="shaders_slang", help="the slang library's folder under <home>/Shaders")
     ap.add_argument("--only", help="console tags to run, comma separated")
     ap.add_argument("--presets", help="run only these presets (comma separated) on every chosen console")
+    ap.add_argument("--bundled", action="store_true", help="the app's own slang presets and the replaced GLSL names")
     ap.add_argument("--warmup", type=float, default=6.0)
     ap.add_argument("--seconds", type=float, default=8.0)
     ap.add_argument("--load-timeout", type=float, default=90.0, help="how long a preset may take to prepare")
@@ -154,6 +178,8 @@ def main():
             continue
         if args.presets:
             presets = [None if x == "none" else x for x in args.presets.split(",")]
+        elif args.bundled:
+            presets = bundled_presets()
         rows += run_case(args, tag, core, folder, game, presets, out_dir)
     print("\n%d runs, %d with errors; screenshots in %s" % (
         len(rows), sum(1 for r in rows if r["error"]), os.path.normpath(out_dir)))

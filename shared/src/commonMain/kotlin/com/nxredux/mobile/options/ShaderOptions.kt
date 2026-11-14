@@ -86,7 +86,7 @@ object ShaderOptions {
      * ([FrontendOptions.EFFECT]): Line/Grid select the bundled preset when no preset key is stored.
      */
     fun fromConfig(values: Map<String, String>): Map<String, String> {
-        val preset = values[PRESET] ?: when (values[FrontendOptions.EFFECT]) {
+        val preset = values[PRESET]?.let(::current) ?: when (values[FrontendOptions.EFFECT]) {
             "Line" -> LINE_PRESET
             "Grid" -> GRID_PRESET
             else -> NONE
@@ -94,7 +94,38 @@ object ShaderOptions {
         return mapOf(PRESET to preset) + values.filterKeys { paramId(it) != null }
     }
 
-    fun preset(values: Map<String, String>): String? = values[PRESET]?.takeIf { it.isNotEmpty() && it != NONE }
+    fun preset(values: Map<String, String>): String? = values[PRESET]?.takeIf { it.isNotEmpty() && it != NONE }?.let(::current)
+
+    /**
+     * The bundled GLSL presets that now ship as their slang versions only, each with the preset that took its place: a
+     * game or console saved with one keeps its shader.
+     */
+    val REPLACED: Map<String, String> = mapOf(
+        "crt/crt-easymode.glslp" to "slang/crt/crt-easymode.slangp",
+        "crt/crt-geom.glslp" to "slang/crt/crt-geom.slangp",
+        "crt/crt-pi.glslp" to "slang/crt/crt-pi.slangp",
+        "crt/zfast-crt.glslp" to "slang/crt/zfast-crt.slangp",
+        "handheld/dot.glslp" to "slang/handheld/dot.slangp",
+        "handheld/gameboy.glslp" to "slang/handheld/gameboy.slangp",
+        "handheld/lcd3x.glslp" to "slang/handheld/lcd3x.slangp",
+        "interpolation/sharp-bilinear.glslp" to "slang/pixel-art-scaling/sharp-bilinear.slangp",
+        "xbrz/xbrz-freescale.glslp" to "slang/edge-smoothing/xbrz/xbrz-freescale.slangp",
+        "glsl/aa-shader-4.0.glsl" to "slang/anti-aliasing/aa-shader-4.0.slangp",
+        "glsl/bicubic.glsl" to "slang/interpolation/bicubic.slangp",
+        "glsl/edge1pixel.glsl" to "slang/pixel-art-scaling/edge1pixel.slangp",
+        "glsl/lcd1x.glsl" to "slang/handheld/lcd1x.slangp",
+        "glsl/lcd3x.glsl" to "slang/handheld/lcd3x.slangp",
+        "glsl/pixellate.glsl" to "slang/pixel-art-scaling/pixellate.slangp",
+        "glsl/res-independent-scanlines.glsl" to "slang/scanlines/res-independent-scanlines.slangp",
+        "glsl/retro-v2.glsl" to "slang/handheld/retro-v2.slangp",
+        "glsl/scale3x.glsl" to "slang/edge-smoothing/scalenx/scale3x.slangp",
+        "glsl/scanline.glsl" to "slang/scanlines/scanline.slangp",
+        "glsl/sharp-bilinear.glsl" to "slang/pixel-art-scaling/sharp-bilinear.slangp",
+        "glsl/sharp-shimmerless.glsl" to "slang/pixel-art-scaling/sharp-shimmerless.slangp",
+    )
+
+    /** The stored preset [value] as it is offered now ([REPLACED]); any other value as it is. */
+    fun current(value: String): String = REPLACED[value] ?: value
 
     /** id → value to upload: the stored value clamped to the range, else the parameter's default. */
     fun paramValues(values: Map<String, String>, params: List<ShaderParam>): Map<String, Float> =

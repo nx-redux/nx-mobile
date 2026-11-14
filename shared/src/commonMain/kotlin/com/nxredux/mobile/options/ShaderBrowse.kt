@@ -18,20 +18,21 @@ object ShaderBrowse {
     private val GROUPS = linkedMapOf(
         "CRT" to "An old tube TV: scanlines, a phosphor mask and glow. For home consoles and arcade games.",
         "Handheld" to "A handheld's LCD: a visible pixel grid, and the Game Boy's green screen.",
-        "Smoothing" to "No retro look: sharper pixels without shimmer, or jagged edges rounded off.",
-        "NTSC" to "The analogue video signal: colour bleed and blur, as through a composite cable.",
-        "Effects" to "Other looks: a curved screen, colour controls, big pixels, a painted picture.",
+        "Smoothing" to "No retro look: sharper pixels without shimmer, jagged edges rounded off, dithering blended.",
+        "NTSC" to "The analogue video signal: colour bleed and blur, as through a composite cable or off a tape.",
+        "Effects" to "Other looks: motion blur, colour controls, a curved screen, a painted picture.",
     )
     /** The single-file shaders (the nx-redux layout's `glsl/`, and `nx/`) by effect; one not listed here is an effect. */
     private val SINGLE = mapOf(
-        "CRT" to setOf("crt-mini", "crt-perfect", "scanline", "res-independent-scanlines", "retro-v2", "line"),
-        "Handheld" to setOf("lcd-mini", "lcd-perfect", "lcd1x", "lcd3x", "dmg-mini", "dmg-perfect", "sharp-shimmerless-grid",
-            "sharp-shimmerless-subpixel-vrgb", "grid"),
-        "Smoothing" to setOf("aa-shader-4.0", "bicubic", "pixel_art_aa", "scale3x", "sharp-bilinear", "sharp-shimmerless", "pixel-perfect",
-            "fast-sharpen", "edge1pixel", "stock"),
+        "CRT" to setOf("crt-mini", "crt-perfect", "line"),
+        "Handheld" to setOf("lcd-mini", "lcd-perfect", "dmg-mini", "dmg-perfect", "sharp-shimmerless-grid", "sharp-shimmerless-subpixel-vrgb", "grid"),
+        "Smoothing" to setOf("pixel_art_aa", "pixel-perfect", "fast-sharpen", "stock"),
     )
-    private val UPPER = setOf("crt", "ntsc", "lcd", "hd", "dmg", "aa", "vrgb")
-    private val SPELLED = mapOf("scalefx" to "ScaleFX", "xbrz" to "xBRZ", "zfast" to "zFast", "lcd1x" to "LCD1x", "lcd3x" to "LCD3x", "v2" to "v2")
+    private val UPPER = setOf("crt", "ntsc", "lcd", "hd", "dmg", "aa", "vrgb", "gbc", "vhs", "vcr", "gdv", "mdapt", "gdapt")
+    private val SPELLED = mapOf(
+        "scalefx" to "ScaleFX", "xbrz" to "xBRZ", "zfast" to "zFast", "lcd1x" to "LCD1x", "lcd3x" to "LCD3x", "v2" to "v2",
+        "sameboy" to "SameBoy", "agb001" to "AGB-001", "svideo" to "S-Video",
+    )
 
     sealed interface Entry { val label: String }
     /** A level to open: [path] is its [entries] path; [info] says what is in it (the bundled groups, the user's folder). */
@@ -103,10 +104,11 @@ object ShaderBrowse {
      * single-file shader by what it does ([SINGLE]).
      */
     private fun group(path: String): String = when (path.removePrefix("slang/").substringBefore('/', "")) {
-        "crt" -> "CRT"
+        // The library's `presets/` holds tuned variants; the bundled ones are CRT looks.
+        "crt", "scanlines", "presets" -> "CRT"
         "handheld" -> "Handheld"
-        "interpolation", "xbrz", "edge-smoothing", "anti-aliasing" -> "Smoothing"
-        "ntsc" -> "NTSC"
+        "interpolation", "xbrz", "edge-smoothing", "anti-aliasing", "pixel-art-scaling", "dithering" -> "Smoothing"
+        "ntsc", "vhs" -> "NTSC"
         else -> stem(path.substringAfterLast('/')).lowercase().let { file -> SINGLE.entries.firstOrNull { file in it.value }?.key } ?: "Effects"
     }
 

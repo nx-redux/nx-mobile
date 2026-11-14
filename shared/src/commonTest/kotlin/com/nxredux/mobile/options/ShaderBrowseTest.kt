@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 class ShaderBrowseTest {
     private val presets = listOf(
-        "crt/crt-geom.glslp", "crt/zfast-crt.glslp", "glsl/lcd3x.glsl", "handheld/dot.glslp", "interpolation/sharp-bilinear.glslp",
+        "crt/crt-geom.glslp", "crt/zfast-crt.glslp", "glsl/lcd-mini.glsl", "handheld/dot.glslp", "interpolation/sharp-bilinear.glslp",
         "nx/line.glslp", "slang/crt/crt-geom.slangp", "slang/crt/crt-guest-advanced-hd.slangp", "slang/edge-smoothing/scalefx/scalefx.slangp",
         "slang/ntsc/ntsc-adaptive.slangp", "xbrz/xbrz-freescale.glslp",
         "User/mine.glslp", "User/shaders_slang/crt/crt-royale.slangp", "User/shaders_slang/crt/shaders/x/deep.slangp",
@@ -34,19 +34,33 @@ class ShaderBrowseTest {
         )
         assertEquals(listOf(Preset("ScaleFX", "slang/edge-smoothing/scalefx/scalefx.slangp"), Preset("Sharp Bilinear", "interpolation/sharp-bilinear.glslp"),
             Preset("xBRZ Freescale", "xbrz/xbrz-freescale.glslp")), ShaderBrowse.entries(presets, "@Smoothing"))
-        assertEquals(listOf(Preset("Dot", "handheld/dot.glslp"), Preset("LCD3x", "glsl/lcd3x.glsl")), ShaderBrowse.entries(presets, "@Handheld"))
+        assertEquals(listOf(Preset("Dot", "handheld/dot.glslp"), Preset("LCD Mini", "glsl/lcd-mini.glsl")), ShaderBrowse.entries(presets, "@Handheld"))
         assertEquals(listOf(Preset("NTSC Adaptive", "slang/ntsc/ntsc-adaptive.slangp")), ShaderBrowse.entries(presets, "@NTSC"))
     }
 
-    @Test fun single_file_shaders_are_sorted_by_what_they_do() {
-        val single = listOf("glsl/crt-mini.glsl", "glsl/scanline.glsl", "glsl/dmg-perfect.glsl", "glsl/sharp-shimmerless-grid.glsl", "nx/grid.glslp",
-            "glsl/pixel_art_AA.glsl", "glsl/sharp-shimmerless.glsl", "glsl/stock.glsl", "glsl/waterpaint.glsl", "glsl/unflat-mini.glsl", "glsl/new-one.glsl")
-        fun names(group: String) = ShaderBrowse.entries(single, group).map { it.label }
+    @Test fun single_file_shaders_and_the_slang_folders_are_sorted_by_what_they_do() {
+        val all = listOf("glsl/crt-mini.glsl", "glsl/dmg-perfect.glsl", "glsl/sharp-shimmerless-grid.glsl", "nx/grid.glslp",
+            "glsl/pixel_art_AA.glsl", "glsl/stock.glsl", "glsl/waterpaint.glsl", "glsl/unflat-mini.glsl", "glsl/new-one.glsl",
+            "slang/scanlines/scanline.slangp", "slang/pixel-art-scaling/pixellate.slangp", "slang/anti-aliasing/aa-shader-4.0.slangp",
+            "slang/handheld/retro-v2.slangp")
+        fun names(group: String) = ShaderBrowse.entries(all, group).map { it.label }
         assertEquals(listOf("CRT Mini", "Scanline"), names("@CRT"))
-        assertEquals(listOf("DMG Perfect", "Grid", "Sharp Shimmerless Grid"), names("@Handheld"))
-        assertEquals(listOf("Pixel Art AA", "Sharp Shimmerless", "Stock"), names("@Smoothing"))
+        assertEquals(listOf("DMG Perfect", "Grid", "Retro v2", "Sharp Shimmerless Grid"), names("@Handheld"))
+        assertEquals(listOf("AA Shader 4.0", "Pixel Art AA", "Pixellate", "Stock"), names("@Smoothing"))
         assertEquals(listOf("New One", "Unflat Mini", "Waterpaint"), names("@Effects"))
-        assertTrue(ShaderBrowse.entries(single, "@NX Redux").isEmpty())
+        assertTrue(ShaderBrowse.entries(all, "@NX Redux").isEmpty())
+    }
+
+    @Test fun the_other_slang_folders_have_a_group_and_names_read_well() {
+        val all = listOf("slang/presets/crt-royale-kurozumi.slangp", "slang/dithering/mdapt.slangp", "slang/vhs/ntsc-vcr.slangp",
+            "slang/ntsc/ntsc-256px-svideo.slangp", "slang/motionblur/mix_frames.slangp", "slang/misc/night-mode.slangp",
+            "slang/handheld/authentic_gbc.slangp", "slang/handheld/agb001.slangp", "slang/handheld/sameboy-lcd.slangp", "slang/crt/crt-gdv-mini.slangp")
+        fun names(group: String) = ShaderBrowse.entries(all, group).map { it.label }
+        assertEquals(listOf("CRT GDV Mini", "CRT Royale Kurozumi"), names("@CRT"))
+        assertEquals(listOf("AGB-001", "Authentic GBC", "SameBoy LCD"), names("@Handheld"))
+        assertEquals(listOf("MDAPT"), names("@Smoothing"))
+        assertEquals(listOf("NTSC 256px S-Video", "NTSC VCR"), names("@NTSC"))
+        assertEquals(listOf("Mix Frames", "Night Mode"), names("@Effects"))
     }
 
     @Test fun a_group_carries_its_description_as_the_level_s_intro() {

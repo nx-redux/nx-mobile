@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.shaders.SlangPreset
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -16,6 +17,13 @@ class BundledSlangTest {
             val chain = SlangPreset.parse(preset) { path -> File(root, path).takeIf { it.isFile }?.readText() }
             assertTrue("$preset has no passes", chain.passes.isNotEmpty())
             for (lut in chain.luts) assertTrue("$preset: ${lut.path} is missing", File(root, lut.path).isFile)
+        }
+    }
+
+    @Test fun every_replaced_preset_is_gone_and_its_replacement_ships() {
+        for ((old, new) in ShaderOptions.REPLACED) {
+            assertTrue("$old still ships", !File(root, old).exists())
+            assertTrue("$new is missing", File(root, new).isFile)
         }
     }
 }
