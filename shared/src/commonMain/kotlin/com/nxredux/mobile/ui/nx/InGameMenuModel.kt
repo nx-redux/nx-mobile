@@ -1731,21 +1731,21 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     /**
-     * The picker's level at [path]: a word per folder and per preset, the one in use marked and, when it is on this
-     * level, highlighted.
+     * The picker's level at [path]: a row per folder (a group with what its shaders do) and per preset, the one in use
+     * marked and, when it is on this level, highlighted; a group's description stands over its presets.
      */
     private fun browsePage(path: String): MenuPage {
         val current = shaders[ShaderOptions.PRESET] ?: ShaderOptions.NONE
         val entries = ShaderBrowse.entries(presets, path)
         val rows = entries.map { entry ->
             when (entry) {
-                is ShaderBrowse.Folder -> MenuRow.Submenu(entry.label, PageKind.ShaderBrowse(entry.path))
+                is ShaderBrowse.Folder -> MenuRow.Submenu(entry.label, PageKind.ShaderBrowse(entry.path), entry.info)
                 is ShaderBrowse.Preset ->
                     MenuRow.Submenu(if (ShaderBrowse.isCurrent(entry, current)) "${entry.label}  $IN_USE_MARK" else entry.label, PageKind.ShaderPick(entry.value))
             }
         }
         val inUse = entries.indexOfFirst { it is ShaderBrowse.Preset && ShaderBrowse.isCurrent(it, current) }
-        return MenuPage(PageKind.ShaderBrowse(path), ShaderBrowse.title(path), rows, selected = inUse.coerceAtLeast(0))
+        return MenuPage(PageKind.ShaderBrowse(path), ShaderBrowse.title(path), rows, selected = inUse.coerceAtLeast(0), intro = ShaderBrowse.intro(path))
     }
 
     /**

@@ -11,6 +11,7 @@ import com.nxredux.mobile.options.ConsoleSettings
 import com.nxredux.mobile.options.CoreOption
 import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.PadOptions
+import com.nxredux.mobile.options.ShaderBrowse
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.AudioOptions
 import com.nxredux.mobile.options.SpeedOptions
@@ -680,7 +681,7 @@ class InGameMenuModelTest {
         val m = shadersModel(values = mapOf("nx_shader" to "User/gone/x.glslp"))
         assertEquals("x", (m.state.page.rows[0] as MenuRow.Option).valueLabel)
         m.press(NxButton.A)
-        assertEquals(listOf("None", "CRT", "NX Redux"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("None", "CRT"), m.state.page.rows.map { it.label })
     }
 
     @Test fun params_page_lists_labels_values_and_is_visual() {
@@ -756,7 +757,9 @@ class InGameMenuModelTest {
         val m = pickerModel()
         assertEquals(PageKind.ShaderBrowse(""), m.state.page.kind)
         assertEquals("Shader", m.state.page.title)
-        assertEquals(listOf("None", "CRT", "NX Redux", "Your shaders"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("None", "CRT", "Your shaders"), m.state.page.rows.map { it.label })
+        assertEquals(ShaderBrowse.intro("@CRT"), m.state.page.rows[1].info)
+        assertEquals("", m.state.page.intro)
         m.press(NxButton.B)
         assertEquals(PageKind.Shaders, m.state.page.kind)
     }
@@ -765,8 +768,9 @@ class InGameMenuModelTest {
         val m = pickerModel()
         m.select(1); m.press(NxButton.A)   // CRT
         assertEquals(PageKind.ShaderBrowse("@CRT"), m.state.page.kind)
-        assertEquals(listOf("CRT Geom", "CRT Pi  $IN_USE_MARK", "CRT Royale"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("CRT Geom", "CRT Pi  $IN_USE_MARK", "CRT Royale", "Line"), m.state.page.rows.map { it.label })
         assertEquals(1, m.state.page.selected)
+        assertEquals(ShaderBrowse.intro("@CRT"), m.state.page.intro)
     }
 
     @Test fun a_on_a_preset_uses_it_and_shows_its_preview_stepping_through_the_level() {
@@ -776,12 +780,14 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.SetShader("nx_shader", "slang/crt/crt-royale.slangp"), m.press(NxButton.A))
         assertEquals(PageKind.Adjust("nx_shader"), m.state.page.kind)
         assertEquals("CRT Royale", (m.state.page.rows[0] as MenuRow.Option).valueLabel)
+        assertEquals(MenuEffect.SetShader("nx_shader", "nx/line.glslp"), m.press(NxButton.RIGHT))
         assertEquals(MenuEffect.SetShader("nx_shader", "slang/crt/crt-geom.slangp"), m.press(NxButton.RIGHT))   // wraps within CRT
+        m.press(NxButton.LEFT)
         assertEquals(MenuEffect.SetShader("nx_shader", "slang/crt/crt-royale.slangp"), m.press(NxButton.LEFT))
         assertEquals(MenuEffect.SetShader("nx_shader", "crt/crt-pi.glslp"), m.press(NxButton.LEFT))
         m.press(NxButton.B)
         assertEquals(PageKind.ShaderBrowse("@CRT"), m.state.page.kind)
-        assertEquals(listOf("CRT Geom", "CRT Pi  $IN_USE_MARK", "CRT Royale"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("CRT Geom", "CRT Pi  $IN_USE_MARK", "CRT Royale", "Line"), m.state.page.rows.map { it.label })
     }
 
     @Test fun a_on_the_preset_in_use_only_shows_its_preview() {
@@ -801,7 +807,7 @@ class InGameMenuModelTest {
 
     @Test fun the_users_folders_open_a_level_at_a_time() {
         val m = pickerModel()
-        m.select(3); m.press(NxButton.A)   // Your shaders
+        m.select(2); m.press(NxButton.A)   // Your shaders
         assertEquals(listOf("shaders_slang", "mine"), m.state.page.rows.map { it.label })
         m.press(NxButton.A)
         assertEquals("shaders_slang", m.state.page.title)

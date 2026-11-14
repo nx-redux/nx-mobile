@@ -17,30 +17,47 @@ class ShaderBrowseTest {
     )
 
     @Test fun the_top_level_is_none_the_groups_in_use_and_the_users_folder() {
-        assertEquals(
-            listOf(Preset("None", "None"), Folder("CRT", "@CRT"), Folder("Handheld", "@Handheld"), Folder("Smoothing", "@Smoothing"),
-                Folder("NTSC", "@NTSC"), Folder("NX Redux", "@NX Redux"), Folder("Your shaders", "User")),
-            ShaderBrowse.entries(presets, ""),
-        )
-        assertEquals(listOf(Preset("None", "None"), Folder("CRT", "@CRT")), ShaderBrowse.entries(listOf("crt/crt-geom.glslp"), ""))
+        val top = ShaderBrowse.entries(presets + "glsl/waterpaint.glsl", "")
+        assertEquals(listOf("None", "CRT", "Handheld", "Smoothing", "NTSC", "Effects", "Your shaders"), top.map { it.label })
+        assertEquals(listOf("@CRT", "@Handheld", "@Smoothing", "@NTSC", "@Effects", "User"), top.filterIsInstance<Folder>().map { it.path })
+        assertTrue(top.filterIsInstance<Folder>().all { it.info.isNotEmpty() })
+        assertEquals(ShaderBrowse.YOURS_INFO, (top.last() as Folder).info)
+        assertEquals(listOf("None", "CRT"), ShaderBrowse.entries(listOf("crt/crt-geom.glslp"), "").map { it.label })
         assertEquals(listOf<ShaderBrowse.Entry>(Preset("None", "None")), ShaderBrowse.entries(emptyList(), ""))
     }
 
     @Test fun a_group_lists_each_shader_once_by_name_slang_first() {
         assertEquals(
             listOf(Preset("CRT Geom", "slang/crt/crt-geom.slangp"), Preset("CRT Guest Advanced HD", "slang/crt/crt-guest-advanced-hd.slangp"),
-                Preset("zFast CRT", "crt/zfast-crt.glslp")),
+                Preset("Line", "nx/line.glslp"), Preset("zFast CRT", "crt/zfast-crt.glslp")),
             ShaderBrowse.entries(presets, "@CRT"),
         )
         assertEquals(listOf(Preset("ScaleFX", "slang/edge-smoothing/scalefx/scalefx.slangp"), Preset("Sharp Bilinear", "interpolation/sharp-bilinear.glslp"),
             Preset("xBRZ Freescale", "xbrz/xbrz-freescale.glslp")), ShaderBrowse.entries(presets, "@Smoothing"))
-        assertEquals(listOf(Preset("LCD3x", "glsl/lcd3x.glsl"), Preset("Line", "nx/line.glslp")), ShaderBrowse.entries(presets, "@NX Redux"))
+        assertEquals(listOf(Preset("Dot", "handheld/dot.glslp"), Preset("LCD3x", "glsl/lcd3x.glsl")), ShaderBrowse.entries(presets, "@Handheld"))
         assertEquals(listOf(Preset("NTSC Adaptive", "slang/ntsc/ntsc-adaptive.slangp")), ShaderBrowse.entries(presets, "@NTSC"))
+    }
+
+    @Test fun single_file_shaders_are_sorted_by_what_they_do() {
+        val single = listOf("glsl/crt-mini.glsl", "glsl/scanline.glsl", "glsl/dmg-perfect.glsl", "glsl/sharp-shimmerless-grid.glsl", "nx/grid.glslp",
+            "glsl/pixel_art_AA.glsl", "glsl/sharp-shimmerless.glsl", "glsl/stock.glsl", "glsl/waterpaint.glsl", "glsl/unflat-mini.glsl", "glsl/new-one.glsl")
+        fun names(group: String) = ShaderBrowse.entries(single, group).map { it.label }
+        assertEquals(listOf("CRT Mini", "Scanline"), names("@CRT"))
+        assertEquals(listOf("DMG Perfect", "Grid", "Sharp Shimmerless Grid"), names("@Handheld"))
+        assertEquals(listOf("Pixel Art AA", "Sharp Shimmerless", "Stock"), names("@Smoothing"))
+        assertEquals(listOf("New One", "Unflat Mini", "Waterpaint"), names("@Effects"))
+        assertTrue(ShaderBrowse.entries(single, "@NX Redux").isEmpty())
+    }
+
+    @Test fun a_group_carries_its_description_as_the_level_s_intro() {
+        val crt = ShaderBrowse.entries(presets, "").filterIsInstance<Folder>().first { it.label == "CRT" }
+        assertEquals(crt.info, ShaderBrowse.intro("@CRT"))
+        assertEquals("", ShaderBrowse.intro("")); assertEquals("", ShaderBrowse.intro("User")); assertEquals("", ShaderBrowse.intro("User/crt"))
     }
 
     @Test fun the_users_folder_is_browsed_a_level_at_a_time() {
         assertEquals(
-            listOf(Folder("shaders_slang", "User/shaders_slang"), Preset("mine", "User/mine.glslp"), Preset("two.glslp", "User/two.glslp"),
+            listOf<ShaderBrowse.Entry>(Folder("shaders_slang", "User/shaders_slang"), Preset("mine", "User/mine.glslp"), Preset("two.glslp", "User/two.glslp"),
                 Preset("two.slangp", "User/two.slangp")),
             ShaderBrowse.entries(presets, "User"),
         )
@@ -81,7 +98,7 @@ class ShaderBrowseTest {
     }
 
     @Test fun a_levels_values_are_its_presets_in_order() {
-        assertEquals(listOf("slang/crt/crt-geom.slangp", "slang/crt/crt-guest-advanced-hd.slangp", "crt/zfast-crt.glslp"), ShaderBrowse.values(presets, "@CRT"))
+        assertEquals(listOf("slang/crt/crt-geom.slangp", "slang/crt/crt-guest-advanced-hd.slangp", "nx/line.glslp", "crt/zfast-crt.glslp"), ShaderBrowse.values(presets, "@CRT"))
         assertEquals(listOf("None"), ShaderBrowse.values(presets, ""))
     }
 }

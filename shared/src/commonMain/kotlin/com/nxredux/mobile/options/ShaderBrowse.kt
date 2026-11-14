@@ -3,8 +3,9 @@ package com.nxredux.mobile.options
 /**
  * The shader picker's levels, from the flat preset list ([ShaderOptions.presetChoices]' paths: the bundled ones, then
  * the user's under [ShaderOptions.USER_PREFIX]). The top level offers None, the bundled presets in a few named groups
- * and the user's folder; below it the user's folders are browsed as they are on disk, one level at a time. A bundled
- * shader that ships in both formats is listed once, as its slang preset.
+ * (by what they do to the picture, each with a line saying so) and the user's folder; below it the user's folders are
+ * browsed as they are on disk, one level at a time. A bundled shader that ships in both formats is listed once, as its
+ * slang preset.
  */
 object ShaderBrowse {
     const val TITLE = "Shader"
@@ -12,13 +13,29 @@ object ShaderBrowse {
     /** The path of a bundled group's level; a user level's path is its folder under the prefix ("User", "User/crt"). */
     private const val GROUP = "@"
     private const val USER = "User"
-    private val GROUPS = listOf("CRT", "Handheld", "Smoothing", "NTSC", "NX Redux")
+    const val YOURS_INFO = "Presets from the Shaders folder in your home folder."
+    /** The bundled groups in the order shown, each with what its shaders do. */
+    private val GROUPS = linkedMapOf(
+        "CRT" to "An old tube TV: scanlines, a phosphor mask and glow. For home consoles and arcade games.",
+        "Handheld" to "A handheld's LCD: a visible pixel grid, and the Game Boy's green screen.",
+        "Smoothing" to "No retro look: sharper pixels without shimmer, or jagged edges rounded off.",
+        "NTSC" to "The analogue video signal: colour bleed and blur, as through a composite cable.",
+        "Effects" to "Other looks: a curved screen, colour controls, big pixels, a painted picture.",
+    )
+    /** The single-file shaders (the nx-redux layout's `glsl/`, and `nx/`) by effect; one not listed here is an effect. */
+    private val SINGLE = mapOf(
+        "CRT" to setOf("crt-mini", "crt-perfect", "scanline", "res-independent-scanlines", "retro-v2", "line"),
+        "Handheld" to setOf("lcd-mini", "lcd-perfect", "lcd1x", "lcd3x", "dmg-mini", "dmg-perfect", "sharp-shimmerless-grid",
+            "sharp-shimmerless-subpixel-vrgb", "grid"),
+        "Smoothing" to setOf("aa-shader-4.0", "bicubic", "pixel_art_aa", "scale3x", "sharp-bilinear", "sharp-shimmerless", "pixel-perfect",
+            "fast-sharpen", "edge1pixel", "stock"),
+    )
     private val UPPER = setOf("crt", "ntsc", "lcd", "hd", "dmg", "aa", "vrgb")
     private val SPELLED = mapOf("scalefx" to "ScaleFX", "xbrz" to "xBRZ", "zfast" to "zFast", "lcd1x" to "LCD1x", "lcd3x" to "LCD3x", "v2" to "v2")
 
     sealed interface Entry { val label: String }
-    /** A level to open: [path] is its [entries] path. */
-    data class Folder(override val label: String, val path: String) : Entry
+    /** A level to open: [path] is its [entries] path; [info] says what is in it (the bundled groups, the user's folder). */
+    data class Folder(override val label: String, val path: String, val info: String = "") : Entry
     /** A preset to use: [value] is the stored `nx_shader` value. */
     data class Preset(override val label: String, val value: String) : Entry
 
@@ -30,8 +47,8 @@ object ShaderBrowse {
             path.isEmpty() -> buildList {
                 add(Preset(ShaderOptions.NONE, ShaderOptions.NONE))
                 val used = bundled.map(::group).toSet()
-                GROUPS.filter { it in used }.forEach { add(Folder(it, GROUP + it)) }
-                if (user.isNotEmpty()) add(Folder(YOURS, USER))
+                GROUPS.filter { it.key in used }.forEach { (name, info) -> add(Folder(name, GROUP + name, info)) }
+                if (user.isNotEmpty()) add(Folder(YOURS, USER, YOURS_INFO))
             }
             path.startsWith(GROUP) -> bundled.filter { group(it) == path.removePrefix(GROUP) }
                 .groupBy { name(it) }
@@ -59,6 +76,9 @@ object ShaderBrowse {
         else -> path.substringAfterLast('/')
     }
 
+    /** The line over a level's list: what a bundled group's shaders do; none for the top level and the user's folders. */
+    fun intro(path: String): String = if (path.startsWith(GROUP)) GROUPS[path.removePrefix(GROUP)].orEmpty() else ""
+
     /** What the Shader row shows for the stored [value]: a bundled preset by its name, a user's by its file name. */
     fun label(value: String): String = when {
         value.isEmpty() || value == ShaderOptions.NONE -> ShaderOptions.NONE
@@ -78,13 +98,16 @@ object ShaderBrowse {
     /** The values of the presets at [path], in the level's order: what LEFT / RIGHT step through in a preset's preview. */
     fun values(presets: List<String>, path: String): List<String> = entries(presets, path).filterIsInstance<Preset>().map { it.value }
 
-    /** A bundled preset's group, by the folder it ships in (the slang set mirrors the layout under `slang/`). */
+    /**
+     * A bundled preset's group: by the folder it ships in (the slang set mirrors the layout under `slang/`), a
+     * single-file shader by what it does ([SINGLE]).
+     */
     private fun group(path: String): String = when (path.removePrefix("slang/").substringBefore('/', "")) {
         "crt" -> "CRT"
         "handheld" -> "Handheld"
         "interpolation", "xbrz", "edge-smoothing", "anti-aliasing" -> "Smoothing"
         "ntsc" -> "NTSC"
-        else -> "NX Redux"
+        else -> stem(path.substringAfterLast('/')).lowercase().let { file -> SINGLE.entries.firstOrNull { file in it.value }?.key } ?: "Effects"
     }
 
     /** A bundled preset's name from its file name: "crt-guest-advanced-hd" is "CRT Guest Advanced HD". */
