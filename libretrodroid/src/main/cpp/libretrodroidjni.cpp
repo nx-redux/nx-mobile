@@ -1475,6 +1475,77 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_renderSeco
     LibretroDroid::getInstance().renderSecondary((unsigned) width, (unsigned) height);
 }
 
+// The LUTs and parameters of a chain of either format, into chain. lutMipmap may be null (none mipmapped). False (logged)
+// when the arrays disagree.
+static bool readChainLutsAndParams(
+    JNIEnv* env,
+    PresetChain& chain,
+    jobjectArray lutIds,
+    jintArray lutWidth,
+    jintArray lutHeight,
+    jobjectArray lutRgba,
+    jbooleanArray lutLinear,
+    jintArray lutWrap,
+    jbooleanArray lutMipmap,
+    jobjectArray paramIds,
+    jfloatArray paramValues
+) {
+    jsize lutCount = javaArrayLength(env, lutIds);
+    for (jarray array : std::initializer_list<jarray> { lutWidth, lutHeight, lutRgba, lutLinear, lutWrap }) {
+        if (javaArrayLength(env, array) != lutCount) {
+            LOGE("setShaderChain: lut arrays differ in length");
+            return false;
+        }
+    }
+    if (javaArrayLength(env, paramValues) != javaArrayLength(env, paramIds)) {
+        LOGE("setShaderChain: param arrays differ in length");
+        return false;
+    }
+    if (lutMipmap != nullptr && javaArrayLength(env, lutMipmap) != lutCount) {
+        LOGE("setShaderChain: lut arrays differ in length");
+        return false;
+    }
+
+    auto lutIdValues = javaStrings(env, lutIds);
+    auto lutWidthValues = javaInts(env, lutWidth);
+    auto lutHeightValues = javaInts(env, lutHeight);
+    auto lutLinearValues = javaBooleans(env, lutLinear);
+    auto lutWrapValues = javaInts(env, lutWrap);
+    std::vector<jboolean> lutMipmapValues;
+    if (lutMipmap != nullptr) lutMipmapValues = javaBooleans(env, lutMipmap);
+
+    for (jsize i = 0; i < lutCount; i++) {
+        auto rgba = (jbyteArray) env->GetObjectArrayElement(lutRgba, i);
+        jsize rgbaLength = javaArrayLength(env, rgba);
+        int width = lutWidthValues[i];
+        int height = lutHeightValues[i];
+        if (width <= 0 || height <= 0 || (int64_t) rgbaLength != (int64_t) width * height * 4) {
+            LOGE("setShaderChain: lut %s has %d bytes for %dx%d", lutIdValues[i].c_str(), rgbaLength, width, height);
+            if (rgba != nullptr) env->DeleteLocalRef(rgba);
+            return false;
+        }
+
+        PresetLut lut;
+        lut.id = lutIdValues[i];
+        lut.width = (unsigned) width;
+        lut.height = (unsigned) height;
+        lut.rgba.resize(rgbaLength);
+        env->GetByteArrayRegion(rgba, 0, rgbaLength, reinterpret_cast<jbyte*>(lut.rgba.data()));
+        env->DeleteLocalRef(rgba);
+        lut.linear = lutLinearValues[i] == JNI_TRUE;
+        lut.wrap = lutWrapValues[i];
+        lut.mipmap = lutMipmap != nullptr && lutMipmapValues[i] == JNI_TRUE;
+        chain.luts.push_back(std::move(lut));
+    }
+
+    auto paramIdValues = javaStrings(env, paramIds);
+    auto paramFloatValues = javaFloats(env, paramValues);
+    for (size_t i = 0; i < paramIdValues.size(); i++) {
+        chain.params[paramIdValues[i]] = paramFloatValues[i];
+    }
+    return true;
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setShaderChain(
     JNIEnv* env,
     jclass obj,
@@ -1506,18 +1577,6 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setShaderC
                 return;
             }
         }
-        jsize lutCount = javaArrayLength(env, lutIds);
-        for (jarray array : std::initializer_list<jarray> { lutWidth, lutHeight, lutRgba, lutLinear, lutWrap }) {
-            if (javaArrayLength(env, array) != lutCount) {
-                LOGE("setShaderChain: lut arrays differ in length");
-                return;
-            }
-        }
-        if (javaArrayLength(env, paramValues) != javaArrayLength(env, paramIds)) {
-            LOGE("setShaderChain: param arrays differ in length");
-            return;
-        }
-
         auto sourceValues = javaStrings(env, sources);
         auto filterValues = javaInts(env, filterLinear);
         auto wrapValues = javaInts(env, wrap);
@@ -1543,46 +1602,134 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setShaderC
             chain.passes.push_back(std::move(pass));
         }
 
-        auto lutIdValues = javaStrings(env, lutIds);
-        auto lutWidthValues = javaInts(env, lutWidth);
-        auto lutHeightValues = javaInts(env, lutHeight);
-        auto lutLinearValues = javaBooleans(env, lutLinear);
-        auto lutWrapValues = javaInts(env, lutWrap);
-
-        for (jsize i = 0; i < lutCount; i++) {
-            auto rgba = (jbyteArray) env->GetObjectArrayElement(lutRgba, i);
-            jsize rgbaLength = javaArrayLength(env, rgba);
-            int width = lutWidthValues[i];
-            int height = lutHeightValues[i];
-            if (width <= 0 || height <= 0 || (int64_t) rgbaLength != (int64_t) width * height * 4) {
-                LOGE("setShaderChain: lut %s has %d bytes for %dx%d", lutIdValues[i].c_str(), rgbaLength, width, height);
-                if (rgba != nullptr) env->DeleteLocalRef(rgba);
-                return;
-            }
-
-            PresetLut lut;
-            lut.id = lutIdValues[i];
-            lut.width = (unsigned) width;
-            lut.height = (unsigned) height;
-            lut.rgba.resize(rgbaLength);
-            env->GetByteArrayRegion(rgba, 0, rgbaLength, reinterpret_cast<jbyte*>(lut.rgba.data()));
-            env->DeleteLocalRef(rgba);
-            lut.linear = lutLinearValues[i] == JNI_TRUE;
-            lut.wrap = lutWrapValues[i];
-            chain.luts.push_back(std::move(lut));
-        }
-
-        auto paramIdValues = javaStrings(env, paramIds);
-        auto paramFloatValues = javaFloats(env, paramValues);
-        for (size_t i = 0; i < paramIdValues.size(); i++) {
-            chain.params[paramIdValues[i]] = paramFloatValues[i];
-        }
+        if (!readChainLutsAndParams(env, chain, lutIds, lutWidth, lutHeight, lutRgba, lutLinear, lutWrap, nullptr, paramIds, paramValues)) return;
 
         LibretroDroid::getInstance().setPresetChain(std::move(chain));
     } catch (std::exception &exception) {
         LOGE("Error in setShaderChain: %s", exception.what());
         JavaUtils::throwRetroException(env, ERROR_GENERIC);
     }
+}
+
+// A slang chain: each pass arrives translated (translateSlang), as the bytes that call returned.
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setSlangChain(
+    JNIEnv* env,
+    jclass obj,
+    jobjectArray programs,
+    jintArray filterLinear,
+    jintArray wrap,
+    jintArray scaleTypeX,
+    jintArray scaleTypeY,
+    jfloatArray scaleX,
+    jfloatArray scaleY,
+    jintArray frameCountMod,
+    jobjectArray alias,
+    jobjectArray format,
+    jbooleanArray mipmapInput,
+    jobjectArray lutIds,
+    jintArray lutWidth,
+    jintArray lutHeight,
+    jobjectArray lutRgba,
+    jbooleanArray lutLinear,
+    jintArray lutWrap,
+    jbooleanArray lutMipmap,
+    jobjectArray paramIds,
+    jfloatArray paramValues
+) {
+    try {
+        jsize passCount = javaArrayLength(env, programs);
+        for (jarray array : std::initializer_list<jarray> {
+            filterLinear, wrap, scaleTypeX, scaleTypeY, scaleX, scaleY, frameCountMod, alias, format, mipmapInput
+        }) {
+            if (javaArrayLength(env, array) != passCount) {
+                LOGE("setSlangChain: pass arrays differ in length");
+                return;
+            }
+        }
+        if (passCount == 0) {
+            LOGE("setSlangChain: no passes");
+            return;
+        }
+
+        auto filterValues = javaInts(env, filterLinear);
+        auto wrapValues = javaInts(env, wrap);
+        auto scaleTypeXValues = javaInts(env, scaleTypeX);
+        auto scaleTypeYValues = javaInts(env, scaleTypeY);
+        auto scaleXValues = javaFloats(env, scaleX);
+        auto scaleYValues = javaFloats(env, scaleY);
+        auto frameCountModValues = javaInts(env, frameCountMod);
+        auto aliasValues = javaStrings(env, alias);
+        auto formatValues = javaStrings(env, format);
+        auto mipmapValues = javaBooleans(env, mipmapInput);
+
+        PresetChain chain;
+        for (jsize i = 0; i < passCount; i++) {
+            auto bytes = (jbyteArray) env->GetObjectArrayElement(programs, i);
+            jsize length = javaArrayLength(env, bytes);
+            std::string encoded((size_t) length, '\0');
+            if (length > 0) env->GetByteArrayRegion(bytes, 0, length, reinterpret_cast<jbyte*>(encoded.data()));
+            if (bytes != nullptr) env->DeleteLocalRef(bytes);
+
+            SlangPass pass;
+            if (!decodeSlangProgram(encoded, pass.program)) {
+                LOGE("setSlangChain: pass %d is not a translated program", (int) i);
+                return;
+            }
+            pass.filterLinear = filterValues[i] < 0 ? std::nullopt : std::optional<bool>(filterValues[i] != 0);
+            pass.wrap = wrapValues[i];
+            pass.scaleTypeX = scaleTypeXValues[i];
+            pass.scaleTypeY = scaleTypeYValues[i];
+            pass.scaleX = scaleXValues[i];
+            pass.scaleY = scaleYValues[i];
+            pass.frameCountMod = (unsigned) std::max(0, (int) frameCountModValues[i]);
+            pass.alias = aliasValues[i];
+            pass.format = formatValues[i];
+            pass.mipmapInput = mipmapValues[i] == JNI_TRUE;
+            chain.slangPasses.push_back(std::move(pass));
+        }
+
+        if (!readChainLutsAndParams(env, chain, lutIds, lutWidth, lutHeight, lutRgba, lutLinear, lutWrap, lutMipmap, paramIds, paramValues)) return;
+
+        LibretroDroid::getInstance().setPresetChain(std::move(chain));
+    } catch (std::exception &exception) {
+        LOGE("Error in setSlangChain: %s", exception.what());
+        JavaUtils::throwRetroException(env, ERROR_GENERIC);
+    }
+}
+
+// One slang pass (two "#version 450" stages) to GLSL ES esVersion (300, 310, 320), as bytes for setSlangChain and for a
+// disk cache. No GL: any thread. Null on failure, with the reason in error[0].
+JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_translateSlang(
+    JNIEnv* env,
+    jclass obj,
+    jstring vertex,
+    jstring fragment,
+    jint esVersion,
+    jobjectArray error
+) {
+    if (vertex == nullptr || fragment == nullptr) return nullptr;
+    std::string reason;
+    try {
+        JniString vertexString(env, vertex);
+        JniString fragmentString(env, fragment);
+        SlangProgram program;
+        if (translateSlang(vertexString.stdString(), fragmentString.stdString(), (unsigned) esVersion, program, reason)) {
+            std::string encoded = encodeSlangProgram(program);
+            jbyteArray result = env->NewByteArray((jsize) encoded.size());
+            if (result != nullptr) {
+                env->SetByteArrayRegion(result, 0, (jsize) encoded.size(), reinterpret_cast<const jbyte*>(encoded.data()));
+            }
+            return result;
+        }
+    } catch (std::exception &exception) {
+        reason = exception.what();
+    }
+    if (error != nullptr && javaArrayLength(env, error) > 0) {
+        jstring text = newSafeJString(env, reason);   // may quote the shader's own lines
+        env->SetObjectArrayElement(error, 0, text);
+        if (text != nullptr) env->DeleteLocalRef(text);
+    }
+    return nullptr;
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_clearShaderChain(

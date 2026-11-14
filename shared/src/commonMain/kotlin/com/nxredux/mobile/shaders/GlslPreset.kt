@@ -1,7 +1,8 @@
 package com.nxredux.mobile.shaders
 
 enum class ScaleType { NONE, SOURCE, VIEWPORT, ABSOLUTE }
-enum class WrapMode { EDGE, REPEAT, MIRRORED }
+/** [BORDER] (transparent black outside the texture) is asked for by slang presets only; GLSL presets get [EDGE] for it. */
+enum class WrapMode { EDGE, REPEAT, MIRRORED, BORDER }
 
 /** One pass of a RetroArch legacy GLSL preset, with its source text (pragma lines stripped). */
 data class ShaderPass(
@@ -134,13 +135,13 @@ object GlslPreset {
         return parts.joinToString("/")
     }
 
-    private fun resolve(dir: String, rel: String): String? = normalize(if (dir.isEmpty()) rel else "$dir/$rel")
+    internal fun resolve(dir: String, rel: String): String? = normalize(if (dir.isEmpty()) rel else "$dir/$rel")
 
-    private fun unquote(v: String): String = v.trim().let { if (it.length >= 2 && it.startsWith('"') && it.endsWith('"')) it.substring(1, it.length - 1) else it }
+    internal fun unquote(v: String): String = v.trim().let { if (it.length >= 2 && it.startsWith('"') && it.endsWith('"')) it.substring(1, it.length - 1) else it }
 
-    private fun bool(v: String) = v.equals("true", ignoreCase = true) || v == "1"
+    internal fun bool(v: String) = v.equals("true", ignoreCase = true) || v == "1"
 
-    private fun scaleType(v: String): ScaleType? = when (v.lowercase()) {
+    internal fun scaleType(v: String): ScaleType? = when (v.lowercase()) {
         "source" -> ScaleType.SOURCE
         "viewport" -> ScaleType.VIEWPORT
         "absolute" -> ScaleType.ABSOLUTE

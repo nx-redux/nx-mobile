@@ -18,6 +18,10 @@ Mac-side Python 3 (stdlib only) driver for a TrimUI Brick (tg5040) on NX Redux, 
   uneven frames, frames held 33 ms+, the core's work per frame (`--work`: Debug log on for the runs) and the temperature.
   Each run ends with the game's Quit (GAME_STOP, so saves a core writes itself finish) before the force-stop; the
   game's auto state is set aside for the runs and put back. `test_pacing.py`: that teardown, no device.
+- `slang_shaders.py`: slang presets from the home's `Shaders/shaders_slang` on a phone (`--only SFC,NDS`, `--presets`):
+  per console and preset, a launch through the GAME hook, a screenshot (`.local/device-tests/slang-shots/`), frame
+  pacing, the time the preset took to prepare and any shader error from the log. Game options, resume points and the
+  Debug log setting are put back.
 - `quit_loop.py`: boot a game, wait, GAME_STOP, check its :game process ends with no ANR or watchdog stop; repeat.
   GAME_STOP quits like Save & Quit, so the game's resume point moves.
 - `dolphin_sav.py`: wraps the libretro Dolphin core's state in standalone Dolphin's .sav headers, for comparing both
