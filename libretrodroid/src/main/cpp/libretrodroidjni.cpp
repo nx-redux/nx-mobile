@@ -55,13 +55,16 @@
 #include "achievements/achievements.h"
 #include "achievements/achievementshash.h"
 #include "microphone/microphoneinterface.h"
+// Outside the namespace block below: these headers open namespace libretrodroid themselves. Included inside it, the
+// exception became libretrodroid::libretrodroid::LibretroDroidError, a type nothing throws, so every
+// catch (LibretroDroidError&) here missed and its error code reached Kotlin as ERROR_GENERIC.
+#include "utils/utils.h"
+#include "utils/libretrodroidexception.h"
 
 namespace libretrodroid {
 
 extern "C" {
-#include "utils/utils.h"
 #include "../../libretro-common/include/libretro.h"
-#include "utils/libretrodroidexception.h"
 }
 
 namespace {
@@ -1029,6 +1032,12 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_step(
         });
         LibretroDroid::getInstance().step();
         LibretroDroid::getInstance().setFrameDrawnHook(nullptr);
+    } catch (libretrodroid::LibretroDroidError& exception) {
+        // Its own code: a custom Vulkan driver that cannot share frames is ERROR_GL_NOT_COMPATIBLE, a failed start.
+        LibretroDroid::getInstance().setFrameDrawnHook(nullptr);
+        LOGE("Error in step: %s", exception.what());
+        JavaUtils::throwRetroException(env, exception.getErrorCode());
+        return;
     } catch (std::exception &exception) {
         LibretroDroid::getInstance().setFrameDrawnHook(nullptr);
         LOGE("Error in step: %s", exception.what());
@@ -1123,6 +1132,39 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setPreferV
     jboolean enabled
 ) {
     LibretroDroid::getInstance().setPreferVulkan(enabled);
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setVulkanDriver(
+    JNIEnv* env,
+    jclass obj,
+    jstring driverDir,
+    jstring libraryName,
+    jstring hookLibDir,
+    jstring tmpDir
+) {
+    LibretroDroid::getInstance().setVulkanDriver(JniString(env, driverDir).stdString(),
+                                                 JniString(env, libraryName).stdString(),
+                                                 JniString(env, hookLibDir).stdString(),
+                                                 JniString(env, tmpDir).stdString());
+}
+
+JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_probeVulkanDriver(
+    JNIEnv* env,
+    jclass obj,
+    jstring driverDir,
+    jstring libraryName,
+    jstring hookLibDir,
+    jstring tmpDir
+) {
+    try {
+        return VulkanBridge::probeCustomDriver(JniString(env, driverDir).stdString(),
+                                               JniString(env, libraryName).stdString(),
+                                               JniString(env, hookLibDir).stdString(),
+                                               JniString(env, tmpDir).stdString());
+    } catch (std::exception& exception) {
+        LOGE("Error in probeVulkanDriver: %s", exception.what());
+        return false;
+    }
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setVulkanSwapchainFrames(

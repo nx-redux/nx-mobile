@@ -69,6 +69,7 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
         over = {
             // Over the whole stage, so its scrim takes every tap until it is answered.
             if ((s as? Screen.Settings)?.confirmRemove != null) SettingsRemoveDialog(state::onButton)
+            (s as? Screen.Settings)?.confirmDriver?.let { GpuDriverRemoveDialog(it.name, state::onButton) }
             (s as? Screen.Settings)?.takeIf { it.confirmReset }?.let { settingsResetAsk(it, selection.value.index) }?.let { SettingsResetDialog(it, state::onButton) }
         },
     )

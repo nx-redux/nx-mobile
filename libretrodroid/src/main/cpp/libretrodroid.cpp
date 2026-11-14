@@ -450,6 +450,11 @@ void LibretroDroid::create(
     preferVulkan = false;
     VulkanBridge::get().setSwapchainFrames(vulkanSwapchainFrames);
     vulkanSwapchainFrames = false;
+    VulkanBridge::get().setDriver(vulkanDriverDir, vulkanDriverLibrary, vulkanDriverHookLibDir, vulkanDriverTmpDir);
+    vulkanDriverDir.clear();
+    vulkanDriverLibrary.clear();
+    vulkanDriverHookLibDir.clear();
+    vulkanDriverTmpDir.clear();
     Environment::getInstance().setPreferVulkan(offerVulkan);
 
     openglESVersion = GLESVersion;
@@ -1233,6 +1238,10 @@ void LibretroDroid::handleVideoRefresh(
                 video->setExternalFrame(frame.buffer, frame.id, frame.width, frame.height, frame.syncFd);
                 width = frame.width;
                 height = frame.height;
+            } else if (VulkanBridge::get().takeCustomSlotFailure()) {
+                // A custom driver that cannot share its frames with the display: as a failed start (the host relaunches
+                // on the system driver). Raised after retro_run returns, like any error here.
+                throw LibretroDroidError("The custom Vulkan driver cannot share frames with the display", ERROR_GL_NOT_COMPATIBLE);
             } else {
                 data = nullptr;   // nothing bridged: redraw the last frame
             }

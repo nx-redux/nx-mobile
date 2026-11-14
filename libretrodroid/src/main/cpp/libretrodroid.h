@@ -179,6 +179,14 @@ public:
     // The next create() offers the core Vulkan (bridged into the GLES presentation). Set before create().
     void setPreferVulkan(bool value) { preferVulkan = value; }
     void setVulkanSwapchainFrames(bool value) { vulkanSwapchainFrames = value; }
+    // The next create()'s Vulkan bridge loads [libraryName] from [driverDir] through libadrenotools (empty: the system
+    // driver). [hookLibDir]: the app's nativeLibraryDir; [tmpDir]: patched libraries below API 29. Set before create().
+    void setVulkanDriver(std::string driverDir, std::string libraryName, std::string hookLibDir, std::string tmpDir) {
+        vulkanDriverDir = std::move(driverDir);
+        vulkanDriverLibrary = std::move(libraryName);
+        vulkanDriverHookLibDir = std::move(hookLibDir);
+        vulkanDriverTmpDir = std::move(tmpDir);
+    }
     // Offer video views to the next core loaded (GET_VIDEO_VIEWS_STATUS answers PRESENTS).
     void setVideoViewsEnabled(bool value) { videoViewsEnabled = value; }
     // The core's last accepted view map (empty: none), any thread. A change also raises takeGameGeometryChanged().
@@ -354,6 +362,10 @@ private:
     bool rumbleEnabled = false;
     bool preferVulkan = false;
     bool vulkanSwapchainFrames = false;
+    std::string vulkanDriverDir;
+    std::string vulkanDriverLibrary;
+    std::string vulkanDriverHookLibDir;
+    std::string vulkanDriverTmpDir;
 
     ShaderManager::Config fragmentShaderConfig = ShaderManager::Config {
         ShaderManager::Type::SHADER_DEFAULT, { }

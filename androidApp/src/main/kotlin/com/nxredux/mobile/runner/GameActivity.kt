@@ -104,6 +104,10 @@ import com.nxredux.mobile.options.ScreenScaling
 import com.nxredux.mobile.options.SpeedOptions
 import com.nxredux.mobile.options.SpeedSettings
 import com.nxredux.mobile.options.VulkanFallback
+import com.nxredux.mobile.gpudriver.GpuDriver
+import com.nxredux.mobile.gpudriver.GpuDriverChoice
+import com.nxredux.mobile.gpudriver.GpuDriverCrash
+import com.nxredux.mobile.gpudriver.GpuDriverMarkerGuard
 import com.nxredux.mobile.settings.ProviderPreferences
 import com.nxredux.mobile.settings.Prefs
 import com.nxredux.mobile.settings.AndroidAppSettings
@@ -207,6 +211,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private const val FINISH_WHEN_HIDDEN_MS = 1_500L   // a quit still on screen this long after asking for the menu finishes anyway
         const val EXTRA_OWN_TASK = "own_task"        // Boolean: launcher mode, the game runs in its own task
         const val EXTRA_FORCE_GLES = "force_gles"    // Boolean: the relaunch after Vulkan could not start (VulkanFallback)
+        const val EXTRA_FORCE_SYSTEM_DRIVER = "force_system_driver"   // Boolean: the relaunch after a custom driver could not start
         // netplay: a Wi-Fi netplay launch (GameSession.netplay); all absent for every other launch. The run core is EXTRA_CORE_ID.
         const val EXTRA_NETPLAY_ROLE = "netplay_role"            // NetplayRole name: "HOST" | "CLIENT"
         const val EXTRA_NETPLAY_PEER = "netplay_peer"            // the other device's IPv4 address
@@ -311,6 +316,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override val isDolphin: Boolean get() = gameCoreId == WiiDolphinController.DOLPHIN_ID
     /** This launch asked the core for Vulkan (Display → Graphics API): a failure to start it relaunches on GLES. */
     @Volatile private var launchedOnVulkan = false
+    /** The custom GPU driver this launch loads ([GpuDriverChoice]); null: the system driver (or not on Vulkan). */
+    @Volatile private var launchedDriver: GpuDriver? = null
+    /** This launch's custom-driver crash marker ([GpuDriverCrash]): written by the launch, cleared by this screen. */
+    private val driverMarker = GpuDriverMarkerGuard { settings.gpuDriverMarker = it }
+    /** Clears the marker once the game has presented frames for [GpuDriverCrash.CLEAR_AFTER_MS]. */
+    private var driverMarkerClear: Job? = null
+    private var presentedFrame = false   // the first frame is up (clearDriverMarkerLater has run): main thread
     /**
      * This screen is being recreated to start the game again on OpenGL ES ([relaunchOnGles]): it writes no auto state
      * and shows no failure dialog.
@@ -968,6 +980,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         rumbles.forEach { it.release() }
         wii.onDestroy()
         if (isFinishing || relaunching) endGameTime()   // Back/finish without Quit (quit already ended it), or the GLES relaunch
+        // A normal exit or a recreation: this launch did not die on its driver. Abandoned first, so a launch still writing
+        // its marker (Back while loading) writes none, or the clear below waits for that write and undoes it.
+        driverMarkerClear?.cancel()
+        driverMarkerClear = null
+        val clearMarker = driverMarker.abandon()
         if (isFinishing) launchRecords.drop(launchId)   // quit before the first frame: the launch never started
         if (BuildConfig.DEBUG && isFinishing) debugReportStopped()
         input.gcClearTriggers()   // a latched soft press never outlives the game
@@ -993,7 +1010,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val app = applicationContext
         if (endsProcess) { ending = true; GameHeartbeat.start(app) }   // a finish without Quit (Back) beats from here
         // After the core's last write (destroyed above); a Binder call to the menu process, so not on this thread.
-        if (endUse || endsProcess) thread(name = if (endsProcess) "game-process-end" else "data-use-end") {
+        if (endUse || endsProcess || clearMarker) thread(name = if (endsProcess) "game-process-end" else if (endUse) "data-use-end" else "gpu-marker-clear") {
+            // First: it may wait for a marker commit in flight, and its clear must be queued before endProcess waits for the sends.
+            if (clearMarker) driverMarker.clear()
             if (endUse) runCatching { DataRoot.useEnd(app) }.onFailure { NxLog.w(TAG_LOG, "could not end the data use", it) }
             if (endsProcess) endProcess()
         }
@@ -1075,14 +1094,54 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * live one the intent. The old screen's onDestroy (the core's native destroy, the session release) runs before the
      * new onCreate; not finishing, it keeps the launch for it.
      */
-    private fun relaunchOnGles() {
+    private fun relaunchOnGles(record: Boolean = true, notice: String = VulkanFallback.NOTICE) {
         if (isFinishing || relaunching || failShown) return
         relaunching = true
-        settings.recordVulkanFailure(gameCoreId)
+        clearDriverMarker()
+        // [record] false: a custom driver failed on a core whose system-driver failure is already recorded.
+        if (record) settings.recordVulkanFailure(gameCoreId)
         NxLog.w(TAG_LOG, "Vulkan could not start for $gameCoreId: starting again on OpenGL ES")
-        android.widget.Toast.makeText(applicationContext, VulkanFallback.NOTICE, android.widget.Toast.LENGTH_LONG).show()
+        android.widget.Toast.makeText(applicationContext, notice, android.widget.Toast.LENGTH_LONG).show()
         intent = Intent(intent).putExtra(EXTRA_FORCE_GLES, true)
         recreate()
+    }
+
+    /**
+     * The custom GPU driver ([launchedDriver]) could not start: as [relaunchOnGles], but the new screen runs Vulkan on the
+     * system driver ([EXTRA_FORCE_SYSTEM_DRIVER]); nothing is recorded, and the driver is not blamed for a crash. If that
+     * fails too, the relaunch after it goes to OpenGL ES ([GpuDriverChoice.afterStartFailure]).
+     */
+    private fun relaunchOnSystemDriver() {
+        if (isFinishing || relaunching || failShown) return
+        val driver = launchedDriver ?: return relaunchOnGles()
+        relaunching = true
+        clearDriverMarker()
+        NxLog.w(TAG_LOG, "the GPU driver ${driver.name} could not start for $gameCoreId: starting again on the system driver")
+        android.widget.Toast.makeText(applicationContext, GpuDriverChoice.named(GpuDriverChoice.SYSTEM_DRIVER_NOTICE, driver.name), android.widget.Toast.LENGTH_LONG).show()
+        intent = Intent(intent).putExtra(EXTRA_FORCE_SYSTEM_DRIVER, true)
+        recreate()
+    }
+
+    /** The game has presented its first frame: this launch's crash marker goes once it has run [GpuDriverCrash.CLEAR_AFTER_MS]. */
+    private fun clearDriverMarkerLater() {
+        presentedFrame = true
+        if (driverMarkerClear != null) return
+        driverMarkerClear = lifecycleScope.launch {
+            delay(GpuDriverCrash.CLEAR_AFTER_MS)
+            driverMarkerClear = null
+            if (driverMarker.clear()) NxLog.i(TAG_LOG, "the GPU driver ran ${GpuDriverCrash.CLEAR_AFTER_MS / 1000} s: its launch marker is cleared")
+        }
+    }
+
+    /**
+     * Forgets this launch's crash marker, and the timer that would have. Nothing when it wrote none. On the main thread:
+     * only once the launch's [GpuDriverMarkerGuard.mark] has returned (a relaunch comes after the view exists), so it
+     * never waits on the marker's commit; the clear itself is applied.
+     */
+    private fun clearDriverMarker() {
+        driverMarkerClear?.cancel()
+        driverMarkerClear = null
+        driverMarker.clear()
     }
 
     /** [title]: "Netplay failed" for a netplay session's failures, which may come mid-game. */
@@ -1095,6 +1154,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         launchRecords.drop(launchId)   // refused: the launcher must not record it
         if (isFinishing || isDestroyed || failShown) return   // observeErrors can report more than once: one dialog, never a stack
         failShown = true
+        // The game never presented a frame: whatever ends this screen now (Back, or a crash in the core's teardown, as
+        // mupen64plus_next's retro_deinit after a start that failed before context_reset) is not the driver's crash.
+        // The dialog only leaves by finishing, so the launch is abandoned here; off the main thread, as in onDestroy.
+        if (!presentedFrame) {
+            driverMarkerClear?.cancel()
+            driverMarkerClear = null
+            if (driverMarker.abandon()) thread(name = "gpu-marker-clear") { driverMarker.clear() }
+        }
         rumbles.forEach { it.release() }
         // A controller's A only focuses the button (Android clicks on ENTER): A, B and BACK leave on release. A release
         // needs its press here first, so a button held from the game as the dialog opens does not close it unseen.
@@ -2051,6 +2118,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         override var ndsRenderMode by game::ndsRenderMode
         override var ndsFellBack by game::ndsFellBack
         override var launchedOnVulkan by game::launchedOnVulkan
+        override var launchedDriver by game::launchedDriver
         override var launchEnv by game::launchEnv
         override var graphicsForcedOptions by game::graphicsForcedOptions
         override var frontendValues by game::frontendValues
@@ -2083,7 +2151,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
 
         override fun fail(message: String, title: String) = game.fail(message, title)
-        override fun relaunchOnGles() = game.relaunchOnGles()
+        override fun relaunchOnGles(record: Boolean, notice: String) = game.relaunchOnGles(record, notice)
+        override fun relaunchOnSystemDriver() = game.relaunchOnSystemDriver()
+        override fun clearDriverMarkerLater() = game.clearDriverMarkerLater()
+        override fun markDriverLaunch(marker: String) = game.driverMarker.mark(marker)
+        override fun clearDriverLaunchMarker() { game.driverMarker.clear() }
         override fun quitGame(chosen: Boolean, autoState: Boolean) = game.quitWithAutoState(chosen, autoState)
         override fun toast(msg: String) = game.toast(msg)
         override fun isLandscape() = game.isLandscape()

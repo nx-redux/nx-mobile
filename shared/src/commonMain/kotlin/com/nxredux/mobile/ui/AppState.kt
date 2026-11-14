@@ -104,6 +104,11 @@ import com.nxredux.mobile.settings.migrateMixWheel
 import com.nxredux.mobile.settings.SecondaryAccent
 import com.nxredux.mobile.settings.OptionTextSize
 import com.nxredux.mobile.settings.AppSettings
+import com.nxredux.mobile.gpudriver.GpuDriver
+import com.nxredux.mobile.gpudriver.GpuDriverChoice
+import com.nxredux.mobile.gpudriver.GpuDriverCrash
+import com.nxredux.mobile.gpudriver.GpuDriverStore
+import com.nxredux.mobile.gpudriver.PackageCheck
 import com.nxredux.mobile.settings.PlayerName
 import com.nxredux.mobile.settings.ImportResult
 import com.nxredux.mobile.settings.ImportSource
@@ -320,6 +325,8 @@ class AppDeps(
     val promptOnSecondDisplay: () -> Boolean = { false },
     /** A diagnostic line (Android: NxLog, so only with Settings → System → Debug log on). */
     val log: (String) -> Unit = {},
+    /** Settings → Emulation → GPU driver and the consoles' GPU driver rows; null: a platform without custom drivers (no row). */
+    val gpuDrivers: GpuDriverStore? = null,
 )
 
 /**
@@ -463,6 +470,8 @@ sealed interface Screen {
         val confirmReset: Boolean = false,
         /** System → Player name's prompt is up (its draft): A saves it, B keeps the old name. */
         val nameDraft: String? = null,
+        /** Emulation → GPU driver: "Remove driver?" is open for this driver; A removes it, B keeps it. */
+        val confirmDriver: GpuDriver? = null,
     ) : Screen
     /** Tools -> Settings: one row per section. */
     data class SettingsMenu(val sections: List<SettingsSection>) : Screen
@@ -575,11 +584,13 @@ internal val Screen.menuPushed: Boolean
 /** Kids Mode's first switch-on, in order (the spec's): PIN, allowed apps, play times, then the two permissions and home. */
 enum class KidsSetupStep { PIN, APPS, TIMES, USAGE, ALARMS, HOME }
 
-enum class SettingsKind { PLAYER_NAME, HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, GAME_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
+enum class SettingsKind { PLAYER_NAME, HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, GAME_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, GPU_DRIVER, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
     SYSTEM_BUTTONS, SYSTEM_BUTTON_BIND,
+    // Emulation -> GPU driver ([GPU_DRIVER] opens it): a driver to use (System driver or an installed one), and Add driver.
+    GPU_DRIVER_ITEM, GPU_DRIVER_ADD,
     LAYOUT_HOME, LAYOUT_GAMES_TAB, LAYOUT_CONSOLES, LAYOUT_COLLECTIONS, LAYOUT_TOOLS, LAYOUT_GAME_LISTS, LAYOUT_TITLE_HINTS, LAYOUT_SWITCHER, TEXT_SIZE,
     // A group's label and the space before it (System's General, Launcher, Developer, About, Licenses): never selected.
     SECTION, GAP,
@@ -606,6 +617,7 @@ enum class SettingsSection(val label: String, val parent: SettingsSection? = nul
     BUTTON_LAYOUT("Button layout", APPEARANCE, SettingsKind.BUTTON_LAYOUT), SAVES("Saves", LIBRARY, SettingsKind.SAVES),
     SHORTCUTS("Shortcuts", CONTROLS, SettingsKind.SHORTCUTS),
     SYSTEM_BUTTONS("System buttons", CONTROLS, SettingsKind.SYSTEM_BUTTONS),
+    GPU_DRIVER("GPU driver", EMULATORS, SettingsKind.GPU_DRIVER),
     IMPORT_SAVES("Import saves", SAVES, SettingsKind.IMPORT_SAVES),
     // An import's results; Done and B go back to Saves ([AppState.leaveSubPage]), past Import saves.
     IMPORT_RESULT("Import results", IMPORT_SAVES),
@@ -847,7 +859,11 @@ data class SettingInfoPopup(val title: String, val text: String, val scrollSeq: 
  */
 data class SettingsRow(val kind: SettingsKind, val label: String, val secondary: String? = null, val extra: ExtraFolder? = null, val consoleId: String? = null, val enabled: Boolean = true, val category: MenuCategory? = null, val shelf: HomeShelf? = null, val hint: NxButton? = null, val landscape: Boolean? = null, val warning: Boolean = false, val note: String? = null, val shortcut: ShortcutAction? = null, val touchSlot: TouchSlot? = null, val systemRole: SystemRole? = null,
     /** A Kids Mode play-time row's ISO day. */
-    val day: Int? = null)
+    val day: Int? = null,
+    /** A GPU driver page row's driver: [GpuDriverChoice.SYSTEM] or an installed driver's id. */
+    val gpuDriver: String? = null,
+    /** The GPU driver page's driver in use: its row is marked. */
+    val current: Boolean = false)
 
 /** A row the selection lands on: not a group label, the space before one, or a paragraph. */
 val SettingsRow.selectable: Boolean get() = kind != SettingsKind.SECTION && kind != SettingsKind.GAP && kind != SettingsKind.TEXT
@@ -3823,6 +3839,7 @@ class AppState(
     /** A page's note under its title ([Screen.Settings.banner]): Saves', where they live. */
     private fun settingsBanner(section: SettingsSection): String? {
         if (section == SettingsSection.LAYOUT_GAMES_TAB) return "Its layout follows Layouts \u2192 Game lists."
+        if (section == SettingsSection.GPU_DRIVER) return GPU_DRIVER_INFO
         if (section != SettingsSection.SAVES) return null
         val home = home()
         val media = deps.homes?.media
@@ -3991,6 +4008,7 @@ class AppState(
         SettingsSection.EMULATORS -> buildList {
             add(SettingsRow(SettingsKind.DEFAULTS, "Default emulators"))
             add(SettingsRow(SettingsKind.EMULATORS, "Default settings"))
+            deps.gpuDrivers?.let { store -> gpuDriverRow(store.unavailableReason(), deps.settings.gpuDriver, store::installed)?.let(::add) }
         }
         SettingsSection.SECOND_SCREEN -> listOf(
             SettingsRow(SettingsKind.SECOND_SCREEN_ENABLE, "Enable", if (deps.settings.secondScreen) "On" else "Off"),
@@ -4047,6 +4065,7 @@ class AppState(
             SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
         )
         SettingsSection.SYSTEM -> systemRows()
+        SettingsSection.GPU_DRIVER -> deps.gpuDrivers?.let { gpuDriverPageRows(deps.settings.gpuDriver, it.installed()) }.orEmpty()
         SettingsSection.KIDS -> kidsUi.kidsRows()
     }
 
@@ -4565,6 +4584,65 @@ class AppState(
         if (stale) rescanFromSettings(parent, opener) else settingsUi.showSettingsOn(parent, opener)
     }
 
+    /**
+     * A on a GPU driver page row: System driver is used at once; an installed driver opens its options (Use this driver,
+     * Remove), the one in use under the cursor when it is.
+     */
+    private fun gpuDriverRowA(id: String) {
+        if (id == GpuDriverChoice.SYSTEM) return useGpuDriver(id)
+        val driver = deps.gpuDrivers?.installed()?.firstOrNull { it.id == id } ?: return settingsUi.refreshSettings()   // gone meanwhile
+        settingsUi.openPicker(driver.name, gpuDriverOptions, if (deps.settings.gpuDriver == id) 0 else -1) { i ->
+            when (gpuDriverOptions[i]) {
+                GPU_DRIVER_USE -> useGpuDriver(id)
+                GPU_DRIVER_REMOVE -> (_screen.value as? Screen.Settings)?.takeIf { it.section == SettingsSection.GPU_DRIVER }?.let { _screen.value = it.copy(confirmDriver = driver) }
+            }
+        }
+    }
+
+    /** [id] becomes the app-wide driver ([GpuDriverChoice.SYSTEM] or an installed one); the page marks it. */
+    private fun useGpuDriver(id: String) {
+        deps.settings.gpuDriver = id
+        settingsUi.refreshSettings()
+    }
+
+    /** A pick in flight ([addGpuDriver]): a second A on Add driver waits for it. */
+    private var gpuDriverAdd: Job? = null
+
+    /**
+     * Add driver: the platform's zip picker, then the install. A driver that installs is listed, not chosen; one refused
+     * says why (the error dialog); a cancelled pick does nothing.
+     */
+    private fun addGpuDriver() {
+        val store = deps.gpuDrivers ?: return
+        if (gpuDriverAdd?.isActive == true) return
+        gpuDriverAdd = scope.launch {
+            when (val result = store.add()) {
+                null -> Unit
+                is PackageCheck.Rejected -> _error.value = result.reason
+                is PackageCheck.Ok -> {
+                    if ((_screen.value as? Screen.Settings)?.section == SettingsSection.GPU_DRIVER) settingsUi.refreshSettings()
+                    showNotice("Added ${result.driver.name}")
+                }
+            }
+        }
+    }
+
+    /**
+     * The confirmed Remove: the driver in use goes back to the system driver first (so no launch picks it up while it is
+     * deleted), its crash records go, then its folder; consoles and games set to it follow the app-wide driver from now on.
+     */
+    private fun removeGpuDriver(driver: GpuDriver) {
+        val store = deps.gpuDrivers ?: return
+        val s = deps.settings
+        if (s.gpuDriver == driver.id) s.gpuDriver = GpuDriverChoice.SYSTEM
+        s.gpuDriverCrashes = gpuCrashesWithout(s.gpuDriverCrashes, driver.id)
+        (_screen.value as? Screen.Settings)?.let { _screen.value = it.copy(confirmDriver = null) }
+        scope.launch {
+            withContext(deps.compute) { tryQuietly { store.remove(driver.id) } }
+            if ((_screen.value as? Screen.Settings)?.section == SettingsSection.GPU_DRIVER) settingsUi.refreshSettings()   // its row goes
+        }
+    }
+
     fun removeExtra(extra: ExtraFolder) {
         deps.settings.extraFolders = deps.settings.extraFolders.filter { it.id != extra.id }
         libraryDirty = true
@@ -4614,6 +4692,14 @@ class AppState(
             when (button) {
                 NxButton.A -> { _screen.value = page.copy(confirmReset = false); settingsUi.runSettingsReset(page) }
                 NxButton.B -> _screen.value = page.copy(confirmReset = false)
+                else -> Unit
+            }
+            return
+        }
+        (s as? Screen.Settings)?.confirmDriver?.let { driver ->
+            when (button) {
+                NxButton.A -> removeGpuDriver(driver)
+                NxButton.B -> _screen.value = s.copy(confirmDriver = null)
                 else -> Unit
             }
             return
@@ -5382,6 +5468,9 @@ class AppState(
                     SettingsKind.BUTTON_LAYOUT_RESET -> _screen.value = s.copy(confirmReset = true)   // asks first
                     SettingsKind.SHORTCUTS -> settingsUi.openSubPage(s, SettingsSection.SHORTCUTS)
                     SettingsKind.SYSTEM_BUTTONS -> settingsUi.openSubPage(s, SettingsSection.SYSTEM_BUTTONS)
+                    SettingsKind.GPU_DRIVER -> if (row.enabled) settingsUi.openSubPage(s, SettingsSection.GPU_DRIVER)   // dimmed: the reason is all it says
+                    SettingsKind.GPU_DRIVER_ITEM -> row.gpuDriver?.let(::gpuDriverRowA)
+                    SettingsKind.GPU_DRIVER_ADD -> addGpuDriver()
                     // Without a controller too: one plugged in next answers it (the row says to connect one).
                     SettingsKind.SHORTCUT_BIND -> row.shortcut?.let(::startCapture)
                     SettingsKind.SYSTEM_BUTTON_BIND -> row.systemRole?.let { systemButtonWaiting = it; settingsUi.refreshSettings() }
@@ -5479,6 +5568,11 @@ class AppState(
         screenClass = deps.screenClass,
         windowPx = deps.windowPx,
         ps2BiosFiles = deps.ps2BiosFiles,
+        // Null (no rows) where custom drivers cannot be used ([GpuDriverStore.unavailableReason]).
+        gpuDrivers = { deps.gpuDrivers?.takeIf { it.unavailableReason() == null }?.installed() },
+        gpuDriverAppWide = { deps.settings.gpuDriver },
+        gpuDriverCrashed = { path -> GpuDriverCrash.crashed(deps.settings.gpuDriverCrashes, path) },
+        clearGpuDriverCrash = { path -> deps.settings.gpuDriverCrashes = GpuDriverCrash.clearGame(deps.settings.gpuDriverCrashes, path).takeIf { it.isNotEmpty() } },
         alwaysListed = { if (deps.linkRomCache != null) listOf(EmulatorRows.CABLE_LINK_TAG) else emptyList() },
     )
 
@@ -6293,7 +6387,8 @@ class AppState(
                 else if (s.menu != null) { if (!s.menu.busy) closeContextMenu(); true }
                 else if (s.pushed) { popHiddenTab(); true }
                 else false
-            is Screen.Settings -> if (s.nameDraft != null) { _screen.value = s.copy(nameDraft = null); true } else if (s.confirmReset) { _screen.value = s.copy(confirmReset = false); true } else {   // Back keeps the settings
+            is Screen.Settings -> if (s.nameDraft != null) { _screen.value = s.copy(nameDraft = null); true } else if (s.confirmReset) { _screen.value = s.copy(confirmReset = false); true }
+                else if (s.confirmDriver != null) { _screen.value = s.copy(confirmDriver = null); true } else {   // Back keeps the settings
                 settingsUi.rememberSection(s.section, _selection.value)
                 // A sub-page goes back to its section. Library or Emulators: after a change ([libraryDirty]), or an extra set
                 // or default tag changed behind the page's back (it fails the fit), it reloads (rescanning if needed); either

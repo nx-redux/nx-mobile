@@ -534,6 +534,21 @@ interface AppSettings {
      */
     val vulkanFailedCores: Set<String>
         get() = emptySet()
+    /** Settings → Emulation → GPU driver: [com.nxredux.mobile.gpudriver.GpuDriverChoice.SYSTEM] or an installed driver's id. Defaulted, like [debugLog]. */
+    var gpuDriver: String
+        get() = com.nxredux.mobile.gpudriver.GpuDriverChoice.SYSTEM
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /**
+     * The custom-driver launch in flight ([com.nxredux.mobile.gpudriver.GpuDriverCrash.encode]); null: none. Setting a
+     * marker is durable when it returns (it guards a launch that may kill the process), so it may block. Defaulted, like [debugLog].
+     */
+    var gpuDriverMarker: String?
+        get() = null
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /** The games a custom driver crashed in, one `gamePath<TAB>driverId` per line; null: none. Defaulted, like [debugLog]. */
+    var gpuDriverCrashes: String?
+        get() = null
+        set(@Suppress("UNUSED_PARAMETER") value) {}
     /** Controls → Game rumble: a core's rumble on the controller in use or the phone ([GameRumble.DEFAULT] Medium). */
     var gameRumble: GameRumble
     /** Appearance → Accent: the selection colour; unset or unknown is [AccentPreset.DEFAULT] (White). */

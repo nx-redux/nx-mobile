@@ -145,6 +145,9 @@ object FrontendOptions {
     fun allFor(tag: String): List<FrontendOption> = ConsoleSettings.tableFor(tag).let { rows ->
         // The PS2 BIOS row is hidden until the folder holds a choice, but its stored pick is still read.
         if (Ps2Options.appliesTo(tag) && rows.none { it.key == Ps2Options.BIOS }) rows + Ps2Options.biosRow(emptyList()) else rows
+    }.let { rows ->
+        // The GPU driver row needs the installed drivers to be listed, but the launch reads its stored pick (kept raw).
+        if (GpuDriverOptions.appliesTo(tag, available = true) && rows.none { it.key == GpuDriverOptions.KEY }) rows + GpuDriverOptions.row(emptyList()) else rows
     } + table
 
     /**

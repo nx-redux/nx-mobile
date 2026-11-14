@@ -37,6 +37,7 @@
 
 #include "libretro.h"
 #include "libretro_vulkan.h"
+#include "vulkandispatch.h"
 #include "vulkanframe.h"
 
 struct AImageReader;
@@ -51,6 +52,14 @@ public:
     // Whether this device can run the bridge: a Vulkan loader and a GPU with AHardwareBuffer import. Checked before
     // Vulkan is offered, so a core that picks Vulkan can always get it. Cached after the first call.
     static bool isSupported();
+
+    // Before any core is loaded: whether the custom driver [library] in [dir] (arguments as setDriver's) can start the
+    // bridge. On its own table and the process-wide cached loader: instance with the bridge's instance extensions, the
+    // /proc/self/maps check, a device with the bridge's device extensions, and one AHardwareBuffer allocated and imported
+    // exactly as a frame slot is. Everything it made is destroyed; the loader stays open for the launch. False: the
+    // reason logged. Any thread; never touches the bridge's own state.
+    static bool probeCustomDriver(const std::string& dir, const std::string& library, const std::string& hookLibDir,
+                                  const std::string& tmpDir);
 
     // From RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE (the core keeps the struct alive).
     void setNegotiation(const retro_hw_render_context_negotiation_interface_vulkan* negotiation);
@@ -74,6 +83,11 @@ public:
     // In the core's video_cb (RETRO_HW_FRAME_BUFFER_VALID): copies the image from set_image into the next buffer.
     bool bridgeFrame(unsigned width, unsigned height, Frame& out);
 
+    // A custom driver could not create or import the shared AHardwareBuffer before any frame was bridged (Mali's
+    // malisx2: INVALID_EXTERNAL_HANDLE), so nothing it renders can reach the screen: the driver could not start. True
+    // once, after the bridgeFrame that failed; the system driver never reports it (its failed frame is skipped, as before).
+    bool takeCustomSlotFailure();
+
     // After the GL draw that sampled the last bridged buffer: fences it so the copy into it two frames later waits.
     void afterGlDraw();
 
@@ -87,13 +101,26 @@ public:
     void setMaxFrame(unsigned width, unsigned height) { maxFrameWidth = width; maxFrameHeight = height; }
     // The core renders into a swapchain on the bridge's surface (Dolphin): frames are bounded by the surface instead.
     void setSwapchainFrames(bool value) { swapchainFrames = value; }
+    // The next initialize() loads [library] from [dir] through libadrenotools instead of the system driver; empty [dir]
+    // and [library]: the system driver. [hookLibDir]: the app's nativeLibraryDir; [tmpDir]: patched libraries below
+    // API 29. One-shot like setSwapchainFrames: destroy() forgets it. A custom driver that fails to load fails
+    // initialize(); the host decides whether to retry on the system driver.
+    void setDriver(const std::string& dir, const std::string& library, const std::string& hookLibDir,
+                   const std::string& tmpDir);
 
 private:
     std::atomic<unsigned> maxFrameWidth { 0 };
     std::atomic<unsigned> maxFrameHeight { 0 };
     bool swapchainFrames = false;
+    std::string driverDir;
+    std::string driverLibrary;
+    std::string driverHookLibDir;
+    std::string driverTmpDir;
 
     VulkanBridge() = default;
+
+    // Every Vulkan call the bridge makes, from the loader this session runs on (initialize() to destroy()).
+    VulkanDispatch vk;
 
     struct Slot {
         AHardwareBuffer* buffer = nullptr;
@@ -109,6 +136,8 @@ private:
     static constexpr unsigned SYNC_COUNT = 2;
 
     bool createInstance();
+    bool bindInstance();   // the instance-level table for [instance]; false when a required entry point is missing
+    void logDriver();
     bool createSurface(unsigned width, unsigned height);
     bool createDevice();
     bool createFrameResources();
@@ -182,13 +211,13 @@ private:
     unsigned slotIndex = 0;
     int lastSlot = -1;
     uint64_t nextSlotId = 1;
+    bool bridgedAny = false;          // a frame has reached a slot since initialize()
+    bool customSlotFailed = false;    // takeCustomSlotFailure's report, pending
+    bool customSlotReported = false;  // reported once per initialize()
 
     bool useSyncFd = false;
     bool queueFamilyForeign = false;
     bool loggedFirstFrame = false;
-
-    PFN_vkGetAndroidHardwareBufferPropertiesANDROID pGetAhbProperties = nullptr;
-    PFN_vkGetSemaphoreFdKHR pGetSemaphoreFd = nullptr;
 };
 
 }

@@ -95,6 +95,7 @@ fun SettingsScreen(
         }
         if (dialog && screen.confirmRemove != null) SettingsRemoveDialog(onHint)
         if (dialog && screen.confirmReset) settingsResetAsk(screen, selectedIndex)?.let { SettingsResetDialog(it, onHint) }
+        if (dialog) screen.confirmDriver?.let { GpuDriverRemoveDialog(it.name, onHint) }
     }
 }
 
@@ -142,6 +143,7 @@ private fun SettingsTouchPage(
         }
         if (dialog && screen.confirmRemove != null) SettingsRemoveDialog(onHint)
         if (dialog && screen.confirmReset) settingsResetAsk(screen, selectedIndex)?.let { SettingsResetDialog(it, onHint) }
+        if (dialog) screen.confirmDriver?.let { GpuDriverRemoveDialog(it.name, onHint) }
     }
 }
 
@@ -173,7 +175,7 @@ internal fun SettingsDetailLines(lines: List<String>, separator: String = " ") {
 internal fun settingsTouchPage(screen: Screen.Settings): Boolean =
     screen.choices.any { it != null } || screen.section == SettingsSection.DEFAULT_EMULATORS ||
         screen.section == SettingsSection.LIBRARY || screen.section == SettingsSection.SYSTEM ||
-        screen.section == SettingsSection.SYSTEM_BUTTONS
+        screen.section == SettingsSection.SYSTEM_BUTTONS || screen.section == SettingsSection.GPU_DRIVER
 
 /** The Settings rows that open a page or an editor: their touch row ends in `›`. */
 private val OPENER_KINDS = setOf(
@@ -181,14 +183,14 @@ private val OPENER_KINDS = setOf(
     SettingsKind.BUTTON_LAYOUT, SettingsKind.BUTTON_LAYOUT_ORIENTATION, SettingsKind.SHORTCUTS, SettingsKind.SYSTEM_BUTTONS, SettingsKind.ANDROID_GAMES, SettingsKind.HIDDEN, SettingsKind.UNASSIGNED,
     SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_GAMES_TAB, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER,
-    SettingsKind.KIDS_PIN, SettingsKind.KIDS_DAY, SettingsKind.KIDS_APPS,
+    SettingsKind.KIDS_PIN, SettingsKind.KIDS_DAY, SettingsKind.KIDS_APPS, SettingsKind.GPU_DRIVER,
 )
 
 /** Rows whose values are a segmented button however many or long they are (Game lists' layout: its five styles side by side; the Game Switcher's Full screen / List). */
 private val SEGMENTED_KINDS = setOf(SettingsKind.GAME_LIST_STYLE, SettingsKind.SWITCHER_LAYOUT)
 
 /** Rows whose secondary (a path, a state, a count, the last scan) is their description, not a value. */
-private val DESCRIBED_KINDS = setOf(SettingsKind.HOME, SettingsKind.EXTRA, SettingsKind.RESCAN, SettingsKind.UNASSIGNED, SettingsKind.HIDDEN)
+private val DESCRIBED_KINDS = setOf(SettingsKind.HOME, SettingsKind.EXTRA, SettingsKind.RESCAN, SettingsKind.UNASSIGNED, SettingsKind.HIDDEN, SettingsKind.GPU_DRIVER_ITEM)
 
 /** Rows whose secondary is their description line ([settingsInfo]), with more behind the info icon: Kids Mode's warnings and flag path. */
 private val LINE_KINDS = setOf(SettingsKind.KIDS_GUARD, SettingsKind.KIDS_ALARMS, SettingsKind.KIDS_HOME, SettingsKind.KIDS_FORGOT)
@@ -209,7 +211,9 @@ internal fun settingsTouchRow(row: SettingsRow, choices: SettingChoices?, sectio
         row.label, info = text.line, detail = text.detail,
         choices = values?.labels.orEmpty(), index = values?.index ?: -1,
         // The link's URL: behind its info icon; [LINE_KINDS]' secondary: their description ([settingsInfo]).
-        value = if (values == null && !described && row.kind != SettingsKind.LICENSES_LINK && row.kind !in LINE_KINDS) row.secondary else null,
+        // A GPU driver page row: "In use" on the driver in use.
+        value = if (row.kind == SettingsKind.GPU_DRIVER_ITEM) GPU_DRIVER_IN_USE.takeIf { row.current }
+            else if (values == null && !described && row.kind != SettingsKind.LICENSES_LINK && row.kind !in LINE_KINDS) row.secondary else null,
         opens = row.kind in OPENER_KINDS, enabled = row.enabled,
         segmented = row.kind in SEGMENTED_KINDS,
         warning = row.warning,
@@ -220,7 +224,7 @@ internal fun settingsTouchRow(row: SettingsRow, choices: SettingChoices?, sectio
             SettingsKind.SECONDARY_ACCENT -> SecondaryAccent.entries.map { if (it is SecondaryAccent.Preset) it.preset.argb else NX_SWATCH_AUTO }
             else -> null
         }.takeIf { values != null },
-        adds = row.kind == SettingsKind.ADD_EXTRA,   // Library's Add ROM folder: a "+" before its name
+        adds = row.kind == SettingsKind.ADD_EXTRA || row.kind == SettingsKind.GPU_DRIVER_ADD,   // Library's Add ROM folder, GPU driver's Add driver: a "+" before its name
     )
 }
 
@@ -236,6 +240,7 @@ internal fun settingsRowAction(row: SettingsRow, section: SettingsSection?): Str
     SettingsKind.RESET_DEFAULTS -> if (section == SettingsSection.SHORTCUTS) "Clear all" else "Reset"
     SettingsKind.BUTTON_LAYOUT_RESET -> "Reset"
     SettingsKind.EXTRA -> "Remove"
+    SettingsKind.GPU_DRIVER_ITEM -> if (row.gpuDriver == com.nxredux.mobile.gpudriver.GpuDriverChoice.SYSTEM) (if (row.current) null else "Use") else "Options"
     SettingsKind.KIDS_GUARD, SettingsKind.KIDS_ALARMS -> "Grant"
     SettingsKind.KIDS_HOME -> "Set"
     else -> null
@@ -270,6 +275,15 @@ internal fun SettingsResetDialog(ask: SettingsResetAsk, onHint: ((NxButton) -> U
     NxDialog(
         ask.title, ask.text,
         onConfirm = { onHint?.invoke(NxButton.A) }, confirmLabel = ask.confirm, onCancel = { onHint?.invoke(NxButton.B) },
+    )
+}
+
+/** "Remove driver?" over Emulation → GPU driver ([Screen.Settings.confirmDriver]) for the driver [name]: A removes it, B keeps it. */
+@Composable
+internal fun GpuDriverRemoveDialog(name: String, onHint: ((NxButton) -> Unit)?) {
+    NxDialog(
+        "Remove driver", gpuDriverRemoveText(name),
+        onConfirm = { onHint?.invoke(NxButton.A) }, confirmLabel = "Remove", onCancel = { onHint?.invoke(NxButton.B) },
     )
 }
 

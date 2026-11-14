@@ -285,7 +285,7 @@ internal class SettingsController(
      */
     fun settingsCategoryTap(index: Int) {
         if (host.loaderActive()) return
-        if ((screen.value as? Screen.Settings)?.let { it.confirmRemove != null || it.confirmReset || it.nameDraft != null } == true) return   // a dialog answers first
+        if ((screen.value as? Screen.Settings)?.let { it.confirmRemove != null || it.confirmReset || it.nameDraft != null || it.confirmDriver != null } == true) return   // a dialog answers first
         // One tap opens the section, from the root or from another section's page.
         if (screen.value is Screen.SettingsMenu) {
             host.select(index)
@@ -428,7 +428,7 @@ internal class SettingsController(
     /** Whether [a] and [b] are the same Settings row across a refresh: its kind and what it is for, not its value or label. */
     private fun sameSettingsRow(a: SettingsRow, b: SettingsRow): Boolean =
         a.kind == b.kind && a.category == b.category && a.shelf == b.shelf && a.hint == b.hint && a.consoleId == b.consoleId &&
-            a.shortcut == b.shortcut && a.touchSlot == b.touchSlot && a.systemRole == b.systemRole && a.landscape == b.landscape && a.extra?.id == b.extra?.id
+            a.shortcut == b.shortcut && a.touchSlot == b.touchSlot && a.systemRole == b.systemRole && a.landscape == b.landscape && a.extra?.id == b.extra?.id && a.gpuDriver == b.gpuDriver
 
     /** The confirmed reset of [page]'s selected row: Reset to defaults (Shortcuts' Clear all) or Button layout's Reset console. */
     fun runSettingsReset(page: Screen.Settings) {

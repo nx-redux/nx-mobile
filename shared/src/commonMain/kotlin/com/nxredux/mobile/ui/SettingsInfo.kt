@@ -43,6 +43,8 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "after 10 minutes the screens turn off on your phone's screen timeout. Press anything or touch a screen to bring " +
             "them back.",
     )
+    SettingsKind.GPU_DRIVER -> SettingText("Replaces the phone's Vulkan driver in games set to Vulkan", GPU_DRIVER_INFO)
+    SettingsKind.GPU_DRIVER_ADD -> SettingText("Install a driver from a zip file")
     SettingsKind.DEFAULT_TAG -> SettingText("")   // a single-emulator console says nothing: its emulator name is all there is
     // Library's Saves row, then the Saves page.
     SettingsKind.SAVES -> quiet("Save file formats, and export or import your saves")

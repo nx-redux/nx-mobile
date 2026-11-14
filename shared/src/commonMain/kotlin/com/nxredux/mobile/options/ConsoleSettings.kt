@@ -1,5 +1,6 @@
 package com.nxredux.mobile.options
 
+import com.nxredux.mobile.gpudriver.GpuDriver
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.runner.Res3dConsole
 
@@ -12,25 +13,25 @@ import com.nxredux.mobile.runner.Res3dConsole
 object ConsoleSettings {
     /**
      * [tag]'s rows; [screen] (null: unknown) shapes the DS and 3DS layout rows, [displayMax] (null: unknown) the DS and 3DS
-     * 3D Resolution scales, [biosFiles] (the ".bin" names in the PS2 BIOS folder) the PS2 BIOS row's choices.
+     * 3D Resolution scales, [biosFiles] (the ".bin" names in the PS2 BIOS folder) the PS2 BIOS row's choices, [gpuDrivers] (null: the feature is unavailable, no row) the GPU driver row's choices.
      */
-    fun tableFor(tag: String, screen: ScreenClass? = null, displayMax: Int? = null, biosFiles: List<String> = emptyList()): List<FrontendOption> = when {
+    fun tableFor(tag: String, screen: ScreenClass? = null, displayMax: Int? = null, biosFiles: List<String> = emptyList(), gpuDrivers: List<GpuDriver>? = null): List<FrontendOption> = when {
         NdsOptions.appliesTo(tag) -> NdsOptions.tableFor(screen, displayMax = displayMax) + NdsOptions.localWirelessRow
         N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRowsFor(screen) + N3dsOptions.resolutionRows(displayMax) + N3dsOptions.newControlsRow + N3dsOptions.localWirelessRow
         PspOptions.appliesTo(tag) -> listOf(PspOptions.localWirelessRow)
         WiiOptions.appliesTo(tag) -> WiiOptions.table
         Ps2Options.appliesTo(tag) -> Ps2Options.rowsFor(biosFiles) + Ps2Options.resolutionRows(displayMax)
         else -> emptyList()
-    } + graphicsRows(tag) + BottomScreenOptions.row + PadOptions.tableFor(tag) + SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.rowsFor(tag)
+    } + graphicsRows(tag, gpuDrivers) + BottomScreenOptions.row + PadOptions.tableFor(tag) + SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.rowsFor(tag)
 
     /**
      * The row and the value it shows for [value] (stored, else the row default). Only the 3D Resolution scales differ: a
      * stored scale the display no longer reaches (a smaller window, another phone) is added as a choice, labelled "7x", so
      * it still shows and cycles; the unstored default above the list (Max Scale 4x on a 3x display) is not added, the row
-     * shows the list's last scale. An unknown stored 3D Resolution mode shows as the default (Auto). Any other row is returned as it is.
+     * shows the list's last scale. An unknown stored 3D Resolution mode shows as the default (Auto), a GPU driver that is no longer installed as the default (Default). Any other row is returned as it is.
      */
     fun fitted(option: FrontendOption, value: String): Pair<FrontendOption, String> = when {
-        option.key in MODE_KEYS && value !in option.values -> option to option.default
+        (option.key in MODE_KEYS || option.key == GpuDriverOptions.KEY) && value !in option.values -> option to option.default
         option.key !in SCALE_KEYS || value in option.values -> option to value
         value == option.default -> option to option.values.last()
         else -> option.copy(values = option.values + value, valueLabels = option.valueLabels + "${value}x") to value
@@ -39,10 +40,10 @@ object ConsoleSettings {
     private val MODE_KEYS = Res3dConsole.entries.map { it.modeKey }.toSet()
     private val SCALE_KEYS = Res3dConsole.entries.flatMap { listOf(it.maxScaleKey, it.scaleKey) }.toSet()
 
-    private fun graphicsRows(tag: String): List<FrontendOption> =
-        if (GraphicsApiOptions.appliesTo(tag)) listOf(GraphicsApiOptions.row) else emptyList()
+    private fun graphicsRows(tag: String, gpuDrivers: List<GpuDriver>?): List<FrontendOption> =
+        if (GraphicsApiOptions.appliesTo(tag)) listOf(GraphicsApiOptions.row) + (if (GpuDriverOptions.appliesTo(tag, gpuDrivers != null)) listOf(GpuDriverOptions.row(gpuDrivers.orEmpty())) else emptyList()) else emptyList()
 
     /** Every console's rows (keys are unique across them); built when read, as [NdsOptions.table]. */
     val all: List<FrontendOption> get() =
-        NdsOptions.table + NdsOptions.localWirelessRow + N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + N3dsOptions.newControlsRow + N3dsOptions.localWirelessRow + PspOptions.localWirelessRow + WiiOptions.table + Ps2Options.biosRow(emptyList()) + Ps2Options.resolutionRows(null) + GraphicsApiOptions.row + BottomScreenOptions.row + PadOptions.all + SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row
+        NdsOptions.table + NdsOptions.localWirelessRow + N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + N3dsOptions.newControlsRow + N3dsOptions.localWirelessRow + PspOptions.localWirelessRow + WiiOptions.table + Ps2Options.biosRow(emptyList()) + Ps2Options.resolutionRows(null) + GraphicsApiOptions.row + GpuDriverOptions.row(emptyList()) + BottomScreenOptions.row + PadOptions.all + SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row
 }

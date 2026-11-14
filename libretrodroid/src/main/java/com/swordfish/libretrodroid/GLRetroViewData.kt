@@ -50,6 +50,13 @@ class GLRetroViewData(context: Context) {
     var preferVulkan: Boolean = false
     /** With [preferVulkan]: the core renders into a swapchain on the bridge's surface (Dolphin), so frames are bounded by it. */
     var vulkanSwapchainFrames: Boolean = false
+    /**
+     * With [preferVulkan]: the directory of a custom Vulkan driver (Turnip) loaded through libadrenotools, absolute and
+     * ending in '/', under the app's internal storage (not shared storage: the linker refuses it). Null: the system driver.
+     */
+    var vulkanDriverDir: String? = null
+    /** The driver's library file name in [vulkanDriverDir] (its meta.json libraryName). */
+    var vulkanDriverLibrary: String? = null
     /** Offer libretro video views to the core (melonDS DS, Azahar), which then report where each screen is. */
     var videoViews: Boolean = false
     /**

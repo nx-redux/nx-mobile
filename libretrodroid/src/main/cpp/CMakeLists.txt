@@ -86,6 +86,17 @@ set (LIBRETRO_COMMON
         libretro/libretro-common/time/rtime.c
 )
 
+# libadrenotools (BSD-2-Clause, github.com/bylaws/libadrenotools @ 8fae8ce, vendored with its linkernsbypass): loads a
+# custom Vulkan driver (Turnip) for the Vulkan bridge. Its hook libraries (libhook_impl, libmain_hook, ...) are SHARED
+# targets that must sit in nativeLibraryDir; libretrodroid depends on them, so AGP packages them beside it. arm64-v8a only:
+# its CMake stops on any other ABI, and the app ships arm64-v8a only (this module still configures the others).
+if (${CMAKE_ANDROID_ARCH_ABI} STREQUAL arm64-v8a)
+    add_subdirectory (libadrenotools)
+    foreach (hook hook_impl main_hook file_redirect_hook gsl_alloc_hook)
+        target_link_options(${hook} PRIVATE "-Wl,-z,max-page-size=16384")
+    endforeach()
+endif()
+
 # The GBA link mode probe is shared with the mGBA core (cores/gba_wifi_link).
 set(GWL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../cores/gba_wifi_link)
 
@@ -116,6 +127,8 @@ add_library(libretrodroid SHARED
         hwcontext.cpp
         vulkanbridge.h
         vulkanbridge.cpp
+        vulkandispatch.h
+        vulkandispatch.cpp
         teardowncontext.h
         teardowncontext.cpp
         sharedcontexts.h
@@ -247,11 +260,17 @@ add_library(libretrodroid SHARED
 # Support 16k pages for Android 15
 target_include_directories(libretrodroid PRIVATE ${GWL_DIR})
 target_link_options(libretrodroid PRIVATE "-Wl,-z,max-page-size=16384")
+if (${CMAKE_ANDROID_ARCH_ABI} STREQUAL arm64-v8a)
+    add_dependencies(libretrodroid hook_impl main_hook file_redirect_hook gsl_alloc_hook)
+    target_link_libraries(libretrodroid adrenotools)
+    target_compile_definitions(libretrodroid PRIVATE LIBRETRODROID_ADRENOTOOLS=1)
+endif()
 # glslang and SPIRV-Cross are used through one small path (slangtranslate): with the static libraries' symbols kept out
 # of this library's exports, the linker drops what nothing reaches (about 1 MB of the stripped library).
 target_link_options(libretrodroid PRIVATE "-Wl,--gc-sections" "-Wl,--exclude-libs,ALL")
 
-# add lib dependencies
+# add lib dependencies. No libvulkan: every Vulkan call goes through VulkanDispatch (dlopen'd system loader or
+# libadrenotools' custom one), so a direct vk* call fails to link instead of silently bypassing a custom driver.
 target_link_libraries(libretrodroid
                       android
                       log 
@@ -262,7 +281,6 @@ target_link_libraries(libretrodroid
                       chdr-static
                       nxslangdeps
                       GLESv3
-                      vulkan
                       mediandk
                       nativewindow
 )

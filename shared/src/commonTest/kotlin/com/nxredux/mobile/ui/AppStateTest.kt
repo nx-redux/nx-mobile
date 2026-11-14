@@ -96,6 +96,11 @@ import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.settings.PadVibration
 import com.nxredux.mobile.settings.GameRumble
 import com.nxredux.mobile.settings.ExtraFolder
+import com.nxredux.mobile.gpudriver.GpuDriver
+import com.nxredux.mobile.gpudriver.GpuDriverChoice
+import com.nxredux.mobile.gpudriver.GpuDriverCrash
+import com.nxredux.mobile.gpudriver.GpuDriverStore
+import com.nxredux.mobile.gpudriver.PackageCheck
 import com.nxredux.mobile.settings.FolderPicker
 import com.nxredux.mobile.settings.Sources
 import com.nxredux.mobile.storage.LibraryIndexStore
@@ -221,6 +226,17 @@ class AppStateTest {
         override var secondaryAccent: SecondaryAccent = SecondaryAccent.DEFAULT
         override var switcherLayout = com.nxredux.mobile.settings.SwitcherLayout.DEFAULT
         override var optionTextSize = com.nxredux.mobile.settings.OptionTextSize.DEFAULT
+        override var gpuDriver = GpuDriverChoice.SYSTEM
+        override var gpuDriverCrashes: String? = null
+    }
+    /** Settings → Emulation → GPU driver's platform side: [drivers] installed, [reason] its unavailableReason, [next] what Add driver's pick gives. */
+    private class FakeGpuDrivers(var drivers: List<GpuDriver> = emptyList(), var reason: String? = null) : GpuDriverStore {
+        var next: PackageCheck? = null
+        val removed = ArrayList<String>()
+        override fun unavailableReason(): String? = reason
+        override fun installed(): List<GpuDriver> = drivers
+        override suspend fun add(): PackageCheck? = next.also { r -> if (r is PackageCheck.Ok) drivers = (drivers + r.driver).sortedBy { it.name.lowercase() } }
+        override fun remove(id: String) { removed += id; drivers = drivers.filter { it.id != id } }
     }
     /** [starts] false: the runner refuses every game (never reports a start); [started] holds the recents of games that did. */
     private class RecordingRunner(private val starts: Boolean = true) : EmulatorRunner {
@@ -2209,8 +2225,8 @@ class AppStateTest {
         assertEquals(2, runner.launched.size)
     }
 
-    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, skinEditor: SkinEditorLauncher? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }, ownKeyboard: Boolean = false, onSecond: () -> Boolean = { false }, topFacts: TopFactsPlatform? = null, linkRomCache: com.nxredux.mobile.netplay.cablelink.LinkRomCache? = null) =
-        AppState(AppDeps(settings, src, runner, picker, data, topFacts = topFacts, ownKeyboard = ownKeyboard, promptOnSecondDisplay = onSecond, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, skinEditor = skinEditor, saveTransfer = saveTransfer, allFilesAccess = allFiles, micAccess = mic, linkRomCache = linkRomCache, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, skinEditor: SkinEditorLauncher? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }, ownKeyboard: Boolean = false, onSecond: () -> Boolean = { false }, topFacts: TopFactsPlatform? = null, linkRomCache: com.nxredux.mobile.netplay.cablelink.LinkRomCache? = null, gpuDrivers: GpuDriverStore? = null) =
+        AppState(AppDeps(settings, src, runner, picker, data, gpuDrivers = gpuDrivers, topFacts = topFacts, ownKeyboard = ownKeyboard, promptOnSecondDisplay = onSecond, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, skinEditor = skinEditor, saveTransfer = saveTransfer, allFilesAccess = allFiles, micAccess = mic, linkRomCache = linkRomCache, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
 
     /** What a scan of [src] for [settings] stores, built without an AppState (so without the skeleton). */
     private suspend fun scannedIndex(settings: MemorySettings, src: RomsSource = source): LibraryIndex =
@@ -13368,7 +13384,7 @@ class AppStateTest {
         assertTrue(assertIs<Screen.Settings>(none.screen.value).rows.none { it.kind == SettingsKind.HOME_SCREEN })
         none.openSettings(SettingsSection.LIBRARY)
         assertTrue(assertIs<Screen.Settings>(none.screen.value).rows.none { it.kind == SettingsKind.ANDROID_GAMES })
-        val with = state(MemorySettings(ContentRef("Home")), launcher = FakeLauncher()); with.load(); with.openSettingsMenu()
+        val with = state(MemorySettings(ContentRef("Home")), launcher = FakeLauncher(), gpuDrivers = FakeGpuDrivers()); with.load(); with.openSettingsMenu()
         val sections = listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS, SettingsSection.SYSTEM)
         assertEquals(sections, assertIs<Screen.SettingsMenu>(with.screen.value).sections)   // no Launcher category: its rows are on System and Library
         assertEquals(sections, with.settingsSections())   // the two-pane left pane lists the same
@@ -13377,6 +13393,139 @@ class AppStateTest {
         val sys = assertIs<Screen.Settings>(with.screen.value).rows
         assertEquals(listOf("About", "Licenses"), sys.filter { it.kind == SettingsKind.SECTION }.map { it.label })
         assertEquals(listOf(SettingsKind.PLAYER_NAME, SettingsKind.PAUSE_UNFOCUSED, SettingsKind.SCREEN_CARE, SettingsKind.HOME_SCREEN, SettingsKind.DEBUG_LOG), sys.take(5).map { it.kind })
+    }
+
+    private val turnip = GpuDriver("t1", "Turnip", "v25.1", "K11MCH1", "", "libvulkan_freedreno.so", 28)
+    private val malisx2 = GpuDriver("m2", "malisx2", "0.5.0", "", "", "libvulkan_malisx2.so", 0)
+
+    /** Emulation → GPU driver's sub-page, opened from its row. */
+    private fun openGpuDriverPage(st: AppState) {
+        st.openSettings(SettingsSection.EMULATORS)
+        st.select(rowIndex(st, SettingsKind.GPU_DRIVER)); st.onButton(NxButton.A)
+        assertEquals(SettingsSection.GPU_DRIVER, assertIs<Screen.Settings>(st.screen.value).section)
+    }
+
+    @Test fun gpu_driver_row_sits_under_default_settings_and_names_the_driver_in_use() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val st = state(settings, gpuDrivers = FakeGpuDrivers(listOf(malisx2, turnip))); st.load()
+        st.openSettings(SettingsSection.EMULATORS)
+        val at = rowIndex(st, SettingsKind.GPU_DRIVER)
+        val rows = assertIs<Screen.Settings>(st.screen.value).rows
+        assertEquals(SettingsKind.EMULATORS, rows[at - 1].kind)
+        assertEquals(SettingsRow(SettingsKind.GPU_DRIVER, "GPU driver", "System driver"), rows[at])
+        settings.gpuDriver = "t1"
+        st.openSettings(SettingsSection.EMULATORS)
+        assertEquals("Turnip", libraryRow(st, SettingsKind.GPU_DRIVER).secondary)
+        settings.gpuDriver = "gone"                                       // a driver no longer installed: the system one runs
+        st.openSettings(SettingsSection.EMULATORS)
+        assertEquals("System driver", libraryRow(st, SettingsKind.GPU_DRIVER).secondary)
+    }
+
+    @Test fun gpu_driver_row_is_absent_with_the_feature_off_or_without_a_store() = runTest {
+        val off = state(MemorySettings(ContentRef("Home")), gpuDrivers = FakeGpuDrivers(reason = "")); off.load()
+        off.openSettings(SettingsSection.EMULATORS)
+        assertTrue(assertIs<Screen.Settings>(off.screen.value).rows.none { it.kind == SettingsKind.GPU_DRIVER })
+        val none = state(MemorySettings(ContentRef("Home"))); none.load()
+        none.openSettings(SettingsSection.EMULATORS)
+        assertTrue(assertIs<Screen.Settings>(none.screen.value).rows.none { it.kind == SettingsKind.GPU_DRIVER })
+    }
+
+    @Test fun gpu_driver_row_on_an_old_android_shows_why_and_does_nothing() = runTest {
+        val st = state(MemorySettings(ContentRef("Home")), gpuDrivers = FakeGpuDrivers(listOf(turnip), reason = "Custom drivers need Android 9 or later")); st.load()
+        st.openSettings(SettingsSection.EMULATORS)
+        val row = libraryRow(st, SettingsKind.GPU_DRIVER)
+        assertEquals("Custom drivers need Android 9 or later", row.secondary)
+        assertFalse(row.enabled)
+        st.select(rowIndex(st, SettingsKind.GPU_DRIVER)); st.onButton(NxButton.A)
+        assertEquals(SettingsSection.EMULATORS, assertIs<Screen.Settings>(st.screen.value).section)
+        assertNull(st.chooser.value)
+    }
+
+    @Test fun gpu_driver_page_lists_the_system_driver_then_each_driver_with_the_one_in_use_marked() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { gpuDriver = "t1" }
+        val st = state(settings, gpuDrivers = FakeGpuDrivers(listOf(malisx2, turnip))); st.load()
+        openGpuDriverPage(st)
+        val page = assertIs<Screen.Settings>(st.screen.value)
+        assertEquals(listOf("System driver", "malisx2", "Turnip", "Add driver"), page.rows.map { it.label })
+        assertEquals(listOf("0.5.0", "v25.1 · K11MCH1"), page.rows.subList(1, 3).map { it.secondary })   // a blank author is left out
+        assertEquals(listOf(false, false, true, false), page.rows.map { it.current })
+        assertEquals(listOf(null, null, "In use", null), page.rows.indices.map { settingsTouchRow(page.rows[it], page.choices[it], page.section).value })
+        assertEquals("Replaces the phone's Vulkan driver in games set to Vulkan. Drivers are third-party code: install only ones you trust.", page.banner)
+        st.onButton(NxButton.B)                                                          // back to System, on its GPU driver row
+        assertEquals(SettingsKind.GPU_DRIVER, assertIs<Screen.Settings>(st.screen.value).rows[st.selection.value.index].kind)
+    }
+
+    @Test fun choosing_a_gpu_driver_sets_the_app_wide_driver() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val st = state(settings, gpuDrivers = FakeGpuDrivers(listOf(malisx2, turnip))); st.load()
+        openGpuDriverPage(st)
+        st.select(2); st.onButton(NxButton.A)                                            // Turnip: its options
+        assertEquals(listOf("Use this driver", "Remove"), st.chooser.value?.labels)
+        assertEquals("Turnip", st.chooser.value?.title)
+        st.chooseValue(0)
+        assertEquals("t1", settings.gpuDriver)
+        assertTrue(assertIs<Screen.Settings>(st.screen.value).rows[2].current)
+        st.select(0); st.onButton(NxButton.A)                                            // System driver: at once
+        assertNull(st.chooser.value)
+        assertEquals(GpuDriverChoice.SYSTEM, settings.gpuDriver)
+        assertTrue(assertIs<Screen.Settings>(st.screen.value).rows[0].current)
+    }
+
+    @Test fun a_refused_gpu_driver_package_says_why() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val store = FakeGpuDrivers().apply { next = PackageCheck.Rejected("This zip has no meta.json, so it isn't a driver package.") }
+        val st = state(settings, gpuDrivers = store); st.load()
+        openGpuDriverPage(st)
+        st.select(rowIndex(st, SettingsKind.GPU_DRIVER_ADD)); st.onButton(NxButton.A)
+        assertEquals("This zip has no meta.json, so it isn't a driver package.", st.error.value)
+        assertEquals(listOf("System driver", "Add driver"), assertIs<Screen.Settings>(st.screen.value).rows.map { it.label })
+    }
+
+    @Test fun an_added_gpu_driver_is_listed_but_not_chosen() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val store = FakeGpuDrivers(listOf(malisx2)).apply { next = PackageCheck.Ok(turnip) }
+        val st = state(settings, gpuDrivers = store); st.load()
+        openGpuDriverPage(st)
+        st.select(rowIndex(st, SettingsKind.GPU_DRIVER_ADD)); st.onButton(NxButton.A)
+        assertEquals(listOf("System driver", "malisx2", "Turnip", "Add driver"), assertIs<Screen.Settings>(st.screen.value).rows.map { it.label })
+        assertEquals(GpuDriverChoice.SYSTEM, settings.gpuDriver)
+        assertEquals("Added Turnip", st.notice.value)
+        assertNull(st.error.value)
+        store.next = null                                                                // a cancelled pick: nothing
+        st.onButton(NxButton.A)
+        assertNull(st.error.value)
+    }
+
+    @Test fun removing_the_gpu_driver_in_use_goes_back_to_the_system_driver_and_drops_its_crashes() = runTest {
+        val crashes = GpuDriverCrash.record(GpuDriverCrash.record(null, "Home/Roms/PS2/a.iso", "t1"), "Home/Roms/PS2/b.iso", "m2")
+        val settings = MemorySettings(ContentRef("Home")).apply { gpuDriver = "t1"; gpuDriverCrashes = crashes }
+        val store = FakeGpuDrivers(listOf(malisx2, turnip))
+        val st = state(settings, gpuDrivers = store); st.load()
+        openGpuDriverPage(st)
+        st.select(2); st.onButton(NxButton.A); st.chooseValue(1)                         // Turnip → Remove: asks first
+        assertEquals(turnip, assertIs<Screen.Settings>(st.screen.value).confirmDriver)
+        st.onButton(NxButton.B)                                                          // kept
+        assertNull(assertIs<Screen.Settings>(st.screen.value).confirmDriver)
+        assertEquals("t1", settings.gpuDriver)
+        assertTrue(store.removed.isEmpty())
+        st.onButton(NxButton.A); st.chooseValue(1); st.onButton(NxButton.A)              // removed
+        assertEquals(listOf("t1"), store.removed)
+        assertEquals(GpuDriverChoice.SYSTEM, settings.gpuDriver)
+        assertEquals(GpuDriverCrash.dropDriver(crashes, "t1"), settings.gpuDriverCrashes)
+        assertEquals(setOf("m2"), GpuDriverCrash.crashed(settings.gpuDriverCrashes, "Home/Roms/PS2/b.iso"))
+        val page = assertIs<Screen.Settings>(st.screen.value)
+        assertNull(page.confirmDriver)
+        assertEquals(listOf("System driver", "malisx2", "Add driver"), page.rows.map { it.label })
+        assertTrue(page.rows[0].current)
+    }
+
+    @Test fun removing_another_gpu_driver_keeps_the_one_in_use() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { gpuDriver = "t1" }
+        val st = state(settings, gpuDrivers = FakeGpuDrivers(listOf(malisx2, turnip))); st.load()
+        openGpuDriverPage(st)
+        st.select(1); st.onButton(NxButton.A); st.chooseValue(1); st.onButton(NxButton.A)
+        assertEquals("t1", settings.gpuDriver)
+        assertEquals(listOf("System driver", "Turnip", "Add driver"), assertIs<Screen.Settings>(st.screen.value).rows.map { it.label })
     }
 
     @Test fun launcher_page_toggles_the_home_screen() = runTest {

@@ -34,6 +34,14 @@ import com.nxredux.mobile.options.CoreConfig
 import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.GraphicsApiOptions
+import com.nxredux.mobile.options.GpuDriverOptions
+import com.nxredux.mobile.gpudriver.AndroidGpuDrivers
+import com.nxredux.mobile.gpudriver.GpuDriver
+import com.nxredux.mobile.gpudriver.GpuDriverChoice
+import com.nxredux.mobile.gpudriver.GpuDriverCrash
+import com.nxredux.mobile.gpudriver.GpuDriverCrashSettle
+import android.os.Build
+import android.os.Process
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.OverlayResolver
@@ -152,6 +160,8 @@ internal interface LaunchHost : GameScreenHost {
     var ndsRenderMode: String?
     var ndsFellBack: Boolean
     var launchedOnVulkan: Boolean
+    /** The custom GPU driver this launch loads; null: the system driver, or not on Vulkan. */
+    var launchedDriver: GpuDriver?
     var launchEnv: Map<String, String?>
     var graphicsForcedOptions: Set<String>
     var frontendValues: Map<String, String>
@@ -181,7 +191,19 @@ internal interface LaunchHost : GameScreenHost {
     fun startGameTime(rec: GameTimeRecorder)
 
     fun fail(message: String, title: String = GameActivity.START_FAILED)
-    fun relaunchOnGles()
+    /** [record] false: the core's Vulkan failure is not recorded (a custom driver failed); [notice]: the toast. */
+    fun relaunchOnGles(record: Boolean = true, notice: String = VulkanFallback.NOTICE)
+    /** The custom driver could not start: the same launch again on the system driver ([GameActivity.EXTRA_FORCE_SYSTEM_DRIVER]). */
+    fun relaunchOnSystemDriver()
+    /** The first frame is up: the crash marker goes after [GpuDriverCrash.CLEAR_AFTER_MS]. */
+    fun clearDriverMarkerLater()
+    /**
+     * Writes the custom-driver crash marker ([GpuDriverCrash.encode]), blocking until it is on disk: off the main thread.
+     * Nothing once the screen is destroyed; a write in flight then is cleared by it ([GpuDriverMarkerGuard]).
+     */
+    fun markDriverLaunch(marker: String): Boolean
+    /** Clears the marker [markDriverLaunch] wrote (blocking, off the main thread): the driver failed its preflight. */
+    fun clearDriverLaunchMarker()
     fun quitGame(chosen: Boolean, autoState: Boolean)
     fun isLandscape(): Boolean
     fun screenClass(): ScreenClass
@@ -862,16 +884,59 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val ps2BiosOption = if (Ps2Options.appliesTo(cfg.tag)) {
                 Ps2Options.biosOption(frontendValues[Ps2Options.BIOS], prepared.biosPresent.filter { it.endsWith(".bin", ignoreCase = true) })
             } else emptyMap()
+            var driverCrashNotice: String? = null   // GpuDriverCrashSettle's, toasted once the launch is read
+            var preflightNotice: String? = null   // a custom driver that failed its preflight (GpuDriverChoice.afterPreflight)
             val data = try {
                 withContext(Dispatchers.IO) {
                     // The name the core sees: an arcade zip in lowercase (fbneo matches the driver name case-sensitively).
                     val fileName = CoreRegistry.contentName(cfg.tag, cfg.romFileName)
                     // Display → Graphics API: the core options for the API and whether the runner offers Vulkan.
                     // Vulkan that could not start here before, or this is the relaunch after it did: OpenGL ES (VulkanFallback).
-                    val vulkanFailed = activity.intent.getBooleanExtra(EXTRA_FORCE_GLES, false) ||
-                        cfg.descriptor?.id in settings.vulkanFailedCores || (cfg.np != null && NetplayCores.forcesGles(cfg.descriptor?.id))
-                    val graphics = GraphicsApiOptions.resolve(frontendValues[GraphicsApiOptions.KEY], cfg.descriptor?.vulkan, { LibretroDroid.isVulkanSupported() }, vulkanFailed)
+                    // On Vulkan, a custom GPU driver may load instead of the system one (GpuDriverChoice); the relaunch after
+                    // it could not start forces the system driver.
+                    val apiValue = frontendValues[GraphicsApiOptions.KEY]
+                    val gamePath = activity.intent.getStringExtra(EXTRA_GAME_PATH)
+                    // No library path, no crash record to keep: such a launch stays on the system driver.
+                    val driversAvailable = gamePath != null && cfg.descriptor?.id !in GpuDriverOptions.EXCLUDED_CORES &&
+                        AndroidGpuDrivers.unavailableReason(BuildConfig.GPU_DRIVERS, Build.VERSION.SDK_INT) == null
+                    val mayLoadDriver = driversAvailable && apiValue == GraphicsApiOptions.VULKAN
+                    // An earlier custom-driver launch whose process died (the menu has not seen it yet): recorded first, so
+                    // a crash in this very game already counts below.
+                    if (mayLoadDriver) driverCrashNotice = GpuDriverCrashSettle.settle(settings, setOf(Process.myPid()))
+                    val driverStore = AndroidGpuDrivers(AndroidGpuDrivers.root(activity.filesDir), Build.VERSION.SDK_INT)
+                    val drivers = if (mayLoadDriver) driverStore.installed() else emptyList()
+                    var launch = GpuDriverChoice.launch(
+                        apiValue, frontendValues[GpuDriverOptions.KEY], settings.gpuDriver, drivers.mapTo(HashSet()) { it.id },
+                        GpuDriverCrash.crashed(settings.gpuDriverCrashes, gamePath.orEmpty()), available = driversAvailable,
+                        forceGles = activity.intent.getBooleanExtra(EXTRA_FORCE_GLES, false),
+                        forceSystem = activity.intent.getBooleanExtra(GameActivity.EXTRA_FORCE_SYSTEM_DRIVER, false),
+                        coreFailedOnSystem = cfg.descriptor?.id in settings.vulkanFailedCores,
+                        netplayForcesGles = cfg.np != null && NetplayCores.forcesGles(cfg.descriptor?.id),
+                    )
+                    var graphics = GraphicsApiOptions.resolve(apiValue, cfg.descriptor?.vulkan, { LibretroDroid.isVulkanSupported() }, launch.vulkanFailed)
+                    var driver = if (graphics.preferVulkan) drivers.firstOrNull { it.id == launch.driverId } else null
+                    if (driver != null && gamePath != null) {
+                        NxLog.i(TAG_LOG, "GPU driver: ${driver.name} (${driver.id}, ${driver.libraryName})")
+                        // Committed before the view exists: on disk before this driver can take the process down. Also
+                        // before the preflight below, so a driver that crashes the preflight is recorded like one that
+                        // crashes its first frames.
+                        markDriverLaunch(GpuDriverCrash.encode(GpuDriverCrash.Marker(Process.myPid(), gamePath, cfg.title, driver.id, driver.name)))
+                        // Before any core is loaded: a driver that cannot start the bridge is caught here, and this same
+                        // launch goes on without it (a core torn down after a failed start can crash: PPSSPP, mupen64plus).
+                        // Retried on every launch. The in-process relaunch stays for what the preflight cannot see.
+                        val ok = GLRetroView.probeVulkanDriver(activity, driverStore.directory(driver.id).absolutePath + "/", driver.libraryName)
+                        val after = GpuDriverChoice.afterPreflight(launch, ok, driver.name, cfg.descriptor?.id in settings.vulkanFailedCores)
+                        if (after.clearMarker) clearDriverLaunchMarker()
+                        if (after.launch != launch) {
+                            NxLog.w(TAG_LOG, "the GPU driver ${driver.name} failed its preflight: this launch goes on without it")
+                            launch = after.launch
+                            graphics = GraphicsApiOptions.resolve(apiValue, cfg.descriptor?.vulkan, { LibretroDroid.isVulkanSupported() }, launch.vulkanFailed)
+                            driver = null
+                        }
+                        preflightNotice = after.notice
+                    }
                     launchedOnVulkan = graphics.preferVulkan
+                    launchedDriver = driver
                     launchEnv = graphics.env
                     // netplay link: the link options are this launch's too (a session's port, mode and peer; a solo mGBA's cable): never saved.
                     graphicsForcedOptions = graphics.forcedOptions.keys + cfg.linkOptions.keys
@@ -900,6 +965,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         // Display → Graphics API ([graphics]): Vulkan frames are bridged into the GLES presentation.
                         preferVulkan = graphics.preferVulkan
                         vulkanSwapchainFrames = graphics.swapchainFrames
+                        if (driver != null) {
+                            vulkanDriverDir = driverStore.directory(driver.id).absolutePath + "/"
+                            vulkanDriverLibrary = driver.libraryName
+                        }
                         // DS / 3DS: the core reports where each screen sits in its frame (video views), the layouts read it.
                         videoViews = gameCoreId in VIDEO_VIEW_CORES
                         // gpsp: never unload the core between games, so its recompiler cache stays mapped near it.
@@ -962,6 +1031,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 copying?.cancel()
                 copyToast?.cancel()
             }
+            driverCrashNotice?.let { toast(it) }
+            preflightNotice?.let { toast(it) }
             return data
         }
     }
@@ -1083,6 +1154,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 val now = frontendValues[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO
                 if (now != launched) sendSegaPad(now)
             }
+            clearDriverMarkerLater()   // a custom driver that keeps presenting is not blamed for a later crash
             wii.onFirstFrame(view)
             dual.pushSecondSurface()   // a presentation shown before the view ran
             if (dual.panelShown()) dual.refreshDiscs()   // a panel up before the game ran asked too early
@@ -1213,15 +1285,26 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     lines.forEach { NxLog.i(TAG_LOG, "core said: $it") }
                     loadFailure(lines)?.let { host.fail(it); return@collect }
                 }
-                if (code == GLRetroView.ERROR_GL_NOT_COMPATIBLE && VulkanFallback.relaunchOnGles(host.launchedOnVulkan)) {
+                if (code == GLRetroView.ERROR_GL_NOT_COMPATIBLE) {
                     // netplay: a relaunch would start without the session (it is gone), so the dialog says what to do. An
                     // ended link session's relaunch ([GameNetplay.local]) is a plain launch, which relaunches as any other.
-                    if (host.activity.intent.hasExtra(GameActivity.EXTRA_NETPLAY_ROLE) && !host.gameNetplay.local) {
-                        host.fail("Vulkan could not start for this game on this device. Set Display → Graphics API to OpenGL ES.")
-                    } else {
-                        host.relaunchOnGles()
+                    val netplaySession = host.activity.intent.hasExtra(GameActivity.EXTRA_NETPLAY_ROLE) && !host.gameNetplay.local
+                    // A custom driver failed (to load, to create its device, or to share its frames): the system driver
+                    // next, unless that failed here already; the system driver failed: OpenGL ES, as before.
+                    val driver = host.launchedDriver
+                    val next = GpuDriverChoice.afterStartFailure(host.launchedOnVulkan, driver?.id, host.gameCoreId in host.settings.vulkanFailedCores, netplaySession)
+                    when (next) {
+                        GpuDriverChoice.Next.SYSTEM_DRIVER -> host.relaunchOnSystemDriver()
+                        GpuDriverChoice.Next.GLES_NO_RECORD ->
+                            host.relaunchOnGles(record = false, notice = GpuDriverChoice.named(GpuDriverChoice.GLES_NOTICE, driver?.name.orEmpty()))
+                        GpuDriverChoice.Next.GLES_RECORD -> host.relaunchOnGles()
+                        GpuDriverChoice.Next.FAIL_MESSAGE -> host.fail(
+                            if (driver != null) GpuDriverChoice.named(GpuDriverChoice.NETPLAY_FAIL, driver.name)
+                            else "Vulkan could not start for this game on this device. Set Display → Graphics API to OpenGL ES."
+                        )
+                        GpuDriverChoice.Next.SHOW_ERROR -> Unit
                     }
-                    return@collect
+                    if (next != GpuDriverChoice.Next.SHOW_ERROR) return@collect
                 }
                 host.fail("The core reported $name")
             }

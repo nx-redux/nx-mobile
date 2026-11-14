@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import android.provider.DocumentsContract
 import android.view.Display
 import android.view.InputDevice
@@ -72,6 +73,8 @@ import com.nxredux.mobile.skinlayout.SkinLayoutActivity
 import com.nxredux.mobile.runner.AndroidEmulatorConfigStore
 import com.nxredux.mobile.runner.AndroidMicAccess
 import com.nxredux.mobile.runner.CoreHangNotice
+import com.nxredux.mobile.gpudriver.AndroidGpuDriverStore
+import com.nxredux.mobile.gpudriver.GpuDriverCrashSettle
 import com.nxredux.mobile.runner.GameExitCheck
 import com.nxredux.mobile.runner.AndroidUserDataStore
 import com.nxredux.mobile.runner.ArcadeSetsAsset
@@ -477,6 +480,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 pasteText = { AndroidDeviceInfo.clipboardText(applicationContext) },
                 promptOnSecondDisplay = { promptOnSecond },
                 log = { NxLog.i("NXAPP", it) },
+                // Settings → Emulation → GPU driver: its zip comes through Save import's picker.
+                gpuDrivers = AndroidGpuDriverStore(this) { onRef -> savePickers.openZip(onRef) },
             ),
             scope,
             kids,
@@ -726,9 +731,11 @@ class MainActivity : ComponentActivity(), FolderPicker {
         if (::state.isInitialized) {
             val hang = CoreHangNotice.take(this)   // a game whose core hung was closed with its process
             hang?.let(state::showError)
+            gpuDriverNoticeShown = false
             scope.launch {   // the game process ending on its own (a crash); a hang already said it, so it wins
                 val exit = withContext(Dispatchers.IO) { GameExitCheck.check(applicationContext, hangShown = hang != null) }
-                GameExitCheck.notice(exit)?.let(state::showError)
+                // A custom GPU driver's crash (onResume) names the cause: the generic notice never replaces it.
+                GameExitCheck.notice(exit)?.takeIf { !gpuDriverNoticeShown }?.let(state::showError)
             }
             state.refreshResume()
             state.onForeground()   // a card inserted while in the background: its games come back
@@ -753,6 +760,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         recordStartedLaunches()   // games that started while the menu was gone (or its process was)
         applyKeepScreenOn()
         if (launching) { launching = false; syncMenuScreen() }   // back from the game (or a launch that never left)
+        settleGpuDriverCrash()
         TopScreenHost.recheck(this)   // an app on the top screen whose host is gone without a word
         // Back from Android's All files access page (or a revoke meanwhile): setup moves on, the row and the refs follow.
         if (::state.isInitialized) state.onAllFilesAccessChanged()
@@ -767,6 +775,27 @@ class MainActivity : ComponentActivity(), FolderPicker {
                     delay(KIDS_TICK_MS)
                 }
             }
+        }
+    }
+
+    /** Set once a custom GPU driver's crash notice is up, until the next onStart: GameExitCheck's notice then stays out. */
+    private var gpuDriverNoticeShown = false
+
+    /**
+     * A custom-driver launch whose process is gone before its marker was cleared died on its driver
+     * ([GpuDriverCrashSettle]): recorded, and the menu says so. A game process still running (its first seconds, the menu
+     * shown beside it on another display) is in the live pids, so it is left alone.
+     */
+    private fun settleGpuDriverCrash() {
+        if (!::settings.isInitialized || !::state.isInitialized) return
+        if (settings.gpuDriverMarker == null) return   // the usual case: no binder call
+        val uid = Process.myUid()
+        val alive = runCatching { getSystemService(ActivityManager::class.java).runningAppProcesses }.getOrNull()
+            ?.filter { it.uid == uid }?.mapTo(HashSet()) { it.pid } ?: return   // unknown: never blame the driver on a guess
+        alive += Process.myPid()
+        GpuDriverCrashSettle.settle(settings, alive)?.let { notice ->
+            gpuDriverNoticeShown = true
+            state.showError(notice)
         }
     }
 
