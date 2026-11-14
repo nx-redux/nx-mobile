@@ -35,6 +35,9 @@ namespace {
 
 const char* const MAGIC = "NXSLANG1";
 
+// A slang uniform block is a few hundred bytes, a few kilobytes in the largest presets: past this a size is not one.
+const unsigned MAX_BLOCK_BYTES = 64 * 1024;
+
 std::string firstLine(const char* log, const char* fallback) {
     std::string text = log ? log : "";
     auto start = text.find_first_not_of(" \t\r\n");
@@ -112,7 +115,11 @@ void toGlslEs(std::vector<uint32_t> spirv, bool vertex, unsigned esVersion, Slan
     if (resources.uniform_buffers.size() > 1) throw std::runtime_error("more than one uniform block");
     if (resources.push_constant_buffers.size() > 1) throw std::runtime_error("more than one push constant block");
     for (auto& block : resources.uniform_buffers) {
-        out.uboSize = (unsigned) compiler.get_declared_struct_size(compiler.get_type(block.base_type_id));
+        // The declared size ends at the last member; std140 rounds a block up to a multiple of 16, which is what the
+        // driver expects the bound buffer to hold.
+        auto declared = compiler.get_declared_struct_size(compiler.get_type(block.base_type_id));
+        if (declared > MAX_BLOCK_BYTES) throw std::runtime_error("uniform block too large");
+        out.uboSize = ((unsigned) declared + 15U) & ~15U;
         out.ubo = blockMembers(compiler, block);
         compiler.set_name(block.base_type_id, vertex ? slangnames::UBO_VERTEX : slangnames::UBO_FRAGMENT);
         compiler.set_name(block.id, vertex ? "nx_ubo_v" : "nx_ubo_f");
@@ -189,7 +196,7 @@ bool decodeMembers(std::istringstream& in, const char* tag, std::vector<SlangMem
     for (auto& m : members) {
         if (!(in >> m.name >> m.offset >> m.base >> m.vecSize >> m.columns)) return false;
         if (m.base != 'f' && m.base != 'i' && m.base != 'u') return false;
-        if (m.vecSize < 1 || m.vecSize > 4 || (m.columns != 1 && m.columns != 4)) return false;
+        if (m.vecSize < 1 || m.vecSize > 4 || m.columns < 1 || m.columns > 4) return false;
     }
     return true;
 }
@@ -202,7 +209,7 @@ bool decodeStage(std::istringstream& in, SlangStage& stage) {
     if (remaining < 0 || length > (size_t) remaining) return false;
     stage.glsl.resize(length);
     if (length && !in.read(stage.glsl.data(), (std::streamsize) length)) return false;
-    if (!expect(in, "ubosize") || !(in >> stage.uboSize)) return false;
+    if (!expect(in, "ubosize") || !(in >> stage.uboSize) || stage.uboSize > MAX_BLOCK_BYTES) return false;
     if (!decodeMembers(in, "ubo", stage.ubo) || !decodeMembers(in, "push", stage.push)) return false;
     size_t count = 0;
     if (!expect(in, "tex") || !(in >> count) || count > MAX_ENTRIES) return false;

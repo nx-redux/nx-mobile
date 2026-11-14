@@ -16,6 +16,8 @@ import java.security.MessageDigest
  */
 object SlangCache {
     private const val PREFIX = "slang-"
+    /** How a translated pass starts (slangtranslate.cpp). */
+    private val MAGIC = "NXSLANG1\n".toByteArray()
 
     /** The GLSL ES version slang passes are written out as: what the device reports, 300 at least and 320 at most. */
     fun esVersion(context: Context): Int {
@@ -37,7 +39,9 @@ object SlangCache {
         digest.update(0)
         digest.update(pass.fragment.toByteArray())
         val file = File(dir, digest.digest().joinToString("") { "%02x".format(it) })
-        runCatching { file.takeIf { it.isFile && it.length() > 0 }?.readBytes() }.getOrNull()?.let { return it }
+        // Anything that is not a translated pass (a damaged file) is translated again and written over.
+        runCatching { file.takeIf { it.isFile && it.length() > 0 }?.readBytes() }.getOrNull()
+            ?.takeIf { it.size > MAGIC.size && it.copyOfRange(0, MAGIC.size).contentEquals(MAGIC) }?.let { return it }
 
         val error = arrayOfNulls<String>(1)
         val bytes = LibretroDroid.translateSlang(pass.vertex, pass.fragment, esVersion, error)

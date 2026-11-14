@@ -136,6 +136,19 @@ void fixedChecks() {
     check(!translateSlang(vertex, std::string(HEADER) + "void main() { nope(); }\n", 320, program, error), "a broken stage fails");
     check(error.rfind("fragment: ", 0) == 0, "the error names the stage");
     check(!decodeSlangProgram("", program) && !decodeSlangProgram("NXSLANG1\nglsl 99999\nx", program), "garbage does not decode");
+    SlangProgram good;
+    check(translateSlang(vertex, fragment, 320, good, error), "the small pass translates again");
+    std::string huge = encodeSlangProgram(good);
+    auto at = huge.find("ubosize 80");
+    check(at != std::string::npos, "the encoded block size is where expected");
+    if (at != std::string::npos) huge.replace(at, 10, "ubosize 4000000000");
+    check(!decodeSlangProgram(huge, program), "an absurd block size does not decode");
+
+    // A block that ends on a scalar is rounded up to the 16 bytes std140 gives it.
+    std::string odd = "#version 450\nlayout(std140, set = 0, binding = 0) uniform UBO { mat4 MVP; float A; } global;\n";
+    check(translateSlang(odd + VERTEX, odd + "layout(location = 0) in vec2 uv;\nlayout(location = 0) out vec4 FragColor;\n"
+          "void main() { FragColor = vec4(global.A) + vec4(uv, 0.0, 1.0); }\n", 320, program, error) && program.fragment.uboSize == 80,
+          "a block's size is a multiple of 16");
 }
 
 void semanticChecks() {

@@ -341,7 +341,10 @@ SlangChainRenderer::SlangChainRenderer(const PresetChain& chain) : params(chain.
                     stage.blockIndex = glGetUniformBlockIndex(pass.program, blockName);
                     if (stage.blockIndex != GL_INVALID_INDEX) {
                         glUniformBlockBinding(pass.program, stage.blockIndex, (GLuint) s);
-                        stage.data.assign(source.uboSize, 0);
+                        // At least what the driver says the block takes: a bound buffer shorter than that is an error.
+                        GLint blockSize = 0;
+                        glGetActiveUniformBlockiv(pass.program, stage.blockIndex, GL_UNIFORM_BLOCK_DATA_SIZE, &blockSize);
+                        stage.data.assign(std::max((size_t) source.uboSize, (size_t) std::max(blockSize, 0)), 0);
                         for (auto& member : source.ubo) {
                             unsigned count = member.vecSize * member.columns;
                             if ((size_t) member.offset + (size_t) count * 4 > stage.data.size()) continue;
@@ -719,6 +722,8 @@ void SlangChainRenderer::fillUniforms(Pass& pass, const Frame& frame) {
     for (int s = 0; s < 2; ++s) {
         Stage& stage = pass.stages[s];
         for (auto& member : stage.block) {
+            // Only what a semantic or a parameter fills; the rest of the block stays zero.
+            if (member.value.kind == ValueKind::Zero) continue;
             std::memset(values, 0, sizeof(values));
             components(member.value, frame, values);
             uint8_t* at = stage.data.data() + member.offset;
@@ -753,6 +758,8 @@ void SlangChainRenderer::fillUniforms(Pass& pass, const Frame& frame) {
             components(member.value, frame, values);
             if (member.columns == 4 && member.vecSize == 4 && member.base == 'f') {
                 glUniformMatrix4fv(member.location, 1, GL_FALSE, values);
+            } else if (member.columns != 1) {
+                // No slang semantic is any other matrix: it keeps the zeros a new program's uniforms start with.
             } else if (member.base == 'f') {
                 switch (member.vecSize) {
                     case 1: glUniform1fv(member.location, 1, values); break;
@@ -832,24 +839,6 @@ void SlangChainRenderer::render(
         auto viewportW = (unsigned) rect[2];
         auto viewportH = (unsigned) rect[3];
 
-        if (slots.size() <= slotIndex) slots.resize(slotIndex + 1);
-        Slot& slot = slots[slotIndex];
-        std::array<unsigned, 4> inputs = { frameW, frameH, viewportW, viewportH };
-        if (slot.sizedFor != inputs) {
-            try {
-                resize(slot, frameW, frameH, viewportW, viewportH);
-            } catch (const std::exception& e) {
-                LOGE("Slang chain could not size its targets: %s", e.what());
-                releaseSlot(slot);
-            }
-            if (slot.history.empty()) {
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                glBindTexture(GL_TEXTURE_2D, preserveBindings ? (GLuint) savedBindings[0] : 0);
-                return;
-            }
-            slot.sizedFor = inputs;
-        }
-
         // The picture's corners in the source texture and on screen: its top row is the texture's last with a
         // bottom-left origin, and the layout may have turned the quad.
         float u0 = sourceCoords[0], u1 = sourceCoords[0], v0 = sourceCoords[1], v1 = sourceCoords[1];
@@ -872,12 +861,13 @@ void SlangChainRenderer::render(
             0.0F, 0.0F, 1.0F, 0.0F,
             topLeft[0], topLeft[1], 0.0F, 1.0F,
         };
-
-        // This frame becomes Original, the ones before it move one step back in the history.
-        slot.head = (slot.head + 1) % (unsigned) slot.history.size();
-        Target& original = slot.history[slot.head];
-        glBindFramebuffer(GL_FRAMEBUFFER, original.framebuffer);
-        glViewport(0, 0, (GLsizei) original.width, (GLsizei) original.height);
+        // The unit quad on screen, where the picture goes.
+        std::array<float, 12> screenPositions{};
+        for (size_t i = 0; i < unitQuad.size(); i += 2) {
+            float x = unitQuad[i], y = unitQuad[i + 1];
+            screenPositions[i] = topLeft[0] + x * (topRight[0] - topLeft[0]) + y * (bottomLeft[0] - topLeft[0]);
+            screenPositions[i + 1] = topLeft[1] + x * (topRight[1] - topLeft[1]) + y * (bottomLeft[1] - topLeft[1]);
+        }
         const std::array<float, 12> frameCoords = {
             u0, top,
             u0, bottom,
@@ -886,61 +876,82 @@ void SlangChainRenderer::render(
             u0, bottom,
             u1, bottom,
         };
-        copy(source, samplerObject(false, false, 0), clipQuad, frameCoords);
-        if (passes.front().cfg.mipmapInput) {
-            glBindTexture(GL_TEXTURE_2D, original.texture);
-            glGenerateMipmap(GL_TEXTURE_2D);
+
+        if (slots.size() <= slotIndex) slots.resize(slotIndex + 1);
+        Slot& slot = slots[slotIndex];
+        std::array<unsigned, 4> inputs = { frameW, frameH, viewportW, viewportH };
+        if (slot.sizedFor != inputs) {
+            try {
+                resize(slot, frameW, frameH, viewportW, viewportH);
+            } catch (const std::exception& e) {
+                // Out of texture memory, or no renderable format: not tried again until the sizes change.
+                LOGE("Slang chain could not size its targets: %s", e.what());
+                releaseSlot(slot);
+            }
+            slot.sizedFor = inputs;
         }
 
-        // What each feedback pass drew last frame is read this frame, while it draws into the other texture.
-        for (size_t i = 0; i < passes.size(); ++i) {
-            if (passes[i].feedback) std::swap(slot.outputs[i], slot.feedback[i]);
-        }
-
-        for (size_t i = 0; i < passes.size(); ++i) {
-            Pass& pass = passes[i];
-            Frame frame { &slot, i, pass.toScreen ? screenMatrix : targetMatrix, frameW, frameH, viewportW, viewportH, frameCount };
-
-            if (pass.toScreen) {
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                glViewport(0, 0, screenW, screenH);
-            } else {
-                glBindFramebuffer(GL_FRAMEBUFFER, slot.outputs[i].framebuffer);
-                glViewport(0, 0, (GLsizei) slot.outputs[i].width, (GLsizei) slot.outputs[i].height);
-            }
-
-            glUseProgram(pass.program);
-            for (auto& sampler : pass.samplers) {
-                glActiveTexture(GL_TEXTURE0 + sampler.unit);
-                glBindTexture(GL_TEXTURE_2D, textureOf(sampler.texture, frame));
-                glBindSampler(sampler.unit, samplerOf(sampler.texture, i, defaultLinear));
-                if (!pass.samplersSet) glUniform1i(sampler.location, (GLint) sampler.unit);
-            }
-            pass.samplersSet = true;
-            fillUniforms(pass, frame);
-
-            bindQuad(0, unitQuad);
-            bindQuad(1, unitQuad);
-            glDrawArrays(GL_TRIANGLES, 0, 6);
-
-            if (pass.mipmapOutput) {
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, slot.outputs[i].texture);
-                glGenerateMipmap(GL_TEXTURE_2D);
-            }
-        }
-
-        Pass& last = passes.back();
-        if (!last.toScreen) {
+        if (slot.history.empty()) {
+            // No targets for this picture: it is drawn as it is, unshaded, in its place.
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             glViewport(0, 0, screenW, screenH);
-            std::array<float, 12> positions{};
-            for (size_t i = 0; i < unitQuad.size(); i += 2) {
-                float x = unitQuad[i], y = unitQuad[i + 1];
-                positions[i] = topLeft[0] + x * (topRight[0] - topLeft[0]) + y * (bottomLeft[0] - topLeft[0]);
-                positions[i + 1] = topLeft[1] + x * (topRight[1] - topLeft[1]) + y * (bottomLeft[1] - topLeft[1]);
+            copy(source, samplerObject(defaultLinear, false, 0), screenPositions, frameCoords);
+        } else {
+            // This frame becomes Original, the ones before it move one step back in the history.
+            slot.head = (slot.head + 1) % (unsigned) slot.history.size();
+            Target& original = slot.history[slot.head];
+            glBindFramebuffer(GL_FRAMEBUFFER, original.framebuffer);
+            glViewport(0, 0, (GLsizei) original.width, (GLsizei) original.height);
+            copy(source, samplerObject(false, false, 0), clipQuad, frameCoords);
+            if (passes.front().cfg.mipmapInput) {
+                glBindTexture(GL_TEXTURE_2D, original.texture);
+                glGenerateMipmap(GL_TEXTURE_2D);
             }
-            copy(slot.outputs.back().texture, samplerObject(defaultLinear && !last.integerFormat, false, 0), positions, unitQuad);
+
+            // What each feedback pass drew last frame is read this frame, while it draws into the other texture.
+            for (size_t i = 0; i < passes.size(); ++i) {
+                if (passes[i].feedback) std::swap(slot.outputs[i], slot.feedback[i]);
+            }
+
+            for (size_t i = 0; i < passes.size(); ++i) {
+                Pass& pass = passes[i];
+                Frame frame { &slot, i, pass.toScreen ? screenMatrix : targetMatrix, frameW, frameH, viewportW, viewportH, frameCount };
+
+                if (pass.toScreen) {
+                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                    glViewport(0, 0, screenW, screenH);
+                } else {
+                    glBindFramebuffer(GL_FRAMEBUFFER, slot.outputs[i].framebuffer);
+                    glViewport(0, 0, (GLsizei) slot.outputs[i].width, (GLsizei) slot.outputs[i].height);
+                }
+
+                glUseProgram(pass.program);
+                for (auto& sampler : pass.samplers) {
+                    glActiveTexture(GL_TEXTURE0 + sampler.unit);
+                    glBindTexture(GL_TEXTURE_2D, textureOf(sampler.texture, frame));
+                    glBindSampler(sampler.unit, samplerOf(sampler.texture, i, defaultLinear));
+                    if (!pass.samplersSet) glUniform1i(sampler.location, (GLint) sampler.unit);
+                }
+                pass.samplersSet = true;
+                fillUniforms(pass, frame);
+
+                bindQuad(0, unitQuad);
+                bindQuad(1, unitQuad);
+                glDrawArrays(GL_TRIANGLES, 0, 6);
+
+                if (pass.mipmapOutput) {
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, slot.outputs[i].texture);
+                    glGenerateMipmap(GL_TEXTURE_2D);
+                }
+            }
+
+            Pass& last = passes.back();
+            if (!last.toScreen) {
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glViewport(0, 0, screenW, screenH);
+                copy(slot.outputs.back().texture, samplerObject(defaultLinear && !last.integerFormat, false, 0), screenPositions, unitQuad);
+            }
         }
 
         glDisableVertexAttribArray(0);
