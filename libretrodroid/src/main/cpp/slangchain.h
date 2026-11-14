@@ -27,26 +27,9 @@
 #include <vector>
 
 #include "presetchain.h"
+#include "slangsemantics.h"
 
 namespace libretrodroid {
-
-// Which texture a slang sampler (or a "...Size" uniform) names. index is the history depth, the pass or the LUT.
-enum class SlangTextureKind { Original, Source, History, Output, Feedback, Lut };
-
-struct SlangTextureRef {
-    SlangTextureKind kind = SlangTextureKind::Original;
-    unsigned index = 0;
-
-    bool operator==(const SlangTextureRef& o) const { return kind == o.kind && index == o.index; }
-};
-
-// The texture a slang name stands for in pass `pass` of a chain with these pass aliases (one per pass, empty for
-// none) and LUT ids: Original, Source, OriginalHistoryN, PassOutputN, PassFeedbackN, <alias>, <alias>Feedback, <lut>.
-// A pass cannot read the output of itself or a later pass this frame, so that reads last frame's (feedback).
-// nullopt for a name that is none of them.
-std::optional<SlangTextureRef> slangTextureFor(const std::string& name, size_t pass,
-                                               const std::vector<std::string>& aliases,
-                                               const std::vector<std::string>& lutIds);
 
 // The GL internal format for a slang framebuffer format name, GL_RGBA8 for one GLES cannot render to.
 GLenum slangFramebufferFormat(const std::string& name);

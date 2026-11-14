@@ -1,5 +1,6 @@
 // Host checks for the slang translator (see CMakeLists.txt for how to build and run).
-//   slangcheck                 fixed checks: a small pass translates, reflects and survives encode/decode
+//   slangcheck                 fixed checks: a small pass translates, reflects and survives encode/decode; slang
+//                              texture names resolve
 //   slangcheck <dir> [es]      every <name>.vert + <name>.frag pair in <dir>: translate to GLSL ES [es] (default 320)
 //                              and compile the result as GLSL ES; prints the failures grouped by message
 
@@ -14,6 +15,7 @@
 
 #include "glslang/Public/ResourceLimits.h"
 #include "glslang/Public/ShaderLang.h"
+#include "slangsemantics.h"
 #include "slangtranslate.h"
 
 using namespace libretrodroid;
@@ -136,6 +138,30 @@ void fixedChecks() {
     check(!decodeSlangProgram("", program) && !decodeSlangProgram("NXSLANG1\nglsl 99999\nx", program), "garbage does not decode");
 }
 
+void semanticChecks() {
+    using Kind = SlangTextureKind;
+    const std::vector<std::string> aliases = { "", "Blur", "", "Final" };
+    const std::vector<std::string> luts = { "Mask", "Blur2" };
+    auto is = [&](const char* name, size_t pass, Kind kind, unsigned index) {
+        auto ref = slangTextureFor(name, pass, aliases, luts);
+        return ref && ref->kind == kind && ref->index == index;
+    };
+    check(is("Original", 2, Kind::Original, 0) && is("Source", 2, Kind::Source, 0), "Original and Source");
+    check(is("OriginalHistory0", 0, Kind::Original, 0) && is("OriginalHistory3", 0, Kind::History, 3), "history by depth");
+    check(is("PassOutput1", 2, Kind::Output, 1), "an earlier pass's output");
+    check(is("PassOutput2", 2, Kind::Feedback, 2) && is("PassOutput3", 2, Kind::Feedback, 3),
+          "this or a later pass's output is last frame's");
+    check(is("PassFeedback0", 2, Kind::Feedback, 0) && is("PassFeedback3", 0, Kind::Feedback, 3), "feedback of any pass");
+    check(is("Blur", 3, Kind::Output, 1) && is("Blur", 1, Kind::Feedback, 1) && is("BlurFeedback", 3, Kind::Feedback, 1),
+          "aliases stand for their pass");
+    check(is("Mask", 0, Kind::Lut, 0) && is("Blur2", 0, Kind::Lut, 1), "a LUT by its id, not a longer alias");
+    check(!slangTextureFor("PassOutput4", 0, aliases, luts) && !slangTextureFor("PassFeedback9", 0, aliases, luts),
+          "a pass that does not exist");
+    check(!slangTextureFor("Nope", 0, aliases, luts) && !slangTextureFor("PassOutput", 0, aliases, luts) &&
+          !slangTextureFor("PassOutput1x", 2, aliases, luts) && !slangTextureFor("Feedback", 0, aliases, luts) &&
+          !slangTextureFor("OriginalHistory999", 0, aliases, luts), "names that are no texture");
+}
+
 int checkDirectory(const std::string& dir, unsigned esVersion) {
     std::vector<std::filesystem::path> vertexFiles;
     for (auto& entry : std::filesystem::directory_iterator(dir)) {
@@ -176,6 +202,7 @@ int main(int argc, char** argv) {
     glslang::InitializeProcess();
     if (argc >= 2) return checkDirectory(argv[1], argc >= 3 ? (unsigned) std::atoi(argv[2]) : 320);
     fixedChecks();
+    semanticChecks();
     if (failures) {
         std::printf("%d check(s) failed\n", failures);
         return 1;

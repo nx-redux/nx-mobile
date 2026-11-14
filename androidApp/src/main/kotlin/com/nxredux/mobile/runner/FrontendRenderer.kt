@@ -401,6 +401,7 @@ internal class FrontendRenderer(
     private fun loadChain(context: Context, preset: String): LoadedChain {
         val read: (String) -> String? = { Shaders.read(host.shaderRoots, it) }
         if (SlangPreset.isSlang(preset)) {
+            val started = SystemClock.elapsedRealtime()
             val chain = SlangPreset.parse(preset, read)
             val es = SlangCache.esVersion(context)
             val passes = chain.passes.mapIndexed { n, p ->
@@ -414,6 +415,7 @@ internal class FrontendRenderer(
                 Shaders.file(host.shaderRoots, lut.path)?.let { decodeLut(it, lut.id, lut.linear, lut.wrap, lut.mipmap) }
                     ?: throw PresetException("texture ${lut.id} unreadable: ${lut.path}")
             }
+            NxLog.i(TAG_LOG, "shader $preset: ${passes.size} slang passes for GLSL ES $es ready in ${SystemClock.elapsedRealtime() - started} ms")
             return LoadedChain(ShaderChainData(emptyList(), luts, emptyMap(), passes), chain.params)
         }
         val chain = GlslPreset.parse(preset, read)

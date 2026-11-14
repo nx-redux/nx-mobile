@@ -24,6 +24,12 @@ set(SPIRV_CROSS_SKIP_INSTALL ON CACHE BOOL "" FORCE)
 set(SPIRV_CROSS_FORCE_PIC ON CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/SPIRV-Cross ${CMAKE_CURRENT_BINARY_DIR}/SPIRV-Cross EXCLUDE_FROM_ALL)
 
+# Optimised for size in every build type: about half the bytes, and a debug build would otherwise take many seconds to
+# translate a large preset. Sections let the linker drop the parts of both libraries nothing reaches.
+foreach(target glslang glslang-default-resource-limits spirv-cross-core spirv-cross-glsl)
+    target_compile_options(${target} PRIVATE -Os -ffunction-sections -fdata-sections -fvisibility=hidden)
+endforeach()
+
 add_library(nxslangdeps INTERFACE)
 target_include_directories(nxslangdeps INTERFACE ${CMAKE_CURRENT_LIST_DIR}/glslang ${CMAKE_CURRENT_LIST_DIR}/SPIRV-Cross)
 target_link_libraries(nxslangdeps INTERFACE glslang glslang-default-resource-limits spirv-cross-glsl)

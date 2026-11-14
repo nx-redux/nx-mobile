@@ -140,18 +140,6 @@ GLuint linkProgram(const std::string& vertex, const std::string& fragment, const
     return 0;
 }
 
-// "<prefix><number>" -> the number.
-std::optional<unsigned> numbered(const std::string& name, const char* prefix) {
-    size_t length = std::strlen(prefix);
-    if (name.size() <= length || name.compare(0, length, prefix) != 0) return std::nullopt;
-    unsigned value = 0;
-    for (size_t i = length; i < name.size(); ++i) {
-        if (name[i] < '0' || name[i] > '9' || value > 100000) return std::nullopt;
-        value = value * 10 + (unsigned) (name[i] - '0');
-    }
-    return value;
-}
-
 bool hasExtension(const char* name) {
     auto* extensions = (const char*) glGetString(GL_EXTENSIONS);
     return extensions && std::strstr(extensions, name) != nullptr;
@@ -262,41 +250,6 @@ void bindQuad(GLuint location, const std::array<float, 12>& data) {
 }
 
 } // namespace
-
-std::optional<SlangTextureRef> slangTextureFor(const std::string& name, size_t pass,
-                                               const std::vector<std::string>& aliases,
-                                               const std::vector<std::string>& lutIds) {
-    size_t count = aliases.size();
-    // This frame's output exists only for an earlier pass.
-    auto output = [&](size_t index) -> std::optional<SlangTextureRef> {
-        if (index >= count) return std::nullopt;
-        return SlangTextureRef{ index < pass ? SlangTextureKind::Output : SlangTextureKind::Feedback, (unsigned) index };
-    };
-    auto feedback = [&](size_t index) -> std::optional<SlangTextureRef> {
-        if (index >= count) return std::nullopt;
-        return SlangTextureRef{ SlangTextureKind::Feedback, (unsigned) index };
-    };
-
-    if (name == "Original") return SlangTextureRef{ SlangTextureKind::Original, 0 };
-    if (name == "Source") return SlangTextureRef{ SlangTextureKind::Source, 0 };
-    if (auto n = numbered(name, "OriginalHistory")) {
-        if (*n == 0) return SlangTextureRef{ SlangTextureKind::Original, 0 };
-        // A preset asking for hundreds of frames of history would be hundreds of full-size textures.
-        if (*n > 64) return std::nullopt;
-        return SlangTextureRef{ SlangTextureKind::History, *n };
-    }
-    if (auto n = numbered(name, "PassOutput")) return output(*n);
-    if (auto n = numbered(name, "PassFeedback")) return feedback(*n);
-    for (size_t i = 0; i < lutIds.size(); ++i) {
-        if (name == lutIds[i]) return SlangTextureRef{ SlangTextureKind::Lut, (unsigned) i };
-    }
-    for (size_t i = 0; i < count; ++i) {
-        if (aliases[i].empty()) continue;
-        if (name == aliases[i]) return output(i);
-        if (name == aliases[i] + "Feedback") return feedback(i);
-    }
-    return std::nullopt;
-}
 
 GLenum slangFramebufferFormat(const std::string& name) {
     static const std::pair<const char*, GLenum> formats[] = {
@@ -425,7 +378,8 @@ SlangChainRenderer::SlangChainRenderer(const PresetChain& chain) : params(chain.
         for (size_t index = 0; index < passes.size(); ++index) {
             Pass& pass = passes[index];
             bool last = index + 1 == passes.size();
-            pass.mipmapOutput = !last && passes[index + 1].cfg.mipmapInput;
+            // Integer textures have no mipmaps to generate.
+            pass.mipmapOutput = !last && passes[index + 1].cfg.mipmapInput && !pass.integerFormat;
             // A last pass that is kept for the next frame, or drawn at its own size, goes through a texture.
             pass.toScreen = last && pass.cfg.scaleTypeX == 0 && pass.cfg.scaleTypeY == 0 && !pass.feedback;
         }

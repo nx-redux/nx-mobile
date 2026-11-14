@@ -14,6 +14,20 @@
 - [ ] Home during a slow PS2/Wii quit, tap the same game → starts fresh; Home during a big PS2 state resume → no ANR; then clear it from the launcher icon → SRAM survived.
 - [ ] Threaded cores across pause/resume (input lock): Dolphin GC/Wii incl. Wii pointer, Azahar, ARMSX2, PPSSPP; N64 netplay input still arrives; a game from a picked file still opens.
 
+## Slang shader presets
+
+Checked on the emulator only (GLES 3.1, GBA): crt-geom, crt-guest-advanced, crt-royale, newpixie-crt, scalefx, Mega Bezel
+POTATO / STD / SMOOTH-ADV. Device checks still owed:
+
+- [ ] Nova (GLES 3.2): the same presets from `Shaders/shaders_slang`; frame rate and heat with crt-guest-advanced and a Mega Bezel preset; first load of a large preset (translate + compile) and the second (cached).
+- [ ] A GL core (N64, GameCube, PSP on GLES) with a slang preset: picture right way up, the core keeps drawing after the menu opens and closes, no black frames (its bindings are put back).
+- [ ] A Vulkan core (PSP, PS2, 3DS) with a slang preset.
+- [ ] DS / 3DS: a feedback or history preset (newpixie-crt, handheld/gameboy) on both screens, each screen with its own trail; DS screens on the second display.
+- [ ] A rotated picture (arcade vertical game) and a pad skin: the picture lands in its place.
+- [ ] Mali (AYANEO): crt-guest-advanced and a float-framebuffer preset draw; a preset that cannot build toasts and falls back.
+- [ ] Shader Parameters on a slang preset change the picture live; Reset Parameters; Save for game, relaunch.
+- [ ] The Shader list with a whole `shaders_slang` folder copied in (about 2,600 presets): opening the in-game menu stays quick.
+
 ## Game info from ScreenScraper
 
 Device checks still owed:

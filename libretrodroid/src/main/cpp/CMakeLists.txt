@@ -169,6 +169,8 @@ add_library(libretrodroid SHARED
         presetchain.cpp
         slangtranslate.h
         slangtranslate.cpp
+        slangsemantics.h
+        slangsemantics.cpp
         slangchain.h
         slangchain.cpp
         rumble.h
@@ -245,6 +247,9 @@ add_library(libretrodroid SHARED
 # Support 16k pages for Android 15
 target_include_directories(libretrodroid PRIVATE ${GWL_DIR})
 target_link_options(libretrodroid PRIVATE "-Wl,-z,max-page-size=16384")
+# glslang and SPIRV-Cross are used through one small path (slangtranslate): with the static libraries' symbols kept out
+# of this library's exports, the linker drops what nothing reaches (about 1 MB of the stripped library).
+target_link_options(libretrodroid PRIVATE "-Wl,--gc-sections" "-Wl,--exclude-libs,ALL")
 
 # add lib dependencies
 target_link_libraries(libretrodroid
