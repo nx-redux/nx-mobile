@@ -18,7 +18,7 @@ class ShaderBrowseTest {
 
     @Test fun the_top_level_is_none_the_groups_in_use_and_the_users_folder() {
         val top = ShaderBrowse.entries(presets + "glsl/waterpaint.glsl", "")
-        assertEquals(listOf("None", "CRT", "Handheld", "Smoothing", "NTSC", "Effects", "Your shaders"), top.map { it.label })
+        assertEquals(listOf("None", "CRT", "Handheld", "Smoothing", "NTSC", "Effects", "Personal"), top.map { it.label })
         assertEquals(listOf("@CRT", "@Handheld", "@Smoothing", "@NTSC", "@Effects", "User"), top.filterIsInstance<Folder>().map { it.path })
         assertTrue(top.filterIsInstance<Folder>().all { it.info.isNotEmpty() })
         assertEquals(ShaderBrowse.YOURS_INFO, (top.last() as Folder).info)
@@ -76,7 +76,7 @@ class ShaderBrowseTest {
     @Test fun titles_and_labels() {
         assertEquals("Shader", ShaderBrowse.title(""))
         assertEquals("CRT", ShaderBrowse.title("@CRT"))
-        assertEquals("Your shaders", ShaderBrowse.title("User"))
+        assertEquals("Personal", ShaderBrowse.title("User"))
         assertEquals("crt", ShaderBrowse.title("User/shaders_slang/crt"))
         assertEquals("None", ShaderBrowse.label("None")); assertEquals("None", ShaderBrowse.label(""))
         assertEquals("CRT Guest Advanced HD", ShaderBrowse.label("slang/crt/crt-guest-advanced-hd.slangp"))

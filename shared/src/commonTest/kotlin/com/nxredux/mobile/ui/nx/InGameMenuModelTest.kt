@@ -757,7 +757,7 @@ class InGameMenuModelTest {
         val m = pickerModel()
         assertEquals(PageKind.ShaderBrowse(""), m.state.page.kind)
         assertEquals("Shader", m.state.page.title)
-        assertEquals(listOf("None", "CRT", "Your shaders"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("None", "CRT", "Personal"), m.state.page.rows.map { it.label })
         assertEquals(ShaderBrowse.intro("@CRT"), m.state.page.rows[1].info)
         assertEquals("", m.state.page.intro)
         m.press(NxButton.B)
@@ -807,7 +807,7 @@ class InGameMenuModelTest {
 
     @Test fun the_users_folders_open_a_level_at_a_time() {
         val m = pickerModel()
-        m.select(2); m.press(NxButton.A)   // Your shaders
+        m.select(2); m.press(NxButton.A)   // Personal
         assertEquals(listOf("shaders_slang", "mine"), m.state.page.rows.map { it.label })
         m.press(NxButton.A)
         assertEquals("shaders_slang", m.state.page.title)

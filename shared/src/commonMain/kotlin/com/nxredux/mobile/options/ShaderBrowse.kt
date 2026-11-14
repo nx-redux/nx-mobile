@@ -9,7 +9,7 @@ package com.nxredux.mobile.options
  */
 object ShaderBrowse {
     const val TITLE = "Shader"
-    const val YOURS = "Your shaders"
+    const val YOURS = "Personal"
     /** The path of a bundled group's level; a user level's path is its folder under the prefix ("User", "User/crt"). */
     private const val GROUP = "@"
     private const val USER = "User"
