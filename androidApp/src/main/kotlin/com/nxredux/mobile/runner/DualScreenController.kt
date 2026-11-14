@@ -82,6 +82,7 @@ import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.sin
 import android.media.AudioManager
+import com.nxredux.mobile.options.ShaderBrowse
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.ui.nx.QuickSetting
@@ -128,6 +129,8 @@ internal interface DualScreenHost : GameScreenHost {
     fun menuLocked(): Set<String>
     /** The panel's All options: the in-game menu, on its Options page. */
     fun openOptions()
+    /** The Settings tab's Shader row: the in-game menu opens on its shader picker. */
+    fun openShaderPicker()
     /** The save-state slots as the in-game menu shows them; empty where the game has none. */
     val slotsUi: androidx.compose.runtime.State<List<com.nxredux.mobile.ui.nx.SlotUi>>
     /** Runs [block] on the open in-game menu, if any, and redraws it. */
@@ -846,8 +849,8 @@ internal class DualScreenController(
 
     /**
      * The Settings tab's rows: the volume, then the picture options a player changes mid-game (Screen Scaling, Screen
-     * Sharpness, Shader), each as in effect now and applied through the in-game menu's own effects. A key the game's
-     * layout holds is dimmed.
+     * Sharpness), each as in effect now and applied through the in-game menu's own effects (a key the game's layout
+     * holds is dimmed), and the shader in use, which opens the in-game menu's picker.
      */
     private fun quickSettings(): List<QuickSetting> = buildList {
         val audio = activity.getSystemService(AudioManager::class.java)
@@ -859,11 +862,8 @@ internal class DualScreenController(
             val labels = o.valueLabels.ifEmpty { o.values.map { v -> v.lowercase().replaceFirstChar { it.uppercase() } } }
             add(GamePanelModel.quickChoice(key, o.label, o.values, frontendValues[key] ?: o.default, labels, enabled = key !in locked))
         }
-        val presets = ShaderOptions.presetChoices(renderer.presetNames)
-        add(GamePanelModel.quickChoice(
-            ShaderOptions.PRESET, ShaderOptions.PRESET_LABEL, presets, ShaderOptions.preset(renderer.shaderValues) ?: ShaderOptions.NONE,
-            presets.map(GamePanelModel::quickFileLabel),
-        ))
+        // Chosen in the in-game menu's picker: far too many presets to step through on a row.
+        add(QuickSetting.Shader(ShaderOptions.PRESET_LABEL, ShaderBrowse.label(ShaderOptions.preset(renderer.shaderValues) ?: ShaderOptions.NONE)))
     }
 
     /** The in-game menu flipped the panel up ([menuOpening]): closing it flips the panel back ([menuClosed]). */
@@ -930,6 +930,7 @@ internal class DualScreenController(
                 refreshDualPanel()
             }
             GamePanelEvent.OpenOptions -> owner.openOptions()
+            GamePanelEvent.OpenShaders -> owner.openShaderPicker()
             is GamePanelEvent.Touch -> if (!sessionLocked || !e.down) {
                 owner.onPanelTouch(e.action, e.down, panelSlotNow())
                 // A held action runs the game: a panel flipped up over the DS/3DS screen gives the screen back, as for FF.

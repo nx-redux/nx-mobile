@@ -74,6 +74,9 @@ sealed interface QuickSetting {
         val key: String, override val label: String, val values: List<String>, val labels: List<String>, val index: Int,
         val current: String, val segments: Boolean, val enabled: Boolean = true,
     ) : QuickSetting
+
+    /** The shader in use by its name ([value]); a tap opens the in-game menu's shader picker ([GamePanelEvent.OpenShaders]). */
+    data class Shader(override val label: String, val value: String) : QuickSetting
 }
 
 /** Where a controller is inside the panel (single-screen in-game menu): the tab row, or the current tab's item [index]. */
@@ -121,6 +124,8 @@ sealed interface GamePanelEvent {
     data class SetQuick(val key: String, val value: String) : GamePanelEvent
     /** The Settings tab's "All options": the in-game menu on its Options page. */
     data object OpenOptions : GamePanelEvent
+    /** The Settings tab's Shader row: the in-game menu opens on its shader picker. */
+    data object OpenShaders : GamePanelEvent
     /** Save-state [slot] (1-based) picked on the strip: Save and Load use it. */
     data class SelectSlot(val slot: Int) : GamePanelEvent
     /** A touch button's tile pressed ([down]) or let go, as the button on the pad: a hold runs while down. */

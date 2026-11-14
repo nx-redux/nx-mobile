@@ -387,6 +387,7 @@ private fun SettingsTab(rows: List<QuickSetting>, bottom: Dp, onEvent: (GamePane
                         Text("${((drag ?: row.value) * 100).roundToInt()}%", Modifier.width(44.dp), color = colors.hint, fontFamily = font, fontSize = GP_SMALL_SIZE, maxLines = 1, textAlign = TextAlign.End)
                     }
                     is QuickSetting.Choice -> if (row.segments) QuickSegments(row, Modifier.weight(1f), onEvent) else QuickStepper(row, Modifier.weight(1f), onEvent)
+                    is QuickSetting.Shader -> QuickOpen(row.value, Modifier.weight(1f)) { onEvent(GamePanelEvent.OpenShaders) }
                 }
             }
         }
@@ -443,6 +444,25 @@ private fun QuickStepper(c: QuickSetting.Choice, modifier: Modifier, onEvent: (G
             )
             Text("\u203A", color = colors.hint, fontFamily = font, fontSize = GP_TITLE_SIZE, maxLines = 1)
         }
+    }
+}
+
+/** A setting chosen on a page of its own: its [value] in the ring with the mark of a row that opens; a tap anywhere opens it. */
+@Composable
+private fun QuickOpen(value: String, modifier: Modifier, onOpen: () -> Unit) {
+    val colors = LocalNxColors.current
+    val font = LocalNxFont.current
+    val shape = RoundedCornerShape(50)
+    Row(
+        modifier.height(GP_QUICK_CONTROL).clip(shape).border(GP_TILE_RING, colors.hint.copy(alpha = 0.6f), shape)   // role: a button's grey ring
+            .clickable(onClick = onOpen).padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            value, Modifier.weight(1f), color = colors.listText, fontFamily = font, fontSize = GP_LABEL_SIZE, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+        )
+        Text("\u203A", color = colors.hint, fontFamily = font, fontSize = GP_TITLE_SIZE, maxLines = 1)
     }
 }
 

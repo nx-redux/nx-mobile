@@ -994,6 +994,19 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     /**
+     * The second-screen panel's Shader row: the menu on the shader picker, over Options and Shaders, so B walks back
+     * through them. Nothing in netplay, as [openOptions].
+     */
+    fun openShaderPicker() {
+        if (sessionLocked) return
+        popTo(PageKind.Root)
+        val options = optionsPage()
+        push(options.copy(selected = options.rows.indexOfFirst { (it as? MenuRow.Submenu)?.target == PageKind.Shaders }.coerceAtLeast(0)))
+        push(shadersPage())
+        push(browsePage(""))
+    }
+
+    /**
      * A Reset binding or the second-screen panel's Reset tile: the menu shows the Reset dialog, as its own panel's Reset
      * tile does. [closesOnCancel]: the menu opened for it, so Cancel and B close the menu and the game plays on (the
      * player never asked for the menu); otherwise they come back to the root. Nothing in netplay (reset would desync the
@@ -1125,7 +1138,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun panelEffect(event: GamePanelEvent): MenuEffect? = when (event) {
         GamePanelEvent.SwapDisc -> (changeDisc(1) as? MenuEffect.ChangeDisc)?.copy(toast = true)
         // The second-screen panel's own: this menu's panel has none of them.
-        is GamePanelEvent.Touch, is GamePanelEvent.SelectSlot, is GamePanelEvent.SetVolume, is GamePanelEvent.SetQuick, GamePanelEvent.OpenOptions -> null
+        is GamePanelEvent.Touch, is GamePanelEvent.SelectSlot, is GamePanelEvent.SetVolume, is GamePanelEvent.SetQuick, GamePanelEvent.OpenOptions, GamePanelEvent.OpenShaders -> null
         is GamePanelEvent.SelectTab -> {
             // A tap leaves a touch player's focus nowhere: off the Menu tab that reads as the tab row ([pressPanel]). The
             // tab row also shows over the Options page beside the root ([menuTabsShown]): a tab there goes back to the root.

@@ -820,6 +820,17 @@ class InGameMenuModelTest {
         assertEquals(PageKind.ShaderBrowse("User/shaders_slang"), m.state.page.kind)
     }
 
+    @Test fun the_panels_shader_row_opens_the_picker_over_options_and_shaders() {
+        val m = plain(InGameMenuModel("Game", 9))
+        m.setShaders(mapOf("nx_shader" to "None"), library, emptyList())
+        m.openShaderPicker()
+        assertEquals(listOf(PageKind.Root, PageKind.Options, PageKind.Shaders, PageKind.ShaderBrowse("")), m.state.stack.map { it.kind })
+        m.press(NxButton.B)
+        assertEquals(PageKind.Shaders, m.state.page.kind)
+        m.press(NxButton.B)
+        assertEquals("Shaders", m.state.page.rows[m.state.page.selected].label)
+    }
+
     @Test fun the_other_format_of_the_bundled_preset_in_use_is_marked() {
         val m = pickerModel("crt/crt-geom.glslp")
         m.select(1); m.press(NxButton.A)
