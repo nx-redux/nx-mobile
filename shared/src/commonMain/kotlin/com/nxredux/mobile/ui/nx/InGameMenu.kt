@@ -513,6 +513,8 @@ private fun PagePane(
             else RowsBody(page.copy(selected = -1), rowHeight, split.onPreviewTap, split.onPreviewTap, {}, modifier)
         }
         page.kind == PageKind.Achievements -> AchievementsBody(page, detail, onSelect, modifier)
+        // The shader picker's levels as words too: names to read down, not settings with values.
+        page.kind is PageKind.ShaderBrowse -> key(page.kind) { RowsBody(page, rowHeight, onSelect, onActivate, {}, modifier, focused = true) }
         else -> key(page.kind) { OptionsBody(page, rowHeight, onSelect, onActivate, onOption, onInfoTruncated, modifier) }
     }
 }

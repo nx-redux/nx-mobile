@@ -19,6 +19,7 @@ import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsView
+import com.nxredux.mobile.options.ShaderBrowse
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.shownFor
 import com.nxredux.mobile.runner.Nds3dMode
@@ -41,6 +42,9 @@ import com.nxredux.mobile.ui.SHORTCUT_PROMPT
 enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, DISCONNECT_DS, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET, ASK_RESET, CANCEL, ADJUST_BUTTONS, USE_TOP_SCREEN }
 enum class SlotAction { SAVE, LOAD }
 
+/** After the picker word of the shader preset in use. */
+const val IN_USE_MARK = "✓"
+
 sealed interface PageKind {
     data object Root : PageKind
     data object Options : PageKind
@@ -56,6 +60,16 @@ sealed interface PageKind {
     data object Shortcuts : PageKind
     data object Shaders : PageKind
     data object ShaderParams : PageKind
+    /**
+     * The shader picker at [path] ([ShaderBrowse.entries]: "" its top level, a bundled group, one of the user's folders):
+     * a row opens the level below it, or uses a preset ([ShaderPick]).
+     */
+    data class ShaderBrowse(val path: String) : PageKind
+    /**
+     * A picker row's target, never a page of its own: the preset [value] is used, and its live preview strip
+     * ([Adjust] of the preset) comes up over the picker, LEFT / RIGHT stepping through that level's presets.
+     */
+    data class ShaderPick(val value: String) : PageKind
     /** Live adjust of one visual setting (frontend or shader) over the paused frame (the menu collapses to a strip). */
     data class Adjust(val key: String) : PageKind
     data object CoreOptions : PageKind
@@ -94,11 +108,13 @@ sealed interface MenuRow : NxDescribedRow {
         val choices: List<String> = emptyList(),
         val index: Int = -1,
         override val detail: String = "",
+        /** The row opens a list page of its own to choose from (the shader picker), drawn and pressed as a picker row. */
+        val opensList: Boolean = false,
     ) : MenuRow
 }
 
-/** The control of [row] ([nxSettingControl] of its choices). */
-val MenuRow.Option.control: NxSettingControl get() = nxSettingControl(choices)
+/** The control of [row] ([nxSettingControl] of its choices); a picker for a row with its own list page. */
+val MenuRow.Option.control: NxSettingControl get() = if (opensList) NxSettingControl.PICKER else nxSettingControl(choices)
 
 /** A popup over the menu's page, taking the input while it shows. */
 sealed interface MenuPopup {
@@ -643,6 +659,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** Opens the picker for option row [index] of the top page (selecting it), its current value under the cursor. */
     fun openPicker(index: Int) {
         val row = state.page.rows.getOrNull(index) as? MenuRow.Option ?: return
+        // The Shader row's list is the shader picker, a page of levels, not a popup of every preset.
+        if (row.opensList && row.key == ShaderOptions.PRESET && state.page.kind == PageKind.Shaders) {
+            select(index)
+            push(browsePage(""))
+            return
+        }
         if (row.choices.isEmpty() || state.page.kind is PageKind.Adjust) return
         if (intoAdjust(index)) return   // a visual row: its live preview, where LEFT/RIGHT step it, not a list
         select(index)
@@ -1327,6 +1349,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             PageKind.Shortcuts -> push(shortcutsPage())
             PageKind.Shaders -> push(shadersPage())
             PageKind.ShaderParams -> push(shaderParamsPage())
+            is PageKind.ShaderBrowse -> push(browsePage(target.path))
+            is PageKind.ShaderPick -> return pickShader(target.value)
             PageKind.CoreOptions -> {
                 if (coreOptionsPending) return null
                 coreOptionsPending = true
@@ -1380,6 +1404,16 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         kind is PageKind.Settings || kind == PageKind.Shaders || kind == PageKind.ShaderParams || kind is PageKind.Adjust
 
     private fun changeFrontend(key: String, delta: Int): MenuEffect? {
+        if (key == ShaderOptions.PRESET) {
+            // Only in a preset's preview over the picker, and only through the presets of the level it was picked from.
+            val level = (state.stack.getOrNull(state.stack.size - 2)?.kind as? PageKind.ShaderBrowse) ?: return null
+            if (state.page.kind !is PageKind.Adjust) return null
+            val scope = ShaderBrowse.entries(presets, level.path).filterIsInstance<ShaderBrowse.Preset>().filter { it.value != ShaderOptions.NONE }
+            if (scope.isEmpty()) return null
+            val current = shaders[ShaderOptions.PRESET] ?: ShaderOptions.NONE
+            val at = scope.indexOfFirst { ShaderBrowse.isCurrent(it, current) }
+            return setFrontendValue(key, scope[(at + delta).mod(scope.size)].value)
+        }
         if (ShaderOptions.isShaderKey(key)) {
             val current = shaderValue(key) ?: return null
             return ShaderOptions.cycle(key, current, delta, presets, params)?.let { setFrontendValue(key, it) }
@@ -1506,11 +1540,15 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 is PageKind.Settings -> rebuilt(p, groupPage(k.group))
                 PageKind.Shaders -> rebuilt(p, shadersPage())
                 PageKind.ShaderParams -> rebuilt(p, shaderParamsPage())
+                is PageKind.ShaderBrowse -> rebuilt(p, browsePage(k.path))
                 // A row its page no longer lists (a parameter the new preset lacks; a DS layout or inset row after a
                 // rotation or a controller): close its strip rather than adjust a row that is not shown.
-                is PageKind.Adjust ->
-                    if (isVanishedParam(k.key) || stack.lastOrNull()?.rows?.none { (it as? MenuRow.Option)?.key == k.key } == true) null
-                    else adjustPage(k.key)
+                // A preset's strip stands over the picker level it was picked from, which has no row of that key.
+                is PageKind.Adjust -> when {
+                    k.key == ShaderOptions.PRESET -> adjustPage(k.key).takeIf { stack.lastOrNull()?.kind is PageKind.ShaderBrowse }
+                    isVanishedParam(k.key) || stack.lastOrNull()?.rows?.none { (it as? MenuRow.Option)?.key == k.key } == true -> null
+                    else -> adjustPage(k.key)
+                }
                 else -> p
             }
             if (page != null) stack += page
@@ -1680,13 +1718,44 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         return MenuPage(PageKind.ShaderParams, ShaderOptions.PARAMS_LABEL, rows, footer = if (rows.isEmpty()) ShaderOptions.NO_PARAMS else "")
     }
 
+    /** The Shaders page's Shader row: the preset in use by its name ([ShaderBrowse.label]); A opens the picker. */
     private fun presetRow(): MenuRow.Option {
         val value = shaders[ShaderOptions.PRESET] ?: ShaderOptions.NONE
-        val choices = ShaderOptions.presetChoices(presets)
-        return MenuRow.Option(
-            ShaderOptions.PRESET_LABEL, ShaderOptions.PRESET, value, visual = true,
-            choices = choices, index = choices.indexOf(value), detail = ShaderOptions.PRESET_INFO,
-        )
+        return MenuRow.Option(ShaderOptions.PRESET_LABEL, ShaderOptions.PRESET, ShaderBrowse.label(value), detail = ShaderOptions.PRESET_INFO, opensList = true)
+    }
+
+    /** The row of a preset's live preview strip: its name between the arrows. */
+    private fun presetStripRow(): MenuRow.Option {
+        val value = shaders[ShaderOptions.PRESET] ?: ShaderOptions.NONE
+        return MenuRow.Option(ShaderOptions.PRESET_LABEL, ShaderOptions.PRESET, ShaderBrowse.label(value), visual = true)
+    }
+
+    /**
+     * The picker's level at [path]: a word per folder and per preset, the one in use marked and, when it is on this
+     * level, highlighted.
+     */
+    private fun browsePage(path: String): MenuPage {
+        val current = shaders[ShaderOptions.PRESET] ?: ShaderOptions.NONE
+        val entries = ShaderBrowse.entries(presets, path)
+        val rows = entries.map { entry ->
+            when (entry) {
+                is ShaderBrowse.Folder -> MenuRow.Submenu(entry.label, PageKind.ShaderBrowse(entry.path))
+                is ShaderBrowse.Preset ->
+                    MenuRow.Submenu(if (ShaderBrowse.isCurrent(entry, current)) "${entry.label}  $IN_USE_MARK" else entry.label, PageKind.ShaderPick(entry.value))
+            }
+        }
+        val inUse = entries.indexOfFirst { it is ShaderBrowse.Preset && ShaderBrowse.isCurrent(it, current) }
+        return MenuPage(PageKind.ShaderBrowse(path), ShaderBrowse.title(path), rows, selected = inUse.coerceAtLeast(0))
+    }
+
+    /**
+     * A on a picker preset: it is used now, and (but for None, which has nothing to look at) its preview strip comes up
+     * so the picture shows undimmed; B there comes back to the list.
+     */
+    private fun pickShader(value: String): MenuEffect? {
+        val effect = setFrontendValue(ShaderOptions.PRESET, value)
+        if (value != ShaderOptions.NONE && state.page.kind is PageKind.ShaderBrowse) push(adjustPage(ShaderOptions.PRESET))
+        return effect
     }
 
     private fun paramRow(p: ShaderParam): MenuRow.Option {
@@ -1698,7 +1767,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** The one row an Adjust page shows for [key]: a frontend setting, the preset, or a parameter. */
     private fun adjustPage(key: String): MenuPage {
         val row = when {
-            key == ShaderOptions.PRESET -> presetRow()
+            key == ShaderOptions.PRESET -> presetStripRow()
             ShaderOptions.paramId(key) != null ->
                 paramRow(checkNotNull(params.firstOrNull { ShaderOptions.paramKey(it.id) == key }) { "not an active parameter: $key" })
             else -> frontendRow(checkNotNull(optionFor(key)) { "not a frontend key: $key" })
