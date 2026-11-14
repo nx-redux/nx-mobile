@@ -40,6 +40,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -132,20 +133,41 @@ internal class BadgedTitle(
     val inlineContent: Map<String, InlineTextContent>,
 )
 
-/** [title] with [badge] as an outlined pill in [tint] after it; the plain [title] without a badge, null without a title. */
+/**
+ * [title] with [badge] as an outlined pill in [tint] after it; the plain [title] without a badge, null without a title.
+ * The name gives way to the badge: one too long for [maxLines] lines of [style] in [maxWidthPx] is cut short with an
+ * ellipsis before the pill, which always shows (it is what tells a pack from its plain ROM of the same name).
+ */
 @Composable
-internal fun rememberBadgedTitle(title: String?, badge: String?, tint: Color): BadgedTitle? {
+internal fun rememberBadgedTitle(title: String?, badge: String?, tint: Color, style: TextStyle, maxLines: Int, maxWidthPx: Int): BadgedTitle? {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val font = LocalNxFont.current
-    return remember(title, badge, tint, font, density) {
+    return remember(title, badge, tint, font, density, style, maxLines, maxWidthPx) {
         when {
             title == null -> null
             badge == null -> BadgedTitle(AnnotatedString(title), emptyList(), emptyMap())
             else -> {
                 val content = pill(badge, pillEm(measurer, density, font, badge, BADGE_TEXT, BADGE_PAD), BADGE_TEXT, BADGE_HEIGHT, tint, font)
-                val text = buildAnnotatedString { append(title); append(" "); appendInlineContent(BADGE_ID, badge) }
-                BadgedTitle(text, listOf(AnnotatedString.Range(content.placeholder, title.length + 1, text.length)), mapOf(BADGE_ID to content))
+                fun badged(name: String): BadgedTitle {
+                    val text = buildAnnotatedString { append(name); append(" "); appendInlineContent(BADGE_ID, badge) }
+                    return BadgedTitle(text, listOf(AnnotatedString.Range(content.placeholder, name.length + 1, text.length)), mapOf(BADGE_ID to content))
+                }
+                val constraints = Constraints(maxWidth = maxWidthPx.coerceAtLeast(0))
+                fun fits(b: BadgedTitle) =
+                    !measurer.measure(b.text, style, TextOverflow.Clip, maxLines = maxLines, placeholders = b.placeholders, constraints = constraints).hasVisualOverflow
+                val whole = badged(title)
+                if (maxWidthPx <= 0 || fits(whole)) whole
+                else {
+                    // The longest start of the name that fits with an ellipsis and the pill.
+                    var lo = 0
+                    var hi = title.length - 1
+                    while (lo < hi) {
+                        val mid = (lo + hi + 1) / 2
+                        if (fits(badged(title.take(mid).trimEnd() + "\u2026"))) lo = mid else hi = mid - 1
+                    }
+                    badged(title.take(lo).trimEnd() + "\u2026")
+                }
             }
         }
     }

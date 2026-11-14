@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineBreak
@@ -218,7 +219,8 @@ internal fun StackCaption(
         verticalArrangement = Arrangement.spacedBy(STACK_CAPTION_GAP),
         horizontalAlignment = if (end) Alignment.End else Alignment.Start,
     ) {
-        val badged = rememberBadgedTitle(title, badge, colors.accent) ?: return@Column
+        val widthPx = with(LocalDensity.current) { width.dp.roundToPx() }
+        val badged = rememberBadgedTitle(title, badge, colors.accent, nameStyle, 3, widthPx)!!   // [title] is not null here
         // the selected game's name in the accent
         Text(badged.text, color = colors.accent, maxLines = 3, overflow = TextOverflow.Ellipsis, style = nameStyle, inlineContent = badged.inlineContent)
         // The centred block may grow: "Next: <name>" may take its two lines whatever the body's room.

@@ -43,7 +43,7 @@ class RomMover(private val source: RomsSource, private val home: ContentRef) {
             for (game in system.games) {
                 if (game.source != extraId) continue
                 val dir = ContentRef(game.folder)
-                items += MoveItem(dir, listOf(game.file) + DiscSheet.loadedNames(source, dir, game.file) + MsuSets.loadedNames(source, dir, game.file), target)
+                items += MoveItem(dir, listOf(game.file) + DiscSheet.loadedNames(source, dir, game.file) + MsuSets.loadedNames(source, dir, game.file, game.badge), target)
             }
         }
         return items
@@ -65,7 +65,7 @@ class RomMover(private val source: RomsSource, private val home: ContentRef) {
                 val all = source.listChildren(f.folder).filter { !it.isDirectory }.map { it.name }
                 items += MoveItem(f.folder, all, target, subdir = f.relativeDir.substringAfterLast('/'), fromParent = f.lookupFolder, relativeDir = f.relativeDir)
             } else {
-                items += MoveItem(f.folder, listOf(f.entry.name) + DiscSheet.loadedNames(source, f.folder, f.entry.name) + MsuSets.loadedNames(source, f.folder, f.entry.name), target, relativeDir = f.relativeDir)
+                items += MoveItem(f.folder, listOf(f.entry.name) + DiscSheet.loadedNames(source, f.folder, f.entry.name) + MsuSets.loadedNames(source, f.folder, f.entry.name, f.badge), target, relativeDir = f.relativeDir)
             }
         }
         return items

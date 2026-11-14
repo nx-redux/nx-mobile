@@ -976,7 +976,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
 
     /** The cue of [cfg]'s MSU-MD set, under the name it was handed to the core by; null when the game is none. */
     private fun msuMdSheet(cfg: LaunchConfig): String? =
-        if (CoreRegistry.consoleOf(cfg.tag)?.id != "md") null else MsuSets.mdSheet(cfg.romFileName, cfg.companions.map { it.first })
+        if (CoreRegistry.consoleOf(cfg.tag)?.id != "md") null else MsuSets.Folder(cfg.companions.map { it.first }).mdSheet(cfg.romFileName)
 
     private suspend fun attachView(cfg: LaunchConfig, prepared: PreparedContent, data: GLRetroViewData) {
         with(host) {

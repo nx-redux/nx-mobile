@@ -74,7 +74,7 @@ class FolderMerge(private val source: RomsSource, private val home: ContentRef) 
                     } ?: continue
                 } else {
                     if ('/' in g.dir.removePrefix(prefix).trimStart('/')) continue
-                    MoveItem(from, listOf(g.file) + DiscSheet.loadedNames(source, from, g.file) + MsuSets.loadedNames(source, from, g.file), split.main).also { items += it }
+                    MoveItem(from, listOf(g.file) + DiscSheet.loadedNames(source, from, g.file) + MsuSets.loadedNames(source, from, g.file, g.badge), split.main).also { items += it }
                 }
                 paths.getOrPut(item) { ArrayList() } += line(other, disc, g.file) to line(split.main, disc, g.file)
             }

@@ -42,7 +42,7 @@ object AndroidSyncExtras {
             val folder = ContentRef(g.folder)
             val names = ArrayList<String>()
             (DiscSheet.companions(source, folder, g.file) as? CompanionLookup.Found)?.companions?.forEach { names += it.fileName }
-            names += MsuSets.loadedNames(source, folder, g.file)
+            names += MsuSets.loadedNames(source, folder, g.file, g.badge)
             val core = CoreRegistry.forTag(tag)
             if (core?.id == "fbneo" && CoreRegistry.loadsArchive(tag, g.file)) {
                 ArcadeCompanions.find(source, folder, g.file, ArcadeSetsAsset.get(context)).companions.forEach { names += it.fileName }

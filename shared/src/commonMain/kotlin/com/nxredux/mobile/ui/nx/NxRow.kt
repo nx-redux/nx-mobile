@@ -140,7 +140,7 @@ internal fun RowCaption(
     captionBadge: () -> String? = { null },   // a pill after the name (the game's badge, [com.nxredux.mobile.library.GameEntry.badge])
 ) {
     val title = captionTitle()
-    val badged = rememberBadgedTitle(title, captionBadge(), textColor)
+    val badged = rememberBadgedTitle(title, captionBadge(), textColor, nameStyle, nameLines, availPx)
     val infoRows = if (title != null) carouselCaptionRows(title, captionInfo(), gameList = stackRows) else emptyList()
     val allFitted = rememberFittedCaptionRows(infoRows, infoStyle, 12.dp, avail, spare.dp)
     val (nameH, rowHs) = rememberCaptionHeights(title, nameStyle, nameLines, allFitted, infoStyle, availPx, badged)

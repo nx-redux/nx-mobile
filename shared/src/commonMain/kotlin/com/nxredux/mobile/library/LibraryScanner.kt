@@ -309,19 +309,16 @@ class LibraryScanner(
             val hidden = DiscSheet.hiddenNamed(files, heads::sheetNames) + MsuSets.hiddenSheets(files)
             val discs = CoreRegistry.forTag(own)?.extensions?.let { "m3u" in it || "cue" in it || "gdi" in it } == true
             val msu = console?.id in MsuSets.CONSOLES
-            val fileNames = files.map { it.name }
+            val sets = if (msu) MsuSets.Folder(files.map { it.name }) else null
             for (c in children) {
                 if (Names.isHidden(c.name)) continue
                 if (c.isDirectory) {
-                    val game = (if (msu) msuFolder(reads, c, entry.ref, relativeDir, own, console) else null)
-                        ?: if (discs) discFolder(reads, c, entry.ref, relativeDir, own, console) else null
-                    game?.let { (t, f) -> byTag.getOrPut(t) { ArrayList() } += f }
+                    if (discs || msu) gameFolder(reads, c, entry.ref, relativeDir, own, console, discs, msu)?.let { (t, f) -> byTag.getOrPut(t) { ArrayList() } += f }
                     continue
                 }
                 if (c.name.lowercase() in hidden) continue
                 val fileTag = homeTag(c.name, sidecar[c.name], own, console) ?: continue
-                val kind = if (msu) MsuSets.kind(c.name, fileNames) else null
-                byTag.getOrPut(fileTag) { ArrayList() } += IndexedFile(c, entry.ref, Recents.HOME, relativeDir, badge = kind)
+                byTag.getOrPut(fileTag) { ArrayList() } += IndexedFile(c, entry.ref, Recents.HOME, relativeDir, badge = sets?.kind(c.name))
             }
         }
     }
@@ -346,30 +343,22 @@ class LibraryScanner(
     }
 
     /**
-     * NX Redux's disc folder: a subfolder `D/` of a system folder holding `D.m3u` (else `D.cue`, else `D.gdi`, any case;
-     * [DiscSheet.folderSheet]) is that one game. It is listed from `D/` (so the launch finds its discs and `D/systems.txt`
-     * holds its tag) with art and name from the system folder, keyed by `D`. Null when `D/` holds no such sheet or no tag
-     * of the console runs it.
+     * A game folder: a subfolder `D/` of a system folder that is one game. [msu]: an MSU pack, its only ROM with its set
+     * beside it ([MsuSets.folderRom]), checked first (a pack's cue would read as a disc folder's sheet); else, [discs]:
+     * NX Redux's disc folder, `D/` holding `D.m3u` (else `D.cue`, else `D.gdi`, any case; [DiscSheet.folderSheet]). It is
+     * listed from `D/` (so the launch finds its files and `D/systems.txt` holds its tag) with art and name from the
+     * system folder, keyed by `D`. Null when `D/` is neither, or no tag of the console runs it.
      */
-    private suspend fun discFolder(reads: ScanReads, dir: Entry, systemFolder: ContentRef, systemDir: String, ownTag: String, console: Console?): Pair<String, IndexedFile>? {
+    private suspend fun gameFolder(
+        reads: ScanReads, dir: Entry, systemFolder: ContentRef, systemDir: String, ownTag: String, console: Console?, discs: Boolean, msu: Boolean,
+    ): Pair<String, IndexedFile>? {
         val children = reads.list(dir.ref)
-        val sheet = DiscSheet.folderSheet(dir.name, children) ?: return null
+        val pack = if (msu) MsuSets.folderRom(children) else null
+        val file = pack ?: (if (discs) DiscSheet.folderSheet(dir.name, children) else null) ?: return null
         val dirPath = "$systemDir/${dir.name}"
-        val tag = homeTag(sheet.name, reads.sidecars.read(Recents.HOME, dirPath, children)[sheet.name], ownTag, console) ?: return null
-        return tag to IndexedFile(sheet, dir.ref, Recents.HOME, dirPath, lookupFolder = systemFolder, lookupDir = systemDir)
-    }
-
-    /**
-     * An MSU pack's folder: a subfolder `D/` of a system folder whose one ROM has its MSU-1 or MSU-MD files beside it
-     * ([MsuSets.folderRom]), listed from `D/` as a disc folder is: art and name from the system folder, keyed by `D`. Null
-     * when `D/` holds no such ROM or no tag of the console runs it.
-     */
-    private suspend fun msuFolder(reads: ScanReads, dir: Entry, systemFolder: ContentRef, systemDir: String, ownTag: String, console: Console?): Pair<String, IndexedFile>? {
-        val children = reads.list(dir.ref)
-        val rom = MsuSets.folderRom(children) ?: return null
-        val dirPath = "$systemDir/${dir.name}"
-        val tag = homeTag(rom.name, reads.sidecars.read(Recents.HOME, dirPath, children)[rom.name], ownTag, console) ?: return null
-        return tag to IndexedFile(rom, dir.ref, Recents.HOME, dirPath, lookupFolder = systemFolder, lookupDir = systemDir, badge = MsuSets.kind(rom.name, children.map { it.name }))
+        val tag = homeTag(file.name, reads.sidecars.read(Recents.HOME, dirPath, children)[file.name], ownTag, console) ?: return null
+        val badge = pack?.let { MsuSets.Folder(children.map { c -> c.name }).kind(it.name) }
+        return tag to IndexedFile(file, dir.ref, Recents.HOME, dirPath, lookupFolder = systemFolder, lookupDir = systemDir, badge = badge)
     }
 
     /** The arcade set tables for one scan: each resolved at most once, and only when a system that uses it is indexed. */
