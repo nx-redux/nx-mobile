@@ -1,8 +1,7 @@
 package com.nxredux.mobile.ui.nx
 
-import com.nxredux.mobile.ui.SETTINGS_ROWS_FADE_STEPS
 import com.nxredux.mobile.ui.LocalSettingsBlock
-import com.nxredux.mobile.ui.SETTINGS_ROWS_FADE_ROWS
+import com.nxredux.mobile.ui.SETTINGS_ROWS_FADE
 import com.nxredux.mobile.ui.settingsRowsFade
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -224,17 +223,18 @@ fun NxOptionsList(
         val viewportPx = if (constraints.hasBoundedHeight) constraints.maxHeight else Int.MAX_VALUE
         val spacers = remember(rows) { rows.map { it.spacer } }
         val geometry = remember(spacers, rowPx, gapPx, viewportPx) { NxOptionsGeometry.of(spacers, rowPx, gapPx, viewportPx) }
-        // Clear of the fade: a row, or in the Settings rows block its fade's rows ([SETTINGS_ROWS_FADE_ROWS]).
+        // Clear of the fade: a row.
         val block = LocalSettingsBlock.current != null
-        val fadeRows = if (block) SETTINGS_ROWS_FADE_ROWS else 1
-        val margin = if (scrollFade && viewportPx >= rowPx * (fadeRows * 2 + 1)) rowPx * fadeRows else 0
+        val margin = if (scrollFade && viewportPx >= rowPx * 3) rowPx else 0
         NxOptionsKeepSelectedInView(listState, selectedIndex, geometry, margin)
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().nxOptionsWholeRows(listState, geometry)
-                // The Settings rows block fades by row ([nxRowFade]); elsewhere the edges fade by pixel.
-                .then(if (!scrollFade) Modifier else if (block) Modifier.nxRowEdgeMask(listState) else Modifier.nxScrollFade(listState, height = rowDp / 2, strong = true)),
-            contentPadding = PaddingValues(bottom = with(density) { geometry.endPadPx.toDp() }),
+            // Elsewhere a resting list draws down to its last whole row; in the Settings rows block it fills its room, the
+            // next row peeking under the block's thin fade ([SETTINGS_ROWS_FADE]).
+            modifier = Modifier.fillMaxSize().then(if (block) Modifier else Modifier.nxOptionsWholeRows(listState, geometry))
+                .then(if (!scrollFade) Modifier else Modifier.nxScrollFade(listState, height = if (block) SETTINGS_ROWS_FADE else rowDp / 2, strong = true)),
+            // its end rest's pad, and in the Settings rows block its bottom inset ([com.nxredux.mobile.ui.LocalSettingsRowsBottom])
+            contentPadding = PaddingValues(bottom = with(density) { geometry.endPadPx.toDp() } + com.nxredux.mobile.ui.LocalSettingsRowsBottom.current),
             flingBehavior = rememberNxOptionsSnapFling(listState, geometry),
         ) {
             itemsIndexed(rows) { i, row ->
@@ -242,7 +242,7 @@ fun NxOptionsList(
                 val selected = i == selectedIndex
                 NxOptionsRow(
                     row, selected, rowDp, labelSize, valueSize, innerPad,
-                    Modifier.then(if (scrollFade && block) Modifier.nxRowFade(listState, i, SETTINGS_ROWS_FADE_STEPS) { !rows[it].spacer } else Modifier).combinedClickable(
+                    Modifier.combinedClickable(
                         onClick = { nxTap(i, selected, tapOpens(i), onSelect, onOpen) },
                         onLongClick = onLongPress?.let { lp -> { lp(i) } },
                     ).padding(horizontal = sidePad),

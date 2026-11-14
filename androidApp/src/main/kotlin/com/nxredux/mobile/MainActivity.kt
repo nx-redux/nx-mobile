@@ -500,7 +500,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
         AchievementsService.onNeedNotificationPermission = needNotificationPermission
         // A held direction's repeats are flagged: LEFT / RIGHT switch main menu tabs on a fresh press only. Text prompts
         // (context menu, RetroAchievements) take their buttons in AppState too: A confirms the draft, B cancels.
-        router = InputRouter(scope, onPress = { state.onButton(it) }, onRepeat = { state.onButton(it, repeat = true) })
+        // SELECT + START is MENU here (the context menu on a pad with no MENU button); alone each acts on its release.
+        router = InputRouter(scope, onPress = { state.onButton(it) }, onRepeat = { state.onButton(it, repeat = true) }, menuChord = true)
         // Same inset behaviour on every API level; App pads for the bars, only the modal pads for the IME.
         // Dark bar style: the app is always dark, so the bar icons stay light even when the system is in light mode.
         enableEdgeToEdge(

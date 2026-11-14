@@ -60,8 +60,10 @@ class StackLayoutTest {
     }
 
     @Test fun mainMenuSlotsNeverOverflowANarrowBody() {
-        assertEquals(232f, mainMenuStackGeometry(BackdropSlot.LOGO, 280f, 400f, portrait = false, gutter = 24f).slotW)   // 280 − 48
-        assertTrue(mainMenuStackGeometry(BackdropSlot.LOGO, 280f, 400f, portrait = true, gutter = 24f).slotW <= 280f - 48f)   // portrait: the 60% cap is narrower
+        // The pad's 60% width cap in either orientation (a short landscape body, a skin's touch screen, as portrait), narrower than the gutters'
+        val landscape = mainMenuStackGeometry(BackdropSlot.LOGO, 280f, 400f, portrait = false, gutter = 24f).slotW
+        assertTrue(landscape <= 280f - 48f)
+        assertEquals(mainMenuStackGeometry(BackdropSlot.LOGO, 280f, 400f, portrait = true, gutter = 24f).slotW, landscape)
         assertEquals(122f, mainMenuStackGeometry(BackdropSlot.TOOL, 154f, 400f, portrait = true, gutter = 16f).slotW)
     }
 

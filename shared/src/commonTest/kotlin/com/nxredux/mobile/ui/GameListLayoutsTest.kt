@@ -28,13 +28,14 @@ class GameListLayoutsTest {
         assertEquals(8, GameListLayouts.indexOf(MenuStyle.MINIMAL, MenuOrientation.VERTICAL, L))
     }
 
-    @Test fun dual_screen_offers_no_backdrop_and_no_vertical_carousel() {
-        assertEquals(listOf("List", "Grid", "Carousel", "Minimal"), GameListLayouts.choices(dual = true).map { it.label })
+    @Test fun dual_screen_offers_no_vertical_carousel_or_backdrop() {
+        assertEquals(listOf("List", "Grid", "Carousel", "Backdrop", "Minimal"), GameListLayouts.choices(dual = true).map { it.label })
         assertEquals(GameListLayouts.all, GameListLayouts.choices(dual = false))
-        // A saved Backdrop or vertical Carousel ticks the Carousel it is drawn as.
-        assertEquals(2, GameListLayouts.indexOf(MenuStyle.BACKDROP, MenuOrientation.VERTICAL, R, dual = true))
+        // A saved vertical Carousel or Backdrop ticks the horizontal one it is drawn as.
+        assertEquals(3, GameListLayouts.indexOf(MenuStyle.BACKDROP, MenuOrientation.VERTICAL, R, dual = true))
+        assertEquals(3, GameListLayouts.indexOf(MenuStyle.BACKDROP, MenuOrientation.HORIZONTAL, L, dual = true))
         assertEquals(2, GameListLayouts.indexOf(MenuStyle.CAROUSEL, MenuOrientation.VERTICAL, L, dual = true))
-        assertEquals(3, GameListLayouts.indexOf(MenuStyle.MINIMAL, MenuOrientation.HORIZONTAL, L, dual = true))
+        assertEquals(4, GameListLayouts.indexOf(MenuStyle.MINIMAL, MenuOrientation.HORIZONTAL, L, dual = true))
         assertEquals(5, GameListLayouts.indexOf(MenuStyle.BACKDROP, MenuOrientation.HORIZONTAL, L, dual = false))
     }
 }

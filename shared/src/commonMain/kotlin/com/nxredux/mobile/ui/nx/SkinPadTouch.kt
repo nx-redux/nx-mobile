@@ -64,16 +64,24 @@ class SkinPadTouch(
     private fun stickOf(finger: Long): String? = sticks.entries.firstOrNull { it.value.finger == finger }?.key
     private fun sendStick(stick: String, x: Float, y: Float) = if (stick == CSTICK) onCStick(x, y) else onStick(x, y)
 
+    /**
+     * A DS / 3DS touch screen under the bare pad (window px of the placement), or null: over it a control takes a touch
+     * only on itself (no slop round a rect or the d-pad, a stick within its ring), so a tap beside a button is the screen's.
+     */
+    var tightArea: com.nxredux.mobile.options.PxRect? = null
+
     /** Whether [x], [y] (window px of the placement) is on one of the skin's controls. */
     fun hits(x: Float, y: Float): Boolean = hitAt(x, y) != null
 
     private fun hitAt(x: Float, y: Float): Hit? {
         val p = placement ?: return null
+        val tight = tightArea?.let { x >= it.x && x <= it.x + it.width && y >= it.y && y <= it.y + it.height } == true
         // the sticks first, over a touch area a little larger than their rings: one wins a touch on the d-pad's edge (the
-        // nearest, if two reach)
-        p.controls.filter { it.spec.shape == ControlShape.STICK && hypot(x - it.x, y - it.y) <= it.spec.r * TouchSlop.STICK }
+        // nearest, if two reach); over the touch screen ([tightArea]) their rings alone
+        val reach = if (tight) 1f else TouchSlop.STICK
+        p.controls.filter { it.spec.shape == ControlShape.STICK && hypot(x - it.x, y - it.y) <= it.spec.r * reach }
             .minByOrNull { hypot(x - it.x, y - it.y) }?.let { return Stick(it) }
-        val slop = TouchSlop.RECT * p.k
+        val slop = if (tight) 0f else TouchSlop.RECT * p.k
         for (c in p.controls) {
             val hit = when (c.spec.shape) {
                 ControlShape.DPAD -> abs(x - c.x) <= c.spec.r + slop && abs(y - c.y) <= c.spec.r + slop

@@ -220,6 +220,34 @@ class FilePickerControllerTest {
         assertEquals(beta, h.selection.value.index)
     }
 
+    // The two actions sit side by side: LEFT / RIGHT move between them and leave them for the entries at either end;
+    // UP / DOWN take them as one line (UP to the entry above, DOWN wrapping to the top).
+    @Test fun the_side_by_side_actions_are_one_line_for_the_pad() = runTest {
+        val h = harness()
+        h.open(FilePickMode.Extra)
+        h.choose("Internal storage"); h.choose("Alpha")
+        val use = h.labels.indexOf("Use this folder")
+        val create = h.labels.indexOf("New folder")
+        val empty = h.labels.indexOf("Nothing here")
+        h.selection.value = h.selection.value.copy(index = empty)
+        h.press(NxButton.RIGHT)
+        assertEquals(use, h.selection.value.index)          // into the actions, on the first
+        h.press(NxButton.RIGHT)
+        assertEquals(create, h.selection.value.index)       // to the one beside it
+        h.press(NxButton.LEFT)
+        assertEquals(use, h.selection.value.index)          // and back
+        h.press(NxButton.LEFT)
+        assertEquals(empty, h.selection.value.index)        // past the first: back to the entry it left
+        h.press(NxButton.RIGHT); h.press(NxButton.RIGHT); h.press(NxButton.RIGHT)
+        assertEquals(empty, h.selection.value.index)        // past the last: back to the entries too
+        h.selection.value = h.selection.value.copy(index = create)
+        h.press(NxButton.UP)
+        assertEquals(empty, h.selection.value.index)        // UP from either action: the entry above them
+        h.selection.value = h.selection.value.copy(index = use)
+        h.press(NxButton.DOWN)
+        assertEquals(0, h.selection.value.index)            // DOWN from either action wraps to the top
+    }
+
     @Test fun an_empty_or_unreadable_folder_shows_nothing_here_above_the_action_rows() = runTest {
         val h = harness()
         h.open(FilePickMode.Extra)

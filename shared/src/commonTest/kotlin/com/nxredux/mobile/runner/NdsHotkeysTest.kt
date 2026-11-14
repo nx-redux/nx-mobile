@@ -10,13 +10,13 @@ import kotlin.test.assertTrue
 class NdsHotkeysTest {
     private fun NdsHotkeys.down(b: NxButton) = onButton(b, down = true)
     private fun NdsHotkeys.up(b: NxButton) = onButton(b, down = false)
-    private fun stylusOn() = NdsHotkeys().also { it.down(NxButton.L2); it.up(NxButton.L2) }
+    private fun stylusOn() = NdsHotkeys().also { it.down(NxButton.R2); it.up(NxButton.R2) }
     private fun near(expected: Float, actual: Float) = assertTrue(abs(expected - actual) < 0.001f, "expected $expected, got $actual")
 
-    @Test fun r2_swaps_and_never_reaches_the_core() {
+    @Test fun l2_swaps_and_never_reaches_the_core() {
         val h = NdsHotkeys()
-        assertEquals(NdsDecision(false, NdsAction.SwapScreens), h.down(NxButton.R2))
-        assertEquals(NdsDecision(false), h.up(NxButton.R2))
+        assertEquals(NdsDecision(false, NdsAction.SwapScreens), h.down(NxButton.L2))
+        assertEquals(NdsDecision(false), h.up(NxButton.L2))
     }
 
     @Test fun l3_and_select_l1_swap_as_on_the_3ds() {
@@ -68,13 +68,13 @@ class NdsHotkeysTest {
         assertFalse(s.pen.pressed)
     }
 
-    @Test fun l2_toggles_the_stylus_and_never_reaches_the_core() {
+    @Test fun r2_toggles_the_stylus_and_never_reaches_the_core() {
         val h = NdsHotkeys()
         assertFalse(h.stylus)                                                   // off at every launch
-        assertEquals(NdsDecision(false, NdsAction.Stylus(true)), h.down(NxButton.L2))
-        assertEquals(NdsDecision(false), h.up(NxButton.L2))
+        assertEquals(NdsDecision(false, NdsAction.Stylus(true)), h.down(NxButton.R2))
+        assertEquals(NdsDecision(false), h.up(NxButton.R2))
         assertTrue(h.stylus)
-        assertEquals(NdsDecision(false, NdsAction.Stylus(false)), h.down(NxButton.L2))
+        assertEquals(NdsDecision(false, NdsAction.Stylus(false)), h.down(NxButton.R2))
         assertFalse(h.stylus)
     }
 
@@ -215,7 +215,7 @@ class NdsHotkeysTest {
     @Test fun turning_the_stylus_on_ignores_a_stick_already_held() {
         val h = NdsHotkeys()
         h.onStick(1f, 0f)                                                       // held while stylus mode was off
-        h.down(NxButton.L2)
+        h.down(NxButton.R2)
         assertFalse(h.tick(100))                                                // the pen waits for a new stick reading
         assertTrue(h.onStick(1f, 0f))
         assertTrue(h.tick(100))
@@ -231,7 +231,7 @@ class NdsHotkeysTest {
     @Test fun turning_the_stylus_off_releases_the_pen() {
         val h = stylusOn()
         h.down(NxButton.A); h.down(NxButton.RIGHT)
-        h.down(NxButton.L2)
+        h.down(NxButton.R2)
         assertFalse(h.stylus)
         assertFalse(h.pen.pressed)
         assertFalse(h.tick(100))
@@ -273,9 +273,9 @@ class NdsHotkeysTest {
         assertEquals(1, h.joystickDirection(hat = 1f, stick = 0f))
     }
 
-    @Test fun l2_toggles_the_stylus() {
+    @Test fun r2_toggles_the_stylus() {
         val h = NdsHotkeys()
-        assertEquals(NdsDecision(false, NdsAction.Stylus(true)), h.onButton(NxButton.L2, down = true))
+        assertEquals(NdsDecision(false, NdsAction.Stylus(true)), h.onButton(NxButton.R2, down = true))
         assertTrue(h.stylus)
     }
 }

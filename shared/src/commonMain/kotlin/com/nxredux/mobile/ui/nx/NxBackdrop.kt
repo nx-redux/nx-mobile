@@ -453,7 +453,7 @@ fun NxBackdrop(
         // reserve centred as one block; a main menu row alone. Sized without a hidden title's [titleRoom], centred in the
         // whole box ([backdropRowPlace]).
         val captioned = games != null   // the main menu's rows carry no caption block
-        val (g, rowH, f, place) = backdropRowPlace(slot, captioned, maxHeight.value, titleRoom.value, captionH, portraitW = maxWidth.value.takeIf { portrait }, bodyW = maxWidth.value)
+        val (g, rowH, f, place) = backdropRowPlace(slot, captioned, maxHeight.value, titleRoom.value, captionH, portraitW = maxWidth.value, bodyW = maxWidth.value)
         val count = games?.size ?: tiles.size
         if (g.itemW <= 1f || g.itemH <= 1f || count == 0) return@BoxWithConstraints
         val top = place.rowTop + centreShift.value

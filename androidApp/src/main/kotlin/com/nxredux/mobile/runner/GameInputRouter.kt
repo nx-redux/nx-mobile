@@ -295,7 +295,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
      */
     private val coreHasStick: Boolean get() = gameCoreId in STICK_CORES   // netplay too: sticks are synced
 
-    /** The DS's stylus toggle, as L2's. */
+    /** The DS's stylus toggle, as R2's. */
     fun toggleNdsStylus() {
         applyNdsAction(ndsHotkeys.toggleStylus())
         syncPen()
@@ -807,7 +807,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         if (btn == NxButton.HOME) { if (down && isWii) pressWiiHome(); return }
         // SELECT + START held together also opens it (the on-screen pad is P1, port 0).
         if (inputs.menuChord(0, btn, down)) { toggleMenu(); return }
-        if (isNds && !routeNds(btn, down)) return   // L3, R2, L2, the SELECT chords and the stylus inputs stay out of the core
+        if (isNds && !routeNds(btn, down)) return   // L3, L2, R2, the SELECT chords and the stylus inputs stay out of the core
         if (isN3ds && !routeN3ds(btn, down)) return  // SELECT (held back for chords), its chords and the stylus inputs: routeN3ds sends what they become
         val view = retroView ?: return
         if (gcPad && (btn == NxButton.L2 || btn == NxButton.R2)) { gcTrigger(btn, down); return }

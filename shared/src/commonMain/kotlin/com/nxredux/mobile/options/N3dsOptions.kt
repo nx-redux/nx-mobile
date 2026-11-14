@@ -127,11 +127,12 @@ object N3dsOptions {
     }
 
     /**
-     * The layout a screen starts with before the player picks one: Large screen on a Fold-shaped screen or tablet in
-     * landscape, Stacked in portrait (the controller row too), Single screen on a regular phone in landscape.
+     * The layout a screen starts with before the player picks one: Large screen in portrait with the overlay pad (as the
+     * DS), Stacked in portrait with a controller ([controllerMode]); Large screen on a Fold-shaped screen or tablet in
+     * landscape, Single screen on a regular phone in landscape.
      */
-    fun defaultLayout(screen: ScreenClass, landscape: Boolean): String = when {
-        !landscape -> "stacked"
+    fun defaultLayout(screen: ScreenClass, landscape: Boolean, controllerMode: Boolean = false): String = when {
+        !landscape -> if (controllerMode) "stacked" else "large"
         screen.isFoldShaped || screen.isTablet -> "large"
         else -> "single_screen"
     }
@@ -167,7 +168,7 @@ object N3dsOptions {
         return listOf(
             layoutRow(LAYOUT_PORTRAIT, "Layout (portrait)", defaultLayout(known, false), "How the two screens share a portrait screen.\n$LAYOUT_INFO_LIST", fold),
             layoutRow(
-                LAYOUT_PORTRAIT_CONTROLLER, "Layout (portrait, controller)", defaultLayout(known, false),
+                LAYOUT_PORTRAIT_CONTROLLER, "Layout (portrait, controller)", defaultLayout(known, false, controllerMode = true),
                 "The portrait layout while a controller that is not a clip-on\nis connected and the pad is hidden.\nSELECT + Left/Right cycles it then.", fold,
                 brief = "Used while a controller (not a clip-on) hides the pad",
             ),
@@ -204,7 +205,7 @@ object N3dsOptions {
 
     /** The app's layout for the row in use on [screen]: the pick (old keys read too), else the screen's [defaultLayout]. */
     fun appLayoutFor(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): String =
-        layoutValue(values, layoutKey(landscape, controllerMode)) ?: defaultLayout(screen, landscape)
+        layoutValue(values, layoutKey(landscape, controllerMode)) ?: defaultLayout(screen, landscape, controllerMode)
 
     /**
      * The core's [LAYOUT] value for the row in use: Large screen and Stacked are its top over bottom ("default"). Under a pad
@@ -218,15 +219,23 @@ object N3dsOptions {
 
     /**
      * How many times smaller the core draws the touch screen in its top over bottom: for Large screen half, or in portrait
-     * with the picture's [space] known the [fillProportion] of it ([proportionText]); else alike. Under a pad skin ([tabletop])
-     * the screens are equal ("1") whatever the player saved.
+     * with the picture's [space] known (Screen Scaling Auto) the [fillProportion] of it ([proportionText]); else alike.
+     * Stacked in portrait with the space known fills it as well: the top screen
+     * takes the full width, the touch screen the same size when the height holds it, else the height left.
+     * Under a pad skin ([tabletop]) the screens are equal ("1") whatever the player saved.
      */
     fun stackedSmallProportion(
         values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass, tabletop: Boolean, space: PxRect? = null,
-    ): String = when {
-        tabletop || appLayoutFor(values, landscape, controllerMode, screen) != "large" -> "1"
-        landscape || space == null -> "2"
-        else -> proportionText(fillProportion(space.width, space.height))
+    ): String {
+        if (tabletop) return "1"
+        return when (appLayoutFor(values, landscape, controllerMode, screen)) {
+            "large" -> if (landscape || space == null) "2" else proportionText(fillProportion(space.width, space.height))
+            // Stacked too short for the full-width top over even a half-size touch screen: two equal screens fitted to
+            // the height, as Stacked always was, never Large's half size
+            "stacked" -> if (landscape || space == null || !fullWidthFits(space.width, space.height)) "1"
+                else proportionText(fillProportion(space.width, space.height))
+            else -> "1"
+        }
     }
 
     /**
@@ -242,6 +251,10 @@ object N3dsOptions {
         // Up to the next hundredth: the bottom never comes out bigger than the height left (a hair under 1 tolerated).
         return ceil((top / bottom).coerceIn(1f, 2f) * 100f - 0.001f) / 100f
     }
+
+    /** Whether a [spaceW] x [spaceH] space holds the full-width top screen over a half-size touch screen ([fillProportion]'s fill). */
+    internal fun fullWidthFits(spaceW: Float, spaceH: Float): Boolean =
+        spaceW > 0f && spaceH > 0f && SCREEN_HEIGHT * (spaceW / TOP_WIDTH) * 1.5f <= spaceH
 
     /** [proportion] as the core option's text: two decimals, a whole one without ("1", "2"). */
     fun proportionText(proportion: Float): String {

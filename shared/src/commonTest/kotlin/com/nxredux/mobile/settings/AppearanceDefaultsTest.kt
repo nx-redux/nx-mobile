@@ -12,7 +12,9 @@ class AppearanceDefaultsTest {
         assertEquals(MenuStyle.GRID, MenuStyles.defaultStyleOf(MenuCategory.TOOLS))
     }
 
-    @Test fun gameListsDefaultToCarousel() { assertEquals(MenuStyle.CAROUSEL, MenuStyles.DEFAULT_GAME_LIST_STYLE) }
+    @Test fun gameListsDefaultToBackdrop() { assertEquals(MenuStyle.BACKDROP, MenuStyles.DEFAULT_GAME_LIST_STYLE) }
+
+    @Test fun gameInfoDefaultsToAchievements() { assertEquals(true, MenuStyles.DEFAULT_INFO_ACHIEVEMENTS) }
 
     @Test fun everyOrientationDefaultsToHorizontal() {
         assertEquals(MenuOrientation.HORIZONTAL, MenuStyles.DEFAULT_ORIENTATION)

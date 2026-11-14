@@ -75,7 +75,7 @@ import org.jetbrains.compose.resources.painterResource
 
 /**
  * The game panel, in the in-game menu's look: the header (art or console logo, title, play time, achievement count,
- * clock and battery), the tab words with the underline ([MenuTabRow]), then the current tab: Shortcuts as hollow pill
+ * clock and battery; on a short panel one line, [GamePanelCompactHeader]), the tab words with the underline ([MenuTabRow]), then the current tab: Shortcuts as hollow pill
  * buttons in a grid (4 columns, 2 or 1 where a label would not fit, [gamePanelColumns]; disabled ones dimmed and inert), Achievements as badge rows, Cheats as
  * rows with a switch, Players as the Players page's rows. The controller's [GamePanelState.focus] sits on the accent pill (the tab row's capsule on
  * Tabs). The Game pill (DS/3DS panel-up) sits bottom-right. The dual-screen panel and the in-game menu share it; the
@@ -98,9 +98,11 @@ fun GamePanel(
     // takes the panel's place.
     val inset = nxPageInset()
     val page = if (menuInset) Modifier.padding(start = inset.pillStart, end = inset.pillEnd) else Modifier
-    Box(modifier.fillMaxSize().then(if (opaque) Modifier.background(colors.background) else Modifier)) {
+    BoxWithConstraints(modifier.fillMaxSize().then(if (opaque) Modifier.background(colors.background) else Modifier)) {
+        // A short panel (a pad skin's small touch screen) keeps its room for the tabs: the header one line.
+        val compact = maxHeight < GP_COMPACT_BELOW
         Column(Modifier.fillMaxSize().then(page)) {
-            if (showHeader) GamePanelHeaderBar(state.header)
+            if (showHeader) { if (compact) GamePanelCompactHeader(state.header) else GamePanelHeaderBar(state.header) }
             if (showTabs) MenuTabRow(
                 tabs.map { it.label }, tabs.indexOf(tab).coerceAtLeast(0), onTab = { onEvent(GamePanelEvent.SelectTab(tabs[it])) },
                 // The row pads by the page inset itself, which the column already has: its words where the menu's start.
@@ -117,7 +119,7 @@ fun GamePanel(
                 }
             }
         }
-        if (state.showGamePill) GamePillCorner { onEvent(GamePanelEvent.ShowGame) }
+        if (state.showGamePill) GamePillCorner(corner = state.gamePillCorner) { onEvent(GamePanelEvent.ShowGame) }
     }
 }
 
@@ -153,6 +155,24 @@ fun GamePanelHeaderBar(h: GamePanelHeader) {
             Text(h.clockText, color = colors.listText, fontFamily = font, fontSize = GP_SMALL_SIZE, maxLines = 1)
             h.batteryPercent?.let { Text("$it%", color = colors.hint, fontFamily = font, fontSize = GP_SMALL_SIZE, maxLines = 1) }
         }
+    }
+}
+
+/**
+ * The panel's header on a short panel ([GP_COMPACT_BELOW]): one line, the title on the left (ellipsized), the clock and
+ * battery on the right; no art, play time or achievement line.
+ */
+@Composable
+internal fun GamePanelCompactHeader(h: GamePanelHeader) {
+    val colors = LocalNxColors.current
+    val font = LocalNxFont.current
+    Row(
+        Modifier.fillMaxWidth().padding(start = GP_GUTTER, end = GP_GUTTER, top = 10.dp, bottom = GP_COMPACT_BOTTOM),
+        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(h.title, Modifier.weight(1f), color = colors.listText, fontFamily = font, fontSize = GP_TITLE_SIZE, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val status = listOfNotNull(h.clockText.takeIf { it.isNotEmpty() }, h.batteryPercent?.let { "$it%" }).joinToString("  ·  ")
+        if (status.isNotEmpty()) Text(status, color = colors.hint, fontFamily = font, fontSize = GP_SMALL_SIZE, maxLines = 1)
     }
 }
 
@@ -623,6 +643,10 @@ private val GP_LIST_BOTTOM = 76.dp   // the last row clears the Game pill (52 dp
 private val GP_LIST_END = 8.dp       // without the pill
 private val GP_ART = 64.dp
 private val GP_HEADER_BOTTOM = 16.dp   // between the header and the tabs (and the menu's list beside them)
+/** A panel shorter than this shows the one-line header ([GamePanelCompactHeader]): a pad skin's small touch screen. */
+internal val GP_COMPACT_BELOW = 320.dp
+/** Between the one-line header and the tabs. */
+private val GP_COMPACT_BOTTOM = 6.dp
 private val GP_BADGE = 32.dp
 private val GP_ROW_HEIGHT = 44.dp
 private val GP_TILE_HEIGHT = 72.dp

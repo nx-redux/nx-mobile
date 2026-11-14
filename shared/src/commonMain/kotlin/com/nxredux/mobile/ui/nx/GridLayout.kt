@@ -188,6 +188,19 @@ internal fun gridFixedTools(bodyW: Float, bodyH: Float, insetStart: Float, inset
     return GridGeometry(tileW = tileW, tileH = tileH, gap = TOOL_APPS_GAP, gutter = insetStart, columns = columns, rows = rows, gutterEnd = insetEnd)
 }
 
+/**
+ * The Tools grid's columns for [count] tools where [maxColumns] x [rowsFit] fit ([gridFixedTools]): as many rows as fit,
+ * the fewest columns that hold every tool, never under a square (two tools a row, not a column), so the block is as
+ * even as it can be and centred (7 on 6 x 3: 3, 3, 1). More tools than fit: every column, the rest scrolls.
+ */
+internal fun toolsColumns(count: Int, maxColumns: Int, rowsFit: Int): Int {
+    if (count <= 0 || maxColumns <= 0) return max(1, maxColumns)
+    if (count > maxColumns * max(1, rowsFit)) return maxColumns
+    val byRows = (count + rowsFit - 1) / max(1, rowsFit)
+    val square = kotlin.math.ceil(kotlin.math.sqrt(count.toDouble())).toInt()
+    return max(byRows, square).coerceIn(1, maxColumns)
+}
+
 /** A skin's glass at least this wide for its height counts as held sideways ([GRID_MIN_COLUMNS_SIDEWAYS]); narrower, near square. */
 internal const val GRID_SKIN_SIDEWAYS_ASPECT = 1.3f
 

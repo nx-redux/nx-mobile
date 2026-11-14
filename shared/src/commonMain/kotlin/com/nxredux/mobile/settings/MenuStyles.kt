@@ -12,7 +12,7 @@ object MenuStyles {
 
     // Layouts' defaults, NX Redux's (menustyle_model.h, config.h CFG_DEFAULT_MENUSTYLE*): a fresh install's, and what
     // Reset to defaults puts back. Every orientation is Horizontal, the vertical alignment [VerticalListAlignment.DEFAULT].
-    val DEFAULT_GAME_LIST_STYLE = MenuStyle.CAROUSEL
+    val DEFAULT_GAME_LIST_STYLE = MenuStyle.BACKDROP
     val DEFAULT_ORIENTATION = MenuOrientation.HORIZONTAL
     /** Layouts → each tab's Show/Hide row: Show. */
     const val DEFAULT_TAB_SHOWN = true
@@ -22,6 +22,8 @@ object MenuStyles {
     const val DEFAULT_BUTTON_HINTS = true
     /** Layouts → Extra info: Show. */
     const val DEFAULT_EXTRA_INFO = true
+    /** Layouts → Game info: a game's achievements under its play time (where it has some), else its genre and release. */
+    const val DEFAULT_INFO_ACHIEVEMENTS = true
     /** Layouts → Home stats: Show. */
     const val DEFAULT_HOME_STATS = true
 
@@ -62,17 +64,18 @@ object MenuStyles {
         if (hasOrientation(style)) stored else MenuOrientation.HORIZONTAL
 
     /**
-     * The game list layout drawn while the menu is on two screens: Backdrop and a vertical Carousel give their room to the
-     * game's picture and details, which the top screen already shows, so both are a horizontal Carousel there. The stored
-     * [style] and [orientation] are kept for a single screen.
+     * The game list layout drawn while the menu is on two screens: a vertical Carousel or Backdrop gives its side column
+     * to the game's details, which the top screen already shows, so it runs across there (a Backdrop stays a Backdrop).
+     * The stored [style] and [orientation] are kept for a single screen.
      */
     fun dualGameListLayout(style: MenuStyle, orientation: MenuOrientation): Pair<MenuStyle, MenuOrientation> = when (style) {
-        MenuStyle.BACKDROP, MenuStyle.CAROUSEL -> MenuStyle.CAROUSEL to MenuOrientation.HORIZONTAL
+        MenuStyle.BACKDROP, MenuStyle.CAROUSEL -> style to MenuOrientation.HORIZONTAL
         else -> style to orientation
     }
 
-    /** The game list styles Layouts offers: [GAME_LIST_STYLES], without Backdrop on two screens ([dualGameListLayout]). */
-    fun gameListStyles(dual: Boolean): List<MenuStyle> = if (dual) GAME_LIST_STYLES - MenuStyle.BACKDROP else GAME_LIST_STYLES
+    /** The game list styles Layouts offers: [GAME_LIST_STYLES], on two screens too (only the vertical forms go: [dualGameListLayout]). */
+    @Suppress("UNUSED_PARAMETER")
+    fun gameListStyles(dual: Boolean): List<MenuStyle> = GAME_LIST_STYLES
 
     /** The other orientation: LEFT, RIGHT and A all flip, there being two. */
     fun flip(o: MenuOrientation): MenuOrientation =

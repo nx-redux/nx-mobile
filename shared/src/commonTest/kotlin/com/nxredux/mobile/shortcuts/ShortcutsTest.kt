@@ -74,7 +74,7 @@ class ShortcutsTest {
 
     @Test fun hotkeyBlocks() {
         val e = eff(ShortcutSet(mapOf(ShortcutAction.TOGGLE_FF to ShortcutBinding(null, KeyCodes.BUTTON_R2)), emptyMap()), tag = "NDS")
-        assertEquals("R2 swaps the DS screens", e.blocked[ShortcutAction.TOGGLE_FF]?.note)
+        assertEquals("R2 is the stylus", e.blocked[ShortcutAction.TOGGLE_FF]?.note)
         assertFalse(ShortcutAction.TOGGLE_FF in e.bindings)
         // the same base fires elsewhere
         assertTrue(ShortcutAction.TOGGLE_FF in eff(ShortcutSet(mapOf(ShortcutAction.TOGGLE_FF to ShortcutBinding(null, KeyCodes.BUTTON_R2)), emptyMap())).bindings)

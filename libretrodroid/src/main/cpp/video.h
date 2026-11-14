@@ -210,6 +210,10 @@ private:
     // The nearest default shader for unshaded regions, built on first use.
     std::optional<ShaderChainEntry> plainShader;
     const ShaderChainEntry& ensurePlainShader();
+    // The sharp bilinear one for an unshaded region upscaled while the view's shader is Sharp (the app's fill at a
+    // fractional scale: a DS touch screen beside a sharp top screen), so its pixels come out even too.
+    std::optional<ShaderChainEntry> plainSharpShader;
+    const ShaderChainEntry& ensurePlainSharpShader();
 
     unsigned coreContentWidth = 0;
     unsigned coreContentHeight = 0;

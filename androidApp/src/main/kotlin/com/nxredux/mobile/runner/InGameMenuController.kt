@@ -250,6 +250,8 @@ internal class InGameMenuController(
     private var menuContent: (@Composable (Boolean, DpSize?) -> Unit)? = null
     // The picture's dim while the menu is in the dual-screen panel ([placeMenu]).
     private var menuDim: (@Composable () -> Unit)? = null
+    /** [menuDim] over the skin's top screen while the menu sits in its bottom one ([PadLayoutController.menuBottomGlass]); else null. */
+    private var menuCoverView: android.view.View? = null
     // Where the open menu was last put; null while closed.
     private var menuPlacement: MenuPlacement? = null
     var menuModel: InGameMenuModel? = null
@@ -450,14 +452,18 @@ internal class InGameMenuController(
     fun placeMenu() {
         val content = menuContent ?: return
         if (!menuOpen) return
-        val inPanel = dual.menuHost() == MenuHost.PANEL
+        // In the panel's place: beside the picture on another display, or in the skin's bottom screen (the fold board's
+        // panel glass, a DS / 3DS touch screen; the picture on the top screen): the menu alone there, no tabs, as on a dual screen.
+        val inPanel = dual.menuHost() == MenuHost.PANEL || padLayout.menuBottomGlass() != null
         val second = dual.menuOnSecond()
-        val placement = MenuPlacement(second, inPanel, dual.presentation)
+        val placement = MenuPlacement(second, inPanel, dual.presentation, padLayout.menuBottomGlass()?.rect, padLayout.menuTopGlass()?.rect)
         if (menuPlacement == placement) return
         menuModel?.takeIf { it.inPanel != inPanel }?.let { it.setInPanel(inPanel); menuState.value = it.state }
         val root = findViewById<FrameLayout>(R.id.root)
         menuView?.let { root.removeView(it) }
         menuView = null
+        menuCoverView?.let { root.removeView(it) }
+        menuCoverView = null
         padLayout.skinUnderMenu = false
         if (second) {
             // The second display's window is its own size (and scaled density): the menu's window is what it gets there.
@@ -466,11 +472,22 @@ internal class InGameMenuController(
             if (inPanel) menuDim?.let { addMenuView(root, it) }
         } else {
             dual.showMenuOnSecond(menuDim.takeIf { inPanel })
+            // in the skin's panel glass: the picture on the top screen paused under its cover, as a dual screen's picture display
+            if (inPanel && padLayout.menuBottomGlass() != null) menuDim?.let { addPictureCover(root, it) }
             addMenuView(root) { content(false, null) }
         }
         menuPlacement = placement
         dual.syncMainPanelHost()
         padLayout.updatePadVisibility()
+    }
+
+    /** [cover] ([menuDim]) over the skin's top screen ([PadLayoutController.menuTopGlass]), the paused game there; nothing without one. */
+    private fun addPictureCover(root: FrameLayout, cover: @Composable () -> Unit) {
+        val g = padLayout.menuTopGlass()?.rect ?: return
+        val view = ComposeView(activity).apply { setContent { cover() } }
+        menuCoverView = view
+        val x = g.x.roundToInt(); val y = g.y.roundToInt()
+        root.addView(view, FrameLayout.LayoutParams((g.x + g.width).roundToInt() - x, (g.y + g.height).roundToInt() - y, Gravity.TOP or Gravity.START).apply { leftMargin = x; topMargin = y })
     }
 
     /** [content] as [menuView] over the game here, where the menu would sit (in the skin: its frame round it). */
@@ -515,11 +532,8 @@ internal class InGameMenuController(
      */
     private fun skinGlass(): PxRect? = padLayout.skinMenuRoom()
 
-    /** The glass whose corners the menu's room takes: the biggest of the skin's (a DS's top screen). */
-    private fun menuGlass(): com.nxredux.mobile.skin.PlacedGlass? {
-        if (!padLayout.skinShown) return null
-        return padLayout.skinPlacement()?.glasses?.maxByOrNull { it.rect.width * it.rect.height }
-    }
+    /** The glass whose corners the menu's room takes ([PadLayoutController.skinMenuGlass]). */
+    private fun menuGlass(): com.nxredux.mobile.skin.PlacedGlass? = padLayout.skinMenuGlass()
 
     fun closeMenu() {
         if (!menuOpen || netplayQuitOnly) return   // an ended Cable Link session: only Quit leaves
@@ -530,6 +544,8 @@ internal class InGameMenuController(
         menuState.value?.panelTab?.takeIf { dual.mainPanelShown() && it != dual.dualPanelTab }?.let { dual.dualPanelTab = it; dual.refreshDualPanel() }
         menuView?.let { findViewById<FrameLayout>(R.id.root).removeView(it) }
         menuView = null
+        menuCoverView?.let { findViewById<FrameLayout>(R.id.root).removeView(it) }
+        menuCoverView = null
         dual.showMenuOnSecond(null)
         menuContent = null
         menuDim = null

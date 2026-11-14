@@ -248,10 +248,9 @@ object SkinSolver {
                 // the piece's strip: an even share of its glass's width each (the whole piece's without one), under the
                 // grown glass when the piece grows (its border, the strip's band, keeps its size)
                 val sc = p.scale
-                // across the frame's inside (its border off each side): the glass's own width, or more where the frame is
-                // wider than its screen (the DS's large bottom screen, between black bars)
-                val inner = p.glass?.let { maxOf(it.w, p.w - 2 * 20) } ?: p.w
-                val sx = px + (p.glass?.let { (p.w - inner) / 2f } ?: 0f) * sc; val sw = (inner + gx) * sc
+                // across the frame's inside ([pieceStripSpan])
+                val (inset, inner) = pieceStripSpan(p)
+                val sx = px + inset * sc; val sw = (inner + gx) * sc
                 val share = sw / st.labels.size
                 st.labels.forEachIndexed { i, l ->
                     val cx = sx + share * (i + 0.5f)
@@ -433,3 +432,17 @@ object SkinSolver {
         }
     }
 }
+
+/**
+ * A piece's touch shortcut strip across its frame's inside, piece px before any growth: its start from the piece's left
+ * and its width. The glass's own width, or more where the frame is wider than its screen (the DS's large bottom screen,
+ * between black bars), the frame's border ([PIECE_FRAME_BORDER]) off each side; a piece with no glass, all of it.
+ * [SkinSolver] places the strip's buttons by it, and [SkinGroups] the strip group's reference.
+ */
+internal fun pieceStripSpan(p: PieceSpec): Pair<Float, Float> {
+    val inner = p.glass?.let { maxOf(it.w, p.w - 2 * PIECE_FRAME_BORDER) } ?: p.w
+    return (p.glass?.let { (p.w - inner) / 2f } ?: 0f) to inner.toFloat()
+}
+
+/** A glass piece's frame border, piece px ([pieceStripSpan]). */
+internal const val PIECE_FRAME_BORDER = 20

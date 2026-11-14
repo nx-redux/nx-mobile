@@ -87,12 +87,12 @@ internal const val PAD_W_K = 2.8f
 internal const val PAD_H_K = 1.8f
 
 /**
- * Portrait: the selected console (its logo slot, its pad and the row's gaps, all together) is shrunk just
- * enough that its pad is at most this share of the body's width.
+ * The selected console (its logo slot, its pad and the row's gaps, all together) is shrunk just enough that its
+ * pad is at most this share of the body's width, in any orientation (a wide body never needs it).
  */
 internal const val CONSOLE_PAD_MAX_SHARE = 0.6f
 
-/** The factor ([CONSOLE_PAD_MAX_SHARE]) a logo slot [itemH] tall shrinks by on a portrait body [bodyW] wide; never grown. */
+/** The factor ([CONSOLE_PAD_MAX_SHARE]) a logo slot [itemH] tall shrinks by on a body [bodyW] wide; never grown. */
 internal fun consolePortraitFit(itemH: Float, bodyW: Float): Float =
     if (itemH <= 0f) 1f else min(1f, CONSOLE_PAD_MAX_SHARE * bodyW / (PAD_W_K * itemH))
 

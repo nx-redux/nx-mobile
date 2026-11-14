@@ -57,11 +57,11 @@ private const val HOME_CAROUSEL_STRIP_GAP = HOME_CAROUSEL_CARD_GAP - HOME_CAROUS
 private const val HOME_CAROUSEL_GROUP_GAP = HOME_CAROUSEL_CARD_GAP - HOME_CAROUSEL_BOX_ROOM
 
 /**
- * The carousel's box at its card's full size on a body [widthDp] wide ([carouselRowPlace]: the size cap, and in
- * [portrait] the width share), with its ring room above and its ring below; the box never needs more.
+ * The carousel's box at its card's full size on a body [widthDp] wide ([carouselRowPlace]: the size cap and the width
+ * share; null: the cap alone), with its ring room above and its ring below; the box never needs more.
  */
-internal fun homeCarouselMaxH(widthDp: Float, portrait: Boolean): Float =
-    carouselRowPlace(HOME_UNBOUNDED_DP, 0f, 0f, portraitW = widthDp.takeIf { portrait }).g.itemH + GRID_RING_ROOM + NX_TILE_RING
+internal fun homeCarouselMaxH(widthDp: Float?): Float =
+    carouselRowPlace(HOME_UNBOUNDED_DP, 0f, 0f, bodyW = widthDp).g.itemH + GRID_RING_ROOM + NX_TILE_RING
 
 private const val HOME_UNBOUNDED_DP = 10_000f   // a body tall enough that the card's height never limits it
 
@@ -76,7 +76,7 @@ internal data class HomeCarouselPlace(val stripInkTop: Float, val boxTop: Float,
  * keeps [HOME_CAROUSEL_MIN_GAP] above and below the group. With [fill] (the Pick a game card) the rows are spaced evenly
  * instead, the same room above, between and below them, the card taking all the rest.
  */
-internal fun homeCarouselPlace(bodyH: Float, above: Float, stripInkH: Float, dockH: Float, fill: Boolean = false, maxBoxH: Float = homeCarouselMaxH(0f, false)): HomeCarouselPlace {
+internal fun homeCarouselPlace(bodyH: Float, above: Float, stripInkH: Float, dockH: Float, fill: Boolean = false, maxBoxH: Float = homeCarouselMaxH(null)): HomeCarouselPlace {
     val span = bodyH + above
     if (!fill) {
         val stripPart = if (stripInkH > 0f) stripInkH + HOME_CAROUSEL_STRIP_GAP else 0f
@@ -217,7 +217,7 @@ internal fun HomeCarouselScreen(
         val bodyH = maxHeight.value - headerH
         val centred = homeCarouselPlace(
             bodyH, if (header != null) 0f else homeUnderlineAbove(frame), inkH, dockH, fill = pick,
-            maxBoxH = homeCarouselMaxH(width, portrait),
+            maxBoxH = homeCarouselMaxH(width),
         )
         // Sideways, the rows centred on the screen's middle, not the body's (the tab row and the header make it uneven).
         val density = LocalDensity.current
