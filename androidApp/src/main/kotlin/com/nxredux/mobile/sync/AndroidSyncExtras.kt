@@ -5,6 +5,7 @@ import com.nxredux.mobile.library.ArcadeCompanions
 import com.nxredux.mobile.library.CompanionLookup
 import com.nxredux.mobile.library.DiscSheet
 import com.nxredux.mobile.library.IndexedGame
+import com.nxredux.mobile.library.MsuSets
 import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.runner.ArcadeSetsAsset
 import com.nxredux.mobile.runner.ContentRef
@@ -33,14 +34,15 @@ object AndroidSyncExtras {
     }
 
     /**
-     * The names beside [g] that its core loads with it: a disc sheet's files, an fbneo set's parent and BIOS sets beside it,
-     * a flycast archive's parent. Mirrors the launch path (AppState). A missing file leaves just [g]'s own name.
+     * The names beside [g] that its core loads with it: a disc sheet's files, an MSU set's music and data, an fbneo set's
+     * parent and BIOS sets beside it, a flycast archive's parent. Mirrors the launch path (AppState). A missing file leaves just [g]'s own name.
      */
     suspend fun companions(context: Context, source: RomsSource, g: IndexedGame, tag: String): List<String> {
         try {
             val folder = ContentRef(g.folder)
             val names = ArrayList<String>()
             (DiscSheet.companions(source, folder, g.file) as? CompanionLookup.Found)?.companions?.forEach { names += it.fileName }
+            names += MsuSets.loadedNames(source, folder, g.file)
             val core = CoreRegistry.forTag(tag)
             if (core?.id == "fbneo" && CoreRegistry.loadsArchive(tag, g.file)) {
                 ArcadeCompanions.find(source, folder, g.file, ArcadeSetsAsset.get(context)).companions.forEach { names += it.fileName }

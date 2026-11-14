@@ -304,12 +304,15 @@ class LibraryScanner(
             byTag.getOrPut(own) { ArrayList() }   // an empty skeleton folder is still indexed (count 0)
             val sidecar = reads.sidecars.read(Recents.HOME, relativeDir, children)
             val files = children.filter { !it.isDirectory && !Names.isHidden(it.name) }
-            val hidden = DiscSheet.hiddenNamed(files, heads::sheetNames)
+            val hidden = DiscSheet.hiddenNamed(files, heads::sheetNames) + MsuSets.hiddenSheets(files)
             val discs = CoreRegistry.forTag(own)?.extensions?.let { "m3u" in it || "cue" in it || "gdi" in it } == true
+            val msu = console?.id in MsuSets.CONSOLES
             for (c in children) {
                 if (Names.isHidden(c.name)) continue
                 if (c.isDirectory) {
-                    if (discs) discFolder(reads, c, entry.ref, relativeDir, own, console)?.let { (t, f) -> byTag.getOrPut(t) { ArrayList() } += f }
+                    val game = (if (msu) msuFolder(reads, c, entry.ref, relativeDir, own, console) else null)
+                        ?: if (discs) discFolder(reads, c, entry.ref, relativeDir, own, console) else null
+                    game?.let { (t, f) -> byTag.getOrPut(t) { ArrayList() } += f }
                     continue
                 }
                 if (c.name.lowercase() in hidden) continue
@@ -350,6 +353,19 @@ class LibraryScanner(
         val dirPath = "$systemDir/${dir.name}"
         val tag = homeTag(sheet.name, reads.sidecars.read(Recents.HOME, dirPath, children)[sheet.name], ownTag, console) ?: return null
         return tag to IndexedFile(sheet, dir.ref, Recents.HOME, dirPath, lookupFolder = systemFolder, lookupDir = systemDir)
+    }
+
+    /**
+     * An MSU pack's folder: a subfolder `D/` of a system folder whose one ROM has its MSU-1 or MSU-MD files beside it
+     * ([MsuSets.folderRom]), listed from `D/` as a disc folder is: art and name from the system folder, keyed by `D`. Null
+     * when `D/` holds no such ROM or no tag of the console runs it.
+     */
+    private suspend fun msuFolder(reads: ScanReads, dir: Entry, systemFolder: ContentRef, systemDir: String, ownTag: String, console: Console?): Pair<String, IndexedFile>? {
+        val children = reads.list(dir.ref)
+        val rom = MsuSets.folderRom(children) ?: return null
+        val dirPath = "$systemDir/${dir.name}"
+        val tag = homeTag(rom.name, reads.sidecars.read(Recents.HOME, dirPath, children)[rom.name], ownTag, console) ?: return null
+        return tag to IndexedFile(rom, dir.ref, Recents.HOME, dirPath, lookupFolder = systemFolder, lookupDir = systemDir)
     }
 
     /** The arcade set tables for one scan: each resolved at most once, and only when a system that uses it is indexed. */

@@ -1,0 +1,15 @@
+# license: modifies PicoDrive (https://github.com/irixxxx/picodrive), non-commercial PicoDrive license (COPYING); this patch is distributed under the same license.
+# The MSU-MD fake BIOS copied "SEGA" raw into bios[], which the 68k reads as
+# byteswapped words, so the msu-md driver found "ESAG" at 0x400100 and refused to run.
+--- a/pico/cd/memory.c
++++ b/pico/cd/memory.c
+@@ -1221,6 +1221,9 @@
+     PicoCreateMCD(NULL, 0);
+     // BIOS faking for MSU-MD, checks for "SEGA" at 0x400100 to detect CD drive
+     memcpy(Pico_mcd->bios+0x100, bios_id, 4);
++    // nx-redux: bios[] holds 68k words in host order, as a loaded BIOS does
++    // (PicoCartLoad byteswaps it); raw bytes read back as "ESAG" on LE hosts
++    Byteswap(Pico_mcd->bios+0x100, Pico_mcd->bios+0x100, 4);
+   }
+ 
+   pcd_base_address = (Pico.romsize ? 0x400000 : 0x000000);

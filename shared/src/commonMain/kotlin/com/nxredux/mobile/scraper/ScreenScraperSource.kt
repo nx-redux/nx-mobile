@@ -262,14 +262,16 @@ class ScreenScraperSource(
      */
     private suspend fun lookup(ref: LibraryGameRef, systemId: Int): Answer {
         val a = auth()
-        val first = answer(api(ScraperRequest.gameInfo(a, ref.fileName, systemId)))
-        if (first.found != null) return first
         val ext = ref.fileName.substringAfterLast('.', "").lowercase()
+        // A folder game is named by its folder: an MSU pack's ROM inside is often an underscored copy of the name.
+        val romName = if (ref.folderGame) ref.relativeDir.split('/').last { it.isNotEmpty() } + ".$ext" else ref.fileName
+        val first = answer(api(ScraperRequest.gameInfo(a, romName, systemId)))
+        if (first.found != null) return first
         if (ext in NOT_HASHED) return first
         val inside = ext == "zip" && systemId !in ARCADE_IDS
         if (ext == "7z" && systemId !in ARCADE_IDS) return first
         val (crc, size) = hash(ref, inside)?.takeIf { it.second <= HASH_LIMIT } ?: return first
-        val second = answer(api(ScraperRequest.gameInfo(a, ref.fileName, systemId, crc, size)))
+        val second = answer(api(ScraperRequest.gameInfo(a, romName, systemId, crc, size)))
         return if (second.found != null) second else Answer(null, first.unread || second.unread)
     }
 

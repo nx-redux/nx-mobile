@@ -1,0 +1,35 @@
+# license: modifies Snes9x (https://github.com/libretro/snes9x), non-commercial Snes9x license (LICENSE); this patch is distributed under the same license.
+# retro_load_game set g_rom_dir only when the frontend passed the ROM data: a load by path (a frontend
+# VFS serving the ROM and its MSU-1 files) left it empty, so MSU-1 looked for <rom>.msu and <rom>-N.pcm nowhere.
+--- a/libretro/libretro.cpp
++++ b/libretro/libretro.cpp
+@@ -1493,6 +1493,16 @@
+     init_descriptors();
+ 
+     update_variables();
++
++    /* nx-redux: the ROM's folder is known for a load by path too (a frontend
++     * VFS serves the content and its MSU-1 files by path, with no data):
++     * MSU-1 and the ROMFILENAME_DIR lookups resolve beside it, not in the
++     * working directory */
++    if (game->path != NULL)
++    {
++        extract_basename(g_basename, game->path, sizeof(g_basename));
++        extract_directory(g_rom_dir, game->path, sizeof(g_rom_dir));
++    }
+ 
+     if(game->data == NULL && game->size == 0 && game->path != NULL)
+         rom_loaded = Memory.LoadROM(game->path);
+@@ -1500,12 +1510,6 @@
+     {
+         uint8 *biosrom = new uint8[0x100000];
+ 
+-        if (game->path != NULL)
+-        {
+-            extract_basename(g_basename, game->path, sizeof(g_basename));
+-            extract_directory(g_rom_dir, game->path, sizeof(g_rom_dir));
+-        }
+-
+         if (is_SufamiTurbo_Cart((uint8 *) game->data, game->size)) {
+             if ((rom_loaded = LoadBIOS(biosrom,"STBIOS.bin",0x40000)))
+             rom_loaded = Memory.LoadMultiCartMem((const uint8_t*)game->data, game->size, 0, 0, biosrom, 0x40000);

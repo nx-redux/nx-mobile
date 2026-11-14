@@ -4,6 +4,7 @@ import com.nxredux.mobile.library.ArcadeCompanions
 import com.nxredux.mobile.library.CompanionLookup
 import com.nxredux.mobile.library.DiscSheet
 import com.nxredux.mobile.library.GameEntry
+import com.nxredux.mobile.library.MsuSets
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.Sidecars
 import com.nxredux.mobile.library.SystemFolder
@@ -130,10 +131,13 @@ internal class LaunchController(
             val core = coreOverride ?: sys.core ?: return@launch
             // A .cue/.m3u/.ccd/.toc loads the files it names from the same folder; all must be there before the core starts.
             val lookup = companionsOrNull { DiscSheet.companions(deps.source, game.folder, game.fileName) }
-            val companions = when (lookup) {
-                null -> { launchError(gone); return@launch }
-                is CompanionLookup.Missing -> { launchError("Missing ${lookup.name} next to ${lookup.sheet}"); return@launch }
-                is CompanionLookup.Found -> lookup.companions
+            // An MSU-1 or MSU-MD ROM's music (and an MSU-MD cue's tracks) lies beside it, under names the core derives from the ROM's.
+            val msu = companionsOrNull { MsuSets.companions(deps.source, game.folder, game.fileName) }
+            val companions = when {
+                lookup == null || msu == null -> { launchError(gone); return@launch }
+                lookup is CompanionLookup.Missing -> { launchError("Missing ${lookup.name} next to ${lookup.sheet}"); return@launch }
+                msu is CompanionLookup.Missing -> { launchError("Missing ${msu.name} next to ${msu.sheet}"); return@launch }
+                else -> (lookup as CompanionLookup.Found).companions + (msu as CompanionLookup.Found).companions
             }
             // An fbneo set also loads its parent and BIOS sets: the ones beside it go along, a BIOS not beside it is checked in the system dir.
             // The set table is fbneo's: flycast's NAOMI/Atomiswave zips, loaded as is too, take none of it.

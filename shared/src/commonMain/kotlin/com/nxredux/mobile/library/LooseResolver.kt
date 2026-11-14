@@ -50,15 +50,18 @@ class LooseResolver internal constructor(
         val sidecar = reads.sidecars.read(sourceId, relativeDir, children)
         val folder = Resolution.FolderHints.of(ancestors, defaultTag)
         // A bin/cue or m3u set shows once, as its sheet.
-        val hidden = DiscSheet.hiddenNamed(children.filter { !it.isDirectory && !Names.isHidden(it.name) }, heads::sheetNames)
+        val files = children.filter { !it.isDirectory && !Names.isHidden(it.name) }
+        val hidden = DiscSheet.hiddenNamed(files, heads::sheetNames) + MsuSets.hiddenSheets(files)
         for (c in children) {
             if (Names.isHidden(c.name)) continue
             if (c.isDirectory) {
                 if (c.name.lowercase() in skip) continue   // only the root's: deeper walks get none
                 val childDir = if (relativeDir.isEmpty()) c.name else "$relativeDir/${c.name}"
                 val childAncestors = listOf(c.name) + ancestors
-                val disc = discFolder(c, reads.list(c.ref), sourceId, childDir, childAncestors, dir, relativeDir)
-                if (disc != null) out += disc else walk(c.ref, sourceId, childDir, childAncestors, out)
+                val grandchildren = reads.list(c.ref)
+                val game = msuFolder(c, grandchildren, sourceId, childDir, childAncestors, dir, relativeDir)
+                    ?: discFolder(c, grandchildren, sourceId, childDir, childAncestors, dir, relativeDir)
+                if (game != null) out += game else walk(c.ref, sourceId, childDir, childAncestors, out)
                 continue
             }
             if (c.name.lowercase() in hidden) continue
@@ -72,6 +75,16 @@ class LooseResolver internal constructor(
             if (tag == null && !candidate) continue
             out += LooseFile(c, dir, relativeDir, tag)
         }
+    }
+
+    /** [dir] (listed as [children]) as an MSU pack's folder ([MsuSets.folderRom]), resolved and listed as [discFolder]'s sheet is. */
+    private suspend fun msuFolder(
+        dir: Entry, children: List<Entry>, sourceId: String, relativeDir: String, ancestors: List<String>, parent: ContentRef, parentDir: String,
+    ): LooseFile? {
+        val rom = MsuSets.folderRom(children) ?: return null
+        val sidecar = reads.sidecars.read(sourceId, relativeDir, children)
+        val tag = Resolution.resolve(rom.name, sidecar[rom.name], ancestors, null, defaultTag) ?: return null
+        return LooseFile(rom, dir.ref, relativeDir, tag, lookupFolder = parent, lookupDir = parentDir)
     }
 
     /** [file] (listed in [siblings]) placed by [probe], for a disc extension only. */

@@ -19,6 +19,7 @@ import com.nxredux.mobile.gametime.GameTimeRecorder
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.library.ArcadeCompanions
+import com.nxredux.mobile.library.MsuSets
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.NaomiSets
 import com.nxredux.mobile.netplay.NetplayCores
@@ -828,7 +829,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // A missing required BIOS: say which file goes where instead of letting the core fail silently.
             val present = withContext(Dispatchers.IO) { systemDir.list()?.toSet() ?: emptySet() }
             val biosPresent = if (biosDir == systemDir) present else withContext(Dispatchers.IO) { biosDir.list()?.toSet() ?: emptySet() }
-            BiosCheck.missing(CoreRegistry.requiredBios(cfg.tag), contentExtension, biosPresent).firstOrNull()?.let {
+            // An MSU-MD set plays its music from a Sega CD: Genesis Plus GX needs that console's BIOS for it, as for a disc
+            // (PicoDrive fakes the one check the MSU-MD driver makes).
+            val biosExtension = if (inner == null && msuMdSheet(cfg) != null && cfg.descriptor?.id == SegaPadType.GPGX) "cue" else contentExtension
+            BiosCheck.missing(CoreRegistry.requiredBios(cfg.tag), biosExtension, biosPresent).firstOrNull()?.let {
                 return refuse(BiosCheck.message(cfg.tag, it))
             }
             // A NAOMI/Atomiswave set's BIOS archive (flycast opens <system>/dc/<bios>.zip or .7z); an unknown set is not checked.
@@ -925,12 +929,16 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                             // a SAF game is copied: a disc set's files go next to its sheet in the cache, under the names the sheet uses.
                             val inPlace = RealPathLaunch.inPlace(cfg.content, fileName, cfg.companions)
                                 ?.takeIf { p -> File(p).canRead() && cfg.companions.all { (name, _) -> File(File(p).parentFile, name).canRead() } }
-                            if (inPlace != null) {
-                                gameFilePath = inPlace
+                            val path = if (inPlace != null) {
+                                inPlace
                             } else {
                                 for ((name, ref) in cfg.companions) copyToCache(ref, name)
-                                gameFilePath = copyToCache(cfg.content, fileName).absolutePath
+                                copyToCache(cfg.content, fileName).absolutePath
                             }
+                            // PicoDrive runs an MSU-MD set from its cue and finds the cartridge beside it; Genesis Plus GX
+                            // runs the cartridge and mounts the cue.
+                            val cue = msuMdSheet(cfg)?.takeIf { cfg.descriptor?.id == SegaPadType.PICODRIVE }
+                            gameFilePath = cue?.let { File(File(path).parentFile, it).absolutePath } ?: path
                         } else {
                             // With more than one virtual file the runner serves the core through its VFS (libretrodroid.cpp:391),
                             // so the core opens /rom/<track>.bin by the name its cue gives.
@@ -965,6 +973,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             return data
         }
     }
+
+    /** The cue of [cfg]'s MSU-MD set, under the name it was handed to the core by; null when the game is none. */
+    private fun msuMdSheet(cfg: LaunchConfig): String? =
+        if (CoreRegistry.consoleOf(cfg.tag)?.id != "md") null else MsuSets.mdSheet(cfg.romFileName, cfg.companions.map { it.first })
 
     private suspend fun attachView(cfg: LaunchConfig, prepared: PreparedContent, data: GLRetroViewData) {
         with(host) {
