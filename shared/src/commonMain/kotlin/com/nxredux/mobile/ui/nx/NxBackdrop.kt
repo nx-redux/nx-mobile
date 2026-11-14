@@ -426,6 +426,7 @@ fun NxBackdrop(
     tiles: List<GridTile>, selectedIndex: () -> Int,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?,
     captionTitle: () -> String?, captionInfo: () -> List<InfoLine>,
+    captionBadge: () -> String? = { null },   // a pill after the caption's name (the game's badge, [com.nxredux.mobile.library.GameEntry.badge])
     modifier: Modifier = Modifier,
     layoutKey: Any? = null,
     titleRoom: Dp = 0.dp,
@@ -505,6 +506,7 @@ fun NxBackdrop(
         // The time and the achievements, then the next goal under the name's one line.
         if (captioned) RowCaption(
             captionTitle, captionInfo, glide, nameStyle, 1, infoStyle, inset, avail, availPx, spare, selTop, rowH + capGap, colors.accent,   // the name in the accent
+            captionBadge = captionBadge,
         )
     }
 }

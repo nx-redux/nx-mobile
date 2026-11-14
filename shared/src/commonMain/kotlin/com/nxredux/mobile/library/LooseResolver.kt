@@ -16,6 +16,8 @@ data class LooseFile(
     val tag: String?,
     val lookupFolder: ContentRef = folder,
     val lookupDir: String = relativeDir,
+    /** A pill by its name ([IndexedGame.badge]), or null. */
+    val badge: String? = null,
 )
 
 /**
@@ -52,6 +54,7 @@ class LooseResolver internal constructor(
         // A bin/cue or m3u set shows once, as its sheet.
         val files = children.filter { !it.isDirectory && !Names.isHidden(it.name) }
         val hidden = DiscSheet.hiddenNamed(files, heads::sheetNames) + MsuSets.hiddenSheets(files)
+        val fileNames = files.map { it.name }
         for (c in children) {
             if (Names.isHidden(c.name)) continue
             if (c.isDirectory) {
@@ -73,7 +76,7 @@ class LooseResolver internal constructor(
             val tag = Resolution.resolve(c.name, sidecar[c.name], folder, defaultTag) { heads.zipEntry(c) }
                 ?: probed(c, children)
             if (tag == null && !candidate) continue
-            out += LooseFile(c, dir, relativeDir, tag)
+            out += LooseFile(c, dir, relativeDir, tag, badge = MsuSets.kind(c.name, fileNames))
         }
     }
 
@@ -84,7 +87,7 @@ class LooseResolver internal constructor(
         val rom = MsuSets.folderRom(children) ?: return null
         val sidecar = reads.sidecars.read(sourceId, relativeDir, children)
         val tag = Resolution.resolve(rom.name, sidecar[rom.name], ancestors, null, defaultTag) ?: return null
-        return LooseFile(rom, dir.ref, relativeDir, tag, lookupFolder = parent, lookupDir = parentDir)
+        return LooseFile(rom, dir.ref, relativeDir, tag, lookupFolder = parent, lookupDir = parentDir, badge = MsuSets.kind(rom.name, children.map { it.name }))
     }
 
     /** [file] (listed in [siblings]) placed by [probe], for a disc extension only. */

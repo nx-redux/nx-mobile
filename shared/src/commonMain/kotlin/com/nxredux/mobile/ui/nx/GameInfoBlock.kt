@@ -106,20 +106,60 @@ private const val GENRE_HEIGHT = 1.1f
 private val GENRE_MEASURE = 100.sp   // the pill text is measured once at this size; its width scales with the font
 
 /** [genre]'s pill width in em of the line's font size: its text at [GENRE_TEXT] and [GENRE_PAD] each side. */
-internal fun genrePillEm(measurer: TextMeasurer, density: Density, font: FontFamily, genre: String): Float {
-    val w = measurer.measure(genre, TextStyle(fontFamily = font, fontWeight = FontWeight.Medium, fontSize = GENRE_MEASURE), maxLines = 1, softWrap = false).size.width
-    return w / with(density) { GENRE_MEASURE.toPx() } * GENRE_TEXT + 2 * GENRE_PAD
+internal fun genrePillEm(measurer: TextMeasurer, density: Density, font: FontFamily, genre: String): Float =
+    pillEm(measurer, density, font, genre, GENRE_TEXT, GENRE_PAD)
+
+/** [word]'s pill width in em of the line's font size: its text at [text] em and [pad] em each side. */
+private fun pillEm(measurer: TextMeasurer, density: Density, font: FontFamily, word: String, text: Float, pad: Float): Float {
+    val w = measurer.measure(word, TextStyle(fontFamily = font, fontWeight = FontWeight.Medium, fontSize = GENRE_MEASURE), maxLines = 1, softWrap = false).size.width
+    return w / with(density) { GENRE_MEASURE.toPx() } * text + 2 * pad
 }
 
 /** [genre] as an outlined pill, inline in the info text: sized in em ([widthEm]), so it follows the line's font size. */
-private fun genrePill(genre: String, widthEm: Float, tint: Color, font: FontFamily) =
-    InlineTextContent(Placeholder(widthEm.em, GENRE_HEIGHT.em, PlaceholderVerticalAlign.TextCenter)) {
+private fun genrePill(genre: String, widthEm: Float, tint: Color, font: FontFamily) = pill(genre, widthEm, GENRE_TEXT, GENRE_HEIGHT, tint, font)
+
+// A caption name's badge ([com.nxredux.mobile.library.GameEntry.badge]) against the name's font size (em): smaller than a genre pill against its
+// line, so it reads as a mark on the name rather than a second word.
+private const val BADGE_TEXT = 0.5f
+private const val BADGE_PAD = 0.4f
+private const val BADGE_HEIGHT = 0.8f
+private const val BADGE_ID = "badge"
+
+/** A caption's name with its badge as a pill after it: the text, the pill's placeholder (to measure it as drawn) and content. */
+internal class BadgedTitle(
+    val text: AnnotatedString,
+    val placeholders: List<AnnotatedString.Range<Placeholder>>,
+    val inlineContent: Map<String, InlineTextContent>,
+)
+
+/** [title] with [badge] as an outlined pill in [tint] after it; the plain [title] without a badge, null without a title. */
+@Composable
+internal fun rememberBadgedTitle(title: String?, badge: String?, tint: Color): BadgedTitle? {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val font = LocalNxFont.current
+    return remember(title, badge, tint, font, density) {
+        when {
+            title == null -> null
+            badge == null -> BadgedTitle(AnnotatedString(title), emptyList(), emptyMap())
+            else -> {
+                val content = pill(badge, pillEm(measurer, density, font, badge, BADGE_TEXT, BADGE_PAD), BADGE_TEXT, BADGE_HEIGHT, tint, font)
+                val text = buildAnnotatedString { append(title); append(" "); appendInlineContent(BADGE_ID, badge) }
+                BadgedTitle(text, listOf(AnnotatedString.Range(content.placeholder, title.length + 1, text.length)), mapOf(BADGE_ID to content))
+            }
+        }
+    }
+}
+
+/** [word] as an outlined pill, inline in a text: [widthEm] by [heightEm] of its font size, the word at [textEm]. */
+private fun pill(word: String, widthEm: Float, textEm: Float, heightEm: Float, tint: Color, font: FontFamily) =
+    InlineTextContent(Placeholder(widthEm.em, heightEm.em, PlaceholderVerticalAlign.TextCenter)) {
         BoxWithConstraints(Modifier.fillMaxSize().border(1.dp, tint.copy(alpha = 0.7f), RoundedCornerShape(50)), contentAlignment = Alignment.Center) {   // role: the pill's outline, a little under the text
-            val size = with(LocalDensity.current) { (maxHeight * (GENRE_TEXT / GENRE_HEIGHT)).toSp() }
+            val size = with(LocalDensity.current) { (maxHeight * (textEm / heightEm)).toSp() }
             // On its natural line box, which may be taller than the pill: the font's capitals sit at that box's middle, so
             // centring the box centres the word; a line squeezed to the pill's height would sit low.
             Text(
-                genre, Modifier.wrapContentSize(unbounded = true), color = tint, fontFamily = font, fontWeight = FontWeight.Medium, fontSize = size,
+                word, Modifier.wrapContentSize(unbounded = true), color = tint, fontFamily = font, fontWeight = FontWeight.Medium, fontSize = size,
                 maxLines = 1, softWrap = false, style = TextStyle(shadow = null),
             )
         }

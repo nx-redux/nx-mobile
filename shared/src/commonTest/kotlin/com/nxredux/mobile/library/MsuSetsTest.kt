@@ -72,7 +72,7 @@ class MsuSetsTest {
             dirs = mapOf(
                 "H" to listOf("Roms"),
                 "H/Roms" to listOf("Super Nintendo ES (SFC)", "Sega Genesis (MD)"),
-                sfc to listOf("Mario.sfc", packFolder, "Saves"),
+                sfc to listOf("Mario.sfc", "Contra III - The Alien Wars (USA).sfc", packFolder, "Saves"),
                 "$sfc/$packFolder" to contraFiles,
                 "$sfc/Saves" to listOf("Mario.srm"),
                 md to listOf("SoR2.md", "SoR2.cue", "SoR2 (Track 01).bin", "SoR2 (Track 02).bin", "Sonic.md", "Golden Axe (MSU-MD)"),
@@ -82,11 +82,17 @@ class MsuSetsTest {
         )
         val index = LibraryScanner(src, Sidecars(src, MemorySidecarStore()) { ContentRef("H") }).scan(ContentRef("H"), emptyList(), emptyMap())
         val snes = index.systems.single { it.tag == "SFC" }.games
-        assertEquals(listOf("$contra.sfc", "Mario.sfc"), snes.map { it.file })
-        assertEquals("Contra III - The Alien Wars", snes[0].name)
-        assertEquals("Roms/Super Nintendo ES (SFC)", snes[0].lookupDir)
+        // Beside the plain ROM of the same name, both keep the clean name: the badge tells them apart.
+        val byFile = snes.associateBy { it.file }
+        assertEquals(setOf("$contra.sfc", "Contra III - The Alien Wars (USA).sfc", "Mario.sfc"), byFile.keys)
+        assertEquals("Contra III - The Alien Wars", byFile.getValue("$contra.sfc").name)
+        assertEquals("Contra III - The Alien Wars", byFile.getValue("Contra III - The Alien Wars (USA).sfc").name)
+        assertEquals("Roms/Super Nintendo ES (SFC)", byFile.getValue("$contra.sfc").lookupDir)
         val genesis = index.systems.single { it.tag == "MD" }.games
         assertEquals(listOf("Golden Axe (World).md", "Sonic.md", "SoR2.md"), genesis.map { it.file }.sortedBy { it.lowercase() })
+        // The badge: a pack in its folder or loose, never a plain ROM.
+        assertEquals(mapOf("$contra.sfc" to MsuSets.MSU1, "Contra III - The Alien Wars (USA).sfc" to null, "Mario.sfc" to null), snes.associate { it.file to it.badge })
+        assertEquals(mapOf("Golden Axe (World).md" to MsuSets.MSU_MD, "Sonic.md" to null, "SoR2.md" to MsuSets.MSU_MD), genesis.associate { it.file to it.badge })
     }
 
     @Test fun an_extra_msu_pack_folder_is_one_game() = runTest {
@@ -103,5 +109,6 @@ class MsuSetsTest {
         assertEquals("$contra.sfc", game.file)
         assertEquals("Contra (MSU1)", game.dir)
         assertEquals("", game.lookupDir)
+        assertEquals(MsuSets.MSU1, game.badge)
     }
 }

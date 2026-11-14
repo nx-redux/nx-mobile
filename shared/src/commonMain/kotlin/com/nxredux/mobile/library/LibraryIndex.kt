@@ -39,7 +39,7 @@ data class LibraryIndex(
          * ([LibraryIndexCodec]). It goes up when an older index would show the library wrongly, not for a field that
          * defaults and fills on the next scan ([scannedAt], [IndexedGame.firstSeen]).
          */
-        const val VERSION = 12
+        const val VERSION = 13
     }
 }
 
@@ -111,6 +111,11 @@ data class IndexedGame(
      * Recents, pin or collection line written for one still resolves to this game.
      */
     val hiddenCopies: List<String> = emptyList(),
+    /**
+     * A word shown as a pill by its name, marking what kind of game this is, else null. Now [MsuSets.MSU1] or
+     * [MsuSets.MSU_MD] for a ROM whose MSU set lies beside it.
+     */
+    val badge: String? = null,
 )
 
 /** Library order: by display name, the tag breaking ties (GBA and MGBA share a name); Unassigned last. */
@@ -138,6 +143,7 @@ fun LibraryIndex.toSystems(hidden: Set<String> = emptySet()): List<SystemFolder>
                 subtitle = if (s.unassigned) g.dir.ifEmpty { "/" } else g.subtitle,
                 firstSeen = g.firstSeen,
                 hiddenCopies = g.hiddenCopies.mapNotNull(GamePath::split),
+                badge = g.badge,
             )
         },
         artRef = s.art?.let { ContentRef(it) },

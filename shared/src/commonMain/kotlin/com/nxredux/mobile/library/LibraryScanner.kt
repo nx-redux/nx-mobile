@@ -31,6 +31,7 @@ internal data class IndexedFile(
     val relativeDir: String,
     val lookupFolder: ContentRef = folder,
     val lookupDir: String = relativeDir,
+    val badge: String? = null,   // [IndexedGame.badge]
 )
 
 /** One console list, built from the index by [toSystems]: every game across the home and the extra folders that resolved to [tag]. */
@@ -65,6 +66,7 @@ data class GameEntry(
     val subtitle: String? = null,          // Unassigned list: where the file is
     val firstSeen: Long? = null,          // Home's New shelf ([IndexedGame.firstSeen])
     val hiddenCopies: List<GameRef> = emptyList(),   // extra copies hidden behind this home game ([IndexedGame.hiddenCopies])
+    val badge: String? = null,            // a pill by its name ([IndexedGame.badge])
 )
 
 /** The game's line in recent.txt, shortcuts.txt, hidden.txt and collection files. */
@@ -210,7 +212,7 @@ class LibraryScanner(
             if (files.isEmpty() && previous != null && reads.list(extra.ref).isEmpty()) hiddenRootCheck(extra, previous)
             scanned += extra
             for (f in files) {
-                val ix = IndexedFile(f.entry, f.folder, extra.id, f.relativeDir, f.lookupFolder, f.lookupDir)
+                val ix = IndexedFile(f.entry, f.folder, extra.id, f.relativeDir, f.lookupFolder, f.lookupDir, f.badge)
                 if (f.tag == null) unassigned += ix else byTag.getOrPut(f.tag) { ArrayList() } += ix
             }
         }
@@ -307,6 +309,7 @@ class LibraryScanner(
             val hidden = DiscSheet.hiddenNamed(files, heads::sheetNames) + MsuSets.hiddenSheets(files)
             val discs = CoreRegistry.forTag(own)?.extensions?.let { "m3u" in it || "cue" in it || "gdi" in it } == true
             val msu = console?.id in MsuSets.CONSOLES
+            val fileNames = files.map { it.name }
             for (c in children) {
                 if (Names.isHidden(c.name)) continue
                 if (c.isDirectory) {
@@ -317,7 +320,8 @@ class LibraryScanner(
                 }
                 if (c.name.lowercase() in hidden) continue
                 val fileTag = homeTag(c.name, sidecar[c.name], own, console) ?: continue
-                byTag.getOrPut(fileTag) { ArrayList() } += IndexedFile(c, entry.ref, Recents.HOME, relativeDir)
+                val kind = if (msu) MsuSets.kind(c.name, fileNames) else null
+                byTag.getOrPut(fileTag) { ArrayList() } += IndexedFile(c, entry.ref, Recents.HOME, relativeDir, badge = kind)
             }
         }
     }
@@ -365,7 +369,7 @@ class LibraryScanner(
         val rom = MsuSets.folderRom(children) ?: return null
         val dirPath = "$systemDir/${dir.name}"
         val tag = homeTag(rom.name, reads.sidecars.read(Recents.HOME, dirPath, children)[rom.name], ownTag, console) ?: return null
-        return tag to IndexedFile(rom, dir.ref, Recents.HOME, dirPath, lookupFolder = systemFolder, lookupDir = systemDir)
+        return tag to IndexedFile(rom, dir.ref, Recents.HOME, dirPath, lookupFolder = systemFolder, lookupDir = systemDir, badge = MsuSets.kind(rom.name, children.map { it.name }))
     }
 
     /** The arcade set tables for one scan: each resolved at most once, and only when a system that uses it is indexed. */
@@ -423,6 +427,7 @@ class LibraryScanner(
                     ?: (if (naomiSet) naomi.title(base)?.let(Names::plainTitle) else null) ?: Names.plainName(key),
                 lookupDir = f.lookupDir,
                 firstSeen = f.entry.lastModified,   // the file's date; withFirstSeen keeps a known game's
+                badge = f.badge,
             ).withArt(look.artFor(key, base, picked = pickedSlots(picked, f.sourceId, f.relativeDir, name)))
             plain += alias == null
         }
@@ -463,22 +468,24 @@ class LibraryScanner(
      * disc folder counts as the folder around it). When the name is shared across folders ([byFolder]; not Unassigned,
      * whose rows always show their dir, and where the whole list is one folder), a copy alone in its folder keeps its clean
      * name, and every copy in an extra folder shows that folder's last name as [IndexedGame.subtitle] ([folderLabel]); a
-     * home copy shows none.
+     * home copy shows none. Games with different badges ([IndexedGame.badge]: an MSU pack beside its plain ROM) never share
+     * a name: the badge tells them apart.
      */
     private fun disambiguated(games: List<IndexedGame>, plain: List<Boolean>, byFolder: Boolean, extraNames: Map<String, String>): List<IndexedGame> {
         fun folder(g: IndexedGame) = if (byFolder) g.source to g.lookupDir else "" to ""
-        val folders = HashMap<String, MutableSet<Pair<String, String>>>()
-        val counts = HashMap<Pair<String, Pair<String, String>>, Int>()
+        fun shown(g: IndexedGame) = g.name to g.badge
+        val folders = HashMap<Pair<String, String?>, MutableSet<Pair<String, String>>>()
+        val counts = HashMap<Pair<Pair<String, String?>, Pair<String, String>>, Int>()
         games.forEachIndexed { i, g ->
             if (!plain[i]) return@forEachIndexed
-            folders.getOrPut(g.name) { HashSet() } += folder(g)
-            val key = g.name to folder(g)
+            folders.getOrPut(shown(g)) { HashSet() } += folder(g)
+            val key = shown(g) to folder(g)
             counts[key] = (counts[key] ?: 0) + 1
         }
         return games.mapIndexed { i, g ->
             if (!plain[i]) return@mapIndexed g
-            val stem = counts.getValue(g.name to folder(g)) > 1
-            val elsewhere = folders.getValue(g.name).size > 1
+            val stem = counts.getValue(shown(g) to folder(g)) > 1
+            val elsewhere = folders.getValue(shown(g)).size > 1
             g.copy(
                 name = if (!stem) g.name else if (g.lookupDir != g.dir) g.dir.substringAfterLast('/') else Names.stripExtension(g.file),
                 subtitle = if (elsewhere) folderLabel(g, extraNames) else g.subtitle,

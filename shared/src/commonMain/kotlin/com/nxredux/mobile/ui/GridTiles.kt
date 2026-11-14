@@ -19,6 +19,7 @@ sealed interface GridTile {
         val screenshotUrl: String?, val title: String, val appId: String? = null, val heroShot: Boolean = false,
         val abstractUrl: String? = null,
         val resumeFrame: Boolean = false,   // the picture is Continue's resume frame: trimmed of its letterbox and zoomed, as Grid Home's card
+        val badge: String? = null,   // a pill on its own row over the name ([GameEntry.badge])
     ) : GridTile
     data class Tool(val icon: DrawableResource, val lines: List<String>, val appId: String? = null) : GridTile   // appId: an Android app's, drawn with its own icon
     data class Collection(val name: String, val count: Int? = null) : GridTile   // count: its games; null when unknown
@@ -51,6 +52,7 @@ private fun gameTile(e: Listed, title: String, shot: String? = null) =
     GridTile.Game(
         shot ?: e.game.screenshotRef?.value, title, e.appId, heroShot = shot == null && e.game.heroShot, abstractUrl = abstractArtFor(e),
         resumeFrame = shot != null,   // a hidden save state's frame: trimmed and zoomed, as Continue's
+        badge = e.game.badge,
     )
 
 /**

@@ -40,6 +40,16 @@ object MsuSets {
         }
     }
 
+    const val MSU1 = "MSU-1"
+    const val MSU_MD = "MSU-MD"
+
+    /** The kind of set [romName] has among [names] (its folder's file names): [MSU1], [MSU_MD], or null for none. */
+    fun kind(romName: String, names: Collection<String>): String? = when {
+        mdCartridge(romName) -> MSU_MD.takeIf { mdSheet(romName, names) != null }
+        msu1Rom(romName) -> MSU1.takeIf { ownFiles(romName, names).isNotEmpty() }
+        else -> null
+    }
+
     /** The MSU-MD cue among [names] that pairs with cartridge [romName], as listed; null when it has none. */
     fun mdSheet(romName: String, names: Collection<String>): String? =
         if (!mdCartridge(romName)) null else ownFiles(romName, names).firstOrNull()?.second

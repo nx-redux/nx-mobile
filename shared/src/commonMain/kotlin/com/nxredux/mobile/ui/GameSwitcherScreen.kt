@@ -88,7 +88,7 @@ internal fun switcherHints(entry: SwitcherEntry?): List<Hint> =
  */
 internal fun switcherListRows(entries: List<SwitcherEntry>): List<NxRow> {
     val labels = MergedLabels.labels(entries.map { MergedLabels.Row(it.game.shownName, it.game.fileName, it.system.tag) })
-    return entries.mapIndexed { i, e -> NxRow(labels[i] ?: e.game.shownName, secondary = e.game.subtitle) }
+    return entries.mapIndexed { i, e -> NxRow(labels[i] ?: e.game.shownName, secondary = e.game.subtitle, tag = e.game.badge) }
 }
 
 /**

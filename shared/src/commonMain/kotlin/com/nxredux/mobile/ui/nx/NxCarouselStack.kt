@@ -33,6 +33,7 @@ fun NxCarouselStack(
     tiles: List<GridTile>, selectedIndex: () -> Int,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?,
     captionTitle: () -> String?, captionInfo: () -> List<InfoLine>,
+    captionBadge: () -> String? = { null },   // a pill after the caption's name (the game's badge, [com.nxredux.mobile.library.GameEntry.badge])
     modifier: Modifier = Modifier,
     layoutKey: Any? = null,
     alignment: VerticalListAlignment = VerticalListAlignment.LEFT,
@@ -87,6 +88,7 @@ fun NxCarouselStack(
                     captionTitle(), captionInfo(), g, bodyW, bodyH, shadow = false, nameSp = nameSp,
                     splitNext = stackPortraitFamily(screenW, screenH, portrait), alignment = alignment,
                     infoShare = STACK_INFO_SHARE,   // the stats at 80% of the name, as the horizontal Carousel's
+                    badge = captionBadge(),
                 )
             },
         )

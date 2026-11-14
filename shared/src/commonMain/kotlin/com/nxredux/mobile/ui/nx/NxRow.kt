@@ -137,23 +137,25 @@ internal fun RowCaption(
     nameStyle: TextStyle, nameLines: Int, infoStyle: TextStyle, inset: PageInset, avail: Dp, availPx: Int, spare: Float,
     selTop: () -> Float, below: Float, textColor: Color,
     stackRows: Boolean = false, rowGap: Dp = 0.dp, maxDrawn: Float = Float.POSITIVE_INFINITY,
+    captionBadge: () -> String? = { null },   // a pill after the name (the game's badge, [com.nxredux.mobile.library.GameEntry.badge])
 ) {
     val title = captionTitle()
+    val badged = rememberBadgedTitle(title, captionBadge(), textColor)
     val infoRows = if (title != null) carouselCaptionRows(title, captionInfo(), gameList = stackRows) else emptyList()
     val allFitted = rememberFittedCaptionRows(infoRows, infoStyle, 12.dp, avail, spare.dp)
-    val (nameH, rowHs) = rememberCaptionHeights(title, nameStyle, nameLines, allFitted, infoStyle, availPx)
+    val (nameH, rowHs) = rememberCaptionHeights(title, nameStyle, nameLines, allFitted, infoStyle, availPx, badged)
     val keep = captionRowsWithin(nameH, rowHs, rowGap.value, maxDrawn)
     val fitted = if (keep < allFitted.size) allFitted.take(keep) else allFitted
     val drawn = if (title == null) 0f else captionDrawnHeight(nameH, rowHs.take(keep), rowGap.value)
     GlideCaptionHeight(glide, drawn, ROW_SLIDE_MS)
-    if (title != null) {
+    if (badged != null) {
         Column(
             Modifier.fillMaxWidth().offset { IntOffset(0, (selTop() + below).dp.roundToPx()) }
                 .padding(start = inset.start, end = inset.end).wrapContentWidth().captionTap(),   // the tap target is the text, not the strip
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(rowGap),
         ) {
-            Text(title, color = textColor, maxLines = nameLines, overflow = TextOverflow.Ellipsis, style = nameStyle)
+            Text(badged.text, color = textColor, maxLines = nameLines, overflow = TextOverflow.Ellipsis, style = nameStyle, inlineContent = badged.inlineContent)
             CaptionFittedRows(fitted, infoStyle, 12.dp)
         }
     }

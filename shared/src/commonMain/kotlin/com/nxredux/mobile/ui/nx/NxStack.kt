@@ -198,6 +198,7 @@ internal fun StackCaption(
     title: String?, info: List<InfoLine>, g: StackGeometry, bodyW: Float, bodyH: Float, shadow: Boolean, nameSp: Float = 18f,
     splitNext: Boolean = false, alignment: VerticalListAlignment = VerticalListAlignment.LEFT,
     infoShare: Float? = null,   // the info rows at this share of the name's size; null: 14 sp
+    badge: String? = null,      // a pill after the name (the game's badge, [com.nxredux.mobile.library.GameEntry.badge])
 ) {
     if (title == null) return
     val end = alignment == VerticalListAlignment.RIGHT
@@ -217,7 +218,9 @@ internal fun StackCaption(
         verticalArrangement = Arrangement.spacedBy(STACK_CAPTION_GAP),
         horizontalAlignment = if (end) Alignment.End else Alignment.Start,
     ) {
-        Text(title, color = colors.accent, maxLines = 3, overflow = TextOverflow.Ellipsis, style = nameStyle)   // the selected game's name in the accent
+        val badged = rememberBadgedTitle(title, badge, colors.accent) ?: return@Column
+        // the selected game's name in the accent
+        Text(badged.text, color = colors.accent, maxLines = 3, overflow = TextOverflow.Ellipsis, style = nameStyle, inlineContent = badged.inlineContent)
         // The centred block may grow: "Next: <name>" may take its two lines whatever the body's room.
         CaptionInfoRows(stackCaptionRows(info), infoStyle, 12.dp, avail = width.dp, spare = bodyH.dp, alwaysSplitNext = splitNext)
     }
