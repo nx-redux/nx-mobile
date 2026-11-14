@@ -37,6 +37,9 @@ Third-party code under `src/main/cpp/` (git submodules, plus [LZ4](https://githu
   on the default shader; the last frame is redrawn while paused; display settings set before `create()` are kept.
 * **RetroArch GLSL preset chains** (`.glslp`), with shader chain and parameter setters, error reporting and the core's
   texture bindings kept around the chain.
+* **RetroArch slang preset chains** (`.slangp`): each pass translated to GLSL ES with glslang and SPIRV-Cross
+  (`slangtranslate`), drawn by a chain with per-pass framebuffer formats, mipmaps, feedback and frame history
+  (`slangchain`).
 * **Screen regions** for multi-screen layouts such as the NDS: draw chosen regions of the core frame, blended by
   alpha and sampled linearly when downscaled, with touches mapped back through the regions and `sendPointer`.
 * **Input:** analog L2/R2 trigger values for cores that read `ANALOG_BUTTON`, and controller port devices set after

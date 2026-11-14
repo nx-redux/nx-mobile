@@ -35,8 +35,8 @@ class ShaderOptionsTest {
     }
 
     @Test fun preset_cycles_through_none_and_the_list_and_params_cycle_their_choices() {
-        val presets = listOf("crt/crt-pi.glslp", "nx/line.glslp")
-        assertEquals("crt/crt-pi.glslp", ShaderOptions.cycle(ShaderOptions.PRESET, "None", 1, presets, emptyList()))
+        val presets = listOf("crt/crt-pie.glslp", "nx/line.glslp")
+        assertEquals("crt/crt-pie.glslp", ShaderOptions.cycle(ShaderOptions.PRESET, "None", 1, presets, emptyList()))
         assertEquals("nx/line.glslp", ShaderOptions.cycle(ShaderOptions.PRESET, "None", -1, presets, emptyList()))
         assertEquals("None", ShaderOptions.cycle(ShaderOptions.PRESET, "gone.glslp", 1, presets, emptyList()))   // raw → first
         assertEquals("0.60", ShaderOptions.cycle(ShaderOptions.paramKey("SCAN"), "0.30", 1, presets, listOf(scan)))
@@ -68,9 +68,9 @@ class ShaderOptionsTest {
 
     @Test fun from_config_keeps_preset_and_params_and_defaults_to_none() {
         assertEquals(mapOf(ShaderOptions.PRESET to "None"), ShaderOptions.fromConfig(emptyMap()))
-        val v = ShaderOptions.fromConfig(mapOf("nx_shader" to "crt/crt-pi.glslp", "nx_shader_param_SCAN" to "0.30", "nx_overlay" to "x"))
-        assertEquals(mapOf("nx_shader" to "crt/crt-pi.glslp", "nx_shader_param_SCAN" to "0.30"), v)
-        assertEquals("crt/crt-pi.glslp", ShaderOptions.preset(v))
+        val v = ShaderOptions.fromConfig(mapOf("nx_shader" to "crt/crt-pie.glslp", "nx_shader_param_SCAN" to "0.30", "nx_overlay" to "x"))
+        assertEquals(mapOf("nx_shader" to "crt/crt-pie.glslp", "nx_shader_param_SCAN" to "0.30"), v)
+        assertEquals("crt/crt-pie.glslp", ShaderOptions.preset(v))
         assertNull(ShaderOptions.preset(mapOf("nx_shader" to "None")))
     }
 
@@ -99,5 +99,13 @@ class ShaderOptionsTest {
         assertEquals(listOf("1.00"), ShaderOptions.paramChoices(bad))
         assertEquals(mapOf("B" to 0.5f), ShaderOptions.paramValues(mapOf("nx_shader_param_B" to "0.5"), listOf(bad)))
         assertEquals(mapOf("B" to 0.5f), ShaderOptions.paramValues(mapOf("nx_shader_param_B" to "NaN"), listOf(bad)))
+    }
+
+    @Test fun a_replaced_bundled_preset_reads_as_its_slang_version() {
+        assertEquals("slang/crt/crt-geom.slangp", ShaderOptions.fromConfig(mapOf("nx_shader" to "crt/crt-geom.glslp"))["nx_shader"])
+        assertEquals("slang/handheld/lcd3x.slangp", ShaderOptions.preset(mapOf("nx_shader" to "glsl/lcd3x.glsl")))
+        assertEquals("User/crt/crt-geom.glslp", ShaderOptions.preset(mapOf("nx_shader" to "User/crt/crt-geom.glslp")))
+        assertEquals("nx/line.glslp", ShaderOptions.current("nx/line.glslp"))
+        assertEquals(null, ShaderOptions.preset(mapOf("nx_shader" to "None")))
     }
 }

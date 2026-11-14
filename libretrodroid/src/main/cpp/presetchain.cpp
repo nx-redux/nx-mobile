@@ -24,6 +24,7 @@
 #include <stdexcept>
 
 #include "log.h"
+#include "slangchain.h"
 
 namespace libretrodroid {
 
@@ -292,6 +293,16 @@ unsigned PresetChainRenderer::passSize(int scaleType, float scale, unsigned prev
     return std::min(r, maxSize);
 }
 
+std::unique_ptr<ChainRenderer> makeChainRenderer(const PresetChain& chain) {
+    if (chain.isSlang()) return std::make_unique<SlangChainRenderer>(chain);
+    return std::make_unique<PresetChainRenderer>(chain);
+}
+
+unsigned chainTextureUnits(const PresetChain& chain) {
+    if (chain.isSlang()) return SlangChainRenderer::MAX_TEXTURE_UNITS;
+    return 2 + (unsigned) chain.luts.size() + (unsigned) chain.passes.size();
+}
+
 PresetChainRenderer::PresetChainRenderer(const PresetChain& chain) : params(chain.params) {
     try {
         GLint maxSize = 0;
@@ -493,7 +504,9 @@ void PresetChainRenderer::render(
     int screenW,
     int screenH,
     bool defaultLinear,
-    unsigned frameCount
+    unsigned frameCount,
+    bool /*bottomLeftOrigin*/,
+    unsigned /*slot*/
 ) {
     // No frame yet: nothing to draw, and no point sizing FBOs from it.
     if (passes.empty() || srcW == 0 || srcH == 0 || frameW == 0 || frameH == 0) return;

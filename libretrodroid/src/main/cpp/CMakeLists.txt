@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13.2)
+cmake_minimum_required(VERSION 3.22.1)
 
 # now build app's shared lib
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall")
@@ -75,6 +75,8 @@ add_library (soundtouch STATIC
 )
 target_include_directories (soundtouch PUBLIC soundtouch/include)
 target_compile_definitions (soundtouch PUBLIC SOUNDTOUCH_FLOAT_SAMPLES=1 SOUNDTOUCH_DISABLE_X86_OPTIMIZATIONS=1)
+
+include (slang.cmake)
 
 set (LIBRETRO_COMMON
         libretro/libretro-common/vfs/vfs_implementation.c
@@ -165,6 +167,12 @@ add_library(libretrodroid SHARED
         shadermanager.cpp
         presetchain.h
         presetchain.cpp
+        slangtranslate.h
+        slangtranslate.cpp
+        slangsemantics.h
+        slangsemantics.cpp
+        slangchain.h
+        slangchain.cpp
         rumble.h
         rumble.cpp
         rumblestate.h
@@ -239,6 +247,9 @@ add_library(libretrodroid SHARED
 # Support 16k pages for Android 15
 target_include_directories(libretrodroid PRIVATE ${GWL_DIR})
 target_link_options(libretrodroid PRIVATE "-Wl,-z,max-page-size=16384")
+# glslang and SPIRV-Cross are used through one small path (slangtranslate): with the static libraries' symbols kept out
+# of this library's exports, the linker drops what nothing reaches (about 1 MB of the stripped library).
+target_link_options(libretrodroid PRIVATE "-Wl,--gc-sections" "-Wl,--exclude-libs,ALL")
 
 # add lib dependencies
 target_link_libraries(libretrodroid
@@ -249,6 +260,7 @@ target_link_libraries(libretrodroid
                       samplerate
                       soundtouch
                       chdr-static
+                      nxslangdeps
                       GLESv3
                       vulkan
                       mediandk

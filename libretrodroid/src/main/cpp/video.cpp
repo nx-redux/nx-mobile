@@ -208,7 +208,7 @@ void Video::updatePresetRenderer() {
     secondaryPresetFailed = false;
     if (!requestedPreset) return;
     try {
-        presetRenderer = std::make_unique<PresetChainRenderer>(*requestedPreset);
+        presetRenderer = makeChainRenderer(*requestedPreset);
         presetRenderer->setPreserveTextureBindings(hasCoreGlState());
     } catch (const std::exception& e) {
         LOGE("Preset chain failed: %s", e.what());
@@ -298,12 +298,10 @@ private:
 unsigned Video::sampledTextureUnits() const {
     // The built-in shaders and immersive mode sample units 0 and 1.
     unsigned units = 2;
-    // The chain is (re)built inside this draw, after the guard; it will sample what PresetChainRenderer::textureUnits
-    // counts (one LUT texture per lut, one output per pass). A held picture keeps it pending and the current chains
+    // The chain is (re)built inside this draw, after the guard; it will sample what chainTextureUnits counts. A held
+    // picture keeps it pending and the current chains
     // alive (the second surface still draws with them), so both count.
-    if (presetDirty && requestedPreset) {
-        units = std::max(units, 2 + (unsigned) requestedPreset->luts.size() + (unsigned) requestedPreset->passes.size());
-    }
+    if (presetDirty && requestedPreset) units = std::max(units, chainTextureUnits(*requestedPreset));
     // The second surface's chain, when not built yet, is built from the main one's preset: the same units.
     if (presetRenderer) units = std::max(units, presetRenderer->textureUnits());
     if (secondaryPresetRenderer) units = std::max(units, secondaryPresetRenderer->textureUnits());
@@ -378,7 +376,7 @@ void Video::drawFrame(bool force) {
             (unsigned) getTextureWidth(), (unsigned) getTextureHeight(),
             frameCoordinates(videoLayout.getTextureCoordinates()), videoLayout.getForegroundVertices(),
             videoLayout.getFramebufferVertices(), videoLayout.getScreenWidth(), videoLayout.getScreenHeight(),
-            linearTexture, frameCount);
+            linearTexture, frameCount, videoLayout.isBottomLeftOrigin(), 0);
         frameCount++;
         return;
     }
@@ -388,7 +386,7 @@ void Video::drawFrame(bool force) {
     frameCount++;
 }
 
-void Video::renderRegions(VideoLayout& layout, PresetChainRenderer* preset, std::vector<RegionCrop>& crops) {
+void Video::renderRegions(VideoLayout& layout, ChainRenderer* preset, std::vector<RegionCrop>& crops) {
     quadScratch.clear();
     for (const auto& quad : layout.getRegionQuads()) {
         if (quad.shaded && preset && composing() && quad.srcWidth > 0.999F && quad.srcHeight > 0.999F) {
@@ -440,7 +438,7 @@ void Video::appendComposition(const RegionQuad& whole, std::vector<RegionQuad>& 
     }
 }
 
-void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layout, PresetChainRenderer* preset,
+void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layout, ChainRenderer* preset,
                         std::vector<RegionCrop>& crops) {
     auto screenW = (unsigned) layout.getScreenWidth();
     auto screenH = (unsigned) layout.getScreenHeight();
@@ -452,7 +450,8 @@ void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layou
         if (!quad.shaded) {
             drawPlain(quad, screenW, screenH);
         } else if (preset) {
-            // One chain serves every shaded region in turn: it keeps no frame history. A region that is part of the
+            // One chain serves every shaded region in turn, each under its own slot (a slang chain keeps every
+            // region's past frames apart). A region that is part of the
             // frame (one DS / 3DS screen) is copied into its own texture first: presets place their effect from
             // texture coordinate 0 (crt-geom's curvature, a mask's edges) and later passes sample Original whole, so
             // each screen gets the effect as if it were the frame.
@@ -467,12 +466,14 @@ void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layou
                     coordinates[i + 1] = v1 > v0 ? (coordinates[i + 1] - v0) / (v1 - v0) : 0.0F;
                 }
                 preset->render(cropped, frameW, frameH, frameW, frameH, coordinates, quad.vertices,
-                               layout.getFramebufferVertices(), (int) screenW, (int) screenH, linearTexture, frameCount);
+                               layout.getFramebufferVertices(), (int) screenW, (int) screenH, linearTexture, frameCount,
+                               videoLayout.isBottomLeftOrigin(), (unsigned) index);
             } else {
                 preset->render(
                     frameTexture(), (unsigned) getTextureStorageWidth(), (unsigned) getTextureStorageHeight(),
                     frameW, frameH, coordinates, quad.vertices, layout.getFramebufferVertices(),
-                    (int) screenW, (int) screenH, linearTexture, frameCount);
+                    (int) screenW, (int) screenH, linearTexture, frameCount,
+                    videoLayout.isBottomLeftOrigin(), (unsigned) index);
                 frameFilter.invalidate();   // its first pass sets the filter of the texture it samples
             }
         } else {
@@ -705,7 +706,7 @@ void Video::updateSecondaryRegions(std::vector<ScreenRegion> regions) {
 void Video::updateSecondaryPresetRenderer() {
     if (!presetRenderer || secondaryPresetRenderer || secondaryPresetFailed || !requestedPreset) return;
     try {
-        secondaryPresetRenderer = std::make_unique<PresetChainRenderer>(*requestedPreset);
+        secondaryPresetRenderer = makeChainRenderer(*requestedPreset);
         secondaryPresetRenderer->setPreserveTextureBindings(hasCoreGlState());
     } catch (const std::exception& e) {
         // The main chain built from the same source, so this is unexpected; the second surface then draws its shaded

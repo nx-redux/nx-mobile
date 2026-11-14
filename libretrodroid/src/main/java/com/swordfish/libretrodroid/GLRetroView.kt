@@ -304,7 +304,7 @@ class GLRetroView(
         if (pressed) sendMotionEvent(MOTION_SOURCE_POINTER, x01, y01) else sendMotionEvent(MOTION_SOURCE_POINTER, -1f, -1f)
     }
 
-    /** A RetroArch GLSL chain drawn instead of [shader]; null = the built-in [shader]. Queued on the GL thread; survives create(). */
+    /** A RetroArch preset chain (GLSL or slang) drawn instead of [shader]; null = the built-in [shader]. Queued on the GL thread; survives create(). */
     var shaderChain: ShaderChainData? by Delegates.observable(null) { _, _, value ->
         shaderParameterOverrides.clear()
         queueEvent { pushShaderChain(value) }
@@ -464,6 +464,32 @@ class GLRetroView(
     private fun pushShaderChain(chain: ShaderChainData?) = catchExceptions {
         if (chain == null) {
             LibretroDroid.clearShaderChain()
+        } else if (chain.slangPasses.isNotEmpty()) {
+            val passes = chain.slangPasses
+            val luts = chain.luts
+            val params = chain.params.entries.toList()
+            LibretroDroid.setSlangChain(
+                passes.map { it.program }.toTypedArray(),
+                passes.map { pass -> pass.filterLinear?.let { if (it) 1 else 0 } ?: -1 }.toIntArray(),
+                passes.map { it.wrap.value }.toIntArray(),
+                passes.map { it.scaleTypeX.value }.toIntArray(),
+                passes.map { it.scaleTypeY.value }.toIntArray(),
+                passes.map { it.scaleX }.toFloatArray(),
+                passes.map { it.scaleY }.toFloatArray(),
+                passes.map { it.frameCountMod }.toIntArray(),
+                passes.map { it.alias }.toTypedArray(),
+                passes.map { it.format }.toTypedArray(),
+                passes.map { it.mipmapInput }.toBooleanArray(),
+                luts.map { it.id }.toTypedArray(),
+                luts.map { it.width }.toIntArray(),
+                luts.map { it.height }.toIntArray(),
+                luts.map { it.rgba }.toTypedArray(),
+                luts.map { it.linear }.toBooleanArray(),
+                luts.map { it.wrap.value }.toIntArray(),
+                luts.map { it.mipmap }.toBooleanArray(),
+                params.map { it.key }.toTypedArray(),
+                params.map { it.value }.toFloatArray(),
+            )
         } else {
             val passes = chain.passes
             val luts = chain.luts

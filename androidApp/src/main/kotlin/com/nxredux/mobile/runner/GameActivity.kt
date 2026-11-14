@@ -1925,6 +1925,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (!menuOpen) toggleMenu()
         withMenu { it.openOptions() }
     }
+    override fun openShaderPicker() {
+        if (quitting || !gameReady || dsWireless) return
+        if (!menuOpen) toggleMenu()
+        withMenu { it.openShaderPicker() }
+    }
     override fun onPanelTouch(action: ShortcutAction, down: Boolean, slot: Int?) = shortcuts.onPanelTouch(action, down, slot)
     override fun placeMenu() = menu.placeMenu()
     override fun relayoutPad() = padLayout.applyLayout(resources.configuration.orientation)
