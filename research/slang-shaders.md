@@ -176,10 +176,19 @@ presentation layer is a separate later project; the translate half below is API-
   copies of the frame, which also normalises its orientation); sampler objects per binding (border clamp where GLES has
   it); one uniform buffer per stage; LUT mipmaps. State (history, feedback, outputs) is kept per screen region, so the
   two DS screens have their own. The presentation is unchanged: Vulkan cores' frames arrive through the bridge as before.
+- **Bundled set**: 50 slang presets from libretro `slang-shaders` under `assets/shaders/slang` (`tools/bundle_slang.py`
+  holds the list and rebuilds the folder and its origins list). The 21 bundled GLSL shaders that have a slang version
+  were removed; a stored value naming one loads its slang preset (`ShaderOptions.REPLACED`). 18 shaders with no slang
+  version stay GLSL.
+- **Picker** (`ShaderBrowse`, the in-game menu's `ShaderBrowse` pages): the Shader row opens None, the bundled presets
+  in groups by effect (CRT, Handheld, Smoothing, NTSC, Effects, each with a line saying what it does) under readable
+  names, and Personal, the home's `Shaders/` browsed a folder at a time. A on a preset uses it and shows its preview
+  strip, LEFT / RIGHT stepping through that level. The second screen's Shader row opens the same picker.
 - **Not done**: rotation / HDR / sensor / sub-frame semantics (zero or neutral values), `FrameDirection` under rewind
-  (always 1), a program-binary cache (the driver's own cache is relied on), a bundled slang set (presets come from the
-  home's `Shaders/`), and a browsable picker for a library-sized folder (the Shader row lists every preset).
+  (always 1), a program-binary cache (the driver's own cache is relied on).
 - **Cost measured**: the stripped arm64 runner grows from 4.2 MB to 6.4 MB (2.3 MB → 3.1 MB compressed) with both
   libraries built for size and unreached code dropped.
-- **Checked**: emulator only (GLES 3.1, GBA): crt-geom, crt-guest-advanced, crt-royale, newpixie-crt, scalefx, Mega
-  Bezel POTATO (10 passes), STD (30) and SMOOTH-ADV (48). Device checks are listed in `TODO_LIST.md`.
+- **Checked**: on the emulator (GLES 3.1) and the Nova (GLES 3.2) with `tools/device-tests/slang_shaders.py`: a set of
+  presets across SNES, Game Boy, a rotated arcade game, N64, GameCube, PSP, PS2, DS and 3DS; every bundled preset and
+  every replaced GLSL name on SNES. Mega Bezel STD and SMOOTH-ADV draw at about 36 fps on the Nova. What is still owed
+  is listed in `TODO_LIST.md`.

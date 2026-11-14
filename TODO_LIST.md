@@ -19,7 +19,8 @@
 Nova, 2026-11-14 (`tools/device-tests/slang_shaders.py`, 33 runs, no errors, screenshots looked at): SNES with crt-geom,
 crt-guest-advanced, crt-royale, newpixie-crt, scalefx, motionblur/feedback and Mega Bezel POTATO at full speed; Game Boy
 (gameboy, lcd-grid-v2); a rotated arcade game; N64 and GameCube (GL cores), PSP, PS2 and 3DS; DS with a feedback preset
-on the top screen. Mega Bezel STD and SMOOTH-ADV draw correctly but at about 36 fps there. Still owed:
+on the top screen; all 50 bundled slang presets and the 21 replaced GLSL names on SNES. Mega Bezel STD and SMOOTH-ADV draw
+correctly but at about 36 fps there. Still owed:
 
 - [ ] Mega Bezel STD / SMOOTH-ADV speed: find whether the 36 fps on the Nova is the preset's own cost or ours.
 - [ ] Heat over a long session with crt-guest-advanced.
@@ -27,7 +28,10 @@ on the top screen. Mega Bezel STD and SMOOTH-ADV draw correctly but at about 36 
 - [ ] DS screens on the second display with a feedback preset; a pad skin with a slang preset.
 - [ ] Mali (AYANEO) and the Fold: crt-guest-advanced and a float-framebuffer preset draw; a preset that cannot build toasts and falls back.
 - [ ] Shader Parameters on a slang preset from the in-game menu: live change, Reset Parameters, Save for game, relaunch.
-- [ ] The Shader list with a whole `shaders_slang` folder copied in (about 2,600 presets): opening the in-game menu stays quick.
+- [ ] Shader picker with a pad on a two-pane screen (Nova, Fold inner): groups with their descriptions, a preset's preview strip stepping within its group, B back with the tick moved; Personal with a whole `shaders_slang` folder (about 2,600 presets) opens quickly.
+- [ ] Second screen: the Settings tab's Shader row opens the picker on the bottom screen while the picture on the top stays undimmed.
+- [ ] A game saved with a removed GLSL preset (crt-geom, lcd3x, scanline...) opens with its slang version and looks the same; compare the swapped single-file ones with the handheld's.
+- [ ] Every bundled preset once on a GL core and on a Mali GPU (only SNES on the Nova so far).
 
 ## Game info from ScreenScraper
 
