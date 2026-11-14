@@ -4,6 +4,7 @@ import com.nxredux.mobile.skin.GlassScreen
 import com.nxredux.mobile.skin.SkinN3ds
 import com.nxredux.mobile.skin.SkinDual
 import com.swordfish.libretrodroid.FrameComposition
+import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -47,9 +48,10 @@ import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.frontendLayout
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_TAG
 import com.nxredux.mobile.shaders.GlslPreset
+import com.nxredux.mobile.shaders.PresetException
 import com.nxredux.mobile.shaders.ScaleType
-import com.nxredux.mobile.shaders.ShaderLut
 import com.nxredux.mobile.shaders.ShaderParam
+import com.nxredux.mobile.shaders.SlangPreset
 import com.nxredux.mobile.shaders.WrapMode
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.NxLog
@@ -61,6 +63,7 @@ import com.swordfish.libretrodroid.ShaderLutData
 import com.swordfish.libretrodroid.ShaderPassData
 import com.swordfish.libretrodroid.ShaderScaleType
 import com.swordfish.libretrodroid.ShaderWrap
+import com.swordfish.libretrodroid.SlangPassData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -346,17 +349,13 @@ internal class FrontendRenderer(
                 dropShaderChain()
                 return
             }
+            val appContext = activity.applicationContext
             lifecycleScope.launch {
                 val result = withContext(Dispatchers.IO) {
-                    runCatching {
-                        val chain = GlslPreset.parse(preset) { Shaders.read(host.shaderRoots, it) }
-                        chain.warnings.forEach { NxLog.i(TAG_LOG, "shader $preset: $it") }
-                        val luts = chain.luts.mapNotNull { lut -> Shaders.file(host.shaderRoots, lut.path)?.let { decodeLut(it, lut) } }
-                        chain to luts
-                    }
+                    runCatching { loadChain(appContext, preset) }
                 }
                 if (generation != shaderGeneration) return@launch
-                val (chain, luts) = result.getOrElse { e ->
+                val loaded = result.getOrElse { e ->
                     NxLog.w(TAG_LOG, "shader $preset failed", e)
                     toast("Shader: ${e.message ?: e.javaClass.simpleName}")
                     requestedPreset = null   // this load is the newest request, so forget it for a retry
@@ -364,15 +363,9 @@ internal class FrontendRenderer(
                     return@launch
                 }
                 loadedPreset = preset
-                shaderParams = chain.params
+                shaderParams = loaded.params
                 // Every parameter with its value: the view reads one absent from the map as 0, not its default.
-                view.shaderChain = ShaderChainData(
-                    passes = chain.passes.map { p ->
-                        ShaderPassData(p.source, p.filterLinear, wrapOf(p.wrap), scaleOf(p.scaleTypeX), scaleOf(p.scaleTypeY), p.scaleX, p.scaleY, p.frameCountMod, p.alias)
-                    },
-                    luts = luts,
-                    params = ShaderOptions.paramValues(shaderValues, chain.params),
-                )
+                view.shaderChain = loaded.chain.copy(params = ShaderOptions.paramValues(shaderValues, loaded.params))
                 host.publishMenuShaders()
             }
             return
@@ -398,28 +391,62 @@ internal class FrontendRenderer(
         host.publishMenuShaders()
     }
 
-    private fun wrapOf(w: WrapMode) = when (w) { WrapMode.EDGE -> ShaderWrap.EDGE; WrapMode.REPEAT -> ShaderWrap.REPEAT; WrapMode.MIRRORED -> ShaderWrap.MIRRORED }
+    /** A preset ready for the view (its parameter values still to fill in), with the parameters it declares. */
+    private class LoadedChain(val chain: ShaderChainData, val params: List<ShaderParam>)
+
+    /**
+     * Reads and prepares [preset], GLSL or slang by its file name: parsed, its LUTs decoded, a slang pass translated
+     * for this device (or read back from [SlangCache]). Blocking; throws with the reason shown to the player.
+     */
+    private fun loadChain(context: Context, preset: String): LoadedChain {
+        val read: (String) -> String? = { Shaders.read(host.shaderRoots, it) }
+        if (SlangPreset.isSlang(preset)) {
+            val chain = SlangPreset.parse(preset, read)
+            val es = SlangCache.esVersion(context)
+            val passes = chain.passes.mapIndexed { n, p ->
+                SlangPassData(
+                    SlangCache.translate(context, p, n, es), p.filterLinear, wrapOf(p.wrap), scaleOf(p.scaleTypeX), scaleOf(p.scaleTypeY),
+                    p.scaleX, p.scaleY, p.frameCountMod, p.alias, p.format, p.mipmapInput,
+                )
+            }
+            // A slang pass that samples a texture the chain lacks does not build, so a missing LUT fails here, by name.
+            val luts = chain.luts.map { lut ->
+                Shaders.file(host.shaderRoots, lut.path)?.let { decodeLut(it, lut.id, lut.linear, lut.wrap, lut.mipmap) }
+                    ?: throw PresetException("texture ${lut.id} unreadable: ${lut.path}")
+            }
+            return LoadedChain(ShaderChainData(emptyList(), luts, emptyMap(), passes), chain.params)
+        }
+        val chain = GlslPreset.parse(preset, read)
+        chain.warnings.forEach { NxLog.i(TAG_LOG, "shader $preset: $it") }
+        val luts = chain.luts.mapNotNull { lut -> Shaders.file(host.shaderRoots, lut.path)?.let { decodeLut(it, lut.id, lut.linear, lut.wrap, false) } }
+        val passes = chain.passes.map { p ->
+            ShaderPassData(p.source, p.filterLinear, wrapOf(p.wrap), scaleOf(p.scaleTypeX), scaleOf(p.scaleTypeY), p.scaleX, p.scaleY, p.frameCountMod, p.alias)
+        }
+        return LoadedChain(ShaderChainData(passes, luts, emptyMap()), chain.params)
+    }
+
+    private fun wrapOf(w: WrapMode) = when (w) { WrapMode.EDGE -> ShaderWrap.EDGE; WrapMode.REPEAT -> ShaderWrap.REPEAT; WrapMode.MIRRORED -> ShaderWrap.MIRRORED; WrapMode.BORDER -> ShaderWrap.BORDER }
     private fun scaleOf(s: ScaleType) = when (s) { ScaleType.NONE -> ShaderScaleType.NONE; ScaleType.SOURCE -> ShaderScaleType.SOURCE; ScaleType.VIEWPORT -> ShaderScaleType.VIEWPORT; ScaleType.ABSOLUTE -> ShaderScaleType.ABSOLUTE }
 
     /** RGBA8 bytes of a LUT PNG (Bitmap ARGB_8888 is RGBA in memory order); null with a log when unreadable. */
-    private fun decodeLut(file: File, lut: ShaderLut): ShaderLutData? {
+    private fun decodeLut(file: File, id: String, linear: Boolean, wrap: WrapMode, mipmap: Boolean): ShaderLutData? {
         var bmp = runCatching { BitmapFactory.decodeFile(file.path, BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888; inPremultiplied = false }) }.getOrNull()
-        if (bmp == null) { NxLog.w(TAG_LOG, "shader texture ${lut.id} unreadable: ${file.path}"); return null }
+        if (bmp == null) { NxLog.w(TAG_LOG, "shader texture $id unreadable: ${file.path}"); return null }
         // The decoder may ignore inPreferredConfig (16-bit, hardware); the view needs exactly 4 bytes per pixel.
         if (bmp.config != Bitmap.Config.ARGB_8888) {
             val copy = bmp.copy(Bitmap.Config.ARGB_8888, false)
             bmp.recycle()
-            if (copy == null) { NxLog.w(TAG_LOG, "shader texture ${lut.id} could not be converted: ${file.path}"); return null }
+            if (copy == null) { NxLog.w(TAG_LOG, "shader texture $id could not be converted: ${file.path}"); return null }
             bmp = copy
         }
         if (bmp.byteCount != bmp.width * bmp.height * 4) {
-            NxLog.w(TAG_LOG, "shader texture ${lut.id} has an unexpected size: ${file.path}")
+            NxLog.w(TAG_LOG, "shader texture $id has an unexpected size: ${file.path}")
             bmp.recycle()
             return null
         }
         val buf = ByteBuffer.allocate(bmp.byteCount)
         bmp.copyPixelsToBuffer(buf)
-        val data = ShaderLutData(lut.id, bmp.width, bmp.height, buf.array(), lut.linear, wrapOf(lut.wrap))
+        val data = ShaderLutData(id, bmp.width, bmp.height, buf.array(), linear, wrapOf(wrap), mipmap)
         bmp.recycle()
         return data
     }

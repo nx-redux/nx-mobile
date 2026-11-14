@@ -17,3 +17,9 @@
 [submodule "libretrodroid/src/main/cpp/soundtouch"]
 	path = libretrodroid/src/main/cpp/soundtouch
 	url = https://codeberg.org/soundtouch/soundtouch
+[submodule "libretrodroid/src/main/cpp/glslang"]
+	path = libretrodroid/src/main/cpp/glslang
+	url = https://github.com/KhronosGroup/glslang
+[submodule "libretrodroid/src/main/cpp/SPIRV-Cross"]
+	path = libretrodroid/src/main/cpp/SPIRV-Cross
+	url = https://github.com/KhronosGroup/SPIRV-Cross

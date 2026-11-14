@@ -167,8 +167,8 @@ private:
     // layout's region quads on framebuffer 0 at layout's screen size; preset (may be null) draws the shaded ones.
     // A screen cut from the frame, copied into its own texture so a preset sees it as a whole frame of its own.
     struct RegionCrop { GLuint framebuffer = 0; GLuint texture = 0; unsigned width = 0; unsigned height = 0; };
-    void renderRegions(VideoLayout& layout, PresetChainRenderer* preset, std::vector<RegionCrop>& crops);
-    void renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layout, PresetChainRenderer* preset,
+    void renderRegions(VideoLayout& layout, ChainRenderer* preset, std::vector<RegionCrop>& crops);
+    void renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layout, ChainRenderer* preset,
                      std::vector<RegionCrop>& crops);
     // While composing: a quad of the whole composed frame cut into its screens (each shaded as its part says),
     // appended to out.
@@ -204,7 +204,7 @@ private:
     bool presetSupported = true;
     std::optional<PresetChain> requestedPreset;
     bool presetDirty = false;
-    std::unique_ptr<PresetChainRenderer> presetRenderer;
+    std::unique_ptr<ChainRenderer> presetRenderer;
     std::optional<std::string> presetError;
     unsigned frameCount = 0;
     // The nearest default shader for unshaded regions, built on first use.
@@ -238,7 +238,7 @@ private:
     // size never resizes the main chain's FBOs. The chain is built on the first secondary draw that needs it, not
     // with the main one: no second compile while there is no second surface.
     VideoLayout secondaryLayout;
-    std::unique_ptr<PresetChainRenderer> secondaryPresetRenderer;
+    std::unique_ptr<ChainRenderer> secondaryPresetRenderer;
     bool secondaryPresetFailed = false;   // don't retry a failed build every frame; cleared with the main chain
 
     std::unique_ptr<Renderer> renderer;

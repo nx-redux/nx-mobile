@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13.2)
+cmake_minimum_required(VERSION 3.22.1)
 
 # now build app's shared lib
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall")
@@ -75,6 +75,8 @@ add_library (soundtouch STATIC
 )
 target_include_directories (soundtouch PUBLIC soundtouch/include)
 target_compile_definitions (soundtouch PUBLIC SOUNDTOUCH_FLOAT_SAMPLES=1 SOUNDTOUCH_DISABLE_X86_OPTIMIZATIONS=1)
+
+include (slang.cmake)
 
 set (LIBRETRO_COMMON
         libretro/libretro-common/vfs/vfs_implementation.c
@@ -165,6 +167,10 @@ add_library(libretrodroid SHARED
         shadermanager.cpp
         presetchain.h
         presetchain.cpp
+        slangtranslate.h
+        slangtranslate.cpp
+        slangchain.h
+        slangchain.cpp
         rumble.h
         rumble.cpp
         rumblestate.h
@@ -249,6 +255,7 @@ target_link_libraries(libretrodroid
                       samplerate
                       soundtouch
                       chdr-static
+                      nxslangdeps
                       GLESv3
                       vulkan
                       mediandk

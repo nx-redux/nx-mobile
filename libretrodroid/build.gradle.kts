@@ -11,6 +11,8 @@ listOf(
     "src/main/cpp/libretro/libretro-common/include/libretro.h",
     "src/main/cpp/rcheevos/include/rc_client.h",
     "src/main/cpp/libchdr/CMakeLists.txt",
+    "src/main/cpp/glslang/CMakeLists.txt",
+    "src/main/cpp/SPIRV-Cross/CMakeLists.txt",
 ).firstOrNull { !file(it).exists() }?.let {
     throw GradleException(
         "libretrodroid's native dependencies are git submodules ($it is missing): " +
