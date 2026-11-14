@@ -278,7 +278,7 @@ internal fun SettingsResetDialog(ask: SettingsResetAsk, onHint: ((NxButton) -> U
     )
 }
 
-/** "Remove driver?" over System → GPU driver ([Screen.Settings.confirmDriver]) for the driver [name]: A removes it, B keeps it. */
+/** "Remove driver?" over Emulation → GPU driver ([Screen.Settings.confirmDriver]) for the driver [name]: A removes it, B keeps it. */
 @Composable
 internal fun GpuDriverRemoveDialog(name: String, onHint: ((NxButton) -> Unit)?) {
     NxDialog(

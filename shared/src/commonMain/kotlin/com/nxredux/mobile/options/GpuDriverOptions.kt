@@ -23,7 +23,7 @@ object GpuDriverOptions {
 
     fun row(installed: List<GpuDriver>): FrontendOption = FrontendOption(
         KEY, "GPU driver", listOf(GpuDriverChoice.DEFAULT, GpuDriverChoice.SYSTEM) + installed.map { it.id }, GpuDriverChoice.DEFAULT,
-        "The Vulkan driver this console uses. Default follows Settings → System → GPU driver. Takes effect the next time the game starts.",
+        "The Vulkan driver this console uses. Default follows Settings → Emulation → GPU driver. Takes effect the next time the game starts.",
         brief = "Applies next launch. Vulkan only",
         visual = false, valueLabels = listOf("Default", "System driver") + installed.map { it.name }, atLaunch = true,
         shownWhen = GraphicsApiOptions.KEY to setOf(GraphicsApiOptions.VULKAN),

@@ -16,7 +16,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 
 /**
- * Settings → System → GPU driver over [AndroidGpuDrivers] (`filesDir/gpu_drivers`). [pickZip] is the app's zip picker
+ * Settings → Emulation → GPU driver over [AndroidGpuDrivers] (`filesDir/gpu_drivers`). [pickZip] is the app's zip picker
  * (Save import's: Android's document picker, or the list-style one with All files access); it answers a content or file
  * ref, null when cancelled.
  */

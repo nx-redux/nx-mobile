@@ -203,7 +203,7 @@ internal class EmulatorSettingsController(
     private val alwaysListed: () -> List<String> = { emptyList() },
     /** The installed custom GPU drivers (null: the feature is unavailable, so no GPU driver row). */
     private val gpuDrivers: () -> List<GpuDriver>? = { null },
-    /** The app-wide driver id (Settings -> System -> GPU driver), null for the system driver. */
+    /** The app-wide driver id (Settings -> Emulation -> GPU driver), null for the system driver. */
     private val gpuDriverAppWide: () -> String? = { null },
     /** The driver ids that crashed in the game at this library path ([com.nxredux.mobile.library.path]). */
     private val gpuDriverCrashed: (gamePath: String) -> Set<String> = { emptySet() },

@@ -325,7 +325,7 @@ class AppDeps(
     val promptOnSecondDisplay: () -> Boolean = { false },
     /** A diagnostic line (Android: NxLog, so only with Settings → System → Debug log on). */
     val log: (String) -> Unit = {},
-    /** Settings → System → GPU driver and the consoles' GPU driver rows; null: a platform without custom drivers (no row). */
+    /** Settings → Emulation → GPU driver and the consoles' GPU driver rows; null: a platform without custom drivers (no row). */
     val gpuDrivers: GpuDriverStore? = null,
 )
 
@@ -470,7 +470,7 @@ sealed interface Screen {
         val confirmReset: Boolean = false,
         /** System → Player name's prompt is up (its draft): A saves it, B keeps the old name. */
         val nameDraft: String? = null,
-        /** System → GPU driver: "Remove driver?" is open for this driver; A removes it, B keeps it. */
+        /** Emulation → GPU driver: "Remove driver?" is open for this driver; A removes it, B keeps it. */
         val confirmDriver: GpuDriver? = null,
     ) : Screen
     /** Tools -> Settings: one row per section. */
@@ -589,7 +589,7 @@ enum class SettingsKind { PLAYER_NAME, HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, U
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
     SYSTEM_BUTTONS, SYSTEM_BUTTON_BIND,
-    // System -> GPU driver ([GPU_DRIVER] opens it): a driver to use (System driver or an installed one), and Add driver.
+    // Emulation -> GPU driver ([GPU_DRIVER] opens it): a driver to use (System driver or an installed one), and Add driver.
     GPU_DRIVER_ITEM, GPU_DRIVER_ADD,
     LAYOUT_HOME, LAYOUT_GAMES_TAB, LAYOUT_CONSOLES, LAYOUT_COLLECTIONS, LAYOUT_TOOLS, LAYOUT_GAME_LISTS, LAYOUT_TITLE_HINTS, LAYOUT_SWITCHER, TEXT_SIZE,
     // A group's label and the space before it (System's General, Launcher, Developer, About, Licenses): never selected.
@@ -617,7 +617,7 @@ enum class SettingsSection(val label: String, val parent: SettingsSection? = nul
     BUTTON_LAYOUT("Button layout", APPEARANCE, SettingsKind.BUTTON_LAYOUT), SAVES("Saves", LIBRARY, SettingsKind.SAVES),
     SHORTCUTS("Shortcuts", CONTROLS, SettingsKind.SHORTCUTS),
     SYSTEM_BUTTONS("System buttons", CONTROLS, SettingsKind.SYSTEM_BUTTONS),
-    GPU_DRIVER("GPU driver", SYSTEM, SettingsKind.GPU_DRIVER),
+    GPU_DRIVER("GPU driver", EMULATORS, SettingsKind.GPU_DRIVER),
     IMPORT_SAVES("Import saves", SAVES, SettingsKind.IMPORT_SAVES),
     // An import's results; Done and B go back to Saves ([AppState.leaveSubPage]), past Import saves.
     IMPORT_RESULT("Import results", IMPORT_SAVES),
@@ -4008,6 +4008,7 @@ class AppState(
         SettingsSection.EMULATORS -> buildList {
             add(SettingsRow(SettingsKind.DEFAULTS, "Default emulators"))
             add(SettingsRow(SettingsKind.EMULATORS, "Default settings"))
+            deps.gpuDrivers?.let { store -> gpuDriverRow(store.unavailableReason(), deps.settings.gpuDriver, store::installed)?.let(::add) }
         }
         SettingsSection.SECOND_SCREEN -> listOf(
             SettingsRow(SettingsKind.SECOND_SCREEN_ENABLE, "Enable", if (deps.settings.secondScreen) "On" else "Off"),
@@ -4089,7 +4090,6 @@ class AppState(
         add(SettingsRow(SettingsKind.PLAYER_NAME, "Player name", PlayerName.resolve(deps.settings.playerName, deps.deviceName())))
         add(SettingsRow(SettingsKind.PAUSE_UNFOCUSED, "Pause when unfocused", if (deps.settings.pauseWhenUnfocused) "On" else "Off"))
         add(SettingsRow(SettingsKind.SCREEN_CARE, "Screen care", if (deps.settings.screenCare) "On" else "Off"))
-        deps.gpuDrivers?.let { store -> gpuDriverSystemRow(store.unavailableReason(), deps.settings.gpuDriver, store::installed)?.let(::add) }
         deps.launcher?.let { l -> add(SettingsRow(SettingsKind.HOME_SCREEN, "Use as home screen", if (l.isHome()) "On" else "Off")) }
         if (deps.ownKeyboard) add(SettingsRow(SettingsKind.KEYBOARD, "Keyboard", keyboardLabel(deps.settings.androidKeyboard)))
         // Logging for a bug report; off, only errors reach logcat.

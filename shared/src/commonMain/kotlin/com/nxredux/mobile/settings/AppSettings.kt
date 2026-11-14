@@ -534,7 +534,7 @@ interface AppSettings {
      */
     val vulkanFailedCores: Set<String>
         get() = emptySet()
-    /** Settings → System → GPU driver: [com.nxredux.mobile.gpudriver.GpuDriverChoice.SYSTEM] or an installed driver's id. Defaulted, like [debugLog]. */
+    /** Settings → Emulation → GPU driver: [com.nxredux.mobile.gpudriver.GpuDriverChoice.SYSTEM] or an installed driver's id. Defaulted, like [debugLog]. */
     var gpuDriver: String
         get() = com.nxredux.mobile.gpudriver.GpuDriverChoice.SYSTEM
         set(@Suppress("UNUSED_PARAMETER") value) {}

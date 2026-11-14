@@ -3,7 +3,7 @@ package com.nxredux.mobile.ui
 import com.nxredux.mobile.gpudriver.GpuDriver
 import com.nxredux.mobile.gpudriver.GpuDriverChoice
 
-/** System → GPU driver's row label for the phone's own driver, and its value on the System page while it is in use. */
+/** Emulation → GPU driver's row label for the phone's own driver, and its value on the Emulation page while it is in use. */
 internal const val GPU_SYSTEM_DRIVER = "System driver"
 
 /** The GPU driver row's full description (behind its info icon) and the GPU driver page's note under its title. */
@@ -28,10 +28,10 @@ internal const val GPU_DRIVER_REMOVE = "Remove"
 internal fun gpuDriverInUse(chosen: String, installed: List<GpuDriver>): GpuDriver? = installed.firstOrNull { it.id == chosen }
 
 /**
- * System's GPU driver row: [unavailable] "" none; a reason, the row dimmed with that reason as its value; otherwise the
+ * Emulation's GPU driver row: [unavailable] "" none; a reason, the row dimmed with that reason as its value; otherwise the
  * driver in use ([gpuDriverInUse]) by name, or System driver.
  */
-internal fun gpuDriverSystemRow(unavailable: String?, chosen: String, installed: () -> List<GpuDriver>): SettingsRow? = when {
+internal fun gpuDriverRow(unavailable: String?, chosen: String, installed: () -> List<GpuDriver>): SettingsRow? = when {
     unavailable == "" -> null
     unavailable != null -> SettingsRow(SettingsKind.GPU_DRIVER, "GPU driver", unavailable, enabled = false)
     else -> SettingsRow(SettingsKind.GPU_DRIVER, "GPU driver", gpuDriverInUse(chosen, installed())?.name ?: GPU_SYSTEM_DRIVER)

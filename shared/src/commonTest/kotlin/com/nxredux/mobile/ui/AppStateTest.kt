@@ -229,7 +229,7 @@ class AppStateTest {
         override var gpuDriver = GpuDriverChoice.SYSTEM
         override var gpuDriverCrashes: String? = null
     }
-    /** Settings → System → GPU driver's platform side: [drivers] installed, [reason] its unavailableReason, [next] what Add driver's pick gives. */
+    /** Settings → Emulation → GPU driver's platform side: [drivers] installed, [reason] its unavailableReason, [next] what Add driver's pick gives. */
     private class FakeGpuDrivers(var drivers: List<GpuDriver> = emptyList(), var reason: String? = null) : GpuDriverStore {
         var next: PackageCheck? = null
         val removed = ArrayList<String>()
@@ -13389,55 +13389,55 @@ class AppStateTest {
         assertEquals(sections, assertIs<Screen.SettingsMenu>(with.screen.value).sections)   // no Launcher category: its rows are on System and Library
         assertEquals(sections, with.settingsSections())   // the two-pane left pane lists the same
         with.openSettings(SettingsSection.SYSTEM)
-        // System's options are one group (Player name, Pause when unfocused, Screen care, GPU driver, Use as home screen, Debug log), then About and Licenses.
+        // System's options are one group (Player name, Pause when unfocused, Screen care, Use as home screen, Debug log), then About and Licenses.
         val sys = assertIs<Screen.Settings>(with.screen.value).rows
         assertEquals(listOf("About", "Licenses"), sys.filter { it.kind == SettingsKind.SECTION }.map { it.label })
-        assertEquals(listOf(SettingsKind.PLAYER_NAME, SettingsKind.PAUSE_UNFOCUSED, SettingsKind.SCREEN_CARE, SettingsKind.GPU_DRIVER, SettingsKind.HOME_SCREEN, SettingsKind.DEBUG_LOG), sys.take(6).map { it.kind })
+        assertEquals(listOf(SettingsKind.PLAYER_NAME, SettingsKind.PAUSE_UNFOCUSED, SettingsKind.SCREEN_CARE, SettingsKind.HOME_SCREEN, SettingsKind.DEBUG_LOG), sys.take(5).map { it.kind })
     }
 
     private val turnip = GpuDriver("t1", "Turnip", "v25.1", "K11MCH1", "", "libvulkan_freedreno.so", 28)
     private val malisx2 = GpuDriver("m2", "malisx2", "0.5.0", "", "", "libvulkan_malisx2.so", 0)
 
-    /** System → GPU driver's sub-page, opened from its row. */
+    /** Emulation → GPU driver's sub-page, opened from its row. */
     private fun openGpuDriverPage(st: AppState) {
-        st.openSettings(SettingsSection.SYSTEM)
+        st.openSettings(SettingsSection.EMULATORS)
         st.select(rowIndex(st, SettingsKind.GPU_DRIVER)); st.onButton(NxButton.A)
         assertEquals(SettingsSection.GPU_DRIVER, assertIs<Screen.Settings>(st.screen.value).section)
     }
 
-    @Test fun gpu_driver_row_sits_under_screen_care_and_names_the_driver_in_use() = runTest {
+    @Test fun gpu_driver_row_sits_under_default_settings_and_names_the_driver_in_use() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val st = state(settings, gpuDrivers = FakeGpuDrivers(listOf(malisx2, turnip))); st.load()
-        st.openSettings(SettingsSection.SYSTEM)
+        st.openSettings(SettingsSection.EMULATORS)
         val at = rowIndex(st, SettingsKind.GPU_DRIVER)
         val rows = assertIs<Screen.Settings>(st.screen.value).rows
-        assertEquals(SettingsKind.SCREEN_CARE, rows[at - 1].kind)
+        assertEquals(SettingsKind.EMULATORS, rows[at - 1].kind)
         assertEquals(SettingsRow(SettingsKind.GPU_DRIVER, "GPU driver", "System driver"), rows[at])
         settings.gpuDriver = "t1"
-        st.openSettings(SettingsSection.SYSTEM)
+        st.openSettings(SettingsSection.EMULATORS)
         assertEquals("Turnip", libraryRow(st, SettingsKind.GPU_DRIVER).secondary)
         settings.gpuDriver = "gone"                                       // a driver no longer installed: the system one runs
-        st.openSettings(SettingsSection.SYSTEM)
+        st.openSettings(SettingsSection.EMULATORS)
         assertEquals("System driver", libraryRow(st, SettingsKind.GPU_DRIVER).secondary)
     }
 
     @Test fun gpu_driver_row_is_absent_with_the_feature_off_or_without_a_store() = runTest {
         val off = state(MemorySettings(ContentRef("Home")), gpuDrivers = FakeGpuDrivers(reason = "")); off.load()
-        off.openSettings(SettingsSection.SYSTEM)
+        off.openSettings(SettingsSection.EMULATORS)
         assertTrue(assertIs<Screen.Settings>(off.screen.value).rows.none { it.kind == SettingsKind.GPU_DRIVER })
         val none = state(MemorySettings(ContentRef("Home"))); none.load()
-        none.openSettings(SettingsSection.SYSTEM)
+        none.openSettings(SettingsSection.EMULATORS)
         assertTrue(assertIs<Screen.Settings>(none.screen.value).rows.none { it.kind == SettingsKind.GPU_DRIVER })
     }
 
     @Test fun gpu_driver_row_on_an_old_android_shows_why_and_does_nothing() = runTest {
         val st = state(MemorySettings(ContentRef("Home")), gpuDrivers = FakeGpuDrivers(listOf(turnip), reason = "Custom drivers need Android 9 or later")); st.load()
-        st.openSettings(SettingsSection.SYSTEM)
+        st.openSettings(SettingsSection.EMULATORS)
         val row = libraryRow(st, SettingsKind.GPU_DRIVER)
         assertEquals("Custom drivers need Android 9 or later", row.secondary)
         assertFalse(row.enabled)
         st.select(rowIndex(st, SettingsKind.GPU_DRIVER)); st.onButton(NxButton.A)
-        assertEquals(SettingsSection.SYSTEM, assertIs<Screen.Settings>(st.screen.value).section)
+        assertEquals(SettingsSection.EMULATORS, assertIs<Screen.Settings>(st.screen.value).section)
         assertNull(st.chooser.value)
     }
 

@@ -12,7 +12,7 @@ class SettingsRowActionTest {
         assertEquals("Reset", settingsRowAction(SettingsRow(SettingsKind.RESET_DEFAULTS, "Reset to defaults"), SettingsSection.APPEARANCE))
         assertEquals("Clear all", settingsRowAction(SettingsRow(SettingsKind.RESET_DEFAULTS, "Clear all"), SettingsSection.SHORTCUTS))
         assertEquals("Remove", settingsRowAction(SettingsRow(SettingsKind.EXTRA, "Roms"), SettingsSection.LIBRARY))
-        // System → GPU driver: an installed driver's A opens its options; System driver's uses it, nothing once in use.
+        // Emulation → GPU driver: an installed driver's A opens its options; System driver's uses it, nothing once in use.
         assertEquals("Options", settingsRowAction(SettingsRow(SettingsKind.GPU_DRIVER_ITEM, "Turnip", gpuDriver = "t1"), SettingsSection.GPU_DRIVER))
         assertEquals("Use", settingsRowAction(SettingsRow(SettingsKind.GPU_DRIVER_ITEM, "System driver", gpuDriver = "system"), SettingsSection.GPU_DRIVER))
         assertNull(settingsRowAction(SettingsRow(SettingsKind.GPU_DRIVER_ITEM, "System driver", gpuDriver = "system", current = true), SettingsSection.GPU_DRIVER))

@@ -480,7 +480,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 pasteText = { AndroidDeviceInfo.clipboardText(applicationContext) },
                 promptOnSecondDisplay = { promptOnSecond },
                 log = { NxLog.i("NXAPP", it) },
-                // Settings → System → GPU driver: its zip comes through Save import's picker.
+                // Settings → Emulation → GPU driver: its zip comes through Save import's picker.
                 gpuDrivers = AndroidGpuDriverStore(this) { onRef -> savePickers.openZip(onRef) },
             ),
             scope,

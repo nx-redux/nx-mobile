@@ -1,6 +1,6 @@
 package com.nxredux.mobile.gpudriver
 
-/** Settings → System → GPU driver's platform side: the installed custom drivers, adding one from a picked zip, removing one. */
+/** Settings → Emulation → GPU driver's platform side: the installed custom drivers, adding one from a picked zip, removing one. */
 interface GpuDriverStore {
     /** Null: drivers can be used here. Text: why not, shown on the dimmed row. "": the feature is off, so no row at all. */
     fun unavailableReason(): String?
