@@ -16,16 +16,17 @@
 
 ## Slang shader presets
 
-Checked on the emulator only (GLES 3.1, GBA): crt-geom, crt-guest-advanced, crt-royale, newpixie-crt, scalefx, Mega Bezel
-POTATO / STD / SMOOTH-ADV. Device checks still owed:
+Nova, 2026-11-14 (`tools/device-tests/slang_shaders.py`, 33 runs, no errors, screenshots looked at): SNES with crt-geom,
+crt-guest-advanced, crt-royale, newpixie-crt, scalefx, motionblur/feedback and Mega Bezel POTATO at full speed; Game Boy
+(gameboy, lcd-grid-v2); a rotated arcade game; N64 and GameCube (GL cores), PSP, PS2 and 3DS; DS with a feedback preset
+on the top screen. Mega Bezel STD and SMOOTH-ADV draw correctly but at about 36 fps there. Still owed:
 
-- [ ] Nova (GLES 3.2): the same presets from `Shaders/shaders_slang`; frame rate and heat with crt-guest-advanced and a Mega Bezel preset; first load of a large preset (translate + compile) and the second (cached).
-- [ ] A GL core (N64, GameCube, PSP on GLES) with a slang preset: picture right way up, the core keeps drawing after the menu opens and closes, no black frames (its bindings are put back).
-- [ ] A Vulkan core (PSP, PS2, 3DS) with a slang preset.
-- [ ] DS / 3DS: a feedback or history preset (newpixie-crt, handheld/gameboy) on both screens, each screen with its own trail; DS screens on the second display.
-- [ ] A rotated picture (arcade vertical game) and a pad skin: the picture lands in its place.
-- [ ] Mali (AYANEO): crt-guest-advanced and a float-framebuffer preset draw; a preset that cannot build toasts and falls back.
-- [ ] Shader Parameters on a slang preset change the picture live; Reset Parameters; Save for game, relaunch.
+- [ ] Mega Bezel STD / SMOOTH-ADV speed: find whether the 36 fps on the Nova is the preset's own cost or ours.
+- [ ] Heat over a long session with crt-guest-advanced.
+- [ ] A GL core: the core keeps drawing after the in-game menu opens and closes on a slang preset.
+- [ ] DS screens on the second display with a feedback preset; a pad skin with a slang preset.
+- [ ] Mali (AYANEO) and the Fold: crt-guest-advanced and a float-framebuffer preset draw; a preset that cannot build toasts and falls back.
+- [ ] Shader Parameters on a slang preset from the in-game menu: live change, Reset Parameters, Save for game, relaunch.
 - [ ] The Shader list with a whole `shaders_slang` folder copied in (about 2,600 presets): opening the in-game menu stays quick.
 
 ## Game info from ScreenScraper
