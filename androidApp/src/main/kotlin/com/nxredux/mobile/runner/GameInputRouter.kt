@@ -3,6 +3,7 @@ package com.nxredux.mobile.runner
 import android.hardware.input.InputManager
 import android.os.SystemClock
 import android.view.InputDevice
+import com.nxredux.mobile.ui.nx.isController
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.widget.FrameLayout
@@ -930,10 +931,8 @@ internal class GameInputRouter(private val host: GameInputHost) {
         if (device != null && !device.isVirtual) rumbles.getOrNull(port)?.useDevice(device.id)
     }
 
-    /** A physical pad: not virtual, with gamepad or joystick sources (a DualSense's touchpad device is neither). */
-    fun isPad(d: InputDevice): Boolean = !d.isVirtual && (
-        (d.sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
-            (d.sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK)
+    /** A physical pad ([isController]; a DualSense's touchpad device is none). */
+    fun isPad(d: InputDevice): Boolean = d.isController()
 
     /**
      * The port [device]'s input goes to: 0 for a one-player core, the on-screen pad or a non-pad device; else its

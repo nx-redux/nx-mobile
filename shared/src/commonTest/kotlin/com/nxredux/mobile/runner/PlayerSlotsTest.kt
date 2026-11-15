@@ -122,6 +122,19 @@ class PlayerSlotsTest {
         assertEquals(pads, PadPresence.attached(pads, outOfPlay = null) { it })   // no slots: nothing is benched
     }
 
+    @Test fun a_joystick_source_without_pad_buttons_is_no_controller() {
+        assertEquals(false, PadPresence.isController(virtual = false, padSource = true, padButton = false))   // a phone's built-in input
+    }
+
+    @Test fun a_physical_pad_with_buttons_is_a_controller() {
+        assertEquals(true, PadPresence.isController(virtual = false, padSource = true, padButton = true))
+    }
+
+    @Test fun a_virtual_or_non_pad_device_is_no_controller() {
+        assertEquals(false, PadPresence.isController(virtual = true, padSource = true, padButton = true))
+        assertEquals(false, PadPresence.isController(virtual = false, padSource = false, padButton = true))   // a keyboard
+    }
+
     @Test fun identical_names_are_numbered_from_the_second() {
         assertEquals(
             listOf("Xbox Wireless Controller", "8BitDo Pro 2", "Xbox Wireless Controller (2)", "Xbox Wireless Controller (3)"),

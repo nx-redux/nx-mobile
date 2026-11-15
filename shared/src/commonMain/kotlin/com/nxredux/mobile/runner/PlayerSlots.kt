@@ -89,6 +89,13 @@ class PlayerSlots(val players: Int) {
  */
 object PadPresence {
     /**
+     * Whether an input device is a controller: a physical one ([virtual] false) that reports a gamepad or joystick
+     * source ([padSource]) and has a gamepad button ([padButton]). Some phones' built-in inputs report a joystick
+     * source with no buttons; counting those would hide the on-screen pad with nothing in hand.
+     */
+    fun isController(virtual: Boolean, padSource: Boolean, padButton: Boolean): Boolean = !virtual && padSource && padButton
+
+    /**
      * [pads] less the benched ones in a multiplayer game ([outOfPlay]: its slots' benched pads, [key] each pad's
      * identity), since the game ignores those: benching the only pad brings the touch pad back for Player 1. A one-player
      * game passes null and every pad counts.
