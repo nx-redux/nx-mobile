@@ -14,6 +14,25 @@
 - [ ] Home during a slow PS2/Wii quit, tap the same game → starts fresh; Home during a big PS2 state resume → no ANR; then clear it from the launcher icon → SRAM survived.
 - [ ] Threaded cores across pause/resume (input lock): Dolphin GC/Wii incl. Wii pointer, Azahar, ARMSX2, PPSSPP; N64 netplay input still arrives; a game from a picked file still opens.
 
+## Vulkan frames through a swapchain on an image reader (malisx2)
+
+A custom driver that cannot import a shared buffer (malisx2 on Mali) now runs through a swapchain on an image reader;
+the OpenGL ES presenter is unchanged. AYANEO Pocket Air Mini (Mali-G76), Budokai Tenkaichi 3 battle state, 2026-11-16:
+malisx2 59/60/60 fps at 1x and 55–57 fps at 2x, against 54–57 and 38–39 on the stock driver. Checked there: picture at
+1x and 2x, a slang preset (crt-geom, 43 fps at 2x), video-mode size change, quit ×5, screen off/on, Home and return,
+PSP (Patapon 2) on the same driver, and the forced fallbacks (`setprop debug.nx.reader_fail_after <frame>`: failed
+start and mid-game both relaunch on the system driver).
+
+Device checks still owed:
+
+- [ ] Nova (Adreno): a Turnip package still passes its pre-check as "import" and measures as before; stock driver unchanged.
+- [ ] Fast forward and frame skip on malisx2 (several frames bridged per draw).
+- [ ] EGL context loss on malisx2 (a long time in the background, or another app taking the GPU): the picture comes back.
+- [ ] A second display with a game on malisx2.
+- [ ] A reader buffer the OpenGL ES side cannot import falls back with the toast (not forced on a device yet).
+- [ ] Other Mali devices and malisx2 versions; GameCube/Wii, 3DS and N64 (Vulkan) on malisx2.
+- [ ] PS2 resume: about 1 launch in 4 on the AYANEO (stock driver too) boots from the disc although the state load reported success. Existing race at the first frame; find and fix.
+
 ## Slang shader presets
 
 Nova, 2026-11-14 (`tools/device-tests/slang_shaders.py`, 33 runs, no errors, screenshots looked at): SNES with crt-geom,
