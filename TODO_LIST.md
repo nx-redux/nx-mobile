@@ -255,15 +255,15 @@ menu, survive Home and return, quit and reload slot 9 (8/8); save then quit at o
 Device checks still owed:
 
 - [ ] Genesis Plus GX with an MSU-MD set and a Sega CD BIOS: music plays (the cart mounts its cue through the VFS).
-- [ ] Play build (no All files access): an MSU-1 pack streams; an MSU-MD set on PicoDrive is copied to the cache and plays.
+- [ ] Play build (no All files access): an MSU-1 pack streams; an MSU-MD set and a Sega CD disc on PicoDrive stream (no cache copy) and play.
 - [ ] Device Sync of an MSU pack in an extra folder: the folder arrives whole; a loose set's `.msu`/`.pcm` or cue and tracks travel with its ROM.
 
 Follow-ups, after #147:
 
 - [x] Region-aware BIOS check (feat/region-bios): a Sega CD disc's header decides which region's BIOS it needs; the popup names the file and where the other regions' files are. Sonic CD (USA) on the Nova, 2026-11-15.
+- [x] PicoDrive on the libretro VFS (feat/picodrive-vfs, core patch picodrive/0003): it streams from descriptors like the other cores, so Sega CD discs and MSU-MD sets are no longer copied to the cache; only PrBoom keeps LoadMode.REAL_PATH. Emulator: MSU-MD Sample, Sonic CD (USA), a plain cartridge; Sonic CD on the Nova, 2026-11-15.
 - [ ] PC Engine CD: check whether a region-specific System Card matters (mednafen pce_fast takes syscard3.pce for both); add it to the region check if so.
 - [ ] BIOS checksums: check each BIOS file against the known good dumps, so a bad or misnamed dump gets its own message.
 - [ ] MSU-MD on Genesis Plus GX: it loads the Sega CD BIOS of the cartridge's region (its header's country codes, or the forced region); the launch still checks "any of the three" for it.
-- [ ] PicoDrive on the libretro VFS: its NDK build opens files by path, so it is the one core (with PrBoom) on LoadMode.REAL_PATH, copied to the cache on the Play build and from SAF extra folders. Building it with libretro-common's VFS lets it stream like the others and drops the copy (Sega CD discs, MSU-MD soundtracks).
 - [ ] More badges ([IndexedGame.badge] is general): from bracketed file-name tags ((Hack), [h], (Homebrew), (Translated), (Beta)/(Proto)) via a small table, a per-game choice in Options (wins over detected ones), or a DAT/ScreenScraper match. One badge per game today.
 - [ ] Docs: unzip MSU packs (a zip cannot be streamed); a pack in its own folder is one game.

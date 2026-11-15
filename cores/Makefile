@@ -400,6 +400,8 @@ swanstation_ARTIFACT = swanstation_libretro_android.so
 # 12-byte field with a bound; long database codes and parts overflowed both.
 # patches/picodrive/0002: the MSU-MD fake BIOS writes its "SEGA" ID in the 68k's byte order, so an MSU-MD game runs
 # without a Sega CD BIOS (raw bytes read back as "ESAG" on little-endian hosts).
+# patches/picodrive/0003: the NDK build sets USE_LIBRETRO_VFS (Makefile.libretro does), so the core opens games through
+# the runner's VFS (/rom/<name> descriptors) like the other cores, and needs no real path or cache copy.
 picodrive_REPO = https://github.com/irixxxx/picodrive
 picodrive_HASH = 9c298c1fe7347a50b07a494cdb8c91d2f9b40c6a
 picodrive_LICENSE = COPYING
