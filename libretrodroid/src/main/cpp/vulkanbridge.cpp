@@ -413,7 +413,8 @@ HandoffMode VulkanBridge::probeCustomDriver(const std::string& dir, const std::s
 }
 
 void VulkanBridge::setDriver(const std::string& dir, const std::string& library, const std::string& hookLibDir,
-                             const std::string& tmpDir) {
+                             const std::string& tmpDir, HandoffMode mode) {
+    driverHandoff = dir.empty() && library.empty() ? HandoffMode::Import : mode;
     driverDir = dir;
     driverLibrary = library;
     driverHookLibDir = hookLibDir;
@@ -549,6 +550,10 @@ VkDevice VulkanBridge::createDeviceWrapper(VkPhysicalDevice physicalDevice, void
         if (self->deviceExtensionAvailable(name)) ours.emplace_back(name);
         else LOGW("Vulkan bridge: device lacks %s", name);
     }
+    // The Reader hand-off presents to a swapchain on the core's device; an Import session's device is left as it was.
+    if (self->handoff() == HandoffMode::Reader && self->deviceExtensionAvailable(VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
+        ours.emplace_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    }
     mergeNames(names, ours);
     info.enabledExtensionCount = (uint32_t) names.size();
     info.ppEnabledExtensionNames = names.data();
@@ -612,6 +617,10 @@ bool VulkanBridge::createDevice() {
                 required.push_back(name);
                 enabledDeviceExtensions.emplace_back(name);
             }
+        }
+        if (handoff() == HandoffMode::Reader && deviceExtensionAvailable(VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
+            required.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+            enabledDeviceExtensions.emplace_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
         }
         // No features required, but as a struct, never null: ParaLLEl-RDP (Granite) copies *required_features unconditionally.
         const VkPhysicalDeviceFeatures noFeatures {};
@@ -823,8 +832,17 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
     unsigned w = extent.width;
     unsigned h = extent.height;
 
+    const bool viaReader = handoff() == HandoffMode::Reader;
     Slot& slot = slots[slotIndex];
-    if (slot.width != w || slot.height != h || slot.image == VK_NULL_HANDLE) {
+    if (viaReader) {
+        if (!reader.matches(w, h)) {
+            {
+                std::lock_guard<std::mutex> lock(queueMutex);
+                vk.queueWaitIdle(queue);
+            }
+            if (!reader.ensure(vk, instance, gpu, device, queueFamily, w, h)) return false;
+        }
+    } else if (slot.width != w || slot.height != h || slot.image == VK_NULL_HANDLE) {
         {
             std::lock_guard<std::mutex> lock(queueMutex);
             vk.queueWaitIdle(queue);
@@ -881,6 +899,14 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
         signalSemaphore = VK_NULL_HANDLE;
     }
 
+    // Where the frame is copied to: this slot's imported buffer, or the swapchain image the reader gives.
+    VkImage target = slot.image;
+    if (viaReader) {
+        VkSemaphore acquired = VK_NULL_HANDLE;
+        if (!reader.acquire(vk, device, index, &target, &acquired)) return false;
+        frameSemaphores.push_back(acquired);
+    }
+
     VkCommandBuffer cmd = commandBuffers[index];
     vk.resetCommandBuffer(cmd, 0);
     VkCommandBufferBeginInfo begin { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
@@ -911,9 +937,10 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
     pre[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     pre[1].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;   // the whole image is overwritten
     pre[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    pre[1].srcQueueFamilyIndex = slot.released ? foreign : VK_QUEUE_FAMILY_IGNORED;
-    pre[1].dstQueueFamilyIndex = slot.released ? queueFamily : VK_QUEUE_FAMILY_IGNORED;
-    pre[1].image = slot.image;
+    const bool reacquire = !viaReader && slot.released;
+    pre[1].srcQueueFamilyIndex = reacquire ? foreign : VK_QUEUE_FAMILY_IGNORED;
+    pre[1].dstQueueFamilyIndex = reacquire ? queueFamily : VK_QUEUE_FAMILY_IGNORED;
+    pre[1].image = target;
     pre[1].subresourceRange = dstRange;
 
     vk.cmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
@@ -925,7 +952,7 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
         region.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
         region.extent = { w, h, 1 };
         vk.cmdCopyImage(cmd, frameImage.create_info.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                       slot.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+                       target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
     } else {
         // BGRA8 (or anything else blittable): a blit converts the channel order.
         VkImageBlit blit {};
@@ -934,7 +961,7 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
         blit.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
         blit.dstOffsets[1] = { (int32_t) w, (int32_t) h, 1 };
         vk.cmdBlitImage(cmd, frameImage.create_info.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                       slot.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_NEAREST);
+                       target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_NEAREST);
     }
 
     VkImageMemoryBarrier post[2] {};
@@ -954,10 +981,11 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
     post[1].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     post[1].dstAccessMask = 0;
     post[1].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    post[1].newLayout = VK_IMAGE_LAYOUT_GENERAL;
-    post[1].srcQueueFamilyIndex = queueFamily;
-    post[1].dstQueueFamilyIndex = foreign;
-    post[1].image = slot.image;
+    // A swapchain image is handed to the presentation engine instead, which takes it in PRESENT_SRC with no transfer.
+    post[1].newLayout = viaReader ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_GENERAL;
+    post[1].srcQueueFamilyIndex = viaReader ? VK_QUEUE_FAMILY_IGNORED : queueFamily;
+    post[1].dstQueueFamilyIndex = viaReader ? VK_QUEUE_FAMILY_IGNORED : foreign;
+    post[1].image = target;
     post[1].subresourceRange = dstRange;
 
     vk.cmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -970,7 +998,8 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
     submitWaitStages.assign(frameSemaphores.size(), VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
     VkSemaphore signals[2];
     uint32_t signalCount = 0;
-    if (useSyncFd) signals[signalCount++] = exportSemaphores[index];
+    if (viaReader) signals[signalCount++] = reader.presentSemaphore(index);
+    else if (useSyncFd) signals[signalCount++] = exportSemaphores[index];
     if (frameSignal != VK_NULL_HANDLE) signals[signalCount++] = frameSignal;
 
     VkSubmitInfo submit { VK_STRUCTURE_TYPE_SUBMIT_INFO };
@@ -994,6 +1023,24 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
     {
         std::lock_guard<std::mutex> lock(fenceMutex[index]);
         fenceSubmitted[index] = true;
+    }
+    if (viaReader) {
+        ReaderFrame presented;
+        if (!reader.present(vk, queue, queueMutex, index, presented)) return false;
+        out.buffer = presented.buffer;
+        out.id = presented.id;
+        out.syncFd = presented.syncFd;
+        out.width = w;
+        out.height = h;
+        out.liveBuffers = READER_LIVE_BUFFERS;
+        if (!loggedFirstFrame) {
+            loggedFirstFrame = true;
+            LOGI("Vulkan bridge: first frame through the reader: core image format %d layout %d, frame %ux%u (reported %ux%u)",
+                 (int) frameImage.create_info.format, (int) frameImage.image_layout, w, h, width, height);
+        }
+        bridgedAny = true;
+        syncIndex = (index + 1) % SYNC_COUNT;
+        return true;
     }
     slot.released = true;
 
@@ -1046,6 +1093,10 @@ void VulkanBridge::onGlContextLost() {
 }
 
 void VulkanBridge::afterGlDraw() {
+    if (handoff() == HandoffMode::Reader) {
+        reader.afterGlDraw();
+        return;
+    }
     if (lastSlot < 0) return;
     Slot& slot = slots[lastSlot];
     if (slot.glFence != nullptr) glDeleteSync(slot.glFence);
@@ -1059,6 +1110,7 @@ void VulkanBridge::destroy() {
             vk.deviceWaitIdle(device);
         }
         for (auto& slot : slots) freeSlot(slot);
+        reader.destroy(vk, instance, device);
         for (unsigned i = 0; i < SYNC_COUNT; i++) {
             std::lock_guard<std::mutex> lock(fenceMutex[i]);
             if (fences[i] != VK_NULL_HANDLE) vk.destroyFence(device, fences[i], nullptr);
@@ -1111,6 +1163,7 @@ void VulkanBridge::destroy() {
     driverLibrary.clear();
     driverHookLibDir.clear();
     driverTmpDir.clear();
+    driverHandoff = HandoffMode::Import;
 }
 
 // --- retro_hw_render_interface_vulkan ---

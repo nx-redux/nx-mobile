@@ -450,7 +450,9 @@ void LibretroDroid::create(
     preferVulkan = false;
     VulkanBridge::get().setSwapchainFrames(vulkanSwapchainFrames);
     vulkanSwapchainFrames = false;
-    VulkanBridge::get().setDriver(vulkanDriverDir, vulkanDriverLibrary, vulkanDriverHookLibDir, vulkanDriverTmpDir);
+    VulkanBridge::get().setDriver(vulkanDriverDir, vulkanDriverLibrary, vulkanDriverHookLibDir, vulkanDriverTmpDir,
+                                  vulkanDriverReader ? HandoffMode::Reader : HandoffMode::Import);
+    vulkanDriverReader = false;
     vulkanDriverDir.clear();
     vulkanDriverLibrary.clear();
     vulkanDriverHookLibDir.clear();
@@ -1235,7 +1237,7 @@ void LibretroDroid::handleVideoRefresh(
             // Copy the core's image into the next AHardwareBuffer; Video draws that as the frame.
             VulkanBridge::Frame frame;
             if (VulkanBridge::get().bridgeFrame(width, height, frame)) {
-                video->setExternalFrame(frame.buffer, frame.id, frame.width, frame.height, frame.syncFd);
+                video->setExternalFrame(frame.buffer, frame.id, frame.width, frame.height, frame.syncFd, frame.liveBuffers);
                 width = frame.width;
                 height = frame.height;
             } else if (VulkanBridge::get().takeCustomSlotFailure()) {

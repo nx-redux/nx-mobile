@@ -17,6 +17,8 @@
 
 #include "ahbrenderer.h"
 
+#include <algorithm>
+
 #include <GLES2/gl2ext.h>
 #include <poll.h>
 #include <unistd.h>
@@ -88,7 +90,8 @@ void AhbRenderer::waitSyncFd(int fd) {
     close(fd);
 }
 
-void AhbRenderer::setFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd) {
+void AhbRenderer::setFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd,
+                           unsigned liveBuffers) {
     Import* found = nullptr;
     for (auto& import : imports) {
         if (import.id == id) { found = &import; break; }
@@ -101,8 +104,8 @@ void AhbRenderer::setFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width,
             if (syncFd >= 0) close(syncFd);
             return;
         }
-        // At most the bridge's two live buffers: older imports are from buffers it has since replaced.
-        while (imports.size() >= 2) {
+        // At most the bridge's live buffers: older imports are from buffers it has since replaced.
+        while (imports.size() >= std::max(1u, liveBuffers)) {
             deleteImport(imports.front());
             imports.erase(imports.begin());
         }

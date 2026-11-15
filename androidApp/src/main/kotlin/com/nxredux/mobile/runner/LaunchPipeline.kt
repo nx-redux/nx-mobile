@@ -993,6 +993,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         if (driver != null) {
                             vulkanDriverDir = driverStore.directory(driver.id).absolutePath + "/"
                             vulkanDriverLibrary = driver.libraryName
+                            vulkanDriverReader = driverReader
                         }
                         // DS / 3DS: the core reports where each screen sits in its frame (video views), the layouts read it.
                         videoViews = gameCoreId in VIDEO_VIEW_CORES

@@ -1140,12 +1140,14 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setVulkanD
     jstring driverDir,
     jstring libraryName,
     jstring hookLibDir,
-    jstring tmpDir
+    jstring tmpDir,
+    jboolean reader
 ) {
     LibretroDroid::getInstance().setVulkanDriver(JniString(env, driverDir).stdString(),
                                                  JniString(env, libraryName).stdString(),
                                                  JniString(env, hookLibDir).stdString(),
-                                                 JniString(env, tmpDir).stdString());
+                                                 JniString(env, tmpDir).stdString(),
+                                                 reader);
 }
 
 JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_probeVulkanDriver(

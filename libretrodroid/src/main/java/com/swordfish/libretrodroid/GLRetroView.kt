@@ -402,6 +402,7 @@ class GLRetroView(
             data.vulkanDriverLibrary,
             context.applicationInfo.nativeLibraryDir,
             driverTmpDir(context),
+            data.vulkanDriverReader,
         )
         LibretroDroid.setVideoViewsEnabled(data.videoViews)
         LibretroDroid.setKeepCoreLoaded(data.keepCoreLoaded)

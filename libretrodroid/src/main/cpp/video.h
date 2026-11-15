@@ -117,8 +117,10 @@ public:
 
     void onNewFrame(const void *data, unsigned width, unsigned height, size_t pitch);
 
-    // The next frame's buffer, for a Video created with vulkanBridge. Owns [syncFd].
-    void setExternalFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd);
+    // The next frame's buffer, for a Video created with vulkanBridge. Owns [syncFd]. [liveBuffers]: how many buffers the
+    // bridge cycles through, each imported once.
+    void setExternalFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd,
+                          unsigned liveBuffers);
 
     uintptr_t getCurrentFramebuffer() {
         return renderer->getFramebuffer();

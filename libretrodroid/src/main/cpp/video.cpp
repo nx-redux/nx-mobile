@@ -899,12 +899,13 @@ void Video::onNewFrame(const void *data, unsigned width, unsigned height, size_t
     }
 }
 
-void Video::setExternalFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd) {
+void Video::setExternalFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd,
+                             unsigned liveBuffers) {
     if (ahbRenderer == nullptr) {
         if (syncFd >= 0) close(syncFd);
         return;
     }
-    ahbRenderer->setFrame(buffer, id, width, height, syncFd);
+    ahbRenderer->setFrame(buffer, id, width, height, syncFd, liveBuffers);
 }
 
 void Video::updateScreenSize(unsigned width, unsigned height) {

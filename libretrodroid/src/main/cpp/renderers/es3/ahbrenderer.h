@@ -38,8 +38,9 @@ class AhbRenderer: public Renderer {
 public:
     explicit AhbRenderer(ShaderManager::Chain shaders);
 
-    // The buffer to draw next. [syncFd] (owned, -1 = none): GL waits on it (GPU side) before sampling.
-    void setFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd);
+    // The buffer to draw next. [syncFd] (owned, -1 = none): GL waits on it (GPU side) before sampling. [liveBuffers]:
+    // how many buffers the bridge cycles through; that many imports are kept.
+    void setFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd, unsigned liveBuffers);
 
     uintptr_t getTexture() override { return currentTexture; }
     uintptr_t getFramebuffer() override { return 0; }

@@ -132,7 +132,7 @@ public class LibretroDroid {
      * directory for patched libraries below API 29. A driver that fails to load fails the launch with
      * ERROR_GL_NOT_COMPATIBLE: the host decides whether to retry on the system driver. Set before create().
      */
-    public static native void setVulkanDriver(String driverDir, String libraryName, String hookLibDir, String tmpDir);
+    public static native void setVulkanDriver(String driverDir, String libraryName, String hookLibDir, String tmpDir, boolean reader);
     /**
      * Before any core is loaded: whether the custom driver libraryName in driverDir (arguments as setVulkanDriver's) can
      * start the Vulkan bridge: its loader, an instance and a device with the bridge's extensions, and one AHardwareBuffer

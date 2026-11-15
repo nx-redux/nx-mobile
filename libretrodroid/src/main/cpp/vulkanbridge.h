@@ -40,6 +40,7 @@
 #include "vulkandispatch.h"
 #include "vulkanframe.h"
 #include "vulkanhandoff.h"
+#include "vulkanreader.h"
 
 struct AImageReader;
 struct ANativeWindow;
@@ -80,6 +81,7 @@ public:
         unsigned width = 0;
         unsigned height = 0;
         int syncFd = -1;        // sync_file signalled when the copy is done (owned by the receiver), -1 = already done
+        unsigned liveBuffers = 2;   // how many buffers frames cycle through: what the GL side keeps imported
     };
 
     // In the core's video_cb (RETRO_HW_FRAME_BUFFER_VALID): copies the image from set_image into the next buffer.
@@ -107,8 +109,11 @@ public:
     // and [library]: the system driver. [hookLibDir]: the app's nativeLibraryDir; [tmpDir]: patched libraries below
     // API 29. One-shot like setSwapchainFrames: destroy() forgets it. A custom driver that fails to load fails
     // initialize(); the host decides whether to retry on the system driver.
+    // [mode]: how the driver's frames reach the GLES side, as its probeCustomDriver found (Reader: it cannot import a
+    // shared buffer). The system driver always imports.
     void setDriver(const std::string& dir, const std::string& library, const std::string& hookLibDir,
-                   const std::string& tmpDir);
+                   const std::string& tmpDir, HandoffMode mode);
+    HandoffMode handoff() const { return driverHandoff; }
 
 private:
     std::atomic<unsigned> maxFrameWidth { 0 };
@@ -118,6 +123,11 @@ private:
     std::string driverLibrary;
     std::string driverHookLibDir;
     std::string driverTmpDir;
+    HandoffMode driverHandoff = HandoffMode::Import;
+    // Reader hand-off: the swapchain on an image reader frames are presented to. Render thread only.
+    ReaderChain reader;
+    // The GLES side keeps one import per buffer the swapchain cycles through; more than any driver's count seen (7).
+    static constexpr unsigned READER_LIVE_BUFFERS = 12;
 
     VulkanBridge() = default;
 

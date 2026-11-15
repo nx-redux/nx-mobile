@@ -57,6 +57,11 @@ class GLRetroViewData(context: Context) {
     var vulkanDriverDir: String? = null
     /** The driver's library file name in [vulkanDriverDir] (its meta.json libraryName). */
     var vulkanDriverLibrary: String? = null
+    /**
+     * The driver cannot import a shared buffer, so its frames go through a swapchain on an image reader
+     * ([LibretroDroid.VULKAN_HANDOFF_READER] from [GLRetroView.probeVulkanDriver]).
+     */
+    var vulkanDriverReader: Boolean = false
     /** Offer libretro video views to the core (melonDS DS, Azahar), which then report where each screen is. */
     var videoViews: Boolean = false
     /**
