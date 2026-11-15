@@ -908,6 +908,10 @@ void Video::setExternalFrame(AHardwareBuffer* buffer, uint64_t id, unsigned widt
     ahbRenderer->setFrame(buffer, id, width, height, syncFd, liveBuffers);
 }
 
+bool Video::takeExternalImportFailure() {
+    return ahbRenderer != nullptr && ahbRenderer->takeImportFailure();
+}
+
 void Video::updateScreenSize(unsigned width, unsigned height) {
     videoLayout.updateScreenSize(width, height);
 }

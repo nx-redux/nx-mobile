@@ -101,6 +101,7 @@ void AhbRenderer::setFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width,
         auto& p = procs();
         if (p.getNativeClientBuffer == nullptr || p.createImage == nullptr || p.imageTargetTexture == nullptr) {
             LOGE("AHB renderer: EGL lacks AHardwareBuffer import");
+            importFailed = true;
             if (syncFd >= 0) close(syncFd);
             return;
         }
@@ -118,6 +119,7 @@ void AhbRenderer::setFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width,
                                      attribs);
         if (import.image == EGL_NO_IMAGE_KHR) {
             LOGE("AHB renderer: eglCreateImageKHR(AHB) failed: 0x%x", eglGetError());
+            importFailed = true;
             if (syncFd >= 0) close(syncFd);
             return;
         }

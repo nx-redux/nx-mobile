@@ -29,6 +29,8 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <ctime>
+#include <sys/system_properties.h>
 
 #include "log.h"
 #include "vulkanreader.h"
@@ -785,6 +787,12 @@ bool VulkanBridge::initialize(unsigned width, unsigned height) {
     bridgedAny = false;
     customSlotFailed = false;
     customSlotReported = false;
+    readerStreak = FailureStreak {};
+    readerImportedAny = false;
+    readerFrames = 0;
+    readerFailAfter = 0;
+    char forced[PROP_VALUE_MAX] {};
+    if (__system_property_get("debug.nx.reader_fail_after", forced) > 0) readerFailAfter = (unsigned) strtoul(forced, nullptr, 10);
     {
         std::lock_guard<std::mutex> lock(frameMutex);
         haveImage = false;
@@ -835,12 +843,13 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
     const bool viaReader = handoff() == HandoffMode::Reader;
     Slot& slot = slots[slotIndex];
     if (viaReader) {
+        if (readerFailAfter > 0 && ++readerFrames >= readerFailAfter) return readerFrame(false);
         if (!reader.matches(w, h)) {
             {
                 std::lock_guard<std::mutex> lock(queueMutex);
                 vk.queueWaitIdle(queue);
             }
-            if (!reader.ensure(vk, instance, gpu, device, queueFamily, w, h)) return false;
+            if (!reader.ensure(vk, instance, gpu, device, queueFamily, w, h)) return readerFrame(false);
         }
     } else if (slot.width != w || slot.height != h || slot.image == VK_NULL_HANDLE) {
         {
@@ -903,7 +912,7 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
     VkImage target = slot.image;
     if (viaReader) {
         VkSemaphore acquired = VK_NULL_HANDLE;
-        if (!reader.acquire(vk, device, index, &target, &acquired)) return false;
+        if (!reader.acquire(vk, device, index, &target, &acquired)) return readerFrame(false);
         frameSemaphores.push_back(acquired);
     }
 
@@ -1018,7 +1027,8 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
     }
     if (r != VK_SUCCESS) {
         LOGE("Vulkan bridge: vkQueueSubmit: %s", resultName(r));
-        return false;   // fenceSubmitted stays false: nobody waits on a fence that will never signal
+        // fenceSubmitted stays false: nobody waits on a fence that will never signal
+        return viaReader ? readerFrame(false) : false;
     }
     {
         std::lock_guard<std::mutex> lock(fenceMutex[index]);
@@ -1026,7 +1036,7 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
     }
     if (viaReader) {
         ReaderFrame presented;
-        if (!reader.present(vk, queue, queueMutex, index, presented)) return false;
+        if (!reader.present(vk, queue, queueMutex, index, presented)) return readerFrame(false);
         out.buffer = presented.buffer;
         out.id = presented.id;
         out.syncFd = presented.syncFd;
@@ -1080,6 +1090,31 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
     syncIndex = (index + 1) % SYNC_COUNT;
 
     return true;
+}
+
+bool VulkanBridge::readerFrame(bool ok) {
+    timespec now {};
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    const int64_t nowMs = (int64_t) now.tv_sec * 1000 + now.tv_nsec / 1000000;
+    if (readerStreak.onFrame(ok, nowMs) && !customSlotReported) {
+        LOGE("Vulkan bridge: the custom driver's frames stopped reaching the display: reported as a failed start");
+        customSlotFailed = true;
+        customSlotReported = true;
+    }
+    return ok;
+}
+
+void VulkanBridge::noteGlImport(bool imported) {
+    if (handoff() != HandoffMode::Reader) return;
+    if (!imported && !readerImportedAny && !customSlotReported) {
+        // The pre-check has no GL context: this is where a buffer the GLES side cannot take shows, on the first frame.
+        LOGE("Vulkan bridge: the GLES side cannot import the custom driver's buffers: reported as a failed start");
+        customSlotFailed = true;
+        customSlotReported = true;
+        return;
+    }
+    if (imported) readerImportedAny = true;
+    readerFrame(imported);
 }
 
 bool VulkanBridge::takeCustomSlotFailure() {

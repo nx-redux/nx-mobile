@@ -87,10 +87,15 @@ public:
     // In the core's video_cb (RETRO_HW_FRAME_BUFFER_VALID): copies the image from set_image into the next buffer.
     bool bridgeFrame(unsigned width, unsigned height, Frame& out);
 
-    // A custom driver could not create or import the shared AHardwareBuffer before any frame was bridged (Mali's
-    // malisx2: INVALID_EXTERNAL_HANDLE), so nothing it renders can reach the screen: the driver could not start. True
-    // once, after the bridgeFrame that failed; the system driver never reports it (its failed frame is skipped, as before).
+    // A custom driver whose frames cannot reach the screen: the driver could not start, or stopped working. Import: the
+    // shared AHardwareBuffer could not be created or imported before any frame was bridged. Reader: none of the first
+    // frames got through, the GLES side could not import the first buffer, or frames flowed and then all failed for a
+    // while (FailureStreak). True once; the system driver never reports it (its failed frame is skipped, as before).
     bool takeCustomSlotFailure();
+
+    // After the GLES side took a bridged frame: whether it could import the buffer. The Reader hand-off's frame only
+    // counts as through once GL has it; Import ignores this (its buffers are the bridge's own).
+    void noteGlImport(bool imported);
 
     // After the GL draw that sampled the last bridged buffer: fences it so the copy into it two frames later waits.
     void afterGlDraw();
@@ -226,6 +231,13 @@ private:
     bool bridgedAny = false;          // a frame has reached a slot since initialize()
     bool customSlotFailed = false;    // takeCustomSlotFailure's report, pending
     bool customSlotReported = false;  // reported once per initialize()
+    // Reader hand-off: tells a hand-off that stopped working from a dropped frame. Fed once per frame.
+    FailureStreak readerStreak;
+    bool readerImportedAny = false;   // GL has imported a reader buffer since initialize()
+    // debug.nx.reader_fail_after: every reader frame from this one on fails (0: off). For checking the fallback on a device.
+    unsigned readerFailAfter = 0;
+    unsigned readerFrames = 0;
+    bool readerFrame(bool ok);        // feeds readerStreak with a frame's outcome; returns [ok]
 
     bool useSyncFd = false;
     bool queueFamilyForeign = false;

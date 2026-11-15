@@ -42,6 +42,9 @@ public:
     // how many buffers the bridge cycles through; that many imports are kept.
     void setFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd, unsigned liveBuffers);
 
+    // True once after a buffer that could not be imported as an EGL image: nothing of that frame is drawn.
+    bool takeImportFailure() { const bool failed = importFailed; importFailed = false; return failed; }
+
     uintptr_t getTexture() override { return currentTexture; }
     uintptr_t getFramebuffer() override { return 0; }
     void onNewFrame(const void *data, unsigned width, unsigned height, size_t pitch) override;
@@ -65,6 +68,7 @@ private:
     void rebuildPasses();
 
     std::vector<Import> imports;
+    bool importFailed = false;
     GLuint currentTexture = 0;
     unsigned textureWidth = 0;
     unsigned textureHeight = 0;

@@ -121,6 +121,8 @@ public:
     // bridge cycles through, each imported once.
     void setExternalFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd,
                           unsigned liveBuffers);
+    // True once after a setExternalFrame whose buffer the GLES side could not import.
+    bool takeExternalImportFailure();
 
     uintptr_t getCurrentFramebuffer() {
         return renderer->getFramebuffer();
