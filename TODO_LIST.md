@@ -260,7 +260,10 @@ Device checks still owed:
 
 Follow-ups, after #147:
 
-- [ ] Region-aware BIOS check: read a Sega CD disc's region (PC Engine CD too if it needs it) and require that region's BIOS, with a popup naming the file ("This game is a US disc: put bios_CD_U.bin in Bios/SEGACD/ (you have the EU and JP ones)"). Today any of U/E/J passes and PicoDrive fails in-game. Optionally check BIOS checksums against the known good dumps.
+- [x] Region-aware BIOS check (feat/region-bios): a Sega CD disc's header decides which region's BIOS it needs; the popup names the file and where the other regions' files are. Sonic CD (USA) on the Nova, 2026-11-15.
+- [ ] PC Engine CD: check whether a region-specific System Card matters (mednafen pce_fast takes syscard3.pce for both); add it to the region check if so.
+- [ ] BIOS checksums: check each BIOS file against the known good dumps, so a bad or misnamed dump gets its own message.
+- [ ] MSU-MD on Genesis Plus GX: it loads the Sega CD BIOS of the cartridge's region (its header's country codes, or the forced region); the launch still checks "any of the three" for it.
 - [ ] PicoDrive on the libretro VFS: its NDK build opens files by path, so it is the one core (with PrBoom) on LoadMode.REAL_PATH, copied to the cache on the Play build and from SAF extra folders. Building it with libretro-common's VFS lets it stream like the others and drops the copy (Sega CD discs, MSU-MD soundtracks).
 - [ ] More badges ([IndexedGame.badge] is general): from bracketed file-name tags ((Hack), [h], (Homebrew), (Translated), (Beta)/(Proto)) via a small table, a per-game choice in Options (wins over detected ones), or a DAT/ScreenScraper match. One badge per game today.
 - [ ] Docs: unzip MSU packs (a zip cannot be streamed); a pack in its own folder is one game.

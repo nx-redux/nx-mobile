@@ -90,6 +90,32 @@ class DiscProbe(private val source: RomsSource, private val chd: ChdSectors? = n
         return if (failed && kind == null) UNREAD.copy(data = data) else ProbeResult(kind?.consoleId, read = true, data = data)
     }
 
+    /**
+     * The 2048 bytes of user data in sector 0 of [file]'s first data track (a disc's header: Sega CD's IP, with its
+     * region), as [probe] finds the track: a bare iso/bin/img, a cue's first data track, a CD CHD's, an m3u's first disc.
+     * Null when it cannot be read, has no data track, or is not a CD image. Never throws.
+     */
+    suspend fun firstDataSector(file: Entry, dir: List<Entry>): ByteArray? = try {
+        sector0(file, dir, followM3u = true)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        null
+    }
+
+    private suspend fun sector0(file: Entry, dir: List<Entry>, followM3u: Boolean): ByteArray? = when (Names.extensionOf(file.name)) {
+        "iso" -> sector0Of(file.ref, DiscImages.rawTrack(file.name, ByteArray(0)))
+        "bin", "img" -> source.readRange(file.ref, 0, 16)?.let { sector0Of(file.ref, DiscImages.rawTrack(file.name, it)) }
+        "cue" -> DiscSheet.readSheet(source, file.ref)?.let(DiscImages::cueTrack)?.let { t -> named(dir, t.file)?.let { sector0Of(it.ref, t) } }
+        "chd" -> source.readHead(file.ref, CHD_HEAD)?.takeIf { ChdHeader.media(it) == ChdMedia.CD }?.let { chd?.read(file.ref, listOf(0))?.firstOrNull() }
+        "m3u" -> if (!followM3u) null else DiscSheet.readSheet(source, file.ref)
+            ?.let { DiscSheet.references(file.name, it).firstOrNull() }?.let { named(dir, it) }?.let { sector0(it, dir, followM3u = false) }
+        else -> null
+    }
+
+    private suspend fun sector0Of(ref: ContentRef, t: DataTrack): ByteArray? =
+        source.readRange(ref, t.start + t.dataOffset, 2048)?.takeIf { it.size == 2048 }
+
     /** [name] in [dir] as a launch finds it ([DiscSheet.Listing]: any case, or another code page's spelling). */
     private fun named(dir: List<Entry>, name: String): Entry? = DiscSheet.Listing(dir.filter { !it.isDirectory }).find(name)
 

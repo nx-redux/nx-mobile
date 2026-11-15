@@ -19,9 +19,11 @@ import com.nxredux.mobile.gametime.GameTimeRecorder
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.library.ArcadeCompanions
+import com.nxredux.mobile.library.Entry
 import com.nxredux.mobile.library.MsuSets
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.NaomiSets
+import com.nxredux.mobile.library.disc.DiscProbe
 import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.netplay.NetplayLinkKind
 import com.nxredux.mobile.netplay.NetplayLinkOptions
@@ -84,6 +86,8 @@ import com.nxredux.mobile.storage.AndroidHomeLocator
 import com.nxredux.mobile.storage.AndroidRefs
 import com.nxredux.mobile.storage.AndroidRomsSources
 import com.nxredux.mobile.storage.DataRoot
+import com.nxredux.mobile.storage.FileRefs
+import com.nxredux.mobile.storage.LibchdrSectors
 import com.nxredux.mobile.storage.NdsDsvSave
 import com.nxredux.mobile.storage.NdsResumeCleanup
 import com.nxredux.mobile.storage.NxPaths
@@ -421,6 +425,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         private const val MUPEN64PLUS_NEXT_ID = "mupen64plus_next"
         /** Beside a real-path cache copy: what it was copied from ([realPathCopyStamp]). */
         private const val REAL_PATH_STAMP = ".nxstamp"
+        /** The consoles a Sega CD disc lists under: its own, and the Mega Drive's (a cue in a Genesis folder runs too). */
+        private val SEGA_CD_CONSOLES = setOf("segacd", "md")
     }
 
     /** What [resolveConfig] settled that the later stages read. */
@@ -854,8 +860,19 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // An MSU-MD set plays its music from a Sega CD: Genesis Plus GX needs that console's BIOS for it, as for a disc
             // (PicoDrive fakes the one check the MSU-MD driver makes).
             val biosExtension = if (inner == null && msuMdSheet(cfg) != null && cfg.descriptor?.id == SegaPadType.GPGX) "cue" else contentExtension
-            BiosCheck.missing(CoreRegistry.requiredBios(cfg.tag), biosExtension, biosPresent).firstOrNull()?.let {
+            // A Sega CD disc boots with its own region's BIOS only: when its header is read, that file is checked (under
+            // any name the core takes) in place of "any of the three".
+            val discRegion = segaCdRegion(cfg, inner, contentExtension, biosPresent)
+            val needs = CoreRegistry.requiredBios(cfg.tag).filterNot { discRegion != null && SegaCdBios.isSegaCdNeed(it) }
+            BiosCheck.missing(needs, biosExtension, biosPresent).firstOrNull()?.let {
                 return refuse(BiosCheck.message(cfg.tag, it))
+            }
+            discRegion?.let { region ->
+                val core = cfg.descriptor?.id.orEmpty()
+                SegaCdBios.missing(core, region, biosPresent)?.let { file ->
+                    val folders = withContext(Dispatchers.IO) { biosFolderOf(cfg) }
+                    return refuse(SegaCdBios.message(cfg.tag, core, region, file, biosPresent, folders::get))
+                }
             }
             // A NAOMI/Atomiswave set's BIOS archive (flycast opens <system>/dc/<bios>.zip or .7z); an unknown set is not checked.
             if (archiveAsIs) naomiSets.missingBios(cfg.romFileName, biosPresent)?.let { return refuse(NaomiSets.biosMessage(cfg.title, it)) }
@@ -1043,6 +1060,53 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             preflightNotice?.let { toast(it) }
             return data
         }
+    }
+
+    /**
+     * The region whose Sega CD BIOS [cfg]'s disc boots with, under PicoDrive or Genesis Plus GX: Genesis Plus GX's forced
+     * region ([SegaCdBios.GPGX_REGION_KEY]), else the disc's header ([SegaCdBios.regionOf], read from its first data
+     * sector through the launch's files: the unpacked [inner] disc, or the content and the tracks it was handed). The
+     * header is read first, so a Mega Drive cartridge named `.bin` is never taken for a disc. Null for any other game, a
+     * header that cannot be read (the generic check then stands), or when [present] holds every region's BIOS (the
+     * answer could not refuse the launch, so nothing is read).
+     */
+    private suspend fun segaCdRegion(cfg: LaunchConfig, inner: File?, contentExtension: String, present: Set<String>): DiscRegion? {
+        val core = cfg.descriptor?.id ?: return null
+        if (core != SegaPadType.PICODRIVE && core != SegaPadType.GPGX) return null
+        if (CoreRegistry.consoleOf(cfg.tag)?.id !in SEGA_CD_CONSOLES || contentExtension !in SegaCdBios.DISC_EXTENSIONS) return null
+        if (DiscRegion.entries.all { SegaCdBios.missing(core, it, present) == null }) return null
+        val disc = withContext(Dispatchers.IO) {
+            val (file, dir) = if (inner != null) {
+                val files = inner.parentFile?.listFiles().orEmpty().filter { it.isFile }.map { Entry(FileRefs.of(it.absolutePath), it.name, false, it.length()) }
+                (files.firstOrNull { it.name == inner.name } ?: return@withContext null) to files
+            } else {
+                val content = Entry(cfg.content, cfg.romFileName, false, null)
+                content to (listOf(content) + cfg.companions.map { (name, ref) -> Entry(ref, name, false, null) })
+            }
+            DiscProbe(AndroidRomsSources.of(host.activity), LibchdrSectors(host.activity.contentResolver)).firstDataSector(file, dir)
+        }?.let(SegaCdBios::regionOf) ?: return null
+        val forced = if (core == SegaPadType.GPGX) SegaCdBios.gpgxForced(cfg.options.firstOrNull { it.key == SegaCdBios.GPGX_REGION_KEY }?.value) else null
+        return forced ?: disc
+    }
+
+    /**
+     * Each BIOS file name in the home's `Bios/` folders [cfg]'s launch gathers from ([BiosFolders.forTag]), with the folder
+     * it is in (the last, in that order: the copy [BiosImport] keeps on a name clash); empty without a home or on a read
+     * failure. Only read for a refusal's message.
+     */
+    private suspend fun biosFolderOf(cfg: LaunchConfig): Map<String, String> = try {
+        val source = AndroidRomsSources.of(host.activity)
+        val bios = cfg.home?.let { source.child(it, "Bios") }?.takeIf { it.isDirectory }
+        val out = LinkedHashMap<String, String>()
+        if (bios != null) for (folder in BiosFolders.forTag(cfg.tag)) {
+            val dir = source.child(bios.ref, folder)?.takeIf { it.isDirectory } ?: continue
+            for (e in source.listChildren(dir.ref)) if (!e.isDirectory) out[e.name] = folder
+        }
+        out
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        emptyMap()
     }
 
     /** The cue of [cfg]'s MSU-MD set, under the name it was handed to the core by; null when the game is none. */
