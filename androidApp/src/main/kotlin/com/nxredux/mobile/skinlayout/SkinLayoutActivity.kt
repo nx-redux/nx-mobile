@@ -118,13 +118,11 @@ class SkinLayoutActivity : ComponentActivity() {
         // is placed only while half-folded in a game. The title says which layout this is ([SkinLayoutEdit.title]).
         val skin = if (!settings.padSkin) null else SkinChoice.place(
             pack.manifest, w, h, dpi, tablet, ds, picture, hingeY = null, topInset = 0, foldable = DeviceTraits.canHalfFold, variant = variant,
-            hingeShown = DeviceTraits.hingeAcross(w, h),
         )
         // the game's rule: the bare buttons wherever the skin is not drawn
         val bare = skin == null
         val placed: SkinPlacement = skin ?: SkinChoice.placeClosest(
             pack.manifest, w, h, dpi, tablet, ds, picture, hingeY = null, topInset = 0, foldable = DeviceTraits.canHalfFold, variant = variant,
-            hingeShown = DeviceTraits.hingeAcross(w, h),
         ) ?: return null
         val stick = profile.stickByDefault || DcGames.stickFirst(base, arcadeSet = false) || profile.kind == PadProfile.Kind.GC
         val image = pack.picture(placed.spec.image)?.asImageBitmap() ?: return null

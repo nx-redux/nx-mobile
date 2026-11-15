@@ -60,7 +60,6 @@ class NxApplication : Application() {
         // A hinge to half-fold at: the half-folded texts and the Half-folded pad layout show only on such a device.
         DeviceTraits.canHalfFold = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
             packageManager.hasSystemFeature(PackageManager.FEATURE_SENSOR_HINGE_ANGLE)
-        com.nxredux.mobile.runner.FoldDirection.load(this)
         // A dead process's install wait notice: that wait ended with it.
         if (!game) getSystemService(NotificationManager::class.java)?.cancel(NotificationIds.APP_UPDATE_WAIT)
         // Off is both flags' default: only On needs setting, so a launcher-only start never loads the native library.

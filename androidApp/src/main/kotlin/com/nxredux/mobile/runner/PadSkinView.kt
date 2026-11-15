@@ -22,7 +22,6 @@ import com.nxredux.mobile.skin.PlacedControl
 import com.nxredux.mobile.skin.stripPill
 import com.nxredux.mobile.skin.stackedMenuRoom
 import com.nxredux.mobile.skin.underMenu
-import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.skin.SkinCell
 import com.nxredux.mobile.skin.SkinSeam
 import com.nxredux.mobile.skin.SkinSeamDraw
@@ -257,8 +256,8 @@ internal class PadSkinView(
             for (g in p.glasses) holes.addRoundRect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height, g.corner, g.corner, Path.Direction.CW)
             canvas.clipOutPath(holes)
             for (c in p.cells) drawCell(canvas, pic, c, p.k)
-            // no hinge across this window (a tablet, a book Fold upright): the fold board as one slab
-            if (!DeviceTraits.hingeAcross(width, height)) for (d in SkinSeam.draws(p, SKIN_STRETCH_MAX)) drawSeam(canvas, pic, d, p.k)
+            // not half-folded: the fold board as one slab
+            if (p.slab) for (d in SkinSeam.draws(p, SKIN_STRETCH_MAX)) drawSeam(canvas, pic, d, p.k)
             canvas.restore()
         }
         canvas.save()

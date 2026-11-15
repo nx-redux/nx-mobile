@@ -3,7 +3,7 @@ package com.nxredux.mobile.skin
 import com.nxredux.mobile.options.PxRect
 
 /**
- * One draw over a fold board's hinge row when the device has no hinge across the window: [cell] drawn as cells are
+ * One draw over a fold board's hinge row when it is drawn without its hinge ([SkinPlacement.slab]): [cell] drawn as cells are
  * ([skinTiles]), upside down where [mirror], fading from opaque at its top to clear at its bottom where [fade].
  */
 data class SkinSeamDraw(val cell: SkinCell, val mirror: Boolean, val fade: Boolean)

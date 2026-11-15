@@ -219,7 +219,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      */
     private data class SkinKey(
         val w: Int, val h: Int, val dpi: Int, val tablet: Boolean, val tag: String, val aspect: Float?, val hinge: Float?, val top: Int,
-        val variant: com.nxredux.mobile.skin.SkinVariant, val tweaks: String, val overlayTweaks: String, val hingeShown: Boolean,
+        val variant: com.nxredux.mobile.skin.SkinVariant, val tweaks: String, val overlayTweaks: String,
     )
     /** The band portrait's bare buttons take at the bottom ([skinBandHeight]), px; 0 in landscape or without them. */
     private var overlayHeight = 0
@@ -455,15 +455,15 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val top = 0
         val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), NdsOptions.appliesTo(tag), host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC, wiiPad, padProfile().cStick)
         val settings = AndroidAppSettings(activity)
-        return SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, top, variant, settings.skinTweaks, settings.overlayTweaks, DeviceTraits.hingeAcross(w, h))
+        return SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, top, variant, settings.skinTweaks, settings.overlayTweaks)
     }
 
     /** [pack]'s layout for [key] before any tweak ([SkinChoice.place], or [SkinChoice.placeClosest] when [closest]; [ds]: a DS or 3DS). */
     private fun placeUntweaked(pack: PadSkinPack, key: SkinKey, ds: Boolean, closest: Boolean): SkinPlacement? {
         val variant = key.variant
         val picture = key.aspect?.let { (it * 240f) to 240f }
-        return if (closest) SkinChoice.placeClosest(pack.manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, key.top, DeviceTraits.canHalfFold, variant, key.hingeShown)
-            else SkinChoice.place(pack.manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, key.top, DeviceTraits.canHalfFold, variant, key.hingeShown)
+        return if (closest) SkinChoice.placeClosest(pack.manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, key.top, DeviceTraits.canHalfFold, variant)
+            else SkinChoice.place(pack.manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, key.top, DeviceTraits.canHalfFold, variant)
     }
 
     /** The smallest a control's touch area may be shrunk to here, window px. */

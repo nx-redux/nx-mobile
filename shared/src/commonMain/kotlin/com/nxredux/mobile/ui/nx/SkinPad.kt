@@ -40,8 +40,6 @@ import org.jetbrains.compose.resources.Font
 import com.nxredux.mobile.skin.SkinCell
 import com.nxredux.mobile.skin.SkinSeam
 import com.nxredux.mobile.skin.SkinSeamDraw
-import com.nxredux.mobile.layout.DeviceTraits
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Paint
@@ -116,7 +114,6 @@ fun SkinArt(placement: SkinPlacement, picture: ImageBitmap, parts: ImageBitmap?,
     val semibold = Font(Res.font.misans_semibold, FontWeight.SemiBold)
     val labelFont = remember(semibold) { FontFamily(semibold) }
     val measurer = rememberTextMeasurer()
-    val acrossPortrait by DeviceTraits.foldAcrossPortrait.collectAsState()
     val holes = remember(placement) {
         Path().apply { for (g in placement.glasses) addRect(Rect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height)) }
     }
@@ -124,10 +121,8 @@ fun SkinArt(placement: SkinPlacement, picture: ImageBitmap, parts: ImageBitmap?,
         // the screens are holes in the background: what is under them shows through (it runs under them otherwise)
         clipPath(holes, ClipOp.Difference) {
             for (c in placement.cells) drawCell(picture, c, placement.k)
-            // no hinge across this window (a tablet, a book Fold upright): the fold board as one slab
-            if (!DeviceTraits.hingeAcross(size.width.roundToInt(), size.height.roundToInt(), acrossPortrait)) {
-                for (d in SkinSeam.draws(placement, SKIN_STRETCH_MAX)) drawSeam(picture, d, placement.k)
-            }
+            // not half-folded: the fold board as one slab
+            if (placement.slab) for (d in SkinSeam.draws(placement, SKIN_STRETCH_MAX)) drawSeam(picture, d, placement.k)
         }
         // the pieces and labels whole, over the screens as the game draws them: a button moved onto a screen's edge stays
         // on top (the frame's own hole is cut round in its art)
