@@ -292,8 +292,6 @@ object CoreRegistry {
     // its valid_extensions (sc, sgd and pco too, which no console here owns).
     private val picodrive = CoreDescriptor(
         "picodrive", "libpicodrive_libretro_android.so", setOf("32x", "bin", "md", "gen", "smd", "68k", "sms", "gg", "sg", "cue", "iso", "chd", "m3u"),
-        // Its NDK build has no libretro VFS (plain fopen on the path): give it a real file.
-        loadMode = LoadMode.REAL_PATH,
         // The Brick's MD, SEGACD and 32X paks' values (the rest of theirs are the core's defaults).
         defaultOptions = mapOf("picodrive_drc" to "enabled", "picodrive_sound_rate" to "44100"),
         // The 6-button pad on both ports; Controls → Controller Type replaces it at launch and live (SegaPadType).

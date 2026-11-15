@@ -1015,24 +1015,19 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                             // a SAF game is copied: a disc set's files go next to its sheet in the cache, under the names the sheet uses.
                             val inPlace = RealPathLaunch.inPlace(cfg.content, fileName, cfg.companions)
                                 ?.takeIf { p -> File(p).canRead() && cfg.companions.all { (name, _) -> File(File(p).parentFile, name).canRead() } }
-                            val path = if (inPlace != null) {
+                            gameFilePath = if (inPlace != null) {
                                 inPlace
                             } else {
                                 for ((name, ref) in cfg.companions) copyToCache(ref, name)
                                 copyToCache(cfg.content, fileName).absolutePath
                             }
-                            // PicoDrive runs an MSU-MD set from its cue and finds the cartridge beside it; Genesis Plus GX
-                            // runs the cartridge and mounts the cue.
-                            val cue = msuMdSheet(cfg)?.takeIf { cfg.descriptor?.id == SegaPadType.PICODRIVE }
-                            gameFilePath = cue?.let { File(File(path).parentFile, it).absolutePath } ?: path
                         } else {
                             // With more than one virtual file the runner serves the core through its VFS (libretrodroid.cpp:391),
-                            // so the core opens /rom/<track>.bin by the name its cue gives.
-                            val opened = ArrayList<VirtualFile>(cfg.companions.size + 1)
+                            // so the core opens /rom/<track>.bin by the name its cue gives. The first file is the one loaded.
+                            val files = vfsFiles(cfg, fileName)
+                            val opened = ArrayList<VirtualFile>(files.size)
                             try {
-                                val pfd = refs.openFd(cfg.content, "r") ?: throw IOException("Cannot open file descriptor")
-                                opened += VirtualFile("/rom/$fileName", pfd)
-                                for ((name, ref) in cfg.companions) {
+                                for ((name, ref) in files) {
                                     opened += VirtualFile("/rom/$name", refs.openFd(ref, "r") ?: throw IOException("Cannot open $name"))
                                 }
                             } catch (e: Exception) {
@@ -1112,6 +1107,16 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     /** The cue of [cfg]'s MSU-MD set, under the name it was handed to the core by; null when the game is none. */
     private fun msuMdSheet(cfg: LaunchConfig): String? =
         if (CoreRegistry.consoleOf(cfg.tag)?.id != "md") null else MsuSets.Folder(cfg.companions.map { it.first }).mdSheet(cfg.romFileName)
+
+    /**
+     * The files [cfg]'s launch serves under `/rom/`, by name, the loaded one first: the game as [fileName], then its
+     * companions; PicoDrive's MSU-MD set from its cue ([MsuSets.picodriveOrder]).
+     */
+    private fun vfsFiles(cfg: LaunchConfig, fileName: String): List<Pair<String, ContentRef>> {
+        val plain = listOf(fileName to cfg.content) + cfg.companions
+        if (cfg.descriptor?.id != SegaPadType.PICODRIVE || CoreRegistry.consoleOf(cfg.tag)?.id != "md") return plain
+        return MsuSets.picodriveOrder(fileName, cfg.content, cfg.companions) ?: plain
+    }
 
     private suspend fun attachView(cfg: LaunchConfig, prepared: PreparedContent, data: GLRetroViewData) {
         with(host) {
