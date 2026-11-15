@@ -179,7 +179,7 @@ class SkinSeamTest {
 
     /**
      * [p]'s row ([RowSpacing]): its edge gaps (to 32 dp) and inner gaps (to 16 dp) alike, the full ones with room; L / R
-     * twice the edge gap from the edges and 16 dp over their rings; a column of two or more twice the inner gap from the
+     * 16 dp in from their ring's outer edge and 16 dp over it; a column of two or more twice the inner gap from the
      * screen and 16 dp under its ring.
      */
     private fun assertRow(p: SkinPlacement, w: Int, dpi: Int, name: String) {
@@ -198,11 +198,11 @@ class SkinSeamTest {
             spec.controls.any { c -> c.id in ids && c.anchor == a && spec.pieces[pc.piece].let { s -> c.x >= s.x && c.x <= s.x + s.w * s.scale && c.y >= s.y && c.y <= s.y + s.h * s.scale } } }
         val lRing = held(PieceAnchor.LEFT, setOf("DPAD", "STICK")); val rRing = held(PieceAnchor.RIGHT, setOf("X", "Y", "A", "B"))
         held(PieceAnchor.LEFT, setOf("L")).takeIf { it.isNotEmpty() }?.let { l ->
-            assertEquals(2f * edge, l.minOf { it.dst.x }, 2f, "$name L")
+            assertEquals(lRing.minOf { it.dst.x } + 16f * dp, l.minOf { it.dst.x }, 2f, "$name L 16 dp in from the d-pad's box")
             assertEquals(16f * dp, lRing.minOf { it.dst.y } - l.maxOf { it.dst.y + it.dst.height }, 2f, "$name L over its ring")
         }
         held(PieceAnchor.RIGHT, setOf("R")).takeIf { it.isNotEmpty() }?.let { r ->
-            assertEquals(2f * edge, w - r.maxOf { it.dst.x + it.dst.width }, 2f, "$name R")
+            assertEquals(rRing.maxOf { it.dst.x + it.dst.width } - 16f * dp, r.maxOf { it.dst.x + it.dst.width }, 2f, "$name R 16 dp in from the face buttons' box")
             assertEquals(16f * dp, rRing.minOf { it.dst.y } - r.maxOf { it.dst.y + it.dst.height }, 2f, "$name R over its ring")
         }
         for (a in listOf(PieceAnchor.LEFT, PieceAnchor.RIGHT)) {
@@ -216,4 +216,22 @@ class SkinSeamTest {
         }
     }
     data class Quad(val a: Int, val b: Int, val c: Int, val d: Float)
+
+    @Test
+    fun aGameFoldBoardsFaceButtonsStandWhereTheMenusDo() {
+        // the DS's and the regular 3DS's diamond, R and START / SELECT where the main menu has them, the Fold and the Ultra
+        for ((w, h, dpi) in listOf(Triple(1848, 2448, 420), Triple(2256, 2504, 480))) {
+            val menu = assertNotNull(SkinChoice.placeMenu(pack, w, h, dpi, foldable = true, tablet = true))
+            val mc = menu.controls.associateBy { it.spec.id }
+            // (the Ultra's DS takes the board's tablet twin, its clusters centred on the bottom screen: its own design)
+            for (v in listOfNotNull(SkinVariant.DS.takeIf { w == 1848 }, SkinVariant.N3DS_REGULAR)) {
+                val g = assertNotNull(SkinChoice.place(pack, w, h, dpi, tablet = true, ds = true, foldable = true, variant = v)).controls.associateBy { it.spec.id }
+                for (id in listOf("X", "Y", "A", "B", "R")) {
+                    assertEquals(mc.getValue(id).x, g.getValue(id).x, 1f, "$v ${w}x$h $id x")
+                    assertEquals(mc.getValue(id).y, g.getValue(id).y, 1f, "$v ${w}x$h $id y")
+                }
+                if (v == SkinVariant.N3DS_REGULAR) for (id in listOf("START", "SELECT")) assertEquals(mc.getValue(id).x, g.getValue(id).x, 1f, "$v ${w}x$h $id x")
+            }
+        }
+    }
 }

@@ -197,14 +197,19 @@ object SkinChoice {
 
     /**
      * A board's spacing ([RowSpacing]) at [densityDpi] and scale [k]: [ROW_EDGE_DP] from the window's edges, [ROW_GAP_DP]
-     * between the side groups and the screen, the gaps no smaller than [ROW_MIN_GAP_DP]; the screen no narrower than [MENU_MIN_DP] ([menu]: the main menu's
-     * or a one-screen game's panel) or than its touch screen's picture.
+     * between the side groups and the screen, the gaps no smaller than [ROW_MIN_GAP_DP]; the screen no narrower than
+     * [MENU_MIN_DP].
      */
-    private fun rowSpacing(densityDpi: Int, k: Float, menu: Boolean = true): RowSpacing {
+    private fun rowSpacing(densityDpi: Int, k: Float): RowSpacing {
         val px = densityDpi / 160f / k
-        // a game's touch screen: its picture's shape is its least ([RowSpacing.frameMin] null); the menu and a panel: [MENU_MIN_DP]
-        return RowSpacing(ROW_EDGE_DP * px, ROW_GAP_DP * px, ROW_MIN_GAP_DP * px, if (menu) MENU_MIN_DP * px else null)
+        // every board's screen the menu's least, so a game's side groups stand where the menu's do (a touch screen's picture
+        // fits in it, a little smaller where it is narrower than the picture)
+        return RowSpacing(ROW_EDGE_DP * px, ROW_GAP_DP * px, ROW_MIN_GAP_DP * px, MENU_MIN_DP * px)
     }
+
+    /** The main menu's fold board drawn at [game]'s size (the same render), the game fold boards' reference. */
+    private fun menuFoldBoard(pack: SkinPackManifest, game: SkinLayoutSpec): SkinLayoutSpec? =
+        pack.layouts.firstOrNull { it.family == SkinFamily.STACKED && it.variant == SkinVariant.MENU && it.foldBoard && it.refW == game.refW && it.refH == game.refH }
 
     /**
      * The menu's landscape shell's frame margin from the window's bottom, picture px: the margin the main menu's bottom
@@ -274,8 +279,10 @@ object SkinChoice {
         val foldBoard = {
             shrunk(k) { s ->
                 widest(pack, SkinFamily.FLEX, v, fold = true, refH = windowH / s) { spec ->
-                    foldPieces(spec, windowW, windowH, s, picture, topInset, hingeY, densityDpi, top,
-                        row = rowSpacing(densityDpi, s, menu = !spec.pieces.any { it.glass?.screen == GlassScreen.TOUCH }))
+                    // the main menu's fold board the reference: its spacing (so the side groups stand where the menu's do)
+                    // and its face buttons' height
+                    foldPieces(spec.faceAt(menuFoldBoard(pack, spec)), windowW, windowH, s, picture, topInset, hingeY, densityDpi, top,
+                        row = rowSpacing(densityDpi, s))
                 }
             }
         }

@@ -1426,14 +1426,15 @@ class NxCarbonPackTest {
             assertEquals(setOf("DPAD", "A", "B", "X", "Y", "L", "R", "START", "SELECT", "MENU"), p.controls.map { it.spec.id }.toSet())
             assertTrue(p.controls.all { it.y in (g.y + g.height)..h.toFloat() }, name)
             // the buttons keep their size and their side, the small ones centred; the rings the edge gap (32 dp where they
-            // fit) from the edges, L / R twice that from them and 16 dp over their rings ([RowSpacing])
+            // fit) from the edges, L / R 16 dp in from their rings' outer edges and 16 dp over them ([RowSpacing])
             val c = p.controls.associateBy { it.spec.id }
             assertEquals(w / 2f, c.getValue("MENU").x, 0.5f, name)
             val rp = rowPieces(p)
             val gap = rp.lRing.minOf { it.dst.x }
             assertTrue(gap <= 32f * dpi / 160f + 1f && gap > 0f, "$name gap $gap")
             assertEquals(gap, w - rp.rRing.maxOf { it.dst.x + it.dst.width }, 1f, "$name right ring")
-            assertEquals(2f * gap, rp.l.minOf { it.dst.x }, 1f, "$name L"); assertEquals(2f * gap, w - rp.r.maxOf { it.dst.x + it.dst.width }, 1f, "$name R")
+            assertEquals(rp.lRing.minOf { it.dst.x } + 16f * dpi / 160f, rp.l.minOf { it.dst.x }, 1f, "$name L")
+            assertEquals(rp.rRing.maxOf { it.dst.x + it.dst.width } - 16f * dpi / 160f, rp.r.maxOf { it.dst.x + it.dst.width }, 1f, "$name R")
             assertEquals(16f * dpi / 160f, rp.lRing.minOf { it.dst.y } - rp.l.maxOf { it.dst.y + it.dst.height }, 1f, "$name L over the d-pad")
             assertEquals(8 + 1 + 7, p.pieces.size, name)   // the frame (corners and edges), the SELECT START well, then the seven button pieces
         }
@@ -1572,7 +1573,7 @@ class NxCarbonPackTest {
             // the edge gaps alike (to 32 dp), the inner ones alike (to 16 dp)
             assertEquals(gaps[0], gaps[3], 2f, "$name edges $gaps"); assertEquals(gaps[1], gaps[2], 2f, "$name inner $gaps")
             assertTrue(gaps[0] <= 32f * dpi / 160f + 1f && gaps[1] <= 16f * dpi / 160f + 1f, "$name gaps $gaps")
-            assertEquals(2f * gaps[0], rp.l.minOf { it.dst.x }, 1f, "$name L")
+            assertEquals(rp.lRing.minOf { it.dst.x } + 16f * dpi / 160f, rp.l.minOf { it.dst.x }, 1f, "$name L")
             assertEquals(16f * dpi / 160f, rp.lRing.minOf { it.dst.y } - rp.l.maxOf { it.dst.y + it.dst.height }, 1f, "$name L over the d-pad")
             assertEquals(2f * gaps[1], rp.col.minOf { it.dst.x } - fr.maxOf { it.dst.x + it.dst.width }, 1f, "$name START / SELECT from the screen")
             assertEquals(16f * dpi / 160f, rp.col.minOf { it.dst.y } - rp.rRing.maxOf { it.dst.y + it.dst.height }, 1f, "$name START / SELECT under the face buttons")

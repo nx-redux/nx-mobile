@@ -32,3 +32,35 @@ internal fun SkinLayoutSpec.menuBesideTheDpad(): SkinLayoutSpec {
         controls = controls.map { if (it === menu) control else it },
     )
 }
+
+/**
+ * A game fold board the row rules place with its right side group (the face buttons' ring, R, its button column) moved
+ * up or down so the ring stands at [menu]'s height (the main menu's fold board drawn alike, the reference); any other
+ * board, or one without a ring in both, as it is.
+ */
+internal fun SkinLayoutSpec.faceAt(menu: SkinLayoutSpec?): SkinLayoutSpec {
+    if (menu == null || menu === this || variant == SkinVariant.MENU || menu.minRefH != minRefH) return this
+    // a board the row rules place (its side groups hold only [ROW_IDS]' controls): another keeps its own design
+    fun SkinLayoutSpec.holds(p: PieceSpec) = controls.any { c ->
+        c.id in ROW_IDS && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+    }
+    if (!pieces.filter { it.glass == null && it.anchor != PieceAnchor.CENTRE }.all { holds(it) } ||
+        !controls.filter { it.anchor == PieceAnchor.LEFT || it.anchor == PieceAnchor.RIGHT }.all { it.id in ROW_IDS }) return this
+    val face = setOf("X", "Y", "A", "B")
+    fun SkinLayoutSpec.ring() = pieces.firstOrNull { p ->
+        p.glass == null && p.anchor == PieceAnchor.RIGHT && controls.any { c ->
+            c.id in face && c.anchor == PieceAnchor.RIGHT && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+        }
+    }
+    val mine = ring() ?: return this
+    val theirs = menu.ring() ?: return this
+    // a full diamond only: a pair (the Atari 5200's fire buttons, PICO-8's O X) keeps its own place by its stick
+    if (!face.all { id -> controls.any { c -> c.id == id && c.anchor == PieceAnchor.RIGHT && c.x >= mine.x && c.x <= mine.x + mine.w * mine.scale && c.y >= mine.y && c.y <= mine.y + mine.h * mine.scale } }) return this
+    if (mine.level != theirs.level || mine.drop != theirs.drop) return this
+    val dy = theirs.y - mine.y
+    if (dy == 0) return this
+    return copy(
+        pieces = pieces.map { if (it.glass == null && it.anchor == PieceAnchor.RIGHT) it.copy(y = it.y + dy) else it },
+        controls = controls.map { if (it.anchor == PieceAnchor.RIGHT) it.copy(y = it.y + dy) else it },
+    )
+}

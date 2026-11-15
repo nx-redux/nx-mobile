@@ -350,7 +350,8 @@ object SkinSolver {
             l to r
         }
         fun columnShiftOf(anchor: PieceAnchor?) = when (anchor) { PieceAnchor.LEFT -> columnShift.first; PieceAnchor.RIGHT -> columnShift.second; else -> 0f }
-        // [row]'s shoulders (L, R): their outer edge twice the d-pad / face buttons' edge gap from the window's edge
+        // [row]'s shoulders (L, R): their outer edge [RowSpacing.gap] in from their ring's outer edge (the d-pad's left, the
+        // face buttons' right; both moved with their group alike, so the group shift cancels out)
         val shoulderIds = setOf("L", "R")
         fun holdsShoulder(p: PieceSpec) = p.glass == null && p.anchor != PieceAnchor.CENTRE && spec.controls.any { c ->
             c.id in shoulderIds && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
@@ -359,9 +360,13 @@ object SkinSolver {
             fun x0(p: PieceSpec) = p.x + across(p.anchor, p.inward)
             val left = spec.pieces.filter { it.anchor == PieceAnchor.LEFT && holdsShoulder(it) }
             val right = spec.pieces.filter { it.anchor == PieceAnchor.RIGHT && holdsShoulder(it) }
-            val edge = rowPlan[5]
-            val l = if (left.isEmpty()) 0f else 2f * edge - (left.minOf { x0(it) } + rowPlan[0])
-            val r = if (right.isEmpty()) 0f else (w - 2f * edge) - (right.maxOf { x0(it) + it.w * it.scale } + rowPlan[1])
+            // the rings' outer edges (the d-pad's left, the face buttons' right, at their middle the circle's outline)
+            fun ring(side: PieceAnchor, ids: Set<String>) = spec.pieces.filter { p -> p.glass == null && p.anchor == side && spec.controls.any { c ->
+                c.id in ids && c.anchor == side && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale } }
+            val lRing = ring(PieceAnchor.LEFT, setOf("DPAD", "STICK")); val rRing = ring(PieceAnchor.RIGHT, setOf("X", "Y", "A", "B"))
+            val inset = row?.gap ?: 0f
+            val l = if (left.isEmpty() || lRing.isEmpty()) 0f else (lRing.minOf { x0(it) } + inset) - left.minOf { x0(it) }
+            val r = if (right.isEmpty() || rRing.isEmpty()) 0f else (rRing.maxOf { x0(it) + it.w * it.scale } - inset) - right.maxOf { x0(it) + it.w * it.scale }
             l to r
         }
         fun shoulderShiftOf(anchor: PieceAnchor?) = when (anchor) { PieceAnchor.LEFT -> shoulderShift.first; PieceAnchor.RIGHT -> shoulderShift.second; else -> 0f }
