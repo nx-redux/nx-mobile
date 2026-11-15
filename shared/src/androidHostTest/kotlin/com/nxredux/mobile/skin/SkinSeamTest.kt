@@ -256,4 +256,53 @@ class SkinSeamTest {
         }
     }
     data class Quad4(val a: Int, val b: Int, val c: Int, val d: Boolean)
+
+    @Test
+    fun theDreamcastFollowsTheMainMenuWithItsSwapOverMenuAndStartAlone() {
+        for ((w, h, dpi, fold) in listOf(Quad4(1848, 2448, 420, true), Quad4(2400, 1080, 420, false))) {
+            val menu = assertNotNull(SkinChoice.placeMenu(pack, w, h, dpi, foldable = fold, tablet = fold), "${w}x$h menu")
+            val game = assertNotNull(SkinChoice.place(pack, w, h, dpi, tablet = fold, ds = false, picture = 640f to 480f, foldable = fold, variant = SkinVariant.DC), "${w}x$h dc")
+            val mc = menu.controls.associateBy { it.spec.id }; val gc = game.controls.associateBy { it.spec.id }
+            // the fold board shows the stick and the d-pad both, a little smaller where the two need the height: the stick
+            // where the menu has its d-pad, level with the face buttons' middle
+            if (fold) assertEquals(gc.getValue("Y").y, gc.getValue("STICK").y, 1.5f, "${w}x$h stick level with the face")
+            else for (id in listOf("DPAD", "X", "Y", "A", "B")) {
+                assertEquals(mc.getValue(id).x, gc.getValue(id).x, 1.5f, "${w}x$h ${game.spec.id} $id x"); assertEquals(mc.getValue(id).y, gc.getValue(id).y, 1.5f, "${w}x$h $id y")
+            }
+            fun ringAt(x: Float, y: Float) = game.pieces.filter { pc -> pc.piece >= 0 && !pc.knob && game.spec.pieces[pc.piece].glass == null }.map { it.dst }
+                .filter { kotlin.math.abs(it.x + it.width / 2f - x) < 2f && kotlin.math.abs(it.y + it.height / 2f - y) < 2f }.maxBy { it.width }
+            fun ringOf(id: String) = ringAt(gc.getValue(id).x, gc.getValue(id).y)
+            fun piece(id: String) = game.pieces.filter { pc -> pc.piece >= 0 && game.spec.pieces[pc.piece].let { s -> s.glass == null &&
+                game.spec.controls.any { c -> c.id == id && c.anchor == s.anchor && c.x >= s.x && c.x <= s.x + s.w * s.scale && c.y >= s.y && c.y <= s.y + s.h * s.scale } } }.map { it.dst }
+            val dp = dpi / 160f
+            val m = gc.getValue("MENU"); val start = gc.getValue("START")
+            val face = ringAt(gc.getValue("X").x, gc.getValue("Y").y)
+            val ring = if (fold) {
+                // the d-pad under the stick, in line, 16 dp apart; MENU under START on the right, right of the bottom screen
+                val st = ringOf("STICK"); val pad = ringOf("DPAD")
+                assertEquals(st.x, pad.x, 1f, "${w}x$h d-pad in line")
+                // 16 dp under it and over the window's bottom, both coming down alike (to 4 dp) where the height is short
+                val gap = pad.y - (st.y + st.height); val under = h - (pad.y + pad.height)
+                assertTrue(gap >= 4f * dp - 1f && gap <= 16f * dp + 1f, "${w}x$h d-pad under the stick $gap")
+                if (gap < 16f * dp - 1f) assertEquals(gap, under, 2f, "${w}x$h room under the d-pad") else assertTrue(under >= 16f * dp - 1f, "${w}x$h room under")
+                assertTrue("STICK_SWAP" !in gc, "${w}x$h no swap")
+                assertEquals(start.x, m.x, 1f, "${w}x$h START / MENU column"); assertTrue(start.y < m.y, "${w}x$h MENU under START")
+                assertTrue(start.x > game.glasses.single { it.screen == GlassScreen.PANEL }.rect.let { it.x + it.width }, "${w}x$h START right of the bottom screen")
+                assertEquals(16f * dp, piece("START").minOf { it.y } - (face.y + face.height), 2f, "${w}x$h column under the face ring")
+                st
+            } else {
+                val ring = ringOf("DPAD")
+                // the swap over MENU in one column on the left, its top 16 dp under the d-pad's ring; START alone on the right,
+                // level with its middle (side by side on a short landscape)
+                val swap = gc.getValue("STICK_SWAP")
+                assertTrue(kotlin.math.abs(swap.x - m.x) > 1f || swap.y < m.y, "${w}x$h the pair")
+                assertEquals(16f * dp, piece("STICK_SWAP").minOf { it.y } - (ring.y + ring.height), 2f, "${w}x$h column under the ring")
+                assertEquals((swap.y + m.y) / 2f, start.y, 1.5f, "${w}x$h START level with the column's middle")
+                ring
+            }
+            // L2 / R2, the shoulders: 16 dp in from their rings
+            val l2 = piece("L2").single(); val r2 = piece("R2").single()
+            assertEquals(ring.x + 16f * dp, l2.x, 1.5f, "${w}x$h L2"); assertEquals(face.x + face.width - 16f * dp, r2.x + r2.width, 1.5f, "${w}x$h R2")
+        }
+    }
 }

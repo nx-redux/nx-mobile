@@ -768,8 +768,8 @@ class NxCarbonPackTest {
 
     @Test
     fun dreamcastLayoutsInEveryFamily() {
-        // both stick and d-pad only with real extra height (tablets); the Fold's inner screen swaps them like a phone
-        val roomy = setOf("tablet", "tablet_land")
+        // both stick and d-pad on every fold / tablet board (the d-pad under the stick); a phone swaps them
+        val roomy = setOf("inner", "inner_half", "tablet", "tablet_land")
         for ((name, d) in consoleDevices + ("tablet_land" to Triple(2304, 1440, null))) {
             val tablet = name.startsWith("tablet")
             val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, false, 640f to 480f,
@@ -809,10 +809,9 @@ class NxCarbonPackTest {
                 val st = p.pieces.filter { it.alt == "stick" && !it.knob }.maxBy { it.dst.width }
                 assertEquals(mid(dp).first, mid(st).first, 1f, "$name well x"); assertEquals(mid(dp).second, mid(st).second, 1f, "$name well y")
             }
-            if (name == "tablet") {   // the stack and the face centred on the bottom screen, L / R level
+            if (name == "tablet") {   // the face centred on the bottom screen (the stick level with it, the d-pad under), L / R level
                 val r = p.glasses.single { it.screen == GlassScreen.PANEL }.rect
                 val mid = r.y + r.height / 2f
-                assertEquals(mid, (c("STICK").y + c("DPAD").y) / 2f, 20f * p.k * 3, "$name stack")
                 assertEquals(mid, (c("X").y + c("B").y) / 2f, 20f * p.k * 3, "$name face")
                 assertEquals(c("L2").y, c("R2").y, 1f, "$name L R")
             }
@@ -825,7 +824,8 @@ class NxCarbonPackTest {
             assertTrue(c("STICK").spec.r >= 160f * p.k, "$name stick ${c("STICK").spec.r}")
             if (name in setOf("inner", "inner_half", "tablet")) {
                 val r = p.glasses.single { it.screen == GlassScreen.PANEL }.rect
-                for (x in p.controls) assertTrue(apart(box(x), floatArrayOf(r.x, r.y, r.x + r.width, r.y + r.height)), "$name ${x.spec.id} on the panel")
+                // the touch screen's strip labels sit on its frame's edge
+                for (x in p.controls.filterNot { it.spec.id.startsWith("TOUCH_") }) assertTrue(apart(box(x), floatArrayOf(r.x, r.y, r.x + r.width, r.y + r.height)), "$name ${x.spec.id} on the panel")
             }
         }
     }

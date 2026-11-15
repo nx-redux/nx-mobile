@@ -63,7 +63,26 @@ data class RowSpacing(val edge: Float, val gap: Float, val minGap: Float, val fr
 }
 
 /** The side controls a [RowSpacing] places: the d-pad / stick and face buttons, L / R, the small button columns. */
-internal val ROW_IDS = setOf("DPAD", "STICK", "X", "Y", "A", "B", "L", "R", "START", "SELECT", "MENU", "MIC", "SWAP", "TURBO_A", "TURBO_B")
+internal val ROW_IDS = setOf("DPAD", "STICK", "X", "Y", "A", "B", "L", "R", "START", "SELECT", "MENU", "MIC", "SWAP", "STICK_SWAP", "TURBO_A", "TURBO_B")
+
+/** A board's shoulders: L / R, or where it has neither but both L2 and R2 (the Dreamcast's triggers) those in their place. */
+internal fun SkinLayoutSpec.shoulderIds(): Set<String> =
+    if (controls.none { it.id == "L" || it.id == "R" } && controls.any { it.id == "L2" } && controls.any { it.id == "R2" }) setOf("L2", "R2") else setOf("L", "R")
+
+/** The side controls a [RowSpacing] places on this board: [ROW_IDS] and its [shoulderIds]. */
+internal fun SkinLayoutSpec.rowIds(): Set<String> = ROW_IDS + shoulderIds()
+
+/**
+ * A taller window's twin showing the stick and the d-pad apart, each its own ring (the Dreamcast's "both" boards): its
+ * own design, the row rules leave it alone.
+ */
+internal fun SkinLayoutSpec.tallTwinApart(): Boolean {
+    // a fold board's twin (the Dreamcast's, both shown on every fold board) takes the row too
+    if (minRefH <= 0 || family == SkinFamily.FLEX) return false
+    fun holdsOnly(p: PieceSpec, id: String) = controls.filter { c -> c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale }
+        .map { it.id }.toSet() == setOf(id)
+    return pieces.any { holdsOnly(it, "STICK") } && pieces.any { holdsOnly(it, "DPAD") }
+}
 
 /**
  * A piece of a layout built from pieces: [src] in its parts picture drawn at [dst] (scaled when the sizes differ).
@@ -206,11 +225,12 @@ object SkinSolver {
         // between them, as a fold board's screen between its groups); a portrait board's, the groups under it ([frameRow])
         val frameRow: FloatArray? = if (row == null || spec.pieces.any { it.glass != null }) null else {
             fun holds(p: PieceSpec) = spec.controls.any { c ->
-                c.id in ROW_IDS && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+                c.id in spec.rowIds() && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
             }
             val sides = spec.pieces.filter { it.anchor != PieceAnchor.CENTRE }
             val leftG = sides.filter { it.anchor == PieceAnchor.LEFT }; val rightG = sides.filter { it.anchor == PieceAnchor.RIGHT }
-            val shaped = sides.all { holds(it) } && spec.controls.filter { it.anchor == PieceAnchor.LEFT || it.anchor == PieceAnchor.RIGHT }.all { it.id in ROW_IDS }
+            val shaped = sides.all { holds(it) } && spec.controls.filter { it.anchor == PieceAnchor.LEFT || it.anchor == PieceAnchor.RIGHT }.all { it.id in spec.rowIds() } &&
+                !spec.tallTwinApart()
             if (!shaped || leftG.isEmpty() || rightG.isEmpty()) null else {
                 fun x0(p: PieceSpec) = p.x + across(p.anchor, p.inward)
                 val l0 = leftG.minOf { x0(it) }; val gl = leftG.maxOf { x0(it) + it.w * it.scale } - l0
@@ -306,8 +326,9 @@ object SkinSolver {
         fun holdsAny(p: PieceSpec, ids: Set<String>) = spec.controls.any { c ->
             c.id in ids && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
         }
-        val rowShaped = spec.pieces.filter { it.glass == null && it.anchor != PieceAnchor.CENTRE }.all { holdsAny(it, ROW_IDS) } &&
-            spec.controls.filter { it.anchor == PieceAnchor.LEFT || it.anchor == PieceAnchor.RIGHT }.all { it.id in ROW_IDS }
+        val rowShaped = spec.pieces.filter { it.glass == null && it.anchor != PieceAnchor.CENTRE }.all { holdsAny(it, spec.rowIds()) } &&
+            spec.controls.filter { it.anchor == PieceAnchor.LEFT || it.anchor == PieceAnchor.RIGHT }.all { it.id in spec.rowIds() } &&
+            !spec.tallTwinApart()
         val rowPlan: FloatArray? = frameRow ?: if (row == null || between == null || !rowShaped) null else {
             val left = spec.pieces.filter { it.glass == null && it.anchor == PieceAnchor.LEFT }
             val right = spec.pieces.filter { it.glass == null && it.anchor == PieceAnchor.RIGHT }
@@ -337,7 +358,7 @@ object SkinSolver {
          */
         // [row]'s small button columns (START / SELECT, MENU beside a side group): their pieces (a well, its caps) and
         // controls, and how far each side's moves on from its group, so its inner edge sits two gaps from the screen
-        val columnIds = setOf("START", "SELECT", "MENU", "MIC", "SWAP")
+        val columnIds = setOf("START", "SELECT", "MENU", "MIC", "SWAP", "STICK_SWAP")
         fun holdsColumn(p: PieceSpec) = p.glass == null && p.anchor != PieceAnchor.CENTRE && spec.controls.any { c ->
             c.id in columnIds && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
         }
@@ -353,7 +374,7 @@ object SkinSolver {
         fun columnShiftOf(anchor: PieceAnchor?) = when (anchor) { PieceAnchor.LEFT -> columnShift.first; PieceAnchor.RIGHT -> columnShift.second; else -> 0f }
         // [row]'s shoulders (L, R): their outer edge [RowSpacing.gap] in from their ring's outer edge (the d-pad's left, the
         // face buttons' right; both moved with their group alike, so the group shift cancels out)
-        val shoulderIds = setOf("L", "R")
+        val shoulderIds = spec.shoulderIds()
         fun holdsShoulder(p: PieceSpec) = p.glass == null && p.anchor != PieceAnchor.CENTRE && spec.controls.any { c ->
             c.id in shoulderIds && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
         }
@@ -430,6 +451,22 @@ object SkinSolver {
         val companionLeft = companionMove(PieceAnchor.LEFT)
         val companionRight = companionMove(PieceAnchor.RIGHT)
         fun companionOf(anchor: PieceAnchor?) = when (anchor) { PieceAnchor.LEFT -> companionLeft; PieceAnchor.RIGHT -> companionRight; else -> 0f to 0f }
+        // the stick and the d-pad both shown, each its own ring (the Dreamcast's): the d-pad under the stick, [RowSpacing.gap]
+        // from it, in line. Rings found by centre: one may lie over the other's box before it moves
+        fun centredOn(id: String) = spec.controls.firstOrNull { it.id == id }?.let { c ->
+            spec.pieces.filter { p -> p.glass == null && p.anchor == c.anchor &&
+                kotlin.math.abs(p.x + p.w * p.scale / 2f - c.x) < 2f && kotlin.math.abs(p.y + p.h * p.scale / 2f - c.y) < 2f }
+        }.orEmpty()
+        val padPieces = if (spec.variant == SkinVariant.DC) centredOn("DPAD") else emptyList()
+        val dpadUnder: Pair<Float, Float> = run {
+            if (rowPlan == null || row == null) return@run 0f to 0f
+            val stick = centredOn("STICK").maxByOrNull { it.w }
+            val pad = padPieces.maxByOrNull { it.w }
+            if (stick == null || pad == null || stick.anchor != pad.anchor || centredOn("STICK").any { it in padPieces }) return@run 0f to 0f
+            fun y0(p: PieceSpec) = p.y + down(p.level, p.drop) - minOf(lift, p.rise.toFloat())
+            ((stick.x + across(stick.anchor, stick.inward)) - (pad.x + across(pad.anchor, pad.inward))) to (y0(stick) + stick.h * stick.scale + row.gap - y0(pad))
+        }
+        fun movesWithDpad(p: PieceSpec) = (dpadUnder.first != 0f || dpadUnder.second != 0f) && p in padPieces
         fun sideShift(anchor: PieceAnchor, inward: Int): Float {
             if (anchor == PieceAnchor.CENTRE) return 0f
             rowPlan?.let { return if (anchor == PieceAnchor.LEFT) it[0] else it[1] }
@@ -445,9 +482,10 @@ object SkinSolver {
         /** Piece [p]'s spot and growth, picture px: x, y, grown by gx, gy. */
         fun spot(p: PieceSpec): FloatArray {
             var px = p.x + across(p.anchor, p.inward) + sideShift(p.anchor, p.inward) +
-                (if (holdsColumn(p)) columnShiftOf(p.anchor) else if (holdsShoulder(p)) shoulderShiftOf(p.anchor) else if (holdsCompanion(p)) companionOf(p.anchor).first else 0f)
+                (if (holdsColumn(p)) columnShiftOf(p.anchor) else if (holdsShoulder(p)) shoulderShiftOf(p.anchor) else if (holdsCompanion(p)) companionOf(p.anchor).first
+                else if (movesWithDpad(p)) dpadUnder.first else 0f)
             // the touch screen follows the shorter frame up; the pad (d-pad, face) up to its own rise
-            var py = p.y + down(p.level, p.drop) - (if (p.glass != null) lift else minOf(lift, p.rise.toFloat())) + (if (holdsColumn(p)) columnDropOf(p.anchor) else if (holdsShoulder(p)) shoulderDropOf(p.anchor) else if (holdsCompanion(p)) companionOf(p.anchor).second else 0f)
+            var py = p.y + down(p.level, p.drop) - (if (p.glass != null) lift else minOf(lift, p.rise.toFloat())) + (if (holdsColumn(p)) columnDropOf(p.anchor) else if (holdsShoulder(p)) shoulderDropOf(p.anchor) else if (holdsCompanion(p)) companionOf(p.anchor).second else if (movesWithDpad(p)) dpadUnder.second else 0f)
             var gx = 0f; var gy = 0f   // a growing piece's growth, picture px
             val pg0 = p.glass
             if (p.grow > 0 && pg0 != null && dx > 0f) {
@@ -556,7 +594,9 @@ object SkinSolver {
             }
         }
         controls += spec.controls.map { c ->
-            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k, travel = c.travel * k, knobTravel = c.knobTravel * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward) + sideShift(c.anchor ?: PieceAnchor.LEFT, c.inward) + (if (c.id in columnIds) columnShiftOf(c.anchor) else if (c.id in shoulderIds) shoulderShiftOf(c.anchor) else if (c.id in companionIds) companionOf(c.anchor).first else 0f)) * k, (c.y + down(c.level, c.drop) - minOf(lift, c.rise.toFloat()) - (if (c.anchor == PieceAnchor.CENTRE) 0f else controlRise) + (if (c.id in columnIds) columnDropOf(c.anchor) else if (c.id in shoulderIds) shoulderDropOf(c.anchor) else if (c.id in companionIds) companionOf(c.anchor).second else 0f)) * k)
+            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k, travel = c.travel * k, knobTravel = c.knobTravel * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward) + sideShift(c.anchor ?: PieceAnchor.LEFT, c.inward) + (if (c.id in columnIds) columnShiftOf(c.anchor) else if (c.id in shoulderIds) shoulderShiftOf(c.anchor) else if (c.id in companionIds) companionOf(c.anchor).first
+                else if (c.id == "DPAD" && (dpadUnder.first != 0f || dpadUnder.second != 0f)) dpadUnder.first else 0f)) * k, (c.y + down(c.level, c.drop) - minOf(lift, c.rise.toFloat()) - (if (c.anchor == PieceAnchor.CENTRE) 0f else controlRise) + (if (c.id in columnIds) columnDropOf(c.anchor) else if (c.id in shoulderIds) shoulderDropOf(c.anchor) else if (c.id in companionIds) companionOf(c.anchor).second
+                else if (c.id == "DPAD" && (dpadUnder.first != 0f || dpadUnder.second != 0f)) dpadUnder.second else 0f)) * k)
         }
         // how far the right-hand group moved in, window px: what sits at the window's right over the board follows it
         val sideIn = spec.pieces.filter { it.anchor == PieceAnchor.RIGHT && it.glass == null }.maxOfOrNull { -sideShift(PieceAnchor.RIGHT, it.inward) } ?: 0f

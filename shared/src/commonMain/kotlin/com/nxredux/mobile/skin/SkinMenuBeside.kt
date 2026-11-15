@@ -40,12 +40,12 @@ internal fun SkinLayoutSpec.menuBesideTheDpad(): SkinLayoutSpec {
  */
 internal fun SkinLayoutSpec.faceAt(menu: SkinLayoutSpec?): SkinLayoutSpec {
     if (menu == null || menu === this || variant == SkinVariant.MENU || menu.minRefH != minRefH) return this
-    // a board the row rules place (its side groups hold only [ROW_IDS]' controls): another keeps its own design
+    // a board the row rules place (its side groups hold only [rowIds]' controls): another keeps its own design
     fun SkinLayoutSpec.holds(p: PieceSpec) = controls.any { c ->
-        c.id in ROW_IDS && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+        c.id in rowIds() && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
     }
     if (!pieces.filter { it.glass == null && it.anchor != PieceAnchor.CENTRE }.all { holds(it) } ||
-        !controls.filter { it.anchor == PieceAnchor.LEFT || it.anchor == PieceAnchor.RIGHT }.all { it.id in ROW_IDS }) return this
+        !controls.filter { it.anchor == PieceAnchor.LEFT || it.anchor == PieceAnchor.RIGHT }.all { it.id in rowIds() }) return this
     val face = setOf("X", "Y", "A", "B")
     fun SkinLayoutSpec.ring() = pieces.firstOrNull { p ->
         p.glass == null && p.anchor == PieceAnchor.RIGHT && controls.any { c ->
@@ -71,26 +71,96 @@ internal fun SkinLayoutSpec.faceAt(menu: SkinLayoutSpec?): SkinLayoutSpec {
  * menu's, taking the menu's anchor and level, and every control it holds with it. L / R and anything else keep their
  * place (the row rules set L / R by their ring). As it is without [menu].
  */
-internal fun SkinLayoutSpec.followMenu(menu: SkinLayoutSpec?): SkinLayoutSpec {
-    if (menu == null || menu.refW != refW || menu.refH != refH) return this
-    val ids = setOf("DPAD", "X", "Y", "A", "B", "START", "SELECT", "MENU")
-    val theirs = menu.controls.filter { it.id in ids }.associateBy { it.id }
+internal fun SkinLayoutSpec.followMenu(
+    menu: SkinLayoutSpec?, alias: Map<String, String> = emptyMap(), skip: Set<String> = emptySet(), anyHeight: Boolean = false,
+): SkinLayoutSpec {
+    // the same board drawn for the same height (a twin for taller windows, the stick and d-pad apart, keeps its own)
+    if (menu == null || menu.refW != refW || menu.refH != refH || (!anyHeight && menu.minRefH != minRefH)) return this
+    val ids = setOf("DPAD", "X", "Y", "A", "B", "START", "SELECT", "MENU") - skip + alias.keys
+    // [alias]: a control of this board standing in for one of the menu's (the stick on the d-pad's spot)
+    val theirs = menu.controls.filter { it.id in ids || it.id in alias.values }.associateBy { it.id }
+        .let { m -> m + alias.mapNotNull { (mine, its) -> m[its]?.let { mine to it } } }.filterKeys { it in ids }
     fun inside(p: PieceSpec, c: ControlSpec) = c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
-    val moved = HashMap<String, ControlSpec>()
-    val newPieces = pieces.map { p ->
-        if (p.glass != null) return@map p
-        val held = controls.filter { it.id in ids && inside(p, it) }
-        val lead = held.firstOrNull { it.id in theirs } ?: return@map p
+    // a centred button the menu keeps centred too (a phone's bottom row) stays in its own row
+    fun follows(c: ControlSpec) = c.id in theirs && !(c.anchor == PieceAnchor.CENTRE && theirs.getValue(c.id).anchor == PieceAnchor.CENTRE)
+    // each piece holding a followed button: its move (dx, dy, anchor, level, drop), and the pieces inside it (a well's caps)
+    data class Move(val dx: Float, val dy: Float, val to: ControlSpec)
+    val moves = HashMap<Int, Move>()
+    pieces.forEachIndexed { i, p ->
+        if (p.glass != null) return@forEachIndexed
+        val lead = controls.firstOrNull { it.id in ids && inside(p, it) && follows(it) } ?: return@forEachIndexed
         val to = theirs.getValue(lead.id)
-        val dx = to.x - lead.x; val dy = to.y - lead.y
-        val anchor = to.anchor ?: p.anchor
-        for (c in held) if (c.id !in moved) moved[c.id] = c.copy(x = c.x + dx, y = c.y + dy, anchor = anchor, level = to.level, drop = to.drop)
-        p.copy(x = (p.x + dx).roundToInt(), y = (p.y + dy).roundToInt(), anchor = anchor, level = to.level, drop = to.drop)
+        moves[i] = Move(to.x - lead.x, to.y - lead.y, to)
     }
-    // a control no piece holds: to the menu's spot itself
+    fun within(a: PieceSpec, b: PieceSpec) = a.x >= b.x && a.y >= b.y && a.x + a.w * a.scale <= b.x + b.w * b.scale && a.y + a.h * a.scale <= b.y + b.h * b.scale
+    pieces.forEachIndexed { i, p ->
+        if (i in moves || p.glass != null) return@forEachIndexed
+        moves.entries.firstOrNull { (j, _) -> within(p, pieces[j]) }?.let { moves[i] = it.value }
+    }
+    fun moveOf(c: ControlSpec): Move? = pieces.indices.firstOrNull { it in moves && inside(pieces[it], c) }?.let { moves.getValue(it) }
+    val newPieces = pieces.mapIndexed { i, p ->
+        val m = moves[i] ?: return@mapIndexed p
+        p.copy(x = (p.x + m.dx).roundToInt(), y = (p.y + m.dy).roundToInt(), anchor = m.to.anchor ?: p.anchor, level = m.to.level, drop = m.to.drop)
+    }
     val newControls = controls.map { c ->
-        moved[c.id] ?: theirs[c.id]?.let { to -> c.copy(x = to.x, y = to.y, anchor = to.anchor, level = to.level, drop = to.drop) } ?: c
+        moveOf(c)?.let { m -> c.copy(x = c.x + m.dx, y = c.y + m.dy, anchor = m.to.anchor, level = m.to.level, drop = m.to.drop) }
+            ?: theirs[c.id]?.takeIf { follows(c) }?.let { to -> c.copy(x = to.x, y = to.y, anchor = to.anchor, level = to.level, drop = to.drop) }   // no piece holds it
+            ?: c
     }
-    return copy(pieces = newPieces, controls = newControls)
+    return copy(pieces = newPieces, controls = newControls).swapOverMenu(menu)
+}
+
+/**
+ * The Dreamcast's fold / tablet board showing the stick and the d-pad both ([this] its "both" board): the stick where the
+ * menu has its d-pad (the d-pad goes under it, [SkinSolver.placePieces]), the face buttons and START where the menu has
+ * them, and MENU under START in the right group, spaced as the menu's START / SELECT column.
+ */
+internal fun SkinLayoutSpec.bothFollowMenu(menu: SkinLayoutSpec?): SkinLayoutSpec {
+    if (menu == null) return this
+    val f = followMenu(menu, alias = mapOf("STICK" to "DPAD"), skip = setOf("DPAD", "MENU"), anyHeight = true)
+    val start = f.controls.firstOrNull { it.id == "START" && it.anchor == PieceAnchor.RIGHT } ?: return f
+    val m = f.controls.firstOrNull { it.id == "MENU" } ?: return f
+    val ms = menu.controls.firstOrNull { it.id == "START" }; val sel = menu.controls.firstOrNull { it.id == "SELECT" }
+    val step = if (ms != null && sel != null) kotlin.math.abs(sel.y - ms.y) else 126f
+    val dx = start.x - m.x; val dy = start.y + step - m.y
+    fun inside(p: PieceSpec, c: ControlSpec) = c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+    fun centred(p: PieceSpec, c: ControlSpec) = p.glass == null && p.anchor == c.anchor &&
+        kotlin.math.abs(p.x + p.w * p.scale / 2f - c.x) < 2f && kotlin.math.abs(p.y + p.h * p.scale / 2f - c.y) < 2f
+    // the d-pad in line with the stick already (its height under it is the solver's, [SkinSolver.placePieces])
+    val stick = f.controls.firstOrNull { it.id == "STICK" }; val pad = f.controls.firstOrNull { it.id == "DPAD" }
+    val px = if (stick != null && pad != null && stick.anchor == pad.anchor) (stick.x - pad.x).roundToInt() else 0
+    return f.copy(
+        pieces = f.pieces.map { p ->
+            if (p.glass == null && inside(p, m)) p.copy(x = (p.x + dx).roundToInt(), y = (p.y + dy).roundToInt(), anchor = PieceAnchor.RIGHT, level = start.level, drop = start.drop)
+            else if (pad != null && centred(p, pad)) p.copy(x = p.x + px) else p
+        },
+        controls = f.controls.map {
+            if (it === m) it.copy(x = it.x + dx, y = it.y + dy, anchor = PieceAnchor.RIGHT, level = start.level, drop = start.drop)
+            else if (it === pad) it.copy(x = it.x + px) else it
+        },
+    )
+}
+
+/**
+ * The Dreamcast's stick / d-pad swap where following [menu] left it on MENU's spot (the fold board, MENU moved into the
+ * left group): stacked over MENU as the menu's START / SELECT column is spaced, a two-button column. As it is elsewhere.
+ */
+private fun SkinLayoutSpec.swapOverMenu(menu: SkinLayoutSpec): SkinLayoutSpec {
+    val m = controls.firstOrNull { it.id == "MENU" && it.anchor == PieceAnchor.LEFT } ?: return this
+    val swaps = controls.filter { it.id == "STICK_SWAP" && it.anchor == PieceAnchor.LEFT }
+    if (swaps.isEmpty() || swaps.none { kotlin.math.abs(it.y - m.y) < 1f && kotlin.math.abs(it.x - m.x) < 120f }) return this
+    val start = menu.controls.firstOrNull { it.id == "START" }; val select = menu.controls.firstOrNull { it.id == "SELECT" }
+    val step = if (start != null && select != null) kotlin.math.abs(select.y - start.y) else 126f
+    val s0 = swaps.first()
+    val dx = m.x - s0.x; val dy = m.y - step - s0.y
+    return copy(
+        // its caps: centred on it (MENU, now on the same spot, has its own)
+        pieces = pieces.map { p ->
+            val cx = p.x + p.w * p.scale / 2f; val cy = p.y + p.h * p.scale / 2f
+            if (p.glass == null && p.anchor == PieceAnchor.LEFT && kotlin.math.abs(cx - s0.x) < 12f && kotlin.math.abs(cy - s0.y) < 12f)
+                p.copy(x = (p.x + dx).roundToInt(), y = (p.y + dy).roundToInt()) else p
+        },
+        controls = controls.map { if (it.id == "STICK_SWAP" && it.anchor == PieceAnchor.LEFT) it.copy(x = it.x + dx, y = it.y + dy) else it },
+    )
 }
 

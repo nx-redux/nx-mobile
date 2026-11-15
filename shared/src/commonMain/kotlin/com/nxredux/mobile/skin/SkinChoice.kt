@@ -209,8 +209,37 @@ object SkinChoice {
         return RowSpacing(ROW_EDGE_DP * px, ROW_GAP_DP * px, ROW_MIN_GAP_DP * px, MENU_MIN_DP * px, PAIR_GAP_DP * px)
     }
 
-    /** The consoles whose layouts follow the main menu's (the arcade's), on the phone and landscape boards too. */
-    private val FOLLOW_MENU = setOf(SkinVariant.ARCADE)
+    /** Every control piece of this placement ending above [bottom], window px (the d-pad moved under the stick). */
+    private fun SkinPlacement.clearOfTheBottom(bottom: Float): Boolean =
+        pieces.filter { it.piece >= 0 && spec.pieces[it.piece].glass == null }.all { it.dst.y + it.dst.height <= bottom + 0.5f }
+
+    /**
+     * The d-pad under the stick ([bothFollowMenu]) kept in the window: where it would end nearer the bottom than
+     * [ROW_GAP_DP], the gap over it and the room under it come down together (to [ROW_MIN_GAP_DP]), then the two lift.
+     */
+    private fun SkinPlacement.dpadInTheRoom(windowH: Float, dp: Float): SkinPlacement {
+        fun centredOn(id: String): List<Int> {
+            val c = controls.firstOrNull { it.spec.id == id } ?: return emptyList()
+            return pieces.indices.filter { i -> pieces[i].let { p -> p.piece >= 0 && spec.pieces[p.piece].glass == null &&
+                kotlin.math.abs(p.dst.x + p.dst.width / 2f - c.x) < 2f && kotlin.math.abs(p.dst.y + p.dst.height / 2f - c.y) < 2f } }
+        }
+        val pad = centredOn("DPAD"); val stick = centredOn("STICK")
+        if (pad.isEmpty() || stick.isEmpty() || pad.any { it in stick }) return this
+        val ring = pad.maxOf { pieces[it].dst.y + pieces[it].dst.height }
+        val over = ring - (windowH - ROW_GAP_DP * dp)
+        if (over <= 0f) return this
+        val give = minOf(over / 2f, (ROW_GAP_DP - ROW_MIN_GAP_DP) * dp)   // off each gap
+        val up = over - 2f * give   // what the gaps cannot give: the pair lifts
+        val padUp = give + up
+        fun moved(i: Int) = when (i) { in pad -> padUp; in stick -> up; else -> 0f }
+        return copy(
+            pieces = pieces.mapIndexed { i, p -> moved(i).let { m -> if (m == 0f) p else p.copy(dst = p.dst.copy(y = p.dst.y - m)) } },
+            controls = controls.map { c -> when (c.spec.id) { "DPAD" -> c.copy(y = c.y - padUp); "STICK" -> if (up > 0f) c.copy(y = c.y - up) else c; else -> c } },
+        )
+    }
+
+    /** The consoles whose layouts follow the main menu's (the arcade's, the Dreamcast's), on the phone and landscape boards too. */
+    private val FOLLOW_MENU = setOf(SkinVariant.ARCADE, SkinVariant.DC)
 
     /** [variant]'s layout [this] following [menu] ([followMenu]) when it is one of [FOLLOW_MENU]'s, else as it is. */
     private fun SkinLayoutSpec.toMenu(variant: SkinVariant, menu: SkinLayoutSpec?): SkinLayoutSpec =
@@ -292,16 +321,21 @@ object SkinChoice {
         val top = when (v) { SkinVariant.N3DS, SkinVariant.N3DS_REGULAR -> 400f to 240f; SkinVariant.DS -> 256f to 192f; else -> null }
         val landscape = windowW > windowH
         // sideways: the main menu's landscape shell, the game in its screen frame (the strip under it; a DS's MIC, SWAP)
-        val foldBoard = {
-            shrunk(k) { s ->
-                widest(pack, SkinFamily.FLEX, v, fold = true, refH = windowH / s) { spec ->
-                    // the main menu's fold board the reference: its spacing (so the side groups stand where the menu's do)
-                    // and its face buttons' height
-                    foldPieces(spec.toMenu(v, menuFoldBoard(pack, spec)?.menuBesideTheDpad()).faceAt(menuFoldBoard(pack, spec)), windowW, windowH, s, picture, topInset, hingeY, densityDpi, top,
-                        row = rowSpacing(densityDpi, s))
-                }
+        // [both]: the Dreamcast's board with the stick and the d-pad both, tried first at every scale (shrunk to fit) over the
+        // board showing one at a time
+        fun foldBoardOf(both: Boolean?) = shrunk(k) { s ->
+            widest(pack, SkinFamily.FLEX, v, fold = true, refH = if (both != null) Float.MAX_VALUE else windowH / s) { spec ->
+                if (both != null && (spec.minRefH > 0) != both) return@widest null
+                // the main menu's fold board the reference: its spacing (so the side groups stand where the menu's do)
+                // and its face buttons' height
+                val menu = menuFoldBoard(pack, spec)
+                val shaped = if (both == true) spec.bothFollowMenu(menu?.menuBesideTheDpad())
+                    else spec.toMenu(v, menu?.menuBesideTheDpad()).faceAt(menu)
+                foldPieces(shaped, windowW, windowH, s, picture, topInset, hingeY, densityDpi, top, row = rowSpacing(densityDpi, s))
+                    ?.let { if (both == true) it.dpadInTheRoom(windowH.toFloat(), densityDpi / 160f) else it }
             }
         }
+        val foldBoard = { if (v == SkinVariant.DC) foldBoardOf(true) ?: foldBoardOf(false) else foldBoardOf(null) }
         if (landscape) {
             // a book foldable's inner screen sideways: its hinge runs across the window, where the board's is. A DS or 3DS
             // takes the board flat too (the crease between its screens); a one-screen game only half-folded, as flat the
