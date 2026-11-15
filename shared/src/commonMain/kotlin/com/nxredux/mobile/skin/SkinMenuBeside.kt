@@ -162,25 +162,47 @@ internal fun SkinLayoutSpec.bothFollowMenu(menu: SkinLayoutSpec?): SkinLayoutSpe
 }
 
 /**
- * The Dreamcast's stick / d-pad swap where following [menu] left it on MENU's spot (the fold board, MENU moved into the
- * left group): stacked over MENU as the menu's START / SELECT column is spaced, a two-button column. As it is elsewhere.
+ * MENU's companion where following [menu] left it beside MENU in the left group (the Dreamcast's stick / d-pad swap, the
+ * FDS's DISK): on a board whose START / SELECT are a column (the fold board), stacked over MENU as that column is
+ * spaced, a two-button column, in the menu's well where the two shared a wide one. As it is elsewhere (side by side on
+ * a short landscape, as the menu's START / SELECT are).
  */
 private fun SkinLayoutSpec.swapOverMenu(menu: SkinLayoutSpec): SkinLayoutSpec {
     val m = controls.firstOrNull { it.id == "MENU" && it.anchor == PieceAnchor.LEFT } ?: return this
-    val swaps = controls.filter { it.id == "STICK_SWAP" && it.anchor == PieceAnchor.LEFT }
-    if (swaps.isEmpty() || swaps.none { kotlin.math.abs(it.y - m.y) < 1f && kotlin.math.abs(it.x - m.x) < 120f }) return this
+    val swaps = controls.filter { it.id in MENU_COMPANIONS && it.anchor == PieceAnchor.LEFT }
+    if (swaps.isEmpty()) return this
     val start = menu.controls.firstOrNull { it.id == "START" }; val select = menu.controls.firstOrNull { it.id == "SELECT" }
     val step = if (start != null && select != null) kotlin.math.abs(select.y - start.y) else 126f
     val s0 = swaps.first()
+    val beside = kotlin.math.abs(s0.y - m.y) < 1f && kotlin.math.abs(s0.x - m.x) < 160f
+    val column = start != null && select != null && kotlin.math.abs(start.x - select.x) < 1f
+    // the Dreamcast's swap left on MENU's own spot (its cap moved there) stacks wherever
+    val onIt = kotlin.math.abs(s0.y - m.y) < 1f && kotlin.math.abs(s0.x - m.x) < 120f && s0.id == "STICK_SWAP"
+    if (!(onIt || (beside && column))) return this
     val dx = m.x - s0.x; val dy = m.y - step - s0.y
+    fun inside(p: PieceSpec, c: ControlSpec) = c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+    // a wide well holding the two: the menu's START / SELECT well instead, round the column
+    val theirWell = if (start != null && select != null) menu.pieces.firstOrNull { it.glass == null && inside(it, start) && inside(it, select) } else null
     return copy(
-        // its caps: centred on it (MENU, now on the same spot, has its own)
         pieces = pieces.map { p ->
             val cx = p.x + p.w * p.scale / 2f; val cy = p.y + p.h * p.scale / 2f
             if (p.glass == null && p.anchor == PieceAnchor.LEFT && kotlin.math.abs(cx - s0.x) < 12f && kotlin.math.abs(cy - s0.y) < 12f)
-                p.copy(x = (p.x + dx).roundToInt(), y = (p.y + dy).roundToInt()) else p
+                p.copy(x = (p.x + dx).roundToInt(), y = (p.y + dy).roundToInt())
+            else if (theirWell != null && p.glass == null && p.w > p.h && inside(p, m) && inside(p, s0)) {
+                val w = theirWell.w * theirWell.scale; val h = theirWell.h * theirWell.scale
+                theirWell.copy(x = (m.x - w / 2f).roundToInt(), y = (m.y - step / 2f - h / 2f).roundToInt(), anchor = PieceAnchor.LEFT,
+                    level = p.level, drop = p.drop, inward = p.inward)
+            } else p
         },
-        controls = controls.map { if (it.id == "STICK_SWAP" && it.anchor == PieceAnchor.LEFT) it.copy(x = it.x + dx, y = it.y + dy) else it },
+        // their words on the column's outer side, as the menu's MENU has its own
+        controls = controls.map { c ->
+            val word = menu.controls.firstOrNull { it.id == "MENU" && it.anchor == PieceAnchor.LEFT } ?: m
+            if (c.id in MENU_COMPANIONS && c.anchor == PieceAnchor.LEFT) c.copy(x = c.x + dx, y = c.y + dy, labelDx = word.labelDx, labelDy = word.labelDy)
+            else if (c === m) c.copy(labelDx = word.labelDx, labelDy = word.labelDy) else c
+        },
     )
 }
+
+/** The buttons that pair with MENU in the left group: the Dreamcast's stick / d-pad swap, the FDS's disk side. */
+internal val MENU_COMPANIONS = setOf("STICK_SWAP", "DISK")
 

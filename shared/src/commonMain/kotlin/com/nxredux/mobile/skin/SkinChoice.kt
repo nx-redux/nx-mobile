@@ -261,8 +261,8 @@ object SkinChoice {
         )
     }
 
-    /** The consoles whose layouts follow the main menu's (the arcade's, the Dreamcast's), on the phone and landscape boards too. */
-    private val FOLLOW_MENU = setOf(SkinVariant.ARCADE, SkinVariant.DC)
+    /** The consoles whose layouts follow the main menu's (the arcade's, the Dreamcast's, the FDS's), on the phone and landscape boards too. */
+    private val FOLLOW_MENU = setOf(SkinVariant.ARCADE, SkinVariant.DC, SkinVariant.FDS)
 
     /** [variant]'s layout [this] following [menu] ([followMenu]) when it is one of [FOLLOW_MENU]'s, else as it is. */
     private fun SkinLayoutSpec.toMenu(variant: SkinVariant, menu: SkinLayoutSpec?): SkinLayoutSpec =
@@ -360,6 +360,8 @@ object SkinChoice {
         fun foldBoardOf(both: Boolean?) = shrunk(k) { s ->
             widest(pack, SkinFamily.FLEX, v, fold = true, refH = if (both != null) Float.MAX_VALUE else windowH / s) { spec ->
                 if (both != null && (spec.minRefH > 0) != both) return@widest null
+                // a console following the menu takes the board drawn as the menu's (no tablet twin: the menu has none)
+                if (both == null && v in FOLLOW_MENU && spec.minRefH > 0) return@widest null
                 // the main menu's fold board the reference: its spacing (so the side groups stand where the menu's do)
                 // and its face buttons' height
                 val menu = menuFoldBoard(pack, spec)

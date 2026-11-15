@@ -174,10 +174,12 @@ class NxCarbonPackTest {
             fun apart(a: FloatArray, b: FloatArray) = a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1]
             for (c in p.controls) if (c !== disk) assertTrue(apart(box(disk), box(c)), "$name DISK on ${c.spec.id}")
             if (name in hinges) {
-                // the fold board: DISK and MENU together under the d-pad, the pair centred on its column, clear of the panel
+                // the fold board: DISK over MENU under the d-pad, a column level with START / SELECT's, clear of the panel
                 val dp = p.controls.single { it.spec.id == "DPAD" }
-                assertEquals(dp.x, (disk.x + menu.x) / 2, 1f, name); assertTrue(disk.y > dp.y, name)
-                assertEquals(menu.y, disk.y, 1f, name); assertTrue(disk.x < menu.x, name)
+                stacked(disk, menu, "$name DISK over MENU"); assertTrue(disk.y > dp.y, name)
+                val st = p.controls.single { it.spec.id == "START" }; val se = p.controls.single { it.spec.id == "SELECT" }
+                assertEquals((st.y + se.y) / 2f, (disk.y + menu.y) / 2f, 1f, "$name level with START / SELECT")
+                for (c in listOf(disk, menu)) { assertTrue(c.spec.labelDx < 0f, "$name ${c.spec.id} word on the left"); assertEquals(0f, c.spec.labelDy, "$name ${c.spec.id} word level") }
                 val r = p.glasses.single { it.screen == GlassScreen.PANEL }.rect
                 for (c in p.controls) assertTrue(apart(box(c), floatArrayOf(r.x, r.y, r.x + r.width, r.y + r.height)), "$name ${c.spec.id} on the panel")
             } else if (p.columns()) stacked(disk, menu, "$name DISK over MENU")

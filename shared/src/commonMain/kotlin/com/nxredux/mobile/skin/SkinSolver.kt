@@ -63,7 +63,7 @@ data class RowSpacing(val edge: Float, val gap: Float, val minGap: Float, val fr
 }
 
 /** The side controls a [RowSpacing] places: the d-pad / stick and face buttons, L / R, the small button columns. */
-internal val ROW_IDS = setOf("DPAD", "STICK", "X", "Y", "A", "B", "L", "R", "START", "SELECT", "MENU", "MIC", "SWAP", "STICK_SWAP", "TURBO_A", "TURBO_B")
+internal val ROW_IDS = setOf("DPAD", "STICK", "X", "Y", "A", "B", "L", "R", "START", "SELECT", "MENU", "MIC", "SWAP", "STICK_SWAP", "DISK", "TURBO_A", "TURBO_B")
 
 /** A board's shoulders: L / R, or where it has neither but both L2 and R2 (the Dreamcast's triggers) those in their place. */
 internal fun SkinLayoutSpec.shoulderIds(): Set<String> =
@@ -358,7 +358,7 @@ object SkinSolver {
          */
         // [row]'s small button columns (START / SELECT, MENU beside a side group): their pieces (a well, its caps) and
         // controls, and how far each side's moves on from its group, so its inner edge sits two gaps from the screen
-        val columnIds = setOf("START", "SELECT", "MENU", "MIC", "SWAP", "STICK_SWAP")
+        val columnIds = setOf("START", "SELECT", "MENU", "MIC", "SWAP", "STICK_SWAP", "DISK")
         fun holdsColumn(p: PieceSpec) = p.glass == null && p.anchor != PieceAnchor.CENTRE && spec.controls.any { c ->
             c.id in columnIds && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
         }
