@@ -1321,6 +1321,17 @@ class NxCarbonPackTest {
         assertNotNull(place("phone_land_gba", 2400, 1080, ds = false, picture = 240f to 160f))
     }
 
+    /** [p]'s row pieces: the d-pad / face rings, L, R and the right START / SELECT column (by the controls they hold). */
+    private class RowPieces(val lRing: List<SkinPiece>, val rRing: List<SkinPiece>, val l: List<SkinPiece>, val r: List<SkinPiece>, val col: List<SkinPiece>)
+
+    private fun rowPieces(p: SkinPlacement): RowPieces {
+        val spec = p.spec
+        fun held(a: PieceAnchor, ids: Set<String>) = p.pieces.filter { pc -> pc.piece >= 0 && spec.pieces[pc.piece].anchor == a && spec.pieces[pc.piece].glass == null &&
+            spec.controls.any { c -> c.id in ids && c.anchor == a && spec.pieces[pc.piece].let { s -> c.x >= s.x && c.x <= s.x + s.w * s.scale && c.y >= s.y && c.y <= s.y + s.h * s.scale } } }
+        return RowPieces(held(PieceAnchor.LEFT, setOf("DPAD")), held(PieceAnchor.RIGHT, setOf("X", "Y", "A", "B")), held(PieceAnchor.LEFT, setOf("L")),
+            held(PieceAnchor.RIGHT, setOf("R")), held(PieceAnchor.RIGHT, setOf("START", "SELECT")))
+    }
+
     private fun twoScreens(name: String, p: SkinPlacement?, w: Int, h: Int, hinge: Float) {
         val placed = assertNotNull(p, name)
         dump(name, w, h, placed)
@@ -1334,12 +1345,13 @@ class NxCarbonPackTest {
         else assertTrue(top.y + top.height < hinge && hinge < menu.y, "$name top $top menu $menu hinge $hinge")
         val c = placed.controls.associateBy { it.spec.id }
         assertTrue("MIC" !in c && "SWAP" !in c, name)
-        // MENU in the left group, mirroring START / SELECT on the right (level with the pair's middle, its label on its
-        // left); nothing under the menu's screen, which reaches the side groups' bottom
+        // MENU in the left group across from START / SELECT on the right (its label on its left); nothing under the
+        // menu's screen, which reaches the side groups' bottom
         val m = c.getValue("MENU"); val st = c.getValue("START"); val se = c.getValue("SELECT")
         assertTrue(m.x + m.spec.r < menu.x && m.spec.labelDx < 0f, "$name MENU ${m.x} beside the glass $menu")
+        // START / SELECT start 16 dp under their ring ([SkinSeamTest]); MENU, alone, level with the pair's middle
         assertEquals((st.y + se.y) / 2f, m.y, 1f, "$name MENU level with START / SELECT")
-        assertEquals(w - st.x, m.x, 2f, "$name MENU mirrors START")
+        // its inner edge as far from the screen as START / SELECT's (two gaps, [SkinSeamTest]); the caps differ in width
     }
 
     @Test
@@ -1351,15 +1363,15 @@ class NxCarbonPackTest {
     @Test
     fun tabletMenuIsTwoScreens() {
         twoScreens("menu_tab_two", SkinChoice.placeMenu(pack, 1440, 2304, 280, tablet = true), 1440, 2304, 1152f)
-        // the tablet's wider room: the menu's touch screen grows; the Fold's keeps the side groups' least spacing
+        // the tablet's wider room: the menu's touch screen grows
         val tab = assertNotNull(SkinChoice.placeMenu(pack, 1440, 2304, 280, tablet = true))
         val tg = tab.glasses.single { it.id == "menu" }.rect
-        assertTrue(tg.width / tab.k > 1100f, "tablet menu glass $tg")
+        assertTrue(tg.width / tab.k > 944f, "tablet menu glass $tg")   // wider than drawn, the row's gaps round it
         // its shape kept as it grows, then taller down to the side groups' bottom (MENU beside the d-pad)
         assertTrue(tg.height >= tg.width * 740f / 944f - 1f, "tablet menu glass $tg")
         val fold = assertNotNull(SkinChoice.placeMenu(pack, 1848, 2448, 420, foldable = true, tablet = true))
-        // the side groups at least 32 from the edges, the frame at least 6 from them: 22 narrower each side than the render
-        assertEquals(944f - 2f * 22f, fold.glasses.single { it.id == "menu" }.rect.width, 1f)
+        // the side groups and the menu's screen spaced evenly across the Fold ([SkinSeamTest]): the screen at least 320 dp
+        assertTrue(fold.glasses.single { it.id == "menu" }.rect.width >= 320f * 420f / 160f - 2f)
     }
 
     @Test
@@ -1413,13 +1425,16 @@ class NxCarbonPackTest {
             assertEquals(w / 2f, g.x + g.width / 2f, 20f * p.k, name)
             assertEquals(setOf("DPAD", "A", "B", "X", "Y", "L", "R", "START", "SELECT", "MENU"), p.controls.map { it.spec.id }.toSet())
             assertTrue(p.controls.all { it.y in (g.y + g.height)..h.toFloat() }, name)
-            // the buttons keep their size and their side: L and the d-pad left, R and the face right, the small ones centred
+            // the buttons keep their size and their side, the small ones centred; the rings the edge gap (32 dp where they
+            // fit) from the edges, L / R twice that from them and 16 dp over their rings ([RowSpacing])
             val c = p.controls.associateBy { it.spec.id }
-            assertEquals((240f + 40f) * p.k, c.getValue("DPAD").x, 0.5f, name)
-            assertEquals(w - (1080 - 942 + 40) * p.k, c.getValue("A").x, 0.5f, name)
             assertEquals(w / 2f, c.getValue("MENU").x, 0.5f, name)
-            assertEquals((148f + 40f) * p.k, c.getValue("L").x, 0.5f, name)
-            assertEquals(w - (1080 - 932 + 40) * p.k, c.getValue("R").x, 0.5f, name)
+            val rp = rowPieces(p)
+            val gap = rp.lRing.minOf { it.dst.x }
+            assertTrue(gap <= 32f * dpi / 160f + 1f && gap > 0f, "$name gap $gap")
+            assertEquals(gap, w - rp.rRing.maxOf { it.dst.x + it.dst.width }, 1f, "$name right ring")
+            assertEquals(2f * gap, rp.l.minOf { it.dst.x }, 1f, "$name L"); assertEquals(2f * gap, w - rp.r.maxOf { it.dst.x + it.dst.width }, 1f, "$name R")
+            assertEquals(16f * dpi / 160f, rp.lRing.minOf { it.dst.y } - rp.l.maxOf { it.dst.y + it.dst.height }, 1f, "$name L over the d-pad")
             assertEquals(8 + 1 + 7, p.pieces.size, name)   // the frame (corners and edges), the SELECT START well, then the seven button pieces
         }
         assertNull(SkinChoice.placeMenu(pack, 1080, 1100, 420))   // too short: no menu layout fits
@@ -1547,17 +1562,28 @@ class NxCarbonPackTest {
             val g = p.glasses.single().rect
             val c = p.controls.associateBy { it.spec.id }
             assertEquals(setOf("DPAD", "A", "B", "X", "Y", "L", "R", "START", "SELECT", "MENU"), c.keys)
-            // the screen between the columns, centred, the frame its margin from the top and bottom
-            assertEquals(w / 2f, g.x + g.width / 2f, 3f * p.k, name)   // the frame's border: 28 left, 32 right
+            // the screen between the columns, centred (the frame's border: 28 left, 32 right), the frame its margin from the
+            // top and bottom; the edge and inner gaps round the rings and the frame ([RowSpacing])
+            assertEquals(w / 2f, g.x + g.width / 2f, 3f * p.k, name)
+            val rp = rowPieces(p)
+            val fr = p.pieces.filter { it.piece < 0 && !it.strip }
+            val gaps = listOf(rp.lRing.minOf { it.dst.x }, fr.minOf { it.dst.x } - rp.lRing.maxOf { it.dst.x + it.dst.width },
+                rp.rRing.minOf { it.dst.x } - fr.maxOf { it.dst.x + it.dst.width }, w - rp.rRing.maxOf { it.dst.x + it.dst.width })
+            // the edge gaps alike (to 32 dp), the inner ones alike (to 16 dp)
+            assertEquals(gaps[0], gaps[3], 2f, "$name edges $gaps"); assertEquals(gaps[1], gaps[2], 2f, "$name inner $gaps")
+            assertTrue(gaps[0] <= 32f * dpi / 160f + 1f && gaps[1] <= 16f * dpi / 160f + 1f, "$name gaps $gaps")
+            assertEquals(2f * gaps[0], rp.l.minOf { it.dst.x }, 1f, "$name L")
+            assertEquals(16f * dpi / 160f, rp.lRing.minOf { it.dst.y } - rp.l.maxOf { it.dst.y + it.dst.height }, 1f, "$name L over the d-pad")
+            assertEquals(2f * gaps[1], rp.col.minOf { it.dst.x } - fr.maxOf { it.dst.x + it.dst.width }, 1f, "$name START / SELECT from the screen")
+            assertEquals(16f * dpi / 160f, rp.col.minOf { it.dst.y } - rp.rRing.maxOf { it.dst.y + it.dst.height }, 1f, "$name START / SELECT under the face buttons")
             assertTrue(c.values.all { it.x < g.x || it.x > g.x + g.width }, "$name glass $g")
             assertTrue(g.y >= 72f * p.k && g.y + g.height <= h - 72f * p.k, "$name glass $g")
             // the pads in their columns at the standard (portrait) size, one group at the middle of the height
             val spec = p.spec.controls.associateBy { it.id }
             assertEquals(72f * p.k, c.getValue("A").spec.r, 0.5f, name)
-            assertEquals(spec.getValue("DPAD").x * p.k, c.getValue("DPAD").x, 0.5f, name)
-            assertEquals(w - (p.spec.width - spec.getValue("X").x) * p.k, c.getValue("X").x, 0.5f, name)
             assertEquals(h / 2f - (p.spec.height / 2f - p.spec.controls.first { it.id == "DPAD" }.y) * p.k, c.getValue("DPAD").y, 0.5f, name)
-            assertEquals(c.getValue("DPAD").y - (p.spec.controls.first { it.id == "DPAD" }.y - p.spec.controls.first { it.id == "L" }.y) * p.k, c.getValue("L").y, 0.5f, name)
+            // MENU, alone, level with the middle of START / SELECT
+            assertEquals((c.getValue("START").y + c.getValue("SELECT").y) / 2f, c.getValue("MENU").y, 1f, name)
             assertTrue(c.getValue("L").y - 54f * p.k > 0f, name)
             assertTrue(c.values.all { it.x < g.x || it.x > g.x + g.width }, name)
             assertEquals(8 + 1 + 7, p.pieces.size, name)   // the frame, the SELECT START well, the buttons

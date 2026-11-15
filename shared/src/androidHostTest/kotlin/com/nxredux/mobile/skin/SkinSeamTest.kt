@@ -102,7 +102,8 @@ class SkinSeamTest {
     @Test
     fun onAWideWindowTheSideGroupsMoveIn16DpAndTheTouchFrameWidens() {
         // the Ultra sideways, half-folded: a window much wider than the fold board's render
-        val wide = assertNotNull(SkinChoice.place(pack, 2504, 2256, 480, tablet = true, ds = true, hingeY = 1128f, foldable = true))
+        // a board the row rules leave alone (the New 3DS's: its ZL / ZR and C-stick): the side groups' own spacing
+        val wide = assertNotNull(SkinChoice.place(pack, 2504, 2256, 480, tablet = true, ds = true, hingeY = 1128f, foldable = true, variant = SkinVariant.N3DS))
         val render = pack.layouts.single { it.id == wide.spec.id }
         val k = wide.k
         val c = wide.controls.associateBy { it.spec.id }
@@ -123,7 +124,7 @@ class SkinSeamTest {
         assertEquals(48f, frame.minOf { it.dst.x } - left.maxOf { it.dst.x + it.dst.width }, 2f)
         assertEquals(48f, right.minOf { it.dst.x } - frame.maxOf { it.dst.x + it.dst.width }, 2f)
         // the Fold upright, the render's width: nothing moves sideways
-        val fold = assertNotNull(SkinChoice.place(pack, 1848, 2448, 420, tablet = true, ds = true, hingeY = 1224f, foldable = true))
+        val fold = assertNotNull(SkinChoice.place(pack, 1848, 2448, 420, tablet = true, ds = true, hingeY = 1224f, foldable = true, variant = SkinVariant.N3DS))
         val foldDpad = fold.controls.single { it.spec.id == "DPAD" }
         val foldRender = pack.layouts.single { it.id == fold.spec.id }.controls.single { it.id == "DPAD" }
         assertEquals(foldRender.x + foldRender.inward, foldDpad.x, 1f)
@@ -155,19 +156,64 @@ class SkinSeamTest {
     }
 
     @Test
-    fun theDsGamesSpacingIsTheLeastEveryFoldBoardKeeps() {
-        // the Fold upright half-folded, the board's own width: the game and the menu alike
-        val game = assertNotNull(SkinChoice.place(pack, 1848, 2448, 420, tablet = true, ds = true, hingeY = 1224f, foldable = true))
-        val menu = assertNotNull(SkinChoice.placeMenu(pack, 1848, 2448, 420, foldable = true, tablet = true, hingeY = 1224f))
-        for (p in listOf(game, menu)) {
-            val spec = p.spec
-            val frame = p.pieces.filter { it.piece >= 0 && spec.pieces[it.piece].glass != null }
-            val left = p.pieces.filter { it.piece >= 0 && spec.pieces[it.piece].anchor == PieceAnchor.LEFT && spec.pieces[it.piece].glass == null }
-            val right = p.pieces.filter { it.piece >= 0 && spec.pieces[it.piece].anchor == PieceAnchor.RIGHT && spec.pieces[it.piece].glass == null }
-            assertTrue(left.minOf { it.dst.x } >= 32f - 0.5f, "${spec.id} left edge")
-            assertTrue(1848f - right.maxOf { it.dst.x + it.dst.width } >= 32f - 0.5f, "${spec.id} right edge")
-            assertTrue(frame.minOf { it.dst.x } - left.maxOf { it.dst.x + it.dst.width } >= 6f - 0.5f, "${spec.id} left gap")
-            assertTrue(right.minOf { it.dst.x } - frame.maxOf { it.dst.x + it.dst.width } >= 6f - 0.5f, "${spec.id} right gap")
+    fun rowShapedGameBoardsSpaceTheRowAsTheMenuDoes() {
+        // the DS, the regular 3DS, the GB and a one-screen game's boards, on the Fold and the Ultra (upright, sideways)
+        for ((w, h, dpi, hinge) in listOf(Quad(1848, 2448, 420, 1224f), Quad(2256, 2504, 480, 1252f), Quad(2504, 2256, 480, 1128f))) {
+            for (v in listOf(SkinVariant.DS, SkinVariant.N3DS_REGULAR, SkinVariant.GB, SkinVariant.SINGLE)) {
+                val ds = v == SkinVariant.DS || v == SkinVariant.N3DS_REGULAR
+                val p = assertNotNull(SkinChoice.place(pack, w, h, dpi, tablet = true, ds = ds, picture = if (ds) null else 240f to 160f, hingeY = hinge, foldable = true, variant = v), "$v ${w}x$h")
+                assertRow(p, w, dpi, "$v ${w}x$h")
+            }
         }
     }
+
+    @Test
+    fun theMenusSideGroupsAndScreenSpaceTheRowEvenly() {
+        // (window, dpi, hinge, expected gap in window px: the full 16 dp, or null where it must shrink)
+        for ((w, h, dpi, hinge) in listOf(Quad(1848, 2448, 420, 1224f), Quad(2256, 2504, 480, 1252f), Quad(2504, 2256, 480, 1128f))) {
+            val p = assertNotNull(SkinChoice.placeMenu(pack, w, h, dpi, foldable = true, tablet = true, hingeY = hinge), "${w}x$h")
+            assertRow(p, w, dpi, "menu ${w}x$h")
+            assertTrue(p.glasses.single { it.id == "menu" }.rect.width >= 320f * dpi / 160f - 2f, "${w}x$h menu glass")
+        }
+    }
+
+    /**
+     * [p]'s row ([RowSpacing]): its edge gaps (to 32 dp) and inner gaps (to 16 dp) alike, the full ones with room; L / R
+     * twice the edge gap from the edges and 16 dp over their rings; a column of two or more twice the inner gap from the
+     * screen and 16 dp under its ring.
+     */
+    private fun assertRow(p: SkinPlacement, w: Int, dpi: Int, name: String) {
+        val spec = p.spec
+        fun span(a: PieceAnchor, glass: Boolean) = p.pieces.filter { it.piece >= 0 && spec.pieces[it.piece].anchor == a && (spec.pieces[it.piece].glass != null) == glass }
+            .let { ps -> ps.minOf { it.dst.x } to ps.maxOf { it.dst.x + it.dst.width } }
+        val (l0, l1) = span(PieceAnchor.LEFT, false); val (f0, f1) = span(PieceAnchor.CENTRE, true); val (r0, r1) = span(PieceAnchor.RIGHT, false)
+        val dp = dpi / 160f
+        // the edge gaps alike (32 dp with room), the inner ones alike (16 dp with room), never the edge less than the inner
+        val edge = l0; val inner = f0 - l1
+        assertEquals(edge, w - r1, 2f, "$name edges"); assertEquals(inner, r0 - f1, 2f, "$name inner gaps")
+        assertTrue(edge <= 32f * dp + 1f && inner <= 16f * dp + 1f && edge >= inner - 1f && inner >= 4f * dp - 1f, "$name edge $edge inner $inner")
+        if (w > 1848) { assertEquals(32f * dp, edge, 1f, "$name edge"); assertEquals(16f * dp, inner, 1f, "$name inner") }
+        val gaps = listOf(edge, inner)
+        fun held(a: PieceAnchor, ids: Set<String>) = p.pieces.filter { pc -> pc.piece >= 0 && spec.pieces[pc.piece].anchor == a && spec.pieces[pc.piece].glass == null &&
+            spec.controls.any { c -> c.id in ids && c.anchor == a && spec.pieces[pc.piece].let { s -> c.x >= s.x && c.x <= s.x + s.w * s.scale && c.y >= s.y && c.y <= s.y + s.h * s.scale } } }
+        val lRing = held(PieceAnchor.LEFT, setOf("DPAD", "STICK")); val rRing = held(PieceAnchor.RIGHT, setOf("X", "Y", "A", "B"))
+        held(PieceAnchor.LEFT, setOf("L")).takeIf { it.isNotEmpty() }?.let { l ->
+            assertEquals(2f * edge, l.minOf { it.dst.x }, 2f, "$name L")
+            assertEquals(16f * dp, lRing.minOf { it.dst.y } - l.maxOf { it.dst.y + it.dst.height }, 2f, "$name L over its ring")
+        }
+        held(PieceAnchor.RIGHT, setOf("R")).takeIf { it.isNotEmpty() }?.let { r ->
+            assertEquals(2f * edge, w - r.maxOf { it.dst.x + it.dst.width }, 2f, "$name R")
+            assertEquals(16f * dp, rRing.minOf { it.dst.y } - r.maxOf { it.dst.y + it.dst.height }, 2f, "$name R over its ring")
+        }
+        for (a in listOf(PieceAnchor.LEFT, PieceAnchor.RIGHT)) {
+            val ids = setOf("START", "SELECT", "MENU", "MIC", "SWAP")
+            if (spec.controls.count { it.id in ids && it.anchor == a } < 2) continue
+            val col = held(a, ids)
+            if (a == PieceAnchor.LEFT) assertEquals(2f * inner, f0 - col.maxOf { it.dst.x + it.dst.width }, 2f, "$name left column")
+            else assertEquals(2f * inner, col.minOf { it.dst.x } - f1, 2f, "$name right column")
+            val ring = if (a == PieceAnchor.LEFT) lRing else rRing
+            assertEquals(16f * dp, col.minOf { it.dst.y } - ring.maxOf { it.dst.y + it.dst.height }, 2f, "$name column under its ring")
+        }
+    }
+    data class Quad(val a: Int, val b: Int, val c: Int, val d: Float)
 }
