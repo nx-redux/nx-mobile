@@ -113,6 +113,8 @@ fceumm_ARTIFACT = libs/$(ABI)/libretro.so
 
 # patches/snes9x/0001 (nx-redux's): retro_cheat_set copies the code to the heap; database codes overflowed its 256-byte
 # stack buffer.
+# patches/snes9x/0002: a load by path (the runner's VFS serving an MSU-1 ROM with its .msu/.pcm files) records the ROM's
+# folder too, so MSU-1 finds its files beside it.
 snes9x_REPO = https://github.com/libretro/snes9x
 snes9x_HASH = fae2fea08f74180759ef540ee94259213f503480
 snes9x_LICENSE = LICENSE
@@ -396,6 +398,8 @@ swanstation_ARTIFACT = swanstation_libretro_android.so
 # patches/picodrive.patch turns the SH2 dynarec on for arm64 (upstream enables it for 32-bit arm only).
 # patches/picodrive/0001 (nx-redux's), after it: retro_cheat_set copies the code to the heap and each part into its
 # 12-byte field with a bound; long database codes and parts overflowed both.
+# patches/picodrive/0002: the MSU-MD fake BIOS writes its "SEGA" ID in the 68k's byte order, so an MSU-MD game runs
+# without a Sega CD BIOS (raw bytes read back as "ESAG" on little-endian hosts).
 picodrive_REPO = https://github.com/irixxxx/picodrive
 picodrive_HASH = 9c298c1fe7347a50b07a494cdb8c91d2f9b40c6a
 picodrive_LICENSE = COPYING

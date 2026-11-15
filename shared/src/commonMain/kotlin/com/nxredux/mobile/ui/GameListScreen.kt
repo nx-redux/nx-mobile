@@ -174,9 +174,10 @@ fun GameListScreen(
         GameListFrame(
             title, style, hints, { index.value() }, dataKey = listOf(entries, showTag, backdropArt), orientation = orientation, alignment = alignment,
             gridTiles = { gameGridTiles(entries) }, backdropGames = { backdropGames(entries, backdropArt) },
-            listRows = { entries.map { NxRow(it.shown, secondary = if (showTag) tagLine(it) else it.game.subtitle) } },
+            listRows = { entries.map { NxRow(it.shown, secondary = if (showTag) tagLine(it) else it.game.subtitle, tag = it.game.badge) } },
             minimalRows = { entries.map { NxRow(it.shown) } },
             captionTitle = { entries.getOrNull(index.value())?.shown },
+            captionBadge = { entries.getOrNull(index.value())?.game?.badge },
             onSelect = onSelect, onOpen = onOpen, modifier = modifier, onHint = onHint, onLongPress = onLongPress,
             info = info, onGridLayout = onGridLayout, onPageRows = onPageRows, tileInfo = tileInfo, layoutKey = layoutKey,
             emptyText = emptyText.takeIf { entries.isEmpty() }, artBox = artBox,
@@ -228,6 +229,7 @@ internal fun GameListFrame(
     title: String, style: MenuStyle, hints: State<List<Hint>>, selectedIndex: () -> Int, dataKey: Any?,
     gridTiles: () -> List<GridTile>, backdropGames: () -> List<BackdropGame>,
     listRows: () -> List<NxRow>, captionTitle: () -> String?, minimalRows: () -> List<NxRow> = listRows,
+    captionBadge: () -> String? = { null },   // a pill after the caption's name: the selected game's badge
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, modifier: Modifier = Modifier,
     onHint: ((NxButton) -> Unit)? = null, onLongPress: ((Int) -> Unit)? = null,
     info: () -> List<InfoLine> = { emptyList() }, onGridLayout: (Int) -> Unit = {},
@@ -382,11 +384,11 @@ internal fun GameListFrame(
                             // Vertical: the tiles stacked on end, Backdrop's three-row caption beside them.
                             if (orientation == MenuOrientation.VERTICAL) NxCarouselStack(
                                 tiles, selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
-                                captionTitle = captionTitle, captionInfo = info, modifier = m, layoutKey = layoutKey, alignment = alignment,
+                                captionTitle = captionTitle, captionInfo = info, captionBadge = captionBadge, modifier = m, layoutKey = layoutKey, alignment = alignment,
                                 titleRoom = titleRoom, onPageRows = onPageRows, drained = true,
                             ) else NxCarousel(
                                 tiles, selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
-                                captionTitle = captionTitle, captionInfo = info, modifier = m, layoutKey = layoutKey, titleRoom = titleRoom,
+                                captionTitle = captionTitle, captionInfo = info, captionBadge = captionBadge, modifier = m, layoutKey = layoutKey, titleRoom = titleRoom,
                                 gameList = true, gameDetails = chrome.extraInfo, drained = true,   // Extra info off: no details to keep room for
                             )
                         }
@@ -397,11 +399,11 @@ internal fun GameListFrame(
                             // Vertical: the box art stacked on end, the caption beside it; the picture behind is the same.
                             if (orientation == MenuOrientation.VERTICAL) NxBackdropStack(
                                 games, emptyList(), selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
-                                captionTitle = captionTitle, captionInfo = info, modifier = m, layoutKey = layoutKey, alignment = alignment,
+                                captionTitle = captionTitle, captionInfo = info, captionBadge = captionBadge, modifier = m, layoutKey = layoutKey, alignment = alignment,
                                 titleRoom = titleRoom, onPageRows = onPageRows,
                             ) else NxBackdrop(
                                 games, emptyList(), selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
-                                captionTitle = captionTitle, captionInfo = info, modifier = m, layoutKey = layoutKey, titleRoom = titleRoom,
+                                captionTitle = captionTitle, captionInfo = info, captionBadge = captionBadge, modifier = m, layoutKey = layoutKey, titleRoom = titleRoom,
                             )
                         }
                     }

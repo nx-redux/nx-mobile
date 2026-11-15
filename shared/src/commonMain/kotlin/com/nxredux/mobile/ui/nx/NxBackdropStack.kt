@@ -41,6 +41,7 @@ fun NxBackdropStack(
     tiles: List<GridTile>, selectedIndex: () -> Int,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?,
     captionTitle: () -> String?, captionInfo: () -> List<InfoLine>,
+    captionBadge: () -> String? = { null },   // a pill after the caption's name (the game's badge, [com.nxredux.mobile.library.GameEntry.badge])
     modifier: Modifier = Modifier,
     layoutKey: Any? = null,
     alignment: VerticalListAlignment = VerticalListAlignment.LEFT,
@@ -78,6 +79,7 @@ fun NxBackdropStack(
                 overlay = { StackCaption(
                     captionTitle(), captionInfo(), g, bodyW, bodyH, shadow = true, nameSp = 18f * nxTextScale(),   // Appearance → Text size
                     splitNext = stackPortraitFamily(screenW, screenH, portrait), alignment = alignment, infoShare = 0.8f,
+                    badge = captionBadge(),
                 ) },
             )
             return@BoxWithConstraints

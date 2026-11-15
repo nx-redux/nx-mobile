@@ -70,6 +70,7 @@ fun NxCarousel(
     tiles: List<GridTile>, selectedIndex: () -> Int,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?,
     captionTitle: () -> String?, captionInfo: () -> List<InfoLine>,
+    captionBadge: () -> String? = { null },   // a pill after the caption's name (the game's badge, [com.nxredux.mobile.library.GameEntry.badge])
     modifier: Modifier = Modifier,
     layoutKey: Any? = null,
     titleRoom: Dp = 0.dp,
@@ -167,7 +168,7 @@ fun NxCarousel(
             captionTitle, details, glide, nameStyle, 2, infoStyle, inset, avail, availPx, spare,
             selTop, g.itemH + CAPTION_GAP, colors.accent,   // the selected game's name in the accent, as Home's cards
             stackRows = gameList, rowGap = if (gameList) STACK_CAPTION_GAP else 0.dp,
-            maxDrawn = if (gameList) captionMax else Float.POSITIVE_INFINITY,
+            maxDrawn = if (gameList) captionMax else Float.POSITIVE_INFINITY, captionBadge = captionBadge,
         )
     }
 }
@@ -357,14 +358,16 @@ private fun rememberCaptionNeed(name: TextStyle, info: TextStyle, details: Boole
 @Composable
 internal fun rememberCaptionHeights(
     title: String?, name: TextStyle, nameLines: Int, fitted: List<CaptionInfoRow>, info: TextStyle, availPx: Int,
+    badged: BadgedTitle? = null,   // the name as drawn with its badge ([rememberBadgedTitle]): measured with the pill
 ): Pair<Float, List<Float>> {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    return remember(title, name, nameLines, fitted, info, availPx, density) {
+    return remember(title, name, nameLines, fitted, info, availPx, density, badged) {
         if (title == null) return@remember 0f to emptyList()
         val c = Constraints(maxWidth = availPx.coerceAtLeast(0))
         with(density) {
-            val nameH = measurer.measure(title, name, TextOverflow.Ellipsis, maxLines = nameLines, constraints = c).size.height.toDp().value
+            val nameH = (if (badged != null) measurer.measure(badged.text, name, TextOverflow.Ellipsis, maxLines = nameLines, placeholders = badged.placeholders, constraints = c)
+                else measurer.measure(title, name, TextOverflow.Ellipsis, maxLines = nameLines, constraints = c)).size.height.toDp().value
             nameH to fitted.map { row ->
                 val text = row.lines.joinToString(INFO_SEPARATOR) { it.text }
                 measurer.measure(text, info, TextOverflow.Ellipsis, maxLines = row.maxLines, constraints = c).size.height.toDp().value

@@ -319,7 +319,11 @@ private fun GameTile(
             }
             // No screenshot: a plain title tile, so no hole in the grid; the ring still goes round it. On Home the name
             // takes the lines the tile holds, and lit with its info line it keeps clear of it (the bottom's caption room).
-            GameTileLayer.TITLE -> if (!homeCaption) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            GameTileLayer.TITLE -> if (!homeCaption) Column(
+                Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(TILE_BADGE_GAP, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                tile.badge?.let { TileBadge(it, colors.listText, statsSize) }
                 TileTitle(tile.title, colors.listText, titleSize, maxLines = titleLines)
             } else BoxWithConstraints(Modifier.fillMaxSize().then(if (drained) Modifier.graphicsLayer { alpha = nxDimInk(litness()) } else Modifier)) {
                 // The info line's room at its size ([nxCardStatsSize], the 11 sp line's room scaled to it).
@@ -388,7 +392,10 @@ private fun GameTile(
                             tile.title, name, homeName, maxLines = homeLines, align = TextAlign.Start,
                             balanced = homeLines > 1, lineHeight = HOME_CAPTION_LINE, shadow = if (homeLines > 1) titleShadow() else null,
                         )
-                        else TileText(tile.title, name, titleSize, maxLines = 2, align = TextAlign.Start)
+                        else {
+                            tile.badge?.let { TileBadge(it, name, statsSize, Modifier.padding(bottom = TILE_BADGE_GAP)) }
+                            TileText(tile.title, name, titleSize, maxLines = 2, align = TextAlign.Start)
+                        }
                     }
                     if (subtitle != null) TileText(subtitle, sub, statsSp, maxLines = 1, align = TextAlign.Start, lineHeight = HOME_INFO_LINE)
                     if (homeCaption) for (row in homeRows) {
@@ -438,6 +445,27 @@ private fun TileTitle(text: String, color: Color, size: TextUnit, maxLines: Int)
 internal fun titleShadow(): Shadow {
     val d = LocalDensity.current.density
     return Shadow(Color.Black.copy(alpha = 0.9f), Offset(0f, 1f * d), 6f * d)   // role: a text shadow
+}
+
+/** Between a tile's badge and its name. */
+private val TILE_BADGE_GAP = 3.dp
+
+/**
+ * A game tile's badge ([GridTile.Game.badge]) on its own row over the name: [word] in an outlined pill in [color] at
+ * [size], on the page's ground at half strength so it reads over a picture the caption fade has not reached.
+ */
+@Composable
+private fun TileBadge(word: String, color: Color, size: TextUnit, modifier: Modifier = Modifier) {
+    val ground = LocalNxColors.current.background.copy(alpha = 0.5f)   // role: a badge's ground over a picture
+    Box(
+        modifier.background(ground, RoundedCornerShape(50)).border(1.dp, color.copy(alpha = 0.7f), RoundedCornerShape(50))   // role: the badge's outline, a little under its word
+            .padding(horizontal = 6.dp, vertical = 1.dp),
+    ) {
+        Text(
+            word, color = color, maxLines = 1, softWrap = false,
+            style = TextStyle(fontFamily = LocalNxFont.current, fontWeight = FontWeight.Medium, fontSize = size, lineHeight = size * LINE_HEIGHT),
+        )
+    }
 }
 
 @Composable

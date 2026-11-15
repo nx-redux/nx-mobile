@@ -249,3 +249,18 @@ menu, survive Home and return, quit and reload slot 9 (8/8); save then quit at o
 - [ ] Wi-Fi netplay: after the peer ends, `dumpsys wifi` shows no nxredux:netplay lock while the game plays on
 - [ ] Vulkan PSP / Azahar with a shader preset and while the picture is held; GL Dolphin / Flycast with a preset
 - [ ] Save / load states on PS2 and Wii (large), PPSSPP; SRAM / RTC with a clock game; multi-file VFS launches and RA hashing
+
+## MSU-1 / MSU-MD (PR #147)
+
+Device checks still owed:
+
+- [ ] Genesis Plus GX with an MSU-MD set and a Sega CD BIOS: music plays (the cart mounts its cue through the VFS).
+- [ ] Play build (no All files access): an MSU-1 pack streams; an MSU-MD set on PicoDrive is copied to the cache and plays.
+- [ ] Device Sync of an MSU pack in an extra folder: the folder arrives whole; a loose set's `.msu`/`.pcm` or cue and tracks travel with its ROM.
+
+Follow-ups, after #147:
+
+- [ ] Region-aware BIOS check: read a Sega CD disc's region (PC Engine CD too if it needs it) and require that region's BIOS, with a popup naming the file ("This game is a US disc: put bios_CD_U.bin in Bios/SEGACD/ (you have the EU and JP ones)"). Today any of U/E/J passes and PicoDrive fails in-game. Optionally check BIOS checksums against the known good dumps.
+- [ ] PicoDrive on the libretro VFS: its NDK build opens files by path, so it is the one core (with PrBoom) on LoadMode.REAL_PATH, copied to the cache on the Play build and from SAF extra folders. Building it with libretro-common's VFS lets it stream like the others and drops the copy (Sega CD discs, MSU-MD soundtracks).
+- [ ] More badges ([IndexedGame.badge] is general): from bracketed file-name tags ((Hack), [h], (Homebrew), (Translated), (Beta)/(Proto)) via a small table, a per-game choice in Options (wins over detected ones), or a DAT/ScreenScraper match. One badge per game today.
+- [ ] Docs: unzip MSU packs (a zip cannot be streamed); a pack in its own folder is one game.
