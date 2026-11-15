@@ -31,6 +31,7 @@
 #include <cstdlib>
 
 #include "log.h"
+#include "vulkanreader.h"
 
 namespace libretrodroid {
 
@@ -269,8 +270,8 @@ bool VulkanBridge::isSupported() {
     return supported;
 }
 
-bool VulkanBridge::probeCustomDriver(const std::string& dir, const std::string& library, const std::string& hookLibDir,
-                                     const std::string& tmpDir) {
+HandoffMode VulkanBridge::probeCustomDriver(const std::string& dir, const std::string& library,
+                                            const std::string& hookLibDir, const std::string& tmpDir) {
     // A table of its own, like isSupported(): the bridge's (and a session's) is never touched. The loader handle is the
     // process-wide cached one, so the launch that follows reuses it; it is never closed.
     VulkanDispatch vk;
@@ -280,6 +281,7 @@ bool VulkanBridge::probeCustomDriver(const std::string& dir, const std::string& 
     VkImage image = VK_NULL_HANDLE;
     VkDeviceMemory memory = VK_NULL_HANDLE;
     std::string failure;   // the reason, logged once below; empty: passed
+    HandoffMode mode = HandoffMode::Import;
 
     [&] {
         if (!VulkanDispatch::loadCustom(vk, dir, library, hookLibDir, tmpDir)) { failure = "the loader could not be opened"; return; }
@@ -352,6 +354,11 @@ bool VulkanBridge::probeCustomDriver(const std::string& dir, const std::string& 
             failure = "the device lacks VK_ANDROID_external_memory_android_hardware_buffer";
             return;
         }
+        // For the Reader hand-off, tried below when the import fails.
+        const bool swapchainListed = std::any_of(exts.begin(), exts.end(), [](const VkExtensionProperties& e) {
+            return strcmp(e.extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0;
+        });
+        if (swapchainListed) deviceNames.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
         // One queue of family 0: nothing is submitted, the device only has to exist for the import below.
         const float priority = 1.0f;
         VkDeviceQueueCreateInfo queueInfo { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
@@ -382,10 +389,10 @@ bool VulkanBridge::probeCustomDriver(const std::string& dir, const std::string& 
         // The shared buffer exactly as a bridge slot makes and imports it (malisx2 on a Mali-G76 fails here).
         const unsigned size = 64;
         if (!allocateSharedBuffer(size, size, &buffer)) { failure = "AHardwareBuffer_allocate failed"; return; }
-        if (!importSharedBuffer(vk, device, buffer, size, size, &image, &memory, nullptr)) {
-            failure = "it cannot share frames with the display (AHardwareBuffer import)";
-            return;
-        }
+        const bool imports = importSharedBuffer(vk, device, buffer, size, size, &image, &memory, nullptr);
+        const bool swapchain = swapchainListed && vk.hasSwapchain();
+        mode = chooseHandoff(imports, swapchain, !imports && swapchain && probeReaderHandoff(vk, instance, gpu, device));
+        if (mode == HandoffMode::None) failure = "it cannot share frames with the display (AHardwareBuffer import)";
     }();
 
     // Reverse order; the loader stays open (vk.close() never closes a custom driver's handle).
@@ -398,10 +405,11 @@ bool VulkanBridge::probeCustomDriver(const std::string& dir, const std::string& 
 
     if (!failure.empty()) {
         LOGE("Vulkan bridge: preflight: custom driver %s cannot start: %s", library.c_str(), failure.c_str());
-        return false;
+        return HandoffMode::None;
     }
-    LOGI("Vulkan bridge: preflight: custom driver %s passed", library.c_str());
-    return true;
+    LOGI("Vulkan bridge: preflight: custom driver %s passed (%s)", library.c_str(),
+         mode == HandoffMode::Reader ? "reader" : "import");
+    return mode;
 }
 
 void VulkanBridge::setDriver(const std::string& dir, const std::string& library, const std::string& hookLibDir,

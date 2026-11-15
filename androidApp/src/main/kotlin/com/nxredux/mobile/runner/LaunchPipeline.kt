@@ -926,6 +926,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     if (mayLoadDriver) driverCrashNotice = GpuDriverCrashSettle.settle(settings, setOf(Process.myPid()))
                     val driverStore = AndroidGpuDrivers(AndroidGpuDrivers.root(activity.filesDir), Build.VERSION.SDK_INT)
                     val drivers = if (mayLoadDriver) driverStore.installed() else emptyList()
+                    // The driver's frames go through a swapchain on an image reader: what its preflight found it can do.
+                    var driverReader = false
                     var launch = GpuDriverChoice.launch(
                         apiValue, frontendValues[GpuDriverOptions.KEY], settings.gpuDriver, drivers.mapTo(HashSet()) { it.id },
                         GpuDriverCrash.crashed(settings.gpuDriverCrashes, gamePath.orEmpty()), available = driversAvailable,
@@ -945,7 +947,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         // Before any core is loaded: a driver that cannot start the bridge is caught here, and this same
                         // launch goes on without it (a core torn down after a failed start can crash: PPSSPP, mupen64plus).
                         // Retried on every launch. The in-process relaunch stays for what the preflight cannot see.
-                        val ok = GLRetroView.probeVulkanDriver(activity, driverStore.directory(driver.id).absolutePath + "/", driver.libraryName)
+                        val handoff = GLRetroView.probeVulkanDriver(activity, driverStore.directory(driver.id).absolutePath + "/", driver.libraryName)
+                        val ok = handoff != LibretroDroid.VULKAN_HANDOFF_NONE
+                        driverReader = handoff == LibretroDroid.VULKAN_HANDOFF_READER
                         val after = GpuDriverChoice.afterPreflight(launch, ok, driver.name, cfg.descriptor?.id in settings.vulkanFailedCores)
                         if (after.clearMarker) clearDriverLaunchMarker()
                         if (after.launch != launch) {
