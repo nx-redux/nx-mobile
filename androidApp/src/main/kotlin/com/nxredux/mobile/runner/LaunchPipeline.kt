@@ -862,7 +862,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val biosExtension = if (inner == null && msuMdSheet(cfg) != null && cfg.descriptor?.id == SegaPadType.GPGX) "cue" else contentExtension
             // A Sega CD disc boots with its own region's BIOS only: when its header is read, that file is checked (under
             // any name the core takes) in place of "any of the three".
-            val discRegion = segaCdRegion(cfg, inner, contentExtension)
+            val discRegion = segaCdRegion(cfg, inner, contentExtension, biosPresent)
             val needs = CoreRegistry.requiredBios(cfg.tag).filterNot { discRegion != null && SegaCdBios.isSegaCdNeed(it) }
             BiosCheck.missing(needs, biosExtension, biosPresent).firstOrNull()?.let {
                 return refuse(BiosCheck.message(cfg.tag, it))
@@ -1065,15 +1065,17 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     /**
      * The region whose Sega CD BIOS [cfg]'s disc boots with, under PicoDrive or Genesis Plus GX: Genesis Plus GX's forced
      * region ([SegaCdBios.GPGX_REGION_KEY]), else the disc's header ([SegaCdBios.regionOf], read from its first data
-     * sector through the launch's files: the unpacked [inner] disc, or the content and the tracks it was handed). Null
-     * for any other game, or a header that cannot be read (the generic check then stands).
+     * sector through the launch's files: the unpacked [inner] disc, or the content and the tracks it was handed). The
+     * header is read first, so a Mega Drive cartridge named `.bin` is never taken for a disc. Null for any other game, a
+     * header that cannot be read (the generic check then stands), or when [present] holds every region's BIOS (the
+     * answer could not refuse the launch, so nothing is read).
      */
-    private suspend fun segaCdRegion(cfg: LaunchConfig, inner: File?, contentExtension: String): DiscRegion? {
-        val core = cfg.descriptor?.id
+    private suspend fun segaCdRegion(cfg: LaunchConfig, inner: File?, contentExtension: String, present: Set<String>): DiscRegion? {
+        val core = cfg.descriptor?.id ?: return null
         if (core != SegaPadType.PICODRIVE && core != SegaPadType.GPGX) return null
         if (CoreRegistry.consoleOf(cfg.tag)?.id !in SEGA_CD_CONSOLES || contentExtension !in SegaCdBios.DISC_EXTENSIONS) return null
-        if (core == SegaPadType.GPGX) SegaCdBios.gpgxForced(cfg.options.firstOrNull { it.key == SegaCdBios.GPGX_REGION_KEY }?.value)?.let { return it }
-        return withContext(Dispatchers.IO) {
+        if (DiscRegion.entries.all { SegaCdBios.missing(core, it, present) == null }) return null
+        val disc = withContext(Dispatchers.IO) {
             val (file, dir) = if (inner != null) {
                 val files = inner.parentFile?.listFiles().orEmpty().filter { it.isFile }.map { Entry(FileRefs.of(it.absolutePath), it.name, false, it.length()) }
                 (files.firstOrNull { it.name == inner.name } ?: return@withContext null) to files
@@ -1082,12 +1084,15 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 content to (listOf(content) + cfg.companions.map { (name, ref) -> Entry(ref, name, false, null) })
             }
             DiscProbe(AndroidRomsSources.of(host.activity), LibchdrSectors(host.activity.contentResolver)).firstDataSector(file, dir)
-        }?.let(SegaCdBios::regionOf)
+        }?.let(SegaCdBios::regionOf) ?: return null
+        val forced = if (core == SegaPadType.GPGX) SegaCdBios.gpgxForced(cfg.options.firstOrNull { it.key == SegaCdBios.GPGX_REGION_KEY }?.value) else null
+        return forced ?: disc
     }
 
     /**
      * Each BIOS file name in the home's `Bios/` folders [cfg]'s launch gathers from ([BiosFolders.forTag]), with the folder
-     * it is in (the first, in that order); empty without a home or on a read failure. Only read for a refusal's message.
+     * it is in (the last, in that order: the copy [BiosImport] keeps on a name clash); empty without a home or on a read
+     * failure. Only read for a refusal's message.
      */
     private suspend fun biosFolderOf(cfg: LaunchConfig): Map<String, String> = try {
         val source = AndroidRomsSources.of(host.activity)
@@ -1095,7 +1100,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         val out = LinkedHashMap<String, String>()
         if (bios != null) for (folder in BiosFolders.forTag(cfg.tag)) {
             val dir = source.child(bios.ref, folder)?.takeIf { it.isDirectory } ?: continue
-            for (e in source.listChildren(dir.ref)) if (!e.isDirectory) out.putIfAbsent(e.name, folder)
+            for (e in source.listChildren(dir.ref)) if (!e.isDirectory) out[e.name] = folder
         }
         out
     } catch (e: CancellationException) {

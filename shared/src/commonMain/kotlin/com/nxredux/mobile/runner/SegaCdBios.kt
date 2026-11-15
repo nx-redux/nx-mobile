@@ -1,7 +1,5 @@
 package com.nxredux.mobile.runner
 
-import com.nxredux.mobile.storage.Bytes
-
 /** A Sega CD disc's region, by its header ([SegaCdBios.regionOf]); [label] reads "This game is a <label> disc". */
 enum class DiscRegion(val label: String) { US("US"), EU("European"), JP("Japanese") }
 
@@ -27,11 +25,13 @@ object SegaCdBios {
 
     /**
      * The region of a Sega CD disc from the user data of its first data sector ([sector0]): the security code's byte
-     * at 0x20B, 0x64 Europe, 0xA1 Japan, anything else the US (both cores' rule). Null when it is no Sega CD header.
+     * at 0x20B past the header, 0x64 Europe, 0xA1 Japan, anything else the US (both cores' rule). The header is found
+     * as PicoDrive's PicoCdCheck finds it, any case, at 0 or at 0x10 (a raw 2352-byte image read as 2048-byte
+     * sectors, as a raw dump named `.iso` is). Null when it is no Sega CD header.
      */
     fun regionOf(sector0: ByteArray): DiscRegion? {
-        if (sector0.size <= 0x20B || !Bytes.startsWithAscii(sector0, "SEGADISCSYSTEM")) return null
-        return when (sector0[0x20B].toInt() and 0xFF) {
+        val at = listOf(0, 0x10).firstOrNull { sector0.size > it + 0x20B && sector0.decodeAscii(it, 14).equals(HEADER, ignoreCase = true) } ?: return null
+        return when (sector0[at + 0x20B].toInt() and 0xFF) {
             0x64 -> DiscRegion.EU
             0xA1 -> DiscRegion.JP
             else -> DiscRegion.US
@@ -39,7 +39,11 @@ object SegaCdBios {
     }
 
     /** Whether [need] is [CoreRegistry]'s "any Sega CD BIOS" need, which a disc of known region replaces. */
-    fun isSegaCdNeed(need: BiosNeed): Boolean = "bios_CD_U.bin" in need.anyOf
+    fun isSegaCdNeed(need: BiosNeed): Boolean = need.anyOf == CoreRegistry.SEGA_CD_BIOS
+
+    private const val HEADER = "SEGADISCSYSTEM"
+
+    private fun ByteArray.decodeAscii(at: Int, length: Int): String = String(CharArray(length) { (this[at + it].toInt() and 0xFF).toChar() })
 
     /** Genesis Plus GX's forced region for its [GPGX_REGION_KEY] value; null for Auto (the disc decides). */
     fun gpgxForced(value: String?): DiscRegion? = when (value) {

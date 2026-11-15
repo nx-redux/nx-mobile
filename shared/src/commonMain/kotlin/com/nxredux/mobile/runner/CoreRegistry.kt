@@ -747,12 +747,13 @@ object CoreRegistry {
         return byTag.filterValues { it.id == id }.keys.toList()
     }
 
-    private val segaCdBios = listOf("bios_CD_U.bin", "bios_CD_E.bin", "bios_CD_J.bin")
-    private val segaCdDiscs = BiosNeed(segaCdBios, setOf("cue", "chd", "iso", "m3u"))
+    /** The Sega CD BIOS a launch accepts any of, by its generic need; [SegaCdBios] narrows it to the disc's region. */
+    val SEGA_CD_BIOS = listOf("bios_CD_U.bin", "bios_CD_E.bin", "bios_CD_J.bin")
+    private val segaCdDiscs = BiosNeed(SEGA_CD_BIOS, setOf("cue", "chd", "iso", "m3u"))
     private val requiredBiosByTag: Map<String, List<BiosNeed>> = mapOf(
         "FDS" to listOf(BiosNeed(listOf("disksys.rom"))),
         "FC" to listOf(BiosNeed(listOf("disksys.rom"), setOf("fds"))),   // a .fds file kept in a Famicom folder runs on the same core
-        "SEGACD" to listOf(BiosNeed(segaCdBios)),
+        "SEGACD" to listOf(BiosNeed(SEGA_CD_BIOS)),
         "GPGX" to listOf(segaCdDiscs),
         "MD" to listOf(segaCdDiscs),
         "PCE" to listOf(BiosNeed(listOf("syscard3.pce"), setOf("cue", "ccd", "chd", "toc", "m3u"))),

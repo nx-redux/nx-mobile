@@ -26,6 +26,9 @@ class SegaCdBiosTest {
         assertEquals(DiscRegion.US, SegaCdBios.regionOf(header(0x7A)))
         assertNull(SegaCdBios.regionOf(ByteArray(2048)))                                  // no Sega CD header
         assertNull(SegaCdBios.regionOf(header(0x64).copyOf(0x100)))                        // cut short
+        // A raw image read as 2048-byte sectors (a raw dump named .iso): the header 16 bytes in, any case.
+        val raw = ByteArray(2048).also { "segadiscsystem  ".encodeToByteArray().copyInto(it, 0x10); it[0x10 + 0x20B] = 0xA1.toByte() }
+        assertEquals(DiscRegion.JP, SegaCdBios.regionOf(raw))
     }
 
     @Test fun each_core_takes_its_own_names_for_the_discs_region_only() {
@@ -64,6 +67,7 @@ class SegaCdBiosTest {
         assertNull(SegaCdBios.gpgxForced("auto"))
         assertNull(SegaCdBios.gpgxForced(null))
         assertTrue(CoreRegistry.requiredBios("SEGACD").all(SegaCdBios::isSegaCdNeed))
+        assertTrue(CoreRegistry.requiredBios("MD").any(SegaCdBios::isSegaCdNeed))
         assertFalse(CoreRegistry.requiredBios("PCE").any(SegaCdBios::isSegaCdNeed))
     }
 
