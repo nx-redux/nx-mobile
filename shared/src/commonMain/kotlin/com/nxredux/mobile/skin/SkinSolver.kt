@@ -45,9 +45,10 @@ fun skinTiles(c: SkinCell, k: Float, stretchMax: Float): List<SkinTile> {
  * How a board spaces its side groups and the screen between them across the window, picture px: [edge] from each
  * window edge to its group and [gap] from each group to the screen where there is room (the screen's frame taking the
  * rest); where there is not, the screen narrows first, its glass to [frameMin] (null: a touch screen's 4:3 picture at
- * its height), then the edge gaps come down toward [gap], then all four shrink alike to [minGap] ([share]).
+ * its height), then the edge gaps come down toward [gap], then all four shrink alike to [minGap] ([share]). [pairGap]:
+ * between a shoulder and its companion beside it (the arcade's TB / TA).
  */
-data class RowSpacing(val edge: Float, val gap: Float, val minGap: Float, val frameMin: Float?) {
+data class RowSpacing(val edge: Float, val gap: Float, val minGap: Float, val frameMin: Float?, val pairGap: Float = 0f) {
     /**
      * The edge gap, the inner gap and the screen's frame width across [room] (the window less the two groups) with a frame
      * no narrower than [frameMin]: the full gaps, the frame the rest; else the frame at its least and the edge gaps down
@@ -62,7 +63,7 @@ data class RowSpacing(val edge: Float, val gap: Float, val minGap: Float, val fr
 }
 
 /** The side controls a [RowSpacing] places: the d-pad / stick and face buttons, L / R, the small button columns. */
-internal val ROW_IDS = setOf("DPAD", "STICK", "X", "Y", "A", "B", "L", "R", "START", "SELECT", "MENU", "MIC", "SWAP")
+internal val ROW_IDS = setOf("DPAD", "STICK", "X", "Y", "A", "B", "L", "R", "START", "SELECT", "MENU", "MIC", "SWAP", "TURBO_A", "TURBO_B")
 
 /**
  * A piece of a layout built from pieces: [src] in its parts picture drawn at [dst] (scaled when the sizes differ).
@@ -408,6 +409,27 @@ object SkinSolver {
         val shoulderDropLeft = shoulderDrop(PieceAnchor.LEFT)
         val shoulderDropRight = shoulderDrop(PieceAnchor.RIGHT)
         fun shoulderDropOf(anchor: PieceAnchor?) = when (anchor) { PieceAnchor.LEFT -> shoulderDropLeft; PieceAnchor.RIGHT -> shoulderDropRight; else -> 0f }
+        // a shoulder's companion (the arcade's TB / TA): on its shoulder's inner side, [RowSpacing.pairGap] from it, level with it
+        val companionIds = setOf("TURBO_A", "TURBO_B")
+        fun holdsCompanion(p: PieceSpec) = p.glass == null && p.anchor != PieceAnchor.CENTRE && spec.controls.any { c ->
+            c.id in companionIds && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+        }
+        fun companionMove(side: PieceAnchor): Pair<Float, Float> {
+            if (rowPlan == null || row == null) return 0f to 0f
+            val groupShift = if (side == PieceAnchor.LEFT) rowPlan[0] else rowPlan[1]   // [sideShift] under the row
+            fun x0(p: PieceSpec): Float = p.x + across(p.anchor, p.inward) + groupShift
+            fun y0(p: PieceSpec) = p.y + down(p.level, p.drop)
+            val sh = spec.pieces.filter { it.anchor == side && holdsShoulder(it) }
+            val comp = spec.pieces.filter { it.anchor == side && holdsCompanion(it) }
+            if (sh.isEmpty() || comp.isEmpty()) return 0f to 0f
+            val dy = (sh.minOf { y0(it) } + shoulderDropOf(side)) - comp.minOf { y0(it) }
+            val dx = if (side == PieceAnchor.LEFT) (sh.maxOf { x0(it) + it.w * it.scale } + shoulderShiftOf(side) + row.pairGap) - comp.minOf { x0(it) }
+                else (sh.minOf { x0(it) } + shoulderShiftOf(side) - row.pairGap) - comp.maxOf { x0(it) + it.w * it.scale }
+            return dx to dy
+        }
+        val companionLeft = companionMove(PieceAnchor.LEFT)
+        val companionRight = companionMove(PieceAnchor.RIGHT)
+        fun companionOf(anchor: PieceAnchor?) = when (anchor) { PieceAnchor.LEFT -> companionLeft; PieceAnchor.RIGHT -> companionRight; else -> 0f to 0f }
         fun sideShift(anchor: PieceAnchor, inward: Int): Float {
             if (anchor == PieceAnchor.CENTRE) return 0f
             rowPlan?.let { return if (anchor == PieceAnchor.LEFT) it[0] else it[1] }
@@ -423,9 +445,9 @@ object SkinSolver {
         /** Piece [p]'s spot and growth, picture px: x, y, grown by gx, gy. */
         fun spot(p: PieceSpec): FloatArray {
             var px = p.x + across(p.anchor, p.inward) + sideShift(p.anchor, p.inward) +
-                (if (holdsColumn(p)) columnShiftOf(p.anchor) else if (holdsShoulder(p)) shoulderShiftOf(p.anchor) else 0f)
+                (if (holdsColumn(p)) columnShiftOf(p.anchor) else if (holdsShoulder(p)) shoulderShiftOf(p.anchor) else if (holdsCompanion(p)) companionOf(p.anchor).first else 0f)
             // the touch screen follows the shorter frame up; the pad (d-pad, face) up to its own rise
-            var py = p.y + down(p.level, p.drop) - (if (p.glass != null) lift else minOf(lift, p.rise.toFloat())) + (if (holdsColumn(p)) columnDropOf(p.anchor) else if (holdsShoulder(p)) shoulderDropOf(p.anchor) else 0f)
+            var py = p.y + down(p.level, p.drop) - (if (p.glass != null) lift else minOf(lift, p.rise.toFloat())) + (if (holdsColumn(p)) columnDropOf(p.anchor) else if (holdsShoulder(p)) shoulderDropOf(p.anchor) else if (holdsCompanion(p)) companionOf(p.anchor).second else 0f)
             var gx = 0f; var gy = 0f   // a growing piece's growth, picture px
             val pg0 = p.glass
             if (p.grow > 0 && pg0 != null && dx > 0f) {
@@ -534,7 +556,7 @@ object SkinSolver {
             }
         }
         controls += spec.controls.map { c ->
-            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k, travel = c.travel * k, knobTravel = c.knobTravel * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward) + sideShift(c.anchor ?: PieceAnchor.LEFT, c.inward) + (if (c.id in columnIds) columnShiftOf(c.anchor) else if (c.id in shoulderIds) shoulderShiftOf(c.anchor) else 0f)) * k, (c.y + down(c.level, c.drop) - minOf(lift, c.rise.toFloat()) - (if (c.anchor == PieceAnchor.CENTRE) 0f else controlRise) + (if (c.id in columnIds) columnDropOf(c.anchor) else if (c.id in shoulderIds) shoulderDropOf(c.anchor) else 0f)) * k)
+            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k, travel = c.travel * k, knobTravel = c.knobTravel * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward) + sideShift(c.anchor ?: PieceAnchor.LEFT, c.inward) + (if (c.id in columnIds) columnShiftOf(c.anchor) else if (c.id in shoulderIds) shoulderShiftOf(c.anchor) else if (c.id in companionIds) companionOf(c.anchor).first else 0f)) * k, (c.y + down(c.level, c.drop) - minOf(lift, c.rise.toFloat()) - (if (c.anchor == PieceAnchor.CENTRE) 0f else controlRise) + (if (c.id in columnIds) columnDropOf(c.anchor) else if (c.id in shoulderIds) shoulderDropOf(c.anchor) else if (c.id in companionIds) companionOf(c.anchor).second else 0f)) * k)
         }
         // how far the right-hand group moved in, window px: what sits at the window's right over the board follows it
         val sideIn = spec.pieces.filter { it.anchor == PieceAnchor.RIGHT && it.glass == null }.maxOfOrNull { -sideShift(PieceAnchor.RIGHT, it.inward) } ?: 0f

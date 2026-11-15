@@ -31,6 +31,8 @@ object SkinChoice {
     private const val ROW_EDGE_DP = 32f
     /** From each side group to the screen between them, dp with room ([RowSpacing.gap]). */
     private const val ROW_GAP_DP = 16f
+    /** Between a shoulder and its companion beside it (the arcade's L TB, TA R), dp. */
+    private const val PAIR_GAP_DP = 8f
     /** The least those gaps shrink to, dp, before the board is drawn smaller. */
     private const val ROW_MIN_GAP_DP = 4f
     /** The narrowest the main menu's bottom screen gets, dp: the narrowest the app's pages lay out for. */
@@ -125,12 +127,12 @@ object SkinChoice {
      */
     private fun shell(
         pack: SkinPackManifest, family: SkinFamily, variant: SkinVariant, windowW: Int, windowH: Int, k: Float,
-        picture: Pair<Float, Float>?, topInset: Int, row: RowSpacing? = null,
+        picture: Pair<Float, Float>?, topInset: Int, row: RowSpacing? = null, adapt: (SkinLayoutSpec) -> SkinLayoutSpec = { it },
     ): SkinPlacement? =
         pack.layouts.filter { it.family == family && it.variant == variant && it.frame != null && !it.foldBoard && it.minRefH <= windowH / k }
             .sortedWith(compareByDescending<SkinLayoutSpec> { it.minRefH }.thenByDescending { it.height })
             .firstNotNullOfOrNull { spec ->
-                SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset = topInset.toFloat(), row = row)?.takeIf { p ->
+                SkinSolver.placePieces(adapt(spec), windowW.toFloat(), windowH.toFloat(), k, picture, topInset = topInset.toFloat(), row = row)?.takeIf { p ->
                     val g = p.glasses.first().rect
                     g.width / k >= MENU_MIN_GLASS && g.height / k >= MENU_MIN_GLASS
                 }
@@ -204,8 +206,22 @@ object SkinChoice {
         val px = densityDpi / 160f / k
         // every board's screen the menu's least, so a game's side groups stand where the menu's do (a touch screen's picture
         // fits in it, a little smaller where it is narrower than the picture)
-        return RowSpacing(ROW_EDGE_DP * px, ROW_GAP_DP * px, ROW_MIN_GAP_DP * px, MENU_MIN_DP * px)
+        return RowSpacing(ROW_EDGE_DP * px, ROW_GAP_DP * px, ROW_MIN_GAP_DP * px, MENU_MIN_DP * px, PAIR_GAP_DP * px)
     }
+
+    /** The consoles whose layouts follow the main menu's (the arcade's), on the phone and landscape boards too. */
+    private val FOLLOW_MENU = setOf(SkinVariant.ARCADE)
+
+    /** [variant]'s layout [this] following [menu] ([followMenu]) when it is one of [FOLLOW_MENU]'s, else as it is. */
+    private fun SkinLayoutSpec.toMenu(variant: SkinVariant, menu: SkinLayoutSpec?): SkinLayoutSpec =
+        if (variant in FOLLOW_MENU) followMenu(menu) else this
+
+    /** The row spacing for [variant]'s phone and landscape boards: [FOLLOW_MENU]'s only (the others keep their own). */
+    private fun rowFor(variant: SkinVariant, densityDpi: Int, k: Float): RowSpacing? = if (variant in FOLLOW_MENU) rowSpacing(densityDpi, k) else null
+
+    /** The main menu's layout for [game]'s board (the same family, render and height class), its reference. */
+    private fun menuTwin(pack: SkinPackManifest, game: SkinLayoutSpec): SkinLayoutSpec? =
+        pack.layouts.firstOrNull { it.family == game.family && it.variant == SkinVariant.MENU && !it.foldBoard && it.refW == game.refW && it.refH == game.refH && it.minRefH == game.minRefH }
 
     /** The main menu's fold board drawn at [game]'s size (the same render), the game fold boards' reference. */
     private fun menuFoldBoard(pack: SkinPackManifest, game: SkinLayoutSpec): SkinLayoutSpec? =
@@ -281,7 +297,7 @@ object SkinChoice {
                 widest(pack, SkinFamily.FLEX, v, fold = true, refH = windowH / s) { spec ->
                     // the main menu's fold board the reference: its spacing (so the side groups stand where the menu's do)
                     // and its face buttons' height
-                    foldPieces(spec.faceAt(menuFoldBoard(pack, spec)), windowW, windowH, s, picture, topInset, hingeY, densityDpi, top,
+                    foldPieces(spec.toMenu(v, menuFoldBoard(pack, spec)?.menuBesideTheDpad()).faceAt(menuFoldBoard(pack, spec)), windowW, windowH, s, picture, topInset, hingeY, densityDpi, top,
                         row = rowSpacing(densityDpi, s))
                 }
             }
@@ -291,7 +307,7 @@ object SkinChoice {
             // takes the board flat too (the crease between its screens); a one-screen game only half-folded, as flat the
             // landscape shell gives it the window's whole height.
             if ((foldable || tablet) && nearSquare(windowW, windowH) && (hingeY != null || v in TWO_SCREEN)) foldBoard()?.let { return it }
-            return shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset)
+            return shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset, rowFor(v, densityDpi, k)) { spec -> spec.toMenu(v, menuTwin(pack, spec)) }
         }
         // a foldable's inner screen or a tablet: the fold board, split at its hinge flat or not (the window's middle when flat)
         if (foldable || tablet) foldBoard()?.let { return it }
@@ -308,7 +324,7 @@ object SkinChoice {
         }
         for (family in families) {
             widest(pack, family, v, fold = false) { spec ->
-                if (spec.frame != null) SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), topScreen = top)
+                if (spec.frame != null) SkinSolver.placePieces(spec.toMenu(v, menuTwin(pack, spec)), windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), topScreen = top, row = rowFor(v, densityDpi, k))
                 else SkinSolver.place(spec, windowW.toFloat(), windowH.toFloat(), k, picture)
             }?.let { return it }
         }

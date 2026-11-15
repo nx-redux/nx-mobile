@@ -64,3 +64,33 @@ internal fun SkinLayoutSpec.faceAt(menu: SkinLayoutSpec?): SkinLayoutSpec {
         controls = controls.map { if (it.anchor == PieceAnchor.RIGHT) it.copy(y = it.y + dy) else it },
     )
 }
+
+/**
+ * A game layout with its d-pad, face buttons, START / SELECT and MENU where [menu] (the main menu's layout for the same
+ * board, the reference) has them: each piece holding one (a ring, a well, a cap) moved by its control's offset to the
+ * menu's, taking the menu's anchor and level, and every control it holds with it. L / R and anything else keep their
+ * place (the row rules set L / R by their ring). As it is without [menu].
+ */
+internal fun SkinLayoutSpec.followMenu(menu: SkinLayoutSpec?): SkinLayoutSpec {
+    if (menu == null || menu.refW != refW || menu.refH != refH) return this
+    val ids = setOf("DPAD", "X", "Y", "A", "B", "START", "SELECT", "MENU")
+    val theirs = menu.controls.filter { it.id in ids }.associateBy { it.id }
+    fun inside(p: PieceSpec, c: ControlSpec) = c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+    val moved = HashMap<String, ControlSpec>()
+    val newPieces = pieces.map { p ->
+        if (p.glass != null) return@map p
+        val held = controls.filter { it.id in ids && inside(p, it) }
+        val lead = held.firstOrNull { it.id in theirs } ?: return@map p
+        val to = theirs.getValue(lead.id)
+        val dx = to.x - lead.x; val dy = to.y - lead.y
+        val anchor = to.anchor ?: p.anchor
+        for (c in held) if (c.id !in moved) moved[c.id] = c.copy(x = c.x + dx, y = c.y + dy, anchor = anchor, level = to.level, drop = to.drop)
+        p.copy(x = (p.x + dx).roundToInt(), y = (p.y + dy).roundToInt(), anchor = anchor, level = to.level, drop = to.drop)
+    }
+    // a control no piece holds: to the menu's spot itself
+    val newControls = controls.map { c ->
+        moved[c.id] ?: theirs[c.id]?.let { to -> c.copy(x = to.x, y = to.y, anchor = to.anchor, level = to.level, drop = to.drop) } ?: c
+    }
+    return copy(pieces = newPieces, controls = newControls)
+}
+

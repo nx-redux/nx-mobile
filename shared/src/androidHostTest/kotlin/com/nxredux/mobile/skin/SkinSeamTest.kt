@@ -234,4 +234,26 @@ class SkinSeamTest {
             }
         }
     }
+
+    @Test
+    fun theArcadeFollowsTheMainMenuWithItsTurboCapsBesideTheShoulders() {
+        // (window, dpi, foldable/tablet): the Fold's inner screen (fold board), a phone upright and sideways
+        for ((w, h, dpi, fold) in listOf(Quad4(1848, 2448, 420, true), Quad4(1080, 2400, 420, false), Quad4(2400, 1080, 420, false))) {
+            val menu = assertNotNull(SkinChoice.placeMenu(pack, w, h, dpi, foldable = fold, tablet = fold), "${w}x$h menu")
+            val game = assertNotNull(SkinChoice.place(pack, w, h, dpi, tablet = fold, ds = false, picture = 304f to 224f, foldable = fold, variant = SkinVariant.ARCADE), "${w}x$h arcade")
+            val mc = menu.controls.associateBy { it.spec.id }; val gc = game.controls.associateBy { it.spec.id }
+            for (id in listOf("DPAD", "X", "Y", "A", "B", "START", "SELECT", "MENU")) {
+                assertEquals(mc.getValue(id).x, gc.getValue(id).x, 1.5f, "${w}x$h ${game.spec.id} $id x")
+                assertEquals(mc.getValue(id).y, gc.getValue(id).y, 1.5f, "${w}x$h ${game.spec.id} $id y")
+            }
+            // TB on L's inner side, TA on R's, 8 dp apart, level with them
+            fun piece(id: String) = game.pieces.single { pc -> pc.piece >= 0 && game.spec.pieces[pc.piece].let { s -> s.glass == null &&
+                game.spec.controls.any { c -> c.id == id && c.anchor == s.anchor && c.x >= s.x && c.x <= s.x + s.w * s.scale && c.y >= s.y && c.y <= s.y + s.h * s.scale } } }.dst
+            val dp = dpi / 160f
+            val l = piece("L"); val tb = piece("TURBO_B"); val r = piece("R"); val ta = piece("TURBO_A")
+            assertEquals(8f * dp, tb.x - (l.x + l.width), 1.5f, "${w}x$h L TB"); assertEquals(l.y, tb.y, 1.5f, "${w}x$h TB level with L")
+            assertEquals(8f * dp, r.x - (ta.x + ta.width), 1.5f, "${w}x$h TA R"); assertEquals(r.y, ta.y, 1.5f, "${w}x$h TA level with R")
+        }
+    }
+    data class Quad4(val a: Int, val b: Int, val c: Int, val d: Boolean)
 }
