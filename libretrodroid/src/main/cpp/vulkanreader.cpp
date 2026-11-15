@@ -152,6 +152,7 @@ bool ReaderChain::present(const VulkanDispatch& vk, VkQueue queue, std::mutex& q
     releaseHeld();
     out.buffer = buffer;
     out.id = ids.idFor(buffer);
+    out.oldestLiveId = ids.firstLive();
     out.syncFd = fd;
     return true;
 }

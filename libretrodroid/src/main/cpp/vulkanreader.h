@@ -35,6 +35,7 @@ struct ReaderFrame {
     AHardwareBuffer* buffer = nullptr;
     uint64_t id = 0;     // per buffer, see BufferIds
     int syncFd = -1;     // signalled when the driver is done with the buffer (owned by the receiver), -1: already done
+    uint64_t oldestLiveId = 0;   // ids below it are of a swapchain that has been replaced
 };
 
 // The Reader hand-off: a swapchain on an AImageReader's window. The driver's own presentation code fills the window's

@@ -1043,6 +1043,7 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
         out.width = w;
         out.height = h;
         out.liveBuffers = READER_LIVE_BUFFERS;
+        out.oldestLiveId = presented.oldestLiveId;
         if (!loggedFirstFrame) {
             loggedFirstFrame = true;
             LOGI("Vulkan bridge: first frame through the reader: core image format %d layout %d, frame %ux%u (reported %ux%u)",

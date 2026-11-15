@@ -1237,7 +1237,8 @@ void LibretroDroid::handleVideoRefresh(
             // Copy the core's image into the next AHardwareBuffer; Video draws that as the frame.
             VulkanBridge::Frame frame;
             if (VulkanBridge::get().bridgeFrame(width, height, frame)) {
-                video->setExternalFrame(frame.buffer, frame.id, frame.width, frame.height, frame.syncFd, frame.liveBuffers);
+                video->setExternalFrame(frame.buffer, frame.id, frame.width, frame.height, frame.syncFd, frame.liveBuffers,
+                                        frame.oldestLiveId);
                 VulkanBridge::get().noteGlImport(!video->takeExternalImportFailure());
                 width = frame.width;
                 height = frame.height;

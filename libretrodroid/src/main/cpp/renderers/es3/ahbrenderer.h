@@ -39,8 +39,10 @@ public:
     explicit AhbRenderer(ShaderManager::Chain shaders);
 
     // The buffer to draw next. [syncFd] (owned, -1 = none): GL waits on it (GPU side) before sampling. [liveBuffers]:
-    // how many buffers the bridge cycles through; that many imports are kept.
-    void setFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd, unsigned liveBuffers);
+    // how many buffers the bridge cycles through; that many imports are kept. [oldestLiveId]: imports with a lower id
+    // are of buffers the bridge has replaced, and are dropped at once (0: none), so they do not stay pinned.
+    void setFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd, unsigned liveBuffers,
+                  uint64_t oldestLiveId);
 
     // True once after a buffer that could not be imported as an EGL image: nothing of that frame is drawn.
     bool takeImportFailure() { const bool failed = importFailed; importFailed = false; return failed; }

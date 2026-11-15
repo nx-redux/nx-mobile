@@ -82,6 +82,7 @@ public:
         unsigned height = 0;
         int syncFd = -1;        // sync_file signalled when the copy is done (owned by the receiver), -1 = already done
         unsigned liveBuffers = 2;   // how many buffers frames cycle through: what the GL side keeps imported
+        uint64_t oldestLiveId = 0;  // imports with a lower id are of buffers that are gone (0: none to drop)
     };
 
     // In the core's video_cb (RETRO_HW_FRAME_BUFFER_VALID): copies the image from set_image into the next buffer.

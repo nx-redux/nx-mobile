@@ -49,6 +49,8 @@ public:
         return next++;
     }
     void clear() { ids.clear(); }
+    // The lowest id of the buffers now live (0: none yet): an import with a lower id is of a swapchain that is gone.
+    uint64_t firstLive() const { return ids.empty() ? 0 : ids.front().second; }
 
 private:
     std::vector<std::pair<const void*, uint64_t>> ids;
@@ -89,39 +91,40 @@ private:
     size_t drawn = 0;   // how many, from the oldest, a draw has covered
 };
 
-// Tells a Reader hand-off that has stopped working from a frame that was merely dropped. True once: when none of the
-// first START_FRAMES frames got through, or when frames did flow and then every one failed for MIDGAME_MS.
+// Tells a Reader hand-off that has stopped working from a frame that was merely dropped. True once. At the start: none
+// of the first START_FRAMES frames got through, or (a driver whose every failed frame blocks for seconds) at least
+// START_MIN_FRAMES failed over START_MS. Later: frames did flow, and then MIDGAME_FRAMES in a row failed over
+// MIDGAME_MS or longer. The run of frames matters as much as the time: no frames arrive while the game is paused, so
+// two dropped frames either side of a pause are far apart on the clock and still only two.
 class FailureStreak {
 public:
     static constexpr int START_FRAMES = 30;
+    static constexpr int START_MIN_FRAMES = 3;
+    static constexpr int64_t START_MS = 5000;
+    static constexpr int MIDGAME_FRAMES = 30;
     static constexpr int64_t MIDGAME_MS = 2000;
 
     bool onFrame(bool ok, int64_t nowMs) {
         if (ok) {
             succeeded = true;
-            failing = false;
+            run = 0;
             return false;
         }
         if (fired) return false;
-        if (!succeeded) {
-            if (++startFailures < START_FRAMES) return false;
-        } else {
-            if (!failing) {
-                failing = true;
-                failingSince = nowMs;
-            }
-            if (nowMs - failingSince < MIDGAME_MS) return false;
-        }
-        fired = true;
-        return true;
+        if (run++ == 0) runSince = nowMs;
+        const int64_t elapsed = nowMs - runSince;
+        const bool broken = succeeded
+            ? run >= MIDGAME_FRAMES && elapsed >= MIDGAME_MS
+            : run >= START_FRAMES || (run >= START_MIN_FRAMES && elapsed >= START_MS);
+        if (broken) fired = true;
+        return broken;
     }
 
 private:
     bool succeeded = false;
-    bool failing = false;
     bool fired = false;
-    int startFailures = 0;
-    int64_t failingSince = 0;
+    int run = 0;            // failed frames in a row
+    int64_t runSince = 0;   // when that run began
 };
 
 } // namespace libretrodroid

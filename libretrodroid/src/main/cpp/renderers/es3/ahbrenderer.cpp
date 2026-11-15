@@ -91,7 +91,18 @@ void AhbRenderer::waitSyncFd(int fd) {
 }
 
 void AhbRenderer::setFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd,
-                           unsigned liveBuffers) {
+                           unsigned liveBuffers, uint64_t oldestLiveId) {
+    if (oldestLiveId > 0) {
+        size_t dropped = 0;
+        for (auto it = imports.begin(); it != imports.end();) {
+            if (it->id >= oldestLiveId) { ++it; continue; }
+            deleteImport(*it);
+            it = imports.erase(it);
+            dropped++;
+        }
+        if (dropped > 0) LOGI("AHB renderer: dropped %zu imports of replaced buffers", dropped);
+    }
+
     Import* found = nullptr;
     for (auto& import : imports) {
         if (import.id == id) { found = &import; break; }
