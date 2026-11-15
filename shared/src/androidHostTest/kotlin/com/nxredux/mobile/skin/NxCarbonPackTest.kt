@@ -116,7 +116,10 @@ class NxCarbonPackTest {
             val r = panel.rect
             val c = p.controls.associateBy { it.spec.id }
             val menu = c.getValue("MENU")
-            assertTrue(r.y > hinge && r.y + r.height < menu.y - menu.spec.r, "$id panel $r hinge $hinge menu ${menu.y}")
+            // MENU under the panel, or beside the d-pad where the board follows the menu's (the Game Boy's)
+            val under = menu.spec.anchor == PieceAnchor.CENTRE
+            if (v == SkinVariant.GB) { assertTrue(!under && menu.spec.labelDx < 0f && menu.spec.labelDy == 0f, "$id MENU beside the d-pad, its word on the left") }
+            assertTrue(r.y > hinge && (!under || r.y + r.height < menu.y - menu.spec.r), "$id panel $r hinge $hinge menu ${menu.y}")
             for (ctl in p.controls) {
                 val hw = if (ctl.spec.r > 0f) ctl.spec.r else ctl.spec.hw
                 val hh = if (ctl.spec.r > 0f) ctl.spec.r else ctl.spec.hh
@@ -131,7 +134,7 @@ class NxCarbonPackTest {
             // the touch shortcut strip under the panel, as every game layout has; no MIC or SWAP
             assertTrue((1..4).all { "TOUCH_$it" in c } && c.keys.none { it == "MIC" || it == "SWAP" }, "$id ${c.keys}")
             val strip = (1..4).map { c.getValue("TOUCH_$it") }
-            assertTrue(strip.all { it.y - it.spec.hh >= r.y + r.height && it.y + it.spec.hh <= menu.y - menu.spec.r }, "$id strip under the panel, over MENU")
+            assertTrue(strip.all { it.y - it.spec.hh >= r.y + r.height && (!under || it.y + it.spec.hh <= menu.y - menu.spec.r) }, "$id strip under the panel, over MENU")
         }
     }
 

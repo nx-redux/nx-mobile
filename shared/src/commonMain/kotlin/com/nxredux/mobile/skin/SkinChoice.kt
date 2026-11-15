@@ -261,8 +261,8 @@ object SkinChoice {
         )
     }
 
-    /** The consoles whose layouts follow the main menu's (the arcade's, the Dreamcast's, the FDS's), on the phone and landscape boards too. */
-    private val FOLLOW_MENU = setOf(SkinVariant.ARCADE, SkinVariant.DC, SkinVariant.FDS)
+    /** The consoles whose layouts follow the main menu's (the arcade's, the Dreamcast's, the FDS's, the Game Boy's), on the phone and landscape boards too. */
+    private val FOLLOW_MENU = setOf(SkinVariant.ARCADE, SkinVariant.DC, SkinVariant.FDS, SkinVariant.GB)
 
     /** [variant]'s layout [this] following [menu] ([followMenu]) when it is one of [FOLLOW_MENU]'s, else as it is. */
     private fun SkinLayoutSpec.toMenu(variant: SkinVariant, menu: SkinLayoutSpec?): SkinLayoutSpec =

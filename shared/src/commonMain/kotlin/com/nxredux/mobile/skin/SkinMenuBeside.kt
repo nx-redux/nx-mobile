@@ -102,10 +102,12 @@ internal fun SkinLayoutSpec.followMenu(
         val m = moves[i] ?: return@mapIndexed p
         p.copy(x = (p.x + m.dx).roundToInt(), y = (p.y + m.dy).roundToInt(), anchor = m.to.anchor ?: p.anchor, level = m.to.level, drop = m.to.drop)
     }
+    // a followed button's word where the menu's is (MENU's beside it on the left, not under it)
+    fun ControlSpec.wordAs(c: ControlSpec) = theirs[c.id]?.takeIf { follows(c) && c.label != null }?.let { copy(labelDx = it.labelDx, labelDy = it.labelDy) } ?: this
     val newControls = controls.map { c ->
-        moveOf(c)?.let { m -> c.copy(x = c.x + m.dx, y = c.y + m.dy, anchor = m.to.anchor, level = m.to.level, drop = m.to.drop) }
+        (moveOf(c)?.let { m -> c.copy(x = c.x + m.dx, y = c.y + m.dy, anchor = m.to.anchor, level = m.to.level, drop = m.to.drop) }
             ?: theirs[c.id]?.takeIf { follows(c) }?.let { to -> c.copy(x = to.x, y = to.y, anchor = to.anchor, level = to.level, drop = to.drop) }   // no piece holds it
-            ?: c
+            ?: c).wordAs(c)
     }
     return copy(pieces = newPieces, controls = newControls).swapOverMenu(menu)
 }
