@@ -117,26 +117,46 @@ internal fun SkinLayoutSpec.followMenu(
  */
 internal fun SkinLayoutSpec.bothFollowMenu(menu: SkinLayoutSpec?): SkinLayoutSpec {
     if (menu == null) return this
-    val f = followMenu(menu, alias = mapOf("STICK" to "DPAD"), skip = setOf("DPAD", "MENU"), anyHeight = true)
-    val start = f.controls.firstOrNull { it.id == "START" && it.anchor == PieceAnchor.RIGHT } ?: return f
+    val f = followMenu(menu, alias = mapOf("STICK" to "DPAD"), skip = setOf("DPAD", "MENU", "START"), anyHeight = true)
+    val start = f.controls.firstOrNull { it.id == "START" } ?: return f
     val m = f.controls.firstOrNull { it.id == "MENU" } ?: return f
-    val ms = menu.controls.firstOrNull { it.id == "START" }; val sel = menu.controls.firstOrNull { it.id == "SELECT" }
-    val step = if (ms != null && sel != null) kotlin.math.abs(sel.y - ms.y) else 126f
-    val dx = start.x - m.x; val dy = start.y + step - m.y
+    val ms = menu.controls.firstOrNull { it.id == "START" } ?: return f
+    val sel = menu.controls.firstOrNull { it.id == "SELECT" } ?: return f
     fun inside(p: PieceSpec, c: ControlSpec) = c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
     fun centred(p: PieceSpec, c: ControlSpec) = p.glass == null && p.anchor == c.anchor &&
         kotlin.math.abs(p.x + p.w * p.scale / 2f - c.x) < 2f && kotlin.math.abs(p.y + p.h * p.scale / 2f - c.y) < 2f
+    // the menu's START / SELECT column: START on its upper spot, MENU on its lower, in the menu's well
+    val upper = if (ms.y <= sel.y) ms else sel; val lower = if (upper === ms) sel else ms
+    val well = menu.pieces.firstOrNull { it.glass == null && inside(it, ms) && inside(it, sel) }
     // the d-pad in line with the stick already (its height under it is the solver's, [SkinSolver.placePieces])
     val stick = f.controls.firstOrNull { it.id == "STICK" }; val pad = f.controls.firstOrNull { it.id == "DPAD" }
     val px = if (stick != null && pad != null && stick.anchor == pad.anchor) (stick.x - pad.x).roundToInt() else 0
+    // L2 / R2 drawn high on this board (over the stick where it was): down to the menu's L / R, so the board fits under
+    // the fold at the menu's size (the solver sets them over their rings either way)
+    val ml = menu.controls.firstOrNull { it.id == "L" }?.let { c -> menu.pieces.firstOrNull { it.glass == null && inside(it, c) } }
+    val l2Piece = f.controls.firstOrNull { it.id == "L2" }?.let { c -> f.pieces.firstOrNull { it.glass == null && inside(it, c) } }
+    val sdy = if (ml != null && l2Piece != null) ml.y - l2Piece.y else 0
+    fun shoulder(id: String) = id == "L2" || id == "R2"
+    val shoulderPieces = f.pieces.filter { p -> p.glass == null && f.controls.any { shoulder(it.id) && inside(p, it) } }.toSet()
+    fun onto(p: PieceSpec, from: ControlSpec, to: ControlSpec) =
+        p.copy(x = (p.x + to.x - from.x).roundToInt(), y = (p.y + to.y - from.y).roundToInt(), anchor = to.anchor ?: p.anchor, level = to.level, drop = to.drop)
+    val moved = f.pieces.map { p ->
+        if (centred(p, start)) onto(p, start, upper)
+        else if (centred(p, m)) onto(p, m, lower)
+        else if (pad != null && centred(p, pad)) p.copy(x = p.x + px)
+        else if (p in shoulderPieces) p.copy(y = p.y + sdy) else p
+    }
+    val cap = f.pieces.indexOfFirst { centred(it, start) }
+    val withWell = if (well == null || cap < 0) moved else moved.toMutableList().apply { add(cap, well) }
+    // their words beside them as the menu's START's is
+    fun ControlSpec.at(to: ControlSpec) = copy(x = to.x, y = to.y, anchor = to.anchor, level = to.level, drop = to.drop, labelDx = ms.labelDx, labelDy = ms.labelDy)
     return f.copy(
-        pieces = f.pieces.map { p ->
-            if (p.glass == null && inside(p, m)) p.copy(x = (p.x + dx).roundToInt(), y = (p.y + dy).roundToInt(), anchor = PieceAnchor.RIGHT, level = start.level, drop = start.drop)
-            else if (pad != null && centred(p, pad)) p.copy(x = p.x + px) else p
-        },
+        pieces = withWell,
         controls = f.controls.map {
-            if (it === m) it.copy(x = it.x + dx, y = it.y + dy, anchor = PieceAnchor.RIGHT, level = start.level, drop = start.drop)
-            else if (it === pad) it.copy(x = it.x + px) else it
+            if (it === start) it.at(upper)
+            else if (it === m) it.at(lower)
+            else if (it === pad) it.copy(x = it.x + px)
+            else if (shoulder(it.id)) it.copy(y = it.y + sdy) else it
         },
     )
 }

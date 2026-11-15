@@ -769,7 +769,7 @@ class NxCarbonPackTest {
     @Test
     fun dreamcastLayoutsInEveryFamily() {
         // both stick and d-pad on every fold / tablet board (the d-pad under the stick); a phone swaps them
-        val roomy = setOf("inner", "inner_half", "tablet", "tablet_land")
+        val roomy = (consoleDevices.map { it.first } + "tablet_land").filter { it.startsWith("inner") || it.startsWith("tablet") }.toSet()
         for ((name, d) in consoleDevices + ("tablet_land" to Triple(2304, 1440, null))) {
             val tablet = name.startsWith("tablet")
             val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, false, 640f to 480f,
@@ -809,11 +809,11 @@ class NxCarbonPackTest {
                 val st = p.pieces.filter { it.alt == "stick" && !it.knob }.maxBy { it.dst.width }
                 assertEquals(mid(dp).first, mid(st).first, 1f, "$name well x"); assertEquals(mid(dp).second, mid(st).second, 1f, "$name well y")
             }
-            if (name == "tablet") {   // the face centred on the bottom screen (the stick level with it, the d-pad under), L / R level
+            if (name == "tablet") {   // the face centred on the bottom screen; the left side (L2, stick, d-pad) lifted for the d-pad
                 val r = p.glasses.single { it.screen == GlassScreen.PANEL }.rect
                 val mid = r.y + r.height / 2f
                 assertEquals(mid, (c("X").y + c("B").y) / 2f, 20f * p.k * 3, "$name face")
-                assertEquals(c("L2").y, c("R2").y, 1f, "$name L R")
+                assertTrue(c("L2").y <= c("R2").y + 1f, "$name L2 lifted with the stick")
             }
             // the swap cap's word: what a tap gives (the d-pad while on the stick, and back)
             if (name !in roomy) {

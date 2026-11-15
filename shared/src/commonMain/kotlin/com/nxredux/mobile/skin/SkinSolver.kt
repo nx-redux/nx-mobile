@@ -77,8 +77,8 @@ internal fun SkinLayoutSpec.rowIds(): Set<String> = ROW_IDS + shoulderIds()
  * own design, the row rules leave it alone.
  */
 internal fun SkinLayoutSpec.tallTwinApart(): Boolean {
-    // a fold board's twin (the Dreamcast's, both shown on every fold board) takes the row too
-    if (minRefH <= 0 || family == SkinFamily.FLEX) return false
+    // the Dreamcast's (both shown on every fold / tablet board) takes the row too
+    if (minRefH <= 0 || variant == SkinVariant.DC) return false
     fun holdsOnly(p: PieceSpec, id: String) = controls.filter { c -> c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale }
         .map { it.id }.toSet() == setOf(id)
     return pieces.any { holdsOnly(it, "STICK") } && pieces.any { holdsOnly(it, "DPAD") }

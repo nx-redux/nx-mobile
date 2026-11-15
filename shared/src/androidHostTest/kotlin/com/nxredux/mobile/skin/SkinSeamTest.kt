@@ -263,9 +263,11 @@ class SkinSeamTest {
             val menu = assertNotNull(SkinChoice.placeMenu(pack, w, h, dpi, foldable = fold, tablet = fold), "${w}x$h menu")
             val game = assertNotNull(SkinChoice.place(pack, w, h, dpi, tablet = fold, ds = false, picture = 640f to 480f, foldable = fold, variant = SkinVariant.DC), "${w}x$h dc")
             val mc = menu.controls.associateBy { it.spec.id }; val gc = game.controls.associateBy { it.spec.id }
-            // the fold board shows the stick and the d-pad both, a little smaller where the two need the height: the stick
-            // where the menu has its d-pad, level with the face buttons' middle
-            if (fold) assertEquals(gc.getValue("Y").y, gc.getValue("STICK").y, 1.5f, "${w}x$h stick level with the face")
+            // the fold board shows the stick and the d-pad both, at the menu's size
+            // the bottom screen's frame as far from the window's bottom as the menu's
+            fun frameEnd(q: SkinPlacement) = q.pieces.filter { it.piece >= 0 && q.spec.pieces[it.piece].glass != null }.maxOf { it.dst.y + it.dst.height }
+            if (fold) assertEquals(frameEnd(menu), frameEnd(game), 1.5f, "${w}x$h frame's bottom")
+            if (fold) assertEquals(menu.k, game.k, 0.001f, "${w}x$h the menu's size")
             else for (id in listOf("DPAD", "X", "Y", "A", "B")) {
                 assertEquals(mc.getValue(id).x, gc.getValue(id).x, 1.5f, "${w}x$h ${game.spec.id} $id x"); assertEquals(mc.getValue(id).y, gc.getValue(id).y, 1.5f, "${w}x$h $id y")
             }
@@ -281,12 +283,13 @@ class SkinSeamTest {
                 // the d-pad under the stick, in line, 16 dp apart; MENU under START on the right, right of the bottom screen
                 val st = ringOf("STICK"); val pad = ringOf("DPAD")
                 assertEquals(st.x, pad.x, 1f, "${w}x$h d-pad in line")
-                // 16 dp under it and over the window's bottom, both coming down alike (to 4 dp) where the height is short
-                val gap = pad.y - (st.y + st.height); val under = h - (pad.y + pad.height)
-                assertTrue(gap >= 4f * dp - 1f && gap <= 16f * dp + 1f, "${w}x$h d-pad under the stick $gap")
-                if (gap < 16f * dp - 1f) assertEquals(gap, under, 2f, "${w}x$h room under the d-pad") else assertTrue(under >= 16f * dp - 1f, "${w}x$h room under")
+                // 16 dp under it, the side lifted so the d-pad ends 16 dp above the window's bottom
+                assertEquals(16f * dp, pad.y - (st.y + st.height), 2f, "${w}x$h d-pad under the stick")
+                assertEquals(h - 16f * dp, pad.y + pad.height, 2f, "${w}x$h d-pad's end")
+                val l2 = piece("L2").single(); assertEquals(16f * dp, st.y - (l2.y + l2.height), 2f, "${w}x$h L2 over the stick")
                 assertTrue("STICK_SWAP" !in gc, "${w}x$h no swap")
                 assertEquals(start.x, m.x, 1f, "${w}x$h START / MENU column"); assertTrue(start.y < m.y, "${w}x$h MENU under START")
+                assertTrue(piece("START").any { r -> m.x in r.x..(r.x + r.width) && m.y in r.y..(r.y + r.height) && start.y in r.y..(r.y + r.height) }, "${w}x$h START and MENU in one well")
                 assertTrue(start.x > game.glasses.single { it.screen == GlassScreen.PANEL }.rect.let { it.x + it.width }, "${w}x$h START right of the bottom screen")
                 assertEquals(16f * dp, piece("START").minOf { it.y } - (face.y + face.height), 2f, "${w}x$h column under the face ring")
                 st
