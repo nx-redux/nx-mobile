@@ -193,6 +193,27 @@ class NxCarbonPackTest {
     }
 
     @Test
+    fun gbaFollowsTheMenuItsL2R2BesideLR() {
+        val devices = listOf(Triple(1080, 2400, false), Triple(1848, 2448, true), Triple(1440, 2304, true), Triple(2400, 1080, false), Triple(2448, 1848, true))
+        for ((w, h, big) in devices) {
+            val dpi = if (w == 1440) 280 else 420
+            val menu = assertNotNull(SkinChoice.placeMenu(pack, w, h, dpi, foldable = big && w != 1440, tablet = big))
+            val p = assertNotNull(SkinChoice.place(pack, w, h, dpi, big, false, 240f to 160f, null, foldable = big && w != 1440, variant = SkinVariant.GBA))
+            val mc = menu.controls.associateBy { it.spec.id }; val gc = p.controls.associateBy { it.spec.id }
+            for (id in listOf("DPAD", "Y", "START", "SELECT", "MENU")) {
+                assertEquals(mc.getValue(id).x, gc.getValue(id).x, 1.5f, "${w}x$h $id x"); assertEquals(mc.getValue(id).y, gc.getValue(id).y, 1.5f, "${w}x$h $id y")
+            }
+            fun cap(id: String) = gc.getValue(id).let { c -> p.pieces.filter { pc -> pc.piece >= 0 && p.spec.pieces[pc.piece].glass == null &&
+                c.x >= pc.dst.x && c.x <= pc.dst.x + pc.dst.width && c.y >= pc.dst.y && c.y <= pc.dst.y + pc.dst.height }.minBy { it.dst.width }.dst }
+            val dp = dpi / 160f
+            val l = cap("L"); val l2 = cap("L2"); val r = cap("R"); val r2 = cap("R2")
+            assertEquals(8f * dp, l2.x - (l.x + l.width), 1.5f, "${w}x$h L L2"); assertEquals(l.y, l2.y, 1.5f, "${w}x$h L2 level")
+            assertEquals(8f * dp, r.x - (r2.x + r2.width), 1.5f, "${w}x$h R2 R"); assertEquals(r.y, r2.y, 1.5f, "${w}x$h R2 level")
+            assertEquals(mc.getValue("L").y, gc.getValue("L").y, 1.5f, "${w}x$h L at the menu's height")
+        }
+    }
+
+    @Test
     fun fdsFallsBackToSingleWithoutItsLayouts() {
         val old = pack.copy(layouts = pack.layouts.filter { it.variant != SkinVariant.FDS })
         val p = assertNotNull(SkinChoice.place(old, 1080, 2520, 420, tablet = false, ds = false, picture = 256f to 240f, variant = SkinVariant.FDS))
@@ -1389,7 +1410,8 @@ class NxCarbonPackTest {
     @Test
     fun tabletClustersCentreOnTheBottomScreen() {
         // the tablet twins: the side clusters' span centred on the bottom screen, within a cap's radius (a capped top screen aside)
-        for (v in listOf(SkinVariant.SINGLE, SkinVariant.GBA, SkinVariant.PSP, SkinVariant.WII_SIDEWAYS, SkinVariant.N3DS_REGULAR, SkinVariant.PS1)) {
+        // (the consoles following the menu take its fold board instead: the GBA)
+        for (v in listOf(SkinVariant.SINGLE, SkinVariant.PSP, SkinVariant.WII_SIDEWAYS, SkinVariant.N3DS_REGULAR, SkinVariant.PS1)) {
             val p = assertNotNull(SkinChoice.place(pack, 1440, 2304, 280, true, v == SkinVariant.N3DS_REGULAR, 640f to 480f, null, variant = v), "$v")
             assertTrue(p.spec.id.endsWith("_fold_tab"), "$v ${p.spec.id}")
             val screen = (p.glasses.firstOrNull { it.screen == GlassScreen.PANEL } ?: p.glass(GlassScreen.TOUCH)!!).rect

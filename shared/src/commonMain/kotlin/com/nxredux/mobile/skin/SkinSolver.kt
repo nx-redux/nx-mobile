@@ -69,8 +69,15 @@ internal val ROW_IDS = setOf("DPAD", "STICK", "X", "Y", "A", "B", "L", "R", "STA
 internal fun SkinLayoutSpec.shoulderIds(): Set<String> =
     if (controls.none { it.id == "L" || it.id == "R" } && controls.any { it.id == "L2" } && controls.any { it.id == "R2" }) setOf("L2", "R2") else setOf("L", "R")
 
-/** The side controls a [RowSpacing] places on this board: [ROW_IDS] and its [shoulderIds]. */
-internal fun SkinLayoutSpec.rowIds(): Set<String> = ROW_IDS + shoulderIds()
+/**
+ * A board's shoulders' companions, each beside its shoulder on the inner side: the arcade's TB / TA, the GBA's L2 / R2
+ * (small caps beside L / R; another console's L2 / R2 keep their own design).
+ */
+internal fun SkinLayoutSpec.companionIds(): Set<String> =
+    setOf("TURBO_A", "TURBO_B") + (if (variant != SkinVariant.GBA || "L2" in shoulderIds()) emptySet() else setOf("L2", "R2").filter { id -> controls.any { it.id == id } })
+
+/** The side controls a [RowSpacing] places on this board: [ROW_IDS], its [shoulderIds] and their [companionIds]. */
+internal fun SkinLayoutSpec.rowIds(): Set<String> = ROW_IDS + shoulderIds() + companionIds()
 
 /**
  * A taller window's twin showing the stick and the d-pad apart, each its own ring (the Dreamcast's "both" boards): its
@@ -430,8 +437,9 @@ object SkinSolver {
         val shoulderDropLeft = shoulderDrop(PieceAnchor.LEFT)
         val shoulderDropRight = shoulderDrop(PieceAnchor.RIGHT)
         fun shoulderDropOf(anchor: PieceAnchor?) = when (anchor) { PieceAnchor.LEFT -> shoulderDropLeft; PieceAnchor.RIGHT -> shoulderDropRight; else -> 0f }
-        // a shoulder's companion (the arcade's TB / TA): on its shoulder's inner side, [RowSpacing.pairGap] from it, level with it
-        val companionIds = setOf("TURBO_A", "TURBO_B")
+        // a shoulder's companion (the arcade's TB / TA, the GBA's L2 / R2): on its shoulder's inner side, [RowSpacing.pairGap]
+        // from it, level with it
+        val companionIds = spec.companionIds()
         fun holdsCompanion(p: PieceSpec) = p.glass == null && p.anchor != PieceAnchor.CENTRE && spec.controls.any { c ->
             c.id in companionIds && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
         }

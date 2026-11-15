@@ -160,7 +160,8 @@ class SkinApplyTest {
     @Test
     fun apply_keeps_a_group_inside_the_window() {
         val w = 2420; val h = 1080   // the Fold's cover, sideways
-        val p = grip()
+        // a board with nothing over the face buttons' ring (the GBA's R stands by it, in the way of a growth)
+        val p = assertNotNull(SkinChoice.place(carbon, w, h, 420, tablet = false, ds = false, picture = 240f to 160f, variant = SkinVariant.GB))
         assertEquals(SkinFamily.GRIP, p.spec.family)
         val face = SkinGroups.of(p.spec).single { "A" in it.controls && "B" in it.controls }
         val out = SkinTweaks.apply(p, mapOf(face.id to SkinTweak(dx = 10000f, scale = 1.25f)), w.toFloat(), h.toFloat())
