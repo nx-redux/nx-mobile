@@ -5,7 +5,11 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.Shader
 import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.Typeface
@@ -18,7 +22,10 @@ import com.nxredux.mobile.skin.PlacedControl
 import com.nxredux.mobile.skin.stripPill
 import com.nxredux.mobile.skin.stackedMenuRoom
 import com.nxredux.mobile.skin.underMenu
+import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.skin.SkinCell
+import com.nxredux.mobile.skin.SkinSeam
+import com.nxredux.mobile.skin.SkinSeamDraw
 import com.nxredux.mobile.skin.SkinPackManifest
 import com.nxredux.mobile.skin.SkinPlacement
 import com.nxredux.mobile.skin.skinTiles
@@ -250,6 +257,8 @@ internal class PadSkinView(
             for (g in p.glasses) holes.addRoundRect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height, g.corner, g.corner, Path.Direction.CW)
             canvas.clipOutPath(holes)
             for (c in p.cells) drawCell(canvas, pic, c, p.k)
+            // no hinge across this window (a tablet, a book Fold upright): the fold board as one slab
+            if (!DeviceTraits.hingeAcross(width, height)) for (d in SkinSeam.draws(p, SKIN_STRETCH_MAX)) drawSeam(canvas, pic, d, p.k)
             canvas.restore()
         }
         canvas.save()
@@ -313,19 +322,34 @@ internal class PadSkinView(
         }
     }
 
-    /** One slice: copied where its part is fixed, laid in mirrored tiles where it repeats ([skinTiles]). */
-    private fun drawCell(canvas: Canvas, pic: Bitmap, c: SkinCell, k: Float) {
+    /** One slice: copied where its part is fixed, laid in mirrored tiles where it repeats ([skinTiles]); [flipY] all upside down. */
+    private fun drawCell(canvas: Canvas, pic: Bitmap, c: SkinCell, k: Float, flipY: Boolean = false) {
         for (t in skinTiles(c, k, SKIN_STRETCH_MAX)) {
             src.set(t.src.x.roundToInt(), t.src.y.roundToInt(), (t.src.x + t.src.width).roundToInt(), (t.src.y + t.src.height).roundToInt())
             dst.set(t.dst.x.roundToInt(), t.dst.y.roundToInt(), (t.dst.x + t.dst.width).roundToInt(), (t.dst.y + t.dst.height).roundToInt())
             if (src.width() <= 0 || src.height() <= 0 || dst.width() <= 0 || dst.height() <= 0) continue
-            if (!t.flipX && !t.flipY) { canvas.drawBitmap(pic, src, dst, paint); continue }
+            val fy = t.flipY != flipY
+            if (!t.flipX && !fy) { canvas.drawBitmap(pic, src, dst, paint); continue }
             val save = canvas.save()
-            canvas.scale(if (t.flipX) -1f else 1f, if (t.flipY) -1f else 1f, dst.exactCenterX(), dst.exactCenterY())
+            canvas.scale(if (t.flipX) -1f else 1f, if (fy) -1f else 1f, dst.exactCenterX(), dst.exactCenterY())
             canvas.drawBitmap(pic, src, dst, paint)
             canvas.restoreToCount(save)
         }
     }
+
+    /** A [SkinSeam] draw: mirrored, or faded out downwards through its own layer. */
+    private fun drawSeam(canvas: Canvas, pic: Bitmap, d: SkinSeamDraw, k: Float) {
+        if (!d.fade) { drawCell(canvas, pic, d.cell, k, flipY = d.mirror); return }
+        val r = d.cell.dst
+        val save = canvas.saveLayer(r.x, r.y, r.x + r.width, r.y + r.height, null)
+        drawCell(canvas, pic, d.cell, k, flipY = d.mirror)
+        fade.shader = LinearGradient(0f, r.y, 0f, r.y + r.height, android.graphics.Color.BLACK, android.graphics.Color.TRANSPARENT, Shader.TileMode.CLAMP)
+        canvas.drawRect(r.x, r.y, r.x + r.width, r.y + r.height, fade)
+        canvas.restoreToCount(save)
+    }
+
+    /** [drawSeam]'s fade: keeps what is under it by its own alpha. */
+    private val fade = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
 
     private fun tick() {
         if (haptics) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)

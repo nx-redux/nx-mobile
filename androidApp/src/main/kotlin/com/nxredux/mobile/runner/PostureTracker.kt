@@ -89,6 +89,7 @@ class PostureTracker(
                     WindowInfoTracker.getOrCreate(activity).windowLayoutInfo(activity).collect { info ->
                         fold = info.displayFeatures.filterIsInstance<FoldingFeature>().firstOrNull()
                         fold?.let { NxLog.i(TAG, "fold: state=${it.state} orientation=${it.orientation} bounds=${it.bounds}") }
+                        fold?.let { FoldDirection.learn(activity, it) }
                         listen(fold != null)
                         update()
                     }

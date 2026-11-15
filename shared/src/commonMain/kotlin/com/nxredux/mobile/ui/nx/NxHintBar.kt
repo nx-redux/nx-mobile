@@ -224,6 +224,9 @@ val LocalNxHintBarKeepHeight = staticCompositionLocalOf { false }
 /** The Game Switcher's bar's share of the ground ([NxColors.scrimSwitcher]'s alpha), its info band's edge too. */
 val NX_SWITCHER_BAR_ALPHA: Float = NxDefaults.colors.scrimSwitcher.alpha
 
+/** The hint bar's room above and below its row ([NxHintBar]); a page's top line keeps the same off the screen's top edge. */
+val NX_HINT_BAR_PAD = 6.dp
+
 /**
  * [onHint], when given, makes each hint tappable: tapping it sends that hint's button. Each hint's glyph comes from
  * [LocalHintGlyphs]: the standard art, a pad symbol's art, the on-screen pad's label as a badge, or no glyph (the hint's
@@ -265,7 +268,7 @@ fun NxHintBar(
             .then(LocalNxHintBarHeight.current?.let { Modifier.heightIn(min = it) } ?: Modifier)
             .padding(
                 start = LocalNxHintBarStart.current ?: pageInset.start, end = LocalNxHintBarEnd.current ?: LocalNxHintBarStart.current ?: pageInset.end,
-                top = 6.dp, bottom = 6.dp,
+                top = NX_HINT_BAR_PAD, bottom = NX_HINT_BAR_PAD,
             ).let { if (keepHeight) it.heightIn(min = glyphSize) else it },
     ) { measurables, c ->
         val gap = HINT_GAP.roundToPx()

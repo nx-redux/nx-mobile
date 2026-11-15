@@ -85,7 +85,7 @@ object SkinChoice {
      */
     fun placeMenu(
         pack: SkinPackManifest, windowW: Int, windowH: Int, densityDpi: Int, topInset: Int = 0, foldable: Boolean = false,
-        tablet: Boolean = false, hingeY: Float? = null, twoScreens: Boolean = true,
+        tablet: Boolean = false, hingeY: Float? = null, twoScreens: Boolean = true, hingeShown: Boolean = true,
     ): SkinPlacement? {
         if (windowW <= 0 || windowH <= 0 || windowW == windowH || densityDpi <= 0) return null
         val k = scaleFor(pack, densityDpi)
@@ -94,7 +94,7 @@ object SkinChoice {
         val twoUp = if (landscape) hingeY != null && (foldable || tablet) && nearSquare(windowW, windowH) else tablet
         if (twoUp && twoScreens) shrunk(k) { s ->
             widest(pack, SkinFamily.STACKED, SkinVariant.MENU, fold = true) { spec ->
-                SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), s, null, topInset.toFloat(), hingeY ?: (windowH / 2f))
+                SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), s, null, topInset.toFloat(), hingeY ?: (windowH / 2f), hingeGap = noHingeGap(hingeShown))
             }
         }?.let { return it }
         return shell(pack, if (landscape) SkinFamily.GRIP else SkinFamily.STACKED, SkinVariant.MENU, windowW, windowH, k, null, topInset)
@@ -150,6 +150,12 @@ object SkinChoice {
         }
     }
 
+    /**
+     * The fold board's top screen frame drawn without its hinge ([SkinSeam]; [hingeShown] false): its room runs down to
+     * the board's middle; with the hinge, the frame's own gap above it.
+     */
+    private fun noHingeGap(hingeShown: Boolean): Float? = if (hingeShown) null else 0f
+
     /** A window no more than [NEAR_SQUARE] long to short: a book foldable's inner screen, either way up. */
     private fun nearSquare(w: Int, h: Int): Boolean = maxOf(w, h).toFloat() / minOf(w, h) <= NEAR_SQUARE
 
@@ -166,17 +172,17 @@ object SkinChoice {
     fun place(
         pack: SkinPackManifest, windowW: Int, windowH: Int, densityDpi: Int, tablet: Boolean, ds: Boolean,
         picture: Pair<Float, Float>? = null, hingeY: Float? = null, topInset: Int = 0, foldable: Boolean = false,
-        variant: SkinVariant? = null,
+        variant: SkinVariant? = null, hingeShown: Boolean = true,
     ): SkinPlacement? {
         if (windowW <= 0 || windowH <= 0 || densityDpi <= 0) return null
         val v = variant ?: if (ds) SkinVariant.DS else SkinVariant.SINGLE
-        val own = placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, v)
+        val own = placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, v, hingeShown)
         // a console's own set the pack lacks for this screen (an older pack, or a player's partly made one): the shared
         // one-screen set, decided per screen, so a missing landscape layout never leaves the game without a skin
         // (never for the Dreamcast, the 3DS, the GameCube, the Wii pads, the PlayStations or the PSP: the shared set has
         // no stick, nor two screens)
         if (own != null || v == SkinVariant.DS || v == SkinVariant.SINGLE || v == SkinVariant.DC || v == SkinVariant.N3DS || v == SkinVariant.N3DS_REGULAR || v == SkinVariant.GC || v == SkinVariant.WII_CLASSIC || v == SkinVariant.WII_NUNCHUK || v == SkinVariant.WII_SIDEWAYS || v == SkinVariant.WII_UPRIGHT || v == SkinVariant.PS1 || v == SkinVariant.PSP) return own
-        return placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, SkinVariant.SINGLE)
+        return placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, SkinVariant.SINGLE, hingeShown)
     }
 
     /**
@@ -186,21 +192,21 @@ object SkinChoice {
     fun placeClosest(
         pack: SkinPackManifest, windowW: Int, windowH: Int, densityDpi: Int, tablet: Boolean, ds: Boolean,
         picture: Pair<Float, Float>? = null, hingeY: Float? = null, topInset: Int = 0, foldable: Boolean = false,
-        variant: SkinVariant? = null,
+        variant: SkinVariant? = null, hingeShown: Boolean = true,
     ): SkinPlacement? {
-        place(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, variant)?.let { return it }
+        place(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, variant, hingeShown)?.let { return it }
         var dpi = densityDpi.toDouble()
         while (true) {
             dpi *= 0.9
             val d = Math.round(dpi).toInt()
             if (d < densityDpi / 2.0 || d <= 0) return null
-            place(pack, windowW, windowH, d, tablet, ds, picture, hingeY, topInset, foldable, variant)?.let { return it }
+            place(pack, windowW, windowH, d, tablet, ds, picture, hingeY, topInset, foldable, variant, hingeShown)?.let { return it }
         }
     }
 
     private fun placeAs(
         pack: SkinPackManifest, windowW: Int, windowH: Int, densityDpi: Int, tablet: Boolean, ds: Boolean,
-        picture: Pair<Float, Float>?, hingeY: Float?, topInset: Int, foldable: Boolean, v: SkinVariant,
+        picture: Pair<Float, Float>?, hingeY: Float?, topInset: Int, foldable: Boolean, v: SkinVariant, hingeShown: Boolean,
     ): SkinPlacement? {
         val k = scaleFor(pack, densityDpi)
         // the top screen's game size: the large layout's top frame takes its shape
@@ -210,7 +216,7 @@ object SkinChoice {
         val foldBoard = {
             shrunk(k) { s ->
                 widest(pack, SkinFamily.FLEX, v, fold = true, refH = windowH / s) { spec ->
-                    SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), s, picture, topInset.toFloat(), hingeY ?: (windowH / 2f))
+                    SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), s, picture, topInset.toFloat(), hingeY ?: (windowH / 2f), hingeGap = noHingeGap(hingeShown))
                 }
             }
         }

@@ -38,6 +38,13 @@ import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.misans_semibold
 import org.jetbrains.compose.resources.Font
 import com.nxredux.mobile.skin.SkinCell
+import com.nxredux.mobile.skin.SkinSeam
+import com.nxredux.mobile.skin.SkinSeamDraw
+import com.nxredux.mobile.layout.DeviceTraits
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Paint
 import com.nxredux.mobile.skin.skinTiles
 import androidx.compose.ui.graphics.drawscope.scale
 import com.nxredux.mobile.skin.SkinPackManifest
@@ -109,6 +116,7 @@ fun SkinArt(placement: SkinPlacement, picture: ImageBitmap, parts: ImageBitmap?,
     val semibold = Font(Res.font.misans_semibold, FontWeight.SemiBold)
     val labelFont = remember(semibold) { FontFamily(semibold) }
     val measurer = rememberTextMeasurer()
+    val acrossPortrait by DeviceTraits.foldAcrossPortrait.collectAsState()
     val holes = remember(placement) {
         Path().apply { for (g in placement.glasses) addRect(Rect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height)) }
     }
@@ -116,6 +124,10 @@ fun SkinArt(placement: SkinPlacement, picture: ImageBitmap, parts: ImageBitmap?,
         // the screens are holes in the background: what is under them shows through (it runs under them otherwise)
         clipPath(holes, ClipOp.Difference) {
             for (c in placement.cells) drawCell(picture, c, placement.k)
+            // no hinge across this window (a tablet, a book Fold upright): the fold board as one slab
+            if (!DeviceTraits.hingeAcross(size.width.roundToInt(), size.height.roundToInt(), acrossPortrait)) {
+                for (d in SkinSeam.draws(placement, SKIN_STRETCH_MAX)) drawSeam(picture, d, placement.k)
+            }
         }
         // the pieces and labels whole, over the screens as the game draws them: a button moved onto a screen's edge stays
         // on top (the frame's own hole is cut round in its art)
@@ -157,8 +169,20 @@ private fun DrawScope.drawPiece(parts: ImageBitmap, p: SkinPiece) {
     }
 }
 
-/** One slice: copied where its part is fixed, laid in mirrored tiles where it repeats ([skinTiles]). */
-private fun DrawScope.drawCell(pic: ImageBitmap, c: SkinCell, k: Float) {
+/** A [SkinSeam] draw: mirrored, or faded out downwards through its own layer. */
+private fun DrawScope.drawSeam(pic: ImageBitmap, d: SkinSeamDraw, k: Float) {
+    if (!d.fade) { drawCell(pic, d.cell, k, flipY = d.mirror); return }
+    val r = d.cell.dst
+    val bounds = Rect(r.x, r.y, r.x + r.width, r.y + r.height)
+    drawContext.canvas.saveLayer(bounds, Paint())
+    drawCell(pic, d.cell, k, flipY = d.mirror)
+    drawRect(Brush.verticalGradient(listOf(Color.Black, Color.Transparent), startY = r.y, endY = r.y + r.height),
+        Offset(r.x, r.y), Size(r.width, r.height), blendMode = BlendMode.DstIn)
+    drawContext.canvas.restore()
+}
+
+/** One slice: copied where its part is fixed, laid in mirrored tiles where it repeats ([skinTiles]); [flipY] all upside down. */
+private fun DrawScope.drawCell(pic: ImageBitmap, c: SkinCell, k: Float, flipY: Boolean = false) {
     for (t in skinTiles(c, k, SKIN_STRETCH_MAX)) {
         val sx = t.src.x.roundToInt()
         val sy = t.src.y.roundToInt()
@@ -167,9 +191,10 @@ private fun DrawScope.drawCell(pic: ImageBitmap, c: SkinCell, k: Float) {
         val dy = t.dst.y.roundToInt()
         val dstSize = IntSize((t.dst.x + t.dst.width).roundToInt() - dx, (t.dst.y + t.dst.height).roundToInt() - dy)
         if (srcSize.width <= 0 || srcSize.height <= 0 || dstSize.width <= 0 || dstSize.height <= 0) continue
-        if (!t.flipX && !t.flipY) { drawImage(pic, IntOffset(sx, sy), srcSize, IntOffset(dx, dy), dstSize); continue }
+        val fy = t.flipY != flipY
+        if (!t.flipX && !fy) { drawImage(pic, IntOffset(sx, sy), srcSize, IntOffset(dx, dy), dstSize); continue }
         val pivot = Offset(dx + dstSize.width / 2f, dy + dstSize.height / 2f)
-        scale(if (t.flipX) -1f else 1f, if (t.flipY) -1f else 1f, pivot) {
+        scale(if (t.flipX) -1f else 1f, if (fy) -1f else 1f, pivot) {
             this@drawCell.drawImage(pic, IntOffset(sx, sy), srcSize, IntOffset(dx, dy), dstSize)
         }
     }

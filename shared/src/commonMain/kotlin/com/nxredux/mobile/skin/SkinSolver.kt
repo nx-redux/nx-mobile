@@ -132,12 +132,13 @@ object SkinSolver {
      * [topInset]: window px at the top the screen keeps clear of (a camera cutout, the status bar); the background still
      * runs under it, and the frame starts right below it (the inset is its top margin, in place of the render's own).
      * [hingeY]: the fold's middle in window px while half-folded, for a frame made for it ([FrameSpec.hinge]): the frame's
-     * room ends above the fold, and every piece must lie below it (else null).
+     * room ends above the fold, and every piece must lie below it (else null). [hingeGap]: picture px the frame's room
+     * keeps above the fold in place of the frame's own [FrameSpec.hinge] (0 on a board drawn without its hinge: to the middle).
      * [topScreen]: the DS / 3DS top screen's game size (256 x 192, 400 x 240): a filling frame showing it, on a board
      * with no fold, is cut to its shape (its border as thin above and below as at the sides), kept at the top, and the
      * pieces with a screen (the touch screen) move up by the height that saves.
      */
-    fun placePieces(spec: SkinLayoutSpec, windowW: Float, windowH: Float, k: Float, picture: Pair<Float, Float>? = null, topInset: Float = 0f, hingeY: Float? = null, topScreen: Pair<Float, Float>? = null): SkinPlacement? {
+    fun placePieces(spec: SkinLayoutSpec, windowW: Float, windowH: Float, k: Float, picture: Pair<Float, Float>? = null, topInset: Float = 0f, hingeY: Float? = null, topScreen: Pair<Float, Float>? = null, hingeGap: Float? = null): SkinPlacement? {
         val frame = spec.frame ?: return null
         if (k <= 0f || spec.refW <= 0 || spec.refH <= 0) return null
         // the background split at the fold too: each half takes its own side's room, the board's hinge on the fold
@@ -166,10 +167,11 @@ object SkinSolver {
         val roomTop = if (topInset > 0f) topInset / k else ownTop   // the inset is the frame's top margin
         val roomW = w - left - right
         val folded = hingeY != null && frame.hinge >= 0
-        val roomH = if (folded) hingeY!! / k - frame.hinge - roomTop
+        val gap = hingeGap ?: frame.hinge.toFloat()
+        val roomH = if (folded) hingeY!! / k - gap - roomTop
             else h - roomTop - (if (frame.bottom >= 0) frame.bottom.toFloat() else (spec.refH - frame.y - frame.h).toFloat())
         // half-folded, the pad's pieces all go below the fold
-        if (folded && spec.pieces.any { it.y + down(it.level, it.drop) < hingeY!! / k + frame.hinge }) return null
+        if (folded && spec.pieces.any { it.y + down(it.level, it.drop) < hingeY!! / k + gap }) return null
         val (aw, ah) = gameSize(g.screen, picture) ?: (g.w.toFloat() to g.h.toFloat())   // the menu's: the glass's own
         val fit = minOf((roomW - bl - br) / aw, (roomH - bt - bb) / ah)
         if (fit <= 0f) return null

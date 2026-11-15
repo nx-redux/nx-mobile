@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.compositionLocalOf
@@ -120,6 +121,7 @@ fun HandheldShell(
     val density = LocalDensity.current
     val ydpi = rememberDisplayYdpi()
     val posture = LocalPosture.current
+    val acrossPortrait by DeviceTraits.foldAcrossPortrait.collectAsState()   // which way the fold runs: the board's hinge drawn or not
     var topInWindow by remember { mutableStateOf<Int?>(null) }   // the shell's top in window px, for the hinge
     // The screen and pad move between the branches below rather than being rebuilt: a rotation or a fold keeps their
     // lazy states, glides, animations and focus. The latest lambdas are read through, so the movable content stays one.
@@ -152,8 +154,9 @@ fun HandheldShell(
                 val above = topInWindow ?: 0
                 val h = constraints.maxHeight + above + below
                 val dpi = (density.density * 160f).roundToInt()
-                remember(skin, w, h, dpi, canTwo, hingeY) {
-                    SkinChoice.placeMenu(skin.manifest, w, h, dpi, foldable = DeviceTraits.canHalfFold, tablet = tablet, hingeY = hingeY, twoScreens = canTwo)
+                val hingeShown = DeviceTraits.hingeAcross(w, h, acrossPortrait)
+                remember(skin, w, h, dpi, canTwo, hingeY, hingeShown) {
+                    SkinChoice.placeMenu(skin.manifest, w, h, dpi, foldable = DeviceTraits.canHalfFold, tablet = tablet, hingeY = hingeY, twoScreens = canTwo, hingeShown = hingeShown)
                         ?.takeIf { posture !is Posture.Tabletop || it.glasses.any { g -> g.id == TOP_GLASS } }?.let { p ->
                         val parts = p.spec.parts?.let { skin.picture(it) ?: return@let null }
                         skin.picture(p.spec.image)?.takeIf { p.spec.parts == null || parts != null }?.let { Triple(p, it, parts) }
