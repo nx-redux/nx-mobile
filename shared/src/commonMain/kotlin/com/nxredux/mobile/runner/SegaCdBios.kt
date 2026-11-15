@@ -63,12 +63,22 @@ object SegaCdBios {
     }
 
     /**
-     * "This game is a US disc: put bios_CD_U.bin in Bios/SEGACD/ (you have bios_CD_E.bin, bios_CD_J.bin)" for the
-     * launched [tag]; the parenthesis lists the other regions' files [coreId] would load, when any is there.
+     * "This game is a US disc: put bios_CD_U.bin in Bios/SEGACD/. Bios/MD/ has bios_CD_E.bin and bios_CD_J.bin, which
+     * only boot European and Japanese discs." for the launched [tag]. The second sentence names the other regions'
+     * files [coreId] would load that are in [present], each under the `Bios/` folder [folderOf] finds it in (they are
+     * gathered from several folders, so "you have" alone would point at the wrong one); a file in none is left out.
      */
-    fun message(tag: String, coreId: String, region: DiscRegion, file: String, present: Set<String>): String {
-        val others = DiscRegion.entries.filter { it != region }.flatMap { accepted(coreId, it) }.filter { it in present }
-        val have = if (others.isEmpty()) "" else " (you have ${others.joinToString(", ")})"
-        return "This game is a ${region.label} disc: put $file in Bios/${CoreRegistry.consoleTag(tag.trim().uppercase())}/$have"
+    fun message(tag: String, coreId: String, region: DiscRegion, file: String, present: Set<String>, folderOf: (String) -> String?): String {
+        val ask = "This game is a ${region.label} disc: put $file in Bios/${CoreRegistry.consoleTag(tag.trim().uppercase())}/."
+        val others = DiscRegion.entries.filter { it != region }
+            .flatMap { r -> accepted(coreId, r).filter { it in present }.mapNotNull { f -> folderOf(f)?.let { Triple(f, r, it) } } }
+        if (others.isEmpty()) return ask
+        val where = others.groupBy({ it.third }, { it.first }).entries.joinToString("; ") { (folder, files) -> "Bios/$folder/ has ${and(files)}" }
+        val regions = and(others.map { it.second.label }.distinct())
+        val verb = if (others.size == 1) "boots" else "boot"
+        return "$ask $where, which only $verb $regions discs."
     }
+
+    private fun and(items: List<String>): String =
+        if (items.size <= 1) items.joinToString() else items.dropLast(1).joinToString(", ") + " and " + items.last()
 }

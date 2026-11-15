@@ -40,14 +40,20 @@ class SegaCdBiosTest {
         assertNull(SegaCdBios.missing("snes9x", DiscRegion.US, emptySet()))
     }
 
-    @Test fun the_message_names_the_file_the_disc_needs_and_the_ones_there() {
+    @Test fun the_message_names_the_file_the_disc_needs_and_where_the_others_are() {
+        val inMd = mapOf("bios_CD_E.bin" to "MD", "bios_CD_J.bin" to "MD")
         assertEquals(
-            "This game is a US disc: put bios_CD_U.bin in Bios/SEGACD/ (you have bios_CD_E.bin, bios_CD_J.bin)",
-            SegaCdBios.message("SEGACD", SegaPadType.GPGX, DiscRegion.US, "bios_CD_U.bin", setOf("bios_CD_E.bin", "bios_CD_J.bin", "scph1001.bin")),
+            "This game is a US disc: put bios_CD_U.bin in Bios/SEGACD/. Bios/MD/ has bios_CD_E.bin and bios_CD_J.bin, which only boot European and Japanese discs.",
+            SegaCdBios.message("SEGACD", SegaPadType.GPGX, DiscRegion.US, "bios_CD_U.bin", setOf("bios_CD_E.bin", "bios_CD_J.bin", "scph1001.bin"), inMd::get),
         )
         assertEquals(
-            "This game is a Japanese disc: put bios_CD_J.bin in Bios/MD/",
-            SegaCdBios.message("MD", SegaPadType.PICODRIVE, DiscRegion.JP, "bios_CD_J.bin", emptySet()),
+            "This game is a Japanese disc: put bios_CD_J.bin in Bios/MD/. Bios/SEGACD/ has bios_CD_E.bin, which only boots European discs.",
+            SegaCdBios.message("MD", SegaPadType.PICODRIVE, DiscRegion.JP, "bios_CD_J.bin", setOf("bios_CD_E.bin"), mapOf("bios_CD_E.bin" to "SEGACD")::get),
+        )
+        // A file in no Bios folder (a stale copy) is not offered as one the user has.
+        assertEquals(
+            "This game is a US disc: put bios_CD_U.bin in Bios/SEGACD/.",
+            SegaCdBios.message("SEGACD", SegaPadType.GPGX, DiscRegion.US, "bios_CD_U.bin", setOf("bios_CD_E.bin"), { null }),
         )
     }
 

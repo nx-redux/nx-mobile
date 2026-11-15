@@ -869,7 +869,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             discRegion?.let { region ->
                 val core = cfg.descriptor?.id.orEmpty()
-                SegaCdBios.missing(core, region, biosPresent)?.let { return refuse(SegaCdBios.message(cfg.tag, core, region, it, biosPresent)) }
+                SegaCdBios.missing(core, region, biosPresent)?.let { file ->
+                    val folders = withContext(Dispatchers.IO) { biosFolderOf(cfg) }
+                    return refuse(SegaCdBios.message(cfg.tag, core, region, file, biosPresent, folders::get))
+                }
             }
             // A NAOMI/Atomiswave set's BIOS archive (flycast opens <system>/dc/<bios>.zip or .7z); an unknown set is not checked.
             if (archiveAsIs) naomiSets.missingBios(cfg.romFileName, biosPresent)?.let { return refuse(NaomiSets.biosMessage(cfg.title, it)) }
@@ -1080,6 +1083,25 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             DiscProbe(AndroidRomsSources.of(host.activity), LibchdrSectors(host.activity.contentResolver)).firstDataSector(file, dir)
         }?.let(SegaCdBios::regionOf)
+    }
+
+    /**
+     * Each BIOS file name in the home's `Bios/` folders [cfg]'s launch gathers from ([BiosFolders.forTag]), with the folder
+     * it is in (the first, in that order); empty without a home or on a read failure. Only read for a refusal's message.
+     */
+    private suspend fun biosFolderOf(cfg: LaunchConfig): Map<String, String> = try {
+        val source = AndroidRomsSources.of(host.activity)
+        val bios = cfg.home?.let { source.child(it, "Bios") }?.takeIf { it.isDirectory }
+        val out = LinkedHashMap<String, String>()
+        if (bios != null) for (folder in BiosFolders.forTag(cfg.tag)) {
+            val dir = source.child(bios.ref, folder)?.takeIf { it.isDirectory } ?: continue
+            for (e in source.listChildren(dir.ref)) if (!e.isDirectory) out.putIfAbsent(e.name, folder)
+        }
+        out
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        emptyMap()
     }
 
     /** The cue of [cfg]'s MSU-MD set, under the name it was handed to the core by; null when the game is none. */
