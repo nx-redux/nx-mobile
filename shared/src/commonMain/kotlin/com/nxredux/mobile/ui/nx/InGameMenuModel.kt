@@ -1871,7 +1871,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         capturing = null
         return when (result) {
             is CaptureResult.Bound -> setBindOverride(shortcutOverrides.withBinding(action, result.binding))
-            is CaptureResult.Refused -> { refreshShortcutsPage(); push(message(action.label, result.reason)); null }
+            is CaptureResult.Refused -> { refreshShortcutsPage(); push(message(action.label(saveOnQuit), result.reason)); null }
             CaptureResult.Cancelled -> { refreshShortcutsPage(); null }
         }
     }
@@ -1951,9 +1951,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             val key = BIND_KEY_PREFIX + a.key
             val blocked = effective.blocked[a]
             when {
-                a == capturing -> MenuRow.Option(a.label, key, SHORTCUT_PROMPT, CAPTURE_LINE)
-                blocked != null -> MenuRow.Option(a.label, key, UNAVAILABLE, blocked.note)
-                else -> MenuRow.Option(a.label, key, shown(effective.bindings[a]?.let(KeyLabels::label) ?: NONE_LABEL, a !in shortcutOverrides.bindings))
+                a == capturing -> MenuRow.Option(a.label(saveOnQuit), key, SHORTCUT_PROMPT, CAPTURE_LINE)
+                blocked != null -> MenuRow.Option(a.label(saveOnQuit), key, UNAVAILABLE, blocked.note)
+                else -> MenuRow.Option(a.label(saveOnQuit), key, shown(effective.bindings[a]?.let(KeyLabels::label) ?: NONE_LABEL, a !in shortcutOverrides.bindings))
             }
         }
         val choices = touchChoices()

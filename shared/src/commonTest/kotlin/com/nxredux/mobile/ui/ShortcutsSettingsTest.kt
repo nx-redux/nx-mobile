@@ -39,6 +39,7 @@ class ShortcutsSettingsTest {
     private class Settings : AppSettings {
         override var treeRef: ContentRef? = ContentRef("Home")
         override var onboardingDone: Boolean? = true
+        override var saveOnQuit = true
         override var onboardingStep: String? = null
         override var extraFolders: List<ExtraFolder> = emptyList()
         override var defaultTags: Map<String, String> = emptyMap()
@@ -127,6 +128,15 @@ class ShortcutsSettingsTest {
         assertTrue(touch.all { it.secondary == "None" })
         assertEquals(SettingsRow(SettingsKind.RESET_DEFAULTS, "Clear all"), rows.last())
         assertEquals(binds + touch + rows.last(), rows)
+    }
+
+    @Test fun save_and_quit_is_named_quit_when_save_on_quit_is_off() = runTest {
+        val s = state(Settings().apply { saveOnQuit = false })
+        s.openShortcuts()
+        val binds = s.page().rows.filter { it.kind == SettingsKind.SHORTCUT_BIND }
+        assertEquals("Quit", binds.first { it.shortcut == ShortcutAction.SAVE_AND_QUIT }.label)
+        assertEquals(ShortcutAction.entries.filter { it != ShortcutAction.SAVE_AND_QUIT }.map { it.label },
+            binds.filter { it.shortcut != ShortcutAction.SAVE_AND_QUIT }.map { it.label })
     }
 
     @Test fun captureSingle() = runTest {

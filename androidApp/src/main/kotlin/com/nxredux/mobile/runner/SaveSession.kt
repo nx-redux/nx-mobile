@@ -53,6 +53,18 @@ internal class SaveSession(
     companion object {
         // Instance-state key: the slot to resume from when the system recreates this activity after a process kill.
         internal const val KEY_RESUME_SLOT = "nx_resume_slot"
+
+        /**
+         * The disk slot a game screen starts from: none in netplay (a session launches cold); the [saved] one when the
+         * system recreated it after a process kill; else the launch's. Without Save on quit a recreated screen whose
+         * bundle names nothing starts fresh: falling back to the launch slot would resume after a kill all the same.
+         */
+        internal fun startSlot(recreated: Boolean, saved: Int?, launch: Int?, saveOnQuit: Boolean, netplay: Boolean): Int? = when {
+            netplay -> null
+            saved != null -> saved
+            recreated && !saveOnQuit -> null
+            else -> launch
+        }
         /** [writeAutoStateOnStop]: at most this long for the GL thread to start the serialize, and again to finish it. */
         private const val AUTO_SERIALIZE_WAIT_MS = 10_000L
         // Process-wide, single thread: the Home auto state and its thumbnail are written off the main thread

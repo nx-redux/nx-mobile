@@ -1166,7 +1166,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 wii.endedByCore = true   // before the drop suspends: no slot 9 may queue behind it
                 // Left without HOME this session (a game's own "Wii Menu", a channel launch): the resume point on disk is an
                 // older session's, behind the game's own save on the NAND. Dropped, so the next launch boots fresh.
-                if (!wii.homeSaved) saves.dropAutoInOrder()
+                if (WiiDolphinController.dropsResumePointOnCoreEnd(wii.homeSaved, settings.saveOnQuit)) saves.dropAutoInOrder()
                 quitGame(chosen = true, autoState = false)
             }
             // Subscribed before the login (startSession, after the first frame): events are not replayed.

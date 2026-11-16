@@ -579,7 +579,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Decided here, not after the launch's async setup, so a stop in between still records the slot.
         // A saved slot (recreated after a process kill) wins over the launch intent's.
         val savedSlot = savedInstanceState?.getInt(SaveSession.KEY_RESUME_SLOT, -1)?.takeIf { it in 0..NxPaths.AUTO_SLOT }
-        saves.startFrom(if (netplay != null) null else savedSlot ?: intent.getIntExtra(EXTRA_RESUME_SLOT, -1).takeIf { it in 0..NxPaths.AUTO_SLOT })
+        val launchSlot = intent.getIntExtra(EXTRA_RESUME_SLOT, -1).takeIf { it in 0..NxPaths.AUTO_SLOT }
+        saves.startFrom(SaveSession.startSlot(savedInstanceState != null, savedSlot, launchSlot, settings.saveOnQuit, netplay != null))
         val claim = sessions.claim(::onSessionHandedOff).also { sessionClaim = it }
         // From the claim to the final release: the menu reads this as "a game screen is alive" (playing, suspended, closing).
         liveGameStore.write(LiveGame(

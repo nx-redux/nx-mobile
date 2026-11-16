@@ -2685,6 +2685,17 @@ class InGameMenuModelTest {
     private fun InGameMenuModel.row(label: String): MenuRow.Option = state.page.rows.first { it.label == label } as MenuRow.Option
     private fun InGameMenuModel.selectRow(label: String) = select(state.page.rows.indexOfFirst { it.label == label })
 
+    @Test fun save_and_quit_shortcut_is_named_quit_without_save_on_quit() {
+        val m = model()
+        m.saveOnQuit = false
+        m.setShortcuts(ShortcutSet.EMPTY, ShortcutOverrides.NONE, ConsoleHotkeys.claimed(plainTag), true, false)
+        m.select(4); m.activate(4)
+        assertNull(m.activate(m.state.page.rows.indexOfFirst { it.label == "Shortcuts" }))
+        val labels = m.state.page.rows.map { it.label }
+        assertTrue("Quit" in labels)
+        assertFalse("Save & Quit" in labels)
+    }
+
     @Test fun optionsOrder() {
         val m = model()
         m.setFrontend(FrontendOptions.defaults("GBA"), emptyList(), emptySet(), "GBA")

@@ -3995,8 +3995,9 @@ class AppState(
         val waiting = _capturingShortcut.value
         val binds = if (!controllerConnected) listOf(SettingsRow(SettingsKind.TEXT, SHORTCUTS_NO_CONTROLLER))
         else ShortcutAction.entries.map { a ->
-            if (a == waiting) SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, SHORTCUT_PROMPT, note = "Hold MENU for a combo", shortcut = a)
-            else SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, set.bindings[a]?.let(KeyLabels::label) ?: "None", note = if (a.mic) MIC_ROW_NOTE else null, shortcut = a)
+            val name = a.label(deps.settings.saveOnQuit)
+            if (a == waiting) SettingsRow(SettingsKind.SHORTCUT_BIND, name, SHORTCUT_PROMPT, note = "Hold MENU for a combo", shortcut = a)
+            else SettingsRow(SettingsKind.SHORTCUT_BIND, name, set.bindings[a]?.let(KeyLabels::label) ?: "None", note = if (a.mic) MIC_ROW_NOTE else null, shortcut = a)
         }
         return binds + TouchSlot.entries.map { t ->
             SettingsRow(SettingsKind.SHORTCUT_TOUCH, t.label, set.touch[t]?.label ?: "None", touchSlot = t)
