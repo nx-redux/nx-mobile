@@ -779,6 +779,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // minarch names saves after the unpacked file when Use extracted file name is on (ma_game.c:75-76): known only now.
             paths = paths.withInner(inner?.let { unpackedEntry })
             saves.open(if (cfg.np == null) SaveStates(dataRoot, paths) else null)   // netplay: no save states, no auto-resume
+            if (!settings.saveOnQuit) saves.unlinkAuto()
             dropStaleNdsResume(cfg.tag, cfg.coreId, cfg.romFileName)
             saves.refreshSlots()   // warm for the first menu open; after the cleanup, so it never lists a deleted state
             cfg.np?.let { gameNetplay.prepareSaves(it, cfg.tag, cfg.romFileName, dataRoot, paths) }
@@ -1166,7 +1167,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 wii.endedByCore = true   // before the drop suspends: no slot 9 may queue behind it
                 // Left without HOME this session (a game's own "Wii Menu", a channel launch): the resume point on disk is an
                 // older session's, behind the game's own save on the NAND. Dropped, so the next launch boots fresh.
-                if (!wii.homeSaved) saves.dropAutoInOrder()
+                if (WiiDolphinController.dropsResumePointOnCoreEnd(wii.homeSaved, settings.saveOnQuit)) saves.dropAutoInOrder()
                 quitGame(chosen = true, autoState = false)
             }
             // Subscribed before the login (startSession, after the first frame): events are not replayed.

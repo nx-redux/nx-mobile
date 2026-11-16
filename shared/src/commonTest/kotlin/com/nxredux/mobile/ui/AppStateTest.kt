@@ -64,6 +64,7 @@ import com.nxredux.mobile.settings.ImportSource
 import com.nxredux.mobile.settings.SaveTransfer
 import com.nxredux.mobile.settings.SaveTransferRules
 import com.nxredux.mobile.settings.TransferReport
+import com.nxredux.mobile.storage.AutoSlotGate
 import com.nxredux.mobile.storage.AllFilesAccess
 import com.nxredux.mobile.storage.FakeAllFilesAccess
 import com.nxredux.mobile.storage.FakeNotificationAccess
@@ -188,6 +189,8 @@ class AppStateTest {
         override var playerName = ""
         override var secondScreen = true
         override var pauseWhenUnfocused = true
+        override var saveOnQuit = true
+        override var aResumes = true
         override var bottomScreen = com.nxredux.mobile.runner.BottomScreen.AUTO
         override var saveFormat = SaveFormat.DEFAULT
         override var stateFormat = StateFormat.DEFAULT
@@ -1620,6 +1623,8 @@ class AppStateTest {
         override suspend fun readHidden() = hidden
         override suspend fun writeHidden(list: List<String>): Boolean { if (failWrites) return false; hidden = list; return true }
         override suspend fun resumeInfo(tag: String, fileName: String) = resumable[tag to fileName] ?: ResumeInfo.NONE
+        override suspend fun hiddenStateShot(tag: String, fileName: String) =
+            resumable[tag to fileName]?.takeIf { it.slot == 9 }?.let { "file:///$fileName.9.png" }
     }
 
     private fun stateWith(userData: FakeUserData, runner: RecordingRunner, scope: CoroutineScope) =
@@ -1640,8 +1645,9 @@ class AppStateTest {
         assertEquals(listOf(Recent("/Roms/Nintendo DS (NDS)/Mario Kart DS.nds", "Mario Kart DS")), data.recents)
     }
 
-    private fun ndsList(settings: MemorySettings, runner: RecordingRunner, scope: CoroutineScope, save: Boolean = true): AppState {
-        val data = FakeUserData(resumable = if (save) mapOf(("NDS" to "Mario Kart DS.nds") to ResumeInfo(9, "file:///p.bmp")) else emptyMap())
+    private fun ndsList(settings: MemorySettings, runner: RecordingRunner, scope: CoroutineScope, save: Boolean = true, slot: Int = 9): AppState {
+        val fake = FakeUserData(resumable = if (save) mapOf(("NDS" to "Mario Kart DS.nds") to ResumeInfo(slot, "file:///p.bmp")) else emptyMap())
+        val data = AutoSlotGate(fake) { settings.saveOnQuit }
         val state = AppState(AppDeps(settings, source, runner, NoopPicker(), data, compute = scope.coroutineContext[ContinuationInterceptor]!!), scope)
         state.load()
         state.openSystem(assertIs<Screen.Systems>(state.screen.value).systems.first { it.tag == "NDS" })
@@ -1658,6 +1664,74 @@ class AppStateTest {
             assertNull(state.screen.value.contextMenu)
             assertNull(runner.launched.single().resumeSlot)              // from the start, the save left alone
         }
+    }
+
+    @Test fun a_plays_fresh_when_a_resumes_is_off_and_the_menu_resumes() = runTest {
+        val runner = RecordingRunner()
+        val state = ndsList(MemorySettings(ContentRef("Home")).apply { aResumes = false; menuButtonHints = false }, runner, CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        assertFalse(state.resumeInfo.value.canResume)                    // A Play shows, not Resume
+        state.onButton(NxButton.A)
+        assertNull(runner.launched.single().resumeSlot)
+        assertTrue(runner.launched.single().fresh)                        // never the suspended game where it was
+        state.onForeground()
+        state.onButton(NxButton.MENU)
+        assertEquals(ContextKind.RESUME, menuKinds(state).first())
+        assertTrue(ContextKind.PLAY_FROM_START !in menuKinds(state))
+        state.onButton(NxButton.A)
+        assertEquals(9, runner.launched[1].resumeSlot)
+        assertFalse(runner.launched[1].fresh)
+    }
+
+    @Test fun save_on_quit_off_ignores_the_hidden_state_but_keeps_a_manual_slot() = runTest {
+        val runner = RecordingRunner()
+        val hidden = ndsList(MemorySettings(ContentRef("Home")).apply { saveOnQuit = false }, runner, CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        hidden.onButton(NxButton.A)
+        assertNull(runner.launched.single().resumeSlot)
+        val manual = RecordingRunner()
+        val kept = ndsList(MemorySettings(ContentRef("Home")).apply { saveOnQuit = false }, manual, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), slot = 3)
+        kept.onButton(NxButton.A)
+        assertEquals(3, manual.launched.single().resumeSlot)
+    }
+
+    @Test fun both_off_offers_neither_resume_nor_play_from_start() = runTest {
+        val runner = RecordingRunner()
+        val state = ndsList(MemorySettings(ContentRef("Home")).apply { aResumes = false; saveOnQuit = false; menuButtonHints = false }, runner, CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        state.onButton(NxButton.MENU)
+        assertTrue(ContextKind.RESUME !in menuKinds(state))
+        assertTrue(ContextKind.PLAY_FROM_START !in menuKinds(state))
+        state.onButton(NxButton.B)
+        state.onButton(NxButton.A)
+        assertNull(runner.launched.single().resumeSlot)
+    }
+
+    @Test fun turning_save_on_quit_off_drops_homes_hidden_state_frames_at_once() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val fake = FakeUserData(recents = listOf(Recent(tetris)), resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9, "file:///t.png")))
+        val state = state(settings, data = AutoSlotGate(fake) { settings.saveOnQuit })
+        state.load(); advanceUntilIdle()
+        val before = assertIs<MainRow.Continue>(state.screen.value.homeRows[0])
+        assertEquals("file:///Tetris.gb.9.png", continueFrame(before))  // the hidden state's frame
+        state.openSettingsMenu()
+        state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // Emulation
+        val emu = assertIs<Screen.Settings>(state.screen.value)
+        repeat(emu.rows.indexOfFirst { it.kind == SettingsKind.SAVE_ON_QUIT }) { state.onButton(NxButton.DOWN) }
+        state.onButton(NxButton.A); advanceUntilIdle()
+        assertFalse(settings.saveOnQuit)
+        state.onButton(NxButton.B); state.onButton(NxButton.B); advanceUntilIdle()
+        repeat(5) { if ((state.screen.value as? Screen.Systems)?.category != MenuCategory.HOME) state.onButton(NxButton.L1) }
+        advanceUntilIdle()
+        val after = assertIs<MainRow.Continue>(state.screen.value.homeRows[0])
+        assertNull(continueFrame(after))                                 // no hidden-state frame left over
+    }
+
+    @Test fun a_on_continue_plays_fresh_when_a_resumes_is_off() = runTest {
+        val runner = RecordingRunner()
+        val data = FakeUserData(recents = listOf(Recent(tetris)), resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9)))
+        val state = state(MemorySettings(ContentRef("Home")).apply { aResumes = false }, data = data, runner = runner)
+        state.load(); advanceUntilIdle()
+        assertIs<MainRow.Continue>(state.screen.value.homeRows[0])
+        state.onButton(NxButton.A)
+        assertNull(runner.launched.single().resumeSlot)
     }
 
     @Test fun a_game_without_a_save_offers_no_play_from_start() = runTest {
@@ -1803,6 +1877,91 @@ class AppStateTest {
         assertIs<Screen.Switcher>(state.screen.value)         // and through the game
         assertEquals(nav, state.nav.value)                    // no slide
         assertEquals("/Roms/Nintendo DS (NDS)/Mario Kart DS.nds", data.recents.first().path)
+    }
+
+    @Test fun save_on_quit_off_keeps_every_recent_in_the_switcher_and_a_starts_hidden_ones_fresh() = runTest {
+        val runner = RecordingRunner()
+        val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        val settings = MemorySettings(ContentRef("Home")).apply { saveOnQuit = false }
+        val fake = FakeUserData(
+            recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb"), Recent("/Roms/Nintendo DS (NDS)/Mario Kart DS.nds")),
+            resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9), ("NDS" to "Mario Kart DS.nds") to ResumeInfo(2)),
+        )
+        val data = AutoSlotGate(fake) { settings.saveOnQuit }
+        val state = AppState(AppDeps(settings, source, runner, NoopPicker(), data, recents = RecentsRecorder(data, scope).also { runner.menu = it }, compute = scope.coroutineContext[ContinuationInterceptor]!!), scope)
+        state.load()
+        state.onButton(NxButton.SELECT)
+        val sw = assertIs<Screen.Switcher>(state.screen.value)
+        assertEquals(listOf("Tetris.gb", "Mario Kart DS.nds"), sw.entries.map { it.game.fileName })
+        assertFalse(sw.entries[0].resume.canResume)                    // its hidden state ignored: A Start
+        state.onButton(NxButton.A)
+        assertNull(runner.launched.single().resumeSlot)
+    }
+
+    @Test fun a_resumes_off_starts_switcher_games_fresh_and_on_resumes_them() = runTest {
+        for (aResumes in listOf(false, true)) {
+            val runner = RecordingRunner()
+            val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+            val settings = MemorySettings(ContentRef("Home")).apply { this.aResumes = aResumes }
+            val data = FakeUserData(
+                recents = listOf(Recent("/Roms/Nintendo DS (NDS)/Mario Kart DS.nds")),
+                resumable = mapOf(("NDS" to "Mario Kart DS.nds") to ResumeInfo(2, "file:///mk.2.bmp")),
+            )
+            val state = AppState(AppDeps(settings, source, runner, NoopPicker(), data, recents = RecentsRecorder(data, scope).also { runner.menu = it }, compute = scope.coroutineContext[ContinuationInterceptor]!!), scope)
+            state.load()
+            state.onButton(NxButton.SELECT)
+            val entry = assertIs<Screen.Switcher>(state.screen.value).entries.single()
+            assertEquals("file:///mk.2.bmp", entry.resume.previewPath)    // its picture stays either way
+            assertEquals(if (aResumes) "Resume" else "Start", switcherHints(entry).single { it.button == NxButton.A }.label)
+            state.onButton(NxButton.A)
+            val launched = runner.launched.single()
+            assertEquals(if (aResumes) 2 else null, launched.resumeSlot)
+            assertEquals(!aResumes, launched.fresh)
+        }
+    }
+
+    // A game whose core keeps no state comes back where it was on A: not a fresh start, which would lose its progress.
+    @Test fun a_on_a_game_without_a_state_may_bring_back_the_suspended_game() = runTest {
+        val runner = RecordingRunner()
+        val state = ndsList(MemorySettings(ContentRef("Home")), runner, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), save = false)
+        state.onButton(NxButton.A)
+        assertNull(runner.launched.single().resumeSlot)
+        assertFalse(runner.launched.single().fresh)
+    }
+
+    @Test fun both_off_keeps_stateless_recents_in_the_switcher_and_starts_them_fresh() = runTest {
+        val runner = RecordingRunner()
+        val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        val settings = MemorySettings(ContentRef("Home")).apply { aResumes = false; saveOnQuit = false }
+        val fake = FakeUserData(recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb")))
+        val data = AutoSlotGate(fake) { settings.saveOnQuit }
+        val state = AppState(AppDeps(settings, source, runner, NoopPicker(), data, recents = RecentsRecorder(data, scope).also { runner.menu = it }, compute = scope.coroutineContext[ContinuationInterceptor]!!), scope)
+        state.load()
+        state.onButton(NxButton.SELECT)
+        val entry = assertIs<Screen.Switcher>(state.screen.value).entries.single()
+        assertEquals("Start", switcherHints(entry).single { it.button == NxButton.A }.label)
+        state.onButton(NxButton.A)
+        assertTrue(runner.launched.single().fresh)
+    }
+
+    @Test fun play_from_start_never_brings_back_the_suspended_game() = runTest {
+        val runner = RecordingRunner()
+        val state = ndsList(MemorySettings(ContentRef("Home")).apply { menuButtonHints = false }, runner, CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        state.onButton(NxButton.MENU)
+        assertEquals(ContextKind.PLAY_FROM_START, menuKinds(state).first())
+        state.onButton(NxButton.A)
+        assertTrue(runner.launched.single().fresh)
+    }
+
+    @Test fun save_on_quit_on_keeps_only_resumable_recents_in_the_switcher() = runTest {
+        val data = FakeUserData(
+            recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb"), Recent("/Roms/Nintendo DS (NDS)/Mario Kart DS.nds")),
+            resumable = mapOf(("NDS" to "Mario Kart DS.nds") to ResumeInfo(2)),
+        )
+        val state = stateWith(data, RecordingRunner(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        state.load()
+        state.onButton(NxButton.SELECT)
+        assertEquals(listOf("Mario Kart DS.nds"), assertIs<Screen.Switcher>(state.screen.value).entries.map { it.game.fileName })
     }
 
     // A game resumed from the switcher ends back on the switcher (the menu comes to the front again), its game first
@@ -5362,6 +5521,26 @@ class AppStateTest {
         assertEquals(ListSelection(1, 2), state.selection.value)       // Settings stays highlighted
     }
 
+    @Test fun emulation_page_ends_with_save_on_quit_and_a_resumes() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings)
+        state.load()
+        state.openSettingsMenu()
+        state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // Emulation
+        var emu = assertIs<Screen.Settings>(state.screen.value)
+        assertEquals(SettingsSection.EMULATORS, emu.section)
+        assertEquals(listOf(SettingsKind.SAVE_ON_QUIT, SettingsKind.A_RESUMES), emu.rows.takeLast(2).map { it.kind })
+        assertEquals(listOf("Save on quit", "A resumes"), emu.rows.takeLast(2).map { it.label })
+        assertEquals(listOf("On", "On"), emu.rows.takeLast(2).map { it.secondary })
+        repeat(emu.rows.size - 2) { state.onButton(NxButton.DOWN) }
+        state.onButton(NxButton.A)
+        assertFalse(settings.saveOnQuit)
+        state.onButton(NxButton.DOWN); state.onButton(NxButton.A)
+        assertFalse(settings.aResumes)
+        emu = assertIs<Screen.Settings>(state.screen.value)
+        assertEquals(listOf("Off", "Off"), emu.rows.takeLast(2).map { it.secondary })
+    }
+
     @Test fun each_section_opens_its_rows_and_b_returns_to_the_menu_on_that_section() = runTest {
         val state = state(MemorySettings(ContentRef("Home")))
         state.load()
@@ -5377,7 +5556,7 @@ class AppStateTest {
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // Emulators
         val emu = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsSection.EMULATORS, emu.section)
-        assertEquals(listOf("Default emulators", "Default settings"), emu.rows.map { it.label })   // Saves under Library, Pause when unfocused under System
+        assertEquals(listOf("Default emulators", "Default settings", "Save on quit", "A resumes"), emu.rows.map { it.label })   // Saves under Library, Pause when unfocused under System
         state.onButton(NxButton.B)
         assertEquals(ListSelection(1, 6), state.selection.value)
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // Appearance
@@ -5674,7 +5853,7 @@ class AppStateTest {
         st.onButton(NxButton.DOWN); st.onButton(NxButton.A)                                      // Emulators
         val e = assertIs<Screen.Settings>(st.screen.value)
         assertEquals(SettingsSection.EMULATORS, e.section)
-        assertEquals(listOf(SettingsRow(SettingsKind.DEFAULTS, "Default emulators"), SettingsRow(SettingsKind.EMULATORS, "Default settings")), e.rows)   // Saves under Library, Pause when unfocused under System
+        assertEquals(listOf(SettingsRow(SettingsKind.DEFAULTS, "Default emulators"), SettingsRow(SettingsKind.EMULATORS, "Default settings"), SettingsRow(SettingsKind.SAVE_ON_QUIT, "Save on quit", "On"), SettingsRow(SettingsKind.A_RESUMES, "A resumes", "On")), e.rows)   // Saves under Library, Pause when unfocused under System
         assertTrue(e.details.isEmpty())
         st.onButton(NxButton.A)                                                                  // Default emulators
         assertEquals(SettingsSection.DEFAULT_EMULATORS, assertIs<Screen.Settings>(st.screen.value).section)
@@ -11620,7 +11799,7 @@ class AppStateTest {
         state.load()
         state.openSettings(SettingsSection.EMULATORS)
         val kinds = assertIs<Screen.Settings>(state.screen.value).rows.map { it.kind }
-        assertEquals(listOf(SettingsKind.DEFAULTS, SettingsKind.EMULATORS), kinds)
+        assertEquals(listOf(SettingsKind.DEFAULTS, SettingsKind.EMULATORS, SettingsKind.SAVE_ON_QUIT, SettingsKind.A_RESUMES), kinds)
     }
 
     // The Cable Link rows (delay, overlay, cache) are mGBA's (EmulatorSettingsControllerTest): neither Emulation nor System lists them.
@@ -11630,7 +11809,7 @@ class AppStateTest {
         state.load()
         val cableKinds = setOf(SettingsKind.CABLE_LINK_DELAY, SettingsKind.CABLE_LINK_DELAY_OVERLAY, SettingsKind.CLEAR_LINK_ROMS)
         state.openSettings(SettingsSection.EMULATORS)
-        assertEquals(listOf(SettingsKind.DEFAULTS, SettingsKind.EMULATORS), assertIs<Screen.Settings>(state.screen.value).rows.map { it.kind })
+        assertEquals(listOf(SettingsKind.DEFAULTS, SettingsKind.EMULATORS, SettingsKind.SAVE_ON_QUIT, SettingsKind.A_RESUMES), assertIs<Screen.Settings>(state.screen.value).rows.map { it.kind })
         state.onButton(NxButton.B); state.openSettings(SettingsSection.SYSTEM)
         assertEquals(false, assertIs<Screen.Settings>(state.screen.value).rows.any { it.kind in cableKinds })
     }
@@ -11718,7 +11897,7 @@ class AppStateTest {
         assertTrue(SettingsSection.SECOND_SCREEN !in sections())
         state.openSettings(SettingsSection.EMULATORS)
         state.onSecondScreenChanged(true)
-        assertEquals(listOf("Default emulators", "Default settings"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })   // no row under Emulators
+        assertEquals(listOf("Default emulators", "Default settings", "Save on quit", "A resumes"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })   // no row under Emulators
     }
 
     @Test fun the_second_screen_page_has_enable_then_bottom_screen_and_b_returns_to_the_root_on_it() = runTest {
@@ -12068,9 +12247,9 @@ class AppStateTest {
         val d = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(listOf("gpSP (GBA)", "mGBA (MGBA)"), d.choices[d.rows.indexOfFirst { it.consoleId == "gba" }]?.labels)
         assertNull(d.choices[d.rows.indexOfFirst { it.consoleId == "gb" }])
-        // Every page with a value row draws touch rows, Library and System (its About rows too); Import saves and Emulators keep theirs.
-        for (section in listOf(SettingsSection.IMPORT_SAVES, SettingsSection.EMULATORS)) assertFalse(settingsTouchPage(state.settingsPreview(section)), section.name)
-        for (section in listOf(SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.LAYOUT_HOME, SettingsSection.CONTROLS, SettingsSection.SAVES, SettingsSection.SYSTEM, SettingsSection.DEFAULT_EMULATORS, SettingsSection.BUTTON_LAYOUT, SettingsSection.LIBRARY))
+        // Every page with a value row draws touch rows, Library, System (its About rows too) and Emulation; Import saves keeps its own.
+        for (section in listOf(SettingsSection.IMPORT_SAVES)) assertFalse(settingsTouchPage(state.settingsPreview(section)), section.name)
+        for (section in listOf(SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.LAYOUT_HOME, SettingsSection.CONTROLS, SettingsSection.SAVES, SettingsSection.SYSTEM, SettingsSection.DEFAULT_EMULATORS, SettingsSection.BUTTON_LAYOUT, SettingsSection.LIBRARY, SettingsSection.EMULATORS))
             assertTrue(settingsTouchPage(state.settingsPreview(section)), section.name)
     }
 

@@ -584,7 +584,7 @@ internal val Screen.menuPushed: Boolean
 /** Kids Mode's first switch-on, in order (the spec's): PIN, allowed apps, play times, then the two permissions and home. */
 enum class KidsSetupStep { PIN, APPS, TIMES, USAGE, ALARMS, HOME }
 
-enum class SettingsKind { PLAYER_NAME, HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, GAME_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, GPU_DRIVER, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
+enum class SettingsKind { PLAYER_NAME, HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, GAME_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, SAVE_ON_QUIT, A_RESUMES, GPU_DRIVER, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
@@ -1400,7 +1400,7 @@ class AppState(
             override fun kidsLocked(): Boolean = kidsUi.kidsLocked
             override fun navStep(motion: NavMotion) = this@AppState.navStep(motion)
             override fun resolveOne(path: String): Listed? = this@AppState.resolveOne(path)
-            override fun launch(entry: Listed, resumeSlot: Int?, fromSwitcher: Boolean): Job? = launches.launch(entry, resumeSlot, fromSwitcher = fromSwitcher)
+            override fun launch(entry: Listed, resumeSlot: Int?, fromSwitcher: Boolean, fresh: Boolean): Job? = launches.launch(entry, resumeSlot, fromSwitcher = fromSwitcher, fresh = fresh)
             override fun menuWithItsRow(): Pair<Screen, ListSelection> =
                 menuScreen().let { m -> m to menuRowOf(m) }
             override fun publishHomeView() = homeTab.publishHomeView()
@@ -3995,8 +3995,9 @@ class AppState(
         val waiting = _capturingShortcut.value
         val binds = if (!controllerConnected) listOf(SettingsRow(SettingsKind.TEXT, SHORTCUTS_NO_CONTROLLER))
         else ShortcutAction.entries.map { a ->
-            if (a == waiting) SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, SHORTCUT_PROMPT, note = "Hold MENU for a combo", shortcut = a)
-            else SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, set.bindings[a]?.let(KeyLabels::label) ?: "None", note = if (a.mic) MIC_ROW_NOTE else null, shortcut = a)
+            val name = a.label(deps.settings.saveOnQuit)
+            if (a == waiting) SettingsRow(SettingsKind.SHORTCUT_BIND, name, SHORTCUT_PROMPT, note = "Hold MENU for a combo", shortcut = a)
+            else SettingsRow(SettingsKind.SHORTCUT_BIND, name, set.bindings[a]?.let(KeyLabels::label) ?: "None", note = if (a.mic) MIC_ROW_NOTE else null, shortcut = a)
         }
         return binds + TouchSlot.entries.map { t ->
             SettingsRow(SettingsKind.SHORTCUT_TOUCH, t.label, set.touch[t]?.label ?: "None", touchSlot = t)
@@ -4009,6 +4010,8 @@ class AppState(
             add(SettingsRow(SettingsKind.DEFAULTS, "Default emulators"))
             add(SettingsRow(SettingsKind.EMULATORS, "Default settings"))
             deps.gpuDrivers?.let { store -> gpuDriverRow(store.unavailableReason(), deps.settings.gpuDriver, store::installed)?.let(::add) }
+            add(SettingsRow(SettingsKind.SAVE_ON_QUIT, "Save on quit", if (deps.settings.saveOnQuit) "On" else "Off"))
+            add(SettingsRow(SettingsKind.A_RESUMES, "A resumes", if (deps.settings.aResumes) "On" else "Off"))
         }
         SettingsSection.SECOND_SCREEN -> listOf(
             SettingsRow(SettingsKind.SECOND_SCREEN_ENABLE, "Enable", if (deps.settings.secondScreen) "On" else "Off"),
@@ -4308,6 +4311,9 @@ class AppState(
             // Emulators, Saves (the handheld's formats in its order), Second screen and Developer.
             SettingsKind.PAUSE_UNFOCUSED -> flip(s.pauseWhenUnfocused) { s.pauseWhenUnfocused = it }
             SettingsKind.SCREEN_CARE -> flip(s.screenCare) { s.screenCare = it }
+            // Home's tiles hold the hidden state's frames read when built: rebuilt so none outlives the switch.
+            SettingsKind.SAVE_ON_QUIT -> flip(s.saveOnQuit, after = { settingsUi.refreshSettings(); scope.launch { refreshMainRows() } }) { s.saveOnQuit = it }
+            SettingsKind.A_RESUMES -> flip(s.aResumes) { s.aResumes = it }
             SettingsKind.SAVE_FORMAT -> cycle(SaveFormat.entries, s.saveFormat, { it.label }) { s.saveFormat = it }
             SettingsKind.STATE_FORMAT -> cycle(StateFormat.entries, s.stateFormat, { it.label }) { s.stateFormat = it }
             SettingsKind.EXTRACTED_NAME -> flip(s.useExtractedFileName) { s.useExtractedFileName = it }
@@ -5839,6 +5845,8 @@ class AppState(
             override fun openAchievements() = ra.openRaPanel()
             override suspend fun canResume(entry: Listed): Boolean = deps.userData.resumeInfo(entry.system.tag, entry.game.fileName).canResume
             override fun playFromStart(entry: Listed) = launches.playFromStart(entry)
+            override val aResumes: Boolean get() = deps.settings.aResumes
+            override fun resumeGame(entry: Listed) { launches.resumeGame(entry) }
             override fun hiddenTabs(): List<MenuCategory> = this@AppState.hiddenTabs()
             override fun openHiddenTab(category: MenuCategory) = this@AppState.openHiddenTab(category)
             override val appOnTop: Boolean get() = _appOnTop.value

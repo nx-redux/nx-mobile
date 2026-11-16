@@ -19,6 +19,9 @@ class LiveGameTest {
         assertTrue(live.canBringBack(session(slot = 9)))
     }
 
+    // Play from start, or A with A resumes off: a new game, never the suspended one where it was.
+    @Test fun freshStartCannotBringBack() = assertFalse(live.canBringBack(session().copy(fresh = true)))
+
     @Test fun slotPickCannotBringBack() = assertFalse(live.canBringBack(session(slot = 3)))
 
     @Test fun otherGameCannot() {

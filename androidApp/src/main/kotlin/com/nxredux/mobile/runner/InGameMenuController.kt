@@ -80,6 +80,7 @@ import java.io.File
  * focus pause shares) is the activity's ([pauseForMenu], [resumeAfterMenu]).
  */
 internal interface InGameMenuHost : GameScreenHost {
+    val settings: AndroidAppSettings
     var menuOpen: Boolean
     /** Kids Mode hides the game's settings from a kid ([InGameMenuModel.setKidsLocked]); [refreshKidsSettings] asks again. */
     val kidsSettingsHidden: Boolean
@@ -299,6 +300,7 @@ internal class InGameMenuController(
             initialSlot = (lastSlotCache ?: saveStates?.lastSlot()?.also { lastSlotCache = it } ?: 1) - 1,
         ).also {
             it.setStatus(configSource); it.cheatsAvailable = cheatsSupported
+            it.saveOnQuit = host.settings.saveOnQuit; it.refresh()
             it.screen = activity.screenClass()   // the DS / 3DS layout rows: this window's values and defaults
             it.displayMax3d = host.nds3dDisplayMax   // the DS / 3DS 3D Resolution rows' scales
             it.ndsView = host.ndsView                 // the DS / 3DS layout row in use, and the DS inset rows only in Picture in picture

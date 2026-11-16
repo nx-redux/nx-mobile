@@ -8,7 +8,7 @@ import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.settings.MenuCategory
 
-enum class ContextKind { PIN, UNPIN, HIDE, UNHIDE, RENAME, ADD_TO_COLLECTION, GAME_SETTINGS, REMOVE_FROM_COLLECTION, REMOVE_RECENT, EMULATOR, CONSOLE, FETCH_ART, CHANGE_ART, PIN_TOOL, UNPIN_TOOL, ADD_TO_TOOLS, REMOVE_FROM_TOOLS, RENAME_COLLECTION, DELETE_COLLECTION, NETPLAY, PLAY_FROM_START, OPEN_GAMES, OPEN_CONSOLES, OPEN_COLLECTIONS, OPEN_TOOLS, ACHIEVEMENTS, USE_TOP_SCREEN }
+enum class ContextKind { PIN, UNPIN, HIDE, UNHIDE, RENAME, ADD_TO_COLLECTION, GAME_SETTINGS, REMOVE_FROM_COLLECTION, REMOVE_RECENT, EMULATOR, CONSOLE, FETCH_ART, CHANGE_ART, PIN_TOOL, UNPIN_TOOL, ADD_TO_TOOLS, REMOVE_FROM_TOOLS, RENAME_COLLECTION, DELETE_COLLECTION, NETPLAY, PLAY_FROM_START, RESUME, OPEN_GAMES, OPEN_CONSOLES, OPEN_COLLECTIONS, OPEN_TOOLS, ACHIEVEMENTS, USE_TOP_SCREEN }
 
 data class ContextItem(val kind: ContextKind, val label: String)
 
@@ -76,6 +76,10 @@ object ContextMenus {
     private val changeArt = ContextItem(ContextKind.CHANGE_ART, "Change art")
     private val netplayItem = ContextItem(ContextKind.NETPLAY, "Netplay")
     private val fromStartItem = ContextItem(ContextKind.PLAY_FROM_START, "Play from start")
+    private val resumeItem = ContextItem(ContextKind.RESUME, "Resume")
+
+    /** A game with a save state leads its menu with what A does not: Play from start, or Resume while A starts fresh. */
+    private fun saveItem(aResumes: Boolean) = if (aResumes) fromStartItem else resumeItem
 
     /**
      * The handheld's table. Console lists: Pin/Unpin (launchable games only), Hide, Rename, Add to Collection, Game
@@ -93,9 +97,9 @@ object ContextMenus {
      */
     fun itemsFor(
         source: ListSource, entry: Listed, pinned: Boolean, art: ArtMenuItem = ArtMenuItem.NONE, netplay: Boolean = false,
-        canResume: Boolean = false, netplayLeads: Boolean = false,
+        canResume: Boolean = false, netplayLeads: Boolean = false, aResumes: Boolean = true,
     ): List<ContextItem> {
-        val lead = leadItems(entry, canResume, netplay && netplayLeads)
+        val lead = leadItems(entry, canResume, netplay && netplayLeads, aResumes)
         val below = netplay && !netplayLeads && hasNetplay(entry)
         return when (source) {
         is ListSource.Console -> when {
@@ -126,11 +130,11 @@ object ContextMenus {
             if (below) add(netplayItem)
             artItem(art)?.let(::add)
         }
-        is ListSource.Filtered -> itemsFor(source.parent, entry, pinned, art, netplay, canResume, netplayLeads)   // its list's own
+        is ListSource.Filtered -> itemsFor(source.parent, entry, pinned, art, netplay, canResume, netplayLeads, aResumes)   // its list's own
         // Every console's games: a ROM's items are a search's, an Android game's those of the Android console's list.
         ListSource.AllGames ->
             if (entry.system.android) listOfNotNull(if (pinned) unpin else pin, artItem(art))
-            else itemsFor(ListSource.Search(""), entry, pinned, art, netplay, canResume, netplayLeads)
+            else itemsFor(ListSource.Search(""), entry, pinned, art, netplay, canResume, netplayLeads, aResumes)
         ListSource.Hidden -> emptyList()   // A unhides directly; UNHIDE stays in the enum for act's exhaustive when
         }
     }
@@ -141,7 +145,7 @@ object ContextMenus {
      * Emulator / Console switch change the library or the games' setup, which is a parent's.
      */
     private val kidsPlayKinds: Set<ContextKind> = setOf(
-        ContextKind.PLAY_FROM_START, ContextKind.NETPLAY, ContextKind.PIN, ContextKind.UNPIN, ContextKind.REMOVE_RECENT,
+        ContextKind.PLAY_FROM_START, ContextKind.RESUME, ContextKind.NETPLAY, ContextKind.PIN, ContextKind.UNPIN, ContextKind.REMOVE_RECENT,
         ContextKind.ACHIEVEMENTS, ContextKind.OPEN_GAMES, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.USE_TOP_SCREEN,
     )
 
@@ -182,8 +186,8 @@ object ContextMenus {
     }
 
     /** A game menu's first items: Play from start ([canResume]: A resumes instead), then Netplay when [netplay] leads. */
-    private fun leadItems(entry: Listed, canResume: Boolean, netplay: Boolean): List<ContextItem> = buildList {
-        if (canResume) add(fromStartItem)
+    private fun leadItems(entry: Listed, canResume: Boolean, netplay: Boolean, aResumes: Boolean): List<ContextItem> = buildList {
+        if (canResume) add(saveItem(aResumes))
         if (netplay && hasNetplay(entry)) add(netplayItem)
     }
 
@@ -197,15 +201,15 @@ object ContextMenus {
      * MENU on a pinned game row (Home's Pinned row, the All pinned list); [fromStart]: the game has a save state (A
      * resumes it), so Play from start leads; [netplay]: hidden hints put Netplay next.
      */
-    fun pinRowItems(netplay: Boolean = false, fromStart: Boolean = false): List<ContextItem> =
-        homeLead(netplay, fromStart) + ContextItem(ContextKind.UNPIN, "Unpin")
+    fun pinRowItems(netplay: Boolean = false, fromStart: Boolean = false, aResumes: Boolean = true): List<ContextItem> =
+        homeLead(netplay, fromStart, aResumes) + ContextItem(ContextKind.UNPIN, "Unpin")
 
     /** MENU on Home's Continue card or a shelf game: a pinned game row's menu (Unpin), or Pin when its game is not pinned. */
-    fun homeGameItems(pinned: Boolean, netplay: Boolean = false, fromStart: Boolean = false): List<ContextItem> =
-        if (pinned) pinRowItems(netplay, fromStart) else homeLead(netplay, fromStart) + ContextItem(ContextKind.PIN, "Pin")
+    fun homeGameItems(pinned: Boolean, netplay: Boolean = false, fromStart: Boolean = false, aResumes: Boolean = true): List<ContextItem> =
+        if (pinned) pinRowItems(netplay, fromStart, aResumes) else homeLead(netplay, fromStart, aResumes) + ContextItem(ContextKind.PIN, "Pin")
 
-    private fun homeLead(netplay: Boolean, fromStart: Boolean): List<ContextItem> = buildList {
-        if (fromStart) add(fromStartItem)
+    private fun homeLead(netplay: Boolean, fromStart: Boolean, aResumes: Boolean): List<ContextItem> = buildList {
+        if (fromStart) add(saveItem(aResumes))
         if (netplay) add(netplayItem)
     }
 

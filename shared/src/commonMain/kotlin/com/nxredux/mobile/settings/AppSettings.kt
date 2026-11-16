@@ -475,6 +475,23 @@ interface AppSettings {
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
     /**
+     * Settings → Emulation → Save on quit (default on): leaving a game (Quit, Home, the system stopping it) writes the
+     * hidden save state it resumes from. Off: none is written, and one already on disk is ignored, never deleted, so
+     * games start fresh. Defaulted, like [debugLog].
+     */
+    var saveOnQuit: Boolean
+        get() = true
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
+    /**
+     * Settings → Emulation → A resumes (default on): A on a game with a save state continues from it. Off: A starts it
+     * fresh, and its menu's Resume continues instead. Defaulted, like [debugLog].
+     */
+    var aResumes: Boolean
+        get() = true
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
+    /**
      * Layouts → Game info: what a game's caption shows under its play time. Off (Details): its genre and release. On
      * (Achievements, the default: [MenuStyles.DEFAULT_INFO_ACHIEVEMENTS]): its achievements where it has some to show,
      * else the genre and release. Defaulted, like [debugLog].

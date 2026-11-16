@@ -196,6 +196,15 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.Quit, m.activate(0))
     }
 
+    @Test fun without_save_on_quit_the_quit_row_just_quits() {
+        val m = model().apply { saveOnQuit = false; refresh() }
+        val row = m.state.page.rows.last()
+        assertEquals("Quit", row.label)
+        assertEquals(MenuAction.QUIT_ONLY, (row as MenuRow.Action).action)
+        assertEquals(MenuEffect.QuitWithoutResume, m.activate(m.state.page.rows.size - 1))
+        assertEquals(MenuAction.QUIT, (model().state.page.rows.last() as MenuRow.Action).action)   // on: asks how to quit
+    }
+
     @Test fun quit_on_the_quit_page_quits_without_a_resume_point() {
         val m = model()
         m.activate(5)
@@ -2710,6 +2719,17 @@ class InGameMenuModelTest {
 
     private fun InGameMenuModel.row(label: String): MenuRow.Option = state.page.rows.first { it.label == label } as MenuRow.Option
     private fun InGameMenuModel.selectRow(label: String) = select(state.page.rows.indexOfFirst { it.label == label })
+
+    @Test fun save_and_quit_shortcut_is_named_quit_without_save_on_quit() {
+        val m = model()
+        m.saveOnQuit = false
+        m.setShortcuts(ShortcutSet.EMPTY, ShortcutOverrides.NONE, ConsoleHotkeys.claimed(plainTag), true, false)
+        m.select(4); m.activate(4)
+        assertNull(m.activate(m.state.page.rows.indexOfFirst { it.label == "Shortcuts" }))
+        val labels = m.state.page.rows.map { it.label }
+        assertTrue("Quit" in labels)
+        assertFalse("Save & Quit" in labels)
+    }
 
     @Test fun optionsOrder() {
         val m = model()

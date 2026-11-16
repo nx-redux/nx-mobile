@@ -90,6 +90,18 @@ class SaveStates(private val root: File, private val paths: NxPaths) {
     }
 
     /**
+     * Save on quit off: the hidden state is never refreshed, so a pointer left on it would later resume a stale state
+     * whose battery save can overwrite newer in-game saves. Drops that pointer (a manual slot's is kept) and the hidden
+     * frame Home shows, keeping the state file itself.
+     */
+    fun unlinkAuto(): Unit = synchronized(slotPointerLock) {
+        val file = File(root, paths.lastSlot)
+        val current = runCatching { file.takeIf { it.exists() }?.readText()?.trim()?.toIntOrNull() }.getOrNull()
+        if (current == NxPaths.AUTO_SLOT) file.delete()
+        File(root, paths.thumb(NxPaths.AUTO_SLOT)).delete()
+    }
+
+    /**
      * Points `<rom.ext>.txt` at the auto slot (9). With [onlyIfNotManual] (leaving via Home), it is only
      * written when absent or already 9: a slot file naming a manual slot is left alone so resuming keeps
      * using the slot the player chose, and so is an unreadable/garbage one (minarch reads that as slot 0).
