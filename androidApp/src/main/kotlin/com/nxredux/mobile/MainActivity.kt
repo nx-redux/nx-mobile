@@ -36,6 +36,7 @@ import com.nxredux.mobile.runner.BiosImport
 import com.nxredux.mobile.runner.LaunchRecords
 import com.nxredux.mobile.runner.LiveGameStore
 import com.nxredux.mobile.runner.Posture
+import com.nxredux.mobile.storage.AutoSlotGate
 import com.nxredux.mobile.storage.LibchdrSectors
 import com.nxredux.mobile.storage.LinkRomCaches
 import com.nxredux.mobile.storage.NotificationAccess
@@ -426,7 +427,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 AndroidRomsSources.of(this),
                 runner,
                 this,
-                AndroidUserDataStore(this),
+                AutoSlotGate(AndroidUserDataStore(this)) { settings.saveOnQuit },
                 cheatDb = CheatDbService.controller(this),
                 achievements = AchievementsService.controller(this, settings, indexStore),
                 sidecarStore = AndroidSidecarStore(this),
