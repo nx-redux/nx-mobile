@@ -39,8 +39,8 @@ Device checks still owed:
   mutex`): 6 of 13 quits on malisx2, also on the stock driver and on main. Cause: the settings interfaces kept for the
   process (core patch 0004) saved themselves at unload, after the save lock was destroyed. Core patch 0007 saves them in
   `retro_deinit` and keeps the lock. After it: 0 of 12 quits (8 malisx2, 4 stock).
-- [ ] PS2 on the driver fallback relaunch (core reloaded in the same process) after core patch 0007: one forced fallback
-  on the AYANEO, and one on the Nova.
+- [ ] PS2 on the driver fallback relaunch (core reloaded in the same process) after core patch 0007: 3 of 3 forced
+  fallbacks relaunched and quit cleanly on the AYANEO; one on the Nova is owed.
 - [ ] PS2 resume: about 1 launch in 4 on the AYANEO (stock driver too) boots from the disc although the state load reported success. Existing race at the first frame; find and fix.
 
 ## Slang shader presets
