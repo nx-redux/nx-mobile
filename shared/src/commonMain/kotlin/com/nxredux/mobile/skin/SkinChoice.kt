@@ -217,12 +217,12 @@ object SkinChoice {
         pieces.filter { it.piece >= 0 && spec.pieces[it.piece].glass == null }.all { it.dst.y + it.dst.height <= bottom + 0.5f }
 
     /**
-     * The d-pad under the stick ([bothFollowMenu]), [ROW_GAP_DP] apart: the side holding the two (its shoulder too) lifts
+     * The d-pad under the stick ([bothFollowMenu]), [padGapDp] apart: the side holding the two (its shoulder too) lifts
      * so the d-pad ends [ROW_GAP_DP] above the window's bottom, never above the bottom screen's frame's top (a landscape
      * shell's: [ROW_GAP_DP] under the window's top); past that, the gap over the d-pad and the room under it come down together (to
      * [ROW_MIN_GAP_DP]).
      */
-    private fun SkinPlacement.dpadInTheRoom(windowH: Float, dp: Float): SkinPlacement {
+    private fun SkinPlacement.dpadInTheRoom(windowH: Float, dp: Float, padGapDp: Float = ROW_GAP_DP): SkinPlacement {
         fun centredOn(id: String): List<Int> {
             val c = controls.firstOrNull { it.spec.id == id } ?: return emptyList()
             return pieces.indices.filter { i -> pieces[i].let { p -> p.piece >= 0 && spec.pieces[p.piece].glass == null &&
@@ -245,13 +245,14 @@ object SkinChoice {
         val gap = ROW_GAP_DP * dp
         val end = windowH - gap
         // the side lifted by [up], the d-pad by [up] + [closer] (its gap over it closed that much)
-        val wantUp = (stickBottom + gap + padH) - end
+        val padGap = padGapDp * dp
+        val wantUp = (stickBottom + padGap + padH) - end
         val room = box(sideAt).first - frameTop   // how far the side may go up
         val up = wantUp.coerceIn(0f, maxOf(0f, room))
         // what the lift cannot give: the gap and the room under the d-pad come down alike
         val short = wantUp - up
-        val give = if (short > 0f) minOf(short / 2f, gap - ROW_MIN_GAP_DP * dp) else 0f
-        val gapNow = gap - give
+        val give = if (short > 0f) minOf(short / 2f, padGap - ROW_MIN_GAP_DP * dp) else 0f
+        val gapNow = padGap - give
         val padUp = padTop - (stickBottom - up + gapNow)
         val other = if (side == PieceAnchor.LEFT) PieceAnchor.RIGHT else PieceAnchor.LEFT
         if (up == 0f && padUp == 0f) return sideInTheRoom(other, frameTop, end).columnsLevel()
@@ -558,6 +559,10 @@ object SkinChoice {
                     val half = if (hingeY == null && wide != null) wide(windowH / 2f) else null
                     (if (wide != null && half != null) wide.bottomOf(half) else wide)?.let { return@widest it }
                 }
+                // a touch screen held back by its height with no width to spare (the Ultra upright): START / SELECT in
+                // the row under it, the d-pad [PAIR_GAP_DP] under the stick
+                if (v in N3DS_VARIANTS && placed != null && placed.touchSpare() >= 0f)
+                    fold(shaped.capsInTheRow(ROW_GAP_DP * dp / s))?.dpadInTheRoom(windowH.toFloat(), dp, PAIR_GAP_DP)?.let { return@widest it }
                 placed?.let { if (both == true || v in N3DS_VARIANTS) it.dpadInTheRoom(windowH.toFloat(), dp) else it }
             }
         }

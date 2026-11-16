@@ -266,8 +266,26 @@ class SkinSeamTest {
                     assertEquals(mc.getValue(id).x, g.getValue(id).x, 1f, "$v ${w}x$h $id x")
                     assertEquals(mc.getValue(id).y, g.getValue(id).y, 1f, "$v ${w}x$h $id y")
                 }
-                if (v == SkinVariant.N3DS_REGULAR) for (id in listOf("START", "SELECT")) assertEquals(mc.getValue(id).x, g.getValue(id).x, 1f, "$v ${w}x$h $id x")
+                // the Fold's; the Ultra's 3DS touch screen held back by its height: START / SELECT in the row under it
+                if (v == SkinVariant.N3DS_REGULAR && w == 1848) for (id in listOf("START", "SELECT")) assertEquals(mc.getValue(id).x, g.getValue(id).x, 1f, "$v ${w}x$h $id x")
             }
+        }
+    }
+
+    @Test
+    fun theUltraUprightPuts3dsStartAndSelectInTheRowAndTheDpadNearerTheStick() {
+        for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) for (hinge in listOf(null, 1252f)) {
+            val name = "$v $hinge"
+            val p = assertNotNull(SkinChoice.place(pack, 2256, 2504, 480, tablet = true, ds = true, hingeY = hinge, foldable = true, variant = v), name)
+            val c = p.controls.associateBy { it.spec.id }
+            val touch = assertNotNull(p.glass(GlassScreen.TOUCH)).rect
+            val row = listOf("MIC", "SWAP", "MENU", "SELECT", "START").map { c.getValue(it) }
+            row.zipWithNext().forEach { (a, b) -> assertEquals(a.y, b.y, 1f, "$name row level"); assertTrue(b.x > a.x, "$name row order") }
+            assertTrue(row.all { it.y > touch.y + touch.height && it.x > touch.x && it.x < touch.x + touch.width }, "$name row under the touch screen")
+            fun ring(id: String) = c.getValue(id).let { k -> p.pieces.filter { it.piece >= 0 && p.spec.pieces[it.piece].glass == null &&
+                kotlin.math.abs(it.dst.x + it.dst.width / 2f - k.x) < 2f && kotlin.math.abs(it.dst.y + it.dst.height / 2f - k.y) < 2f }.maxOf { it.dst.width } }
+            val s = c.getValue("STICK"); val d = c.getValue("DPAD")
+            assertEquals(8f * 3f, (d.y - ring("DPAD") / 2f) - (s.y + ring("STICK") / 2f), 1f, "$name d-pad 8 dp under the stick")
         }
     }
 

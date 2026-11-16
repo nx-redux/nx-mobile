@@ -787,10 +787,25 @@ internal class DualScreenController(
                 }
             }
             boardPillHost = view
-            // over the skin (which would take its touches) and the panel in its glass; the menu and notifications come later
             root.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END))
         }
+        placeBoardPill(root)
         syncMainPanelHost()
+    }
+
+    /**
+     * The board's pill right over the skin's view (which would take its touches) and the panel in its glass, under the
+     * menu and the notifications: a new layout adds the skin's view again, over a pill added before it.
+     */
+    private fun placeBoardPill(root: FrameLayout) {
+        val pill = boardPillHost ?: return
+        val current = root.indexOfChild(pill)
+        fun without(i: Int) = if (current in 0 until i) i - 1 else i
+        val under = listOfNotNull(padLayout.skinViewNow, mainPanelHost).map { root.indexOfChild(it) }.filter { it >= 0 }.maxOrNull()?.let { without(it) } ?: return
+        val target = under + 1
+        if (current == target) return
+        if (current >= 0) root.removeView(pill)
+        root.addView(pill, target)
     }
 
     /**
