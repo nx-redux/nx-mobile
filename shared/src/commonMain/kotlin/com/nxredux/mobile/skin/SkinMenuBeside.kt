@@ -475,12 +475,13 @@ internal fun SkinLayoutSpec.capsSideways(sized: SkinLayoutSpec?): SkinLayoutSpec
 }
 
 /**
- * A landscape shell's 3DS small-cap columns (the Fold cover's `_col`) as a pair over one each side: the stick / d-pad
- * swap and MIC in a row with MENU under them; SELECT and START in a row with SWAP under them. The pairs in the
- * horizontal pill of [sized] (the fold board) cut to two, the one under in it cut to one, centred under the side's
- * ring at the column's top, the words under the caps as that board's row. As it is where [sized] has no such well.
+ * A landscape shell's small-cap columns (the Fold cover's `_col`) as a pair over one each side: [groups] (a pair and
+ * the cap under it, or none), each on the side of its pair's first cap (a cap of another side moves over). The pairs
+ * in the horizontal pill of [sized] (the fold board) cut to two, the one under in it cut to one, centred under the
+ * side's ring at its column's top, the words under the caps as that board's row. As it is where [sized] has no such
+ * well or a cap is missing.
  */
-internal fun SkinLayoutSpec.capsInPairs(sized: SkinLayoutSpec?): SkinLayoutSpec {
+internal fun SkinLayoutSpec.capsInPairs(sized: SkinLayoutSpec?, groups: List<Triple<String, String, String?>>): SkinLayoutSpec {
     if (sized == null) return this
     fun inside(p: PieceSpec, c: ControlSpec) = p.anchor == c.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
     fun centredAt(p: PieceSpec, x: Float, y: Float) = p.glass == null && kotlin.math.abs(p.x + p.w * p.scale / 2f - x) < 2f && kotlin.math.abs(p.y + p.h * p.scale / 2f - y) < 2f
@@ -490,35 +491,37 @@ internal fun SkinLayoutSpec.capsInPairs(sized: SkinLayoutSpec?): SkinLayoutSpec 
     val pill = sized.pieces.firstOrNull { p -> p.glass == null && inside(p, sMic) && inside(p, sSwap) } ?: return this
     val pitch = kotlin.math.abs(sMenu.x - sMic.x)
     // the cap under a pair: clear of the pair's words
-    val step = pitch + sMic.labelH + (sMic.labelDy - (sMic.r - 0f)).coerceAtLeast(0f)
+    val step = pitch + sMic.labelH + (sMic.labelDy - sMic.r).coerceAtLeast(0f)
     val pad = pill.h * pill.scale / 2f
-    val groups = listOf(Triple("STICK_SWAP", "MIC", "MENU"), Triple("SELECT", "START", "SWAP"))
     val first = controls.associateBy { it.id }
-    if (groups.any { (a, b, c) -> listOf(a, b, c).any { it !in first } }) return this
-    val ids = groups.flatMap { listOf(it.first, it.second, it.third) }.toSet()
+    if (groups.any { (a, b, c) -> listOfNotNull(a, b, c).any { it !in first } }) return this
+    val ids = groups.flatMap { listOfNotNull(it.first, it.second, it.third) }.toSet()
     val caps = controls.filter { it.id in ids }
     // the columns' wells: the pieces holding two of the caps (not a control's own)
     val wells = pieces.filter { p -> p.glass == null && caps.distinctBy { it.id }.count { inside(p, it) } >= 2 && controls.none { centredAt(p, it.x, it.y) } }
-    val xs = HashMap<String, Float>(); val ys = HashMap<String, Float>()
+    val xs = HashMap<String, Float>(); val ys = HashMap<String, Float>(); val sides = HashMap<String, ControlSpec>()
     val newWells = ArrayList<PieceSpec>()
     for ((a, b, under) in groups) {
-        val col = listOf(a, b, under).map { first.getValue(it) }
-        // centred under the side's ring (the stick's, the face buttons'), at the column's top cap's height
-        val ring = (if (col.first().anchor == PieceAnchor.LEFT) first["STICK"] ?: first["DPAD"] else first["X"])?.x ?: col.first().x
-        val cx = ring; val top = col.minOf { it.y }
-        xs[a] = cx - pitch / 2f; xs[b] = cx + pitch / 2f; xs[under] = cx
-        ys[a] = top; ys[b] = top; ys[under] = top + step
-        val side = col.first()
+        val side = first.getValue(a)
+        val col = caps.filter { it.anchor == side.anchor }
+        // centred under the side's ring (the stick's, the face buttons'), at the side's column top
+        val ring = (if (side.anchor == PieceAnchor.LEFT) first["STICK"] ?: first["DPAD"] else first["X"])?.x ?: side.x
+        val top = col.minOf { it.y }
+        xs[a] = ring - pitch / 2f; xs[b] = ring + pitch / 2f; ys[a] = top; ys[b] = top
+        listOfNotNull(a, b, under).forEach { sides[it] = side }
         fun well(left: Float, y: Float, n: Int) = pillWell(pill, left, n, pitch).map { it.copy(y = (y - pad).roundToInt(), anchor = side.anchor ?: it.anchor, level = side.level, drop = side.drop, inward = side.inward) }
-        newWells += well(cx - pitch / 2f - pad, top, 2) + well(cx - pad, top + step, 1)
+        newWells += well(ring - pitch / 2f - pad, top, 2)
+        if (under != null) { xs[under] = ring; ys[under] = top + step; newWells += well(ring - pad, top + step, 1) }
     }
     val moved = caps.associateWith { c -> xs.getValue(c.id) to ys.getValue(c.id) }
     return copy(
         pieces = newWells + pieces.filter { it !in wells }.map { p ->
             val c = caps.firstOrNull { centredAt(p, it.x, it.y) } ?: return@map p
-            val (nx, ny) = moved.getValue(c)
-            p.copy(x = (nx - p.w * p.scale / 2f).roundToInt(), y = (ny - p.h * p.scale / 2f).roundToInt())
+            val (nx, ny) = moved.getValue(c); val side = sides.getValue(c.id)
+            p.copy(x = (nx - p.w * p.scale / 2f).roundToInt(), y = (ny - p.h * p.scale / 2f).roundToInt(),
+                anchor = side.anchor ?: p.anchor, level = side.level, drop = side.drop, inward = side.inward)
         },
-        controls = controls.map { c -> moved[c]?.let { (nx, ny) -> c.copy(x = nx, y = ny, labelDy = sMic.labelDy, labelDx = 0f, labelH = sMic.labelH) } ?: c },
+        controls = controls.map { c -> moved[c]?.let { (nx, ny) -> val side = sides.getValue(c.id)
+            c.copy(x = nx, y = ny, anchor = side.anchor, level = side.level, drop = side.drop, inward = side.inward, labelDy = sMic.labelDy, labelDx = 0f, labelH = sMic.labelH) } ?: c },
     )
 }

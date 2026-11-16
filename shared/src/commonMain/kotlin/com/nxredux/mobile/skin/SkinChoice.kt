@@ -478,29 +478,43 @@ object SkinChoice {
     /**
      * Each side group moved whole so its pad stands where [menu] (the main menu's shell on this window) has it: the left
      * by the stick (or d-pad) to the menu's d-pad, the right by X to the menu's X; never nearer the screen's frame than
-     * [ROW_GAP_DP]. As it is where either lacks them.
+     * [ROW_GAP_DP], nor the window's bottom ([windowH]) than that (a word under a cap [ROW_MIN_GAP_DP]), both sides
+     * down alike. As it is where either lacks them.
      */
-    private fun SkinPlacement.sidesAsTheMenu(menu: SkinPlacement, dp: Float): SkinPlacement {
+    private fun SkinPlacement.sidesAsTheMenu(menu: SkinPlacement, windowH: Float, dp: Float): SkinPlacement {
         fun ctl(p: SkinPlacement, id: String) = p.controls.firstOrNull { it.spec.id == id }
         val frame = pieces.filter { it.piece < 0 && !it.strip }.map { it.dst }
         if (frame.isEmpty()) return this
         val gap = ROW_GAP_DP * dp
         fun sideOf(p: SkinPiece) = if (p.piece < 0 || spec.pieces[p.piece].glass != null) null else spec.pieces[p.piece].anchor
-        var out = this
-        for ((side, own, theirs) in listOf(Triple(PieceAnchor.LEFT, ctl(this, "STICK") ?: ctl(this, "DPAD"), ctl(menu, "DPAD")), Triple(PieceAnchor.RIGHT, ctl(this, "X"), ctl(menu, "X")))) {
-            if (own == null || theirs == null) continue
-            val at = out.pieces.filter { sideOf(it) == side }
-            if (at.isEmpty()) continue
-            var dx = theirs.x - own.x
-            // not nearer the frame than the gap
-            if (side == PieceAnchor.LEFT) dx = minOf(dx, frame.minOf { it.x } - gap - at.maxOf { it.dst.x + it.dst.width })
-            else dx = maxOf(dx, frame.maxOf { it.x + it.width } + gap - at.minOf { it.dst.x })
-            val dy = theirs.y - own.y
-            out = out.copy(
-                pieces = out.pieces.map { if (sideOf(it) == side) it.copy(dst = it.dst.copy(x = it.dst.x + dx, y = it.dst.y + dy)) else it },
-                controls = out.controls.map { if (it.spec.anchor == side) it.copy(x = it.x + dx, y = it.y + dy) else it },
-            )
-        }
+        // each side's move across, and down no further than its room over the window's bottom: both sides down alike, so
+        // they stay level
+        val moves = listOf(PieceAnchor.LEFT to ((ctl(this, "STICK") ?: ctl(this, "DPAD")) to ctl(menu, "DPAD")), PieceAnchor.RIGHT to (ctl(this, "X") to ctl(menu, "X")))
+            .mapNotNull { (side, pair) ->
+                val (own, theirs) = pair
+                if (own == null || theirs == null) return@mapNotNull null
+                val at = pieces.filter { sideOf(it) == side }
+                if (at.isEmpty()) return@mapNotNull null
+                val dx = if (side == PieceAnchor.LEFT) minOf(theirs.x - own.x, frame.minOf { it.x } - gap - at.maxOf { it.dst.x + it.dst.width })
+                    else maxOf(theirs.x - own.x, frame.maxOf { it.x + it.width } + gap - at.minOf { it.dst.x })
+                // the room under it: its pieces and caps [ROW_GAP_DP] over the bottom, a word under a cap [ROW_MIN_GAP_DP]
+                val minGap = ROW_MIN_GAP_DP * dp
+                val room = minOf(at.minOf { windowH - gap - (it.dst.y + it.dst.height) },
+                    controls.filter { it.spec.anchor == side }.minOfOrNull { c ->
+                        val cap = c.y + maxOf(c.spec.r, c.spec.hh)
+                        val word = if (c.spec.labelDx == 0f && c.spec.labelH > 0f) cap + c.spec.labelDy + c.spec.labelH else cap
+                        minOf(windowH - gap - cap, windowH - minGap - word)
+                    } ?: Float.MAX_VALUE)
+                Triple(side, dx, minOf(theirs.y - own.y, maxOf(0f, room)))
+            }
+        if (moves.isEmpty()) return this
+        val dy = moves.minOf { it.third }
+        val dxOf = moves.associate { it.first to it.second }
+        fun dx(side: PieceAnchor?) = dxOf[side] ?: 0f
+        val out = copy(
+            pieces = pieces.map { p -> sideOf(p)?.takeIf { it in dxOf }?.let { side -> p.copy(dst = p.dst.copy(x = p.dst.x + dx(side), y = p.dst.y + dy)) } ?: p },
+            controls = controls.map { c -> if (c.spec.anchor in dxOf) c.copy(x = c.x + dx(c.spec.anchor), y = c.y + dy) else c },
+        )
         return out
     }
 
@@ -624,15 +638,17 @@ object SkinChoice {
         )
     }
 
-    /** The consoles whose layouts follow the main menu's (the arcade's, the Dreamcast's, the FDS's, the Game Boys', the 3DS's), on the phone and landscape boards too. */
-    private val FOLLOW_MENU = setOf(SkinVariant.ARCADE, SkinVariant.DC, SkinVariant.FDS, SkinVariant.GB, SkinVariant.GBA) + N3DS_VARIANTS
+    /** The consoles whose layouts follow the main menu's (the arcade's, the Dreamcast's, the FDS's, the Game Boys', the DS's and the 3DS's), on the phone and landscape boards too. */
+    private val FOLLOW_MENU = setOf(SkinVariant.ARCADE, SkinVariant.DC, SkinVariant.FDS, SkinVariant.GB, SkinVariant.GBA, SkinVariant.DS) + N3DS_VARIANTS
 
     /**
      * [variant]'s layout [this] following [menu] ([followMenu]) when it is one of [FOLLOW_MENU]'s, else as it is. The
-     * 3DS's MENU stays with its MIC and SWAP.
+     * DS's and the 3DS's MENU stays with its MIC and SWAP.
      */
     private fun SkinLayoutSpec.toMenu(variant: SkinVariant, menu: SkinLayoutSpec?): SkinLayoutSpec =
-        if (variant in N3DS_VARIANTS) followMenu(menu, skip = setOf("MENU")).withStart(this).nubAsDrawn(this) else if (variant in FOLLOW_MENU) followMenu(menu) else this
+        if (variant in N3DS_VARIANTS) followMenu(menu, skip = setOf("MENU")).withStart(this).nubAsDrawn(this)
+        else if (variant == SkinVariant.DS) followMenu(menu, skip = setOf("MENU")).withStart(this)
+        else if (variant in FOLLOW_MENU) followMenu(menu) else this
 
     /** The row spacing for [variant]'s phone and landscape boards: [FOLLOW_MENU]'s only (the others keep their own). */
     private fun rowFor(variant: SkinVariant, densityDpi: Int, k: Float): RowSpacing? = if (variant in FOLLOW_MENU) rowSpacing(densityDpi, k) else null
@@ -727,12 +743,14 @@ object SkinChoice {
             widest(pack, SkinFamily.FLEX, v, fold = true, refH = if (both != null) Float.MAX_VALUE else windowH / s) { spec ->
                 if (both != null && (spec.minRefH > 0) != both) return@widest null
                 // a console following the menu takes the board drawn as the menu's (no tablet twin: the menu has none)
-                if (both == null && v in FOLLOW_MENU && v !in N3DS_VARIANTS && spec.minRefH > 0) return@widest null
+                if (both == null && v in FOLLOW_MENU && v !in N3DS_VARIANTS && v != SkinVariant.DS && spec.minRefH > 0) return@widest null
                 // the main menu's fold board the reference: its spacing (so the side groups stand where the menu's do)
                 // and its face buttons' height
                 val menu = menuFoldBoard(pack, spec)
                 val shaped = if (both == true) spec.bothFollowMenu(menu?.menuBesideTheDpad())
                     else if (v in N3DS_VARIANTS) spec.bothFollowMenu(menu?.menuBesideTheDpad(), menuUnderStart = false)
+                    // the DS's drawn as the menu's already (its own START / SELECT and row): the face where the menu's is
+                    else if (v == SkinVariant.DS) spec.faceAt(menu)
                     else spec.toMenu(v, menu?.menuBesideTheDpad()).faceAt(menu)
                 // a screen frame with nothing under it as far from the window's bottom as the menu's
                 fun fold(sp: SkinLayoutSpec, hinge: Float? = hingeY) = foldPieces(sp, windowW, windowH, s, picture, topInset, hinge, densityDpi, top, bottomMargin = shellMargin(pack),
@@ -791,12 +809,19 @@ object SkinChoice {
                 board.capsSideways(pack.layouts.firstOrNull { it.variant == SkinVariant.N3DS_REGULAR && it.foldBoard })
             }?.dpadInTheRoom(windowH.toFloat(), densityDpi / 160f)?.let { return it }
             return shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset, rowFor(v, densityDpi, k)) { spec ->
-                // the 3DS's small-cap columns (the Fold cover's): a pair over one each side, the pads where the menu's
-                // shell of the same render has them (its height class may differ)
-                spec.toMenu(v, menuTwin(pack, spec)).let { s -> if (v in N3DS_VARIANTS && spec.id.endsWith("_col"))
-                    s.capsInPairs(pack.layouts.firstOrNull { it.variant == SkinVariant.N3DS_REGULAR && it.foldBoard }) else s }
-            }?.let { p -> if (v in N3DS_VARIANTS && p.spec.id.endsWith("_col")) placeMenu(pack, windowW, windowH, densityDpi, foldable = foldable, tablet = tablet)
-                ?.let { p.sidesAsTheMenu(it, densityDpi / 160f) } ?: p else p }
+                // the DS's and the 3DS's small-cap columns (the Fold cover's): a pair over one each side (the DS's
+                // SELECT / START alone, its SWAP with MIC)
+                val pairs = when {
+                    !spec.id.endsWith("_col") -> null
+                    v in N3DS_VARIANTS -> listOf(Triple("STICK_SWAP", "MIC", "MENU"), Triple("SELECT", "START", "SWAP"))
+                    v == SkinVariant.DS -> listOf(Triple("MIC", "SWAP", "MENU"), Triple<String, String, String?>("SELECT", "START", null))
+                    else -> null
+                }
+                spec.toMenu(v, menuTwin(pack, spec)).let { s -> pairs?.let { s.capsInPairs(pack.layouts.firstOrNull { it.variant == SkinVariant.N3DS_REGULAR && it.foldBoard }, it) } ?: s }
+            }?.let { p -> if ((v in N3DS_VARIANTS || v == SkinVariant.DS) && p.spec.id.endsWith("_col")) placeMenu(pack, windowW, windowH, densityDpi, foldable = foldable, tablet = tablet)
+                ?.let { p.sidesAsTheMenu(it, windowH.toFloat(), densityDpi / 160f).columnsLevel() } ?: p else p }
+                // the DS's small-cap columns level at their foot (START / SELECT where the menu's are, MIC / MENU its own)
+                ?.let { if (v == SkinVariant.DS) it.columnsLevel() else it }
                 ?.let { if (v in N3DS_VARIANTS) it.capsInOneRow(windowH.toFloat(), densityDpi / 160f).nubBetweenXAndA() else it }
         }
         // a foldable's inner screen or a tablet: the fold board, split at its hinge flat or not (the window's middle when flat)
