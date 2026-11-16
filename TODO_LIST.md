@@ -266,6 +266,6 @@ Follow-ups, after #147:
 - [ ] PC Engine CD: check whether a region-specific System Card matters (mednafen pce_fast takes syscard3.pce for both); add it to the region check if so.
 - [ ] BIOS checksums: check each BIOS file against the known good dumps, so a bad or misnamed dump gets its own message.
 - [x] MSU-MD on Genesis Plus GX: the launch checks the Sega CD BIOS of the cartridge's region (its header's country codes, or the forced region), as the core loads it. Refused without bios_CD_U.bin and played with it, MSU-MD Sample on the Nova, 2026-11-16.
-- [ ] BIOS copies: the app copies BIOS files into its own system folder and never removes one whose original is gone, so a deleted or renamed BIOS still loads and passes the check.
+- [x] BIOS copies: the app copied BIOS files into its own system folder and never removed one whose original was gone, so a deleted or renamed BIOS still loaded and passed the check. It now records each copy by the Bios folder it came from and removes it once no folder has it (a bundled file is restored). Refused with bios_CD_U.bin renamed, re-copied and played with it back, MSU-MD Sample on the Nova, 2026-11-16.
 - [ ] More badges ([IndexedGame.badge] is general): from bracketed file-name tags ((Hack), [h], (Homebrew), (Translated), (Beta)/(Proto)) via a small table, a per-game choice in Options (wins over detected ones), or a DAT/ScreenScraper match. One badge per game today.
 - [ ] Docs: unzip MSU packs (a zip cannot be streamed); a pack in its own folder is one game.
