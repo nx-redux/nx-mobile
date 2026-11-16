@@ -38,3 +38,15 @@ class SaveOnQuitOffTest {
         assertFalse(WiiDolphinController.dropsResumePointOnCoreEnd(homeSaved = true, saveOnQuit = true))
     }
 }
+
+class FreshSettingTest {
+    @Test fun a_quit_reads_the_setting_after_the_refresh() = kotlinx.coroutines.test.runTest {
+        var saveOnQuit = false
+        assertTrue(SaveSession.readFresh(300, refresh = { saveOnQuit = true }) { saveOnQuit })
+    }
+
+    @Test fun a_refresh_that_hangs_keeps_the_value_it_had() = kotlinx.coroutines.test.runTest {
+        val saveOnQuit = true
+        assertTrue(SaveSession.readFresh(300, refresh = { kotlinx.coroutines.awaitCancellation() }) { saveOnQuit })
+    }
+}

@@ -161,6 +161,7 @@ import com.nxredux.mobile.ui.nx.SlotUi
 import com.nxredux.mobile.ui.nx.PadMic
 import com.nxredux.mobile.ui.nx.PadMotion
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -184,6 +185,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     SaveSessionHost {
 
     companion object {
+        /** How long a quit waits for Save on quit's current value from the menu's process before using its own copy. */
+        private const val QUIT_SETTINGS_REFRESH_MS = 300L
         /** The frontend rows a pad skin leaves out ([menuLocked]): it places the screens itself. */
         private val SKIN_HIDDEN_OPTIONS = setOf(
             com.nxredux.mobile.options.FrontendOptions.SCALING, com.nxredux.mobile.options.FrontendOptions.OVERLAY,
@@ -1549,7 +1552,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         achievements = null
         if (view == null || !gameReady) { ach?.stop(); finish(); return }   // not running yet: no save to write
         // Save on quit off: the quit keeps the resume point as is (no hidden state), its battery save still written.
-        saves.writeOnQuit(view, chosen, autoState && settings.saveOnQuit, release = { live -> ach?.stop(native = live) }, finish = ::finish)
+        if (!autoState) { saves.writeOnQuit(view, chosen, false, release = { live -> ach?.stop(native = live) }, finish = ::finish); return }
+        // The refresh is a blocking call into the menu's process: run apart, so the timeout can stop waiting for it.
+        lifecycleScope.launch {
+            val keep = SaveSession.readFresh(QUIT_SETTINGS_REFRESH_MS, refresh = { CoroutineScope(Dispatchers.IO).async { Prefs.refreshGame() }.await() }) { settings.saveOnQuit }
+            saves.writeOnQuit(view, chosen, keep, release = { live -> ach?.stop(native = live) }, finish = ::finish)
+        }
     }
 
     override fun refreshSlots() = saves.refreshSlots()

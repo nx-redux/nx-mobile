@@ -22,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -59,6 +60,16 @@ internal class SaveSession(
          * system recreated it after a process kill; else the launch's. Without Save on quit a recreated screen whose
          * bundle names nothing starts fresh: falling back to the launch slot would resume after a kill all the same.
          */
+        /**
+         * The game process's settings are a copy refreshed when it comes back to the front; a quit (a handoff from the
+         * menu, a game beside the menu) may come while the copy is behind. [refresh] gets at most [timeoutMs] (it calls
+         * into the menu's process, which may have to start first); then [read] answers on what is there.
+         */
+        internal suspend fun readFresh(timeoutMs: Long, refresh: suspend () -> Unit, read: () -> Boolean): Boolean {
+            withTimeoutOrNull(timeoutMs) { refresh() }
+            return read()
+        }
+
         internal fun startSlot(recreated: Boolean, saved: Int?, launch: Int?, saveOnQuit: Boolean, netplay: Boolean): Int? = when {
             netplay -> null
             saved != null -> saved
@@ -192,9 +203,7 @@ internal class SaveSession(
     fun onStop(writeAuto: Boolean, unlinkAuto: Boolean = false) {
         if (writeAuto) writeAutoStateOnStop()
         // On [autoWriter], behind any slot-9 write still queued from before the switch went off.
-        if (unlinkAuto) saveStates?.let { ss ->
-            autoWriter.execute { runCatching { ss.unlinkAuto() }.onFailure { NxLog.w("GameActivity", "unlinking the hidden state failed", it) } }
-        }
+        if (unlinkAuto) unlinkAuto()
         pendingOutState?.let(::putResumeSlot)
         pendingOutState = null
     }
@@ -283,6 +292,16 @@ internal class SaveSession(
         }
         homeThumb?.let { queueHomeThumb(it) }
         homeThumb = null
+    }
+
+    /**
+     * Save on quit off: queues [SaveStates.unlinkAuto] on [autoWriter], behind any slot-9 write still queued from before
+     * the switch went off. Run at the game's start too, so a game that never reaches onStop (a crash, a force stop)
+     * leaves no pointer on a hidden state older than its in-game saves.
+     */
+    fun unlinkAuto() {
+        val ss = saveStates ?: return
+        autoWriter.execute { runCatching { ss.unlinkAuto() }.onFailure { NxLog.w("GameActivity", "unlinking the hidden state failed", it) } }
     }
 
     /** Loads the resume slot right after start, like minarch's State_resume; a failure keeps the fresh boot. */
