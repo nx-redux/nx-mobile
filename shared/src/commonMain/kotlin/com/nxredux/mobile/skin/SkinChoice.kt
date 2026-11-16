@@ -460,6 +460,117 @@ object SkinChoice {
         )
     }
 
+    /**
+     * [ids]' group (one stick, or a diamond of caps and its ring) [f] its size about its middle, its middle moved to
+     * [tx], [ty]: its pieces (those round its middle or a cap's, a stick's round its knob) and hit areas with it.
+     */
+    private fun SkinPlacement.groupAt(ids: Set<String>, tx: Float, ty: Float, f: Float): SkinPlacement {
+        val cs = controls.filter { it.spec.id in ids }
+        if (cs.isEmpty()) return this
+        val gx = cs.map { it.x }.average().toFloat(); val gy = cs.map { it.y }.average().toFloat()
+        val knob = if (cs.size == 1) pieces.firstOrNull { it.knob && it.knobOf == cs[0].spec.id }?.dst else null
+        fun mid(d: com.nxredux.mobile.options.PxRect) = (d.x + d.width / 2f) to (d.y + d.height / 2f)
+        fun near(a: Pair<Float, Float>, x: Float, y: Float) = kotlin.math.abs(a.first - x) < 2f && kotlin.math.abs(a.second - y) < 2f
+        // where a piece's middle counts from: the group's middle for a stick's (off its hit area's), else its own
+        fun from(d: com.nxredux.mobile.options.PxRect): Pair<Float, Float>? {
+            val m = mid(d)
+            if (knob != null && near(m, mid(knob).first, mid(knob).second)) return gx to gy
+            return if (near(m, gx, gy) || cs.any { near(m, it.x, it.y) }) m else null
+        }
+        return copy(
+            pieces = pieces.map { p ->
+                if (p.piece < 0 || spec.pieces[p.piece].glass != null) return@map p
+                val (mx, my) = from(p.dst) ?: return@map p
+                val w = p.dst.width * f; val h = p.dst.height * f
+                p.copy(dst = p.dst.copy(x = tx + (mx - gx) * f - w / 2f, y = ty + (my - gy) * f - h / 2f, width = w, height = h))
+            },
+            controls = controls.map { c -> if (c !in cs) c else c.copy(x = tx + (c.x - gx) * f, y = ty + (c.y - gy) * f,
+                spec = c.spec.copy(r = c.spec.r * f, hw = c.spec.hw * f, hh = c.spec.hh * f, arm = c.spec.arm * f, capR = c.spec.capR * f,
+                    travel = c.spec.travel * f, knobTravel = c.spec.knobTravel * f)) },
+        )
+    }
+
+    /**
+     * The N64's tall shell's pads as [menu]'s (the main menu's shell on this window): the stick [fullR] its radius (as
+     * it is when null) where the menu's d-pad is, the d-pad in line under it; the C diamond at the menu's face buttons'
+     * size where they are, what stands under it on its side (B / A, MENU, START) moved down as far as it grew.
+     */
+    private fun SkinPlacement.padsAsTheMenu(menu: SkinPlacement, fullR: Float?): SkinPlacement {
+        fun ctl(p: SkinPlacement, id: String) = p.controls.firstOrNull { it.spec.id == id }
+        val stick = ctl(this, "STICK") ?: return this
+        val mPad = ctl(menu, "DPAD") ?: return this
+        val face = listOf("X", "Y", "A", "B").map { ctl(menu, it) ?: return this }
+        val cs = listOf("CU", "CL", "CR", "CD").map { ctl(this, it) ?: return this }
+        val fx = face.map { it.x }.average().toFloat(); val fy = face.map { it.y }.average().toFloat()
+        val cx = cs.map { it.x }.average().toFloat(); val cy = cs.map { it.y }.average().toFloat()
+        val mx = face.first { it.spec.id == "X" }
+        val cu = cs.first { it.spec.id == "CU" }
+        val f = kotlin.math.hypot(mx.x - fx, mx.y - fy) / kotlin.math.hypot(cu.x - cx, cu.y - cy)
+        val side = cu.spec.anchor
+        fun sideOf(p: SkinPiece) = if (p.piece < 0 || spec.pieces[p.piece].glass != null) null else spec.pieces[p.piece].anchor
+        fun centred(p: SkinPiece, x: Float, y: Float) = kotlin.math.abs(p.dst.x + p.dst.width / 2f - x) < 2f && kotlin.math.abs(p.dst.y + p.dst.height / 2f - y) < 2f
+        // the diamond's foot before and after: what stands under it goes down by the difference
+        val diamond = pieces.filter { p -> sideOf(p) == side && (centred(p, cx, cy) || cs.any { centred(p, it.x, it.y) }) }
+        val foot = diamond.maxOfOrNull { it.dst.y + it.dst.height } ?: return this
+        val newFoot = fy + (foot - cy) * f
+        val dx = fx - cx; val dy = newFoot - foot
+        val below = pieces.filter { p -> sideOf(p) == side && p !in diamond && p.dst.y >= foot - 0.5f }
+        val belowIds = controls.filter { it.spec.anchor == side && it !in cs && it.y > foot }.toSet()
+        val moved = copy(
+            pieces = pieces.map { if (it in below) it.copy(dst = it.dst.copy(x = it.dst.x + dx, y = it.dst.y + dy)) else it },
+            controls = controls.map { if (it in belowIds) it.copy(x = it.x + dx, y = it.y + dy) else it },
+        ).groupAt(setOf("CU", "CL", "CR", "CD"), fx, fy, f)
+            .groupAt(setOf("STICK"), mPad.x, mPad.y, fullR?.let { it / stick.spec.r } ?: 1f)
+        // the d-pad in line under the stick (its height is [dpadInTheRoom]'s)
+        val pad = ctl(moved, "DPAD") ?: return moved
+        // the shoulders where the menu's are: R on its R, Z and L together centred on its L
+        val ml = ctl(menu, "L"); val mr = ctl(menu, "R")
+        val left = listOf("L2", "L").mapNotNull { ctl(moved, it) }
+        val r = ctl(moved, "R")
+        var out = moved.groupAt(setOf("DPAD"), mPad.x, pad.y, 1f)
+        if (ml != null && left.isNotEmpty()) out = out.shifted(left.map { it.spec.id }.toSet(), ml.x - left.map { it.x }.average().toFloat(), ml.y - left.first().y)
+        if (mr != null && r != null) out = out.shifted(setOf("R"), mr.x - r.x, mr.y - r.y)
+        return out
+    }
+
+    /** Controls [ids] and the pieces holding them (theirs alone: a pill, a well) moved by [dx], [dy]. */
+    private fun SkinPlacement.shifted(ids: Set<String>, dx: Float, dy: Float): SkinPlacement {
+        if (dx == 0f && dy == 0f) return this
+        val cs = controls.filter { it.spec.id in ids }
+        fun holds(d: com.nxredux.mobile.options.PxRect, c: PlacedControl) = c.x >= d.x && c.x <= d.x + d.width && c.y >= d.y && c.y <= d.y + d.height
+        val at = pieces.filter { p -> p.piece >= 0 && spec.pieces[p.piece].glass == null && cs.any { holds(p.dst, it) } && controls.none { it !in cs && holds(p.dst, it) } }.toSet()
+        return copy(
+            pieces = pieces.map { if (it in at) it.copy(dst = it.dst.copy(x = it.dst.x + dx, y = it.dst.y + dy)) else it },
+            controls = controls.map { if (it in cs) it.copy(x = it.x + dx, y = it.y + dy) else it },
+        )
+    }
+
+    /**
+     * A landscape shell's screen frame across as [menu]'s (the main menu's shell on this window): its slices' left and
+     * right edges where the menu's are, the glass and the touch shortcut slots across with them. As it is where either
+     * has no frame slices.
+     */
+    private fun SkinPlacement.frameAsTheMenus(menu: SkinPlacement): SkinPlacement {
+        fun slices(q: SkinPlacement) = q.pieces.filter { it.piece < 0 && !it.strip && !it.knob }
+        val mine = slices(this); val theirs = slices(menu)
+        if (mine.isEmpty() || theirs.isEmpty()) return this
+        val left = mine.minOf { it.dst.x }; val right = mine.maxOf { it.dst.x + it.dst.width }
+        val l = theirs.minOf { it.dst.x } - left; val r = theirs.maxOf { it.dst.x + it.dst.width } - right
+        if (kotlin.math.abs(l) < 0.5f && kotlin.math.abs(r) < 0.5f) return this
+        val g = glass(GlassScreen.PICTURE)
+        fun across(x: Float) = left + l + (x - left) * ((right + r) - (left + l)) / (right - left)
+        return copy(
+            pieces = pieces.map { p -> when {
+                p !in mine -> p
+                kotlin.math.abs(p.dst.x - left) < 0.5f -> p.copy(dst = p.dst.copy(x = p.dst.x + l))
+                kotlin.math.abs(p.dst.x + p.dst.width - right) < 0.5f -> p.copy(dst = p.dst.copy(x = p.dst.x + r))
+                else -> p.copy(dst = p.dst.copy(x = p.dst.x + l, width = p.dst.width - l + r))
+            } },
+            glasses = glasses.map { if (it === g) it.copy(rect = it.rect.copy(x = it.rect.x + l, width = it.rect.width - l + r)) else it },
+            controls = controls.map { c -> if (c.spec.id.startsWith("TOUCH_")) c.copy(x = across(c.x), spec = c.spec.copy(hw = c.spec.hw * ((right + r) - (left + l)) / (right - left))) else c },
+        )
+    }
+
     /** Control [id] (the d-pad, a stick: its pieces, its hit area and a stick's travel) [f] its size, about its middle. */
     private fun SkinPlacement.scaled(id: String, f: Float): SkinPlacement {
         val c = controls.firstOrNull { it.spec.id == id } ?: return this
@@ -796,6 +907,17 @@ object SkinChoice {
             // the Dreamcast on a tablet / an inner screen: the stick and the d-pad both, as on its fold board
             if (v == SkinVariant.DC && (foldable || tablet)) shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset, rowFor(v, densityDpi, k),
                 refH = Float.MAX_VALUE, pick = { it.minRefH > 0 && it.controls.none { c -> c.id == "STICK_SWAP" } }) { spec -> spec.bothFollowMenu(menuShellOf(pack, spec)) }
+                ?.dpadInTheRoom(windowH.toFloat(), densityDpi / 160f)?.let { return it }
+            // the N64 on a tablet / an inner screen: the stick and the d-pad both; the stick at its full size (the short
+            // shell's) where the main menu's d-pad is, the C diamond at the menu's face buttons' size where they are
+            if (v == SkinVariant.N64 && (foldable || tablet)) shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset, rowSpacing(densityDpi, k),
+                // MENU and START under B / A (the left's room under the stick is the d-pad's)
+                pick = { it.minRefH > 0 && it.controls.none { c -> c.id == "STICK_SWAP" } && it.controls.any { c -> c.id == "MENU" && c.anchor == PieceAnchor.RIGHT } }) { spec ->
+                spec.n64FollowMenu(menuShellOf(pack, spec)) }
+                ?.let { p ->
+                    val full = pack.layouts.firstOrNull { it.variant == v && it.family == SkinFamily.GRIP && it.minRefH == 0 }?.controls?.firstOrNull { it.id == "STICK" }?.r
+                    placeMenu(pack, windowW, windowH, densityDpi, topInset, foldable, tablet)?.let { p.padsAsTheMenu(it, full?.let { r -> r * p.k }).frameAsTheMenus(it) } ?: p
+                }
                 ?.dpadInTheRoom(windowH.toFloat(), densityDpi / 160f)?.let { return it }
             // the 3DS's tall shell (the stick and the d-pad both) where it fits: its small caps in a row each side; the New
             // 3DS's as the regular 3DS's shell with ZL / ZR and a full C-stick under the face buttons, as the d-pad under the stick
