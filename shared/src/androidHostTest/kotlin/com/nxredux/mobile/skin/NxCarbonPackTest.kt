@@ -288,6 +288,16 @@ class NxCarbonPackTest {
                 for (x in cs) assertTrue(x.x >= 0f && x.x <= d.first && x.y >= 0f && x.y <= d.second, "$name ${x.spec.id} off the window")
             }
             if (name in roomy) assertTrue(c("STICK").y < c("DPAD").y, "$name stick above the d-pad")
+            // B and A apart: 8 dp between their edges
+            assertTrue(kotlin.math.hypot(c("A").x - c("B").x, c("A").y - c("B").y) - c("A").spec.r - c("B").spec.r >= 8f * (if (tablet) 280 else 420) / 160f - 1f, "$name B A apart")
+            // L / R where the main menu's are (Z starting where its L does), but the tablet's upright board's
+            if (name != "tablet") {
+                val m = assertNotNull(SkinChoice.placeMenu(pack, d.first, d.second, if (tablet) 280 else 420, foldable = name.startsWith("inner"),
+                    tablet = tablet || name.startsWith("inner"), hingeY = d.third), "$name menu")
+                fun mc(id: String) = m.controls.first { it.spec.id == id }
+                assertEquals(mc("R").x, c("R").x, 1f, "$name R x"); assertEquals(mc("R").y, c("R").y, 1f, "$name R y")
+                assertEquals(mc("L").x - mc("L").spec.hw, c("L2").x - c("L2").spec.hw, 1f, "$name Z from the menu's L"); assertEquals(mc("L").y, c("L").y, 1f, "$name L y")
+            }
             // B up left of A; Z nearer the thumb than L (outside it, or under it)
             assertTrue(c("B").x < c("A").x && c("B").y < c("A").y, "$name B up left of A")
             assertTrue(c("L2").x < c("L").x || c("L2").y > c("L").y, "$name Z outside or under L")
@@ -1020,7 +1030,7 @@ class NxCarbonPackTest {
                 assertEquals(mc(its).spec.r, c(mine).spec.r, 1f, "$w $mine at $its's size")
             }
             assertEquals(mc("R").x, c("R").x, 1f, "$w R on the menu's"); assertEquals(mc("R").y, c("R").y, 1f, "$w R on the menu's")
-            assertEquals(mc("L").x, (c("L2").x + c("L").x) / 2f, 1f, "$w Z L centred on the menu's L")
+            assertEquals(mc("L").x - mc("L").spec.hw, c("L2").x - c("L2").spec.hw, 1f, "$w Z starts where the menu's L does")
             assertEquals(mc("L").y, c("L").y, 1f, "$w L level with the menu's"); assertEquals(c("L").y, c("L2").y, 1f, "$w Z level with L")
             assertTrue(c("B").y > c("CD").y && c("MENU").y > c("A").y && c("START").y > c("MENU").y, "$w B / A, MENU, START under it")
             assertTrue(c("START").y + c("START").spec.r < h, "$w on the window")
@@ -1030,6 +1040,38 @@ class NxCarbonPackTest {
             span(p).zip(span(m)).forEachIndexed { i, (a, b) -> assertEquals(b, a, 1f, "$w the menu's frame, edge $i") }
             val g = assertNotNull(p.glass(GlassScreen.PICTURE)).rect; val mg = assertNotNull(m.glasses.firstOrNull()).rect
             assertEquals(mg.x, g.x, 1f, "$w the menu's glass left"); assertEquals(mg.width, g.width, 1f, "$w the menu's glass width")
+        }
+    }
+
+    // The N64 upright on an inner screen: its touch screen's frame the main menu's; MENU and START a pair
+    // under the stick / d-pad switch on the left, clear of that frame; the C diamond and the shoulders as the menu's.
+    @Test
+    fun n64UprightFoldBoardHasTheMenusFrameAndThePairUnderTheSwitch() {
+        for ((w, h, dpi) in listOf(Triple(1848, 2448, 420), Triple(2256, 2504, 480))) {
+            val p = assertNotNull(SkinChoice.place(pack, w, h, dpi, false, false, 320f to 240f, null, foldable = true, variant = SkinVariant.N64), "$w")
+            val m = assertNotNull(SkinChoice.placeMenu(pack, w, h, dpi, foldable = true, tablet = true), "$w menu")
+            fun lower(q: SkinPlacement) = q.pieces.filter { it.piece >= 0 && !it.strip && q.spec.pieces[it.piece].glass != null && it.dst.y + it.dst.height / 2f > h / 2f }
+            val f = lower(p); val mf = lower(m)
+            assertEquals(mf.minOf { it.dst.x }, f.minOf { it.dst.x }, 1f, "$w frame left"); assertEquals(mf.maxOf { it.dst.x + it.dst.width }, f.maxOf { it.dst.x + it.dst.width }, 1f, "$w frame right")
+            assertEquals(mf.minOf { it.dst.y }, f.minOf { it.dst.y }, 1f, "$w frame top"); assertEquals(mf.maxOf { it.dst.y + it.dst.height }, f.maxOf { it.dst.y + it.dst.height }, 1f, "$w frame bottom")
+            fun c(id: String) = p.controls.first { it.spec.id == id }
+            val sw = c("STICK_SWAP"); val menu = c("MENU"); val start = c("START")
+            assertEquals(menu.y, start.y, 1f, "$w a pair"); assertTrue(menu.x < start.x, "$w MENU then START")
+            assertTrue(menu.y > sw.y + sw.spec.r + menu.spec.r, "$w under the switch")
+            assertTrue(start.x + start.spec.r < f.minOf { it.dst.x }, "$w clear of the frame")
+            assertTrue(start.y + start.spec.r < h, "$w on the window")
+            // the C diamond as the menu's face buttons, B / A lower under it
+            fun mc(id: String) = m.controls.first { it.spec.id == id }
+            for ((mine, its) in listOf("CU" to "X", "CL" to "Y", "CR" to "A", "CD" to "B")) {
+                assertEquals(mc(its).x, c(mine).x, 1f, "$w $mine on $its"); assertEquals(mc(its).y, c(mine).y, 1f, "$w $mine on $its")
+                assertEquals(mc(its).spec.r, c(mine).spec.r, 1f, "$w $mine at $its's size")
+            }
+            assertTrue(c("B").y - c("B").spec.r > c("CD").y + c("CD").spec.r, "$w B under the diamond")
+            assertTrue(c("A").y + c("A").spec.r < h, "$w A on the window")
+            assertEquals(mc("DPAD").x, c("STICK").x, 1f, "$w the stick on the menu's d-pad"); assertEquals(mc("DPAD").y, c("STICK").y, 1f, "$w the stick on the menu's d-pad")
+            assertEquals(c("STICK").x, c("DPAD").x, 1f, "$w the d-pad with it"); assertEquals(c("STICK").y, c("DPAD").y, 1f, "$w the d-pad with it")
+            assertEquals(mc("R").x, c("R").x, 1f, "$w R on the menu's"); assertEquals(mc("R").y, c("R").y, 1f, "$w R on the menu's")
+            assertEquals(mc("L").x - mc("L").spec.hw, c("L2").x - c("L2").spec.hw, 1f, "$w Z starts where the menu's L does"); assertEquals(mc("L").y, c("L").y, 1f, "$w L level with the menu's")
         }
     }
 
