@@ -177,8 +177,12 @@ internal class SaveSession(
      * onStop: [writeAuto] queues the auto state ([writeAutoStateOnStop]); then, on API 26–27 where onSaveInstanceState
      * already ran, the outcome is recorded in its bundle.
      */
-    fun onStop(writeAuto: Boolean) {
+    fun onStop(writeAuto: Boolean, unlinkAuto: Boolean = false) {
         if (writeAuto) writeAutoStateOnStop()
+        // On [autoWriter], behind any slot-9 write still queued from before the switch went off.
+        if (unlinkAuto) saveStates?.let { ss ->
+            autoWriter.execute { runCatching { ss.unlinkAuto() }.onFailure { NxLog.w("GameActivity", "unlinking the hidden state failed", it) } }
+        }
         pendingOutState?.let(::putResumeSlot)
         pendingOutState = null
     }
