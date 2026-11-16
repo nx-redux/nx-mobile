@@ -30,7 +30,11 @@ Device checks still owed:
 - [ ] EGL context loss on malisx2 (a long time in the background, or another app taking the GPU): the picture comes back.
 - [ ] A second display with a game on malisx2.
 - [ ] A reader buffer the OpenGL ES side cannot import falls back with the toast (not forced on a device yet).
-- [ ] Other Mali devices and malisx2 versions; GameCube/Wii, 3DS and N64 (Vulkan) on malisx2.
+- [ ] Other Mali devices and malisx2 versions; GameCube/Wii and N64 (Vulkan) on malisx2.
+- [ ] 3DS on Vulkan on the AYANEO: Mario Kart 7 from boot reaches 60 fps through the reader on malisx2, then the core
+  aborts at the first 3D scene (`vk::DeviceLostError` in `waitForFences`), on the stock driver too. The game process is
+  about 1 GB on a 1.9 GB device and the menu process is killed for low memory in each run. Check a build from main, then
+  find the cause. OpenGL ES drops to about 5 fps at the same scene.
 - [ ] PS2 resume: about 1 launch in 4 on the AYANEO (stock driver too) boots from the disc although the state load reported success. Existing race at the first frame; find and fix.
 
 ## Slang shader presets
