@@ -759,21 +759,17 @@ internal class DualScreenController(
     private val boardPillGame = mutableStateOf(false)
     /** How far the board's side groups moved in from the window's edge, px ([com.nxredux.mobile.skin.SkinPlacement.sideIn]): the pill follows. */
     private val boardPillIn = mutableStateOf(0f)
-    /** How far a camera cutout in the window's bottom-right corner (where the pill sits) reaches in from the right, px; 0: none there. */
-    private val boardPillCutout = mutableStateOf(0)
 
     /**
      * On the skin's two-screen board ([boardTouchGlass]) the Panel pill, and the Game pill once the panel is up over the
-     * touch screen, at one spot: the window's bottom-right, outside the touch screen (clear of a cutout there), over the
-     * skin's shell. [on]: the board is up; else the pill goes.
+     * touch screen, at one spot: the window's bottom-right, outside the touch screen, over the skin's shell. Not stepped
+     * past a corner camera cutout: that would put it over the skin's small caps. [on]: the board is up; else the pill goes.
      */
     private fun syncBoardPill(on: Boolean) {
         val root = findViewById<FrameLayout>(R.id.root)
         if (!on) { boardPillHost?.let { root.removeView(it) }; boardPillHost = null; return }
         boardPillGame.value = boardPanelUp
         boardPillIn.value = padLayout.skinPlacement()?.sideIn ?: 0f
-        // read once the window is laid out (the cutout is in window px)
-        if (root.width > 0) readPillCutout(root) else root.post { readPillCutout(root) }
         if (boardPillHost == null) {
             val theme = panelTheme()
             val view = ComposeView(activity).apply {
@@ -781,11 +777,10 @@ internal class DualScreenController(
                     theme {
                         PanelPill(
                             if (boardPillGame.value) "Game" else "Panel",
-                            // as far in from the window's bottom as from its right, the side groups' move in included; a
-                            // camera cutout in the corner is stepped past to its left, the bottom margin kept
+                            // as far in from the window's bottom as from its right, the side groups' move in included
                             Modifier.padding(start = 10.dp, top = 10.dp).padding(with(LocalDensity.current) {
                                 val m = 10.dp + boardPillIn.value.toDp()
-                                PaddingValues(end = maxOf(m, boardPillCutout.value.toDp() + 10.dp), bottom = m)
+                                PaddingValues(end = m, bottom = m)
                             }),
                         ) { if (boardPillGame.value) flipPanelDown() else flipPanelUp() }
                     }
@@ -796,14 +791,6 @@ internal class DualScreenController(
             root.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END))
         }
         syncMainPanelHost()
-    }
-
-    /** [boardPillCutout] from [root]'s window insets: a cutout reaching into the bottom-right corner, its width from the right. */
-    private fun readPillCutout(root: View) {
-        val corner = PILL_CORNER_DP * root.resources.displayMetrics.density
-        boardPillCutout.value = root.rootWindowInsets?.displayCutout?.boundingRects
-            ?.filter { it.right > root.width - corner && it.bottom > root.height - corner }
-            ?.maxOfOrNull { root.width - it.left } ?: 0
     }
 
     /**
@@ -1106,4 +1093,3 @@ internal data class SecondSurface(val surface: Surface, val width: Int, val heig
 private data class DisplayShape(val width: Int, val height: Int, val densityDpi: Int)
 
 /** The board pill's corner, dp from the window's bottom-right: a camera cutout reaching into it is kept clear of. */
-private const val PILL_CORNER_DP = 120f

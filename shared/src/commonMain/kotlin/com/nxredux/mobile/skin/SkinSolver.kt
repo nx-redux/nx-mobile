@@ -69,23 +69,30 @@ internal val ROW_IDS = setOf("DPAD", "STICK", "X", "Y", "A", "B", "L", "R", "STA
 internal fun SkinLayoutSpec.shoulderIds(): Set<String> =
     if (controls.none { it.id == "L" || it.id == "R" } && controls.any { it.id == "L2" } && controls.any { it.id == "R2" }) setOf("L2", "R2") else setOf("L", "R")
 
+/** The 3DS's layout sets, the New 3DS's and the regular one's. */
+internal val N3DS_VARIANTS = setOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)
+
 /**
  * A board's shoulders' companions, each beside its shoulder on the inner side: the arcade's TB / TA, the GBA's L2 / R2
- * (small caps beside L / R; another console's L2 / R2 keep their own design).
+ * and the 3DS's ZL / ZR (small caps beside L / R; another console's L2 / R2 keep their own design).
  */
 internal fun SkinLayoutSpec.companionIds(): Set<String> =
-    setOf("TURBO_A", "TURBO_B") + (if (variant != SkinVariant.GBA || "L2" in shoulderIds()) emptySet() else setOf("L2", "R2").filter { id -> controls.any { it.id == id } })
+    setOf("TURBO_A", "TURBO_B") + (if ((variant != SkinVariant.GBA && variant !in N3DS_VARIANTS) || "L2" in shoulderIds()) emptySet()
+        else setOf("L2", "R2").filter { id -> controls.any { it.id == id } })
 
-/** The side controls a [RowSpacing] places on this board: [ROW_IDS], its [shoulderIds] and their [companionIds]. */
-internal fun SkinLayoutSpec.rowIds(): Set<String> = ROW_IDS + shoulderIds() + companionIds()
+/**
+ * The side controls a [RowSpacing] places on this board: [ROW_IDS], its [shoulderIds] and their [companionIds] (the
+ * 3DS's C-stick nub too, over its face buttons, moving with them).
+ */
+internal fun SkinLayoutSpec.rowIds(): Set<String> = ROW_IDS + shoulderIds() + companionIds() + (if (variant in N3DS_VARIANTS) setOf("CSTICK") else emptySet())
 
 /**
  * A taller window's twin showing the stick and the d-pad apart, each its own ring (the Dreamcast's "both" boards): its
  * own design, the row rules leave it alone.
  */
 internal fun SkinLayoutSpec.tallTwinApart(): Boolean {
-    // the Dreamcast's (both shown on every fold / tablet board) takes the row too
-    if (minRefH <= 0 || variant == SkinVariant.DC) return false
+    // the Dreamcast's and the 3DS's (both shown on every fold / tablet board) take the row too
+    if (minRefH <= 0 || variant == SkinVariant.DC || variant in N3DS_VARIANTS) return false
     fun holdsOnly(p: PieceSpec, id: String) = controls.filter { c -> c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale }
         .map { it.id }.toSet() == setOf(id)
     return pieces.any { holdsOnly(it, "STICK") } && pieces.any { holdsOnly(it, "DPAD") }
@@ -201,11 +208,13 @@ object SkinSolver {
      * by it ([RowSpacing]); on a portrait board, the groups under its screen from the window's edges;
      * in place of [sideInset]'s, on a board whose side groups hold only [ROW_IDS]' controls; null when even its least
      * spacing does not fit (a smaller board is tried).
+     * [centreControls]: where the touch screen follows a capped top screen up, the side groups go up with it, centred in
+     * the height under it (false: they stay where their layout puts them, a board following the main menu's).
      * [topScreen]: the DS / 3DS top screen's game size (256 x 192, 400 x 240): a filling frame showing it, on a board
      * with no fold, is cut to its shape (its border as thin above and below as at the sides), kept at the top, and the
      * pieces with a screen (the touch screen) move up by the height that saves.
      */
-    fun placePieces(spec: SkinLayoutSpec, windowW: Float, windowH: Float, k: Float, picture: Pair<Float, Float>? = null, topInset: Float = 0f, hingeY: Float? = null, topScreen: Pair<Float, Float>? = null, hingeGap: Float? = null, capPad: Float? = null, capLift: Boolean = false, sideInset: Float = 0f, bottomMargin: Float? = null, bottomGlass: Float? = null, row: RowSpacing? = null): SkinPlacement? {
+    fun placePieces(spec: SkinLayoutSpec, windowW: Float, windowH: Float, k: Float, picture: Pair<Float, Float>? = null, topInset: Float = 0f, hingeY: Float? = null, topScreen: Pair<Float, Float>? = null, hingeGap: Float? = null, capPad: Float? = null, capLift: Boolean = false, sideInset: Float = 0f, bottomMargin: Float? = null, bottomGlass: Float? = null, row: RowSpacing? = null, centreControls: Boolean = true): SkinPlacement? {
         val frame = spec.frame ?: return null
         if (k <= 0f || spec.refW <= 0 || spec.refH <= 0) return null
         // the background split at the fold too: each half takes its own side's room, the board's hinge on the fold
@@ -399,6 +408,22 @@ object SkinSolver {
             l to r
         }
         fun shoulderShiftOf(anchor: PieceAnchor?) = when (anchor) { PieceAnchor.LEFT -> shoulderShift.first; PieceAnchor.RIGHT -> shoulderShift.second; else -> 0f }
+        // the stick and the d-pad both shown, each its own ring (the Dreamcast's, the 3DS's): the d-pad under the stick, [RowSpacing.gap]
+        // from it, in line. Rings found by centre: one may lie over the other's box before it moves
+        fun centredOn(id: String) = spec.controls.firstOrNull { it.id == id }?.let { c ->
+            spec.pieces.filter { p -> p.glass == null && p.anchor == c.anchor &&
+                kotlin.math.abs(p.x + p.w * p.scale / 2f - c.x) < 2f && kotlin.math.abs(p.y + p.h * p.scale / 2f - c.y) < 2f }
+        }.orEmpty()
+        val padPieces = if (spec.variant == SkinVariant.DC || spec.variant in N3DS_VARIANTS) centredOn("DPAD") else emptyList()
+        val dpadUnder: Pair<Float, Float> = run {
+            if (rowPlan == null || row == null) return@run 0f to 0f
+            val stick = centredOn("STICK").maxByOrNull { it.w }
+            val pad = padPieces.maxByOrNull { it.w }
+            if (stick == null || pad == null || stick.anchor != pad.anchor || centredOn("STICK").any { it in padPieces }) return@run 0f to 0f
+            fun y0(p: PieceSpec) = p.y + down(p.level, p.drop) - minOf(lift, p.rise.toFloat())
+            ((stick.x + across(stick.anchor, stick.inward)) - (pad.x + across(pad.anchor, pad.inward))) to (y0(stick) + stick.h * stick.scale + row.gap - y0(pad))
+        }
+        fun movesWithDpad(p: PieceSpec) = (dpadUnder.first != 0f || dpadUnder.second != 0f) && p in padPieces
         // and down: its top [RowSpacing.gap] under its side's d-pad / face buttons (the pieces holding them), or a single
         // button's middle level with the middle of the column across
         val padIds = setOf("DPAD", "STICK", "X", "Y", "A", "B")
@@ -409,7 +434,8 @@ object SkinSolver {
             val pad = spec.pieces.filter { p -> p.glass == null && p.anchor == anchor && !holdsColumn(p) && spec.controls.any { c ->
                 c.id in padIds && c.anchor == anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale } }
             if (col.isEmpty() || pad.isEmpty()) return 0f
-            return pad.maxOf { y0(it) + it.h * it.scale } + row.gap - col.minOf { y0(it) }
+            // the d-pad where it goes under the stick
+            return pad.maxOf { y0(it) + it.h * it.scale + (if (movesWithDpad(it)) dpadUnder.second else 0f) } + row.gap - col.minOf { y0(it) }
         }
         // a one-button column (the main menu's MENU) centred on the middle of the column of two or more across from it
         fun columnControls(anchor: PieceAnchor) = spec.controls.filter { it.id in columnIds && it.anchor == anchor }
@@ -429,8 +455,11 @@ object SkinSolver {
             if (rowPlan == null || row == null || anchor == null || anchor == PieceAnchor.CENTRE) return 0f
             fun y0(p: PieceSpec) = p.y + down(p.level, p.drop)
             val sh = spec.pieces.filter { it.anchor == anchor && holdsShoulder(it) }
-            val pad = spec.pieces.filter { p -> p.glass == null && p.anchor == anchor && !holdsColumn(p) && !holdsShoulder(p) && spec.controls.any { c ->
-                c.id in padIds && c.anchor == anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale } }
+            fun holding(ids: Set<String>) = spec.pieces.filter { p -> p.glass == null && p.anchor == anchor && !holdsColumn(p) && !holdsShoulder(p) && spec.controls.any { c ->
+                c.id in ids && c.anchor == anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale } }
+            val rings = holding(padIds)
+            // the 3DS's C-stick nub wholly over the face ring stands under the shoulders too (in the ring's corner it is clear)
+            val pad = rings + holding(setOf("CSTICK")).filter { n -> rings.isNotEmpty() && n.y + n.h * n.scale <= rings.minOf { it.y } + 0.5f }
             if (sh.isEmpty() || pad.isEmpty()) return 0f
             return pad.minOf { y0(it) } - row.gap - sh.maxOf { y0(it) + it.h * it.scale }
         }
@@ -459,22 +488,6 @@ object SkinSolver {
         val companionLeft = companionMove(PieceAnchor.LEFT)
         val companionRight = companionMove(PieceAnchor.RIGHT)
         fun companionOf(anchor: PieceAnchor?) = when (anchor) { PieceAnchor.LEFT -> companionLeft; PieceAnchor.RIGHT -> companionRight; else -> 0f to 0f }
-        // the stick and the d-pad both shown, each its own ring (the Dreamcast's): the d-pad under the stick, [RowSpacing.gap]
-        // from it, in line. Rings found by centre: one may lie over the other's box before it moves
-        fun centredOn(id: String) = spec.controls.firstOrNull { it.id == id }?.let { c ->
-            spec.pieces.filter { p -> p.glass == null && p.anchor == c.anchor &&
-                kotlin.math.abs(p.x + p.w * p.scale / 2f - c.x) < 2f && kotlin.math.abs(p.y + p.h * p.scale / 2f - c.y) < 2f }
-        }.orEmpty()
-        val padPieces = if (spec.variant == SkinVariant.DC) centredOn("DPAD") else emptyList()
-        val dpadUnder: Pair<Float, Float> = run {
-            if (rowPlan == null || row == null) return@run 0f to 0f
-            val stick = centredOn("STICK").maxByOrNull { it.w }
-            val pad = padPieces.maxByOrNull { it.w }
-            if (stick == null || pad == null || stick.anchor != pad.anchor || centredOn("STICK").any { it in padPieces }) return@run 0f to 0f
-            fun y0(p: PieceSpec) = p.y + down(p.level, p.drop) - minOf(lift, p.rise.toFloat())
-            ((stick.x + across(stick.anchor, stick.inward)) - (pad.x + across(pad.anchor, pad.inward))) to (y0(stick) + stick.h * stick.scale + row.gap - y0(pad))
-        }
-        fun movesWithDpad(p: PieceSpec) = (dpadUnder.first != 0f || dpadUnder.second != 0f) && p in padPieces
         fun sideShift(anchor: PieceAnchor, inward: Int): Float {
             if (anchor == PieceAnchor.CENTRE) return 0f
             rowPlan?.let { return if (anchor == PieceAnchor.LEFT) it[0] else it[1] }
@@ -560,7 +573,7 @@ object SkinSolver {
         val screenRise = if (capped && capLift) roomH - fh else 0f
         // the side groups only: the row under the touch screen keeps its place, as half-folded (folding never moves it)
         val own = spec.pieces.indices.filter { spec.pieces[it].glass == null && spec.pieces[it].anchor != PieceAnchor.CENTRE }
-        val controlRise = if (screenRise <= 0f || own.isEmpty()) 0f else {
+        val controlRise = if (screenRise <= 0f || own.isEmpty() || !centreControls) 0f else {
             val spots = own.associateWith { spot(spec.pieces[it]) }
             val top = own.minOf { spots.getValue(it)[1] }
             val bottom = own.maxOf { spots.getValue(it)[1] + spec.pieces[it].h * spec.pieces[it].scale }

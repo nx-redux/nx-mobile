@@ -113,12 +113,16 @@ internal fun SkinLayoutSpec.followMenu(
 }
 
 /**
- * The Dreamcast's fold / tablet board showing the stick and the d-pad both ([this] its "both" board): the stick where the
- * menu has its d-pad (the d-pad goes under it, [SkinSolver.placePieces]), the face buttons and START where the menu has
- * them, and MENU under START in the right group, spaced as the menu's START / SELECT column.
+ * A fold / tablet board showing the stick and the d-pad both ([this] its "both" board): the stick where the menu has its
+ * d-pad (the d-pad goes under it, [SkinSolver.placePieces]), the face buttons (the 3DS's C-stick nub with them) where
+ * the menu has them. The Dreamcast ([menuUnderStart]): START where the menu has it and MENU under it in the right group,
+ * spaced as the menu's START / SELECT column. The 3DS: START / SELECT where the menu has them, MENU kept in the row
+ * under the touch screen with MIC and SWAP.
  */
-internal fun SkinLayoutSpec.bothFollowMenu(menu: SkinLayoutSpec?): SkinLayoutSpec {
+internal fun SkinLayoutSpec.bothFollowMenu(menu: SkinLayoutSpec?, menuUnderStart: Boolean = true): SkinLayoutSpec {
     if (menu == null) return this
+    if (!menuUnderStart) return followMenu(menu, alias = mapOf("STICK" to "DPAD"), skip = setOf("DPAD", "MENU"), anyHeight = true)
+        .dpadInLineWithTheStick().withStart(this).nubAsDrawn(this)
     val f = followMenu(menu, alias = mapOf("STICK" to "DPAD"), skip = setOf("DPAD", "MENU", "START"), anyHeight = true)
     val start = f.controls.firstOrNull { it.id == "START" } ?: return f
     val m = f.controls.firstOrNull { it.id == "MENU" } ?: return f
@@ -208,3 +212,127 @@ private fun SkinLayoutSpec.swapOverMenu(menu: SkinLayoutSpec): SkinLayoutSpec {
 /** The buttons that pair with MENU in the left group: the Dreamcast's stick / d-pad swap, the FDS's disk side. */
 internal val MENU_COMPANIONS = setOf("STICK_SWAP", "DISK")
 
+
+/**
+ * The 3DS's C-stick nub (its ring and knob pieces) kept where [drawn] (this board before it followed the menu) has it
+ * from X. Where that is over the face ring (over Y's column, the fold board's and the tall shell's), the face ring and
+ * what stands under it drop by the nub's height over the ring, so the nub stands where the ring's top was: the
+ * shoulders over it stay level with the left's ([SkinSolver.placePieces] sets them over the nub). As it is without a nub.
+ */
+internal fun SkinLayoutSpec.nubAsDrawn(drawn: SkinLayoutSpec): SkinLayoutSpec {
+    val nub = controls.firstOrNull { it.id == "CSTICK" } ?: return this
+    val x = controls.firstOrNull { it.id == "X" && it.anchor == nub.anchor } ?: return this
+    val nub0 = drawn.controls.firstOrNull { it.id == "CSTICK" } ?: return this
+    val x0 = drawn.controls.firstOrNull { it.id == "X" } ?: return this
+    val dx = x.x + (nub0.x - x0.x) - nub.x; val dy = x.y + (nub0.y - x0.y) - nub.y
+    fun centred(p: PieceSpec) = p.glass == null && p.anchor == nub.anchor &&
+        kotlin.math.abs(p.x + p.w * p.scale / 2f - nub.x) < 2f && kotlin.math.abs(p.y + p.h * p.scale / 2f - nub.y) < 2f
+    fun inside(p: PieceSpec, c: ControlSpec) = c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+    val moved = copy(
+        pieces = pieces.map { if (centred(it)) it.copy(x = (it.x + dx).roundToInt(), y = (it.y + dy).roundToInt(), level = x.level, drop = x.drop) else it },
+        controls = controls.map { if (it === nub) it.copy(x = it.x + dx, y = it.y + dy, level = x.level, drop = x.drop) else it },
+    )
+    val n = moved.controls.first { it.id == "CSTICK" }
+    val ring = moved.pieces.firstOrNull { it.glass == null && inside(it, x) } ?: return moved
+    val nubTop = moved.pieces.filter { p -> p.glass == null && p.anchor == n.anchor &&
+        kotlin.math.abs(p.x + p.w * p.scale / 2f - n.x) < 2f && kotlin.math.abs(p.y + p.h * p.scale / 2f - n.y) < 2f }.minOfOrNull { it.y } ?: return moved
+    val nubBottom = n.y + (n.y - nubTop)
+    if (nubBottom > ring.y) return moved   // in the ring's corner (a phone's): the shoulders clear it already
+    val down = ring.y - nubTop
+    val shoulders = shoulderIds() + companionIds()
+    fun stays(p: PieceSpec) = p.glass != null || p.anchor != n.anchor || controls.any { it.id in shoulders && inside(p, it) }
+    return moved.copy(
+        pieces = moved.pieces.map { if (stays(it)) it else it.copy(y = it.y + down) },
+        controls = moved.controls.map { if (it.anchor == n.anchor && it.id !in shoulders) it.copy(y = it.y + down) else it },
+    )
+}
+
+/** The d-pad (its ring) moved across in line with the stick on the same side: its height under it is the solver's. */
+private fun SkinLayoutSpec.dpadInLineWithTheStick(): SkinLayoutSpec {
+    val stick = controls.firstOrNull { it.id == "STICK" } ?: return this
+    val pad = controls.firstOrNull { it.id == "DPAD" }?.takeIf { it.anchor == stick.anchor } ?: return this
+    val dx = (stick.x - pad.x).roundToInt()
+    if (dx == 0) return this
+    fun centred(p: PieceSpec) = p.glass == null && p.anchor == pad.anchor &&
+        kotlin.math.abs(p.x + p.w * p.scale / 2f - pad.x) < 2f && kotlin.math.abs(p.y + p.h * p.scale / 2f - pad.y) < 2f
+    return copy(pieces = pieces.map { if (centred(it)) it.copy(x = it.x + dx) else it }, controls = controls.map { if (it === pad) it.copy(x = it.x + dx) else it })
+}
+
+/**
+ * The caps drawn in START's column under it on [drawn] (the 3DS's SWAP on its tall shell) moved as START moved, so the
+ * column stays one.
+ */
+internal fun SkinLayoutSpec.withStart(drawn: SkinLayoutSpec): SkinLayoutSpec {
+    val s0 = drawn.controls.firstOrNull { it.id == "START" } ?: return this
+    val s1 = controls.firstOrNull { it.id == "START" } ?: return this
+    val dx = s1.x - s0.x; val dy = s1.y - s0.y
+    if (dx == 0f && dy == 0f) return this
+    val ids = drawn.controls.filter { it.id != "START" && it.id != "SELECT" && it.anchor == s0.anchor && it.anchor != PieceAnchor.CENTRE &&
+        kotlin.math.abs(it.x - s0.x) < 1f && it.y > s0.y }.map { it.id }.toSet()
+    if (ids.isEmpty()) return this
+    val caps = controls.filter { it.id in ids }
+    fun centred(p: PieceSpec, c: ControlSpec) = p.glass == null && p.anchor == c.anchor &&
+        kotlin.math.abs(p.x + p.w * p.scale / 2f - c.x) < 2f && kotlin.math.abs(p.y + p.h * p.scale / 2f - c.y) < 2f
+    return copy(
+        pieces = pieces.map { p -> if (caps.any { centred(p, it) }) p.copy(x = (p.x + dx).roundToInt(), y = (p.y + dy).roundToInt(), anchor = s1.anchor ?: p.anchor, level = s1.level, drop = s1.drop) else p },
+        controls = controls.map { c -> if (c.id in ids) c.copy(x = c.x + dx, y = c.y + dy, anchor = s1.anchor, level = s1.level, drop = s1.drop) else c },
+    )
+}
+
+/**
+ * The 3DS board's small caps in the row under the touch screen, three wells [gap] apart (picture px), centred where the
+ * row was: MIC / SWAP, MENU alone, SELECT / START. Each well is the row's own pill cut to its caps (its two ends, its
+ * middle long enough for the pitch between two caps), so they look alike; START / SELECT's own well goes. As it is
+ * without that row.
+ */
+internal fun SkinLayoutSpec.capsInTheRow(gap: Float): SkinLayoutSpec {
+    fun at(id: String) = controls.firstOrNull { it.id == id }
+    val mic = at("MIC") ?: return this; val swap = at("SWAP") ?: return this; val menu = at("MENU") ?: return this
+    val start = at("START") ?: return this; val select = at("SELECT") ?: return this
+    if (listOf(mic, swap, menu).any { it.anchor != PieceAnchor.CENTRE }) return this
+    fun inside(p: PieceSpec, c: ControlSpec) = p.anchor == c.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+    fun centred(p: PieceSpec, c: ControlSpec) = p.glass == null && p.anchor == c.anchor &&
+        kotlin.math.abs(p.x + p.w * p.scale / 2f - c.x) < 2f && kotlin.math.abs(p.y + p.h * p.scale / 2f - c.y) < 2f
+    val caps = listOf(mic, swap, menu, select, start)
+    // the wells: the pieces holding two caps each (a cap's own piece holds one)
+    val well = pieces.firstOrNull { p -> p.glass == null && inside(p, mic) && inside(p, swap) } ?: return this
+    val startWell = pieces.firstOrNull { p -> p.glass == null && inside(p, start) && inside(p, select) }
+    val pitch = kotlin.math.abs(swap.x - menu.x)
+    // the pill's ends (as round as it is tall) and its flat middle, picture px of the parts picture
+    val end = well.h / 2
+    fun pill(left: Float, n: Int): List<PieceSpec> {
+        val mid = ((n - 1) * pitch / well.scale).roundToInt()
+        val a = well.copy(w = end, x = left.roundToInt())
+        val m = well.copy(sx = well.sx + (well.w - mid) / 2, w = mid, x = (left + end * well.scale).roundToInt())
+        val b = well.copy(sx = well.sx + well.w - end, w = end, x = (left + (end + mid) * well.scale).roundToInt())
+        return if (mid > 0) listOf(a, m, b) else listOf(a, b)
+    }
+    val two = (well.h + pitch / well.scale) * well.scale; val one = well.h * well.scale
+    val total = two + gap + one + gap + two
+    val left = menu.x - total / 2f
+    val wells = pill(left, 2) + pill(left + two + gap, 1) + pill(left + two + gap + one + gap, 2)
+    // each cap's middle: a pair's caps the pitch apart in their well
+    val pad = one / 2f
+    val xs = mapOf(
+        "MIC" to left + pad, "SWAP" to left + pad + pitch, "MENU" to left + two + gap + pad,
+        "SELECT" to left + two + gap + one + gap + pad, "START" to left + two + gap + one + gap + pad + pitch,
+    )
+    val moved = caps.associateBy { it.id }
+    val capPiece = pieces.first { centred(it, mic) }
+    return copy(
+        // the wells before the first of the caps and the row's well: drawn under them
+        pieces = pieces.filter { it !== startWell }.let { ps -> ps.indexOfFirst { p -> p === well || (p !== well && caps.any { centred(p, it) }) }.let { i -> ps.take(i) + wells + ps.drop(i) } }.flatMap { p ->
+            if (p === well) return@flatMap emptyList()
+            if (wells.any { it === p }) return@flatMap listOf(p)
+            val c = caps.firstOrNull { centred(p, it) } ?: return@flatMap listOf(p)
+            val nx = xs.getValue(c.id)
+            listOf(p.copy(x = (nx - p.w * p.scale / 2f).roundToInt(), y = (mic.y - p.h * p.scale / 2f).roundToInt(), anchor = PieceAnchor.CENTRE,
+                inward = capPiece.inward, level = capPiece.level, rise = capPiece.rise, drop = capPiece.drop))
+        },
+        controls = controls.map { c ->
+            if (c.id !in moved) c
+            else c.copy(x = xs.getValue(c.id), y = mic.y, anchor = PieceAnchor.CENTRE, inward = mic.inward, level = mic.level, rise = mic.rise, drop = mic.drop,
+                labelDy = mic.labelDy, labelDx = 0f, labelH = mic.labelH)
+        },
+    )
+}

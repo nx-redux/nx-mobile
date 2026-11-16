@@ -907,7 +907,9 @@ class NxCarbonPackTest {
                 val id = "$v $win ${p.spec.id} $side"
                 assertTrue(caps.all { kotlin.math.abs(it.x - caps[0].x) < 1f }, "$id: one column")
                 assertTrue(caps.zipWithNext().all { (a, b) -> b.y - a.y >= a.spec.r + b.spec.r }, "$id: top to bottom, apart")
-                assertTrue(caps[0].y - caps[0].spec.r > padFoot, "$id: under the pad")
+                // under its side's own cluster (the right's: the face's, the left's: the d-pad's or the stick's)
+                val foot = if (side == "left") padFoot else c("B").let { it.y + it.spec.r }
+                assertTrue(caps[0].y - caps[0].spec.r > foot, "$id: under the pad")
                 assertTrue(caps.last().y + caps.last().spec.r < wh - 20f, "$id: on the window")
                 for (k in caps) assertTrue(k.spec.labelH > 0f && (if (side == "left") k.spec.labelDx < 0f else k.spec.labelDx > 0f), "$id ${k.spec.id}: its word outside")
                 // the top two in an upright pair well (two grouped; of three, the top two)
@@ -928,17 +930,22 @@ class NxCarbonPackTest {
         }
     }
 
-    // The New 3DS's tall landscape (the unfolded Fold, a tablet): the face lower than the regular 3DS's, away from
-    // the C-stick nub over it.
+    // The New 3DS's tall landscape (the unfolded Fold, a tablet) and fold board: the face lower than the regular 3DS's,
+    // under the C-stick nub over it; R level with the regular's (the menu's), clear of the nub.
     @Test
     fun new3dsTallLandscapeFaceSitsLowerThanTheRegularOnes() {
-        for ((w, h, dpi) in listOf(Triple(2448, 1848, 420), Triple(2304, 1440, 280))) {
-            fun at(v: SkinVariant) = assertNotNull(SkinChoice.place(pack, w, h, dpi, dpi == 280, true, null, null, variant = v), "$v $w")
+        for ((w, h, dpi) in listOf(Triple(2448, 1848, 420), Triple(2304, 1440, 280), Triple(1848, 2448, 420))) {
+            fun at(v: SkinVariant) = assertNotNull(SkinChoice.place(pack, w, h, dpi, dpi == 280, true, null, null, foldable = dpi == 420, variant = v), "$v $w")
             val n = at(SkinVariant.N3DS); val r = at(SkinVariant.N3DS_REGULAR)
-            for (id in listOf("X", "Y", "A", "B")) {
-                val down = n.controls.first { it.spec.id == id }.y - r.controls.first { it.spec.id == id }.y
-                assertEquals(40f * n.k, down, 1f, "$w $id")
-            }
+            fun y(p: SkinPlacement, id: String) = p.controls.first { it.spec.id == id }.y
+            val down = y(n, "X") - y(r, "X")
+            assertTrue(down > 40f * n.k, "$w face lower: $down")
+            for (id in listOf("Y", "A", "B")) assertEquals(down, y(n, id) - y(r, id), 1f, "$w $id with X")
+            // (or higher: its side lifted to fit the face's column over the window's bottom)
+            assertTrue(y(n, "R") <= y(r, "R") + 1f, "$w R level with the regular's or higher")
+            val nub = n.controls.first { it.spec.id == "CSTICK" }; val rr = n.controls.first { it.spec.id == "R" }
+            assertTrue(nub.y - nub.spec.r * 1.25f > rr.y + rr.spec.hh, "$w nub under R")
+            assertTrue(nub.y < y(n, "X"), "$w nub over the face")
         }
     }
 
@@ -1172,7 +1179,9 @@ class NxCarbonPackTest {
                 assertTrue(c("MENU").y > t.y + t.height, "$name row under the bottom screen")
                 assertTrue(c("START").y > c("B").y && c("SELECT").y > c("B").y, "$name SELECT START under the face")
                 assertEquals(c("START").x, c("SELECT").x, 1f, "$name START over SELECT, one column (user: as the console's)")
-                assertEquals(c("Y").x, c("START").x, 1f, "$name the column on Y's (user)")
+                val menuStart = assertNotNull(SkinChoice.placeMenu(pack, d.first, d.second, if (tablet) 280 else 420, foldable = name.startsWith("inner"), tablet = true, hingeY = d.third))
+                    .controls.first { it.spec.id == "START" }
+                assertEquals(menuStart.x, c("START").x, 1f, "$name the column on the menu's START's (near Y's, user)")
                 for (id in listOf("SELECT", "START"))   // a clear gap under B's cap
                     assertTrue(c(id).y - c("B").y > (c(id).spec.r + c("B").spec.r + 30f) * p.k, "$name $id clear of B")
                 assertTrue(c("CSTICK").y - c("R").y > (c("CSTICK").spec.r * 1.25f + c("R").spec.hh + 30f) * p.k, "$name nub clear of ZR / R (user)")

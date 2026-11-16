@@ -35,6 +35,8 @@ object SkinChoice {
     private const val PAIR_GAP_DP = 8f
     /** The least those gaps shrink to, dp, before the board is drawn smaller. */
     private const val ROW_MIN_GAP_DP = 4f
+    /** Spare width (dp each side) beside the 3DS touch screen's picture from which its frame is cut to it ([touchToItsPicture]). */
+    private const val WIDE_TOUCH_DP = 40f
     /** The narrowest the main menu's bottom screen gets, dp: the narrowest the app's pages lay out for. */
     private const val MENU_MIN_DP = 320f
     /** The longest a book foldable's inner screen is to its short side (the Galaxy Fold 7 / 8 Ultra 1.11, the Pixel Folds 1.04). */
@@ -181,20 +183,21 @@ object SkinChoice {
     private fun foldPieces(
         spec: SkinLayoutSpec, windowW: Int, windowH: Int, k: Float, picture: Pair<Float, Float>?, topInset: Int, hingeY: Float?, densityDpi: Int,
         topScreen: Pair<Float, Float>? = null, bottomMargin: Float? = null, bottomGlass: Float? = null, row: RowSpacing? = null,
+        centreControls: Boolean = true,
     ): SkinPlacement? {
         val w = windowW.toFloat(); val h = windowH.toFloat()
         // a DS / 3DS top screen: its frame no taller than the screen across its width, plus a little ([TOP_PAD_DP])
         val capPad = topScreen?.let { TOP_PAD_DP * densityDpi / 160f / k }
         val sideInset = SIDE_INSET_DP * densityDpi / 160f / k
-        if (hingeY != null) return SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), hingeY, topScreen, capPad = capPad, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass, row = row)
+        if (hingeY != null) return SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), hingeY, topScreen, capPad = capPad, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass, row = row, centreControls = centreControls)
         val middle = h / 2f
-        val first = SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), middle, topScreen, hingeGap = 0f, capPad = capPad, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass, row = row) ?: return null
+        val first = SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), middle, topScreen, hingeGap = 0f, capPad = capPad, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass, row = row, centreControls = centreControls) ?: return null
         // the top of the frame under the middle: the highest of the pieces with a screen below it
         val under = first.pieces.filter { it.piece >= 0 && spec.pieces[it.piece].glass != null && it.dst.y > middle }.minOfOrNull { it.dst.y }
             ?: return first.copy(slab = true)
         // only where there is room: the frame never ends above the middle for it (a frame under nearer than the gap)
         val gap = minOf(0f, (middle - (under - FRAME_GAP_DP * densityDpi / 160f)) / k)
-        return (SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), middle, topScreen, hingeGap = gap, capPad = capPad, capLift = true, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass, row = row) ?: first).copy(slab = true)
+        return (SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), middle, topScreen, hingeGap = gap, capPad = capPad, capLift = true, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass, row = row, centreControls = centreControls) ?: first).copy(slab = true)
     }
 
     /**
@@ -236,7 +239,9 @@ object SkinChoice {
         val frameTop = frames.minOfOrNull { it.y } ?: (ROW_GAP_DP * dp)
         fun box(ids: List<Int>) = ids.minOf { pieces[it].dst.y } to ids.maxOf { pieces[it].dst.y + pieces[it].dst.height }
         val (stickTop, stickBottom) = box(stick); val (padTop, padBottom) = box(pad)
-        val padH = padBottom - padTop
+        // what stands under the d-pad (the 3DS's MIC / MENU column) goes with it, and ends the side
+        val under = sideAt.filter { it !in pad && pieces[it].dst.y >= padBottom - 0.5f }
+        val padH = (under.maxOfOrNull { pieces[it].dst.y + pieces[it].dst.height } ?: padBottom).coerceAtLeast(padBottom) - padTop
         val gap = ROW_GAP_DP * dp
         val end = windowH - gap
         // the side lifted by [up], the d-pad by [up] + [closer] (its gap over it closed that much)
@@ -248,25 +253,170 @@ object SkinChoice {
         val give = if (short > 0f) minOf(short / 2f, gap - ROW_MIN_GAP_DP * dp) else 0f
         val gapNow = gap - give
         val padUp = padTop - (stickBottom - up + gapNow)
-        if (up == 0f && padUp == 0f) return this
+        val other = if (side == PieceAnchor.LEFT) PieceAnchor.RIGHT else PieceAnchor.LEFT
+        if (up == 0f && padUp == 0f) return sideInTheRoom(other, frameTop, end).columnsLevel()
         val sideIds = controls.filter { it.spec.anchor == side }.map { it.spec.id }.toSet()
-        fun moved(i: Int) = when (i) { in pad -> padUp; in sideAt -> up; else -> 0f }
+        fun moved(i: Int) = when (i) { in pad, in under -> padUp; in sideAt -> up; else -> 0f }
         return copy(
             pieces = pieces.mapIndexed { i, p -> moved(i).let { m -> if (m == 0f) p else p.copy(dst = p.dst.copy(y = p.dst.y - m)) } },
             controls = controls.map { c -> when {
-                c.spec.id == "DPAD" -> c.copy(y = c.y - padUp)
+                c.spec.id == "DPAD" || (c.spec.anchor == side && c.y > padBottom) -> c.copy(y = c.y - padUp)
                 c.spec.anchor == side && c.spec.id in sideIds -> c.copy(y = c.y - up)
+                else -> c
+            } },
+        ).sideInTheRoom(other, frameTop, end).columnsLevel()
+    }
+
+    /**
+     * The small caps' columns each side (the 3DS's MIC / MENU, SELECT / START / SWAP on its tall shell) level at their
+     * foot: the higher one down to the lower one's (its well with it). As it is without a column each side.
+     */
+    private fun SkinPlacement.columnsLevel(): SkinPlacement {
+        val ids = setOf("START", "SELECT", "MENU", "MIC", "SWAP", "STICK_SWAP", "DISK")
+        fun caps(side: PieceAnchor) = controls.filter { it.spec.id in ids && it.spec.anchor == side }
+        val l = caps(PieceAnchor.LEFT); val r = caps(PieceAnchor.RIGHT)
+        if (l.isEmpty() || r.isEmpty()) return this
+        val dy = l.maxOf { it.y } - r.maxOf { it.y }
+        if (kotlin.math.abs(dy) < 0.5f) return this
+        val (side, move) = if (dy > 0f) PieceAnchor.RIGHT to dy else PieceAnchor.LEFT to -dy
+        val mine = if (side == PieceAnchor.LEFT) l else r
+        val others = controls.filter { it.spec.anchor == side && it !in mine }
+        // a column's pieces: those holding its caps and nothing else
+        fun holds(d: com.nxredux.mobile.options.PxRect, c: PlacedControl) = c.x >= d.x && c.x <= d.x + d.width && c.y >= d.y && c.y <= d.y + d.height
+        val at = pieces.indices.filter { i -> pieces[i].let { p -> p.piece >= 0 && spec.pieces[p.piece].let { it.glass == null && it.anchor == side } &&
+            mine.any { holds(p.dst, it) } && others.none { holds(p.dst, it) } } }
+        return copy(
+            pieces = pieces.mapIndexed { i, p -> if (i in at) p.copy(dst = p.dst.copy(y = p.dst.y + move)) else p },
+            controls = controls.map { if (it in mine) it.copy(y = it.y + move) else it },
+        )
+    }
+
+    /**
+     * The [side] group (the face buttons' side by the stick and the d-pad: the 3DS's taller with its C-stick nub) lifted
+     * so its lowest piece ends by [end] (window px), no higher than [frameTop]; as it is where it ends there already.
+     */
+    private fun SkinPlacement.sideInTheRoom(side: PieceAnchor, frameTop: Float, end: Float): SkinPlacement {
+        val at = pieces.indices.filter { i -> pieces[i].piece >= 0 && spec.pieces[pieces[i].piece].let { it.glass == null && it.anchor == side } }
+        if (at.isEmpty()) return this
+        val over = at.maxOf { pieces[it].dst.y + pieces[it].dst.height } - end
+        val up = over.coerceAtMost(at.minOf { pieces[it].dst.y } - frameTop)
+        if (up <= 0f) return this
+        return copy(
+            pieces = pieces.mapIndexed { i, p -> if (i in at) p.copy(dst = p.dst.copy(y = p.dst.y - up)) else p },
+            controls = controls.map { c -> if (c.spec.anchor == side) c.copy(y = c.y - up) else c },
+        )
+    }
+
+    /** Window px each side of the touch screen's glass past its 4:3 picture (its height the limit); 0 without one. */
+    private fun SkinPlacement.touchSpare(): Float =
+        glass(GlassScreen.TOUCH)?.rect?.let { (it.width - it.height * 4f / 3f) / 2f } ?: 0f
+
+    /**
+     * The touch screen's frame cut to its 4:3 picture (where its height holds the picture narrower than the glass), its
+     * strip's slots with it, centred where it was. As it is where the picture fills the glass's width.
+     */
+    private fun SkinPlacement.touchToItsPicture(): SkinPlacement {
+        val g = glass(GlassScreen.TOUCH) ?: return this
+        val cut = touchSpare()
+        if (cut < 0.5f) return this
+        val gi = spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
+        val frame = pieces.filter { it.piece == gi && !it.strip }
+        if (frame.isEmpty()) return this
+        val left = frame.minOf { it.dst.x }; val right = frame.maxOf { it.dst.x + it.dst.width }
+        val cx = g.rect.x + g.rect.width / 2f
+        val ratio = (g.rect.width - 2f * cut) / g.rect.width
+        fun across(x: Float) = cx + (x - cx) * ratio
+        return copy(
+            pieces = pieces.map { p -> when {
+                p.piece != gi -> p
+                p.strip -> p.copy(dst = p.dst.copy(x = across(p.dst.x + p.dst.width / 2f) - p.dst.width / 2f))
+                kotlin.math.abs(p.dst.x - left) < 0.5f -> p.copy(dst = p.dst.copy(x = p.dst.x + cut))
+                kotlin.math.abs(p.dst.x + p.dst.width - right) < 0.5f -> p.copy(dst = p.dst.copy(x = p.dst.x - cut))
+                else -> p.copy(dst = p.dst.copy(x = p.dst.x + cut, width = p.dst.width - 2f * cut))
+            } },
+            glasses = glasses.map { if (it === g) it.copy(rect = it.rect.copy(x = it.rect.x + cut, width = it.rect.width - 2f * cut)) else it },
+            controls = controls.map { c -> if (c.spec.id.startsWith("TOUCH_")) c.copy(spec = c.spec.copy(hw = c.spec.hw * ratio), x = across(c.x)) else c },
+        )
+    }
+
+    /**
+     * The 3DS board beside a touch screen cut to its picture ([touchToItsPicture]): L level with R and the stick with the
+     * face buttons; the d-pad under the stick moved in toward the screen as far as the room beside it allows (the New
+     * 3DS's at most half its ring), its ring [ROW_GAP_DP] from the stick's ([PAIR_GAP_DP] the regular 3DS's). Where it would end nearer the window's bottom than
+     * [ROW_GAP_DP] both sides lift alike, no higher than the touch screen's frame; past that the stick goes up toward
+     * its shoulder (to [ROW_GAP_DP] under it), then the gap over the d-pad gives, down to [ROW_MIN_GAP_DP].
+     */
+    private fun SkinPlacement.padsStaggered(windowH: Float, dp: Float): SkinPlacement {
+        fun centredOn(id: String): List<Int> {
+            val c = controls.firstOrNull { it.spec.id == id } ?: return emptyList()
+            return pieces.indices.filter { i -> pieces[i].let { p -> p.piece >= 0 && spec.pieces[p.piece].glass == null &&
+                kotlin.math.abs(p.dst.x + p.dst.width / 2f - c.x) < 2f && kotlin.math.abs(p.dst.y + p.dst.height / 2f - c.y) < 2f } }
+        }
+        fun ctl(id: String) = controls.firstOrNull { it.spec.id == id }
+        val stickC = ctl("STICK") ?: return this; val padC = ctl("DPAD") ?: return this
+        val l = ctl("L") ?: return this; val r = ctl("R") ?: return this
+        val x = ctl("X") ?: return this; val b = ctl("B") ?: return this
+        val stick = centredOn("STICK"); val pad = centredOn("DPAD")
+        if (stick.isEmpty() || pad.isEmpty() || pad.any { it in stick }) return this
+        val gi = spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
+        val frame = pieces.filter { it.piece == gi && !it.strip }.map { it.dst }
+        if (frame.isEmpty()) return this
+        fun sideOf(i: Int) = pieces[i].let { p -> if (p.piece < 0 || spec.pieces[p.piece].glass != null) null else spec.pieces[p.piece].anchor }
+        fun holds(d: com.nxredux.mobile.options.PxRect, c: PlacedControl) = c.x >= d.x && c.x <= d.x + d.width && c.y >= d.y && c.y <= d.y + d.height
+        // the left shoulder and its companion (the New 3DS's ZL)
+        val shoulderIds = spec.shoulderIds() + spec.companionIds()
+        val shoulders = controls.filter { it.spec.id in shoulderIds && it.spec.anchor == PieceAnchor.LEFT }
+        val shoulderAt = pieces.indices.filter { i -> sideOf(i) == PieceAnchor.LEFT && shoulders.any { holds(pieces[i].dst, it) } }
+        val gap = ROW_GAP_DP * dp
+        val shoulderDy = r.y - l.y
+        val stickDy = (x.y + b.y) / 2f - stickC.y
+        val stickY = stickC.y + stickDy
+        val ring = stick.maxOf { pieces[it].dst.width }; val padRing = pad.maxOf { pieces[it].dst.width }
+        val stickRight = stick.maxOf { pieces[it].dst.x + pieces[it].dst.width }
+        // the regular 3DS's as far in as the room allows (higher on its slant for it), [PAIR_GAP_DP] under the stick; the
+        // New 3DS's at most half its ring, [ROW_GAP_DP] under it
+        val regular = spec.variant == SkinVariant.N3DS_REGULAR
+        val inward = ((frame.minOf { it.x } - gap) - stickRight).coerceIn(0f, if (regular) Float.MAX_VALUE else padRing / 2f)
+        val padGap = if (regular) PAIR_GAP_DP * dp else gap
+        fun under(g: Float): Float { val d = (ring + padRing) / 2f + g; return kotlin.math.sqrt(maxOf(0f, d * d - inward * inward)) }
+        // both sides' lift where the d-pad would end too low, then what the gap over it gives
+        val end = windowH - gap
+        val over = stickY + under(padGap) + padRing / 2f - end
+        val sides = pieces.indices.filter { sideOf(it) == PieceAnchor.LEFT || sideOf(it) == PieceAnchor.RIGHT }
+        val top = sides.minOf { i -> pieces[i].dst.y - (if (i in shoulderAt) -shoulderDy else if (i in stick) -stickDy else 0f) }
+        val up = over.coerceIn(0f, maxOf(0f, top - frame.minOf { it.y }))
+        // then the stick up toward its shoulder (the New 3DS's face buttons lower, under its C-stick), [ROW_GAP_DP] under it
+        val shoulderBottom = shoulderAt.maxOfOrNull { pieces[it].dst.y + pieces[it].dst.height + shoulderDy } ?: frame.minOf { it.y }
+        val stickTop = stick.minOf { pieces[it].dst.y } + stickDy
+        val stickUp = (over - up).coerceIn(0f, maxOf(0f, stickTop - (shoulderBottom + gap)))
+        val stickYNow = stickY - stickUp
+        // the gap that ends the d-pad [ROW_GAP_DP] over the window's bottom, on its slant from the stick
+        val drop = end + up - padRing / 2f - stickYNow
+        val gapNow = if (over - up - stickUp > 0f) minOf(padGap, maxOf(ROW_MIN_GAP_DP * dp, kotlin.math.sqrt(drop * drop + inward * inward) - (ring + padRing) / 2f)) else padGap
+        val padX = stickC.x + inward; val padY = stickYNow + under(gapNow)
+        fun dy(i: Int) = when { i in pad -> padY - padC.y; i in shoulderAt -> shoulderDy; i in stick -> stickDy - stickUp; else -> 0f } - (if (i in sides) up else 0f)
+        fun dx(i: Int) = if (i in pad) padX - padC.x else 0f
+        return copy(
+            pieces = pieces.mapIndexed { i, p -> if (dx(i) == 0f && dy(i) == 0f) p else p.copy(dst = p.dst.copy(x = p.dst.x + dx(i), y = p.dst.y + dy(i))) },
+            controls = controls.map { c -> when {
+                c === padC -> c.copy(x = padX, y = padY - up)
+                c === stickC -> c.copy(y = stickYNow - up)
+                c in shoulders -> c.copy(y = c.y + shoulderDy - up)
+                c.spec.anchor == PieceAnchor.LEFT || c.spec.anchor == PieceAnchor.RIGHT -> c.copy(y = c.y - up)
                 else -> c
             } },
         )
     }
 
-    /** The consoles whose layouts follow the main menu's (the arcade's, the Dreamcast's, the FDS's, the Game Boys'), on the phone and landscape boards too. */
-    private val FOLLOW_MENU = setOf(SkinVariant.ARCADE, SkinVariant.DC, SkinVariant.FDS, SkinVariant.GB, SkinVariant.GBA)
+    /** The consoles whose layouts follow the main menu's (the arcade's, the Dreamcast's, the FDS's, the Game Boys', the 3DS's), on the phone and landscape boards too. */
+    private val FOLLOW_MENU = setOf(SkinVariant.ARCADE, SkinVariant.DC, SkinVariant.FDS, SkinVariant.GB, SkinVariant.GBA) + N3DS_VARIANTS
 
-    /** [variant]'s layout [this] following [menu] ([followMenu]) when it is one of [FOLLOW_MENU]'s, else as it is. */
+    /**
+     * [variant]'s layout [this] following [menu] ([followMenu]) when it is one of [FOLLOW_MENU]'s, else as it is. The
+     * 3DS's MENU stays with its MIC and SWAP.
+     */
     private fun SkinLayoutSpec.toMenu(variant: SkinVariant, menu: SkinLayoutSpec?): SkinLayoutSpec =
-        if (variant in FOLLOW_MENU) followMenu(menu) else this
+        if (variant in N3DS_VARIANTS) followMenu(menu, skip = setOf("MENU")).withStart(this).nubAsDrawn(this) else if (variant in FOLLOW_MENU) followMenu(menu) else this
 
     /** The row spacing for [variant]'s phone and landscape boards: [FOLLOW_MENU]'s only (the others keep their own). */
     private fun rowFor(variant: SkinVariant, densityDpi: Int, k: Float): RowSpacing? = if (variant in FOLLOW_MENU) rowSpacing(densityDpi, k) else null
@@ -361,16 +511,23 @@ object SkinChoice {
             widest(pack, SkinFamily.FLEX, v, fold = true, refH = if (both != null) Float.MAX_VALUE else windowH / s) { spec ->
                 if (both != null && (spec.minRefH > 0) != both) return@widest null
                 // a console following the menu takes the board drawn as the menu's (no tablet twin: the menu has none)
-                if (both == null && v in FOLLOW_MENU && spec.minRefH > 0) return@widest null
+                if (both == null && v in FOLLOW_MENU && v !in N3DS_VARIANTS && spec.minRefH > 0) return@widest null
                 // the main menu's fold board the reference: its spacing (so the side groups stand where the menu's do)
                 // and its face buttons' height
                 val menu = menuFoldBoard(pack, spec)
                 val shaped = if (both == true) spec.bothFollowMenu(menu?.menuBesideTheDpad())
+                    else if (v in N3DS_VARIANTS) spec.bothFollowMenu(menu?.menuBesideTheDpad(), menuUnderStart = false)
                     else spec.toMenu(v, menu?.menuBesideTheDpad()).faceAt(menu)
                 // a screen frame with nothing under it as far from the window's bottom as the menu's
-                foldPieces(shaped, windowW, windowH, s, picture, topInset, hingeY, densityDpi, top, bottomMargin = shellMargin(pack),
-                    bottomGlass = flatEnd, row = rowSpacing(densityDpi, s))
-                    ?.let { if (both == true) it.dpadInTheRoom(windowH.toFloat(), densityDpi / 160f) else it }
+                fun fold(sp: SkinLayoutSpec) = foldPieces(sp, windowW, windowH, s, picture, topInset, hingeY, densityDpi, top, bottomMargin = shellMargin(pack),
+                    bottomGlass = flatEnd, row = rowSpacing(densityDpi, s), centreControls = v !in N3DS_VARIANTS)
+                val placed = fold(shaped)
+                val dp = densityDpi / 160f
+                // the 3DS's touch screen held back by its height (a wide window): the frame cut to its picture, the width
+                // it gives up the side groups', START / SELECT in the row under it
+                if (v in N3DS_VARIANTS && placed != null && placed.touchSpare() >= WIDE_TOUCH_DP * dp)
+                    fold(shaped.capsInTheRow(ROW_GAP_DP * dp / s))?.touchToItsPicture()?.padsStaggered(windowH.toFloat(), dp)?.let { return@widest it }
+                placed?.let { if (both == true || v in N3DS_VARIANTS) it.dpadInTheRoom(windowH.toFloat(), dp) else it }
             }
         }
         val foldBoard = { if (v == SkinVariant.DC) foldBoardOf(true) ?: foldBoardOf(false) else foldBoardOf(null) }
@@ -382,6 +539,10 @@ object SkinChoice {
             // the Dreamcast on a tablet / an inner screen: the stick and the d-pad both, as on its fold board
             if (v == SkinVariant.DC && (foldable || tablet)) shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset, rowFor(v, densityDpi, k),
                 refH = Float.MAX_VALUE, pick = { it.minRefH > 0 && it.controls.none { c -> c.id == "STICK_SWAP" } }) { spec -> spec.bothFollowMenu(menuShellOf(pack, spec)) }
+                ?.dpadInTheRoom(windowH.toFloat(), densityDpi / 160f)?.let { return it }
+            // the 3DS's tall shell (the stick and the d-pad both) where it fits
+            if (v in N3DS_VARIANTS) shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset, rowFor(v, densityDpi, k),
+                pick = { it.controls.none { c -> c.id == "STICK_SWAP" } }) { spec -> spec.bothFollowMenu(menuShellOf(pack, spec), menuUnderStart = false) }
                 ?.dpadInTheRoom(windowH.toFloat(), densityDpi / 160f)?.let { return it }
             return shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset, rowFor(v, densityDpi, k)) { spec -> spec.toMenu(v, menuTwin(pack, spec)) }
         }

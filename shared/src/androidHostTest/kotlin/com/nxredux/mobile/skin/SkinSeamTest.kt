@@ -100,37 +100,53 @@ class SkinSeamTest {
     }
 
     @Test
-    fun onAWideWindowTheSideGroupsMoveIn16DpAndTheTouchFrameWidens() {
-        // the Ultra sideways, half-folded: a window much wider than the fold board's render
-        // a board the row rules leave alone (the New 3DS's: its ZL / ZR and C-stick): the side groups' own spacing
-        val wide = assertNotNull(SkinChoice.place(pack, 2504, 2256, 480, tablet = true, ds = true, hingeY = 1128f, foldable = true, variant = SkinVariant.N3DS))
-        val render = pack.layouts.single { it.id == wide.spec.id }
-        val k = wide.k
-        val c = wide.controls.associateBy { it.spec.id }
-        // the d-pad 16 dp (48 px at 480 dpi) in from where its anchor alone puts it; the A button likewise from the right
-        val dpad = render.controls.single { it.id == "DPAD" }
-        assertEquals((dpad.x + dpad.inward) * k + 48f, c.getValue("DPAD").x, 2f)
-        val a = render.controls.single { it.id == "A" }
-        val rightAnchor = (a.x + 2504f / k - render.refW - a.inward) * k
-        assertEquals(rightAnchor - 48f, c.getValue("A").x, 2f)
-        // the touch screen's frame wider than its 4:3 picture: the rest of the room
-        val touch = assertNotNull(wide.glass(GlassScreen.TOUCH)).rect
-        assertTrue(touch.width / touch.height > 4f / 3f + 0.1f, "$touch")
-        assertTrue(touch.x > c.getValue("DPAD").x + c.getValue("DPAD").spec.r, "the frame clear of the d-pad: $touch")
-        // 16 dp from the nearest piece of each group to the touch screen's frame
-        val frame = wide.pieces.filter { it.piece >= 0 && render.pieces[it.piece].glass != null }
-        val left = wide.pieces.filter { it.piece >= 0 && render.pieces[it.piece].anchor == PieceAnchor.LEFT && render.pieces[it.piece].glass == null }
-        val right = wide.pieces.filter { it.piece >= 0 && render.pieces[it.piece].anchor == PieceAnchor.RIGHT && render.pieces[it.piece].glass == null }
-        assertEquals(48f, frame.minOf { it.dst.x } - left.maxOf { it.dst.x + it.dst.width }, 2f)
-        assertEquals(48f, right.minOf { it.dst.x } - frame.maxOf { it.dst.x + it.dst.width }, 2f)
-        // the Fold upright, the render's width: nothing moves sideways
+    fun onAWideWindowThe3dsTouchFrameFitsItsPictureAndTheDpadMovesIn() {
+        // the Ultra sideways, flat and half-folded: the touch screen held back by its height
+        for (hinge in listOf(null, 1128f)) for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) {
+            val name = "$v $hinge"
+            val wide = assertNotNull(SkinChoice.place(pack, 2504, 2256, 480, tablet = true, ds = true, hingeY = hinge, foldable = true, variant = v), name)
+            val render = wide.spec
+            val c = wide.controls.associateBy { it.spec.id }
+            val dp = 3f
+            // the frame no wider than the 4:3 picture
+            val touch = assertNotNull(wide.glass(GlassScreen.TOUCH)).rect
+            assertEquals(4f / 3f, touch.width / touch.height, 0.01f, "$name $touch")
+            val frame = wide.pieces.filter { it.piece >= 0 && render.pieces[it.piece].glass?.screen == GlassScreen.TOUCH && !it.strip }
+            val left = wide.pieces.filter { it.piece >= 0 && render.pieces[it.piece].anchor == PieceAnchor.LEFT && render.pieces[it.piece].glass == null }
+            val right = wide.pieces.filter { it.piece >= 0 && render.pieces[it.piece].anchor == PieceAnchor.RIGHT && render.pieces[it.piece].glass == null }
+            // the side groups 32 dp from the window's edges, at least 16 dp from the frame
+            assertEquals(32f * dp, left.minOf { it.dst.x }, 2f, "$name left edge")
+            assertEquals(32f * dp, 2504f - right.maxOf { it.dst.x + it.dst.width }, 2f, "$name right edge")
+            assertTrue(frame.minOf { it.dst.x } - left.maxOf { it.dst.x + it.dst.width } >= 16f * dp - 1f, "$name left gap")
+            assertTrue(right.minOf { it.dst.x } - frame.maxOf { it.dst.x + it.dst.width } >= 16f * dp - 1f, "$name right gap")
+            // L level with R, the stick with the face buttons, the d-pad under the stick moved in toward the screen
+            assertEquals(c.getValue("R").y, c.getValue("L").y, 1f, "$name L level with R")
+            // (the New 3DS's face buttons lower, under its C-stick: its stick as high as the room needs, 16 dp under L)
+            val face = (c.getValue("X").y + c.getValue("B").y) / 2f
+            if (v == SkinVariant.N3DS_REGULAR) assertEquals(face, c.getValue("STICK").y, 1f, "$name stick level with the face")
+            else assertTrue(c.getValue("STICK").y <= face + 1f && c.getValue("STICK").y - c.getValue("STICK").spec.r >= c.getValue("L").y + c.getValue("L").spec.hh, "$name stick between L and the face's level")
+            assertTrue(c.getValue("DPAD").x > c.getValue("STICK").x + 20f * dp, "$name d-pad moved in")
+            assertTrue(c.getValue("DPAD").y > c.getValue("STICK").y, "$name d-pad under the stick")
+            // the regular 3DS's rings 8 dp apart on their slant
+            if (v == SkinVariant.N3DS_REGULAR) {
+                val sc = c.getValue("STICK"); val pc = c.getValue("DPAD")
+                val ring = wide.pieces.filter { it.piece >= 0 && kotlin.math.abs(it.dst.x + it.dst.width / 2f - sc.x) < 2f && kotlin.math.abs(it.dst.y + it.dst.height / 2f - sc.y) < 2f }.maxOf { it.dst.width }
+                val padRing = wide.pieces.filter { it.piece >= 0 && kotlin.math.abs(it.dst.x + it.dst.width / 2f - pc.x) < 2f && kotlin.math.abs(it.dst.y + it.dst.height / 2f - pc.y) < 2f }.maxOf { it.dst.width }
+                assertEquals(8f * dp, kotlin.math.hypot(pc.x - sc.x, pc.y - sc.y) - (ring + padRing) / 2f, 1f, "$name rings 8 dp apart")
+            }
+            assertTrue(left.maxOf { it.dst.y + it.dst.height } <= 2256f - 16f * dp + 1f, "$name the d-pad in the window")
+            // MIC, SWAP, MENU, SELECT, START in one row under the touch screen, centred on it
+            val row = listOf("MIC", "SWAP", "MENU", "SELECT", "START").map { c.getValue(it) }
+            row.zipWithNext().forEach { (a, b) -> assertEquals(a.y, b.y, 1f, "$name row level"); assertTrue(b.x > a.x, "$name row order") }
+            assertEquals(touch.x + touch.width / 2f, c.getValue("MENU").x, 2f, "$name MENU in the middle")
+            assertTrue(row.all { it.y > touch.y + touch.height }, "$name row under the touch screen")
+        }
         val fold = assertNotNull(SkinChoice.place(pack, 1848, 2448, 420, tablet = true, ds = true, hingeY = 1224f, foldable = true, variant = SkinVariant.N3DS))
-        val foldDpad = fold.controls.single { it.spec.id == "DPAD" }
-        val foldRender = pack.layouts.single { it.id == fold.spec.id }.controls.single { it.id == "DPAD" }
-        assertEquals(foldRender.x + foldRender.inward, foldDpad.x, 1f)
-        // its frame as wide as the render's, taller up to the hinge's spacing (half-folded): the 4:3 picture inside it
+        // the Fold: its frame as wide as the render's, taller up to the hinge's spacing (half-folded): the 4:3 picture
+        // inside it, START / SELECT beside the face buttons
         val ft = assertNotNull(fold.glass(GlassScreen.TOUCH)).rect
         assertTrue(ft.width / ft.height <= 4f / 3f + 0.02f, "$ft")
+        assertEquals(PieceAnchor.RIGHT, fold.controls.single { it.spec.id == "START" }.spec.anchor)
     }
 
     @Test
@@ -160,6 +176,8 @@ class SkinSeamTest {
         // the DS, the regular 3DS, the GB and a one-screen game's boards, on the Fold and the Ultra (upright, sideways)
         for ((w, h, dpi, hinge) in listOf(Quad(1848, 2448, 420, 1224f), Quad(2256, 2504, 480, 1252f), Quad(2504, 2256, 480, 1128f))) {
             for (v in listOf(SkinVariant.DS, SkinVariant.N3DS_REGULAR, SkinVariant.GB, SkinVariant.SINGLE)) {
+                // the 3DS on the Ultra sideways: its touch frame cut to its picture (onAWideWindowThe3dsTouchFrameFitsItsPictureAndTheDpadMovesIn)
+                if (v == SkinVariant.N3DS_REGULAR && w == 2504) continue
                 val ds = v == SkinVariant.DS || v == SkinVariant.N3DS_REGULAR
                 val p = assertNotNull(SkinChoice.place(pack, w, h, dpi, tablet = true, ds = ds, picture = if (ds) null else 240f to 160f, hingeY = hinge, foldable = true, variant = v), "$v ${w}x$h")
                 assertRow(p, w, dpi, "$v ${w}x$h")
@@ -231,6 +249,22 @@ class SkinSeamTest {
                     assertEquals(mc.getValue(id).y, g.getValue(id).y, 1f, "$v ${w}x$h $id y")
                 }
                 if (v == SkinVariant.N3DS_REGULAR) for (id in listOf("START", "SELECT")) assertEquals(mc.getValue(id).x, g.getValue(id).x, 1f, "$v ${w}x$h $id x")
+            }
+        }
+    }
+
+    @Test
+    fun the3dsPhoneBoardsFollowTheMainMenu() {
+        // a phone upright and sideways: the Circle Pad (on the d-pad's spot, the two swapped), the face and START / SELECT where
+        // the menu has them; MENU stays with MIC and SWAP
+        for ((w, h) in listOf(1080 to 2400, 2400 to 1080)) {
+            val menu = assertNotNull(SkinChoice.placeMenu(pack, w, h, 420)).controls.associateBy { it.spec.id }
+            for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) {
+                val g = assertNotNull(SkinChoice.place(pack, w, h, 420, tablet = false, ds = true, variant = v)).controls.associateBy { it.spec.id }
+                for ((id, its) in listOf("STICK" to "DPAD", "DPAD" to "DPAD", "X" to "X", "Y" to "Y", "A" to "A", "B" to "B", "START" to "START", "SELECT" to "SELECT")) {
+                    assertEquals(menu.getValue(its).x, g.getValue(id).x, 1f, "$v ${w}x$h $id x")
+                    assertEquals(menu.getValue(its).y, g.getValue(id).y, 1f, "$v ${w}x$h $id y")
+                }
             }
         }
     }
