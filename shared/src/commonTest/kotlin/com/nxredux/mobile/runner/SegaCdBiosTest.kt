@@ -60,6 +60,43 @@ class SegaCdBiosTest {
         )
     }
 
+    private fun cartridge(country: String): ByteArray = ByteArray(0x8000).also {
+        "SEGA MEGA DRIVE ".encodeToByteArray().copyInto(it, 0x100)
+        country.padEnd(16).encodeToByteArray().copyInto(it, 0x1F0)
+    }
+
+    /** [rom] as an `.smd` dump: a 512-byte header, then each 16 KB block's odd bytes followed by its even ones. */
+    private fun smd(rom: ByteArray): ByteArray = ByteArray(0x200 + rom.size).also { out ->
+        for (b in 0 until rom.size / 0x4000) for (i in 0 until 0x2000) {
+            out[0x200 + b * 0x4000 + i] = rom[b * 0x4000 + i * 2 + 1]
+            out[0x200 + b * 0x4000 + 0x2000 + i] = rom[b * 0x4000 + i * 2]
+        }
+    }
+
+    @Test fun an_msu_md_cartridges_region_is_its_header_country_codes_us_over_japan_over_europe() {
+        fun region(rom: ByteArray) = SegaCdBios.cartridgeRegion(rom.copyOf(minOf(rom.size, SegaCdBios.CARTRIDGE_HEAD)), rom.size.toLong())
+        assertEquals(DiscRegion.US, region(cartridge("JUE")))
+        assertEquals(DiscRegion.JP, region(cartridge("JE")))
+        assertEquals(DiscRegion.EU, region(cartridge("E")))
+        assertEquals(DiscRegion.EU, region(cartridge("EUROPE")))
+        assertEquals(DiscRegion.JP, region(cartridge("JAPAN")))
+        assertEquals(DiscRegion.US, region(cartridge("4")))   // hex country bits: 4 the US
+        assertEquals(DiscRegion.EU, region(cartridge("8")))
+        assertEquals(DiscRegion.JP, region(cartridge("2")))   // Japan PAL loads the Japanese BIOS
+        assertEquals(DiscRegion.US, region(cartridge("")))
+        val swapped = cartridge("E").let { r -> ByteArray(r.size) { r[it xor 1] } }
+        assertEquals(DiscRegion.EU, region(swapped))
+        assertEquals(DiscRegion.JP, region(smd(cartridge("J"))))
+        assertNull(SegaCdBios.cartridgeRegion(ByteArray(0x100), 0x8000))
+    }
+
+    @Test fun the_message_for_an_msu_md_cartridge_asks_for_its_music() {
+        assertEquals(
+            "This game's MSU-MD music needs the European Sega CD BIOS: put bios_CD_E.bin in Bios/MD/. Bios/SEGACD/ has bios_CD_U.bin, which only boots US games.",
+            SegaCdBios.message("MD", SegaPadType.GPGX, DiscRegion.EU, "bios_CD_E.bin", setOf("bios_CD_U.bin"), mapOf("bios_CD_U.bin" to "SEGACD")::get, cartridge = true),
+        )
+    }
+
     @Test fun genesis_plus_gx_forced_region_and_the_generic_need() {
         assertEquals(DiscRegion.EU, SegaCdBios.gpgxForced("pal"))
         assertEquals(DiscRegion.US, SegaCdBios.gpgxForced("ntsc-u"))
