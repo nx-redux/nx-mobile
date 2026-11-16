@@ -307,6 +307,18 @@ object SkinChoice {
         )
     }
 
+    /**
+     * This flat board with [half]'s bottom half (the same board half-folded): its pieces under the lid (the touch screen,
+     * the side groups, the row), its controls and its touch glass; the lid (the top screen's frame, a piece of no layout
+     * piece) and the background this one's.
+     */
+    private fun SkinPlacement.bottomOf(half: SkinPlacement): SkinPlacement = copy(
+        pieces = pieces.filter { it.piece < 0 } + half.pieces.filter { it.piece >= 0 },
+        controls = half.controls,
+        glasses = glasses.filter { it.screen != GlassScreen.TOUCH } + half.glasses.filter { it.screen == GlassScreen.TOUCH },
+        sideIn = half.sideIn,
+    )
+
     /** Window px each side of the touch screen's glass past its 4:3 picture (its height the limit); 0 without one. */
     private fun SkinPlacement.touchSpare(): Float =
         glass(GlassScreen.TOUCH)?.rect?.let { (it.width - it.height * 4f / 3f) / 2f } ?: 0f
@@ -519,14 +531,21 @@ object SkinChoice {
                     else if (v in N3DS_VARIANTS) spec.bothFollowMenu(menu?.menuBesideTheDpad(), menuUnderStart = false)
                     else spec.toMenu(v, menu?.menuBesideTheDpad()).faceAt(menu)
                 // a screen frame with nothing under it as far from the window's bottom as the menu's
-                fun fold(sp: SkinLayoutSpec) = foldPieces(sp, windowW, windowH, s, picture, topInset, hingeY, densityDpi, top, bottomMargin = shellMargin(pack),
+                fun fold(sp: SkinLayoutSpec, hinge: Float? = hingeY) = foldPieces(sp, windowW, windowH, s, picture, topInset, hinge, densityDpi, top, bottomMargin = shellMargin(pack),
                     bottomGlass = flatEnd, row = rowSpacing(densityDpi, s), centreControls = v !in N3DS_VARIANTS)
                 val placed = fold(shaped)
                 val dp = densityDpi / 160f
                 // the 3DS's touch screen held back by its height (a wide window): the frame cut to its picture, the width
                 // it gives up the side groups', START / SELECT in the row under it
-                if (v in N3DS_VARIANTS && placed != null && placed.touchSpare() >= WIDE_TOUCH_DP * dp)
-                    fold(shaped.capsInTheRow(ROW_GAP_DP * dp / s))?.touchToItsPicture()?.padsStaggered(windowH.toFloat(), dp)?.let { return@widest it }
+                if (v in N3DS_VARIANTS && placed != null && placed.touchSpare() >= WIDE_TOUCH_DP * dp) {
+                    val caps = shaped.capsInTheRow(ROW_GAP_DP * dp / s)
+                    fun wide(hinge: Float?) = fold(caps, hinge)?.touchToItsPicture()?.padsStaggered(windowH.toFloat(), dp)
+                    val wide = wide(hingeY)
+                    // flat: the bottom half as half-folded at the window's middle (the touch screen not grown up into the
+                    // hinge's room), so folding never moves it; the flat lid kept
+                    val half = if (hingeY == null && wide != null) wide(windowH / 2f) else null
+                    (if (wide != null && half != null) wide.bottomOf(half) else wide)?.let { return@widest it }
+                }
                 placed?.let { if (both == true || v in N3DS_VARIANTS) it.dpadInTheRoom(windowH.toFloat(), dp) else it }
             }
         }

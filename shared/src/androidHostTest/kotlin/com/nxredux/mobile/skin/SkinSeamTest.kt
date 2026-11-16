@@ -141,6 +141,15 @@ class SkinSeamTest {
             assertEquals(touch.x + touch.width / 2f, c.getValue("MENU").x, 2f, "$name MENU in the middle")
             assertTrue(row.all { it.y > touch.y + touch.height }, "$name row under the touch screen")
         }
+        // flat, the bottom half as half-folded: folding never moves the touch screen or the buttons
+        for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) {
+            val flat = assertNotNull(SkinChoice.place(pack, 2504, 2256, 480, tablet = true, ds = true, hingeY = null, foldable = true, variant = v))
+            val half = assertNotNull(SkinChoice.place(pack, 2504, 2256, 480, tablet = true, ds = true, hingeY = 1128f, foldable = true, variant = v))
+            val ft = assertNotNull(flat.glass(GlassScreen.TOUCH)).rect; val ht = assertNotNull(half.glass(GlassScreen.TOUCH)).rect
+            listOf(ft.x to ht.x, ft.y to ht.y, ft.width to ht.width, ft.height to ht.height).forEach { (a, b) -> assertEquals(b, a, 0.5f, "$v touch $ft $ht") }
+            val hc = half.controls.associateBy { it.spec.id }
+            flat.controls.forEach { c -> hc[c.spec.id]?.let { assertEquals(it.x, c.x, 0.5f, "$v ${c.spec.id}"); assertEquals(it.y, c.y, 0.5f, "$v ${c.spec.id}") } }
+        }
         val fold = assertNotNull(SkinChoice.place(pack, 1848, 2448, 420, tablet = true, ds = true, hingeY = 1224f, foldable = true, variant = SkinVariant.N3DS))
         // the Fold: its frame as wide as the render's, taller up to the hinge's spacing (half-folded): the 4:3 picture
         // inside it, START / SELECT beside the face buttons
