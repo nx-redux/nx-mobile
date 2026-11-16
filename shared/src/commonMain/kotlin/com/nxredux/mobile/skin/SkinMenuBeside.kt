@@ -336,3 +336,33 @@ internal fun SkinLayoutSpec.capsInTheRow(gap: Float): SkinLayoutSpec {
         },
     )
 }
+
+/**
+ * The regular 3DS's board [this] given the New 3DS's controls from [new] (its own board at the same size), as [new]'s
+ * layout (its id and variant): ZL / ZR (the row places them beside L / R) and the C-stick drawn as the stick (its ring
+ * and knob at the Circle Pad's size), under the face buttons [gap] picture px from their ring, in line with them (moved
+ * across once placed). As it is where either lacks what that needs.
+ */
+internal fun SkinLayoutSpec.withNewControls(new: SkinLayoutSpec, gap: Float): SkinLayoutSpec {
+    fun inside(p: PieceSpec, c: ControlSpec) = p.anchor == c.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+    fun centredAt(p: PieceSpec, side: PieceAnchor?, x: Float, y: Float) = p.glass == null && p.anchor == side &&
+        kotlin.math.abs(p.x + p.w * p.scale / 2f - x) < 2f && kotlin.math.abs(p.y + p.h * p.scale / 2f - y) < 2f
+    val zs = new.controls.filter { it.id == "L2" || it.id == "R2" }
+    val zPieces = new.pieces.filter { p -> p.glass == null && zs.any { inside(p, it) } }
+    val stick = controls.firstOrNull { it.id == "STICK" } ?: return this
+    val x = controls.firstOrNull { it.id == "X" } ?: return this
+    val b = controls.firstOrNull { it.id == "B" } ?: return this
+    if (new.controls.none { it.id == "CSTICK" }) return this
+    val stickPieces = pieces.filter { centredAt(it, stick.anchor, stick.x, stick.y) }
+    val fx = x.x; val fy = (x.y + b.y) / 2f
+    val face = pieces.filter { centredAt(it, x.anchor, fx, fy) }.maxByOrNull { it.w * it.scale } ?: return this
+    if (stickPieces.isEmpty()) return this
+    val ring = stickPieces.maxOf { it.w * it.scale }
+    val ny = fy + face.h * face.scale / 2f + gap + ring / 2f
+    val nubPieces = stickPieces.map { p ->
+        p.copy(x = (fx - p.w * p.scale / 2f).roundToInt(), y = (ny - p.h * p.scale / 2f).roundToInt(), anchor = face.anchor, inward = face.inward,
+            level = face.level, rise = face.rise, drop = face.drop, knobOf = if (p.knob) "CSTICK" else p.knobOf)
+    }
+    val nub = stick.copy(id = "CSTICK", x = fx, y = ny, anchor = x.anchor, inward = x.inward, level = x.level, rise = x.rise, drop = x.drop)
+    return copy(id = new.id, variant = new.variant, pieces = pieces + zPieces + nubPieces, controls = controls + zs + nub)
+}

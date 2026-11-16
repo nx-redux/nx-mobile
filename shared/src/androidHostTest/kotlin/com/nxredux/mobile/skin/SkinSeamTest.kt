@@ -121,18 +121,27 @@ class SkinSeamTest {
             assertTrue(right.minOf { it.dst.x } - frame.maxOf { it.dst.x + it.dst.width } >= 16f * dp - 1f, "$name right gap")
             // L level with R, the stick with the face buttons, the d-pad under the stick moved in toward the screen
             assertEquals(c.getValue("R").y, c.getValue("L").y, 1f, "$name L level with R")
-            // (the New 3DS's face buttons lower, under its C-stick: its stick as high as the room needs, 16 dp under L)
             val face = (c.getValue("X").y + c.getValue("B").y) / 2f
-            if (v == SkinVariant.N3DS_REGULAR) assertEquals(face, c.getValue("STICK").y, 1f, "$name stick level with the face")
-            else assertTrue(c.getValue("STICK").y <= face + 1f && c.getValue("STICK").y - c.getValue("STICK").spec.r >= c.getValue("L").y + c.getValue("L").spec.hh, "$name stick between L and the face's level")
+            assertEquals(face, c.getValue("STICK").y, 1f, "$name stick level with the face")
             assertTrue(c.getValue("DPAD").x > c.getValue("STICK").x + 20f * dp, "$name d-pad moved in")
             assertTrue(c.getValue("DPAD").y > c.getValue("STICK").y, "$name d-pad under the stick")
-            // the regular 3DS's rings 8 dp apart on their slant
-            if (v == SkinVariant.N3DS_REGULAR) {
-                val sc = c.getValue("STICK"); val pc = c.getValue("DPAD")
-                val ring = wide.pieces.filter { it.piece >= 0 && kotlin.math.abs(it.dst.x + it.dst.width / 2f - sc.x) < 2f && kotlin.math.abs(it.dst.y + it.dst.height / 2f - sc.y) < 2f }.maxOf { it.dst.width }
-                val padRing = wide.pieces.filter { it.piece >= 0 && kotlin.math.abs(it.dst.x + it.dst.width / 2f - pc.x) < 2f && kotlin.math.abs(it.dst.y + it.dst.height / 2f - pc.y) < 2f }.maxOf { it.dst.width }
-                assertEquals(8f * dp, kotlin.math.hypot(pc.x - sc.x, pc.y - sc.y) - (ring + padRing) / 2f, 1f, "$name rings 8 dp apart")
+            // the rings under the stick and the face buttons 8 dp from them on their slant
+            fun ringAt(x: Float, y: Float) = wide.pieces.filter { it.piece >= 0 && render.pieces[it.piece].glass == null &&
+                kotlin.math.abs(it.dst.x + it.dst.width / 2f - x) < 2f && kotlin.math.abs(it.dst.y + it.dst.height / 2f - y) < 2f }.maxOf { it.dst.width }
+            val sc = c.getValue("STICK"); val pc = c.getValue("DPAD")
+            assertEquals(8f * dp, kotlin.math.hypot(pc.x - sc.x, pc.y - sc.y) - (ringAt(sc.x, sc.y) + ringAt(pc.x, pc.y)) / 2f, 1f, "$name d-pad 8 dp under the stick")
+            val regular = assertNotNull(SkinChoice.place(pack, 2504, 2256, 480, tablet = true, ds = true, hingeY = hinge, foldable = true, variant = SkinVariant.N3DS_REGULAR))
+            if (v == SkinVariant.N3DS) {
+                // the New 3DS's buttons where the regular one's are; ZL / ZR beside L / R; the C-stick a full stick under the face
+                val rc = regular.controls.associateBy { it.spec.id }
+                rc.values.forEach { r -> c[r.spec.id]?.let { assertEquals(r.x, it.x, 1f, "$name ${r.spec.id} x"); assertEquals(r.y, it.y, 1f, "$name ${r.spec.id} y") } }
+                assertEquals(c.getValue("L").y, c.getValue("L2").y, 1f, "$name ZL level with L"); assertTrue(c.getValue("L2").x > c.getValue("L").x, "$name ZL inside L")
+                assertEquals(c.getValue("R").y, c.getValue("R2").y, 1f, "$name ZR level with R"); assertTrue(c.getValue("R2").x < c.getValue("R").x, "$name ZR inside R")
+                val nub = c.getValue("CSTICK")
+                assertEquals(sc.spec.r, nub.spec.r, 0.5f, "$name C-stick a full stick")
+                assertTrue(nub.x < c.getValue("X").x - 20f * dp && nub.y > face, "$name C-stick under the face, moved in")
+                assertEquals(8f * dp, kotlin.math.hypot(nub.x - c.getValue("X").x, nub.y - face) - (ringAt(c.getValue("X").x, face) + ringAt(nub.x, nub.y)) / 2f, 1f, "$name C-stick 8 dp under the face")
+                assertTrue(right.maxOf { it.dst.y + it.dst.height } <= 2256f - 16f * dp + 1f, "$name the C-stick in the window")
             }
             assertTrue(left.maxOf { it.dst.y + it.dst.height } <= 2256f - 16f * dp + 1f, "$name the d-pad in the window")
             // MIC, SWAP, MENU, SELECT, START in one row under the touch screen, centred on it
