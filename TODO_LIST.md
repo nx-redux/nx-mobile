@@ -35,9 +35,12 @@ Device checks still owed:
   core aborts at the first 3D scene (`vk::DeviceLostError` in `waitForFences`). Same on a build from main and on the
   stock driver. The game holds about 1.4 GB with swap on a 1.9 GB device and 23 MB was free at the abort, so most likely
   the GPU kernel driver could not get memory (kernel log not readable there). OpenGL ES survives at about 5 fps.
-- [ ] PS2 quit on the AYANEO aborts in the core after teardown (`pthread_mutex_lock called on a destroyed mutex`, in
-  `libarmsx2`): 1 of 4 quits on a build from main, 2 of 4 on the stock driver and 4 of 5 on malisx2 with the reader.
-  Check whether the auto state and memory card are always written first, then fix the teardown order.
+- [ ] PS2 quit on the AYANEO aborts when the core library is closed (`pthread_mutex_lock called on a destroyed mutex`,
+  in `libarmsx2`): 1 of 4 quits on a build from main, 2 of 4 on the stock driver, 6 of 13 on malisx2 with the reader.
+  It is after the auto state is written. Cause (from the disassembly, no symbols): at `dlclose` a function-static
+  object's destructor runs its "save if dirty" branch (it looks like the INI settings interface) and takes a global
+  mutex whose destructor already ran. Fix in the core: save and drop that object in `retro_deinit`. It matters for the
+  driver fallback too: that relaunch reloads the core in the same process (`recreate()`), so the abort can end it.
 - [ ] PS2 resume: about 1 launch in 4 on the AYANEO (stock driver too) boots from the disc although the state load reported success. Existing race at the first frame; find and fix.
 
 ## Slang shader presets
