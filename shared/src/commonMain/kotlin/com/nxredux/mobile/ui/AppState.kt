@@ -5843,6 +5843,8 @@ class AppState(
             override fun openAchievements() = ra.openRaPanel()
             override suspend fun canResume(entry: Listed): Boolean = deps.userData.resumeInfo(entry.system.tag, entry.game.fileName).canResume
             override fun playFromStart(entry: Listed) = launches.playFromStart(entry)
+            override val aResumes: Boolean get() = deps.settings.aResumes
+            override fun resumeGame(entry: Listed) { launches.resumeGame(entry) }
             override fun hiddenTabs(): List<MenuCategory> = this@AppState.hiddenTabs()
             override fun openHiddenTab(category: MenuCategory) = this@AppState.openHiddenTab(category)
             override val appOnTop: Boolean get() = _appOnTop.value

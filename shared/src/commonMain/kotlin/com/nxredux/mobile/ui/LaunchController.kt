@@ -93,10 +93,17 @@ internal class LaunchController(
      */
     fun resumeFromSave(entry: Listed, orPlay: Boolean = false): Job? {
         val e = entry.takeIf { !it.system.unassigned && !it.system.android } ?: return null
+        if (orPlay && !deps.settings.aResumes) return launch(e, resumeSlot = null)   // A starts fresh; the menu's Resume continues
         return scope.launch {   // ends with the launch's own job
             val info = deps.userData.resumeInfo(e.system.tag, e.game.fileName)
             (if (info.canResume) launch(e, info.slot) else if (orPlay) launch(e, resumeSlot = null) else null)?.join()
         }
+    }
+
+    /** The context menu's Resume (A starts games fresh): [entry] from its save, read now; without one nothing starts. */
+    fun resumeGame(entry: Listed): Job? {
+        host.rememberMenuSelection()   // Home's game, as A on it
+        return resumeFromSave(entry)
     }
 
     /**
@@ -257,7 +264,8 @@ internal class LaunchController(
             else -> null
         }?.takeIf { !it.system.unassigned && !it.system.android } ?: run { _resumeInfo.value = ResumeInfo.NONE; return }
         resumeJob = scope.launch {
-            val info = deps.userData.resumeInfo(e.system.tag, e.game.fileName)
+            val read = deps.userData.resumeInfo(e.system.tag, e.game.fileName)
+            val info = if (deps.settings.aResumes) read else read.copy(slot = null)   // A starts fresh: its hint says so; the picture stays
             if (screen.value === s && selection.value.index == index) _resumeInfo.value = info   // drop stale reads
         }
     }

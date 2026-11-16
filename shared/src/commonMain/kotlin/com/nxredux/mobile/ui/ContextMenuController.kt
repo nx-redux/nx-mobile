@@ -121,6 +121,12 @@ internal interface ContextMenuHost {
     /** The menu's Play from start: launches [entry] without its save state. */
     fun playFromStart(entry: Listed) {}
 
+    /** A starts games fresh (Settings → Emulation → A resumes off): a game's menu offers Resume instead of Play from start. */
+    val aResumes: Boolean get() = true
+
+    /** The menu's Resume: continues [entry] from its save state. */
+    fun resumeGame(entry: Listed) {}
+
     /** The tabs Layouts hides that have content, for MENU's hidden-tab items; empty while a hidden tab is pushed. */
     fun hiddenTabs(): List<MenuCategory> = emptyList()
 
@@ -273,7 +279,7 @@ internal class ContextMenuController(
     private fun gameMenu(s: Screen.Games, e: Listed, canResume: Boolean) {
         val items = ContextMenus.itemsFor(
             s.source, e, pinned = pinned(e), art = host.artMenu(e), netplay = host.netplayOffered(e),
-            canResume = canResume, netplayLeads = host.netplayInMenu,
+            canResume = canResume, netplayLeads = host.netplayInMenu, aResumes = host.aResumes,
         )
         // The achievements panel, last, while Layouts hides its icon and hint.
         val own = (if (host.achievementsInMenu) items + ContextItem(ContextKind.ACHIEVEMENTS, "Achievements") else items)
@@ -298,9 +304,9 @@ internal class ContextMenuController(
     /** A main-menu row's menu on [category]'s tab; null for a row without one (a console, Pick a game, "+N", Kids Mode's Apps). */
     private fun rowMenu(row: MainRow?, fromStart: Boolean, category: MenuCategory?): ContextMenu? = when (row) {
         is MainRow.Collection -> ContextMenu(null, ContextMenus.collectionItems(), collection = row.name)
-        is MainRow.Pin -> ContextMenu(row.entry, ContextMenus.pinRowItems(netplay = homeNetplay(row.entry), fromStart = fromStart))
-        is MainRow.Shelf -> ContextMenu(row.entry, ContextMenus.homeGameItems(pinned = false, netplay = homeNetplay(row.entry), fromStart = fromStart))   // never a pinned game
-        is MainRow.Continue -> ContextMenu(row.entry, ContextMenus.homeGameItems(pinned = host.pins.any { it.path in row.entry.game.lines }, netplay = homeNetplay(row.entry), fromStart = fromStart))
+        is MainRow.Pin -> ContextMenu(row.entry, ContextMenus.pinRowItems(netplay = homeNetplay(row.entry), fromStart = fromStart, aResumes = host.aResumes))
+        is MainRow.Shelf -> ContextMenu(row.entry, ContextMenus.homeGameItems(pinned = false, netplay = homeNetplay(row.entry), fromStart = fromStart, aResumes = host.aResumes))   // never a pinned game
+        is MainRow.Continue -> ContextMenu(row.entry, ContextMenus.homeGameItems(pinned = host.pins.any { it.path in row.entry.game.lines }, netplay = homeNetplay(row.entry), fromStart = fromStart, aResumes = host.aResumes))
         is MainRow.Tool -> if (row.row.kind == ToolKind.KIDS_LOCK || category == MenuCategory.APPS) null   // Kids Mode's Lock and Apps: no menu
             else ContextMenus.toolItems(pinned = row.row.pinKey in host.toolPins, app = row.row.kind == ToolKind.APP, pin = !host.kidsOn)
                 .takeIf { it.isNotEmpty() }?.let { ContextMenu(null, it, tool = row.row) }
@@ -433,6 +439,7 @@ internal class ContextMenuController(
             ContextKind.CHANGE_ART -> { closeContextMenu(); host.openArtPanel(m.game, fetchFirst = false) }
             ContextKind.NETPLAY -> { closeContextMenu(); host.openNetplay(m.game) }
             ContextKind.PLAY_FROM_START -> { closeContextMenu(); host.playFromStart(m.game) }
+            ContextKind.RESUME -> { closeContextMenu(); host.resumeGame(m.game) }
         }
     }
 
@@ -585,7 +592,7 @@ internal class ContextMenuController(
             ContextKind.PIN, ContextKind.UNPIN, ContextKind.HIDE, ContextKind.UNHIDE, ContextKind.RENAME,
             ContextKind.REMOVE_FROM_COLLECTION, ContextKind.REMOVE_RECENT, ContextKind.GAME_SETTINGS, ContextKind.FETCH_ART, ContextKind.CHANGE_ART,
             ContextKind.PIN_TOOL, ContextKind.UNPIN_TOOL, ContextKind.ADD_TO_TOOLS, ContextKind.REMOVE_FROM_TOOLS,
-            ContextKind.RENAME_COLLECTION, ContextKind.DELETE_COLLECTION, ContextKind.NETPLAY, ContextKind.PLAY_FROM_START,
+            ContextKind.RENAME_COLLECTION, ContextKind.DELETE_COLLECTION, ContextKind.NETPLAY, ContextKind.PLAY_FROM_START, ContextKind.RESUME,
             ContextKind.OPEN_GAMES, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS, ContextKind.ACHIEVEMENTS, ContextKind.USE_TOP_SCREEN -> closeContextMenu()
         }
     }

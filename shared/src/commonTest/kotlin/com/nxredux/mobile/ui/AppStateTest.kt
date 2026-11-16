@@ -64,6 +64,7 @@ import com.nxredux.mobile.settings.ImportSource
 import com.nxredux.mobile.settings.SaveTransfer
 import com.nxredux.mobile.settings.SaveTransferRules
 import com.nxredux.mobile.settings.TransferReport
+import com.nxredux.mobile.storage.AutoSlotGate
 import com.nxredux.mobile.storage.AllFilesAccess
 import com.nxredux.mobile.storage.FakeAllFilesAccess
 import com.nxredux.mobile.storage.FakeNotificationAccess
@@ -1642,8 +1643,9 @@ class AppStateTest {
         assertEquals(listOf(Recent("/Roms/Nintendo DS (NDS)/Mario Kart DS.nds", "Mario Kart DS")), data.recents)
     }
 
-    private fun ndsList(settings: MemorySettings, runner: RecordingRunner, scope: CoroutineScope, save: Boolean = true): AppState {
-        val data = FakeUserData(resumable = if (save) mapOf(("NDS" to "Mario Kart DS.nds") to ResumeInfo(9, "file:///p.bmp")) else emptyMap())
+    private fun ndsList(settings: MemorySettings, runner: RecordingRunner, scope: CoroutineScope, save: Boolean = true, slot: Int = 9): AppState {
+        val fake = FakeUserData(resumable = if (save) mapOf(("NDS" to "Mario Kart DS.nds") to ResumeInfo(slot, "file:///p.bmp")) else emptyMap())
+        val data = AutoSlotGate(fake) { settings.saveOnQuit }
         val state = AppState(AppDeps(settings, source, runner, NoopPicker(), data, compute = scope.coroutineContext[ContinuationInterceptor]!!), scope)
         state.load()
         state.openSystem(assertIs<Screen.Systems>(state.screen.value).systems.first { it.tag == "NDS" })
@@ -1660,6 +1662,52 @@ class AppStateTest {
             assertNull(state.screen.value.contextMenu)
             assertNull(runner.launched.single().resumeSlot)              // from the start, the save left alone
         }
+    }
+
+    @Test fun a_plays_fresh_when_a_resumes_is_off_and_the_menu_resumes() = runTest {
+        val runner = RecordingRunner()
+        val state = ndsList(MemorySettings(ContentRef("Home")).apply { aResumes = false; menuButtonHints = false }, runner, CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        assertFalse(state.resumeInfo.value.canResume)                    // A Play shows, not Resume
+        state.onButton(NxButton.A)
+        assertNull(runner.launched.single().resumeSlot)
+        state.onForeground()
+        state.onButton(NxButton.MENU)
+        assertEquals(ContextKind.RESUME, menuKinds(state).first())
+        assertTrue(ContextKind.PLAY_FROM_START !in menuKinds(state))
+        state.onButton(NxButton.A)
+        assertEquals(9, runner.launched[1].resumeSlot)
+    }
+
+    @Test fun save_on_quit_off_ignores_the_hidden_state_but_keeps_a_manual_slot() = runTest {
+        val runner = RecordingRunner()
+        val hidden = ndsList(MemorySettings(ContentRef("Home")).apply { saveOnQuit = false }, runner, CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        hidden.onButton(NxButton.A)
+        assertNull(runner.launched.single().resumeSlot)
+        val manual = RecordingRunner()
+        val kept = ndsList(MemorySettings(ContentRef("Home")).apply { saveOnQuit = false }, manual, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), slot = 3)
+        kept.onButton(NxButton.A)
+        assertEquals(3, manual.launched.single().resumeSlot)
+    }
+
+    @Test fun both_off_offers_neither_resume_nor_play_from_start() = runTest {
+        val runner = RecordingRunner()
+        val state = ndsList(MemorySettings(ContentRef("Home")).apply { aResumes = false; saveOnQuit = false; menuButtonHints = false }, runner, CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        state.onButton(NxButton.MENU)
+        assertTrue(ContextKind.RESUME !in menuKinds(state))
+        assertTrue(ContextKind.PLAY_FROM_START !in menuKinds(state))
+        state.onButton(NxButton.B)
+        state.onButton(NxButton.A)
+        assertNull(runner.launched.single().resumeSlot)
+    }
+
+    @Test fun a_on_continue_plays_fresh_when_a_resumes_is_off() = runTest {
+        val runner = RecordingRunner()
+        val data = FakeUserData(recents = listOf(Recent(tetris)), resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9)))
+        val state = state(MemorySettings(ContentRef("Home")).apply { aResumes = false }, data = data, runner = runner)
+        state.load(); advanceUntilIdle()
+        assertIs<MainRow.Continue>(state.screen.value.homeRows[0])
+        state.onButton(NxButton.A)
+        assertNull(runner.launched.single().resumeSlot)
     }
 
     @Test fun a_game_without_a_save_offers_no_play_from_start() = runTest {
