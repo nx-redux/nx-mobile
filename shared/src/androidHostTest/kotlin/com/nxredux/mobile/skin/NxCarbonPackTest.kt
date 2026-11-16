@@ -1177,17 +1177,11 @@ class NxCarbonPackTest {
                 row("L", "L2", "SWAP", "R2", "R")
                 assertEquals(d.first / 2f, c("SWAP").x, 30f * p.k, "$name SWAP in the middle")
             }
-            if (foldBoard) {   // one row under the bottom screen
-                row("MIC", "MENU", "SWAP")
+            if (foldBoard) {   // one row under the bottom screen, SELECT / START in it (user)
+                row("MIC", "SWAP", "MENU", "SELECT", "START")
                 val t = p.glasses.single { it.screen == GlassScreen.TOUCH }.rect
                 assertTrue(c("MENU").y > t.y + t.height, "$name row under the bottom screen")
-                assertTrue(c("START").y > c("B").y && c("SELECT").y > c("B").y, "$name SELECT START under the face")
-                assertEquals(c("START").x, c("SELECT").x, 1f, "$name START over SELECT, one column (user: as the console's)")
-                val menuStart = assertNotNull(SkinChoice.placeMenu(pack, d.first, d.second, if (tablet) 280 else 420, foldable = name.startsWith("inner"), tablet = true, hingeY = d.third))
-                    .controls.first { it.spec.id == "START" }
-                assertEquals(menuStart.x, c("START").x, 1f, "$name the column on the menu's START's (near Y's, user)")
-                for (id in listOf("SELECT", "START"))   // a clear gap under B's cap
-                    assertTrue(c(id).y - c("B").y > (c(id).spec.r + c("B").spec.r + 30f) * p.k, "$name $id clear of B")
+                assertEquals(t.x + t.width / 2f, c("MENU").x, 2f, "$name MENU in the middle")
                 assertTrue(c("CSTICK").y - c("R").y > (c("CSTICK").spec.r * 1.25f + c("R").spec.hh + 30f) * p.k, "$name nub clear of ZR / R (user)")
                 if (name == "tablet") assertTrue(t.width / p.k > 1000f, "$name bottom screen grown: ${t.width / p.k}")
             }
