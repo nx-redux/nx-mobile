@@ -4310,7 +4310,8 @@ class AppState(
             // Emulators, Saves (the handheld's formats in its order), Second screen and Developer.
             SettingsKind.PAUSE_UNFOCUSED -> flip(s.pauseWhenUnfocused) { s.pauseWhenUnfocused = it }
             SettingsKind.SCREEN_CARE -> flip(s.screenCare) { s.screenCare = it }
-            SettingsKind.SAVE_ON_QUIT -> flip(s.saveOnQuit) { s.saveOnQuit = it }
+            // Home's tiles hold the hidden state's frames read when built: rebuilt so none outlives the switch.
+            SettingsKind.SAVE_ON_QUIT -> flip(s.saveOnQuit, after = { settingsUi.refreshSettings(); scope.launch { refreshMainRows() } }) { s.saveOnQuit = it }
             SettingsKind.A_RESUMES -> flip(s.aResumes) { s.aResumes = it }
             SettingsKind.SAVE_FORMAT -> cycle(SaveFormat.entries, s.saveFormat, { it.label }) { s.saveFormat = it }
             SettingsKind.STATE_FORMAT -> cycle(StateFormat.entries, s.stateFormat, { it.label }) { s.stateFormat = it }

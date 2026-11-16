@@ -73,11 +73,11 @@ import com.nxredux.mobile.ui.nx.placeholderBoxSize
 /** How far a horizontal swipe travels before it moves to the next or previous game. */
 private val SWIPE_THRESHOLD = 24.dp
 
-/** The switcher's hints: B Back, and with a game Y Remove (touch: a trash icon) and A Resume (Start for one with no state to resume). */
-/** A List-layout card's picture: the resume frame, else the scraped screenshot unless it failed to load; null: the box chain. */
+/** The full-screen layout's picture: the resume frame, else the scraped screenshot unless it failed to load; null: the box chain. */
 internal fun switcherCardPicture(resumeFrame: String?, screenshot: String?, failed: Set<String>): String? =
     resumeFrame ?: screenshot?.takeIf { it !in failed }
 
+/** The switcher's hints: B Back, and with a game Y Remove (touch: a trash icon) and A Resume (Start for one with no state to resume). */
 internal fun switcherHints(entry: SwitcherEntry?): List<Hint> =
     if (entry == null) listOf(Hint(NxButton.B, "Back"))
     else listOf(

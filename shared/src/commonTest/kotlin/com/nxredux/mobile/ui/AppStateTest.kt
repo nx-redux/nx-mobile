@@ -1623,6 +1623,8 @@ class AppStateTest {
         override suspend fun readHidden() = hidden
         override suspend fun writeHidden(list: List<String>): Boolean { if (failWrites) return false; hidden = list; return true }
         override suspend fun resumeInfo(tag: String, fileName: String) = resumable[tag to fileName] ?: ResumeInfo.NONE
+        override suspend fun hiddenStateShot(tag: String, fileName: String) =
+            resumable[tag to fileName]?.takeIf { it.slot == 9 }?.let { "file:///$fileName.9.png" }
     }
 
     private fun stateWith(userData: FakeUserData, runner: RecordingRunner, scope: CoroutineScope) =
@@ -1698,6 +1700,26 @@ class AppStateTest {
         state.onButton(NxButton.B)
         state.onButton(NxButton.A)
         assertNull(runner.launched.single().resumeSlot)
+    }
+
+    @Test fun turning_save_on_quit_off_drops_homes_hidden_state_frames_at_once() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val fake = FakeUserData(recents = listOf(Recent(tetris)), resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9, "file:///t.png")))
+        val state = state(settings, data = AutoSlotGate(fake) { settings.saveOnQuit })
+        state.load(); advanceUntilIdle()
+        val before = assertIs<MainRow.Continue>(state.screen.value.homeRows[0])
+        assertEquals("file:///Tetris.gb.9.png", continueFrame(before))  // the hidden state's frame
+        state.openSettingsMenu()
+        state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // Emulation
+        val emu = assertIs<Screen.Settings>(state.screen.value)
+        repeat(emu.rows.indexOfFirst { it.kind == SettingsKind.SAVE_ON_QUIT }) { state.onButton(NxButton.DOWN) }
+        state.onButton(NxButton.A); advanceUntilIdle()
+        assertFalse(settings.saveOnQuit)
+        state.onButton(NxButton.B); state.onButton(NxButton.B); advanceUntilIdle()
+        repeat(5) { if ((state.screen.value as? Screen.Systems)?.category != MenuCategory.HOME) state.onButton(NxButton.L1) }
+        advanceUntilIdle()
+        val after = assertIs<MainRow.Continue>(state.screen.value.homeRows[0])
+        assertNull(continueFrame(after))                                 // no hidden-state frame left over
     }
 
     @Test fun a_on_continue_plays_fresh_when_a_resumes_is_off() = runTest {
