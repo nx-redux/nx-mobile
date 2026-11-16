@@ -905,6 +905,20 @@ class NxCarbonPackTest {
             val stick = p.controls.firstOrNull { it.spec.id == "STICK" }
             val padFoot = maxOf(pad.y + pad.spec.r, stick?.let { it.y + it.spec.r } ?: 0f)
             val face = listOf(c("Y"), c("A")).map { it.x }.average().toFloat()
+            if (v != SkinVariant.DS && p.spec.id.endsWith("_col")) {
+                // the 3DS on the cover: a pair over one each side (user), the pads where the main menu's are (user)
+                val name = "$v $win ${p.spec.id}"
+                for ((a, b, under) in listOf(Triple("STICK_SWAP", "MIC", "MENU"), Triple("SELECT", "START", "SWAP"))) {
+                    assertEquals(c(a).y, c(b).y, 1f, "$name $a $b a row"); assertTrue(c(b).x > c(a).x, "$name $a before $b")
+                    assertEquals((c(a).x + c(b).x) / 2f, c(under).x, 1f, "$name $under under them"); assertTrue(c(under).y > c(a).y, "$name $under below")
+                    assertTrue(c(under).y + c(under).spec.r + c(under).spec.labelDy + c(under).spec.labelH < wh, "$name $under's word on the window")
+                }
+                val menu = assertNotNull(SkinChoice.placeMenu(pack, ww, wh, dpi, foldable = true)).controls.associateBy { it.spec.id }
+                val stick = p.controls.firstOrNull { it.spec.id == "STICK" } ?: c("DPAD")
+                assertEquals(menu.getValue("DPAD").x, stick.x, 1f, "$name stick x as the menu's d-pad"); assertEquals(menu.getValue("DPAD").y, stick.y, 1f, "$name stick y")
+                assertEquals(menu.getValue("X").x, c("X").x, 1f, "$name X x as the menu's"); assertEquals(menu.getValue("X").y, c("X").y, 1f, "$name X y")
+                continue
+            }
             if (v != SkinVariant.DS && p.spec.id.contains("_tall")) {
                 // the 3DS's tall shell: a row each side under its lower pad (the right's the New 3DS's C-stick), level (user)
                 val name = "$v $win ${p.spec.id}"

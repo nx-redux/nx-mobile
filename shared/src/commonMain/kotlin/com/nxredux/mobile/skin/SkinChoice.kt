@@ -475,6 +475,35 @@ object SkinChoice {
         )
     }
 
+    /**
+     * Each side group moved whole so its pad stands where [menu] (the main menu's shell on this window) has it: the left
+     * by the stick (or d-pad) to the menu's d-pad, the right by X to the menu's X; never nearer the screen's frame than
+     * [ROW_GAP_DP]. As it is where either lacks them.
+     */
+    private fun SkinPlacement.sidesAsTheMenu(menu: SkinPlacement, dp: Float): SkinPlacement {
+        fun ctl(p: SkinPlacement, id: String) = p.controls.firstOrNull { it.spec.id == id }
+        val frame = pieces.filter { it.piece < 0 && !it.strip }.map { it.dst }
+        if (frame.isEmpty()) return this
+        val gap = ROW_GAP_DP * dp
+        fun sideOf(p: SkinPiece) = if (p.piece < 0 || spec.pieces[p.piece].glass != null) null else spec.pieces[p.piece].anchor
+        var out = this
+        for ((side, own, theirs) in listOf(Triple(PieceAnchor.LEFT, ctl(this, "STICK") ?: ctl(this, "DPAD"), ctl(menu, "DPAD")), Triple(PieceAnchor.RIGHT, ctl(this, "X"), ctl(menu, "X")))) {
+            if (own == null || theirs == null) continue
+            val at = out.pieces.filter { sideOf(it) == side }
+            if (at.isEmpty()) continue
+            var dx = theirs.x - own.x
+            // not nearer the frame than the gap
+            if (side == PieceAnchor.LEFT) dx = minOf(dx, frame.minOf { it.x } - gap - at.maxOf { it.dst.x + it.dst.width })
+            else dx = maxOf(dx, frame.maxOf { it.x + it.width } + gap - at.minOf { it.dst.x })
+            val dy = theirs.y - own.y
+            out = out.copy(
+                pieces = out.pieces.map { if (sideOf(it) == side) it.copy(dst = it.dst.copy(x = it.dst.x + dx, y = it.dst.y + dy)) else it },
+                controls = out.controls.map { if (it.spec.anchor == side) it.copy(x = it.x + dx, y = it.y + dy) else it },
+            )
+        }
+        return out
+    }
+
     /** Window px each side of the touch screen's glass past its 4:3 picture (its height the limit); 0 without one. */
     private fun SkinPlacement.touchSpare(): Float =
         glass(GlassScreen.TOUCH)?.rect?.let { (it.width - it.height * 4f / 3f) / 2f } ?: 0f
@@ -761,7 +790,13 @@ object SkinChoice {
                     ?: spec.bothFollowMenu(menuShellOf(pack, spec), menuUnderStart = false)
                 board.capsSideways(pack.layouts.firstOrNull { it.variant == SkinVariant.N3DS_REGULAR && it.foldBoard })
             }?.dpadInTheRoom(windowH.toFloat(), densityDpi / 160f)?.let { return it }
-            return shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset, rowFor(v, densityDpi, k)) { spec -> spec.toMenu(v, menuTwin(pack, spec)) }
+            return shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset, rowFor(v, densityDpi, k)) { spec ->
+                // the 3DS's small-cap columns (the Fold cover's): a pair over one each side, the pads where the menu's
+                // shell of the same render has them (its height class may differ)
+                spec.toMenu(v, menuTwin(pack, spec)).let { s -> if (v in N3DS_VARIANTS && spec.id.endsWith("_col"))
+                    s.capsInPairs(pack.layouts.firstOrNull { it.variant == SkinVariant.N3DS_REGULAR && it.foldBoard }) else s }
+            }?.let { p -> if (v in N3DS_VARIANTS && p.spec.id.endsWith("_col")) placeMenu(pack, windowW, windowH, densityDpi, foldable = foldable, tablet = tablet)
+                ?.let { p.sidesAsTheMenu(it, densityDpi / 160f) } ?: p else p }
                 ?.let { if (v in N3DS_VARIANTS) it.capsInOneRow(windowH.toFloat(), densityDpi / 160f).nubBetweenXAndA() else it }
         }
         // a foldable's inner screen or a tablet: the fold board, split at its hinge flat or not (the window's middle when flat)
