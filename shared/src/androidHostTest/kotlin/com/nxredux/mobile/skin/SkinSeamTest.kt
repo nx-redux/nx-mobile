@@ -195,7 +195,8 @@ class SkinSeamTest {
         for ((w, h, dpi, hinge) in listOf(Quad(1848, 2448, 420, 1224f), Quad(2256, 2504, 480, 1252f), Quad(2504, 2256, 480, 1128f))) {
             for (v in listOf(SkinVariant.DS, SkinVariant.N3DS_REGULAR, SkinVariant.GB, SkinVariant.SINGLE)) {
                 // the 3DS on the Ultra sideways: its touch frame cut to its picture (onAWideWindowThe3dsTouchFrameFitsItsPictureAndTheDpadMovesIn)
-                if (v == SkinVariant.N3DS_REGULAR && w == 2504) continue
+                // the 3DS on the Ultra upright too: its touch screen cut to its picture, the row under it (user)
+                if (v == SkinVariant.N3DS_REGULAR && (w == 2504 || w == 2256)) continue
                 val ds = v == SkinVariant.DS || v == SkinVariant.N3DS_REGULAR
                 val p = assertNotNull(SkinChoice.place(pack, w, h, dpi, tablet = true, ds = ds, picture = if (ds) null else 240f to 160f, hingeY = hinge, foldable = true, variant = v), "$v ${w}x$h")
                 assertRow(p, w, dpi, "$v ${w}x$h")
@@ -324,13 +325,11 @@ class SkinSeamTest {
             val p = assertNotNull(SkinChoice.place(pack, 2256, 2504, 480, tablet = true, ds = true, hingeY = hinge, foldable = true, variant = v), name)
             val c = p.controls.associateBy { it.spec.id }
             val touch = assertNotNull(p.glass(GlassScreen.TOUCH)).rect
-            val row = listOf("MIC", "SWAP", "MENU", "SELECT", "START").map { c.getValue(it) }
+            // (MIC, MENU, SWAP, SELECT, START as on the Fold (user))
+            val row = listOf("MIC", "MENU", "SWAP", "SELECT", "START").map { c.getValue(it) }
             row.zipWithNext().forEach { (a, b) -> assertEquals(a.y, b.y, 1f, "$name row level"); assertTrue(b.x > a.x, "$name row order") }
             assertTrue(row.all { it.y > touch.y + touch.height && it.x > touch.x && it.x < touch.x + touch.width }, "$name row under the touch screen")
-            fun ring(id: String) = c.getValue(id).let { k -> p.pieces.filter { it.piece >= 0 && p.spec.pieces[it.piece].glass == null &&
-                kotlin.math.abs(it.dst.x + it.dst.width / 2f - k.x) < 2f && kotlin.math.abs(it.dst.y + it.dst.height / 2f - k.y) < 2f }.maxOf { it.dst.width } }
-            val s = c.getValue("STICK"); val d = c.getValue("DPAD")
-            assertEquals(8f * 3f, (d.y - ring("DPAD") / 2f) - (s.y + ring("STICK") / 2f), 1f, "$name d-pad 8 dp under the stick")
+            // (the d-pad: where the user's tweak put it, SkinBakeTest.the3dsOnTheUltraUprightIsAsTheFolds)
         }
     }
 

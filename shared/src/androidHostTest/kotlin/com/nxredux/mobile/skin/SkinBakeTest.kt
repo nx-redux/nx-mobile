@@ -294,4 +294,101 @@ class SkinBakeTest {
             kotlin.test.assertEquals(c("MIC").y, c("SELECT").y, 1f, "$name rows level")
         }
     }
+
+    // The 3DS on the Ultra's inner screen upright (flat and half-folded), as on the Fold: MIC, MENU, SWAP, SELECT, START in
+    // one row under the touch screen, the touch screen only its picture (4:3), the d-pad where the user's tweak put it (user).
+    @Test
+    fun the3dsOnTheUltraUprightIsAsTheFolds() {
+        for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) for (name in listOf("ultra", "ultra_half")) {
+            val d = GOLDEN_DEVICES.first { it.name == name }
+            val p = assertNotNull(placeFor(pack, v, d), "$v $name")
+            fun c(id: String) = p.controls.first { it.spec.id == id && it.spec.alt == null }
+            val row = listOf("MIC", "MENU", "SWAP", "SELECT", "START").map(::c)
+            for ((a, b) in row.zipWithNext()) { kotlin.test.assertEquals(a.y, b.y, 1f, "$v $name ${b.spec.id} in the row"); assertTrue(b.x > a.x, "$v $name ${b.spec.id} in order") }
+            kotlin.test.assertEquals(d.w / 2f, (row.first().x + row.last().x) / 2f, 2f, "$v $name row centred")
+            val touch = assertNotNull(p.glasses.firstOrNull { it.screen == GlassScreen.TOUCH }, "$v $name").rect
+            kotlin.test.assertEquals(touch.width * 3f / 4f, touch.height, 2f, "$v $name touch screen only its picture (4:3)")
+            assertTrue(row[0].y - row[0].spec.r > touch.y + touch.height, "$v $name row under the touch screen")
+            fun ring(id: String) = p.pieces.filter { q -> c(id).let { it.x >= q.dst.x && it.x <= q.dst.x + q.dst.width && it.y >= q.dst.y && it.y <= q.dst.y + q.dst.height } }.maxBy { it.dst.width }.dst
+            val rowLeft = p.pieces.filter { q -> kotlin.math.abs(q.dst.y + q.dst.height / 2f - row[0].y) < 2f }.minOf { it.dst.x }
+            val dpad = ring("DPAD")
+            // where the user's tweak put it: 222 px from the row, clear of the touch screen's frame, its top by the stick's foot
+            kotlin.test.assertEquals(222f * p.k, rowLeft - (dpad.x + dpad.width), 2f, "$v $name d-pad 222 px from the row")
+            assertTrue(dpad.x + dpad.width < touch.x, "$v $name d-pad clear of the touch screen")
+            val stick = ring("STICK")
+            kotlin.test.assertEquals(stick.y + stick.height, dpad.y, 4f, "$v $name d-pad's top by the stick's foot")
+        }
+    }
+
+    // The New 3DS on the Ultra's inner screen upright (flat and half-folded): a joystick for the C-stick at the d-pad's size
+    // (not the nub over the face), where the d-pad is mirrored on the right: level with it, as far from the row (user).
+    @Test
+    fun theNew3dsOnTheUltraUprightHasItsCStickAsTheDpadMirrored() {
+        for (name in listOf("ultra", "ultra_half")) {
+            val d = GOLDEN_DEVICES.first { it.name == name }
+            val p = assertNotNull(placeFor(pack, SkinVariant.N3DS, d), name)
+            fun c(id: String) = p.controls.first { it.spec.id == id && it.spec.alt == null }
+            fun ring(id: String) = p.pieces.filter { q -> c(id).let { it.x >= q.dst.x && it.x <= q.dst.x + q.dst.width && it.y >= q.dst.y && it.y <= q.dst.y + q.dst.height } }.maxBy { it.dst.width }.dst
+            kotlin.test.assertEquals(1, p.controls.count { it.spec.id == "CSTICK" }, "$name one C-stick")
+            val dpad = ring("DPAD"); val cs = ring("CSTICK")
+            kotlin.test.assertEquals(dpad.width, cs.width, 2f, "$name C-stick the d-pad's size")
+            kotlin.test.assertEquals(dpad.y + dpad.height / 2f, cs.y + cs.height / 2f, 2f, "$name C-stick level with the d-pad")
+            val rowY = c("MIC").y
+            val rowPieces = p.pieces.filter { q -> kotlin.math.abs(q.dst.y + q.dst.height / 2f - rowY) < 2f }
+            val rowLeft = rowPieces.minOf { it.dst.x }; val rowRight = rowPieces.maxOf { it.dst.x + it.dst.width }
+            kotlin.test.assertEquals(rowLeft - (dpad.x + dpad.width), cs.x - rowRight, 2f, "$name C-stick as far from the row as the d-pad")
+            assertTrue(c("CSTICK").y > c("B").y, "$name C-stick under the face")
+            // the face and the shoulders as the regular 3DS's (where the menu has them; R level with L), ZR beside R as ZL
+            // beside L (user)
+            val reg = assertNotNull(placeFor(pack, SkinVariant.N3DS_REGULAR, d), name)
+            fun rc(id: String) = reg.controls.first { it.spec.id == id && it.spec.alt == null }
+            for (id in listOf("X", "Y", "A", "B", "R")) {
+                kotlin.test.assertEquals(rc(id).x, c(id).x, 1f, "$name $id x as the regular 3DS's")
+                kotlin.test.assertEquals(rc(id).y, c(id).y, 1f, "$name $id y as the regular 3DS's")
+                kotlin.test.assertEquals(rc(id).spec.r, c(id).spec.r, 0.5f, "$name $id size as the regular 3DS's")
+            }
+            kotlin.test.assertEquals(c("L").y, c("R").y, 1f, "$name R level with L")
+            kotlin.test.assertEquals(c("L2").y, c("R2").y, 1f, "$name ZR level with ZL")
+            fun span(id: String) = c(id).let { k -> p.pieces.filter { q -> k.x >= q.dst.x && k.x <= q.dst.x + q.dst.width && k.y >= q.dst.y && k.y <= q.dst.y + q.dst.height }.maxBy { it.dst.width }.dst }
+            kotlin.test.assertEquals(span("L2").x - (span("L").x + span("L").width), span("R").x - (span("R2").x + span("R2").width), 2f, "$name ZR beside R as ZL beside L")
+        }
+    }
+
+    // The 3DS on the Ultra's inner screen sideways (flat and half-folded): MIC, MENU, SWAP, SELECT, START in one row under
+    // the touch screen's frame, centred across (user).
+    @Test
+    fun the3dsOnTheUltraSidewaysHasItsCapsInARowUnderTheTouchScreen() {
+        for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) for (name in listOf("ultra_land", "ultra_land_half")) {
+            val d = GOLDEN_DEVICES.first { it.name == name }
+            val p = assertNotNull(placeFor(pack, v, d), "$v $name")
+            fun c(id: String) = p.controls.first { it.spec.id == id && it.spec.alt == null }
+            val row = listOf("MIC", "MENU", "SWAP", "SELECT", "START").map(::c)
+            for ((a, b) in row.zipWithNext()) { kotlin.test.assertEquals(a.y, b.y, 1f, "$v $name ${b.spec.id} in the row"); assertTrue(b.x > a.x, "$v $name ${b.spec.id} in order") }
+            kotlin.test.assertEquals(d.w / 2f, (row.first().x + row.last().x) / 2f, 2f, "$v $name row centred")
+            val touch = assertNotNull(p.glasses.firstOrNull { it.screen == GlassScreen.TOUCH }, "$v $name").rect
+            assertTrue(row[0].y - row[0].spec.r > touch.y + touch.height, "$v $name row under the touch screen")
+            // the d-pad where the user's tweak put it (48 px right, 66 px up of under the stick: 2052.9 before); the New
+            // 3DS's C-stick level with it (user)
+            kotlin.test.assertEquals(2052.9f - 66.28f * p.k, c("DPAD").y, 2f, "$v $name d-pad up as the tweak")
+            if (v == SkinVariant.N3DS) kotlin.test.assertEquals(c("DPAD").y, c("CSTICK").y, 1f, "$v $name C-stick level with the d-pad")
+            // the touch screen wide into the room between the side boxes (its 4:3 picture in it with bars), the inner gap
+            // (16 dp) to the nearest piece each side beside it (user)
+            assertTrue(touch.width > touch.height * 4f / 3f + 50f, "$v $name touch screen wider than its picture: $touch")
+            val dp = d.dpi / 160f
+            val beside = p.pieces.filter { it.piece >= 0 && p.spec.pieces[it.piece].glass == null && it.dst.y < touch.y + touch.height && it.dst.y + it.dst.height > touch.y }
+            val frame = p.pieces.filter { it.piece >= 0 && p.spec.pieces[it.piece].glass?.screen == GlassScreen.TOUCH }
+            val f0 = frame.minOf { it.dst.x }; val f1 = frame.maxOf { it.dst.x + it.dst.width }
+            val l1 = beside.filter { it.dst.x + it.dst.width / 2f < touch.x }.maxOf { it.dst.x + it.dst.width }
+            val r0 = beside.filter { it.dst.x + it.dst.width / 2f > touch.x + touch.width }.minOf { it.dst.x }
+            // (widened about its middle: the nearer side at the inner gap)
+            kotlin.test.assertEquals(16f * dp, minOf(f0 - l1, r0 - f1), 2f, "$v $name nearer gap to the frame")
+            assertTrue(maxOf(f0 - l1, r0 - f1) >= 16f * dp - 2f, "$v $name farther gap")
+            kotlin.test.assertEquals(d.w / 2f, (f0 + f1) / 2f, 2f, "$v $name frame centred")
+            // the New 3DS's C-stick as far from the frame as the d-pad (the d-pad's move mirrored) (user)
+            if (v == SkinVariant.N3DS) {
+                fun ring(id: String) = p.pieces.filter { q -> c(id).let { it.x >= q.dst.x && it.x <= q.dst.x + q.dst.width && it.y >= q.dst.y && it.y <= q.dst.y + q.dst.height } }.maxBy { it.dst.width }.dst
+                kotlin.test.assertEquals(f0 - (ring("DPAD").x + ring("DPAD").width), ring("CSTICK").x - f1, 2f, "$v $name C-stick as far from the frame as the d-pad")
+            }
+        }
+    }
 }

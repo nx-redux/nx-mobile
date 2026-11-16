@@ -643,6 +643,12 @@ fun ultraUprightLowerPadUp(boxes: Map<String, List<BoxSpec>>): Map<String, List<
     }) }
 }
 
+/** The Ultra's inner screen sideways, flat or half-folded (835 x 752 dp): its device-shape tag. */
+private fun BoxWhen.ultraSideways(): Boolean {
+    val w = (minWdp + maxWdp) / 2f; val h = (minHdp + maxHdp) / 2f
+    return orientation == "landscape" && kotlin.math.abs(w - 835f) < 12f && kotlin.math.abs(h - 752f) < 12f
+}
+
 /** The Fold 8's inner screen upright, flat or half-folded (704 x 932 dp): its device-shape tag. */
 private fun BoxWhen.fold8Upright(): Boolean {
     val w = (minWdp + maxWdp) / 2f; val h = (minHdp + maxHdp) / 2f
@@ -652,27 +658,105 @@ private fun BoxWhen.fold8Upright(): Boolean {
 private fun BoxWhen.wdp() = (minWdp + maxWdp) / 2f
 
 /**
- * [z]'s lower pad (the d-pad under the stick; the C-stick under the face) moved up by half its gap under the upper one,
- * and across toward [rowEnd] (the caps' row's near end, box px): right toward it [toTheRight], else left. Where the user
- * put the regular 3DS's d-pad on the Fold with the controls editor: 5 px from the row, 25 px over half the gap (user).
+ * The Ultra sideways: the d-pad where the user put the regular 3DS's with the controls editor (48 px right, 66 px up), the
+ * New 3DS's C-stick level with it and moved as far in from the right (its gap to the touch screen the d-pad's) (user).
  */
-private fun padUpAndIn(z: BoxSize, rowEnd: Float, toTheRight: Boolean): BoxSize? {
-    val pads = z.pieces.filter { it.group in PAD_GROUPS && it.alt == null }.groupBy { it.group!! }
-        .map { (id, ps) -> Triple(id, ps.minOf { it.y.toFloat() }, ps.maxOf { it.y + it.h * it.scale }) }.sortedBy { it.second }
-    if (pads.size < 2) return null
-    val gap = pads[1].second - pads[0].third
-    val up = (if (gap > 0f) gap / 2f else 0f) + 25f
-    val lowerTop = pads[1].second
-    val lower = z.pieces.filter { it.y + it.h * it.scale / 2f >= lowerTop - 0.5f }
-    val near = 5f
-    val dx = if (toTheRight) maxOf(0f, rowEnd - near - lower.maxOf { it.x + it.w * it.acrossScale })
-        else minOf(0f, rowEnd + near - lower.minOf { it.x.toFloat() })
-    return z.copy(pieces = z.pieces.map { p -> if (p.y + p.h * p.scale / 2f >= lowerTop - 0.5f) p.copy(x = Math.round(p.x + dx), y = Math.round(p.y - up)) else p },
-        controls = z.controls.map { c -> if (c.y >= lowerTop - 0.5f) c.copy(x = c.x + dx, y = c.y - up) else c })
+private fun sidewaysPadsUp(out: Map<BoxSlot, MutableList<BoxSize>>, sides: List<Pair<BoxSlot, Int>>) {
+    val li = sides.firstOrNull { it.first == BoxSlot.LEFT }?.second ?: return
+    val l0 = out.getValue(BoxSlot.LEFT)[li]
+    val l = l0.copy(pieces = l0.pieces.map { if (it.group == "DPAD") it.copy(x = Math.round(it.x + 48.43f), y = Math.round(it.y - 66.28f)) else it },
+        controls = l0.controls.map { if (it.id == "DPAD") it.copy(x = it.x + 48.43f, y = it.y - 66.28f) else it })
+    out.getValue(BoxSlot.LEFT)[li] = l
+    val ri = sides.firstOrNull { it.first == BoxSlot.RIGHT }?.second ?: return
+    val r = out.getValue(BoxSlot.RIGHT)[ri]
+    val cs = r.controls.firstOrNull { it.id == "CSTICK" } ?: return
+    val dpad = l.controls.firstOrNull { it.id == "DPAD" && it.alt == null } ?: return
+    // the boxes' main pads stand level on the window (the stick, the face's middle): the right box's px from the left's
+    fun main(z: BoxSize, ids: List<String>) = z.controls.filter { it.id in ids && it.alt == null }.map { it.y }.average().toFloat()
+    val dy = dpad.y + (main(r, listOf("X", "Y", "A", "B")) - main(l, listOf("STICK"))) - cs.y
+    out.getValue(BoxSlot.RIGHT)[ri] = r.copy(pieces = r.pieces.map { if (it.group == "CSTICK") it.copy(x = Math.round(it.x - 48.43f), y = Math.round(it.y + dy)) else it },
+        controls = r.controls.map { if (it.id == "CSTICK") it.copy(x = it.x - 48.43f, y = it.y + dy) else it })
 }
 
 /**
- * The pack's drawing for the 3DS on the Fold 8's inner screen upright (user): MIC, MENU, SWAP, SELECT, START out of the
+ * [out]'s right box for [tag] (the New 3DS's) as the regular 3DS's ([regular]'s): its face and R, ZR (L2's twin) beside R
+ * as ZL beside L, level with it; its C-stick left out ([newCStickAsTheDpad] puts one back).
+ */
+private fun newRightAsTheRegular(out: Map<BoxSlot, MutableList<BoxSize>>, regular: List<BoxSpec>, tag: BoxWhen) {
+    val ri = out[BoxSlot.RIGHT]?.indexOfFirst { it.`when` == tag }?.takeIf { it >= 0 } ?: return
+    val li = out[BoxSlot.LEFT]?.indexOfFirst { it.`when` == tag }?.takeIf { it >= 0 } ?: return
+    val reg = regular.firstOrNull { it.slot == BoxSlot.RIGHT }?.sizes?.firstOrNull { it.`when` == tag } ?: return
+    val mine = out.getValue(BoxSlot.RIGHT)[ri]; val left = out.getValue(BoxSlot.LEFT)[li]
+    fun c(z: BoxSize, id: String) = z.controls.firstOrNull { it.id == id && it.alt == null }
+    val l = c(left, "L") ?: return; val zl = c(left, "L2") ?: return
+    val r = c(reg, "R") ?: return; val zr = c(mine, "R2") ?: return
+    // the gap between the drawn pieces mirrored (a pill need not be centred on its control)
+    fun span(z: BoxSize, g: String) = z.pieces.filter { it.group == g }.let { ps -> ps.minOf { it.x.toFloat() } to ps.maxOf { it.x + it.w * it.acrossScale } }
+    val gap = span(left, "L2").first - span(left, "L").second
+    val zrW = span(mine, "R2").let { it.second - it.first }
+    val dx = (span(reg, "R").first - gap - zrW) - span(mine, "R2").first
+    val dy = (r.y + (zl.y - l.y)) - zr.y
+    val tx = zr.x + dx; val ty = zr.y + dy
+    val zrPieces = mine.pieces.filter { it.group == "R2" }.map { it.copy(x = Math.round(it.x + dx), y = Math.round(it.y + dy)) }
+    out.getValue(BoxSlot.RIGHT)[ri] = reg.copy(pieces = reg.pieces + zrPieces, controls = reg.controls + zr.copy(x = tx, y = ty))
+}
+
+/** [out]'s right box for [tag]: the Fold upright's C-stick (the d-pad's size) placed as the d-pad mirrored (a New 3DS's only). */
+private fun newCStickAsTheDpad(out: Map<BoxSlot, MutableList<BoxSize>>, sides: List<Pair<BoxSlot, Int>>, list: List<BoxSpec>, tag: BoxWhen, rowW: Int) {
+    val li = sides.firstOrNull { it.first == BoxSlot.LEFT }?.second ?: return
+    val ri = sides.firstOrNull { it.first == BoxSlot.RIGHT }?.second ?: return
+    val l = out.getValue(BoxSlot.LEFT)[li]; val r = out.getValue(BoxSlot.RIGHT)[ri]
+    // (a New 3DS only: its own right had the C-stick)
+    if (list.first { it.slot == BoxSlot.RIGHT }.sizes.firstOrNull { it.`when` == tag }?.controls?.none { it.id == "CSTICK" } != false) return
+    fun x0(ps: List<PieceSpec>) = ps.minOf { it.x.toFloat() }
+    fun x1(ps: List<PieceSpec>) = ps.maxOf { it.x + it.w * it.acrossScale }
+    fun y0(ps: List<PieceSpec>) = ps.minOf { it.y.toFloat() }
+    val dpad = l.pieces.filter { it.group == "DPAD" && it.alt == null }
+    if (dpad.isEmpty()) return
+    // the Fold upright's C-stick: the same drawing at the d-pad's size
+    val fold = list.first { it.slot == BoxSlot.RIGHT }.sizes.firstOrNull { it.`when`?.fold8Upright() == true } ?: return
+    val big = fold.pieces.filter { it.group == "CSTICK" }
+    val bigC = fold.controls.firstOrNull { it.id == "CSTICK" } ?: return
+    if (big.isEmpty()) return
+    val dev = GOLDEN_DEVICES.firstOrNull { it.hingeY == null && kotlin.math.abs(it.w * 160f / it.dpi - tag.wdp()) < 12f && it.h > it.w == (tag.orientation == "portrait") } ?: return
+    val winW = dev.w.toFloat(); val edge = SkinBoxes.EDGE_DP * dev.dpi / 160f
+    // the boxes' main pads stand level on the window (the stick, the face's middle): the right box's px from the left's
+    fun main(z: BoxSize, ids: List<String>) = z.controls.filter { it.id in ids && it.alt == null }.map { it.y }.average().toFloat()
+    val dy = main(r, listOf("X", "Y", "A", "B")) - main(l, listOf("STICK"))
+    val gap = ((winW - rowW) / 2f - edge) - x1(dpad)
+    val left = (winW + rowW) / 2f - (winW - edge - r.w) + gap
+    val top = y0(dpad) + dy
+    val mx = left - x0(big); val my = top - y0(big)
+    val moved = big.map { it.copy(x = Math.round(it.x + mx), y = Math.round(it.y + my)) }
+    val c = bigC.copy(x = bigC.x + mx, y = bigC.y + my)
+    val z = r.copy(pieces = r.pieces.filter { it.group != "CSTICK" } + moved, controls = r.controls.filter { it.id != "CSTICK" } + c)
+    out.getValue(BoxSlot.RIGHT)[ri] = z.copy(h = maxOf(z.h, Math.round(z.pieces.maxOf { it.y + it.h * it.scale })))
+}
+
+/**
+ * [z]'s lower pad (the d-pad under the stick; the C-stick under the face) moved up by half its gap under the upper one,
+ * and across to [near] px from [rowEnd] (the caps' row's near end, box px): right toward it [toTheRight], else left.
+ */
+private fun padUpAndIn(z: BoxSize, rowEnd: Float, toTheRight: Boolean, near: Float, up: Float?): BoxSize? {
+    val pads = z.pieces.filter { it.group in PAD_GROUPS && it.alt == null }.groupBy { it.group!! }
+        .map { (id, ps) -> Triple(id, ps.minOf { it.y.toFloat() }, ps.maxOf { it.y + it.h * it.scale }) }.sortedBy { it.second }
+    if (pads.size < 2) return null
+    val lowerTop = pads[1].second
+    val lower = z.pieces.filter { it.y + it.h * it.scale / 2f >= lowerTop - 0.5f }
+    // a lower pad only (not the face under the Ultra upright New 3DS's nub)
+    fun width(g: String) = z.pieces.filter { it.group == g }.let { ps -> ps.maxOf { it.x + it.w * it.acrossScale } - ps.minOf { it.x.toFloat() } }
+    if (width(pads[1].first) > 1.05f * width(pads[0].first)) return null
+    val gap = pads[1].second - pads[0].third
+    // [up]: px up; null: half the gap under the upper pad and 25 px
+    val dy = up ?: ((if (gap > 0f) gap / 2f else 0f) + 25f)
+    val dx = if (toTheRight) maxOf(0f, rowEnd - near - lower.maxOf { it.x + it.w * it.acrossScale })
+        else minOf(0f, rowEnd + near - lower.minOf { it.x.toFloat() })
+    return z.copy(pieces = z.pieces.map { p -> if (p.y + p.h * p.scale / 2f >= lowerTop - 0.5f) p.copy(x = Math.round(p.x + dx), y = Math.round(p.y - dy)) else p },
+        controls = z.controls.map { c -> if (c.y >= lowerTop - 0.5f) c.copy(x = c.x + dx, y = c.y - dy) else c })
+}
+
+/**
+ * The pack's drawing for the 3DS on the Fold 8's and the Ultra's inner screens upright, and the Ultra's sideways (user): MIC, MENU, SWAP, SELECT, START out of the
  * side rows into one row in the bottom row box, under the touch screen (its room ends over it), one well for the five
  * cut from the side rows' well. [isFor]: the layouts it is for.
  */
@@ -681,9 +765,12 @@ fun fold8UprightCapsInTheBottomRow(boxes: Map<String, List<BoxSpec>>, isFor: (St
     val order = listOf("MIC", "MENU", "SWAP", "SELECT", "START")
     val out = list.associate { b -> b.slot to b.sizes.toMutableList() }.toMutableMap()
     val tags = list.filter { it.slot == BoxSlot.LEFT || it.slot == BoxSlot.RIGHT }.flatMap { b -> b.sizes.mapNotNull { it.`when` } }
-        .filter { it.fold8Upright() }.distinct()
+        .filter { it.fold8Upright() || (it.ultraUpright() && it.orientation == "portrait") || it.ultraSideways() }.distinct()
     var row: MutableList<BoxSize>? = out[BoxSlot.BOTTOM_ROW]
     for (tag in tags) {
+        // the New 3DS on the Ultra: its right as the regular 3DS's (the face full size, R level with L), ZR beside R (user)
+        val sideways = tag.ultraSideways()
+        if (!tag.fold8Upright() && !sideways && "3dsr" !in id) boxes[id.replace("3ds", "3dsr")]?.let { newRightAsTheRegular(out, it, tag) }
         val sides = listOf(BoxSlot.LEFT, BoxSlot.RIGHT).mapNotNull { s -> out[s]?.indexOfFirst { it.`when` == tag }?.takeIf { it >= 0 }?.let { s to it } }
         val caps = sides.flatMap { (s, i) -> out.getValue(s)[i].controls.filter { it.id in order } }
         if (order.any { id -> caps.none { it.id == id } }) continue
@@ -723,14 +810,26 @@ fun fold8UprightCapsInTheBottomRow(boxes: Map<String, List<BoxSpec>>, isFor: (St
             var kept = z.copy(pieces = z.pieces.filter { !isCapPiece(it) }, controls = z.controls.filter { it.id !in order })
             // the left's lower pad (the d-pad) into the room the caps left: up by half its gap under the stick, across to
             // the inner gap from the row (the row centred on the window, the box on the edge; picture px = window px here)
-            val winW = tag.wdp() * 420f / 160f; val edge = SkinBoxes.EDGE_DP * 420f / 160f
-            kept = when (s) {
-                BoxSlot.LEFT -> padUpAndIn(kept, rowEnd = (winW - w) / 2f - edge, toTheRight = true)
+            // the device the tag was baked on: its window and density (a tuned board's picture px are its window px)
+            val dev = GOLDEN_DEVICES.firstOrNull { it.hingeY == null && kotlin.math.abs(it.w * 160f / it.dpi - tag.wdp()) < 12f && it.h > it.w == (tag.orientation == "portrait") }
+                ?: error("no device for $tag")
+            val winW = dev.w.toFloat(); val edge = SkinBoxes.EDGE_DP * dev.dpi / 160f
+            // where the user put the regular 3DS's d-pad with the controls editor: on the Fold 5 px from the row, up half its
+            // gap under the stick and 25 px; on the Ultra (its d-pad up by half its gap already, [ultraUprightLowerPadUp])
+            // 222 px from the row, clear of the touch screen's frame, and 30 px up (user)
+            val (near, up) = if (tag.fold8Upright()) 5f to null else 222f to 30f
+            // (sideways the pads keep their places: only the caps move)
+            if (!sideways) kept = when (s) {
+                BoxSlot.LEFT -> padUpAndIn(kept, rowEnd = (winW - w) / 2f - edge, toTheRight = true, near = near, up = up)
                 // (the right box on the right edge: the row's right end in its px)
-                else -> padUpAndIn(kept, rowEnd = (winW + w) / 2f - (winW - edge - kept.w), toTheRight = false)
+                else -> padUpAndIn(kept, rowEnd = (winW + w) / 2f - (winW - edge - kept.w), toTheRight = false, near = near, up = up)
             } ?: kept
             out.getValue(s)[i] = kept.copy(h = Math.round(kept.pieces.maxOfOrNull { it.y + it.h * it.scale } ?: kept.h.toFloat()))
         }
+        // the New 3DS on the Ultra: its nub over the face a joystick at the d-pad's size instead (as the Fold's C-stick),
+        // where the d-pad is mirrored on the right: level with it, as far from the row (user)
+        if (!tag.fold8Upright() && !sideways) newCStickAsTheDpad(out, sides, list, tag, w)
+        if (sideways) sidewaysPadsUp(out, sides)
     }
     val slots = list.map { it.slot }.toMutableList().also { if (BoxSlot.BOTTOM_ROW !in it && out.containsKey(BoxSlot.BOTTOM_ROW)) it += BoxSlot.BOTTOM_ROW }
     slots.map { slot -> BoxSpec(slot, out.getValue(slot).toList()) }

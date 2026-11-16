@@ -458,6 +458,43 @@ object SkinChoice {
     }
 
     /**
+     * The touch screen's frame and glass widened about their middle into the room beside them, to [gap] from the nearer
+     * side's pieces (its picture keeps its shape in the glass, bars beside it); the frame's middle column stretched, its
+     * edges moved out, the touch shortcuts spread across the new width. As it is with no room to grow.
+     */
+    private fun SkinPlacement.touchWideToTheBoxes(gap: Float): SkinPlacement {
+        val g = glass(GlassScreen.TOUCH) ?: return this
+        val gi = spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
+        val frame = pieces.filter { it.piece == gi }
+        if (frame.isEmpty()) return this
+        val f0 = frame.minOf { it.dst.x }; val f1 = frame.maxOf { it.dst.x + it.dst.width }
+        val top = frame.minOf { it.dst.y }; val bottom = frame.maxOf { it.dst.y + it.dst.height }
+        val cx = (f0 + f1) / 2f
+        // the pieces beside it (not the screens', nor one across the window: the hinge)
+        val beside = pieces.filter { it.piece >= 0 && it.piece != gi && spec.pieces[it.piece].glass == null && it.dst.width < (f1 - f0) &&
+            it.dst.y < bottom && it.dst.y + it.dst.height > top }
+        val l1 = beside.filter { it.dst.x + it.dst.width / 2f < cx }.maxOfOrNull { it.dst.x + it.dst.width } ?: return this
+        val r0 = beside.filter { it.dst.x + it.dst.width / 2f > cx }.minOfOrNull { it.dst.x } ?: return this
+        val half = minOf(cx - (l1 + gap), (r0 - gap) - cx)
+        val extra = 2f * half - (f1 - f0)
+        if (extra < 1f) return this
+        val shift = extra / 2f
+        val moved = pieces.map { p -> when {
+            p.piece != gi -> p
+            kotlin.math.abs(p.dst.x - f0) < 0.5f -> p.copy(dst = p.dst.copy(x = p.dst.x - shift))
+            kotlin.math.abs(p.dst.x + p.dst.width - f1) < 0.5f -> p.copy(dst = p.dst.copy(x = p.dst.x + shift))
+            else -> p.copy(dst = p.dst.copy(x = p.dst.x - shift, width = p.dst.width + extra))
+        } }
+        val f = (g.rect.width + extra) / g.rect.width
+        val gcx = g.rect.x + g.rect.width / 2f
+        return copy(
+            pieces = moved,
+            glasses = glasses.map { if (it === g) it.copy(rect = it.rect.copy(x = it.rect.x - shift, width = it.rect.width + extra)) else it },
+            controls = controls.map { c -> if (c.spec.id.startsWith("TOUCH_")) c.copy(x = gcx + (c.x - gcx) * f, spec = c.spec.copy(hw = c.spec.hw * f)) else c },
+        )
+    }
+
+    /**
      * The touch screen's frame cut to its 4:3 picture's height where its width holds the picture shorter than the glass
      * (the Fold upright: no bars over and under the game), its top kept (its gap to the top screen's frame), its strip
      * and the row under it up with its bottom. As it is where the picture fills the glass's height.
@@ -811,7 +848,11 @@ object SkinChoice {
                     val caps = (newBoard ?: shaped).capsInTheRow(ROW_GAP_DP * dp / s)
                     // (a layout with boxes has no row under its touch screen, which then grows down: cut to its picture's
                     // height as well)
-                    fun wide(hinge: Float?) = fold(caps, hinge)?.touchToItsPicture()?.let { if (spec.boxes.isNotEmpty()) it.touchToItsPictureHeight() else it }
+                    // (a layout with boxes: its touch screen as wide as the room between the boxes, the picture in it with
+                    // bars (user); not where the bake checks the old placements)
+                    fun wide(hinge: Float?) = fold(caps, hinge)?.let { if (spec.boxes.isNotEmpty() && !SkinBoxes.anchorAtTheBottom) it else it.touchToItsPicture() }
+                        ?.let { if (spec.boxes.isNotEmpty()) it.touchToItsPictureHeight() else it }
+                        ?.let { if (spec.boxes.isNotEmpty() && !SkinBoxes.anchorAtTheBottom) it.touchWideToTheBoxes(SkinBoxes.GAP_DP * dp) else it }
                         ?.padsStaggered(windowH.toFloat(), dp)
                     val wide = wide(hingeY)
                     // flat: the bottom half as half-folded at the window's middle (the touch screen not grown up into the
@@ -826,8 +867,10 @@ object SkinChoice {
                         ?.padsStaggered(windowH.toFloat(), dp)?.let { return@widest it }
                 // START / SELECT in the row under the touch screen; where its height holds it back with no width to
                 // spare (the Ultra upright) the d-pad [PAIR_GAP_DP] under the stick
+                // (a layout with boxes: its touch screen only its picture (no bars), the caps' row in the room under it)
                 if (v in N3DS_VARIANTS && placed != null)
-                    fold(shaped.capsInTheRow(ROW_GAP_DP * dp / s))?.dpadInTheRoom(windowH.toFloat(), dp, PAIR_GAP_DP)?.let { return@widest it }
+                    fold(shaped.capsInTheRow(ROW_GAP_DP * dp / s))?.let { if (spec.boxes.isNotEmpty() && !SkinBoxes.anchorAtTheBottom) it.touchToItsPicture().touchToItsPictureHeight() else it }
+                        ?.dpadInTheRoom(windowH.toFloat(), dp, PAIR_GAP_DP)?.let { return@widest it }
                 placed?.let { if (both == true || v in N3DS_VARIANTS) it.dpadInTheRoom(windowH.toFloat(), dp) else it }
             }
         }

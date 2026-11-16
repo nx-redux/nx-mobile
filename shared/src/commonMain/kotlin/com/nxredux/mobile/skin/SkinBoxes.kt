@@ -48,8 +48,9 @@ object SkinBoxes {
     }
 
     /**
-     * Side boxes stand on their bottom line (as they were baked from) instead of centring their main pad: only the bake's
-     * checks against the placements the rules gave set it.
+     * Side boxes stand on their bottom line (as they were baked from) instead of centring their main pad, and a 3DS board's
+     * touch screen keeps its room's size (not cut to its picture): only the bake's checks against the placements the rules
+     * gave set it.
      */
     internal var anchorAtTheBottom = false
 
