@@ -1169,9 +1169,11 @@ class NxCarbonPackTest {
                 for (x in cs) assertEquals(cs[0].y, x.y, 1f, "$name ${x.spec.id} in the row")
                 for (i in 1 until cs.size) assertTrue(cs[i].x > cs[i - 1].x, "$name ${want.toList()} in order")
             }
-            if (name == "flip") {   // one group of four centred at the bottom
-                row("STICK_SWAP", "MIC", "SWAP", "MENU")
-                assertEquals(d.first / 2f, (c("STICK_SWAP").x + c("MENU").x) / 2f, 30f * p.k, "$name group centred")
+            if (name == "flip") {   // the row at the bottom, MENU in its middle; SWAP between the shoulders, nearest the screens (user)
+                row("STICK_SWAP", "MIC", "MENU", "SELECT", "START")
+                assertEquals(d.first / 2f, c("MENU").x, 30f * p.k, "$name MENU in the middle")
+                row("L", "L2", "SWAP", "R2", "R")
+                assertEquals(d.first / 2f, c("SWAP").x, 30f * p.k, "$name SWAP in the middle")
             }
             if (foldBoard) {   // one row under the bottom screen
                 row("MIC", "MENU", "SWAP")

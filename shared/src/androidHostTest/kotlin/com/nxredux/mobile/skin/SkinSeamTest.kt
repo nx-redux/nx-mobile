@@ -297,7 +297,9 @@ class SkinSeamTest {
             val menu = assertNotNull(SkinChoice.placeMenu(pack, w, h, 420)).controls.associateBy { it.spec.id }
             for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) {
                 val g = assertNotNull(SkinChoice.place(pack, w, h, 420, tablet = false, ds = true, variant = v)).controls.associateBy { it.spec.id }
-                for ((id, its) in listOf("STICK" to "DPAD", "DPAD" to "DPAD", "X" to "X", "Y" to "Y", "A" to "A", "B" to "B", "START" to "START", "SELECT" to "SELECT")) {
+                // (upright, the New 3DS's ZL / ZR stand where SELECT / START were: those in the row under the pad, user)
+                val caps = if (v == SkinVariant.N3DS && h > w) emptyList() else listOf("START" to "START", "SELECT" to "SELECT")
+                for ((id, its) in listOf("STICK" to "DPAD", "DPAD" to "DPAD", "X" to "X", "Y" to "Y", "A" to "A", "B" to "B") + caps) {
                     assertEquals(menu.getValue(its).x, g.getValue(id).x, 1f, "$v ${w}x$h $id x")
                     assertEquals(menu.getValue(its).y, g.getValue(id).y, 1f, "$v ${w}x$h $id y")
                 }

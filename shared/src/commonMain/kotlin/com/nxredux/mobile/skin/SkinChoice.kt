@@ -320,6 +320,23 @@ object SkinChoice {
         sideIn = half.sideIn,
     )
 
+    /**
+     * SWAP between the shoulders ([startInTheRow]) level with L, its cap and well with it (the row rules move the
+     * shoulders, not the centre's caps). As it is with SWAP elsewhere.
+     */
+    private fun SkinPlacement.swapLevelWithTheShoulders(): SkinPlacement {
+        val menu = controls.firstOrNull { it.spec.id == "SWAP" } ?: return this
+        val l = controls.firstOrNull { it.spec.id == "L" } ?: return this
+        val reach = menu.spec.r * 1.5f
+        if (kotlin.math.abs(menu.y - l.y) > reach) return this
+        val dy = l.y - menu.y
+        fun near(d: com.nxredux.mobile.options.PxRect) = kotlin.math.abs(d.x + d.width / 2f - menu.x) < reach && kotlin.math.abs(d.y + d.height / 2f - menu.y) < reach
+        return copy(
+            pieces = pieces.map { p -> if (p.piece >= 0 && spec.pieces[p.piece].anchor == PieceAnchor.CENTRE && spec.pieces[p.piece].glass == null && near(p.dst)) p.copy(dst = p.dst.copy(y = p.dst.y + dy)) else p },
+            controls = controls.map { if (it === menu) it.copy(y = l.y) else it },
+        )
+    }
+
     /** Window px each side of the touch screen's glass past its 4:3 picture (its height the limit); 0 without one. */
     private fun SkinPlacement.touchSpare(): Float =
         glass(GlassScreen.TOUCH)?.rect?.let { (it.width - it.height * 4f / 3f) / 2f } ?: 0f
@@ -597,7 +614,12 @@ object SkinChoice {
         }
         for (family in families) {
             widest(pack, family, v, fold = false) { spec ->
-                if (spec.frame != null) SkinSolver.placePieces(spec.toMenu(v, menuTwin(pack, spec)), windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), topScreen = top, row = rowFor(v, densityDpi, k))
+                if (spec.frame != null) SkinSolver.placePieces(spec.toMenu(v, menuTwin(pack, spec)).let { s ->
+                    // the New 3DS's ZL / ZR beside L / R where SELECT / START stood: those in the row under the pad, SWAP
+                    // between the shoulders
+                    if (v == SkinVariant.N3DS && family == SkinFamily.STACKED) s.startInTheRow(ROW_GAP_DP * densityDpi / 160f / k, pack.layouts.firstOrNull { it.variant == v && it.foldBoard }) else s
+                }, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), topScreen = top, row = rowFor(v, densityDpi, k))
+                    ?.let { if (v == SkinVariant.N3DS && family == SkinFamily.STACKED) it.swapLevelWithTheShoulders() else it }
                 else SkinSolver.place(spec, windowW.toFloat(), windowH.toFloat(), k, picture)
             }?.let { return it }
         }

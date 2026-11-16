@@ -298,15 +298,7 @@ internal fun SkinLayoutSpec.capsInTheRow(gap: Float): SkinLayoutSpec {
     val well = pieces.firstOrNull { p -> p.glass == null && inside(p, mic) && inside(p, swap) } ?: return this
     val startWell = pieces.firstOrNull { p -> p.glass == null && inside(p, start) && inside(p, select) }
     val pitch = kotlin.math.abs(swap.x - menu.x)
-    // the pill's ends (as round as it is tall) and its flat middle, picture px of the parts picture
-    val end = well.h / 2
-    fun pill(left: Float, n: Int): List<PieceSpec> {
-        val mid = ((n - 1) * pitch / well.scale).roundToInt()
-        val a = well.copy(w = end, x = left.roundToInt())
-        val m = well.copy(sx = well.sx + (well.w - mid) / 2, w = mid, x = (left + end * well.scale).roundToInt())
-        val b = well.copy(sx = well.sx + well.w - end, w = end, x = (left + (end + mid) * well.scale).roundToInt())
-        return if (mid > 0) listOf(a, m, b) else listOf(a, b)
-    }
+    fun pill(left: Float, n: Int) = pillWell(well, left, n, pitch)
     val two = (well.h + pitch / well.scale) * well.scale; val one = well.h * well.scale
     val total = two + gap + one + gap + two
     val left = menu.x - total / 2f
@@ -365,4 +357,73 @@ internal fun SkinLayoutSpec.withNewControls(new: SkinLayoutSpec, gap: Float): Sk
     }
     val nub = stick.copy(id = "CSTICK", x = fx, y = ny, anchor = x.anchor, inward = x.inward, level = x.level, rise = x.rise, drop = x.drop)
     return copy(id = new.id, variant = new.variant, pieces = pieces + zPieces + nubPieces, controls = controls + zs + nub)
+}
+
+/**
+ * The phone's 3DS board with SELECT / START in the row under the pad, three wells [gap] picture px apart (the stick /
+ * d-pad swap and MIC, MENU alone, SELECT and START; centred where the row was), and SWAP where they stood, between the
+ * shoulders in a well of its own (nearest the screens it swaps); each well the row's pill cut to its caps, their caps the row's size ([sized]'s, the fold board's, where it has them), their
+ * words under them as the row's; their own well goes. As it is without that row.
+ */
+internal fun SkinLayoutSpec.startInTheRow(gap: Float, sized: SkinLayoutSpec?): SkinLayoutSpec {
+    fun at(id: String) = controls.firstOrNull { it.id == id }
+    val mic = at("MIC") ?: return this; val swap = at("SWAP") ?: return this
+    val start = at("START") ?: return this; val select = at("SELECT") ?: return this
+    if (mic.anchor != PieceAnchor.CENTRE) return this
+    fun inside(p: PieceSpec, c: ControlSpec) = p.anchor == c.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+    fun centredAt(p: PieceSpec, x: Float, y: Float) = p.glass == null && kotlin.math.abs(p.x + p.w * p.scale / 2f - x) < 2f && kotlin.math.abs(p.y + p.h * p.scale / 2f - y) < 2f
+    val well = pieces.firstOrNull { p -> p.glass == null && inside(p, mic) && inside(p, swap) } ?: return this
+    val startWell = pieces.firstOrNull { p -> p.glass == null && inside(p, start) && inside(p, select) }
+    val pitch = kotlin.math.abs(swap.x - mic.x)
+    // the row's caps and words: the centre controls at its height inside its well (a swapped pair on one spot counts once)
+    val rowCaps = controls.filter { it.anchor == PieceAnchor.CENTRE && kotlin.math.abs(it.y - mic.y) < 1f && inside(well, it) }
+    if (rowCaps.none { it.id == "SWAP" }) return this
+    val groups = listOf(listOf("STICK_SWAP", "MIC"), listOf("MENU"), listOf("SELECT", "START"))
+    if (groups.flatten().any { id -> id != "SELECT" && id != "START" && rowCaps.none { it.id == id } }) return this
+    val pad = well.h * well.scale / 2f
+    fun width(g: List<String>) = 2f * pad + (g.size - 1) * pitch
+    val total = groups.sumOf { width(it).toDouble() }.toFloat() + gap * (groups.size - 1)
+    val lefts = groups.runningFold(well.x + well.w * well.scale / 2f - total / 2f) { x, g -> x + width(g) + gap }.dropLast(1)
+    // SWAP where SELECT / START stood, between them
+    val topX = (select.x + start.x) / 2f; val topY = start.y
+    val xs = groups.zip(lefts).flatMap { (g, x) -> g.mapIndexed { i, id -> id to x + pad + i * pitch } }.toMap() + ("SWAP" to topX)
+    val ys = mapOf("SWAP" to topY)
+    fun sizedCap(id: String): Pair<PieceSpec, ControlSpec>? {
+        val c = sized?.controls?.firstOrNull { it.id == id } ?: return null
+        return sized.pieces.firstOrNull { centredAt(it, c.x, c.y) }?.let { it to c }
+    }
+    val capPiece = pieces.first { centredAt(it, mic.x, mic.y) }
+    val moved = listOf(select, start)
+    val caps = moved.mapNotNull { c ->
+        val own = pieces.firstOrNull { centredAt(it, c.x, c.y) } ?: return@mapNotNull null
+        val src = sizedCap(c.id)?.first ?: own
+        val nx = xs.getValue(c.id)
+        src.copy(x = (nx - src.w * src.scale / 2f).roundToInt(), y = (mic.y - src.h * src.scale / 2f).roundToInt(), anchor = PieceAnchor.CENTRE,
+            inward = capPiece.inward, level = capPiece.level, rise = capPiece.rise, drop = capPiece.drop, alt = null)
+    }
+    val ownCaps = moved.mapNotNull { c -> pieces.firstOrNull { centredAt(it, c.x, c.y) } }
+    return copy(
+        pieces = pieces.filter { it !== startWell && ownCaps.none { o -> o === it } }.flatMap { p -> when {
+            p === well -> groups.zip(lefts).flatMap { (g, x) -> pillWell(well, x, g.size, pitch) } + pillWell(well, topX - pad, 1, pitch).map { it.copy(y = (topY - pad).roundToInt()) }
+            else -> rowCaps.firstOrNull { centredAt(p, it.x, it.y) }?.let { c ->
+                listOf(p.copy(x = (p.x + xs.getValue(c.id) - c.x).roundToInt(), y = (p.y + (ys[c.id] ?: c.y) - c.y).roundToInt()))
+            } ?: listOf(p)
+        } } + caps,
+        controls = controls.map { c -> when {
+            c in rowCaps -> c.copy(x = xs.getValue(c.id), y = ys[c.id] ?: c.y)
+            c in moved -> c.copy(x = xs.getValue(c.id), y = mic.y, anchor = PieceAnchor.CENTRE, inward = mic.inward, level = mic.level, rise = mic.rise, drop = mic.drop,
+                labelDy = mic.labelDy, labelDx = 0f, labelH = mic.labelH, capR = sizedCap(c.id)?.second?.capR ?: c.capR)
+            else -> c
+        } },
+    )
+}
+
+/** [well] (a pill) cut to [n] caps [pitch] apart from [left] (picture px): its two ends and its flat middle between them. */
+private fun pillWell(well: PieceSpec, left: Float, n: Int, pitch: Float): List<PieceSpec> {
+    val end = well.h / 2
+    val mid = ((n - 1) * pitch / well.scale).roundToInt()
+    val a = well.copy(w = end, x = left.roundToInt())
+    val m = well.copy(sx = well.sx + (well.w - mid) / 2, w = mid, x = (left + end * well.scale).roundToInt())
+    val b = well.copy(sx = well.sx + well.w - end, w = end, x = (left + (end + mid) * well.scale).roundToInt())
+    return if (mid > 0) listOf(a, m, b) else listOf(a, b)
 }
