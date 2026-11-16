@@ -71,6 +71,21 @@ object SystemFiles {
         }
     }
 
+    /** Whether [file] (in [systemDir]) is one this APK bundles. */
+    fun isBundled(context: Context, systemDir: File, file: File): Boolean {
+        val rel = file.relativeToOrNull(systemDir)?.path?.takeIf { it.isNotEmpty() && !it.startsWith("..") } ?: return false
+        val parent = rel.substringBeforeLast('/', "")
+        val asset = if (parent.isEmpty()) "system" else "system/$parent"
+        return runCatching { context.assets.list(asset).orEmpty().contains(rel.substringAfterLast('/')) }.getOrDefault(false)
+    }
+
+    /** Puts this APK's copy of [file] (in [systemDir]) back over it; false when it bundles none or the copy fails. */
+    fun restoreBundled(context: Context, systemDir: File, file: File): Boolean {
+        if (!isBundled(context, systemDir, file)) return false
+        val rel = file.relativeTo(systemDir).path
+        return runCatching { file.writeAtomically(context.assets.open("system/$rel").use { it.readBytes() }) }.isSuccess
+    }
+
     private fun copyTree(source: Source, assetPath: String, target: File) {
         val names = source.list(assetPath)
         if (names.isEmpty()) {   // a file
