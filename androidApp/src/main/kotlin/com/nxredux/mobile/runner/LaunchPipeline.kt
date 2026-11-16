@@ -859,10 +859,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val biosPresent = if (biosDir == systemDir) present else withContext(Dispatchers.IO) { biosDir.list()?.toSet() ?: emptySet() }
             // An MSU-MD set plays its music from a Sega CD: Genesis Plus GX needs that console's BIOS for it, as for a disc
             // (PicoDrive fakes the one check the MSU-MD driver makes).
-            val biosExtension = if (inner == null && msuMdSheet(cfg) != null && cfg.descriptor?.id == SegaPadType.GPGX) "cue" else contentExtension
-            // A Sega CD disc boots with its own region's BIOS only: when its header is read, that file is checked (under
-            // any name the core takes) in place of "any of the three".
-            val discRegion = segaCdRegion(cfg, inner, contentExtension, biosPresent)
+            val msuMd = inner == null && msuMdSheet(cfg) != null && cfg.descriptor?.id == SegaPadType.GPGX
+            val biosExtension = if (msuMd) "cue" else contentExtension
+            // A Sega CD disc boots with its own region's BIOS only (an MSU-MD cartridge with its own region's): when its
+            // header is read, that file is checked (under any name the core takes) in place of "any of the three".
+            val discRegion = if (msuMd) msuMdRegion(cfg, biosPresent) else segaCdRegion(cfg, inner, contentExtension, biosPresent)
             val needs = CoreRegistry.requiredBios(cfg.tag).filterNot { discRegion != null && SegaCdBios.isSegaCdNeed(it) }
             BiosCheck.missing(needs, biosExtension, biosPresent).firstOrNull()?.let {
                 return refuse(BiosCheck.message(cfg.tag, it))
@@ -871,7 +872,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 val core = cfg.descriptor?.id.orEmpty()
                 SegaCdBios.missing(core, region, biosPresent)?.let { file ->
                     val folders = withContext(Dispatchers.IO) { biosFolderOf(cfg) }
-                    return refuse(SegaCdBios.message(cfg.tag, core, region, file, biosPresent, folders::get))
+                    return refuse(SegaCdBios.message(cfg.tag, core, region, file, biosPresent, folders::get, cartridge = msuMd))
                 }
             }
             // A NAOMI/Atomiswave set's BIOS archive (flycast opens <system>/dc/<bios>.zip or .7z); an unknown set is not checked.
@@ -1082,6 +1083,24 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         }?.let(SegaCdBios::regionOf) ?: return null
         val forced = if (core == SegaPadType.GPGX) SegaCdBios.gpgxForced(cfg.options.firstOrNull { it.key == SegaCdBios.GPGX_REGION_KEY }?.value) else null
         return forced ?: disc
+    }
+
+    /**
+     * The region whose Sega CD BIOS Genesis Plus GX loads for [cfg]'s MSU-MD cartridge: its forced region, else the
+     * cartridge header's ([SegaCdBios.cartridgeRegion]). Null when the header cannot be read, or when [present] holds
+     * every region's BIOS (nothing to refuse, so nothing is read).
+     */
+    private suspend fun msuMdRegion(cfg: LaunchConfig, present: Set<String>): DiscRegion? {
+        val core = SegaPadType.GPGX
+        if (DiscRegion.entries.all { SegaCdBios.missing(core, it, present) == null }) return null
+        SegaCdBios.gpgxForced(cfg.options.firstOrNull { it.key == SegaCdBios.GPGX_REGION_KEY }?.value)?.let { return it }
+        val refs = host.refs
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val size = refs.size(cfg.content) ?: return@runCatching null
+                refs.openInput(cfg.content)?.use { SegaCdBios.cartridgeRegion(readUpTo(it, SegaCdBios.CARTRIDGE_HEAD), size) }
+            }.getOrNull()
+        }
     }
 
     /**
