@@ -31,10 +31,13 @@ Device checks still owed:
 - [ ] A second display with a game on malisx2.
 - [ ] A reader buffer the OpenGL ES side cannot import falls back with the toast (not forced on a device yet).
 - [ ] Other Mali devices and malisx2 versions; GameCube/Wii and N64 (Vulkan) on malisx2.
-- [ ] 3DS on Vulkan on the AYANEO: Mario Kart 7 from boot reaches 60 fps through the reader on malisx2, then the core
-  aborts at the first 3D scene (`vk::DeviceLostError` in `waitForFences`), on the stock driver too. The game process is
-  about 1 GB on a 1.9 GB device and the menu process is killed for low memory in each run. Check a build from main, then
-  find the cause. OpenGL ES drops to about 5 fps at the same scene.
+- [ ] 3DS on Vulkan on the AYANEO: Mario Kart 7 from boot reaches 60 fps (through the reader on malisx2 too), then the
+  core aborts at the first 3D scene (`vk::DeviceLostError` in `waitForFences`). Same on a build from main and on the
+  stock driver. The game holds about 1.4 GB with swap on a 1.9 GB device and 23 MB was free at the abort, so most likely
+  the GPU kernel driver could not get memory (kernel log not readable there). OpenGL ES survives at about 5 fps.
+- [ ] PS2 quit on the AYANEO aborts in the core after teardown (`pthread_mutex_lock called on a destroyed mutex`, in
+  `libarmsx2`): 1 of 4 quits on a build from main, 2 of 4 on the stock driver and 4 of 5 on malisx2 with the reader.
+  Check whether the auto state and memory card are always written first, then fix the teardown order.
 - [ ] PS2 resume: about 1 launch in 4 on the AYANEO (stock driver too) boots from the disc although the state load reported success. Existing race at the first frame; find and fix.
 
 ## Slang shader presets
