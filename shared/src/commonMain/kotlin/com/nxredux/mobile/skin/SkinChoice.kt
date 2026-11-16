@@ -37,7 +37,7 @@ object SkinChoice {
     private const val ROW_MIN_GAP_DP = 4f
     /** Spare width (dp each side) beside the 3DS touch screen's picture from which its frame is cut to it ([touchToItsPicture]). */
     private const val WIDE_TOUCH_DP = 40f
-    /** The d-pad's size on a fold board whose touch screen is cut to its picture's height ([touchToItsPictureHeight]). */
+    /** The d-pad's and the New 3DS's C-stick's size on a fold board whose touch screen is cut to its picture's height ([touchToItsPictureHeight]). */
     private const val SMALL_DPAD = 0.85f
     /** The narrowest the main menu's bottom screen gets, dp: the narrowest the app's pages lay out for. */
     private const val MENU_MIN_DP = 320f
@@ -460,14 +460,18 @@ object SkinChoice {
         )
     }
 
-    /** The d-pad (its pieces and its hit area) [f] its size, about its middle. */
-    private fun SkinPlacement.dpadScaled(f: Float): SkinPlacement {
-        val c = controls.firstOrNull { it.spec.id == "DPAD" } ?: return this
-        fun centred(d: com.nxredux.mobile.options.PxRect) = kotlin.math.abs(d.x + d.width / 2f - c.x) < 2f && kotlin.math.abs(d.y + d.height / 2f - c.y) < 2f
+    /** Control [id] (the d-pad, a stick: its pieces, its hit area and a stick's travel) [f] its size, about its middle. */
+    private fun SkinPlacement.scaled(id: String, f: Float): SkinPlacement {
+        val c = controls.firstOrNull { it.spec.id == id } ?: return this
+        // its pieces: those round its middle, or a stick's round its knob (they may stand off its hit area's)
+        val knob = pieces.firstOrNull { it.knob && it.knobOf == id }?.dst
+        val mx = knob?.let { it.x + it.width / 2f } ?: c.x; val my = knob?.let { it.y + it.height / 2f } ?: c.y
+        fun centred(d: com.nxredux.mobile.options.PxRect) = kotlin.math.abs(d.x + d.width / 2f - mx) < 2f && kotlin.math.abs(d.y + d.height / 2f - my) < 2f
         return copy(
             pieces = pieces.map { p -> if (p.piece >= 0 && spec.pieces[p.piece].glass == null && centred(p.dst))
                 p.copy(dst = p.dst.copy(x = c.x - p.dst.width * f / 2f, y = c.y - p.dst.height * f / 2f, width = p.dst.width * f, height = p.dst.height * f)) else p },
-            controls = controls.map { if (it === c) it.copy(spec = it.spec.copy(r = it.spec.r * f, arm = it.spec.arm * f, capR = it.spec.capR * f)) else it },
+            controls = controls.map { if (it === c) it.copy(spec = it.spec.copy(r = it.spec.r * f, arm = it.spec.arm * f, capR = it.spec.capR * f,
+                travel = it.spec.travel * f, knobTravel = it.spec.knobTravel * f)) else it },
         )
     }
 
@@ -504,21 +508,22 @@ object SkinChoice {
     }
 
     /**
-     * The 3DS board beside a touch screen cut to its picture ([touchToItsPicture]): L level with R and the stick with the
-     * face buttons; under the stick the d-pad, under the face buttons the New 3DS's C-stick ([withNewControls]), each
-     * moved in toward the screen as far as the room beside it allows (higher on its slant for it), [ROW_GAP_DP] from the
-     * frame, its ring [PAIR_GAP_DP] from the one over it ([nubUnder] false: the nub left where it is). Where one would end nearer the window's bottom than
+     * The 3DS board beside a touch screen cut to its picture ([touchToItsPicture], [touchToItsPictureHeight]): L level
+     * with R and the stick with the face buttons; under the stick the d-pad, under the face buttons the New 3DS's
+     * C-stick ([withNewControls]), each moved in toward the screen as far as the pieces level with it allow (the touch
+     * screen's frame, the row under it; higher on its slant for it), [ROW_GAP_DP] clear of them, its ring
+     * [PAIR_GAP_DP] from the one over it. Where one would end nearer the window's bottom than
      * [ROW_GAP_DP] both sides lift alike, no higher than the touch screen's frame; past that its gap gives, down to
      * [ROW_MIN_GAP_DP].
      */
-    private fun SkinPlacement.padsStaggered(windowH: Float, dp: Float, nubUnder: Boolean = true): SkinPlacement {
+    private fun SkinPlacement.padsStaggered(windowH: Float, dp: Float): SkinPlacement {
         fun centredAt(x: Float, y: Float) = pieces.indices.filter { i -> pieces[i].let { p -> p.piece >= 0 && spec.pieces[p.piece].glass == null &&
             kotlin.math.abs(p.dst.x + p.dst.width / 2f - x) < 2f && kotlin.math.abs(p.dst.y + p.dst.height / 2f - y) < 2f } }
         fun ctl(id: String) = controls.firstOrNull { it.spec.id == id }
         val stickC = ctl("STICK") ?: return this; val padC = ctl("DPAD") ?: return this
         val l = ctl("L") ?: return this; val r = ctl("R") ?: return this
         val x = ctl("X") ?: return this; val b = ctl("B") ?: return this
-        val nubC = ctl("CSTICK")?.takeIf { nubUnder }
+        val nubC = ctl("CSTICK")
         val stick = centredAt(stickC.x, stickC.y); val pad = centredAt(padC.x, padC.y)
         val nub = nubC?.let { centredAt(it.x, it.y) }.orEmpty()
         val fx = x.x; val fy = (x.y + b.y) / 2f
@@ -553,7 +558,12 @@ object SkinChoice {
         }
         val padIn = reach(fy + under(ring, padRing, 0f, pair)).let { first -> minOf(first, reach(fy + under(ring, padRing, first, pair))) }
         val nubRing = if (nubC != null) width(nub) else 0f
-        val nubIn = if (nubC == null) 0f else ((fx - nubRing / 2f) - (frame.maxOf { it.x + it.width } + gap)).coerceAtLeast(0f)
+        fun reachLeft(y: Float): Float {
+            val x1 = blocks.filter { it.x + it.width < fx && it.y < y + nubRing / 2f + gap && it.y + it.height > y - nubRing / 2f - gap }.maxOfOrNull { it.x + it.width }
+                ?: return nubRing / 2f
+            return ((fx - nubRing / 2f) - (x1 + gap)).coerceIn(0f, nubRing / 2f)
+        }
+        val nubIn = if (nubC == null) 0f else reachLeft(fy + under(faceRing, nubRing, 0f, pair)).let { first -> minOf(first, reachLeft(fy + under(faceRing, nubRing, first, pair))) }
         // both sides' lift where a lower ring would end too low, then what its gap gives
         val end = windowH - gap
         val over = maxOf(fy + under(ring, padRing, padIn, pair) + padRing / 2f - end,
@@ -702,15 +712,15 @@ object SkinChoice {
                 val dp = densityDpi / 160f
                 // the 3DS's touch screen held back by its height (a wide window): the frame cut to its picture, the width
                 // it gives up the side groups', START / SELECT in the row under it
+                // the New 3DS's as the regular 3DS's board (its buttons where that one has them), with ZL / ZR and a
+                // full C-stick under the face buttons: where the touch screen is cut to its picture
+                val regular = if (v != SkinVariant.N3DS) null else pack.layouts.firstOrNull {
+                    it.variant == SkinVariant.N3DS_REGULAR && it.family == spec.family && it.refW == spec.refW && it.refH == spec.refH && it.minRefH == spec.minRefH
+                }
+                val newBoard by lazy { regular?.let { reg -> reg.bothFollowMenu(menuFoldBoard(pack, reg)?.menuBesideTheDpad(), menuUnderStart = false)
+                    .withNewControls(spec, PAIR_GAP_DP * dp / s) } }
                 if (v in N3DS_VARIANTS && placed != null && placed.touchSpare() >= WIDE_TOUCH_DP * dp) {
-                    // the New 3DS's as the regular 3DS's board (its buttons where that one has them), with ZL / ZR and a
-                    // full C-stick under the face buttons
-                    val regular = if (v != SkinVariant.N3DS) null else pack.layouts.firstOrNull {
-                        it.variant == SkinVariant.N3DS_REGULAR && it.family == spec.family && it.refW == spec.refW && it.refH == spec.refH && it.minRefH == spec.minRefH
-                    }
-                    val board = regular?.let { reg -> reg.bothFollowMenu(menuFoldBoard(pack, reg)?.menuBesideTheDpad(), menuUnderStart = false)
-                        .withNewControls(spec, PAIR_GAP_DP * dp / s) } ?: shaped
-                    val caps = board.capsInTheRow(ROW_GAP_DP * dp / s)
+                    val caps = (newBoard ?: shaped).capsInTheRow(ROW_GAP_DP * dp / s)
                     fun wide(hinge: Float?) = fold(caps, hinge)?.touchToItsPicture()?.padsStaggered(windowH.toFloat(), dp)
                     val wide = wide(hingeY)
                     // flat: the bottom half as half-folded at the window's middle (the touch screen not grown up into the
@@ -718,12 +728,15 @@ object SkinChoice {
                     val half = if (hingeY == null && wide != null) wide(windowH / 2f) else null
                     (if (wide != null && half != null) wide.bottomOf(half) else wide)?.let { return@widest it }
                 }
+                // the touch screen's width holding its picture shorter than the glass (the Fold upright): the frame cut to
+                // the picture's height, the sides level, a smaller d-pad and New 3DS C-stick on a slant
+                if (v in N3DS_VARIANTS && placed != null && placed.touchSpare() < 0f)
+                    fold((newBoard ?: shaped).capsInTheRow(ROW_GAP_DP * dp / s))?.touchToItsPictureHeight()?.scaled("DPAD", SMALL_DPAD)?.scaled("CSTICK", SMALL_DPAD)
+                        ?.padsStaggered(windowH.toFloat(), dp)?.let { return@widest it }
                 // START / SELECT in the row under the touch screen; where its height holds it back with no width to
                 // spare (the Ultra upright) the d-pad [PAIR_GAP_DP] under the stick
                 if (v in N3DS_VARIANTS && placed != null)
-                    fold(shaped.capsInTheRow(ROW_GAP_DP * dp / s))?.dpadInTheRoom(windowH.toFloat(), dp, if (placed.touchSpare() >= 0f) PAIR_GAP_DP else ROW_GAP_DP)
-                        ?.let { if (placed.touchSpare() < 0f) it.touchToItsPictureHeight().dpadScaled(SMALL_DPAD).padsStaggered(windowH.toFloat(), dp, nubUnder = false) else it }
-                        ?.let { return@widest it }
+                    fold(shaped.capsInTheRow(ROW_GAP_DP * dp / s))?.dpadInTheRoom(windowH.toFloat(), dp, PAIR_GAP_DP)?.let { return@widest it }
                 placed?.let { if (both == true || v in N3DS_VARIANTS) it.dpadInTheRoom(windowH.toFloat(), dp) else it }
             }
         }

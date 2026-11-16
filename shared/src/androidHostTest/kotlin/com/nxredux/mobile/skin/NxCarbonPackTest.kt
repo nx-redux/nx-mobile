@@ -936,7 +936,8 @@ class NxCarbonPackTest {
     // under the C-stick nub over it; R level with the regular's (the menu's), clear of the nub.
     @Test
     fun new3dsTallLandscapeFaceSitsLowerThanTheRegularOnes() {
-        for ((w, h, dpi) in listOf(Triple(2448, 1848, 420), Triple(2304, 1440, 280), Triple(1848, 2448, 420))) {
+        // (the Fold upright: the regular's places, the C-stick under the face: theFoldUprightGivesTheNew3dsTheRegularPlaces)
+        for ((w, h, dpi) in listOf(Triple(2448, 1848, 420), Triple(2304, 1440, 280))) {
             fun at(v: SkinVariant) = assertNotNull(SkinChoice.place(pack, w, h, dpi, dpi == 280, true, null, null, foldable = dpi == 420, variant = v), "$v $w")
             val n = at(SkinVariant.N3DS); val r = at(SkinVariant.N3DS_REGULAR)
             fun y(p: SkinPlacement, id: String) = p.controls.first { it.spec.id == id }.y
@@ -1163,9 +1164,10 @@ class NxCarbonPackTest {
                 // the large layout: the nub centred between the stick and the face, level with the face's middle row
                 assertTrue(c("CSTICK").x > c("STICK").x && c("CSTICK").x < c("Y").x, "$name nub between the stick and the face")
                 assertEquals(c("A").y, c("CSTICK").y, 1f, "$name nub level with A")
-            } else assertTrue(c("CSTICK").y < c("X").y, "$name nub above X")
-            if (foldBoard || tall) assertEquals(c("Y").x, c("CSTICK").x, 20f * p.k, "$name nub over Y's column, as the console (user)")
-            else if (!p.spec.id.startsWith("large_3ds")) assertTrue(c("CSTICK").x > c("X").x && c("CSTICK").y < c("A").y - c("A").spec.r, "$name nub up-right of X, above A")
+            } else if (foldBoard) assertTrue(c("CSTICK").y > c("B").y, "$name C-stick under the face (user)")
+            else assertTrue(c("CSTICK").y < c("X").y, "$name nub above X")
+            if (tall) assertEquals(c("Y").x, c("CSTICK").x, 20f * p.k, "$name nub over Y's column, as the console (user)")
+            else if (!p.spec.id.startsWith("large_3ds") && !foldBoard) assertTrue(c("CSTICK").x > c("X").x && c("CSTICK").y < c("A").y - c("A").spec.r, "$name nub up-right of X, above A")
             fun row(vararg want: String) {
                 val cs = want.map(::c)
                 for (x in cs) assertEquals(cs[0].y, x.y, 1f, "$name ${x.spec.id} in the row")
@@ -1182,10 +1184,10 @@ class NxCarbonPackTest {
                 val t = p.glasses.single { it.screen == GlassScreen.TOUCH }.rect
                 assertTrue(c("MENU").y > t.y + t.height, "$name row under the bottom screen")
                 assertEquals(t.x + t.width / 2f, c("MENU").x, 2f, "$name MENU in the middle")
-                assertTrue(c("CSTICK").y - c("R").y > (c("CSTICK").spec.r * 1.25f + c("R").spec.hh + 30f) * p.k, "$name nub clear of ZR / R (user)")
                 if (name == "tablet") assertTrue(t.width / p.k > 1000f, "$name bottom screen grown: ${t.width / p.k}")
             }
-            assertTrue(c("CSTICK").spec.r < c("STICK").spec.r / 2f, "$name nub small")
+            if (foldBoard) assertEquals(c("STICK").spec.r * 0.85f, c("CSTICK").spec.r, 0.5f, "$name C-stick a stick at the d-pad's 85% (user)")
+            else assertTrue(c("CSTICK").spec.r < c("STICK").spec.r / 2f, "$name nub small")
             if (name in roomy) assertTrue(c("STICK").y < c("DPAD").y, "$name Circle Pad above the d-pad")
             else {
                 assertEquals(c("DPAD").x, c("STICK").x, 0.5f, "$name stick x")

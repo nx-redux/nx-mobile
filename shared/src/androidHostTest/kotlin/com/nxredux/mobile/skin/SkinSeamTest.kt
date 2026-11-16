@@ -294,6 +294,27 @@ class SkinSeamTest {
     }
 
     @Test
+    fun theFoldUprightGivesTheNew3dsTheRegularPlaces() {
+        // the regular 3DS's buttons; ZL / ZR beside L / R; the C-stick a full stick under the face, in toward the screen (user)
+        for (hinge in listOf(null, 1224f)) {
+            fun at(v: SkinVariant) = assertNotNull(SkinChoice.place(pack, 1848, 2448, 420, tablet = false, ds = true, hingeY = hinge, foldable = true, variant = v), "$v $hinge")
+            val n = at(SkinVariant.N3DS).controls.associateBy { it.spec.id }; val r = at(SkinVariant.N3DS_REGULAR).controls.associateBy { it.spec.id }
+            // (both sides lift alike where the C-stick needs the height)
+            val lift = r.getValue("X").y - n.getValue("X").y
+            for (id in listOf("L", "R", "X", "Y", "A", "B", "STICK", "MIC", "MENU", "SELECT", "START")) {
+                assertEquals(r.getValue(id).x, n.getValue(id).x, 1f, "$hinge $id x")
+                if (id !in setOf("MIC", "MENU", "SELECT", "START")) assertEquals(r.getValue(id).y - lift, n.getValue(id).y, 1f, "$hinge $id y")
+            }
+            assertEquals(n.getValue("L").y, n.getValue("L2").y, 1f, "$hinge ZL level with L"); assertTrue(n.getValue("L2").x > n.getValue("L").x, "$hinge ZL inside L")
+            assertEquals(n.getValue("R").y, n.getValue("R2").y, 1f, "$hinge ZR level with R"); assertTrue(n.getValue("R2").x < n.getValue("R").x, "$hinge ZR inside R")
+            val nub = n.getValue("CSTICK")
+            assertEquals(n.getValue("STICK").spec.r * 0.85f, nub.spec.r, 0.5f, "$hinge C-stick at the d-pad's 85%")
+            // (in toward the screen as far as the frame and the row leave it: half-folded, none)
+            assertTrue(nub.y > n.getValue("B").y && nub.x <= n.getValue("X").x + 1f, "$hinge C-stick under the face, in toward the screen")
+        }
+    }
+
+    @Test
     fun theUltraUprightPuts3dsStartAndSelectInTheRowAndTheDpadNearerTheStick() {
         for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) for (hinge in listOf(null, 1252f)) {
             val name = "$v $hinge"
