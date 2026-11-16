@@ -293,6 +293,14 @@ class AndroidAppSettings(context: Context) : AppSettings {
             prefs.edit { putBoolean(KEY_SCREEN_CARE, value) }
         }
 
+    override var saveOnQuit: Boolean
+        get() = prefs.getBoolean(KEY_SAVE_ON_QUIT, true)
+        set(value) = prefs.edit { putBoolean(KEY_SAVE_ON_QUIT, value) }
+
+    override var aResumes: Boolean
+        get() = prefs.getBoolean(KEY_A_RESUMES, true)
+        set(value) = prefs.edit { putBoolean(KEY_A_RESUMES, value) }
+
     override var playerName: String
         get() = prefs.getString(KEY_PLAYER_NAME, "").orEmpty()
         set(value) = prefs.edit { putString(KEY_PLAYER_NAME, value) }
@@ -493,6 +501,8 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_BOTTOM_SCREEN = "bottom_screen"
         private const val KEY_PAUSE_UNFOCUSED = "pause_unfocused"
         private const val KEY_SCREEN_CARE = "screen_care"
+        private const val KEY_SAVE_ON_QUIT = "save_on_quit"
+        private const val KEY_A_RESUMES = "a_resumes"
         private const val KEY_MENU_INFO_ACHIEVEMENTS = "menu_info_achievements"
         private const val KEY_SAVE_FORMAT = "save_format"
         private const val KEY_STATE_FORMAT = "state_format"

@@ -188,6 +188,8 @@ class AppStateTest {
         override var playerName = ""
         override var secondScreen = true
         override var pauseWhenUnfocused = true
+        override var saveOnQuit = true
+        override var aResumes = true
         override var bottomScreen = com.nxredux.mobile.runner.BottomScreen.AUTO
         override var saveFormat = SaveFormat.DEFAULT
         override var stateFormat = StateFormat.DEFAULT
@@ -5362,6 +5364,26 @@ class AppStateTest {
         assertEquals(ListSelection(1, 2), state.selection.value)       // Settings stays highlighted
     }
 
+    @Test fun emulation_page_ends_with_save_on_quit_and_a_resumes() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings)
+        state.load()
+        state.openSettingsMenu()
+        state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // Emulation
+        var emu = assertIs<Screen.Settings>(state.screen.value)
+        assertEquals(SettingsSection.EMULATORS, emu.section)
+        assertEquals(listOf(SettingsKind.SAVE_ON_QUIT, SettingsKind.A_RESUMES), emu.rows.takeLast(2).map { it.kind })
+        assertEquals(listOf("Save on quit", "A resumes"), emu.rows.takeLast(2).map { it.label })
+        assertEquals(listOf("On", "On"), emu.rows.takeLast(2).map { it.secondary })
+        repeat(emu.rows.size - 2) { state.onButton(NxButton.DOWN) }
+        state.onButton(NxButton.A)
+        assertFalse(settings.saveOnQuit)
+        state.onButton(NxButton.DOWN); state.onButton(NxButton.A)
+        assertFalse(settings.aResumes)
+        emu = assertIs<Screen.Settings>(state.screen.value)
+        assertEquals(listOf("Off", "Off"), emu.rows.takeLast(2).map { it.secondary })
+    }
+
     @Test fun each_section_opens_its_rows_and_b_returns_to_the_menu_on_that_section() = runTest {
         val state = state(MemorySettings(ContentRef("Home")))
         state.load()
@@ -5377,7 +5399,7 @@ class AppStateTest {
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // Emulators
         val emu = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsSection.EMULATORS, emu.section)
-        assertEquals(listOf("Default emulators", "Default settings"), emu.rows.map { it.label })   // Saves under Library, Pause when unfocused under System
+        assertEquals(listOf("Default emulators", "Default settings", "Save on quit", "A resumes"), emu.rows.map { it.label })   // Saves under Library, Pause when unfocused under System
         state.onButton(NxButton.B)
         assertEquals(ListSelection(1, 6), state.selection.value)
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // Appearance

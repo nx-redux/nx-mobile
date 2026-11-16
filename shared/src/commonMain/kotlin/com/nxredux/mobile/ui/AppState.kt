@@ -584,7 +584,7 @@ internal val Screen.menuPushed: Boolean
 /** Kids Mode's first switch-on, in order (the spec's): PIN, allowed apps, play times, then the two permissions and home. */
 enum class KidsSetupStep { PIN, APPS, TIMES, USAGE, ALARMS, HOME }
 
-enum class SettingsKind { PLAYER_NAME, HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, GAME_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, GPU_DRIVER, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
+enum class SettingsKind { PLAYER_NAME, HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, GAME_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, SAVE_ON_QUIT, A_RESUMES, GPU_DRIVER, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
@@ -4009,6 +4009,8 @@ class AppState(
             add(SettingsRow(SettingsKind.DEFAULTS, "Default emulators"))
             add(SettingsRow(SettingsKind.EMULATORS, "Default settings"))
             deps.gpuDrivers?.let { store -> gpuDriverRow(store.unavailableReason(), deps.settings.gpuDriver, store::installed)?.let(::add) }
+            add(SettingsRow(SettingsKind.SAVE_ON_QUIT, "Save on quit", if (deps.settings.saveOnQuit) "On" else "Off"))
+            add(SettingsRow(SettingsKind.A_RESUMES, "A resumes", if (deps.settings.aResumes) "On" else "Off"))
         }
         SettingsSection.SECOND_SCREEN -> listOf(
             SettingsRow(SettingsKind.SECOND_SCREEN_ENABLE, "Enable", if (deps.settings.secondScreen) "On" else "Off"),
@@ -4308,6 +4310,8 @@ class AppState(
             // Emulators, Saves (the handheld's formats in its order), Second screen and Developer.
             SettingsKind.PAUSE_UNFOCUSED -> flip(s.pauseWhenUnfocused) { s.pauseWhenUnfocused = it }
             SettingsKind.SCREEN_CARE -> flip(s.screenCare) { s.screenCare = it }
+            SettingsKind.SAVE_ON_QUIT -> flip(s.saveOnQuit) { s.saveOnQuit = it }
+            SettingsKind.A_RESUMES -> flip(s.aResumes) { s.aResumes = it }
             SettingsKind.SAVE_FORMAT -> cycle(SaveFormat.entries, s.saveFormat, { it.label }) { s.saveFormat = it }
             SettingsKind.STATE_FORMAT -> cycle(StateFormat.entries, s.stateFormat, { it.label }) { s.stateFormat = it }
             SettingsKind.EXTRACTED_NAME -> flip(s.useExtractedFileName) { s.useExtractedFileName = it }
