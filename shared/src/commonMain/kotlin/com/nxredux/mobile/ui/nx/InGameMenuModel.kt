@@ -466,6 +466,17 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         refreshRoot()
     }
 
+    /** From [setKidsLocked]: Kids Mode is on without Parent mode, so the root has no Options (a kid changes no settings). */
+    private var kidsLocked = false
+
+    /** Kids Mode on without Parent mode ([kidsLocked]) or not: going on returns an open Options page (and what is under it) to the root. */
+    fun setKidsLocked(on: Boolean) {
+        if (on == kidsLocked) return
+        kidsLocked = on
+        if (on && state.stack.any { it.kind == PageKind.Options }) popTo(PageKind.Root)
+        refreshRoot()
+    }
+
     /**
      * Seconds until a menu left open in a DS room leaves it by itself, shown on the Disconnect row; null when nothing
      * counts down.
@@ -988,7 +999,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /** The second-screen panel's All options: the menu on its Options page. Nothing in netplay (its root has no Options). */
     fun openOptions() {
-        if (sessionLocked) return
+        if (sessionLocked || kidsLocked) return
         popTo(PageKind.Root)
         push(optionsPage())
     }
@@ -998,7 +1009,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * through them. Nothing in netplay, as [openOptions].
      */
     fun openShaderPicker() {
-        if (sessionLocked) return
+        if (sessionLocked || kidsLocked) return
         popTo(PageKind.Root)
         val options = optionsPage()
         push(options.copy(selected = options.rows.indexOfFirst { (it as? MenuRow.Submenu)?.target == PageKind.Shaders }.coerceAtLeast(0)))
@@ -1651,7 +1662,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             add(MenuRow.Slot("Load", SlotAction.LOAD))
             add(MenuRow.Action("Reset", MenuAction.ASK_RESET))   // asks first ([resetPage]); the panel's Reset tile before
             if (screenTaken) add(MenuRow.Action(USE_TOP_SCREEN_LABEL, MenuAction.USE_TOP_SCREEN))
-            add(MenuRow.Submenu("Options", PageKind.Options))
+            if (!kidsLocked) add(MenuRow.Submenu("Options", PageKind.Options))
             add(MenuRow.Action("Quit", MenuAction.QUIT))
         },
     )

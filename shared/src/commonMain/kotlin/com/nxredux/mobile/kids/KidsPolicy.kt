@@ -147,6 +147,14 @@ fun nextOpenLabel(n: NextOpen): String {
 fun kidsGameBlocked(enabled: Boolean, now: LocalNow, schedule: KidsSchedule, unlockUntilMs: Long, mainParent: () -> Boolean): Boolean =
     kidsMode(enabled, parent = false, now = now, schedule = schedule, unlockUntilMs = unlockUntilMs) is KidsMode.Locked && !mainParent()
 
+/**
+ * A game's settings (the in-game menu's Options, the second-screen panel's Settings tab) are hidden from a kid: Kids Mode
+ * is on and Parent mode is not held. [mode] is the main process's, null when it has no controller yet; then Parent mode
+ * (memory only) cannot be held, so the stored [enabled] decides.
+ */
+fun kidsHidesGameSettings(mode: KidsMode?, enabled: Boolean): Boolean =
+    if (mode == null) enabled else mode != KidsMode.Off && mode != KidsMode.Parent
+
 /** How often at most a game reports input to the main process, for Parent mode's idle time. */
 const val KIDS_INPUT_EVERY_MS = 30_000L
 
