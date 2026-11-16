@@ -906,7 +906,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // clears this screen. A quit writes its own; a game that never got ready writes nothing (writeAutoStateOnStop);
         // one that failed after starting and leaves through its dialog keeps the last good resume point.
         // API 26–27: onSaveInstanceState already ran; the outcome of the write is recorded in its bundle.
-        saves.onStop(writeAuto = !quitting && !wii.endedByCore && !relaunching && !(isFinishing && failShown) && !inRoom)
+        saves.onStop(writeAuto = !quitting && !wii.endedByCore && !relaunching && !(isFinishing && failShown) && !inRoom && settings.saveOnQuit)
         if (isFinishing) { input.gcClearTriggers(); stopAchievements() }
         input.onStop()   // the pen and 3DS hotkey ticks stop; onStart restarts them
         // A Presentation stays up while its activity is stopped: no second screen in the background.
@@ -1543,7 +1543,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         ach?.detach()
         achievements = null
         if (view == null || !gameReady) { ach?.stop(); finish(); return }   // not running yet: no save to write
-        saves.writeOnQuit(view, chosen, autoState, release = { live -> ach?.stop(native = live) }, finish = ::finish)
+        // Save on quit off: the quit keeps the resume point as is (no hidden state), its battery save still written.
+        saves.writeOnQuit(view, chosen, autoState && settings.saveOnQuit, release = { live -> ach?.stop(native = live) }, finish = ::finish)
     }
 
     override fun refreshSlots() = saves.refreshSlots()

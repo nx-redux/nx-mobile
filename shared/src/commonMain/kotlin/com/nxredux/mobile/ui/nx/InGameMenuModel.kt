@@ -431,6 +431,17 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     var netplayEnded: Boolean = false
 
     /**
+     * Settings → Emulation → Save on quit: off, leaving writes no hidden save state, so the root's Quit is the plain
+     * [MenuAction.QUIT_ONLY] with no Save & Quit to ask about. Set before the menu shows, then [refresh].
+     */
+    var saveOnQuit: Boolean
+        get() = !quitSaveOff
+        set(value) { quitSaveOff = !value }
+
+    // Inverted so the root built during construction, before this line's initializer runs, already reads it as on.
+    private var quitSaveOff = false
+
+    /**
      * netplay: the session is a link one (GB/GBC/GBA, each player on their own save): Leave ends the link and the game
      * plays on as a local one, which the root's footer says. Set with [netplay], then [refresh].
      */
@@ -1652,7 +1663,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             add(MenuRow.Action("Reset", MenuAction.ASK_RESET))   // asks first ([resetPage]); the panel's Reset tile before
             if (screenTaken) add(MenuRow.Action(USE_TOP_SCREEN_LABEL, MenuAction.USE_TOP_SCREEN))
             add(MenuRow.Submenu("Options", PageKind.Options))
-            add(MenuRow.Action("Quit", MenuAction.QUIT))
+            add(MenuRow.Action("Quit", if (saveOnQuit) MenuAction.QUIT else MenuAction.QUIT_ONLY))
         },
     )
 

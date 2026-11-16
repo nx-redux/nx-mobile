@@ -336,7 +336,9 @@ internal class WiiDolphinController(
         if (homeSaving || host.quitting || endedByCore) return
         val view = host.retroView ?: return
         val ss = saves.saveStates
-        if (ss == null || !host.gameReady || saves.resumePending) { tapHome(view); return }
+        // Without Save on quit there is no resume point to keep: HOME opens at once.
+        val keep = com.nxredux.mobile.settings.AndroidAppSettings(host.activity).saveOnQuit
+        if (ss == null || !host.gameReady || saves.resumePending || !keep) { tapHome(view); return }
         homeSaving = true
         saves.writeHomeResumePoint(view, ss, onSaved = { homeSaved = true }) { homeSaving = false; if (!host.quitting) tapHome(view) }
     }
