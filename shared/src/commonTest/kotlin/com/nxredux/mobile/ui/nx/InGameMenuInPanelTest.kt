@@ -50,8 +50,11 @@ class InGameMenuInPanelTest {
     @Test fun in_the_panel_a_visual_row_changes_in_place() {
         val m = model().openDisplay()
         assertTrue((m.state.page.rows[0] as MenuRow.Option).visual)   // Screen Scaling
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Native"), m.press(NxButton.RIGHT))
+        assertNull(m.press(NxButton.RIGHT))                                         // the sides wait for A
+        m.press(NxButton.A)                                                         // its picker, in place
+        assertTrue(m.state.popup is MenuPopup.Picker)
         assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)   // no live preview strip
+        m.closePopup()
         m.setChoice(0, 0)
         assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)
     }
@@ -78,7 +81,7 @@ class InGameMenuInPanelTest {
 
     @Test fun moving_into_the_panel_leaves_a_live_preview() {
         val m = model(inPanel = false).openDisplay()
-        m.press(NxButton.RIGHT)
+        m.press(NxButton.A)
         assertTrue(m.state.page.kind is PageKind.Adjust)
         m.setInPanel(true)
         assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)

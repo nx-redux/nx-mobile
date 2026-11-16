@@ -63,7 +63,7 @@ internal interface SettingsHost {
 internal class SettingsController(
     private val screen: MutableStateFlow<Screen>,
     private val selection: MutableStateFlow<ListSelection>,
-    /** The row being changed on a two-pane page ([AppState.rowEdit]); AppState clears it when the screen changes. */
+    /** The row being changed ([AppState.rowEdit]); AppState clears it when the screen changes. */
     private val rowEdit: MutableStateFlow<RowEdit?>,
     private val deps: AppDeps,
     /** Kids Mode can run here: its category shows. */
@@ -182,31 +182,34 @@ internal class SettingsController(
     }
 
     /**
-     * The pad on a page of setting rows ([rowEditKey]) drawn beside another ([rowEditTwoPane]); one page keeps LEFT /
-     * RIGHT for its values (the page's own handling). Two panes: LEFT and RIGHT go between pages (LEFT as B; RIGHT opens a `›`
-     * row, as A) and never change a value. A on a row of segments, swatches or a stepped value ([NxPadA.EDIT]) starts
-     * changing it: then LEFT / RIGHT step it (the page's own LEFT / RIGHT), A or B stop, UP / DOWN stop and move. A
-     * switch's A flips it and a picker's opens it, as before (the page's own A). Returns the press the page hears
-     * ([button] itself, or LEFT's B and RIGHT's A); null when it is taken here.
+     * The pad on a page of setting rows ([rowEditKey]). A on a row of segments, swatches or a stepped value
+     * ([NxPadA.EDIT]) starts changing it: then LEFT / RIGHT step it (the page's own LEFT / RIGHT), only A or B stop (UP / DOWN
+     * do nothing meanwhile). A switch's A flips it and a picker's opens it (the page's own A). Until A, LEFT / RIGHT never change a
+     * value: drawn beside another page ([rowEditTwoPane]) they go between pages (LEFT as B; RIGHT opens a `›` row, as A),
+     * on one page they do nothing on a value row. Returns the press the page hears ([button] itself, or LEFT's B and
+     * RIGHT's A); null when it is taken here.
      */
     fun onRowEditButton(s: Screen, button: NxButton): NxButton? {
         val key = rowEditKey(s) ?: return button
         if (rowEditBlocked(s)) return button
-        if (!rowEditTwoPane(s, settingsSplit)) { rowEdit.value = null; return button }
         val i = selection.value.index
         if (rowEdit.value == RowEdit(key, i)) return when (button) {
             NxButton.A, NxButton.B -> { rowEdit.value = null; null }
-            NxButton.UP, NxButton.DOWN -> { rowEdit.value = null; button }
-            else -> button   // LEFT / RIGHT: the page steps the value; X: its info
+            NxButton.UP, NxButton.DOWN -> null   // only A or B end the change
+            // LEFT / RIGHT: the page steps the value, while the row still steps (a refresh can leave another row here).
+            NxButton.LEFT, NxButton.RIGHT -> if (settingTouchRow(i)?.padA == NxPadA.EDIT) button else { rowEdit.value = null; null }
+            else -> button   // X: its info
         }
         rowEdit.value = null
+        if (button != NxButton.A && button != NxButton.LEFT && button != NxButton.RIGHT) return button
         val row = settingTouchRow(i)
-        return when (button) {
-            NxButton.A -> if (row?.padA == NxPadA.EDIT) { rowEdit.value = RowEdit(key, i); null } else button
-            NxButton.LEFT -> NxButton.B
+        if (button == NxButton.A) return if (row?.padA == NxPadA.EDIT) { rowEdit.value = RowEdit(key, i); null } else button
+        return when {
+            !rowEditTwoPane(s, settingsSplit) -> if (row != null && row.padA != NxPadA.NONE) null else button
+            button == NxButton.LEFT -> NxButton.B
             // A `›` row has no values (its A opens), so its A never starts an edit here.
-            NxButton.RIGHT -> if (row?.opens == true) NxButton.A else null
-            else -> button
+            row?.opens == true -> NxButton.A
+            else -> null
         }
     }
 
@@ -423,6 +426,10 @@ internal class SettingsController(
             page.rows.indices.filter { sameSettingsRow(page.rows[it], was) }.singleOrNull()
         }
         selection.value = selectableOn(page, if (moved != null && moved != sel.index) sel.copy(index = moved) else sel)
+        // The row being changed goes with it; gone (or no longer found once), the change ends rather than land on another row.
+        rowEdit.value?.takeIf { it.key == section }?.let { e ->
+            rowEdit.value = if (e.index == sel.index && moved != null) e.copy(index = moved) else null
+        }
     }
 
     /** Whether [a] and [b] are the same Settings row across a refresh: its kind and what it is for, not its value or label. */

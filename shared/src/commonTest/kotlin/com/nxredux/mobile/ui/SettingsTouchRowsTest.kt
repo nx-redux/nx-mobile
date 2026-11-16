@@ -180,11 +180,10 @@ class SettingsTouchRowsTest {
     @Test fun touchHintsFollowTheControl() {
         val rows = listOf(SettingsRow(SettingsKind.PAD_SKIN, "Pad skin", "On"), SettingsRow(SettingsKind.ACCENT, "Accent", "White"))
         val back = Hint(NxButton.B, "Back")
-        val change = Hint(NxButton.LEFT, "Change")
-        assertEquals(listOf(back, change, Hint(NxButton.A, "Toggle"), Hint(NxButton.X, "Info")),
+        assertEquals(listOf(back, Hint(NxButton.A, "Toggle"), Hint(NxButton.X, "Info")),
             settingsHints(rows, 0, NxSettingRow("Pad skin", choices = listOf("Off", "On"), index = 1), info = true))
-        assertEquals(listOf(back, change, Hint(NxButton.A, "Choose")), settingsHints(rows, 1, NxSettingRow("Accent", choices = List(9) { "c$it" }, index = 0)))
-        assertEquals(listOf(back, change), settingsHints(rows, 1, NxSettingRow("Pad theme", choices = listOf("NX Carbon", "NX Onyx"), index = 0)))   // segmented: A steps
+        assertEquals(listOf(back, Hint(NxButton.A, "Choose")), settingsHints(rows, 1, NxSettingRow("Accent", choices = List(9) { "c$it" }, index = 0)))
+        assertEquals(listOf(back, Hint(NxButton.A, "Change")), settingsHints(rows, 1, NxSettingRow("Pad theme", choices = listOf("NX Carbon", "NX Onyx"), index = 0)))   // segmented: A, then LEFT / RIGHT
         assertEquals(listOf(back, Hint(NxButton.A, "Select")), settingsHints(rows, 1))   // no touch row
     }
 
@@ -207,9 +206,9 @@ class SettingsTouchRowsTest {
     @Test fun emulatorHintsFollowTheControl() {
         val opt = CoreOption("opt_a", "x", label = "Option A", values = listOf("x", "y"), defaultValue = "x")
         val row = EmulatorRow.Core(opt, inCategory = false)
-        assertEquals(listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.B, "Back"), Hint(NxButton.A, "Select")), emulatorOptionsHints(row))
+        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Select")), emulatorOptionsHints(row))
         val many = NxSettingRow("Option A", info = "cut", choices = List(6) { "v$it" }, index = 0)
-        assertEquals(listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.B, "Back"), Hint(NxButton.A, "Choose"), Hint(NxButton.X, "Info")), emulatorOptionsHints(row, many, truncated = "cut"))
+        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Choose"), Hint(NxButton.X, "Info")), emulatorOptionsHints(row, many, truncated = "cut"))
     }
 
     @Test fun settingValuePicksByIndex() {
@@ -221,15 +220,5 @@ class SettingsTouchRowsTest {
         v.changeTo(1); assertEquals(listOf("c"), after)   // already the one (as v read it): nothing
         v.changeTo(5); assertEquals("c", value)            // out of range: nothing
         assertEquals(null, SettingValue(listOf(1, 2), 1, {}, after = {}).labels)
-    }
-
-    @Test fun androidsOwnSwitchesHaveNoLeftChangeHint() {
-        val touch = NxSettingRow("Use as home screen", choices = listOf("Off", "On"), index = 0)
-        val back = Hint(NxButton.B, "Back")
-        val toggle = Hint(NxButton.A, "Toggle")
-        for (kind in listOf(SettingsKind.HOME_SCREEN, SettingsKind.ALL_FILES, SettingsKind.MIC_ACCESS))
-            assertEquals(listOf(back, toggle), settingsHints(listOf(SettingsRow(kind, touch.label)), 0, touch), "$kind")
-        val pause = SettingsRow(SettingsKind.PAUSE_UNFOCUSED, "Pause when unfocused")
-        assertEquals(listOf(back, Hint(NxButton.LEFT, "Change"), toggle), settingsHints(listOf(pause), 0, touch.copy(label = pause.label)))
     }
 }

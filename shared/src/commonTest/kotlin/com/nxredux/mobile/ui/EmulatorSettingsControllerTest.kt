@@ -334,11 +334,11 @@ class EmulatorSettingsControllerTest {
         await { state.screen.value is Screen.EmulatorOptions }
         assertTrue(selected(state) !is EmulatorRow.Header)   // the first selectable row
         selectOptA(state)
-        state.onButton(NxButton.RIGHT)
+        state.padStep(NxButton.RIGHT)
         await { onOptA(state) && coreValue(state, "opt_a") == "y" }
         assertTrue("opt_a = y" in configs.files.getValue("GBA-gpsp/minarch.cfg").lines())
         assertEquals("opt_a", (selected(state) as EmulatorRow.Core).option.key)   // the selection stays on the row
-        state.onButton(NxButton.LEFT); state.onButton(NxButton.LEFT)   // serialised: each change reads what the last wrote
+        state.padStep(NxButton.LEFT); state.padStep(NxButton.LEFT)   // serialised: each change reads what the last wrote
         await { onOptA(state) && coreValue(state, "opt_a") == "z" }
     }
 
@@ -369,7 +369,7 @@ class EmulatorSettingsControllerTest {
         await { state.screen.value is Screen.EmulatorOptions }
         selectOptA(state)
         configs.failWrites = true
-        state.onButton(NxButton.RIGHT)
+        state.onButton(NxButton.A); state.onButton(NxButton.RIGHT)   // the change: its error stays up
         await { state.error.value != null }
         assertEquals("Could not save the setting", state.error.value)
         assertEquals("z", coreValue(state, "opt_a"))
@@ -461,7 +461,7 @@ class EmulatorSettingsControllerTest {
         assertEquals("Mario", options(state).game?.game?.shownName)
         assertFalse(EmulatorRow.UseEmulatorSettings in options(state).rows)
         selectOptA(state)
-        state.onButton(NxButton.A)   // A on a value row is RIGHT
+        state.padStep(NxButton.RIGHT)
         await { onOptA(state) && coreValue(state, "opt_a") == "x" }
         val text = configs.files.getValue("GBA-gpsp/Mario.cfg").lines()
         assertTrue("bind Up = UP" in text)
@@ -653,12 +653,12 @@ class EmulatorSettingsControllerTest {
         openCore(state, "mgba")
         await { state.screen.value is Screen.EmulatorOptions }
         selectApp(state, SettingsKind.CABLE_LINK_DELAY)
-        state.onButton(NxButton.RIGHT)
+        state.padStep(NxButton.RIGHT)
         assertEquals("2 frames", appRow(state, SettingsKind.CABLE_LINK_DELAY).row.secondary)
         assertEquals(SettingsKind.CABLE_LINK_DELAY, (selected(state) as EmulatorRow.App).row.kind)
-        state.onButton(NxButton.LEFT); state.onButton(NxButton.LEFT)
+        state.padStep(NxButton.LEFT); state.padStep(NxButton.LEFT)
         assertEquals("Auto", appRow(state, SettingsKind.CABLE_LINK_DELAY).row.secondary)
-        state.onButton(NxButton.LEFT)   // wraps, as on Settings
+        state.padStep(NxButton.LEFT)   // wraps, as on Settings
         assertEquals("8 frames", appRow(state, SettingsKind.CABLE_LINK_DELAY).row.secondary)
         selectApp(state, SettingsKind.CABLE_LINK_DELAY_OVERLAY)
         state.onButton(NxButton.A)

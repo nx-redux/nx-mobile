@@ -310,7 +310,20 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var previewPage: Pair<OptionsPreviewInputs, MenuPage>? = null
 
     var state: MenuState = MenuState(listOf(rootPage()), initialSlot.coerceIn(0, slotCount - 1))
-        private set(value) { field = withPreview(value) }
+        private set(value) { field = withPreview(keptEdit(value)) }
+
+    /** The option row A started changing ([MenuState.editing]), by key. */
+    private var editKey: String? = null
+
+    /**
+     * [s] still changing only while its highlighted row is the one A started on: a rebuild that drops or hides that row
+     * (a core option a change hid) moves the highlight to another, which LEFT / RIGHT must not change.
+     */
+    private fun keptEdit(s: MenuState): MenuState {
+        if (!s.editing) return s
+        val key = (s.page.rows.getOrNull(s.page.selected) as? MenuRow.Option)?.key
+        return if (key != null && key == editKey) s else s.copy(editing = false)
+    }
 
     /** [s] with its [MenuState.preview] for the root's highlighted row (the Options page beside the Options row). */
     private fun withPreview(s: MenuState): MenuState {
@@ -564,7 +577,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             NxButton.LEFT -> return change(-1)
             NxButton.RIGHT -> return change(1)
             NxButton.A, NxButton.B -> { state = state.copy(editing = false); return null }
-            NxButton.UP, NxButton.DOWN -> state = state.copy(editing = false)   // and move, below
+            NxButton.UP, NxButton.DOWN -> return null   // only A or B end the change
             else -> Unit   // X its info, MENU closes
         }
         if (state.page.kind == PageKind.Shortcuts) {
@@ -604,26 +617,30 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             // The first word: UP goes up to the tab row over it (the words no longer wrap there).
             NxButton.UP -> { if (root && tabsShown() && state.page.selected == 0) state = state.copy(panelFocus = PanelFocus.Tabs) else move(-1); null }
             NxButton.DOWN -> { move(1); null }
-            // In two panes ([split]), off the root LEFT goes back to the page on the left and RIGHT opens a row's page:
-            // they never change a value there, A starts that ([editsOnA]). One page (no pane to go to): LEFT / RIGHT
-            // change a value row at once, as on the root's Disc row and Save / Load; B goes back.
+            // Off the root LEFT / RIGHT never change a value: A starts that ([editsOnA]). In two panes ([split]) LEFT goes
+            // back to the page on the left and RIGHT opens a row's page; one page leaves a value row alone (no pane to go
+            // to). The root's Disc row and Save / Load step at once.
             NxButton.LEFT -> when {
-                root || stepsOnSide() -> { intoAdjust(state.page.selected); change(-1) }
+                root -> { intoAdjust(state.page.selected); change(-1) }
+                holdsSides() -> null
                 else -> back()
             }
             NxButton.RIGHT -> when {
                 !root && opensPage(state.page.rows.getOrNull(state.page.selected)) -> activate(state.page.selected)
-                !root -> if (stepsOnSide()) { intoAdjust(state.page.selected); change(1) } else null
+                !root -> null
                 visualRow(state.page.selected) != null -> { intoAdjust(state.page.selected); change(1) }
                 // Options moves into its preview, as A, whether or not the menu splits.
                 (split || state.preview != null) && opensPage(state.page.rows.getOrNull(state.page.selected)) -> activate(state.page.selected)
                 else -> change(1)
             }
-            // A on Quit saves and quits; a touch tap ([activate]) asks how to quit instead. On two panes A on segments or
-            // swatches starts changing it ([MenuState.editing]); a tap changes it at once.
+            // A on Quit saves and quits; a touch tap ([activate]) asks how to quit instead. A on segments or swatches
+            // starts changing it ([MenuState.editing]); a tap changes it at once.
             NxButton.A -> when {
                 selectedAction() == MenuAction.QUIT -> MenuEffect.Quit
-                editsOnA(state.page.selected) -> { state = state.copy(editing = true); null }
+                editsOnA(state.page.selected) -> {
+                    editKey = (state.page.rows[state.page.selected] as MenuRow.Option).key
+                    state = state.copy(editing = true); null
+                }
                 else -> activate(state.page.selected)
             }
             NxButton.B -> back()
@@ -790,12 +807,11 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     /**
-     * A on row [index] of the top page starts changing it with LEFT / RIGHT ([MenuState.editing]), in two panes
-     * ([split]): an option row of segments or swatches, off the root and Achievements, not a visual row (its strip) nor a
-     * Shortcuts row that binds.
+     * A on row [index] of the top page starts changing it with LEFT / RIGHT ([MenuState.editing]): an option row of
+     * segments or swatches, off the root and Achievements, not a visual row (A adjusts it: its strip, in the panel in
+     * place) nor a Shortcuts row that binds.
      */
     private fun editsOnA(index: Int): Boolean {
-        if (!split) return false   // one page: LEFT / RIGHT change it at once ([stepsOnSide]), A as a tap
         val row = state.page.rows.getOrNull(index) as? MenuRow.Option ?: return false
         val kind = state.page.kind
         if (kind == PageKind.Root || kind == PageKind.Achievements || row.visual) return false
@@ -804,10 +820,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     /**
-     * LEFT / RIGHT change the top page's highlighted row at once: an option row of a page off the root drawn as one page
-     * (not [split]), where they have no pane to go to. A visual row opens its strip with the change.
+     * LEFT / RIGHT do nothing on the top page's highlighted row: an option row of a page off the root drawn as one page
+     * (not [split]), where they have no pane to go to and change no value until A ([editsOnA]).
      */
-    private fun stepsOnSide(): Boolean =
+    private fun holdsSides(): Boolean =
         !split && state.page.kind != PageKind.Root && state.page.kind != PageKind.Achievements &&
             state.page.rows.getOrNull(state.page.selected) is MenuRow.Option
 

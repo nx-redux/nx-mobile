@@ -48,7 +48,7 @@ class OptionsPagesTest {
         assertTrue(artworkSettingTouchRow(ArtworkSettingRow(ArtworkSettingKind.SECTION, "Accounts")).section)
         // Hints: a switch Toggle, the allowance Back only, the rest Select; X Info when asked.
         val back = Hint(NxButton.B, "Back")
-        assertEquals(listOf(back, Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Toggle"), Hint(NxButton.X, "Info")), artworkSettingsHints(ArtworkSettingRow(ArtworkSettingKind.REPLACE, "Replace existing art", "Off"), replace, info = true))
+        assertEquals(listOf(back, Hint(NxButton.A, "Toggle"), Hint(NxButton.X, "Info")), artworkSettingsHints(ArtworkSettingRow(ArtworkSettingKind.REPLACE, "Replace existing art", "Off"), replace, info = true))
         assertEquals(listOf(back), artworkSettingsHints(ArtworkSettingRow(ArtworkSettingKind.TGDB_LEFT, "TheGamesDB", "9 left this month"), null, info = false))
         assertEquals(listOf(back, Hint(NxButton.A, "Select")), artworkSettingsHints(ArtworkSettingRow(ArtworkSettingKind.SS_LOGIN, "ScreenScraper login"), null, info = false))
     }
@@ -109,7 +109,7 @@ class OptionsPagesTest {
         assertTrue(raSettingsTouchRow(RaSettingsRow(RaSettingKind.GAP, "")).spacer)
         // Hints: a picker Choose, an action Select, a group label Back only; X Info when asked.
         val back = Hint(NxButton.B, "Back")
-        assertEquals(listOf(back, Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Choose")), raSettingsHints(RaSettingsRow(RaSettingKind.NOTIFICATION_SECONDS, "Notification duration", "3 s", choices = seconds), duration))
+        assertEquals(listOf(back, Hint(NxButton.A, "Choose")), raSettingsHints(RaSettingsRow(RaSettingKind.NOTIFICATION_SECONDS, "Notification duration", "3 s", choices = seconds), duration))
         assertEquals(listOf(back, Hint(NxButton.A, "Select"), Hint(NxButton.X, "Info")), raSettingsHints(RaSettingsRow(RaSettingKind.RESET_ACCOUNT, "Reset account data"), null, info = true))
         assertEquals(listOf(back), raSettingsHints(RaSettingsRow(RaSettingKind.SECTION, "Account")))
     }

@@ -886,11 +886,11 @@ class ArtworkScreensTest {
         fun on(k: ArtworkSettingKind) { r.state.select(rows().indexOfFirst { it.kind == k }) }
         assertEquals(listOf("Art to fetch", "Replace existing art", "2D box art", "Wheel", "Mix"), rows().take(5).map { it.label })
         assertEquals(listOf("Off", "Off", "Off"), listOf(ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX).map { row(it).secondary })
-        on(ArtworkSettingKind.BOX2D); r.state.onButton(NxButton.RIGHT)
+        on(ArtworkSettingKind.BOX2D); r.state.padStep(NxButton.RIGHT)
         assertTrue(r.settings.artBox2d); assertEquals("On", row(ArtworkSettingKind.BOX2D).secondary)
         on(ArtworkSettingKind.WHEEL); r.state.onButton(NxButton.A)
         assertTrue(r.settings.artWheel); assertEquals("On", row(ArtworkSettingKind.WHEEL).secondary)
-        r.state.onButton(NxButton.LEFT)
+        r.state.padStep(NxButton.LEFT)
         assertFalse(r.settings.artWheel)
         on(ArtworkSettingKind.MIX); r.state.onButton(NxButton.A)
         assertTrue(r.settings.artMix)

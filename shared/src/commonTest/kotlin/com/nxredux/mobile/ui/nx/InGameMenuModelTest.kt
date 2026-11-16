@@ -280,16 +280,18 @@ class InGameMenuModelTest {
         assertNull(m.press(NxButton.A))                      // open Video
         assertEquals(PageKind.Category("video"), m.state.page.kind)
         assertEquals("Video", m.state.page.title)
-        assertEquals(MenuEffect.SetOption("pal", "b"), m.press(NxButton.A))   // A steps segments
+        assertNull(m.press(NxButton.A))                      // A starts changing segments
+        assertEquals(MenuEffect.SetOption("pal", "b"), m.press(NxButton.RIGHT))
         assertEquals("B", (m.state.page.rows.single() as MenuRow.Option).valueLabel)
-        assertEquals(MenuEffect.SetOption("pal", "a"), m.press(NxButton.A))   // wraps
+        assertEquals(MenuEffect.SetOption("pal", "a"), m.press(NxButton.RIGHT))   // wraps
     }
 
-    @Test fun a_on_a_segmented_option_steps_it_and_shows_no_page() {
+    @Test fun a_on_a_segmented_option_starts_changing_it_and_shows_no_page() {
         val m = model().openCoreOptions()
         m.press(NxButton.A)                                  // Video
         assertEquals(NxSettingControl.SEGMENTED, m.optionRow(0).control)   // A / B
-        assertEquals(MenuEffect.SetOption("pal", "b"), m.press(NxButton.A))
+        assertNull(m.press(NxButton.A)); assertTrue(m.state.editing)
+        assertEquals(MenuEffect.SetOption("pal", "b"), m.press(NxButton.RIGHT))
         assertEquals(PageKind.Category("video"), m.state.page.kind)
         assertNull(m.state.popup)
         assertEquals(1, m.optionRow(0).index)
@@ -393,7 +395,8 @@ class InGameMenuModelTest {
         m.updateOptions(listOf(a.copy(visible = false), b, c))
         assertEquals(1, m.state.page.selected)
         assertEquals("c", (m.state.page.rows[m.state.page.selected] as MenuRow.Option).key)
-        assertEquals(MenuEffect.SetOption("c", "2"), m.press(NxButton.A))
+        m.press(NxButton.A)
+        assertEquals(MenuEffect.SetOption("c", "2"), m.press(NxButton.RIGHT))
         m.updateOptions(listOf(a, b, c.copy(value = "2")))  // a revealed above the selection
         assertEquals(2, m.state.page.selected)
         assertEquals("c", (m.state.page.rows[m.state.page.selected] as MenuRow.Option).key)
@@ -415,11 +418,25 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.Close, m.press(NxButton.MENU))
     }
 
+    @Test fun a_change_ends_when_its_row_goes() {
+        val a = CoreOption("a", "1", label = "A", values = listOf("1", "2"))
+        val c = CoreOption("c", "1", label = "C", values = listOf("1", "2"))
+        val m = model().toCoreOptionsRow()
+        m.press(NxButton.A)
+        m.showCoreOptions(listOf(a, c), emptySet())
+        m.press(NxButton.DOWN)                                   // C
+        assertNull(m.press(NxButton.A)); assertTrue(m.state.editing)
+        m.updateOptions(listOf(a, c.copy(visible = false)))      // C hidden: the highlight lands on A
+        assertFalse(m.state.editing)
+        assertNull(m.press(NxButton.RIGHT))                      // A is not changed without its own A
+    }
+
     @Test fun cycling_from_a_raw_value_goes_to_first_choice() {
         val m = model().toCoreOptionsRow()
         m.press(NxButton.A)
         m.showCoreOptions(listOf(CoreOption("k", "z", label = "K", values = listOf("x", "y"))), emptySet())
-        assertEquals(MenuEffect.SetOption("k", "x"), m.press(NxButton.A))
+        m.press(NxButton.A)
+        assertEquals(MenuEffect.SetOption("k", "x"), m.press(NxButton.RIGHT))
     }
 
     private val overlayNames = listOf("Aspect.png", "Native.png")
@@ -468,7 +485,8 @@ class InGameMenuModelTest {
         assertEquals(listOf("100%", "60%", "40%", "25%"), opacity.choices)
         assertEquals(1, opacity.index)                       // 60%, the default
         m.select(1)
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.PAD_LANDSCAPE_OPACITY, "40"), m.press(NxButton.A))   // A steps segments
+        assertNull(m.press(NxButton.A))                                    // A starts changing segments
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.PAD_LANDSCAPE_OPACITY, "40"), m.press(NxButton.RIGHT))
         assertEquals("40%", m.optionRow(1).valueLabel)                     // not a visual row: in place
     }
 
@@ -1910,16 +1928,30 @@ class InGameMenuModelTest {
         assertEquals(listOf(Hint(NxButton.B, "Back")), hintsFor(MenuPage(PageKind.Message, "T", emptyList(), footer = "x"), null))
     }
 
-    @Test fun one_page_left_right_change_a_row_at_once_and_a_steps_segments() {
+    @Test fun one_page_left_right_leave_a_switch_alone_and_a_toggles_it() {
         val m = model().openFrontend()   // not split: one page
         m.select(5)                                                            // Debug HUD, a switch
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.DEBUG_HUD, "On"), m.press(NxButton.RIGHT))
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.DEBUG_HUD, "Off"), m.press(NxButton.LEFT))
-        assertFalse(m.state.editing)                                           // no change step on one page
-        assertEquals(
-            listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Toggle"), Hint(NxButton.B, "Back")),
-            hintsFor(m.state.page, m.state.page.rows[5], twoPane = false),
-        )
+        val kind = m.state.page.kind
+        assertNull(m.press(NxButton.RIGHT)); assertNull(m.press(NxButton.LEFT))   // no change, no page left
+        assertEquals(kind, m.state.page.kind); assertEquals(0, m.optionRow(5).index)
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.DEBUG_HUD, "On"), m.press(NxButton.A))
+        assertFalse(m.state.editing)
+        assertEquals(listOf(Hint(NxButton.A, "Toggle"), Hint(NxButton.B, "Back")), hintsFor(m.state.page, m.state.page.rows[5]))
+    }
+
+    @Test fun one_page_a_starts_changing_segments_and_b_stops() {
+        val m = model().openCoreOptions()
+        m.press(NxButton.A)                                                    // Video, not split: one page
+        assertEquals(NxSettingControl.SEGMENTED, m.optionRow(0).control)
+        assertNull(m.press(NxButton.RIGHT)); assertEquals(0, m.optionRow(0).index)   // not changing: RIGHT changes nothing
+        assertNull(m.press(NxButton.LEFT)); assertEquals(PageKind.Category("video"), m.state.page.kind)
+        assertEquals(listOf(Hint(NxButton.A, "Change"), Hint(NxButton.B, "Back")), hintsFor(m.state.page, m.state.page.rows[0]).filter { it.button != NxButton.X })
+        assertNull(m.press(NxButton.A)); assertTrue(m.state.editing)
+        assertEquals(MenuEffect.SetOption("pal", "b"), m.press(NxButton.RIGHT))
+        assertNull(m.press(NxButton.DOWN)); assertNull(m.press(NxButton.UP))   // only A or B end the change
+        assertTrue(m.state.editing); assertEquals(0, m.state.page.selected)
+        assertNull(m.press(NxButton.B)); assertFalse(m.state.editing)
+        assertEquals(PageKind.Category("video"), m.state.page.kind)
     }
 
     @Test fun two_panes_a_starts_changing_segments_and_b_stops() {

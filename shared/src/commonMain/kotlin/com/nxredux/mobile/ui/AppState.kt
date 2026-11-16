@@ -4722,8 +4722,8 @@ class AppState(
                 if (row.kind == SettingsKind.SHORTCUT_BIND) row.shortcut?.let { setShortcut(it, null) }   // back to None
                 else if (settingsUi.selectedSettingShowsInfo()) showSettingInfo(_selection.value.index)
             }
-            // A value row being changed ([onRowEditButton]) steps on LEFT/RIGHT; a default emulator steps through its
-            // console's tags. Otherwise LEFT / RIGHT go between pages there.
+            // A value row being changed ([onRowEditButton], after A) steps on LEFT/RIGHT; a default emulator steps through
+            // its console's tags.
             NxButton.LEFT, NxButton.RIGHT -> if (s is Screen.SettingsMenu) {
                 // Two panes: RIGHT on a category moves into its page, like A. One page has no pane to go to.
                 if (settingsUi.settingsSplit && button == NxButton.RIGHT) openSelected()
@@ -6159,7 +6159,7 @@ class AppState(
         dismissNoticeOnPress()
         (_screen.value as? Screen.Onboarding)?.let { onOnboardingButton(it, button); return }
         netplay?.takeIf { it.page.value != null }?.let { it.onButton(button); return }   // the Netplay sheet over a game list
-        // A two-pane page's row edit takes the press, or has the page hear LEFT / RIGHT as its own B / A.
+        // The row edit takes the press (A first, then LEFT / RIGHT), or on two panes has the page hear LEFT / RIGHT as its own B / A.
         val heard = settingsUi.onRowEditButton(_screen.value, button) ?: return
         // A held direction turned into B or A acts once: its repeats would climb or open one page per repeat.
         if (repeat && heard != button) return
