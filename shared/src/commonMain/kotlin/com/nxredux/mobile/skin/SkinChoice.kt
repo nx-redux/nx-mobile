@@ -750,10 +750,17 @@ object SkinChoice {
             if (v == SkinVariant.DC && (foldable || tablet)) shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset, rowFor(v, densityDpi, k),
                 refH = Float.MAX_VALUE, pick = { it.minRefH > 0 && it.controls.none { c -> c.id == "STICK_SWAP" } }) { spec -> spec.bothFollowMenu(menuShellOf(pack, spec)) }
                 ?.dpadInTheRoom(windowH.toFloat(), densityDpi / 160f)?.let { return it }
-            // the 3DS's tall shell (the stick and the d-pad both) where it fits
+            // the 3DS's tall shell (the stick and the d-pad both) where it fits: its small caps in a row each side; the New
+            // 3DS's as the regular 3DS's shell with ZL / ZR and a full C-stick under the face buttons, as the d-pad under the stick
             if (v in N3DS_VARIANTS) shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset, rowFor(v, densityDpi, k),
-                pick = { it.controls.none { c -> c.id == "STICK_SWAP" } }) { spec -> spec.bothFollowMenu(menuShellOf(pack, spec), menuUnderStart = false) }
-                ?.dpadInTheRoom(windowH.toFloat(), densityDpi / 160f)?.let { return it }
+                pick = { it.controls.none { c -> c.id == "STICK_SWAP" } }) { spec ->
+                val regular = if (v != SkinVariant.N3DS) null else pack.layouts.firstOrNull {
+                    it.variant == SkinVariant.N3DS_REGULAR && it.family == spec.family && it.refW == spec.refW && it.refH == spec.refH && it.minRefH == spec.minRefH
+                }
+                val board = regular?.let { reg -> reg.bothFollowMenu(menuShellOf(pack, reg), menuUnderStart = false).withNewControls(spec, ROW_GAP_DP * densityDpi / 160f / k) }
+                    ?: spec.bothFollowMenu(menuShellOf(pack, spec), menuUnderStart = false)
+                board.capsSideways(pack.layouts.firstOrNull { it.variant == SkinVariant.N3DS_REGULAR && it.foldBoard })
+            }?.dpadInTheRoom(windowH.toFloat(), densityDpi / 160f)?.let { return it }
             return shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset, rowFor(v, densityDpi, k)) { spec -> spec.toMenu(v, menuTwin(pack, spec)) }
                 ?.let { if (v in N3DS_VARIANTS) it.capsInOneRow(windowH.toFloat(), densityDpi / 160f).nubBetweenXAndA() else it }
         }

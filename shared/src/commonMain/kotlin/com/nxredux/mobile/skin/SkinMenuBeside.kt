@@ -427,3 +427,49 @@ private fun pillWell(well: PieceSpec, left: Float, n: Int, pitch: Float): List<P
     val b = well.copy(sx = well.sx + well.w - end, w = end, x = (left + (end + mid) * well.scale).roundToInt())
     return if (mid > 0) listOf(a, m, b) else listOf(a, b)
 }
+
+/**
+ * A tall landscape shell's 3DS small caps in a row each side instead of a column: MIC, MENU on the left; SWAP, SELECT,
+ * START on the right, each row in one well (the horizontal pill of [sized], the fold board, cut to its caps) at that
+ * board's pitch, centred under its side's ring, the words under the caps as its row's; the columns' wells go. The
+ * solver puts each row under its side's pad. As it is where [sized] has no such well.
+ */
+internal fun SkinLayoutSpec.capsSideways(sized: SkinLayoutSpec?): SkinLayoutSpec {
+    if (sized == null) return this
+    fun inside(p: PieceSpec, c: ControlSpec) = p.anchor == c.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+    fun centredAt(p: PieceSpec, x: Float, y: Float) = p.glass == null && kotlin.math.abs(p.x + p.w * p.scale / 2f - x) < 2f && kotlin.math.abs(p.y + p.h * p.scale / 2f - y) < 2f
+    val sMic = sized.controls.firstOrNull { it.id == "MIC" } ?: return this
+    val sMenu = sized.controls.firstOrNull { it.id == "MENU" } ?: return this
+    val sSwap = sized.controls.firstOrNull { it.id == "SWAP" } ?: return this
+    val pill = sized.pieces.firstOrNull { p -> p.glass == null && inside(p, sMic) && inside(p, sSwap) } ?: return this
+    val pitch = kotlin.math.abs(sMenu.x - sMic.x)
+    val pad = pill.h * pill.scale / 2f
+    val rows = listOf(listOf("MIC", "MENU"), listOf("SWAP", "SELECT", "START"))
+    val byId = controls.associateBy { it.id }
+    if (rows.flatten().any { it !in byId }) return this
+    val caps = rows.flatten().map { byId.getValue(it) }
+    // the columns' wells: the pieces holding two of the caps (not a control's own, as a stick's ring over them)
+    val wells = pieces.filter { p -> p.glass == null && caps.count { inside(p, it) } >= 2 && controls.none { centredAt(p, it.x, it.y) } }
+    if (wells.isEmpty()) return this
+    val xs = HashMap<String, Float>(); val ys = HashMap<String, Float>(); val lefts = ArrayList<Pair<Float, Float>>()
+    for (row in rows) {
+        val cs = row.map { byId.getValue(it) }
+        val top = cs.minOf { it.y }
+        // centred under its side's ring (the stick's, the face buttons'), at the column's top cap's height
+        val ring = (if (cs.first().anchor == PieceAnchor.LEFT) byId["STICK"] ?: byId["DPAD"] else byId["X"])?.x ?: cs.first().x
+        val left = ring - pad - (row.size - 1) * pitch / 2f
+        row.forEachIndexed { i, id -> xs[id] = left + pad + i * pitch; ys[id] = top }
+        lefts += left to top - pad
+    }
+    val newWells = rows.zip(lefts).flatMap { (row, at) ->
+        val side = byId.getValue(row.first())
+        pillWell(pill, at.first, row.size, pitch).map { it.copy(y = at.second.roundToInt(), anchor = side.anchor ?: it.anchor, level = side.level, drop = side.drop, inward = side.inward) }
+    }
+    return copy(
+        pieces = pieces.filter { it !in wells }.map { p ->
+            val c = caps.firstOrNull { centredAt(p, it.x, it.y) } ?: return@map p
+            p.copy(x = (xs.getValue(c.id) - p.w * p.scale / 2f).roundToInt(), y = (ys.getValue(c.id) - p.h * p.scale / 2f).roundToInt())
+        }.let { ps -> newWells + ps },
+        controls = controls.map { c -> if (c.id !in xs) c else c.copy(x = xs.getValue(c.id), y = ys.getValue(c.id), labelDy = sMic.labelDy, labelDx = 0f, labelH = sMic.labelH) },
+    )
+}

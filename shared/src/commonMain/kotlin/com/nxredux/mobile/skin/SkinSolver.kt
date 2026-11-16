@@ -375,14 +375,18 @@ object SkinSolver {
         // [row]'s small button columns (START / SELECT, MENU beside a side group): their pieces (a well, its caps) and
         // controls, and how far each side's moves on from its group, so its inner edge sits two gaps from the screen
         val columnIds = setOf("START", "SELECT", "MENU", "MIC", "SWAP", "STICK_SWAP", "DISK")
+        // (not another control's own piece over them: a New 3DS C-stick's ring under the face buttons)
         fun holdsColumn(p: PieceSpec) = p.glass == null && p.anchor != PieceAnchor.CENTRE && spec.controls.any { c ->
             c.id in columnIds && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
-        }
+        } && spec.controls.none { c -> c.id !in columnIds && c.anchor == p.anchor &&
+            kotlin.math.abs(p.x + p.w * p.scale / 2f - c.x) < 2f && kotlin.math.abs(p.y + p.h * p.scale / 2f - c.y) < 2f }
         val columnShift: Pair<Float, Float> = if (rowPlan == null) 0f to 0f else {
             val gap = rowPlan[4]
             fun x0(p: PieceSpec) = p.x + across(p.anchor, p.inward)
-            val left = spec.pieces.filter { it.anchor == PieceAnchor.LEFT && holdsColumn(it) }
-            val right = spec.pieces.filter { it.anchor == PieceAnchor.RIGHT && holdsColumn(it) }
+            // a side's small caps in a row (the 3DS's tall shell) stay as drawn, under their ring
+            fun inRow(side: PieceAnchor) = spec.variant in N3DS_VARIANTS && spec.controls.filter { it.id in columnIds && it.anchor == side }.let { cs -> cs.size >= 2 && cs.all { kotlin.math.abs(it.y - cs[0].y) < 1f } }
+            val left = spec.pieces.filter { it.anchor == PieceAnchor.LEFT && holdsColumn(it) }.takeUnless { inRow(PieceAnchor.LEFT) }.orEmpty()
+            val right = spec.pieces.filter { it.anchor == PieceAnchor.RIGHT && holdsColumn(it) }.takeUnless { inRow(PieceAnchor.RIGHT) }.orEmpty()
             val l = if (left.isEmpty()) 0f else (rowPlan[2] - 2f * gap) - (left.maxOf { x0(it) + it.w * it.scale } + rowPlan[0])
             val r = if (right.isEmpty()) 0f else (rowPlan[2] + rowPlan[3] + 2f * gap) - (right.minOf { x0(it) } + rowPlan[1])
             l to r
@@ -431,8 +435,9 @@ object SkinSolver {
             if (rowPlan == null || row == null || anchor == null || anchor == PieceAnchor.CENTRE) return 0f
             fun y0(p: PieceSpec) = p.y + down(p.level, p.drop)
             val col = spec.pieces.filter { it.anchor == anchor && holdsColumn(it) }
+            // (a New 3DS C-stick under the face buttons too: the caps go under it)
             val pad = spec.pieces.filter { p -> p.glass == null && p.anchor == anchor && !holdsColumn(p) && spec.controls.any { c ->
-                c.id in padIds && c.anchor == anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale } }
+                (c.id in padIds || c.id == "CSTICK") && c.anchor == anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale } }
             if (col.isEmpty() || pad.isEmpty()) return 0f
             // the d-pad where it goes under the stick
             return pad.maxOf { y0(it) + it.h * it.scale + (if (movesWithDpad(it)) dpadUnder.second else 0f) } + row.gap - col.minOf { y0(it) }

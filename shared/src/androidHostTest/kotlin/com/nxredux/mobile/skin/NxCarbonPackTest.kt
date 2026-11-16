@@ -905,6 +905,17 @@ class NxCarbonPackTest {
             val stick = p.controls.firstOrNull { it.spec.id == "STICK" }
             val padFoot = maxOf(pad.y + pad.spec.r, stick?.let { it.y + it.spec.r } ?: 0f)
             val face = listOf(c("Y"), c("A")).map { it.x }.average().toFloat()
+            if (v != SkinVariant.DS && p.spec.id.contains("_tall")) {
+                // the 3DS's tall shell: a row each side under its lower pad (the right's the New 3DS's C-stick), level (user)
+                val name = "$v $win ${p.spec.id}"
+                val rows = listOf(listOf(c("MIC"), c("MENU")), listOf(c("SWAP"), c("SELECT"), c("START")))
+                for (r in rows) for ((a, b) in r.zipWithNext()) { assertEquals(a.y, b.y, 1f, "$name ${b.spec.id} in the row"); assertTrue(b.x > a.x, "$name ${b.spec.id} in order") }
+                assertEquals(c("MIC").y, c("SWAP").y, 1f, "$name rows level")
+                val rightFoot = (p.controls.firstOrNull { it.spec.id == "CSTICK" }?.let { it.y + it.spec.r } ?: 0f).coerceAtLeast(c("B").y + c("B").spec.r)
+                assertTrue(c("MIC").y - c("MIC").spec.r > padFoot && c("SWAP").y - c("SWAP").spec.r > rightFoot, "$name rows under the pads")
+                assertTrue(c("MIC").y + c("MIC").spec.r + c("MIC").spec.labelDy + c("MIC").spec.labelH < wh, "$name words on the window")
+                continue
+            }
             for ((side, caps) in listOf("left" to left, "right" to right)) {
                 val id = "$v $win ${p.spec.id} $side"
                 assertTrue(caps.all { kotlin.math.abs(it.x - caps[0].x) < 1f }, "$id: one column")
@@ -932,23 +943,25 @@ class NxCarbonPackTest {
         }
     }
 
-    // The New 3DS's tall landscape (the unfolded Fold, a tablet) and fold board: the face lower than the regular 3DS's,
-    // under the C-stick nub over it; R level with the regular's (the menu's), clear of the nub.
+    // The New 3DS's tall landscape (the unfolded Fold, a tablet): the regular 3DS's places, its C-stick under the face.
     @Test
-    fun new3dsTallLandscapeFaceSitsLowerThanTheRegularOnes() {
-        // (the Fold upright: the regular's places, the C-stick under the face: theFoldUprightGivesTheNew3dsTheRegularPlaces)
+    fun new3dsTallLandscapeTakesTheRegularPlacesWithTheCStickUnderTheFace() {
         for ((w, h, dpi) in listOf(Triple(2448, 1848, 420), Triple(2304, 1440, 280))) {
             fun at(v: SkinVariant) = assertNotNull(SkinChoice.place(pack, w, h, dpi, dpi == 280, true, null, null, foldable = dpi == 420, variant = v), "$v $w")
-            val n = at(SkinVariant.N3DS); val r = at(SkinVariant.N3DS_REGULAR)
-            fun y(p: SkinPlacement, id: String) = p.controls.first { it.spec.id == id }.y
-            val down = y(n, "X") - y(r, "X")
-            assertTrue(down > 40f * n.k, "$w face lower: $down")
-            for (id in listOf("Y", "A", "B")) assertEquals(down, y(n, id) - y(r, id), 1f, "$w $id with X")
-            // (or higher: its side lifted to fit the face's column over the window's bottom)
-            assertTrue(y(n, "R") <= y(r, "R") + 1f, "$w R level with the regular's or higher")
-            val nub = n.controls.first { it.spec.id == "CSTICK" }; val rr = n.controls.first { it.spec.id == "R" }
-            assertTrue(nub.y - nub.spec.r * 1.25f > rr.y + rr.spec.hh, "$w nub under R")
-            assertTrue(nub.y < y(n, "X"), "$w nub over the face")
+            val np = at(SkinVariant.N3DS)
+            val n = np.controls.associateBy { it.spec.id }; val r = at(SkinVariant.N3DS_REGULAR).controls.associateBy { it.spec.id }
+            // the screen centred between the side groups (the rows under their rings, not widening a side: user)
+            val g = np.glasses.first().rect
+            assertEquals(w / 2f, g.x + g.width / 2f, 12f, "$w screen centred: $g")
+            // the regular 3DS's buttons; ZL / ZR beside L / R; a full C-stick under the face, in line, as the d-pad under the stick (user)
+            for (id in listOf("L", "R", "X", "Y", "A", "B", "STICK", "DPAD")) {
+                assertEquals(r.getValue(id).x, n.getValue(id).x, 1f, "$w $id x"); assertEquals(r.getValue(id).y, n.getValue(id).y, 1f, "$w $id y")
+            }
+            assertEquals(n.getValue("L").y, n.getValue("L2").y, 1f, "$w ZL level with L"); assertEquals(n.getValue("R").y, n.getValue("R2").y, 1f, "$w ZR level with R")
+            val nub = n.getValue("CSTICK")
+            assertEquals(n.getValue("X").x, nub.x, 1f, "$w C-stick in line with the face")
+            assertEquals(n.getValue("STICK").spec.r, nub.spec.r, 0.5f, "$w C-stick a full stick")
+            assertEquals(n.getValue("DPAD").y - n.getValue("STICK").y, nub.y - (n.getValue("X").y + n.getValue("B").y) / 2f, 0.15f * (n.getValue("DPAD").y - n.getValue("STICK").y), "$w as far under the face as the d-pad under the stick")
         }
     }
 
@@ -1164,9 +1177,9 @@ class NxCarbonPackTest {
                 // the large layout: the nub centred between the stick and the face, level with the face's middle row
                 assertTrue(c("CSTICK").x > c("STICK").x && c("CSTICK").x < c("Y").x, "$name nub between the stick and the face")
                 assertEquals(c("A").y, c("CSTICK").y, 1f, "$name nub level with A")
-            } else if (foldBoard) assertTrue(c("CSTICK").y > c("B").y, "$name C-stick under the face (user)")
+            } else if (foldBoard || tall) assertTrue(c("CSTICK").y > c("B").y, "$name C-stick under the face (user)")
             else assertTrue(c("CSTICK").y < c("X").y, "$name nub above X")
-            if (tall) assertEquals(c("Y").x, c("CSTICK").x, 20f * p.k, "$name nub over Y's column, as the console (user)")
+            if (tall) assertEquals(c("X").x, c("CSTICK").x, 1f, "$name C-stick in line under the face, as the d-pad under the stick (user)")
             else if (!p.spec.id.startsWith("large_3ds") && !foldBoard) assertTrue(c("CSTICK").x > c("X").x && c("CSTICK").y < c("A").y - c("A").spec.r, "$name nub up-right of X, above A")
             fun row(vararg want: String) {
                 val cs = want.map(::c)
@@ -1187,6 +1200,7 @@ class NxCarbonPackTest {
                 if (name == "tablet") assertTrue(t.width / p.k > 1000f, "$name bottom screen grown: ${t.width / p.k}")
             }
             if (foldBoard) assertEquals(c("STICK").spec.r * 0.85f, c("CSTICK").spec.r, 0.5f, "$name C-stick a stick at the d-pad's 85% (user)")
+            else if (tall) assertEquals(c("STICK").spec.r, c("CSTICK").spec.r, 0.5f, "$name C-stick a full stick (user)")
             else assertTrue(c("CSTICK").spec.r < c("STICK").spec.r / 2f, "$name nub small")
             if (name in roomy) assertTrue(c("STICK").y < c("DPAD").y, "$name Circle Pad above the d-pad")
             else {
@@ -1198,14 +1212,10 @@ class NxCarbonPackTest {
                 assertEquals(c("R").x, c("R2").x, 1f, "$name ZR over R"); assertTrue(c("R2").y < c("R").y, "$name ZR above R")
             } else { assertEquals(c("L").y, c("L2").y, 1f, "$name ZL beside L"); assertEquals(c("R").y, c("R2").y, 1f, "$name ZR beside R") }
             if (name == "cover") row("STICK_SWAP", "MIC", "MENU", "SWAP")   // one group of four
-            if (tall) {   // each side's caps in one column under its pad: MIC over MENU; SELECT over START over SWAP
-                fun column(vararg want: String) {
-                    val cs = want.map(::c)
-                    for (x in cs) assertEquals(cs[0].x, x.x, 1f, "$name ${x.spec.id} in the column")
-                    for (i in 1 until cs.size) assertTrue(cs[i].y > cs[i - 1].y, "$name ${want.toList()} in order")
-                }
-                column("MIC", "MENU"); column("SELECT", "START", "SWAP")
+            if (tall) {   // each side's caps in a row under its pad: MIC MENU; SWAP SELECT START (user)
+                row("MIC", "MENU"); row("SWAP", "SELECT", "START")
                 assertTrue(c("MIC").y - c("DPAD").y > (c("MIC").spec.r + c("DPAD").spec.r) * p.k, "$name MIC clear of the d-pad")
+                assertTrue(c("SWAP").y - c("CSTICK").y > c("SWAP").spec.r + c("CSTICK").spec.r * 1.25f, "$name SWAP clear of the C-stick")
             }
             if (name == "phone_land") {   // SWAP on the right with SELECT START, the switch cap on the left
                 assertTrue(c("SWAP").x > d.first / 2f, "$name SWAP right")
