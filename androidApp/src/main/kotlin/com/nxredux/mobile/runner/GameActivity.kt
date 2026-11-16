@@ -697,6 +697,29 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
     }
 
+    /**
+     * Kids Mode hides this game's settings from a kid (the menu's Options, the second-screen Settings tab): this process's
+     * stored copy at first, then the main process's answer ([refreshKidsSettings]), which alone knows Parent mode.
+     */
+    override val kidsSettingsHidden: Boolean get() = kidsHidden ?: settings.kidsEnabled
+    private var kidsHidden: Boolean? = null
+    private var kidsSettingsJob: Job? = null
+
+    /** Asks the main process again (a resume, a menu opening: Parent mode or Kids Mode may have changed meanwhile). */
+    override fun refreshKidsSettings() {
+        if (kidsSettingsJob?.isActive == true) return
+        val app = applicationContext
+        kidsSettingsJob = lifecycleScope.launch {
+            val hidden = withContext(Dispatchers.IO) {
+                runCatching { PrefsProvider.kidsSettingsHidden(app) }.onFailure { NxLog.w(TAG_LOG, "Kids Mode: no answer on game settings", it) }.getOrNull()
+            } ?: return@launch
+            if (hidden == kidsHidden || isDestroyed) return@launch
+            kidsHidden = hidden
+            withMenu { it.setKidsLocked(hidden) }
+            dual.refreshDualPanel()
+        }
+    }
+
     /** Kids Mode is on: input here is reported to the main process for Parent mode's idle time ([kidsInputSeen]). */
     private var kidsReportsInput = false
     private var kidsInputAt = -1L
@@ -749,6 +772,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         wii.syncMotionSensors(foreground = true)
         shortcuts.onResume()
         dual.syncDual()   // Settings → Second screen may have changed meanwhile
+        refreshKidsSettings()
     }
 
     private var topResumed = true   // the last onTopResumedActivityChanged (API 29+); below that, always the top one
@@ -2011,12 +2035,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * the DS wireless is on: the reduced menu has no Options, and a menu opened in a room starts the cap.
      */
     override fun openOptions() {
-        if (quitting || !gameReady || dsWireless) return
+        if (quitting || !gameReady || dsWireless || kidsSettingsHidden) return
         if (!menuOpen) toggleMenu()
         withMenu { it.openOptions() }
     }
     override fun openShaderPicker() {
-        if (quitting || !gameReady || dsWireless) return
+        if (quitting || !gameReady || dsWireless || kidsSettingsHidden) return
         if (!menuOpen) toggleMenu()
         withMenu { it.openShaderPicker() }
     }

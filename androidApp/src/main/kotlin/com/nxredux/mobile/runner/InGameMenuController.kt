@@ -82,6 +82,9 @@ import java.io.File
 internal interface InGameMenuHost : GameScreenHost {
     val settings: AndroidAppSettings
     var menuOpen: Boolean
+    /** Kids Mode hides the game's settings from a kid ([InGameMenuModel.setKidsLocked]); [refreshKidsSettings] asks again. */
+    val kidsSettingsHidden: Boolean
+    fun refreshKidsSettings()
     val gameReady: Boolean
     val gameTag: String
     val isN3ds: Boolean
@@ -313,7 +316,9 @@ internal class InGameMenuController(
             }
             it.setDsWireless(host.dsWireless)   // a DS game's wireless on the automatic route: Continue, Disconnect, Quit
             it.setIdleSeconds(host.dsIdleSeconds)
+            it.setKidsLocked(host.kidsSettingsHidden)   // Kids Mode without Parent mode: no Options for a kid
         }
+        host.refreshKidsSettings()
         if (retroView != null) {
             // Re-listed on every open so a bundled tree swapped in since launch, or a shader added to the home, is
             // picked up; on IO, the menu showing the cached lists until then (unchanged, as they almost always are,

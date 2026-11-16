@@ -17,6 +17,15 @@ import java.io.File
  */
 class TreeSync(private val tree: ImportTree) {
 
+    /**
+     * What an [importDir] found on the tree: the files it takes, by path under the imported folder ([seen]), and whether
+     * every folder listed ([complete]; a hidden listing is imported by name, so a file missing from [seen] may still be there).
+     */
+    class Found {
+        val seen = HashSet<String>()
+        var complete = true
+    }
+
     fun importDir(
         treeDir: ContentRef,
         localDir: File,
@@ -24,20 +33,26 @@ class TreeSync(private val tree: ImportTree) {
         recursive: Boolean,
         whenDiffers: Boolean = false,
         extraNames: List<String> = emptyList(),
+        found: Found? = null,
+        prefix: String = "",
     ) {
         val listed = try {
             tree.list(treeDir)
         } catch (e: ListingUnavailable) {
             NxLog.w(TAG, "listing hidden; importing by name", e)
+            found?.complete = false
             return importByName(treeDir, localDir, accept, recursive, whenDiffers, extraNames)
         }
         for (e in listed) {
             if (e.isDirectory) {
-                if (recursive) importDir(e.ref, File(localDir, e.name), accept, true, whenDiffers)
+                if (recursive) importDir(e.ref, File(localDir, e.name), accept, true, whenDiffers, found = found, prefix = "$prefix${e.name}/")
                 continue
             }
             if (MirrorRules.isTransient(e.name)) continue   // a part: possibly cut short
-            if (accept(e.name)) importOne(e, File(localDir, e.name), whenDiffers)
+            if (accept(e.name)) {
+                found?.seen?.add(prefix + e.name)
+                importOne(e, File(localDir, e.name), whenDiffers)
+            }
         }
     }
 

@@ -105,6 +105,10 @@ object AndroidKids {
      */
     fun parentNow(): Boolean = controller?.mode?.value == KidsMode.Parent
 
+    /** For the game process: hide the game's settings from a kid ([kidsHidesGameSettings]). Any thread. */
+    fun gameSettingsHiddenNow(context: Context): Boolean =
+        kidsHidesGameSettings(controller?.mode?.value, com.nxredux.mobile.settings.AndroidAppSettings(context).kidsEnabled)
+
     /** Lock now (the lock alarm's own lock, [lockOnAlarm]); repeating it is safe (the game quits once, the menu moves once more). */
     fun lockNow(context: Context) {
         get(context)

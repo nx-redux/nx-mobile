@@ -2148,6 +2148,41 @@ class InGameMenuModelTest {
         assertTrue(m.panelBeside)
     }
 
+    @Test fun kids_lock_hides_options_from_the_root() {
+        val m = model()
+        m.setKidsLocked(true)
+        val labels = m.state.page.rows.map { it.label }
+        assertFalse("Options" in labels)
+        assertEquals(listOf("Continue", "Save", "Load", "Reset", "Quit"), labels)
+        assertNull(m.state.preview)
+    }
+
+    @Test fun kids_lock_off_brings_options_back() {
+        val m = model()
+        val full = m.state.page.rows.map { it.label }
+        m.setKidsLocked(true)
+        m.setKidsLocked(false)
+        assertEquals(full, m.state.page.rows.map { it.label })
+    }
+
+    @Test fun kids_lock_returns_an_open_options_page_to_the_root() {
+        val m = model()
+        m.activate(m.state.page.rows.indexOfFirst { it.label == "Options" })
+        assertEquals(PageKind.Options, m.state.page.kind)
+        m.setKidsLocked(true)
+        assertEquals(PageKind.Root, m.state.page.kind)
+        assertEquals(1, m.state.stack.size)
+    }
+
+    @Test fun kids_lock_refuses_the_panels_options_and_shader_picker() {
+        val m = model()
+        m.setKidsLocked(true)
+        m.openOptions()
+        assertEquals(PageKind.Root, m.state.page.kind)
+        m.openShaderPicker()
+        assertEquals(PageKind.Root, m.state.page.kind)
+    }
+
     @Test fun ds_wireless_on_returns_an_open_sub_page_to_the_root() {
         val m = model()
         m.activate(m.state.page.rows.indexOfFirst { it.label == "Options" })
