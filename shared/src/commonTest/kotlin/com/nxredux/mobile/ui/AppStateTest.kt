@@ -5696,7 +5696,7 @@ class AppStateTest {
         st.onButton(NxButton.DOWN); st.onButton(NxButton.A)                                      // Emulators
         val e = assertIs<Screen.Settings>(st.screen.value)
         assertEquals(SettingsSection.EMULATORS, e.section)
-        assertEquals(listOf(SettingsRow(SettingsKind.DEFAULTS, "Default emulators"), SettingsRow(SettingsKind.EMULATORS, "Default settings")), e.rows)   // Saves under Library, Pause when unfocused under System
+        assertEquals(listOf(SettingsRow(SettingsKind.DEFAULTS, "Default emulators"), SettingsRow(SettingsKind.EMULATORS, "Default settings"), SettingsRow(SettingsKind.SAVE_ON_QUIT, "Save on quit", "On"), SettingsRow(SettingsKind.A_RESUMES, "A resumes", "On")), e.rows)   // Saves under Library, Pause when unfocused under System
         assertTrue(e.details.isEmpty())
         st.onButton(NxButton.A)                                                                  // Default emulators
         assertEquals(SettingsSection.DEFAULT_EMULATORS, assertIs<Screen.Settings>(st.screen.value).section)
@@ -11642,7 +11642,7 @@ class AppStateTest {
         state.load()
         state.openSettings(SettingsSection.EMULATORS)
         val kinds = assertIs<Screen.Settings>(state.screen.value).rows.map { it.kind }
-        assertEquals(listOf(SettingsKind.DEFAULTS, SettingsKind.EMULATORS), kinds)
+        assertEquals(listOf(SettingsKind.DEFAULTS, SettingsKind.EMULATORS, SettingsKind.SAVE_ON_QUIT, SettingsKind.A_RESUMES), kinds)
     }
 
     // The Cable Link rows (delay, overlay, cache) are mGBA's (EmulatorSettingsControllerTest): neither Emulation nor System lists them.
@@ -11652,7 +11652,7 @@ class AppStateTest {
         state.load()
         val cableKinds = setOf(SettingsKind.CABLE_LINK_DELAY, SettingsKind.CABLE_LINK_DELAY_OVERLAY, SettingsKind.CLEAR_LINK_ROMS)
         state.openSettings(SettingsSection.EMULATORS)
-        assertEquals(listOf(SettingsKind.DEFAULTS, SettingsKind.EMULATORS), assertIs<Screen.Settings>(state.screen.value).rows.map { it.kind })
+        assertEquals(listOf(SettingsKind.DEFAULTS, SettingsKind.EMULATORS, SettingsKind.SAVE_ON_QUIT, SettingsKind.A_RESUMES), assertIs<Screen.Settings>(state.screen.value).rows.map { it.kind })
         state.onButton(NxButton.B); state.openSettings(SettingsSection.SYSTEM)
         assertEquals(false, assertIs<Screen.Settings>(state.screen.value).rows.any { it.kind in cableKinds })
     }
@@ -11740,7 +11740,7 @@ class AppStateTest {
         assertTrue(SettingsSection.SECOND_SCREEN !in sections())
         state.openSettings(SettingsSection.EMULATORS)
         state.onSecondScreenChanged(true)
-        assertEquals(listOf("Default emulators", "Default settings"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })   // no row under Emulators
+        assertEquals(listOf("Default emulators", "Default settings", "Save on quit", "A resumes"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })   // no row under Emulators
     }
 
     @Test fun the_second_screen_page_has_enable_then_bottom_screen_and_b_returns_to_the_root_on_it() = runTest {
@@ -12090,9 +12090,9 @@ class AppStateTest {
         val d = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(listOf("gpSP (GBA)", "mGBA (MGBA)"), d.choices[d.rows.indexOfFirst { it.consoleId == "gba" }]?.labels)
         assertNull(d.choices[d.rows.indexOfFirst { it.consoleId == "gb" }])
-        // Every page with a value row draws touch rows, Library and System (its About rows too); Import saves and Emulators keep theirs.
-        for (section in listOf(SettingsSection.IMPORT_SAVES, SettingsSection.EMULATORS)) assertFalse(settingsTouchPage(state.settingsPreview(section)), section.name)
-        for (section in listOf(SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.LAYOUT_HOME, SettingsSection.CONTROLS, SettingsSection.SAVES, SettingsSection.SYSTEM, SettingsSection.DEFAULT_EMULATORS, SettingsSection.BUTTON_LAYOUT, SettingsSection.LIBRARY))
+        // Every page with a value row draws touch rows, Library, System (its About rows too) and Emulation; Import saves keeps its own.
+        for (section in listOf(SettingsSection.IMPORT_SAVES)) assertFalse(settingsTouchPage(state.settingsPreview(section)), section.name)
+        for (section in listOf(SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.LAYOUT_HOME, SettingsSection.CONTROLS, SettingsSection.SAVES, SettingsSection.SYSTEM, SettingsSection.DEFAULT_EMULATORS, SettingsSection.BUTTON_LAYOUT, SettingsSection.LIBRARY, SettingsSection.EMULATORS))
             assertTrue(settingsTouchPage(state.settingsPreview(section)), section.name)
     }
 

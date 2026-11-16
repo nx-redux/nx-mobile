@@ -320,7 +320,7 @@ class EmulatorSettingsControllerTest {
         state.load()
         await { state.screen.value is Screen.Systems }
         state.openSettings(SettingsSection.EMULATORS)
-        assertEquals(listOf(SettingsKind.DEFAULTS, SettingsKind.EMULATORS), assertIs<Screen.Settings>(state.screen.value).rows.map { it.kind })   // Saves under Library, Pause when unfocused under System
+        assertEquals(listOf(SettingsKind.DEFAULTS, SettingsKind.EMULATORS, SettingsKind.SAVE_ON_QUIT, SettingsKind.A_RESUMES), assertIs<Screen.Settings>(state.screen.value).rows.map { it.kind })   // Saves under Library, Pause when unfocused under System
         state.onButton(NxButton.B)
         state.openSettings(SettingsSection.LIBRARY)
         val kinds = assertIs<Screen.Settings>(state.screen.value).rows.map { it.kind }
