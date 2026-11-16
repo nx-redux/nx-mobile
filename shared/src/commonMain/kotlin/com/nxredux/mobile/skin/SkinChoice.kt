@@ -337,6 +337,98 @@ object SkinChoice {
         )
     }
 
+    /**
+     * A landscape shell's small caps in two rows each side (the 3DS's: the stick / d-pad swap and MIC over MENU, SELECT
+     * and START over SWAP) where the lower one would end nearer the window's bottom than [ROW_GAP_DP]: each side's in
+     * one row in one well instead (the stick / d-pad swap, MIC, MENU; SWAP, SELECT, START), its outer end in line with
+     * the side's ring, its inner end [ROW_GAP_DP] clear of the screen's frame (the caps nearer than drawn where that
+     * needs), the words under the caps. As it is where the two rows fit, or the one would not.
+     */
+    private fun SkinPlacement.capsInOneRow(windowH: Float, dp: Float): SkinPlacement {
+        fun all(id: String) = controls.filter { it.spec.id == id }
+        fun one(id: String) = controls.firstOrNull { it.spec.id == id }
+        val left = listOf("STICK_SWAP", "MIC", "MENU"); val right = listOf("SWAP", "SELECT", "START")
+        val ids = left + right
+        if (ids.any { one(it) == null }) return this
+        val gap = ROW_GAP_DP * dp
+        val lower = listOf(one("MENU")!!, one("SWAP")!!)
+        if (lower.maxOf { it.y + it.spec.r } <= windowH - gap) return this
+        val frame = pieces.filter { it.piece < 0 && !it.strip }.map { it.dst }
+        if (frame.isEmpty()) return this
+        fun holds(d: com.nxredux.mobile.options.PxRect, c: PlacedControl) = c.x >= d.x && c.x <= d.x + d.width && c.y >= d.y && c.y <= d.y + d.height
+        fun centredAt(d: com.nxredux.mobile.options.PxRect, x: Float, y: Float) = kotlin.math.abs(d.x + d.width / 2f - x) < 2f && kotlin.math.abs(d.y + d.height / 2f - y) < 2f
+        val mic = one("MIC")!!; val select = one("SELECT")!!
+        val leftWell = pieces.indexOfFirst { it.piece >= 0 && holds(it.dst, mic) && holds(it.dst, one("STICK_SWAP")!!) }
+        val rightWell = pieces.indexOfFirst { it.piece >= 0 && holds(it.dst, select) && holds(it.dst, one("START")!!) }
+        if (leftWell < 0 || rightWell < 0) return this
+        val stick = one("STICK") ?: one("DPAD") ?: return this
+        val x = one("X") ?: return this; val b = one("B") ?: return this
+        val ringLeft = pieces.filter { it.piece >= 0 && centredAt(it.dst, stick.x, stick.y) }.minOfOrNull { it.dst.x } ?: return this
+        val ringRight = pieces.filter { it.piece >= 0 && centredAt(it.dst, x.x, (x.y + b.y) / 2f) }.maxOfOrNull { it.dst.x + it.dst.width } ?: return this
+        val well = pieces[leftWell]
+        val pad = well.dst.height / 2f
+        val capW = pieces.filter { it.piece >= 0 && centredAt(it.dst, mic.x, mic.y) }.maxOfOrNull { it.dst.width } ?: return this
+        val drawn = kotlin.math.abs(mic.x - one("STICK_SWAP")!!.x)
+        val pitch = minOf(drawn, (frame.minOf { it.x } - gap - ringLeft - 2f * pad) / 2f, (ringRight - (frame.maxOf { it.x + it.width } + gap) - 2f * pad) / 2f)
+        if (pitch < capW) return this
+        val wellW = 2f * pad + 2f * pitch
+        val xs = left.mapIndexed { i, id -> id to ringLeft + pad + i * pitch } + right.mapIndexed { i, id -> id to ringRight - wellW + pad + i * pitch }
+        val at = xs.toMap()
+        val rowY = mapOf("STICK_SWAP" to mic.y, "MIC" to mic.y, "MENU" to mic.y, "SWAP" to select.y, "SELECT" to select.y, "START" to select.y)
+        // the pill cut to three caps: its ends as drawn, its flat middle stretched between them
+        fun pill(w: SkinPiece, x0: Float): List<SkinPiece> {
+            val sh = w.src.height; val end = sh / 2f; val sc = w.dst.height / sh
+            return listOf(
+                w.copy(src = w.src.copy(width = end), dst = w.dst.copy(x = x0, width = end * sc)),
+                w.copy(src = w.src.copy(x = w.src.x + end, width = w.src.width - 2f * end), dst = w.dst.copy(x = x0 + end * sc, width = wellW - 2f * end * sc)),
+                w.copy(src = w.src.copy(x = w.src.x + w.src.width - end, width = end), dst = w.dst.copy(x = x0 + wellW - end * sc, width = end * sc)),
+            )
+        }
+        val words = mapOf("MENU" to mic, "SWAP" to select)
+        val caps = ids.flatMap { all(it) }
+        return copy(
+            pieces = pieces.flatMapIndexed { i, p -> when (i) {
+                leftWell -> pill(p, ringLeft)
+                rightWell -> pill(p.copy(dst = p.dst.copy(y = select.y - pad)), ringRight - wellW)
+                else -> caps.firstOrNull { p.piece >= 0 && centredAt(p.dst, it.x, it.y) }?.let { c ->
+                    listOf(p.copy(dst = p.dst.copy(x = at.getValue(c.spec.id) - p.dst.width / 2f, y = rowY.getValue(c.spec.id) - p.dst.height / 2f)))
+                } ?: listOf(p)
+            } },
+            controls = controls.map { c ->
+                if (c !in caps) c else {
+                    val w = words[c.spec.id]
+                    c.copy(x = at.getValue(c.spec.id), y = rowY.getValue(c.spec.id),
+                        spec = if (w == null) c.spec else c.spec.copy(labelDy = w.spec.labelDy, labelDx = w.spec.labelDx, labelH = w.spec.labelH))
+                }
+            },
+        )
+    }
+
+    /**
+     * The New 3DS's C-stick nub beside X (a landscape shell's, up-right of it) lowered toward as far from A as from X,
+     * clear of X's cap by its reach, its pieces with it (off the shoulders). As it is without a nub.
+     */
+    private fun SkinPlacement.nubBetweenXAndA(): SkinPlacement {
+        val nub = controls.firstOrNull { it.spec.id == "CSTICK" } ?: return this
+        val x = controls.firstOrNull { it.spec.id == "X" } ?: return this
+        val a = controls.firstOrNull { it.spec.id == "A" } ?: return this
+        if (nub.x <= x.x || a.y == x.y) return this
+        // as far from A as from X, or higher where that is nearer X than its cap and the stick's reach (its slop)
+        val even = ((a.x * a.x - x.x * x.x) + (a.y * a.y - x.y * x.y) - 2f * nub.x * (a.x - x.x)) / (2f * (a.y - x.y))
+        val clear = x.spec.r + nub.spec.r * 1.25f; val across = nub.x - x.x
+        val ny = if (across >= clear) even else minOf(even, x.y - kotlin.math.sqrt(clear * clear - across * across))
+        if (ny <= nub.y) return this
+        // its pieces found by its knob (they may stand off its hit area's middle): the knob and the ring round it, both
+        // centred on the nub's new spot
+        val knob = pieces.firstOrNull { it.knob && it.knobOf == "CSTICK" } ?: return this
+        val kx = knob.dst.x + knob.dst.width / 2f; val ky = knob.dst.y + knob.dst.height / 2f
+        fun round(d: com.nxredux.mobile.options.PxRect) = kotlin.math.abs(d.x + d.width / 2f - kx) < 2f && kotlin.math.abs(d.y + d.height / 2f - ky) < 2f
+        return copy(
+            pieces = pieces.map { if (it.piece >= 0 && round(it.dst)) it.copy(dst = it.dst.copy(x = it.dst.x + nub.x - kx, y = it.dst.y + ny - ky)) else it },
+            controls = controls.map { if (it === nub) it.copy(y = ny) else it },
+        )
+    }
+
     /** Window px each side of the touch screen's glass past its 4:3 picture (its height the limit); 0 without one. */
     private fun SkinPlacement.touchSpare(): Float =
         glass(GlassScreen.TOUCH)?.rect?.let { (it.width - it.height * 4f / 3f) / 2f } ?: 0f
@@ -598,6 +690,7 @@ object SkinChoice {
                 pick = { it.controls.none { c -> c.id == "STICK_SWAP" } }) { spec -> spec.bothFollowMenu(menuShellOf(pack, spec), menuUnderStart = false) }
                 ?.dpadInTheRoom(windowH.toFloat(), densityDpi / 160f)?.let { return it }
             return shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset, rowFor(v, densityDpi, k)) { spec -> spec.toMenu(v, menuTwin(pack, spec)) }
+                ?.let { if (v in N3DS_VARIANTS) it.capsInOneRow(windowH.toFloat(), densityDpi / 160f).nubBetweenXAndA() else it }
         }
         // a foldable's inner screen or a tablet: the fold board, split at its hinge flat or not (the window's middle when flat)
         if (foldable || tablet) foldBoard()?.let { return it }

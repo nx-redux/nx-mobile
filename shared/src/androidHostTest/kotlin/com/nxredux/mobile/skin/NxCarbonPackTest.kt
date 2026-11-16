@@ -871,7 +871,9 @@ class NxCarbonPackTest {
             val row2 = listOf("MIC", "MENU", "SELECT", "START", "SWAP").filter { id -> spec.controls.any { it.id == id } }
                 .maxBy { ref(it) }
             assertTrue(placed(row1) - placed(pad) > (ref(row1) - ref(pad)) * p.k + 20f, "$v ${p.spec.id}: pads to the first row")
-            assertTrue(placed(row2) - placed(row1) > (ref(row2) - ref(row1)) * p.k + 20f, "$v ${p.spec.id}: between the rows")
+            // (the 3DS's caps in one row each side, the height short of two: user)
+            if (v == SkinVariant.DS) assertTrue(placed(row2) - placed(row1) > (ref(row2) - ref(row1)) * p.k + 20f, "$v ${p.spec.id}: between the rows")
+            else assertEquals(placed("MIC"), placed("MENU"), 1f, "$v ${p.spec.id}: one row")
             val last = p.controls.first { it.spec.id == row2 }
             assertTrue(last.y + last.spec.r + last.spec.labelDy + last.spec.labelH < 1080f, "$v ${p.spec.id}: its word on the window")
         }
@@ -1212,11 +1214,10 @@ class NxCarbonPackTest {
             if (name == "phone_land") {   // SWAP on the right with SELECT START, the switch cap on the left
                 assertTrue(c("SWAP").x > d.first / 2f, "$name SWAP right")
                 assertTrue(c("STICK_SWAP").x < d.first / 2f, "$name switch left")
-                // two rows: switch MIC over MENU (under MIC); SELECT START over SWAP (under SELECT)
-                row("STICK_SWAP", "MIC"); row("SELECT", "START")
-                assertEquals(c("MIC").x, c("MENU").x, 1f, "$name MENU under MIC"); assertTrue(c("MENU").y > c("MIC").y, "$name MENU under MIC")
-                assertEquals(c("SELECT").x, c("SWAP").x, 1f, "$name SWAP under SELECT"); assertTrue(c("SWAP").y > c("SELECT").y, "$name SWAP under SELECT")
-                assertTrue(c("MENU").y - c("MIC").y >= 139f * p.k, "$name room between the rows")
+                // the height short of two rows: one each side, switch MIC MENU; SWAP SELECT START (user)
+                row("STICK_SWAP", "MIC", "MENU"); row("SWAP", "SELECT", "START")
+                // the C-stick lowered toward A, clear of X by its reach (user)
+                assertTrue(c("CSTICK").y > c("R").y + c("R").spec.hh + c("CSTICK").spec.r, "$name nub clear of R")
             }
         }
     }
