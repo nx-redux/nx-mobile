@@ -164,6 +164,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
@@ -187,6 +188,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     companion object {
         /** How long a quit waits for Save on quit's current value from the menu's process before using its own copy. */
         private const val QUIT_SETTINGS_REFRESH_MS = 300L
+        /** Process-wide: false only until this process's first game screen; a process killed in the background starts over. */
+        private var screenShownInProcess = false
         /** The frontend rows a pad skin leaves out ([menuLocked]): it places the screens itself. */
         private val SKIN_HIDDEN_OPTIONS = setOf(
             com.nxredux.mobile.options.FrontendOptions.SCALING, com.nxredux.mobile.options.FrontendOptions.OVERLAY,
@@ -583,7 +586,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // A saved slot (recreated after a process kill) wins over the launch intent's.
         val savedSlot = savedInstanceState?.getInt(SaveSession.KEY_RESUME_SLOT, -1)?.takeIf { it in 0..NxPaths.AUTO_SLOT }
         val launchSlot = intent.getIntExtra(EXTRA_RESUME_SLOT, -1).takeIf { it in 0..NxPaths.AUTO_SLOT }
-        saves.startFrom(SaveSession.startSlot(savedInstanceState != null, savedSlot, launchSlot, settings.saveOnQuit, netplay != null))
+        // A bundle in a process that already showed a game screen is a recreate() (a driver relaunch), not a kill.
+        val afterKill = savedInstanceState != null && !screenShownInProcess
+        screenShownInProcess = true
+        saves.startFrom(SaveSession.startSlot(afterKill, savedSlot, launchSlot, settings.saveOnQuit, netplay != null))
         val claim = sessions.claim(::onSessionHandedOff).also { sessionClaim = it }
         // From the claim to the final release: the menu reads this as "a game screen is alive" (playing, suspended, closing).
         liveGameStore.write(LiveGame(
@@ -1554,9 +1560,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Save on quit off: the quit keeps the resume point as is (no hidden state), its battery save still written.
         if (!autoState) { saves.writeOnQuit(view, chosen, false, release = { live -> ach?.stop(native = live) }, finish = ::finish); return }
         // The refresh is a blocking call into the menu's process: run apart, so the timeout can stop waiting for it.
+        // Not cancellable: onPause skipped its battery save for this quit, so the quit's write must not be lost to a destroy.
         lifecycleScope.launch {
-            val keep = SaveSession.readFresh(QUIT_SETTINGS_REFRESH_MS, refresh = { CoroutineScope(Dispatchers.IO).async { Prefs.refreshGame() }.await() }) { settings.saveOnQuit }
-            saves.writeOnQuit(view, chosen, keep, release = { live -> ach?.stop(native = live) }, finish = ::finish)
+            withContext(NonCancellable) {
+                val keep = SaveSession.readFresh(QUIT_SETTINGS_REFRESH_MS, refresh = { CoroutineScope(Dispatchers.IO).async { Prefs.refreshGame() }.await() }) { settings.saveOnQuit }
+                saves.writeOnQuit(view, chosen, keep, release = { live -> ach?.stop(native = live) }, finish = ::finish)
+            }
         }
     }
 

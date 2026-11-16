@@ -56,11 +56,6 @@ internal class SaveSession(
         internal const val KEY_RESUME_SLOT = "nx_resume_slot"
 
         /**
-         * The disk slot a game screen starts from: none in netplay (a session launches cold); the [saved] one when the
-         * system recreated it after a process kill; else the launch's. Without Save on quit a recreated screen whose
-         * bundle names nothing starts fresh: falling back to the launch slot would resume after a kill all the same.
-         */
-        /**
          * The game process's settings are a copy refreshed when it comes back to the front; a quit (a handoff from the
          * menu, a game beside the menu) may come while the copy is behind. [refresh] gets at most [timeoutMs] (it calls
          * into the menu's process, which may have to start first); then [read] answers on what is there.
@@ -70,12 +65,18 @@ internal class SaveSession(
             return read()
         }
 
-        internal fun startSlot(recreated: Boolean, saved: Int?, launch: Int?, saveOnQuit: Boolean, netplay: Boolean): Int? = when {
+        /**
+         * The disk slot a game screen starts from: none in netplay (a session launches cold); the [saved] one when the
+         * screen is recreated; else the launch's. Without Save on quit a screen recreated [afterKill] whose bundle names
+         * nothing starts fresh: falling back to the launch slot would resume after a kill all the same.
+         */
+        internal fun startSlot(afterKill: Boolean, saved: Int?, launch: Int?, saveOnQuit: Boolean, netplay: Boolean): Int? = when {
             netplay -> null
             saved != null -> saved
-            recreated && !saveOnQuit -> null
+            afterKill && !saveOnQuit -> null
             else -> launch
         }
+
         /** [writeAutoStateOnStop]: at most this long for the GL thread to start the serialize, and again to finish it. */
         private const val AUTO_SERIALIZE_WAIT_MS = 10_000L
         // Process-wide, single thread: the Home auto state and its thumbnail are written off the main thread

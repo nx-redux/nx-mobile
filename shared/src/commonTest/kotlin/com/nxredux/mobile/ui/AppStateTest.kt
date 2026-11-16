@@ -1920,6 +1920,30 @@ class AppStateTest {
         }
     }
 
+    // A game whose core keeps no state comes back where it was on A: not a fresh start, which would lose its progress.
+    @Test fun a_on_a_game_without_a_state_may_bring_back_the_suspended_game() = runTest {
+        val runner = RecordingRunner()
+        val state = ndsList(MemorySettings(ContentRef("Home")), runner, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), save = false)
+        state.onButton(NxButton.A)
+        assertNull(runner.launched.single().resumeSlot)
+        assertFalse(runner.launched.single().fresh)
+    }
+
+    @Test fun both_off_keeps_stateless_recents_in_the_switcher_and_starts_them_fresh() = runTest {
+        val runner = RecordingRunner()
+        val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        val settings = MemorySettings(ContentRef("Home")).apply { aResumes = false; saveOnQuit = false }
+        val fake = FakeUserData(recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb")))
+        val data = AutoSlotGate(fake) { settings.saveOnQuit }
+        val state = AppState(AppDeps(settings, source, runner, NoopPicker(), data, recents = RecentsRecorder(data, scope).also { runner.menu = it }, compute = scope.coroutineContext[ContinuationInterceptor]!!), scope)
+        state.load()
+        state.onButton(NxButton.SELECT)
+        val entry = assertIs<Screen.Switcher>(state.screen.value).entries.single()
+        assertEquals("Start", switcherHints(entry).single { it.button == NxButton.A }.label)
+        state.onButton(NxButton.A)
+        assertTrue(runner.launched.single().fresh)
+    }
+
     @Test fun play_from_start_never_brings_back_the_suspended_game() = runTest {
         val runner = RecordingRunner()
         val state = ndsList(MemorySettings(ContentRef("Home")).apply { menuButtonHints = false }, runner, CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
