@@ -41,7 +41,7 @@ Device checks still owed:
   `retro_deinit` and keeps the lock. After it: 0 of 12 quits (8 malisx2, 4 stock).
 - [ ] PS2 on the driver fallback relaunch (core reloaded in the same process) after core patch 0007: 3 of 3 forced
   fallbacks relaunched and quit cleanly on the AYANEO; one on the Nova is owed.
-- [ ] PS2 resume: about 1 launch in 4 on the AYANEO (stock driver too) boots from the disc although the state load reported success. Existing race at the first frame; find and fix.
+- [x] PS2 resume booted from the disc although the state load reported success (5 of 13 launches on the AYANEO, either driver). Cause: the state loads during the BIOS boot, and the core swapped TLB entries one index at a time, so unmapping a stale entry could unmap pages a new entry had just mapped (a burst of `TLB Miss` in the log). Core patch 0008 unmaps all stale entries first. After it: 12 of 12 launches resumed.
 
 ## Slang shader presets
 

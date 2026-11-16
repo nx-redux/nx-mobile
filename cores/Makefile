@@ -548,6 +548,8 @@ dolphin_FLAGS = -DLIBRETRO=ON -DENABLE_LTO=ON -DANDROID_STL=c++_static
 # build time and refuses a mismatched kernel. vtlb fastmem then maps at host-page granularity, as on 16 KB Apple hosts.
 # patches/armsx2/0007: the settings interfaces that 0004 keeps for the process are saved in retro_deinit, and the save
 # lock is never destroyed; a dirty one saved itself at library unload, after the lock was gone (abort on Android).
+# patches/armsx2/0008: a state load unmaps every replaced TLB entry before mapping the new ones; entry by entry, a load
+# during the BIOS boot could unmap pages a new entry had just mapped (the game then ran off into the disc boot).
 # ARMSX2_EMBED_PATCHES=OFF: upstream fetches a patches.zip at configure time and compiles it in; that collection has no
 # licence, so it stays out of the .so. The app's Cheats & Patches tool downloads PCSX2's patches.zip at runtime and
 # extracts it into Cheats/PS2/Patches/, which patches/armsx2/0005 points the core at (cheats from Cheats/PS2/).
