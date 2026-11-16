@@ -1855,6 +1855,36 @@ class AppStateTest {
         assertEquals("/Roms/Nintendo DS (NDS)/Mario Kart DS.nds", data.recents.first().path)
     }
 
+    @Test fun save_on_quit_off_keeps_every_recent_in_the_switcher_and_a_starts_hidden_ones_fresh() = runTest {
+        val runner = RecordingRunner()
+        val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        val settings = MemorySettings(ContentRef("Home")).apply { saveOnQuit = false }
+        val fake = FakeUserData(
+            recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb"), Recent("/Roms/Nintendo DS (NDS)/Mario Kart DS.nds")),
+            resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9), ("NDS" to "Mario Kart DS.nds") to ResumeInfo(2)),
+        )
+        val data = AutoSlotGate(fake) { settings.saveOnQuit }
+        val state = AppState(AppDeps(settings, source, runner, NoopPicker(), data, recents = RecentsRecorder(data, scope).also { runner.menu = it }, compute = scope.coroutineContext[ContinuationInterceptor]!!), scope)
+        state.load()
+        state.onButton(NxButton.SELECT)
+        val sw = assertIs<Screen.Switcher>(state.screen.value)
+        assertEquals(listOf("Tetris.gb", "Mario Kart DS.nds"), sw.entries.map { it.game.fileName })
+        assertFalse(sw.entries[0].resume.canResume)                    // its hidden state ignored: A Start
+        state.onButton(NxButton.A)
+        assertNull(runner.launched.single().resumeSlot)
+    }
+
+    @Test fun save_on_quit_on_keeps_only_resumable_recents_in_the_switcher() = runTest {
+        val data = FakeUserData(
+            recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb"), Recent("/Roms/Nintendo DS (NDS)/Mario Kart DS.nds")),
+            resumable = mapOf(("NDS" to "Mario Kart DS.nds") to ResumeInfo(2)),
+        )
+        val state = stateWith(data, RecordingRunner(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        state.load()
+        state.onButton(NxButton.SELECT)
+        assertEquals(listOf("Mario Kart DS.nds"), assertIs<Screen.Switcher>(state.screen.value).entries.map { it.game.fileName })
+    }
+
     // A game resumed from the switcher ends back on the switcher (the menu comes to the front again), its game first
     // as the latest recent; the page under it is the one the switcher opened over.
     @Test fun quitting_a_game_resumed_from_the_switcher_returns_to_the_switcher() = runTest {

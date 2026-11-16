@@ -74,6 +74,10 @@ import com.nxredux.mobile.ui.nx.placeholderBoxSize
 private val SWIPE_THRESHOLD = 24.dp
 
 /** The switcher's hints: B Back, and with a game Y Remove (touch: a trash icon) and A Resume (Start for one with no state to resume). */
+/** A List-layout card's picture: the resume frame, else the scraped screenshot unless it failed to load; null: the box chain. */
+internal fun switcherCardPicture(resumeFrame: String?, screenshot: String?, failed: Set<String>): String? =
+    resumeFrame ?: screenshot?.takeIf { it !in failed }
+
 internal fun switcherHints(entry: SwitcherEntry?): List<Hint> =
     if (entry == null) listOf(Hint(NxButton.B, "Back"))
     else listOf(
@@ -206,18 +210,22 @@ private fun GameSwitcherFullScreen(screen: Screen.Switcher, onButton: (NxButton)
         } else {
             // Tapping the preview resumes; the hint bar drawn on top swallows its own taps (see below).
             Box(Modifier.fillMaxSize().pointerInput(entry) { detectTapGestures { onButton(NxButton.A) } })
-            // The resume preview; else the box chain by Backdrop art then 3D → 2D → wheel ([boxShown]): the 3D box or a
-            // wheel Fit, a 2D front in the case; else an Android game's screenshot Fit; else "No Preview".
-            val preview = entry.resume.previewPath
+            // The resume preview, else the scraped screenshot ([switcherCardPicture]); else the box chain by Backdrop art
+            // then 3D → 2D → wheel ([boxShown]): the 3D box or a wheel Fit, a 2D front in the case; else an Android game's
+            // screenshot Fit; else "No Preview".
             var failed by remember(entry) { mutableStateOf(emptySet<String>()) }
             val g = entry.game
+            val preview = switcherCardPicture(entry.resume.previewPath, g.screenshotRef?.value, failed)
             val box = boxShown(backdropArt, g.boxartRef?.value, g.box2dRef?.value, g.wheelRef?.value, failed)
             val androidShot = g.androidShot?.takeIf { it !in failed }
             when {
                 preview != null -> KeepUntilLoaded(preview) { shown, done ->
                     AsyncImage(
                         model = shown, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(),
-                        onState = { if (it is AsyncImagePainter.State.Success || it is AsyncImagePainter.State.Error) done() },
+                        onState = {
+                            if (it is AsyncImagePainter.State.Success || it is AsyncImagePainter.State.Error) done()
+                            if (it is AsyncImagePainter.State.Error && shown != entry.resume.previewPath) failed = failed + shown
+                        },
                     )
                 }
                 box is BoxShown.Art3d -> AsyncImage(

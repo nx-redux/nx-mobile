@@ -101,7 +101,8 @@ internal class SwitcherController(
         userData.readRecents().mapNotNull { recent ->
             val e = host.resolveOne(recent.path)?.takeUnless { it.system.android } ?: return@mapNotNull null   // never one (not recorded): kept out anyway
             val info = userData.resumeInfo(e.system.tag, e.game.fileName)
-            if (info.canResume) SwitcherEntry(e.system, e.game, info) else null
+            // Without Save on quit no game keeps a hidden state: every recent stays, and A starts it fresh.
+            if (info.canResume || !settings.saveOnQuit) SwitcherEntry(e.system, e.game, info) else null
         }.distinctBy { it.game.path }   // a hidden copy's line and its home game's are one game
 
     /**
