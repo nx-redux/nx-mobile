@@ -1672,12 +1672,14 @@ class AppStateTest {
         assertFalse(state.resumeInfo.value.canResume)                    // A Play shows, not Resume
         state.onButton(NxButton.A)
         assertNull(runner.launched.single().resumeSlot)
+        assertTrue(runner.launched.single().fresh)                        // never the suspended game where it was
         state.onForeground()
         state.onButton(NxButton.MENU)
         assertEquals(ContextKind.RESUME, menuKinds(state).first())
         assertTrue(ContextKind.PLAY_FROM_START !in menuKinds(state))
         state.onButton(NxButton.A)
         assertEquals(9, runner.launched[1].resumeSlot)
+        assertFalse(runner.launched[1].fresh)
     }
 
     @Test fun save_on_quit_off_ignores_the_hidden_state_but_keeps_a_manual_slot() = runTest {
@@ -1894,6 +1896,37 @@ class AppStateTest {
         assertFalse(sw.entries[0].resume.canResume)                    // its hidden state ignored: A Start
         state.onButton(NxButton.A)
         assertNull(runner.launched.single().resumeSlot)
+    }
+
+    @Test fun a_resumes_off_starts_switcher_games_fresh_and_on_resumes_them() = runTest {
+        for (aResumes in listOf(false, true)) {
+            val runner = RecordingRunner()
+            val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+            val settings = MemorySettings(ContentRef("Home")).apply { this.aResumes = aResumes }
+            val data = FakeUserData(
+                recents = listOf(Recent("/Roms/Nintendo DS (NDS)/Mario Kart DS.nds")),
+                resumable = mapOf(("NDS" to "Mario Kart DS.nds") to ResumeInfo(2, "file:///mk.2.bmp")),
+            )
+            val state = AppState(AppDeps(settings, source, runner, NoopPicker(), data, recents = RecentsRecorder(data, scope).also { runner.menu = it }, compute = scope.coroutineContext[ContinuationInterceptor]!!), scope)
+            state.load()
+            state.onButton(NxButton.SELECT)
+            val entry = assertIs<Screen.Switcher>(state.screen.value).entries.single()
+            assertEquals("file:///mk.2.bmp", entry.resume.previewPath)    // its picture stays either way
+            assertEquals(if (aResumes) "Resume" else "Start", switcherHints(entry).single { it.button == NxButton.A }.label)
+            state.onButton(NxButton.A)
+            val launched = runner.launched.single()
+            assertEquals(if (aResumes) 2 else null, launched.resumeSlot)
+            assertEquals(!aResumes, launched.fresh)
+        }
+    }
+
+    @Test fun play_from_start_never_brings_back_the_suspended_game() = runTest {
+        val runner = RecordingRunner()
+        val state = ndsList(MemorySettings(ContentRef("Home")).apply { menuButtonHints = false }, runner, CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        state.onButton(NxButton.MENU)
+        assertEquals(ContextKind.PLAY_FROM_START, menuKinds(state).first())
+        state.onButton(NxButton.A)
+        assertTrue(runner.launched.single().fresh)
     }
 
     @Test fun save_on_quit_on_keeps_only_resumable_recents_in_the_switcher() = runTest {

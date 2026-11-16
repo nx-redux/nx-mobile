@@ -84,7 +84,7 @@ internal class LaunchController(
     /** The context menu's Play from start (a game with a save state, which A resumes): [entry] from the start. */
     fun playFromStart(entry: Listed) {
         host.rememberMenuSelection()   // Home's game, as A on it (a game list has none to remember)
-        launch(entry, resumeSlot = null)
+        launch(entry, resumeSlot = null, fresh = true)
     }
 
     /**
@@ -93,7 +93,7 @@ internal class LaunchController(
      */
     fun resumeFromSave(entry: Listed, orPlay: Boolean = false): Job? {
         val e = entry.takeIf { !it.system.unassigned && !it.system.android } ?: return null
-        if (orPlay && !deps.settings.aResumes) return launch(e, resumeSlot = null)   // A starts fresh; the menu's Resume continues
+        if (orPlay && !deps.settings.aResumes) return launch(e, resumeSlot = null, fresh = true)   // A starts fresh; the menu's Resume continues
         return scope.launch {   // ends with the launch's own job
             val info = deps.userData.resumeInfo(e.system.tag, e.game.fileName)
             (if (info.canResume) launch(e, info.slot) else if (orPlay) launch(e, resumeSlot = null) else null)?.join()
@@ -116,7 +116,7 @@ internal class LaunchController(
     }
 
     /** Starts [entry] (see the steps inside); the start's job, or null when none began (an app, no core, one in flight). */
-    fun launch(entry: Listed, resumeSlot: Int?, coreOverride: CoreDescriptor? = null, netplay: NetplaySession? = null, fromSwitcher: Boolean = false): Job? {
+    fun launch(entry: Listed, resumeSlot: Int?, coreOverride: CoreDescriptor? = null, netplay: NetplaySession? = null, fromSwitcher: Boolean = false, fresh: Boolean = false): Job? {
         if (host.kidsLocked()) return null   // Kids Mode: no game (nor Android game) while Locked
         val listed = entry.system
         val game = entry.game
@@ -180,7 +180,7 @@ internal class LaunchController(
             host.dropPushedTab()
             switcher.onRunnerCalled(fromSwitcher)   // a refused launch never gets here (the runner keeps the return on disk)
             deps.runner.launch(GameSession(sys.tag, game.shownName, core, game.ref, game.folder, game.fileName, resumeSlot, all, systemSets = systemSets, gamePath = game.path,
-                artPath = panelArt(deps.settings.backdropArt, game), netplay = netplay, fromSwitcher = fromSwitcher), recent)
+                artPath = panelArt(deps.settings.backdropArt, game), netplay = netplay, fromSwitcher = fromSwitcher, fresh = fresh), recent)
         }
         launchJob = job
         job.invokeOnCompletion { if (launchJob === job) launchJob = null }
