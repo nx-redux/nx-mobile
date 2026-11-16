@@ -167,34 +167,6 @@ internal fun SkinLayoutSpec.bothFollowMenu(menu: SkinLayoutSpec?, menuUnderStart
     )
 }
 
-/**
- * The N64's tall shell following [menu] (the main menu's shell of the same render): the stick where the menu has its
- * d-pad (the d-pad goes under it, [SkinSolver.placePieces]), the C buttons' diamond centred where the menu's face
- * buttons are, A / B, MENU and START under it moved with it (the menu's START / SELECT spots are where A / B stand).
- * As it is without [menu].
- */
-internal fun SkinLayoutSpec.n64FollowMenu(menu: SkinLayoutSpec?): SkinLayoutSpec {
-    if (menu == null) return this
-    val f = followMenu(menu, alias = mapOf("STICK" to "DPAD"), skip = setOf("DPAD", "X", "Y", "A", "B", "START", "SELECT", "MENU"), anyHeight = true)
-        .dpadInLineWithTheStick()
-    val face = listOf("X", "Y", "A", "B").map { id -> menu.controls.firstOrNull { it.id == id } ?: return f }
-    val cs = listOf("CU", "CL", "CR", "CD").map { id -> f.controls.firstOrNull { it.id == id } ?: return f }
-    val side = cs.first().anchor
-    if (face.any { it.anchor != side }) return f
-    val dx = face.map { it.x }.average().toFloat() - cs.map { it.x }.average().toFloat()
-    val dy = face.map { it.y }.average().toFloat() - cs.map { it.y }.average().toFloat()
-    if (dx == 0f && dy == 0f) return f
-    val ids = setOf("CU", "CL", "CR", "CD", "A", "B", "MENU", "START")
-    val group = f.controls.filter { it.id in ids && it.anchor == side }
-    fun inside(p: PieceSpec, c: ControlSpec) = c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
-    fun within(a: PieceSpec, b: PieceSpec) = a.x >= b.x && a.y >= b.y && a.x + a.w * a.scale <= b.x + b.w * b.scale && a.y + a.h * a.scale <= b.y + b.h * b.scale
-    val holding = f.pieces.filter { p -> p.glass == null && p.anchor == side && group.any { inside(p, it) } }
-    val moving = f.pieces.filter { p -> p.glass == null && (p in holding || holding.any { within(p, it) }) }.toSet()
-    return f.copy(
-        pieces = f.pieces.map { if (it in moving) it.copy(x = (it.x + dx).roundToInt(), y = (it.y + dy).roundToInt()) else it },
-        controls = f.controls.map { if (it in group) it.copy(x = it.x + dx, y = it.y + dy) else it },
-    )
-}
 
 /**
  * MENU's companion where following [menu] left it beside MENU in the left group (the Dreamcast's stick / d-pad swap, the

@@ -109,6 +109,7 @@ object SkinChoice {
     ): SkinPlacement? {
         if (windowW <= 0 || windowH <= 0 || windowW == windowH || densityDpi <= 0) return null
         val k = scaleFor(pack, densityDpi)
+        val tuned = tunedFor(windowW, windowH, densityDpi, hingeY)
         val landscape = windowW > windowH
         // sideways, a book foldable's inner screen half-folded: the hinge runs across the window, so the two screens too
         val twoUp = if (landscape) hingeY != null && (foldable || tablet) && nearSquare(windowW, windowH) else tablet
@@ -116,12 +117,22 @@ object SkinChoice {
         // folding and opening keep its bottom edge in place
         val flatEnd = menuFlatEnd(pack, windowW, windowH, k, topInset, densityDpi)
         if (twoUp && twoScreens) shrunk(k) { s ->
-            widest(pack, SkinFamily.STACKED, SkinVariant.MENU, fold = true) { spec ->
+            widest(tuned, pack, SkinFamily.STACKED, SkinVariant.MENU, fold = true) { spec ->
                 foldPieces(spec.menuBesideTheDpad(), windowW, windowH, s, null, topInset, hingeY, densityDpi,
                     bottomMargin = shellMargin(pack), bottomGlass = flatEnd, row = rowSpacing(densityDpi, s))
             }
         }?.let { return it }
-        return shell(pack, if (landscape) SkinFamily.GRIP else SkinFamily.STACKED, SkinVariant.MENU, windowW, windowH, k, null, topInset, rowSpacing(densityDpi, k))
+        return shell(tuned, pack, if (landscape) SkinFamily.GRIP else SkinFamily.STACKED, SkinVariant.MENU, windowW, windowH, k, densityDpi, null, topInset, rowSpacing(densityDpi, k), hingeY = hingeY)
+    }
+
+    /**
+     * Whether a layout has a box size drawn for this window ([BoxWhen]): such a layout is the one the device was tuned
+     * with, tried before its siblings (a box layout has no pieces to rule itself out by).
+     */
+    private fun tunedFor(windowW: Int, windowH: Int, densityDpi: Int, hingeY: Float?): (SkinLayoutSpec) -> Boolean {
+        val dp = densityDpi / 160f
+        val shape = DeviceShape(windowW / dp, windowH / dp, hingeY != null)
+        return { spec -> spec.boxes.any { b -> b.sizes.any { it.`when`?.matches(shape) == true } } }
     }
 
     /**
@@ -129,14 +140,19 @@ object SkinChoice {
      * window stretches little), with a usable glass; a game's [picture] fitted in it.
      */
     private fun shell(
-        pack: SkinPackManifest, family: SkinFamily, variant: SkinVariant, windowW: Int, windowH: Int, k: Float,
+        tuned: (SkinLayoutSpec) -> Boolean, pack: SkinPackManifest, family: SkinFamily, variant: SkinVariant, windowW: Int, windowH: Int, k: Float, densityDpi: Int,
         picture: Pair<Float, Float>?, topInset: Int, row: RowSpacing? = null, refH: Float = windowH / k,
-        pick: (SkinLayoutSpec) -> Boolean = { true }, adapt: (SkinLayoutSpec) -> SkinLayoutSpec = { it },
+        hingeY: Float? = null, pick: (SkinLayoutSpec) -> Boolean = { true }, adapt: (SkinLayoutSpec) -> SkinLayoutSpec = { it },
     ): SkinPlacement? =
         pack.layouts.filter { it.family == family && it.variant == variant && it.frame != null && !it.foldBoard && it.minRefH <= refH && pick(it) }
-            .sortedWith(compareByDescending<SkinLayoutSpec> { it.minRefH }.thenByDescending { it.height })
+            .sortedWith(compareByDescending<SkinLayoutSpec> { tuned(it) }.thenByDescending { it.minRefH }.thenByDescending { it.height })
             .firstNotNullOfOrNull { spec ->
-                SkinSolver.placePieces(adapt(spec), windowW.toFloat(), windowH.toFloat(), k, picture, topInset = topInset.toFloat(), row = row)?.takeIf { p ->
+                // a layout with boxes: placed as its boxes have it, never adapted
+                // (the hinge for the box sizes drawn half-folded: a shell itself ignores it)
+                (if (spec.boxes.isNotEmpty()) SkinBoxes.place(spec, windowW, windowH, k, densityDpi, hingeY) { s, r ->
+                    SkinSolver.placePieces(s, windowW.toFloat(), windowH.toFloat(), k, picture, topInset = topInset.toFloat(), row = row,
+                        roomLeft = r.left, roomRight = r.right, roomBottom = r.bottom)
+                } else SkinSolver.placePieces(adapt(spec), windowW.toFloat(), windowH.toFloat(), k, picture, topInset = topInset.toFloat(), row = row))?.takeIf { p ->
                     val g = p.glasses.first().rect
                     g.width / k >= MENU_MIN_GLASS && g.height / k >= MENU_MIN_GLASS
                 }
@@ -147,11 +163,11 @@ object SkinChoice {
      * board rendered for it (a background only grows, so a smaller window takes a smaller one).
      */
     private fun widest(
-        pack: SkinPackManifest, family: SkinFamily, variant: SkinVariant, fold: Boolean, refH: Float = Float.MAX_VALUE,
+        tuned: (SkinLayoutSpec) -> Boolean, pack: SkinPackManifest, family: SkinFamily, variant: SkinVariant, fold: Boolean, refH: Float = Float.MAX_VALUE,
         placed: (SkinLayoutSpec) -> SkinPlacement?,
     ): SkinPlacement? =
         pack.layouts.filter { it.family == family && it.variant == variant && it.foldBoard == fold && it.minRefH <= refH }
-            .sortedWith(compareByDescending<SkinLayoutSpec> { it.minRefH }.thenByDescending { it.width }).firstNotNullOfOrNull(placed)
+            .sortedWith(compareByDescending<SkinLayoutSpec> { tuned(it) }.thenByDescending { it.minRefH }.thenByDescending { it.width }).firstNotNullOfOrNull(placed)
 
     /** A layout on a foldable's board: its background has a hinge (an inner screen's two halves). */
     private val SkinLayoutSpec.foldBoard: Boolean get() = tree.parts.any { it.isHinge }
@@ -185,21 +201,25 @@ object SkinChoice {
     private fun foldPieces(
         spec: SkinLayoutSpec, windowW: Int, windowH: Int, k: Float, picture: Pair<Float, Float>?, topInset: Int, hingeY: Float?, densityDpi: Int,
         topScreen: Pair<Float, Float>? = null, bottomMargin: Float? = null, bottomGlass: Float? = null, row: RowSpacing? = null,
-        centreControls: Boolean = true,
+        centreControls: Boolean = true, room: BoxRoom? = null,
     ): SkinPlacement? {
+        // a layout with boxes: its screens by these rules in the room the boxes leave
+        if (spec.boxes.isNotEmpty()) return SkinBoxes.place(spec, windowW, windowH, k, densityDpi, hingeY) { s, r ->
+            foldPieces(s, windowW, windowH, k, picture, topInset, hingeY, densityDpi, topScreen, bottomMargin, bottomGlass, row, centreControls, r)
+        }
         val w = windowW.toFloat(); val h = windowH.toFloat()
         // a DS / 3DS top screen: its frame no taller than the screen across its width, plus a little ([TOP_PAD_DP])
         val capPad = topScreen?.let { TOP_PAD_DP * densityDpi / 160f / k }
         val sideInset = SIDE_INSET_DP * densityDpi / 160f / k
-        if (hingeY != null) return SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), hingeY, topScreen, capPad = capPad, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass, row = row, centreControls = centreControls)
+        if (hingeY != null) return SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), hingeY, topScreen, capPad = capPad, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass, row = row, centreControls = centreControls, roomLeft = room?.left, roomRight = room?.right, roomBottom = room?.bottom)
         val middle = h / 2f
-        val first = SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), middle, topScreen, hingeGap = 0f, capPad = capPad, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass, row = row, centreControls = centreControls) ?: return null
+        val first = SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), middle, topScreen, hingeGap = 0f, capPad = capPad, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass, row = row, centreControls = centreControls, roomLeft = room?.left, roomRight = room?.right, roomBottom = room?.bottom) ?: return null
         // the top of the frame under the middle: the highest of the pieces with a screen below it
         val under = first.pieces.filter { it.piece >= 0 && spec.pieces[it.piece].glass != null && it.dst.y > middle }.minOfOrNull { it.dst.y }
             ?: return first.copy(slab = true)
         // only where there is room: the frame never ends above the middle for it (a frame under nearer than the gap)
         val gap = minOf(0f, (middle - (under - FRAME_GAP_DP * densityDpi / 160f)) / k)
-        return (SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), middle, topScreen, hingeGap = gap, capPad = capPad, capLift = true, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass, row = row, centreControls = centreControls) ?: first).copy(slab = true)
+        return (SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), middle, topScreen, hingeGap = gap, capPad = capPad, capLift = true, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass, row = row, centreControls = centreControls, roomLeft = room?.left, roomRight = room?.right, roomBottom = room?.bottom) ?: first).copy(slab = true)
     }
 
     /**
@@ -225,6 +245,7 @@ object SkinChoice {
      * [ROW_MIN_GAP_DP]).
      */
     private fun SkinPlacement.dpadInTheRoom(windowH: Float, dp: Float, padGapDp: Float = ROW_GAP_DP): SkinPlacement {
+        if (boxed) return this
         fun centredOn(id: String): List<Int> {
             val c = controls.firstOrNull { it.spec.id == id } ?: return emptyList()
             return pieces.indices.filter { i -> pieces[i].let { p -> p.piece >= 0 && spec.pieces[p.piece].glass == null &&
@@ -275,6 +296,7 @@ object SkinChoice {
      * foot: the higher one down to the lower one's (its well with it). As it is without a column each side.
      */
     private fun SkinPlacement.columnsLevel(): SkinPlacement {
+        if (boxed) return this
         val ids = setOf("START", "SELECT", "MENU", "MIC", "SWAP", "STICK_SWAP", "DISK")
         fun caps(side: PieceAnchor) = controls.filter { it.spec.id in ids && it.spec.anchor == side }
         val l = caps(PieceAnchor.LEFT); val r = caps(PieceAnchor.RIGHT)
@@ -299,6 +321,7 @@ object SkinChoice {
      * so its lowest piece ends by [end] (window px), no higher than [frameTop]; as it is where it ends there already.
      */
     private fun SkinPlacement.sideInTheRoom(side: PieceAnchor, frameTop: Float, end: Float): SkinPlacement {
+        if (boxed) return this
         val at = pieces.indices.filter { i -> pieces[i].piece >= 0 && spec.pieces[pieces[i].piece].let { it.glass == null && it.anchor == side } }
         if (at.isEmpty()) return this
         val over = at.maxOf { pieces[it].dst.y + pieces[it].dst.height } - end
@@ -327,6 +350,7 @@ object SkinChoice {
      * shoulders, not the centre's caps). As it is with SWAP elsewhere.
      */
     private fun SkinPlacement.swapLevelWithTheShoulders(): SkinPlacement {
+        if (boxed) return this
         val menu = controls.firstOrNull { it.spec.id == "SWAP" } ?: return this
         val l = controls.firstOrNull { it.spec.id == "L" } ?: return this
         val reach = menu.spec.r * 1.5f
@@ -347,6 +371,7 @@ object SkinChoice {
      * needs), the words under the caps. As it is where the two rows fit, or the one would not.
      */
     private fun SkinPlacement.capsInOneRow(windowH: Float, dp: Float): SkinPlacement {
+        if (boxed) return this
         fun all(id: String) = controls.filter { it.spec.id == id }
         fun one(id: String) = controls.firstOrNull { it.spec.id == id }
         val left = listOf("STICK_SWAP", "MIC", "MENU"); val right = listOf("SWAP", "SELECT", "START")
@@ -411,6 +436,7 @@ object SkinChoice {
      * clear of X's cap by its reach, its pieces with it (off the shoulders). As it is without a nub.
      */
     private fun SkinPlacement.nubBetweenXAndA(): SkinPlacement {
+        if (boxed) return this
         val nub = controls.firstOrNull { it.spec.id == "CSTICK" } ?: return this
         val x = controls.firstOrNull { it.spec.id == "X" } ?: return this
         val a = controls.firstOrNull { it.spec.id == "A" } ?: return this
@@ -460,236 +486,12 @@ object SkinChoice {
         )
     }
 
-    /**
-     * [ids]' group (one stick, or a diamond of caps and its ring) [f] its size about its middle, its middle moved to
-     * [tx], [ty]: its pieces (those round its middle or a cap's, a stick's round its knob) and hit areas with it.
-     */
-    private fun SkinPlacement.groupAt(ids: Set<String>, tx: Float, ty: Float, f: Float): SkinPlacement {
-        val cs = controls.filter { it.spec.id in ids }
-        if (cs.isEmpty()) return this
-        val gx = cs.map { it.x }.average().toFloat(); val gy = cs.map { it.y }.average().toFloat()
-        val knob = if (cs.size == 1) pieces.firstOrNull { it.knob && it.knobOf == cs[0].spec.id }?.dst else null
-        fun mid(d: com.nxredux.mobile.options.PxRect) = (d.x + d.width / 2f) to (d.y + d.height / 2f)
-        fun near(a: Pair<Float, Float>, x: Float, y: Float) = kotlin.math.abs(a.first - x) < 2f && kotlin.math.abs(a.second - y) < 2f
-        // where a piece's middle counts from: the group's middle for a stick's (off its hit area's), else its own
-        fun from(d: com.nxredux.mobile.options.PxRect): Pair<Float, Float>? {
-            val m = mid(d)
-            if (knob != null && near(m, mid(knob).first, mid(knob).second)) return gx to gy
-            return if (near(m, gx, gy) || cs.any { near(m, it.x, it.y) }) m else null
-        }
-        return copy(
-            pieces = pieces.map { p ->
-                if (p.piece < 0 || spec.pieces[p.piece].glass != null) return@map p
-                val (mx, my) = from(p.dst) ?: return@map p
-                val w = p.dst.width * f; val h = p.dst.height * f
-                p.copy(dst = p.dst.copy(x = tx + (mx - gx) * f - w / 2f, y = ty + (my - gy) * f - h / 2f, width = w, height = h))
-            },
-            controls = controls.map { c -> if (c !in cs) c else c.copy(x = tx + (c.x - gx) * f, y = ty + (c.y - gy) * f,
-                spec = c.spec.copy(r = c.spec.r * f, hw = c.spec.hw * f, hh = c.spec.hh * f, arm = c.spec.arm * f, capR = c.spec.capR * f,
-                    travel = c.spec.travel * f, knobTravel = c.spec.knobTravel * f)) },
-        )
-    }
 
-    /**
-     * The N64's tall shell's pads as [menu]'s (the main menu's shell on this window): the stick [fullR] its radius (as
-     * it is when null) where the menu's d-pad is, the d-pad in line under it; the C diamond at the menu's face buttons'
-     * size where they are, what stands under it on its side (B / A, MENU, START) moved down as far as it grew.
-     */
-    private fun SkinPlacement.padsAsTheMenu(menu: SkinPlacement, fullR: Float?): SkinPlacement {
-        fun ctl(p: SkinPlacement, id: String) = p.controls.firstOrNull { it.spec.id == id }
-        val stick = ctl(this, "STICK") ?: return this
-        val mPad = ctl(menu, "DPAD") ?: return this
-        val moved = faceAsTheMenus(menu)
-            .groupAt(setOf("STICK"), mPad.x, mPad.y, fullR?.let { it / stick.spec.r } ?: 1f)
-        // the d-pad in line under the stick (its height is [dpadInTheRoom]'s)
-        val pad = ctl(moved, "DPAD") ?: return moved
-        return moved.groupAt(setOf("DPAD"), mPad.x, pad.y, 1f)
-    }
 
-    /**
-     * The N64's shoulders where [menu]'s are (the main menu's pad on this window): R on its R; Z starting where its L
-     * does (their left edges), L beside Z as drawn.
-     */
-    private fun SkinPlacement.shouldersAsTheMenus(menu: SkinPlacement): SkinPlacement {
-        fun ctl(p: SkinPlacement, id: String) = p.controls.firstOrNull { it.spec.id == id }
-        val ml = ctl(menu, "L"); val mr = ctl(menu, "R")
-        val left = listOf("L2", "L").mapNotNull { ctl(this, it) }
-        val r = ctl(this, "R")
-        var out = this
-        val lead = left.minByOrNull { it.x - it.spec.hw }
-        if (ml != null && lead != null) out = out.shifted(left.map { it.spec.id }.toSet(), (ml.x - ml.spec.hw) - (lead.x - lead.spec.hw), ml.y - lead.y)
-        if (mr != null && r != null) out = out.shifted(setOf("R"), mr.x - r.x, mr.y - r.y)
-        return out
-    }
 
-    /**
-     * The N64's C diamond at [menu]'s face buttons' size where they are (the main menu's pad on this window), what
-     * stands under it on its side (B / A, MENU, START) moved down as far as it grew. As it is where either lacks them.
-     */
-    private fun SkinPlacement.faceAsTheMenus(menu: SkinPlacement): SkinPlacement {
-        fun ctl(p: SkinPlacement, id: String) = p.controls.firstOrNull { it.spec.id == id }
-        val face = listOf("X", "Y", "A", "B").map { ctl(menu, it) ?: return this }
-        val cs = listOf("CU", "CL", "CR", "CD").map { ctl(this, it) ?: return this }
-        val fx = face.map { it.x }.average().toFloat(); val fy = face.map { it.y }.average().toFloat()
-        val cx = cs.map { it.x }.average().toFloat(); val cy = cs.map { it.y }.average().toFloat()
-        val mx = face.first { it.spec.id == "X" }
-        val cu = cs.first { it.spec.id == "CU" }
-        val f = kotlin.math.hypot(mx.x - fx, mx.y - fy) / kotlin.math.hypot(cu.x - cx, cu.y - cy)
-        val side = cu.spec.anchor
-        fun sideOf(p: SkinPiece) = if (p.piece < 0 || spec.pieces[p.piece].glass != null) null else spec.pieces[p.piece].anchor
-        fun centred(p: SkinPiece, x: Float, y: Float) = kotlin.math.abs(p.dst.x + p.dst.width / 2f - x) < 2f && kotlin.math.abs(p.dst.y + p.dst.height / 2f - y) < 2f
-        // the diamond's foot before and after: what stands under it goes down by the difference
-        val diamond = pieces.filter { p -> sideOf(p) == side && (centred(p, cx, cy) || cs.any { centred(p, it.x, it.y) }) }
-        val foot = diamond.maxOfOrNull { it.dst.y + it.dst.height } ?: return this
-        val newFoot = fy + (foot - cy) * f
-        val dx = fx - cx; val dy = newFoot - foot
-        val belowIds = controls.filter { it.spec.anchor == side && it !in cs && it.y > foot }.toSet()
-        // under it: what starts below its foot, or holds only controls below it (B / A's well rising beside it)
-        fun holds(p: SkinPiece, c: PlacedControl) = c.x >= p.dst.x && c.x <= p.dst.x + p.dst.width && c.y >= p.dst.y && c.y <= p.dst.y + p.dst.height
-        val below = pieces.filter { p -> sideOf(p) == side && p !in diamond &&
-            (p.dst.y >= foot - 0.5f || (belowIds.any { holds(p, it) } && controls.none { it !in belowIds && holds(p, it) })) }
-        return copy(
-            pieces = pieces.map { if (it in below) it.copy(dst = it.dst.copy(x = it.dst.x + dx, y = it.dst.y + dy)) else it },
-            controls = controls.map { if (it in belowIds) it.copy(x = it.x + dx, y = it.y + dy) else it },
-        ).groupAt(setOf("CU", "CL", "CR", "CD"), fx, fy, f)
-    }
 
-    /** The stick and the d-pad shown on its spot (the switch's two) centred where [menu]'s d-pad is. As it is without them. */
-    private fun SkinPlacement.stickOnTheMenusDpad(menu: SkinPlacement): SkinPlacement {
-        val to = menu.controls.firstOrNull { it.spec.id == "DPAD" } ?: return this
-        return groupAt(setOf("STICK"), to.x, to.y, 1f).groupAt(setOf("DPAD"), to.x, to.y, 1f)
-    }
 
-    /**
-     * Round caps [a] and [b] (their pieces with them) moved apart along the line between them so [gap] window px stand
-     * between their edges, the well holding both grown about their middle as much (it still holds them). As it is where
-     * they stand that far apart already.
-     */
-    private fun SkinPlacement.apart(a: String, b: String, gap: Float): SkinPlacement {
-        val ca = controls.firstOrNull { it.spec.id == a } ?: return this
-        val cb = controls.firstOrNull { it.spec.id == b } ?: return this
-        val dist = kotlin.math.hypot(cb.x - ca.x, cb.y - ca.y)
-        val need = ca.spec.r + cb.spec.r + gap
-        if (dist <= 0f || dist >= need) return this
-        val f = need / dist
-        val mx = (ca.x + cb.x) / 2f; val my = (ca.y + cb.y) / 2f
-        fun out(c: PlacedControl) = (mx + (c.x - mx) * f - c.x) to (my + (c.y - my) * f - c.y)
-        fun holds(d: com.nxredux.mobile.options.PxRect, c: PlacedControl) = c.x >= d.x && c.x <= d.x + d.width && c.y >= d.y && c.y <= d.y + d.height
-        fun centredOn(d: com.nxredux.mobile.options.PxRect, c: PlacedControl) = kotlin.math.abs(d.x + d.width / 2f - c.x) < 2f && kotlin.math.abs(d.y + d.height / 2f - c.y) < 2f
-        fun plain(p: SkinPiece) = p.piece >= 0 && spec.pieces[p.piece].glass == null
-        return copy(
-            pieces = pieces.map { p -> when {
-                !plain(p) -> p
-                centredOn(p.dst, ca) -> out(ca).let { (dx, dy) -> p.copy(dst = p.dst.copy(x = p.dst.x + dx, y = p.dst.y + dy)) }
-                centredOn(p.dst, cb) -> out(cb).let { (dx, dy) -> p.copy(dst = p.dst.copy(x = p.dst.x + dx, y = p.dst.y + dy)) }
-                holds(p.dst, ca) && holds(p.dst, cb) -> {
-                    val w = p.dst.width * f; val h = p.dst.height * f
-                    p.copy(dst = p.dst.copy(x = mx + (p.dst.x + p.dst.width / 2f - mx) * f - w / 2f, y = my + (p.dst.y + p.dst.height / 2f - my) * f - h / 2f, width = w, height = h))
-                }
-                else -> p
-            } },
-            controls = controls.map { c -> if (c === ca || c === cb) out(c).let { (dx, dy) -> c.copy(x = c.x + dx, y = c.y + dy) } else c },
-        )
-    }
 
-    /** Controls [ids] and the pieces holding them (theirs alone: a pill, a well) moved by [dx], [dy]. */
-    private fun SkinPlacement.shifted(ids: Set<String>, dx: Float, dy: Float): SkinPlacement {
-        if (dx == 0f && dy == 0f) return this
-        val cs = controls.filter { it.spec.id in ids }
-        fun holds(d: com.nxredux.mobile.options.PxRect, c: PlacedControl) = c.x >= d.x && c.x <= d.x + d.width && c.y >= d.y && c.y <= d.y + d.height
-        val at = pieces.filter { p -> p.piece >= 0 && spec.pieces[p.piece].glass == null && cs.any { holds(p.dst, it) } && controls.none { it !in cs && holds(p.dst, it) } }.toSet()
-        return copy(
-            pieces = pieces.map { if (it in at) it.copy(dst = it.dst.copy(x = it.dst.x + dx, y = it.dst.y + dy)) else it },
-            controls = controls.map { if (it in cs) it.copy(x = it.x + dx, y = it.y + dy) else it },
-        )
-    }
-
-    /**
-     * A screen frame's edges where [menu]'s are (the main menu's pad on this window): a landscape shell's slices, or with
-     * [lower] a fold board's frame under it (its pieces drawn with a glass); the glass, its strip and the touch shortcut
-     * slots with them. As it is where either has no such frame.
-     */
-    private fun SkinPlacement.frameAsTheMenus(menu: SkinPlacement, lower: Float? = null): SkinPlacement {
-        fun slices(q: SkinPlacement) = if (lower == null) q.pieces.filter { it.piece < 0 && !it.strip && !it.knob }
-            else q.pieces.filter { it.piece >= 0 && !it.strip && q.spec.pieces[it.piece].glass != null && it.dst.y + it.dst.height / 2f > lower }
-        val mine = slices(this); val theirs = slices(menu)
-        if (mine.isEmpty() || theirs.isEmpty()) return this
-        val left = mine.minOf { it.dst.x }; val right = mine.maxOf { it.dst.x + it.dst.width }
-        val top = mine.minOf { it.dst.y }; val bottom = mine.maxOf { it.dst.y + it.dst.height }
-        val l = theirs.minOf { it.dst.x } - left; val r = theirs.maxOf { it.dst.x + it.dst.width } - right
-        val t = theirs.minOf { it.dst.y } - top; val b = theirs.maxOf { it.dst.y + it.dst.height } - bottom
-        if (listOf(l, r, t, b).all { kotlin.math.abs(it) < 0.5f }) return this
-        val g = if (lower == null) glass(GlassScreen.PICTURE) else glasses.firstOrNull { it.rect.y + it.rect.height / 2f > lower }
-        val wide = ((right + r) - (left + l)) / (right - left)
-        fun across(x: Float) = left + l + (x - left) * wide
-        // one edge's slices move with it, the middle's stretch
-        fun span(at: Float, size: Float, lo: Float, hi: Float, dLo: Float, dHi: Float) = when {
-            kotlin.math.abs(at - lo) < 0.5f -> at + dLo to size
-            kotlin.math.abs(at + size - hi) < 0.5f -> at + dHi to size
-            else -> at + dLo to size - dLo + dHi
-        }
-        val frameParts = mine.map { it.piece }.toSet()
-        fun inFrame(p: SkinPiece) = if (lower == null) p.piece < 0 else p.piece in frameParts
-        return copy(
-            pieces = pieces.map { p -> when {
-                p in mine -> {
-                    val (x, w) = span(p.dst.x, p.dst.width, left, right, l, r)
-                    val (y, h) = span(p.dst.y, p.dst.height, top, bottom, t, b)
-                    p.copy(dst = p.dst.copy(x = x, y = y, width = w, height = h))
-                }
-                // its strip (the shortcut words' band in its bottom border)
-                p.strip && inFrame(p) -> p.copy(dst = p.dst.copy(x = across(p.dst.x + p.dst.width / 2f) - p.dst.width / 2f, y = p.dst.y + b))
-                else -> p
-            } },
-            glasses = glasses.map { if (it === g) it.copy(rect = it.rect.copy(x = it.rect.x + l, width = it.rect.width - l + r, y = it.rect.y + t, height = it.rect.height - t + b)) else it },
-            controls = controls.map { c -> if (c.spec.id.startsWith("TOUCH_") && (lower == null || c.y > lower)) c.copy(x = across(c.x), y = c.y + b, spec = c.spec.copy(hw = c.spec.hw * wide)) else c },
-        )
-    }
-
-    /**
-     * The N64 fold board's MENU / START pair (their well with them) under the stick / d-pad switch: centred under it,
-     * [PAIR_GAP_DP] under its well, no nearer the touch screen's frame than [ROW_GAP_DP]. As it is without the three.
-     */
-    private fun SkinPlacement.pairUnderTheSwitch(dp: Float): SkinPlacement {
-        val sw = controls.firstOrNull { it.spec.id == "STICK_SWAP" } ?: return this
-        val menu = controls.firstOrNull { it.spec.id == "MENU" } ?: return this
-        val start = controls.firstOrNull { it.spec.id == "START" } ?: return this
-        fun holds(d: com.nxredux.mobile.options.PxRect, x: Float, y: Float) = x >= d.x && x <= d.x + d.width && y >= d.y && y <= d.y + d.height
-        fun plain(p: SkinPiece) = p.piece >= 0 && spec.pieces[p.piece].glass == null
-        val pair = pieces.filter { p -> plain(p) && (holds(p.dst, menu.x, menu.y) || holds(p.dst, start.x, start.y)) }
-        if (pair.isEmpty()) return this
-        val swWell = pieces.filter { p -> plain(p) && holds(p.dst, sw.x, sw.y) }.maxByOrNull { it.dst.width * it.dst.height }?.dst ?: return this
-        val top = pair.minOf { it.dst.y }; val bottom = pair.maxOf { it.dst.y + it.dst.height }
-        val cx = (menu.x + start.x) / 2f
-        val left = pair.minOf { it.dst.x }; val right = pair.maxOf { it.dst.x + it.dst.width }
-        // clear of the touch screen's frame (the frame pieces level with the pair)
-        val y0 = swWell.y + swWell.height + PAIR_GAP_DP * dp
-        val frameLeft = pieces.filter { it.piece >= 0 && spec.pieces[it.piece].glass != null && it.dst.y < y0 + (bottom - top) && it.dst.y + it.dst.height > y0 }
-            .minOfOrNull { it.dst.x }
-        var dx = sw.x - cx
-        if (frameLeft != null) dx = minOf(dx, frameLeft - ROW_GAP_DP * dp - right)
-        val dy = y0 - top
-        val anchor = spec.pieces[pieces.first { plain(it) && holds(it.dst, sw.x, sw.y) }.piece].anchor
-        return copy(
-            pieces = pieces.map { if (it in pair) it.copy(dst = it.dst.copy(x = it.dst.x + dx, y = it.dst.y + dy)) else it },
-            controls = controls.map { c -> if (c === menu || c === start) c.copy(x = c.x + dx, y = c.y + dy, spec = c.spec.copy(anchor = anchor)) else c },
-        )
-    }
-
-    /** Control [id] (the d-pad, a stick: its pieces, its hit area and a stick's travel) [f] its size, about its middle. */
-    private fun SkinPlacement.scaled(id: String, f: Float): SkinPlacement {
-        val c = controls.firstOrNull { it.spec.id == id } ?: return this
-        // its pieces: those round its middle, or a stick's round its knob (they may stand off its hit area's)
-        val knob = pieces.firstOrNull { it.knob && it.knobOf == id }?.dst
-        val mx = knob?.let { it.x + it.width / 2f } ?: c.x; val my = knob?.let { it.y + it.height / 2f } ?: c.y
-        fun centred(d: com.nxredux.mobile.options.PxRect) = kotlin.math.abs(d.x + d.width / 2f - mx) < 2f && kotlin.math.abs(d.y + d.height / 2f - my) < 2f
-        return copy(
-            pieces = pieces.map { p -> if (p.piece >= 0 && spec.pieces[p.piece].glass == null && centred(p.dst))
-                p.copy(dst = p.dst.copy(x = c.x - p.dst.width * f / 2f, y = c.y - p.dst.height * f / 2f, width = p.dst.width * f, height = p.dst.height * f)) else p },
-            controls = controls.map { if (it === c) it.copy(spec = it.spec.copy(r = it.spec.r * f, arm = it.spec.arm * f, capR = it.spec.capR * f,
-                travel = it.spec.travel * f, knobTravel = it.spec.knobTravel * f)) else it },
-        )
-    }
 
     /**
      * Each side group moved whole so its pad stands where [menu] (the main menu's shell on this window) has it: the left
@@ -698,6 +500,7 @@ object SkinChoice {
      * down alike. As it is where either lacks them.
      */
     private fun SkinPlacement.sidesAsTheMenu(menu: SkinPlacement, windowH: Float, dp: Float): SkinPlacement {
+        if (boxed) return this
         fun ctl(p: SkinPlacement, id: String) = p.controls.firstOrNull { it.spec.id == id }
         val frame = pieces.filter { it.piece < 0 && !it.strip }.map { it.dst }
         if (frame.isEmpty()) return this
@@ -732,6 +535,22 @@ object SkinChoice {
             controls = controls.map { c -> if (c.spec.anchor in dxOf) c.copy(x = c.x + dx(c.spec.anchor), y = c.y + dy) else c },
         )
         return out
+    }
+
+    /** Control [id] (the d-pad, a stick: its pieces, its hit area and a stick's travel) [f] its size, about its middle. */
+    private fun SkinPlacement.scaled(id: String, f: Float): SkinPlacement {
+        if (boxed) return this
+        val c = controls.firstOrNull { it.spec.id == id } ?: return this
+        // its pieces: those round its middle, or a stick's round its knob (they may stand off its hit area's)
+        val knob = pieces.firstOrNull { it.knob && it.knobOf == id }?.dst
+        val mx = knob?.let { it.x + it.width / 2f } ?: c.x; val my = knob?.let { it.y + it.height / 2f } ?: c.y
+        fun centred(d: com.nxredux.mobile.options.PxRect) = kotlin.math.abs(d.x + d.width / 2f - mx) < 2f && kotlin.math.abs(d.y + d.height / 2f - my) < 2f
+        return copy(
+            pieces = pieces.map { p -> if (p.piece >= 0 && spec.pieces[p.piece].glass == null && centred(p.dst))
+                p.copy(dst = p.dst.copy(x = c.x - p.dst.width * f / 2f, y = c.y - p.dst.height * f / 2f, width = p.dst.width * f, height = p.dst.height * f)) else p },
+            controls = controls.map { if (it === c) it.copy(spec = it.spec.copy(r = it.spec.r * f, arm = it.spec.arm * f, capR = it.spec.capR * f,
+                travel = it.spec.travel * f, knobTravel = it.spec.knobTravel * f)) else it },
+        )
     }
 
     /** Window px each side of the touch screen's glass past its 4:3 picture (its height the limit); 0 without one. */
@@ -776,6 +595,7 @@ object SkinChoice {
      * [ROW_MIN_GAP_DP].
      */
     private fun SkinPlacement.padsStaggered(windowH: Float, dp: Float): SkinPlacement {
+        if (boxed) return this
         fun centredAt(x: Float, y: Float) = pieces.indices.filter { i -> pieces[i].let { p -> p.piece >= 0 && spec.pieces[p.piece].glass == null &&
             kotlin.math.abs(p.dst.x + p.dst.width / 2f - x) < 2f && kotlin.math.abs(p.dst.y + p.dst.height / 2f - y) < 2f } }
         fun ctl(id: String) = controls.firstOrNull { it.spec.id == id }
@@ -884,7 +704,7 @@ object SkinChoice {
 
     /** Sideways: window px between the menu's landscape shell's screen and the window's bottom (null upright). */
     private fun menuFlatEnd(pack: SkinPackManifest, windowW: Int, windowH: Int, k: Float, topInset: Int, densityDpi: Int): Float? =
-        if (windowW <= windowH) null else shell(pack, SkinFamily.GRIP, SkinVariant.MENU, windowW, windowH, k, null, topInset, rowSpacing(densityDpi, k))
+        if (windowW <= windowH) null else shell(tunedFor(windowW, windowH, densityDpi, null), pack, SkinFamily.GRIP, SkinVariant.MENU, windowW, windowH, k, densityDpi, null, topInset, rowSpacing(densityDpi, k))
             ?.glasses?.firstOrNull()?.rect?.let { windowH - (it.y + it.height) }
 
     /**
@@ -916,15 +736,6 @@ object SkinChoice {
         if (windowW <= 0 || windowH <= 0 || densityDpi <= 0) return null
         val v = variant ?: if (ds) SkinVariant.DS else SkinVariant.SINGLE
         val own = placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, v)
-            ?.let { p ->
-                if (v != SkinVariant.N64) return@let p
-                // (a tablet's upright board, the stick and the d-pad both, keeps its own: its C diamond stands where the menu's R is)
-                if (p.spec.foldBoard && p.controls.none { it.spec.id == "STICK_SWAP" }) return@let p.apart("B", "A", PAIR_GAP_DP * densityDpi / 160f)
-                // the N64's shoulders where the main menu's are on this window (a tablet-class one's on a fold board or an
-                // inner screen sideways: the menu's two-screen board there)
-                val menu = placeMenu(pack, windowW, windowH, densityDpi, topInset, foldable, tablet || (foldable && (p.spec.foldBoard || nearSquare(windowW, windowH))), hingeY)
-                (menu?.let { p.shouldersAsTheMenus(it) } ?: p).apart("B", "A", PAIR_GAP_DP * densityDpi / 160f)
-            }
         // a console's own set the pack lacks for this screen (an older pack, or a player's partly made one): the shared
         // one-screen set, decided per screen, so a missing landscape layout never leaves the game without a skin
         // (never for the Dreamcast, the 3DS, the GameCube, the Wii pads, the PlayStations or the PSP: the shared set has
@@ -957,6 +768,7 @@ object SkinChoice {
         picture: Pair<Float, Float>?, hingeY: Float?, topInset: Int, foldable: Boolean, v: SkinVariant,
     ): SkinPlacement? {
         val k = scaleFor(pack, densityDpi)
+        val tuned = tunedFor(windowW, windowH, densityDpi, hingeY)
         // the top screen's game size: the large layout's top frame takes its shape
         val top = when (v) { SkinVariant.N3DS, SkinVariant.N3DS_REGULAR -> 400f to 240f; SkinVariant.DS -> 256f to 192f; else -> null }
         val landscape = windowW > windowH
@@ -965,7 +777,7 @@ object SkinChoice {
         // board showing one at a time
         val flatEnd by lazy { menuFlatEnd(pack, windowW, windowH, k, topInset, densityDpi) }
         fun foldBoardOf(both: Boolean?) = shrunk(k) { s ->
-            widest(pack, SkinFamily.FLEX, v, fold = true, refH = if (both != null) Float.MAX_VALUE else windowH / s) { spec ->
+            widest(tuned, pack, SkinFamily.FLEX, v, fold = true, refH = if (both != null) Float.MAX_VALUE else windowH / s) { spec ->
                 if (both != null && (spec.minRefH > 0) != both) return@widest null
                 // a console following the menu takes the board drawn as the menu's (no tablet twin: the menu has none)
                 if (both == null && v in FOLLOW_MENU && v !in N3DS_VARIANTS && v != SkinVariant.DS && spec.minRefH > 0) return@widest null
@@ -988,12 +800,19 @@ object SkinChoice {
                 // full C-stick under the face buttons: where the touch screen is cut to its picture
                 val regular = if (v != SkinVariant.N3DS) null else pack.layouts.firstOrNull {
                     it.variant == SkinVariant.N3DS_REGULAR && it.family == spec.family && it.refW == spec.refW && it.refH == spec.refH && it.minRefH == spec.minRefH
-                }
-                val newBoard by lazy { regular?.let { reg -> reg.bothFollowMenu(menuFoldBoard(pack, reg)?.menuBesideTheDpad(), menuUnderStart = false)
+                }?.copy(boxes = emptyList())   // its own pieces (its boxes are its own drawing, without the New 3DS's controls)
+                // (a layout with boxes draws that already: its own boxes)
+                val newBoard by lazy { if (spec.boxes.isNotEmpty()) null else regular?.let { reg -> reg.bothFollowMenu(menuFoldBoard(pack, reg)?.menuBesideTheDpad(), menuUnderStart = false)
                     .withNewControls(spec, PAIR_GAP_DP * dp / s) } }
-                if (v in N3DS_VARIANTS && placed != null && placed.touchSpare() >= WIDE_TOUCH_DP * dp) {
+                // which of the branches below: by the board as its pieces place (a layout with boxes: its own pieces, not
+                // its boxes, which hold the touch screen already cut)
+                val branch = if (spec.boxes.isEmpty()) placed else fold(shaped.copy(boxes = emptyList()))
+                if (v in N3DS_VARIANTS && placed != null && branch != null && branch.touchSpare() >= WIDE_TOUCH_DP * dp) {
                     val caps = (newBoard ?: shaped).capsInTheRow(ROW_GAP_DP * dp / s)
-                    fun wide(hinge: Float?) = fold(caps, hinge)?.touchToItsPicture()?.padsStaggered(windowH.toFloat(), dp)
+                    // (a layout with boxes has no row under its touch screen, which then grows down: cut to its picture's
+                    // height as well)
+                    fun wide(hinge: Float?) = fold(caps, hinge)?.touchToItsPicture()?.let { if (spec.boxes.isNotEmpty()) it.touchToItsPictureHeight() else it }
+                        ?.padsStaggered(windowH.toFloat(), dp)
                     val wide = wide(hingeY)
                     // flat: the bottom half as half-folded at the window's middle (the touch screen not grown up into the
                     // hinge's room), so folding never moves it; the flat lid kept
@@ -1002,7 +821,7 @@ object SkinChoice {
                 }
                 // the touch screen's width holding its picture shorter than the glass (the Fold upright): the frame cut to
                 // the picture's height, the sides level, a smaller d-pad and New 3DS C-stick on a slant
-                if (v in N3DS_VARIANTS && placed != null && placed.touchSpare() < 0f)
+                if (v in N3DS_VARIANTS && placed != null && branch != null && branch.touchSpare() < 0f)
                     fold((newBoard ?: shaped).capsInTheRow(ROW_GAP_DP * dp / s))?.touchToItsPictureHeight()?.scaled("DPAD", SMALL_DPAD)?.scaled("CSTICK", SMALL_DPAD)
                         ?.padsStaggered(windowH.toFloat(), dp)?.let { return@widest it }
                 // START / SELECT in the row under the touch screen; where its height holds it back with no width to
@@ -1019,32 +838,26 @@ object SkinChoice {
             // landscape shell gives it the window's whole height.
             if ((foldable || tablet) && nearSquare(windowW, windowH) && (hingeY != null || v in TWO_SCREEN)) foldBoard()?.let { return it }
             // the Dreamcast on a tablet / an inner screen: the stick and the d-pad both, as on its fold board
-            if (v == SkinVariant.DC && (foldable || tablet)) shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset, rowFor(v, densityDpi, k),
+            if (v == SkinVariant.DC && (foldable || tablet)) shell(tuned, pack, SkinFamily.GRIP, v, windowW, windowH, k, densityDpi, picture, topInset, rowFor(v, densityDpi, k), hingeY = hingeY,
                 refH = Float.MAX_VALUE, pick = { it.minRefH > 0 && it.controls.none { c -> c.id == "STICK_SWAP" } }) { spec -> spec.bothFollowMenu(menuShellOf(pack, spec)) }
                 ?.dpadInTheRoom(windowH.toFloat(), densityDpi / 160f)?.let { return it }
-            // the N64 on a tablet / an inner screen: the stick and the d-pad both; the stick at its full size (the short
-            // shell's) where the main menu's d-pad is, the C diamond at the menu's face buttons' size where they are
-            if (v == SkinVariant.N64 && (foldable || tablet)) shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset, rowSpacing(densityDpi, k),
-                // MENU and START under B / A (the left's room under the stick is the d-pad's)
-                pick = { it.minRefH > 0 && it.controls.none { c -> c.id == "STICK_SWAP" } && it.controls.any { c -> c.id == "MENU" && c.anchor == PieceAnchor.RIGHT } }) { spec ->
-                spec.n64FollowMenu(menuShellOf(pack, spec)) }
-                ?.let { p ->
-                    val full = pack.layouts.firstOrNull { it.variant == v && it.family == SkinFamily.GRIP && it.minRefH == 0 }?.controls?.firstOrNull { it.id == "STICK" }?.r
-                    placeMenu(pack, windowW, windowH, densityDpi, topInset, foldable, tablet)?.let { p.padsAsTheMenu(it, full?.let { r -> r * p.k }).frameAsTheMenus(it) } ?: p
-                }
-                ?.dpadInTheRoom(windowH.toFloat(), densityDpi / 160f)?.let { return it }
+            // the N64 on a tablet / an inner screen: the stick and the d-pad both, MENU and START under B / A (the left's
+            // room under the stick is the d-pad's)
+            if (v == SkinVariant.N64 && (foldable || tablet)) shell(tuned, pack, SkinFamily.GRIP, v, windowW, windowH, k, densityDpi, picture, topInset, rowSpacing(densityDpi, k), hingeY = hingeY,
+                pick = { it.minRefH > 0 && it.controls.none { c -> c.id == "STICK_SWAP" } && it.controls.any { c -> c.id == "MENU" && c.anchor == PieceAnchor.RIGHT } })
+                ?.let { return it }
             // the 3DS's tall shell (the stick and the d-pad both) where it fits: its small caps in a row each side; the New
             // 3DS's as the regular 3DS's shell with ZL / ZR and a full C-stick under the face buttons, as the d-pad under the stick
-            if (v in N3DS_VARIANTS) shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset, rowFor(v, densityDpi, k),
+            if (v in N3DS_VARIANTS) shell(tuned, pack, SkinFamily.GRIP, v, windowW, windowH, k, densityDpi, picture, topInset, rowFor(v, densityDpi, k), hingeY = hingeY,
                 pick = { it.controls.none { c -> c.id == "STICK_SWAP" } }) { spec ->
                 val regular = if (v != SkinVariant.N3DS) null else pack.layouts.firstOrNull {
                     it.variant == SkinVariant.N3DS_REGULAR && it.family == spec.family && it.refW == spec.refW && it.refH == spec.refH && it.minRefH == spec.minRefH
-                }
+                }?.copy(boxes = emptyList())   // its own pieces (its boxes are its own drawing, without the New 3DS's controls)
                 val board = regular?.let { reg -> reg.bothFollowMenu(menuShellOf(pack, reg), menuUnderStart = false).withNewControls(spec, ROW_GAP_DP * densityDpi / 160f / k) }
                     ?: spec.bothFollowMenu(menuShellOf(pack, spec), menuUnderStart = false)
                 board.capsSideways(pack.layouts.firstOrNull { it.variant == SkinVariant.N3DS_REGULAR && it.foldBoard })
             }?.dpadInTheRoom(windowH.toFloat(), densityDpi / 160f)?.let { return it }
-            return shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset, rowFor(v, densityDpi, k)) { spec ->
+            return shell(tuned, pack, SkinFamily.GRIP, v, windowW, windowH, k, densityDpi, picture, topInset, rowFor(v, densityDpi, k), hingeY = hingeY) { spec ->
                 // the DS's and the 3DS's small-cap columns (the Fold cover's): a pair over one each side (the DS's
                 // SELECT / START alone, its SWAP with MIC)
                 val pairs = when {
@@ -1061,17 +874,13 @@ object SkinChoice {
                 ?.let { if (v in N3DS_VARIANTS) it.capsInOneRow(windowH.toFloat(), densityDpi / 160f).nubBetweenXAndA() else it }
         }
         // a foldable's inner screen or a tablet: the fold board, split at its hinge flat or not (the window's middle when flat)
-        if (foldable || tablet) foldBoard()?.let { b ->
-            // the N64's: its touch screen's frame, the C diamond, the shoulders and the stick on its d-pad as the menu's,
-            // MENU / START with the switch under the stick
-            // (the board with the switch: a tablet's, the stick and the d-pad both, keeps its own)
-            if (v != SkinVariant.N64 || b.controls.none { it.spec.id == "STICK_SWAP" }) return b
-            val menu = placeMenu(pack, windowW, windowH, densityDpi, topInset, foldable, tablet = true, hingeY = hingeY) ?: return b
-            return b.frameAsTheMenus(menu, lower = windowH / 2f).faceAsTheMenus(menu).stickOnTheMenusDpad(menu).pairUnderTheSwitch(densityDpi / 160f)
-        }
+        if (foldable || tablet) foldBoard()?.let { return it }
         // half-folded: the screen frame above the fold, the pad below it (a DS's touch screen with it)
-        if (hingeY != null) return widest(pack, SkinFamily.FLEX, v, fold = false) { spec ->
+        if (hingeY != null) return widest(tuned, pack, SkinFamily.FLEX, v, fold = false) { spec ->
             if (spec.frame?.hinge?.let { it >= 0 } != true) null
+            else if (spec.boxes.isNotEmpty()) SkinBoxes.place(spec, windowW, windowH, k, densityDpi, hingeY) { s, r ->
+                SkinSolver.placePieces(s, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), hingeY, roomLeft = r.left, roomRight = r.right, roomBottom = r.bottom)
+            }
             else SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), hingeY)
         }
         val families = when {
@@ -1081,8 +890,12 @@ object SkinChoice {
             else -> listOf(SkinFamily.LARGE, SkinFamily.STACKED)
         }
         for (family in families) {
-            widest(pack, family, v, fold = false) { spec ->
-                if (spec.frame != null) SkinSolver.placePieces(spec.toMenu(v, menuTwin(pack, spec)).let { s ->
+            widest(tuned, pack, family, v, fold = false) { spec ->
+                if (spec.frame != null && spec.boxes.isNotEmpty()) SkinBoxes.place(spec, windowW, windowH, k, densityDpi, hingeY) { s, r ->
+                    SkinSolver.placePieces(s, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), topScreen = top, row = rowFor(v, densityDpi, k),
+                        roomLeft = r.left, roomRight = r.right, roomBottom = r.bottom)
+                }
+                else if (spec.frame != null) SkinSolver.placePieces(spec.toMenu(v, menuTwin(pack, spec)).let { s ->
                     // the New 3DS's ZL / ZR beside L / R where SELECT / START stood: those in the row under the pad, SWAP
                     // between the shoulders
                     if (v == SkinVariant.N3DS && family == SkinFamily.STACKED) s.startInTheRow(ROW_GAP_DP * densityDpi / 160f / k, pack.layouts.firstOrNull { it.variant == v && it.foldBoard }) else s

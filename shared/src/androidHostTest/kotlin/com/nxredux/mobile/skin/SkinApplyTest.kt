@@ -433,8 +433,9 @@ class SkinApplyTest {
         val q = stripUp(q0, stripTop(q0) - (qg.y + qg.height - 80f))
         val qa = area(q)
         val face = group(q, "A", "B", "X", "Y")
-        assertTrue(box(q, face).let { it.y + it.height < inner(qa).let { m -> m.y + m.height } }, "the face buttons level with the area's middle")
-        val moved = box(SkinTweaks.apply(q, mapOf(face.id to SkinTweak(dx = -10000f)), 2420f, 1080f), face)
+        // (the face buttons held to the bottom: lifted level with the area's middle first, then sent in)
+        val lift = box(q, face).let { f -> inner(qa).let { m -> m.y + m.height / 2f } - (f.y + f.height / 2f) } / q.k
+        val moved = box(SkinTweaks.apply(q, mapOf(face.id to SkinTweak(dx = -10000f, dy = lift)), 2420f, 1080f), face)
         near(moved.x, qa.x + qa.width - 0.1f * qa.width, "stopped 10% in", e = 1f)
     }
 

@@ -134,7 +134,49 @@ data class SkinLayoutSpec(
      * height (the Dreamcast's stick above the d-pad on a tablet), tried before its siblings without it.
      */
     val minRefH: Int = 0,
+    /** Its controls as fixed-size boxes the engine places whole ([SkinBoxes]); empty: placed piece by piece ([SkinSolver.placePieces]). */
+    val boxes: List<BoxSpec> = emptyList(),
 )
+
+/** Where a [BoxSpec] stands: beside the screen on either side, or a row centred across under the screen or at the bottom. */
+@Serializable
+enum class BoxSlot {
+    @SerialName("left") LEFT,
+    @SerialName("right") RIGHT,
+    @SerialName("topRow") TOP_ROW,
+    @SerialName("bottomRow") BOTTOM_ROW,
+}
+
+/**
+ * The device shape a [BoxSize] was drawn for: [orientation] (`portrait` / `landscape`, null: either), the window's
+ * width and height in dp within [minWdp]..[maxWdp] and [minHdp]..[maxHdp], and half-folded or flat ([halfFolded], null: either).
+ */
+@Serializable
+data class BoxWhen(
+    val orientation: String? = null,
+    val minWdp: Float = 0f,
+    val maxWdp: Float = Float.MAX_VALUE,
+    val minHdp: Float = 0f,
+    val maxHdp: Float = Float.MAX_VALUE,
+    val halfFolded: Boolean? = null,
+)
+
+/**
+ * One drawing of a box: [w] x [h] picture px, its [pieces] and [controls] at their places inside it (from its top-left;
+ * their anchor, level, drop and inward are not used: the box is placed whole). [when]: the device shape it is for.
+ */
+@Serializable
+data class BoxSize(
+    val w: Int,
+    val h: Int,
+    val pieces: List<PieceSpec> = emptyList(),
+    val controls: List<ControlSpec> = emptyList(),
+    val `when`: BoxWhen? = null,
+)
+
+/** A box of a layout's controls in its [slot]: [sizes] its drawings, the first the full one, the others compact versions. */
+@Serializable
+data class BoxSpec(val slot: BoxSlot, val sizes: List<BoxSize>)
 
 /**
  * The screen frame of a layout built from pieces: [sx], [sy], [w] x [h] in the parts picture, at [x], [y] in the full
@@ -243,7 +285,17 @@ data class PieceSpec(
     val knobOf: String = "STICK",
     /** As [ControlSpec.alt]: shown only with the stick ("stick") or the d-pad ("dpad"); null: always. */
     val alt: String? = null,
-)
+    /**
+     * The group it belongs to ([SkinGroups]) where that is not what overlaps (a box's pieces: a grown well over a
+     * neighbour's ring stays its own group, so a player's tweak keyed on it still finds it); null: by overlap.
+     */
+    val group: String? = null,
+    /** In a box: drawn this much of its width across in place of [scale] (a well stretched to hold a row of caps); 0: [scale]. */
+    val scaleX: Float = 0f,
+) {
+    /** Its drawn width's scale: [scaleX], else [scale]. */
+    val acrossScale: Float get() = if (scaleX > 0f) scaleX else scale
+}
 
 /** How a [SliceNode] cuts its box: into side-by-side columns or stacked rows. */
 @Serializable

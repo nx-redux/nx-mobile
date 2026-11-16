@@ -220,7 +220,10 @@ class SkinSeamTest {
      */
     private fun assertRow(p: SkinPlacement, w: Int, dpi: Int, name: String) {
         val spec = p.spec
-        fun span(a: PieceAnchor, glass: Boolean) = p.pieces.filter { it.piece >= 0 && spec.pieces[it.piece].anchor == a && (spec.pieces[it.piece].glass != null) == glass }
+        fun pieces(a: PieceAnchor, glass: Boolean) = p.pieces.filter { it.piece >= 0 && spec.pieces[it.piece].anchor == a && (spec.pieces[it.piece].glass != null) == glass }
+        val frame = pieces(PieceAnchor.CENTRE, true).let { ps -> ps.minOf { it.dst.y } to ps.maxOf { it.dst.y + it.dst.height } }
+        // the side pieces beside the screen (a pad drawn under its corner, the Fold's 3DS d-pad (user), is not in the row)
+        fun span(a: PieceAnchor, glass: Boolean) = pieces(a, glass).filter { glass || (it.dst.y + it.dst.height / 2f).let { cy -> cy > frame.first && cy < frame.second } }
             .let { ps -> ps.minOf { it.dst.x } to ps.maxOf { it.dst.x + it.dst.width } }
         val (l0, l1) = span(PieceAnchor.LEFT, false); val (f0, f1) = span(PieceAnchor.CENTRE, true); val (r0, r1) = span(PieceAnchor.RIGHT, false)
         val dp = dpi / 160f
@@ -245,8 +248,11 @@ class SkinSeamTest {
             val ids = setOf("START", "SELECT", "MENU", "MIC", "SWAP")
             if (spec.controls.count { it.id in ids && it.anchor == a } < 2) continue
             val col = held(a, ids)
-            if (a == PieceAnchor.LEFT) assertEquals(2f * inner, f0 - col.maxOf { it.dst.x + it.dst.width }, 2f, "$name left column")
-            else assertEquals(2f * inner, col.minOf { it.dst.x } - f1, 2f, "$name right column")
+            // (a column two gaps from the screen; a row, the DS's on its fold board, from the box's inner edge)
+            val caps = spec.controls.filter { it.id in ids && it.anchor == a }
+            val isRow = caps.all { kotlin.math.abs(it.y - caps[0].y) < 1f }
+            if (!isRow && a == PieceAnchor.LEFT) assertEquals(2f * inner, f0 - col.maxOf { it.dst.x + it.dst.width }, 2f, "$name left column")
+            else if (!isRow) assertEquals(2f * inner, col.minOf { it.dst.x } - f1, 2f, "$name right column")
             val ring = if (a == PieceAnchor.LEFT) lRing else rRing
             assertEquals(16f * dp, col.minOf { it.dst.y } - ring.maxOf { it.dst.y + it.dst.height }, 2f, "$name column under its ring")
         }
@@ -280,16 +286,13 @@ class SkinSeamTest {
             val c = p.controls.associateBy { it.spec.id }
             assertEquals(c.getValue("R").y, c.getValue("L").y, 1f, "$name L level with R")
             assertEquals((c.getValue("X").y + c.getValue("B").y) / 2f, c.getValue("STICK").y, 1f, "$name stick level with the face")
-            val drawn = p.spec.controls.single { it.id == "DPAD" }.r * p.k
-            assertEquals(drawn * 0.85f, c.getValue("DPAD").spec.r, 1f, "$name d-pad smaller")
+            // (the d-pad's size and place: the pack draws them, SkinBakeTest.the3dsOnTheFoldUprightHasItsDpadUpAndIn)
             fun ring(id: String) = c.getValue(id).let { k -> p.pieces.filter { it.piece >= 0 && p.spec.pieces[it.piece].glass == null &&
                 kotlin.math.abs(it.dst.x + it.dst.width / 2f - k.x) < 2f && kotlin.math.abs(it.dst.y + it.dst.height / 2f - k.y) < 2f }.maxOf { it.dst.width } }
             val s = c.getValue("STICK"); val d = c.getValue("DPAD")
-            // (the New 3DS half-folded short of the room: the gap gives, down to 4 dp)
-            val gap = kotlin.math.hypot(d.x - s.x, d.y - s.y) - (ring("STICK") + ring("DPAD")) / 2f
-            if (v == SkinVariant.N3DS_REGULAR || hinge == null) assertEquals(8f * 420f / 160f, gap, 1f, "$name d-pad 8 dp under the stick")
-            else assertTrue(gap >= 4f * 420f / 160f - 1f && gap <= 8f * 420f / 160f + 1f, "$name d-pad 4 to 8 dp under the stick: $gap")
-            assertTrue(d.y + ring("DPAD") / 2f <= 2448f - 16f * 420f / 160f + 1f, "$name d-pad in the window: ${d.y + ring("DPAD") / 2f} stick ${s.y} L ${c.getValue("L").y} touch ${p.glass(GlassScreen.TOUCH)?.rect}")
+            assertTrue(d.spec.r < s.spec.r, "$name d-pad smaller than the stick")
+            // (the boxes' least gap to the bottom: 4 dp)
+            assertTrue(d.y + ring("DPAD") / 2f <= 2448f - 4f * 420f / 160f + 1f, "$name d-pad in the window: ${d.y + ring("DPAD") / 2f} stick ${s.y} L ${c.getValue("L").y} touch ${p.glass(GlassScreen.TOUCH)?.rect}")
         }
     }
 
@@ -397,10 +400,12 @@ class SkinSeamTest {
             val ring = if (fold) {
                 // the d-pad under the stick, in line, 16 dp apart; MENU under START on the right, right of the bottom screen
                 val st = ringOf("STICK"); val pad = ringOf("DPAD")
-                assertEquals(st.x, pad.x, 1f, "${w}x$h d-pad in line")
-                // 16 dp under it, the side lifted so the d-pad ends 16 dp above the window's bottom
-                assertEquals(16f * dp, pad.y - (st.y + st.height), 2f, "${w}x$h d-pad under the stick")
-                assertEquals(h - 16f * dp, pad.y + pad.height, 2f, "${w}x$h d-pad's end")
+                // (the d-pad, the lower of the two, drawn smaller about its middle: in line by its middle; its gap under the
+                // stick halved so the side stands level with the other, at least 8 dp)
+                assertEquals(st.x + st.width / 2f, pad.x + pad.width / 2f, 1f, "${w}x$h d-pad in line")
+                assertTrue(pad.y - (st.y + st.height) >= 8f * dp - 2f, "${w}x$h d-pad under the stick")
+                // (the stick centred under the fold, the d-pad under it: no nearer the bottom than the least gap)
+                assertTrue(pad.y + pad.height <= h - 4f * dp + 2f, "${w}x$h d-pad's end")
                 val l2 = piece("L2").single(); assertEquals(16f * dp, st.y - (l2.y + l2.height), 2f, "${w}x$h L2 over the stick")
                 assertTrue("STICK_SWAP" !in gc, "${w}x$h no swap")
                 assertEquals(start.x, m.x, 1f, "${w}x$h START / MENU column"); assertTrue(start.y < m.y, "${w}x$h MENU under START")

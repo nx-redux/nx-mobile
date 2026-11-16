@@ -127,6 +127,8 @@ data class SkinPlacement(
     val slab: Boolean = false,
     /** Window px the fold board's side groups moved in from the window's edges (a window wider than its render). */
     val sideIn: Float = 0f,
+    /** Its controls from the layout's boxes ([SkinBoxes]): as the pack draws them, no rule moves them. */
+    val boxed: Boolean = false,
 ) {
     fun glass(screen: GlassScreen): PlacedGlass? = glasses.firstOrNull { it.screen == screen }
 
@@ -210,11 +212,14 @@ object SkinSolver {
      * spacing does not fit (a smaller board is tried).
      * [centreControls]: where the touch screen follows a capped top screen up, the side groups go up with it, centred in
      * the height under it (false: they stay where their layout puts them, a board following the main menu's).
+     * [roomLeft], [roomRight], [roomBottom]: window px where control boxes ([SkinBoxes]) end the screen's room on that
+     * side, in place of the frame's own margins (a fold board's: the room of the screen between its side groups).
      * [topScreen]: the DS / 3DS top screen's game size (256 x 192, 400 x 240): a filling frame showing it, on a board
      * with no fold, is cut to its shape (its border as thin above and below as at the sides), kept at the top, and the
      * pieces with a screen (the touch screen) move up by the height that saves.
      */
-    fun placePieces(spec: SkinLayoutSpec, windowW: Float, windowH: Float, k: Float, picture: Pair<Float, Float>? = null, topInset: Float = 0f, hingeY: Float? = null, topScreen: Pair<Float, Float>? = null, hingeGap: Float? = null, capPad: Float? = null, capLift: Boolean = false, sideInset: Float = 0f, bottomMargin: Float? = null, bottomGlass: Float? = null, row: RowSpacing? = null, centreControls: Boolean = true): SkinPlacement? {
+    fun placePieces(spec: SkinLayoutSpec, windowW: Float, windowH: Float, k: Float, picture: Pair<Float, Float>? = null, topInset: Float = 0f, hingeY: Float? = null, topScreen: Pair<Float, Float>? = null, hingeGap: Float? = null, capPad: Float? = null, capLift: Boolean = false, sideInset: Float = 0f, bottomMargin: Float? = null, bottomGlass: Float? = null, row: RowSpacing? = null, centreControls: Boolean = true,
+        roomLeft: Float? = null, roomRight: Float? = null, roomBottom: Float? = null): SkinPlacement? {
         val frame = spec.frame ?: return null
         if (k <= 0f || spec.refW <= 0 || spec.refH <= 0) return null
         // the background split at the fold too: each half takes its own side's room, the board's hinge on the fold
@@ -264,14 +269,17 @@ object SkinSolver {
             }
         }
         val gripRow = frameRow?.takeIf { spec.family == SkinFamily.GRIP }
-        val left = gripRow?.get(2) ?: if (frame.side >= 0) frame.side.toFloat() else frame.x.toFloat()
-        val right = gripRow?.let { w - it[2] - it[3] } ?: if (frame.side >= 0) frame.side.toFloat() else (spec.refW - frame.x - frame.w).toFloat()
+        // the screen between a fold board's side groups takes the boxes' room; the frame above keeps its own
+        val boxesBeside = spec.pieces.any { it.glass != null && it.anchor == PieceAnchor.CENTRE } && spec.tree.parts.any { it.isHinge }
+        val left = roomLeft?.takeUnless { boxesBeside }?.let { it / k } ?: gripRow?.get(2) ?: if (frame.side >= 0) frame.side.toFloat() else frame.x.toFloat()
+        val right = roomRight?.takeUnless { boxesBeside }?.let { w - it / k } ?: gripRow?.let { w - it[2] - it[3] } ?: if (frame.side >= 0) frame.side.toFloat() else (spec.refW - frame.x - frame.w).toFloat()
         val ownTop = if (frame.top >= 0) frame.top.toFloat() else frame.y.toFloat()
         val roomTop = if (topInset > 0f) topInset / k else ownTop   // the inset is the frame's top margin
         val roomW = w - left - right
         val folded = hingeY != null && frame.hinge >= 0
         val gap = hingeGap ?: frame.hinge.toFloat()
         val roomH = if (folded) hingeY!! / k - gap - roomTop
+            else if (roomBottom != null && !boxesBeside) roomBottom / k - roomTop
             else h - roomTop - (if (frame.bottom >= 0) frame.bottom.toFloat() else (spec.refH - frame.y - frame.h).toFloat())
         // half-folded, the pad's pieces all go below the fold
         if (folded && spec.pieces.any { it.y + down(it.level, it.drop) < hingeY!! / k + gap }) return null
@@ -293,7 +301,8 @@ object SkinSolver {
         val fw = gw + bl + br
         val fh = gh + bt + bb
         val fx = left + (roomW - fw) / 2f
-        val fy = if (tight || capped) roomTop else roomTop + (roomH - fh)   // down against what is under it: the spare height goes above
+        // down against what is under it, the spare height above; over boxes, up at the top, the spare height between
+        val fy = if (tight || capped || (roomBottom != null && !boxesBeside)) roomTop else roomTop + (roomH - fh)
         val lift = if (tight) roomH - fh else 0f   // the touch screen follows the shorter frame up
         val pieces = ArrayList<SkinPiece>()
         // the frame: corners as drawn, straight edges stretched from the 2 px slice at their middle (the glass, a hole, skipped).
@@ -545,8 +554,11 @@ object SkinSolver {
         }
         // [row]'s: the frame at the plan's x and width
         val rowAt = if (rowPlan != null && between != null) spot(between) else null
-        val widenLeft = if (rowAt != null) rowAt[0] - rowPlan!![2] else widen(PieceAnchor.LEFT)
-        val widenRight = if (rowAt != null) rowPlan!![3] - (between!!.w + rowAt[2]) * between.scale - widenLeft else widen(PieceAnchor.RIGHT)
+        // the boxes' room: the frame's left and right edges there
+        val boxAt = if (between != null && roomLeft != null && roomRight != null) spot(between) else null
+        val widenLeft = if (boxAt != null) boxAt[0] - roomLeft!! / k else if (rowAt != null) rowAt[0] - rowPlan!![2] else widen(PieceAnchor.LEFT)
+        val widenRight = if (boxAt != null) (roomRight!! - roomLeft!!) / k - (between!!.w + boxAt[2]) * between.scale - widenLeft
+            else if (rowAt != null) rowPlan!![3] - (between!!.w + rowAt[2]) * between.scale - widenLeft else widen(PieceAnchor.RIGHT)
         // With nothing under it (the main menu's, its MENU with the side groups), the screen's frame grows down to the
         // window's bottom, [bottomMargin] from it.
         // nothing under the screen: it may grow up and down (the main menu's, its MENU with the side groups)
@@ -570,7 +582,8 @@ object SkinSolver {
                 val border = sp.glass?.let { (sp.h - it.y - it.h) * sp.scale } ?: 0f
                 h - gm / k + border
             } ?: (h - (bottomMargin ?: ownTop))
-            if (under) 0f else maxOf(0f, target - bottom)
+            // a bottom row of boxes under it: down to the row's room
+            if (roomBottom != null) maxOf(0f, roomBottom / k - bottom) else if (under) 0f else maxOf(0f, target - bottom)
         } ?: 0f
         // Under a capped frame the touch screen's frame grows up by the height the cap saves (under the frame as the
         // room's bottom was), its bottom by the row under it kept; the side groups (shoulders, clusters and their buttons) centred in the height between the frame and the
