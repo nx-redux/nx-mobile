@@ -1696,11 +1696,31 @@ class NxCarbonPackTest {
         assertTrue(SkinChoice.placeMenu(pack, 2448, 1848, 420, tablet = true)?.spec?.id?.startsWith("grip_menu") == true)
     }
 
+    // The shared one-screen set (the SNES's buttons, any console without its own): the main menu's pads, shoulders and
+    // caps where the menu has them on every device class, its screen the GBA's (user).
+    @Test
+    fun theSharedOneScreenSetIsTheMenusPad() {
+        for (d in GOLDEN_DEVICES) {
+            val menu = assertNotNull(placeFor(pack, null, d), "${d.name} menu").controls.associateBy { it.spec.id }
+            val single = assertNotNull(placeFor(pack, SkinVariant.SINGLE, d), "${d.name} single")
+            val c = single.controls.filter { !it.spec.id.startsWith("TOUCH_") }.associateBy { it.spec.id }
+            assertEquals(menu.keys, c.keys, "${d.name} the menu's buttons")
+            for ((id, m) in menu) {
+                assertEquals(m.x, c.getValue(id).x, 1f, "${d.name} $id x"); assertEquals(m.y, c.getValue(id).y, 1f, "${d.name} $id y")
+                assertEquals(m.spec.r, c.getValue(id).spec.r, 1f, "${d.name} $id r"); assertEquals(m.spec.hw, c.getValue(id).spec.hw, 1f, "${d.name} $id hw")
+            }
+            val gba = assertNotNull(placeFor(pack, SkinVariant.GBA, d), "${d.name} gba").glasses.first().rect
+            val g = single.glasses.first().rect
+            assertEquals(gba.x, g.x, 1f, "${d.name} screen x"); assertEquals(gba.y, g.y, 1f, "${d.name} screen y")
+            assertEquals(gba.width, g.width, 1f, "${d.name} screen w"); assertEquals(gba.height, g.height, 1f, "${d.name} screen h")
+        }
+    }
+
     @Test
     fun tabletClustersCentreOnTheBottomScreen() {
         // the tablet twins: the side clusters' span centred on the bottom screen, within a cap's radius (a capped top screen aside)
-        // (the consoles following the menu take its fold board instead: the GBA)
-        for (v in listOf(SkinVariant.SINGLE, SkinVariant.PSP, SkinVariant.WII_SIDEWAYS, SkinVariant.N3DS_REGULAR, SkinVariant.PS1)) {
+        // (the consoles following the menu take its fold board instead: the GBA, the shared one-screen set)
+        for (v in listOf(SkinVariant.PSP, SkinVariant.WII_SIDEWAYS, SkinVariant.N3DS_REGULAR, SkinVariant.PS1)) {
             val p = assertNotNull(SkinChoice.place(pack, 1440, 2304, 280, true, v == SkinVariant.N3DS_REGULAR, 640f to 480f, null, variant = v), "$v")
             assertTrue(p.spec.id.endsWith("_fold_tab"), "$v ${p.spec.id}")
             val screen = (p.glasses.firstOrNull { it.screen == GlassScreen.PANEL } ?: p.glass(GlassScreen.TOUCH)!!).rect

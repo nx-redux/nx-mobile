@@ -45,7 +45,7 @@ val GOLDEN_DEVICES = listOf(
 /** The consoles drawn as boxes: their golden fixture's name. */
 val BOXED = linkedMapOf<SkinVariant?, String>(null to "menu", SkinVariant.N64 to "n64", SkinVariant.GB to "gb", SkinVariant.GBA to "gba",
     SkinVariant.ARCADE to "arcade", SkinVariant.DC to "dc", SkinVariant.FDS to "fds", SkinVariant.DS to "ds", SkinVariant.N3DS to "n3ds",
-    SkinVariant.N3DS_REGULAR to "n3ds_regular")
+    SkinVariant.N3DS_REGULAR to "n3ds_regular", SkinVariant.SINGLE to "single")
 
 /** A one-screen console's picture size, game px (null: the DS / 3DS, two screens). */
 private fun pictureOf(v: SkinVariant): Pair<Float, Float>? = when (v) {
