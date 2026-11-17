@@ -44,7 +44,9 @@ class SkinBakeTest {
             all += boxes
             val baked = withBoxes(pack, boxes)
             val golden = readGolden(file)
-            for (d in GOLDEN_DEVICES) runCatching { assertMatchesGolden(golden.getValue(d.name), placeFor(baked, v, d), label = "$file ${d.name}") }
+            // drawn by hand rather than baked: the DS on a phone half-folded (the flat phone's pads round its touch screen)
+            // and on the Fold cover upright (the narrow touch frame, the regular L / R beside it)
+            for (d in GOLDEN_DEVICES) if (placeFor(pack, v, d)?.spec?.id !in setOf("flex_ds", "large_ds")) runCatching { assertMatchesGolden(golden.getValue(d.name), placeFor(baked, v, d), label = "$file ${d.name}") }
                 .onFailure { failures += (it.message ?: "").take(160) }
         } } finally { SkinBoxes.anchorAtTheBottom = false }
         assertTrue(failures.isEmpty(), failures.joinToString("\n"))

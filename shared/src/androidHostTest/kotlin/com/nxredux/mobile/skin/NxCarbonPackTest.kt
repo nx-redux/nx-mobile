@@ -1108,6 +1108,47 @@ class NxCarbonPackTest {
         }
     }
 
+    // The DS on a phone half-folded (the Flip upright): the pads and MENU's row where the flat phone has them, the touch
+    // screen up under the fold, the short L / R beside it and SELECT / START under it, all clear of one another (user).
+    @Test
+    fun dsOnAHalfFoldedPhoneKeepsTheFlatPhonesPads() {
+        val (w, h, dpi, hinge) = listOf(1080, 2520, 420, 1260)
+        val half = assertNotNull(SkinChoice.place(pack, w, h, dpi, false, true, null, hinge.toFloat(), foldable = true, variant = SkinVariant.DS))
+        val flat = assertNotNull(SkinChoice.place(pack, w, h, dpi, false, true, null, null, foldable = true, variant = SkinVariant.DS))
+        val m = half.controls.associateBy { it.spec.id }
+        val f = flat.controls.associateBy { it.spec.id }
+        for (id in listOf("DPAD", "X", "Y", "A", "B", "MIC", "SWAP", "MENU")) {
+            assertEquals(f.getValue(id).x, m.getValue(id).x, 1f, "$id x"); assertEquals(f.getValue(id).y, m.getValue(id).y, 1f, "$id y")
+        }
+        val touch = half.glasses.first { it.id == "touch" }.rect
+        // its frame: the smallest piece round it
+        val frame = half.pieces.filter { p -> p.dst.x <= touch.x && p.dst.y <= touch.y && p.dst.x + p.dst.width >= touch.x + touch.width && p.dst.y + p.dst.height >= touch.y + touch.height }
+            .minBy { it.dst.width * it.dst.height }.dst
+        assertTrue(frame.y >= hinge, "the touch screen under the fold")
+        for (id in listOf("L", "R")) {
+            val c = m.getValue(id)
+            assertEquals(f.getValue(id).y, c.y, 1f, "$id level with the flat phone's")
+            assertTrue(c.x + c.spec.hw <= frame.x || c.x - c.spec.hw >= frame.x + frame.width, "$id beside the touch screen")
+        }
+        for (id in listOf("SELECT", "START")) assertTrue(m.getValue(id).y - m.getValue(id).spec.r >= frame.y + frame.height, "$id under the touch screen")
+    }
+
+    // The DS on the Fold cover upright: the touch screen's narrow frame (no black bars beside the screen) and the regular
+    // L / R beside it, clear of it (user).
+    @Test
+    fun dsOnTheFoldCoverUprightHasTheRegularShouldersBesideANarrowTouchFrame() {
+        val p = assertNotNull(SkinChoice.place(pack, 1248, 1972, 420, false, true, null, null, foldable = true, variant = SkinVariant.DS))
+        assertEquals("large_ds", p.spec.id)
+        val touch = p.glasses.first { it.id == "touch" }.rect
+        val frame = p.pieces.filter { q -> q.dst.x <= touch.x && q.dst.y <= touch.y && q.dst.x + q.dst.width >= touch.x + touch.width && q.dst.y + q.dst.height >= touch.y + touch.height }
+            .minBy { it.dst.width * it.dst.height }.dst
+        assertTrue(touch.x - frame.x <= 24f && frame.x + frame.width - touch.x - touch.width <= 24f, "a thin border beside the screen")
+        val c = p.controls.associateBy { it.spec.id }
+        assertEquals(100f, c.getValue("L").spec.hw, 0.5f); assertEquals(100f, c.getValue("R").spec.hw, 0.5f)
+        assertTrue(c.getValue("L").x + c.getValue("L").spec.hw < frame.x, "L beside the touch screen")
+        assertTrue(c.getValue("R").x - c.getValue("R").spec.hw > frame.x + frame.width, "R beside the touch screen")
+    }
+
     // A phone half-folded (the Flip upright): the main menu's screen above the fold and its pad below, where a game's
     // half-folded board has them, so opening a game moves nothing (user).
     @Test

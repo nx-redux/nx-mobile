@@ -6042,17 +6042,17 @@
      "anchor": "centre"
     },
     {
-     "sx": 682,
+     "sx": 1364,
      "sy": 2392,
-     "w": 680,
+     "w": 552,
      "h": 476,
-     "x": 284,
+     "x": 348,
      "y": 912,
      "anchor": "centre",
      "glass": {
       "id": "touch",
       "screen": "touch",
-      "x": 84,
+      "x": 20,
       "y": 22,
       "w": 512,
       "h": 384,
@@ -6060,7 +6060,7 @@
      },
      "strip": {
       "y": 42,
-      "hh": 28,
+      "hh": 34,
       "labels": [
        {
         "id": "TOUCH_1"
@@ -6082,6 +6082,66 @@
     {
      "slot": "left",
      "sizes": [
+      {
+       "w": 404,
+       "h": 498,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": -12,
+         "y": 174,
+         "anchor": "left",
+         "inward": 40,
+         "rise": 60,
+         "group": "DPAD"
+        },
+        {
+         "sx": 1720,
+         "sy": 3782,
+         "w": 220,
+         "h": 108,
+         "x": 24,
+         "y": 0,
+         "anchor": "left",
+         "inward": 40,
+         "group": "L"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 196.0,
+         "y": 382.0,
+         "r": 156.0,
+         "arm": 54.0,
+         "anchor": "left",
+         "inward": 40,
+         "rise": 60
+        },
+        {
+         "id": "L",
+         "shape": "rect",
+         "x": 134.0,
+         "y": 54.0,
+         "hw": 100.0,
+         "hh": 42.0,
+         "anchor": "left",
+         "inward": 40
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 437.3943,
+        "maxWdp": 513.4629,
+        "minHdp": 691.13904,
+        "maxHdp": 811.33716,
+        "halfFolded": false
+       }
+      },
       {
        "w": 404,
        "h": 498,
@@ -6135,10 +6195,10 @@
        ],
        "when": {
         "orientation": "portrait",
-        "minWdp": 437.3943,
-        "maxWdp": 513.4629,
-        "minHdp": 691.13904,
-        "maxHdp": 811.33716,
+        "minWdp": 331.2,
+        "maxWdp": 437.3943,
+        "minHdp": 600.0,
+        "maxHdp": 830.0,
         "halfFolded": false
        }
       }
@@ -6147,6 +6207,99 @@
     {
      "slot": "right",
      "sizes": [
+      {
+       "w": 406,
+       "h": 498,
+       "pieces": [
+        {
+         "sx": 1672,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 0,
+         "y": 174,
+         "anchor": "right",
+         "inward": 40,
+         "rise": 60,
+         "group": "A+B+X+Y"
+        },
+        {
+         "sx": 1942,
+         "sy": 3782,
+         "w": 220,
+         "h": 108,
+         "x": 162,
+         "y": 0,
+         "anchor": "right",
+         "inward": 40,
+         "group": "R"
+        }
+       ],
+       "controls": [
+        {
+         "id": "X",
+         "shape": "circle",
+         "x": 208.0,
+         "y": 260.0,
+         "r": 72.0,
+         "capR": 54.0,
+         "anchor": "right",
+         "inward": 40,
+         "rise": 60
+        },
+        {
+         "id": "Y",
+         "shape": "circle",
+         "x": 104.0,
+         "y": 382.0,
+         "r": 72.0,
+         "capR": 54.0,
+         "anchor": "right",
+         "inward": 40,
+         "rise": 60
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 312.0,
+         "y": 382.0,
+         "r": 72.0,
+         "capR": 54.0,
+         "anchor": "right",
+         "inward": 40,
+         "rise": 60
+        },
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 208.0,
+         "y": 504.0,
+         "r": 72.0,
+         "capR": 54.0,
+         "anchor": "right",
+         "inward": 40,
+         "rise": 60
+        },
+        {
+         "id": "R",
+         "shape": "rect",
+         "x": 272.0,
+         "y": 54.0,
+         "hw": 100.0,
+         "hh": 42.0,
+         "anchor": "right",
+         "inward": 40
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 437.3943,
+        "maxWdp": 513.4629,
+        "minHdp": 691.13904,
+        "maxHdp": 811.33716,
+        "halfFolded": false
+       }
+      },
       {
        "w": 406,
        "h": 498,
@@ -6233,10 +6386,10 @@
        ],
        "when": {
         "orientation": "portrait",
-        "minWdp": 437.3943,
-        "maxWdp": 513.4629,
-        "minHdp": 691.13904,
-        "maxHdp": 811.33716,
+        "minWdp": 331.2,
+        "maxWdp": 437.3943,
+        "minHdp": 600.0,
+        "maxHdp": 830.0,
         "halfFolded": false
        }
       }
@@ -7524,7 +7677,7 @@
      "w": 552,
      "h": 476,
      "x": 348,
-     "y": 912,
+     "y": 752,
      "anchor": "centre",
      "glass": {
       "id": "touch",
@@ -7568,19 +7721,19 @@
          "sy": 2966,
          "w": 416,
          "h": 416,
-         "x": -52,
-         "y": 174,
+         "x": -28,
+         "y": 114,
          "anchor": "left",
          "inward": 40,
          "group": "DPAD"
         },
         {
-         "sx": 1720,
-         "sy": 3782,
-         "w": 220,
+         "sx": 982,
+         "sy": 3656,
+         "w": 160,
          "h": 108,
-         "x": -46,
-         "y": 0,
+         "x": 14,
+         "y": -36,
          "anchor": "left",
          "inward": 40,
          "group": "L"
@@ -7590,8 +7743,8 @@
         {
          "id": "DPAD",
          "shape": "dpad",
-         "x": 156.0,
-         "y": 382.0,
+         "x": 180.0,
+         "y": 322.0,
          "r": 156.0,
          "arm": 54.0,
          "anchor": "left",
@@ -7600,9 +7753,9 @@
         {
          "id": "L",
          "shape": "rect",
-         "x": 64.0,
-         "y": 54.0,
-         "hw": 100.0,
+         "x": 94.0,
+         "y": 18.0,
+         "hw": 68.0,
          "hh": 42.0,
          "anchor": "left",
          "inward": 40
@@ -7631,19 +7784,19 @@
          "sy": 2966,
          "w": 416,
          "h": 416,
-         "x": 0,
-         "y": 174,
+         "x": -22,
+         "y": 114,
          "anchor": "right",
          "inward": 40,
          "group": "A+B+X+Y"
         },
         {
-         "sx": 1942,
-         "sy": 3782,
-         "w": 220,
+         "sx": 1144,
+         "sy": 3656,
+         "w": 160,
          "h": 108,
          "x": 192,
-         "y": 0,
+         "y": -36,
          "anchor": "right",
          "inward": 40,
          "group": "R"
@@ -7653,8 +7806,8 @@
         {
          "id": "X",
          "shape": "circle",
-         "x": 208.0,
-         "y": 260.0,
+         "x": 186.0,
+         "y": 200.0,
          "r": 72.0,
          "capR": 54.0,
          "anchor": "right",
@@ -7663,8 +7816,8 @@
         {
          "id": "Y",
          "shape": "circle",
-         "x": 104.0,
-         "y": 382.0,
+         "x": 82.0,
+         "y": 322.0,
          "r": 72.0,
          "capR": 54.0,
          "anchor": "right",
@@ -7673,8 +7826,8 @@
         {
          "id": "A",
          "shape": "circle",
-         "x": 312.0,
-         "y": 382.0,
+         "x": 290.0,
+         "y": 322.0,
          "r": 72.0,
          "capR": 54.0,
          "anchor": "right",
@@ -7683,8 +7836,8 @@
         {
          "id": "B",
          "shape": "circle",
-         "x": 208.0,
-         "y": 504.0,
+         "x": 186.0,
+         "y": 444.0,
          "r": 72.0,
          "capR": 54.0,
          "anchor": "right",
@@ -7693,9 +7846,9 @@
         {
          "id": "R",
          "shape": "rect",
-         "x": 302.0,
-         "y": 54.0,
-         "hw": 100.0,
+         "x": 272.0,
+         "y": 18.0,
+         "hw": 68.0,
          "hh": 42.0,
          "anchor": "right",
          "inward": 40
@@ -7725,7 +7878,7 @@
          "w": 252,
          "h": 124,
          "x": 0,
-         "y": 676,
+         "y": 518,
          "anchor": "centre",
          "group": "SELECT+START"
         },
@@ -7735,7 +7888,7 @@
          "w": 72,
          "h": 72,
          "x": 26,
-         "y": 702,
+         "y": 544,
          "anchor": "centre",
          "group": "SELECT+START"
         },
@@ -7745,7 +7898,7 @@
          "w": 72,
          "h": 72,
          "x": 154,
-         "y": 702,
+         "y": 544,
          "anchor": "centre",
          "group": "SELECT+START"
         }
@@ -7755,7 +7908,7 @@
          "id": "START",
          "shape": "circle",
          "x": 190.0,
-         "y": 738.0,
+         "y": 580.0,
          "r": 58.0,
          "capR": 30.0,
          "anchor": "centre",
@@ -7767,7 +7920,7 @@
          "id": "SELECT",
          "shape": "circle",
          "x": 62.0,
-         "y": 738.0,
+         "y": 580.0,
          "r": 58.0,
          "capR": 30.0,
          "anchor": "centre",
@@ -7819,7 +7972,7 @@
          "sy": 3782,
          "w": 100,
          "h": 100,
-         "x": 155,
+         "x": 295,
          "y": 22,
          "anchor": "centre",
          "group": "MENU+MIC+SWAP"
@@ -7829,7 +7982,7 @@
          "sy": 3892,
          "w": 100,
          "h": 100,
-         "x": 295,
+         "x": 155,
          "y": 22,
          "anchor": "centre",
          "group": "MENU+MIC+SWAP"
@@ -7839,7 +7992,7 @@
         {
          "id": "MENU",
          "shape": "circle",
-         "x": 205.0,
+         "x": 345.0,
          "y": 72.0,
          "r": 58.0,
          "capR": 39.0,
@@ -7863,7 +8016,7 @@
         {
          "id": "SWAP",
          "shape": "circle",
-         "x": 345.0,
+         "x": 205.0,
          "y": 72.0,
          "r": 58.0,
          "capR": 39.0,
