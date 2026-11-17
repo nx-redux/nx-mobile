@@ -1020,7 +1020,7 @@ class NxCarbonPackTest {
     // where they are, B / A, MENU and START under it; the screen frame the menu's.
     @Test
     fun n64TallLandscapeHasTheMenusPadsAtFullSize() {
-        for ((w, h, dpi) in listOf(Triple(2448, 1848, 420), Triple(2304, 1440, 280))) {
+        for ((w, h, dpi) in listOf(Triple(2448, 1848, 420), Triple(2504, 2256, 480), Triple(2304, 1440, 280))) {
             val tablet = dpi == 280
             val p = assertNotNull(SkinChoice.place(pack, w, h, dpi, tablet, false, 320f to 240f, null, foldable = !tablet, variant = SkinVariant.N64), "$w")
             val m = assertNotNull(SkinChoice.placeMenu(pack, w, h, dpi, foldable = !tablet, tablet = tablet), "$w menu")
@@ -1041,8 +1041,9 @@ class NxCarbonPackTest {
             assertEquals(mc("R").x, c("R").x, 1f, "$w R on the menu's"); assertEquals(mc("R").y, c("R").y, 1f, "$w R on the menu's")
             assertEquals(mc("L").x - mc("L").spec.hw, c("L2").x - c("L2").spec.hw, 1f, "$w Z starts where the menu's L does")
             assertEquals(mc("L").y, c("L").y, 1f, "$w L level with the menu's"); assertEquals(c("L").y, c("L2").y, 1f, "$w Z level with L")
-            // (the Fold sideways: MENU on the left, START on the right, level, at the bottom (user); a tablet: both under B / A)
-            if (w == 2448) {
+            // (the Fold and the Ultra sideways: MENU on the left, START on the right, level, at the bottom (user); a tablet:
+            // both under B / A)
+            if (!tablet) {
                 assertTrue(c("B").y > c("CD").y && c("MENU").x < w / 2f && c("START").x > w / 2f, "$w B under the diamond, MENU left, START right")
                 assertEquals(c("MENU").y, c("START").y, 1f, "$w MENU level with START")
                 assertTrue(c("MENU").y > c("DPAD").y && c("MENU").spec.labelDx < 0f && c("START").spec.labelDx > 0f, "$w under the pads, the words beside them")
@@ -1058,14 +1059,13 @@ class NxCarbonPackTest {
     }
 
     // The N64's screens are the other consoles' (the main menu's frame) on the covers, the Flip and a phone, sideways
-    // and upright (but the Fold cover sideways, below), and on the Ultra half-folded sideways: its side boxes as wide, its controls as tall;
+    // and upright (but the Fold cover sideways, below): its side boxes as wide, its controls as tall;
     // sideways its L / R at the others' height, its stick on their d-pad, MENU under the stick.
     @Test
     fun n64ScreensAreTheOtherConsolesOnEveryShape() {
         data class Win(val w: Int, val h: Int, val dpi: Int, val fold: Boolean, val hinge: Float? = null)
         for (win in listOf(Win(1248, 1972, 420, true), Win(2424, 1080, 480, true), Win(1080, 2424, 480, true),
-            Win(2520, 1080, 420, true), Win(1080, 2520, 420, true), Win(2400, 1080, 420, false), Win(1080, 2400, 420, false),
-            Win(2504, 2256, 480, true, 1128f))) {
+            Win(2520, 1080, 420, true), Win(1080, 2520, 420, true), Win(2400, 1080, 420, false), Win(1080, 2400, 420, false))) {
             fun placed(v: SkinVariant) = assertNotNull(SkinChoice.place(pack, win.w, win.h, win.dpi, false, false, 320f to 240f, win.hinge,
                 foldable = win.fold, variant = v), "$win $v")
             val pn = placed(SkinVariant.N64); val pg = placed(SkinVariant.GBA)
@@ -1106,6 +1106,30 @@ class NxCarbonPackTest {
             assertEquals(c("CU").x, (c("A").x + c("B").x) / 2f, 2f, "$h B / A under the C diamond")
             assertTrue(c("A").x + c("A").spec.r < w, "$h A on the window")
         }
+    }
+
+    // The N64 on the Ultra's inner screen sideways half-folded, as upright half-folded: the stick on the main menu's d-pad,
+    // the C diamond on its face buttons at their size, R level with L, the d-pad under the stick and no switch; MENU +
+    // START a pair under the lower screen's frame, centred under it (user).
+    @Test
+    fun n64UltraSidewaysHalfFoldedIsAsUpright() {
+        val (w, h, dpi, hinge) = listOf(2504, 2256, 480, 1128)
+        val p = assertNotNull(SkinChoice.place(pack, w, h, dpi, false, false, 320f to 240f, hinge.toFloat(), foldable = true, variant = SkinVariant.N64))
+        val m = assertNotNull(SkinChoice.placeMenu(pack, w, h, dpi, foldable = true, tablet = true, hingeY = hinge.toFloat()))
+        fun c(id: String) = p.controls.first { it.spec.id == id }
+        fun mc(id: String) = m.controls.first { it.spec.id == id }
+        assertEquals(mc("DPAD").x, c("STICK").x, 1f, "stick x"); assertEquals(mc("DPAD").y, c("STICK").y, 1f, "stick y")
+        for ((mine, its) in listOf("CU" to "X", "CL" to "Y", "CR" to "A", "CD" to "B")) {
+            assertEquals(mc(its).x, c(mine).x, 2f, "$mine on $its"); assertEquals(mc(its).y, c(mine).y, 2f, "$mine on $its")
+            assertEquals(mc(its).spec.r, c(mine).spec.r, 1f, "$mine at $its's size")
+        }
+        assertEquals(c("L").y, c("R").y, 1f, "R level with L")
+        assertTrue(p.controls.none { it.spec.id == "STICK_SWAP" }, "no switch")
+        assertTrue(c("DPAD").y - c("DPAD").spec.r > c("STICK").y + c("STICK").spec.r && c("DPAD").y + c("DPAD").spec.r < h, "the d-pad under the stick")
+        val panel = assertNotNull(p.glass(GlassScreen.PANEL)).rect
+        val menu = c("MENU"); val start = c("START")
+        assertEquals(menu.y, start.y, 1f, "a pair"); assertTrue(menu.y - menu.spec.r > panel.y + panel.height, "under the lower screen")
+        assertEquals(panel.x + panel.width / 2f, (menu.x + start.x) / 2f, 2f, "under its middle")
     }
 
     // The N64 on the Fold cover sideways: its screen as wide as the others' (a 4:3 picture held by that width), MENU and
