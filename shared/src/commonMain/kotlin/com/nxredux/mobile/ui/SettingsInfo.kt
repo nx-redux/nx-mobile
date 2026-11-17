@@ -212,6 +212,11 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
         "Regular 3DS and New 3DS buttons each have their own layout. New 3DS adds ZL, ZR and the C-stick; a game uses it " +
             "when its New 3DS Controls setting turns them on.",
     )
+    SettingsKind.BUTTON_LAYOUT_SEGA_PAD -> quiet(
+        "6-button or 3-button pad",
+        "The 6-button and 3-button pads each have their own layout. A game gets the one its Controller Type setting " +
+            "picks; on Auto, the one the game asks for.",
+    )
     SettingsKind.BUTTON_LAYOUT_ORIENTATION -> quiet("Edit the buttons for this orientation")
     SettingsKind.BUTTON_LAYOUT_RESET -> SettingText("Resets this console's buttons", "Put the chosen console's buttons back where the skin puts them")
     SettingsKind.SHORTCUTS -> quiet(

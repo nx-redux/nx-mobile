@@ -39,7 +39,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(137 + N3DS_LAYOUTS + GRIP_COLUMNS, pack.layouts.size)   // the menu half-folded on a phone (flex_menu); 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's, the Atari 5200's and Doom's in every family; a tablet twin of each game fold board without one (17: the clusters centred on the bottom screen, user)
+        assertEquals(153 + N3DS_LAYOUTS + GRIP_COLUMNS, pack.layouts.size)   // the menu half-folded on a phone (flex_menu); 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's, the Atari 5200's, Doom's and the Sega pad's two (6- and 3-button) in every family; a tablet twin of each game fold board without one (17: the clusters centred on the bottom screen, user)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -1713,6 +1713,49 @@ class NxCarbonPackTest {
             val g = single.glasses.first().rect
             assertEquals(gba.x, g.x, 1f, "${d.name} screen x"); assertEquals(gba.y, g.y, 1f, "${d.name} screen y")
             assertEquals(gba.width, g.width, 1f, "${d.name} screen w"); assertEquals(gba.height, g.height, 1f, "${d.name} screen h")
+        }
+    }
+
+    @Test
+    fun theSegaPadSitsOnTheMenusSpots() {
+        // Genesis / Sega CD / 32X: the d-pad and MENU on the menu's, the six (or A B C) round the face diamond's centre,
+        // no shoulders, the screen as the shared set's; 6-button: MODE on SELECT's cap; 3-button: START beside MENU
+        for (d in GOLDEN_DEVICES) for (six in listOf(true, false)) {
+            val v = if (six) SkinVariant.MD else SkinVariant.MD3
+            val menu = assertNotNull(placeFor(pack, null, d), "${d.name} menu").controls.associateBy { it.spec.id }
+            val md = assertNotNull(placeFor(pack, v, d), "${d.name} $v")
+            val c = md.controls.associateBy { it.spec.id }
+            val dp = menu.getValue("DPAD")
+            assertEquals(dp.x, c.getValue("DPAD").x, 1f, "${d.name} $v d-pad x"); assertEquals(dp.y, c.getValue("DPAD").y, 1f, "${d.name} $v d-pad y")
+            val face = listOf("A", "B", "X", "Y").map { menu.getValue(it) }
+            val fx = face.sumOf { it.x.toDouble() } / 4; val fy = face.sumOf { it.y.toDouble() } / 4
+            // A B C on Y X A (the bottom row's middle B under the face's centre, a row's rise to the right)
+            val b = c.getValue("X")
+            assertEquals(fx.toFloat(), b.x, 1f, "${d.name} $v B x"); assertEquals(fy.toFloat() + 70f * md.k, b.y, 1f, "${d.name} $v B y")
+            assertTrue(c.getValue("Y").x < b.x && b.x < c.getValue("A").x && c.getValue("A").y < c.getValue("Y").y, "${d.name} $v A B C rising right")
+            if (six) {
+                assertEquals(setOf("DPAD", "Y", "X", "A", "B", "L", "R", "SELECT", "START", "MENU"), c.keys.filterNot { it.startsWith("TOUCH_") }.toSet(), "${d.name} $v")
+                assertTrue(listOf("B", "L", "R").all { c.getValue(it).y < b.y }, "${d.name} X Y Z above")
+                assertEquals("MODE", c.getValue("SELECT").spec.label ?: "MODE", "${d.name} MODE")
+                for (id in listOf("SELECT", "START", "MENU")) {
+                    assertEquals(menu.getValue(id).x, c.getValue(id).x, 1f, "${d.name} $id x"); assertEquals(menu.getValue(id).y, c.getValue(id).y, 1f, "${d.name} $id y")
+                }
+            } else {
+                assertEquals(setOf("DPAD", "Y", "X", "A", "START", "MENU"), c.keys.filterNot { it.startsWith("TOUCH_") }.toSet(), "${d.name} $v")
+                val m = c.getValue("MENU"); val st = c.getValue("START"); val mm = menu.getValue("MENU")
+                fun at(p: PlacedControl, q: PlacedControl) = kotlin.math.abs(p.x - q.x) < 1f && kotlin.math.abs(p.y - q.y) < 1f
+                // in the bottom row the pair round the menu's MENU; where the menu has MENU beside the d-pad (sideways, the
+                // fold board) MENU on the 6-button's MODE spot (the menu's SELECT) by START, under the face (user)
+                val row = kotlin.math.abs(m.y - st.y) < 1f && kotlin.math.abs((m.x + st.x) / 2f - mm.x) < 1f
+                assertTrue(row || (at(m, menu.getValue("SELECT")) && at(st, menu.getValue("START"))), "${d.name} MENU ${m.x},${m.y} START ${st.x},${st.y}")
+            }
+            val single = assertNotNull(placeFor(pack, SkinVariant.SINGLE, d), "${d.name} single").glasses.first().rect
+            val g = md.glasses.first().rect
+            assertEquals(single.x, g.x, 1f, "${d.name} $v screen x"); assertEquals(single.y, g.y, 1f, "${d.name} $v screen y")
+            assertEquals(single.width, g.width, 1f, "${d.name} $v screen w")
+            // 3-button: no MODE / START row under the screen where the shared set has one, so the screen may take its room
+            if (six) assertEquals(single.height, g.height, 1f, "${d.name} $v screen h")
+            else assertTrue(g.height >= single.height - 1f, "${d.name} $v screen h ${g.height} under ${single.height}")
         }
     }
 

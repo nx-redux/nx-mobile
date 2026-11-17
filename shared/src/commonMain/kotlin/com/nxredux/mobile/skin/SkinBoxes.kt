@@ -118,17 +118,21 @@ object SkinBoxes {
         // the control area: a fold board's half under the fold, else (sideways) the window's height; an upright phone's
         // boxes keep to the bottom (its screen takes the height they leave)
         val area: ClosedFloatingPointRange<Float>? = if (anchorAtTheBottom) null else if (fold != null) fold..h else if (w > h) 0f..h else null
+        /** [z]'s main pad's middle (box px): its own [BoxSize.mainY], else the stick or d-pad, the face diamond's four. */
+        fun mainY(s: BoxSlot, z: BoxSize): Float? {
+            z.mainY?.let { return it }
+            // (a switch board's stick and d-pad are alternates on one spot: either will do)
+            fun c(id: String) = z.controls.firstOrNull { it.id == id && it.alt == null } ?: z.controls.firstOrNull { it.id == id }
+            return if (s == BoxSlot.LEFT) (c("STICK") ?: c("DPAD"))?.y
+                else (listOf("X", "Y", "A", "B").mapNotNull(::c).takeIf { it.size == 4 } ?: listOf("CU", "CL", "CR", "CD").mapNotNull(::c).takeIf { it.size == 4 })
+                    ?.map { it.y }?.average()?.toFloat()
+        }
         /** A side box's top: its main pad (the stick, else the d-pad; the face buttons) centred in the area, kept on it. */
         fun centredTop(s: BoxSlot): Float {
             val bottomLine = sidesBottom - bh(s)
             val z = size(s) ?: return bottomLine
             val a = area ?: return bottomLine
-            // (a switch board's stick and d-pad are alternates on one spot: either will do)
-            fun c(id: String) = z.controls.firstOrNull { it.id == id && it.alt == null } ?: z.controls.firstOrNull { it.id == id }
-            val main = if (s == BoxSlot.LEFT) (c("STICK") ?: c("DPAD"))?.y
-                else (listOf("X", "Y", "A", "B").mapNotNull(::c).takeIf { it.size == 4 } ?: listOf("CU", "CL", "CR", "CD").mapNotNull(::c).takeIf { it.size == 4 })
-                    ?.map { it.y }?.average()?.toFloat()
-            main ?: return bottomLine
+            val main = mainY(s, z) ?: return bottomLine
             val s0 = k * f
             val top = z.pieces.minOfOrNull { it.y.toFloat() } ?: 0f
             // its foot: its lowest piece, or the word under a cap where that hangs lower
@@ -145,12 +149,7 @@ object SkinBoxes {
         val centred = listOf(BoxSlot.LEFT, BoxSlot.RIGHT).associateWith { centredTop(it) }
         val lift = if (area == null) 0f else listOf(BoxSlot.LEFT, BoxSlot.RIGHT).filter { it in sizes }.maxOfOrNull { s ->
             val z = sizes.getValue(s)
-            val main = run {
-                fun c(id: String) = z.controls.firstOrNull { it.id == id && it.alt == null } ?: z.controls.firstOrNull { it.id == id }
-                if (s == BoxSlot.LEFT) (c("STICK") ?: c("DPAD"))?.y
-                else (listOf("X", "Y", "A", "B").mapNotNull(::c).takeIf { it.size == 4 } ?: listOf("CU", "CL", "CR", "CD").mapNotNull(::c).takeIf { it.size == 4 })
-                    ?.map { it.y }?.average()?.toFloat()
-            } ?: return@maxOfOrNull 0f
+            val main = mainY(s, z) ?: return@maxOfOrNull 0f
             ((area.start + area.endInclusive) / 2f - main * k * f) - centred.getValue(s)
         } ?: 0f
         fun sideTop(s: BoxSlot): Float {
@@ -158,10 +157,7 @@ object SkinBoxes {
             if (area == null || s !in sizes) return c
             // the other side's lift too, where it lifted more (never past this one's own room above)
             val own = run {
-                val z = sizes.getValue(s)
-                fun cc(id: String) = z.controls.firstOrNull { it.id == id && it.alt == null } ?: z.controls.firstOrNull { it.id == id }
-                val main = (if (s == BoxSlot.LEFT) (cc("STICK") ?: cc("DPAD"))?.y else (listOf("X", "Y", "A", "B").mapNotNull(::cc).takeIf { it.size == 4 }
-                    ?: listOf("CU", "CL", "CR", "CD").mapNotNull(::cc).takeIf { it.size == 4 })?.map { it.y }?.average()?.toFloat()) ?: return c
+                val main = mainY(s, sizes.getValue(s)) ?: return c
                 ((area.start + area.endInclusive) / 2f - main * k * f) - c
             }
             val more = lift - own

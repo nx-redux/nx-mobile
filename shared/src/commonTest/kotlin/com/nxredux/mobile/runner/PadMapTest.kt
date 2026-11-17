@@ -112,6 +112,15 @@ class PadMapTest {
         for (tag in listOf("SMS", "GG", "NGP", "SFC", "")) assertFalse(PadMap.forTag(tag).segaCluster, tag)
     }
 
+    @Test fun only_a_three_button_sega_pad_is_sega_three() {
+        for (tag in listOf("MD", "GPGX", "SEGACD", "32X")) {
+            assertTrue(PadMap.forTag(tag, SegaPad.THREE).segaThree, tag)
+            assertFalse(PadMap.forTag(tag, SegaPad.SIX).segaThree, tag)
+            assertFalse(PadMap.forTag(tag).segaThree, tag)   // unknown: the six
+        }
+        assertFalse(PadMap.forTag("SMS", SegaPad.THREE).segaThree)
+    }
+
     @Test fun send_key_translates_keycodes_and_passes_others_through() {
         val md = PadMap.forTag("MD")
         assertEquals(PadMap.KEY_B, md.sendKey(PadMap.KEY_X))

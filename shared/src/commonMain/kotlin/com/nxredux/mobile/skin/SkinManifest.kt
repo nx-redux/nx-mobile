@@ -96,6 +96,10 @@ enum class SkinVariant {
     @SerialName("psp") PSP,
     /** PICO-8: the d-pad, O and X as a tilted pair, START (its pause). */
     @SerialName("p8") P8,
+    /** Genesis / Mega Drive, Sega CD, 32X on a 6-button game: the d-pad, A B C below X Y Z, MODE (SELECT) START; no shoulders. */
+    @SerialName("md") MD,
+    /** The same on a 3-button game: A B C alone (where they are on the six), START beside MENU; no MODE. */
+    @SerialName("md3") MD3,
     /** The Atari 5200: the analog joystick (first), FIRE 1 / 2, * #, PAUSE START, KEYPAD (the core's on-screen keypad). */
     @SerialName("a5200") A5200,
     /** Doom (PrBoom's Classic pad): the d-pad, A B X Y, L R with L2 R2 (weapons), SELECT START, L3 R3. */
@@ -164,6 +168,8 @@ data class BoxWhen(
 /**
  * One drawing of a box: [w] x [h] picture px, its [pieces] and [controls] at their places inside it (from its top-left;
  * their anchor, level, drop and inward are not used: the box is placed whole). [when]: the device shape it is for.
+ * [mainY]: where its main pad's middle is (box px), for a pad whose controls do not say it (the Sega pad's six, its X Y
+ * A B on both rows); null: from its controls (the stick or d-pad; the face diamond's four).
  */
 @Serializable
 data class BoxSize(
@@ -172,6 +178,7 @@ data class BoxSize(
     val pieces: List<PieceSpec> = emptyList(),
     val controls: List<ControlSpec> = emptyList(),
     val `when`: BoxWhen? = null,
+    val mainY: Float? = null,
 )
 
 /** A box of a layout's controls in its [slot]: [sizes] its drawings, the first the full one, the others compact versions. */

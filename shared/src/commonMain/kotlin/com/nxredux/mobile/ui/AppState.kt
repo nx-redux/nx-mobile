@@ -332,9 +332,10 @@ class AppDeps(
 /**
  * Appearance → Button layout → Portrait or Landscape: edit [consoleId]'s pad skin buttons in that orientation, on this
  * screen. [wiiPad]: the Wii controller whose layout is edited (null for every other console). [n3dsNew]: the 3DS's New
- * 3DS controls layout (ZL / ZR, the C-stick), else the regular 3DS's.
+ * 3DS controls layout (ZL / ZR, the C-stick), else the regular 3DS's. [segaThree]: the Sega pad's 3-button layout, else
+ * the 6-button one.
  */
-data class SkinEditRequest(val consoleId: String, val landscape: Boolean, val wiiPad: WiiPad?, val n3dsNew: Boolean = false)
+data class SkinEditRequest(val consoleId: String, val landscape: Boolean, val wiiPad: WiiPad?, val n3dsNew: Boolean = false, val segaThree: Boolean = false)
 
 /** Opens the button layout editor for a [SkinEditRequest], [title] naming it there. */
 interface SkinEditorLauncher { fun open(request: SkinEditRequest, title: String) }
@@ -584,7 +585,7 @@ internal val Screen.menuPushed: Boolean
 /** Kids Mode's first switch-on, in order (the spec's): PIN, allowed apps, play times, then the two permissions and home. */
 enum class KidsSetupStep { PIN, APPS, TIMES, USAGE, ALARMS, HOME }
 
-enum class SettingsKind { PLAYER_NAME, HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, GAME_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, GPU_DRIVER, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
+enum class SettingsKind { PLAYER_NAME, HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, GAME_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_SEGA_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, GPU_DRIVER, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
@@ -668,6 +669,8 @@ internal const val RESET_DEFAULTS_LABEL = "Reset to defaults"
 /** The Wii's and the 3DS's console ids: Button layout's Controller row is theirs. */
 private const val WII_CONSOLE = "wii"
 private const val N3DS_CONSOLE = "3ds"
+/** The consoles with the Sega pad's two skins ([com.nxredux.mobile.runner.PadMap.isSegaPadTag]'s). */
+private val SEGA_PAD_CONSOLES = setOf("md", "segacd", "32x")
 
 /** The global Shortcuts page's note on Toggle mic, which does nothing outside DS / 3DS. */
 internal const val MIC_ROW_NOTE = "DS / 3DS only"
@@ -3859,6 +3862,8 @@ class AppState(
     private var buttonLayoutWiiPad: WiiPad = WiiPad.CLASSIC
     /** The 3DS's New 3DS controls (most games resolve to the regular ones under Auto, so Regular first). */
     private var buttonLayoutN3dsNew: Boolean = false
+    /** The Sega pad consoles' 3-button pad (else the 6-button one, which the skin shows when the pad is unknown). */
+    private var buttonLayoutSegaThree: Boolean = false
 
     private fun buttonLayoutConsole(): Console = buttonLayoutConsole ?: buttonLayoutConsoles.first()
 
@@ -3871,6 +3876,8 @@ class AppState(
 
     private fun n3dsPadLabel(new: Boolean): String = if (new) "New" else "Regular"
 
+    private fun segaPadLabel(three: Boolean): String = if (three) "3-button" else "6-button"
+
     /** Any console has a tweak stored, skin or overlay: Appearance's Button layout row reads Custom. */
     private fun buttonLayoutCustom(): Boolean = listOf(deps.settings.skinTweaks, deps.settings.overlayTweaks)
         .any { stored -> SkinTweaks.decode(stored).values.any { c -> c.values.any { it.isNotEmpty() } } }
@@ -3881,6 +3888,7 @@ class AppState(
             SettingsRow(SettingsKind.BUTTON_LAYOUT_CONSOLE, "Console", console.displayName),
             if (console.id == WII_CONSOLE) SettingsRow(SettingsKind.BUTTON_LAYOUT_WII_PAD, "Controller", wiiPadLabel(buttonLayoutWiiPad)) else null,
             if (console.id == N3DS_CONSOLE) SettingsRow(SettingsKind.BUTTON_LAYOUT_N3DS_PAD, "Controller", n3dsPadLabel(buttonLayoutN3dsNew)) else null,
+            if (console.id in SEGA_PAD_CONSOLES) SettingsRow(SettingsKind.BUTTON_LAYOUT_SEGA_PAD, "Controller", segaPadLabel(buttonLayoutSegaThree)) else null,
             SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Portrait", landscape = false),
             SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Landscape", landscape = true),
             SettingsRow(SettingsKind.BUTTON_LAYOUT_RESET, "Reset console"),
@@ -3898,8 +3906,10 @@ class AppState(
         val pad = buttonLayoutWiiPad.takeIf { console.id == WII_CONSOLE }
         val n3ds = console.id == N3DS_CONSOLE
         val new = n3ds && buttonLayoutN3dsNew
-        val controller = pad?.let(::wiiPadLabel) ?: n3dsPadLabel(new).takeIf { n3ds }
-        editor.open(SkinEditRequest(console.id, landscape, pad, new), controller?.let { "${console.displayName} · $it" } ?: console.displayName)
+        val sega = console.id in SEGA_PAD_CONSOLES
+        val three = sega && buttonLayoutSegaThree
+        val controller = pad?.let(::wiiPadLabel) ?: n3dsPadLabel(new).takeIf { n3ds } ?: segaPadLabel(three).takeIf { sega }
+        editor.open(SkinEditRequest(console.id, landscape, pad, new, three), controller?.let { "${console.displayName} · $it" } ?: console.displayName)
     }
 
     /** The editor saved or left: republish the page if Settings is still showing (the activity wrote the settings). */
@@ -4305,6 +4315,7 @@ class AppState(
             SettingsKind.BUTTON_LAYOUT_CONSOLE -> cycle(buttonLayoutConsoles, buttonLayoutConsole(), { it.displayName }) { buttonLayoutConsole = it }
             SettingsKind.BUTTON_LAYOUT_WII_PAD -> cycle(wiiPads, buttonLayoutWiiPad, ::wiiPadLabel) { buttonLayoutWiiPad = it }
             SettingsKind.BUTTON_LAYOUT_N3DS_PAD -> cycle(listOf(false, true), buttonLayoutN3dsNew, ::n3dsPadLabel) { buttonLayoutN3dsNew = it }
+            SettingsKind.BUTTON_LAYOUT_SEGA_PAD -> cycle(listOf(false, true), buttonLayoutSegaThree, ::segaPadLabel) { buttonLayoutSegaThree = it }
             // Emulators, Saves (the handheld's formats in its order), Second screen and Developer.
             SettingsKind.PAUSE_UNFOCUSED -> flip(s.pauseWhenUnfocused) { s.pauseWhenUnfocused = it }
             SettingsKind.SCREEN_CARE -> flip(s.screenCare) { s.screenCare = it }

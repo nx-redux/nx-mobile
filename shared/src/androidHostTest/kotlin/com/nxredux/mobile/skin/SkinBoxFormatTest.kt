@@ -30,15 +30,31 @@ class SkinBoxFormatTest {
         assertTrue(pack.layouts.isNotEmpty())
     }
 
-    // The colour packs draw NX Carbon's layouts: they carry its boxes too, so they place alike.
+    // The colour packs draw NX Carbon's layouts: they carry its boxes too, so they place alike. Each pack packs its own
+    // parts picture, so only where a piece is in it may differ.
     @Test
     fun everyColourPackHasTheCarbonBoxes() {
         val dir = File("../androidApp/src/main/assets/skins")
-        val carbon = assertNotNull(SkinPackManifest.parse(File(dir, "nx-carbon/skin.json").readText())).layouts.associate { it.id to it.boxes }
+        fun atlasFree(b: List<BoxSpec>) = b.map { bx -> bx.copy(sizes = bx.sizes.map { z -> z.copy(pieces = z.pieces.map { it.copy(sx = 0, sy = 0) }) }) }
+        val carbon = assertNotNull(SkinPackManifest.parse(File(dir, "nx-carbon/skin.json").readText())).layouts.associate { it.id to atlasFree(it.boxes) }
         assertTrue(carbon.values.any { it.isNotEmpty() }, "NX Carbon has boxes")
         for (pack in dir.listFiles()!!.filter { it.isDirectory && it.name != "nx-carbon" }) {
             val layouts = assertNotNull(SkinPackManifest.parse(File(pack, "skin.json").readText()), pack.name).layouts
-            for (l in layouts) assertEquals(carbon[l.id].orEmpty(), l.boxes, "${pack.name} ${l.id}")
+            for (l in layouts) assertEquals(carbon[l.id].orEmpty(), atlasFree(l.boxes), "${pack.name} ${l.id}")
+        }
+    }
+
+    // A box's piece is in its own pack's parts picture: the picture of one of that pack's layout pieces (or a slice of
+    // one, a well's ends and middle), not where NX Carbon's picture has it.
+    @Test
+    fun everyBoxPieceIsInItsOwnPacksParts() {
+        val dir = File("../androidApp/src/main/assets/skins")
+        for (pack in dir.listFiles()!!.filter { it.isDirectory }) {
+            val layouts = assertNotNull(SkinPackManifest.parse(File(pack, "skin.json").readText()), pack.name).layouts
+            val drawn = layouts.flatMap { it.pieces }
+            for (l in layouts) for (bx in l.boxes) for (z in bx.sizes) for (p in z.pieces) assertTrue(drawn.any { q ->
+                p.sx >= q.sx && p.sy >= q.sy && p.sx + p.w <= q.sx + q.w && p.sy + p.h <= q.sy + q.h && (p.w == q.w || p.h == q.h)
+            }, "${pack.name} ${l.id} ${bx.slot} ${p.sx},${p.sy} ${p.w}x${p.h}")
         }
     }
 }

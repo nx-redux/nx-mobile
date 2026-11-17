@@ -53,7 +53,7 @@ object SkinChoice {
      * buttons, no second pair of shoulders. Others keep the normal pad. The DS and the 3DS have their own layouts.
      */
     private val SINGLE_TAGS = setOf(
-        "GB", "SGB", "GBC", "GBA", "MGBA", "FC", "FDS", "SFC", "SUPA", "MD", "GPGX", "SMS", "GG", "SG1000", "SEGACD", "32X",
+        "GB", "SGB", "GBC", "GBA", "MGBA", "FC", "FDS", "SFC", "SUPA", "SMS", "GG", "SG1000",
         "NGP", "NGPC", "PCE", "VB", "LYNX", "A2600", "A7800", "PKM", "WS", "WSC", "COLECO", "FBN",
     )
 
@@ -62,11 +62,11 @@ object SkinChoice {
      * set (the Game Boys, the GBA), the DS's, or the shared one-screen set ([SINGLE_TAGS], and any console with none of its own). [gameCube]: a
      * GameCube disc run under the Wii tag (its pad is the GameCube's). [wiiPad]: the Wii game's resolved controller (each
      * Wii pad has its layout; the Classic Controller's until it resolves). [n3dsNew]: the resolved New 3DS Controls (the 3DS skin with
-     * ZL / ZR and the C-stick nub, else the regular 3DS's).
+     * ZL / ZR and the C-stick nub, else the regular 3DS's). [segaThree]: a Sega pad game resolved to the 3-button pad.
      */
     fun variantFor(
         baseTag: String, ds: Boolean, arcadeSet: Boolean = false, gameCube: Boolean = false, wiiPad: com.nxredux.mobile.runner.WiiPad? = null,
-        n3dsNew: Boolean = false,
+        n3dsNew: Boolean = false, segaThree: Boolean = false,
     ): SkinVariant = when {
         ds -> SkinVariant.DS
         gameCube || baseTag == "GC" -> SkinVariant.GC
@@ -80,6 +80,7 @@ object SkinChoice {
         // pcsx_rearmed / SwanStation (a DualShock on port 1) and ARMSX2 (its DualShock 2): the same skin
         baseTag == "PS" || baseTag == "PSX" || baseTag == "PS2" -> SkinVariant.PS1
         baseTag == "PSP" -> SkinVariant.PSP
+        baseTag in MD_TAGS -> if (segaThree) SkinVariant.MD3 else SkinVariant.MD   // unknown: the six (the core's 6-button default)
         baseTag == "P8" -> SkinVariant.P8   // fake-08: O (B) and X (A), START its pause
         baseTag == "PRBOOM" -> SkinVariant.DOOM   // PrBoom's Classic pad: the standard pad with L2 R2 L3 R3
         baseTag == "A5200" -> SkinVariant.A5200   // a5200: FIRE 1 / 2 (A / B), * # (Y / X), KEYPAD (L: its on-screen keypad)
@@ -91,6 +92,7 @@ object SkinChoice {
 
     private val GB_TAGS = setOf("GB", "GBC", "SGB", "FC")   // the NES too: A B, fceumm's turbo on TA / TB, no DISK
     private val GBA_TAGS = setOf("GBA", "MGBA")
+    private val MD_TAGS = setOf("MD", "GPGX", "SEGACD", "32X")   // the Sega pad's ([com.nxredux.mobile.runner.PadMap.isSegaPadTag])
     private val ARCADE_TAGS = setOf("FBN")
 
     /**

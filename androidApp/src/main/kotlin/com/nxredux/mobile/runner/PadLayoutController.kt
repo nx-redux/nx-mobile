@@ -453,7 +453,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         // the skin and its screen run under the top camera cutout too (the frame keeps its own margin; the picture is centred
         // in the glass, so it reaches the camera only when it fills the glass's height)
         val top = 0
-        val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), NdsOptions.appliesTo(tag), host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC, wiiPad, padProfile().cStick)
+        val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), NdsOptions.appliesTo(tag), host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC, wiiPad, padProfile().cStick, padProfile().segaThree)
         val settings = AndroidAppSettings(activity)
         return SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, top, variant, settings.skinTweaks, settings.overlayTweaks)
     }
