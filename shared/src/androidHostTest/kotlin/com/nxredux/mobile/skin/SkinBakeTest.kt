@@ -94,7 +94,9 @@ class SkinBakeTest {
             val pad = p.controls.first { it.spec.id == "DPAD" }; val stick = p.controls.first { it.spec.id == "STICK" }
             kotlin.test.assertEquals(f(old("DPAD"), "r") * LOWER_PAD, pad.spec.r, 1f, "$file $name the d-pad at 85%")
             kotlin.test.assertEquals(f(old("STICK"), "r"), stick.spec.r, 1f, "$file $name the stick as it was")
-            kotlin.test.assertEquals(f(old("DPAD"), "x"), pad.x, 1.5f, "$file $name about its middle")
+            // (the Dreamcast's toward the screen as the user placed it: theDreamcastDpadIsTuckedUnderTheStick)
+            val across = if (v == SkinVariant.DC) 42f / 156f * f(old("DPAD"), "r") else 0f
+            kotlin.test.assertEquals(f(old("DPAD"), "x") + across, pad.x, 1.5f, "$file $name about its middle")
         }
     }
 
@@ -125,8 +127,8 @@ class SkinBakeTest {
                 .let { num(it.getValue("x")) to num(it.getValue("y")) }
             val oldGap = ring(oldPieces, old("DPAD").first, old("DPAD").second).let { r -> r.y + r.height * (1f - LOWER_PAD) / 2f } -
                 ring(oldPieces, old("STICK").first, old("STICK").second).let { it.y + it.height }
-            // (the Ultra upright halves it again: theUltraUprightDreamcastHasItsDpadNearerTheStick)
-            if (!name.startsWith("ultra")) kotlin.test.assertEquals(oldGap / 2f, gap, 3f, "$name the d-pad's gap halved")
+            // (halved, then tucked up to 8 dp: theDreamcastDpadIsTuckedUnderTheStick)
+            if (!name.startsWith("ultra")) kotlin.test.assertTrue(gap < oldGap / 2f, "$name the d-pad's gap under half what it had")
             assertTrue(pad.y + pad.spec.r <= d.h, "$name the d-pad on the window")
         }
     }
@@ -196,18 +198,23 @@ class SkinBakeTest {
         }
     }
 
-    // The Dreamcast on the Ultra's inner screen upright (flat and half-folded) and sideways half-folded: the d-pad up under
-    // the stick, its gap to the stick's ring half what it had (40 px upright, 82 px sideways) (user).
+    // The Dreamcast's d-pad under the stick as the user placed it on the Fold: toward the screen by 42 / 156 of the main
+    // menu's d-pad, its ring just under the stick's; so the stick and face buttons stay on the menu's pads sideways
+    // half-folded too (user).
     @Test
-    fun theUltraUprightDreamcastHasItsDpadNearerTheStick() {
-        for ((name, half) in listOf("ultra" to 20f, "ultra_half" to 20f, "ultra_land_half" to 41f)) {
+    fun theDreamcastDpadIsTuckedUnderTheStick() {
+        for (name in listOf("inner", "inner_half", "inner_land", "ultra", "ultra_half", "ultra_land_half", "tablet", "tablet_land")) {
             val d = GOLDEN_DEVICES.first { it.name == name }
             val p = assertNotNull(placeFor(pack, SkinVariant.DC, d), name)
             fun c(id: String) = p.controls.first { it.spec.id == id && it.spec.alt == null }
             fun ring(x: Float, y: Float) = p.pieces.filter { !it.knob }.map { it.dst }
                 .filter { kotlin.math.abs(it.x + it.width / 2f - x) < 3f && kotlin.math.abs(it.y + it.height / 2f - y) < 3f }.maxBy { it.width }
             val gap = ring(c("DPAD").x, c("DPAD").y).y - ring(c("STICK").x, c("STICK").y).let { it.y + it.height }
-            kotlin.test.assertEquals(half * p.k, gap, 2f, "$name the d-pad's gap halved")
+            kotlin.test.assertEquals(1f, gap, 2f, "$name the d-pad's ring just under the stick's")
+            val menu = assertNotNull(placeFor(pack, null, d), "$name menu").controls.associateBy { it.spec.id }
+            kotlin.test.assertEquals(42f / 156f * menu.getValue("DPAD").spec.r, c("DPAD").x - c("STICK").x, 2f, "$name the d-pad toward the screen")
+            kotlin.test.assertEquals(menu.getValue("DPAD").y, c("STICK").y, 1f, "$name the stick on the menu's d-pad")
+            kotlin.test.assertEquals(menu.getValue("A").y, c("A").y, 1f, "$name the face buttons on the menu's")
         }
     }
 

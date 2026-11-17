@@ -389,12 +389,11 @@ class SkinSeamTest {
             val m = gc.getValue("MENU"); val start = gc.getValue("START")
             val face = ringAt(gc.getValue("X").x, gc.getValue("Y").y)
             val ring = if (fold) {
-                // the d-pad under the stick, in line, 16 dp apart; MENU under START on the right, right of the bottom screen
+                // the d-pad under the stick; MENU under START on the right, right of the bottom screen
                 val st = ringOf("STICK"); val pad = ringOf("DPAD")
-                // (the d-pad, the lower of the two, drawn smaller about its middle: in line by its middle; its gap under the
-                // stick halved so the side stands level with the other, at least 8 dp)
-                assertEquals(st.x + st.width / 2f, pad.x + pad.width / 2f, 1f, "${w}x$h d-pad in line")
-                assertTrue(pad.y - (st.y + st.height) >= 8f * dp - 2f, "${w}x$h d-pad under the stick")
+                // (the d-pad as the user placed it: 16 dp toward the screen, its ring just under the stick's)
+                assertEquals(16f * dp, (pad.x + pad.width / 2f) - (st.x + st.width / 2f), 2f, "${w}x$h d-pad toward the screen")
+                assertTrue(pad.y - (st.y + st.height) >= 0f, "${w}x$h d-pad under the stick")
                 // (the stick centred under the fold, the d-pad under it: no nearer the bottom than the least gap)
                 assertTrue(pad.y + pad.height <= h - 4f * dp + 2f, "${w}x$h d-pad's end")
                 val l2 = piece("L2").single(); assertEquals(16f * dp, st.y - (l2.y + l2.height), 2f, "${w}x$h L2 over the stick")
