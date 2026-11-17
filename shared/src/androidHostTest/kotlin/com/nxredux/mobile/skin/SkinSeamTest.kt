@@ -351,9 +351,17 @@ class SkinSeamTest {
             val menu = assertNotNull(SkinChoice.placeMenu(pack, w, h, dpi, foldable = fold, tablet = fold), "${w}x$h menu")
             val game = assertNotNull(SkinChoice.place(pack, w, h, dpi, tablet = fold, ds = false, picture = 304f to 224f, foldable = fold, variant = SkinVariant.ARCADE), "${w}x$h arcade")
             val mc = menu.controls.associateBy { it.spec.id }; val gc = game.controls.associateBy { it.spec.id }
-            for (id in listOf("DPAD", "X", "Y", "A", "B", "START", "SELECT", "MENU")) {
+            // a narrow upright (a phone): COIN and START in MENU's row, one each side of it (user)
+            val upright = !fold && h > w
+            for (id in if (upright) listOf("DPAD", "X", "Y", "A", "B", "MENU") else listOf("DPAD", "X", "Y", "A", "B", "START", "SELECT", "MENU")) {
                 assertEquals(mc.getValue(id).x, gc.getValue(id).x, 1.5f, "${w}x$h ${game.spec.id} $id x")
                 assertEquals(mc.getValue(id).y, gc.getValue(id).y, 1.5f, "${w}x$h ${game.spec.id} $id y")
+            }
+            if (upright) {
+                val m = gc.getValue("MENU")
+                for (id in listOf("SELECT", "START")) assertEquals(m.y, gc.getValue(id).y, 1f, "${w}x$h $id in MENU's row")
+                assertTrue(gc.getValue("SELECT").x < m.x && gc.getValue("START").x > m.x, "${w}x$h COIN, MENU, START")
+                assertEquals(m.x - gc.getValue("SELECT").x, gc.getValue("START").x - m.x, 1f, "${w}x$h evenly")
             }
             // TB on L's inner side, TA on R's, 8 dp apart, level with them
             fun piece(id: String) = game.pieces.single { pc -> pc.piece >= 0 && game.spec.pieces[pc.piece].let { s -> s.glass == null &&
