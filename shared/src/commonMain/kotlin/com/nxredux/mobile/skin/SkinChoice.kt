@@ -122,6 +122,15 @@ object SkinChoice {
                     bottomMargin = shellMargin(pack), bottomGlass = flatEnd, row = rowSpacing(densityDpi, s))
             }
         }?.let { return it }
+        // a phone half-folded: the screen frame above the fold and the pad below it, as a game's half-folded board has them,
+        // so opening a game moves nothing
+        if (!landscape && !tablet && hingeY != null) widest(tuned, pack, SkinFamily.FLEX, SkinVariant.MENU, fold = false) { spec ->
+            if (spec.frame?.hinge?.let { it >= 0 } != true) null
+            else if (spec.boxes.isNotEmpty()) SkinBoxes.place(spec, windowW, windowH, k, densityDpi, hingeY) { s, r ->
+                SkinSolver.placePieces(s, windowW.toFloat(), windowH.toFloat(), k, null, topInset.toFloat(), hingeY, roomLeft = r.left, roomRight = r.right, roomBottom = r.bottom)
+            }
+            else SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, null, topInset.toFloat(), hingeY)
+        }?.let { return it }
         return shell(tuned, pack, if (landscape) SkinFamily.GRIP else SkinFamily.STACKED, SkinVariant.MENU, windowW, windowH, k, densityDpi, null, topInset, rowSpacing(densityDpi, k), hingeY = hingeY)
     }
 

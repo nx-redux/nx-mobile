@@ -21,6 +21,8 @@ class SkinBakeTest {
         SkinBoxes.anchorAtTheBottom = true
         try {
             for (d in GOLDEN_DEVICES) {
+                // drawn from a game's boxes rather than baked: a phone half-folded, on the GBA's half-folded board
+                if (placeFor(pack, null, d)?.spec?.id == "flex_menu") continue
                 val p = placeFor(baked, null, d)
                 if (p != null) assertTrue(baked.layouts.first { it.id == p.spec.id }.boxes.isNotEmpty(), "menu ${d.name}: placed by its boxes")
                 assertMatchesGolden(golden.getValue(d.name), p, label = "menu ${d.name}")

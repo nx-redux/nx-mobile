@@ -39,7 +39,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(136 + N3DS_LAYOUTS + GRIP_COLUMNS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's, the Atari 5200's and Doom's in every family; a tablet twin of each game fold board without one (17: the clusters centred on the bottom screen, user)
+        assertEquals(137 + N3DS_LAYOUTS + GRIP_COLUMNS, pack.layouts.size)   // the menu half-folded on a phone (flex_menu); 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's, the Atari 5200's and Doom's in every family; a tablet twin of each game fold board without one (17: the clusters centred on the bottom screen, user)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -1106,6 +1106,27 @@ class NxCarbonPackTest {
             assertEquals(c("CU").x, (c("A").x + c("B").x) / 2f, 2f, "$h B / A under the C diamond")
             assertTrue(c("A").x + c("A").spec.r < w, "$h A on the window")
         }
+    }
+
+    // A phone half-folded (the Flip upright): the main menu's screen above the fold and its pad below, where a game's
+    // half-folded board has them, so opening a game moves nothing (user).
+    @Test
+    fun menuOnAHalfFoldedPhoneIsAboveTheFoldAsAGamesIs() {
+        val (w, h, dpi, hinge) = listOf(1080, 2520, 420, 1260)
+        val menu = assertNotNull(SkinChoice.placeMenu(pack, w, h, dpi, foldable = true, hingeY = hinge.toFloat()))
+        val game = assertNotNull(SkinChoice.place(pack, w, h, dpi, false, false, 240f to 160f, hinge.toFloat(), foldable = true, variant = SkinVariant.GBA))
+        assertEquals("flex_menu", menu.spec.id)
+        val mg = menu.glasses.first().rect
+        val gg = game.glasses.first().rect
+        assertTrue(mg.y + mg.height < hinge, "the menu's screen above the fold")
+        assertEquals(gg.x, mg.x, 1f, "screen left"); assertEquals(gg.width, mg.width, 1f, "screen width"); assertEquals(gg.y, mg.y, 1f, "screen top")
+        val m = menu.controls.associateBy { it.spec.id }
+        val g = game.controls.associateBy { it.spec.id }
+        for (id in listOf("DPAD", "X", "Y", "A", "B", "SELECT", "START", "MENU")) {
+            assertEquals(g.getValue(id).x, m.getValue(id).x, 1f, "$id x"); assertEquals(g.getValue(id).y, m.getValue(id).y, 1f, "$id y")
+            assertEquals(g.getValue(id).spec.r, m.getValue(id).spec.r, 1f, "$id size")
+        }
+        assertTrue(m.getValue("L").y > hinge && m.getValue("R").y > hinge, "the shoulders below the fold")
     }
 
     // The N64 on the Ultra's inner screen sideways half-folded, as upright half-folded: the stick on the main menu's d-pad,

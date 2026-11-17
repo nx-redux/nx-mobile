@@ -1161,6 +1161,573 @@
    ]
   },
   {
+   "id": "flex_menu",
+   "family": "flex",
+   "variant": "menu",
+   "image": "portrait_bg_flex.webp",
+   "width": 1040,
+   "height": 2400,
+   "tree": {
+    "split": "rows",
+    "parts": [
+     {
+      "len": 1368,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 524,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 452,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 64,
+      "mode": "repeat",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 524,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 452,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 968,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 524,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 452,
+         "mode": "fixed"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "glasses": [],
+   "scales": [
+    []
+   ],
+   "controls": [
+    {
+     "id": "DPAD",
+     "shape": "dpad",
+     "x": 240.0,
+     "y": 2066.0,
+     "r": 156,
+     "arm": 54,
+     "anchor": "left",
+     "inward": 40
+    },
+    {
+     "id": "X",
+     "shape": "circle",
+     "x": 838.0,
+     "y": 1944.0,
+     "r": 72,
+     "capR": 54,
+     "anchor": "right",
+     "inward": 40
+    },
+    {
+     "id": "Y",
+     "shape": "circle",
+     "x": 734.0,
+     "y": 2066.0,
+     "r": 72,
+     "capR": 54,
+     "anchor": "right",
+     "inward": 40
+    },
+    {
+     "id": "A",
+     "shape": "circle",
+     "x": 942.0,
+     "y": 2066.0,
+     "r": 72,
+     "capR": 54,
+     "anchor": "right",
+     "inward": 40
+    },
+    {
+     "id": "B",
+     "shape": "circle",
+     "x": 838.0,
+     "y": 2188.0,
+     "r": 72,
+     "capR": 54,
+     "anchor": "right",
+     "inward": 40
+    },
+    {
+     "id": "L",
+     "shape": "rect",
+     "x": 148.0,
+     "y": 1758.0,
+     "hw": 100.0,
+     "hh": 42,
+     "anchor": "left",
+     "inward": 40
+    },
+    {
+     "id": "R",
+     "shape": "rect",
+     "x": 932.0,
+     "y": 1758.0,
+     "hw": 100.0,
+     "hh": 42,
+     "anchor": "right",
+     "inward": 40
+    },
+    {
+     "id": "START",
+     "shape": "circle",
+     "x": 604.0,
+     "y": 1758.0,
+     "r": 58,
+     "capR": 30,
+     "anchor": "centre",
+     "label": "START",
+     "labelDy": 57,
+     "labelH": 17
+    },
+    {
+     "id": "SELECT",
+     "shape": "circle",
+     "x": 476.0,
+     "y": 1758.0,
+     "r": 58,
+     "capR": 30,
+     "anchor": "centre",
+     "label": "SELECT",
+     "labelDy": 57,
+     "labelH": 17
+    },
+    {
+     "id": "MENU",
+     "shape": "circle",
+     "x": 540.0,
+     "y": 2356.0,
+     "r": 58,
+     "capR": 39,
+     "anchor": "centre",
+     "label": "MENU",
+     "labelDy": 64.5,
+     "labelH": 17
+    }
+   ],
+   "parts": "parts.webp",
+   "refW": 1080,
+   "refH": 2520,
+   "frame": {
+    "sx": 0,
+    "sy": 0,
+    "w": 1036,
+    "h": 1604,
+    "x": 24,
+    "y": 41,
+    "corner": 72,
+    "fill": true,
+    "side": 24,
+    "top": 17,
+    "glass": {
+     "id": "menu",
+     "screen": "picture",
+     "x": 44,
+     "y": 47,
+     "w": 944,
+     "h": 1510,
+     "corner": 16
+    },
+    "hinge": 40
+   },
+   "pieces": [
+    {
+     "sx": 0,
+     "sy": 3656,
+     "w": 252,
+     "h": 124,
+     "x": 414,
+     "y": 1695,
+     "anchor": "centre"
+    },
+    {
+     "sx": 1254,
+     "sy": 2966,
+     "w": 416,
+     "h": 416,
+     "x": 32,
+     "y": 1858,
+     "anchor": "left",
+     "inward": 40
+    },
+    {
+     "sx": 1672,
+     "sy": 2966,
+     "w": 416,
+     "h": 416,
+     "x": 630,
+     "y": 1858,
+     "anchor": "right",
+     "inward": 40
+    },
+    {
+     "sx": 572,
+     "sy": 3892,
+     "w": 72,
+     "h": 72,
+     "x": 440,
+     "y": 1721,
+     "anchor": "centre"
+    },
+    {
+     "sx": 646,
+     "sy": 3892,
+     "w": 72,
+     "h": 72,
+     "x": 568,
+     "y": 1721,
+     "anchor": "centre"
+    },
+    {
+     "sx": 1720,
+     "sy": 3782,
+     "w": 220,
+     "h": 108,
+     "x": 38,
+     "y": 1704,
+     "anchor": "left",
+     "inward": 40
+    },
+    {
+     "sx": 1942,
+     "sy": 3782,
+     "w": 220,
+     "h": 108,
+     "x": 822,
+     "y": 1704,
+     "anchor": "right",
+     "inward": 40
+    },
+    {
+     "sx": 2980,
+     "sy": 3782,
+     "w": 100,
+     "h": 100,
+     "x": 490,
+     "y": 2306,
+     "anchor": "centre"
+    }
+   ],
+   "boxes": [
+    {
+     "slot": "left",
+     "sizes": [
+      {
+       "w": 404,
+       "h": 560,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": -12,
+         "y": 154,
+         "anchor": "left",
+         "inward": 40,
+         "group": "DPAD"
+        },
+        {
+         "sx": 1720,
+         "sy": 3782,
+         "w": 220,
+         "h": 108,
+         "x": -6,
+         "y": 0,
+         "anchor": "left",
+         "inward": 40,
+         "group": "L"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 196.0,
+         "y": 362.0,
+         "r": 156.0,
+         "arm": 54.0,
+         "anchor": "left",
+         "inward": 40
+        },
+        {
+         "id": "L",
+         "shape": "rect",
+         "x": 104.0,
+         "y": 54.0,
+         "hw": 100.0,
+         "hh": 42.0,
+         "anchor": "left",
+         "inward": 40
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 378.51428,
+        "maxWdp": 444.34286,
+        "minHdp": 883.2,
+        "maxHdp": 1036.8,
+        "halfFolded": true
+       }
+      }
+     ]
+    },
+    {
+     "slot": "right",
+     "sizes": [
+      {
+       "w": 406,
+       "h": 560,
+       "pieces": [
+        {
+         "sx": 1672,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 0,
+         "y": 154,
+         "anchor": "right",
+         "inward": 40,
+         "group": "A+B+X+Y"
+        },
+        {
+         "sx": 1942,
+         "sy": 3782,
+         "w": 220,
+         "h": 108,
+         "x": 192,
+         "y": 0,
+         "anchor": "right",
+         "inward": 40,
+         "group": "R"
+        }
+       ],
+       "controls": [
+        {
+         "id": "X",
+         "shape": "circle",
+         "x": 208.0,
+         "y": 240.0,
+         "r": 72.0,
+         "capR": 54.0,
+         "anchor": "right",
+         "inward": 40
+        },
+        {
+         "id": "Y",
+         "shape": "circle",
+         "x": 104.0,
+         "y": 362.0,
+         "r": 72.0,
+         "capR": 54.0,
+         "anchor": "right",
+         "inward": 40
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 312.0,
+         "y": 362.0,
+         "r": 72.0,
+         "capR": 54.0,
+         "anchor": "right",
+         "inward": 40
+        },
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 208.0,
+         "y": 484.0,
+         "r": 72.0,
+         "capR": 54.0,
+         "anchor": "right",
+         "inward": 40
+        },
+        {
+         "id": "R",
+         "shape": "rect",
+         "x": 302.0,
+         "y": 54.0,
+         "hw": 100.0,
+         "hh": 42.0,
+         "anchor": "right",
+         "inward": 40
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 378.51428,
+        "maxWdp": 444.34286,
+        "minHdp": 883.2,
+        "maxHdp": 1036.8,
+        "halfFolded": true
+       }
+      }
+     ]
+    },
+    {
+     "slot": "topRow",
+     "sizes": [
+      {
+       "w": 252,
+       "h": 400,
+       "pieces": [
+        {
+         "sx": 0,
+         "sy": 3656,
+         "w": 252,
+         "h": 124,
+         "x": 0,
+         "y": 433,
+         "anchor": "centre",
+         "group": "SELECT+START"
+        },
+        {
+         "sx": 572,
+         "sy": 3892,
+         "w": 72,
+         "h": 72,
+         "x": 26,
+         "y": 459,
+         "anchor": "centre",
+         "group": "SELECT+START"
+        },
+        {
+         "sx": 646,
+         "sy": 3892,
+         "w": 72,
+         "h": 72,
+         "x": 154,
+         "y": 459,
+         "anchor": "centre",
+         "group": "SELECT+START"
+        }
+       ],
+       "controls": [
+        {
+         "id": "START",
+         "shape": "circle",
+         "x": 190.0,
+         "y": 496.0,
+         "r": 58.0,
+         "capR": 30.0,
+         "anchor": "centre",
+         "label": "START",
+         "labelDy": 57.0,
+         "labelH": 17.0
+        },
+        {
+         "id": "SELECT",
+         "shape": "circle",
+         "x": 62.0,
+         "y": 496.0,
+         "r": 58.0,
+         "capR": 30.0,
+         "anchor": "centre",
+         "label": "SELECT",
+         "labelDy": 57.0,
+         "labelH": 17.0
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 378.51428,
+        "maxWdp": 444.34286,
+        "minHdp": 883.2,
+        "maxHdp": 1036.8,
+        "halfFolded": true
+       }
+      }
+     ]
+    },
+    {
+     "slot": "bottomRow",
+     "sizes": [
+      {
+       "w": 100,
+       "h": 130,
+       "pieces": [
+        {
+         "sx": 2980,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 0,
+         "y": 0,
+         "anchor": "centre",
+         "group": "MENU"
+        }
+       ],
+       "controls": [
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 50.0,
+         "y": 50.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "MENU",
+         "labelDy": 64.5,
+         "labelH": 17.0
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 378.51428,
+        "maxWdp": 444.34286,
+        "minHdp": 883.2,
+        "maxHdp": 1036.8,
+        "halfFolded": true
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
    "id": "stacked_menu_fold",
    "family": "stacked",
    "variant": "menu",
