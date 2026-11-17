@@ -59,7 +59,8 @@ private fun buttonGroups(p: SkinPlacement, buttons: List<SkinPiece>): Map<SkinPi
     val controls = p.controls.filter { !it.spec.id.startsWith("TOUCH_") }
     fun inside(q: SkinPiece) = controls.filter { c -> holds(q.dst, c) && (q.alt == null || c.spec.alt == null || q.alt == c.spec.alt) }
     fun kind(q: SkinPiece): String {
-        q.alt?.let { return it.uppercase() }
+        // (a switch's drawings, one per mode, are a cap in its well: the 3DS's stick / d-pad toggle)
+        q.alt?.let { alt -> return if (inside(q).let { cs -> cs.isNotEmpty() && cs.all { it.spec.id in CAPS } }) "CAP" else alt.uppercase() }
         if (q.knob) return q.knobOf
         val ids = inside(q).map { it.spec.id }.toSet()
         return when {
@@ -73,7 +74,8 @@ private fun buttonGroups(p: SkinPlacement, buttons: List<SkinPiece>): Map<SkinPi
         }
     }
     val kinds = buttons.map { kind(it) }
-    fun touch(a: PxRect, b: PxRect) = a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+    // (edge to edge counts: a well's end and its middle side by side)
+    fun touch(a: PxRect, b: PxRect) = a.x <= b.x + b.width + 0.5f && b.x <= a.x + a.width + 0.5f && a.y < b.y + b.height && b.y < a.y + a.height
     val parent = IntArray(buttons.size) { it }
     fun root(i: Int): Int { var r = i; while (parent[r] != r) r = parent[r]; return r }
     for (i in buttons.indices) for (j in i + 1 until buttons.size)
@@ -406,7 +408,7 @@ private fun BoxWhen.fold8Sideways(): Boolean {
  */
 fun fold8SidewaysGapsHalved(boxes: Map<String, List<BoxSpec>>, isFor: (String) -> Boolean): Map<String, List<BoxSpec>> = boxes.mapValues { (id, list) ->
     if (!isFor(id)) return@mapValues list
-    list.map { b -> if (b.slot != BoxSlot.LEFT && b.slot != BoxSlot.RIGHT) b else b.copy(sizes = b.sizes.map { z ->
+    capRowsLevelOnFold8Sideways(list.map { b -> if (b.slot != BoxSlot.LEFT && b.slot != BoxSlot.RIGHT) b else b.copy(sizes = b.sizes.map { z ->
         if (z.`when`?.fold8Sideways() != true) return@map z
         data class Pad(val id: String, val y0: Float, val y1: Float)
         val pads = z.pieces.filter { it.group in PAD_GROUPS && it.alt == null }.groupBy { it.group!! }
@@ -428,7 +430,38 @@ fun fold8SidewaysGapsHalved(boxes: Map<String, List<BoxSpec>>, isFor: (String) -
                 in capIds -> c.copy(y = c.y - up2)
                 else -> c } },
         )
-    }) }
+    }) })
+}
+
+/**
+ * Sideways (the Fold 8, a tablet): the caps' rows each side level on the window (the side boxes' main pads stand level: the stick,
+ * the face's middle), the higher row down to the lower (the regular 3DS's SWAP / SELECT / START, under its face, down to
+ * MIC / MENU under its d-pad) (user: the rows level, as the DS's).
+ */
+private fun capRowsLevelOnFold8Sideways(list: List<BoxSpec>): List<BoxSpec> {
+    val l = list.firstOrNull { it.slot == BoxSlot.LEFT } ?: return list
+    val r = list.firstOrNull { it.slot == BoxSlot.RIGHT } ?: return list
+    val out = list.associate { it.slot to it.sizes.toMutableList() }
+    for ((li, lz) in l.sizes.withIndex()) {
+        if (lz.`when`?.orientation != "landscape") continue
+        val ri = r.sizes.indexOfFirst { it.`when` == lz.`when` }.takeIf { it >= 0 } ?: continue
+        val rz = r.sizes[ri]
+        fun main(z: BoxSize, ids: List<String>) = z.controls.filter { it.id in ids && it.alt == null }.map { it.y }.average().toFloat()
+        fun rowY(z: BoxSize) = z.controls.filter { it.id in CAPS }.maxOfOrNull { it.y }
+        val ly = rowY(lz) ?: continue; val ry = rowY(rz) ?: continue
+        val lo = ly - main(lz, listOf("STICK")); val ro = ry - main(rz, listOf("X", "Y", "A", "B"))
+        // (a side without the pad itself, the cover's stick / d-pad switch: as it is)
+        if (lo.isNaN() || ro.isNaN() || kotlin.math.abs(lo - ro) < 0.5f) continue
+        fun down(z: BoxSize, dy: Float): BoxSize {
+            val caps = z.controls.filter { it.id in CAPS }
+            val ids = caps.map { it.id }.toSet()
+            val moved = z.copy(pieces = z.pieces.map { p -> if (p.group != null && p.group !in PAD_GROUPS && p.group!!.split("+").any { it in ids }) p.copy(y = Math.round(p.y + dy)) else p },
+                controls = z.controls.map { if (it.id in ids) it.copy(y = it.y + dy) else it })
+            return moved.copy(h = maxOf(z.h, Math.round(moved.pieces.maxOf { it.y + it.h * it.scale })))
+        }
+        if (lo > ro) out.getValue(BoxSlot.RIGHT)[ri] = down(rz, lo - ro) else out.getValue(BoxSlot.LEFT)[li] = down(lz, ro - lo)
+    }
+    return list.map { b -> b.copy(sizes = out.getValue(b.slot).toList()) }
 }
 
 /**

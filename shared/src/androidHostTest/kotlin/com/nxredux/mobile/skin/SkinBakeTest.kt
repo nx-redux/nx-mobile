@@ -391,4 +391,16 @@ class SkinBakeTest {
             }
         }
     }
+
+    // A cap's switch (the 3DS's stick / d-pad toggle) in its well is one group with the caps it shares the well with, as
+    // its outline shows: the Ultra's cover upright (user).
+    @Test
+    fun theSwitchIsGroupedWithItsWell() {
+        for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) {
+            val p = assertNotNull(SkinChoice.place(pack, 1080, 2424, 480, false, ds = true, hingeY = null, foldable = true, variant = v), "$v")
+            val ids = SkinGroups.of(p.spec).map { it.id }
+            val mine = ids.single { "STICK_SWAP" in it.split("+") }
+            assertTrue(mine.split("+").any { it == "MIC" }, "$v the switch with MIC: $ids")
+        }
+    }
 }

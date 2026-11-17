@@ -13292,7 +13292,7 @@
      "slot": "left",
      "sizes": [
       {
-       "w": 520,
+       "w": 416,
        "h": 512,
        "pieces": [
         {
@@ -13342,28 +13342,6 @@
          "knob": true,
          "alt": "stick",
          "group": "STICK"
-        },
-        {
-         "sx": 2164,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 420,
-         "y": 576,
-         "anchor": "centre",
-         "alt": "stick",
-         "group": "STICK_SWAP"
-        },
-        {
-         "sx": 2266,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 420,
-         "y": 576,
-         "anchor": "centre",
-         "alt": "dpad",
-         "group": "STICK_SWAP"
         }
        ],
        "controls": [
@@ -13399,32 +13377,6 @@
          "travel": 60.0,
          "knobTravel": 30.0,
          "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 470.0,
-         "y": 626.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "centre",
-         "label": "D-PAD",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 470.0,
-         "y": 626.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "centre",
-         "label": "STICK",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "alt": "dpad"
         }
        ],
        "when": {
@@ -13487,28 +13439,6 @@
          "knob": true,
          "alt": "stick",
          "group": "STICK"
-        },
-        {
-         "sx": 2164,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 268,
-         "y": 576,
-         "anchor": "centre",
-         "alt": "stick",
-         "group": "STICK_SWAP"
-        },
-        {
-         "sx": 2266,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 268,
-         "y": 576,
-         "anchor": "centre",
-         "alt": "dpad",
-         "group": "STICK_SWAP"
         }
        ],
        "controls": [
@@ -13544,32 +13474,6 @@
          "travel": 60.000004,
          "knobTravel": 30.000002,
          "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 318.5,
-         "y": 626.12506,
-         "r": 58.000004,
-         "capR": 39.0,
-         "anchor": "centre",
-         "label": "D-PAD",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 318.5,
-         "y": 626.12506,
-         "r": 58.000004,
-         "capR": 39.0,
-         "anchor": "centre",
-         "label": "STICK",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "alt": "dpad"
         }
        ],
        "when": {
@@ -13871,6 +13775,28 @@
          "y": 22,
          "anchor": "centre",
          "group": "MENU+STICK_SWAP"
+        },
+        {
+         "sx": 2164,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "alt": "stick",
+         "group": "MENU+STICK_SWAP"
+        },
+        {
+         "sx": 2266,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "alt": "dpad",
+         "group": "MENU+STICK_SWAP"
         }
        ],
        "controls": [
@@ -13885,6 +13811,32 @@
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 65.000015,
+         "y": 71.99994,
+         "r": 58.000004,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "D-PAD",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "stick"
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 65.000015,
+         "y": 71.99994,
+         "r": 58.000004,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "STICK",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "dpad"
         }
        ],
        "when": {
@@ -13919,6 +13871,28 @@
          "y": 22,
          "anchor": "centre",
          "group": "MENU+STICK_SWAP"
+        },
+        {
+         "sx": 2164,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "alt": "stick",
+         "group": "MENU+STICK_SWAP"
+        },
+        {
+         "sx": 2266,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "alt": "dpad",
+         "group": "MENU+STICK_SWAP"
         }
        ],
        "controls": [
@@ -13933,6 +13907,32 @@
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 65.0,
+         "y": 72.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "D-PAD",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "stick"
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 65.0,
+         "y": 72.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "STICK",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "dpad"
         }
        ],
        "when": {
@@ -14476,7 +14476,7 @@
      "sizes": [
       {
        "w": 404,
-       "h": 706,
+       "h": 749,
        "pieces": [
         {
          "sx": 1254,
@@ -14484,11 +14484,12 @@
          "w": 416,
          "h": 416,
          "x": -12,
-         "y": 128,
+         "y": 171,
          "anchor": "left",
          "inward": 40,
          "alt": "dpad",
-         "group": "DPAD"
+         "group": "DPAD",
+         "level": "middle"
         },
         {
          "sx": 1446,
@@ -14496,30 +14497,11 @@
          "w": 160,
          "h": 108,
          "x": 42,
-         "y": -22,
+         "y": 21,
          "anchor": "left",
          "inward": 40,
-         "group": "L2"
-        },
-        {
-         "sx": 718,
-         "sy": 3384,
-         "w": 270,
-         "h": 144,
-         "x": 21,
-         "y": 578,
-         "anchor": "left",
-         "group": "MENU+STICK_SWAP"
-        },
-        {
-         "sx": 2980,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 176,
-         "y": 600,
-         "anchor": "left",
-         "group": "MENU+STICK_SWAP"
+         "group": "L2",
+         "level": "middle"
         },
         {
          "sx": 2754,
@@ -14527,11 +14509,12 @@
          "w": 416,
          "h": 416,
          "x": -12,
-         "y": 128,
+         "y": 171,
          "anchor": "left",
          "inward": 40,
          "alt": "stick",
-         "group": "STICK"
+         "group": "STICK",
+         "level": "middle"
         },
         {
          "sx": 2396,
@@ -14539,34 +14522,13 @@
          "w": 284,
          "h": 284,
          "x": 54,
-         "y": 194,
+         "y": 237,
          "anchor": "left",
          "inward": 40,
          "knob": true,
          "alt": "stick",
-         "group": "STICK"
-        },
-        {
-         "sx": 2164,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 36,
-         "y": 600,
-         "anchor": "left",
-         "alt": "stick",
-         "group": "STICK_SWAP"
-        },
-        {
-         "sx": 2266,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 36,
-         "y": 600,
-         "anchor": "left",
-         "alt": "dpad",
-         "group": "STICK_SWAP"
+         "group": "STICK",
+         "level": "middle"
         },
         {
          "sx": 1608,
@@ -14574,10 +14536,91 @@
          "w": 110,
          "h": 108,
          "x": 210,
-         "y": -22,
+         "y": 21,
          "anchor": "left",
          "inward": 40,
-         "group": "L"
+         "group": "L",
+         "level": "middle"
+        },
+        {
+         "sx": 718,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 6,
+         "y": 610,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 789,
+         "sy": 3384,
+         "w": 2,
+         "h": 144,
+         "x": 78,
+         "y": 610,
+         "scaleX": 140.0,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 916,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 358,
+         "y": 610,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 2164,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 28,
+         "y": 632,
+         "anchor": "left",
+         "alt": "stick",
+         "group": "MENU+START+STICK_SWAP",
+         "level": "middle"
+        },
+        {
+         "sx": 2266,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 28,
+         "y": 632,
+         "anchor": "left",
+         "alt": "dpad",
+         "group": "MENU+START+STICK_SWAP",
+         "level": "middle"
+        },
+        {
+         "sx": 2980,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 168,
+         "y": 632,
+         "anchor": "left",
+         "group": "MENU+START+STICK_SWAP",
+         "level": "middle"
+        },
+        {
+         "sx": 102,
+         "sy": 3892,
+         "w": 92,
+         "h": 92,
+         "x": 312,
+         "y": 636,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
         }
        ],
        "controls": [
@@ -14585,7 +14628,7 @@
          "id": "DPAD",
          "shape": "dpad",
          "x": 196.0,
-         "y": 336.0,
+         "y": 379.0,
          "r": 156.0,
          "arm": 54.0,
          "anchor": "left",
@@ -14596,7 +14639,7 @@
          "id": "L2",
          "shape": "rect",
          "x": 122.0,
-         "y": 32.0,
+         "y": 75.0,
          "hw": 70.0,
          "hh": 42.0,
          "anchor": "left",
@@ -14605,20 +14648,21 @@
         {
          "id": "MENU",
          "shape": "circle",
-         "x": 226.0,
-         "y": 650.0,
+         "x": 218.0,
+         "y": 681.669434,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "left",
          "label": "MENU",
          "labelDy": 64.5,
-         "labelH": 17.0
+         "labelH": 17.0,
+         "labelDx": 0.0
         },
         {
          "id": "STICK",
          "shape": "stick",
          "x": 196.0,
-         "y": 336.0,
+         "y": 379.0,
          "r": 170.0,
          "anchor": "left",
          "inward": 40,
@@ -14629,38 +14673,53 @@
         {
          "id": "STICK_SWAP",
          "shape": "circle",
-         "x": 86.0,
-         "y": 650.0,
+         "x": 78.0,
+         "y": 681.669434,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "left",
          "label": "D-PAD",
          "labelDy": 64.5,
          "labelH": 17.0,
-         "alt": "stick"
+         "alt": "stick",
+         "labelDx": 0.0
         },
         {
          "id": "STICK_SWAP",
          "shape": "circle",
-         "x": 86.0,
-         "y": 650.0,
+         "x": 78.0,
+         "y": 681.669434,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "left",
          "label": "STICK",
          "labelDy": 64.5,
          "labelH": 17.0,
-         "alt": "dpad"
+         "alt": "dpad",
+         "labelDx": 0.0
         },
         {
          "id": "L",
          "shape": "rect",
          "x": 265.0,
-         "y": 32.0,
+         "y": 75.0,
          "hw": 45.0,
          "hh": 42.0,
          "anchor": "left",
          "inward": 40
+        },
+        {
+         "id": "START",
+         "shape": "circle",
+         "x": 358.0,
+         "y": 681.669434,
+         "r": 58.000004,
+         "capR": 30.000002,
+         "anchor": "left",
+         "label": "START",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "labelDx": 0.0
         }
        ],
        "when": {
@@ -14674,7 +14733,7 @@
       },
       {
        "w": 292,
-       "h": 46,
+       "h": 89,
        "pieces": [
         {
          "sx": 1446,
@@ -14682,52 +14741,11 @@
          "w": 160,
          "h": 108,
          "x": 14,
-         "y": -22,
+         "y": 21,
          "anchor": "left",
          "inward": 40,
-         "group": "L2"
-        },
-        {
-         "sx": 718,
-         "sy": 3384,
-         "w": 270,
-         "h": 144,
-         "x": 21,
-         "y": 578,
-         "anchor": "left",
-         "group": "MENU+STICK_SWAP"
-        },
-        {
-         "sx": 2980,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 176,
-         "y": 600,
-         "anchor": "left",
-         "group": "MENU+STICK_SWAP"
-        },
-        {
-         "sx": 2164,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 36,
-         "y": 600,
-         "anchor": "left",
-         "alt": "stick",
-         "group": "STICK_SWAP"
-        },
-        {
-         "sx": 2266,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 36,
-         "y": 600,
-         "anchor": "left",
-         "alt": "dpad",
-         "group": "STICK_SWAP"
+         "group": "L2",
+         "level": "middle"
         },
         {
          "sx": 1608,
@@ -14735,10 +14753,91 @@
          "w": 110,
          "h": 108,
          "x": 182,
-         "y": -22,
+         "y": 21,
          "anchor": "left",
          "inward": 40,
-         "group": "L"
+         "group": "L",
+         "level": "middle"
+        },
+        {
+         "sx": 718,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": -32,
+         "y": 621,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 789,
+         "sy": 3384,
+         "w": 2,
+         "h": 144,
+         "x": 40,
+         "y": 621,
+         "scaleX": 140.0,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 916,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 320,
+         "y": 621,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 2164,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": -10,
+         "y": 643,
+         "anchor": "left",
+         "alt": "stick",
+         "group": "MENU+START+STICK_SWAP",
+         "level": "middle"
+        },
+        {
+         "sx": 2266,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": -10,
+         "y": 643,
+         "anchor": "left",
+         "alt": "dpad",
+         "group": "MENU+START+STICK_SWAP",
+         "level": "middle"
+        },
+        {
+         "sx": 2980,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 130,
+         "y": 643,
+         "anchor": "left",
+         "group": "MENU+START+STICK_SWAP",
+         "level": "middle"
+        },
+        {
+         "sx": 102,
+         "sy": 3892,
+         "w": 92,
+         "h": 92,
+         "x": 274,
+         "y": 647,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
         }
        ],
        "controls": [
@@ -14746,7 +14845,7 @@
          "id": "L2",
          "shape": "rect",
          "x": 94.49997,
-         "y": 32.12506,
+         "y": 75.12505999999999,
          "hw": 70.0,
          "hh": 42.0,
          "anchor": "left",
@@ -14755,50 +14854,66 @@
         {
          "id": "MENU",
          "shape": "circle",
-         "x": 226.00002,
-         "y": 650.125,
+         "x": 180.49819866186309,
+         "y": 693.125,
          "r": 58.000004,
          "capR": 39.0,
          "anchor": "left",
          "label": "MENU",
          "labelDy": 64.5,
-         "labelH": 17.0
+         "labelH": 17.0,
+         "labelDx": 0.0
         },
         {
          "id": "STICK_SWAP",
          "shape": "circle",
-         "x": 86.0,
-         "y": 650.125,
+         "x": 40.4981986618631,
+         "y": 693.125,
          "r": 58.000004,
          "capR": 39.0,
          "anchor": "left",
          "label": "D-PAD",
          "labelDy": 64.5,
          "labelH": 17.0,
-         "alt": "stick"
+         "alt": "stick",
+         "labelDx": 0.0
         },
         {
          "id": "STICK_SWAP",
          "shape": "circle",
-         "x": 86.0,
-         "y": 650.125,
+         "x": 40.4981986618631,
+         "y": 693.125,
          "r": 58.000004,
          "capR": 39.0,
          "anchor": "left",
          "label": "STICK",
          "labelDy": 64.5,
          "labelH": 17.0,
-         "alt": "dpad"
+         "alt": "dpad",
+         "labelDx": 0.0
         },
         {
          "id": "L",
          "shape": "rect",
          "x": 237.49998,
-         "y": 32.12506,
+         "y": 75.12505999999999,
          "hw": 45.0,
          "hh": 42.0,
          "anchor": "left",
          "inward": 40
+        },
+        {
+         "id": "START",
+         "shape": "circle",
+         "x": 320.4981986618631,
+         "y": 693.125,
+         "r": 58.000004,
+         "capR": 30.000002,
+         "anchor": "left",
+         "label": "START",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "labelDx": 0.0
         }
        ],
        "when": {
@@ -14809,6 +14924,199 @@
         "maxHdp": 907.2,
         "halfFolded": false
        }
+      },
+      {
+       "w": 292,
+       "h": 89,
+       "pieces": [
+        {
+         "sx": 1446,
+         "sy": 3782,
+         "w": 160,
+         "h": 108,
+         "x": 14,
+         "y": 21,
+         "anchor": "left",
+         "inward": 40,
+         "group": "L2",
+         "level": "middle"
+        },
+        {
+         "sx": 1608,
+         "sy": 3782,
+         "w": 110,
+         "h": 108,
+         "x": 182,
+         "y": 21,
+         "anchor": "left",
+         "inward": 40,
+         "group": "L",
+         "level": "middle"
+        },
+        {
+         "sx": 718,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": -32,
+         "y": 621,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 789,
+         "sy": 3384,
+         "w": 2,
+         "h": 144,
+         "x": 40,
+         "y": 621,
+         "scaleX": 140.0,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 916,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 320,
+         "y": 621,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 2164,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": -10,
+         "y": 643,
+         "anchor": "left",
+         "alt": "stick",
+         "group": "MENU+START+STICK_SWAP",
+         "level": "middle"
+        },
+        {
+         "sx": 2266,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": -10,
+         "y": 643,
+         "anchor": "left",
+         "alt": "dpad",
+         "group": "MENU+START+STICK_SWAP",
+         "level": "middle"
+        },
+        {
+         "sx": 2980,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 130,
+         "y": 643,
+         "anchor": "left",
+         "group": "MENU+START+STICK_SWAP",
+         "level": "middle"
+        },
+        {
+         "sx": 102,
+         "sy": 3892,
+         "w": 92,
+         "h": 92,
+         "x": 274,
+         "y": 647,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
+        }
+       ],
+       "controls": [
+        {
+         "id": "L2",
+         "shape": "rect",
+         "x": 94.49997,
+         "y": 75.12505999999999,
+         "hw": 70.0,
+         "hh": 42.0,
+         "anchor": "left",
+         "inward": 40
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 180.0,
+         "y": 693.125,
+         "r": 58.000004,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "labelDx": 0.0
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 40.0,
+         "y": 693.125,
+         "r": 58.000004,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "D-PAD",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "stick",
+         "labelDx": 0.0
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 40.0,
+         "y": 693.125,
+         "r": 58.000004,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "STICK",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "dpad",
+         "labelDx": 0.0
+        },
+        {
+         "id": "L",
+         "shape": "rect",
+         "x": 237.49998,
+         "y": 75.12505999999999,
+         "hw": 45.0,
+         "hh": 42.0,
+         "anchor": "left",
+         "inward": 40
+        },
+        {
+         "id": "START",
+         "shape": "circle",
+         "x": 320.0,
+         "y": 693.125,
+         "r": 58.000004,
+         "capR": 30.000002,
+         "anchor": "left",
+         "label": "START",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "labelDx": 0.0
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 390.0,
+        "maxWdp": 444.0,
+        "minHdp": 860.0,
+        "maxHdp": 1010.0
+       }
       }
      ]
     },
@@ -14817,18 +15125,20 @@
      "sizes": [
       {
        "w": 456,
-       "h": 706,
+       "h": 749,
        "pieces": [
         {
          "sx": 836,
          "sy": 2966,
          "w": 416,
          "h": 416,
-         "x": 50,
-         "y": 88,
+         "x": -2,
+         "y": 119,
          "anchor": "right",
          "inward": 40,
-         "group": "CD+CL+CR+CU"
+         "group": "CD+CL+CR+CU",
+         "scale": 1.25,
+         "level": "middle"
         },
         {
          "sx": 1942,
@@ -14836,84 +15146,88 @@
          "w": 220,
          "h": 108,
          "x": 194,
-         "y": -22,
+         "y": 21,
          "anchor": "right",
          "inward": 40,
-         "group": "R"
+         "group": "R",
+         "level": "middle"
         },
         {
          "sx": 2682,
          "sy": 2966,
          "w": 281,
          "h": 281,
-         "x": 0,
-         "y": 430,
+         "x": -135,
+         "y": 452,
          "anchor": "right",
          "inward": 40,
          "scale": 1.1393083,
-         "group": "A+B"
+         "group": "A+B",
+         "level": "middle"
         },
         {
          "sx": 146,
          "sy": 3384,
          "w": 148,
          "h": 148,
-         "x": 31,
-         "y": 461,
+         "x": -104,
+         "y": 483,
          "anchor": "right",
          "inward": 40,
-         "group": "A+B"
+         "group": "A+B",
+         "level": "middle"
         },
         {
          "sx": 296,
          "sy": 3384,
          "w": 148,
          "h": 148,
-         "x": 140,
-         "y": 571,
+         "x": 5,
+         "y": 593,
          "anchor": "right",
          "inward": 40,
-         "group": "A+B"
+         "group": "A+B",
+         "level": "middle"
         }
        ],
        "controls": [
         {
          "id": "CU",
          "shape": "circle",
-         "x": 257.50317,
-         "y": 198.40002,
-         "r": 58.0,
-         "capR": 43.0,
+         "x": 257.3789625,
+         "y": 257.00002500000005,
+         "r": 72.5,
+         "capR": 53.75,
          "anchor": "right",
          "inward": 40
         },
         {
          "id": "CL",
          "shape": "circle",
-         "x": 174.30316,
-         "y": 296.0,
-         "r": 58.0,
-         "capR": 43.0,
+         "x": 153.37894999999997,
+         "y": 379.0,
+         "r": 72.5,
+         "capR": 53.75,
          "anchor": "right",
          "inward": 40
         },
         {
          "id": "CR",
          "shape": "circle",
-         "x": 340.70312,
-         "y": 296.0,
-         "r": 58.0,
-         "capR": 43.0,
+         "x": 361.37890000000004,
+         "y": 379.0,
+         "r": 72.5,
+         "capR": 53.75,
          "anchor": "right",
          "inward": 40
         },
         {
          "id": "CD",
          "shape": "circle",
-         "x": 257.50317,
-         "y": 393.6001,
-         "r": 58.0,
-         "capR": 43.0,
+         "x": 257.3789625,
+         "y": 501.000125,
+         "r": 72.5,
+         "capR": 53.75,
          "anchor": "right",
          "inward": 40
         },
@@ -14921,7 +15235,7 @@
          "id": "R",
          "shape": "rect",
          "x": 303.50317,
-         "y": 32.0,
+         "y": 75.0,
          "hw": 100.0,
          "hh": 42.0,
          "anchor": "right",
@@ -14930,8 +15244,8 @@
         {
          "id": "B",
          "shape": "circle",
-         "x": 104.70245,
-         "y": 535.1992,
+         "x": -29.712159999999997,
+         "y": 556.927471,
          "r": 67.0,
          "capR": 54.0,
          "anchor": "right",
@@ -14940,8 +15254,8 @@
         {
          "id": "A",
          "shape": "circle",
-         "x": 214.3039,
-         "y": 644.8008,
+         "x": 79.88929,
+         "y": 666.5290709999999,
          "r": 67.0,
          "capR": 54.0,
          "anchor": "right",
@@ -14959,7 +15273,7 @@
       },
       {
        "w": 234,
-       "h": 46,
+       "h": 89,
        "pieces": [
         {
          "sx": 1942,
@@ -14967,10 +15281,11 @@
          "w": 220,
          "h": 108,
          "x": 0,
-         "y": -22,
+         "y": 21,
          "anchor": "right",
          "inward": 40,
-         "group": "R"
+         "group": "R",
+         "level": "middle"
         }
        ],
        "controls": [
@@ -14978,7 +15293,7 @@
          "id": "R",
          "shape": "rect",
          "x": 110.0,
-         "y": 32.12506,
+         "y": 75.12505999999999,
          "hw": 100.0,
          "hh": 42.0,
          "anchor": "right",
@@ -14993,12 +15308,73 @@
         "maxHdp": 907.2,
         "halfFolded": false
        }
+      },
+      {
+       "w": 234,
+       "h": 89,
+       "pieces": [
+        {
+         "sx": 1942,
+         "sy": 3782,
+         "w": 220,
+         "h": 108,
+         "x": 0,
+         "y": 21,
+         "anchor": "right",
+         "inward": 40,
+         "group": "R",
+         "level": "middle"
+        }
+       ],
+       "controls": [
+        {
+         "id": "R",
+         "shape": "rect",
+         "x": 110.0,
+         "y": 75.12505999999999,
+         "hw": 100.0,
+         "hh": 42.0,
+         "anchor": "right",
+         "inward": 40
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 390.0,
+        "maxWdp": 444.0,
+        "minHdp": 860.0,
+        "maxHdp": 1010.0
+       }
       }
      ]
     },
     {
      "slot": "topRow",
      "sizes": [
+      {
+       "w": 0,
+       "h": 0,
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 331.2,
+        "maxWdp": 388.80002,
+        "minHdp": 772.8,
+        "maxHdp": 907.2,
+        "halfFolded": false
+       }
+      },
+      {
+       "w": 0,
+       "h": 0,
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 437.3943,
+        "maxWdp": 513.4629,
+        "minHdp": 691.13904,
+        "maxHdp": 811.33716,
+        "halfFolded": false
+       }
+      },
       {
        "w": 72,
        "h": 1,
@@ -15011,7 +15387,8 @@
          "x": 0,
          "y": 34,
          "anchor": "centre",
-         "group": "START"
+         "group": "START",
+         "level": "middle"
         }
        ],
        "controls": [
@@ -15051,89 +15428,121 @@
          "sy": 2966,
          "w": 416,
          "h": 416,
-         "x": 0,
+         "x": 24,
          "y": 40,
          "anchor": "left",
          "inward": 40,
          "alt": "dpad",
-         "group": "DPAD"
+         "group": "DPAD",
+         "level": "middle"
         },
         {
          "sx": 836,
          "sy": 2966,
          "w": 416,
          "h": 416,
-         "x": 463,
-         "y": 0,
+         "x": 391,
+         "y": -10,
          "anchor": "right",
          "inward": 40,
-         "group": "CD+CL+CR+CU"
+         "group": "CD+CL+CR+CU",
+         "level": "middle",
+         "scale": 1.2415034549402377
         },
         {
          "sx": 2754,
          "sy": 2392,
          "w": 416,
          "h": 416,
-         "x": 0,
+         "x": 24,
          "y": 40,
          "anchor": "left",
          "inward": 40,
          "alt": "stick",
-         "group": "STICK"
+         "group": "STICK",
+         "level": "middle"
         },
         {
          "sx": 2396,
          "sy": 2966,
          "w": 284,
          "h": 284,
-         "x": 66,
+         "x": 90,
          "y": 106,
          "anchor": "left",
          "inward": 40,
          "knob": true,
          "alt": "stick",
-         "group": "STICK"
+         "group": "STICK",
+         "level": "middle"
         },
         {
-         "sx": 2682,
-         "sy": 2966,
-         "w": 281,
-         "h": 281,
-         "x": 413,
-         "y": 342,
-         "anchor": "right",
-         "inward": 40,
-         "scale": 1.1393083,
-         "group": "A+B"
+         "sx": 718,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 471,
+         "y": 462,
+         "scale": 1.3888888888888888,
+         "group": "A+B",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 789,
+         "sy": 3384,
+         "w": 2,
+         "h": 144,
+         "x": 571,
+         "y": 462,
+         "scale": 1.3888888888888888,
+         "scaleX": 77.5,
+         "group": "A+B",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 916,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 726,
+         "y": 462,
+         "scale": 1.3888888888888888,
+         "group": "A+B",
+         "anchor": "left",
+         "level": "middle"
         },
         {
          "sx": 146,
          "sy": 3384,
          "w": 148,
          "h": 148,
-         "x": 444,
-         "y": 373,
+         "x": 497,
+         "y": 488,
          "anchor": "right",
          "inward": 40,
-         "group": "A+B"
+         "group": "A+B",
+         "level": "middle"
         },
         {
          "sx": 296,
          "sy": 3384,
          "w": 148,
          "h": 148,
-         "x": 554,
-         "y": 483,
+         "x": 652,
+         "y": 488,
          "anchor": "right",
          "inward": 40,
-         "group": "A+B"
+         "group": "A+B",
+         "level": "middle"
         }
        ],
        "controls": [
         {
          "id": "DPAD",
          "shape": "dpad",
-         "x": 208.0,
+         "x": 232.49819866186309,
          "y": 248.0,
          "r": 156.0,
          "arm": 54.0,
@@ -15144,47 +15553,47 @@
         {
          "id": "CU",
          "shape": "circle",
-         "x": 670.9999,
-         "y": 110.40006,
-         "r": 58.000004,
-         "capR": 43.0,
+         "x": 648.9675759135357,
+         "y": 126.82920072266005,
+         "r": 72.0072053525476,
+         "capR": 53.38464856243022,
          "anchor": "right",
          "inward": 40
         },
         {
          "id": "CL",
          "shape": "circle",
-         "x": 587.7999,
-         "y": 208.00005,
-         "r": 58.000004,
-         "capR": 43.0,
+         "x": 545.6744884625078,
+         "y": 247.9999255097927,
+         "r": 72.0072053525476,
+         "capR": 53.38464856243022,
          "anchor": "right",
          "inward": 40
         },
         {
          "id": "CR",
          "shape": "circle",
-         "x": 754.19995,
-         "y": 208.00005,
-         "r": 58.000004,
-         "capR": 43.0,
+         "x": 752.2607254397361,
+         "y": 247.9999255097927,
+         "r": 72.0072053525476,
+         "capR": 53.38464856243022,
          "anchor": "right",
          "inward": 40
         },
         {
          "id": "CD",
          "shape": "circle",
-         "x": 670.9999,
-         "y": 305.60016,
-         "r": 58.000004,
-         "capR": 43.0,
+         "x": 648.9675759135357,
+         "y": 369.17079927734,
+         "r": 72.0072053525476,
+         "capR": 53.38464856243022,
          "anchor": "right",
          "inward": 40
         },
         {
          "id": "STICK",
          "shape": "stick",
-         "x": 208.0,
+         "x": 232.49819866186309,
          "y": 248.0,
          "r": 170.0,
          "anchor": "left",
@@ -15196,8 +15605,8 @@
         {
          "id": "B",
          "shape": "circle",
-         "x": 518.1993,
-         "y": 447.1991,
+         "x": 571.4675759135357,
+         "y": 562.1019042717447,
          "r": 67.0,
          "capR": 54.0,
          "anchor": "right",
@@ -15206,8 +15615,8 @@
         {
          "id": "A",
          "shape": "circle",
-         "x": 627.8006,
-         "y": 556.8008,
+         "x": 726.4675759135357,
+         "y": 562.1019042717447,
          "r": 67.0,
          "capR": 54.0,
          "anchor": "right",
@@ -15233,6 +15642,218 @@
         "minHdp": 691.13904,
         "maxHdp": 811.33716,
         "halfFolded": false
+       }
+      },
+      {
+       "w": 881,
+       "h": 618,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": -44,
+         "y": 40,
+         "anchor": "left",
+         "inward": 40,
+         "alt": "dpad",
+         "group": "DPAD",
+         "level": "middle"
+        },
+        {
+         "sx": 836,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 459,
+         "y": -10,
+         "anchor": "right",
+         "inward": 40,
+         "group": "CD+CL+CR+CU",
+         "level": "middle",
+         "scale": 1.2415034549402377
+        },
+        {
+         "sx": 2754,
+         "sy": 2392,
+         "w": 416,
+         "h": 416,
+         "x": -44,
+         "y": 40,
+         "anchor": "left",
+         "inward": 40,
+         "alt": "stick",
+         "group": "STICK",
+         "level": "middle"
+        },
+        {
+         "sx": 2396,
+         "sy": 2966,
+         "w": 284,
+         "h": 284,
+         "x": 22,
+         "y": 106,
+         "anchor": "left",
+         "inward": 40,
+         "knob": true,
+         "alt": "stick",
+         "group": "STICK",
+         "level": "middle"
+        },
+        {
+         "sx": 718,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 539,
+         "y": 462,
+         "scale": 1.3888888888888888,
+         "group": "A+B",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 789,
+         "sy": 3384,
+         "w": 2,
+         "h": 144,
+         "x": 639,
+         "y": 462,
+         "scale": 1.3888888888888888,
+         "scaleX": 77.5,
+         "group": "A+B",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 916,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 794,
+         "y": 462,
+         "scale": 1.3888888888888888,
+         "group": "A+B",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 146,
+         "sy": 3384,
+         "w": 148,
+         "h": 148,
+         "x": 565,
+         "y": 488,
+         "anchor": "right",
+         "inward": 40,
+         "group": "A+B",
+         "level": "middle"
+        },
+        {
+         "sx": 296,
+         "sy": 3384,
+         "w": 148,
+         "h": 148,
+         "x": 720,
+         "y": 488,
+         "anchor": "right",
+         "inward": 40,
+         "group": "A+B",
+         "level": "middle"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 164.5,
+         "y": 248.0,
+         "r": 156.0,
+         "arm": 54.0,
+         "anchor": "left",
+         "inward": 40,
+         "alt": "dpad"
+        },
+        {
+         "id": "CU",
+         "shape": "circle",
+         "x": 716.5,
+         "y": 126.82920072266005,
+         "r": 72.0072053525476,
+         "capR": 53.38464856243022,
+         "anchor": "right",
+         "inward": 40
+        },
+        {
+         "id": "CL",
+         "shape": "circle",
+         "x": 613.2069125489721,
+         "y": 247.9999255097927,
+         "r": 72.0072053525476,
+         "capR": 53.38464856243022,
+         "anchor": "right",
+         "inward": 40
+        },
+        {
+         "id": "CR",
+         "shape": "circle",
+         "x": 819.7931495262004,
+         "y": 247.9999255097927,
+         "r": 72.0072053525476,
+         "capR": 53.38464856243022,
+         "anchor": "right",
+         "inward": 40
+        },
+        {
+         "id": "CD",
+         "shape": "circle",
+         "x": 716.5,
+         "y": 369.17079927734,
+         "r": 72.0072053525476,
+         "capR": 53.38464856243022,
+         "anchor": "right",
+         "inward": 40
+        },
+        {
+         "id": "STICK",
+         "shape": "stick",
+         "x": 164.5,
+         "y": 248.0,
+         "r": 170.0,
+         "anchor": "left",
+         "inward": 40,
+         "travel": 60.000004,
+         "knobTravel": 30.000002,
+         "alt": "stick"
+        },
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 639.0,
+         "y": 562.1019042717447,
+         "r": 67.0,
+         "capR": 54.0,
+         "anchor": "right",
+         "inward": 40
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 794.0,
+         "y": 562.1019042717447,
+         "r": 67.0,
+         "capR": 54.0,
+         "anchor": "right",
+         "inward": 40
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 390.0,
+        "maxWdp": 444.0,
+        "minHdp": 860.0,
+        "maxHdp": 1010.0
        }
       }
      ]
@@ -29157,7 +29778,7 @@
      "slot": "left",
      "sizes": [
       {
-       "w": 436,
+       "w": 404,
        "h": 538,
        "pieces": [
         {
@@ -29207,28 +29828,6 @@
          "knob": true,
          "alt": "stick",
          "group": "STICK"
-        },
-        {
-         "sx": 2164,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 336,
-         "y": 602,
-         "anchor": "centre",
-         "alt": "stick",
-         "group": "STICK_SWAP"
-        },
-        {
-         "sx": 2266,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 336,
-         "y": 602,
-         "anchor": "centre",
-         "alt": "dpad",
-         "group": "STICK_SWAP"
         }
        ],
        "controls": [
@@ -29264,32 +29863,6 @@
          "travel": 60.0,
          "knobTravel": 30.0,
          "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 386.0,
-         "y": 652.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "centre",
-         "label": "D-PAD",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 386.0,
-         "y": 652.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "centre",
-         "label": "STICK",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "alt": "dpad"
         }
        ],
        "when": {
@@ -29465,6 +30038,28 @@
          "y": 22,
          "anchor": "centre",
          "group": "MENU+STICK_SWAP"
+        },
+        {
+         "sx": 2164,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "alt": "stick",
+         "group": "MENU+STICK_SWAP"
+        },
+        {
+         "sx": 2266,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "alt": "dpad",
+         "group": "MENU+STICK_SWAP"
         }
        ],
        "controls": [
@@ -29479,6 +30074,32 @@
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 65.0,
+         "y": 72.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "D-PAD",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "stick"
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 65.0,
+         "y": 72.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "STICK",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "dpad"
         }
        ],
        "when": {
@@ -44248,29 +44869,8 @@
      "sizes": [
       {
        "w": 416,
-       "h": 932,
+       "h": 880,
        "pieces": [
-        {
-         "sx": 718,
-         "sy": 3384,
-         "w": 270,
-         "h": 144,
-         "x": 86,
-         "y": 738,
-         "anchor": "centre",
-         "group": "MENU+START"
-        },
-        {
-         "sx": 1254,
-         "sy": 2966,
-         "w": 416,
-         "h": 416,
-         "x": 0,
-         "y": 156,
-         "anchor": "left",
-         "alt": "dpad",
-         "group": "DPAD"
-        },
         {
          "sx": 1446,
          "sy": 3782,
@@ -44279,27 +44879,8 @@
          "x": 48,
          "y": 0,
          "anchor": "left",
-         "group": "L2"
-        },
-        {
-         "sx": 102,
-         "sy": 3892,
-         "w": 92,
-         "h": 92,
-         "x": 245,
-         "y": 764,
-         "anchor": "centre",
-         "group": "MENU+START"
-        },
-        {
-         "sx": 2980,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 101,
-         "y": 760,
-         "anchor": "centre",
-         "group": "MENU+START"
+         "group": "L2",
+         "level": "middle"
         },
         {
          "sx": 2754,
@@ -44309,8 +44890,8 @@
          "x": 0,
          "y": 156,
          "anchor": "left",
-         "alt": "stick",
-         "group": "STICK"
+         "group": "STICK",
+         "level": "middle"
         },
         {
          "sx": 2396,
@@ -44321,30 +44902,8 @@
          "y": 222,
          "anchor": "left",
          "knob": true,
-         "alt": "stick",
-         "group": "STICK"
-        },
-        {
-         "sx": 2164,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 171,
-         "y": 614,
-         "anchor": "left",
-         "alt": "stick",
-         "group": "STICK_SWAP"
-        },
-        {
-         "sx": 2266,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 171,
-         "y": 614,
-         "anchor": "left",
-         "alt": "dpad",
-         "group": "STICK_SWAP"
+         "group": "STICK",
+         "level": "middle"
         },
         {
          "sx": 1608,
@@ -44354,20 +44913,23 @@
          "x": 216,
          "y": 0,
          "anchor": "left",
-         "group": "L"
+         "group": "L",
+         "level": "middle"
+        },
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 116,
+         "y": 580,
+         "anchor": "left",
+         "group": "DPAD",
+         "level": "middle",
+         "scale": 0.72
         }
        ],
        "controls": [
-        {
-         "id": "DPAD",
-         "shape": "dpad",
-         "x": 208.0,
-         "y": 364.0,
-         "r": 156.0,
-         "arm": 54.0,
-         "anchor": "left",
-         "alt": "dpad"
-        },
         {
          "id": "L2",
          "shape": "rect",
@@ -44378,30 +44940,6 @@
          "anchor": "left"
         },
         {
-         "id": "START",
-         "shape": "circle",
-         "x": 290.59998,
-         "y": 810.0,
-         "r": 58.0,
-         "capR": 40.0,
-         "anchor": "left",
-         "label": "START",
-         "labelDy": 64.5,
-         "labelH": 17.0
-        },
-        {
-         "id": "MENU",
-         "shape": "circle",
-         "x": 150.59998,
-         "y": 810.0,
-         "r": 58.0,
-         "capR": 40.0,
-         "anchor": "left",
-         "label": "MENU",
-         "labelDy": 64.5,
-         "labelH": 17.0
-        },
-        {
          "id": "STICK",
          "shape": "stick",
          "x": 208.0,
@@ -44409,34 +44947,7 @@
          "r": 170.0,
          "anchor": "left",
          "travel": 60.0,
-         "knobTravel": 30.0,
-         "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 220.6,
-         "y": 664.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "left",
-         "label": "D-PAD",
-         "labelDx": -67.0,
-         "labelH": 17.0,
-         "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 220.6,
-         "y": 664.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "left",
-         "label": "STICK",
-         "labelDx": -67.0,
-         "labelH": 17.0,
-         "alt": "dpad"
+         "knobTravel": 30.0
         },
         {
          "id": "L",
@@ -44445,6 +44956,15 @@
          "y": 54.0,
          "hw": 45.0,
          "hh": 42.0,
+         "anchor": "left"
+        },
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 266.24,
+         "y": 729.76,
+         "r": 112.32,
+         "arm": 54.0,
          "anchor": "left"
         }
        ],
@@ -44458,29 +44978,8 @@
       },
       {
        "w": 358,
-       "h": 938,
+       "h": 874,
        "pieces": [
-        {
-         "sx": 718,
-         "sy": 3384,
-         "w": 270,
-         "h": 144,
-         "x": 66,
-         "y": 729,
-         "anchor": "centre",
-         "group": "MENU+START"
-        },
-        {
-         "sx": 1254,
-         "sy": 2966,
-         "w": 416,
-         "h": 416,
-         "x": -50,
-         "y": 150,
-         "anchor": "left",
-         "alt": "dpad",
-         "group": "DPAD"
-        },
         {
          "sx": 1446,
          "sy": 3782,
@@ -44489,27 +44988,8 @@
          "x": -8,
          "y": 0,
          "anchor": "left",
-         "group": "L2"
-        },
-        {
-         "sx": 102,
-         "sy": 3892,
-         "w": 92,
-         "h": 92,
-         "x": 225,
-         "y": 755,
-         "anchor": "centre",
-         "group": "MENU+START"
-        },
-        {
-         "sx": 2980,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 81,
-         "y": 751,
-         "anchor": "centre",
-         "group": "MENU+START"
+         "group": "L2",
+         "level": "middle"
         },
         {
          "sx": 2754,
@@ -44519,8 +44999,8 @@
          "x": -50,
          "y": 150,
          "anchor": "left",
-         "alt": "stick",
-         "group": "STICK"
+         "group": "STICK",
+         "level": "middle"
         },
         {
          "sx": 2396,
@@ -44531,30 +45011,8 @@
          "y": 216,
          "anchor": "left",
          "knob": true,
-         "alt": "stick",
-         "group": "STICK"
-        },
-        {
-         "sx": 2164,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 151,
-         "y": 608,
-         "anchor": "left",
-         "alt": "stick",
-         "group": "STICK_SWAP"
-        },
-        {
-         "sx": 2266,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 151,
-         "y": 608,
-         "anchor": "left",
-         "alt": "dpad",
-         "group": "STICK_SWAP"
+         "group": "STICK",
+         "level": "middle"
         },
         {
          "sx": 1608,
@@ -44564,20 +45022,23 @@
          "x": 160,
          "y": 0,
          "anchor": "left",
-         "group": "L"
+         "group": "L",
+         "level": "middle"
+        },
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 58,
+         "y": 574,
+         "anchor": "left",
+         "group": "DPAD",
+         "level": "middle",
+         "scale": 0.72
         }
        ],
        "controls": [
-        {
-         "id": "DPAD",
-         "shape": "dpad",
-         "x": 158.0,
-         "y": 358.0,
-         "r": 156.0,
-         "arm": 54.0,
-         "anchor": "left",
-         "alt": "dpad"
-        },
         {
          "id": "L2",
          "shape": "rect",
@@ -44588,30 +45049,6 @@
          "anchor": "left"
         },
         {
-         "id": "START",
-         "shape": "circle",
-         "x": 270.59998,
-         "y": 801.0,
-         "r": 58.0,
-         "capR": 40.0,
-         "anchor": "left",
-         "label": "START",
-         "labelDy": 64.5,
-         "labelH": 17.0
-        },
-        {
-         "id": "MENU",
-         "shape": "circle",
-         "x": 130.59998,
-         "y": 801.0,
-         "r": 58.0,
-         "capR": 40.0,
-         "anchor": "left",
-         "label": "MENU",
-         "labelDy": 64.5,
-         "labelH": 17.0
-        },
-        {
          "id": "STICK",
          "shape": "stick",
          "x": 158.0,
@@ -44619,34 +45056,7 @@
          "r": 170.0,
          "anchor": "left",
          "travel": 60.0,
-         "knobTravel": 30.0,
-         "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 200.6,
-         "y": 658.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "left",
-         "label": "D-PAD",
-         "labelDx": -67.0,
-         "labelH": 17.0,
-         "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 200.6,
-         "y": 658.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "left",
-         "label": "STICK",
-         "labelDx": -67.0,
-         "labelH": 17.0,
-         "alt": "dpad"
+         "knobTravel": 30.0
         },
         {
          "id": "L",
@@ -44655,6 +45065,15 @@
          "y": 54.0,
          "hw": 45.0,
          "hh": 42.0,
+         "anchor": "left"
+        },
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 208.24,
+         "y": 723.76,
+         "r": 112.32,
+         "arm": 54.0,
          "anchor": "left"
         }
        ],
@@ -44667,7 +45086,7 @@
        }
       },
       {
-       "w": 380,
+       "w": 416,
        "h": 750,
        "pieces": [
         {
@@ -44679,7 +45098,8 @@
          "y": 160,
          "anchor": "left",
          "alt": "dpad",
-         "group": "DPAD"
+         "group": "DPAD",
+         "level": "middle"
         },
         {
          "sx": 1446,
@@ -44689,7 +45109,8 @@
          "x": 52,
          "y": 0,
          "anchor": "left",
-         "group": "L2"
+         "group": "L2",
+         "level": "middle"
         },
         {
          "sx": 2754,
@@ -44700,7 +45121,8 @@
          "y": 160,
          "anchor": "left",
          "alt": "stick",
-         "group": "STICK"
+         "group": "STICK",
+         "level": "middle"
         },
         {
          "sx": 2396,
@@ -44712,29 +45134,8 @@
          "anchor": "left",
          "knob": true,
          "alt": "stick",
-         "group": "STICK"
-        },
-        {
-         "sx": 2164,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 167,
-         "y": 618,
-         "anchor": "left",
-         "alt": "stick",
-         "group": "STICK_SWAP"
-        },
-        {
-         "sx": 2266,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 167,
-         "y": 618,
-         "anchor": "left",
-         "alt": "dpad",
-         "group": "STICK_SWAP"
+         "group": "STICK",
+         "level": "middle"
         },
         {
          "sx": 1608,
@@ -44745,7 +45146,88 @@
          "y": 0,
          "anchor": "left",
          "scale": 1.0000001,
-         "group": "L"
+         "group": "L",
+         "level": "middle"
+        },
+        {
+         "sx": 718,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": -40,
+         "y": 596,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 789,
+         "sy": 3384,
+         "w": 2,
+         "h": 144,
+         "x": 32,
+         "y": 596,
+         "scaleX": 140.0,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 916,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 312,
+         "y": 596,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 2164,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": -18,
+         "y": 618,
+         "anchor": "left",
+         "alt": "stick",
+         "group": "MENU+START+STICK_SWAP",
+         "level": "middle"
+        },
+        {
+         "sx": 2266,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": -18,
+         "y": 618,
+         "anchor": "left",
+         "alt": "dpad",
+         "group": "MENU+START+STICK_SWAP",
+         "level": "middle"
+        },
+        {
+         "sx": 2980,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 122,
+         "y": 618,
+         "anchor": "left",
+         "group": "MENU+START+STICK_SWAP",
+         "level": "middle"
+        },
+        {
+         "sx": 102,
+         "sy": 3892,
+         "w": 92,
+         "h": 92,
+         "x": 266,
+         "y": 622,
+         "anchor": "left",
+         "group": "MENU+START+STICK_SWAP",
+         "level": "middle"
         }
        ],
        "controls": [
@@ -44782,28 +45264,30 @@
         {
          "id": "STICK_SWAP",
          "shape": "circle",
-         "x": 217.03502,
+         "x": 32.43503000000001,
          "y": 667.5649,
          "r": 58.0,
          "capR": 39.000004,
          "anchor": "left",
          "label": "D-PAD",
-         "labelDx": -67.0,
+         "labelDx": 0.0,
          "labelH": 17.0,
-         "alt": "stick"
+         "alt": "stick",
+         "labelDy": 64.5
         },
         {
          "id": "STICK_SWAP",
          "shape": "circle",
-         "x": 217.03502,
+         "x": 32.43503000000001,
          "y": 667.5649,
          "r": 58.0,
          "capR": 39.000004,
          "anchor": "left",
          "label": "STICK",
-         "labelDx": -67.0,
+         "labelDx": 0.0,
          "labelH": 17.0,
-         "alt": "dpad"
+         "alt": "dpad",
+         "labelDy": 64.5
         },
         {
          "id": "L",
@@ -44813,6 +45297,32 @@
          "hw": 44.999996,
          "hh": 42.0,
          "anchor": "left"
+        },
+        {
+         "id": "START",
+         "shape": "circle",
+         "x": 312.43503,
+         "y": 667.5649,
+         "r": 58.0,
+         "capR": 40.0,
+         "anchor": "left",
+         "label": "START",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "labelDx": 0.0
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 172.43503,
+         "y": 667.5649,
+         "r": 58.0,
+         "capR": 40.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "labelDx": 0.0
         }
        ],
        "when": {
@@ -44821,6 +45331,226 @@
         "maxWdp": 901.44006,
         "minHdp": 691.84,
         "maxHdp": 812.16003,
+        "halfFolded": true
+       }
+      },
+      {
+       "w": 416,
+       "h": 880,
+       "pieces": [
+        {
+         "sx": 1446,
+         "sy": 3782,
+         "w": 160,
+         "h": 108,
+         "x": 48,
+         "y": 0,
+         "anchor": "left",
+         "group": "L2",
+         "level": "middle"
+        },
+        {
+         "sx": 2754,
+         "sy": 2392,
+         "w": 416,
+         "h": 416,
+         "x": 0,
+         "y": 156,
+         "anchor": "left",
+         "group": "STICK",
+         "level": "middle"
+        },
+        {
+         "sx": 2396,
+         "sy": 2966,
+         "w": 284,
+         "h": 284,
+         "x": 66,
+         "y": 222,
+         "anchor": "left",
+         "knob": true,
+         "group": "STICK",
+         "level": "middle"
+        },
+        {
+         "sx": 1608,
+         "sy": 3782,
+         "w": 110,
+         "h": 108,
+         "x": 216,
+         "y": 0,
+         "anchor": "left",
+         "group": "L",
+         "level": "middle"
+        },
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 116,
+         "y": 580,
+         "anchor": "left",
+         "group": "DPAD",
+         "level": "middle",
+         "scale": 0.72
+        }
+       ],
+       "controls": [
+        {
+         "id": "L2",
+         "shape": "rect",
+         "x": 128.0,
+         "y": 54.0,
+         "hw": 70.0,
+         "hh": 42.0,
+         "anchor": "left"
+        },
+        {
+         "id": "STICK",
+         "shape": "stick",
+         "x": 208.0,
+         "y": 364.0,
+         "r": 170.0,
+         "anchor": "left",
+         "travel": 60.0,
+         "knobTravel": 30.0
+        },
+        {
+         "id": "L",
+         "shape": "rect",
+         "x": 271.0,
+         "y": 54.0,
+         "hw": 45.0,
+         "hh": 42.0,
+         "anchor": "left"
+        },
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 266.24,
+         "y": 729.76,
+         "r": 112.32,
+         "arm": 54.0,
+         "anchor": "left"
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 691.84,
+        "maxWdp": 812.16003,
+        "minHdp": 767.8934,
+        "maxHdp": 901.44006,
+        "halfFolded": true
+       }
+      },
+      {
+       "w": 358,
+       "h": 874,
+       "pieces": [
+        {
+         "sx": 1446,
+         "sy": 3782,
+         "w": 160,
+         "h": 108,
+         "x": -8,
+         "y": 0,
+         "anchor": "left",
+         "group": "L2",
+         "level": "middle"
+        },
+        {
+         "sx": 2754,
+         "sy": 2392,
+         "w": 416,
+         "h": 416,
+         "x": -50,
+         "y": 150,
+         "anchor": "left",
+         "group": "STICK",
+         "level": "middle"
+        },
+        {
+         "sx": 2396,
+         "sy": 2966,
+         "w": 284,
+         "h": 284,
+         "x": 16,
+         "y": 216,
+         "anchor": "left",
+         "knob": true,
+         "group": "STICK",
+         "level": "middle"
+        },
+        {
+         "sx": 1608,
+         "sy": 3782,
+         "w": 110,
+         "h": 108,
+         "x": 160,
+         "y": 0,
+         "anchor": "left",
+         "group": "L",
+         "level": "middle"
+        },
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 58,
+         "y": 574,
+         "anchor": "left",
+         "group": "DPAD",
+         "level": "middle",
+         "scale": 0.72
+        }
+       ],
+       "controls": [
+        {
+         "id": "L2",
+         "shape": "rect",
+         "x": 72.0,
+         "y": 54.0,
+         "hw": 70.0,
+         "hh": 42.0,
+         "anchor": "left"
+        },
+        {
+         "id": "STICK",
+         "shape": "stick",
+         "x": 158.0,
+         "y": 358.0,
+         "r": 170.0,
+         "anchor": "left",
+         "travel": 60.0,
+         "knobTravel": 30.0
+        },
+        {
+         "id": "L",
+         "shape": "rect",
+         "x": 215.0,
+         "y": 54.0,
+         "hw": 45.0,
+         "hh": 42.0,
+         "anchor": "left"
+        },
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 208.24,
+         "y": 723.76,
+         "r": 112.32,
+         "arm": 54.0,
+         "anchor": "left"
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 647.68,
+        "maxWdp": 760.32,
+        "minHdp": 857.9657,
+        "maxHdp": 1007.1772,
         "halfFolded": true
        }
       }
@@ -44842,7 +45572,8 @@
          "y": 104,
          "anchor": "right",
          "scale": 1.2499988,
-         "group": "CD+CL+CR+CU"
+         "group": "CD+CL+CR+CU",
+         "level": "middle"
         },
         {
          "sx": 1942,
@@ -44852,7 +45583,8 @@
          "x": 148,
          "y": 0,
          "anchor": "right",
-         "group": "R"
+         "group": "R",
+         "level": "middle"
         },
         {
          "sx": 2682,
@@ -44863,7 +45595,8 @@
          "y": 593,
          "anchor": "right",
          "scale": 1.1613588,
-         "group": "A+B"
+         "group": "A+B",
+         "level": "middle"
         },
         {
          "sx": 146,
@@ -44873,7 +45606,8 @@
          "x": 78,
          "y": 626,
          "anchor": "right",
-         "group": "A+B"
+         "group": "A+B",
+         "level": "middle"
         },
         {
          "sx": 296,
@@ -44883,7 +45617,8 @@
          "x": 190,
          "y": 738,
          "anchor": "right",
-         "group": "A+B"
+         "group": "A+B",
+         "level": "middle"
         }
        ],
        "controls": [
@@ -44972,7 +45707,8 @@
          "y": 98,
          "anchor": "right",
          "scale": 1.2499988,
-         "group": "CD+CL+CR+CU"
+         "group": "CD+CL+CR+CU",
+         "level": "middle"
         },
         {
          "sx": 1942,
@@ -44982,7 +45718,8 @@
          "x": 146,
          "y": 0,
          "anchor": "right",
-         "group": "R"
+         "group": "R",
+         "level": "middle"
         },
         {
          "sx": 2682,
@@ -44993,7 +45730,8 @@
          "y": 590,
          "anchor": "right",
          "scale": 1.1393083,
-         "group": "A+B"
+         "group": "A+B",
+         "level": "middle"
         },
         {
          "sx": 146,
@@ -45003,7 +45741,8 @@
          "x": 71,
          "y": 621,
          "anchor": "right",
-         "group": "A+B"
+         "group": "A+B",
+         "level": "middle"
         },
         {
          "sx": 296,
@@ -45013,7 +45752,8 @@
          "x": 181,
          "y": 731,
          "anchor": "right",
-         "group": "A+B"
+         "group": "A+B",
+         "level": "middle"
         }
        ],
        "controls": [
@@ -45090,7 +45830,7 @@
        }
       },
       {
-       "w": 382,
+       "w": 416,
        "h": 750,
        "pieces": [
         {
@@ -45098,61 +45838,66 @@
          "sy": 2966,
          "w": 416,
          "h": 416,
-         "x": 0,
+         "x": 34,
          "y": 120,
          "anchor": "right",
-         "group": "CD+CL+CR+CU"
+         "group": "CD+CL+CR+CU",
+         "level": "middle"
         },
         {
          "sx": 1942,
          "sy": 3782,
          "w": 220,
          "h": 108,
-         "x": 111,
+         "x": 145,
          "y": 0,
          "anchor": "right",
          "scale": 1.0000001,
-         "group": "R"
+         "group": "R",
+         "level": "middle"
         },
         {
          "sx": 2682,
          "sy": 2966,
          "w": 281,
          "h": 281,
-         "x": 44,
+         "x": 78,
          "y": 503,
          "anchor": "right",
          "scale": 1.1744603,
-         "group": "A+B"
+         "group": "A+B",
+         "level": "middle"
         },
         {
          "sx": 146,
          "sy": 3384,
          "w": 148,
          "h": 148,
-         "x": 78,
+         "x": 112,
          "y": 537,
          "anchor": "right",
          "scale": 0.99999994,
-         "group": "A+B"
+         "group": "A+B",
+         "level": "middle"
         },
         {
          "sx": 296,
          "sy": 3384,
          "w": 148,
          "h": 148,
-         "x": 190,
+         "x": 224,
          "y": 650,
          "anchor": "right",
          "scale": 0.99999994,
-         "group": "A+B"
+         "group": "A+B",
+         "level": "middle"
         }
        ],
        "controls": [
         {
          "id": "CU",
          "shape": "circle",
-         "x": 208.00009,
+         "x": 242.00009,
          "y": 229.96481,
          "r": 58.0,
          "capR": 43.000004,
@@ -45161,7 +45906,7 @@
         {
          "id": "CL",
          "shape": "circle",
-         "x": 124.80027,
+         "x": 158.80027,
          "y": 327.56488,
          "r": 58.0,
          "capR": 43.000004,
@@ -45170,7 +45915,7 @@
         {
          "id": "CR",
          "shape": "circle",
-         "x": 291.19992,
+         "x": 325.19992,
          "y": 327.56488,
          "r": 58.0,
          "capR": 43.000004,
@@ -45179,7 +45924,7 @@
         {
          "id": "CD",
          "shape": "circle",
-         "x": 208.00009,
+         "x": 242.00009,
          "y": 425.16507,
          "r": 58.0,
          "capR": 43.000004,
@@ -45188,7 +45933,7 @@
         {
          "id": "R",
          "shape": "rect",
-         "x": 220.8701,
+         "x": 254.8701,
          "y": 54.000053,
          "hw": 100.0,
          "hh": 42.0,
@@ -45197,7 +45942,7 @@
         {
          "id": "B",
          "shape": "circle",
-         "x": 151.50858,
+         "x": 185.50858,
          "y": 611.07324,
          "r": 67.0,
          "capR": 54.0,
@@ -45206,7 +45951,7 @@
         {
          "id": "A",
          "shape": "circle",
-         "x": 264.4916,
+         "x": 298.4916,
          "y": 724.0565,
          "r": 67.0,
          "capR": 54.0,
@@ -45221,6 +45966,278 @@
         "maxHdp": 812.16003,
         "halfFolded": true
        }
+      },
+      {
+       "w": 416,
+       "h": 932,
+       "pieces": [
+        {
+         "sx": 836,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": -52,
+         "y": 104,
+         "anchor": "right",
+         "scale": 1.2499988,
+         "group": "CD+CL+CR+CU",
+         "level": "middle"
+        },
+        {
+         "sx": 1942,
+         "sy": 3782,
+         "w": 220,
+         "h": 108,
+         "x": 148,
+         "y": 0,
+         "anchor": "right",
+         "group": "R",
+         "level": "middle"
+        },
+        {
+         "sx": 2682,
+         "sy": 2966,
+         "w": 281,
+         "h": 281,
+         "x": 45,
+         "y": 593,
+         "anchor": "right",
+         "scale": 1.1613588,
+         "group": "A+B",
+         "level": "middle"
+        },
+        {
+         "sx": 146,
+         "sy": 3384,
+         "w": 148,
+         "h": 148,
+         "x": 78,
+         "y": 626,
+         "anchor": "right",
+         "group": "A+B",
+         "level": "middle"
+        },
+        {
+         "sx": 296,
+         "sy": 3384,
+         "w": 148,
+         "h": 148,
+         "x": 190,
+         "y": 738,
+         "anchor": "right",
+         "group": "A+B",
+         "level": "middle"
+        }
+       ],
+       "controls": [
+        {
+         "id": "CU",
+         "shape": "circle",
+         "x": 208.0,
+         "y": 242.0,
+         "r": 72.49993,
+         "capR": 53.74995,
+         "anchor": "right"
+        },
+        {
+         "id": "CL",
+         "shape": "circle",
+         "x": 104.00012,
+         "y": 364.0,
+         "r": 72.49993,
+         "capR": 53.74995,
+         "anchor": "right"
+        },
+        {
+         "id": "CR",
+         "shape": "circle",
+         "x": 311.99976,
+         "y": 364.0,
+         "r": 72.49993,
+         "capR": 53.74995,
+         "anchor": "right"
+        },
+        {
+         "id": "CD",
+         "shape": "circle",
+         "x": 208.0,
+         "y": 486.0,
+         "r": 72.49993,
+         "capR": 53.74995,
+         "anchor": "right"
+        },
+        {
+         "id": "R",
+         "shape": "rect",
+         "x": 258.0,
+         "y": 54.0,
+         "hw": 100.0,
+         "hh": 42.0,
+         "anchor": "right"
+        },
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 152.13867,
+         "y": 700.1382,
+         "r": 67.0,
+         "capR": 54.0,
+         "anchor": "right"
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 263.86145,
+         "y": 811.8613,
+         "r": 67.0,
+         "capR": 54.0,
+         "anchor": "right"
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 691.84,
+        "maxWdp": 812.16003,
+        "minHdp": 767.8934,
+        "maxHdp": 901.44006,
+        "halfFolded": true
+       }
+      },
+      {
+       "w": 358,
+       "h": 938,
+       "pieces": [
+        {
+         "sx": 836,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": -60,
+         "y": 98,
+         "anchor": "right",
+         "scale": 1.2499988,
+         "group": "CD+CL+CR+CU",
+         "level": "middle"
+        },
+        {
+         "sx": 1942,
+         "sy": 3782,
+         "w": 220,
+         "h": 108,
+         "x": 146,
+         "y": 0,
+         "anchor": "right",
+         "group": "R",
+         "level": "middle"
+        },
+        {
+         "sx": 2682,
+         "sy": 2966,
+         "w": 281,
+         "h": 281,
+         "x": 40,
+         "y": 590,
+         "anchor": "right",
+         "scale": 1.1393083,
+         "group": "A+B",
+         "level": "middle"
+        },
+        {
+         "sx": 146,
+         "sy": 3384,
+         "w": 148,
+         "h": 148,
+         "x": 71,
+         "y": 621,
+         "anchor": "right",
+         "group": "A+B",
+         "level": "middle"
+        },
+        {
+         "sx": 296,
+         "sy": 3384,
+         "w": 148,
+         "h": 148,
+         "x": 181,
+         "y": 731,
+         "anchor": "right",
+         "group": "A+B",
+         "level": "middle"
+        }
+       ],
+       "controls": [
+        {
+         "id": "CU",
+         "shape": "circle",
+         "x": 200.0,
+         "y": 236.0,
+         "r": 72.49993,
+         "capR": 53.74995,
+         "anchor": "right"
+        },
+        {
+         "id": "CL",
+         "shape": "circle",
+         "x": 96.00012,
+         "y": 358.0,
+         "r": 72.49993,
+         "capR": 53.74995,
+         "anchor": "right"
+        },
+        {
+         "id": "CR",
+         "shape": "circle",
+         "x": 303.99988,
+         "y": 358.0,
+         "r": 72.49993,
+         "capR": 53.74995,
+         "anchor": "right"
+        },
+        {
+         "id": "CD",
+         "shape": "circle",
+         "x": 200.0,
+         "y": 480.0,
+         "r": 72.49993,
+         "capR": 53.74995,
+         "anchor": "right"
+        },
+        {
+         "id": "R",
+         "shape": "rect",
+         "x": 256.0,
+         "y": 54.0,
+         "hw": 100.0,
+         "hh": 42.0,
+         "anchor": "right"
+        },
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 145.19934,
+         "y": 695.199,
+         "r": 67.0,
+         "capR": 54.0,
+         "anchor": "right"
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 254.80066,
+         "y": 804.80054,
+         "r": 67.0,
+         "capR": 54.0,
+         "anchor": "right"
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 647.68,
+        "maxWdp": 760.32,
+        "minHdp": 857.9657,
+        "maxHdp": 1007.1772,
+        "halfFolded": true
+       }
       }
      ]
     },
@@ -45228,17 +46245,59 @@
      "slot": "bottomRow",
      "sizes": [
       {
-       "w": 270,
-       "h": 127,
+       "w": 354,
+       "h": 150,
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 691.84,
+        "maxWdp": 812.16003,
+        "minHdp": 767.8934,
+        "maxHdp": 901.44006
+       },
        "pieces": [
         {
          "sx": 718,
          "sy": 3384,
-         "w": 270,
+         "w": 72,
          "h": 144,
-         "x": 0,
-         "y": -54,
-         "anchor": "centre",
+         "x": 20,
+         "y": 0,
+         "group": "MENU+START",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 789,
+         "sy": 3384,
+         "w": 2,
+         "h": 144,
+         "x": 92,
+         "y": 0,
+         "scaleX": 85.0,
+         "group": "MENU+START",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 916,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 262,
+         "y": 0,
+         "group": "MENU+START",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 2980,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 42,
+         "y": 22,
+         "anchor": "left",
+         "level": "middle",
          "group": "MENU+START"
         },
         {
@@ -45246,48 +46305,344 @@
          "sy": 3892,
          "w": 92,
          "h": 92,
-         "x": 159,
-         "y": -28,
-         "anchor": "centre",
+         "x": 216,
+         "y": 26,
+         "anchor": "left",
+         "level": "middle",
          "group": "MENU+START"
+        }
+       ],
+       "controls": [
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 92.0,
+         "y": 72,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "level": "middle",
+         "labelDx": 0.0
+        },
+        {
+         "id": "START",
+         "shape": "circle",
+         "x": 262.0,
+         "y": 72,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "START",
+         "labelDx": 0.0,
+         "labelH": 17.0,
+         "level": "middle",
+         "labelDy": 64.5
+        }
+       ]
+      },
+      {
+       "w": 354,
+       "h": 150,
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 691.84,
+        "maxWdp": 812.16003,
+        "minHdp": 767.8934,
+        "maxHdp": 901.44006,
+        "halfFolded": true
+       },
+       "pieces": [
+        {
+         "sx": 718,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 20,
+         "y": 0,
+         "group": "MENU+START",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 789,
+         "sy": 3384,
+         "w": 2,
+         "h": 144,
+         "x": 92,
+         "y": 0,
+         "scaleX": 85.0,
+         "group": "MENU+START",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 916,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 262,
+         "y": 0,
+         "group": "MENU+START",
+         "anchor": "left",
+         "level": "middle"
         },
         {
          "sx": 2980,
          "sy": 3782,
          "w": 100,
          "h": 100,
-         "x": 15,
-         "y": -32,
-         "anchor": "centre",
+         "x": 42,
+         "y": 22,
+         "anchor": "left",
+         "level": "middle",
+         "group": "MENU+START"
+        },
+        {
+         "sx": 102,
+         "sy": 3892,
+         "w": 92,
+         "h": 92,
+         "x": 216,
+         "y": 26,
+         "anchor": "left",
+         "level": "middle",
          "group": "MENU+START"
         }
        ],
        "controls": [
         {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 92.0,
+         "y": 72,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "level": "middle",
+         "labelDx": 0.0
+        },
+        {
          "id": "START",
          "shape": "circle",
-         "x": 205.00009,
-         "y": 18.435041,
+         "x": 262.0,
+         "y": 72,
          "r": 58.0,
-         "capR": 40.0,
-         "anchor": "centre",
+         "capR": 39.0,
+         "anchor": "left",
          "label": "START",
-         "labelDy": 64.5,
-         "labelH": 17.0
+         "labelDx": 0.0,
+         "labelH": 17.0,
+         "level": "middle",
+         "labelDy": 64.5
+        }
+       ]
+      },
+      {
+       "w": 354,
+       "h": 150,
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 647.68,
+        "maxWdp": 760.32,
+        "minHdp": 857.9657,
+        "maxHdp": 1007.1772
+       },
+       "pieces": [
+        {
+         "sx": 718,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 20,
+         "y": 0,
+         "group": "MENU+START",
+         "anchor": "left",
+         "level": "middle"
         },
+        {
+         "sx": 789,
+         "sy": 3384,
+         "w": 2,
+         "h": 144,
+         "x": 92,
+         "y": 0,
+         "scaleX": 85.0,
+         "group": "MENU+START",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 916,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 262,
+         "y": 0,
+         "group": "MENU+START",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 2980,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 42,
+         "y": 22,
+         "anchor": "left",
+         "level": "middle",
+         "group": "MENU+START"
+        },
+        {
+         "sx": 102,
+         "sy": 3892,
+         "w": 92,
+         "h": 92,
+         "x": 216,
+         "y": 26,
+         "anchor": "left",
+         "level": "middle",
+         "group": "MENU+START"
+        }
+       ],
+       "controls": [
         {
          "id": "MENU",
          "shape": "circle",
-         "x": 65.000046,
-         "y": 18.435041,
+         "x": 92.0,
+         "y": 72,
          "r": 58.0,
-         "capR": 40.0,
-         "anchor": "centre",
+         "capR": 39.0,
+         "anchor": "left",
          "label": "MENU",
          "labelDy": 64.5,
-         "labelH": 17.0
+         "labelH": 17.0,
+         "level": "middle",
+         "labelDx": 0.0
+        },
+        {
+         "id": "START",
+         "shape": "circle",
+         "x": 262.0,
+         "y": 72,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "START",
+         "labelDx": 0.0,
+         "labelH": 17.0,
+         "level": "middle",
+         "labelDy": 64.5
+        }
+       ]
+      },
+      {
+       "w": 354,
+       "h": 150,
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 647.68,
+        "maxWdp": 760.32,
+        "minHdp": 857.9657,
+        "maxHdp": 1007.1772,
+        "halfFolded": true
+       },
+       "pieces": [
+        {
+         "sx": 718,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 20,
+         "y": 0,
+         "group": "MENU+START",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 789,
+         "sy": 3384,
+         "w": 2,
+         "h": 144,
+         "x": 92,
+         "y": 0,
+         "scaleX": 85.0,
+         "group": "MENU+START",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 916,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 262,
+         "y": 0,
+         "group": "MENU+START",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 2980,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 42,
+         "y": 22,
+         "anchor": "left",
+         "level": "middle",
+         "group": "MENU+START"
+        },
+        {
+         "sx": 102,
+         "sy": 3892,
+         "w": 92,
+         "h": 92,
+         "x": 216,
+         "y": 26,
+         "anchor": "left",
+         "level": "middle",
+         "group": "MENU+START"
         }
        ],
+       "controls": [
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 92.0,
+         "y": 72,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "level": "middle",
+         "labelDx": 0.0
+        },
+        {
+         "id": "START",
+         "shape": "circle",
+         "x": 262.0,
+         "y": 72,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "START",
+         "labelDx": 0.0,
+         "labelH": 17.0,
+         "level": "middle",
+         "labelDy": 64.5
+        }
+       ]
+      },
+      {
        "when": {
         "orientation": "landscape",
         "minWdp": 767.8934,
@@ -45295,7 +46650,9 @@
         "minHdp": 691.84,
         "maxHdp": 812.16003,
         "halfFolded": true
-       }
+       },
+       "w": 0,
+       "h": 0
       },
       {
        "w": 0,
@@ -52150,7 +53507,7 @@
          "x": -10,
          "y": 554,
          "anchor": "centre",
-         "group": "STICK_SWAP"
+         "group": "MIC+STICK_SWAP"
         },
         {
          "sx": 2019,
@@ -52217,7 +53574,7 @@
          "y": 576,
          "anchor": "centre",
          "alt": "stick",
-         "group": "STICK_SWAP"
+         "group": "MIC+STICK_SWAP"
         },
         {
          "sx": 2266,
@@ -52228,7 +53585,7 @@
          "y": 576,
          "anchor": "centre",
          "alt": "dpad",
-         "group": "STICK_SWAP"
+         "group": "MIC+STICK_SWAP"
         }
        ],
        "controls": [
@@ -53257,28 +54614,6 @@
          "knob": true,
          "alt": "stick",
          "group": "STICK"
-        },
-        {
-         "sx": 2164,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 128,
-         "y": 576,
-         "anchor": "centre",
-         "alt": "stick",
-         "group": "STICK_SWAP"
-        },
-        {
-         "sx": 2266,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 128,
-         "y": 576,
-         "anchor": "centre",
-         "alt": "dpad",
-         "group": "STICK_SWAP"
         }
        ],
        "controls": [
@@ -53314,32 +54649,6 @@
          "travel": 60.000004,
          "knobTravel": 30.000002,
          "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 178.49997,
-         "y": 626.12506,
-         "r": 58.000004,
-         "capR": 39.0,
-         "anchor": "centre",
-         "label": "D-PAD",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 178.49997,
-         "y": 626.12506,
-         "r": 58.000004,
-         "capR": 39.0,
-         "anchor": "centre",
-         "label": "STICK",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "alt": "dpad"
         }
        ],
        "when": {
@@ -53559,6 +54868,28 @@
          "group": "MENU+MIC+STICK_SWAP+SWAP"
         },
         {
+         "sx": 2164,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "alt": "stick",
+         "group": "MENU+MIC+STICK_SWAP+SWAP"
+        },
+        {
+         "sx": 2266,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "alt": "dpad",
+         "group": "MENU+MIC+STICK_SWAP+SWAP"
+        },
+        {
          "sx": 0,
          "sy": 3892,
          "w": 100,
@@ -53593,6 +54924,32 @@
          "label": "MIC",
          "labelDy": 64.5,
          "labelH": 17.0
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 65.000015,
+         "y": 71.99994,
+         "r": 58.000004,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "D-PAD",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "stick"
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 65.000015,
+         "y": 71.99994,
+         "r": 58.000004,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "STICK",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "dpad"
         },
         {
          "id": "SWAP",
@@ -54330,28 +55687,6 @@
          "inward": 40,
          "rise": 40,
          "group": "L2"
-        },
-        {
-         "sx": 2164,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 280,
-         "y": 742,
-         "anchor": "centre",
-         "alt": "stick",
-         "group": "STICK_SWAP"
-        },
-        {
-         "sx": 2266,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 280,
-         "y": 742,
-         "anchor": "centre",
-         "alt": "dpad",
-         "group": "STICK_SWAP"
         }
        ],
        "controls": [
@@ -54401,32 +55736,6 @@
          "anchor": "left",
          "inward": 40,
          "rise": 40
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 330.0,
-         "y": 792.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "centre",
-         "label": "D-PAD",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 330.0,
-         "y": 792.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "centre",
-         "label": "STICK",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "alt": "dpad"
         }
        ],
        "when": {
@@ -54726,6 +56035,28 @@
          "y": 22,
          "anchor": "centre",
          "group": "MENU+MIC+STICK_SWAP+SWAP"
+        },
+        {
+         "sx": 2164,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "alt": "stick",
+         "group": "MENU+MIC+STICK_SWAP+SWAP"
+        },
+        {
+         "sx": 2266,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "alt": "dpad",
+         "group": "MENU+MIC+STICK_SWAP+SWAP"
         }
        ],
        "controls": [
@@ -54764,6 +56095,32 @@
          "label": "SWAP",
          "labelDy": 64.5,
          "labelH": 17.0
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 65.0,
+         "y": 72.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "D-PAD",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "stick"
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 65.0,
+         "y": 72.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "STICK",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "dpad"
         }
        ],
        "when": {
@@ -55398,28 +56755,6 @@
          "knob": true,
          "alt": "stick",
          "group": "STICK"
-        },
-        {
-         "sx": 2164,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 280,
-         "y": 626,
-         "anchor": "centre",
-         "alt": "stick",
-         "group": "STICK_SWAP"
-        },
-        {
-         "sx": 2266,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 280,
-         "y": 626,
-         "anchor": "centre",
-         "alt": "dpad",
-         "group": "STICK_SWAP"
         }
        ],
        "controls": [
@@ -55458,32 +56793,6 @@
          "travel": 60.0,
          "knobTravel": 30.0,
          "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 330.0,
-         "y": 676.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "centre",
-         "label": "D-PAD",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 330.0,
-         "y": 676.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "centre",
-         "label": "STICK",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "alt": "dpad"
         }
        ],
        "when": {
@@ -55723,6 +57032,28 @@
          "y": 22,
          "anchor": "centre",
          "group": "MENU+MIC+STICK_SWAP+SWAP"
+        },
+        {
+         "sx": 2164,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "alt": "stick",
+         "group": "MENU+MIC+STICK_SWAP+SWAP"
+        },
+        {
+         "sx": 2266,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "alt": "dpad",
+         "group": "MENU+MIC+STICK_SWAP+SWAP"
         }
        ],
        "controls": [
@@ -55761,6 +57092,32 @@
          "label": "SWAP",
          "labelDy": 64.5,
          "labelH": 17.0
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 65.0,
+         "y": 72.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "D-PAD",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "stick"
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 65.0,
+         "y": 72.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "STICK",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "dpad"
         }
        ],
        "when": {
@@ -58363,7 +59720,7 @@
          "anchor": "left",
          "inward": 40,
          "alt": "dpad",
-         "group": "DPAD+STICK_SWAP"
+         "group": "DPAD"
         },
         {
          "sx": 1720,
@@ -58386,7 +59743,7 @@
          "anchor": "left",
          "inward": 40,
          "alt": "stick",
-         "group": "STICK+STICK_SWAP"
+         "group": "STICK"
         },
         {
          "sx": 2396,
@@ -58399,7 +59756,7 @@
          "inward": 40,
          "knob": true,
          "alt": "stick",
-         "group": "STICK+STICK_SWAP"
+         "group": "STICK"
         },
         {
          "sx": 1754,
@@ -58411,28 +59768,6 @@
          "anchor": "left",
          "inward": 40,
          "group": "L2"
-        },
-        {
-         "sx": 2164,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 196,
-         "y": 702,
-         "anchor": "centre",
-         "alt": "stick",
-         "group": "STICK+STICK_SWAP"
-        },
-        {
-         "sx": 2266,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 196,
-         "y": 702,
-         "anchor": "centre",
-         "alt": "dpad",
-         "group": "DPAD+STICK_SWAP"
         }
        ],
        "controls": [
@@ -58478,32 +59813,6 @@
          "hh": 42.0,
          "anchor": "left",
          "inward": 40
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 246.0,
-         "y": 752.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "centre",
-         "label": "D-PAD",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 246.0,
-         "y": 752.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "centre",
-         "label": "STICK",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "alt": "dpad"
         }
        ],
        "when": {
@@ -58789,6 +60098,28 @@
          "y": 22,
          "anchor": "centre",
          "group": "MENU+MIC+STICK_SWAP+SWAP"
+        },
+        {
+         "sx": 2164,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "alt": "stick",
+         "group": "MENU+MIC+STICK_SWAP+SWAP"
+        },
+        {
+         "sx": 2266,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "alt": "dpad",
+         "group": "MENU+MIC+STICK_SWAP+SWAP"
         }
        ],
        "controls": [
@@ -58827,6 +60158,32 @@
          "label": "SWAP",
          "labelDy": 64.5,
          "labelH": 17.0
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 65.0,
+         "y": 72.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "D-PAD",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "stick"
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 65.0,
+         "y": 72.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "STICK",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "dpad"
         }
        ],
        "when": {
@@ -59320,7 +60677,7 @@
          "anchor": "left",
          "inward": 40,
          "alt": "dpad",
-         "group": "DPAD+STICK_SWAP"
+         "group": "DPAD"
         },
         {
          "sx": 1720,
@@ -59343,7 +60700,7 @@
          "anchor": "left",
          "inward": 40,
          "alt": "stick",
-         "group": "STICK+STICK_SWAP"
+         "group": "STICK"
         },
         {
          "sx": 2396,
@@ -59356,29 +60713,7 @@
          "inward": 40,
          "knob": true,
          "alt": "stick",
-         "group": "STICK+STICK_SWAP"
-        },
-        {
-         "sx": 2164,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 196,
-         "y": 586,
-         "anchor": "centre",
-         "alt": "stick",
-         "group": "STICK+STICK_SWAP"
-        },
-        {
-         "sx": 2266,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 196,
-         "y": 586,
-         "anchor": "centre",
-         "alt": "dpad",
-         "group": "DPAD+STICK_SWAP"
+         "group": "STICK"
         }
        ],
        "controls": [
@@ -59414,32 +60749,6 @@
          "travel": 60.0,
          "knobTravel": 30.0,
          "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 246.0,
-         "y": 636.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "centre",
-         "label": "D-PAD",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 246.0,
-         "y": 636.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "centre",
-         "label": "STICK",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "alt": "dpad"
         }
        ],
        "when": {
@@ -59667,6 +60976,28 @@
          "y": 22,
          "anchor": "centre",
          "group": "MENU+MIC+STICK_SWAP+SWAP"
+        },
+        {
+         "sx": 2164,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "alt": "stick",
+         "group": "MENU+MIC+STICK_SWAP+SWAP"
+        },
+        {
+         "sx": 2266,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "alt": "dpad",
+         "group": "MENU+MIC+STICK_SWAP+SWAP"
         }
        ],
        "controls": [
@@ -59705,6 +61036,32 @@
          "label": "SWAP",
          "labelDy": 64.5,
          "labelH": 17.0
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 65.0,
+         "y": 72.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "D-PAD",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "stick"
+        },
+        {
+         "id": "STICK_SWAP",
+         "shape": "circle",
+         "x": 65.0,
+         "y": 72.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "STICK",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "alt": "dpad"
         }
        ],
        "when": {
@@ -76701,7 +78058,7 @@
          "anchor": "left",
          "level": "middle",
          "alt": "stick",
-         "group": "STICK_SWAP"
+         "group": "MENU+STICK_SWAP"
         },
         {
          "sx": 2266,
@@ -76713,7 +78070,7 @@
          "anchor": "left",
          "level": "middle",
          "alt": "dpad",
-         "group": "STICK_SWAP"
+         "group": "MENU+STICK_SWAP"
         }
        ],
        "controls": [
@@ -79302,20 +80659,9 @@
      "slot": "left",
      "sizes": [
       {
-       "w": 354,
-       "h": 929,
+       "w": 394,
+       "h": 874,
        "pieces": [
-        {
-         "sx": 718,
-         "sy": 3384,
-         "w": 270,
-         "h": 144,
-         "x": 29,
-         "y": 521,
-         "anchor": "left",
-         "level": "middle",
-         "group": "MENU+STICK_SWAP"
-        },
         {
          "sx": 1446,
          "sy": 3782,
@@ -79328,49 +80674,14 @@
          "group": "L2"
         },
         {
-         "sx": 1254,
-         "sy": 2966,
-         "w": 416,
-         "h": 416,
-         "x": -44,
-         "y": 120,
-         "anchor": "left",
-         "level": "middle",
-         "alt": "dpad",
-         "group": "DPAD"
-        },
-        {
-         "sx": 2980,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 184,
-         "y": 543,
-         "anchor": "left",
-         "level": "middle",
-         "group": "MENU+STICK_SWAP"
-        },
-        {
-         "sx": 102,
-         "sy": 3892,
-         "w": 92,
-         "h": 92,
-         "x": 188,
-         "y": 687,
-         "anchor": "left",
-         "level": "middle",
-         "group": "START"
-        },
-        {
          "sx": 2754,
          "sy": 2392,
          "w": 416,
          "h": 416,
-         "x": -44,
-         "y": 120,
+         "x": -22,
+         "y": 150,
          "anchor": "left",
          "level": "middle",
-         "alt": "stick",
          "group": "STICK"
         },
         {
@@ -79378,37 +80689,12 @@
          "sy": 2966,
          "w": 284,
          "h": 284,
-         "x": 22,
-         "y": 186,
+         "x": 44,
+         "y": 216,
          "anchor": "left",
          "level": "middle",
          "knob": true,
-         "alt": "stick",
          "group": "STICK"
-        },
-        {
-         "sx": 2164,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 44,
-         "y": 543,
-         "anchor": "left",
-         "level": "middle",
-         "alt": "stick",
-         "group": "STICK_SWAP"
-        },
-        {
-         "sx": 2266,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 44,
-         "y": 543,
-         "anchor": "left",
-         "level": "middle",
-         "alt": "dpad",
-         "group": "STICK_SWAP"
         },
         {
          "sx": 1608,
@@ -79420,20 +80706,21 @@
          "anchor": "left",
          "level": "middle",
          "group": "L"
+        },
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 107,
+         "y": 574,
+         "anchor": "left",
+         "level": "middle",
+         "group": "DPAD",
+         "scale": 0.72
         }
        ],
        "controls": [
-        {
-         "id": "DPAD",
-         "shape": "dpad",
-         "x": 164.0,
-         "y": 328.0,
-         "r": 156.0,
-         "arm": 54.0,
-         "anchor": "left",
-         "level": "middle",
-         "alt": "dpad"
-        },
         {
          "id": "L2",
          "shape": "rect",
@@ -79445,70 +80732,15 @@
          "level": "middle"
         },
         {
-         "id": "START",
-         "shape": "circle",
-         "x": 234.0,
-         "y": 733.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "left",
-         "label": "START",
-         "labelDx": -67.0,
-         "labelH": 17.0,
-         "level": "middle"
-        },
-        {
-         "id": "MENU",
-         "shape": "circle",
-         "x": 234.0,
-         "y": 593.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "left",
-         "label": "MENU",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "level": "middle"
-        },
-        {
          "id": "STICK",
          "shape": "stick",
-         "x": 164.0,
-         "y": 328.0,
+         "x": 186.0,
+         "y": 358.0,
          "r": 170.0,
          "anchor": "left",
          "level": "middle",
          "travel": 60.0,
-         "knobTravel": 30.0,
-         "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 94.0,
-         "y": 593.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "left",
-         "label": "D-PAD",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "level": "middle",
-         "alt": "stick"
-        },
-        {
-         "id": "STICK_SWAP",
-         "shape": "circle",
-         "x": 94.0,
-         "y": 593.0,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "left",
-         "label": "STICK",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "level": "middle",
-         "alt": "dpad"
+         "knobTravel": 30.0
         },
         {
          "id": "L",
@@ -79517,6 +80749,16 @@
          "y": 54.0,
          "hw": 45.0,
          "hh": 42.0,
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 257.0,
+         "y": 723.76,
+         "r": 112.32,
+         "arm": 54.0,
          "anchor": "left",
          "level": "middle"
         }
@@ -79531,27 +80773,16 @@
        }
       },
       {
-       "w": 354,
+       "w": 416,
        "h": 778,
        "pieces": [
-        {
-         "sx": 718,
-         "sy": 3384,
-         "w": 270,
-         "h": 144,
-         "x": 29,
-         "y": 521,
-         "anchor": "left",
-         "level": "middle",
-         "group": "MENU+STICK_SWAP"
-        },
         {
          "sx": 1446,
          "sy": 3782,
          "w": 160,
          "h": 108,
          "x": 42,
-         "y": 0,
+         "y": -30,
          "anchor": "left",
          "level": "middle",
          "group": "L2"
@@ -79561,7 +80792,7 @@
          "sy": 2966,
          "w": 416,
          "h": 416,
-         "x": -44,
+         "x": 1,
          "y": 120,
          "anchor": "left",
          "level": "middle",
@@ -79569,33 +80800,11 @@
          "group": "DPAD"
         },
         {
-         "sx": 2980,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 184,
-         "y": 543,
-         "anchor": "left",
-         "level": "middle",
-         "group": "MENU+STICK_SWAP"
-        },
-        {
-         "sx": 102,
-         "sy": 3892,
-         "w": 92,
-         "h": 92,
-         "x": 188,
-         "y": 687,
-         "anchor": "left",
-         "level": "middle",
-         "group": "START"
-        },
-        {
          "sx": 2754,
          "sy": 2392,
          "w": 416,
          "h": 416,
-         "x": -44,
+         "x": 1,
          "y": 120,
          "anchor": "left",
          "level": "middle",
@@ -79607,7 +80816,7 @@
          "sy": 2966,
          "w": 284,
          "h": 284,
-         "x": 22,
+         "x": 67,
          "y": 186,
          "anchor": "left",
          "level": "middle",
@@ -79616,46 +80825,102 @@
          "group": "STICK"
         },
         {
+         "sx": 1608,
+         "sy": 3782,
+         "w": 110,
+         "h": 108,
+         "x": 210,
+         "y": -30,
+         "anchor": "left",
+         "level": "middle",
+         "group": "L"
+        },
+        {
+         "sx": 718,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": -3,
+         "y": 578,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 789,
+         "sy": 3384,
+         "w": 2,
+         "h": 144,
+         "x": 69,
+         "y": 578,
+         "scaleX": 140.0,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 916,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 349,
+         "y": 578,
+         "group": "MENU+START+STICK_SWAP",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
          "sx": 2164,
          "sy": 3782,
          "w": 100,
          "h": 100,
-         "x": 44,
-         "y": 543,
+         "x": 19,
+         "y": 600,
          "anchor": "left",
          "level": "middle",
          "alt": "stick",
-         "group": "STICK_SWAP"
+         "group": "MENU+START+STICK_SWAP"
         },
         {
          "sx": 2266,
          "sy": 3782,
          "w": 100,
          "h": 100,
-         "x": 44,
-         "y": 543,
+         "x": 19,
+         "y": 600,
          "anchor": "left",
          "level": "middle",
          "alt": "dpad",
-         "group": "STICK_SWAP"
+         "group": "MENU+START+STICK_SWAP"
         },
         {
-         "sx": 1608,
+         "sx": 2980,
          "sy": 3782,
-         "w": 110,
-         "h": 108,
-         "x": 210,
-         "y": 0,
+         "w": 100,
+         "h": 100,
+         "x": 159,
+         "y": 600,
          "anchor": "left",
          "level": "middle",
-         "group": "L"
+         "group": "MENU+START+STICK_SWAP"
+        },
+        {
+         "sx": 102,
+         "sy": 3892,
+         "w": 92,
+         "h": 92,
+         "x": 303,
+         "y": 604,
+         "anchor": "left",
+         "level": "middle",
+         "group": "MENU+START+STICK_SWAP"
         }
        ],
        "controls": [
         {
          "id": "DPAD",
          "shape": "dpad",
-         "x": 164.00002,
+         "x": 208.62502,
          "y": 328.00003,
          "r": 156.0,
          "arm": 54.0,
@@ -79667,7 +80932,7 @@
          "id": "L2",
          "shape": "rect",
          "x": 122.0,
-         "y": 54.0,
+         "y": 24.000022,
          "hw": 70.0,
          "hh": 42.0,
          "anchor": "left",
@@ -79676,33 +80941,35 @@
         {
          "id": "START",
          "shape": "circle",
-         "x": 234.0,
-         "y": 733.0,
+         "x": 348.62502,
+         "y": 650.00006,
          "r": 58.000004,
          "capR": 39.0,
          "anchor": "left",
          "label": "START",
-         "labelDx": -67.0,
+         "labelDx": 0.0,
          "labelH": 17.0,
-         "level": "middle"
+         "level": "middle",
+         "labelDy": 64.5
         },
         {
          "id": "MENU",
          "shape": "circle",
-         "x": 234.0,
-         "y": 593.00006,
+         "x": 208.62502,
+         "y": 650.00006,
          "r": 58.000004,
          "capR": 39.0,
          "anchor": "left",
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0,
-         "level": "middle"
+         "level": "middle",
+         "labelDx": 0.0
         },
         {
          "id": "STICK",
          "shape": "stick",
-         "x": 164.00002,
+         "x": 208.62502,
          "y": 328.00003,
          "r": 170.0,
          "anchor": "left",
@@ -79714,8 +80981,8 @@
         {
          "id": "STICK_SWAP",
          "shape": "circle",
-         "x": 94.0,
-         "y": 593.00006,
+         "x": 68.62502,
+         "y": 650.00006,
          "r": 58.000004,
          "capR": 39.0,
          "anchor": "left",
@@ -79723,13 +80990,14 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "level": "middle",
-         "alt": "stick"
+         "alt": "stick",
+         "labelDx": 0.0
         },
         {
          "id": "STICK_SWAP",
          "shape": "circle",
-         "x": 94.0,
-         "y": 593.00006,
+         "x": 68.62502,
+         "y": 650.00006,
          "r": 58.000004,
          "capR": 39.0,
          "anchor": "left",
@@ -79737,13 +81005,14 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "level": "middle",
-         "alt": "dpad"
+         "alt": "dpad",
+         "labelDx": 0.0
         },
         {
          "id": "L",
          "shape": "rect",
          "x": 265.0,
-         "y": 54.0,
+         "y": 24.000022,
          "hw": 45.0,
          "hh": 42.0,
          "anchor": "left",
@@ -79765,15 +81034,15 @@
      "slot": "right",
      "sizes": [
       {
-       "w": 354,
-       "h": 929,
+       "w": 394,
+       "h": 959,
        "pieces": [
         {
          "sx": 1942,
          "sy": 3782,
          "w": 220,
          "h": 108,
-         "x": 114,
+         "x": 154,
          "y": 0,
          "anchor": "right",
          "level": "middle",
@@ -79784,19 +81053,20 @@
          "sy": 2966,
          "w": 416,
          "h": 416,
-         "x": -18,
-         "y": 120,
+         "x": -50,
+         "y": 100,
          "anchor": "right",
          "level": "middle",
-         "group": "CD+CL+CR+CU"
+         "group": "CD+CL+CR+CU",
+         "scale": 1.2413793103448278
         },
         {
          "sx": 2682,
          "sy": 2966,
          "w": 281,
          "h": 281,
-         "x": 30,
-         "y": 487,
+         "x": -18,
+         "y": 554,
          "anchor": "right",
          "level": "middle",
          "scale": 1.1393099,
@@ -79807,8 +81077,8 @@
          "sy": 3384,
          "w": 148,
          "h": 148,
-         "x": 61,
-         "y": 519,
+         "x": 13,
+         "y": 586,
          "anchor": "right",
          "level": "middle",
          "group": "A+B"
@@ -79818,8 +81088,8 @@
          "sy": 3384,
          "w": 148,
          "h": 148,
-         "x": 171,
-         "y": 629,
+         "x": 123,
+         "y": 696,
          "anchor": "right",
          "level": "middle",
          "group": "A+B"
@@ -79829,47 +81099,47 @@
         {
          "id": "CU",
          "shape": "circle",
-         "x": 190.0,
-         "y": 230.4,
-         "r": 58.0,
-         "capR": 43.0,
+         "x": 207.984107946027,
+         "y": 236.8254872563718,
+         "r": 72.0,
+         "capR": 53.379310344827594,
          "anchor": "right",
          "level": "middle"
         },
         {
          "id": "CL",
          "shape": "circle",
-         "x": 106.80005,
-         "y": 328.0,
-         "r": 58.0,
-         "capR": 43.0,
+         "x": 104.70141139430285,
+         "y": 357.984107946027,
+         "r": 72.0,
+         "capR": 53.379310344827594,
          "anchor": "right",
          "level": "middle"
         },
         {
          "id": "CR",
          "shape": "circle",
-         "x": 273.19995,
-         "y": 328.0,
-         "r": 58.0,
-         "capR": 43.0,
+         "x": 311.26680449775114,
+         "y": 357.984107946027,
+         "r": 72.0,
+         "capR": 53.379310344827594,
          "anchor": "right",
          "level": "middle"
         },
         {
          "id": "CD",
          "shape": "circle",
-         "x": 190.0,
-         "y": 425.59998,
-         "r": 58.0,
-         "capR": 43.0,
+         "x": 207.984107946027,
+         "y": 479.142703808096,
+         "r": 72.0,
+         "capR": 53.379310344827594,
          "anchor": "right",
          "level": "middle"
         },
         {
          "id": "R",
          "shape": "rect",
-         "x": 224.0,
+         "x": 264.0,
          "y": 54.0,
          "hw": 100.0,
          "hh": 42.0,
@@ -79879,8 +81149,8 @@
         {
          "id": "B",
          "shape": "circle",
-         "x": 135.19922,
-         "y": 593.1992,
+         "x": 87.19922,
+         "y": 660.5992,
          "r": 67.0,
          "capR": 54.0,
          "anchor": "right",
@@ -79889,8 +81159,8 @@
         {
          "id": "A",
          "shape": "circle",
-         "x": 244.80078,
-         "y": 702.8008,
+         "x": 196.80078000000003,
+         "y": 770.2008,
          "r": 67.0,
          "capR": 54.0,
          "anchor": "right",
@@ -79907,16 +81177,16 @@
        }
       },
       {
-       "w": 354,
-       "h": 778,
+       "w": 416,
+       "h": 847,
        "pieces": [
         {
          "sx": 1942,
          "sy": 3782,
          "w": 220,
          "h": 108,
-         "x": 92,
-         "y": 0,
+         "x": 154,
+         "y": -30,
          "anchor": "right",
          "level": "middle",
          "group": "R"
@@ -79926,31 +81196,57 @@
          "sy": 2966,
          "w": 416,
          "h": 416,
-         "x": -18,
-         "y": 120,
+         "x": -51,
+         "y": 70,
          "anchor": "right",
          "level": "middle",
-         "group": "CD+CL+CR+CU"
+         "group": "CD+CL+CR+CU",
+         "scale": 1.2415947419589832
         },
         {
-         "sx": 2682,
-         "sy": 2966,
-         "w": 281,
-         "h": 281,
-         "x": 30,
-         "y": 487,
+         "sx": 718,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 27,
+         "y": 544,
+         "scale": 1.3888888888888888,
+         "group": "A+B",
          "anchor": "right",
-         "level": "middle",
-         "scale": 1.1393095,
-         "group": "A+B"
+         "level": "middle"
+        },
+        {
+         "sx": 789,
+         "sy": 3384,
+         "w": 2,
+         "h": 144,
+         "x": 127,
+         "y": 544,
+         "scale": 1.3888888888888888,
+         "scaleX": 77.5,
+         "group": "A+B",
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "sx": 916,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 282,
+         "y": 544,
+         "scale": 1.3888888888888888,
+         "group": "A+B",
+         "anchor": "right",
+         "level": "middle"
         },
         {
          "sx": 146,
          "sy": 3384,
          "w": 148,
          "h": 148,
-         "x": 61,
-         "y": 519,
+         "x": 53,
+         "y": 570,
          "anchor": "right",
          "level": "middle",
          "group": "A+B"
@@ -79960,8 +81256,8 @@
          "sy": 3384,
          "w": 148,
          "h": 148,
-         "x": 171,
-         "y": 629,
+         "x": 208,
+         "y": 570,
          "anchor": "right",
          "level": "middle",
          "group": "A+B"
@@ -79971,48 +81267,48 @@
         {
          "id": "CU",
          "shape": "circle",
-         "x": 189.99995,
-         "y": 230.40001,
-         "r": 58.000004,
-         "capR": 43.0,
+         "x": 207.38885465760893,
+         "y": 206.804468469838,
+         "r": 72.0125,
+         "capR": 53.388573904236274,
          "anchor": "right",
          "level": "middle"
         },
         {
          "id": "CL",
          "shape": "circle",
-         "x": 106.79998,
-         "y": 328.00003,
-         "r": 58.000004,
-         "capR": 43.0,
+         "x": 104.08820937446382,
+         "y": 327.98414011692955,
+         "r": 72.0125,
+         "capR": 53.388573904236274,
          "anchor": "right",
          "level": "middle"
         },
         {
          "id": "CR",
          "shape": "circle",
-         "x": 273.19995,
-         "y": 328.00003,
-         "r": 58.000004,
-         "capR": 43.0,
+         "x": 310.6895371885964,
+         "y": 327.98414011692955,
+         "r": 72.0125,
+         "capR": 53.388573904236274,
          "anchor": "right",
          "level": "middle"
         },
         {
          "id": "CD",
          "shape": "circle",
-         "x": 189.99995,
-         "y": 425.6,
-         "r": 58.000004,
-         "capR": 43.0,
+         "x": 207.38885465760893,
+         "y": 449.1637496842841,
+         "r": 72.0125,
+         "capR": 53.388573904236274,
          "anchor": "right",
          "level": "middle"
         },
         {
          "id": "R",
          "shape": "rect",
-         "x": 202.00002,
-         "y": 54.0,
+         "x": 264.00002,
+         "y": 24.000002000000052,
          "hw": 100.0,
          "hh": 42.0,
          "anchor": "right",
@@ -80021,8 +81317,8 @@
         {
          "id": "B",
          "shape": "circle",
-         "x": 135.19925,
-         "y": 593.1993,
+         "x": 127.23480195760894,
+         "y": 643.865598654937,
          "r": 67.0,
          "capR": 54.0,
          "anchor": "right",
@@ -80031,8 +81327,8 @@
         {
          "id": "A",
          "shape": "circle",
-         "x": 244.80067,
-         "y": 702.8008,
+         "x": 282.2348019576089,
+         "y": 643.865598654937,
          "r": 67.0,
          "capR": 54.0,
          "anchor": "right",
@@ -80047,6 +81343,123 @@
         "maxHdp": 388.80002,
         "halfFolded": false
        }
+      }
+     ]
+    },
+    {
+     "slot": "bottomRow",
+     "sizes": [
+      {
+       "w": 0,
+       "h": 0,
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 772.8,
+        "maxWdp": 907.2,
+        "minHdp": 331.2,
+        "maxHdp": 388.80002,
+        "halfFolded": false
+       }
+      },
+      {
+       "w": 354,
+       "h": 150,
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 691.13904,
+        "maxWdp": 811.33716,
+        "minHdp": 437.3943,
+        "maxHdp": 513.4629,
+        "halfFolded": false
+       },
+       "pieces": [
+        {
+         "sx": 718,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 20,
+         "y": 0,
+         "group": "MENU+START",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 789,
+         "sy": 3384,
+         "w": 2,
+         "h": 144,
+         "x": 92,
+         "y": 0,
+         "scaleX": 85.0,
+         "group": "MENU+START",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 916,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 262,
+         "y": 0,
+         "group": "MENU+START",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 2980,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 42,
+         "y": 22,
+         "anchor": "left",
+         "level": "middle",
+         "group": "MENU+START"
+        },
+        {
+         "sx": 102,
+         "sy": 3892,
+         "w": 92,
+         "h": 92,
+         "x": 216,
+         "y": 26,
+         "anchor": "left",
+         "level": "middle",
+         "group": "MENU+START"
+        }
+       ],
+       "controls": [
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 92.0,
+         "y": 72,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDy": 64.5,
+         "labelH": 17.0,
+         "level": "middle",
+         "labelDx": 0.0
+        },
+        {
+         "id": "START",
+         "shape": "circle",
+         "x": 262.0,
+         "y": 72,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "START",
+         "labelDx": 0.0,
+         "labelH": 17.0,
+         "level": "middle",
+         "labelDy": 64.5
+        }
+       ]
       }
      ]
     }
@@ -80789,7 +82202,7 @@
          "w": 416,
          "h": 416,
          "x": 31,
-         "y": 639,
+         "y": 583,
          "anchor": "left",
          "level": "middle",
          "scale": 0.85,
@@ -80829,6 +82242,39 @@
          "anchor": "left",
          "level": "middle",
          "group": "L"
+        },
+        {
+         "sx": 1814,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 256,
+         "y": 978,
+         "group": "MENU",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 2292,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 328,
+         "y": 978,
+         "group": "MENU",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 2980,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 278,
+         "y": 1000,
+         "group": "MENU",
+         "anchor": "left",
+         "level": "middle"
         }
        ],
        "controls": [
@@ -80836,7 +82282,7 @@
          "id": "DPAD",
          "shape": "dpad",
          "x": 208.0,
-         "y": 816.0,
+         "y": 759.8,
          "r": 132.6,
          "arm": 45.9,
          "anchor": "left",
@@ -80872,6 +82318,19 @@
          "hh": 42.0,
          "anchor": "left",
          "level": "middle"
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 328.0,
+         "y": 1050.6,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDx": -67.0,
+         "labelH": 17.0,
+         "level": "middle"
         }
        ],
        "when": {
@@ -80881,6 +82340,167 @@
         "minHdp": 647.68,
         "maxHdp": 760.32,
         "halfFolded": false
+       }
+      },
+      {
+       "w": 416,
+       "h": 1229,
+       "pieces": [
+        {
+         "sx": 1446,
+         "sy": 3782,
+         "w": 160,
+         "h": 108,
+         "x": 42,
+         "y": 0,
+         "anchor": "left",
+         "level": "middle",
+         "group": "L2"
+        },
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 31,
+         "y": 583,
+         "anchor": "left",
+         "level": "middle",
+         "scale": 0.85,
+         "group": "DPAD"
+        },
+        {
+         "sx": 2754,
+         "sy": 2392,
+         "w": 416,
+         "h": 416,
+         "x": 0,
+         "y": 150,
+         "anchor": "left",
+         "level": "middle",
+         "scale": 1.0000001,
+         "group": "STICK"
+        },
+        {
+         "sx": 2396,
+         "sy": 2966,
+         "w": 284,
+         "h": 284,
+         "x": 66,
+         "y": 216,
+         "anchor": "left",
+         "level": "middle",
+         "knob": true,
+         "group": "STICK"
+        },
+        {
+         "sx": 1608,
+         "sy": 3782,
+         "w": 110,
+         "h": 108,
+         "x": 210,
+         "y": 0,
+         "anchor": "left",
+         "level": "middle",
+         "group": "L"
+        },
+        {
+         "sx": 1814,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 256,
+         "y": 978,
+         "group": "MENU",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 2292,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 328,
+         "y": 978,
+         "group": "MENU",
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "sx": 2980,
+         "sy": 3782,
+         "w": 100,
+         "h": 100,
+         "x": 278,
+         "y": 1000,
+         "group": "MENU",
+         "anchor": "left",
+         "level": "middle"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 208.0,
+         "y": 759.8,
+         "r": 132.6,
+         "arm": 45.9,
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "id": "L2",
+         "shape": "rect",
+         "x": 122.0,
+         "y": 54.0,
+         "hw": 70.0,
+         "hh": 42.0,
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "id": "STICK",
+         "shape": "stick",
+         "x": 208.0,
+         "y": 358.0,
+         "r": 170.0,
+         "anchor": "left",
+         "level": "middle",
+         "travel": 60.0,
+         "knobTravel": 30.0
+        },
+        {
+         "id": "L",
+         "shape": "rect",
+         "x": 265.0,
+         "y": 54.0,
+         "hw": 45.0,
+         "hh": 42.0,
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 328.0,
+         "y": 1050.6,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDx": -67.0,
+         "labelH": 17.0,
+         "level": "middle"
+        }
+       ],
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 857.9657,
+        "maxWdp": 1007.1772,
+        "minHdp": 647.68,
+        "maxHdp": 760.32,
+        "halfFolded": true
        }
       }
      ]
@@ -81298,17 +82918,6 @@
        "h": 1229,
        "pieces": [
         {
-         "sx": 2965,
-         "sy": 2966,
-         "w": 144,
-         "h": 270,
-         "x": 16,
-         "y": 943,
-         "anchor": "right",
-         "level": "middle",
-         "group": "MENU+START"
-        },
-        {
          "sx": 1942,
          "sy": 3782,
          "w": 220,
@@ -81330,28 +82939,6 @@
          "level": "middle",
          "scale": 1.2500002,
          "group": "CD+CL+CR+CU"
-        },
-        {
-         "sx": 2980,
-         "sy": 3782,
-         "w": 100,
-         "h": 100,
-         "x": 38,
-         "y": 958,
-         "anchor": "right",
-         "level": "middle",
-         "group": "MENU+START"
-        },
-        {
-         "sx": 102,
-         "sy": 3892,
-         "w": 92,
-         "h": 92,
-         "x": 42,
-         "y": 1102,
-         "anchor": "right",
-         "level": "middle",
-         "group": "MENU+START"
         },
         {
          "sx": 2682,
@@ -81386,6 +82973,39 @@
          "anchor": "right",
          "level": "middle",
          "group": "A+B"
+        },
+        {
+         "sx": 1814,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 16,
+         "y": 978,
+         "group": "START",
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "sx": 2292,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 88,
+         "y": 978,
+         "group": "START",
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "sx": 102,
+         "sy": 3892,
+         "w": 92,
+         "h": 92,
+         "x": 42,
+         "y": 1004,
+         "group": "START",
+         "anchor": "right",
+         "level": "middle"
         }
        ],
        "controls": [
@@ -81443,24 +83063,11 @@
          "id": "START",
          "shape": "circle",
          "x": 88.0,
-         "y": 1148.4,
+         "y": 1050.6,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "right",
          "label": "START",
-         "labelDx": 67.0,
-         "labelH": 17.0,
-         "level": "middle"
-        },
-        {
-         "id": "MENU",
-         "shape": "circle",
-         "x": 88.0,
-         "y": 1008.4,
-         "r": 58.0,
-         "capR": 39.0,
-         "anchor": "right",
-         "label": "MENU",
          "labelDx": 67.0,
          "labelH": 17.0,
          "level": "middle"
@@ -81493,6 +83100,195 @@
         "minHdp": 647.68,
         "maxHdp": 760.32,
         "halfFolded": false
+       }
+      },
+      {
+       "w": 416,
+       "h": 1229,
+       "pieces": [
+        {
+         "sx": 1942,
+         "sy": 3782,
+         "w": 220,
+         "h": 108,
+         "x": 154,
+         "y": 0,
+         "anchor": "right",
+         "level": "middle",
+         "group": "R"
+        },
+        {
+         "sx": 836,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": -52,
+         "y": 98,
+         "anchor": "right",
+         "level": "middle",
+         "scale": 1.2500002,
+         "group": "CD+CL+CR+CU"
+        },
+        {
+         "sx": 2682,
+         "sy": 2966,
+         "w": 281,
+         "h": 281,
+         "x": 48,
+         "y": 599,
+         "anchor": "right",
+         "level": "middle",
+         "scale": 1.1393083,
+         "group": "A+B"
+        },
+        {
+         "sx": 146,
+         "sy": 3384,
+         "w": 148,
+         "h": 148,
+         "x": 79,
+         "y": 631,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 296,
+         "sy": 3384,
+         "w": 148,
+         "h": 148,
+         "x": 189,
+         "y": 741,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1814,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 16,
+         "y": 978,
+         "group": "START",
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "sx": 2292,
+         "sy": 3384,
+         "w": 72,
+         "h": 144,
+         "x": 88,
+         "y": 978,
+         "group": "START",
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "sx": 102,
+         "sy": 3892,
+         "w": 92,
+         "h": 92,
+         "x": 42,
+         "y": 1004,
+         "group": "START",
+         "anchor": "right",
+         "level": "middle"
+        }
+       ],
+       "controls": [
+        {
+         "id": "CU",
+         "shape": "circle",
+         "x": 208.0,
+         "y": 236.0,
+         "r": 72.50002,
+         "capR": 53.750015,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "CL",
+         "shape": "circle",
+         "x": 104.0,
+         "y": 358.0,
+         "r": 72.50002,
+         "capR": 53.750015,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "CR",
+         "shape": "circle",
+         "x": 312.0,
+         "y": 358.0,
+         "r": 72.50002,
+         "capR": 53.750015,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "CD",
+         "shape": "circle",
+         "x": 208.0,
+         "y": 480.0,
+         "r": 72.50002,
+         "capR": 53.750015,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "R",
+         "shape": "rect",
+         "x": 264.0,
+         "y": 54.0,
+         "hw": 100.0,
+         "hh": 42.0,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "START",
+         "shape": "circle",
+         "x": 88.0,
+         "y": 1050.6,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "right",
+         "label": "START",
+         "labelDx": 67.0,
+         "labelH": 17.0,
+         "level": "middle"
+        },
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 153.19922,
+         "y": 705.19934,
+         "r": 67.0,
+         "capR": 54.0,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 262.80078,
+         "y": 814.80066,
+         "r": 67.0,
+         "capR": 54.0,
+         "anchor": "right",
+         "level": "middle"
+        }
+       ],
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 857.9657,
+        "maxWdp": 1007.1772,
+        "minHdp": 647.68,
+        "maxHdp": 760.32,
+        "halfFolded": true
        }
       }
      ]
@@ -94617,7 +96413,7 @@
          "anchor": "left",
          "level": "middle",
          "drop": 0.6,
-         "group": "STICK_SWAP"
+         "group": "MENU+MIC+STICK_SWAP"
         },
         {
          "sx": 790,
@@ -94738,7 +96534,7 @@
          "level": "middle",
          "drop": 0.6,
          "alt": "stick",
-         "group": "STICK_SWAP"
+         "group": "MENU+MIC+STICK_SWAP"
         },
         {
          "sx": 2266,
@@ -94751,7 +96547,7 @@
          "level": "middle",
          "drop": 0.6,
          "alt": "dpad",
-         "group": "STICK_SWAP"
+         "group": "MENU+MIC+STICK_SWAP"
         }
        ],
        "controls": [
@@ -97627,7 +99423,7 @@
          "anchor": "left",
          "level": "middle",
          "drop": 0.6,
-         "group": "STICK_SWAP"
+         "group": "MENU+MIC+STICK_SWAP"
         },
         {
          "sx": 790,
@@ -97737,7 +99533,7 @@
          "level": "middle",
          "drop": 0.6,
          "alt": "stick",
-         "group": "STICK_SWAP"
+         "group": "MENU+MIC+STICK_SWAP"
         },
         {
          "sx": 2266,
@@ -97750,7 +99546,7 @@
          "level": "middle",
          "drop": 0.6,
          "alt": "dpad",
-         "group": "STICK_SWAP"
+         "group": "MENU+MIC+STICK_SWAP"
         }
        ],
        "controls": [
@@ -99095,7 +100891,7 @@
          "w": 72,
          "h": 144,
          "x": 4,
-         "y": 608,
+         "y": 1035,
          "anchor": "right",
          "level": "middle",
          "group": "SELECT+START+SWAP"
@@ -99106,7 +100902,7 @@
          "w": 280,
          "h": 144,
          "x": 76,
-         "y": 608,
+         "y": 1035,
          "anchor": "right",
          "level": "middle",
          "group": "SELECT+START+SWAP"
@@ -99117,7 +100913,7 @@
          "w": 72,
          "h": 144,
          "x": 356,
-         "y": 608,
+         "y": 1035,
          "anchor": "right",
          "level": "middle",
          "group": "SELECT+START+SWAP"
@@ -99150,7 +100946,7 @@
          "w": 92,
          "h": 92,
          "x": 170,
-         "y": 634,
+         "y": 1061,
          "anchor": "right",
          "level": "middle",
          "group": "SELECT+START+SWAP"
@@ -99161,7 +100957,7 @@
          "w": 92,
          "h": 92,
          "x": 310,
-         "y": 634,
+         "y": 1061,
          "anchor": "right",
          "level": "middle",
          "group": "SELECT+START+SWAP"
@@ -99172,7 +100968,7 @@
          "w": 100,
          "h": 100,
          "x": 26,
-         "y": 630,
+         "y": 1057,
          "anchor": "right",
          "level": "middle",
          "scale": 1.0000001,
@@ -99234,7 +101030,7 @@
          "id": "START",
          "shape": "circle",
          "x": 355.99994,
-         "y": 680.0,
+         "y": 1106.6,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "right",
@@ -99247,7 +101043,7 @@
          "id": "SELECT",
          "shape": "circle",
          "x": 216.00008,
-         "y": 680.0,
+         "y": 1106.6,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "right",
@@ -99260,7 +101056,7 @@
          "id": "SWAP",
          "shape": "circle",
          "x": 76.000015,
-         "y": 680.0,
+         "y": 1106.6,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "right",
@@ -99289,7 +101085,7 @@
          "w": 72,
          "h": 144,
          "x": 4,
-         "y": 608,
+         "y": 977,
          "anchor": "right",
          "level": "middle",
          "group": "SELECT+START+SWAP"
@@ -99300,7 +101096,7 @@
          "w": 280,
          "h": 144,
          "x": 76,
-         "y": 608,
+         "y": 977,
          "anchor": "right",
          "level": "middle",
          "group": "SELECT+START+SWAP"
@@ -99311,7 +101107,7 @@
          "w": 72,
          "h": 144,
          "x": 356,
-         "y": 608,
+         "y": 977,
          "anchor": "right",
          "level": "middle",
          "group": "SELECT+START+SWAP"
@@ -99344,7 +101140,7 @@
          "w": 92,
          "h": 92,
          "x": 170,
-         "y": 634,
+         "y": 1003,
          "anchor": "right",
          "level": "middle",
          "group": "SELECT+START+SWAP"
@@ -99355,7 +101151,7 @@
          "w": 92,
          "h": 92,
          "x": 310,
-         "y": 634,
+         "y": 1003,
          "anchor": "right",
          "level": "middle",
          "group": "SELECT+START+SWAP"
@@ -99366,7 +101162,7 @@
          "w": 100,
          "h": 100,
          "x": 26,
-         "y": 630,
+         "y": 999,
          "anchor": "right",
          "level": "middle",
          "group": "SELECT+START+SWAP"
@@ -99427,7 +101223,7 @@
          "id": "START",
          "shape": "circle",
          "x": 356.0,
-         "y": 680.0,
+         "y": 1048.8999,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "right",
@@ -99440,7 +101236,7 @@
          "id": "SELECT",
          "shape": "circle",
          "x": 216.0,
-         "y": 680.0,
+         "y": 1048.8999,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "right",
@@ -99453,7 +101249,7 @@
          "id": "SWAP",
          "shape": "circle",
          "x": 76.0,
-         "y": 680.0,
+         "y": 1048.8999,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "right",
@@ -99482,7 +101278,7 @@
          "w": 72,
          "h": 144,
          "x": 4,
-         "y": 608,
+         "y": 977,
          "anchor": "right",
          "level": "middle",
          "group": "SELECT+START+SWAP"
@@ -99493,7 +101289,7 @@
          "w": 280,
          "h": 144,
          "x": 76,
-         "y": 608,
+         "y": 977,
          "anchor": "right",
          "level": "middle",
          "group": "SELECT+START+SWAP"
@@ -99504,7 +101300,7 @@
          "w": 72,
          "h": 144,
          "x": 356,
-         "y": 608,
+         "y": 977,
          "anchor": "right",
          "level": "middle",
          "group": "SELECT+START+SWAP"
@@ -99537,7 +101333,7 @@
          "w": 92,
          "h": 92,
          "x": 170,
-         "y": 634,
+         "y": 1003,
          "anchor": "right",
          "level": "middle",
          "group": "SELECT+START+SWAP"
@@ -99548,7 +101344,7 @@
          "w": 92,
          "h": 92,
          "x": 310,
-         "y": 634,
+         "y": 1003,
          "anchor": "right",
          "level": "middle",
          "group": "SELECT+START+SWAP"
@@ -99559,7 +101355,7 @@
          "w": 100,
          "h": 100,
          "x": 26,
-         "y": 630,
+         "y": 999,
          "anchor": "right",
          "level": "middle",
          "group": "SELECT+START+SWAP"
@@ -99620,7 +101416,7 @@
          "id": "START",
          "shape": "circle",
          "x": 356.0,
-         "y": 680.0,
+         "y": 1048.8999,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "right",
@@ -99633,7 +101429,7 @@
          "id": "SELECT",
          "shape": "circle",
          "x": 216.0,
-         "y": 680.0,
+         "y": 1048.8999,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "right",
@@ -99646,7 +101442,7 @@
          "id": "SWAP",
          "shape": "circle",
          "x": 76.0,
-         "y": 680.0,
+         "y": 1048.8999,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "right",
@@ -113689,7 +115485,7 @@
          "anchor": "left",
          "level": "middle",
          "alt": "stick",
-         "group": "STICK_SWAP"
+         "group": "MENU+STICK_SWAP"
         },
         {
          "sx": 2266,
@@ -113701,7 +115497,7 @@
          "anchor": "left",
          "level": "middle",
          "alt": "dpad",
-         "group": "STICK_SWAP"
+         "group": "MENU+STICK_SWAP"
         }
        ],
        "controls": [

@@ -1173,12 +1173,11 @@
             "DPAD",
             "L",
             "L2",
-            "MENU+MIC",
+            "MENU+MIC+STICK_SWAP",
             "R",
             "R2",
             "SELECT+START+SWAP",
             "STICK",
-            "STICK_SWAP",
             "STRIP"
         ]
     },
@@ -1255,24 +1254,6 @@
                 "r": 0.0,
                 "hw": 43.0,
                 "hh": 42.0
-            },
-            {
-                "id": "STICK_SWAP",
-                "alt": "stick",
-                "x": 414.0,
-                "y": 1832.0,
-                "r": 58.0,
-                "hw": 0.0,
-                "hh": 0.0
-            },
-            {
-                "id": "STICK_SWAP",
-                "alt": "dpad",
-                "x": 414.0,
-                "y": 1832.0,
-                "r": 58.0,
-                "hw": 0.0,
-                "hh": 0.0
             },
             {
                 "id": "X",
@@ -1377,6 +1358,24 @@
                 "id": "SWAP",
                 "alt": "",
                 "x": 834.0,
+                "y": 1832.0,
+                "r": 58.0,
+                "hw": 0.0,
+                "hh": 0.0
+            },
+            {
+                "id": "STICK_SWAP",
+                "alt": "stick",
+                "x": 414.0,
+                "y": 1832.0,
+                "r": 58.0,
+                "hw": 0.0,
+                "hh": 0.0
+            },
+            {
+                "id": "STICK_SWAP",
+                "alt": "dpad",
+                "x": 414.0,
                 "y": 1832.0,
                 "r": 58.0,
                 "hw": 0.0,
@@ -1540,28 +1539,6 @@
             },
             {
                 "dst": [
-                    364.0,
-                    1782.0,
-                    100.0,
-                    100.0
-                ],
-                "alt": "stick",
-                "knob": false,
-                "strip": false
-            },
-            {
-                "dst": [
-                    364.0,
-                    1782.0,
-                    100.0,
-                    100.0
-                ],
-                "alt": "dpad",
-                "knob": false,
-                "strip": false
-            },
-            {
-                "dst": [
                     758.0,
                     1352.0,
                     416.0,
@@ -1691,6 +1668,28 @@
                 "alt": "",
                 "knob": false,
                 "strip": false
+            },
+            {
+                "dst": [
+                    364.0,
+                    1782.0,
+                    100.0,
+                    100.0
+                ],
+                "alt": "stick",
+                "knob": false,
+                "strip": false
+            },
+            {
+                "dst": [
+                    364.0,
+                    1782.0,
+                    100.0,
+                    100.0
+                ],
+                "alt": "dpad",
+                "knob": false,
+                "strip": false
             }
         ],
         "glasses": [
@@ -1719,12 +1718,11 @@
             "DPAD",
             "L",
             "L2",
-            "MENU+MIC+SWAP",
+            "MENU+MIC+STICK_SWAP+SWAP",
             "R",
             "R2",
             "SELECT+START",
             "STICK",
-            "STICK_SWAP",
             "STRIP"
         ]
     },
@@ -8279,24 +8277,6 @@
                 "hh": 42.0
             },
             {
-                "id": "STICK_SWAP",
-                "alt": "stick",
-                "x": 330.0,
-                "y": 2380.0,
-                "r": 58.0,
-                "hw": 0.0,
-                "hh": 0.0
-            },
-            {
-                "id": "STICK_SWAP",
-                "alt": "dpad",
-                "x": 330.0,
-                "y": 2380.0,
-                "r": 58.0,
-                "hw": 0.0,
-                "hh": 0.0
-            },
-            {
                 "id": "X",
                 "alt": "",
                 "x": 838.0,
@@ -8399,6 +8379,24 @@
                 "id": "SWAP",
                 "alt": "",
                 "x": 750.0,
+                "y": 2380.0,
+                "r": 58.0,
+                "hw": 0.0,
+                "hh": 0.0
+            },
+            {
+                "id": "STICK_SWAP",
+                "alt": "stick",
+                "x": 330.0,
+                "y": 2380.0,
+                "r": 58.0,
+                "hw": 0.0,
+                "hh": 0.0
+            },
+            {
+                "id": "STICK_SWAP",
+                "alt": "dpad",
+                "x": 330.0,
                 "y": 2380.0,
                 "r": 58.0,
                 "hw": 0.0,
@@ -8562,28 +8560,6 @@
             },
             {
                 "dst": [
-                    280.0,
-                    2330.0,
-                    100.0,
-                    100.0
-                ],
-                "alt": "stick",
-                "knob": false,
-                "strip": false
-            },
-            {
-                "dst": [
-                    280.0,
-                    2330.0,
-                    100.0,
-                    100.0
-                ],
-                "alt": "dpad",
-                "knob": false,
-                "strip": false
-            },
-            {
-                "dst": [
                     630.0,
                     1918.0,
                     416.0,
@@ -8713,6 +8689,28 @@
                 "alt": "",
                 "knob": false,
                 "strip": false
+            },
+            {
+                "dst": [
+                    280.0,
+                    2330.0,
+                    100.0,
+                    100.0
+                ],
+                "alt": "stick",
+                "knob": false,
+                "strip": false
+            },
+            {
+                "dst": [
+                    280.0,
+                    2330.0,
+                    100.0,
+                    100.0
+                ],
+                "alt": "dpad",
+                "knob": false,
+                "strip": false
             }
         ],
         "glasses": [
@@ -8737,14 +8735,14 @@
         ],
         "groups": [
             "A+B+CSTICK+X+Y",
-            "DPAD+STICK_SWAP",
+            "DPAD",
             "L",
             "L2",
-            "MENU+MIC+SWAP",
+            "MENU+MIC+STICK_SWAP+SWAP",
             "R",
             "R2",
             "SELECT+START",
-            "STICK+STICK_SWAP",
+            "STICK",
             "STRIP"
         ]
     }
