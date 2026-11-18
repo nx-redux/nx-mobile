@@ -1790,8 +1790,8 @@ class NxCarbonPackTest {
     @Test
     fun tabletClustersCentreOnTheBottomScreen() {
         // the tablet twins: the side clusters' span centred on the bottom screen, within a cap's radius (a capped top screen aside)
-        // (the consoles following the menu take its fold board instead: the GBA, the shared one-screen set; the PS1 keeps
-        // its d-pad and face on the menu's spots, its sticks under them)
+        // (the consoles following the menu take its fold board instead: the GBA, the shared one-screen set; the PS1 and the
+        // PSP keep their d-pad and face on the menu's spots, their sticks under them)
         val menu = assertNotNull(SkinChoice.placeMenu(pack, 1440, 2304, 280, tablet = true)).controls.associateBy { it.spec.id }
         for (v in listOf(SkinVariant.PSP, SkinVariant.WII_SIDEWAYS, SkinVariant.N3DS_REGULAR, SkinVariant.PS1)) {
             val p = assertNotNull(SkinChoice.place(pack, 1440, 2304, 280, true, v == SkinVariant.N3DS_REGULAR, 640f to 480f, null, variant = v), "$v")
@@ -1800,7 +1800,7 @@ class NxCarbonPackTest {
             val side = p.controls.filter { it.spec.id != "MENU" && it.y > screen.y - 200f && (it.x < screen.x || it.x > screen.x + screen.width) }
             fun ext(c: PlacedControl) = if (c.spec.shape == ControlShape.RECT) c.spec.hh else c.spec.r * (if (c.spec.shape == ControlShape.STICK) 1.07f else 1f)
             val mid = (side.minOf { it.y - ext(it) } + side.maxOf { it.y + ext(it) }) / 2f
-            if (v == SkinVariant.PS1) for (id in listOf("DPAD", "Y")) {
+            if (v == SkinVariant.PS1 || v == SkinVariant.PSP) for (id in listOf("DPAD", "Y")) {
                 assertEquals(menu.getValue(id).x, p.controls.first { it.spec.id == id }.x, 1f, "$v $id x on the menu's")
                 assertEquals(menu.getValue(id).y, p.controls.first { it.spec.id == id }.y, 1f, "$v $id y on the menu's")
             } else if (v == SkinVariant.N3DS_REGULAR) {
