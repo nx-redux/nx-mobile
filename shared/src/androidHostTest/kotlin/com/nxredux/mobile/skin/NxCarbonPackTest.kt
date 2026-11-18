@@ -514,6 +514,12 @@ class NxCarbonPackTest {
                 for (i in cs.indices) for (j in i + 1 until cs.size) {
                     val a = cs[i]; val b = cs[j]
                     if (a.spec.id in face && b.spec.id in face) continue
+                    // L3 / R3 tucked at their stick's ring (the two-stick boards): only clear of the stick's own touch circle
+                    if (setOf(a.spec.id, b.spec.id).let { it == setOf("STICK", "L3") || it == setOf("CSTICK", "R3") }) {
+                        val stick = if (a.spec.shape == ControlShape.STICK) a else b
+                        assertTrue(kotlin.math.hypot(a.x - b.x, a.y - b.y) > stick.spec.r, "$name ${a.spec.id} ${b.spec.id}")
+                        continue
+                    }
                     assertTrue(if (circle(a) && circle(b)) round(a, b) else apart(box(a), box(b)), "$name ${a.spec.id} ${b.spec.id}")
                 }
                 for (x in cs) assertTrue(x.x >= 0f && x.x <= d.first && x.y >= 0f && x.y <= d.second, "$name ${x.spec.id} off the window")
@@ -1784,7 +1790,9 @@ class NxCarbonPackTest {
     @Test
     fun tabletClustersCentreOnTheBottomScreen() {
         // the tablet twins: the side clusters' span centred on the bottom screen, within a cap's radius (a capped top screen aside)
-        // (the consoles following the menu take its fold board instead: the GBA, the shared one-screen set)
+        // (the consoles following the menu take its fold board instead: the GBA, the shared one-screen set; the PS1 keeps
+        // its d-pad and face on the menu's spots, its sticks under them)
+        val menu = assertNotNull(SkinChoice.placeMenu(pack, 1440, 2304, 280, tablet = true)).controls.associateBy { it.spec.id }
         for (v in listOf(SkinVariant.PSP, SkinVariant.WII_SIDEWAYS, SkinVariant.N3DS_REGULAR, SkinVariant.PS1)) {
             val p = assertNotNull(SkinChoice.place(pack, 1440, 2304, 280, true, v == SkinVariant.N3DS_REGULAR, 640f to 480f, null, variant = v), "$v")
             assertTrue(p.spec.id.endsWith("_fold_tab"), "$v ${p.spec.id}")
@@ -1792,7 +1800,10 @@ class NxCarbonPackTest {
             val side = p.controls.filter { it.spec.id != "MENU" && it.y > screen.y - 200f && (it.x < screen.x || it.x > screen.x + screen.width) }
             fun ext(c: PlacedControl) = if (c.spec.shape == ControlShape.RECT) c.spec.hh else c.spec.r * (if (c.spec.shape == ControlShape.STICK) 1.07f else 1f)
             val mid = (side.minOf { it.y - ext(it) } + side.maxOf { it.y + ext(it) }) / 2f
-            if (v == SkinVariant.N3DS_REGULAR) {
+            if (v == SkinVariant.PS1) for (id in listOf("DPAD", "Y")) {
+                assertEquals(menu.getValue(id).x, p.controls.first { it.spec.id == id }.x, 1f, "$v $id x on the menu's")
+                assertEquals(menu.getValue(id).y, p.controls.first { it.spec.id == id }.y, 1f, "$v $id y on the menu's")
+            } else if (v == SkinVariant.N3DS_REGULAR) {
                 // a capped top screen (the 3DS's wide one): the touch screen up under it, the controls centred in the height
                 // between the top screen's frame and the window's bottom instead
                 val top = p.glass(GlassScreen.TOP)!!.rect
