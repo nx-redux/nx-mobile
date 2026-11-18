@@ -773,8 +773,9 @@ class NxCarbonPackTest {
     @Test
     fun gameCubeLayoutsInEveryFamily() {
         // the stick as Dreamcast's, the diamond, L R triggers (L2 R2) with Z (R) inside R or above it, the C-stick nub, START MENU;
-        // both sticks on the tablet board and every tall landscape (the Fold's inner too), the C-stick then under the face
-        val roomy = setOf("tablet", "tablet_land", "inner_land")
+        // both sticks on the tablet board, the Fold's inner (upright, half-folded, sideways) and every tall landscape, the
+        // C-stick then under the face
+        val roomy = setOf("tablet", "tablet_land", "inner", "inner_half", "inner_land")
         for ((name, d) in consoleDevices + ("tablet_land" to Triple(2304, 1440, null))) {
             val tablet = name.startsWith("tablet")
             val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, false, 640f to 480f,
@@ -1283,16 +1284,23 @@ class NxCarbonPackTest {
             kotlin.math.abs(w.dst.y + w.dst.height / 2f - my) < 2f }, "SELECT and START in a well")
     }
 
-    // The GameCube's tall landscape (the unfolded Fold, a tablet): MENU over on the right with START, the pair in a
-    // well, clear of the d-pad it overlapped on the left.
+    // The GameCube's tall landscape: on a tablet START over MENU on the right, the pair in a well; on the unfolded Fold
+    // (the C-stick as big as the d-pad, no room under it for both) START alone on the right, MENU level with it on the left.
     @Test
-    fun gameCubeTallLandscapeHasMenuWithStartOnTheRight() {
+    fun gameCubeTallLandscapeSplitsStartAndMenu() {
         for ((w, h, dpi) in listOf(Triple(2448, 1848, 420), Triple(2304, 1440, 280))) {
             val p = assertNotNull(SkinChoice.place(pack, w, h, dpi, dpi == 280, false, 640f to 480f, null, foldable = dpi == 420, variant = SkinVariant.GC), "$w")
             fun c(id: String) = p.controls.first { it.spec.id == id }
             val menu = c("MENU"); val start = c("START")
+            assertTrue(start.x > w / 2f, "$w START right")
+            if (dpi == 420) {
+                assertTrue(menu.x < w / 2f, "$w MENU left")
+                assertEquals(start.y, menu.y, 1f, "$w MENU level with START")
+                assertEquals(c("DPAD").spec.r, c("CSTICK").spec.r * 156f / 170f, 1f, "$w the C-stick at the d-pad's size")
+                continue
+            }
             assertTrue(menu.x > w / 2f, "$w MENU right")
-            stacked(menu, start, "$w MENU over START")
+            stacked(start, menu, "$w START over MENU (the PSP's order)")
             val my = (menu.y + start.y) / 2f
             assertTrue(p.pieces.any { q -> q.dst.height > q.dst.width * 1.5f && kotlin.math.abs(q.dst.x + q.dst.width / 2f - menu.x) < 2f &&
                 kotlin.math.abs(q.dst.y + q.dst.height / 2f - my) < 2f }, "$w the pair in a well")
