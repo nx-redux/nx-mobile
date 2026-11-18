@@ -81,6 +81,7 @@ object SkinChoice {
         baseTag == "PS" || baseTag == "PSX" || baseTag == "PS2" -> SkinVariant.PS1
         baseTag == "PSP" -> SkinVariant.PSP
         baseTag in MD_TAGS -> if (segaThree) SkinVariant.MD3 else SkinVariant.MD   // unknown: the six (the core's 6-button default)
+        baseTag in SATURN_TAGS -> SkinVariant.SATURN
         baseTag == "P8" -> SkinVariant.P8   // fake-08: O (B) and X (A), START its pause
         baseTag == "PRBOOM" -> SkinVariant.DOOM   // PrBoom's Classic pad: the standard pad with L2 R2 L3 R3
         baseTag == "A5200" -> SkinVariant.A5200   // a5200: FIRE 1 / 2 (A / B), * # (Y / X), KEYPAD (L: its on-screen keypad)
@@ -93,6 +94,9 @@ object SkinChoice {
     private val GB_TAGS = setOf("GB", "GBC", "SGB", "FC")   // the NES too: A B, fceumm's turbo on TA / TB, no DISK
     private val GBA_TAGS = setOf("GBA", "MGBA")
     private val MD_TAGS = setOf("MD", "GPGX", "SEGACD", "32X")   // the Sega pad's ([com.nxredux.mobile.runner.PadMap.isSegaPadTag])
+    // the Saturn's tags (as other frontends name it), for when a Saturn core is added: its face as the Genesis's (A on Y,
+    // B on B, C on A, X on L, Y on X, Z on R), its L / R on L2 / R2
+    private val SATURN_TAGS = setOf("SATURN", "SS")
     private val ARCADE_TAGS = setOf("FBN")
 
     /**

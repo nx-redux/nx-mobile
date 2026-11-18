@@ -39,7 +39,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(153 + N3DS_LAYOUTS + GRIP_COLUMNS, pack.layouts.size)   // the menu half-folded on a phone (flex_menu); 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's, the Atari 5200's, Doom's and the Sega pad's two (6- and 3-button) in every family; a tablet twin of each game fold board without one (17: the clusters centred on the bottom screen, user)
+        assertEquals(161 + N3DS_LAYOUTS + GRIP_COLUMNS, pack.layouts.size)   // the menu half-folded on a phone (flex_menu); 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's, the Atari 5200's, Doom's, the Sega pad's two (6- and 3-button) and the Saturn's in every family; a tablet twin of each game fold board without one (17: the clusters centred on the bottom screen, user)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -1756,6 +1756,28 @@ class NxCarbonPackTest {
             // 3-button: no MODE / START row under the screen where the shared set has one, so the screen may take its room
             if (six) assertEquals(single.height, g.height, 1f, "${d.name} $v screen h")
             else assertTrue(g.height >= single.height - 1f, "${d.name} $v screen h ${g.height} under ${single.height}")
+        }
+    }
+
+    @Test
+    fun theSaturnPadIsTheSixWithShoulders() {
+        // the Genesis's six on the same spots, L / R (L2 / R2) where the menu has L / R, START by MENU as the 3-button's
+        for (d in GOLDEN_DEVICES) {
+            val menu = assertNotNull(placeFor(pack, null, d), "${d.name} menu").controls.associateBy { it.spec.id }
+            val md = assertNotNull(placeFor(pack, SkinVariant.MD, d), "${d.name} md").controls.associateBy { it.spec.id }
+            val md3 = assertNotNull(placeFor(pack, SkinVariant.MD3, d), "${d.name} md3").controls.associateBy { it.spec.id }
+            val ss = assertNotNull(placeFor(pack, SkinVariant.SATURN, d), "${d.name} saturn")
+            val c = ss.controls.associateBy { it.spec.id }
+            assertEquals(setOf("DPAD", "Y", "X", "A", "B", "L", "R", "L2", "R2", "START", "MENU"), c.keys.filterNot { it.startsWith("TOUCH_") }.toSet(), d.name)
+            for (id in listOf("DPAD", "Y", "X", "A", "B", "L", "R")) {
+                assertEquals(md.getValue(id).x, c.getValue(id).x, 1f, "${d.name} $id x"); assertEquals(md.getValue(id).y, c.getValue(id).y, 1f, "${d.name} $id y")
+            }
+            for ((id, m) in listOf("L2" to "L", "R2" to "R")) {
+                assertEquals(menu.getValue(m).x, c.getValue(id).x, 1f, "${d.name} $id x"); assertEquals(menu.getValue(m).y, c.getValue(id).y, 1f, "${d.name} $id y")
+            }
+            for (id in listOf("START", "MENU")) {
+                assertEquals(md3.getValue(id).x, c.getValue(id).x, 1f, "${d.name} $id x"); assertEquals(md3.getValue(id).y, c.getValue(id).y, 1f, "${d.name} $id y")
+            }
         }
     }
 

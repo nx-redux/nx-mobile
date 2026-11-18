@@ -100,6 +100,8 @@ enum class SkinVariant {
     @SerialName("md") MD,
     /** The same on a 3-button game: A B C alone (where they are on the six), START beside MENU; no MODE. */
     @SerialName("md3") MD3,
+    /** Sega Saturn: the d-pad, the Sega pad's six (A B C below X Y Z), L R (L2 R2), START beside MENU. */
+    @SerialName("saturn") SATURN,
     /** The Atari 5200: the analog joystick (first), FIRE 1 / 2, * #, PAUSE START, KEYPAD (the core's on-screen keypad). */
     @SerialName("a5200") A5200,
     /** Doom (PrBoom's Classic pad): the d-pad, A B X Y, L R with L2 R2 (weapons), SELECT START, L3 R3. */

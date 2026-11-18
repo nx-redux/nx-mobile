@@ -24,6 +24,7 @@ class SkinVariantForTest {
             assertEquals(SkinVariant.MD3, SkinChoice.variantFor(t, false, segaThree = true), t)
         }
         assertEquals(SkinVariant.SINGLE, SkinChoice.variantFor("SMS", false, segaThree = true))   // the 8-bit Segas: the shared set
+        for (t in listOf("SATURN", "SS")) assertEquals(SkinVariant.SATURN, SkinChoice.variantFor(t, false), t)
     }
 
     @Test
