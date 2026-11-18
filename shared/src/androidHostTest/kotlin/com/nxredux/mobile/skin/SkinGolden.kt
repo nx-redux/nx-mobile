@@ -45,7 +45,7 @@ val GOLDEN_DEVICES = listOf(
 /** The consoles drawn as boxes: their golden fixture's name. */
 val BOXED = linkedMapOf<SkinVariant?, String>(null to "menu", SkinVariant.N64 to "n64", SkinVariant.GB to "gb", SkinVariant.GBA to "gba",
     SkinVariant.ARCADE to "arcade", SkinVariant.DC to "dc", SkinVariant.FDS to "fds", SkinVariant.DS to "ds", SkinVariant.N3DS to "n3ds",
-    SkinVariant.N3DS_REGULAR to "n3ds_regular", SkinVariant.SINGLE to "single", SkinVariant.MD to "md", SkinVariant.MD3 to "md3", SkinVariant.SATURN to "saturn", SkinVariant.PS1 to "ps1", SkinVariant.PSP to "psp", SkinVariant.GC to "gc")
+    SkinVariant.N3DS_REGULAR to "n3ds_regular", SkinVariant.SINGLE to "single", SkinVariant.MD to "md", SkinVariant.MD3 to "md3", SkinVariant.SATURN to "saturn", SkinVariant.PS1 to "ps1", SkinVariant.PSP to "psp", SkinVariant.GC to "gc", SkinVariant.WII_CLASSIC to "wii_classic", SkinVariant.WII_NUNCHUK to "wii_nunchuk", SkinVariant.WII_SIDEWAYS to "wii_sideways", SkinVariant.WII_UPRIGHT to "wii_upright")
 
 /** A one-screen console's picture size, game px (null: the DS / 3DS, two screens). */
 private fun pictureOf(v: SkinVariant): Pair<Float, Float>? = when (v) {
@@ -134,9 +134,12 @@ fun assertMatchesGolden(expected: JsonElement, actual: SkinPlacement?, tol: Floa
     fun f(o: JsonObject, k: String) = o.getValue(k).jsonPrimitive.float
     fun s(o: JsonObject, k: String) = o.getValue(k).jsonPrimitive.content
     fun near(a: Float, b: Float) = kotlin.math.abs(a - b) <= tol
-    // controls by id and alternate
-    val mine = got.getValue("controls").jsonArray.map { it.jsonObject }.groupBy { s(it, "id") + "/" + s(it, "alt") }
-    val theirs = e.getValue("controls").jsonArray.map { it.jsonObject }.groupBy { s(it, "id") + "/" + s(it, "alt") }
+    // controls by id and alternate (one id twice, as the sideways Wii Remote's Y cap and Y shoulder: paired by size, the
+    // boxes listing them in another order)
+    fun byKey(o: JsonObject) = o.getValue("controls").jsonArray.map { it.jsonObject }.groupBy { s(it, "id") + "/" + s(it, "alt") }
+        .mapValues { (_, l) -> l.sortedWith(compareBy({ f(it, "r") }, { f(it, "hw") }, { f(it, "hh") })) }
+    val mine = byKey(got)
+    val theirs = byKey(e)
     assertEquals(theirs.keys, mine.keys, "$label: the controls")
     for ((key, list) in theirs) for ((i, c) in list.withIndex()) {
         val m = mine.getValue(key).getOrNull(i) ?: fail("$label $key: missing")

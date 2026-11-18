@@ -623,8 +623,10 @@ class NxCarbonPackTest {
             assertTrue(shoulderB.x < c("R2").x && shoulderB.y < c("B").y, "$name B left shoulder, SHAKE right")
             assertTrue(c("B").y < c("X").y && c("A").x < c("X").x && faceB.y > c("X").y, "$name 1 top, 2 left, B bottom, A right")
             for (id in listOf("HOME", "MOTION")) assertTrue(cs.any { it.spec.id == id }, "$name $id")
-            if (name in setOf("inner", "inner_half", "tablet")) for (id in listOf("SELECT", "START"))
-                assertEquals(c("A").x, c(id).x, 1f, "$name $id on 2's (the diamond's left)")
+            if (name in setOf("inner", "inner_half", "tablet")) {   // − on the left, + on the right, level
+                assertTrue(c("SELECT").x < d.first / 2f && c("START").x > d.first / 2f, "$name − left, + right")
+                assertEquals(c("SELECT").y, c("START").y, 1f, "$name − level with +")
+            }
             fun box(pc: PlacedControl): FloatArray {
                 val r = when (pc.spec.shape) { ControlShape.STICK -> pc.spec.r * 1.25f; ControlShape.RECT -> 0f; else -> pc.spec.r }
                 val hw = if (r > 0f) r else pc.spec.hw; val hh = if (r > 0f) r else pc.spec.hh
@@ -699,17 +701,17 @@ class NxCarbonPackTest {
             val small = p.spec.family == SkinFamily.STACKED || (p.spec.family == SkinFamily.FLEX && !p.spec.id.contains("fold"))
             if (small) assertEquals(listOf("−", "+"), listOf(c("L").spec.label, c("R").spec.label), name)
             else assertTrue(c("L").spec.label.isNullOrEmpty() && c("R").spec.label.isNullOrEmpty(), "$name − + marked caps carry no word")
-            if (name in roomy) {   // the stick on top, the d-pad under it, both smaller
+            if (name in roomy) {   // the stick on top, the d-pad under it, the d-pad at 85%
                 assertTrue(c("STICK").y < c("DPAD").y, "$name stick above the d-pad")
-                assertEquals(c("STICK").y, c("START").y, 1f, "$name 1 level with the stick (user)")
-                assertTrue(c("STICK").spec.r < c("DPAD").spec.r, "$name the stick scaled down")
-                val ring = 206f * p.k; val sring = ring * c("STICK").spec.r / (170f * p.k)
-                val lower = (c("DPAD").y - ring) - (c("STICK").y + sring)
-                assertEquals(28f * p.k, lower, 2f * p.k, "$name the d-pad close under the stick (user)")
+                // the stick and the face on the menu's d-pad and face spots: the face's middle level with the stick
+                assertEquals(c("STICK").y, c("A").y, 1f, "$name the face's middle level with the stick")
+                assertEquals(156f * 0.85f * p.k, c("DPAD").spec.r, 1f, "$name the d-pad (the lower pad) at 85%")
+                // the stick full size on the menu's d-pad spot, the d-pad's drawing close under the stick's (clear of it)
+                val gap = (c("DPAD").y - 208f * 0.85f * p.k) - (c("STICK").y + 208f * p.k)
+                assertTrue(gap >= 0f && gap < 30f * p.k, "$name the d-pad close under the stick: $gap")
             } else assertTrue(c("STICK").spec.r > c("DPAD").spec.r, "$name the swapped stick full size")
-            if (name in setOf("inner", "inner_half", "tablet")) {   // the fold board: − + a column on 2's, MENU HOME MOTION one row
-                assertEquals(c("SELECT").x, c("L").x, 1f, "$name − on 2's"); assertEquals(c("SELECT").x, c("R").x, 1f, "$name + on 2's")
-                for (id in listOf("HOME", "MOTION")) assertEquals(c("MENU").y, c(id).y, 1f, "$name $id in MENU's row")
+            if (name in setOf("inner", "inner_half", "tablet")) {   // the fold board: MENU HOME MOTION − + one row under the bottom screen
+                for (id in listOf("HOME", "MOTION", "L", "R")) assertEquals(c("MENU").y, c(id).y, 1f, "$name $id in MENU's row")
             }
         }
     }
@@ -749,7 +751,8 @@ class NxCarbonPackTest {
                 for (x in cs) assertTrue(x.x >= 0f && x.x <= d.first && x.y >= 0f && x.y <= d.second, "$name ${x.spec.id} off the window")
             }
             assertEquals(2, p.pieces.count { it.knob }, name)
-            if (p.columns()) stacked(c("MENU"), c("HOME"), "$name MENU over HOME")
+            // (a column only on the tablet sideways: the Fold's and the Ultra's inner sideways keep them in a row under the stick)
+            if (p.columns() && name == "tablet_land") stacked(c("MENU"), c("HOME"), "$name MENU over HOME")
             else { assertEquals(c("MENU").y, c("HOME").y, 1f, "$name HOME beside MENU"); assertTrue(c("HOME").x > c("MENU").x, "$name HOME right of MENU") }
             val small = p.spec.family == SkinFamily.STACKED || (p.spec.family == SkinFamily.FLEX && !p.spec.id.contains("fold"))
             assertEquals(if (small) listOf("−", "+") else listOf("SELECT", "START"), listOf(c("SELECT").spec.label, c("START").spec.label), name)
@@ -1799,7 +1802,7 @@ class NxCarbonPackTest {
     fun tabletClustersCentreOnTheBottomScreen() {
         // the tablet twins: the side clusters' span centred on the bottom screen, within a cap's radius (a capped top screen aside)
         // (the consoles following the menu take its fold board instead: the GBA, the shared one-screen set; the PS1 and the
-        // PSP keep their d-pad and face on the menu's spots, their sticks under them)
+        // PSP keep their d-pad and face on the menu's spots, their sticks under them; the sideways Wii Remote its d-pad)
         val menu = assertNotNull(SkinChoice.placeMenu(pack, 1440, 2304, 280, tablet = true)).controls.associateBy { it.spec.id }
         for (v in listOf(SkinVariant.PSP, SkinVariant.WII_SIDEWAYS, SkinVariant.N3DS_REGULAR, SkinVariant.PS1)) {
             val p = assertNotNull(SkinChoice.place(pack, 1440, 2304, 280, true, v == SkinVariant.N3DS_REGULAR, 640f to 480f, null, variant = v), "$v")
@@ -1808,7 +1811,10 @@ class NxCarbonPackTest {
             val side = p.controls.filter { it.spec.id != "MENU" && it.y > screen.y - 200f && (it.x < screen.x || it.x > screen.x + screen.width) }
             fun ext(c: PlacedControl) = if (c.spec.shape == ControlShape.RECT) c.spec.hh else c.spec.r * (if (c.spec.shape == ControlShape.STICK) 1.07f else 1f)
             val mid = (side.minOf { it.y - ext(it) } + side.maxOf { it.y + ext(it) }) / 2f
-            if (v == SkinVariant.PS1 || v == SkinVariant.PSP) for (id in listOf("DPAD", "Y")) {
+            if (v == SkinVariant.WII_SIDEWAYS) for (k in listOf("x", "y")) {   // the d-pad on the menu's (− + split to the sides)
+                val a = menu.getValue("DPAD"); val b = p.controls.first { it.spec.id == "DPAD" }
+                assertEquals(if (k == "x") a.x else a.y, if (k == "x") b.x else b.y, 1f, "$v DPAD $k on the menu's")
+            } else if (v == SkinVariant.PS1 || v == SkinVariant.PSP) for (id in listOf("DPAD", "Y")) {
                 assertEquals(menu.getValue(id).x, p.controls.first { it.spec.id == id }.x, 1f, "$v $id x on the menu's")
                 assertEquals(menu.getValue(id).y, p.controls.first { it.spec.id == id }.y, 1f, "$v $id y on the menu's")
             } else if (v == SkinVariant.N3DS_REGULAR) {
