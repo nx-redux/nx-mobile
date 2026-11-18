@@ -389,8 +389,7 @@ class NxCarbonPackTest {
             assertTrue(c("A").x < c("B").x && c("A").y > c("B").y, "$name FIRE 1 down left of FIRE 2")
             assertTrue(c("Y").spec.shape == ControlShape.RECT && c("X").spec.shape == ControlShape.RECT && c("Y").x < c("X").x, "$name * left, # right shoulders")
             assertEquals("KEYPAD", c("L").spec.label, name)
-            if (name == "phone_land") { assertEquals(c("MENU").x, c("L").x, 1f, "$name MENU under KEYPAD"); assertTrue(c("MENU").y > c("L").y, name) }
-            else if (p.columns()) stacked(c("L"), c("MENU"), "$name KEYPAD over MENU")
+            if (p.columns() && p.spec.id.contains("_tall")) stacked(c("L"), c("MENU"), "$name KEYPAD over MENU")   // (the Fold cover: a row)
             else assertEquals(c("MENU").y, c("L").y, 1f, "$name KEYPAD beside MENU")
             for (useStick in listOf(true, false)) {
                 val sc = p.forStick(useStick).controls.filterNot { it.spec.id.startsWith("TOUCH_") }
