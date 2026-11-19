@@ -2329,8 +2329,8 @@ class AppStateTest {
         assertEquals(2, runner.launched.size)
     }
 
-    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, skinEditor: SkinEditorLauncher? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }, ownKeyboard: Boolean = false, onSecond: () -> Boolean = { false }, topFacts: TopFactsPlatform? = null, linkRomCache: com.nxredux.mobile.netplay.cablelink.LinkRomCache? = null, gpuDrivers: GpuDriverStore? = null) =
-        AppState(AppDeps(settings, src, runner, picker, data, gpuDrivers = gpuDrivers, topFacts = topFacts, ownKeyboard = ownKeyboard, promptOnSecondDisplay = onSecond, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, skinEditor = skinEditor, saveTransfer = saveTransfer, allFilesAccess = allFiles, micAccess = mic, linkRomCache = linkRomCache, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, skinEditor: SkinEditorLauncher? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }, ownKeyboard: Boolean = false, onSecond: () -> Boolean = { false }, topFacts: TopFactsPlatform? = null, linkRomCache: com.nxredux.mobile.netplay.cablelink.LinkRomCache? = null, gpuDrivers: GpuDriverStore? = null, biosIntake: com.nxredux.mobile.bios.BiosIntake? = null) =
+        AppState(AppDeps(settings, src, runner, picker, data, gpuDrivers = gpuDrivers, topFacts = topFacts, ownKeyboard = ownKeyboard, promptOnSecondDisplay = onSecond, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, skinEditor = skinEditor, saveTransfer = saveTransfer, biosIntake = biosIntake, allFilesAccess = allFiles, micAccess = mic, linkRomCache = linkRomCache, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
 
     /** What a scan of [src] for [settings] stores, built without an AppState (so without the skeleton). */
     private suspend fun scannedIndex(settings: MemorySettings, src: RomsSource = source): LibraryIndex =
@@ -12426,6 +12426,101 @@ class AppStateTest {
         st.select(rows.indexOfFirst { it.kind == SettingsKind.EXPORT_SAVES }); st.onButton(NxButton.A)
         assertEquals(listOf("export"), transfer.calls)
         assertEquals("Exported 1 save and 0 states (0.0 MB)", st.notice.value)
+    }
+
+    private class FakeBiosIntake(var result: com.nxredux.mobile.bios.BiosIntakeResult = com.nxredux.mobile.bios.BiosIntakeResult.Message("No BIOS found")) : com.nxredux.mobile.bios.BiosIntake {
+        val calls = mutableListOf<com.nxredux.mobile.bios.BiosSource>()
+        override val running = false
+        override fun import(source: com.nxredux.mobile.bios.BiosSource, progress: (String) -> Unit, done: (com.nxredux.mobile.bios.BiosIntakeResult) -> Unit) { calls += source; progress("Working…"); done(result) }
+    }
+
+    private fun biosDone(): com.nxredux.mobile.bios.BiosIntakeResult {
+        val plan = com.nxredux.mobile.bios.BiosIntakePlan(
+            listOf(com.nxredux.mobile.bios.BiosWrite("gb_bios.bin", "GB", "gb_bios.bin", com.nxredux.mobile.bios.BiosOutcome.VERIFIED, bootChange = true)), emptyList(), 2,
+        )
+        return com.nxredux.mobile.bios.BiosIntakeResult.Done(com.nxredux.mobile.bios.BiosIntakeSummary(plan, emptyList()))
+    }
+
+    @Test fun library_has_import_bios_after_saves() = runTest {
+        val st = state(MemorySettings(ContentRef("Home")), biosIntake = FakeBiosIntake())
+        st.load()
+        st.openSettings(SettingsSection.LIBRARY)
+        val kinds = assertIs<Screen.Settings>(st.screen.value).rows.map { it.kind }
+        assertEquals(kinds.indexOf(SettingsKind.SAVES) + 1, kinds.indexOf(SettingsKind.IMPORT_BIOS))
+        val plain = state(MemorySettings(ContentRef("Home")))
+        plain.load()
+        plain.openSettings(SettingsSection.LIBRARY)
+        assertFalse(assertIs<Screen.Settings>(plain.screen.value).rows.any { it.kind == SettingsKind.IMPORT_BIOS })
+    }
+
+    @Test fun import_bios_row_info() {
+        assertEquals(
+            "Copy BIOS in from a folder, files or a zip. You can also put them in Bios/ yourself.",
+            settingsInfo(SettingsRow(SettingsKind.IMPORT_BIOS, "Import BIOS")).detail,
+        )
+    }
+
+    @Test fun import_bios_page_has_four_sources() = runTest {
+        val intake = FakeBiosIntake(biosDone())
+        val st = state(MemorySettings(ContentRef("Home")), biosIntake = intake)
+        st.load()
+        fun page() = assertIs<Screen.Settings>(st.screen.value)
+        st.openSettings(SettingsSection.IMPORT_BIOS)
+        assertEquals(listOf("From a folder", "From files", "From a zip file", "From RetroArch"), page().rows.map { it.label })
+        for ((i, source) in com.nxredux.mobile.bios.BiosSource.entries.withIndex()) {
+            st.openSettings(SettingsSection.IMPORT_BIOS)
+            st.select(i); st.onButton(NxButton.A)
+            assertEquals(source, intake.calls.last())
+            assertEquals(SettingsSection.IMPORT_BIOS_RESULT, page().section)
+        }
+    }
+
+    @Test fun import_bios_done_lists_results_and_done_returns_to_library() = runTest {
+        val st = state(MemorySettings(ContentRef("Home")), biosIntake = FakeBiosIntake(biosDone()))
+        st.load()
+        st.openSettings(SettingsSection.LIBRARY)
+        st.select(assertIs<Screen.Settings>(st.screen.value).rows.indexOfFirst { it.kind == SettingsKind.IMPORT_BIOS }); st.onButton(NxButton.A)
+        assertEquals(SettingsSection.IMPORT_BIOS, assertIs<Screen.Settings>(st.screen.value).section)
+        st.onButton(NxButton.A)                                             // From a folder
+        val page = assertIs<Screen.Settings>(st.screen.value)
+        assertEquals(SettingsSection.IMPORT_BIOS_RESULT, page.section)
+        assertNull(st.notice.value)
+        assertEquals(
+            listOf("Game Boy", "gb_bios.bin — verified · optional: changes boot", "2 other files skipped",
+                "Anything skipped can still go in Bios/<CONSOLE>/ by hand.", "Done"),
+            page.rows.map { it.label },
+        )
+        st.select(page.rows.indexOfFirst { it.kind == SettingsKind.IMPORT_BIOS_DONE }); st.onButton(NxButton.A)
+        val back = assertIs<Screen.Settings>(st.screen.value)
+        assertEquals(SettingsSection.LIBRARY, back.section)
+        assertEquals(SettingsKind.IMPORT_BIOS, back.rows[st.selection.value.index].kind)
+    }
+
+    @Test fun import_bios_message_is_a_notice() = runTest {
+        val st = state(MemorySettings(ContentRef("Home")), biosIntake = FakeBiosIntake())
+        st.load()
+        st.openSettings(SettingsSection.IMPORT_BIOS)
+        st.onButton(NxButton.A)
+        assertEquals("No BIOS found", st.notice.value)
+        assertEquals(SettingsSection.IMPORT_BIOS, assertIs<Screen.Settings>(st.screen.value).section)
+    }
+
+    @Test fun import_bios_done_rereads_bios_badges() = runTest {
+        var missing = true
+        val facts = object : TopFactsPlatform {
+            override suspend fun biosMissing(tag: String) = BiosMissing.REQUIRED.takeIf { tag == "GB" && missing }
+        }
+        val st = state(MemorySettings(ContentRef("Home")), src = bigSource(), topFacts = facts, biosIntake = FakeBiosIntake(biosDone())).also { it.load(); it.onDualMenu(true); advanceUntilIdle() }
+        st.openConsolesTab(); advanceUntilIdle()
+        st.selectConsole("GB"); advanceUntilIdle()
+        assertEquals(BiosMissing.REQUIRED, st.topStats.value?.bios)
+        missing = false
+        st.openSettings(SettingsSection.IMPORT_BIOS); st.onButton(NxButton.A); advanceUntilIdle()
+        repeat(6) { if (st.screen.value !is Screen.Systems) { st.onButton(NxButton.B); advanceUntilIdle() } }
+        st.openConsolesTab(); advanceUntilIdle()
+        st.selectConsole("GBA"); advanceUntilIdle()
+        st.selectConsole("GB"); advanceUntilIdle()
+        assertNull(st.topStats.value?.bios)
     }
 
     @Test fun import_page_has_three_sources() = runTest {
