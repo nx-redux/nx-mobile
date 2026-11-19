@@ -45,6 +45,7 @@ import java.io.File
  *   may not start an activity from the background otherwise (Android 10+). The game shows over the lock screen and
  *   turns the screen on ([NxTestResults.markShowWhenLocked]).
  * - GAME_STOP: the live game quits as the menu's Quit does (battery save and auto state written); its process ends.
+ * - GAME_FF (`--ez on true|false`, default true): fast forward on or off in the live game, as the panel's tile sets it.
  */
 class NxTestReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -66,6 +67,9 @@ class NxTestReceiver : BroadcastReceiver() {
             }
             // The game runs in the game process: handed on to its receiver there ([NxGameStopReceiver]).
             ACTION_GAME_STOP -> if (LiveGameStore.alive(app)) app.sendBroadcast(Intent(app, NxGameStopReceiver::class.java))
+            ACTION_GAME_FF -> if (LiveGameStore.alive(app)) {
+                app.sendBroadcast(Intent(app, NxGameStopReceiver::class.java).putExtra(NxGameStopReceiver.EXTRA_FF, intent.getBooleanExtra("on", true)))
+            }
                 else NxLog.w(TAG, "GAME_STOP: no live game")
         }
     }
@@ -77,6 +81,7 @@ class NxTestReceiver : BroadcastReceiver() {
         const val ACTION_SYNC_STOP = "com.nxredux.mobile.test.SYNC_STOP"
         const val ACTION_GAME = "com.nxredux.mobile.test.GAME"
         const val ACTION_GAME_STOP = "com.nxredux.mobile.test.GAME_STOP"
+        const val ACTION_GAME_FF = "com.nxredux.mobile.test.GAME_FF"
         const val SYNC_TIMEOUT_MS = 20 * 60 * 1000L
 
         /** Process-level: a hook's work outlives onReceive. Main thread, like the controller's own scope. */

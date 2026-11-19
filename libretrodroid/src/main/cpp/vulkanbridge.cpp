@@ -391,7 +391,11 @@ HandoffMode VulkanBridge::probeCustomDriver(const std::string& dir, const std::s
         // The shared buffer exactly as a bridge slot makes and imports it (malisx2 on a Mali-G76 fails here).
         const unsigned size = 64;
         if (!allocateSharedBuffer(size, size, &buffer)) { failure = "AHardwareBuffer_allocate failed"; return; }
-        const bool imports = importSharedBuffer(vk, device, buffer, size, size, &image, &memory, nullptr);
+        // debug.nx.reader_force=1: the import counts as failed, so a driver that can share buffers (Turnip) runs the
+        // Reader hand-off and it can be checked on a phone whose drivers all pass.
+        char forceReader[PROP_VALUE_MAX] {};
+        const bool forced = __system_property_get("debug.nx.reader_force", forceReader) > 0 && forceReader[0] == '1';
+        const bool imports = importSharedBuffer(vk, device, buffer, size, size, &image, &memory, nullptr) && !forced;
         const bool swapchain = swapchainListed && vk.hasSwapchain();
         mode = chooseHandoff(imports, swapchain, !imports && swapchain && probeReaderHandoff(vk, instance, gpu, device));
         if (mode == HandoffMode::None) failure = "it cannot share frames with the display (AHardwareBuffer import)";
@@ -793,6 +797,8 @@ bool VulkanBridge::initialize(unsigned width, unsigned height) {
     readerFailAfter = 0;
     char forced[PROP_VALUE_MAX] {};
     if (__system_property_get("debug.nx.reader_fail_after", forced) > 0) readerFailAfter = (unsigned) strtoul(forced, nullptr, 10);
+    char glFail[PROP_VALUE_MAX] {};
+    readerGlFail = __system_property_get("debug.nx.reader_gl_fail", glFail) > 0 && glFail[0] == '1';
     {
         std::lock_guard<std::mutex> lock(frameMutex);
         haveImage = false;
@@ -1107,6 +1113,7 @@ bool VulkanBridge::readerFrame(bool ok) {
 
 void VulkanBridge::noteGlImport(bool imported) {
     if (handoff() != HandoffMode::Reader) return;
+    if (readerGlFail) imported = false;
     if (!imported && !readerImportedAny && !customSlotReported) {
         // The pre-check has no GL context: this is where a buffer the GLES side cannot take shows, on the first frame.
         LOGE("Vulkan bridge: the GLES side cannot import the custom driver's buffers: reported as a failed start");

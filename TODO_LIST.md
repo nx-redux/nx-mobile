@@ -23,14 +23,25 @@ malisx2 59/60/60 fps at 1x and 55–57 fps at 2x, against 54–57 and 38–39 on
 PSP (Patapon 2) on the same driver, and the forced fallbacks (`setprop debug.nx.reader_fail_after <frame>`: failed
 start and mid-game both relaunch on the system driver).
 
+Checked on the Nova (Adreno 740, Turnip 27.0.0) on 2026-11-20, the reader hand-off forced on a driver that passes the
+import (`setprop debug.nx.reader_force 1`): PS2 (Budokai Tenkaichi 3, God of War II, Ace Combat 5 resumed from their
+states, 60 fps), PSP, 3DS, GameCube and N64 run with a correct picture; fast forward at 4x presents about 220 frames a
+second with none failed (PSP, 3DS, GameCube with Frame Skip on Auto, N64); Home and return twice, with a memory trim and
+screen off/on; a simulated second display (3DS: top screen there, touch screen on the main one); a reader buffer the
+OpenGL ES side cannot import (`setprop debug.nx.reader_gl_fail 1`) and a mid-game failure (2 of 2) both relaunch on
+the system driver, and the PS2 core quits cleanly after.
+
 Device checks still owed:
 
-- [ ] Nova (Adreno): a Turnip package still passes its pre-check as "import" and measures as before; stock driver unchanged.
-- [ ] Fast forward and frame skip on malisx2 (several frames bridged per draw).
-- [ ] EGL context loss on malisx2 (a long time in the background, or another app taking the GPU): the picture comes back.
-- [ ] A second display with a game on malisx2.
-- [ ] A reader buffer the OpenGL ES side cannot import falls back with the toast (not forced on a device yet).
+- [x] Nova (Adreno): a Turnip package still passes its pre-check as "import" and measures as before (60 fps).
+- [ ] Fast forward on malisx2 itself (passes through the reader on Turnip).
+- [ ] EGL context loss (a long time in the background, or another app taking the GPU): the picture comes back. Home and
+  return, a memory trim and screen off/on keep the context, so this was not reached on the Nova or the AYANEO.
+- [ ] A real second screen with a game on the reader hand-off (a simulated one passes).
 - [ ] Other Mali devices and malisx2 versions; GameCube/Wii and N64 (Vulkan) on malisx2.
+- [ ] PS2 fast forward does not speed the game up on the Nova (the core's frame count stays at 60 a second), on the
+  import hand-off as well: not from this hand-off, cause not looked at.
+- [ ] Graphics API Auto on a Mali phone: PS2 starts on Vulkan, and the GPU driver row shows on Auto.
 - [ ] 3DS on Vulkan on the AYANEO: Mario Kart 7 from boot reaches 60 fps (through the reader on malisx2 too), then the
   core aborts at the first 3D scene (`vk::DeviceLostError` in `waitForFences`). Same on a build from main and on the
   stock driver. The game holds about 1.4 GB with swap on a 1.9 GB device and 23 MB was free at the abort, so most likely
@@ -39,8 +50,8 @@ Device checks still owed:
   mutex`): 6 of 13 quits on malisx2, also on the stock driver and on main. Cause: the settings interfaces kept for the
   process (core patch 0004) saved themselves at unload, after the save lock was destroyed. Core patch 0007 saves them in
   `retro_deinit` and keeps the lock. After it: 0 of 12 quits (8 malisx2, 4 stock).
-- [ ] PS2 on the driver fallback relaunch (core reloaded in the same process) after core patch 0007: 3 of 3 forced
-  fallbacks relaunched and quit cleanly on the AYANEO; one on the Nova is owed.
+- [x] PS2 on the driver fallback relaunch (core reloaded in the same process) after core patch 0007: 3 of 3 forced
+  fallbacks relaunched and quit cleanly on the AYANEO, 3 of 3 on the Nova.
 - [x] PS2 resume booted from the disc although the state load reported success (5 of 13 launches on the AYANEO, either driver). Cause: the state loads during the BIOS boot, and the core swapped TLB entries one index at a time, so unmapping a stale entry could unmap pages a new entry had just mapped (a burst of `TLB Miss` in the log). Core patch 0008 unmaps all stale entries first. After it: 12 of 12 launches resumed.
 
 ## Slang shader presets

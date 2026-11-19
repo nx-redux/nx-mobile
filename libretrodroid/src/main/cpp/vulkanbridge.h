@@ -237,6 +237,7 @@ private:
     bool readerImportedAny = false;   // GL has imported a reader buffer since initialize()
     // debug.nx.reader_fail_after: every reader frame from this one on fails (0: off). For checking the fallback on a device.
     unsigned readerFailAfter = 0;
+    bool readerGlFail = false;        // debug.nx.reader_gl_fail=1: every GLES import counts as failed
     unsigned readerFrames = 0;
     bool readerFrame(bool ok);        // feeds readerStreak with a frame's outcome; returns [ok]
 
