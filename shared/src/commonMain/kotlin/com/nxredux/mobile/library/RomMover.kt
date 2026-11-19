@@ -25,30 +25,11 @@ data class MoveItem(
 data class MoveResult(val moved: Int = 0, val clashed: Int = 0, val failed: Int = 0, val cancelled: Boolean = false)
 
 /**
- * Moves an extra folder's placed games into the home's `Roms/<Console (TAG)>` folders, the handheld's layout. A game
- * moves whole (a cue with its bins) or not at all; an unassigned game is never moved. A provider move is tried first,
- * then a copy and a delete of the original.
+ * Moves the home's games outside `Roms/` into its `Roms/<Console (TAG)>` folders, the handheld's layout. A game moves
+ * whole (a cue with its bins) or not at all; an unassigned game is never moved. A provider move is tried first, then a
+ * copy and a delete of the original. Never used on an extra folder: those are only read.
  */
 class RomMover(private val source: RomsSource, private val home: ContentRef) {
-    /** [extraId]'s placed games in [index], each with its files and the home folder its console's games live in. */
-    suspend fun plan(index: LibraryIndex, extraId: String): List<MoveItem> {
-        val items = ArrayList<MoveItem>()
-        for (system in index.systems) {
-            if (system.unassigned) continue
-            val target = system.folderName.ifEmpty {
-                val console = CoreRegistry.consoleOf(system.tag) ?: return@ifEmpty ""
-                "${console.displayName} (${console.tags.first()})"
-            }
-            if (target.isEmpty()) continue
-            for (game in system.games) {
-                if (game.source != extraId) continue
-                val dir = ContentRef(game.folder)
-                items += MoveItem(dir, listOf(game.file) + DiscSheet.loadedNames(source, dir, game.file) + MsuSets.loadedNames(source, dir, game.file, game.badge), target)
-            }
-        }
-        return items
-    }
-
     /**
      * A home's games outside `Roms/` ([LibraryScanner.scanOutsideRoms]), placed ones only, each into its console's folder:
      * the one [index] names for it, else `<Console> (<first tag>)`. A disc folder's game is the folder, whole.

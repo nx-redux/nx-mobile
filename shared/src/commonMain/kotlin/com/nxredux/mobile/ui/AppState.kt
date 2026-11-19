@@ -6797,10 +6797,13 @@ internal enum class SummaryRowKind { MOVE, CONTINUE }
 
 internal data class SummaryRow(val kind: SummaryRowKind, val row: NxRow)
 
-/** The summary page's rows: the Move choice (only when some games are placed and nothing ran yet) and Continue. None while a move runs. */
+/**
+ * The summary page's rows: the home's Move choice (only when it has games to tidy and nothing ran yet) and Continue. None
+ * while a move runs. An extra folder has Continue alone: it is only read, never changed.
+ */
 internal fun folderSummaryRows(s: Screen.FolderSummary): List<SummaryRow> = buildList {
     if (s.progress != null) return@buildList
-    val movable = if (s.extraId == Recents.HOME) s.summary.outside > 0 || s.summary.split > 0 else s.summary.games > s.summary.unassigned
+    val movable = s.extraId == Recents.HOME && (s.summary.outside > 0 || s.summary.split > 0)
     if (s.result == null && movable) {
         add(SummaryRow(SummaryRowKind.MOVE, NxRow("Move them into ${s.home}/Roms", secondary = if (s.move) "On" else "Off", cycleable = true)))
     }
@@ -6808,25 +6811,20 @@ internal fun folderSummaryRows(s: Screen.FolderSummary): List<SummaryRow> = buil
 }
 
 /**
- * The move's confirmation for [s] (title, text), or null when Continue moves nothing: Move off, already run, or nothing
- * to move. An extra folder's placed games leave it for the home's Roms; the home's games outside Roms move in and a
- * console's extra folders merge into one.
+ * The move's confirmation for [s] (title, text), or null when Continue moves nothing: Move off, already run, nothing to
+ * move, or an extra folder (only read, never moved from). The home's games outside Roms move in and a console's extra
+ * folders merge into one.
  */
 internal fun folderMoveAsk(s: Screen.FolderSummary): Pair<String, String>? {
-    if (!s.move || s.result != null || s.progress != null) return null
+    if (!s.move || s.result != null || s.progress != null || s.extraId != Recents.HOME) return null
     val sum = s.summary
     fun games(n: Int) = if (n == 1) "1 game" else "$n games"
-    if (s.extraId == Recents.HOME) {
-        if (sum.outside == 0 && sum.split == 0) return null
-        val parts = listOfNotNull(
-            if (sum.outside > 0) "${games(sum.outside)} outside Roms will be moved into ${s.home}/Roms" else null,
-            if (sum.split > 0) (if (sum.split == 1) "1 console's folders will be merged into one" else "${sum.split} consoles' folders will be merged into one") else null,
-        )
-        return "Move games?" to (parts.joinToString(", and ") + ". Folders left empty are removed.")
-    }
-    val placed = sum.games - sum.unassigned
-    if (placed <= 0) return null
-    return "Move games?" to "${games(placed)} will be moved from ${s.name} into ${s.home}/Roms. ${if (placed == 1) "It is" else "They are"} moved, not copied."
+    if (sum.outside == 0 && sum.split == 0) return null
+    val parts = listOfNotNull(
+        if (sum.outside > 0) "${games(sum.outside)} outside Roms will be moved into ${s.home}/Roms" else null,
+        if (sum.split > 0) (if (sum.split == 1) "1 console's folders will be merged into one" else "${sum.split} consoles' folders will be merged into one") else null,
+    )
+    return "Move games?" to (parts.joinToString(", and ") + ". Folders left empty are removed.")
 }
 
 /** The summary page's headline and lines: what was found, per console, where the unassigned are; the move's progress or result. */

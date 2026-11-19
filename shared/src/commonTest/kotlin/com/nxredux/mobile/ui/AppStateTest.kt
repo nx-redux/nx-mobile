@@ -38,7 +38,6 @@ import com.nxredux.mobile.library.CollectionCountCache
 import com.nxredux.mobile.library.CountingRomsSource
 import com.nxredux.mobile.cheats.db.*
 import com.nxredux.mobile.library.Entry
-import com.nxredux.mobile.library.MoveResult
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.IndexedExtra
@@ -748,87 +747,22 @@ class AppStateTest {
             listOf("Found 3 games in ${s.name}", "Game Boy Advance (1)", "", "2 games need a console. Find them in Settings → Library → Unassigned games."),
             folderSummaryDetails(s),
         )
-        assertEquals(SummaryRowKind.MOVE, folderSummaryRows(s).first().kind)
-        assertEquals(ListSelection(0, folderSummaryRows(s).size), state.selection.value)   // on the Move option, not Continue
+        // Only read: no Move, Continue alone (and selected).
+        assertEquals(listOf(SummaryRowKind.CONTINUE), folderSummaryRows(s).map { it.kind })
+        assertEquals(ListSelection(0, 1), state.selection.value)
         assertEquals(false, state.menuPadShown())
     }
 
-    @Test fun continue_without_moving_goes_on_to_the_handheld_question() = runTest {
+    // Continue goes on, the folder exactly as it was: an extra folder is only read.
+    @Test fun continue_goes_on_and_leaves_the_folder_as_it_was() = runTest {
         val (state, settings) = atFolderSummary()
-        state.select(state.selection.value.count - 1); state.onButton(NxButton.A)                                         // Continue
+        val before = source.listChildren(ContentRef("sd/Loose")).map { it.name }
+        state.onButton(NxButton.A)                                                                                      // Continue
         assertEquals(OnboardingStep.HANDHELD, assertIs<Screen.Onboarding>(state.screen.value).step)
         assertEquals("Setup · Step 6/12", assertIs<Screen.Onboarding>(state.screen.value).title)
         assertEquals(listOf(ContentRef("sd/Loose")), settings.extraFolders.map { it.ref })
-        assertTrue("Kirby.gba" in source.listChildren(ContentRef("sd/Loose")).map { it.name })
-    }
-
-    @Test fun the_move_box_starts_unchecked_and_toggles() = runTest {
-        val (state, _) = atFolderSummary()
-        assertEquals(false, assertIs<Screen.FolderSummary>(state.screen.value).move)
-        state.select(summaryRow(state, SummaryRowKind.MOVE)); state.onButton(NxButton.A)
-        assertEquals(true, assertIs<Screen.FolderSummary>(state.screen.value).move)
-        state.onButton(NxButton.A)
-        assertEquals(false, assertIs<Screen.FolderSummary>(state.screen.value).move)
-    }
-
-    // The Move row is a switch: LEFT and RIGHT leave it alone, as on every settings page; A flips it.
-    @Test fun left_and_right_leave_the_move_row_alone() = runTest {
-        val (state, _) = atFolderSummary()
-        state.select(summaryRow(state, SummaryRowKind.MOVE))
-        state.onButton(NxButton.RIGHT); state.onButton(NxButton.LEFT)
-        assertEquals(false, assertIs<Screen.FolderSummary>(state.screen.value).move)
-        state.onButton(NxButton.A)
-        assertEquals(true, assertIs<Screen.FolderSummary>(state.screen.value).move)
-        assertEquals(summaryRow(state, SummaryRowKind.MOVE), state.selection.value.index)
-    }
-
-    private fun summaryRow(state: AppState, kind: SummaryRowKind): Int =
-        folderSummaryRows(assertIs<Screen.FolderSummary>(state.screen.value)).indexOfFirst { it.kind == kind }
-
-    @Test fun continue_with_move_moves_placed_games_and_keeps_the_rest() = runTest {
-        val (state, settings) = atFolderSummary()
-        state.select(summaryRow(state, SummaryRowKind.MOVE)); state.onButton(NxButton.A)                        // Move: on
-        state.select(summaryRow(state, SummaryRowKind.CONTINUE)); state.onButton(NxButton.A)                        // Continue
-        state.onButton(NxButton.A)   // the move's confirmation: Move
-        advanceUntilIdle()
-        assertTrue("Kirby.gba" in source.listChildren(ContentRef("Home/Roms/Game Boy Advance (GBA)")).map { it.name })
-        assertEquals(listOf("thing.chd", "v.img"), source.listChildren(ContentRef("sd/Loose")).map { it.name })
-        assertEquals(listOf(ContentRef("sd/Loose")), settings.extraFolders.map { it.ref })   // unassigned games remain there
-        val done = assertIs<Screen.FolderSummary>(state.screen.value)
-        assertEquals(MoveResult(moved = 1), done.result)
-        assertEquals(3, done.summary.games)                                // still what the folder held: "Found 3 games", then "Moved 1…"
-        state.onButton(NxButton.A)
-        assertEquals(OnboardingStep.HANDHELD, assertIs<Screen.Onboarding>(state.screen.value).step)
-    }
-
-    // Continue with Move on asks first; B closes the question and moves nothing, Move still on.
-    @Test fun the_move_asks_first_and_b_moves_nothing() = runTest {
-        val (state, _) = atFolderSummary()
-        state.select(summaryRow(state, SummaryRowKind.MOVE)); state.onButton(NxButton.A)                        // Move: on
-        state.select(summaryRow(state, SummaryRowKind.CONTINUE)); state.onButton(NxButton.A)                        // Continue
-        assertTrue(assertIs<Screen.FolderSummary>(state.screen.value).confirmMove)
-        state.onButton(NxButton.B)
-        advanceUntilIdle()
-        val back = assertIs<Screen.FolderSummary>(state.screen.value)
-        assertEquals(false, back.confirmMove)
-        assertEquals(true, back.move)
-        assertNull(back.result)
-        assertTrue("Kirby.gba" in source.listChildren(ContentRef("sd/Loose")).map { it.name })   // still where it was
-    }
-
-    // A provider error during the move is a result, not a crash: the page says what could not move.
-    @Test fun a_failing_move_shows_its_failures() = runTest {
-        val src = FakeRomsSource(source.snapshotDirs(), bytes = mapOf("sd/Loose/Kirby.gba" to ByteArray(4))).apply { moveThrows = true }
-        val settings = freshInstall()
-        val state = state(settings, src)
-        state.load(); state.getStarted(); state.setHomePast(ContentRef("Home")); state.addExtra(ContentRef("sd/Loose"))
-        state.select(summaryRow(state, SummaryRowKind.MOVE)); state.onButton(NxButton.A)
-        state.select(summaryRow(state, SummaryRowKind.CONTINUE)); state.onButton(NxButton.A)
-        state.onButton(NxButton.A)   // the move's confirmation: Move
-        advanceUntilIdle()
-        val done = assertIs<Screen.FolderSummary>(state.screen.value)
-        assertEquals(MoveResult(failed = 1), done.result)
-        assertTrue(folderSummaryDetails(done).any { "1 could not be moved" in it }, "${folderSummaryDetails(done)}")
+        assertEquals(before, source.listChildren(ContentRef("sd/Loose")).map { it.name })
+        assertTrue("Kirby.gba" in before)
     }
 
     @Test fun b_on_the_summary_goes_back_to_the_roms_folder_step() = runTest {
