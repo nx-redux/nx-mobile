@@ -282,6 +282,8 @@ class AppDeps(
     val skinEditor: SkinEditorLauncher? = null,
     /** Settings → Library → Saves: Export and Import (null: rows do nothing). */
     val saveTransfer: SaveTransfer? = null,
+    /** Settings → Library → Import BIOS (null: no row). */
+    val biosIntake: com.nxredux.mobile.bios.BiosIntake? = null,
     /** Tools → Device Sync (null: a platform without it, so no Tools row). */
     val deviceSync: DeviceSyncController? = null,
     /** All files access (a sideloaded Android 11+ build); null: none (SAF only, no setup step, no Settings row). */
@@ -402,6 +404,8 @@ sealed interface Screen {
         val move: Boolean = false, val progress: Pair<Int, Int>? = null, val result: MoveResult? = null,
         val confirmMove: Boolean = false,
     ) : Screen
+    /** A finished Import BIOS: what went where, read-only, with Done (A or B) back to Library on the Import BIOS row. */
+    data class BiosImportResult(val summary: com.nxredux.mobile.bios.BiosIntakeSummary) : Screen
     data object Loading : Screen
     /** Kids Mode while Locked: the big tiles screen of the allowed apps, in place of the main menu. */
     data object KidsHome : Screen
@@ -585,7 +589,7 @@ internal val Screen.menuPushed: Boolean
 /** Kids Mode's first switch-on, in order (the spec's): PIN, allowed apps, play times, then the two permissions and home. */
 enum class KidsSetupStep { PIN, APPS, TIMES, USAGE, ALARMS, HOME }
 
-enum class SettingsKind { PLAYER_NAME, HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, GAME_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, SAVE_ON_QUIT, A_RESUMES, GPU_DRIVER, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
+enum class SettingsKind { PLAYER_NAME, HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, GAME_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, SAVE_ON_QUIT, A_RESUMES, GPU_DRIVER, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, IMPORT_BIOS, IMPORT_BIOS_FOLDER, IMPORT_BIOS_FILES, IMPORT_BIOS_ZIP, IMPORT_BIOS_RETROARCH, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
@@ -622,6 +626,7 @@ enum class SettingsSection(val label: String, val parent: SettingsSection? = nul
     IMPORT_SAVES("Import saves", SAVES, SettingsKind.IMPORT_SAVES),
     // An import's results; Done and B go back to Saves ([AppState.leaveSubPage]), past Import saves.
     IMPORT_RESULT("Import results", IMPORT_SAVES),
+    IMPORT_BIOS("Import BIOS", LIBRARY, SettingsKind.IMPORT_BIOS),
     // Layouts' groups: a tab's options, the game lists', the page title's and hints', the Game Switcher's.
     LAYOUT_HOME("Home", MAIN_MENU, SettingsKind.LAYOUT_HOME), LAYOUT_GAMES_TAB("Games", MAIN_MENU, SettingsKind.LAYOUT_GAMES_TAB),
     LAYOUT_CONSOLES("Consoles", MAIN_MENU, SettingsKind.LAYOUT_CONSOLES),
@@ -4036,6 +4041,12 @@ class AppState(
             SettingsRow(SettingsKind.IMPORT_ZIP, "From a zip file"),
             SettingsRow(SettingsKind.IMPORT_RETROARCH, "From RetroArch"),
         )
+        SettingsSection.IMPORT_BIOS -> listOf(
+            SettingsRow(SettingsKind.IMPORT_BIOS_FOLDER, "From a folder"),
+            SettingsRow(SettingsKind.IMPORT_BIOS_FILES, "From files"),
+            SettingsRow(SettingsKind.IMPORT_BIOS_ZIP, "From a zip file"),
+            SettingsRow(SettingsKind.IMPORT_BIOS_RETROARCH, "From RetroArch"),
+        )
         // The summary, then each skipped file with its reason; read-only but for Done.
         SettingsSection.IMPORT_RESULT -> importResult?.let { r ->
             r.lines().map { SettingsRow(SettingsKind.INFO, it) } + r.skipped.map { SettingsRow(SettingsKind.INFO, it.name, it.reasonText()) }
@@ -4212,6 +4223,7 @@ class AppState(
         deps.allFilesAccess?.takeIf { it.declared }?.let { add(allFilesRow(it.granted(), root)) }
         deps.micAccess?.takeIf { it.usable }?.let { add(SettingsRow(SettingsKind.MIC_ACCESS, "Microphone access", if (it.granted()) "On" else "Off")) }
         add(SettingsRow(SettingsKind.SAVES, "Saves"))
+        if (deps.biosIntake != null) add(SettingsRow(SettingsKind.IMPORT_BIOS, "Import BIOS"))
         if (deps.launcher != null) add(SettingsRow(SettingsKind.ANDROID_GAMES, "Android games", installedCache?.let { gamesCountLabel(androidGames(it).size) } ?: "…"))
         unassignedSystem()?.let { add(SettingsRow(SettingsKind.UNASSIGNED, "Unassigned games", gamesLabel(it.gameCount))) }
         if (hiddenPaths.isNotEmpty()) add(SettingsRow(SettingsKind.HIDDEN, "Hidden games", gamesLabel(hiddenPaths.size)))
@@ -4372,6 +4384,27 @@ class AppState(
             is ImportResult.Message -> showNotice(result.text)
         }
     }
+
+    /** Import BIOS from [source]: a sticky progress notice, then the results page (or a notice). */
+    private fun importBios(source: com.nxredux.mobile.bios.BiosSource) =
+        deps.biosIntake?.import(source, progress = { showNotice(it, sticky = true) }, done = ::biosImportDone)
+
+    private fun biosImportDone(result: com.nxredux.mobile.bios.BiosIntakeResult) {
+        when (result) {
+            is com.nxredux.mobile.bios.BiosIntakeResult.Done -> {
+                // Files landed in Bios/: the consoles' "BIOS missing" badges read again.
+                consoleBios.clear(); consoleBiosLibrary = null; statsCache.clear(); statsCacheOf = null
+                if ((_screen.value as? Screen.Settings)?.section != SettingsSection.IMPORT_BIOS) return showNotice(result.summary.headline())
+                dismissNotice()
+                _screen.value = Screen.BiosImportResult(result.summary)
+                _selection.value = ListSelection(0, 1)   // Done, the page's one button
+            }
+            is com.nxredux.mobile.bios.BiosIntakeResult.Message -> showNotice(result.text)
+        }
+    }
+
+    /** Done (A, a tap or B) on the BIOS import's results: back to Library on its Import BIOS row. */
+    fun biosResultDone() = settingsUi.showSettingsOn(SettingsSection.LIBRARY, SettingsKind.IMPORT_BIOS)
 
     /**
      * Onboarding's import from [source]: its progress and then its result show on the step itself (re-drawn), never a
@@ -5475,6 +5508,11 @@ class AppState(
                     SettingsKind.IMPORT_ZIP -> importSaves(ImportSource.ZIP)
                     SettingsKind.IMPORT_RETROARCH -> importSaves(ImportSource.RETROARCH)
                     SettingsKind.IMPORT_DONE -> leaveSubPage(SettingsSection.IMPORT_RESULT)
+                    SettingsKind.IMPORT_BIOS -> settingsUi.openSubPage(s, SettingsSection.IMPORT_BIOS)
+                    SettingsKind.IMPORT_BIOS_FOLDER -> importBios(com.nxredux.mobile.bios.BiosSource.FOLDER)
+                    SettingsKind.IMPORT_BIOS_FILES -> importBios(com.nxredux.mobile.bios.BiosSource.FILES)
+                    SettingsKind.IMPORT_BIOS_ZIP -> importBios(com.nxredux.mobile.bios.BiosSource.ZIP)
+                    SettingsKind.IMPORT_BIOS_RETROARCH -> importBios(com.nxredux.mobile.bios.BiosSource.RETROARCH)
                     SettingsKind.BUTTON_LAYOUT -> settingsUi.openSubPage(s, SettingsSection.BUTTON_LAYOUT)
                     SettingsKind.BUTTON_LAYOUT_ORIENTATION -> row.landscape?.let(::openSkinEditor)
                     SettingsKind.BUTTON_LAYOUT_RESET -> _screen.value = s.copy(confirmReset = true)   // asks first
@@ -5511,6 +5549,7 @@ class AppState(
             Screen.PickFolder, is Screen.PermissionsStep -> setupStepRow(_selection.value.index)
             is Screen.StorageUpgrade -> upgrade.storageUpgradeRow(_selection.value.index)
             is Screen.CopySaves -> upgrade.copySavesRow(_selection.value.index)
+            is Screen.BiosImportResult -> biosResultDone()
             is Screen.FilePicker -> filePicker?.onButton(s, NxButton.A)
             Screen.AddFirstExtra, is Screen.AndroidGamesStep, is Screen.FolderSummary -> setupStepRow(_selection.value.index)
             Screen.Loading -> Unit
@@ -6435,6 +6474,7 @@ class AppState(
             is Screen.PermissionsStep -> { if (deps.settings.onboardingDone == false) backToWelcome() else skipAllFiles(); true }
             is Screen.StorageUpgrade -> { upgrade.storageUpgradeBack(s); true }   // required: B never leaves it for the library
             is Screen.CopySaves -> { if (!s.busy) upgrade.copySavesRow(if (s.error != null) 0 else 1); true }   // B: Keep separate (or OK)
+            is Screen.BiosImportResult -> { biosResultDone(); true }
             is Screen.AndroidGamesStep -> { if (inFirstSetup()) showAddFirstExtra() else answerAndroidGames(false); true }
             // The summary: B stops a running move (after the current game); otherwise back to the ROMs folder step (the folder stays added).
             // The home page: back to the pick (a new pick shows its page again).

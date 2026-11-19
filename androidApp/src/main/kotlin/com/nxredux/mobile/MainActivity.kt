@@ -31,6 +31,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.window.layout.WindowMetricsCalculator
+import com.nxredux.mobile.bios.AndroidBiosIntake
 import com.nxredux.mobile.runner.goImmersive
 import com.nxredux.mobile.runner.BiosImport
 import com.nxredux.mobile.runner.LaunchRecords
@@ -218,6 +219,13 @@ class MainActivity : ComponentActivity(), FolderPicker {
     private var folderOpened: ((Uri?) -> Unit)? = null
     private val openFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> folderOpened?.invoke(uri); folderOpened = null }
 
+    private var filesOpened: ((List<Uri>) -> Unit)? = null
+    private val openFiles = registerForActivityResult(object : ActivityResultContracts.OpenMultipleDocuments() {
+        override fun createIntent(context: Context, input: Array<String>): Intent = super.createIntent(context, input).apply {
+            homeDocument()?.let { putExtra(DocumentsContract.EXTRA_INITIAL_URI, it) }
+        }
+    }) { uris -> filesOpened?.invoke(uris); filesOpened = null }
+
     /** With All files access the app's list-style picker answers (a file ref); else Android's (a content ref). */
     private val savePickers = object : AndroidSaveTransfer.Pickers {
         private fun asRef(onRef: (ContentRef?) -> Unit): (Uri?) -> Unit = { uri -> onRef(uri?.let { ContentRef(it.toString()) }) }
@@ -232,6 +240,10 @@ class MainActivity : ComponentActivity(), FolderPicker {
         override fun openFolder(onRef: (ContentRef?) -> Unit) {
             if (allFiles.granted()) return state.pickFile(FilePickMode.ImportFolder, onRef)
             folderOpened = asRef(onRef); openFolder.launch(initialUri)
+        }
+        // Android's picker in every build: the app's own picker picks one file at a time.
+        override fun openFiles(onRefs: (List<ContentRef>) -> Unit) {
+            filesOpened = { uris -> onRefs(uris.map { ContentRef(it.toString()) }) }; openFiles.launch(arrayOf("*/*"))
         }
     }
 
@@ -419,6 +431,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         val glesVersion = getSystemService(ActivityManager::class.java).deviceConfigurationInfo.reqGlEsVersion
         // An import refuses while a sync runs; a sync refuses while an import runs (both write saves).
         val saveTransfer = AndroidSaveTransfer(this, savePickers, { runner.gameScreenAlive }, syncing = { DeviceSyncs.current()?.running == true })
+        val biosIntake = AndroidBiosIntake(this, savePickers, syncing = { DeviceSyncs.current()?.running == true })
         DeviceSyncs.screenOn = syncScreenOn
         DeviceSyncs.onNeedNotificationPermission = syncNotifications
         state = AppState(
@@ -463,6 +476,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 windowPx = { windowPx },
                 ps2BiosFiles = { BiosImport.binFiles(applicationContext, settings.treeRef, "PS2") },
                 saveTransfer = saveTransfer,
+                biosIntake = biosIntake,
                 deviceSync = DeviceSyncs.get(this),
                 updater = AppUpdates.get(this),
                 chdSectors = LibchdrSectors(contentResolver),

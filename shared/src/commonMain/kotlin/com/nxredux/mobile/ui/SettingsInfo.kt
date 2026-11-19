@@ -76,6 +76,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     )
     SettingsKind.EXPORT_SAVES -> quiet("Write one zip of your saves, states and slot pictures")
     SettingsKind.IMPORT_SAVES -> quiet("Copy saves in from a folder, a zip file or RetroArch")
+    SettingsKind.IMPORT_BIOS -> quiet("Copy BIOS in from a folder, files or a zip. You can also put them in Bios/ yourself.")
     // Second screen.
     SettingsKind.SECOND_SCREEN_ENABLE -> SettingText(
         "Off leaves it free for another app",

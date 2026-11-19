@@ -107,6 +107,14 @@ fun CopySavesScreen(screen: Screen.CopySaves, selected: Int, onSelect: (Int) -> 
     SetupStepScreen("Storage", headline, listOf(line), if (screen.busy) emptyList() else copySavesRows(screen), canGoBack = !screen.busy, selected, onSelect, onRow, onHint, button = true)
 }
 
+/** A finished Import BIOS ([Screen.BiosImportResult]): what went where as plain lines, and Done, the only thing to pick. */
+@Composable
+fun BiosImportResultScreen(screen: Screen.BiosImportResult, selected: Int, onSelect: (Int) -> Unit, onDone: () -> Unit, onHint: (NxButton) -> Unit) =
+    SetupStepScreen(
+        "Import BIOS", screen.summary.headline(), screen.summary.lines(), listOf("Done"), canGoBack = true, selected, onSelect,
+        onRow = { onDone() }, onHint = onHint, button = true, lineBreaks = true,
+    )
+
 /** First setup, after the home pick: offer an existing ROMs folder as an extra source (scanned in place). [note]: a line above it ([AppState.setupNote]). */
 @Composable
 fun AddFirstExtraScreen(title: String, canGoBack: Boolean, selected: Int, onSelect: (Int) -> Unit, onRow: (Int) -> Unit, onHint: (NxButton) -> Unit, note: String? = null) =
