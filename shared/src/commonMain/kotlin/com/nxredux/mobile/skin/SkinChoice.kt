@@ -54,7 +54,7 @@ object SkinChoice {
      */
     private val SINGLE_TAGS = setOf(
         "GB", "SGB", "GBC", "GBA", "MGBA", "FC", "FDS", "SFC", "SUPA",
-        "VB", "WS", "WSC", "COLECO", "FBN",
+        "VB", "WS", "WSC", "FBN",
     )
 
     /**
@@ -92,6 +92,7 @@ object SkinChoice {
         baseTag == "A2600" -> SkinVariant.A2600   // stella2014: Fire (B), SELECT, RESET (START)
         baseTag == "LYNX" -> SkinVariant.LYNX   // handy: B, A, Option 1 / 2 (L / R), Pause (START)
         baseTag == "PKM" -> SkinVariant.PKM   // pokemini: B, A, Shake (L), C (R); Power on SELECT (the menu's Reset does it)
+        baseTag == "COLECO" -> SkinVariant.COLECO   // gearcoleco: Yellow (B), Red (A), its keypad ([com.nxredux.mobile.ui.nx.colecoKeypad])
         baseTag == "A5200" -> SkinVariant.A5200   // a5200: FIRE 1 / 2 (A / B), * # (Y / X), KEYPAD (L: its on-screen keypad)
         // flycast: a NAOMI / Atomiswave set takes the arcade skin, a disc the Dreamcast one ([DcGames.isArcadeSet])
         baseTag == "DC" -> if (arcadeSet) SkinVariant.ARCADE else SkinVariant.DC

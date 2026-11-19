@@ -122,6 +122,8 @@ enum class SkinVariant {
     @SerialName("lynx") LYNX,
     /** The Pokémon mini: the d-pad, B and A as PICO-8's pair, SHAKE on L, C on R; no START. */
     @SerialName("pkm") PKM,
+    /** The ColecoVision: the d-pad, Yellow (the core's B) and Red (A) as PICO-8's pair, KEYPAD opening its keypad over the picture. */
+    @SerialName("coleco") COLECO,
 }
 
 /**

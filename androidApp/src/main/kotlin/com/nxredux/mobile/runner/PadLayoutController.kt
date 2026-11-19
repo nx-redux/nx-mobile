@@ -543,6 +543,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             onGlass = { x, y, down -> glassTouch(game, x, y, down) }, bare = bare)
         view.useStick = PadStickModes[padStickKey, stickDefault()]   // the player's choice, shared by the skin and its bare buttons
         view.dimmed = motionDim()
+        if (com.nxredux.mobile.runner.CoreRegistry.baseTag(layoutTag()) == "COLECO") view.keypad = { com.nxredux.mobile.ui.nx.colecoKeypad(it) }
         // under the menu and the notifications, over the game
         val below = listOfNotNull(menuView, notificationsView).map { root.indexOfChild(it) }.filter { it >= 0 }.minOrNull() ?: -1
         root.addView(view, below, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -638,6 +639,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 motionHandler.removeCallbacks(motionHold)
                 if (!motionHeld) { padMotion()?.onTap?.invoke(); motionHandler.post { skinViews().forEach { it.dimmed = motionDim() } } }
             }
+            // the ColecoVision's keypad over the picture, opened and closed by the cap
+            SkinAction.KEYPAD -> if (down) skinViews().forEach { it.keypadOpen = !it.keypadOpen }
             else -> host.onSkinShortcut(action, down)
         }
     }

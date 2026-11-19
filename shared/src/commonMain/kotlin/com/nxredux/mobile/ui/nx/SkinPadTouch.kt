@@ -255,7 +255,7 @@ class SkinPadTouch(
             "HOME" to NxButton.HOME,   // the Wii's HOME
             "L3" to NxButton.L3, "R3" to NxButton.R3,   // the PlayStation's stick clicks
         )
-        val ACTIONS = setOf("MIC", "SWAP", "SAVE", "LOAD", "REWIND", "FAST", "TOUCH_1", "TOUCH_2", "TOUCH_3", "TOUCH_4", "TURBO_A", "TURBO_B", "STICK_SWAP", "MOTION")
+        val ACTIONS = setOf("MIC", "SWAP", "SAVE", "LOAD", "REWIND", "FAST", "TOUCH_1", "TOUCH_2", "TOUCH_3", "TOUCH_4", "TURBO_A", "TURBO_B", "STICK_SWAP", "MOTION", "KEYPAD")
     }
 }
 

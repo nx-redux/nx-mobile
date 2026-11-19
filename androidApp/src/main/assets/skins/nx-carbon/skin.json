@@ -37627,6 +37627,707 @@
    ]
   },
   {
+   "id": "stacked_coleco",
+   "family": "stacked",
+   "variant": "coleco",
+   "image": "portrait_bg.webp",
+   "width": 900,
+   "height": 1700,
+   "tree": {
+    "split": "rows",
+    "parts": [
+     {
+      "len": 204,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 262,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 283,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 227,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 64,
+      "mode": "repeat",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 262,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 283,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 227,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 330,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 262,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 283,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 227,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 64,
+      "mode": "repeat",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 262,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 283,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 227,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 1038,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 262,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 283,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 227,
+         "mode": "fixed"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "glasses": [],
+   "scales": [
+    []
+   ],
+   "controls": [
+    {
+     "id": "DPAD",
+     "shape": "dpad",
+     "x": 240.0,
+     "y": 2066.0,
+     "r": 156,
+     "arm": 54,
+     "anchor": "left",
+     "inward": 40
+    },
+    {
+     "id": "KEYPAD",
+     "shape": "circle",
+     "x": 610.0,
+     "y": 2356.0,
+     "r": 58,
+     "capR": 30,
+     "anchor": "centre",
+     "label": "KEYPAD",
+     "labelDy": 64.5,
+     "labelH": 17
+    },
+    {
+     "id": "MENU",
+     "shape": "circle",
+     "x": 470.0,
+     "y": 2356.0,
+     "r": 58,
+     "capR": 39,
+     "anchor": "centre",
+     "label": "MENU",
+     "labelDy": 64.5,
+     "labelH": 17
+    },
+    {
+     "id": "B",
+     "shape": "circle",
+     "x": 777.9,
+     "y": 2126.1,
+     "r": 80,
+     "capR": 60,
+     "anchor": "right",
+     "inward": 40
+    },
+    {
+     "id": "A",
+     "shape": "circle",
+     "x": 898.1,
+     "y": 2005.9,
+     "r": 80,
+     "capR": 60,
+     "anchor": "right",
+     "inward": 40
+    }
+   ],
+   "parts": "parts.webp",
+   "refW": 1080,
+   "refH": 2520,
+   "frame": {
+    "sx": 1038,
+    "sy": 0,
+    "w": 1036,
+    "h": 1604,
+    "x": 24,
+    "y": 41,
+    "corner": 72,
+    "fill": true,
+    "side": 24,
+    "top": 17,
+    "glass": {
+     "id": "pic",
+     "screen": "picture",
+     "x": 44,
+     "y": 47,
+     "w": 944,
+     "h": 1470,
+     "corner": 16
+    },
+    "strip": {
+     "y": 45,
+     "hh": 30,
+     "labels": [
+      {
+       "id": "TOUCH_1"
+      },
+      {
+       "id": "TOUCH_2"
+      },
+      {
+       "id": "TOUCH_3"
+      },
+      {
+       "id": "TOUCH_4"
+      }
+     ],
+     "wordUp": 22
+    }
+   },
+   "pieces": [
+    {
+     "sx": 1739,
+     "sy": 3384,
+     "w": 270,
+     "h": 144,
+     "x": 405,
+     "y": 2284,
+     "anchor": "centre"
+    },
+    {
+     "sx": 1254,
+     "sy": 2966,
+     "w": 416,
+     "h": 416,
+     "x": 32,
+     "y": 1858,
+     "anchor": "left",
+     "inward": 40
+    },
+    {
+     "sx": 0,
+     "sy": 3384,
+     "w": 304,
+     "h": 304,
+     "x": 686,
+     "y": 1914,
+     "anchor": "right",
+     "inward": 40
+    },
+    {
+     "sx": 1056,
+     "sy": 3946,
+     "w": 100,
+     "h": 100,
+     "x": 560,
+     "y": 2306,
+     "anchor": "centre"
+    },
+    {
+     "sx": 1260,
+     "sy": 3946,
+     "w": 100,
+     "h": 100,
+     "x": 420,
+     "y": 2306,
+     "anchor": "centre"
+    },
+    {
+     "sx": 1750,
+     "sy": 3690,
+     "w": 124,
+     "h": 124,
+     "x": 716,
+     "y": 2064,
+     "anchor": "right",
+     "inward": 40
+    },
+    {
+     "sx": 1876,
+     "sy": 3690,
+     "w": 124,
+     "h": 124,
+     "x": 836,
+     "y": 1944,
+     "anchor": "right",
+     "inward": 40
+    }
+   ],
+   "boxes": [
+    {
+     "slot": "left",
+     "sizes": [
+      {
+       "w": 404,
+       "h": 555,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 0,
+         "y": 171,
+         "anchor": "left",
+         "inward": 40,
+         "group": "DPAD"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 208.0,
+         "y": 379.0,
+         "r": 156.0,
+         "arm": 54.0,
+         "anchor": "left",
+         "inward": 40
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 437.3943,
+        "maxWdp": 513.4629,
+        "minHdp": 691.13904,
+        "maxHdp": 811.33716,
+        "halfFolded": false
+       }
+      },
+      {
+       "w": 364,
+       "h": 555,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": -28,
+         "y": 171,
+         "anchor": "left",
+         "inward": 40,
+         "group": "DPAD"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 180.49998,
+         "y": 379.12497,
+         "r": 156.0,
+         "arm": 54.0,
+         "anchor": "left",
+         "inward": 40
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 331.2,
+        "maxWdp": 388.80002,
+        "minHdp": 772.8,
+        "maxHdp": 907.2,
+        "halfFolded": false
+       }
+      }
+     ]
+    },
+    {
+     "slot": "right",
+     "sizes": [
+      {
+       "w": 350,
+       "h": 555,
+       "pieces": [
+        {
+         "sx": 0,
+         "sy": 3384,
+         "w": 304,
+         "h": 304,
+         "x": -10,
+         "y": 227,
+         "anchor": "right",
+         "inward": 40,
+         "group": "A+B"
+        },
+        {
+         "sx": 1750,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 20,
+         "y": 377,
+         "anchor": "right",
+         "inward": 40,
+         "group": "A+B"
+        },
+        {
+         "sx": 1876,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 140,
+         "y": 257,
+         "anchor": "right",
+         "inward": 40,
+         "group": "A+B"
+        }
+       ],
+       "controls": [
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 81.9,
+         "y": 439.1,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right",
+         "inward": 40
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 202.1,
+         "y": 318.9,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right",
+         "inward": 40
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 437.3943,
+        "maxWdp": 513.4629,
+        "minHdp": 691.13904,
+        "maxHdp": 811.33716,
+        "halfFolded": false
+       },
+       "mainY": 379.0
+      },
+      {
+       "w": 310,
+       "h": 555,
+       "pieces": [
+        {
+         "sx": 0,
+         "sy": 3384,
+         "w": 304,
+         "h": 304,
+         "x": -22,
+         "y": 227,
+         "anchor": "right",
+         "inward": 40,
+         "group": "A+B"
+        },
+        {
+         "sx": 1750,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 8,
+         "y": 377,
+         "anchor": "right",
+         "inward": 40,
+         "group": "A+B"
+        },
+        {
+         "sx": 1876,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 128,
+         "y": 257,
+         "anchor": "right",
+         "inward": 40,
+         "group": "A+B"
+        }
+       ],
+       "controls": [
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 69.9,
+         "y": 439.1,
+         "r": 80.0,
+         "capR": 60.000004,
+         "anchor": "right",
+         "inward": 40
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 190.1,
+         "y": 318.9,
+         "r": 80.0,
+         "capR": 60.000004,
+         "anchor": "right",
+         "inward": 40
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 331.2,
+        "maxWdp": 388.80002,
+        "minHdp": 772.8,
+        "maxHdp": 907.2,
+        "halfFolded": false
+       },
+       "mainY": 379.0
+      }
+     ]
+    },
+    {
+     "slot": "bottomRow",
+     "sizes": [
+      {
+       "w": 270,
+       "h": 152,
+       "pieces": [
+        {
+         "sx": 1739,
+         "sy": 3384,
+         "w": 270,
+         "h": 144,
+         "x": 0,
+         "y": 0,
+         "anchor": "centre",
+         "group": "MENU+START"
+        },
+        {
+         "sx": 1056,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 155,
+         "y": 22,
+         "anchor": "centre",
+         "group": "MENU+START"
+        },
+        {
+         "sx": 1260,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "group": "MENU+START"
+        }
+       ],
+       "controls": [
+        {
+         "id": "KEYPAD",
+         "shape": "circle",
+         "x": 205.00002,
+         "y": 71.99994,
+         "r": 58.000004,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "KEYPAD",
+         "labelDy": 64.5,
+         "labelH": 17.0
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 65.000015,
+         "y": 71.99994,
+         "r": 58.000004,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "MENU",
+         "labelDy": 64.5,
+         "labelH": 17.0
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 331.2,
+        "maxWdp": 388.80002,
+        "minHdp": 772.8,
+        "maxHdp": 907.2,
+        "halfFolded": false
+       }
+      },
+      {
+       "w": 270,
+       "h": 152,
+       "pieces": [
+        {
+         "sx": 1739,
+         "sy": 3384,
+         "w": 270,
+         "h": 144,
+         "x": 0,
+         "y": 0,
+         "anchor": "centre",
+         "group": "MENU+START"
+        },
+        {
+         "sx": 1056,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 155,
+         "y": 22,
+         "anchor": "centre",
+         "group": "MENU+START"
+        },
+        {
+         "sx": 1260,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "group": "MENU+START"
+        }
+       ],
+       "controls": [
+        {
+         "id": "KEYPAD",
+         "shape": "circle",
+         "x": 205.0,
+         "y": 72.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "KEYPAD",
+         "labelDy": 64.5,
+         "labelH": 17.0
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 65.0,
+         "y": 72.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "MENU",
+         "labelDy": 64.5,
+         "labelH": 17.0
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 437.3943,
+        "maxWdp": 513.4629,
+        "minHdp": 691.13904,
+        "maxHdp": 811.33716,
+        "halfFolded": false
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
    "id": "stacked_md",
    "family": "stacked",
    "variant": "md",
@@ -48960,6 +49661,255 @@
      "h": 108,
      "x": 877,
      "y": 1704,
+     "anchor": "right",
+     "inward": 40
+    }
+   ]
+  },
+  {
+   "id": "flex_coleco_wide",
+   "family": "flex",
+   "variant": "coleco",
+   "image": "portrait_bg_wide.webp",
+   "width": 1800,
+   "height": 2400,
+   "tree": {
+    "split": "rows",
+    "parts": [
+     {
+      "len": 1368,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 908,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 828,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 64,
+      "mode": "repeat",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 908,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 828,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 968,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 908,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 828,
+         "mode": "fixed"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "glasses": [],
+   "scales": [
+    []
+   ],
+   "controls": [
+    {
+     "id": "DPAD",
+     "shape": "dpad",
+     "x": 240.0,
+     "y": 2066.0,
+     "r": 156,
+     "arm": 54,
+     "anchor": "left",
+     "inward": 40
+    },
+    {
+     "id": "KEYPAD",
+     "shape": "circle",
+     "x": 610.0,
+     "y": 2356.0,
+     "r": 58,
+     "capR": 30,
+     "anchor": "centre",
+     "label": "KEYPAD",
+     "labelDy": 64.5,
+     "labelH": 17
+    },
+    {
+     "id": "MENU",
+     "shape": "circle",
+     "x": 470.0,
+     "y": 2356.0,
+     "r": 58,
+     "capR": 39,
+     "anchor": "centre",
+     "label": "MENU",
+     "labelDy": 64.5,
+     "labelH": 17
+    },
+    {
+     "id": "B",
+     "shape": "circle",
+     "x": 777.9,
+     "y": 2126.1,
+     "r": 80,
+     "capR": 60,
+     "anchor": "right",
+     "inward": 40
+    },
+    {
+     "id": "A",
+     "shape": "circle",
+     "x": 898.1,
+     "y": 2005.9,
+     "r": 80,
+     "capR": 60,
+     "anchor": "right",
+     "inward": 40
+    }
+   ],
+   "parts": "parts.webp",
+   "refW": 1080,
+   "refH": 2520,
+   "frame": {
+    "sx": 1038,
+    "sy": 0,
+    "w": 1036,
+    "h": 1604,
+    "x": 24,
+    "y": 41,
+    "corner": 72,
+    "fill": true,
+    "side": 24,
+    "top": 17,
+    "glass": {
+     "id": "pic",
+     "screen": "picture",
+     "x": 44,
+     "y": 47,
+     "w": 944,
+     "h": 1470,
+     "corner": 16
+    },
+    "hinge": 40,
+    "strip": {
+     "y": 45,
+     "hh": 30,
+     "labels": [
+      {
+       "id": "TOUCH_1"
+      },
+      {
+       "id": "TOUCH_2"
+      },
+      {
+       "id": "TOUCH_3"
+      },
+      {
+       "id": "TOUCH_4"
+      }
+     ],
+     "wordUp": 22
+    }
+   },
+   "pieces": [
+    {
+     "sx": 1739,
+     "sy": 3384,
+     "w": 270,
+     "h": 144,
+     "x": 405,
+     "y": 2284,
+     "anchor": "centre"
+    },
+    {
+     "sx": 1254,
+     "sy": 2966,
+     "w": 416,
+     "h": 416,
+     "x": 32,
+     "y": 1858,
+     "anchor": "left",
+     "inward": 40
+    },
+    {
+     "sx": 0,
+     "sy": 3384,
+     "w": 304,
+     "h": 304,
+     "x": 686,
+     "y": 1914,
+     "anchor": "right",
+     "inward": 40
+    },
+    {
+     "sx": 1056,
+     "sy": 3946,
+     "w": 100,
+     "h": 100,
+     "x": 560,
+     "y": 2306,
+     "anchor": "centre"
+    },
+    {
+     "sx": 1260,
+     "sy": 3946,
+     "w": 100,
+     "h": 100,
+     "x": 420,
+     "y": 2306,
+     "anchor": "centre"
+    },
+    {
+     "sx": 1750,
+     "sy": 3690,
+     "w": 124,
+     "h": 124,
+     "x": 716,
+     "y": 2064,
+     "anchor": "right",
+     "inward": 40
+    },
+    {
+     "sx": 1876,
+     "sy": 3690,
+     "w": 124,
+     "h": 124,
+     "x": 836,
+     "y": 1944,
      "anchor": "right",
      "inward": 40
     }
@@ -65493,6 +66443,448 @@
          "id": "MENU",
          "shape": "circle",
          "x": 135.0,
+         "y": 72.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "MENU",
+         "labelDy": 64.5,
+         "labelH": 17.0
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 378.51428,
+        "maxWdp": 444.34286,
+        "minHdp": 883.2,
+        "maxHdp": 1036.8,
+        "halfFolded": true
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "flex_coleco",
+   "family": "flex",
+   "variant": "coleco",
+   "image": "portrait_bg_flex.webp",
+   "width": 1040,
+   "height": 2400,
+   "tree": {
+    "split": "rows",
+    "parts": [
+     {
+      "len": 1368,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 524,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 452,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 64,
+      "mode": "repeat",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 524,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 452,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 968,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 524,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 452,
+         "mode": "fixed"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "glasses": [],
+   "scales": [
+    []
+   ],
+   "controls": [
+    {
+     "id": "DPAD",
+     "shape": "dpad",
+     "x": 240.0,
+     "y": 2066.0,
+     "r": 156,
+     "arm": 54,
+     "anchor": "left",
+     "inward": 40
+    },
+    {
+     "id": "KEYPAD",
+     "shape": "circle",
+     "x": 610.0,
+     "y": 2356.0,
+     "r": 58,
+     "capR": 30,
+     "anchor": "centre",
+     "label": "KEYPAD",
+     "labelDy": 64.5,
+     "labelH": 17
+    },
+    {
+     "id": "MENU",
+     "shape": "circle",
+     "x": 470.0,
+     "y": 2356.0,
+     "r": 58,
+     "capR": 39,
+     "anchor": "centre",
+     "label": "MENU",
+     "labelDy": 64.5,
+     "labelH": 17
+    },
+    {
+     "id": "B",
+     "shape": "circle",
+     "x": 777.9,
+     "y": 2126.1,
+     "r": 80,
+     "capR": 60,
+     "anchor": "right",
+     "inward": 40
+    },
+    {
+     "id": "A",
+     "shape": "circle",
+     "x": 898.1,
+     "y": 2005.9,
+     "r": 80,
+     "capR": 60,
+     "anchor": "right",
+     "inward": 40
+    }
+   ],
+   "parts": "parts.webp",
+   "refW": 1080,
+   "refH": 2520,
+   "frame": {
+    "sx": 1038,
+    "sy": 0,
+    "w": 1036,
+    "h": 1604,
+    "x": 24,
+    "y": 41,
+    "corner": 72,
+    "fill": true,
+    "side": 24,
+    "top": 17,
+    "glass": {
+     "id": "pic",
+     "screen": "picture",
+     "x": 44,
+     "y": 47,
+     "w": 944,
+     "h": 1470,
+     "corner": 16
+    },
+    "hinge": 40,
+    "strip": {
+     "y": 45,
+     "hh": 30,
+     "labels": [
+      {
+       "id": "TOUCH_1"
+      },
+      {
+       "id": "TOUCH_2"
+      },
+      {
+       "id": "TOUCH_3"
+      },
+      {
+       "id": "TOUCH_4"
+      }
+     ],
+     "wordUp": 22
+    }
+   },
+   "pieces": [
+    {
+     "sx": 1739,
+     "sy": 3384,
+     "w": 270,
+     "h": 144,
+     "x": 405,
+     "y": 2284,
+     "anchor": "centre"
+    },
+    {
+     "sx": 1254,
+     "sy": 2966,
+     "w": 416,
+     "h": 416,
+     "x": 32,
+     "y": 1858,
+     "anchor": "left",
+     "inward": 40
+    },
+    {
+     "sx": 0,
+     "sy": 3384,
+     "w": 304,
+     "h": 304,
+     "x": 686,
+     "y": 1914,
+     "anchor": "right",
+     "inward": 40
+    },
+    {
+     "sx": 1056,
+     "sy": 3946,
+     "w": 100,
+     "h": 100,
+     "x": 560,
+     "y": 2306,
+     "anchor": "centre"
+    },
+    {
+     "sx": 1260,
+     "sy": 3946,
+     "w": 100,
+     "h": 100,
+     "x": 420,
+     "y": 2306,
+     "anchor": "centre"
+    },
+    {
+     "sx": 1750,
+     "sy": 3690,
+     "w": 124,
+     "h": 124,
+     "x": 716,
+     "y": 2064,
+     "anchor": "right",
+     "inward": 40
+    },
+    {
+     "sx": 1876,
+     "sy": 3690,
+     "w": 124,
+     "h": 124,
+     "x": 836,
+     "y": 1944,
+     "anchor": "right",
+     "inward": 40
+    }
+   ],
+   "boxes": [
+    {
+     "slot": "left",
+     "sizes": [
+      {
+       "w": 404,
+       "h": 980,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": -12,
+         "y": 596,
+         "anchor": "left",
+         "inward": 40,
+         "group": "DPAD"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 196.0,
+         "y": 804.0,
+         "r": 156.0,
+         "arm": 54.0,
+         "anchor": "left",
+         "inward": 40
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 378.51428,
+        "maxWdp": 444.34286,
+        "minHdp": 883.2,
+        "maxHdp": 1036.8,
+        "halfFolded": true
+       }
+      }
+     ]
+    },
+    {
+     "slot": "right",
+     "sizes": [
+      {
+       "w": 350,
+       "h": 980,
+       "pieces": [
+        {
+         "sx": 0,
+         "sy": 3384,
+         "w": 304,
+         "h": 304,
+         "x": 0,
+         "y": 652,
+         "anchor": "right",
+         "inward": 40,
+         "group": "A+B"
+        },
+        {
+         "sx": 1750,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 30,
+         "y": 802,
+         "anchor": "right",
+         "inward": 40,
+         "group": "A+B"
+        },
+        {
+         "sx": 1876,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 150,
+         "y": 682,
+         "anchor": "right",
+         "inward": 40,
+         "group": "A+B"
+        }
+       ],
+       "controls": [
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 91.900024,
+         "y": 864.1001,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right",
+         "inward": 40
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 212.09998,
+         "y": 743.9,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right",
+         "inward": 40
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 378.51428,
+        "maxWdp": 444.34286,
+        "minHdp": 883.2,
+        "maxHdp": 1036.8,
+        "halfFolded": true
+       }
+      }
+     ]
+    },
+    {
+     "slot": "bottomRow",
+     "sizes": [
+      {
+       "w": 270,
+       "h": 152,
+       "pieces": [
+        {
+         "sx": 1739,
+         "sy": 3384,
+         "w": 270,
+         "h": 144,
+         "x": 0,
+         "y": 0,
+         "anchor": "centre",
+         "group": "MENU+START"
+        },
+        {
+         "sx": 1056,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 155,
+         "y": 22,
+         "anchor": "centre",
+         "group": "MENU+START"
+        },
+        {
+         "sx": 1260,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 15,
+         "y": 22,
+         "anchor": "centre",
+         "group": "MENU+START"
+        }
+       ],
+       "controls": [
+        {
+         "id": "KEYPAD",
+         "shape": "circle",
+         "x": 205.0,
+         "y": 72.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "centre",
+         "label": "KEYPAD",
+         "labelDy": 64.5,
+         "labelH": 17.0
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 65.0,
          "y": 72.0,
          "r": 58.0,
          "capR": 39.0,
@@ -106859,6 +108251,853 @@
         "halfFolded": true
        },
        "mainY": 358.0
+      }
+     ]
+    },
+    {
+     "slot": "bottomRow",
+     "sizes": [
+      {
+       "w": 0,
+       "h": 0,
+       "pieces": [],
+       "controls": [],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 647.68,
+        "maxWdp": 760.32,
+        "minHdp": 857.9657,
+        "maxHdp": 1007.1772,
+        "halfFolded": false
+       }
+      },
+      {
+       "w": 0,
+       "h": 0,
+       "pieces": [],
+       "controls": [],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 647.68,
+        "maxWdp": 760.32,
+        "minHdp": 857.9657,
+        "maxHdp": 1007.1772,
+        "halfFolded": true
+       }
+      },
+      {
+       "w": 0,
+       "h": 0,
+       "pieces": [],
+       "controls": [],
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 767.8934,
+        "maxWdp": 901.44006,
+        "minHdp": 691.84,
+        "maxHdp": 812.16003,
+        "halfFolded": true
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "flex_coleco_fold",
+   "family": "flex",
+   "variant": "coleco",
+   "image": "portrait_bg_fold.webp",
+   "width": 1848,
+   "height": 3024,
+   "tree": {
+    "split": "rows",
+    "parts": [
+     {
+      "len": 668,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 767,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 1017,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 64,
+      "mode": "repeat",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 767,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 1017,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 432,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 767,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 1017,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 120,
+      "mode": "hinge",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 767,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 1017,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 8,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 767,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 1017,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 640,
+      "mode": "crop",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 767,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 1017,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 1092,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 767,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 1017,
+         "mode": "fixed"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "glasses": [],
+   "scales": [
+    []
+   ],
+   "controls": [
+    {
+     "id": "DPAD",
+     "shape": "dpad",
+     "x": 224.0,
+     "y": 2360.0,
+     "r": 156,
+     "arm": 54,
+     "anchor": "left",
+     "level": "bottom"
+    },
+    {
+     "id": "KEYPAD",
+     "shape": "circle",
+     "x": 994.0,
+     "y": 2812.0,
+     "r": 58,
+     "capR": 40,
+     "anchor": "centre",
+     "label": "KEYPAD",
+     "labelDy": 64.5,
+     "labelH": 17,
+     "level": "bottom"
+    },
+    {
+     "id": "MENU",
+     "shape": "circle",
+     "x": 854.0,
+     "y": 2812.0,
+     "r": 58,
+     "capR": 39,
+     "anchor": "centre",
+     "label": "MENU",
+     "labelDy": 64.5,
+     "labelH": 17,
+     "level": "bottom"
+    },
+    {
+     "id": "B",
+     "shape": "circle",
+     "x": 1561.9,
+     "y": 2420.1,
+     "r": 80,
+     "capR": 60,
+     "anchor": "right",
+     "level": "bottom"
+    },
+    {
+     "id": "A",
+     "shape": "circle",
+     "x": 1682.1,
+     "y": 2299.9,
+     "r": 80,
+     "capR": 60,
+     "anchor": "right",
+     "level": "bottom"
+    }
+   ],
+   "parts": "parts.webp",
+   "refW": 1848,
+   "refH": 3024,
+   "frame": {
+    "sx": 0,
+    "sy": 0,
+    "w": 1036,
+    "h": 1604,
+    "x": 24,
+    "y": 41,
+    "corner": 72,
+    "fill": true,
+    "side": 32,
+    "top": 32,
+    "hinge": 94,
+    "glass": {
+     "id": "pic",
+     "screen": "picture",
+     "x": 44,
+     "y": 47,
+     "w": 944,
+     "h": 1510,
+     "corner": 16
+    }
+   },
+   "pieces": [
+    {
+     "sx": 1739,
+     "sy": 3384,
+     "w": 270,
+     "h": 144,
+     "x": 789,
+     "y": 2740,
+     "anchor": "centre",
+     "level": "bottom"
+    },
+    {
+     "sx": 1254,
+     "sy": 2966,
+     "w": 416,
+     "h": 416,
+     "x": 16,
+     "y": 2152,
+     "anchor": "left",
+     "level": "bottom"
+    },
+    {
+     "sx": 0,
+     "sy": 3384,
+     "w": 304,
+     "h": 304,
+     "x": 1470,
+     "y": 2208,
+     "anchor": "right",
+     "level": "bottom"
+    },
+    {
+     "sx": 1056,
+     "sy": 3946,
+     "w": 100,
+     "h": 100,
+     "x": 944,
+     "y": 2762,
+     "anchor": "centre",
+     "level": "bottom"
+    },
+    {
+     "sx": 1260,
+     "sy": 3946,
+     "w": 100,
+     "h": 100,
+     "x": 804,
+     "y": 2762,
+     "anchor": "centre",
+     "level": "bottom"
+    },
+    {
+     "sx": 0,
+     "sy": 1606,
+     "w": 984,
+     "h": 784,
+     "x": 432,
+     "y": 1958,
+     "anchor": "centre",
+     "glass": {
+      "id": "panel",
+      "screen": "panel",
+      "x": 20,
+      "y": 22,
+      "w": 944,
+      "h": 692,
+      "corner": 16
+     },
+     "grow": 40,
+     "strip": {
+      "y": 42,
+      "hh": 28,
+      "labels": [
+       {
+        "id": "TOUCH_1"
+       },
+       {
+        "id": "TOUCH_2"
+       },
+       {
+        "id": "TOUCH_3"
+       },
+       {
+        "id": "TOUCH_4"
+       }
+      ]
+     }
+    },
+    {
+     "sx": 1750,
+     "sy": 3690,
+     "w": 124,
+     "h": 124,
+     "x": 1500,
+     "y": 2358,
+     "anchor": "right",
+     "level": "bottom"
+    },
+    {
+     "sx": 1876,
+     "sy": 3690,
+     "w": 124,
+     "h": 124,
+     "x": 1620,
+     "y": 2238,
+     "anchor": "right",
+     "level": "bottom"
+    }
+   ],
+   "boxes": [
+    {
+     "slot": "left",
+     "sizes": [
+      {
+       "w": 416,
+       "h": 590,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 0,
+         "y": -9,
+         "anchor": "left",
+         "group": "DPAD"
+        },
+        {
+         "sx": 1260,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 264,
+         "y": 544,
+         "anchor": "left",
+         "group": "MENU"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 208.0,
+         "y": 198.56491,
+         "r": 156.00002,
+         "arm": 54.0,
+         "anchor": "left"
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 314.435,
+         "y": 594.13,
+         "r": 58.0,
+         "capR": 39.000004,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDx": -68.0,
+         "labelH": 17.0
+        }
+       ],
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 767.8934,
+        "maxWdp": 901.44006,
+        "minHdp": 691.84,
+        "maxHdp": 812.16003,
+        "halfFolded": true
+       }
+      },
+      {
+       "w": 358,
+       "h": 590,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": -50,
+         "y": 0,
+         "anchor": "left",
+         "group": "DPAD"
+        },
+        {
+         "sx": 1260,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 232,
+         "y": 544,
+         "anchor": "left",
+         "group": "MENU"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 158.0,
+         "y": 208.0,
+         "r": 156.0,
+         "arm": 54.0,
+         "anchor": "left"
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 282.0,
+         "y": 594.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDx": -68.0,
+         "labelH": 17.0
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 647.68,
+        "maxWdp": 760.32,
+        "minHdp": 857.9657,
+        "maxHdp": 1007.1772,
+        "halfFolded": false
+       }
+      },
+      {
+       "w": 358,
+       "h": 590,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": -50,
+         "y": 0,
+         "anchor": "left",
+         "group": "DPAD"
+        },
+        {
+         "sx": 1260,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 232,
+         "y": 544,
+         "anchor": "left",
+         "group": "MENU"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 158.0,
+         "y": 208.0,
+         "r": 156.0,
+         "arm": 54.0,
+         "anchor": "left"
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 282.0,
+         "y": 594.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDx": -68.0,
+         "labelH": 17.0
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 647.68,
+        "maxWdp": 760.32,
+        "minHdp": 857.9657,
+        "maxHdp": 1007.1772,
+        "halfFolded": true
+       }
+      }
+     ]
+    },
+    {
+     "slot": "right",
+     "sizes": [
+      {
+       "w": 416,
+       "h": 534,
+       "pieces": [
+        {
+         "sx": 0,
+         "sy": 3384,
+         "w": 304,
+         "h": 304,
+         "x": 56,
+         "y": 0,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1750,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 86,
+         "y": 150,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1876,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 206,
+         "y": 30,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1056,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 52,
+         "y": 497,
+         "anchor": "right",
+         "group": "START"
+        }
+       ],
+       "controls": [
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 147.9,
+         "y": 212.1,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right"
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 268.1,
+         "y": 91.9,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right"
+        },
+        {
+         "id": "KEYPAD",
+         "shape": "circle",
+         "x": 101.565,
+         "y": 547.13,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "right",
+         "label": "KEYPAD",
+         "labelDx": 68.0,
+         "labelH": 17.0
+        }
+       ],
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 767.8934,
+        "maxWdp": 901.44006,
+        "minHdp": 691.84,
+        "maxHdp": 812.16003,
+        "halfFolded": true
+       },
+       "mainY": 152.0
+      },
+      {
+       "w": 358,
+       "h": 534,
+       "pieces": [
+        {
+         "sx": 0,
+         "sy": 3384,
+         "w": 304,
+         "h": 304,
+         "x": 48,
+         "y": 0,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1750,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 78,
+         "y": 150,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1876,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 198,
+         "y": 30,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1056,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 26,
+         "y": 488,
+         "anchor": "right",
+         "group": "START"
+        }
+       ],
+       "controls": [
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 139.9,
+         "y": 212.1,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right"
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 260.1,
+         "y": 91.9,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right"
+        },
+        {
+         "id": "KEYPAD",
+         "shape": "circle",
+         "x": 76.0,
+         "y": 538.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "right",
+         "label": "KEYPAD",
+         "labelDx": 68.0,
+         "labelH": 17.0
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 647.68,
+        "maxWdp": 760.32,
+        "minHdp": 857.9657,
+        "maxHdp": 1007.1772,
+        "halfFolded": false
+       },
+       "mainY": 152.0
+      },
+      {
+       "w": 358,
+       "h": 534,
+       "pieces": [
+        {
+         "sx": 0,
+         "sy": 3384,
+         "w": 304,
+         "h": 304,
+         "x": 48,
+         "y": 0,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1750,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 78,
+         "y": 150,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1876,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 198,
+         "y": 30,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1056,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 26,
+         "y": 488,
+         "anchor": "right",
+         "group": "START"
+        }
+       ],
+       "controls": [
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 139.9,
+         "y": 212.1,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right"
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 260.1,
+         "y": 91.9,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right"
+        },
+        {
+         "id": "KEYPAD",
+         "shape": "circle",
+         "x": 76.0,
+         "y": 538.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "right",
+         "label": "KEYPAD",
+         "labelDx": 68.0,
+         "labelH": 17.0
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 647.68,
+        "maxWdp": 760.32,
+        "minHdp": 857.9657,
+        "maxHdp": 1007.1772,
+        "halfFolded": true
+       },
+       "mainY": 152.0
       }
      ]
     },
@@ -168263,6 +170502,509 @@
    ]
   },
   {
+   "id": "grip_coleco",
+   "family": "grip",
+   "variant": "coleco",
+   "image": "landscape_bg.webp",
+   "width": 1900,
+   "height": 860,
+   "tree": {
+    "split": "rows",
+    "parts": [
+     {
+      "len": 148,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 463,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 401,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 908,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 64,
+      "mode": "repeat",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 463,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 401,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 908,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 273,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 463,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 401,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 908,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 64,
+      "mode": "repeat",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 463,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 401,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 908,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 311,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 463,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 401,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 908,
+         "mode": "fixed"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "glasses": [],
+   "scales": [
+    []
+   ],
+   "controls": [
+    {
+     "id": "DPAD",
+     "shape": "dpad",
+     "x": 248.0,
+     "y": 399.0,
+     "r": 156,
+     "arm": 54,
+     "anchor": "left",
+     "level": "middle"
+    },
+    {
+     "id": "KEYPAD",
+     "shape": "circle",
+     "x": 318.0,
+     "y": 703.0,
+     "r": 58,
+     "capR": 39,
+     "anchor": "left",
+     "label": "KEYPAD",
+     "labelDy": 64.5,
+     "labelH": 17,
+     "level": "middle"
+    },
+    {
+     "id": "MENU",
+     "shape": "circle",
+     "x": 178.0,
+     "y": 703.0,
+     "r": 58,
+     "capR": 39,
+     "anchor": "left",
+     "label": "MENU",
+     "labelDy": 64.5,
+     "labelH": 17,
+     "level": "middle"
+    },
+    {
+     "id": "B",
+     "shape": "circle",
+     "x": 1591.9,
+     "y": 459.1,
+     "r": 80,
+     "capR": 60,
+     "anchor": "right",
+     "level": "middle"
+    },
+    {
+     "id": "A",
+     "shape": "circle",
+     "x": 1712.1,
+     "y": 338.9,
+     "r": 80,
+     "capR": 60,
+     "anchor": "right",
+     "level": "middle"
+    }
+   ],
+   "parts": "parts.webp",
+   "refW": 1900,
+   "refH": 860,
+   "frame": {
+    "sx": 1038,
+    "sy": 0,
+    "w": 1036,
+    "h": 1604,
+    "x": 496,
+    "y": 72,
+    "corner": 72,
+    "fill": true,
+    "side": 480,
+    "top": 56,
+    "bottom": 56,
+    "glass": {
+     "id": "pic",
+     "screen": "picture",
+     "x": 44,
+     "y": 47,
+     "w": 944,
+     "h": 1470,
+     "corner": 16
+    },
+    "strip": {
+     "y": 45,
+     "hh": 30,
+     "labels": [
+      {
+       "id": "TOUCH_1"
+      },
+      {
+       "id": "TOUCH_2"
+      },
+      {
+       "id": "TOUCH_3"
+      },
+      {
+       "id": "TOUCH_4"
+      }
+     ],
+     "wordUp": 22
+    }
+   },
+   "pieces": [
+    {
+     "sx": 1739,
+     "sy": 3384,
+     "w": 270,
+     "h": 144,
+     "x": 113,
+     "y": 631,
+     "anchor": "left",
+     "level": "middle"
+    },
+    {
+     "sx": 1254,
+     "sy": 2966,
+     "w": 416,
+     "h": 416,
+     "x": 40,
+     "y": 191,
+     "anchor": "left",
+     "level": "middle"
+    },
+    {
+     "sx": 0,
+     "sy": 3384,
+     "w": 304,
+     "h": 304,
+     "x": 1500,
+     "y": 247,
+     "anchor": "right",
+     "level": "middle"
+    },
+    {
+     "sx": 1260,
+     "sy": 3946,
+     "w": 100,
+     "h": 100,
+     "x": 128,
+     "y": 653,
+     "anchor": "left",
+     "level": "middle"
+    },
+    {
+     "sx": 1056,
+     "sy": 3946,
+     "w": 100,
+     "h": 100,
+     "x": 268,
+     "y": 653,
+     "anchor": "left",
+     "level": "middle"
+    },
+    {
+     "sx": 1750,
+     "sy": 3690,
+     "w": 124,
+     "h": 124,
+     "x": 1530,
+     "y": 397,
+     "anchor": "right",
+     "level": "middle"
+    },
+    {
+     "sx": 1876,
+     "sy": 3690,
+     "w": 124,
+     "h": 124,
+     "x": 1650,
+     "y": 277,
+     "anchor": "right",
+     "level": "middle"
+    }
+   ],
+   "boxes": [
+    {
+     "slot": "left",
+     "sizes": [
+      {
+       "w": 416,
+       "h": 628,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 0,
+         "y": 0,
+         "anchor": "left",
+         "level": "middle",
+         "group": "DPAD"
+        },
+        {
+         "sx": 1260,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 274,
+         "y": 481,
+         "anchor": "left",
+         "level": "middle",
+         "group": "MENU"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 208.0,
+         "y": 208.0,
+         "r": 156.0,
+         "arm": 54.0,
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 324.0,
+         "y": 531.0,
+         "r": 58.000004,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelH": 17.0,
+         "level": "middle",
+         "labelDx": -67.0
+        }
+       ],
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 772.8,
+        "maxWdp": 907.2,
+        "minHdp": 331.2,
+        "maxHdp": 388.80002,
+        "halfFolded": false
+       }
+      }
+     ]
+    },
+    {
+     "slot": "right",
+     "sizes": [
+      {
+       "w": 416,
+       "h": 572,
+       "pieces": [
+        {
+         "sx": 0,
+         "sy": 3384,
+         "w": 304,
+         "h": 304,
+         "x": 100,
+         "y": 0,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1750,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 130,
+         "y": 150,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1876,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 250,
+         "y": 30,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1056,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 42,
+         "y": 425,
+         "anchor": "right",
+         "group": "START",
+         "level": "middle"
+        }
+       ],
+       "controls": [
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 191.9,
+         "y": 212.1,
+         "r": 80.0,
+         "capR": 60.000004,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 312.1,
+         "y": 91.9,
+         "r": 80.0,
+         "capR": 60.000004,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "KEYPAD",
+         "shape": "circle",
+         "x": 92.0,
+         "y": 475.0,
+         "r": 58.000004,
+         "capR": 39.0,
+         "anchor": "right",
+         "label": "KEYPAD",
+         "labelH": 17.0,
+         "level": "middle",
+         "labelDx": 67.0
+        }
+       ],
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 772.8,
+        "maxWdp": 907.2,
+        "minHdp": 331.2,
+        "maxHdp": 388.80002,
+        "halfFolded": false
+       },
+       "mainY": 152.0
+      }
+     ]
+    }
+   ]
+  },
+  {
    "id": "grip_sms_tall",
    "family": "grip",
    "variant": "sms",
@@ -176709,6 +179451,978 @@
         "halfFolded": true
        },
        "mainY": 358.0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "grip_coleco_tall",
+   "family": "grip",
+   "variant": "coleco",
+   "image": "landscape_bg_tall.webp",
+   "width": 2300,
+   "height": 1500,
+   "tree": {
+    "split": "rows",
+    "parts": [
+     {
+      "len": 663,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 596,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 732,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 844,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 64,
+      "mode": "repeat",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 596,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 732,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 844,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 516,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 596,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 732,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 844,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 64,
+      "mode": "repeat",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 596,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 732,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 844,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 193,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 596,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 732,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 844,
+         "mode": "fixed"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "glasses": [],
+   "scales": [
+    []
+   ],
+   "controls": [
+    {
+     "id": "DPAD",
+     "shape": "dpad",
+     "x": 248.0,
+     "y": 719.0,
+     "r": 156,
+     "arm": 54,
+     "anchor": "left",
+     "level": "middle"
+    },
+    {
+     "id": "KEYPAD",
+     "shape": "circle",
+     "x": 368.0,
+     "y": 1095.0,
+     "r": 58,
+     "capR": 39,
+     "anchor": "left",
+     "label": "KEYPAD",
+     "labelDy": 0,
+     "labelH": 17,
+     "level": "middle",
+     "labelDx": -67
+    },
+    {
+     "id": "MENU",
+     "shape": "circle",
+     "x": 368.0,
+     "y": 955.0,
+     "r": 58,
+     "capR": 39,
+     "anchor": "left",
+     "label": "MENU",
+     "labelDy": 0,
+     "labelH": 17,
+     "level": "middle",
+     "labelDx": -67
+    },
+    {
+     "id": "B",
+     "shape": "circle",
+     "x": 1991.9,
+     "y": 779.1,
+     "r": 80,
+     "capR": 60,
+     "anchor": "right",
+     "level": "middle"
+    },
+    {
+     "id": "A",
+     "shape": "circle",
+     "x": 2112.1,
+     "y": 658.9,
+     "r": 80,
+     "capR": 60,
+     "anchor": "right",
+     "level": "middle"
+    }
+   ],
+   "parts": "parts.webp",
+   "refW": 2300,
+   "refH": 1500,
+   "frame": {
+    "sx": 1038,
+    "sy": 0,
+    "w": 1036,
+    "h": 1604,
+    "x": 496,
+    "y": 72,
+    "corner": 72,
+    "fill": true,
+    "side": 480,
+    "top": 56,
+    "bottom": 56,
+    "glass": {
+     "id": "pic",
+     "screen": "picture",
+     "x": 44,
+     "y": 47,
+     "w": 944,
+     "h": 1470,
+     "corner": 16
+    },
+    "strip": {
+     "y": 45,
+     "hh": 30,
+     "labels": [
+      {
+       "id": "TOUCH_1"
+      },
+      {
+       "id": "TOUCH_2"
+      },
+      {
+       "id": "TOUCH_3"
+      },
+      {
+       "id": "TOUCH_4"
+      }
+     ],
+     "wordUp": 22
+    }
+   },
+   "pieces": [
+    {
+     "sx": 1021,
+     "sy": 3384,
+     "w": 144,
+     "h": 270,
+     "x": 296,
+     "y": 890,
+     "anchor": "left",
+     "level": "middle"
+    },
+    {
+     "sx": 1254,
+     "sy": 2966,
+     "w": 416,
+     "h": 416,
+     "x": 40,
+     "y": 511,
+     "anchor": "left",
+     "level": "middle"
+    },
+    {
+     "sx": 0,
+     "sy": 3384,
+     "w": 304,
+     "h": 304,
+     "x": 1900,
+     "y": 567,
+     "anchor": "right",
+     "level": "middle"
+    },
+    {
+     "sx": 1260,
+     "sy": 3946,
+     "w": 100,
+     "h": 100,
+     "x": 318,
+     "y": 905,
+     "anchor": "left",
+     "level": "middle"
+    },
+    {
+     "sx": 1056,
+     "sy": 3946,
+     "w": 100,
+     "h": 100,
+     "x": 318,
+     "y": 1045,
+     "anchor": "left",
+     "level": "middle"
+    },
+    {
+     "sx": 1750,
+     "sy": 3690,
+     "w": 124,
+     "h": 124,
+     "x": 1930,
+     "y": 717,
+     "anchor": "right",
+     "level": "middle"
+    },
+    {
+     "sx": 1876,
+     "sy": 3690,
+     "w": 124,
+     "h": 124,
+     "x": 2050,
+     "y": 597,
+     "anchor": "right",
+     "level": "middle"
+    }
+   ],
+   "minRefH": 1500,
+   "boxes": [
+    {
+     "slot": "left",
+     "sizes": [
+      {
+       "w": 416,
+       "h": 1235,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 0,
+         "y": 0,
+         "anchor": "left",
+         "level": "middle",
+         "group": "DPAD"
+        },
+        {
+         "sx": 1260,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 274,
+         "y": 543,
+         "anchor": "left",
+         "level": "middle",
+         "scale": 1.0000001,
+         "group": "MENU"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 208.0,
+         "y": 208.00003,
+         "r": 156.0,
+         "arm": 54.0,
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 324.0,
+         "y": 593.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDx": -67.0,
+         "labelH": 17.0,
+         "level": "middle"
+        }
+       ],
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 1211.2457,
+        "maxWdp": 1421.8972,
+        "minHdp": 757.02856,
+        "maxHdp": 888.6857,
+        "halfFolded": false
+       }
+      },
+      {
+       "w": 416,
+       "h": 1142,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 0,
+         "y": 0,
+         "anchor": "left",
+         "level": "middle",
+         "group": "DPAD"
+        },
+        {
+         "sx": 1260,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 274,
+         "y": 543,
+         "anchor": "left",
+         "level": "middle",
+         "group": "MENU"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 208.0,
+         "y": 208.0,
+         "r": 156.0,
+         "arm": 54.0,
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 324.0,
+         "y": 593.0,
+         "r": 58.000004,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDx": -67.0,
+         "labelH": 17.0,
+         "level": "middle"
+        }
+       ],
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 767.8934,
+        "maxWdp": 901.44006,
+        "minHdp": 691.84,
+        "maxHdp": 812.16003,
+        "halfFolded": false
+       }
+      },
+      {
+       "w": 416,
+       "h": 1079,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 0,
+         "y": 0,
+         "anchor": "left",
+         "level": "middle",
+         "group": "DPAD"
+        },
+        {
+         "sx": 1260,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 274,
+         "y": 543,
+         "anchor": "left",
+         "level": "middle",
+         "group": "MENU"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 208.0,
+         "y": 208.0,
+         "r": 156.0,
+         "arm": 54.0,
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 324.0,
+         "y": 593.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDx": -67.0,
+         "labelH": 17.0,
+         "level": "middle"
+        }
+       ],
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 857.9657,
+        "maxWdp": 1007.1772,
+        "minHdp": 647.68,
+        "maxHdp": 760.32,
+        "halfFolded": false
+       }
+      },
+      {
+       "w": 416,
+       "h": 1079,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 0,
+         "y": 0,
+         "anchor": "left",
+         "level": "middle",
+         "group": "DPAD"
+        },
+        {
+         "sx": 1260,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 274,
+         "y": 543,
+         "anchor": "left",
+         "level": "middle",
+         "group": "MENU"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 208.0,
+         "y": 208.0,
+         "r": 156.0,
+         "arm": 54.0,
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 324.0,
+         "y": 593.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDx": -67.0,
+         "labelH": 17.0,
+         "level": "middle"
+        }
+       ],
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 857.9657,
+        "maxWdp": 1007.1772,
+        "minHdp": 647.68,
+        "maxHdp": 760.32,
+        "halfFolded": true
+       }
+      }
+     ]
+    },
+    {
+     "slot": "right",
+     "sizes": [
+      {
+       "w": 416,
+       "h": 1179,
+       "pieces": [
+        {
+         "sx": 0,
+         "sy": 3384,
+         "w": 304,
+         "h": 304,
+         "x": 56,
+         "y": 0,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1750,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 86,
+         "y": 150,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1876,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 206,
+         "y": 30,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1056,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 42,
+         "y": 487,
+         "anchor": "right",
+         "group": "START",
+         "level": "middle"
+        }
+       ],
+       "controls": [
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 147.9,
+         "y": 212.1,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 268.1,
+         "y": 91.9,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "KEYPAD",
+         "shape": "circle",
+         "x": 92.0,
+         "y": 537.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "right",
+         "label": "KEYPAD",
+         "labelDx": 67.0,
+         "labelH": 17.0,
+         "level": "middle"
+        }
+       ],
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 1211.2457,
+        "maxWdp": 1421.8972,
+        "minHdp": 757.02856,
+        "maxHdp": 888.6857,
+        "halfFolded": false
+       },
+       "mainY": 152.0
+      },
+      {
+       "w": 416,
+       "h": 1086,
+       "pieces": [
+        {
+         "sx": 0,
+         "sy": 3384,
+         "w": 304,
+         "h": 304,
+         "x": 56,
+         "y": 0,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1750,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 86,
+         "y": 150,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1876,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 206,
+         "y": 30,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1056,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 42,
+         "y": 487,
+         "anchor": "right",
+         "group": "START",
+         "level": "middle"
+        }
+       ],
+       "controls": [
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 147.9,
+         "y": 212.1,
+         "r": 80.0,
+         "capR": 60.000004,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 268.1,
+         "y": 91.9,
+         "r": 80.0,
+         "capR": 60.000004,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "KEYPAD",
+         "shape": "circle",
+         "x": 92.0,
+         "y": 537.0,
+         "r": 58.000004,
+         "capR": 39.0,
+         "anchor": "right",
+         "label": "KEYPAD",
+         "labelDx": 67.0,
+         "labelH": 17.0,
+         "level": "middle"
+        }
+       ],
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 767.8934,
+        "maxWdp": 901.44006,
+        "minHdp": 691.84,
+        "maxHdp": 812.16003,
+        "halfFolded": false
+       },
+       "mainY": 152.0
+      },
+      {
+       "w": 416,
+       "h": 1023,
+       "pieces": [
+        {
+         "sx": 0,
+         "sy": 3384,
+         "w": 304,
+         "h": 304,
+         "x": 56,
+         "y": 0,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1750,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 86,
+         "y": 150,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1876,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 206,
+         "y": 30,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1056,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 42,
+         "y": 487,
+         "anchor": "right",
+         "group": "START",
+         "level": "middle"
+        }
+       ],
+       "controls": [
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 147.9,
+         "y": 212.1,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 268.1,
+         "y": 91.9,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "KEYPAD",
+         "shape": "circle",
+         "x": 92.0,
+         "y": 537.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "right",
+         "label": "KEYPAD",
+         "labelDx": 67.0,
+         "labelH": 17.0,
+         "level": "middle"
+        }
+       ],
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 857.9657,
+        "maxWdp": 1007.1772,
+        "minHdp": 647.68,
+        "maxHdp": 760.32,
+        "halfFolded": false
+       },
+       "mainY": 152.0
+      },
+      {
+       "w": 416,
+       "h": 1023,
+       "pieces": [
+        {
+         "sx": 0,
+         "sy": 3384,
+         "w": 304,
+         "h": 304,
+         "x": 56,
+         "y": 0,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1750,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 86,
+         "y": 150,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1876,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 206,
+         "y": 30,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1056,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 42,
+         "y": 487,
+         "anchor": "right",
+         "group": "START",
+         "level": "middle"
+        }
+       ],
+       "controls": [
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 147.9,
+         "y": 212.1,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 268.1,
+         "y": 91.9,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "KEYPAD",
+         "shape": "circle",
+         "x": 92.0,
+         "y": 537.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "right",
+         "label": "KEYPAD",
+         "labelDx": 67.0,
+         "labelH": 17.0,
+         "level": "middle"
+        }
+       ],
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 857.9657,
+        "maxWdp": 1007.1772,
+        "minHdp": 647.68,
+        "maxHdp": 760.32,
+        "halfFolded": true
+       },
+       "mainY": 152.0
       }
      ]
     }
@@ -214618,6 +218332,855 @@
    ]
   },
   {
+   "id": "flex_coleco_fold_tab",
+   "family": "flex",
+   "variant": "coleco",
+   "image": "portrait_bg_fold.webp",
+   "width": 1848,
+   "height": 3024,
+   "tree": {
+    "split": "rows",
+    "parts": [
+     {
+      "len": 668,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 767,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 1017,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 64,
+      "mode": "repeat",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 767,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 1017,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 432,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 767,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 1017,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 120,
+      "mode": "hinge",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 767,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 1017,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 8,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 767,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 1017,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 640,
+      "mode": "crop",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 767,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 1017,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 1092,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 767,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 1017,
+         "mode": "fixed"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "glasses": [],
+   "scales": [
+    []
+   ],
+   "controls": [
+    {
+     "id": "DPAD",
+     "shape": "dpad",
+     "x": 224.0,
+     "y": 2227.0,
+     "r": 156,
+     "arm": 54,
+     "anchor": "left",
+     "level": "bottom"
+    },
+    {
+     "id": "KEYPAD",
+     "shape": "circle",
+     "x": 994.0,
+     "y": 2812.0,
+     "r": 58,
+     "capR": 40,
+     "anchor": "centre",
+     "label": "KEYPAD",
+     "labelDy": 64.5,
+     "labelH": 17,
+     "level": "bottom"
+    },
+    {
+     "id": "MENU",
+     "shape": "circle",
+     "x": 854.0,
+     "y": 2812.0,
+     "r": 58,
+     "capR": 39,
+     "anchor": "centre",
+     "label": "MENU",
+     "labelDy": 64.5,
+     "labelH": 17,
+     "level": "bottom"
+    },
+    {
+     "id": "B",
+     "shape": "circle",
+     "x": 1561.9,
+     "y": 2287.1,
+     "r": 80,
+     "capR": 60,
+     "anchor": "right",
+     "level": "bottom"
+    },
+    {
+     "id": "A",
+     "shape": "circle",
+     "x": 1682.1,
+     "y": 2166.9,
+     "r": 80,
+     "capR": 60,
+     "anchor": "right",
+     "level": "bottom"
+    }
+   ],
+   "parts": "parts.webp",
+   "refW": 1848,
+   "refH": 3024,
+   "frame": {
+    "sx": 0,
+    "sy": 0,
+    "w": 1036,
+    "h": 1604,
+    "x": 24,
+    "y": 41,
+    "corner": 72,
+    "fill": true,
+    "side": 32,
+    "top": 32,
+    "hinge": 94,
+    "glass": {
+     "id": "pic",
+     "screen": "picture",
+     "x": 44,
+     "y": 47,
+     "w": 944,
+     "h": 1510,
+     "corner": 16
+    }
+   },
+   "pieces": [
+    {
+     "sx": 1739,
+     "sy": 3384,
+     "w": 270,
+     "h": 144,
+     "x": 789,
+     "y": 2740,
+     "anchor": "centre",
+     "level": "bottom"
+    },
+    {
+     "sx": 1254,
+     "sy": 2966,
+     "w": 416,
+     "h": 416,
+     "x": 16,
+     "y": 2019,
+     "anchor": "left",
+     "level": "bottom"
+    },
+    {
+     "sx": 0,
+     "sy": 3384,
+     "w": 304,
+     "h": 304,
+     "x": 1470,
+     "y": 2075,
+     "anchor": "right",
+     "level": "bottom"
+    },
+    {
+     "sx": 1056,
+     "sy": 3946,
+     "w": 100,
+     "h": 100,
+     "x": 944,
+     "y": 2762,
+     "anchor": "centre",
+     "level": "bottom"
+    },
+    {
+     "sx": 1260,
+     "sy": 3946,
+     "w": 100,
+     "h": 100,
+     "x": 804,
+     "y": 2762,
+     "anchor": "centre",
+     "level": "bottom"
+    },
+    {
+     "sx": 0,
+     "sy": 1606,
+     "w": 984,
+     "h": 784,
+     "x": 432,
+     "y": 1958,
+     "anchor": "centre",
+     "glass": {
+      "id": "panel",
+      "screen": "panel",
+      "x": 20,
+      "y": 22,
+      "w": 944,
+      "h": 692,
+      "corner": 16
+     },
+     "grow": 40,
+     "strip": {
+      "y": 42,
+      "hh": 28,
+      "labels": [
+       {
+        "id": "TOUCH_1"
+       },
+       {
+        "id": "TOUCH_2"
+       },
+       {
+        "id": "TOUCH_3"
+       },
+       {
+        "id": "TOUCH_4"
+       }
+      ]
+     }
+    },
+    {
+     "sx": 1750,
+     "sy": 3690,
+     "w": 124,
+     "h": 124,
+     "x": 1500,
+     "y": 2225,
+     "anchor": "right",
+     "level": "bottom"
+    },
+    {
+     "sx": 1876,
+     "sy": 3690,
+     "w": 124,
+     "h": 124,
+     "x": 1620,
+     "y": 2105,
+     "anchor": "right",
+     "level": "bottom"
+    }
+   ],
+   "minRefH": 2449,
+   "boxes": [
+    {
+     "slot": "left",
+     "sizes": [
+      {
+       "w": 416,
+       "h": 723,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 0,
+         "y": 127,
+         "anchor": "left",
+         "group": "DPAD"
+        },
+        {
+         "sx": 1260,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 268,
+         "y": 677,
+         "anchor": "left",
+         "group": "MENU"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 208.0,
+         "y": 335.0,
+         "r": 156.0,
+         "arm": 54.0,
+         "anchor": "left"
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 318.0,
+         "y": 727.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDx": -68.0,
+         "labelH": 17.0
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 691.84,
+        "maxWdp": 812.16003,
+        "minHdp": 767.8934,
+        "maxHdp": 901.44006,
+        "halfFolded": false
+       }
+      },
+      {
+       "w": 416,
+       "h": 723,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 0,
+         "y": 127,
+         "anchor": "left",
+         "group": "DPAD"
+        },
+        {
+         "sx": 1260,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 268,
+         "y": 677,
+         "anchor": "left",
+         "group": "MENU"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 208.0,
+         "y": 335.0,
+         "r": 156.0,
+         "arm": 54.0,
+         "anchor": "left"
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 318.0,
+         "y": 727.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDx": -68.0,
+         "labelH": 17.0
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 691.84,
+        "maxWdp": 812.16003,
+        "minHdp": 767.8934,
+        "maxHdp": 901.44006,
+        "halfFolded": true
+       }
+      },
+      {
+       "w": 416,
+       "h": 723,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": 0,
+         "y": 133,
+         "anchor": "left",
+         "group": "DPAD"
+        },
+        {
+         "sx": 1260,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 274,
+         "y": 677,
+         "anchor": "left",
+         "scale": 1.0000001,
+         "group": "MENU"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 208.0,
+         "y": 340.99994,
+         "r": 156.0,
+         "arm": 54.0,
+         "anchor": "left"
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 324.0,
+         "y": 727.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDx": -68.0,
+         "labelH": 17.0
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 757.02856,
+        "maxWdp": 888.6857,
+        "minHdp": 1211.2457,
+        "maxHdp": 1421.8972,
+        "halfFolded": false
+       }
+      }
+     ]
+    },
+    {
+     "slot": "right",
+     "sizes": [
+      {
+       "w": 416,
+       "h": 667,
+       "pieces": [
+        {
+         "sx": 0,
+         "sy": 3384,
+         "w": 304,
+         "h": 304,
+         "x": 56,
+         "y": 0,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1750,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 86,
+         "y": 150,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1876,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 206,
+         "y": 30,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1056,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 48,
+         "y": 494,
+         "anchor": "right",
+         "group": "START"
+        }
+       ],
+       "controls": [
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 147.9,
+         "y": 212.1,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right"
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 268.1,
+         "y": 91.9,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right"
+        },
+        {
+         "id": "KEYPAD",
+         "shape": "circle",
+         "x": 98.0,
+         "y": 544.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "right",
+         "label": "KEYPAD",
+         "labelDx": 68.0,
+         "labelH": 17.0
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 691.84,
+        "maxWdp": 812.16003,
+        "minHdp": 767.8934,
+        "maxHdp": 901.44006,
+        "halfFolded": false
+       },
+       "mainY": 152.0
+      },
+      {
+       "w": 416,
+       "h": 667,
+       "pieces": [
+        {
+         "sx": 0,
+         "sy": 3384,
+         "w": 304,
+         "h": 304,
+         "x": 56,
+         "y": 0,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1750,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 86,
+         "y": 150,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1876,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 206,
+         "y": 30,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1056,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 48,
+         "y": 494,
+         "anchor": "right",
+         "group": "START"
+        }
+       ],
+       "controls": [
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 147.9,
+         "y": 212.1,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right"
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 268.1,
+         "y": 91.9,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right"
+        },
+        {
+         "id": "KEYPAD",
+         "shape": "circle",
+         "x": 98.0,
+         "y": 544.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "right",
+         "label": "KEYPAD",
+         "labelDx": 68.0,
+         "labelH": 17.0
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 691.84,
+        "maxWdp": 812.16003,
+        "minHdp": 767.8934,
+        "maxHdp": 901.44006,
+        "halfFolded": true
+       },
+       "mainY": 152.0
+      },
+      {
+       "w": 416,
+       "h": 667,
+       "pieces": [
+        {
+         "sx": 0,
+         "sy": 3384,
+         "w": 304,
+         "h": 304,
+         "x": 56,
+         "y": 0,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1750,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 86,
+         "y": 150,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1876,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 206,
+         "y": 30,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1056,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 42,
+         "y": 488,
+         "anchor": "right",
+         "group": "START"
+        }
+       ],
+       "controls": [
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 147.9,
+         "y": 212.1,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right"
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 268.1,
+         "y": 91.9,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right"
+        },
+        {
+         "id": "KEYPAD",
+         "shape": "circle",
+         "x": 92.0,
+         "y": 538.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "right",
+         "label": "KEYPAD",
+         "labelDx": 68.0,
+         "labelH": 17.0
+        }
+       ],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 757.02856,
+        "maxWdp": 888.6857,
+        "minHdp": 1211.2457,
+        "maxHdp": 1421.8972,
+        "halfFolded": false
+       },
+       "mainY": 152.0
+      }
+     ]
+    },
+    {
+     "slot": "bottomRow",
+     "sizes": [
+      {
+       "w": 0,
+       "h": 0,
+       "pieces": [],
+       "controls": [],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 757.02856,
+        "maxWdp": 888.6857,
+        "minHdp": 1211.2457,
+        "maxHdp": 1421.8972,
+        "halfFolded": false
+       }
+      },
+      {
+       "w": 0,
+       "h": 0,
+       "pieces": [],
+       "controls": [],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 691.84,
+        "maxWdp": 812.16003,
+        "minHdp": 767.8934,
+        "maxHdp": 901.44006,
+        "halfFolded": false
+       }
+      },
+      {
+       "w": 0,
+       "h": 0,
+       "pieces": [],
+       "controls": [],
+       "when": {
+        "orientation": "portrait",
+        "minWdp": 691.84,
+        "maxWdp": 812.16003,
+        "minHdp": 767.8934,
+        "maxHdp": 901.44006,
+        "halfFolded": true
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
    "id": "flex_md_fold_tab",
    "family": "flex",
    "variant": "md",
@@ -237380,6 +241943,512 @@
         "halfFolded": false
        },
        "mainY": 358.0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "grip_coleco_col",
+   "family": "grip",
+   "variant": "coleco",
+   "image": "landscape_bg.webp",
+   "width": 1900,
+   "height": 860,
+   "tree": {
+    "split": "rows",
+    "parts": [
+     {
+      "len": 148,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 463,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 401,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 908,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 64,
+      "mode": "repeat",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 463,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 401,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 908,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 273,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 463,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 401,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 908,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 64,
+      "mode": "repeat",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 463,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 401,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 908,
+         "mode": "fixed"
+        }
+       ]
+      }
+     },
+     {
+      "len": 311,
+      "mode": "fixed",
+      "node": {
+       "split": "cols",
+       "parts": [
+        {
+         "len": 463,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 401,
+         "mode": "fixed"
+        },
+        {
+         "len": 64,
+         "mode": "repeat"
+        },
+        {
+         "len": 908,
+         "mode": "fixed"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "glasses": [],
+   "scales": [
+    []
+   ],
+   "controls": [
+    {
+     "id": "DPAD",
+     "shape": "dpad",
+     "x": 248.0,
+     "y": 399.0,
+     "r": 156,
+     "arm": 54,
+     "anchor": "left",
+     "level": "middle"
+    },
+    {
+     "id": "KEYPAD",
+     "shape": "circle",
+     "x": 368.0,
+     "y": 775.0,
+     "r": 58,
+     "capR": 39,
+     "anchor": "left",
+     "label": "KEYPAD",
+     "labelDy": 0,
+     "labelH": 17,
+     "level": "middle",
+     "labelDx": -67
+    },
+    {
+     "id": "MENU",
+     "shape": "circle",
+     "x": 368.0,
+     "y": 635.0,
+     "r": 58,
+     "capR": 39,
+     "anchor": "left",
+     "label": "MENU",
+     "labelDy": 0,
+     "labelH": 17,
+     "level": "middle",
+     "labelDx": -67
+    },
+    {
+     "id": "B",
+     "shape": "circle",
+     "x": 1591.9,
+     "y": 459.1,
+     "r": 80,
+     "capR": 60,
+     "anchor": "right",
+     "level": "middle"
+    },
+    {
+     "id": "A",
+     "shape": "circle",
+     "x": 1712.1,
+     "y": 338.9,
+     "r": 80,
+     "capR": 60,
+     "anchor": "right",
+     "level": "middle"
+    }
+   ],
+   "parts": "parts.webp",
+   "refW": 1900,
+   "refH": 860,
+   "frame": {
+    "sx": 1038,
+    "sy": 0,
+    "w": 1036,
+    "h": 1604,
+    "x": 496,
+    "y": 72,
+    "corner": 72,
+    "fill": true,
+    "side": 480,
+    "top": 56,
+    "bottom": 56,
+    "glass": {
+     "id": "pic",
+     "screen": "picture",
+     "x": 44,
+     "y": 47,
+     "w": 944,
+     "h": 1470,
+     "corner": 16
+    },
+    "strip": {
+     "y": 45,
+     "hh": 30,
+     "labels": [
+      {
+       "id": "TOUCH_1"
+      },
+      {
+       "id": "TOUCH_2"
+      },
+      {
+       "id": "TOUCH_3"
+      },
+      {
+       "id": "TOUCH_4"
+      }
+     ],
+     "wordUp": 22
+    }
+   },
+   "pieces": [
+    {
+     "sx": 1021,
+     "sy": 3384,
+     "w": 144,
+     "h": 270,
+     "x": 296,
+     "y": 570,
+     "anchor": "left",
+     "level": "middle"
+    },
+    {
+     "sx": 1254,
+     "sy": 2966,
+     "w": 416,
+     "h": 416,
+     "x": 40,
+     "y": 191,
+     "anchor": "left",
+     "level": "middle"
+    },
+    {
+     "sx": 0,
+     "sy": 3384,
+     "w": 304,
+     "h": 304,
+     "x": 1500,
+     "y": 247,
+     "anchor": "right",
+     "level": "middle"
+    },
+    {
+     "sx": 1260,
+     "sy": 3946,
+     "w": 100,
+     "h": 100,
+     "x": 318,
+     "y": 585,
+     "anchor": "left",
+     "level": "middle"
+    },
+    {
+     "sx": 1056,
+     "sy": 3946,
+     "w": 100,
+     "h": 100,
+     "x": 318,
+     "y": 725,
+     "anchor": "left",
+     "level": "middle"
+    },
+    {
+     "sx": 1750,
+     "sy": 3690,
+     "w": 124,
+     "h": 124,
+     "x": 1530,
+     "y": 397,
+     "anchor": "right",
+     "level": "middle"
+    },
+    {
+     "sx": 1876,
+     "sy": 3690,
+     "w": 124,
+     "h": 124,
+     "x": 1650,
+     "y": 277,
+     "anchor": "right",
+     "level": "middle"
+    }
+   ],
+   "minRefH": 1100,
+   "boxes": [
+    {
+     "slot": "left",
+     "sizes": [
+      {
+       "w": 394,
+       "h": 779,
+       "pieces": [
+        {
+         "sx": 1254,
+         "sy": 2966,
+         "w": 416,
+         "h": 416,
+         "x": -22,
+         "y": 0,
+         "anchor": "left",
+         "level": "middle",
+         "group": "DPAD"
+        },
+        {
+         "sx": 1260,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 252,
+         "y": 543,
+         "anchor": "left",
+         "level": "middle",
+         "group": "MENU"
+        }
+       ],
+       "controls": [
+        {
+         "id": "DPAD",
+         "shape": "dpad",
+         "x": 186.0,
+         "y": 208.0,
+         "r": 156.0,
+         "arm": 54.0,
+         "anchor": "left",
+         "level": "middle"
+        },
+        {
+         "id": "MENU",
+         "shape": "circle",
+         "x": 302.0,
+         "y": 593.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "left",
+         "label": "MENU",
+         "labelDx": -67.0,
+         "labelH": 17.0,
+         "level": "middle"
+        }
+       ],
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 691.13904,
+        "maxWdp": 811.33716,
+        "minHdp": 437.3943,
+        "maxHdp": 513.4629,
+        "halfFolded": false
+       }
+      }
+     ]
+    },
+    {
+     "slot": "right",
+     "sizes": [
+      {
+       "w": 394,
+       "h": 723,
+       "pieces": [
+        {
+         "sx": 0,
+         "sy": 3384,
+         "w": 304,
+         "h": 304,
+         "x": 78,
+         "y": 0,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1750,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 108,
+         "y": 150,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1876,
+         "sy": 3690,
+         "w": 124,
+         "h": 124,
+         "x": 228,
+         "y": 30,
+         "anchor": "right",
+         "level": "middle",
+         "group": "A+B"
+        },
+        {
+         "sx": 1056,
+         "sy": 3946,
+         "w": 100,
+         "h": 100,
+         "x": 42,
+         "y": 487,
+         "anchor": "right",
+         "group": "START",
+         "level": "middle"
+        }
+       ],
+       "controls": [
+        {
+         "id": "B",
+         "shape": "circle",
+         "x": 169.9,
+         "y": 212.1,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "A",
+         "shape": "circle",
+         "x": 290.1,
+         "y": 91.9,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right",
+         "level": "middle"
+        },
+        {
+         "id": "KEYPAD",
+         "shape": "circle",
+         "x": 92.0,
+         "y": 537.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "anchor": "right",
+         "label": "KEYPAD",
+         "labelDx": 67.0,
+         "labelH": 17.0,
+         "level": "middle"
+        }
+       ],
+       "when": {
+        "orientation": "landscape",
+        "minWdp": 691.13904,
+        "maxWdp": 811.33716,
+        "minHdp": 437.3943,
+        "maxHdp": 513.4629,
+        "halfFolded": false
+       },
+       "mainY": 152.0
       }
      ]
     }
