@@ -1140,15 +1140,17 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setVulkanD
     jstring driverDir,
     jstring libraryName,
     jstring hookLibDir,
-    jstring tmpDir
+    jstring tmpDir,
+    jboolean reader
 ) {
     LibretroDroid::getInstance().setVulkanDriver(JniString(env, driverDir).stdString(),
                                                  JniString(env, libraryName).stdString(),
                                                  JniString(env, hookLibDir).stdString(),
-                                                 JniString(env, tmpDir).stdString());
+                                                 JniString(env, tmpDir).stdString(),
+                                                 reader);
 }
 
-JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_probeVulkanDriver(
+JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_probeVulkanDriver(
     JNIEnv* env,
     jclass obj,
     jstring driverDir,
@@ -1157,13 +1159,13 @@ JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_probeV
     jstring tmpDir
 ) {
     try {
-        return VulkanBridge::probeCustomDriver(JniString(env, driverDir).stdString(),
-                                               JniString(env, libraryName).stdString(),
-                                               JniString(env, hookLibDir).stdString(),
-                                               JniString(env, tmpDir).stdString());
+        return (jint) VulkanBridge::probeCustomDriver(JniString(env, driverDir).stdString(),
+                                                      JniString(env, libraryName).stdString(),
+                                                      JniString(env, hookLibDir).stdString(),
+                                                      JniString(env, tmpDir).stdString());
     } catch (std::exception& exception) {
         LOGE("Error in probeVulkanDriver: %s", exception.what());
-        return false;
+        return (jint) HandoffMode::None;
     }
 }
 

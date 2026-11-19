@@ -917,7 +917,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     // Vulkan that could not start here before, or this is the relaunch after it did: OpenGL ES (VulkanFallback).
                     // On Vulkan, a custom GPU driver may load instead of the system one (GpuDriverChoice); the relaunch after
                     // it could not start forces the system driver.
-                    val apiValue = frontendValues[GraphicsApiOptions.KEY]
+                    // Auto is Vulkan for a core that follows the GPU on a Mali phone; the driver rows below then apply as on Vulkan.
+                    val apiValue = GraphicsApiOptions.effective(frontendValues[GraphicsApiOptions.KEY], cfg.descriptor?.vulkan) { AndroidDeviceInfo.gpu() }
                     val gamePath = activity.intent.getStringExtra(EXTRA_GAME_PATH)
                     // No library path, no crash record to keep: such a launch stays on the system driver.
                     val driversAvailable = gamePath != null && cfg.descriptor?.id !in GpuDriverOptions.EXCLUDED_CORES &&
@@ -928,6 +929,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     if (mayLoadDriver) driverCrashNotice = GpuDriverCrashSettle.settle(settings, setOf(Process.myPid()))
                     val driverStore = AndroidGpuDrivers(AndroidGpuDrivers.root(activity.filesDir), Build.VERSION.SDK_INT)
                     val drivers = if (mayLoadDriver) driverStore.installed() else emptyList()
+                    // The driver's frames go through a swapchain on an image reader: what its preflight found it can do.
+                    var driverReader = false
                     var launch = GpuDriverChoice.launch(
                         apiValue, frontendValues[GpuDriverOptions.KEY], settings.gpuDriver, drivers.mapTo(HashSet()) { it.id },
                         GpuDriverCrash.crashed(settings.gpuDriverCrashes, gamePath.orEmpty()), available = driversAvailable,
@@ -947,7 +950,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         // Before any core is loaded: a driver that cannot start the bridge is caught here, and this same
                         // launch goes on without it (a core torn down after a failed start can crash: PPSSPP, mupen64plus).
                         // Retried on every launch. The in-process relaunch stays for what the preflight cannot see.
-                        val ok = GLRetroView.probeVulkanDriver(activity, driverStore.directory(driver.id).absolutePath + "/", driver.libraryName)
+                        val handoff = GLRetroView.probeVulkanDriver(activity, driverStore.directory(driver.id).absolutePath + "/", driver.libraryName)
+                        val ok = handoff != LibretroDroid.VULKAN_HANDOFF_NONE
+                        driverReader = handoff == LibretroDroid.VULKAN_HANDOFF_READER
                         val after = GpuDriverChoice.afterPreflight(launch, ok, driver.name, cfg.descriptor?.id in settings.vulkanFailedCores)
                         if (after.clearMarker) clearDriverLaunchMarker()
                         if (after.launch != launch) {
@@ -991,6 +996,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         if (driver != null) {
                             vulkanDriverDir = driverStore.directory(driver.id).absolutePath + "/"
                             vulkanDriverLibrary = driver.libraryName
+                            vulkanDriverReader = driverReader
                         }
                         // DS / 3DS: the core reports where each screen sits in its frame (video views), the layouts read it.
                         videoViews = gameCoreId in VIDEO_VIEW_CORES

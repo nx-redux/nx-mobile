@@ -21,11 +21,12 @@ object GpuDriverOptions {
     fun appliesTo(tag: String, available: Boolean): Boolean =
         GraphicsApiOptions.appliesTo(tag) && available && CoreRegistry.forTag(tag)?.id !in EXCLUDED_CORES
 
-    fun row(installed: List<GpuDriver>): FrontendOption = FrontendOption(
+    /** [autoVulkan]: Graphics API's Auto is Vulkan here ([GraphicsApiOptions.autoIsVulkan]), so the row shows on Auto too. */
+    fun row(installed: List<GpuDriver>, autoVulkan: Boolean = false): FrontendOption = FrontendOption(
         KEY, "GPU driver", listOf(GpuDriverChoice.DEFAULT, GpuDriverChoice.SYSTEM) + installed.map { it.id }, GpuDriverChoice.DEFAULT,
         "The Vulkan driver this console uses. Default follows Settings → Emulation → GPU driver. Takes effect the next time the game starts.",
         brief = "Applies next launch. Vulkan only",
         visual = false, valueLabels = listOf("Default", "System driver") + installed.map { it.name }, atLaunch = true,
-        shownWhen = GraphicsApiOptions.KEY to setOf(GraphicsApiOptions.VULKAN),
+        shownWhen = GraphicsApiOptions.KEY to (if (autoVulkan) setOf(GraphicsApiOptions.VULKAN, GraphicsApiOptions.AUTO) else setOf(GraphicsApiOptions.VULKAN)),
     )
 }

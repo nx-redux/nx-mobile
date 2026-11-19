@@ -257,6 +257,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             return true
         }
 
+        /** Debug builds only (the adb GAME_FF hook): fast forward on or off, as the panel's tile sets it. Main thread. */
+        internal fun debugFastForward(on: Boolean): Boolean {
+            if (!BuildConfig.DEBUG) return false
+            val game = debugGame?.get()?.takeIf { !it.isFinishing } ?: return false
+            game.handleMenuEffect(MenuEffect.SetSpeed(ff = on, rewind = if (on) false else null))
+            return true
+        }
+
         // The runner's native session is process-wide: one game screen owns it at a time (main thread only). A screen
         // created while another is alive (a second launcher stacked over a stopped game) makes that one quit and waits for
         // its teardown, native destroy included, before it starts its own emulator.

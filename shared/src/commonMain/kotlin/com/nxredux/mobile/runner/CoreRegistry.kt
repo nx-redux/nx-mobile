@@ -209,7 +209,7 @@ object CoreRegistry {
             "armsx2_widescreen_patches" to "disabled", "armsx2_no_interlacing_patches" to "disabled", "armsx2_cheats" to "disabled", "armsx2_sw_threads" to "2",
         ),
         lockedOptions = setOf("armsx2_renderer", "armsx2_bios", "armsx2_upscale", "armsx2_sw_threads"),
-        vulkan = VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan")),
+        vulkan = VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan"), autoOnMali = true),
         // The PS2's two controller ports, both DualShock2 (cores/patches/armsx2/0006); no multitap. Saves stay on card 1.
         players = 2,
         name = "ARMSX2",
@@ -483,7 +483,7 @@ object CoreRegistry {
         ),
         lockedOptions = dolphinLocked,
         hiddenValues = mapOf("dolphin_renderer" to setOf("Software", "Null")),
-        vulkan = VulkanSwitch(swapchainFrames = true),
+        vulkan = VulkanSwitch(swapchainFrames = true, autoOnMali = true),
         // Dolphin writes its NAND and memory cards under User/Wii and User/GC in its console's save dir (Saves/<console tag>/User).
         controllerPort0 = CoreDescriptor.WIIMOTE_SIDEWAYS,
         players = 4,

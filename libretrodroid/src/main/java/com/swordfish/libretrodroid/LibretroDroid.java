@@ -132,14 +132,19 @@ public class LibretroDroid {
      * directory for patched libraries below API 29. A driver that fails to load fails the launch with
      * ERROR_GL_NOT_COMPATIBLE: the host decides whether to retry on the system driver. Set before create().
      */
-    public static native void setVulkanDriver(String driverDir, String libraryName, String hookLibDir, String tmpDir);
+    public static native void setVulkanDriver(String driverDir, String libraryName, String hookLibDir, String tmpDir, boolean reader);
     /**
      * Before any core is loaded: whether the custom driver libraryName in driverDir (arguments as setVulkanDriver's) can
      * start the Vulkan bridge: its loader, an instance and a device with the bridge's extensions, and one AHardwareBuffer
-     * imported as the bridge's frames are. Leaves the loader open for the launch that follows; false logs the reason.
+     * imported as the bridge's frames are, or failing that one frame through a swapchain on an image reader. Leaves the
+     * loader open for the launch that follows. Answers how the driver's frames can reach the screen:
+     * VULKAN_HANDOFF_NONE (it cannot start, the reason logged), VULKAN_HANDOFF_IMPORT or VULKAN_HANDOFF_READER.
      * Blocking (a driver load): any thread but the GL one is fine.
      */
-    public static native boolean probeVulkanDriver(String driverDir, String libraryName, String hookLibDir, String tmpDir);
+    public static final int VULKAN_HANDOFF_NONE = 0;
+    public static final int VULKAN_HANDOFF_IMPORT = 1;
+    public static final int VULKAN_HANDOFF_READER = 2;
+    public static native int probeVulkanDriver(String driverDir, String libraryName, String hookLibDir, String tmpDir);
     /** Offer libretro video views to the next core loaded. */
     public static native void setVideoViewsEnabled(boolean enabled);
     /** The core's video view map, 6 ints per view (x, y, width, height, screen, eye); empty when there is none. */

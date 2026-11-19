@@ -1,0 +1,24 @@
+diff --git a/pcsx2/SaveState.cpp b/pcsx2/SaveState.cpp
+--- a/pcsx2/SaveState.cpp
++++ b/pcsx2/SaveState.cpp
+@@ -74,13 +74,18 @@
+ {
+ 	resetCache();
+ //	WriteCP0Status(cpuRegs.CP0.n.Status.val);
++	// Every stale entry goes before any new one is mapped: the entries the state replaces can sit at other
++	// indices than the state's own (a load while the BIOS is still booting), and unmapping one of those
++	// after a new entry over the same pages was mapped would leave the pages unmapped.
+ 	for (int i = 0; i < 48; i++)
+ 	{
+ 		if (std::memcmp(&s_tlb_backup[i], &tlb[i], sizeof(tlbs)) != 0)
+-		{
+ 			UnmapTLB(s_tlb_backup[i], i);
++	}
++	for (int i = 0; i < 48; i++)
++	{
++		if (std::memcmp(&s_tlb_backup[i], &tlb[i], sizeof(tlbs)) != 0)
+ 			MapTLB(tlb[i], i);
+-		}
+ 	}
+ 
+ 	if (EmuConfig.Gamefixes.GoemonTlbHack) GoemonPreloadTlb();

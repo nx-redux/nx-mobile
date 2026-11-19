@@ -14,6 +14,59 @@
 - [ ] Home during a slow PS2/Wii quit, tap the same game → starts fresh; Home during a big PS2 state resume → no ANR; then clear it from the launcher icon → SRAM survived.
 - [ ] Threaded cores across pause/resume (input lock): Dolphin GC/Wii incl. Wii pointer, Azahar, ARMSX2, PPSSPP; N64 netplay input still arrives; a game from a picked file still opens.
 
+## Vulkan frames through a swapchain on an image reader (malisx2)
+
+A custom driver that cannot import a shared buffer (malisx2 on Mali) now runs through a swapchain on an image reader;
+the OpenGL ES presenter is unchanged. AYANEO Pocket Air Mini (Mali-G76), Budokai Tenkaichi 3 battle state, 2026-11-16:
+malisx2 59/60/60 fps at 1x and 55–57 fps at 2x, against 54–57 and 38–39 on the stock driver. Checked there: picture at
+1x and 2x, a slang preset (crt-geom, 43 fps at 2x), video-mode size change, quit ×5, screen off/on, Home and return,
+PSP (Patapon 2) on the same driver, and the forced fallbacks (`setprop debug.nx.reader_fail_after <frame>`: failed
+start and mid-game both relaunch on the system driver).
+
+Checked on the Nova (Adreno 740, Turnip 27.0.0) on 2026-11-20, the reader hand-off forced on a driver that passes the
+import (`setprop debug.nx.reader_force 1`): PS2 (Budokai Tenkaichi 3, God of War II, Ace Combat 5 resumed from their
+states, 60 fps), PSP, 3DS, GameCube and N64 run with a correct picture; fast forward at 4x presents about 220 frames a
+second with none failed (PSP, 3DS, GameCube with Frame Skip on Auto, N64); Home and return twice, with a memory trim and
+screen off/on; a simulated second display (3DS: top screen there, touch screen on the main one); a reader buffer the
+OpenGL ES side cannot import (`setprop debug.nx.reader_gl_fail 1`) and a mid-game failure (2 of 2) both relaunch on
+the system driver, and the PS2 core quits cleanly after.
+
+Device checks still owed:
+
+- [x] Nova (Adreno): a Turnip package still passes its pre-check as "import" and measures as before (60 fps).
+- [ ] Fast forward on malisx2 itself (passes through the reader on Turnip).
+- [ ] EGL context loss (a long time in the background, or another app taking the GPU): the picture comes back. Home and
+  return, a memory trim and screen off/on keep the context, so this was not reached on the Nova or the AYANEO.
+- [ ] Other Mali devices and malisx2 versions; GameCube/Wii and N64 (Vulkan) on malisx2.
+- [x] PS2 fast forward did not speed the game up (the core's frame count stayed at 60 a second, any hand-off, OpenGL ES
+  too). Cause: the core's VM runs on its own thread with its own limiter and never asked whether the frontend
+  fast-forwards. Core patch 0009 lifts the limiter while it does and makes each call wait for the VM's next frame.
+  After it on the Nova at Max FF 4x: Ace Combat 5 226 fps on Vulkan and 229 on OpenGL ES; God of War II 118 at 2x;
+  Budokai Tenkaichi 3 116 (the phone's limit in a battle).
+- [x] A real second screen on the Nova with the reader hand-off forced (3DS): top screen there, touch screen on the main
+  one, fast forward, Home and return.
+- [x] Graphics API Auto on the AYANEO (Mali-G76): PS2 starts on Vulkan (malisx2 through the reader, 56–57 fps), Wii on
+  Vulkan, N64 stays on OpenGL ES. The GPU driver row showing on Auto in Settings is not looked at on a device yet.
+- Which consoles follow the GPU on Auto, from the AYANEO on 2026-11-20 (frames in 5 s, stutters counted by NXHITCH):
+  Wii (New Super Mario Bros. Wii) 240–279 on OpenGL ES against 291–302 on Vulkan; GameCube (Double Dash race) 285–300
+  against 301; so Dolphin follows it, with PS2. N64 (Mario Kart 64 from boot) holds 300 on OpenGL ES with 18 stutters
+  against 274–294 with about 950 on Vulkan (ParaLLEl), malisx2 no better. PSP (Tekken 6 fight), PS1 (SwanStation) and
+  Dreamcast (Soulcalibur fight) hold full speed on both with fewer stutters on OpenGL ES. 3DS (Mario Kart 7): the
+  low-memory killer ends the game seconds into a Vulkan launch (1.2 GB held on a 1.9 GB device).
+- [ ] N64, PSP, GameCube and Wii run on malisx2 through the reader on the AYANEO with a correct picture; other Mali
+  devices and malisx2 versions are still owed.
+- [ ] 3DS on Vulkan on the AYANEO: Mario Kart 7 from boot reaches 60 fps (through the reader on malisx2 too), then the
+  core aborts at the first 3D scene (`vk::DeviceLostError` in `waitForFences`). Same on a build from main and on the
+  stock driver. The game holds about 1.4 GB with swap on a 1.9 GB device and 23 MB was free at the abort, so most likely
+  the GPU kernel driver could not get memory (kernel log not readable there). OpenGL ES survives at about 5 fps.
+- [x] PS2 quit on the AYANEO aborted when the core library was closed (`pthread_mutex_lock called on a destroyed
+  mutex`): 6 of 13 quits on malisx2, also on the stock driver and on main. Cause: the settings interfaces kept for the
+  process (core patch 0004) saved themselves at unload, after the save lock was destroyed. Core patch 0007 saves them in
+  `retro_deinit` and keeps the lock. After it: 0 of 12 quits (8 malisx2, 4 stock).
+- [x] PS2 on the driver fallback relaunch (core reloaded in the same process) after core patch 0007: 3 of 3 forced
+  fallbacks relaunched and quit cleanly on the AYANEO, 3 of 3 on the Nova.
+- [x] PS2 resume booted from the disc although the state load reported success (5 of 13 launches on the AYANEO, either driver). Cause: the state loads during the BIOS boot, and the core swapped TLB entries one index at a time, so unmapping a stale entry could unmap pages a new entry had just mapped (a burst of `TLB Miss` in the log). Core patch 0008 unmaps all stale entries first. After it: 12 of 12 launches resumed.
+
 ## Slang shader presets
 
 Nova, 2026-11-14 (`tools/device-tests/slang_shaders.py`, 33 runs, no errors, screenshots looked at): SNES with crt-geom,
