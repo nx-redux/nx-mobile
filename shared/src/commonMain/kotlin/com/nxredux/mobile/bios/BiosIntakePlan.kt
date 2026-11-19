@@ -29,8 +29,8 @@ data class BiosIntakePlan(val writes: List<BiosWrite>, val skips: List<BiosSkip>
  * same bytes is left alone, and a verified file there is kept over a not-verified newcomer.
  */
 object BiosIntakePlanner {
-    /** Above any console BIOS in the list: bigger files are not hashed (a whole ROM folder picked by mistake). */
-    const val MAX_BYTES = 64L * 1024 * 1024
+    /** Above any file in the list (the DSi NAND is 240 MiB): bigger files are not hashed (big games picked by mistake). */
+    const val MAX_BYTES = 256L * 1024 * 1024
 
     fun needsHash(size: Long?): Boolean = size == null || size <= MAX_BYTES
 

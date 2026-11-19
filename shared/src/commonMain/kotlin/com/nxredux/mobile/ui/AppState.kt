@@ -282,6 +282,8 @@ class AppDeps(
     val skinEditor: SkinEditorLauncher? = null,
     /** Settings → Library → Saves: Export and Import (null: rows do nothing). */
     val saveTransfer: SaveTransfer? = null,
+    /** Settings → Library → Import BIOS (null: no row). */
+    val biosIntake: com.nxredux.mobile.bios.BiosIntake? = null,
     /** Tools → Device Sync (null: a platform without it, so no Tools row). */
     val deviceSync: DeviceSyncController? = null,
     /** All files access (a sideloaded Android 11+ build); null: none (SAF only, no setup step, no Settings row). */

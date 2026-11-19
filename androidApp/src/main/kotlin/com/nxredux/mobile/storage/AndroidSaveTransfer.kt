@@ -45,6 +45,8 @@ class AndroidSaveTransfer(
         fun createZip(suggestedName: String, onRef: (ContentRef?) -> Unit)
         fun openZip(onRef: (ContentRef?) -> Unit)
         fun openFolder(onRef: (ContentRef?) -> Unit)
+        /** Several single files (Import BIOS); empty: cancelled. */
+        fun openFiles(onRefs: (List<ContentRef>) -> Unit)
     }
 
     private val app = context.applicationContext
@@ -89,7 +91,7 @@ class AndroidSaveTransfer(
                     val file = if (FileRefs.isFile(ref)) File(FileRefs.path(ref)) else null
                     val open: () -> InputStream? = { if (file != null) FileInputStream(file) else resolver.openInputStream(Uri.parse(ref.value)) }
                     // The picker shows every file type (a zip filter hid everything on Samsung's picker): only a zip goes on.
-                    if (!isZip(open)) return@importWork ImportResult.Message("That file is not a zip")
+                    if (!looksLikeZip(open)) return@importWork ImportResult.Message("That file is not a zip")
                     ImportResult.Done(importer().run(ZipImportFiles { open() ?: error("cannot read the zip") }))
                 }
             }
@@ -173,17 +175,6 @@ class AndroidSaveTransfer(
         File(DataRoot.private(app), ".userdata/android/library.json").takeIf { it.isFile }?.readText()?.let(LibraryIndexCodec::decode)
     }.getOrNull()
 
-    /** True when the stream starts like a zip (`PK\3\4`, or `PK\5\6` for an empty one). */
-    private fun isZip(open: () -> InputStream?): Boolean = runCatching {
-        open()?.use { s ->
-            val head = ByteArray(4)
-            var n = 0
-            while (n < head.size) { val r = s.read(head, n, head.size - n); if (r < 0) break; n += r }
-            n == 4 && head[0] == 'P'.code.toByte() && head[1] == 'K'.code.toByte() &&
-                ((head[2] == 3.toByte() && head[3] == 4.toByte()) || (head[2] == 5.toByte() && head[3] == 6.toByte()))
-        } ?: false
-    }.getOrDefault(false)
-
     private fun deleteDocument(uri: Uri): Boolean =
         runCatching { DocumentsContract.deleteDocument(resolver, uri) }.onFailure { NxLog.w(TAG, "could not delete $uri", it) }.getOrDefault(false)
 
@@ -213,3 +204,14 @@ class AndroidSaveTransfer(
         internal val anyImporting: Boolean get() = importsRunning.get() > 0
     }
 }
+
+/** True when the stream starts like a zip (`PK\3\4`, or `PK\5\6` for an empty one). */
+internal fun looksLikeZip(open: () -> InputStream?): Boolean = runCatching {
+    open()?.use { s ->
+        val head = ByteArray(4)
+        var n = 0
+        while (n < head.size) { val r = s.read(head, n, head.size - n); if (r < 0) break; n += r }
+        n == 4 && head[0] == 'P'.code.toByte() && head[1] == 'K'.code.toByte() &&
+            ((head[2] == 3.toByte() && head[3] == 4.toByte()) || (head[2] == 5.toByte() && head[3] == 6.toByte()))
+    } ?: false
+}.getOrDefault(false)
