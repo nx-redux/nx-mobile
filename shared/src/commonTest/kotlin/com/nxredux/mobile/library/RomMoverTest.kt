@@ -31,12 +31,26 @@ class RomMoverTest {
         ),
     )
 
+    /**
+     * Folder [folder]'s placed games in [index] as move items into the home's console folders: how the mover is fed in
+     * these tests (the app only moves the home's own games; an extra folder is never moved from).
+     */
+    private suspend fun plan(source: RomsSource, index: LibraryIndex, folder: String): List<MoveItem> = index.systems
+        .filter { !it.unassigned }
+        .flatMap { system ->
+            val target = system.folderName.ifEmpty { com.nxredux.mobile.runner.CoreRegistry.consoleOf(system.tag)?.let { "${it.displayName} (${it.tags.first()})" }.orEmpty() }
+            if (target.isEmpty()) emptyList() else system.games.filter { it.source == folder }.map { game ->
+                val dir = ContentRef(game.folder)
+                MoveItem(dir, listOf(game.file) + DiscSheet.loadedNames(source, dir, game.file) + MsuSets.loadedNames(source, dir, game.file, game.badge), target)
+            }
+        }
+
     private fun names(src: FakeRomsSource, dir: String) = kotlinx.coroutines.runBlocking { src.listChildren(ContentRef(dir)).map { it.name } }
 
     @Test fun a_cue_moves_with_its_bins_and_the_unassigned_stay() = runTest {
         val src = source()
         val mover = RomMover(src, ContentRef("H"))
-        val items = mover.plan(index, "x")
+        val items = plan(src, index, "x")
         assertEquals(listOf("Sony PlayStation (PS)", "Game Boy Advance (GBA)"), items.map { it.targetFolder })
         assertEquals(listOf("G.cue", "G (Track 1).bin", "G (Track 2).bin"), items[0].files)
         val result = mover.run(items, { _, _ -> }) { false }
@@ -50,7 +64,7 @@ class RomMoverTest {
     @Test fun a_clash_leaves_the_game_in_place() = runTest {
         val src = source(home = listOf("K.gba"))
         val mover = RomMover(src, ContentRef("H"))
-        val result = mover.run(mover.plan(index, "x"), { _, _ -> }) { false }
+        val result = mover.run(plan(src, index, "x"), { _, _ -> }) { false }
         assertEquals(MoveResult(moved = 1, clashed = 1), result)
         assertTrue("K.gba" in names(src, "x"))
     }
@@ -58,7 +72,7 @@ class RomMoverTest {
     @Test fun without_a_provider_move_it_copies_then_deletes() = runTest {
         val src = source().apply { moveRefused = true }
         val mover = RomMover(src, ContentRef("H"))
-        assertEquals(2, mover.run(mover.plan(index, "x"), { _, _ -> }) { false }.moved)
+        assertEquals(2, mover.run(plan(src, index, "x"), { _, _ -> }) { false }.moved)
         assertEquals(listOf("N.chd"), names(src, "x"))
     }
 
@@ -67,7 +81,7 @@ class RomMoverTest {
         val src = source()
         val mover = RomMover(src, ContentRef("H"))
         var done = 0
-        val result = mover.run(mover.plan(index, "x"), { d, _ -> done = d }) { done >= 1 }
+        val result = mover.run(plan(src, index, "x"), { d, _ -> done = d }) { done >= 1 }
         assertEquals(MoveResult(moved = 1, cancelled = true), result)
         assertTrue("K.gba" in names(src, "x"))
         assertFalse("G.cue" in names(src, "x"))
@@ -77,7 +91,7 @@ class RomMoverTest {
     @Test fun a_refused_move_is_a_failure_not_a_clash() = runTest {
         val src = source().apply { moveRefused = true; readOnlyPaths += "H/Roms/Sony PlayStation (PS)" }
         val mover = RomMover(src, ContentRef("H"))
-        assertEquals(MoveResult(moved = 1, failed = 1), mover.run(mover.plan(index, "x"), { _, _ -> }) { false })
+        assertEquals(MoveResult(moved = 1, failed = 1), mover.run(plan(src, index, "x"), { _, _ -> }) { false })
         assertTrue("G.cue" in names(src, "x"))
     }
 
@@ -85,7 +99,7 @@ class RomMoverTest {
     @Test fun cancelling_the_job_mid_set_leaves_no_half_set() = runTest {
         val src = source()
         val mover = RomMover(src, ContentRef("H"))
-        val items = mover.plan(index, "x")
+        val items = plan(src, index, "x")
         val job = launch { mover.run(items, { _, _ -> }) { false } }
         src.onMove = { job.cancel() }                                     // at the cue's first file
         job.join()
@@ -172,7 +186,7 @@ class RomMoverTest {
         )
         val idx = LibraryIndex(LibraryIndex.VERSION, "H", emptyList(), emptyMap(), listOf(IndexedSystem("PS", "Sony PlayStation", games = listOf(game("P.cue", "P")))))
         val mover = RomMover(src, ContentRef("H"))
-        val items = mover.plan(idx, "x")
+        val items = plan(src, idx, "x")
         assertEquals(listOf("P.cue") + bins, items.single().files)
         assertEquals(MoveResult(moved = 1), mover.run(items, { _, _ -> }) { false })
         assertEquals(listOf("P.cue") + bins, names(src, "H/Roms/Sony PlayStation (PS)"))

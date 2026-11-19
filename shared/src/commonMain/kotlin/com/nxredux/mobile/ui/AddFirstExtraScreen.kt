@@ -131,8 +131,9 @@ fun AndroidGamesStepScreen(
 
 /**
  * First setup's summary of the ROMs folder just added ([Screen.FolderSummary]): what was found, a line per console, and
- * where the unassigned games are; the Move choice as a row (its On / Off on the right) and Continue the button under it.
- * B stops a running move. Continue with Move on asks first ([folderMoveAsk]): A moves, B goes back.
+ * where the unassigned games are, and Continue. The home's page adds its Move choice as a row (its On / Off on the right):
+ * B stops a running move, and Continue with Move on asks first ([folderMoveAsk]): A moves, B goes back. An added ROMs
+ * folder has no Move: it is only read.
  */
 @Composable
 fun FolderSummaryScreen(

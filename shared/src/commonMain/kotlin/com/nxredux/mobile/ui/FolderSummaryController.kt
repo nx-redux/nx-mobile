@@ -183,24 +183,22 @@ internal class FolderSummaryController(
     }
 
     /**
-     * First setup's summary of the folder [extraId] just added, from the library its scan stored, on Continue. After a
-     * move, [before] (what the folder held) stays the summary, so the page still says what was found.
+     * First setup's summary of the folder [extraId] just added, from the library its scan stored: what was found, then
+     * Continue. An extra folder is only read: nothing in it is moved, renamed or written.
      */
-    fun showFolderSummary(extraId: String, result: MoveResult? = null, before: FolderSummary? = null) {
+    fun showFolderSummary(extraId: String) {
         val index = library.snapshot ?: return host.finishFolderSteps()
         val extra = deps.settings.extraFolders.firstOrNull { it.id == extraId }
         val name = extra?.let { deps.source.displayName(it.ref) } ?: ""
         val home = host.home()?.let { deps.source.displayName(it) } ?: ""
-        val summary = before ?: folderSummary(index, extraId)
-        val s = Screen.FolderSummary(extraId, name, home, summary, move = result != null, result = result)
+        val s = Screen.FolderSummary(extraId, name, home, folderSummary(index, extraId))
         screen.value = s
-        val rows = folderSummaryRows(s)
-        selection.value = ListSelection(0, rows.size)   // on the first row: the Move option where it is offered, else Continue
+        selection.value = ListSelection(0, folderSummaryRows(s).size)   // Continue
     }
 
     /**
-     * A or a tap on the summary's row [index]: Move toggles; Continue with Move on asks first ([Screen.FolderSummary.confirmMove]),
-     * else goes on.
+     * A or a tap on the summary's row [index]: the home's Move toggles; Continue with Move on asks first
+     * ([Screen.FolderSummary.confirmMove]), else goes on.
      */
     fun folderSummaryRow(s: Screen.FolderSummary, index: Int) {
         if (s.progress != null) return
@@ -218,7 +216,6 @@ internal class FolderSummaryController(
             if (s.move && s.result == null && homeTidy(s.summary)) moveHomeOutside(s) else host.showAddFirstExtra()
             return
         }
-        if (s.move && s.result == null && s.summary.games > s.summary.unassigned) return moveSummaryGames(s)
         host.finishFolderSteps()
     }
 
@@ -229,24 +226,6 @@ internal class FolderSummaryController(
             NxButton.B -> screen.value = s.copy(confirmMove = false)
             else -> Unit
         }
-    }
-
-    /** The summary's move: [s]'s placed games into the home's Roms, its progress on the page, then a rescan and the result. */
-    private fun moveSummaryGames(s: Screen.FolderSummary) = launchMove(s) { home, index, mover ->
-        // An unexpected error is a result too (nothing moved past it), never a crash of the app's scope.
-        val result = tryOr({ MoveResult(failed = s.summary.games - s.summary.unassigned) }) {
-            mover.run(mover.plan(index, s.extraId), ::moveProgress) { moveCancelled }
-        }
-        host.scanNow(home, then = {
-            // Emptied by the move: the folder is no longer a source.
-            val extra = deps.settings.extraFolders.firstOrNull { it.id == s.extraId }
-            if (extra != null && library.snapshot?.let { folderSummary(it, s.extraId).games } == 0) {
-                deps.settings.extraFolders = deps.settings.extraFolders - extra
-                deps.folderPicker.forget(extra.ref)
-                host.markLibraryDirty()
-            }
-            showFolderSummary(s.extraId, result, before = s.summary)
-        })
     }
 }
 

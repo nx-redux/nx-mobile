@@ -78,10 +78,12 @@ class LegacyArtMove(
 
     /**
      * Moves [media]'s legacy files; [entries] is [media]'s listing, [homeSegments] its home-relative path (the log's
-     * keys), null for an extra folder's own `.media`, where nothing is logged. True when anything changed on disk (the
-     * caller lists [media] again). Never throws but for cancellation.
+     * keys), null for an extra folder's own `.media`: an extra folder is only read, so nothing moves there (the scan reads
+     * its legacy folders in place). True when anything changed on disk (the caller lists [media] again). Never throws but
+     * for cancellation.
      */
     suspend fun move(media: ContentRef, entries: List<Entry>, homeSegments: List<String>?): Boolean {
+        if (homeSegments == null) return false
         val legacy = entries.filter { it.isDirectory && it.name in LEGACY }
         if (legacy.isEmpty()) return false
         return lock.withLock {
