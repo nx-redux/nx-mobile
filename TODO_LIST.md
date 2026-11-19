@@ -37,10 +37,14 @@ Device checks still owed:
 - [ ] Fast forward on malisx2 itself (passes through the reader on Turnip).
 - [ ] EGL context loss (a long time in the background, or another app taking the GPU): the picture comes back. Home and
   return, a memory trim and screen off/on keep the context, so this was not reached on the Nova or the AYANEO.
-- [ ] A real second screen with a game on the reader hand-off (a simulated one passes).
 - [ ] Other Mali devices and malisx2 versions; GameCube/Wii and N64 (Vulkan) on malisx2.
-- [ ] PS2 fast forward does not speed the game up on the Nova (the core's frame count stays at 60 a second), on the
-  import hand-off as well: not from this hand-off, cause not looked at.
+- [x] PS2 fast forward did not speed the game up (the core's frame count stayed at 60 a second, any hand-off, OpenGL ES
+  too). Cause: the core's VM runs on its own thread with its own limiter and never asked whether the frontend
+  fast-forwards. Core patch 0009 lifts the limiter while it does and makes each call wait for the VM's next frame.
+  After it on the Nova at Max FF 4x: Ace Combat 5 226 fps on Vulkan and 229 on OpenGL ES; God of War II 118 at 2x;
+  Budokai Tenkaichi 3 116 (the phone's limit in a battle).
+- [x] A real second screen on the Nova with the reader hand-off forced (3DS): top screen there, touch screen on the main
+  one, fast forward, Home and return.
 - [ ] Graphics API Auto on a Mali phone: PS2 starts on Vulkan, and the GPU driver row shows on Auto.
 - [ ] 3DS on Vulkan on the AYANEO: Mario Kart 7 from boot reaches 60 fps (through the reader on malisx2 too), then the
   core aborts at the first 3D scene (`vk::DeviceLostError` in `waitForFences`). Same on a build from main and on the
