@@ -397,7 +397,7 @@ class NxCarbonPackTest {
     @Test
     fun atari5200LayoutsInEveryFamily() {
         // the joystick (first; the d-pad by the swap cap, both on the fold board and the tall landscape), FIRE 1 (A) down left and
-        // FIRE 2 (B) up right, * (Y) / # (X) on the shoulders, PAUSE START, KEYPAD (L) by MENU
+        // FIRE 2 (B) up right, * (Y) / # (X) on the shoulders, PAUSE START, KEYPAD (L) by MENU (tall sideways: under PAUSE / START)
         val roomy = setOf("inner", "inner_half", "tablet", "tablet_land", "inner_land")
         for ((name, d) in consoleDevices + ("tablet_land" to Triple(2304, 1440, null))) {
             val tablet = name.startsWith("tablet")
@@ -412,7 +412,7 @@ class NxCarbonPackTest {
             assertTrue(c("A").x < c("B").x && c("A").y > c("B").y, "$name FIRE 1 down left of FIRE 2")
             assertTrue(c("Y").spec.shape == ControlShape.RECT && c("X").spec.shape == ControlShape.RECT && c("Y").x < c("X").x, "$name * left, # right shoulders")
             assertEquals("KEYPAD", c("L").spec.label, name)
-            if (p.columns() && p.spec.id.contains("_tall")) stacked(c("L"), c("MENU"), "$name KEYPAD over MENU")   // (the Fold cover: a row)
+            if (p.columns() && p.spec.id.contains("_tall")) stacked(c("START"), c("L"), "$name KEYPAD under PAUSE / START")   // (the Fold cover: a row by MENU)
             else assertEquals(c("MENU").y, c("L").y, 1f, "$name KEYPAD beside MENU")
             for (useStick in listOf(true, false)) {
                 val sc = p.forStick(useStick).controls.filterNot { it.spec.id.startsWith("TOUCH_") }
