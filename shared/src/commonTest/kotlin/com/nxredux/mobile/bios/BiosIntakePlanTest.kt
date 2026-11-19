@@ -126,10 +126,32 @@ class BiosIntakePlanTest {
     }
 
     @Test
-    fun largeFilesAreNotHashed() {
-        assertTrue(BiosIntakePlanner.needsHash(16384))
-        assertTrue(BiosIntakePlanner.needsHash(null))
-        assertFalse(BiosIntakePlanner.needsHash(BiosIntakePlanner.MAX_BYTES + 1))
+    fun onlyFilesThatCanMatchAreRead() {
+        assertTrue(known.shouldRead(524288, "SCPH-5501 (USA).bin"))       // a listed size: may be a renamed BIOS
+        assertTrue(known.shouldRead(999, "gba_bios.bin"))                 // a known name: planned by name (or skipped as wrong size)
+        assertTrue(known.shouldRead(5_000_000, "neogeo.zip"))             // a set archive: any size
+        assertTrue(known.shouldRead(null, "unknown.bin"))                 // size unknown: read, up to the largest listed size
+        assertFalse(known.shouldRead(8_388_608, "Pokemon Emerald.gba"))   // no listed size, no known name: never opened
+        assertFalse(known.shouldRead(4_000_000_000, "game.iso"))
+        assertEquals(524288L, known.maxSize)
+    }
+
+    @Test
+    fun anyNameConsoleFindsTheSameBytesUnderAnotherName() {
+        val ps2Md5 = "d5ce2c7d119f563ce04bc04dbc3a323e"
+        val withPs2 = KnownBios(known.entries + KnownBiosEntry("SCPH-39001.bin", emptyList(), "PS2", setOf(4194304L), setOf(ps2Md5), required = false, bootChange = false))
+        val have = object : ExistingBios {
+            override fun md5(console: String, name: String): String? = null
+            override fun anyWithMd5(console: String, md5: String) = console == "PS2" && md5 == ps2Md5
+        }
+        val r = BiosIntakePlanner.plan(listOf(PickedBios("my ps2 bios.bin", 4194304, ps2Md5)), withPs2, have)
+        assertEquals(BiosOutcome.ALREADY_THERE, r.writes.single().outcome)
+        // Consoles that need exact names do not look under other names.
+        val gbaHave = object : ExistingBios {
+            override fun md5(console: String, name: String): String? = null
+            override fun anyWithMd5(console: String, md5: String) = true
+        }
+        assertEquals(BiosOutcome.VERIFIED, BiosIntakePlanner.plan(listOf(PickedBios("gba_bios.bin", 16384, gba)), known, gbaHave).writes.single().outcome)
     }
 
     @Test

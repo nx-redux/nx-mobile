@@ -1,11 +1,17 @@
 package com.nxredux.mobile.bios
 
+import com.nxredux.mobile.runner.CoreRegistry
+
 /** One picked file, already read: [path] inside the pick (folder or zip), [md5] null when it was too big to hash. */
 data class PickedBios(val path: String, val size: Long, val md5: String?)
 
-/** The md5 of what `Bios/<console>/<name>` holds now; null when nothing is there. */
+/** What the home's `Bios/<console>/` holds now. */
 fun interface ExistingBios {
+    /** The md5 of `Bios/<console>/<name>`; null when nothing is there. */
     fun md5(console: String, name: String): String?
+
+    /** Whether any file in `Bios/<console>/` has [md5] (asked only for consoles that take a BIOS under any name). */
+    fun anyWithMd5(console: String, md5: String): Boolean = false
 }
 
 enum class BiosOutcome { VERIFIED, RENAMED, NOT_VERIFIED, ALREADY_THERE, KEPT_YOURS }
@@ -29,17 +35,17 @@ data class BiosIntakePlan(val writes: List<BiosWrite>, val skips: List<BiosSkip>
  * same bytes is left alone, and a verified file there is kept over a not-verified newcomer.
  */
 object BiosIntakePlanner {
-    /** Above any file in the list (the DSi NAND is 240 MiB): bigger files are not hashed (big games picked by mistake). */
-    const val MAX_BYTES = 256L * 1024 * 1024
-
-    fun needsHash(size: Long?): Boolean = size == null || size <= MAX_BYTES
-
     /** macOS leftovers (`._x`, `.DS_Store`) and other dotfiles are no BIOS and are not even counted. */
     fun isCandidate(path: String): Boolean = !baseName(path).startsWith(".")
 
     private fun baseName(path: String) = path.substringAfterLast('/')
 
     private val VERIFIED_RANK = setOf(BiosOutcome.VERIFIED, BiosOutcome.RENAMED)
+
+    /** Consoles whose core takes a BIOS under any name (ARMSX2: any .bin): the same bytes under another name are there already. */
+    private val anyNameConsoles: Set<String> by lazy {
+        CoreRegistry.tags.filter { t -> CoreRegistry.requiredBios(t).any { it.anySuffix != null } }.mapTo(HashSet()) { CoreRegistry.consoleTag(it) }
+    }
 
     private class Candidate(val picked: PickedBios, val entry: KnownBiosEntry, val outcome: BiosOutcome)
 
@@ -72,6 +78,7 @@ object BiosIntakePlanner {
             val have = existing.md5(console, name)
             val outcome = when {
                 have != null && have == winner.picked.md5 -> BiosOutcome.ALREADY_THERE
+                winner.picked.md5 != null && console in anyNameConsoles && existing.anyWithMd5(console, winner.picked.md5) -> BiosOutcome.ALREADY_THERE
                 have != null && winner.outcome == BiosOutcome.NOT_VERIFIED && have in winner.entry.md5s -> BiosOutcome.KEPT_YOURS
                 else -> winner.outcome
             }

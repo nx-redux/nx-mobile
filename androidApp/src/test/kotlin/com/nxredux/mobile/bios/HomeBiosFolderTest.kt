@@ -49,9 +49,26 @@ class HomeBiosFolderTest {
     }
 
     @Test
+    fun anyWithMd5LooksAtEveryFileOfTheConsole() {
+        val home = tmp.newFolder("home")
+        home.resolve("Bios/PS2").mkdirs()
+        home.resolve("Bios/PS2/SCPH-70012_BIOS_V12_USA_200.BIN").writeText("abc")
+        assertTrue(FileHomeBios(home).anyWithMd5("PS2", "900150983cd24fb0d6963f7d28e17f72"))
+        assertFalse(FileHomeBios(home).anyWithMd5("PS2", "0".repeat(32)))
+        assertFalse(FileHomeBios(home).anyWithMd5("GBA", "900150983cd24fb0d6963f7d28e17f72"))
+    }
+
+    @Test
+    fun limitedCopyStopsPastTheLimit() {
+        val out = tmp.newFile("y")
+        assertNull(Md5.copy("abcdef".byteInputStream(), out.outputStream(), limit = 4))
+        assertEquals("900150983cd24fb0d6963f7d28e17f72" to 3L, Md5.copy("abc".byteInputStream(), tmp.newFile("z").outputStream(), limit = 4))
+    }
+
+    @Test
     fun hashingCopyGivesMd5AndBytes() {
         val out = tmp.newFile("x")
-        val (md5, size) = Md5.copy("abc".byteInputStream(), out.outputStream())
+        val (md5, size) = Md5.copy("abc".byteInputStream(), out.outputStream())!!
         assertEquals("900150983cd24fb0d6963f7d28e17f72", md5)
         assertEquals(3L, size)
         assertEquals("abc", out.readText())

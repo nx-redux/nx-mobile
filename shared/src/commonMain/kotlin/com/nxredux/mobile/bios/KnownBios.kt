@@ -25,7 +25,18 @@ class KnownBios(val entries: List<KnownBiosEntry>) {
     private val nameIndex: Map<String, List<KnownBiosEntry>> =
         entries.flatMap { e -> (listOf(e.name) + e.aliases).map { it.lowercase() to e } }.groupBy({ it.first }, { it.second }).mapValues { it.value.distinct() }
 
+    private val allSizes: Set<Long> = entries.flatMapTo(HashSet()) { it.sizes }
+
+    /** The largest listed file: a file of unknown size is read no further than this. */
+    val maxSize: Long = allSizes.maxOrNull() ?: 0L
+
     fun byMd5(md5: String): List<KnownBiosEntry> = md5Index[md5.lowercase()].orEmpty()
+
+    /**
+     * Whether a picked file can match anything, decided before it is opened: every listed md5 belongs to a listed size,
+     * and set archives match by name. A file of another size with an unknown name is counted, never read.
+     */
+    fun shouldRead(size: Long?, baseName: String): Boolean = size == null || size in allSizes || byName(baseName).isNotEmpty()
 
     /** Entries named [name] or aliased so, ignoring case and, as dumps are often spelled with one, a hyphen. */
     fun byName(name: String): List<KnownBiosEntry> {

@@ -46,9 +46,7 @@ class AndroidBiosIntake(
     private val resolver = app.contentResolver
     private val main = Handler(Looper.getMainLooper())
     private val executor = Executors.newSingleThreadExecutor()
-    private val runningCount = AtomicInteger()
-
-    override val running: Boolean get() = runningCount.get() > 0
+    override val running: Boolean get() = anyRunning
 
     override fun import(source: BiosSource, progress: (String) -> Unit, done: (BiosIntakeResult) -> Unit) {
         refusal()?.let { return done(BiosIntakeResult.Message(it)) }
@@ -88,7 +86,7 @@ class AndroidBiosIntake(
     private fun work(progress: (String) -> Unit, done: (BiosIntakeResult) -> Unit, files: () -> ImportFiles) {
         refusal()?.let { return done(BiosIntakeResult.Message(it)) }
         val home = AndroidHomeLocator(app).current() ?: return done(BiosIntakeResult.Message(NO_HOME))
-        runningCount.incrementAndGet()
+        active.incrementAndGet()
         main.post { progress("Working…") }
         executor.execute {
             val result = try {
@@ -97,7 +95,7 @@ class AndroidBiosIntake(
                 NxLog.e(TAG, "BIOS import failed", e)
                 BiosIntakeResult.Message("Failed: ${e.message ?: e::class.simpleName}")
             }
-            main.post { runningCount.decrementAndGet(); done(result) }
+            main.post { active.decrementAndGet(); done(result) }
         }
     }
 
@@ -106,25 +104,36 @@ class AndroidBiosIntake(
         try {
             val picked = mutableListOf<PickedBios>()
             val tempOf = HashMap<String, File>()
+            val unread = mutableListOf<BiosSkip>()
             val known = KnownBiosAsset.get(app)
-            val names = known.entries.flatMap { listOf(it.name) + it.aliases }.mapTo(HashSet()) { it.lowercase() }
+            var other = 0
             for (e in files.entries()) {
                 if (!BiosIntakePlanner.isCandidate(e.path)) continue
                 val base = e.path.substringAfterLast('/')
-                if (!BiosIntakePlanner.needsHash(e.size)) {
-                    // Too big for any BIOS: planned by name and size only, never copied aside.
-                    picked += PickedBios(e.path, e.size ?: 0L, null)
-                    continue
+                // A size no listed file has and an unknown name: no BIOS, never opened (a whole ROM folder picked).
+                if (!known.shouldRead(e.size, base)) { other++; continue }
+                val named = known.byName(base).isNotEmpty()
+                val copy = File(temp, tempOf.size.toString() + "-" + picked.size)
+                val read = try {
+                    // An unknown name of unknown size is read no further than the largest listed file.
+                    Md5.copy(e.open(), copy.outputStream(), if (named) Long.MAX_VALUE else known.maxSize)
+                } catch (t: Throwable) {
+                    NxLog.w(TAG, "could not read ${e.path}", t)
+                    copy.delete(); unread += BiosSkip(e.path, "Could not read"); continue
                 }
-                val copy = File(temp, tempOf.size.toString())
-                val (md5, size) = Md5.copy(e.open(), copy.outputStream())
-                if (known.byMd5(md5).isEmpty() && base.lowercase() !in names && base.lowercase().replace("-", "") !in names) {
+                if (read == null) { copy.delete(); other++; continue }
+                val (md5, size) = read
+                if (known.byMd5(md5).isEmpty() && !named) {
                     copy.delete()   // no BIOS: counted, not kept
                 } else tempOf[e.path] = copy
                 picked += PickedBios(e.path, size, md5)
             }
-            val plan = BiosIntakePlanner.plan(picked, known) { c, n -> folder.md5(c, n) }
-            val failed = plan.writes.filter { it.needsWrite }.mapNotNull { w ->
+            val planned = BiosIntakePlanner.plan(picked, known, object : ExistingBios {
+                override fun md5(console: String, name: String) = folder.md5(console, name)
+                override fun anyWithMd5(console: String, md5: String) = folder.anyWithMd5(console, md5)
+            })
+            val plan = planned.copy(otherFiles = planned.otherFiles + other)
+            val failed = unread + plan.writes.filter { it.needsWrite }.mapNotNull { w ->
                 val src = tempOf[w.pickedPath]
                 val ok = src != null && folder.write(w.console, w.name) { FileInputStream(src) }
                 if (ok) null else BiosSkip(w.pickedPath, "Could not write")
@@ -169,12 +178,16 @@ class AndroidBiosIntake(
     private fun retroArchRoots(): List<File> = RetroArchFolders.ROOTS.map { File(Environment.getExternalStorageDirectory(), it) }
         .filter { File(it, SYSTEM).isDirectory }
 
-    private companion object {
-        const val TAG = "BiosIntake"
-        const val SYSTEM = "system"
-        const val NO_HOME = "Set a home folder first"
-        const val ACCESS_OFF = "Turn on All files access to import BIOS"
-        const val NO_RETROARCH = "No RetroArch system folder found"
-        const val NOT_RETROARCH = "Pick the RetroArch folder (the one with system inside)"
+    companion object {
+        /** One count for every instance (an activity recreated mid-import): Device Sync waits while any runs. */
+        private val active = AtomicInteger()
+        val anyRunning: Boolean get() = active.get() > 0
+
+        private const val TAG = "BiosIntake"
+        private const val SYSTEM = "system"
+        private const val NO_HOME = "Set a home folder first"
+        private const val ACCESS_OFF = "Turn on All files access to import BIOS"
+        private const val NO_RETROARCH = "No RetroArch system folder found"
+        private const val NOT_RETROARCH = "Pick the RetroArch folder (the one with system inside)"
     }
 }
