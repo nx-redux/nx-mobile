@@ -45,7 +45,16 @@ Device checks still owed:
   Budokai Tenkaichi 3 116 (the phone's limit in a battle).
 - [x] A real second screen on the Nova with the reader hand-off forced (3DS): top screen there, touch screen on the main
   one, fast forward, Home and return.
-- [ ] Graphics API Auto on a Mali phone: PS2 starts on Vulkan, and the GPU driver row shows on Auto.
+- [x] Graphics API Auto on the AYANEO (Mali-G76): PS2 starts on Vulkan (malisx2 through the reader, 56–57 fps), Wii on
+  Vulkan, N64 stays on OpenGL ES. The GPU driver row showing on Auto in Settings is not looked at on a device yet.
+- Which consoles follow the GPU on Auto, from the AYANEO on 2026-11-20 (frames in 5 s, stutters counted by NXHITCH):
+  Wii (New Super Mario Bros. Wii) 240–279 on OpenGL ES against 291–302 on Vulkan; GameCube (Double Dash race) 285–300
+  against 301; so Dolphin follows it, with PS2. N64 (Mario Kart 64 from boot) holds 300 on OpenGL ES with 18 stutters
+  against 274–294 with about 950 on Vulkan (ParaLLEl), malisx2 no better. PSP (Tekken 6 fight), PS1 (SwanStation) and
+  Dreamcast (Soulcalibur fight) hold full speed on both with fewer stutters on OpenGL ES. 3DS (Mario Kart 7): the
+  low-memory killer ends the game seconds into a Vulkan launch (1.2 GB held on a 1.9 GB device).
+- [ ] N64, PSP, GameCube and Wii run on malisx2 through the reader on the AYANEO with a correct picture; other Mali
+  devices and malisx2 versions are still owed.
 - [ ] 3DS on Vulkan on the AYANEO: Mario Kart 7 from boot reaches 60 fps (through the reader on malisx2 too), then the
   core aborts at the first 3D scene (`vk::DeviceLostError` in `waitForFences`). Same on a build from main and on the
   stock driver. The game holds about 1.4 GB with swap on a 1.9 GB device and 23 MB was free at the abort, so most likely

@@ -483,7 +483,7 @@ object CoreRegistry {
         ),
         lockedOptions = dolphinLocked,
         hiddenValues = mapOf("dolphin_renderer" to setOf("Software", "Null")),
-        vulkan = VulkanSwitch(swapchainFrames = true),
+        vulkan = VulkanSwitch(swapchainFrames = true, autoOnMali = true),
         // Dolphin writes its NAND and memory cards under User/Wii and User/GC in its console's save dir (Saves/<console tag>/User).
         controllerPort0 = CoreDescriptor.WIIMOTE_SIDEWAYS,
         players = 4,

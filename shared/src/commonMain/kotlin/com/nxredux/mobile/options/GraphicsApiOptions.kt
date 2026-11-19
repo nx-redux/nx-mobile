@@ -33,7 +33,7 @@ object GraphicsApiOptions {
 
     /** [row] where Auto is Vulkan ([autoIsVulkan]). */
     val rowAutoVulkan = row.copy(
-        info = "How the console is drawn. Auto uses Vulkan on this\nphone's GPU (Arm Mali), where it is much faster.\n" +
+        info = "How the console is drawn. Auto uses Vulkan on this\nphone's GPU (Arm Mali), where it is faster.\n" +
             "Phones without Vulkan stay on OpenGL ES. Takes effect\nthe next time the game starts.",
         brief = "Applies next launch. Auto is Vulkan",
     )
