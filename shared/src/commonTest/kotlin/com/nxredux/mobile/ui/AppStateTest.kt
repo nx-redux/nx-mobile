@@ -2837,7 +2837,7 @@ class AppStateTest {
         assertIs<Screen.PickFolder>(st.screen.value)
         st.onButton(NxButton.A)                                   // Pick folder
         assertEquals(0, picker.picks)                             // not Android's picker
-        pickRow(st, "NXRedux"); pickRow(st, "Use this folder")          // one storage: the picker opens in it
+        pickRow(st, "NXRedux"); pickRow(st, "Use NXRedux")          // one storage: the picker opens in it
         assertEquals(fileHome, settings.treeRef)
         assertIs<Screen.FolderSummary>(st.screen.value)           // setHome saw first setup: its next step (the home holds games)
     }
@@ -2891,7 +2891,7 @@ class AppStateTest {
         st.openSettings(SettingsSection.LIBRARY)
         st.select(assertIs<Screen.Settings>(st.screen.value).rows.indexOfFirst { it.kind == SettingsKind.ADD_EXTRA }); st.openSelected()
         assertEquals("/storage/emulated/0", assertIs<Screen.FilePicker>(st.screen.value).dir)
-        pickRow(st, "Loose"); pickRow(st, "Use this folder")
+        pickRow(st, "Loose"); pickRow(st, "Use Loose")
         assertEquals(FileRefs.of("/storage/emulated/0/Loose"), settings.extraFolders.single().ref)
         assertEquals(SettingsSection.LIBRARY, assertIs<Screen.Settings>(st.screen.value).section)
     }
@@ -2907,7 +2907,7 @@ class AppStateTest {
         assertTrue(st.textEntryOpen)                              // New folder's field sees the d-pad first
         st.filePickerDraft("Exports"); st.onButton(NxButton.A)
         assertFalse(st.textEntryOpen)
-        pickRow(st, "Save here")
+        pickRow(st, "Save in Exports")
         assertEquals(listOf<ContentRef?>(FileRefs.of("/storage/emulated/0/NXRedux/Exports/nx-mobile-saves.zip")), got)
         assertSame(before, st.screen.value)
         st.pickFile(FilePickMode.ImportZip) { got += it }
@@ -2933,7 +2933,7 @@ class AppStateTest {
         st.pickFile(FilePickMode.ImportZip) { second += it }
         assertEquals(listOf<ContentRef?>(null), second)
         assertSame(open, st.screen.value)
-        pickRow(st, "Use this folder")
+        pickRow(st, "Use NXRedux")
         assertEquals(listOf<ContentRef?>(fileHome), first)
         assertSame(before, st.screen.value)
     }
@@ -2958,7 +2958,7 @@ class AppStateTest {
         st.load()
         val got = ArrayList<ContentRef?>()
         st.pickFile(FilePickMode.Export("saves.zip")) { got += it }
-        pickRow(st, "Save here")
+        pickRow(st, "Save in NXRedux")
         val replace = assertIs<Screen.FilePicker>(st.screen.value)
         assertNotNull(replace.replace)
         val at = st.selection.value
