@@ -13,6 +13,8 @@ data class VulkanSwitch(
     val swapchainFrames: Boolean = false,
     /** Process environment the core reads on Vulkan (set before it loads; cleared on any other launch). */
     val vulkanEnv: Map<String, String> = emptyMap(),
+    /** Graphics API "Auto" is Vulkan on an Arm Mali GPU: its OpenGL ES driver runs this core far slower than its Vulkan one. */
+    val autoOnMali: Boolean = false,
 )
 
 data class CoreDescriptor(

@@ -16,6 +16,7 @@ import com.nxredux.mobile.gpudriver.GpuDriverChoice
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.options.EmulatorSettings
 import com.nxredux.mobile.options.GpuDriverOptions
+import com.nxredux.mobile.options.GraphicsApiOptions
 import com.nxredux.mobile.options.OptionGroup
 import com.nxredux.mobile.options.Ps2Options
 import com.nxredux.mobile.runner.CoreDescriptor
@@ -209,7 +210,10 @@ internal class EmulatorSettingsController(
     private val gpuDriverCrashed: (gamePath: String) -> Set<String> = { emptySet() },
     /** Forgets the driver crashes recorded for the game at this library path. */
     private val clearGpuDriverCrash: (gamePath: String) -> Unit = {},
+    /** The phone's GPU name (GL_RENDERER; null: unknown), asked once and only for a core whose Graphics API Auto follows it. */
+    private val gpuName: suspend () -> String? = { null },
 ) {
+    private var gpu: String? = null   // [gpuName] once it answered
     private val lock = Mutex()
     private var listRows: List<EmulatorListRow> = emptyList()
     private var listRow: EmulatorListRow? = null          // the core whose picker or page is open
@@ -344,6 +348,7 @@ internal class EmulatorSettingsController(
             secondScreen = secondScreen(), screen = screen, displayMax = Res3dConsole.forTag(tag)?.displayMaxOf(windowPx(), screen),
             biosFiles = if (Ps2Options.appliesTo(tag)) ps2BiosFiles() else emptyList(),
             gpuDrivers = drivers, gpuDriverResolved = resolved, gpuDriverCrashNote = crashNote,
+            autoVulkan = GraphicsApiOptions.autoIsVulkan(d.vulkan, gpu),
         )
         val first = page()
         // The GPU driver row shows only on Vulkan, so its presence says the page's Graphics API is Vulkan and what it shows is what the launch reads.
@@ -357,8 +362,10 @@ internal class EmulatorSettingsController(
         return if (resolved || note != null) page(resolved, note) else first
     }
 
-    private suspend fun readPage(tag: String, d: CoreDescriptor, game: Listed?): EmulatorPage =
-        build(tag, d, game, configs.read(tag, d.id, game?.game?.fileName))
+    private suspend fun readPage(tag: String, d: CoreDescriptor, game: Listed?): EmulatorPage {
+        if (d.vulkan?.autoOnMali == true && gpu == null) gpu = gpuName()
+        return build(tag, d, game, configs.read(tag, d.id, game?.game?.fileName))
+    }
 
     /** Reads and shows [tag]'s page when [still] holds (the user has not moved on meanwhile); [opened] runs just before it shows. */
     private fun openPage(tag: String, d: CoreDescriptor, game: Listed?, still: () -> Boolean, opened: () -> Unit) {

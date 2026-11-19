@@ -5571,6 +5571,7 @@ class AppState(
         // Null (no rows) where custom drivers cannot be used ([GpuDriverStore.unavailableReason]).
         gpuDrivers = { deps.gpuDrivers?.takeIf { it.unavailableReason() == null }?.installed() },
         gpuDriverAppWide = { deps.settings.gpuDriver },
+        gpuName = { tryOrNull { deps.deviceGpu() } },
         gpuDriverCrashed = { path -> GpuDriverCrash.crashed(deps.settings.gpuDriverCrashes, path) },
         clearGpuDriverCrash = { path -> deps.settings.gpuDriverCrashes = GpuDriverCrash.clearGame(deps.settings.gpuDriverCrashes, path).takeIf { it.isNotEmpty() } },
         alwaysListed = { if (deps.linkRomCache != null) listOf(EmulatorRows.CABLE_LINK_TAG) else emptyList() },

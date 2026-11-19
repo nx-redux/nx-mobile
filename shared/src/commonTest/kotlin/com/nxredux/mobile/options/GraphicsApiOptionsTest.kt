@@ -101,4 +101,40 @@ class GraphicsApiOptionsTest {
         assertEquals(GraphicsApiOptions.row, FrontendOptions.option(GraphicsApiOptions.KEY))
         assertEquals(GraphicsApiOptions.AUTO, FrontendOptions.defaults("GC")[GraphicsApiOptions.KEY])
     }
+
+    private val ps2 = CoreRegistry.forTag("PS2")!!.vulkan
+
+    @Test fun auto_is_vulkan_for_ps2_on_a_mali_gpu() {
+        for (v in listOf(GraphicsApiOptions.AUTO, null)) {
+            assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(v, ps2) { "Mali-G76 MC4" }, "$v")
+            assertEquals(v, GraphicsApiOptions.effective(v, ps2) { "Adreno (TM) 740" }, "$v")
+            assertEquals(v, GraphicsApiOptions.effective(v, ps2) { null }, "$v")
+        }
+        assertTrue(GraphicsApiOptions.resolve(GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, ps2) { "Mali-G76 MC4" }, ps2, { true }).preferVulkan)
+    }
+
+    @Test fun a_picked_api_is_kept_on_a_mali_gpu_and_the_gpu_is_not_asked() {
+        for (v in listOf(GraphicsApiOptions.GLES, GraphicsApiOptions.VULKAN)) {
+            assertEquals(v, GraphicsApiOptions.effective(v, ps2) { error("asked") })
+        }
+    }
+
+    @Test fun only_ps2_follows_the_gpu_on_auto() {
+        assertEquals(listOf("armsx2"), CoreRegistry.all.filter { it.vulkan?.autoOnMali == true }.map { it.id })
+        assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, n64) { error("asked") })
+        assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, null) { error("asked") })
+    }
+
+    @Test fun where_auto_is_vulkan_the_rows_say_so_and_the_gpu_driver_row_shows_on_auto() {
+        val drivers = listOf(com.nxredux.mobile.gpudriver.GpuDriver("d", "Driver", "1", "a", "d", "libvulkan_d.so", 28))
+        val plain = ConsoleSettings.tableFor("PS2", gpuDrivers = drivers)
+        assertEquals(GraphicsApiOptions.row, plain.single { it.key == GraphicsApiOptions.KEY })
+        assertTrue(plain.shownFor(emptyMap()).none { it.key == GpuDriverOptions.KEY })
+        val mali = ConsoleSettings.tableFor("PS2", gpuDrivers = drivers, autoVulkan = true)
+        val api = mali.single { it.key == GraphicsApiOptions.KEY }
+        assertEquals("Applies next launch. Auto is Vulkan", api.brief)
+        assertTrue("Auto uses Vulkan" in api.info)
+        assertTrue(mali.shownFor(emptyMap()).any { it.key == GpuDriverOptions.KEY })
+        assertTrue(mali.shownFor(mapOf(GraphicsApiOptions.KEY to GraphicsApiOptions.GLES)).none { it.key == GpuDriverOptions.KEY })
+    }
 }

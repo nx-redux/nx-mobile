@@ -915,7 +915,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     // Vulkan that could not start here before, or this is the relaunch after it did: OpenGL ES (VulkanFallback).
                     // On Vulkan, a custom GPU driver may load instead of the system one (GpuDriverChoice); the relaunch after
                     // it could not start forces the system driver.
-                    val apiValue = frontendValues[GraphicsApiOptions.KEY]
+                    // Auto is Vulkan for a core that follows the GPU on a Mali phone; the driver rows below then apply as on Vulkan.
+                    val apiValue = GraphicsApiOptions.effective(frontendValues[GraphicsApiOptions.KEY], cfg.descriptor?.vulkan) { AndroidDeviceInfo.gpu() }
                     val gamePath = activity.intent.getStringExtra(EXTRA_GAME_PATH)
                     // No library path, no crash record to keep: such a launch stays on the system driver.
                     val driversAvailable = gamePath != null && cfg.descriptor?.id !in GpuDriverOptions.EXCLUDED_CORES &&
