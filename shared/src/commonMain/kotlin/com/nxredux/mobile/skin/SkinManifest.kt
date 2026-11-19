@@ -106,6 +106,14 @@ enum class SkinVariant {
     @SerialName("a5200") A5200,
     /** Doom (PrBoom's Classic pad): the d-pad, A B X Y, L R with L2 R2 (weapons), SELECT START, L3 R3. */
     @SerialName("doom") DOOM,
+    /** The Master System and SG-1000: the d-pad, 1 (the core's B) and 2 (A) as PICO-8's pair, START as PAUSE. */
+    @SerialName("sms") SMS,
+    /** The Game Gear: the Master System's pair, START. */
+    @SerialName("gg") GG,
+    /** The Atari 7800: the d-pad, 1 (B) and 2 (A) as PICO-8's pair, SELECT, START as PAUSE. */
+    @SerialName("a7800") A7800,
+    /** The Neo Geo Pocket (Color): the d-pad, A (the core's B) and B (A) as PICO-8's pair, START as OPTION. */
+    @SerialName("ngp") NGP,
 }
 
 /**

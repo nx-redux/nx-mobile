@@ -53,8 +53,8 @@ object SkinChoice {
      * buttons, no second pair of shoulders. Others keep the normal pad. The DS and the 3DS have their own layouts.
      */
     private val SINGLE_TAGS = setOf(
-        "GB", "SGB", "GBC", "GBA", "MGBA", "FC", "FDS", "SFC", "SUPA", "SMS", "GG", "SG1000",
-        "NGP", "NGPC", "PCE", "VB", "LYNX", "A2600", "A7800", "PKM", "WS", "WSC", "COLECO", "FBN",
+        "GB", "SGB", "GBC", "GBA", "MGBA", "FC", "FDS", "SFC", "SUPA",
+        "PCE", "VB", "LYNX", "A2600", "PKM", "WS", "WSC", "COLECO", "FBN",
     )
 
     /**
@@ -84,6 +84,10 @@ object SkinChoice {
         baseTag in SATURN_TAGS -> SkinVariant.SATURN
         baseTag == "P8" -> SkinVariant.P8   // fake-08: O (B) and X (A), START its pause
         baseTag == "PRBOOM" -> SkinVariant.DOOM   // PrBoom's Classic pad: the standard pad with L2 R2 L3 R3
+        baseTag == "SMS" || baseTag == "SG1000" -> SkinVariant.SMS   // picodrive: 1 (B), 2 (A), START the pause
+        baseTag == "GG" -> SkinVariant.GG
+        baseTag == "A7800" -> SkinVariant.A7800   // prosystem: 1 (B), 2 (A), SELECT, START the console's pause
+        baseTag == "NGP" || baseTag == "NGPC" -> SkinVariant.NGP   // race: A (B), B (A), START its OPTION
         baseTag == "A5200" -> SkinVariant.A5200   // a5200: FIRE 1 / 2 (A / B), * # (Y / X), KEYPAD (L: its on-screen keypad)
         // flycast: a NAOMI / Atomiswave set takes the arcade skin, a disc the Dreamcast one ([DcGames.isArcadeSet])
         baseTag == "DC" -> if (arcadeSet) SkinVariant.ARCADE else SkinVariant.DC
