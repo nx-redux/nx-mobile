@@ -543,6 +543,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.Onboarding -> WithIndex(selection) { val edit by state.rowEdit.collectAsState(); OnboardingScreen(s, it, state::select, state::onboardingRow, editing = rowEditIndex(s, edit, it), onHint = state::onButton, onSetting = state::onboardingSettingEvent, onDraftKey = state::onboardingDraftKey, onDraftUser = state::onboardingDraftUser, onDraftPassword = state::onboardingDraftPassword) }
             is Screen.StorageUpgrade -> WithIndex(selection) { StorageUpgradeScreen(s, it, state::select, state::storageUpgradeRow, state::onButton) }
             is Screen.CopySaves -> WithIndex(selection) { CopySavesScreen(s, it, state::select, state::copySavesRow, state::onButton) }
+            is Screen.BiosImportResult -> WithIndex(selection) { BiosImportResultScreen(s, it, state::select, { state.biosResultDone() }, state::onButton) }
             Screen.AddFirstExtra -> WithIndex(selection) { val (t, b) = remember(s) { state.setupChrome() }; AddFirstExtraScreen(t, b, it, state::select, state::setupStepRow, state::onButton, note = remember(s) { state.setupNote() }) }
             is Screen.FolderSummary -> WithIndex(selection) { val (t, _) = remember(s) { state.setupChrome() }; FolderSummaryScreen(s, t, it, state::select, state::setupStepRow, state::onButton, note = remember(s) { state.setupNote() }) }
             is Screen.AndroidGamesStep -> WithIndex(selection) { val (t, b) = remember(s) { state.setupChrome() }; AndroidGamesStepScreen(s.ask, t, b, it, state::select, state::setupStepRow, state::onButton) }
@@ -903,7 +904,7 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
             else -> SettingsBackground()
         }
         is Screen.PermissionsStep, Screen.PickFolder, Screen.AddFirstExtra, is Screen.FolderSummary, is Screen.AndroidGamesStep,
-        is Screen.StorageUpgrade, is Screen.CopySaves -> SettingsBackground()
+        is Screen.StorageUpgrade, is Screen.CopySaves, is Screen.BiosImportResult -> SettingsBackground()
         // The folder picker: the small mark only, so the large one never sits behind its names.
         is Screen.FilePicker -> SettingsBackground()
         // Settings and every Artwork page (the root drawn as Settings' root, the others as its rows block or on its wide

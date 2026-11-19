@@ -21,54 +21,41 @@ interface BiosIntake {
     fun import(source: BiosSource, progress: (String) -> Unit, done: (BiosIntakeResult) -> Unit)
 }
 
-/** One line of an import's results page: a group label, a file with its status, or the closing paragraph. */
-sealed interface BiosResultRow {
-    data class Group(val title: String) : BiosResultRow
-    data class File(val name: String, val status: String) : BiosResultRow
-    data class Note(val text: String) : BiosResultRow
-}
-
 /** An import's results page: the [plan] as carried out, [failed] the planned writes that could not be written. */
 data class BiosIntakeSummary(val plan: BiosIntakePlan, val failed: List<BiosSkip>) {
     private val failedPaths = failed.mapTo(HashSet()) { it.pickedPath }
     private val shown = plan.writes.filter { !(it.needsWrite && it.pickedPath in failedPaths) }
 
-    /** Each console's files (consoles A to Z), then the skips, then a note on other files and placing by hand. */
-    fun rows(): List<BiosResultRow> = buildList {
-        shown.groupBy { it.console }.entries
-            .sortedBy { (tag, _) -> displayName(tag) }
-            .forEach { (tag, writes) ->
-                add(BiosResultRow.Group(displayName(tag)))
-                writes.forEach { add(BiosResultRow.File(it.name, statusText(it) + if (it.bootChange) " · changes boot" else "")) }
-            }
-        val skipped = plan.skips + failed
-        if (skipped.isNotEmpty()) {
-            add(BiosResultRow.Group("Skipped"))
-            skipped.forEach { add(BiosResultRow.File(it.pickedPath.substringAfterLast('/'), it.reason)) }
-        }
-        val other = when (plan.otherFiles) {
-            0 -> null
-            1 -> "1 other file skipped. "
-            else -> "${plan.otherFiles} other files skipped. "
-        }
-        if (skipped.isNotEmpty() || other != null) add(BiosResultRow.Note((other ?: "") + "Anything skipped can still go in Bios/<CONSOLE>/ by hand."))
-    }
-
-    /** One line for a notice, when the import ends away from its page. */
-    fun noticeText(): String {
+    /** "Imported 3 BIOS, 2 already there": the page's headline, and the notice when the import ends away from it. */
+    fun headline(): String {
         val copied = shown.count { it.needsWrite }
         val there = shown.count { !it.needsWrite }
         return listOfNotNull("Imported $copied BIOS", there.takeIf { it > 0 }?.let { "$it already there" }).joinToString(", ")
     }
 
+    /** A line per file (consoles A to Z), the skips, then a note on other files and placing by hand; blank lines between. */
+    fun lines(): List<String> {
+        val files = shown.sortedBy { displayName(it.console) }.map { w ->
+            "${displayName(w.console)}: ${w.name} (${statusText(w)}${if (w.bootChange) ", changes boot" else ""})"
+        }
+        val skipped = (plan.skips + failed).map { "Skipped ${it.pickedPath.substringAfterLast('/')}: ${it.reason.replaceFirstChar(Char::lowercaseChar)}" }
+        val other = when (plan.otherFiles) {
+            0 -> null
+            1 -> "1 other file skipped. "
+            else -> "${plan.otherFiles} other files skipped. "
+        }
+        val note = if (skipped.isNotEmpty() || other != null) listOf((other ?: "") + "Anything skipped can still go in Bios/<CONSOLE>/ by hand.") else emptyList()
+        return listOf(files, skipped, note).filter { it.isNotEmpty() }.flatMapIndexed { i, block -> if (i == 0) block else listOf("") + block }
+    }
+
     private fun displayName(tag: String) = CoreRegistry.consoleOf(tag)?.displayName ?: tag
 
     private fun statusText(w: BiosWrite) = when (w.outcome) {
-        BiosOutcome.VERIFIED -> "Verified"
-        BiosOutcome.RENAMED -> "Renamed from ${w.pickedPath.substringAfterLast('/')}"
-        BiosOutcome.NOT_VERIFIED -> "Not verified"
-        BiosOutcome.ALREADY_THERE -> "Already there"
-        BiosOutcome.KEPT_YOURS -> "Kept yours (verified)"
+        BiosOutcome.VERIFIED -> "verified"
+        BiosOutcome.RENAMED -> "renamed from ${w.pickedPath.substringAfterLast('/')}"
+        BiosOutcome.NOT_VERIFIED -> "not verified"
+        BiosOutcome.ALREADY_THERE -> "already there"
+        BiosOutcome.KEPT_YOURS -> "kept yours, verified"
     }
 
     companion object {

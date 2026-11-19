@@ -12471,36 +12471,37 @@ class AppStateTest {
             st.openSettings(SettingsSection.IMPORT_BIOS)
             st.select(i); st.onButton(NxButton.A)
             assertEquals(source, intake.calls.last())
-            assertEquals(SettingsSection.IMPORT_BIOS_RESULT, page().section)
+            assertIs<Screen.BiosImportResult>(st.screen.value)
         }
     }
 
-    @Test fun import_bios_done_lists_results_and_done_returns_to_library() = runTest {
+    @Test fun import_bios_done_shows_the_result_page_and_done_returns_to_library() = runTest {
         val st = state(MemorySettings(ContentRef("Home")), biosIntake = FakeBiosIntake(biosDone()))
         st.load()
         st.openSettings(SettingsSection.LIBRARY)
         st.select(assertIs<Screen.Settings>(st.screen.value).rows.indexOfFirst { it.kind == SettingsKind.IMPORT_BIOS }); st.onButton(NxButton.A)
         assertEquals(SettingsSection.IMPORT_BIOS, assertIs<Screen.Settings>(st.screen.value).section)
         st.onButton(NxButton.A)                                             // From a folder
-        val page = assertIs<Screen.Settings>(st.screen.value)
-        assertEquals(SettingsSection.IMPORT_BIOS_RESULT, page.section)
+        val page = assertIs<Screen.BiosImportResult>(st.screen.value)
         assertNull(st.notice.value)
-        assertEquals(
-            listOf(
-                Triple(SettingsKind.SECTION, "Game Boy", null),
-                Triple(SettingsKind.INFO, "gb_bios.bin", "Verified · changes boot"),
-                Triple(SettingsKind.GAP, "", null),
-                Triple(SettingsKind.TEXT, "2 other files skipped. Anything skipped can still go in Bios/<CONSOLE>/ by hand.", null),
-                Triple(SettingsKind.GAP, "", null),
-                Triple(SettingsKind.IMPORT_BIOS_DONE, "Done", null),
-            ),
-            page.rows.map { Triple(it.kind, it.label, it.secondary) },
-        )
-        assertEquals(SettingsKind.INFO, page.rows[st.selection.value.index].kind)   // lands on the first file, not a label
-        st.select(page.rows.indexOfFirst { it.kind == SettingsKind.IMPORT_BIOS_DONE }); st.onButton(NxButton.A)
+        assertEquals("Imported 1 BIOS", page.summary.headline())
+        assertEquals(listOf("Game Boy: gb_bios.bin (verified, changes boot)", "", "2 other files skipped. Anything skipped can still go in Bios/<CONSOLE>/ by hand."), page.summary.lines())
+        assertEquals(0, st.selection.value.index)                          // Done, the page's one button, has the highlight
+        st.onButton(NxButton.DOWN)
+        assertEquals(0, st.selection.value.index)                          // nothing else to select
+        st.onButton(NxButton.A)                                             // Done
         val back = assertIs<Screen.Settings>(st.screen.value)
         assertEquals(SettingsSection.LIBRARY, back.section)
         assertEquals(SettingsKind.IMPORT_BIOS, back.rows[st.selection.value.index].kind)
+    }
+
+    @Test fun b_on_the_bios_result_page_returns_to_library() = runTest {
+        val st = state(MemorySettings(ContentRef("Home")), biosIntake = FakeBiosIntake(biosDone()))
+        st.load()
+        st.openSettings(SettingsSection.IMPORT_BIOS); st.onButton(NxButton.A)
+        assertIs<Screen.BiosImportResult>(st.screen.value)
+        st.onButton(NxButton.B)
+        assertEquals(SettingsSection.LIBRARY, assertIs<Screen.Settings>(st.screen.value).section)
     }
 
     @Test fun import_bios_message_is_a_notice() = runTest {
