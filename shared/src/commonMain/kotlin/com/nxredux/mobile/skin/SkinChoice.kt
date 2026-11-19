@@ -153,7 +153,8 @@ object SkinChoice {
 
     /**
      * Whether a layout has a box size drawn for this window ([BoxWhen]): such a layout is the one the device was tuned
-     * with, tried before its siblings (a box layout has no pieces to rule itself out by).
+     * with, tried before its siblings (a box layout has no pieces to rule itself out by). Untuned, a box layout still
+     * goes before a sibling built from pieces, whose pads sit off the menu's spots.
      */
     private fun tunedFor(windowW: Int, windowH: Int, densityDpi: Int, hingeY: Float?): (SkinLayoutSpec) -> Boolean {
         val dp = densityDpi / 160f
@@ -171,7 +172,7 @@ object SkinChoice {
         hingeY: Float? = null, pick: (SkinLayoutSpec) -> Boolean = { true }, adapt: (SkinLayoutSpec) -> SkinLayoutSpec = { it },
     ): SkinPlacement? =
         pack.layouts.filter { it.family == family && it.variant == variant && it.frame != null && !it.foldBoard && it.minRefH <= refH && pick(it) }
-            .sortedWith(compareByDescending<SkinLayoutSpec> { tuned(it) }.thenByDescending { it.minRefH }.thenByDescending { it.height })
+            .sortedWith(compareByDescending<SkinLayoutSpec> { tuned(it) }.thenByDescending { it.boxes.isNotEmpty() }.thenByDescending { it.minRefH }.thenByDescending { it.height })
             .firstNotNullOfOrNull { spec ->
                 // a layout with boxes: placed as its boxes have it, never adapted
                 // (the hinge for the box sizes drawn half-folded: a shell itself ignores it)
@@ -193,7 +194,7 @@ object SkinChoice {
         placed: (SkinLayoutSpec) -> SkinPlacement?,
     ): SkinPlacement? =
         pack.layouts.filter { it.family == family && it.variant == variant && it.foldBoard == fold && it.minRefH <= refH }
-            .sortedWith(compareByDescending<SkinLayoutSpec> { tuned(it) }.thenByDescending { it.minRefH }.thenByDescending { it.width }).firstNotNullOfOrNull(placed)
+            .sortedWith(compareByDescending<SkinLayoutSpec> { tuned(it) }.thenByDescending { it.boxes.isNotEmpty() }.thenByDescending { it.minRefH }.thenByDescending { it.width }).firstNotNullOfOrNull(placed)
 
     /** A layout on a foldable's board: its background has a hinge (an inner screen's two halves). */
     private val SkinLayoutSpec.foldBoard: Boolean get() = tree.parts.any { it.isHinge }
@@ -549,13 +550,6 @@ object SkinChoice {
         )
     }
 
-
-
-
-
-
-
-
     /**
      * Each side group moved whole so its pad stands where [menu] (the main menu's shell on this window) has it: the left
      * by the stick (or d-pad) to the menu's d-pad, the right by X to the menu's X; never nearer the screen's frame than
@@ -875,7 +869,7 @@ object SkinChoice {
                     // (a layout with boxes has no row under its touch screen, which then grows down: cut to its picture's
                     // height as well)
                     // (a layout with boxes: its touch screen as wide as the room between the boxes, the picture in it with
-                    // bars (user); not where the bake checks the old placements)
+                    // bars; not where the bake checks the old placements)
                     fun wide(hinge: Float?) = fold(caps, hinge)?.let { if (spec.boxes.isNotEmpty() && !SkinBoxes.anchorAtTheBottom) it else it.touchToItsPicture() }
                         ?.let { if (spec.boxes.isNotEmpty()) it.touchToItsPictureHeight() else it }
                         ?.let { if (spec.boxes.isNotEmpty() && !SkinBoxes.anchorAtTheBottom) it.touchWideToTheBoxes(SkinBoxes.GAP_DP * dp) else it }

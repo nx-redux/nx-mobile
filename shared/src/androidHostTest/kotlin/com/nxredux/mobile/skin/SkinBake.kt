@@ -224,7 +224,7 @@ private fun lowerPadSmaller(z: BoxSize): BoxSize {
     }.sortedBy { it.cy }
     if (pads.size < 2) return z
     val top = pads.first()
-    // two large controls in a box: the lower one smaller (user) (not one drawn smaller already: a nub, the Fold upright
+    // two large controls in a box: the lower one smaller (not one drawn smaller already: a nub, the Fold upright
     // 3DS's d-pad and C-stick)
     val lower = pads.drop(1).filter { it.x0 < top.x1 && top.x0 < it.x1 && it.cy > top.y1 - 1f &&
         (it.x1 - it.x0) > 0.9f * (top.x1 - top.x0) }
@@ -403,7 +403,7 @@ private fun BoxWhen.fold8Sideways(): Boolean {
 }
 
 /**
- * The pack's drawing for the 3DS on the Fold 8's inner screen sideways (user): down a side with two pads, the gap from
+ * The pack's drawing for the 3DS on the Fold 8's inner screen sideways: down a side with two pads, the gap from
  * the upper pad to the lower one and from the lower one to the caps' row each halved. [isFor]: the layouts it is for.
  */
 fun fold8SidewaysGapsHalved(boxes: Map<String, List<BoxSpec>>, isFor: (String) -> Boolean): Map<String, List<BoxSpec>> = boxes.mapValues { (id, list) ->
@@ -436,7 +436,7 @@ fun fold8SidewaysGapsHalved(boxes: Map<String, List<BoxSpec>>, isFor: (String) -
 /**
  * Sideways (the Fold 8, a tablet): the caps' rows each side level on the window (the side boxes' main pads stand level: the stick,
  * the face's middle), the higher row down to the lower (the regular 3DS's SWAP / SELECT / START, under its face, down to
- * MIC / MENU under its d-pad) (user: the rows level, as the DS's).
+ * MIC / MENU under its d-pad) (the rows level, as the DS's).
  */
 private fun capRowsLevelOnFold8Sideways(list: List<BoxSpec>): List<BoxSpec> {
     val l = list.firstOrNull { it.slot == BoxSlot.LEFT } ?: return list
@@ -692,7 +692,7 @@ private fun BoxWhen.wdp() = (minWdp + maxWdp) / 2f
 
 /**
  * The Ultra sideways: the d-pad where the user put the regular 3DS's with the controls editor (48 px right, 66 px up), the
- * New 3DS's C-stick level with it and moved as far in from the right (its gap to the touch screen the d-pad's) (user).
+ * New 3DS's C-stick level with it and moved as far in from the right (its gap to the touch screen the d-pad's).
  */
 private fun sidewaysPadsUp(out: Map<BoxSlot, MutableList<BoxSize>>, sides: List<Pair<BoxSlot, Int>>) {
     val li = sides.firstOrNull { it.first == BoxSlot.LEFT }?.second ?: return
@@ -789,7 +789,7 @@ private fun padUpAndIn(z: BoxSize, rowEnd: Float, toTheRight: Boolean, near: Flo
 }
 
 /**
- * The pack's drawing for the 3DS on the Fold 8's and the Ultra's inner screens upright, and the Ultra's sideways (user): MIC, MENU, SWAP, SELECT, START out of the
+ * The pack's drawing for the 3DS on the Fold 8's and the Ultra's inner screens upright, and the Ultra's sideways: MIC, MENU, SWAP, SELECT, START out of the
  * side rows into one row in the bottom row box, under the touch screen (its room ends over it), one well for the five
  * cut from the side rows' well. [isFor]: the layouts it is for.
  */
@@ -801,7 +801,7 @@ fun fold8UprightCapsInTheBottomRow(boxes: Map<String, List<BoxSpec>>, isFor: (St
         .filter { it.fold8Upright() || (it.ultraUpright() && it.orientation == "portrait") || it.ultraSideways() }.distinct()
     var row: MutableList<BoxSize>? = out[BoxSlot.BOTTOM_ROW]
     for (tag in tags) {
-        // the New 3DS on the Ultra: its right as the regular 3DS's (the face full size, R level with L), ZR beside R (user)
+        // the New 3DS on the Ultra: its right as the regular 3DS's (the face full size, R level with L), ZR beside R
         val sideways = tag.ultraSideways()
         if (!tag.fold8Upright() && !sideways && "3dsr" !in id) boxes[id.replace("3ds", "3dsr")]?.let { newRightAsTheRegular(out, it, tag) }
         val sides = listOf(BoxSlot.LEFT, BoxSlot.RIGHT).mapNotNull { s -> out[s]?.indexOfFirst { it.`when` == tag }?.takeIf { it >= 0 }?.let { s to it } }
@@ -849,7 +849,7 @@ fun fold8UprightCapsInTheBottomRow(boxes: Map<String, List<BoxSpec>>, isFor: (St
             val winW = dev.w.toFloat(); val edge = SkinBoxes.EDGE_DP * dev.dpi / 160f
             // where the user put the regular 3DS's d-pad with the controls editor: on the Fold 5 px from the row, up half its
             // gap under the stick and 25 px; on the Ultra (its d-pad up by half its gap already, [ultraUprightLowerPadUp])
-            // 222 px from the row, clear of the touch screen's frame, and 30 px up (user)
+            // 222 px from the row, clear of the touch screen's frame, and 30 px up
             val (near, up) = if (tag.fold8Upright()) 5f to null else 222f to 30f
             // (sideways the pads keep their places: only the caps move)
             if (!sideways) kept = when (s) {
@@ -860,7 +860,7 @@ fun fold8UprightCapsInTheBottomRow(boxes: Map<String, List<BoxSpec>>, isFor: (St
             out.getValue(s)[i] = kept.copy(h = Math.round(kept.pieces.maxOfOrNull { it.y + it.h * it.scale } ?: kept.h.toFloat()))
         }
         // the New 3DS on the Ultra: its nub over the face a joystick at the d-pad's size instead (as the Fold's C-stick),
-        // where the d-pad is mirrored on the right: level with it, as far from the row (user)
+        // where the d-pad is mirrored on the right: level with it, as far from the row
         if (!tag.fold8Upright() && !sideways) newCStickAsTheDpad(out, sides, list, tag, w)
         if (sideways) sidewaysPadsUp(out, sides)
     }

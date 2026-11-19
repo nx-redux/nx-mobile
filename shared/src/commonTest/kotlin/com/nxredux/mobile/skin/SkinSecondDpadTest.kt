@@ -50,6 +50,16 @@ class SkinSecondDpadTest {
     }
 
     @Test
+    fun aThumbSlidOntoTheOtherDpadKeepsSteeringItsOwn() {
+        val ev = mutableListOf<PadEvent>()
+        val t = touch(ev)
+        t.press(1, 200f, 380f)   // the d-pad's up
+        t.move(1, 800f, 500f)    // slid straight onto the second: still the first's, now its right (not up held)
+        assertEquals(listOf(PadEvent.Down(NxButton.UP), PadEvent.Up(NxButton.UP), PadEvent.Down(NxButton.RIGHT)), ev)
+        assertTrue(ev.none { it == PadEvent.Down(NxButton.L1) || it == PadEvent.Down(NxButton.R2) || it == PadEvent.Down(NxButton.L2) }, "nothing of the second's: $ev")
+    }
+
+    @Test
     fun theWonderSwansYCursorIsItsCoresR2L2LAndR() {
         val ev = mutableListOf<PadEvent>()
         val t = touch(ev, WS_SECOND_DPAD)

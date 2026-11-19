@@ -1106,5 +1106,3 @@ internal data class SecondSurface(val surface: Surface, val width: Int, val heig
 
 /** A display's real size in px and its density: a change needs a new window on it. */
 private data class DisplayShape(val width: Int, val height: Int, val densityDpi: Int)
-
-/** The board pill's corner, dp from the window's bottom-right: a camera cutout reaching into it is kept clear of. */

@@ -204,7 +204,7 @@ class SkinPadTouch(
         if (id !in held) return
         val over = hitAt(x, y).takeUnless(::isUnder)   // never slide onto an under cap: as if over nothing
         val pad = steering[id]
-        if (pad != null && (over == null || (over is Dpad && over.c == pad))) setHeld(id, dpadAt(pad, x, y))
+        if (pad != null && (over == null || over is Dpad)) setHeld(id, dpadAt(pad, x, y))   // (over the other d-pad too: a thumb keeps its own pad)
         else if (over is Btn) { steering.remove(id); setHeld(id, setOf(over.b)) }
     }
 

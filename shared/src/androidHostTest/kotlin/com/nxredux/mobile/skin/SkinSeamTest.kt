@@ -109,7 +109,7 @@ class SkinSeamTest {
             val render = wide.spec
             val c = wide.controls.associateBy { it.spec.id }
             val dp = 3f
-            // the touch screen widened into the room between the side groups, its 4:3 picture in it with bars (user)
+            // the touch screen widened into the room between the side groups, its 4:3 picture in it with bars
             val touch = assertNotNull(wide.glass(GlassScreen.TOUCH)).rect
             assertTrue(touch.width / touch.height >= 4f / 3f - 0.01f, "$name $touch")
             val frame = wide.pieces.filter { it.piece >= 0 && render.pieces[it.piece].glass?.screen == GlassScreen.TOUCH && !it.strip }
@@ -137,7 +137,7 @@ class SkinSeamTest {
                 assertTrue(right.maxOf { it.dst.y + it.dst.height } <= 2256f - 16f * dp + 1f, "$name the C-stick in the window")
             }
             assertTrue(left.maxOf { it.dst.y + it.dst.height } <= 2256f - 16f * dp + 1f, "$name the d-pad in the window")
-            // MIC, MENU, SWAP, SELECT, START in one row under the touch screen, centred on it (user)
+            // MIC, MENU, SWAP, SELECT, START in one row under the touch screen, centred on it
             val row = listOf("MIC", "MENU", "SWAP", "SELECT", "START").map { c.getValue(it) }
             row.zipWithNext().forEach { (a, b) -> assertEquals(a.y, b.y, 1f, "$name row level"); assertTrue(b.x > a.x, "$name row order") }
             assertEquals(touch.x + touch.width / 2f, c.getValue("SWAP").x, 2f, "$name SWAP in the middle")
@@ -187,7 +187,7 @@ class SkinSeamTest {
         for ((w, h, dpi, hinge) in listOf(Quad(1848, 2448, 420, 1224f), Quad(2256, 2504, 480, 1252f), Quad(2504, 2256, 480, 1128f))) {
             for (v in listOf(SkinVariant.DS, SkinVariant.N3DS_REGULAR, SkinVariant.GB, SkinVariant.SINGLE)) {
                 // the 3DS on the Ultra sideways: its touch frame cut to its picture (onAWideWindowThe3dsTouchFrameFitsItsPictureAndTheDpadMovesIn)
-                // the 3DS on the Ultra upright too: its touch screen cut to its picture, the row under it (user)
+                // the 3DS on the Ultra upright too: its touch screen cut to its picture, the row under it
                 if (v == SkinVariant.N3DS_REGULAR && (w == 2504 || w == 2256)) continue
                 val ds = v == SkinVariant.DS || v == SkinVariant.N3DS_REGULAR
                 val p = assertNotNull(SkinChoice.place(pack, w, h, dpi, tablet = true, ds = ds, picture = if (ds) null else 240f to 160f, hingeY = hinge, foldable = true, variant = v), "$v ${w}x$h")
@@ -215,7 +215,7 @@ class SkinSeamTest {
         val spec = p.spec
         fun pieces(a: PieceAnchor, glass: Boolean) = p.pieces.filter { it.piece >= 0 && spec.pieces[it.piece].anchor == a && (spec.pieces[it.piece].glass != null) == glass }
         val frame = pieces(PieceAnchor.CENTRE, true).let { ps -> ps.minOf { it.dst.y } to ps.maxOf { it.dst.y + it.dst.height } }
-        // the side pieces beside the screen (a pad drawn under its corner, the Fold's 3DS d-pad (user), is not in the row)
+        // the side pieces beside the screen (a pad drawn under its corner, the Fold's 3DS d-pad, is not in the row)
         fun span(a: PieceAnchor, glass: Boolean) = pieces(a, glass).filter { glass || (it.dst.y + it.dst.height / 2f).let { cy -> cy > frame.first && cy < frame.second } }
             .let { ps -> ps.minOf { it.dst.x } to ps.maxOf { it.dst.x + it.dst.width } }
         val (l0, l1) = span(PieceAnchor.LEFT, false); val (f0, f1) = span(PieceAnchor.CENTRE, true); val (r0, r1) = span(PieceAnchor.RIGHT, false)
@@ -272,7 +272,7 @@ class SkinSeamTest {
 
     @Test
     fun theFoldUprightLevelsThe3dsSidesWithASmallerDpadOnASlant() {
-        // the touch screen cut to its picture's height (user): both sides level, the d-pad smaller, 8 dp under the stick
+        // the touch screen cut to its picture's height: both sides level, the d-pad smaller, 8 dp under the stick
         for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) for (hinge in listOf(null, 1224f)) {
             val name = "$v $hinge"
             val p = assertNotNull(SkinChoice.place(pack, 1848, 2448, 420, tablet = false, ds = true, hingeY = hinge, foldable = true, variant = v), name)
@@ -291,7 +291,7 @@ class SkinSeamTest {
 
     @Test
     fun theFoldUprightGivesTheNew3dsTheRegularPlaces() {
-        // the regular 3DS's buttons; ZL / ZR beside L / R; the C-stick a full stick under the face, in toward the screen (user)
+        // the regular 3DS's buttons; ZL / ZR beside L / R; the C-stick a full stick under the face, in toward the screen
         for (hinge in listOf(null, 1224f)) {
             fun at(v: SkinVariant) = assertNotNull(SkinChoice.place(pack, 1848, 2448, 420, tablet = false, ds = true, hingeY = hinge, foldable = true, variant = v), "$v $hinge")
             val n = at(SkinVariant.N3DS).controls.associateBy { it.spec.id }; val r = at(SkinVariant.N3DS_REGULAR).controls.associateBy { it.spec.id }
@@ -317,7 +317,7 @@ class SkinSeamTest {
             val p = assertNotNull(SkinChoice.place(pack, 2256, 2504, 480, tablet = true, ds = true, hingeY = hinge, foldable = true, variant = v), name)
             val c = p.controls.associateBy { it.spec.id }
             val touch = assertNotNull(p.glass(GlassScreen.TOUCH)).rect
-            // (MIC, MENU, SWAP, SELECT, START as on the Fold (user))
+            // (MIC, MENU, SWAP, SELECT, START as on the Fold)
             val row = listOf("MIC", "MENU", "SWAP", "SELECT", "START").map { c.getValue(it) }
             row.zipWithNext().forEach { (a, b) -> assertEquals(a.y, b.y, 1f, "$name row level"); assertTrue(b.x > a.x, "$name row order") }
             assertTrue(row.all { it.y > touch.y + touch.height && it.x > touch.x && it.x < touch.x + touch.width }, "$name row under the touch screen")
@@ -351,7 +351,7 @@ class SkinSeamTest {
             val menu = assertNotNull(SkinChoice.placeMenu(pack, w, h, dpi, foldable = fold, tablet = fold), "${w}x$h menu")
             val game = assertNotNull(SkinChoice.place(pack, w, h, dpi, tablet = fold, ds = false, picture = 304f to 224f, foldable = fold, variant = SkinVariant.ARCADE), "${w}x$h arcade")
             val mc = menu.controls.associateBy { it.spec.id }; val gc = game.controls.associateBy { it.spec.id }
-            // a narrow upright (a phone): COIN and START in MENU's row, one each side of it (user)
+            // a narrow upright (a phone): COIN and START in MENU's row, one each side of it
             val upright = !fold && h > w
             for (id in if (upright) listOf("DPAD", "X", "Y", "A", "B", "MENU") else listOf("DPAD", "X", "Y", "A", "B", "START", "SELECT", "MENU")) {
                 assertEquals(mc.getValue(id).x, gc.getValue(id).x, 1.5f, "${w}x$h ${game.spec.id} $id x")

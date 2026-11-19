@@ -100,7 +100,7 @@ class SkinBoxesTest {
         assertEquals(2448f - 32f * dp, r.maxOf { it.x + it.width }, 1f, "right box from the edge")
         assertEquals(l.maxOf { it.x + it.width } + 16f * dp, f.minOf { it.x }, 1f, "the screen 16 dp from the left box")
         assertEquals(r.minOf { it.x } - 16f * dp, f.maxOf { it.x + it.width }, 1f, "the screen 16 dp from the right box")
-        // sideways the main pads centred in the window's height (user): the d-pad, the face buttons
+        // sideways the main pads centred in the window's height: the d-pad, the face buttons
         assertEquals(1848f / 2f, p.controls.first { it.spec.id == "DPAD" }.y, 1f, "the d-pad centred")
         assertEquals(1848f / 2f, listOf("X", "Y", "A", "B").map { id -> p.controls.first { it.spec.id == id }.y }.average().toFloat(), 1f, "the face buttons centred")
         // the box layout is a plain placement: its groups as the controls editor sees them

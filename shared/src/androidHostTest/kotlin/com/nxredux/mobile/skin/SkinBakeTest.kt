@@ -200,7 +200,7 @@ class SkinBakeTest {
 
     // The Dreamcast's d-pad under the stick as the user placed it on the Fold: toward the screen by 42 / 156 of the main
     // menu's d-pad, its ring just under the stick's; so the stick and face buttons stay on the menu's pads sideways
-    // half-folded too (user).
+    // half-folded too.
     @Test
     fun theDreamcastDpadIsTuckedUnderTheStick() {
         for (name in listOf("inner", "inner_half", "inner_land", "ultra", "ultra_half", "ultra_land_half", "tablet", "tablet_land")) {
@@ -219,7 +219,7 @@ class SkinBakeTest {
     }
 
     // The 3DS on the Fold's inner screen upright (flat and half-folded): MIC, MENU, SWAP, SELECT, START in one row under
-    // the touch screen, centred across, clear of it (user).
+    // the touch screen, centred across, clear of it.
     @Test
     fun the3dsOnTheFoldUprightHasItsCapsInARowUnderTheTouchScreen() {
         for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) for (name in listOf("inner", "inner_half")) {
@@ -242,7 +242,7 @@ class SkinBakeTest {
 
     // The 3DS on the Fold's inner screen upright: the d-pad up into the room under the stick (half the gap it had) and
     // across to the caps' row, where the user's own tweak put it on the Fold (5 px from the row, 25 px over half the gap);
-    // the New 3DS's C-stick the same under the face, from the row's other end (user).
+    // the New 3DS's C-stick the same under the face, from the row's other end.
     @Test
     fun the3dsOnTheFoldUprightHasItsDpadUpAndIn() {
         for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) for (name in listOf("inner", "inner_half")) {
@@ -270,7 +270,7 @@ class SkinBakeTest {
     }
 
     // The 3DS on the Fold's inner screen sideways (flat and half-folded): MIC and MENU in their row under the d-pad, clear
-    // of it, at the same height on the regular 3DS as on the New one (user).
+    // of it, at the same height on the regular 3DS as on the New one.
     @Test
     fun the3dsOnTheFoldSidewaysHasMicAndMenuUnderTheDpad() {
         for (name in listOf("inner_land", "inner_land_half")) {
@@ -288,7 +288,7 @@ class SkinBakeTest {
 
     // The New 3DS on the Fold's inner screen sideways (flat and half-folded): the C-stick under the face drawn smaller (two
     // large controls in a box: the lower one at 85%); the gaps down each side (the upper pad to the lower, the lower to
-    // the caps' row) half what they were (73 and 42 px), both rows level (user).
+    // the caps' row) half what they were (73 and 42 px), both rows level.
     @Test
     fun theNew3dsOnTheFoldSidewaysHasASmallerCStickAndHalfTheGaps() {
         for (name in listOf("inner_land", "inner_land_half")) {
@@ -307,7 +307,7 @@ class SkinBakeTest {
     }
 
     // The 3DS on the Ultra's inner screen upright (flat and half-folded), as on the Fold: MIC, MENU, SWAP, SELECT, START in
-    // one row under the touch screen, the touch screen only its picture (4:3), the d-pad where the user's tweak put it (user).
+    // one row under the touch screen, the touch screen only its picture (4:3), the d-pad where the user's tweak put it.
     @Test
     fun the3dsOnTheUltraUprightIsAsTheFolds() {
         for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) for (name in listOf("ultra", "ultra_half")) {
@@ -332,7 +332,7 @@ class SkinBakeTest {
     }
 
     // The New 3DS on the Ultra's inner screen upright (flat and half-folded): a joystick for the C-stick at the d-pad's size
-    // (not the nub over the face), where the d-pad is mirrored on the right: level with it, as far from the row (user).
+    // (not the nub over the face), where the d-pad is mirrored on the right: level with it, as far from the row.
     @Test
     fun theNew3dsOnTheUltraUprightHasItsCStickAsTheDpadMirrored() {
         for (name in listOf("ultra", "ultra_half")) {
@@ -350,7 +350,7 @@ class SkinBakeTest {
             kotlin.test.assertEquals(rowLeft - (dpad.x + dpad.width), cs.x - rowRight, 2f, "$name C-stick as far from the row as the d-pad")
             assertTrue(c("CSTICK").y > c("B").y, "$name C-stick under the face")
             // the face and the shoulders as the regular 3DS's (where the menu has them; R level with L), ZR beside R as ZL
-            // beside L (user)
+            // beside L
             val reg = assertNotNull(placeFor(pack, SkinVariant.N3DS_REGULAR, d), name)
             fun rc(id: String) = reg.controls.first { it.spec.id == id && it.spec.alt == null }
             for (id in listOf("X", "Y", "A", "B", "R")) {
@@ -366,7 +366,7 @@ class SkinBakeTest {
     }
 
     // The 3DS on the Ultra's inner screen sideways (flat and half-folded): MIC, MENU, SWAP, SELECT, START in one row under
-    // the touch screen's frame, centred across (user).
+    // the touch screen's frame, centred across.
     @Test
     fun the3dsOnTheUltraSidewaysHasItsCapsInARowUnderTheTouchScreen() {
         for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) for (name in listOf("ultra_land", "ultra_land_half")) {
@@ -379,11 +379,11 @@ class SkinBakeTest {
             val touch = assertNotNull(p.glasses.firstOrNull { it.screen == GlassScreen.TOUCH }, "$v $name").rect
             assertTrue(row[0].y - row[0].spec.r > touch.y + touch.height, "$v $name row under the touch screen")
             // the d-pad where the user's tweak put it (48 px right, 66 px up of under the stick: 2052.9 before); the New
-            // 3DS's C-stick level with it (user)
+            // 3DS's C-stick level with it
             kotlin.test.assertEquals(2052.9f - 66.28f * p.k, c("DPAD").y, 2f, "$v $name d-pad up as the tweak")
             if (v == SkinVariant.N3DS) kotlin.test.assertEquals(c("DPAD").y, c("CSTICK").y, 1f, "$v $name C-stick level with the d-pad")
             // the touch screen wide into the room between the side boxes (its 4:3 picture in it with bars), the inner gap
-            // (16 dp) to the nearest piece each side beside it (user)
+            // (16 dp) to the nearest piece each side beside it
             assertTrue(touch.width > touch.height * 4f / 3f + 50f, "$v $name touch screen wider than its picture: $touch")
             val dp = d.dpi / 160f
             val beside = p.pieces.filter { it.piece >= 0 && p.spec.pieces[it.piece].glass == null && it.dst.y < touch.y + touch.height && it.dst.y + it.dst.height > touch.y }
@@ -395,7 +395,7 @@ class SkinBakeTest {
             kotlin.test.assertEquals(16f * dp, minOf(f0 - l1, r0 - f1), 2f, "$v $name nearer gap to the frame")
             assertTrue(maxOf(f0 - l1, r0 - f1) >= 16f * dp - 2f, "$v $name farther gap")
             kotlin.test.assertEquals(d.w / 2f, (f0 + f1) / 2f, 2f, "$v $name frame centred")
-            // the New 3DS's C-stick as far from the frame as the d-pad (the d-pad's move mirrored) (user)
+            // the New 3DS's C-stick as far from the frame as the d-pad (the d-pad's move mirrored)
             if (v == SkinVariant.N3DS) {
                 fun ring(id: String) = p.pieces.filter { q -> c(id).let { it.x >= q.dst.x && it.x <= q.dst.x + q.dst.width && it.y >= q.dst.y && it.y <= q.dst.y + q.dst.height } }.maxBy { it.dst.width }.dst
                 kotlin.test.assertEquals(f0 - (ring("DPAD").x + ring("DPAD").width), ring("CSTICK").x - f1, 2f, "$v $name C-stick as far from the frame as the d-pad")
@@ -404,7 +404,7 @@ class SkinBakeTest {
     }
 
     // A cap's switch (the 3DS's stick / d-pad toggle) in its well is one group with the caps it shares the well with, as
-    // its outline shows: the Ultra's cover upright (user).
+    // its outline shows: the Ultra's cover upright.
     @Test
     fun theSwitchIsGroupedWithItsWell() {
         for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) {
