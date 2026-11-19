@@ -46,7 +46,8 @@ val GOLDEN_DEVICES = listOf(
 val BOXED = linkedMapOf<SkinVariant?, String>(null to "menu", SkinVariant.N64 to "n64", SkinVariant.GB to "gb", SkinVariant.GBA to "gba",
     SkinVariant.ARCADE to "arcade", SkinVariant.DC to "dc", SkinVariant.FDS to "fds", SkinVariant.DS to "ds", SkinVariant.N3DS to "n3ds",
     SkinVariant.N3DS_REGULAR to "n3ds_regular", SkinVariant.SINGLE to "single", SkinVariant.MD to "md", SkinVariant.MD3 to "md3", SkinVariant.SATURN to "saturn", SkinVariant.PS1 to "ps1", SkinVariant.PSP to "psp", SkinVariant.GC to "gc", SkinVariant.WII_CLASSIC to "wii_classic", SkinVariant.WII_NUNCHUK to "wii_nunchuk", SkinVariant.WII_SIDEWAYS to "wii_sideways", SkinVariant.WII_UPRIGHT to "wii_upright", SkinVariant.P8 to "p8", SkinVariant.A5200 to "a5200", SkinVariant.DOOM to "doom",
-    SkinVariant.SMS to "sms", SkinVariant.GG to "gg", SkinVariant.A7800 to "a7800", SkinVariant.NGP to "ngp")
+    SkinVariant.SMS to "sms", SkinVariant.GG to "gg", SkinVariant.A7800 to "a7800", SkinVariant.NGP to "ngp",
+    SkinVariant.PCE to "pce", SkinVariant.A2600 to "a2600", SkinVariant.LYNX to "lynx", SkinVariant.PKM to "pkm")
 
 /** A one-screen console's picture size, game px (null: the DS / 3DS, two screens). */
 private fun pictureOf(v: SkinVariant): Pair<Float, Float>? = when (v) {
@@ -58,6 +59,10 @@ private fun pictureOf(v: SkinVariant): Pair<Float, Float>? = when (v) {
     SkinVariant.SMS -> 256f to 192f
     SkinVariant.GG -> 160f to 144f
     SkinVariant.NGP -> 160f to 152f
+    SkinVariant.PCE -> 256f to 240f
+    SkinVariant.A2600 -> 160f to 210f
+    SkinVariant.LYNX -> 160f to 102f
+    SkinVariant.PKM -> 96f to 64f
     SkinVariant.DS, SkinVariant.N3DS, SkinVariant.N3DS_REGULAR -> null
     else -> 320f to 240f
 }

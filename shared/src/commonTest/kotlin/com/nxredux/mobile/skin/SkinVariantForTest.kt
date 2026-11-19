@@ -10,12 +10,16 @@ class SkinVariantForTest {
         assertEquals(SkinVariant.DS, SkinChoice.variantFor("NDS", ds = true))
         for (t in listOf("GB", "GBC", "SGB", "FC")) assertEquals(SkinVariant.GB, SkinChoice.variantFor(t, false), t)
         for (t in listOf("GBA", "MGBA")) assertEquals(SkinVariant.GBA, SkinChoice.variantFor(t, false), t)
-        for (t in listOf("SFC", "PCE")) assertEquals(SkinVariant.SINGLE, SkinChoice.variantFor(t, false), t)
+        assertEquals(SkinVariant.SINGLE, SkinChoice.variantFor("SFC", false))
         // the two-button 8-bits: their pair on the face's spot
         for (t in listOf("SMS", "SG1000")) assertEquals(SkinVariant.SMS, SkinChoice.variantFor(t, false), t)
         assertEquals(SkinVariant.GG, SkinChoice.variantFor("GG", false))
         assertEquals(SkinVariant.A7800, SkinChoice.variantFor("A7800", false))
         for (t in listOf("NGP", "NGPC")) assertEquals(SkinVariant.NGP, SkinChoice.variantFor(t, false), t)
+        assertEquals(SkinVariant.PCE, SkinChoice.variantFor("PCE", false))
+        assertEquals(SkinVariant.A2600, SkinChoice.variantFor("A2600", false))
+        assertEquals(SkinVariant.LYNX, SkinChoice.variantFor("LYNX", false))
+        assertEquals(SkinVariant.PKM, SkinChoice.variantFor("PKM", false))
         assertEquals(SkinVariant.DOOM, SkinChoice.variantFor("PRBOOM", false))   // the standard pad with L2 R2 L3 R3
         // a console with no layout of its own (an added core's tag) takes the shared one-screen layout
         for (t in listOf("", "XYZ", "SNES9X_CUSTOM")) assertEquals(SkinVariant.SINGLE, SkinChoice.variantFor(t, false), t)

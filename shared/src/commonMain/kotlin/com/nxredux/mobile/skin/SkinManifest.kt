@@ -114,6 +114,14 @@ enum class SkinVariant {
     @SerialName("a7800") A7800,
     /** The Neo Geo Pocket (Color): the d-pad, A (the core's B) and B (A) as PICO-8's pair, START as OPTION. */
     @SerialName("ngp") NGP,
+    /** The PC Engine / TurboGrafx-16: the d-pad, II (the core's B) and I (A) as PICO-8's pair, SELECT, START as RUN. */
+    @SerialName("pce") PCE,
+    /** The Atari 2600: the d-pad, one FIRE (B), SELECT, START as RESET. */
+    @SerialName("a2600") A2600,
+    /** The Atari Lynx: the d-pad, B and A as PICO-8's pair, OPTION 1 / 2 on L / R, START as PAUSE. */
+    @SerialName("lynx") LYNX,
+    /** The Pokémon mini: the d-pad, B and A as PICO-8's pair, SHAKE on L, C on R; no START. */
+    @SerialName("pkm") PKM,
 }
 
 /**

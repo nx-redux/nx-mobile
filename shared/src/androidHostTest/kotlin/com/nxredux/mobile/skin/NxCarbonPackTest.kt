@@ -45,7 +45,10 @@ class NxCarbonPackTest {
             val ids = spec.controls.map { it.id }.toSet()
             when (spec.variant) {
                 SkinVariant.SMS, SkinVariant.GG, SkinVariant.NGP -> assertEquals(pair, ids, spec.id)
-                SkinVariant.A7800 -> assertEquals(pair + "SELECT", ids, spec.id)
+                SkinVariant.A7800, SkinVariant.PCE -> assertEquals(pair + "SELECT", ids, spec.id)
+                SkinVariant.A2600 -> assertEquals(setOf("DPAD", "B", "SELECT", "START", "MENU"), ids, spec.id)   // one FIRE
+                SkinVariant.LYNX -> assertEquals(pair + "L" + "R", ids, spec.id)   // OPTION 1 / 2 on L / R
+                SkinVariant.PKM -> assertEquals(pair - "START" + "L" + "R", ids, spec.id)   // SHAKE / C on L / R, no START
                 else -> {}
             }
             // the NGP's A / B: the N64's whole 148 px caps drawn at the pair's cap size, not a 124 px corner of them
@@ -56,7 +59,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(161 + 32 + N3DS_LAYOUTS + GRIP_COLUMNS, pack.layouts.size)   // the menu half-folded on a phone (flex_menu); 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's, the Atari 5200's, Doom's, the Sega pad's two (6- and 3-button) and the Saturn's in every family; the two-button 8-bits' four (sms, gg, a7800, ngp: 7 each and a tablet twin) in every family; a tablet twin of each game fold board without one (17: the clusters centred on the bottom screen, user)
+        assertEquals(161 + 64 + N3DS_LAYOUTS + GRIP_COLUMNS, pack.layouts.size)   // the menu half-folded on a phone (flex_menu); 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's, the Atari 5200's, Doom's, the Sega pad's two (6- and 3-button) and the Saturn's in every family; the small-pad consoles' eight (sms, gg, a7800, ngp, pce, a2600, lynx, pkm: 7 each and a tablet twin) in every family; a tablet twin of each game fold board without one (17: the clusters centred on the bottom screen, user)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit

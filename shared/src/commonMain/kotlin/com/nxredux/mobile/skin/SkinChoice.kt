@@ -54,7 +54,7 @@ object SkinChoice {
      */
     private val SINGLE_TAGS = setOf(
         "GB", "SGB", "GBC", "GBA", "MGBA", "FC", "FDS", "SFC", "SUPA",
-        "PCE", "VB", "LYNX", "A2600", "PKM", "WS", "WSC", "COLECO", "FBN",
+        "VB", "WS", "WSC", "COLECO", "FBN",
     )
 
     /**
@@ -88,6 +88,10 @@ object SkinChoice {
         baseTag == "GG" -> SkinVariant.GG
         baseTag == "A7800" -> SkinVariant.A7800   // prosystem: 1 (B), 2 (A), SELECT, START the console's pause
         baseTag == "NGP" || baseTag == "NGPC" -> SkinVariant.NGP   // race: A (B), B (A), START its OPTION
+        baseTag == "PCE" -> SkinVariant.PCE   // pce_fast: II (B), I (A), SELECT, RUN (START)
+        baseTag == "A2600" -> SkinVariant.A2600   // stella2014: Fire (B), SELECT, RESET (START)
+        baseTag == "LYNX" -> SkinVariant.LYNX   // handy: B, A, Option 1 / 2 (L / R), Pause (START)
+        baseTag == "PKM" -> SkinVariant.PKM   // pokemini: B, A, Shake (L), C (R); Power on SELECT (the menu's Reset does it)
         baseTag == "A5200" -> SkinVariant.A5200   // a5200: FIRE 1 / 2 (A / B), * # (Y / X), KEYPAD (L: its on-screen keypad)
         // flycast: a NAOMI / Atomiswave set takes the arcade skin, a disc the Dreamcast one ([DcGames.isArcadeSet])
         baseTag == "DC" -> if (arcadeSet) SkinVariant.ARCADE else SkinVariant.DC
