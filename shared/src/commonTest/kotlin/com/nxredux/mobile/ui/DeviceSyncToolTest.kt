@@ -217,7 +217,7 @@ class DeviceSyncToolTest {
         assertEquals(OnboardingStep.ARTWORK, assertIs<Screen.Onboarding>(r.state.screen.value).step)
     }
 
-    // Sync ROMs is an option row above the links where ROM sync is available: the d-pad reaches it, A / LEFT / RIGHT flip it.
+    // Sync ROMs is an option row above the links where ROM sync is available: the d-pad reaches it, A flips it, LEFT / RIGHT leave it.
     @Test fun onboarding_sync_roms_is_an_option_row_above_the_links() = runTest {
         val r = atSyncOffer()
         r.platform.roms = true
@@ -226,7 +226,9 @@ class DeviceSyncToolTest {
         assertEquals(SyncFocus.ROMS, r.state.syncSetup.value!!.focus)
         r.state.onButton(NxButton.A)
         assertTrue(assertIs<DeviceSyncPage.Ready>(r.sync.page.value).roms)
-        r.state.onButton(NxButton.RIGHT)
+        r.state.onButton(NxButton.RIGHT); r.state.onButton(NxButton.LEFT)
+        assertTrue(assertIs<DeviceSyncPage.Ready>(r.sync.page.value).roms)
+        r.state.onButton(NxButton.A)
         assertFalse(assertIs<DeviceSyncPage.Ready>(r.sync.page.value).roms)
         r.state.syncSetupTap(0, open = true)                              // a tap on the row flips it
         assertTrue(assertIs<DeviceSyncPage.Ready>(r.sync.page.value).roms)

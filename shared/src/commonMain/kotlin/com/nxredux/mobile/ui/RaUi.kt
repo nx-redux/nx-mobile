@@ -56,17 +56,16 @@ data class RaSettingsRow(
 }
 
 /**
- * The settings page's hints for the highlighted row, as Settings' ([settingsHints]): a value row's [valueHints] (on one
- * page LEFT Change; A Toggle on a switch, Choose on a picker, on two panes Change on segments); an action A Select; a
- * dimmed row Back only. X Info while its description is cut off or says more ([info]).
+ * The settings page's hints for the highlighted row, as Settings' ([settingsHints]): a value row's [valueHints] (A
+ * Toggle on a switch, Choose on a picker, Change on segments); an action A Select; a dimmed row Back only. X Info while its description is cut off or says more ([info]).
  */
-fun raSettingsHints(row: RaSettingsRow?, touch: NxSettingRow? = null, info: Boolean = false, twoPane: Boolean = false): List<Hint> {
+fun raSettingsHints(row: RaSettingsRow?, touch: NxSettingRow? = null, info: Boolean = false): List<Hint> {
     val back = Hint(NxButton.B, "Back")
     val x = if (info) listOf(Hint(NxButton.X, "Info")) else emptyList()
     return when {
         row == null || !row.selectable -> listOf(back)
         !row.enabled -> listOf(back) + x
-        touch != null && touch.choices.size >= 2 -> listOf(back) + touch.valueHints(twoPane) + x
+        touch != null && touch.choices.size >= 2 -> listOf(back) + touch.valueHints + x
         else -> listOf(back, Hint(NxButton.A, "Select")) + x
     }
 }

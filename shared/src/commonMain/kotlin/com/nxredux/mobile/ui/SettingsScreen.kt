@@ -26,7 +26,6 @@ import com.nxredux.mobile.ui.nx.NxRowKind
 import com.nxredux.mobile.ui.nx.NxBanner
 import com.nxredux.mobile.ui.nx.NxScreenScaffold
 import com.nxredux.mobile.ui.nx.NX_EDIT_HINTS
-import com.nxredux.mobile.ui.nx.splitWindow
 import com.nxredux.mobile.ui.nx.valueHints
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
@@ -116,8 +115,7 @@ private fun SettingsTouchPage(
     val report = onTruncated
     val selected = rows.getOrNull(selectedIndex)
     val infoShown = selected != null && nxShowsInfo(selected, truncated)
-    val twoPane = rowEditTwoPane(screen, settingsSplit(splitWindow()))
-    val shownHints = hints ?: if (editing >= 0) NX_EDIT_HINTS else settingsHints(screen.rows, selectedIndex, selected, infoShown, twoPane)
+    val shownHints = hints ?: if (editing >= 0) NX_EDIT_HINTS else settingsHints(screen.rows, selectedIndex, selected, infoShown)
     val preview = onSetting == null
     val events = onSetting ?: {}
     Box(modifier.fillMaxSize()) {
@@ -300,7 +298,7 @@ internal fun SettingsRemoveDialog(onHint: ((NxButton) -> Unit)?) {
  * The hint bar for the row at [selected]: no A on a read-only row (About's info rows, or a page of only those), "A Copy"
  * on About's Copy device info, "A Open" on Full list of licenses, "A Check" or "A Update" on its update row (none while busy), "A Select" elsewhere.
  */
-internal fun settingsHints(rows: List<SettingsRow>, selected: Int, touch: NxSettingRow? = null, info: Boolean = false, twoPane: Boolean = false): List<Hint> {
+internal fun settingsHints(rows: List<SettingsRow>, selected: Int, touch: NxSettingRow? = null, info: Boolean = false): List<Hint> {
     val back = Hint(NxButton.B, "Back")
     val kind = rows.getOrNull(selected)?.kind
     val infoHint = if (info) listOf(Hint(NxButton.X, "Info")) else emptyList()
@@ -314,10 +312,8 @@ internal fun settingsHints(rows: List<SettingsRow>, selected: Int, touch: NxSett
             else listOf(back, Hint(NxButton.A, "Bind"), Hint(NxButton.X, "Clear"))
         // System buttons' press to bind: B cancels a wait ([SettingsRow.note] set), else A binds.
         kind == SettingsKind.SYSTEM_BUTTON_BIND -> if (rows[selected].note != null) listOf(Hint(NxButton.B, "Cancel")) else listOf(back, Hint(NxButton.A, "Bind"))
-        // A touch value row ([valueHints]): two panes, A toggles a switch, opens a picker or starts changing segments;
-        // one page, LEFT / RIGHT change it. Use as home screen and All files access are Android's to change: A alone.
-        touch != null && touch.choices.size >= 2 -> listOf(back) +
-            touch.valueHints(twoPane, side = kind != SettingsKind.HOME_SCREEN && kind != SettingsKind.ALL_FILES && kind != SettingsKind.MIC_ACCESS) + infoHint
+        // A touch value row ([valueHints]): A toggles a switch, opens a picker or starts changing segments.
+        touch != null && touch.choices.size >= 2 -> listOf(back) + touch.valueHints + infoHint
         touch != null && !touch.enabled -> listOf(back) + infoHint
         else -> listOf(back, Hint(NxButton.A, "Select")) + infoHint
     }

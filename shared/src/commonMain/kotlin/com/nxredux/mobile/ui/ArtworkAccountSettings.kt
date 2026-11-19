@@ -276,7 +276,6 @@ internal class ArtworkAccountSettings(
         val row = s.rows.getOrNull(selection.value.index)
         when (button) {
             NxButton.UP, NxButton.DOWN -> selection.value = selection.value.step(if (button == NxButton.UP) -1 else 1) { s.rows.getOrNull(it)?.selectable == true }
-            NxButton.LEFT, NxButton.RIGHT -> if (row?.enabled == true && row.kind.toggle) toggle(row.kind)
             NxButton.A -> if (row?.enabled == true) when (row.kind) {
                 ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.FETCH_INFO -> toggle(row.kind)
                 ArtworkSettingKind.SS_LOGIN ->

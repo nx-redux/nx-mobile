@@ -167,6 +167,9 @@ internal interface EmulatorSettingsHost {
 
     /** A on hosted row [row] that has no values (Clear link ROM cache): what A does on its Settings page. */
     fun runAppRow(row: SettingsRow)
+
+    /** Page [key] rebuilt, the selected row from [from] to [to] (null: gone): the row being changed follows ([SettingsController.followRowEdit]). */
+    fun followRowEdit(key: Any?, from: Int, to: Int?) {}
 }
 
 /**
@@ -548,12 +551,16 @@ internal class EmulatorSettingsController(
     private fun show(was: Screen.EmulatorOptions, page: EmulatorPage) {
         val cur = screen.value as? Screen.EmulatorOptions ?: return
         if (!samePage(cur, was)) return
-        val previous = cur.rows.getOrNull(selection.value.index)
+        val from = selection.value.index
+        val previous = cur.rows.getOrNull(from)
         val rows = rows(page, cur.category)
-        screen.value = cur.copy(page = page, rows = rows)
-        val at = EmulatorRows.indexOfSame(rows, previous)
-            ?: selection.value.index.takeIf { rows.getOrNull(it)?.selectable == true }
+        val next = cur.copy(page = page, rows = rows)
+        screen.value = next
+        val same = EmulatorRows.indexOfSame(rows, previous)
+        val at = same
+            ?: from.takeIf { rows.getOrNull(it)?.selectable == true }
             ?: EmulatorRows.firstSelectable(rows)
         selection.value = ListSelection(at, rows.size)
+        host.followRowEdit(rowEditKey(next), from, same)
     }
 }

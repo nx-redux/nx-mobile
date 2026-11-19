@@ -244,11 +244,11 @@ class ShortcutsSettingsTest {
         val s = state()
         s.openShortcuts()
         s.select(s.page().rows.indexOfFirst { it.label == "Touch button 1" })
-        s.onButton(NxButton.RIGHT)
+        s.padStep(NxButton.RIGHT)
         assertEquals("Toggle FF", s.row("Touch button 1").secondary)
-        s.onButton(NxButton.RIGHT)
+        s.padStep(NxButton.RIGHT)
         assertEquals("Hold FF", s.row("Touch button 1").secondary)
-        s.onButton(NxButton.LEFT); s.onButton(NxButton.LEFT)
+        s.padStep(NxButton.LEFT); s.padStep(NxButton.LEFT)   // its picker: None too
         assertEquals("None", s.row("Touch button 1").secondary)
         // Every action a touch button can do: Save & Quit is a controller's only.
         assertEquals(listOf("None") + ShortcutAction.entries.filter { it.touch }.map { it.label }, s.page().choices[s.selection.value.index]?.labels)
@@ -285,7 +285,7 @@ class ShortcutsSettingsTest {
         val s = state(settings)
         s.openShortcuts()
         s.bind(ShortcutAction.TOGGLE_FF); s.captureKey(110, true); s.captureKey(103, true)
-        s.select(s.page().rows.indexOfFirst { it.label == "Touch button 2" }); s.onButton(NxButton.RIGHT)
+        s.select(s.page().rows.indexOfFirst { it.label == "Touch button 2" }); s.padStep(NxButton.RIGHT)
         assertEquals("", settings.shortcuts)                    // not per change
         s.onButton(NxButton.B)
         assertEquals(SettingsSection.CONTROLS, s.page().section)

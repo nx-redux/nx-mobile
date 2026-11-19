@@ -180,6 +180,7 @@ import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxSettingControl
 import com.nxredux.mobile.ui.nx.NxPadA
 import com.nxredux.mobile.ui.nx.NxSettingEvent
+import com.nxredux.mobile.ui.nx.padA
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.control
 import com.nxredux.mobile.ui.nx.launcherChromeFor
@@ -3083,16 +3084,20 @@ class AppState(
         }
         // The last page: START goes as Press Start does.
         if (s.step == OnboardingStep.DONE && button == NxButton.START) return onboardingRow(0)
-        when (button) {
+        // A value row changes as Settings' do: A first, then LEFT / RIGHT, until A or B ([SettingsController.onRowEditButton]).
+        val heard = settingsUi.onRowEditButton(s, button) ?: return
+        when (heard) {
             NxButton.UP -> _selection.value = _selection.value.up(wrap = true)
             NxButton.DOWN -> _selection.value = _selection.value.down(wrap = true)
             NxButton.LEFT, NxButton.RIGHT -> when (s.step) {
-                OnboardingStep.SAVE_FORMATS -> stepOnboardingValue(OnboardingStep.SAVE_FORMATS, _selection.value.index, if (button == NxButton.LEFT) -1 else 1)
-                OnboardingStep.PAD, OnboardingStep.TITLE, OnboardingStep.ACCENT, OnboardingStep.TEXT_SIZE -> if (_selection.value.index < s.rows.lastIndex) stepOnboardingValue(onboarding.step, _selection.value.index, if (button == NxButton.LEFT) -1 else 1)
-                in ONBOARDING_LAYOUT_STEPS -> if (_selection.value.index < s.rows.lastIndex) stepOnboardingLayoutRow(_selection.value.index, if (button == NxButton.LEFT) -1 else 1)
+                OnboardingStep.SAVE_FORMATS -> stepOnboardingValue(OnboardingStep.SAVE_FORMATS, _selection.value.index, if (heard == NxButton.LEFT) -1 else 1)
+                OnboardingStep.PAD, OnboardingStep.TITLE, OnboardingStep.ACCENT, OnboardingStep.TEXT_SIZE -> if (_selection.value.index < s.rows.lastIndex) stepOnboardingValue(onboarding.step, _selection.value.index, if (heard == NxButton.LEFT) -1 else 1)
+                in ONBOARDING_LAYOUT_STEPS -> if (_selection.value.index < s.rows.lastIndex) stepOnboardingLayoutRow(_selection.value.index, if (heard == NxButton.LEFT) -1 else 1)
                 else -> Unit
             }
-            NxButton.A -> onboardingRow(_selection.value.index)
+            // A picker's A opens it, as a tap on its value does; a switch's flips (the row's own A).
+            NxButton.A -> if (s.touchRows?.getOrNull(_selection.value.index)?.padA == NxPadA.PICK) onboardingSettingEvent(NxSettingEvent.OpenPicker(_selection.value.index))
+                else onboardingRow(_selection.value.index)
             NxButton.B -> onboardingBack()
             else -> Unit
         }
@@ -4728,8 +4733,8 @@ class AppState(
                 if (row.kind == SettingsKind.SHORTCUT_BIND) row.shortcut?.let { setShortcut(it, null) }   // back to None
                 else if (settingsUi.selectedSettingShowsInfo()) showSettingInfo(_selection.value.index)
             }
-            // A value row being changed ([onRowEditButton]) steps on LEFT/RIGHT; a default emulator steps through its
-            // console's tags. Otherwise LEFT / RIGHT go between pages there.
+            // A value row being changed ([onRowEditButton], after A) steps on LEFT/RIGHT; a default emulator steps through
+            // its console's tags.
             NxButton.LEFT, NxButton.RIGHT -> if (s is Screen.SettingsMenu) {
                 // Two panes: RIGHT on a category moves into its page, like A. One page has no pane to go to.
                 if (settingsUi.settingsSplit && button == NxButton.RIGHT) openSelected()
@@ -5303,7 +5308,8 @@ class AppState(
                 syncSetupTap((at + (if (button == NxButton.UP) -1 else 1) + rows.size) % rows.size, open = false)
                 return
             }
-            if (focus == SyncFocus.ROMS && (button == NxButton.A || button == NxButton.LEFT || button == NxButton.RIGHT)) { sync.flipRoms(); return }
+            // Sync ROMs is a switch: A flips it, LEFT / RIGHT leave it alone (as on every settings page).
+            if (focus == SyncFocus.ROMS && (button == NxButton.A || button == NxButton.LEFT || button == NxButton.RIGHT)) { if (button == NxButton.A) sync.flipRoms(); return }
             if (onboardingSync && focus == SyncFocus.SKIP && button == NxButton.A) return leaveOnboardingSync(forward = true)
         }
         // Setup: A on Done (Continue) goes on; leaving Ready (B) goes back a step.
@@ -5551,6 +5557,7 @@ class AppState(
         scope, _screen, _selection, _error, deps.coreOptions, deps.emulatorConfigs, deps.coreDefaults,
         host = object : EmulatorSettingsHost {
             override fun showEmulatorsSettings() = settingsUi.showSettingsOn(SettingsSection.EMULATORS, SettingsKind.EMULATORS)
+            override fun followRowEdit(key: Any?, from: Int, to: Int?) = settingsUi.followRowEdit(key, from, to)
             override fun appSection(page: EmulatorPage): EmulatorAppSection? =
                 if (!EmulatorRows.hostsCableLink(page)) null
                 else EmulatorAppSection(EmulatorRows.CABLE_LINK_LABEL, cableLinkRows().map { EmulatorRow.App(it, settingsUi.settingChoices(it)) })
@@ -6167,7 +6174,7 @@ class AppState(
         dismissNoticeOnPress()
         (_screen.value as? Screen.Onboarding)?.let { onOnboardingButton(it, button); return }
         netplay?.takeIf { it.page.value != null }?.let { it.onButton(button); return }   // the Netplay sheet over a game list
-        // A two-pane page's row edit takes the press, or has the page hear LEFT / RIGHT as its own B / A.
+        // The row edit takes the press (A first, then LEFT / RIGHT), or on two panes has the page hear LEFT / RIGHT as its own B / A.
         val heard = settingsUi.onRowEditButton(_screen.value, button) ?: return
         // A held direction turned into B or A acts once: its repeats would climb or open one page per repeat.
         if (repeat && heard != button) return
@@ -6198,13 +6205,11 @@ class AppState(
         }
         if (artworkScreens?.onButton(_screen.value, button) == true) return
         (_screen.value as? Screen.Switcher)?.let { switcher.onSwitcherButton(it, button, repeat); return }
-        // The summary: its move's confirmation takes every button first; LEFT and RIGHT flip the Move row as A does.
+        // The summary: its move's confirmation takes every button first; the Move row is a switch, A flips it and LEFT / RIGHT
+        // leave it alone (as on every settings page).
         (_screen.value as? Screen.FolderSummary)?.let { fs ->
             if (fs.confirmMove) { folders.onFolderMoveConfirm(fs, button); return }
-            val rows = folderSummaryRows(fs)
-            if ((button == NxButton.LEFT || button == NxButton.RIGHT) && rows.getOrNull(_selection.value.index)?.kind == SummaryRowKind.MOVE) {
-                _screen.value = fs.copy(move = !fs.move); return
-            }
+            if ((button == NxButton.LEFT || button == NxButton.RIGHT) && folderSummaryRows(fs).getOrNull(_selection.value.index)?.kind == SummaryRowKind.MOVE) return
         }
         (_screen.value as? Screen.CheatDb)?.let { onCheatDbButton(it, button); return }   // before the generic when: UP/DOWN use the action-row count
         if (_screen.value == Screen.DeviceSync) { onDeviceSyncButton(button); return }   // every button is the controller's

@@ -134,18 +134,8 @@ val NxSettingRow.padAHint: Hint? get() = when (padA) {
     NxPadA.NONE -> null
 }
 
-/**
- * [this] value row's hints by how the page is drawn: beside another page ([twoPane]) A's alone ([padAHint]: Toggle,
- * Choose or Change, LEFT / RIGHT then step it); one page, LEFT / RIGHT change it at once and A toggles a switch or opens
- * a picker (segments step on A too, no hint of their own). [side] false: LEFT / RIGHT leave this row alone (a row
- * Android changes).
- */
-fun NxSettingRow.valueHints(twoPane: Boolean, side: Boolean = true): List<Hint> =
-    if (twoPane) listOfNotNull(padAHint)
-    else listOfNotNull(
-        Hint(NxButton.LEFT, "Change").takeIf { side },
-        when (padA) { NxPadA.FLIP -> Hint(NxButton.A, "Toggle"); NxPadA.PICK -> Hint(NxButton.A, "Choose"); else -> null },
-    )
+/** [this] value row's hints: A's alone ([padAHint]: Toggle, Choose or Change); LEFT / RIGHT step it only after A's Change. */
+val NxSettingRow.valueHints: List<Hint> get() = listOfNotNull(padAHint)
 
 /** The hints while a row is being changed ([NxSettingRow.editing]): LEFT / RIGHT change it, A or B are done. */
 val NX_EDIT_HINTS: List<Hint> = listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.B, "Done"))
