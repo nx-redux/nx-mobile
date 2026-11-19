@@ -236,7 +236,18 @@ data class FrameSpec(
     val top: Int = -1,
     val bottom: Int = -1,
     val hinge: Int = -1,
-)
+    /** The art's size in the parts picture where it is smaller than [w] x [h] (corners and a middle, stretched); 0: [w] / [h]. */
+    val srcW: Int = 0,
+    val srcH: Int = 0,
+    /**
+     * The art's opening: px in from its left, top, right and bottom edges (drawn the same in the frame, its corners kept).
+     * Black over it where no screen is (a strip's band, a narrower screen's sides), its corners the glass's; empty: none.
+     */
+    val hole: List<Int> = emptyList(),
+) {
+    val artW: Int get() = if (srcW > 0) srcW else w
+    val artH: Int get() = if (srcH > 0) srcH else h
+}
 
 /**
  * The frame's on-screen buttons (the touch shortcut slots TOUCH_1..TOUCH_4): an even share of the screen's width each, centred [y] px above
@@ -323,7 +334,14 @@ data class PieceSpec(
     val group: String? = null,
     /** In a box: drawn this much of its width across in place of [scale] (a well stretched to hold a row of caps); 0: [scale]. */
     val scaleX: Float = 0f,
+    /** As [FrameSpec.srcW] / [FrameSpec.srcH]: smaller art, nine-sliced to [w] x [h] with corners of [grow]. */
+    val srcW: Int = 0,
+    val srcH: Int = 0,
+    /** As [FrameSpec.hole], for a piece with a [glass]. */
+    val hole: List<Int> = emptyList(),
 ) {
+    val artW: Int get() = if (srcW > 0) srcW else w
+    val artH: Int get() = if (srcH > 0) srcH else h
     /** Its drawn width's scale: [scaleX], else [scale]. */
     val acrossScale: Float get() = if (scaleX > 0f) scaleX else scale
 }

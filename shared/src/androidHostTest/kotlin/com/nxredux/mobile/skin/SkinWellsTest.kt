@@ -17,7 +17,7 @@ internal fun skinPreviewJson(w: Int, h: Int, p: SkinPlacement?): String {
     sb.append("],\"parts\":${p?.spec?.parts?.let { "\"$it\"" }},\"pieces\":[")
     p?.pieces?.forEachIndexed { i, c ->
         if (i > 0) sb.append(',')
-        sb.append("[${c.src.x},${c.src.y},${c.src.width},${c.src.height},${c.dst.x},${c.dst.y},${c.dst.width},${c.dst.height},${c.alt?.let { "\"$it\"" }}]")
+        sb.append("[${c.src.x},${c.src.y},${c.src.width},${c.src.height},${c.dst.x},${c.dst.y},${c.dst.width},${c.dst.height},${c.alt?.let { "\"$it\"" }},${c.fill}]")
     }
     sb.append("],\"glasses\":[")
     p?.glasses?.forEachIndexed { i, g -> if (i > 0) sb.append(','); sb.append("[\"${g.screen}\",${g.rect.x},${g.rect.y},${g.rect.width},${g.rect.height},${g.scale}]") }

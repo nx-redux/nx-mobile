@@ -87,7 +87,8 @@ fun goldenOf(p: SkinPlacement?): JsonElement = if (p == null) JsonNull else buil
         }) }
     })
     put("pieces", buildJsonArray {
-        p.pieces.forEach { q -> add(buildJsonObject { put("dst", rect(q.dst)); put("alt", q.alt ?: ""); put("knob", q.knob); put("strip", q.strip) }) }
+        p.pieces.filter { it.fill < 0f }.forEach { q ->   // (a frame's black opening: drawn from the frame, not placed)
+            add(buildJsonObject { put("dst", rect(q.dst)); put("alt", q.alt ?: ""); put("knob", q.knob); put("strip", q.strip) }) }
     })
     put("glasses", buildJsonArray { p.glasses.forEach { g -> add(buildJsonObject { put("id", g.id); put("rect", rect(g.rect)) }) } })
     put("groups", buildJsonArray { SkinGroups.of(p.spec).map { it.id }.sorted().forEach { add(JsonPrimitive(it)) } })

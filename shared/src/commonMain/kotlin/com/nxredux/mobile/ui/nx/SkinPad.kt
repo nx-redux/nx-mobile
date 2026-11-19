@@ -114,6 +114,9 @@ fun SkinArt(placement: SkinPlacement, picture: ImageBitmap, parts: ImageBitmap?,
     val semibold = Font(Res.font.misans_semibold, FontWeight.SemiBold)
     val labelFont = remember(semibold) { FontFamily(semibold) }
     val measurer = rememberTextMeasurer()
+    val rounded = remember(placement) {   // the screens with their corners: what a frame's black leaves open
+        Path().apply { for (g in placement.glasses) addRoundRect(androidx.compose.ui.geometry.RoundRect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height, CornerRadius(g.corner))) }
+    }
     val holes = remember(placement) {
         Path().apply { for (g in placement.glasses) addRect(Rect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height)) }
     }
@@ -126,7 +129,13 @@ fun SkinArt(placement: SkinPlacement, picture: ImageBitmap, parts: ImageBitmap?,
         }
         // the pieces and labels whole, over the screens as the game draws them: a button moved onto a screen's edge stays
         // on top (the frame's own hole is cut round in its art)
-        if (parts != null) for (p in placement.pieces) drawPiece(parts, p)
+        if (parts != null) for (p in placement.pieces) {
+            if (p.fill >= 0f) {   // black inside a frame where no screen is: the screens cut out of it
+                clipPath(rounded, ClipOp.Difference) {
+                    drawRoundRect(Color.Black, Offset(p.dst.x, p.dst.y), Size(p.dst.width, p.dst.height), CornerRadius(p.fill))   // role: a screen frame's black inside
+                }
+            } else drawPiece(parts, p)
+        }
         // the marks on the caps (their art is blank): a word cap height markH, or art from the parts markH tall
         for (c in placement.controls) {
             if (c.spec.markH <= 0f) continue

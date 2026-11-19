@@ -276,6 +276,8 @@ internal class PadSkinView(
     }
     private val slotLabel = Paint(label)
     private val mark = Paint(label)
+    /** The black inside a frame where no screen is ([com.nxredux.mobile.skin.SkinPiece.fill]). */
+    private val frameInk = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.BLACK }
     /** The overlay's touch shortcut pills ([stripPill]): their fill and their edge. */
     private val pillFill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val pillRing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -325,6 +327,14 @@ internal class PadSkinView(
         parts?.let { pp ->
             for (piece in p.pieces) {
                 if (piece.knob) continue   // the stick's knob moves: drawn over the layer ([dispatchDraw])
+                if (piece.fill >= 0f) {   // black inside a frame where no screen is: the screens cut out of it
+                    holes.reset()
+                    for (g in p.glasses) holes.addRoundRect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height, g.corner, g.corner, Path.Direction.CW)
+                    canvas.save(); canvas.clipOutPath(holes)
+                    canvas.drawRoundRect(piece.dst.x, piece.dst.y, piece.dst.x + piece.dst.width, piece.dst.y + piece.dst.height, piece.fill, piece.fill, frameInk)
+                    canvas.restore()
+                    continue
+                }
                 src.set(piece.src.x.roundToInt(), piece.src.y.roundToInt(), (piece.src.x + piece.src.width).roundToInt(), (piece.src.y + piece.src.height).roundToInt())
                 dst.set(piece.dst.x.roundToInt(), piece.dst.y.roundToInt(), (piece.dst.x + piece.dst.width).roundToInt(), (piece.dst.y + piece.dst.height).roundToInt())
                 canvas.drawBitmap(pp, src, dst, paint)

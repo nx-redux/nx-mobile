@@ -103,7 +103,9 @@ internal fun SkinLayoutSpec.tallTwinApart(): Boolean {
  * [strip]: one of the frame strip's shortcut labels (hidden with the in-game menu open). [piece]: the layout's piece it
  * draws (an index into [SkinLayoutSpec.pieces]); -1: the frame or a strip label.
  */
-data class SkinPiece(val src: PxRect, val dst: PxRect, val strip: Boolean = false, val alt: String? = null, val knob: Boolean = false, val knobOf: String = "STICK", val piece: Int = -1)
+data class SkinPiece(val src: PxRect, val dst: PxRect, val strip: Boolean = false, val alt: String? = null, val knob: Boolean = false, val knobOf: String = "STICK", val piece: Int = -1,
+    /** 0 or more: no art, [dst] filled black with corners this round, the screens cut out (a frame's opening where no screen is). */
+    val fill: Float = -1f)
 
 /** A control's hit area placed in the window: its [spec] (id, shape, sizes scaled) at [x], [y]. */
 data class PlacedControl(val spec: ControlSpec, val x: Float, val y: Float)
@@ -309,21 +311,7 @@ object SkinSolver {
         // Each drawn border reaches past the glass's edge by its corner radius, so the hole's rounded corners are drawn
         // as they are (a border thicker than the frame's corner, as under the strip, would start right at the glass and
         // stretch the corner's curve into a square: the board then shows through)
-        val gc = g.corner.toFloat()
-        val cl = maxOf(bl + gc, frame.corner.toFloat()); val ct = maxOf(bt + gc, frame.corner.toFloat())
-        val cr = maxOf(br + gc, frame.corner.toFloat()); val cb = maxOf(bb + gc, frame.corner.toFloat())
-        val sx0 = frame.sx.toFloat(); val sy0 = frame.sy.toFloat()
-        val midX = sx0 + frame.w / 2f - 1f; val midY = sy0 + frame.h / 2f - 1f
-        val colsSrc = listOf(sx0 to cl, midX to 2f, sx0 + frame.w - cr to cr)
-        val rowsSrc = listOf(sy0 to ct, midY to 2f, sy0 + frame.h - cb to cb)
-        val colsDst = listOf(fx to cl, fx + cl to fw - cl - cr, fx + fw - cr to cr)
-        val rowsDst = listOf(fy to ct, fy + ct to fh - ct - cb, fy + fh - cb to cb)
-        for (j in 0..2) for (i in 0..2) {
-            if (i == 1 && j == 1) continue
-            val (dX, dW) = colsDst[i]; val (dY, dH) = rowsDst[j]
-            if (dW <= 0f || dH <= 0f) continue
-            pieces += SkinPiece(PxRect(colsSrc[i].first, rowsSrc[j].first, colsSrc[i].second, rowsSrc[j].second), win(dX, dY, dW, dH))
-        }
+        pieces += frameSlices(frame, fx, fy, fw, fh, 1f, k) { x, y, w_, h_ -> win(x, y, w_, h_) }
         val controls = ArrayList<PlacedControl>()
         frame.strip?.let { st ->
             val share = gw / st.labels.size
@@ -607,8 +595,8 @@ object SkinSolver {
             val shapeW = at[2]   // the glass's own growth, its picture's shape kept
             // after its growth, which reaches up from where the piece is drawn for the window, not where it moves to
             val py = at[1] - (if (p === between) raise else 0f) - (if (p.glass != null) screenRise else if (p.anchor == PieceAnchor.CENTRE) 0f else controlRise)
-            if (gx != 0f || gy != 0f) {   // grown, or narrowed clear of the side groups
-                pieces += nineSlice(p, p.grow.toFloat(), p.w + gx, p.h + gy) { x, y, w_, h_ -> win(px + x, py + y, w_, h_) }.map { it.copy(piece = pi) }
+            if (gx != 0f || gy != 0f || p.srcW > 0 || p.srcH > 0 || p.hole.isNotEmpty()) {   // grown, narrowed clear of the side groups, or from smaller art
+                pieces += nineSlice(p, p.grow.toFloat(), p.w + gx, p.h + gy, k) { x, y, w_, h_ -> win(px + x, py + y, w_, h_) }.map { it.copy(piece = pi) }
             } else {
                 pieces += SkinPiece(PxRect(p.sx.toFloat(), p.sy.toFloat(), p.w.toFloat(), p.h.toFloat()), win(px, py, p.w * p.scale, p.h * p.scale), alt = p.alt, knob = p.knob, knobOf = p.knobOf, piece = pi)
             }
@@ -652,14 +640,48 @@ object SkinSolver {
     private const val HINGE_CLEAR = 80f
 
     /** Piece [p]'s picture drawn [w] x [h] picture px: corners [c] as drawn, the edges and middle stretched. */
-    private fun nineSlice(p: PieceSpec, c: Float, w: Float, h: Float, dst: (Float, Float, Float, Float) -> PxRect): List<SkinPiece> {
+    private fun nineSlice(p: PieceSpec, c: Float, w: Float, h: Float, cornerK: Float, dst: (Float, Float, Float, Float) -> PxRect): List<SkinPiece> {
         val sx = p.sx.toFloat(); val sy = p.sy.toFloat()
-        val cols = listOf(Triple(sx, c, 0f to c), Triple(sx + c, p.w - 2 * c, c to w - 2 * c), Triple(sx + p.w - c, c, w - c to c))
-        val rows = listOf(Triple(sy, c, 0f to c), Triple(sy + c, p.h - 2 * c, c to h - 2 * c), Triple(sy + p.h - c, c, h - c to c))
+        val cols = listOf(Triple(sx, c, 0f to c), Triple(sx + c, p.artW - 2 * c, c to w - 2 * c), Triple(sx + p.artW - c, c, w - c to c))
+        val rows = listOf(Triple(sy, c, 0f to c), Triple(sy + c, p.artH - 2 * c, c to h - 2 * c), Triple(sy + p.artH - c, c, h - c to c))
         return buildList {
             for ((ry, rh, rd) in rows) for ((cx, cw, cd) in cols) {
                 if (cd.second <= 0f || rd.second <= 0f) continue
                 add(SkinPiece(PxRect(cx, ry, cw, rh), dst(cd.first, rd.first, cd.second, rd.second)))
+            }
+            val g = p.glass
+            if (g != null && p.hole.size == 4) { val (l, t, r, b) = p.hole
+                add(SkinPiece(PxRect(0f, 0f, 0f, 0f), dst(l.toFloat(), t.toFloat(), w - l - r, h - t - b), fill = g.corner * cornerK)) }
+        }
+    }
+
+    /**
+     * [frame]'s art round a [fw] x [fh] frame at [fx], [fy] (frame px times [k] give the drawn size): corners as drawn,
+     * straight edges stretched from the 2 px slice at their middle, the glass a hole. Each drawn border reaches past the
+     * glass's edge by its corner radius, so the hole's rounded corners are drawn as they are (a border thicker than the
+     * frame's corner, as under the strip, would start right at the glass and stretch the corner's curve into a square).
+     * With a [FrameSpec.hole], black over the art's opening last, where no screen is.
+     */
+    fun frameSlices(frame: FrameSpec, fx: Float, fy: Float, fw: Float, fh: Float, k: Float, cornerK: Float = k, dst: (Float, Float, Float, Float) -> PxRect): List<SkinPiece> {
+        val g = frame.glass
+        val bl = g.x.toFloat(); val bt = g.y.toFloat(); val br = (frame.w - g.x - g.w).toFloat(); val bb = (frame.h - g.y - g.h).toFloat()
+        val gc = g.corner.toFloat()
+        val cl = maxOf(bl + gc, frame.corner.toFloat()); val ct = maxOf(bt + gc, frame.corner.toFloat())
+        val cr = maxOf(br + gc, frame.corner.toFloat()); val cb = maxOf(bb + gc, frame.corner.toFloat())
+        val sx0 = frame.sx.toFloat(); val sy0 = frame.sy.toFloat()
+        val colsSrc = listOf(sx0 to cl, sx0 + frame.artW / 2f - 1f to 2f, sx0 + frame.artW - cr to cr)
+        val rowsSrc = listOf(sy0 to ct, sy0 + frame.artH / 2f - 1f to 2f, sy0 + frame.artH - cb to cb)
+        val colsDst = listOf(fx to cl * k, fx + cl * k to fw - (cl + cr) * k, fx + fw - cr * k to cr * k)
+        val rowsDst = listOf(fy to ct * k, fy + ct * k to fh - (ct + cb) * k, fy + fh - cb * k to cb * k)
+        return buildList {
+            for (j in 0..2) for (i in 0..2) {
+                if (i == 1 && j == 1) continue
+                val (dX, dW) = colsDst[i]; val (dY, dH) = rowsDst[j]
+                if (dW <= 0f || dH <= 0f) continue
+                add(SkinPiece(PxRect(colsSrc[i].first, rowsSrc[j].first, colsSrc[i].second, rowsSrc[j].second), dst(dX, dY, dW, dH)))
+            }
+            frame.hole.takeIf { it.size == 4 }?.let { (l, t, r, b) ->
+                add(SkinPiece(PxRect(0f, 0f, 0f, 0f), dst(fx + l * k, fy + t * k, fw - (l + r) * k, fh - (t + b) * k), fill = gc * cornerK))
             }
         }
     }

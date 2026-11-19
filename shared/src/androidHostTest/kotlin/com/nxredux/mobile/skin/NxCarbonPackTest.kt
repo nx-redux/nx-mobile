@@ -1343,7 +1343,7 @@ class NxCarbonPackTest {
             if (l.id != "grip_gba" && l.id != "stacked_single") continue
             val bottom = f.h - f.glass.y - f.glass.h
             assertTrue(bottom <= 87, "${l.id} bottom border $bottom")
-            val rim = f.glass.y   // the frame's own rim and groove, as at its top
+            val rim = f.hole.getOrElse(3) { f.glass.y }   // the frame's own rim and groove at its foot (its art's opening)
             assertEquals((bottom - rim) / 2f + rim, (st.y + st.wordUp).toFloat(), 2f, "${l.id} words centred in the band")
             assertTrue(st.hh >= 30, "${l.id} touch slots still easy to press")
             assertTrue(bottom - st.y - st.hh >= SLOT_SCREEN_GAP, "${l.id} slots clear of the screen")
@@ -1594,7 +1594,7 @@ class NxCarbonPackTest {
     fun flipIsStackedFlatAndFlexHalfFolded() {
         val flat = assertNotNull(place("flip_flat", 1080, 2520))
         assertEquals("stacked_ds", flat.spec.id)
-        assertEquals(1080f - 2 * (40 + 30), flat.glass(GlassScreen.STACK)!!.rect.width, 1f)   // the window less the shell margins and the frame border
+        assertEquals(992f, flat.glass(GlassScreen.STACK)!!.rect.width, 1f)   // the window less the shell margins and the frame's 20 px borders
         val flex = assertNotNull(place("flip_flex", 1080, 2520, hinge = 1200f, foldable = true))
         assertHalfFolded(flex, 1200f)
         assertEquals("flex_ds", flex.spec.id)
@@ -1884,7 +1884,7 @@ class NxCarbonPackTest {
             assertEquals(rp.lRing.minOf { it.dst.x } + 16f * dpi / 160f, rp.l.minOf { it.dst.x }, 1f, "$name L")
             assertEquals(rp.rRing.maxOf { it.dst.x + it.dst.width } - 16f * dpi / 160f, rp.r.maxOf { it.dst.x + it.dst.width }, 1f, "$name R")
             assertEquals(16f * dpi / 160f, rp.lRing.minOf { it.dst.y } - rp.l.maxOf { it.dst.y + it.dst.height }, 1f, "$name L over the d-pad")
-            assertEquals(8 + 1 + 7, p.pieces.size, name)   // the frame (corners and edges), the SELECT START well, then the seven button pieces
+            assertEquals(8 + 1 + 7, p.pieces.count { it.fill < 0f }, name)   // the frame (corners and edges), the SELECT START well, then the seven button pieces
         }
         assertNull(SkinChoice.placeMenu(pack, 1080, 1100, 420))   // too short: no menu layout fits
         // the game's choice never picks the menu layout
@@ -2037,7 +2037,7 @@ class NxCarbonPackTest {
             assertEquals((c.getValue("START").y + c.getValue("SELECT").y) / 2f, c.getValue("MENU").y, 1f, name)
             assertTrue(c.getValue("L").y - 54f * p.k > 0f, name)
             assertTrue(c.values.all { it.x < g.x || it.x > g.x + g.width }, name)
-            assertEquals(8 + 1 + 7, p.pieces.size, name)   // the frame, the SELECT START well, the buttons
+            assertEquals(8 + 1 + 7, p.pieces.count { it.fill < 0f }, name)   // the frame, the SELECT START well, the buttons
         }
         // with the status bar over it, the frame starts right under it
         val bar = assertNotNull(SkinChoice.placeMenu(pack, 2400, 1080, 420, topInset = 90))

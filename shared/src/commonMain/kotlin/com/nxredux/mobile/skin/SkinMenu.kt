@@ -77,24 +77,9 @@ fun SkinPlacement.menuFrame(room: PxRect): List<SkinPiece> {
     val f = spec.frame ?: return emptyList()
     val g = f.glass
     val bl = g.x.toFloat(); val bt = g.y.toFloat(); val br = (f.w - g.x - g.w).toFloat(); val bb = (f.h - g.y - g.h).toFloat()
-    val gc = g.corner.toFloat()
-    val cl = maxOf(bl + gc, f.corner.toFloat()); val ct = maxOf(bt + gc, f.corner.toFloat())
-    val cr = maxOf(br + gc, f.corner.toFloat()); val cb = maxOf(bb + gc, f.corner.toFloat())
-    val sx0 = f.sx.toFloat(); val sy0 = f.sy.toFloat()
-    val colsSrc = listOf(sx0 to cl, sx0 + f.w / 2f - 1f to 2f, sx0 + f.w - cr to cr)
-    val rowsSrc = listOf(sy0 to ct, sy0 + f.h / 2f - 1f to 2f, sy0 + f.h - cb to cb)
     val fx = room.x - bl * k; val fy = room.y - bt * k
     val fw = room.width + (bl + br) * k; val fh = room.height + (bt + bb) * k
-    val colsDst = listOf(fx to cl * k, fx + cl * k to fw - (cl + cr) * k, fx + fw - cr * k to cr * k)
-    val rowsDst = listOf(fy to ct * k, fy + ct * k to fh - (ct + cb) * k, fy + fh - cb * k to cb * k)
-    return buildList {
-        for (j in 0..2) for (i in 0..2) {
-            if (i == 1 && j == 1) continue
-            val (dX, dW) = colsDst[i]; val (dY, dH) = rowsDst[j]
-            if (dW <= 0f || dH <= 0f) continue
-            add(SkinPiece(PxRect(colsSrc[i].first, rowsSrc[j].first, colsSrc[i].second, rowsSrc[j].second), PxRect(dX, dY, dW, dH), piece = MENU_FRAME_PIECE))
-        }
-    }
+    return SkinSolver.frameSlices(f, fx, fy, fw, fh, k) { x, y, w, h -> PxRect(x, y, w, h) }.map { it.copy(piece = MENU_FRAME_PIECE) }
 }
 
 /** [menuFrame]'s slices' [SkinPiece.piece]: none of the layout's own pieces. */
