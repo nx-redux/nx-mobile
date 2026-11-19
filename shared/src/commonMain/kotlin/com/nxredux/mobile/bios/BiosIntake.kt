@@ -23,8 +23,9 @@ interface BiosIntake {
 
 /** An import's results page: the [plan] as carried out, [failed] the planned writes that could not be written. */
 data class BiosIntakeSummary(val plan: BiosIntakePlan, val failed: List<BiosSkip>) {
-    private val failedPaths = failed.mapTo(HashSet()) { it.pickedPath }
-    private val shown = plan.writes.filter { !(it.needsWrite && it.pickedPath in failedPaths) }
+    // A failed write leaves that destination only: the file's other consoles still show, its duplicates there do not.
+    private val failedAt = failed.mapNotNullTo(HashSet()) { f -> f.console?.let { it to f.name } }
+    private val shown = plan.writes.filter { (it.console to it.name) !in failedAt }
 
     /** "Imported 3 BIOS, 2 already there": the page's headline, and the notice when the import ends away from it. */
     fun headline(): String {
@@ -38,7 +39,7 @@ data class BiosIntakeSummary(val plan: BiosIntakePlan, val failed: List<BiosSkip
         val files = shown.sortedBy { displayName(it.console) }.map { w ->
             "${displayName(w.console)}: ${w.name} (${statusText(w)}${if (w.bootChange) ", changes boot" else ""})"
         }
-        val skipped = (plan.skips + failed).map { "Skipped ${it.pickedPath.substringAfterLast('/')}: ${it.reason.replaceFirstChar(Char::lowercaseChar)}" }
+        val skipped = (plan.skips + failed).map { "Skipped ${biosBaseName(it.pickedPath)}: ${it.reason.replaceFirstChar(Char::lowercaseChar)}" }
         val other = when (plan.otherFiles) {
             0 -> null
             1 -> "1 other file skipped. "
@@ -52,7 +53,7 @@ data class BiosIntakeSummary(val plan: BiosIntakePlan, val failed: List<BiosSkip
 
     private fun statusText(w: BiosWrite) = when (w.outcome) {
         BiosOutcome.VERIFIED -> "verified"
-        BiosOutcome.RENAMED -> "renamed from ${w.pickedPath.substringAfterLast('/')}"
+        BiosOutcome.RENAMED -> "renamed from ${biosBaseName(w.pickedPath)}"
         BiosOutcome.NOT_VERIFIED -> "not verified"
         BiosOutcome.ALREADY_THERE -> "already there"
         BiosOutcome.KEPT_YOURS -> "kept yours, verified"

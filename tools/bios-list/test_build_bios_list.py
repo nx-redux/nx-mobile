@@ -93,6 +93,9 @@ systems: [sony-playstation-2]
 files:
   - name: "<module>.irx"
   - name: Wii System Menu
+  - name: COH-H31000.BIN
+    size: 4194304
+  - name: proverb.zip
 """,
     "prboom": """
 systems: [doom]
@@ -196,6 +199,9 @@ class BuildBiosListTest(unittest.TestCase):
         lines = build_bios_list.to_tsv(self.build()).splitlines()
         neo = [l for l in lines if l.startswith("neogeo.zip\t")][0].split("\t")
         self.assertEqual("", neo[3])
+
+    def test_arcade_files_kept_out_of_ps2(self):
+        self.assertFalse([r for r in self.build() if r.name in ("COH-H31000.BIN", "proverb.zip")])
 
     def test_boot_change_flag(self):
         rows = self.build()

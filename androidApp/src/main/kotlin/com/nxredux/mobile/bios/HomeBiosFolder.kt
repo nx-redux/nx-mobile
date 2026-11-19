@@ -116,6 +116,11 @@ class SafHomeBios(private val saf: SafTree, tree: Uri) : HomeBiosFolder {
         val ok = runCatching { val out = saf.openWrite(part) ?: error("no write"); Md5.copy(from(), out); true }.getOrDefault(false)
         if (!ok) { saf.delete(part); return false }
         saf.child(d, name)?.let { if (!saf.delete(it.uri)) { saf.delete(part); return false } }
-        return saf.rename(part, name) != null
+        if (saf.rename(part, name) != null) return true
+        // A provider that cannot rename: the old file is gone, so write the target straight from the part, then drop it.
+        val target = saf.createFile(d, name) ?: return false
+        val copied = runCatching { val out = saf.openWrite(target) ?: error("no write"); Md5.copy(saf.openRead(part) ?: error("no read"), out); true }.getOrDefault(false)
+        saf.delete(part)
+        return copied
     }
 }

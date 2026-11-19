@@ -41,9 +41,27 @@ class BiosIntakeSummaryTest {
     fun failedWritesListedWithSkips() {
         val plan = BiosIntakePlan(listOf(w("scph5501.bin", "PS", "scph5501.bin", BiosOutcome.VERIFIED)), emptyList(), 1)
         // A write that failed leaves its console's lines and is listed with the skips.
-        val s = BiosIntakeSummary(plan, listOf(BiosSkip("scph5501.bin", "Could not write")))
+        val s = BiosIntakeSummary(plan, listOf(BiosSkip("scph5501.bin", "Could not write", console = "PS", name = "scph5501.bin")))
         assertEquals("Imported 0 BIOS", s.headline())
         assertEquals(listOf("Skipped scph5501.bin: could not write", "", "1 other file skipped. Anything skipped can still go in Bios/<CONSOLE>/ by hand."), s.lines())
+    }
+
+    @Test
+    fun aFailedWriteHidesOnlyThatConsole() {
+        val plan = BiosIntakePlan(
+            listOf(
+                w("bios_CD_U.bin", "SEGACD", "bios_CD_U.bin", BiosOutcome.VERIFIED),
+                w("bios_CD_U.bin", "MD", "bios_CD_U.bin", BiosOutcome.VERIFIED),
+                w("copy/bios_CD_U.bin", "MD", "bios_CD_U.bin", BiosOutcome.ALREADY_THERE),   // a duplicate of the failed winner
+            ),
+            emptyList(), 0,
+        )
+        val s = BiosIntakeSummary(plan, listOf(BiosSkip("bios_CD_U.bin", "Could not write", console = "MD", name = "bios_CD_U.bin")))
+        assertEquals("Imported 1 BIOS", s.headline())
+        assertEquals(
+            listOf("Sega CD: bios_CD_U.bin (verified)", "", "Skipped bios_CD_U.bin: could not write", "", "Anything skipped can still go in Bios/<CONSOLE>/ by hand."),
+            s.lines(),
+        )
     }
 
     @Test

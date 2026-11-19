@@ -21,8 +21,14 @@ data class BiosWrite(val pickedPath: String, val console: String, val name: Stri
     val needsWrite: Boolean get() = outcome == BiosOutcome.VERIFIED || outcome == BiosOutcome.RENAMED || outcome == BiosOutcome.NOT_VERIFIED
 }
 
-/** A file the results list as skipped, with why. Files that are no known BIOS at all are only counted ([BiosIntakePlan.otherFiles]). */
-data class BiosSkip(val pickedPath: String, val reason: String)
+/**
+ * A file the results list as skipped, with why; [console] and [name] set for a planned write that failed. Files that are
+ * no known BIOS at all are only counted ([BiosIntakePlan.otherFiles]).
+ */
+data class BiosSkip(val pickedPath: String, val reason: String, val console: String? = null, val name: String? = null)
+
+/** A picked path's file name; zips made on Windows may separate folders with a backslash. */
+fun biosBaseName(path: String): String = path.substringAfterLast('/').substringAfterLast('\\')
 
 data class BiosIntakePlan(val writes: List<BiosWrite>, val skips: List<BiosSkip>, val otherFiles: Int) {
     val isEmpty: Boolean get() = writes.isEmpty() && skips.isEmpty()
@@ -36,9 +42,7 @@ data class BiosIntakePlan(val writes: List<BiosWrite>, val skips: List<BiosSkip>
  */
 object BiosIntakePlanner {
     /** macOS leftovers (`._x`, `.DS_Store`) and other dotfiles are no BIOS and are not even counted. */
-    fun isCandidate(path: String): Boolean = !baseName(path).startsWith(".")
-
-    private fun baseName(path: String) = path.substringAfterLast('/')
+    fun isCandidate(path: String): Boolean = !biosBaseName(path).startsWith(".")
 
     private val VERIFIED_RANK = setOf(BiosOutcome.VERIFIED, BiosOutcome.RENAMED)
 
@@ -54,20 +58,18 @@ object BiosIntakePlanner {
         var other = 0
         val candidates = mutableListOf<Candidate>()
         for (p in picked) {
-            val base = baseName(p.path)
+            val base = biosBaseName(p.path)
             val byMd5 = p.md5?.let { known.byMd5(it) }.orEmpty()
             if (byMd5.isNotEmpty()) {
-                byMd5.groupBy { it.console }.values.forEach { hits ->
-                    val e = hits.firstOrNull { h -> (listOf(h.name) + h.aliases).any { it.equals(base, ignoreCase = true) } } ?: hits.first()
-                    candidates += Candidate(p, e, if (base == e.name) BiosOutcome.VERIFIED else BiosOutcome.RENAMED)
-                }
+                // The same bytes under two names of one console (SMS bios_E / bios_U) are both written: the core may look for either.
+                byMd5.forEach { e -> candidates += Candidate(p, e, if (base == e.name) BiosOutcome.VERIFIED else BiosOutcome.RENAMED) }
                 continue
             }
             val byName = known.byName(base)
             val fits = byName.filter { it.sizes.isEmpty() || p.size in it.sizes }
             when {
                 fits.isNotEmpty() -> fits.groupBy { it.console }.values.forEach { candidates += Candidate(p, it.first(), BiosOutcome.NOT_VERIFIED) }
-                byName.isNotEmpty() -> skips += BiosSkip(p.path, "Wrong size (expected ${byName.first().sizes.min()} bytes)")
+                byName.isNotEmpty() -> skips += BiosSkip(p.path, "Wrong size (expected ${byName.flatMap { it.sizes }.distinct().sorted().joinToString(" or ")} bytes)")
                 else -> other++
             }
         }

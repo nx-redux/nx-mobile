@@ -2,10 +2,8 @@ package com.nxredux.mobile.bios
 
 import android.content.Context
 import android.net.Uri
-import android.os.Environment
 import android.os.Handler
 import android.os.Looper
-import android.provider.DocumentsContract
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.KnownBiosAsset
 import com.nxredux.mobile.settings.SaveTransferRules
@@ -18,7 +16,7 @@ import com.nxredux.mobile.storage.ImportEntry
 import com.nxredux.mobile.storage.ImportFiles
 import com.nxredux.mobile.storage.ImportTree
 import com.nxredux.mobile.storage.MediaHome
-import com.nxredux.mobile.storage.RetroArchFolders
+import com.nxredux.mobile.storage.PickedRefs
 import com.nxredux.mobile.storage.SafTree
 import com.nxredux.mobile.storage.TreeImportFiles
 import com.nxredux.mobile.storage.ZipImportFiles
@@ -45,7 +43,6 @@ class AndroidBiosIntake(
     private val app = context.applicationContext
     private val resolver = app.contentResolver
     private val main = Handler(Looper.getMainLooper())
-    private val executor = Executors.newSingleThreadExecutor()
     override val running: Boolean get() = anyRunning
 
     override fun import(source: BiosSource, progress: (String) -> Unit, done: (BiosIntakeResult) -> Unit) {
@@ -55,21 +52,21 @@ class AndroidBiosIntake(
             BiosSource.FILES -> pickers.openFiles { refs -> if (refs.isNotEmpty()) work(progress, done) { pickedFiles(refs) } }
             BiosSource.ZIP -> pickers.openZip { ref ->
                 ref ?: return@openZip
-                val open = opener(ref)
+                val open = PickedRefs.opener(resolver, ref)
                 // The picker shows every file type: only a zip goes on.
                 if (!looksLikeZip(open)) return@openZip done(BiosIntakeResult.Message("That file is not a zip"))
                 work(progress, done) { ZipImportFiles { open() ?: error("cannot read the zip") } }
             }
             // With All files access every RetroArch system folder found is read; without it the user picks RetroArch's folder.
             BiosSource.RETROARCH -> if (AndroidAllFilesAccess.isGranted()) {
-                val roots = retroArchRoots()
+                val roots = PickedRefs.retroArchRoots(listOf(SYSTEM))
                 if (roots.isEmpty()) return done(BiosIntakeResult.Message(NO_RETROARCH))
                 work(progress, done) { concat(roots.map { DirImportFiles(it, listOf(SYSTEM)) }) }
             } else pickers.openFolder { ref ->
                 ref ?: return@openFolder
                 val tree = ImportTree.of(resolver, ref)
-                if (tree.child(treeStart(ref), SYSTEM)?.isDirectory != true) return@openFolder done(BiosIntakeResult.Message(NOT_RETROARCH))
-                work(progress, done) { TreeImportFiles(tree, treeStart(ref), listOf(SYSTEM)) }
+                if (tree.child(PickedRefs.treeStart(ref), SYSTEM)?.isDirectory != true) return@openFolder done(BiosIntakeResult.Message(NOT_RETROARCH))
+                work(progress, done) { TreeImportFiles(tree, PickedRefs.treeStart(ref), listOf(SYSTEM)) }
             }
         }
     }
@@ -109,7 +106,7 @@ class AndroidBiosIntake(
             var other = 0
             for (e in files.entries()) {
                 if (!BiosIntakePlanner.isCandidate(e.path)) continue
-                val base = e.path.substringAfterLast('/')
+                val base = biosBaseName(e.path)
                 // A size no listed file has and an unknown name: no BIOS, never opened (a whole ROM folder picked).
                 if (!known.shouldRead(e.size, base)) { other++; continue }
                 val named = known.byName(base).isNotEmpty()
@@ -136,7 +133,7 @@ class AndroidBiosIntake(
             val failed = unread + plan.writes.filter { it.needsWrite }.mapNotNull { w ->
                 val src = tempOf[w.pickedPath]
                 val ok = src != null && folder.write(w.console, w.name) { FileInputStream(src) }
-                if (ok) null else BiosSkip(w.pickedPath, "Could not write")
+                if (ok) null else BiosSkip(w.pickedPath, "Could not write", w.console, w.name)
             }
             return BiosIntakeSummary.resultOf(plan, failed)
         } finally {
@@ -144,12 +141,8 @@ class AndroidBiosIntake(
         }
     }
 
-    private fun opener(ref: ContentRef): () -> InputStream? {
-        val file = if (FileRefs.isFile(ref)) File(FileRefs.path(ref)) else null
-        return { if (file != null) FileInputStream(file) else resolver.openInputStream(Uri.parse(ref.value)) }
-    }
 
-    private fun treeFiles(ref: ContentRef): ImportFiles = TreeImportFiles(ImportTree.of(resolver, ref), treeStart(ref))
+    private fun treeFiles(ref: ContentRef): ImportFiles = TreeImportFiles(ImportTree.of(resolver, ref), PickedRefs.treeStart(ref))
 
     /** Single documents from the multi-file picker, each under its display name. */
     private fun pickedFiles(refs: List<ContentRef>): ImportFiles = object : ImportFiles {
@@ -160,7 +153,7 @@ class AndroidBiosIntake(
                 override val path = name
                 override val mtime: Long? = null
                 override val size: Long? = null
-                override fun open(): InputStream = opener(ref)() ?: error("cannot read $name")
+                override fun open(): InputStream = PickedRefs.opener(resolver, ref)() ?: error("cannot read $name")
             }
         }
     }
@@ -169,18 +162,13 @@ class AndroidBiosIntake(
         override fun entries(): Sequence<ImportEntry> = all.asSequence().flatMap { it.entries() }
     }
 
-    /** A SAF pick is a tree URI: the walk starts at its root document. A file ref (All files access) is the folder itself. */
-    private fun treeStart(root: ContentRef): ContentRef = if (FileRefs.isFile(root)) root else Uri.parse(root.value).let {
-        ContentRef(DocumentsContract.buildDocumentUriUsingTree(it, DocumentsContract.getTreeDocumentId(it)).toString())
-    }
 
-    @Suppress("DEPRECATION")   // the shared storage root itself, read with All files access
-    private fun retroArchRoots(): List<File> = RetroArchFolders.ROOTS.map { File(Environment.getExternalStorageDirectory(), it) }
-        .filter { File(it, SYSTEM).isDirectory }
 
     companion object {
         /** One count for every instance (an activity recreated mid-import): Device Sync waits while any runs. */
         private val active = AtomicInteger()
+        // One thread for every instance: runs never overlap, so each may clear the shared temp folder first.
+        private val executor = Executors.newSingleThreadExecutor()
         val anyRunning: Boolean get() = active.get() > 0
 
         private const val TAG = "BiosIntake"

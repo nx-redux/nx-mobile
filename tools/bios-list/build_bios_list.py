@@ -74,6 +74,11 @@ DB_FOLDERS = [("armsx2", "PS2", "bios/Sony/PlayStation 2/", 4194304, "bin", (".v
 ARCHIVES = ("zip", "7z")
 
 
+# Files a profile lists that are no console BIOS: ARMSX2's Namco System 246 arcade boot files would show as PS2 BIOS
+# choices in Bios/PS2/.
+NOT_CONSOLE = {("armsx2", "COH-H31000.BIN"), ("armsx2", "proverb.zip")}
+
+
 class Row:
     def __init__(self, name, console):
         self.name, self.console = name, console
@@ -135,7 +140,7 @@ def build(root, cores=None):
                 entry = {"name": entry["archive"], "system": entry.get("system"), "required": entry.get("required"),
                          "path": entry.get("archive_path")}
             name = flat_name(entry)
-            if name is None or not looks_like_bios(name):
+            if name is None or not looks_like_bios(name) or (core, name) in NOT_CONSOLE:
                 continue
             console = console_of(core, entry)
             if console is None:

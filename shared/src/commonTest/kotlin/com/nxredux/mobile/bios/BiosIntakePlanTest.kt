@@ -115,6 +115,31 @@ class BiosIntakePlanTest {
     }
 
     @Test
+    fun sameBytesUnderTwoNamesOfOneConsoleWriteBoth() {
+        val sms = "840481177270d5642a14ca71ee72844c"
+        val k = KnownBios(listOf(
+            KnownBiosEntry("bios_E.sms", emptyList(), "SMS", setOf(8192L), setOf(sms), required = false, bootChange = true),
+            KnownBiosEntry("bios_U.sms", emptyList(), "SMS", setOf(8192L), setOf(sms), required = false, bootChange = true),
+        ))
+        val r = BiosIntakePlanner.plan(listOf(PickedBios("[BIOS] Master System (USA).sms", 8192, sms)), k, nothing)
+        assertEquals(setOf("bios_E.sms", "bios_U.sms"), r.writes.filter { it.needsWrite }.map { it.name }.toSet())
+    }
+
+    @Test
+    fun wrongSizeNamesEverySizeTheFileCanHave() {
+        val k = KnownBios(listOf(KnownBiosEntry("bios_U.sms", emptyList(), "SMS", setOf(16384L, 8192L), emptySet(), required = false, bootChange = false)))
+        val r = BiosIntakePlanner.plan(listOf(PickedBios("bios_U.sms", 5, "0".repeat(32))), k, nothing)
+        assertEquals(listOf(BiosSkip("bios_U.sms", "Wrong size (expected 8192 or 16384 bytes)")), r.skips)
+    }
+
+    @Test
+    fun backslashPathsMatchByBaseName() {
+        assertEquals("scph5501.bin", biosBaseName("BIOS\\PS1\\scph5501.bin"))
+        val r = plan(PickedBios("BIOS\\PS1\\scph5501.bin", 524288, "0".repeat(32)))
+        assertEquals(BiosOutcome.NOT_VERIFIED, r.writes.single().outcome)
+    }
+
+    @Test
     fun bootChangeCarried() {
         assertTrue(plan(PickedBios("gb_bios.bin", 256, gb)).writes.single().bootChange)
     }
