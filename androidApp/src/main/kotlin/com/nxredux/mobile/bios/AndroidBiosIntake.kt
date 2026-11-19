@@ -127,7 +127,7 @@ class AndroidBiosIntake(
             val failed = plan.writes.filter { it.needsWrite }.mapNotNull { w ->
                 val src = tempOf[w.pickedPath]
                 val ok = src != null && folder.write(w.console, w.name) { FileInputStream(src) }
-                if (ok) null else BiosSkip(w.pickedPath, "could not write")
+                if (ok) null else BiosSkip(w.pickedPath, "Could not write")
             }
             return BiosIntakeSummary.resultOf(plan, failed)
         } finally {

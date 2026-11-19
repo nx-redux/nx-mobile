@@ -4047,8 +4047,18 @@ class AppState(
             SettingsRow(SettingsKind.IMPORT_BIOS_ZIP, "From a zip file"),
             SettingsRow(SettingsKind.IMPORT_BIOS_RETROARCH, "From RetroArch"),
         )
-        SettingsSection.IMPORT_BIOS_RESULT -> biosResult?.lines().orEmpty().map { SettingsRow(SettingsKind.INFO, it) } +
-            SettingsRow(SettingsKind.IMPORT_BIOS_DONE, "Done")
+        // Settings' own shape: each console a group label over its files (status on the right), then the note.
+        SettingsSection.IMPORT_BIOS_RESULT -> buildList {
+            biosResult?.rows().orEmpty().forEach { r ->
+                when (r) {
+                    is com.nxredux.mobile.bios.BiosResultRow.Group -> { if (isNotEmpty()) add(SettingsRow(SettingsKind.GAP, "")); add(SettingsRow(SettingsKind.SECTION, r.title)) }
+                    is com.nxredux.mobile.bios.BiosResultRow.File -> add(SettingsRow(SettingsKind.INFO, r.name, r.status))
+                    is com.nxredux.mobile.bios.BiosResultRow.Note -> { add(SettingsRow(SettingsKind.GAP, "")); add(SettingsRow(SettingsKind.TEXT, r.text)) }
+                }
+            }
+            add(SettingsRow(SettingsKind.GAP, ""))
+            add(SettingsRow(SettingsKind.IMPORT_BIOS_DONE, "Done"))
+        }
         // The summary, then each skipped file with its reason; read-only but for Done.
         SettingsSection.IMPORT_RESULT -> importResult?.let { r ->
             r.lines().map { SettingsRow(SettingsKind.INFO, it) } + r.skipped.map { SettingsRow(SettingsKind.INFO, it.name, it.reasonText()) }
@@ -4401,7 +4411,7 @@ class AppState(
                 // Files landed in Bios/: the consoles' "BIOS missing" badges read again.
                 consoleBios.clear(); consoleBiosLibrary = null; statsCache.clear(); statsCacheOf = null
                 if ((_screen.value as? Screen.Settings)?.section != SettingsSection.IMPORT_BIOS) {
-                    return showNotice(result.summary.lines().filter { " — " in it }.joinToString("; ").ifEmpty { "BIOS import finished" })
+                    return showNotice(result.summary.noticeText())
                 }
                 dismissNotice()
                 settingsUi.forgetSection(SettingsSection.IMPORT_BIOS_RESULT)

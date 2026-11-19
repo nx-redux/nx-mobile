@@ -55,7 +55,7 @@ class BiosIntakePlanTest {
     fun nameOnlyWrongSizeIsSkipped() {
         val r = plan(PickedBios("gba_bios.bin", 999, "0".repeat(32)))
         assertEquals(emptyList(), r.writes)
-        assertEquals(listOf(BiosSkip("gba_bios.bin", "wrong size (expected 16384 bytes)")), r.skips)
+        assertEquals(listOf(BiosSkip("gba_bios.bin", "Wrong size (expected 16384 bytes)")), r.skips)
     }
 
     @Test
@@ -104,7 +104,7 @@ class BiosIntakePlanTest {
     fun verifiedBeatsNotVerifiedForOneDestination() {
         val r = plan(PickedBios("gba_bios.bin", 16384, "0".repeat(32)), PickedBios("[BIOS] GBA.bin", 16384, gba))
         assertEquals("[BIOS] GBA.bin", r.writes.single { it.needsWrite }.pickedPath)
-        assertEquals(listOf(BiosSkip("gba_bios.bin", "another copy was used")), r.skips)
+        assertEquals(listOf(BiosSkip("gba_bios.bin", "Another copy was used")), r.skips)
     }
 
     @Test

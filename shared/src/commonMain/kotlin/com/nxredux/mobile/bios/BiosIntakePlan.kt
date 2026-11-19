@@ -61,7 +61,7 @@ object BiosIntakePlanner {
             val fits = byName.filter { it.sizes.isEmpty() || p.size in it.sizes }
             when {
                 fits.isNotEmpty() -> fits.groupBy { it.console }.values.forEach { candidates += Candidate(p, it.first(), BiosOutcome.NOT_VERIFIED) }
-                byName.isNotEmpty() -> skips += BiosSkip(p.path, "wrong size (expected ${byName.first().sizes.min()} bytes)")
+                byName.isNotEmpty() -> skips += BiosSkip(p.path, "Wrong size (expected ${byName.first().sizes.min()} bytes)")
                 else -> other++
             }
         }
@@ -80,7 +80,7 @@ object BiosIntakePlanner {
                     c === winner -> writes += BiosWrite(c.picked.path, console, name, outcome, c.entry.bootChange)
                     c.picked.md5 != null && c.picked.md5 == winner.picked.md5 ->
                         writes += BiosWrite(c.picked.path, console, name, BiosOutcome.ALREADY_THERE, c.entry.bootChange)
-                    else -> skips += BiosSkip(c.picked.path, "another copy was used")
+                    else -> skips += BiosSkip(c.picked.path, "Another copy was used")
                 }
             }
         }

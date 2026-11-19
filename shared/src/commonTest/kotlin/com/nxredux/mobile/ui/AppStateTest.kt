@@ -12486,10 +12486,17 @@ class AppStateTest {
         assertEquals(SettingsSection.IMPORT_BIOS_RESULT, page.section)
         assertNull(st.notice.value)
         assertEquals(
-            listOf("Game Boy", "gb_bios.bin — verified · optional: changes boot", "2 other files skipped",
-                "Anything skipped can still go in Bios/<CONSOLE>/ by hand.", "Done"),
-            page.rows.map { it.label },
+            listOf(
+                Triple(SettingsKind.SECTION, "Game Boy", null),
+                Triple(SettingsKind.INFO, "gb_bios.bin", "Verified · changes boot"),
+                Triple(SettingsKind.GAP, "", null),
+                Triple(SettingsKind.TEXT, "2 other files skipped. Anything skipped can still go in Bios/<CONSOLE>/ by hand.", null),
+                Triple(SettingsKind.GAP, "", null),
+                Triple(SettingsKind.IMPORT_BIOS_DONE, "Done", null),
+            ),
+            page.rows.map { Triple(it.kind, it.label, it.secondary) },
         )
+        assertEquals(SettingsKind.INFO, page.rows[st.selection.value.index].kind)   // lands on the first file, not a label
         st.select(page.rows.indexOfFirst { it.kind == SettingsKind.IMPORT_BIOS_DONE }); st.onButton(NxButton.A)
         val back = assertIs<Screen.Settings>(st.screen.value)
         assertEquals(SettingsSection.LIBRARY, back.section)
