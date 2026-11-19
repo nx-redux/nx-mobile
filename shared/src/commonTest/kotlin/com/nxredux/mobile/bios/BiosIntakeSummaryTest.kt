@@ -20,7 +20,7 @@ class BiosIntakeSummaryTest {
             otherFiles = 12,
         )
         val s = BiosIntakeSummary(plan, emptyList())
-        assertEquals("Imported 3 BIOS, 2 already there", s.headline())
+        assertEquals("Imported 3 BIOS, 1 already there, 1 kept", s.headline())
         assertEquals(
             listOf(
                 "Game Boy: gb_bios.bin (not verified, changes boot)",
@@ -68,6 +68,19 @@ class BiosIntakeSummaryTest {
     fun noNoteWhenNothingSkipped() {
         val plan = BiosIntakePlan(listOf(w("scph5501.bin", "PS", "scph5501.bin", BiosOutcome.VERIFIED)), emptyList(), 0)
         assertEquals(listOf("Sony PlayStation: scph5501.bin (verified)"), BiosIntakeSummary(plan, emptyList()).lines())
+    }
+
+    @Test
+    fun keptExistingReads() {
+        val plan = BiosIntakePlan(listOf(w("firmware.bin", "NDS", "firmware.bin", BiosOutcome.KEPT_EXISTING)), emptyList(), 0)
+        assertEquals(listOf("Nintendo DS: firmware.bin (kept yours)"), BiosIntakeSummary(plan, emptyList()).lines())
+        assertEquals("Imported 0 BIOS, 1 kept", BiosIntakeSummary(plan, emptyList()).headline())
+    }
+
+    @Test
+    fun allUnreadableShowsWhy() {
+        val r = BiosIntakeSummary.resultOf(BiosIntakePlan(emptyList(), emptyList(), 0), listOf(BiosSkip("gba_bios.bin", "Could not read")))
+        assertEquals(listOf("Skipped gba_bios.bin: could not read", "", "Anything skipped can still go in Bios/<CONSOLE>/ by hand."), (r as BiosIntakeResult.Done).summary.lines())
     }
 
     @Test

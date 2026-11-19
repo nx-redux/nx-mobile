@@ -96,8 +96,9 @@ class BiosIntakePlanTest {
     @Test
     fun samePickTwiceWritesOnce() {
         val r = plan(PickedBios("scph5501.bin", 524288, ps1), PickedBios("SCPH-5501 (USA).bin", 524288, ps1))
-        assertEquals(1, r.writes.count { it.needsWrite })
-        assertEquals(BiosOutcome.ALREADY_THERE, r.writes.single { it.pickedPath == "SCPH-5501 (USA).bin" }.outcome)
+        // The second copy is the same file: one line, not an "already there" for a file that was not there before.
+        assertEquals(listOf(BiosWrite("scph5501.bin", "PS", "scph5501.bin", BiosOutcome.VERIFIED, bootChange = false)), r.writes)
+        assertEquals(emptyList(), r.skips)
     }
 
     @Test
@@ -137,6 +138,24 @@ class BiosIntakePlanTest {
         assertEquals("scph5501.bin", biosBaseName("BIOS\\PS1\\scph5501.bin"))
         val r = plan(PickedBios("BIOS\\PS1\\scph5501.bin", 524288, "0".repeat(32)))
         assertEquals(BiosOutcome.NOT_VERIFIED, r.writes.single().outcome)
+    }
+
+    @Test
+    fun notVerifiedNeverReplacesAnotherFileThere() {
+        // The user's own firmware.bin (their settings), no listed md5: a same-size not-verified newcomer leaves it alone.
+        val r = plan(PickedBios("gba_bios.bin", 16384, "0".repeat(32)), existing = { _, _ -> "9".repeat(32) })
+        assertEquals(BiosOutcome.KEPT_EXISTING, r.writes.single().outcome)
+        assertFalse(r.writes.single().needsWrite)
+    }
+
+    @Test
+    fun repeatedPathsAreMadeUnique() {
+        val seen = HashSet<String>()
+        assertEquals("system/scph5501.bin", BiosIntakePlanner.uniquePath("system/scph5501.bin", seen))
+        val second = BiosIntakePlanner.uniquePath("system/scph5501.bin", seen)
+        assertEquals("2/system/scph5501.bin", second)
+        assertEquals("scph5501.bin", biosBaseName(second))
+        assertEquals("3/system/scph5501.bin", BiosIntakePlanner.uniquePath("system/scph5501.bin", seen))
     }
 
     @Test

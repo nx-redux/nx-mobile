@@ -16,8 +16,8 @@ interface HomeBiosFolder {
     /** The md5 of `Bios/<console>/<name>`, null when it is not there or cannot be read. */
     fun md5(console: String, name: String): String?
 
-    /** Whether any file in `Bios/<console>/` has [md5]. */
-    fun anyWithMd5(console: String, md5: String): Boolean
+    /** The md5 of every file in `Bios/<console>/` (parts left out); empty when the folder is not there. */
+    fun md5sIn(console: String): Set<String>
 
     /**
      * Writes `Bios/<console>/<name>` from [from], creating the folders: built beside the target and moved over it, so a
@@ -33,14 +33,14 @@ interface HomeBiosFolder {
 
 object Md5 {
     /**
-     * Copies [input] to [output] (both closed) and returns its md5 (lowercase hex) and length; null, stopping there, once
-     * more than [limit] bytes came.
+     * Opens [open], then [create], copies one to the other (both closed, also when [create] throws) and returns the md5
+     * (lowercase hex) and length; null, stopping there, once more than [limit] bytes came.
      */
-    fun copy(input: InputStream, output: OutputStream, limit: Long = Long.MAX_VALUE): Pair<String, Long>? {
+    fun copy(open: () -> InputStream, create: () -> OutputStream, limit: Long = Long.MAX_VALUE): Pair<String, Long>? {
         val digest = MessageDigest.getInstance("MD5")
         var total = 0L
-        input.use { i ->
-            output.use { o ->
+        open().use { i ->
+            create().use { o ->
                 val buf = ByteArray(64 * 1024)
                 while (true) {
                     val n = i.read(buf)
@@ -55,7 +55,13 @@ object Md5 {
         return hex(digest.digest()) to total
     }
 
-    fun of(input: InputStream): String = copy(input, OutputStream.nullOutputStream())!!.first
+    /** The md5 of [input] (closed). Not OutputStream.nullOutputStream(): that is Android 13+. */
+    fun of(input: InputStream): String = copy({ input }, { DISCARD })!!.first
+
+    private object DISCARD : OutputStream() {
+        override fun write(b: Int) = Unit
+        override fun write(b: ByteArray, off: Int, len: Int) = Unit
+    }
 
     private fun hex(bytes: ByteArray) = bytes.joinToString("") { "%02x".format(it) }
 }
@@ -68,16 +74,16 @@ class FileHomeBios(private val home: File) : HomeBiosFolder {
     override fun md5(console: String, name: String): String? =
         file(console, name).takeIf { it.isFile }?.let { f -> runCatching { Md5.of(f.inputStream()) }.getOrNull() }
 
-    override fun anyWithMd5(console: String, md5: String): Boolean =
-        File(File(home, "Bios"), console).listFiles().orEmpty().any { f -> f.isFile && !f.name.endsWith(PART) && runCatching { Md5.of(f.inputStream()) }.getOrNull() == md5 }
+    override fun md5sIn(console: String): Set<String> =
+        File(File(home, "Bios"), console).listFiles().orEmpty().filter { it.isFile && !it.name.endsWith(PART) }
+            .mapNotNullTo(HashSet()) { f -> runCatching { Md5.of(f.inputStream()) }.getOrNull() }
 
     override fun write(console: String, name: String, from: () -> InputStream): Boolean {
         val target = file(console, name)
         val part = File(target.parentFile, name + PART)
         return runCatching {
             target.parentFile!!.mkdirs()
-            val out = part.outputStream()
-            Md5.copy(from(), out) ?: error("unreachable")
+            Md5.copy(from, { part.outputStream() }) ?: error("unreachable")
             if (!part.renameTo(target)) {
                 target.delete()
                 check(part.renameTo(target)) { "rename failed" }
@@ -102,24 +108,24 @@ class SafHomeBios(private val saf: SafTree, tree: Uri) : HomeBiosFolder {
         return runCatching { saf.openRead(f.uri)?.let(Md5::of) }.getOrNull()
     }
 
-    override fun anyWithMd5(console: String, md5: String): Boolean {
-        val d = dir(console, create = false) ?: return false
-        return saf.listChildren(d).any { e ->
-            !e.isDirectory && !e.name.endsWith(PART) && runCatching { saf.openRead(e.uri)?.let(Md5::of) }.getOrNull() == md5
-        }
+    override fun md5sIn(console: String): Set<String> {
+        val d = dir(console, create = false) ?: return emptySet()
+        return saf.listChildren(d).filter { !it.isDirectory && !it.name.endsWith(PART) }
+            .mapNotNullTo(HashSet()) { e -> runCatching { saf.openRead(e.uri)?.let(Md5::of) }.getOrNull() }
     }
 
     override fun write(console: String, name: String, from: () -> InputStream): Boolean {
         val d = dir(console, create = true) ?: return false
         saf.child(d, name + PART)?.let { saf.delete(it.uri) }
         val part = saf.createNew(d, name + PART) ?: return false
-        val ok = runCatching { val out = saf.openWrite(part) ?: error("no write"); Md5.copy(from(), out); true }.getOrDefault(false)
+        val ok = runCatching { Md5.copy(from, { saf.openWrite(part) ?: error("no write") }); true }.getOrDefault(false)
         if (!ok) { saf.delete(part); return false }
         saf.child(d, name)?.let { if (!saf.delete(it.uri)) { saf.delete(part); return false } }
         if (saf.rename(part, name) != null) return true
         // A provider that cannot rename: the old file is gone, so write the target straight from the part, then drop it.
-        val target = saf.createFile(d, name) ?: return false
-        val copied = runCatching { val out = saf.openWrite(target) ?: error("no write"); Md5.copy(saf.openRead(part) ?: error("no read"), out); true }.getOrDefault(false)
+        val target = saf.createFile(d, name) ?: run { saf.delete(part); return false }
+        val copied = runCatching { Md5.copy({ saf.openRead(part) ?: error("no read") }, { saf.openWrite(target) ?: error("no write") }); true }.getOrDefault(false)
+        if (!copied) saf.delete(target)   // never half a BIOS where a launch would copy it to the core
         saf.delete(part)
         return copied
     }

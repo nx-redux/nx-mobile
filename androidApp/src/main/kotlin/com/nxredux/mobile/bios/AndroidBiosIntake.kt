@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.provider.OpenableColumns
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.KnownBiosAsset
 import com.nxredux.mobile.settings.SaveTransferRules
@@ -53,9 +54,11 @@ class AndroidBiosIntake(
             BiosSource.ZIP -> pickers.openZip { ref ->
                 ref ?: return@openZip
                 val open = PickedRefs.opener(resolver, ref)
-                // The picker shows every file type: only a zip goes on.
-                if (!looksLikeZip(open)) return@openZip done(BiosIntakeResult.Message("That file is not a zip"))
-                work(progress, done) { ZipImportFiles { open() ?: error("cannot read the zip") } }
+                work(progress, done) {
+                    // The picker shows every file type: only a zip goes on. Read here, off the main thread (a cloud provider downloads it).
+                    if (!looksLikeZip(open)) throw Refused("That file is not a zip")
+                    ZipImportFiles { open() ?: error("cannot read the zip") }
+                }
             }
             // With All files access every RetroArch system folder found is read; without it the user picks RetroArch's folder.
             BiosSource.RETROARCH -> if (AndroidAllFilesAccess.isGranted()) {
@@ -64,9 +67,11 @@ class AndroidBiosIntake(
                 work(progress, done) { concat(roots.map { DirImportFiles(it, listOf(SYSTEM)) }) }
             } else pickers.openFolder { ref ->
                 ref ?: return@openFolder
-                val tree = ImportTree.of(resolver, ref)
-                if (tree.child(PickedRefs.treeStart(ref), SYSTEM)?.isDirectory != true) return@openFolder done(BiosIntakeResult.Message(NOT_RETROARCH))
-                work(progress, done) { TreeImportFiles(tree, PickedRefs.treeStart(ref), listOf(SYSTEM)) }
+                work(progress, done) {
+                    val tree = ImportTree.of(resolver, ref)
+                    if (tree.child(PickedRefs.treeStart(ref), SYSTEM)?.isDirectory != true) throw Refused(NOT_RETROARCH)
+                    TreeImportFiles(tree, PickedRefs.treeStart(ref), listOf(SYSTEM))
+                }
             }
         }
     }
@@ -79,6 +84,9 @@ class AndroidBiosIntake(
         return null
     }
 
+    /** A source that turns out unusable once read on the import thread: its message, not "Failed: …". */
+    private class Refused(message: String) : Exception(message)
+
     /** The work on the import thread, asked again after the picker; any throwable becomes "Failed: …". */
     private fun work(progress: (String) -> Unit, done: (BiosIntakeResult) -> Unit, files: () -> ImportFiles) {
         refusal()?.let { return done(BiosIntakeResult.Message(it)) }
@@ -88,6 +96,8 @@ class AndroidBiosIntake(
         executor.execute {
             val result = try {
                 run(files(), HomeBiosFolder.of(resolver, home))
+            } catch (e: Refused) {
+                BiosIntakeResult.Message(e.message.orEmpty())
             } catch (e: Throwable) {
                 NxLog.e(TAG, "BIOS import failed", e)
                 BiosIntakeResult.Message("Failed: ${e.message ?: e::class.simpleName}")
@@ -104,30 +114,33 @@ class AndroidBiosIntake(
             val unread = mutableListOf<BiosSkip>()
             val known = KnownBiosAsset.get(app)
             var other = 0
+            val seen = HashSet<String>()
             for (e in files.entries()) {
                 if (!BiosIntakePlanner.isCandidate(e.path)) continue
-                val base = biosBaseName(e.path)
+                val path = BiosIntakePlanner.uniquePath(e.path, seen)
+                val base = biosBaseName(path)
                 // A size no listed file has and an unknown name: no BIOS, never opened (a whole ROM folder picked).
                 if (!known.shouldRead(e.size, base)) { other++; continue }
                 val named = known.byName(base).isNotEmpty()
                 val copy = File(temp, tempOf.size.toString() + "-" + picked.size)
                 val read = try {
                     // An unknown name of unknown size is read no further than the largest listed file.
-                    Md5.copy(e.open(), copy.outputStream(), if (named) Long.MAX_VALUE else known.maxSize)
+                    Md5.copy(e::open, copy::outputStream, if (named) Long.MAX_VALUE else known.maxSize)
                 } catch (t: Throwable) {
                     NxLog.w(TAG, "could not read ${e.path}", t)
-                    copy.delete(); unread += BiosSkip(e.path, "Could not read"); continue
+                    copy.delete(); unread += BiosSkip(path, "Could not read"); continue
                 }
                 if (read == null) { copy.delete(); other++; continue }
                 val (md5, size) = read
                 if (known.byMd5(md5).isEmpty() && !named) {
                     copy.delete()   // no BIOS: counted, not kept
-                } else tempOf[e.path] = copy
-                picked += PickedBios(e.path, size, md5)
+                } else tempOf[path] = copy
+                picked += PickedBios(path, size, md5)
             }
+            val folderMd5s = HashMap<String, Set<String>>()   // each console folder hashed once, however many files ask
             val planned = BiosIntakePlanner.plan(picked, known, object : ExistingBios {
                 override fun md5(console: String, name: String) = folder.md5(console, name)
-                override fun anyWithMd5(console: String, md5: String) = folder.anyWithMd5(console, md5)
+                override fun anyWithMd5(console: String, md5: String) = md5 in folderMd5s.getOrPut(console) { folder.md5sIn(console) }
             })
             val plan = planned.copy(otherFiles = planned.otherFiles + other)
             val failed = unread + plan.writes.filter { it.needsWrite }.mapNotNull { w ->
@@ -144,19 +157,27 @@ class AndroidBiosIntake(
 
     private fun treeFiles(ref: ContentRef): ImportFiles = TreeImportFiles(ImportTree.of(resolver, ref), PickedRefs.treeStart(ref))
 
-    /** Single documents from the multi-file picker, each under its display name. */
+    /** Single documents from the multi-file picker, each under its display name with its size (so games picked are never read). */
     private fun pickedFiles(refs: List<ContentRef>): ImportFiles = object : ImportFiles {
         override fun entries(): Sequence<ImportEntry> = refs.asSequence().map { ref ->
             val uri = Uri.parse(ref.value)
-            val name = if (FileRefs.isFile(ref)) File(FileRefs.path(ref)).name else SafTree(resolver).displayName(uri) ?: uri.lastPathSegment.orEmpty()
+            val local = if (FileRefs.isFile(ref)) File(FileRefs.path(ref)) else null
+            val name = local?.name ?: SafTree(resolver).displayName(uri) ?: uri.lastPathSegment.orEmpty()
+            val bytes = local?.length() ?: documentSize(uri)
             object : ImportEntry {
                 override val path = name
                 override val mtime: Long? = null
-                override val size: Long? = null
+                override val size: Long? = bytes
                 override fun open(): InputStream = PickedRefs.opener(resolver, ref)() ?: error("cannot read $name")
             }
         }
     }
+
+    private fun documentSize(uri: Uri): Long? = runCatching {
+        resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+            if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null
+        }
+    }.getOrNull()
 
     private fun concat(all: List<ImportFiles>): ImportFiles = object : ImportFiles {
         override fun entries(): Sequence<ImportEntry> = all.asSequence().flatMap { it.entries() }

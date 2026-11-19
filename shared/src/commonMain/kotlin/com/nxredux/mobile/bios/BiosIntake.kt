@@ -30,8 +30,10 @@ data class BiosIntakeSummary(val plan: BiosIntakePlan, val failed: List<BiosSkip
     /** "Imported 3 BIOS, 2 already there": the page's headline, and the notice when the import ends away from it. */
     fun headline(): String {
         val copied = shown.count { it.needsWrite }
-        val there = shown.count { !it.needsWrite }
-        return listOfNotNull("Imported $copied BIOS", there.takeIf { it > 0 }?.let { "$it already there" }).joinToString(", ")
+        val there = shown.count { it.outcome == BiosOutcome.ALREADY_THERE }
+        val kept = shown.count { it.outcome == BiosOutcome.KEPT_YOURS || it.outcome == BiosOutcome.KEPT_EXISTING }
+        return listOfNotNull("Imported $copied BIOS", there.takeIf { it > 0 }?.let { "$it already there" }, kept.takeIf { it > 0 }?.let { "$it kept" })
+            .joinToString(", ")
     }
 
     /** A line per file (consoles A to Z), the skips, then a note on other files and placing by hand; blank lines between. */
@@ -57,6 +59,7 @@ data class BiosIntakeSummary(val plan: BiosIntakePlan, val failed: List<BiosSkip
         BiosOutcome.NOT_VERIFIED -> "not verified"
         BiosOutcome.ALREADY_THERE -> "already there"
         BiosOutcome.KEPT_YOURS -> "kept yours, verified"
+        BiosOutcome.KEPT_EXISTING -> "kept yours"
     }
 
     companion object {
@@ -64,6 +67,6 @@ data class BiosIntakeSummary(val plan: BiosIntakePlan, val failed: List<BiosSkip
 
         /** A pick with no known BIOS in it at all ends as a message, not an empty results page. */
         fun resultOf(plan: BiosIntakePlan, failed: List<BiosSkip>): BiosIntakeResult =
-            if (plan.isEmpty) BiosIntakeResult.Message(NONE_FOUND) else BiosIntakeResult.Done(BiosIntakeSummary(plan, failed))
+            if (plan.isEmpty && failed.isEmpty()) BiosIntakeResult.Message(NONE_FOUND) else BiosIntakeResult.Done(BiosIntakeSummary(plan, failed))
     }
 }

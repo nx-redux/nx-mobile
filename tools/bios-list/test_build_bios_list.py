@@ -68,6 +68,9 @@ files:
   - name: dc_boot.bin
     path: dc/dc_boot.bin
     system: sega-dreamcast
+  - name: dc_nvmem.bin
+    path: dc/dc_nvmem.bin
+    system: sega-dreamcast
 """,
     "fbneo": """
 systems: [arcade]
@@ -93,6 +96,8 @@ systems: [sony-playstation-2]
 files:
   - name: "<module>.irx"
   - name: Wii System Menu
+  - name: ps2-0230a-20080220.nvm
+  - name: ps2-0230a-20080220.mec
   - name: COH-H31000.BIN
     size: 4194304
   - name: proverb.zip
@@ -202,6 +207,9 @@ class BuildBiosListTest(unittest.TestCase):
 
     def test_arcade_files_kept_out_of_ps2(self):
         self.assertFalse([r for r in self.build() if r.name in ("COH-H31000.BIN", "proverb.zip")])
+
+    def test_runtime_data_left_out(self):
+        self.assertFalse([r for r in self.build() if r.name in ("dc_nvmem.bin", "ps2-0230a-20080220.nvm", "ps2-0230a-20080220.mec")])
 
     def test_boot_change_flag(self):
         rows = self.build()

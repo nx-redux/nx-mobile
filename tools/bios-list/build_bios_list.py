@@ -58,8 +58,11 @@ IGNORED = {
 # Folders a core reads under the system dir whose files the user keeps flat in Bios/<TAG>/ (BiosFolders.subdir).
 FLAT_SUBDIRS = ("dc/", "pcsx2/bios/")
 
-# Not BIOS: configs, fonts, palettes, samples, text.
-NON_BIOS_EXT = {"cfg", "ttf", "otf", "pal", "wav", "txt", "xml", "json", "png", "ini", "dat", "md"}
+# Not BIOS: configs, fonts, palettes, samples, text, and a core's own runtime data (PS2 NVRAM / MechaCon).
+NON_BIOS_EXT = {"cfg", "ttf", "otf", "pal", "wav", "txt", "xml", "json", "png", "ini", "dat", "md", "nvm", "mec"}
+
+# Files a core writes as it runs (flycast's settings and clock): the user's own, never brought in from a pack.
+RUNTIME_DATA = {"dc_nvmem.bin"}
 
 # Optional files whose presence changes how a game boots (boot animation / TMSS screen).
 BOOT_CHANGE = {"gb_bios.bin", "gbc_bios.bin", "sgb_bios.bin", "sgb_boot.bin", "bios_MD.bin",
@@ -140,7 +143,7 @@ def build(root, cores=None):
                 entry = {"name": entry["archive"], "system": entry.get("system"), "required": entry.get("required"),
                          "path": entry.get("archive_path")}
             name = flat_name(entry)
-            if name is None or not looks_like_bios(name) or (core, name) in NOT_CONSOLE:
+            if name is None or not looks_like_bios(name) or (core, name) in NOT_CONSOLE or name in RUNTIME_DATA:
                 continue
             console = console_of(core, entry)
             if console is None:

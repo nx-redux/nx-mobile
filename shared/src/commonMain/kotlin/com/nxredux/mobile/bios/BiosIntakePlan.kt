@@ -14,7 +14,8 @@ fun interface ExistingBios {
     fun anyWithMd5(console: String, md5: String): Boolean = false
 }
 
-enum class BiosOutcome { VERIFIED, RENAMED, NOT_VERIFIED, ALREADY_THERE, KEPT_YOURS }
+/** KEPT_YOURS: a verified file there beat a not-verified newcomer; KEPT_EXISTING: another, unlisted file there was left alone. */
+enum class BiosOutcome { VERIFIED, RENAMED, NOT_VERIFIED, ALREADY_THERE, KEPT_YOURS, KEPT_EXISTING }
 
 /** A picked file's place: `Bios/<console>/<name>`. Only [needsWrite] ones are copied; the others are reported. */
 data class BiosWrite(val pickedPath: String, val console: String, val name: String, val outcome: BiosOutcome, val bootChange: Boolean) {
@@ -43,6 +44,17 @@ data class BiosIntakePlan(val writes: List<BiosWrite>, val skips: List<BiosSkip>
 object BiosIntakePlanner {
     /** macOS leftovers (`._x`, `.DS_Store`) and other dotfiles are no BIOS and are not even counted. */
     fun isCandidate(path: String): Boolean = !biosBaseName(path).startsWith(".")
+
+    /**
+     * [path], or the same under a numbered folder when [seen] has it already (two RetroArch roots, two picked files of
+     * one name), so each picked file keeps its own bytes; the file name is unchanged.
+     */
+    fun uniquePath(path: String, seen: MutableSet<String>): String {
+        if (seen.add(path)) return path
+        var n = 2
+        while (!seen.add("$n/$path")) n++
+        return "$n/$path"
+    }
 
     private val VERIFIED_RANK = setOf(BiosOutcome.VERIFIED, BiosOutcome.RENAMED)
 
@@ -82,13 +94,14 @@ object BiosIntakePlanner {
                 have != null && have == winner.picked.md5 -> BiosOutcome.ALREADY_THERE
                 winner.picked.md5 != null && console in anyNameConsoles && existing.anyWithMd5(console, winner.picked.md5) -> BiosOutcome.ALREADY_THERE
                 have != null && winner.outcome == BiosOutcome.NOT_VERIFIED && have in winner.entry.md5s -> BiosOutcome.KEPT_YOURS
+                // A file the user has there (their own firmware, settings in it) is never swapped for a not-verified one.
+                have != null && winner.outcome == BiosOutcome.NOT_VERIFIED -> BiosOutcome.KEPT_EXISTING
                 else -> winner.outcome
             }
             for (c in group) {
                 when {
                     c === winner -> writes += BiosWrite(c.picked.path, console, name, outcome, c.entry.bootChange)
-                    c.picked.md5 != null && c.picked.md5 == winner.picked.md5 ->
-                        writes += BiosWrite(c.picked.path, console, name, BiosOutcome.ALREADY_THERE, c.entry.bootChange)
+                    c.picked.md5 != null && c.picked.md5 == winner.picked.md5 -> Unit   // the same file picked twice: one line
                     else -> skips += BiosSkip(c.picked.path, "Another copy was used")
                 }
             }
