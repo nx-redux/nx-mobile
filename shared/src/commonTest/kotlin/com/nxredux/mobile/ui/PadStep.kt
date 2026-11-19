@@ -13,6 +13,7 @@ internal fun AppState.selectedTouchRow(): NxSettingRow? {
         is Screen.EmulatorOptions -> s.rows.getOrNull(i)?.takeIf { it.selectable }?.let(::emulatorTouchRow)
         is Screen.RaSettings -> s.rows.getOrNull(i)?.takeIf { it.selectable }?.let(::raSettingsTouchRow)
         is Screen.ArtworkSettings -> s.rows.getOrNull(i)?.takeIf { it.selectable }?.let(::artworkSettingTouchRow)
+        is Screen.Onboarding -> s.touchRows?.getOrNull(i)
         else -> null
     }
 }

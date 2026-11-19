@@ -184,6 +184,8 @@ data class MenuState(
      * stop. A move, a tap on another row, a push or a pop ends it.
      */
     val editing: Boolean = false,
+    /** Hosted in the dual-screen panel ([InGameMenuModel.inPanel]): a visual row changes in place there, as any other, with no strip. */
+    val inPanel: Boolean = false,
 ) {
     val page: MenuPage get() = stack.last()
 
@@ -310,7 +312,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var previewPage: Pair<OptionsPreviewInputs, MenuPage>? = null
 
     var state: MenuState = MenuState(listOf(rootPage()), initialSlot.coerceIn(0, slotCount - 1))
-        private set(value) { field = withPreview(keptEdit(value)) }
+        private set(value) { field = withPreview(keptEdit(value)).let { if (it.inPanel != inPanel) it.copy(inPanel = inPanel) else it } }
 
     /** The option row A started changing ([MenuState.editing]), by key. */
     private var editKey: String? = null
@@ -321,8 +323,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      */
     private fun keptEdit(s: MenuState): MenuState {
         if (!s.editing) return s
-        val key = (s.page.rows.getOrNull(s.page.selected) as? MenuRow.Option)?.key
-        return if (key != null && key == editKey) s else s.copy(editing = false)
+        val row = s.page.rows.getOrNull(s.page.selected) as? MenuRow.Option
+        // Still the row A started on, and still segments or swatches (a rebuild can turn it into a picker or one value).
+        val kept = row != null && row.key == editKey && (row.control == NxSettingControl.SEGMENTED || row.control == NxSettingControl.SWATCHES)
+        return if (kept) s else s.copy(editing = false)
     }
 
     /** [s] with its [MenuState.preview] for the root's highlighted row (the Options page beside the Options row). */
@@ -814,7 +818,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun editsOnA(index: Int): Boolean {
         val row = state.page.rows.getOrNull(index) as? MenuRow.Option ?: return false
         val kind = state.page.kind
-        if (kind == PageKind.Root || kind == PageKind.Achievements || row.visual) return false
+        // A visual row opens its live strip instead, except in the panel (no strip there: it changes as any other).
+        if (kind == PageKind.Root || kind == PageKind.Achievements || visualRow(index) != null) return false
         if (kind == PageKind.Shortcuts && row.choices.isEmpty()) return false
         return row.control == NxSettingControl.SEGMENTED || row.control == NxSettingControl.SWATCHES
     }
@@ -1201,6 +1206,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      */
     fun setInPanel(on: Boolean) {
         inPanel = on
+        state = state.copy()   // the state carries it ([MenuState.inPanel])
         if (on) {
             val i = state.stack.indexOfLast { it.kind !is PageKind.Adjust }
             if (i >= 0 && i < state.stack.size - 1) state = state.copy(stack = state.stack.take(i + 1), editing = false)

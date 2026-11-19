@@ -62,6 +62,7 @@ internal fun rowEditKey(s: Screen): Any? = when (s) {
     is Screen.EmulatorOptions -> "emulator:${s.category}"
     is Screen.RaSettings -> "ra"
     is Screen.ArtworkSettings -> "artwork"
+    is Screen.Onboarding -> "onboarding:${s.step}"
     else -> null
 }
 
@@ -78,6 +79,7 @@ internal fun rowEditBlocked(s: Screen): Boolean = when (s) {
     is Screen.Settings -> s.confirmReset || s.confirmRemove != null || s.nameDraft != null || s.confirmDriver != null
     is Screen.RaSettings -> s.signingIn || s.confirm != null
     is Screen.ArtworkSettings -> s.dialogOpen
+    is Screen.Onboarding -> s.prompt || s.artSignIn || s.artKey != null
     else -> false
 }
 

@@ -5,6 +5,7 @@ import androidx.compose.ui.Modifier
 import com.nxredux.mobile.kids.PlayWindow
 import com.nxredux.mobile.kids.timeLabel
 import com.nxredux.mobile.ui.nx.Hint
+import com.nxredux.mobile.ui.nx.padAHint
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
@@ -15,14 +16,9 @@ internal enum class KidsDayRow { LOCKED, FROM, TO, DONE }
 internal fun kidsDayRows(s: Screen.KidsDayEdit): List<KidsDayRow> =
     if (s.window == null) listOf(KidsDayRow.LOCKED, KidsDayRow.DONE) else KidsDayRow.entries
 
-/** The steppers' step, minutes. */
+/** The pickers' step, minutes. */
 internal const val KIDS_DAY_STEP = 30
 private const val DAY_END = 24 * 60
-
-/** [w] with From ([from]) or To moved [by] steps, between 0:00 and 24:00 and From always a step before To. */
-internal fun kidsDayStep(w: PlayWindow, from: Boolean, by: Int): PlayWindow =
-    if (from) w.copy(fromMin = (w.fromMin + by * KIDS_DAY_STEP).coerceIn(0, w.toMin - KIDS_DAY_STEP))
-    else w.copy(toMin = (w.toMin + by * KIDS_DAY_STEP).coerceIn(w.fromMin + KIDS_DAY_STEP, DAY_END))
 
 /** The times From ([from]) or To may take beside [w]'s other end, as their picker lists them. */
 internal fun kidsDayTimes(w: PlayWindow, from: Boolean): List<Int> =
@@ -41,8 +37,8 @@ internal fun kidsTimeLabel(minOfDay: Int): String = if (minOfDay >= DAY_END) "Mi
 internal fun kidsWindowLabel(w: PlayWindow?): String = if (w == null) "Locked" else "${kidsTimeLabel(w.fromMin)} – ${kidsTimeLabel(w.toMin)}"
 
 /**
- * One day's play time ([Screen.KidsDayEdit]) in the setup pages' shape: Locked's switch, From and To (LEFT / RIGHT half
- * an hour, A or a tap their picker), Done. Every change is stored at once; B or Done go back.
+ * One day's play time ([Screen.KidsDayEdit]) in the setup pages' shape: Locked's switch, From and To (A or a tap opens
+ * their picker; LEFT / RIGHT change nothing, as on every settings page), Done. Every change is stored at once; B or Done go back.
  */
 @Composable
 internal fun KidsDayEditScreen(
@@ -62,7 +58,7 @@ internal fun KidsDayEditScreen(
         }
     }
     val line = if (w == null) "Games stay closed all day." else "Games open from ${kidsTimeLabel(w.fromMin)} to ${kidsTimeLabel(w.toMin)}."
-    val hints = listOf(Hint(NxButton.B, "Back"), Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Choose"))
+    val hints = listOf(Hint(NxButton.B, "Back"), rows.getOrNull(selected)?.padAHint ?: Hint(NxButton.A, "Choose"))
     SetupBlockPage(
         if (s.setup) "Kids Mode setup" else "Kids Mode", kidsDayName(s.day), listOf(line), rows, buttons = 1,
         selected, hints, onSelect, onRow, onHint, modifier, onSetting = onSetting,

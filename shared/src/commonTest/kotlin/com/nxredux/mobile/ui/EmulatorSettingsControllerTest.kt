@@ -342,6 +342,23 @@ class EmulatorSettingsControllerTest {
         await { onOptA(state) && coreValue(state, "opt_a") == "z" }
     }
 
+    // The page is rebuilt after each change: the change goes on with it, on the same row, until A or B.
+    @Test fun a_change_goes_on_across_the_rebuilt_page() = runTest {
+        val configs = MemoryConfigs()
+        val state = TestState(configs)
+        openCore(state, "gpsp")
+        await { state.screen.value is Screen.EmulatorOptions }
+        selectOptA(state)
+        state.onButton(NxButton.A)
+        state.onButton(NxButton.RIGHT)
+        await { onOptA(state) && coreValue(state, "opt_a") == "y" }
+        assertEquals(state.selection.value.index, state.rowEdit.value?.index)
+        state.onButton(NxButton.RIGHT)
+        await { onOptA(state) && coreValue(state, "opt_a") == "z" }
+        state.onButton(NxButton.B)
+        assertNull(state.rowEdit.value)
+    }
+
     // Touch only, a value row of three or more opens a chooser of its values; a pick writes it as stepping would.
     // A touch row's picker lists the option's values; a pick writes it.
     @Test fun touch_a_core_option_opens_a_picker_and_a_pick_writes_it() = runTest {

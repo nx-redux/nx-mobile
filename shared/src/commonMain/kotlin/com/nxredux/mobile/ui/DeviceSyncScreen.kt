@@ -61,7 +61,7 @@ fun DeviceSyncScreen(
                 val roms: (@Composable () -> Unit)? = if (!p.romsAvailable) null else ({ SyncRomsRow(p.roms, lit = focus == SyncFocus.ROMS) { open -> onSetupTap(0, open) } })
                 SyncPage(
                     title, lines, words, if (focus == SyncFocus.ROMS) -1 else at - off,
-                    listOf(Hint(NxButton.A, when (focus) { SyncFocus.LINK -> "Start"; SyncFocus.ROMS -> "Change"; SyncFocus.SKIP -> "Choose" }), Hint(NxButton.B, "Back")),
+                    listOf(Hint(NxButton.A, when (focus) { SyncFocus.LINK -> "Start"; SyncFocus.ROMS -> "Toggle"; SyncFocus.SKIP -> "Choose" }), Hint(NxButton.B, "Back")),
                     onHint, onTap = { onSetupTap(it + off, true) }, extra = roms,
                 )
             }

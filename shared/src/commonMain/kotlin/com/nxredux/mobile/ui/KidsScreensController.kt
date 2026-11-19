@@ -678,7 +678,8 @@ internal class KidsScreensController(
     }
 
     /**
-     * The pad on a setup step: UP / DOWN along its rows, A or a side step on an app's switch, B out. B leaves setup for
+     * The pad on a setup step: UP / DOWN along its rows, A on an app's switch flips it (LEFT / RIGHT leave it alone, as on
+     * every settings page), B out. B leaves setup for
      * the Kids Mode page (Kids Mode stays off, nothing stored but the apps and times chosen); Allowed apps' B is its Done.
      */
     fun onKidsSetupButton(s: Screen.KidsSetup, button: NxButton) {
@@ -686,10 +687,9 @@ internal class KidsScreensController(
         val rows = kidsSetupRows(s)
         when (button) {
             NxButton.UP, NxButton.DOWN -> if (rows.isNotEmpty()) selection.value = sel.copy(index = (sel.index + if (button == NxButton.UP) -1 else 1).mod(rows.size))
-            // An app's switch flips; the two buttons side by side (Grant / Skip, Use as home screen / Skip): LEFT the first, RIGHT the second.
-            NxButton.LEFT, NxButton.RIGHT -> when (val row = rows.getOrNull(sel.index)) {
-                is KidsSetupRow.App -> kidsToggleApp(s, row.app)
-                is KidsSetupRow.Day, KidsSetupRow.Next, null -> Unit
+            // The two buttons side by side (Grant / Skip, Use as home screen / Skip): LEFT the first, RIGHT the second.
+            NxButton.LEFT, NxButton.RIGHT -> when (rows.getOrNull(sel.index)) {
+                is KidsSetupRow.App, is KidsSetupRow.Day, KidsSetupRow.Next, null -> Unit
                 else -> selection.value = sel.copy(index = if (button == NxButton.LEFT) 0 else 1)
             }
             NxButton.A -> kidsSetupRow(sel.index)
@@ -728,13 +728,6 @@ internal class KidsScreensController(
         kidsDaySet(s, if (locked) null else s.kept, KidsDayRow.LOCKED)
     }
 
-    /** From or To [by] half hours, From kept before To ([kidsDayStep]). */
-    private fun kidsDayStep(s: Screen.KidsDayEdit, row: KidsDayRow, by: Int) {
-        val w = s.window ?: return
-        val next = kidsDayStep(w, row == KidsDayRow.FROM, by)
-        if (next != w) kidsDaySet(s, next, row)
-    }
-
     /** A on (or a tap on) day row [index]: Locked flips, From / To open their picker, Done goes back. */
     fun kidsDayRow(index: Int) {
         val s = screen.value as? Screen.KidsDayEdit ?: return
@@ -769,17 +762,12 @@ internal class KidsScreensController(
         }
     }
 
-    /** The pad on a day: UP / DOWN along the rows, LEFT / RIGHT half an hour on From / To (or flip Locked), A as a tap, B back. */
+    /** The pad on a day: UP / DOWN along the rows, A as a tap (Locked flips, From / To open their picker), B back; LEFT / RIGHT change nothing. */
     fun onKidsDayButton(s: Screen.KidsDayEdit, button: NxButton) {
         val sel = selection.value
         val rows = kidsDayRows(s)
         when (button) {
             NxButton.UP, NxButton.DOWN -> selection.value = sel.copy(index = (sel.index + if (button == NxButton.UP) -1 else 1).mod(rows.size))
-            NxButton.LEFT, NxButton.RIGHT -> when (val row = rows.getOrNull(sel.index)) {
-                KidsDayRow.FROM, KidsDayRow.TO -> kidsDayStep(s, row, if (button == NxButton.LEFT) -1 else 1)
-                KidsDayRow.LOCKED -> kidsDayLocked(s, s.window != null)
-                else -> Unit
-            }
             NxButton.A -> kidsDayRow(sel.index)
             NxButton.B -> host.back()
             else -> Unit

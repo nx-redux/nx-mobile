@@ -504,11 +504,22 @@ class AppStateTest {
         assertEquals("Setup · Step 1/10", s.title)                            // the count starts here
         assertEquals(true, s.canGoBack)
         assertEquals(listOf("Size" to "Large", "Continue" to null), s.rows.map { it.label to it.secondary })
-        state.select(0); state.onButton(NxButton.A)
+        // As on every settings page: A starts the change, LEFT / RIGHT make it, UP / DOWN wait, only A or B end it.
+        state.select(0); state.onButton(NxButton.RIGHT)
+        assertEquals(com.nxredux.mobile.settings.OptionTextSize.LARGE, settings.optionTextSize)
+        state.onButton(NxButton.A)
+        assertEquals(com.nxredux.mobile.settings.OptionTextSize.LARGE, settings.optionTextSize)
+        assertNotNull(state.rowEdit.value)
+        state.onButton(NxButton.RIGHT)
         assertEquals(com.nxredux.mobile.settings.OptionTextSize.SMALL, settings.optionTextSize)
         assertEquals("Small", assertIs<Screen.Onboarding>(state.screen.value).rows[0].secondary)
+        state.onButton(NxButton.DOWN)
+        assertEquals(0, state.selection.value.index)
         state.onButton(NxButton.RIGHT)
         assertEquals(com.nxredux.mobile.settings.OptionTextSize.LARGE, settings.optionTextSize)
+        state.onButton(NxButton.B)
+        assertNull(state.rowEdit.value)
+        assertEquals(OnboardingStep.TEXT_SIZE, assertIs<Screen.Onboarding>(state.screen.value).step)   // B ended the change, not the page
         state.select(1); state.onButton(NxButton.A)                        // Continue
         assertIs<Screen.PickFolder>(state.screen.value)
         assertNull(settings.onboardingStep?.takeIf { it == OnboardingStep.TEXT_SIZE.name })
@@ -757,14 +768,14 @@ class AppStateTest {
         assertEquals(false, assertIs<Screen.FolderSummary>(state.screen.value).move)
     }
 
-    // The Move row is a value row ("< Off >"): LEFT and RIGHT flip it too.
-    @Test fun left_and_right_flip_the_move_row() = runTest {
+    // The Move row is a switch: LEFT and RIGHT leave it alone, as on every settings page; A flips it.
+    @Test fun left_and_right_leave_the_move_row_alone() = runTest {
         val (state, _) = atFolderSummary()
         state.select(summaryRow(state, SummaryRowKind.MOVE))
-        state.onButton(NxButton.RIGHT)
-        assertEquals(true, assertIs<Screen.FolderSummary>(state.screen.value).move)
-        state.onButton(NxButton.LEFT)
+        state.onButton(NxButton.RIGHT); state.onButton(NxButton.LEFT)
         assertEquals(false, assertIs<Screen.FolderSummary>(state.screen.value).move)
+        state.onButton(NxButton.A)
+        assertEquals(true, assertIs<Screen.FolderSummary>(state.screen.value).move)
         assertEquals(summaryRow(state, SummaryRowKind.MOVE), state.selection.value.index)
     }
 
@@ -882,10 +893,10 @@ class AppStateTest {
         val (state, settings) = atOnboardingStep(OnboardingStep.HANDHELD)
         state.select(0); state.onButton(NxButton.A)
         assertEquals(OnboardingStep.SAVE_FORMATS, assertIs<Screen.Onboarding>(state.screen.value).step)
-        state.select(0); state.onButton(NxButton.RIGHT)
+        state.select(0); state.padStep(NxButton.RIGHT)
         assertEquals(SaveFormat.DEFAULT.step(1), settings.saveFormat)
         assertEquals(SaveFormat.DEFAULT.step(1).label, assertIs<Screen.Onboarding>(state.screen.value).rows[0].secondary)
-        state.select(1); state.onButton(NxButton.LEFT)
+        state.select(1); state.padStep(NxButton.LEFT)
         assertEquals(StateFormat.DEFAULT.step(-1), settings.stateFormat)
         state.select(2); state.onButton(NxButton.A)
         assertEquals(true, settings.useExtractedFileName)
@@ -910,16 +921,16 @@ class AppStateTest {
         assertEquals(listOf("Accent", "Secondary accent", "Continue"), rows.map { it.label })
         assertEquals(0, state.selection.value.index)
         val before = state.screen.value
-        state.onButton(NxButton.RIGHT)
+        state.padStep(NxButton.RIGHT)
         assertEquals(AccentPreset.DEFAULT.step(1), settings.accent)
         assertNotEquals(before, state.screen.value)                         // a new screen, so App re-reads the colours
         assertEquals(settings.accent, assertIs<Screen.Onboarding>(state.screen.value).accent)
         assertEquals(settings.accent.label, assertIs<Screen.Onboarding>(state.screen.value).rows[0].secondary)
-        state.onButton(NxButton.LEFT)
+        state.padStep(NxButton.LEFT)
         assertEquals(AccentPreset.DEFAULT, settings.accent)
         val secondary = settings.secondaryAccent
         state.onButton(NxButton.DOWN)
-        state.onButton(NxButton.RIGHT)
+        state.padStep(NxButton.RIGHT)
         assertEquals(secondary.step(1), settings.secondaryAccent)
         assertEquals(OnboardingStep.ACCENT, assertIs<Screen.Onboarding>(state.screen.value).step)   // a value row stays on the page
         state.onButton(NxButton.DOWN)
@@ -969,7 +980,7 @@ class AppStateTest {
     @Test fun customise_walks_its_pages_and_writes_each() = runTest {
         val (state, settings) = atCustomise()
         assertEquals(OnboardingStep.PAD, step(state))
-        state.select(1); repeat(2) { state.onButton(NxButton.RIGHT) }   // the theme row: NX Carbon → NX Onyx → NX Obsidian
+        state.select(1); repeat(2) { state.padStep(NxButton.RIGHT) }   // the theme row: NX Carbon → NX Onyx → NX Obsidian
         state.select(2); state.onButton(NxButton.A)                         // Continue (the pad Show, as it is)
         assertEquals(OnboardingStep.TITLE, step(state))
         state.select(0); state.onButton(NxButton.A)                         // the page title: Hide (flips in place)
@@ -979,12 +990,12 @@ class AppStateTest {
         for ((st, c) in tabs) {
             assertEquals(st, step(state))
             state.select(0)
-            while (MenuStyles.styleOf(settings.menuStyles, c) != MenuStyle.LIST) state.onButton(NxButton.RIGHT)   // the layout row steps
+            repeat(10) { if (MenuStyles.styleOf(settings.menuStyles, c) != MenuStyle.LIST) state.padStep(NxButton.RIGHT) }   // the layout row steps
             state.select(state.selection.value.count - 1); state.onButton(NxButton.A)   // Continue
         }
         assertEquals(OnboardingStep.GAME_LISTS, step(state))
         state.select(0)
-        while (settings.gameListStyle != MenuStyle.BACKDROP) state.onButton(NxButton.RIGHT)
+        repeat(10) { if (settings.gameListStyle != MenuStyle.BACKDROP) state.padStep(NxButton.RIGHT) }
         state.select(state.selection.value.count - 1); state.onButton(NxButton.A)   // Continue
         assertEquals(OnboardingStep.ACCENT, step(state))
         assertEquals(true, settings.padSkin); assertEquals(PadTheme.NX_OBSIDIAN, settings.padTheme)
@@ -994,7 +1005,7 @@ class AppStateTest {
     }
 
     // the pad off (no controller) leaves no buttons: theme, title and hints are skipped.
-    // The pad row flips in place (A, a tap, LEFT/RIGHT) so the pad can be compared; only Continue goes on.
+    // The pad row flips in place (A or a tap) so the pad can be compared; only Continue goes on.
     @Test fun the_pad_page_flips_in_place_and_off_skips_theme_title_and_hints() = runTest {
         val (state, settings) = atCustomise()
         assertEquals(listOf("Pad skin" to "On", "Pad theme" to "NX Carbon", "Continue" to null), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label to it.secondary })
@@ -1004,24 +1015,24 @@ class AppStateTest {
         assertEquals(OnboardingStep.PAD, step(state))
         assertEquals(false, settings.padSkin); assertEquals(false, state.menuPadShown())
         assertNotEquals(total, assertIs<Screen.Onboarding>(state.screen.value).title)   // the count follows at once
-        state.onButton(NxButton.RIGHT)                                      // and back
+        state.padStep(NxButton.RIGHT)                                      // and back
         assertEquals(true, settings.padSkin)
-        state.onButton(NxButton.LEFT)
+        state.padStep(NxButton.LEFT)
         assertEquals(false, settings.padSkin)
         assertEquals(listOf("Pad skin", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })   // no pad: no theme row
         state.select(1); state.onButton(NxButton.A)                         // Continue
         assertEquals(OnboardingStep.TAB_HOME, step(state))
     }
 
-    // The theme is a second row on the pad page: it flips in place too.
-    @Test fun the_pad_theme_row_flips_in_place() = runTest {
+    // The theme is a second row on the pad page: it steps in place too.
+    @Test fun the_pad_theme_row_steps_in_place() = runTest {
         val (state, settings) = atCustomise()
         val before = state.screen.value
-        state.select(1); state.onButton(NxButton.A)                         // NX Carbon → NX Onyx, the page stays
+        state.select(1); state.padStep(NxButton.RIGHT)                      // NX Carbon → NX Onyx, the page stays
         assertEquals(PadTheme.NX_ONYX, settings.padTheme)
         assertEquals(OnboardingStep.PAD, step(state))
         assertNotEquals(before, state.screen.value)                        // republished: App re-reads the theme
-        state.onButton(NxButton.LEFT)
+        state.padStep(NxButton.LEFT)
         assertEquals(PadTheme.NX_CARBON, settings.padTheme)
     }
 
@@ -1054,7 +1065,7 @@ class AppStateTest {
         assertEquals(listOf("Page title" to "Show", "Button hints" to "Show", "Continue" to null), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label to it.secondary })
         state.select(0); state.onButton(NxButton.A)
         assertEquals(false, settings.menuPageTitle)
-        state.select(1); state.onButton(NxButton.RIGHT)
+        state.select(1); state.padStep(NxButton.RIGHT)
         assertEquals(false, settings.menuButtonHints)
         assertEquals(OnboardingStep.TITLE, step(state))
         assertEquals(1, state.selection.value.index)                       // the row stays selected
@@ -1077,7 +1088,7 @@ class AppStateTest {
         assertEquals(true, state.menuPadShown())                           // the menu: the choice
     }
 
-    // A layout page: the layout row above one picture of it. LEFT / RIGHT or A step the layout in place (applied at once,
+    // A layout page: the layout row above one picture of it. A then LEFT / RIGHT step the layout in place (applied at once,
     // the picture following); only Continue goes on.
     @Test fun a_layout_page_steps_its_layout_in_place_and_continue_goes_on() = runTest {
         val (state, settings) = atCustomise(controller = true)
@@ -1086,13 +1097,13 @@ class AppStateTest {
         val page = assertIs<Screen.Onboarding>(state.screen.value)
         assertEquals(listOf("Layout" to "Grid", "Stats" to "Show", "Continue" to null), page.rows.map { it.label to it.secondary })   // named without the tab: the title says it
         assertEquals(LayoutShot.Tab(MenuCategory.HOME, MenuStyle.GRID), page.shot)
-        state.onButton(NxButton.RIGHT)                                      // Grid -> Carousel
+        state.padStep(NxButton.RIGHT)                                      // Grid -> Carousel
         assertEquals(MenuStyle.CAROUSEL, settings.menuStyles[MenuCategory.HOME])
         assertEquals(LayoutShot.Tab(MenuCategory.HOME, MenuStyle.CAROUSEL), assertIs<Screen.Onboarding>(state.screen.value).shot)
-        state.onButton(NxButton.A)                                          // A on the row: the next one, the page stays
+        state.padStep(NxButton.RIGHT)                                      // the next one, the page stays
         assertEquals(MenuStyle.MINIMAL, settings.menuStyles[MenuCategory.HOME])
         assertEquals(OnboardingStep.TAB_HOME, step(state))
-        state.onButton(NxButton.LEFT)                                       // back to Carousel
+        state.padStep(NxButton.LEFT)                                       // back to Carousel
         assertEquals(MenuStyle.CAROUSEL, settings.menuStyles[MenuCategory.HOME])
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)           // Home stats: Hide, the picture without the strip
         assertEquals(false, settings.menuHomeStats)
@@ -1106,11 +1117,11 @@ class AppStateTest {
         val (state, settings) = atCustomise(controller = true)
         while (step(state) != OnboardingStep.TAB_CONSOLES) { state.select(state.selection.value.count - 1); state.onButton(NxButton.A) }
         state.select(0)
-        while (MenuStyles.styleOf(settings.menuStyles, MenuCategory.CONSOLES) != MenuStyle.LIST) state.onButton(NxButton.RIGHT)
+        repeat(10) { if (MenuStyles.styleOf(settings.menuStyles, MenuCategory.CONSOLES) != MenuStyle.LIST) state.padStep(NxButton.RIGHT) }
         assertEquals(listOf("Layout", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })   // List: no orientation
-        while (MenuStyles.styleOf(settings.menuStyles, MenuCategory.CONSOLES) != MenuStyle.CAROUSEL) state.onButton(NxButton.RIGHT)
+        repeat(10) { if (MenuStyles.styleOf(settings.menuStyles, MenuCategory.CONSOLES) != MenuStyle.CAROUSEL) state.padStep(NxButton.RIGHT) }
         assertEquals(listOf("Layout" to "Carousel", "Orientation" to "Horizontal", "Continue" to null), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label to it.secondary })
-        state.select(1); state.onButton(NxButton.RIGHT)
+        state.select(1); state.padStep(NxButton.RIGHT)
         assertEquals(MenuOrientation.VERTICAL, settings.menuOrientations[MenuCategory.CONSOLES])
         assertEquals(LayoutShot.Tab(MenuCategory.CONSOLES, MenuStyle.CAROUSEL, vertical = true), assertIs<Screen.Onboarding>(state.screen.value).shot)
         assertEquals(1, state.selection.value.index)                       // the row stays selected
@@ -1121,11 +1132,11 @@ class AppStateTest {
         val (state, settings) = atCustomise(controller = true)
         while (step(state) != OnboardingStep.GAME_LISTS) { state.select(state.selection.value.count - 1); state.onButton(NxButton.A) }
         state.select(0)
-        while (settings.gameListStyle != MenuStyle.BACKDROP) state.onButton(NxButton.RIGHT)
+        repeat(10) { if (settings.gameListStyle != MenuStyle.BACKDROP) state.padStep(NxButton.RIGHT) }
         assertEquals(listOf("Layout", "Orientation", "Games tab", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })
-        state.select(1); state.onButton(NxButton.RIGHT)                    // Vertical: the alignment row comes
+        state.select(1); state.padStep(NxButton.RIGHT)                    // Vertical: the alignment row comes
         assertEquals(listOf("Layout", "Orientation", "Alignment", "Games tab", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })
-        state.select(2); state.onButton(NxButton.RIGHT)                    // Right
+        state.select(2); state.padStep(NxButton.RIGHT)                    // Right
         assertEquals(VerticalListAlignment.RIGHT, settings.gameListVerticalAlignment)
         assertEquals(LayoutShot.Games(MenuStyle.BACKDROP, vertical = true, right = true), assertIs<Screen.Onboarding>(state.screen.value).shot)
     }
@@ -1137,7 +1148,7 @@ class AppStateTest {
         assertEquals("Layout", page.rows[0].label)
         val seen = mutableSetOf<MenuStyle>()
         state.select(0)
-        repeat(MenuStyles.GAME_LIST_STYLES.size) { state.onButton(NxButton.RIGHT); seen += settings.gameListStyle }
+        repeat(MenuStyles.GAME_LIST_STYLES.size) { state.padStep(NxButton.RIGHT); seen += settings.gameListStyle }
         assertEquals(MenuStyles.GAME_LIST_STYLES.toSet(), seen)
         assertEquals(LayoutShot.Games(settings.gameListStyle), assertIs<Screen.Onboarding>(state.screen.value).shot)
     }
@@ -1153,7 +1164,7 @@ class AppStateTest {
         assertEquals("Continue", page.rows.last().label)
         assertEquals("Games tab", page.touchRows!![i].label)
         assertEquals("Continue", page.touchRows!!.last().label)
-        state.select(i); state.onButton(NxButton.RIGHT)
+        state.select(i); state.padStep(NxButton.RIGHT)
         assertFalse(settings.showGamesTab)
         assertEquals("Hide", assertIs<Screen.Onboarding>(state.screen.value).rows[i].secondary)
         state.onButton(NxButton.A)                          // A steps it back

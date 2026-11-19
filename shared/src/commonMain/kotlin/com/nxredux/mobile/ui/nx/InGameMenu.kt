@@ -318,7 +318,7 @@ private fun InGameMenuContent(
             Modifier
         }
         MenuHintBar(
-            page, hintsFor(page, selectedRow, state.selectedShowsInfo, state.panelFocus ?: PanelFocus.Tabs.takeIf { offMenuTab }, state.panelTab, editing = state.editing), hintModifier,
+            page, hintsFor(page, selectedRow, state.selectedShowsInfo, state.panelFocus ?: PanelFocus.Tabs.takeIf { offMenuTab }, state.panelTab, editing = state.editing, inPanel = state.inPanel), hintModifier,
             onHint = { onPress(menuHintButton(it)) },
         )
     }
@@ -963,12 +963,13 @@ private fun AdjustArrow(text: String, size: TextUnit, color: Color, onClick: () 
 internal fun hintsFor(
     page: MenuPage, row: MenuRow?, infoTruncated: Boolean = false, panelFocus: PanelFocus? = null, panelTab: GamePanelTab? = null,
     editing: Boolean = false,   // the row is being changed ([MenuState.editing]): LEFT / RIGHT change, B done
+    inPanel: Boolean = false,   // in the dual-screen panel ([MenuState.inPanel]): a visual row changes as any other
 ): List<Hint> {
     if (editing && panelFocus == null) return NX_EDIT_HINTS
-    return pageHints(page, row, infoTruncated, panelFocus, panelTab)
+    return pageHints(page, row, infoTruncated, panelFocus, panelTab, inPanel)
 }
 
-private fun pageHints(page: MenuPage, row: MenuRow?, infoTruncated: Boolean, panelFocus: PanelFocus?, panelTab: GamePanelTab?): List<Hint> = when {
+private fun pageHints(page: MenuPage, row: MenuRow?, infoTruncated: Boolean, panelFocus: PanelFocus?, panelTab: GamePanelTab?, inPanel: Boolean): List<Hint> = when {
     panelFocus != null -> buildList {
         add(Hint(NxButton.L1, "Tab"))
         if (panelFocus is PanelFocus.Item) { if (panelTab != GamePanelTab.ACHIEVEMENTS) add(Hint(NxButton.A, "Select")) }   // its rows open nothing
@@ -991,7 +992,7 @@ private fun pageHints(page: MenuPage, row: MenuRow?, infoTruncated: Boolean, pan
         if (row.fullInfo.isNotBlank()) add(Hint(NxButton.A, "Info"))
         add(Hint(NxButton.B, "Resume"))
     }
-    row is MenuRow.Option -> optionHints(row, infoTruncated)
+    row is MenuRow.Option -> optionHints(row, infoTruncated, inPanel)
     // Options: A opens its page (previewed on the right).
     page.kind == PageKind.Root && row is MenuRow.Submenu -> listOf(Hint(NxButton.A, "Open"), Hint(NxButton.B, "Resume"))
     row is MenuRow.Submenu -> buildList {
@@ -1032,9 +1033,9 @@ private fun shortcutHints(row: MenuRow.Option): List<Hint> = buildList {
  * Choose on a picker, Change on segments or swatches (A then LEFT / RIGHT, [MenuState.editing]);
  * X Info when its description is cut off on its row or says more ([MenuState.selectedShowsInfo], passed as [infoTruncated]).
  */
-private fun optionHints(row: MenuRow.Option, infoTruncated: Boolean): List<Hint> = buildList {
+private fun optionHints(row: MenuRow.Option, infoTruncated: Boolean, inPanel: Boolean): List<Hint> = buildList {
     when {
-        row.visual -> add(Hint(NxButton.A, "Adjust"))
+        row.visual && !inPanel -> add(Hint(NxButton.A, "Adjust"))   // its live strip
         row.control == NxSettingControl.SWITCH -> add(Hint(NxButton.A, "Toggle"))
         row.control == NxSettingControl.PICKER -> add(Hint(NxButton.A, "Choose"))
         // A starts changing segments or swatches ([MenuState.editing]).

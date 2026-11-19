@@ -178,6 +178,7 @@ internal class SettingsController(
         is Screen.EmulatorOptions -> s.rows.getOrNull(row)?.takeIf { it.selectable }?.let(::emulatorTouchRow)
         is Screen.RaSettings -> s.rows.getOrNull(row)?.takeIf { it.selectable }?.let(::raSettingsTouchRow)
         is Screen.ArtworkSettings -> s.rows.getOrNull(row)?.takeIf { it.selectable }?.let(::artworkSettingTouchRow)
+        is Screen.Onboarding -> s.touchRows?.getOrNull(row)
         else -> null
     }
 
@@ -426,9 +427,16 @@ internal class SettingsController(
             page.rows.indices.filter { sameSettingsRow(page.rows[it], was) }.singleOrNull()
         }
         selection.value = selectableOn(page, if (moved != null && moved != sel.index) sel.copy(index = moved) else sel)
-        // The row being changed goes with it; gone (or no longer found once), the change ends rather than land on another row.
-        rowEdit.value?.takeIf { it.key == section }?.let { e ->
-            rowEdit.value = if (e.index == sel.index && moved != null) e.copy(index = moved) else null
+        followRowEdit(section, sel.index, moved)
+    }
+
+    /**
+     * Page [key] rebuilt with the selection's row, at [from] before, now at [to] (null: gone, or no longer found once): the
+     * row being changed goes with it, or the change ends rather than land on another row.
+     */
+    fun followRowEdit(key: Any?, from: Int, to: Int?) {
+        rowEdit.value?.takeIf { it.key == key }?.let { e ->
+            rowEdit.value = if (e.index == from && to != null) e.copy(index = to) else null
         }
     }
 

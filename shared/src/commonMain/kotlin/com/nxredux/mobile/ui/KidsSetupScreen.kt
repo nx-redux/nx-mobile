@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.launcher.InstalledApp
 import com.nxredux.mobile.ui.nx.Hint
+import com.nxredux.mobile.ui.nx.padAHint
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
@@ -90,9 +91,11 @@ internal fun KidsSetupScreen(
         KidsSetupStep.APPS, KidsSetupStep.TIMES -> 1
         else -> 2
     }
-    val hints = listOf(Hint(NxButton.B, if (s.setup) "Cancel" else "Back"), Hint(NxButton.A, "Choose"))
+    val touchRows = rows.map { kidsSetupTouchRow(it, s.setup) }
+    // An app's switch says Toggle: A flips it (LEFT / RIGHT leave it alone, as on every settings page).
+    val hints = listOf(Hint(NxButton.B, if (s.setup) "Cancel" else "Back"), touchRows.getOrNull(selected)?.padAHint ?: Hint(NxButton.A, "Choose"))
     SetupBlockPage(
-        if (s.setup) "Kids Mode setup" else "Kids Mode", headline, kidsSetupLines(s), rows.map { kidsSetupTouchRow(it, s.setup) }, buttons,
+        if (s.setup) "Kids Mode setup" else "Kids Mode", headline, kidsSetupLines(s), touchRows, buttons,
         selected, hints, onSelect, onRow, onHint, modifier, onSetting = onSetting,
         lineBreaks = true,   // the Apps step's "Pick at least one app" on its own line
     )
