@@ -124,6 +124,10 @@ enum class SkinVariant {
     @SerialName("pkm") PKM,
     /** The ColecoVision: the d-pad, Yellow (the core's B) and Red (A) as PICO-8's pair, KEYPAD opening its keypad over the picture. */
     @SerialName("coleco") COLECO,
+    /** The Virtual Boy: its two d-pads level (the right one, DPAD2, on the face's spot), B / A, L / R, SELECT START. */
+    @SerialName("vb") VB,
+    /** The WonderSwan (and Color): the X cursor as the d-pad, the Y cursor as DPAD2 on the face's spot, B / A, START and ROTATE. */
+    @SerialName("ws") WS,
 }
 
 /**

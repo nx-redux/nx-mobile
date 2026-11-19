@@ -30,6 +30,7 @@ import com.nxredux.mobile.skin.SkinPlacement
 import com.nxredux.mobile.skin.skinTiles
 import com.nxredux.mobile.ui.nx.KeypadKey
 import com.nxredux.mobile.ui.nx.KeypadPress
+import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.PadEvent
 import com.nxredux.mobile.ui.nx.keypadKeyAt
 import com.nxredux.mobile.ui.nx.keypadKeys
@@ -260,6 +261,11 @@ internal class PadSkinView(
     private val src = Rect()
     private val dst = Rect()
     private val touch = SkinPadTouch(onPad, { id, down -> onAction(SkinAction.valueOf(id), down) }, ::tick, ::invalidate, onStick, onCStick)
+
+    /** The console's second d-pad (DPAD2) as its core's buttons ([SkinPadTouch.secondDpad]); empty: none. */
+    var secondDpad: Map<NxButton, NxButton>
+        get() = touch.secondDpad
+        set(value) { touch.secondDpad = value }
     /** The labels under the buttons, written here (the picture has none there). */
     private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = SKIN_LABEL_GREY

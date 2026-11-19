@@ -543,7 +543,11 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             onGlass = { x, y, down -> glassTouch(game, x, y, down) }, bare = bare)
         view.useStick = PadStickModes[padStickKey, stickDefault()]   // the player's choice, shared by the skin and its bare buttons
         view.dimmed = motionDim()
-        if (com.nxredux.mobile.runner.CoreRegistry.baseTag(layoutTag()) == "COLECO") view.keypad = { com.nxredux.mobile.ui.nx.colecoKeypad(it) }
+        when (com.nxredux.mobile.runner.CoreRegistry.baseTag(layoutTag())) {
+            "COLECO" -> view.keypad = { com.nxredux.mobile.ui.nx.colecoKeypad(it) }
+            "VB" -> view.secondDpad = com.nxredux.mobile.ui.nx.VB_SECOND_DPAD
+            "WS", "WSC" -> view.secondDpad = com.nxredux.mobile.ui.nx.WS_SECOND_DPAD
+        }
         // under the menu and the notifications, over the game
         val below = listOfNotNull(menuView, notificationsView).map { root.indexOfChild(it) }.filter { it >= 0 }.minOrNull() ?: -1
         root.addView(view, below, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))

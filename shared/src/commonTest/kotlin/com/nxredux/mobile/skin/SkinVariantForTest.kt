@@ -21,6 +21,8 @@ class SkinVariantForTest {
         assertEquals(SkinVariant.LYNX, SkinChoice.variantFor("LYNX", false))
         assertEquals(SkinVariant.PKM, SkinChoice.variantFor("PKM", false))
         assertEquals(SkinVariant.COLECO, SkinChoice.variantFor("COLECO", false))
+        assertEquals(SkinVariant.VB, SkinChoice.variantFor("VB", false))
+        for (t in listOf("WS", "WSC")) assertEquals(SkinVariant.WS, SkinChoice.variantFor(t, false), t)
         assertEquals(SkinVariant.DOOM, SkinChoice.variantFor("PRBOOM", false))   // the standard pad with L2 R2 L3 R3
         // a console with no layout of its own (an added core's tag) takes the shared one-screen layout
         for (t in listOf("", "XYZ", "SNES9X_CUSTOM")) assertEquals(SkinVariant.SINGLE, SkinChoice.variantFor(t, false), t)

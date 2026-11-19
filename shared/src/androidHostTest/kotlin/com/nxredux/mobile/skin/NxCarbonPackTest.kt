@@ -50,6 +50,8 @@ class NxCarbonPackTest {
                 SkinVariant.LYNX -> assertEquals(pair + "L" + "R", ids, spec.id)   // OPTION 1 / 2 on L / R
                 SkinVariant.PKM -> assertEquals(pair - "START" + "L" + "R", ids, spec.id)   // SHAKE / C on L / R, no START
                 SkinVariant.COLECO -> assertEquals(pair - "START" + "KEYPAD", ids, spec.id)   // its keypad over the picture, from KEYPAD
+                SkinVariant.VB -> assertEquals(pair + "SELECT" + "DPAD2" + "L" + "R", ids, spec.id)   // the right d-pad
+                SkinVariant.WS -> assertEquals(pair + "SELECT" + "DPAD2", ids, spec.id)   // the Y cursor, SELECT its ROTATE
                 else -> {}
             }
             // the NGP's A / B: the N64's whole 148 px caps drawn at the pair's cap size, not a 124 px corner of them
@@ -60,7 +62,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(161 + 72 + N3DS_LAYOUTS + GRIP_COLUMNS, pack.layouts.size)   // the menu half-folded on a phone (flex_menu); 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's, the Atari 5200's, Doom's, the Sega pad's two (6- and 3-button) and the Saturn's in every family; the small-pad consoles' nine (sms, gg, a7800, ngp, pce, a2600, lynx, pkm, coleco: 7 each and a tablet twin) in every family; a tablet twin of each game fold board without one (17: the clusters centred on the bottom screen, user)
+        assertEquals(161 + 88 + N3DS_LAYOUTS + GRIP_COLUMNS, pack.layouts.size)   // the menu half-folded on a phone (flex_menu); 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's, the Atari 5200's, Doom's, the Sega pad's two (6- and 3-button) and the Saturn's in every family; the small-pad consoles' eleven (sms, gg, a7800, ngp, pce, a2600, lynx, pkm, coleco, vb, ws: 7 each and a tablet twin) in every family; a tablet twin of each game fold board without one (17: the clusters centred on the bottom screen, user)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
