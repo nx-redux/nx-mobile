@@ -21,9 +21,6 @@ internal const val BAD_FOLDER_NAME = "That name can't be used."
 internal const val FOLDER_EXISTS = "A folder with that name already exists."
 internal const val FOLDER_NOT_CREATED = "Could not create the folder."
 internal const val STORAGE_TITLE = "Storage"
-/** Longer folder names are cut in the middle, so the action keeps to its half of the row beside New folder. */
-private const val ACTION_NAME_MAX = 22
-private const val ACTION_NAME_KEEP = 10
 
 /** What the list-style picker ([FilePickerController]) picks. */
 sealed interface FilePickMode {
@@ -75,14 +72,14 @@ internal fun homeFolderStatus(entries: List<LocalEntry>): String {
     return "Has other files: games found in it will be sorted into Roms"
 }
 
-/** The action's words for [mode] naming [folder], the folder shown; null for [FilePickMode.ImportZip], which has none. */
-internal fun pickActionLabel(mode: FilePickMode, folder: String): String? {
-    val name = if (folder.length <= ACTION_NAME_MAX) folder else folder.take(ACTION_NAME_KEEP) + "…" + folder.takeLast(ACTION_NAME_KEEP)
-    return when (mode) {
-        FilePickMode.Home, FilePickMode.Extra, FilePickMode.ImportFolder -> "Use $name"
-        is FilePickMode.Export -> "Save in $name"
-        FilePickMode.ImportZip -> null
-    }
+/**
+ * The action's words for [mode] naming [folder], the folder shown; null for [FilePickMode.ImportZip], which has none.
+ * A name too long for the row is cut where it is drawn ([SetupButtons]), so New folder beside it keeps its room.
+ */
+internal fun pickActionLabel(mode: FilePickMode, folder: String): String? = when (mode) {
+    FilePickMode.Home, FilePickMode.Extra, FilePickMode.ImportFolder -> "Use $folder"
+    is FilePickMode.Export -> "Save in $folder"
+    FilePickMode.ImportZip -> null
 }
 
 /** [folder]: the shown folder's name, as the action says it. [canPick] false: no action (the phone's storage root for a home or an extra folder; New folder stays). */

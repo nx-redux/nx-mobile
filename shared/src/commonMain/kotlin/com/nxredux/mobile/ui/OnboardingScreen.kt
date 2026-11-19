@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Color
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import org.jetbrains.compose.resources.DrawableResource
@@ -215,8 +216,11 @@ internal fun SetupButtons(
         labels.forEachIndexed { i, text ->
             val index = first + i
             val main = i == 0
+            // The main button gives way when the row runs out (a long folder name in the picker's Use …): it ends in "…",
+            // the others keep their whole words.
             Box(
-                Modifier.heightIn(min = SETUP_BUTTON_TAP).clickable { onSelect(index); onOpen(index) },
+                (if (main) Modifier.weight(1f, fill = false) else Modifier)
+                    .heightIn(min = SETUP_BUTTON_TAP).clickable { onSelect(index); onOpen(index) },
                 contentAlignment = Alignment.CenterStart,
             ) {
                 val ink = if (main) colors.onAccent else colors.listText
@@ -235,6 +239,7 @@ internal fun SetupButtons(
                     Text(
                         text, color = ink,
                         fontFamily = LocalNxFont.current, fontWeight = FontWeight.Bold, fontSize = size, lineHeight = size * SETUP_WORD_LINE, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }

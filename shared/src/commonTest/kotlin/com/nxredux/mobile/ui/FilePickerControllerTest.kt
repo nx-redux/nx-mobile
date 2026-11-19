@@ -415,11 +415,11 @@ class FilePickerControllerTest {
         assertTrue("Save in NXRedux" in e.labels)
     }
 
-    // A long name is cut in the middle so the action keeps to its half of the row beside New folder.
-    @Test fun a_long_folder_name_is_cut_in_the_middle() {
-        assertEquals("Use Games", pickActionLabel(FilePickMode.Extra, "Games"))
-        assertEquals("Use Retro Game…Collection", pickActionLabel(FilePickMode.Extra, "Retro Games Big Collection"))
-        assertEquals("Save in Retro Game…Collection", pickActionLabel(FilePickMode.Export("x.zip"), "Retro Games Big Collection"))
+    // The label carries the whole name: a long one is cut where it is drawn, by the room the row has.
+    @Test fun the_action_label_keeps_the_whole_folder_name() {
+        assertEquals("Use Retro Games Big Collection", pickActionLabel(FilePickMode.Extra, "Retro Games Big Collection"))
+        assertEquals("Save in Retro Games Big Collection", pickActionLabel(FilePickMode.Export("x.zip"), "Retro Games Big Collection"))
+        assertNull(pickActionLabel(FilePickMode.ImportZip, "Games"))
     }
 
     // The action rows stay pinned above the list (a gap between): Use <folder> and New folder, none in Import a zip.
