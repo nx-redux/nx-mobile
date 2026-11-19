@@ -54,7 +54,7 @@ internal fun pickerListRows(rows: List<PickerRow>): List<NxRow> = rows.map {
     NxRow(it.label, enabled = it != PickerRow.Empty && it !is PickerRow.File, icon = icon)   // a file: shown dimmed, never picked
 }
 
-/** How many of [rows] are actions (Use this folder / Save here, New folder), pinned side by side under the scrolling list. */
+/** How many of [rows] are actions (Use / Save in, New folder), pinned side by side under the scrolling list. */
 internal fun pickerPinnedRows(rows: List<PickerRow>): Int = rows.takeLastWhile { it is PickerRow.Action || it == PickerRow.NewFolder }.size
 
 /**
