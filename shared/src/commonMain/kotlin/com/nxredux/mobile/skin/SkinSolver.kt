@@ -633,7 +633,7 @@ object SkinSolver {
             }
         }
         controls += spec.controls.map { c ->
-            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k, travel = c.travel * k, knobTravel = c.knobTravel * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward) + sideShift(c.anchor ?: PieceAnchor.LEFT, c.inward) + (if (c.id in columnIds) columnShiftOf(c.anchor) else if (c.id in shoulderIds) shoulderShiftOf(c.anchor) else if (c.id in companionIds) companionOf(c.anchor).first
+            PlacedControl(c.scaled(k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward) + sideShift(c.anchor ?: PieceAnchor.LEFT, c.inward) + (if (c.id in columnIds) columnShiftOf(c.anchor) else if (c.id in shoulderIds) shoulderShiftOf(c.anchor) else if (c.id in companionIds) companionOf(c.anchor).first
                 else if (c.id == "DPAD" && (dpadUnder.first != 0f || dpadUnder.second != 0f)) dpadUnder.first else 0f)) * k, (c.y + down(c.level, c.drop) - minOf(lift, c.rise.toFloat()) - (if (c.anchor == PieceAnchor.CENTRE) 0f else controlRise) + (if (c.id in columnIds) columnDropOf(c.anchor) else if (c.id in shoulderIds) shoulderDropOf(c.anchor) else if (c.id in companionIds) companionOf(c.anchor).second
                 else if (c.id == "DPAD" && (dpadUnder.first != 0f || dpadUnder.second != 0f)) dpadUnder.second else 0f)) * k)
         }
@@ -709,7 +709,7 @@ object SkinSolver {
         }
         val controls = spec.controls.map { c ->
             val (x, y) = ctx.map(c.x, c.y) ?: return null
-            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k, travel = c.travel * k, knobTravel = c.knobTravel * k), x * k, y * k)
+            PlacedControl(c.scaled(k), x * k, y * k)
         }
         val windowCells = cells.map { it.copy(dst = PxRect(it.dst.x * k, it.dst.y * k, it.dst.width * k, it.dst.height * k)) }
         return SkinPlacement(spec, k, windowCells, glasses, controls)

@@ -198,12 +198,9 @@ object SkinBoxes {
                 pieces += q
             }
             for (c in z.controls) {
-                val q = c.copy(x = px + c.x * f, y = py + c.y * f, r = c.r * f, hw = c.hw * f, hh = c.hh * f, capR = c.capR * f, arm = c.arm * f,
-                    labelDy = c.labelDy * f, labelDx = c.labelDx * f, labelH = c.labelH * f, travel = c.travel * f, knobTravel = c.knobTravel * f,
-                    anchor = a, level = PieceLevel.TOP, inward = 0, drop = -1f)
+                val q = c.scaled(f).copy(x = px + c.x * f, y = py + c.y * f, anchor = a, level = PieceLevel.TOP, inward = 0, drop = -1f)
                 controls += q
-                placedControls += PlacedControl(q.copy(r = q.r * k, hw = q.hw * k, hh = q.hh * k, capR = q.capR * k, arm = q.arm * k, labelDy = q.labelDy * k,
-                    labelDx = q.labelDx * k, labelH = q.labelH * k, travel = q.travel * k, knobTravel = q.knobTravel * k), q.x * k, q.y * k)
+                placedControls += PlacedControl(q.scaled(k), q.x * k, q.y * k)
             }
         }
         return base.copy(spec = bare.copy(pieces = pieces, controls = controls), pieces = placedPieces, controls = placedControls, boxed = true)

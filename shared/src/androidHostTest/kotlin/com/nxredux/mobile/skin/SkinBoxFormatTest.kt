@@ -35,7 +35,8 @@ class SkinBoxFormatTest {
     @Test
     fun everyColourPackHasTheCarbonBoxes() {
         val dir = File("../androidApp/src/main/assets/skins")
-        fun atlasFree(b: List<BoxSpec>) = b.map { bx -> bx.copy(sizes = bx.sizes.map { z -> z.copy(pieces = z.pieces.map { it.copy(sx = 0, sy = 0) }) }) }
+        fun atlasFree(b: List<BoxSpec>) = b.map { bx -> bx.copy(sizes = bx.sizes.map { z -> z.copy(pieces = z.pieces.map { it.copy(sx = 0, sy = 0) },
+            controls = z.controls.map { it.copy(markSx = 0, markSy = 0) }) }) }   // (a mark's art: where its own pack's picture has it)
         val carbon = assertNotNull(SkinPackManifest.parse(File(dir, "nx-carbon/skin.json").readText())).layouts.associate { it.id to atlasFree(it.boxes) }
         assertTrue(carbon.values.any { it.isNotEmpty() }, "NX Carbon has boxes")
         for (pack in dir.listFiles()!!.filter { it.isDirectory && it.name != "nx-carbon" }) {

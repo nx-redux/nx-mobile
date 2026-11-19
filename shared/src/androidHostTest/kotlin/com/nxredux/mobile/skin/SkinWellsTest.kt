@@ -22,7 +22,7 @@ internal fun skinPreviewJson(w: Int, h: Int, p: SkinPlacement?): String {
     sb.append("],\"glasses\":[")
     p?.glasses?.forEachIndexed { i, g -> if (i > 0) sb.append(','); sb.append("[\"${g.screen}\",${g.rect.x},${g.rect.y},${g.rect.width},${g.rect.height},${g.scale}]") }
     sb.append("],\"controls\":[")
-    p?.controls?.forEachIndexed { i, c -> if (i > 0) sb.append(','); sb.append("[\"${c.spec.id}\",${c.x},${c.y},${c.spec.r},${c.spec.hw},${c.spec.hh},${c.spec.label?.let { "\"$it\"" }},${c.spec.labelDy},${c.spec.labelH},${c.spec.labelDx}]") }
+    p?.controls?.forEachIndexed { i, c -> if (i > 0) sb.append(','); sb.append("[\"${c.spec.id}\",${c.x},${c.y},${c.spec.r},${c.spec.hw},${c.spec.hh},${c.spec.label?.let { "\"$it\"" }},${c.spec.labelDy},${c.spec.labelH},${c.spec.labelDx},${c.spec.mark?.let { "\"$it\"" }},${c.spec.markH},${c.spec.markDy},${c.spec.markColor?.let { "\"$it\"" }},${c.spec.markSx},${c.spec.markSy},${c.spec.markSw},${c.spec.markSh}]") }
     sb.append("]}")
     return sb.toString()
 }

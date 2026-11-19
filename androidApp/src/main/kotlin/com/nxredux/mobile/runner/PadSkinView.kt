@@ -34,6 +34,7 @@ import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.PadEvent
 import com.nxredux.mobile.ui.nx.keypadKeyAt
 import com.nxredux.mobile.ui.nx.keypadKeys
+import com.nxredux.mobile.ui.nx.markInk
 import com.nxredux.mobile.ui.nx.SkinPackSource
 import com.nxredux.mobile.ui.nx.SkinGlassPass
 import com.nxredux.mobile.ui.nx.SkinPadTouch
@@ -274,6 +275,7 @@ internal class PadSkinView(
             .getOrDefault(Typeface.DEFAULT_BOLD)
     }
     private val slotLabel = Paint(label)
+    private val mark = Paint(label)
     /** The overlay's touch shortcut pills ([stripPill]): their fill and their edge. */
     private val pillFill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val pillRing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -327,6 +329,21 @@ internal class PadSkinView(
                 dst.set(piece.dst.x.roundToInt(), piece.dst.y.roundToInt(), (piece.dst.x + piece.dst.width).roundToInt(), (piece.dst.y + piece.dst.height).roundToInt())
                 canvas.drawBitmap(pp, src, dst, paint)
             }
+        }
+        for (c in p.controls) {   // the marks on the caps (their art is blank): a word cap height markH, or art markH tall
+            if (c.spec.markH <= 0f) continue
+            if (c.spec.markSw > 0 && c.spec.markSh > 0) {
+                val pp = parts ?: continue
+                val h = c.spec.markH; val w = h * c.spec.markSw / c.spec.markSh; val cy = c.y + c.spec.markDy
+                src.set(c.spec.markSx, c.spec.markSy, c.spec.markSx + c.spec.markSw, c.spec.markSy + c.spec.markSh)
+                dst.set((c.x - w / 2f).roundToInt(), (cy - h / 2f).roundToInt(), (c.x + w / 2f).roundToInt(), (cy + h / 2f).roundToInt())
+                canvas.drawBitmap(pp, src, dst, paint)
+                continue
+            }
+            val word = c.spec.mark ?: continue
+            mark.textSize = c.spec.markH / SKIN_LABEL_CAP
+            mark.color = markInk(c.spec)
+            canvas.drawText(word, c.x, c.y + c.spec.markDy + c.spec.markH / 2f, mark)
         }
         for (c in p.controls) {
             val text = c.spec.label ?: continue

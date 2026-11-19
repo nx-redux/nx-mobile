@@ -127,6 +127,23 @@ fun SkinArt(placement: SkinPlacement, picture: ImageBitmap, parts: ImageBitmap?,
         // the pieces and labels whole, over the screens as the game draws them: a button moved onto a screen's edge stays
         // on top (the frame's own hole is cut round in its art)
         if (parts != null) for (p in placement.pieces) drawPiece(parts, p)
+        // the marks on the caps (their art is blank): a word cap height markH, or art from the parts markH tall
+        for (c in placement.controls) {
+            if (c.spec.markH <= 0f) continue
+            if (c.spec.markSw > 0 && c.spec.markSh > 0) {
+                if (parts == null) continue
+                val h = c.spec.markH; val w = h * c.spec.markSw / c.spec.markSh; val cy = c.y + c.spec.markDy
+                drawImage(parts, IntOffset(c.spec.markSx, c.spec.markSy), IntSize(c.spec.markSw, c.spec.markSh),
+                    IntOffset((c.x - w / 2f).roundToInt(), (cy - h / 2f).roundToInt()), IntSize(w.roundToInt(), h.roundToInt()))
+                continue
+            }
+            val word = c.spec.mark ?: continue
+            val style = TextStyle(color = Color(markInk(c.spec)), fontFamily = labelFont, fontWeight = FontWeight.SemiBold,
+                fontSize = (c.spec.markH / SKIN_LABEL_CAP).toSp())   // role: a word printed on a button
+            val m = measurer.measure(word, style)
+            val capTop = c.y + c.spec.markDy - c.spec.markH / 2f
+            drawText(m, topLeft = Offset(c.x - m.size.width / 2f, capTop + c.spec.markH - m.firstBaseline))
+        }
         // the labels under the buttons (written here, not in the picture): cap height labelH, centred labelDy below
         for (c in placement.controls) {
             val text = c.spec.label ?: continue

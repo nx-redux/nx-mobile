@@ -291,6 +291,13 @@ sealed interface SkinPressShape {
 /** A control's label ([com.nxredux.mobile.skin.ControlSpec.label]): MiSans SemiBold, this grey (the skin's printed labels). */
 const val SKIN_LABEL_GREY = 0xFFC4C4C4.toInt()
 
+/** A word printed on a cap ([com.nxredux.mobile.skin.ControlSpec.mark]): MiSans SemiBold, this light grey (the renders' print). */
+const val SKIN_MARK_INK = 0xFFE8E8E8.toInt()
+
+/** [c]'s mark colour: its [com.nxredux.mobile.skin.ControlSpec.markColor] (`#RRGGBB`), else [SKIN_MARK_INK]. */
+fun markInk(c: com.nxredux.mobile.skin.ControlSpec): Int =
+    c.markColor?.removePrefix("#")?.takeIf { it.length == 6 }?.toLongOrNull(16)?.let { (0xFF000000 or it).toInt() } ?: SKIN_MARK_INK
+
 /** MiSans SemiBold's cap height in ems: the text size that gives a label its cap height. */
 const val SKIN_LABEL_CAP = 0.739f
 

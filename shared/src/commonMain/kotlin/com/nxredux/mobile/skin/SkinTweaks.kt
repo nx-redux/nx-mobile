@@ -377,11 +377,6 @@ object SkinTweaks {
         return p.controls.indices.filter { it >= stripN && Triple(p.controls[it].spec.id, p.controls[it].spec.x, p.controls[it].spec.y) in mine }
     }
 
-    private fun ControlSpec.scaled(s: Float) = copy(
-        r = r * s, hw = hw * s, hh = hh * s, capR = capR * s, arm = arm * s, labelDy = labelDy * s, labelDx = labelDx * s,
-        labelH = labelH * s, travel = travel * s, knobTravel = knobTravel * s,
-    )
-
     /** A placed control's hit box (window px). */
     private fun hit(c: PlacedControl): PxRect {
         val hw = if (c.spec.shape == ControlShape.RECT) c.spec.hw else c.spec.r

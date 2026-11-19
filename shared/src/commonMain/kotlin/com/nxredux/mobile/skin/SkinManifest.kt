@@ -425,7 +425,10 @@ enum class ControlShape {
  * third of [r]). In a layout built from pieces, [anchor], [inward] and [level] place it like its piece (else it is where its slice
  * lands). [label]: a word the app writes under it (the skin's picture has none there), its cap height [labelH] centred
  * [labelDy] below the control's centre, and [labelDx] across (beside the button: right-aligned left of it when
- * negative, left-aligned right of it when positive).
+ * negative, left-aligned right of it when positive). [mark]: a word printed on the cap, drawn by the app (the cap's
+ * art is blank, so a new word needs no render): its cap height [markH], centred [markDy] below the control's centre, in
+ * [markColor] (`#RRGGBB`; null: the print's light grey). A mark that is art (an icon) is [markSx], [markSy], [markSw] x
+ * [markSh] in the parts picture instead, drawn [markH] tall (its own width to that), centred [markDy] below the centre.
  */
 @Serializable
 data class ControlSpec(
@@ -455,4 +458,17 @@ data class ControlSpec(
     val knobTravel: Float = 0f,
     /** Shown only with the stick ("stick") or only with the d-pad ("dpad") on a layout that swaps them; null: always. */
     val alt: String? = null,
-)
+    val mark: String? = null,
+    val markH: Float = 0f,
+    val markDy: Float = 0f,
+    val markColor: String? = null,
+    val markSx: Int = 0,
+    val markSy: Int = 0,
+    val markSw: Int = 0,
+    val markSh: Int = 0,
+) {
+    /** Its sizes at [k] times (a placement's scale); its place stays for the placement to set. */
+    fun scaled(k: Float): ControlSpec = copy(r = r * k, hw = hw * k, hh = hh * k, capR = capR * k, arm = arm * k,
+        labelDy = labelDy * k, labelDx = labelDx * k, labelH = labelH * k, travel = travel * k, knobTravel = knobTravel * k,
+        markH = markH * k, markDy = markDy * k)
+}
