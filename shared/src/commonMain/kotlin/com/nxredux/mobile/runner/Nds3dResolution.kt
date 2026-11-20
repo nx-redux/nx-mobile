@@ -1,5 +1,7 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.layout.DeviceTraits
+
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.options.NdsLayoutChoice
 import com.nxredux.mobile.options.NdsOptions
@@ -30,7 +32,7 @@ enum class Res3dConsole(
     val coreId: String,
     val coreKey: String,
     val coreMax: Int,
-    val defaultCap: Int,
+    private val cap: Int,
     val modeKey: String,
     val maxScaleKey: String,
     val scaleKey: String,
@@ -45,6 +47,12 @@ enum class Res3dConsole(
 
     /** The three stored rows. */
     val keys: Set<String> get() = setOf(modeKey, maxScaleKey, scaleKey)
+
+    /**
+     * The Max Scale an unset game starts with. The PSP's is 2x on a Mali GPU: Dante's Inferno on the AYANEO's Mali-G76
+     * holds 60 fps at 2x and drops to ~42 at 3x on either renderer.
+     */
+    val defaultCap: Int get() = if (this == PSP && DeviceTraits.maliGpu) 2 else cap
 
     /** This console's display maximum ([Nds3dResolution.displayMaxOf], [N3ds3dResolution.displayMaxOf]) for a [window] (px, width to height) of class [screen]. */
     fun displayMaxOf(window: Pair<Int, Int>?, screen: ScreenClass?): Int? = when (this) {

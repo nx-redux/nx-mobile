@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.options.ConsoleSettings
 import com.nxredux.mobile.options.CoreConfig
 import com.nxredux.mobile.options.FrontendOptions
@@ -41,6 +42,20 @@ class PspResolutionTest {
         assertEquals(1, PspResolution.frameScale(270))
         assertEquals(2, PspResolution.frameScale(540))
         assertEquals(4, PspResolution.frameScale(1088))
+    }
+
+    @Test fun aMaliGpuStartsThePspAtTwo() {
+        try {
+            DeviceTraits.maliGpu = true
+            assertEquals(2, psp.defaultCap)
+            assertEquals(3, Res3dConsole.N3DS.defaultCap)
+            assertEquals(2, Nds3dResolution.valueFor(emptyMap(), current = 3, displayMax = 3, console = psp))
+            assertEquals("2", FrontendOptions.fromConfig(emptyMap(), "PSP")[psp.maxScaleKey])
+        } finally {
+            DeviceTraits.maliGpu = false
+        }
+        assertTrue(DeviceTraits.isMali(" Mali-G76 MC4"))
+        assertTrue(!DeviceTraits.isMali("Adreno (TM) 740"))
     }
 
     @Test fun autoStopsAtThreeUnlessRaised() {

@@ -1,5 +1,7 @@
 package com.nxredux.mobile.options
 
+import com.nxredux.mobile.layout.DeviceTraits
+
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.VulkanSwitch
 
@@ -58,7 +60,7 @@ object GraphicsApiOptions {
 
     /** Whether Auto is Vulkan for a core with [switch] on the GPU named [gpu] (GL_RENDERER, null: unknown). */
     fun autoIsVulkan(switch: VulkanSwitch?, gpu: String?): Boolean =
-        switch?.autoOnMali == true && gpu?.trim()?.startsWith("Mali", ignoreCase = true) == true
+        switch?.autoOnMali == true && DeviceTraits.isMali(gpu)
 
     /**
      * The value a launch reads for the stored [value]: Vulkan in place of Auto (or no value) where [autoIsVulkan], else

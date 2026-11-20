@@ -8,4 +8,13 @@ object DeviceTraits {
     /** The device has a hinge it can half-fold at (Android: the hinge angle sensor), so half-folded layouts apply. */
     @kotlin.concurrent.Volatile
     var canHalfFold: Boolean = false
+
+    /**
+     * The GPU is an Arm Mali (GL_RENDERER), set once a launch or settings page has read it: the PSP's Max Scale starts
+     * lower there ([com.nxredux.mobile.runner.Res3dConsole.defaultCap]).
+     */
+    @kotlin.concurrent.Volatile
+    var maliGpu: Boolean = false
+
+    fun isMali(gpu: String?): Boolean = gpu?.trim()?.startsWith("Mali", ignoreCase = true) == true
 }

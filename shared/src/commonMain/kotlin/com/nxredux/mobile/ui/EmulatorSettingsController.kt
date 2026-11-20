@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.tryOrNull
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.netplay.NetplayCores
@@ -372,7 +373,7 @@ internal class EmulatorSettingsController(
     }
 
     private suspend fun readPage(tag: String, d: CoreDescriptor, game: Listed?): EmulatorPage {
-        if (d.vulkan?.autoOnMali == true && gpu == null) gpu = gpuName()
+        if (d.vulkan?.autoOnMali == true && gpu == null) gpu = gpuName()?.also { DeviceTraits.maliGpu = DeviceTraits.isMali(it) }
         return build(tag, d, game, configs.read(tag, d.id, game?.game?.fileName))
     }
 
