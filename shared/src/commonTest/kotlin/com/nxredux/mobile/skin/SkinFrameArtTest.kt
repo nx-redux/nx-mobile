@@ -35,4 +35,19 @@ class SkinFrameArtTest {
         val all = SkinSolver.frameSlices(frame.copy(hole = emptyList()), 0f, 0f, 1000f, 1600f, 1f) { x, y, w, h -> PxRect(x, y, w, h) }
         assertTrue(all.none { it.fill >= 0f })
     }
+
+    @Test
+    fun aHoleWiderThanItsFrameDrawsNoBlack() {
+        val all = SkinSolver.frameSlices(frame.copy(hole = listOf(600, 22, 600, 22)), 0f, 0f, 1000f, 1600f, 1f) { x, y, w, h -> PxRect(x, y, w, h) }
+        assertTrue(all.none { it.fill >= 0f })
+    }
+
+    @Test
+    fun cornersWiderThanTheArtStayInsideIt() {
+        // 60 px of art across for corners of 48 each side: each corner shares what the art has
+        val slices = SkinSolver.frameSlices(frame.copy(srcW = 60, srcH = 70), 0f, 0f, 1000f, 1600f, 1f) { x, y, w, h -> PxRect(x, y, w, h) }.filter { it.fill < 0f }
+        for (s in slices) assertTrue(s.src.x >= 100f && s.src.y >= 50f && s.src.x + s.src.width <= 160f && s.src.y + s.src.height <= 120f && s.src.width > 0f && s.src.height > 0f, "inside the art: ${s.src}")
+        assertEquals(1000f, slices.maxOf { it.dst.x + it.dst.width }, 0.01f)
+    }
+
 }

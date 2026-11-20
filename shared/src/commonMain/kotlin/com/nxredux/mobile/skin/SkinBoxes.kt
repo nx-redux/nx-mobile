@@ -62,7 +62,9 @@ object SkinBoxes {
         spec: SkinLayoutSpec, windowW: Int, windowH: Int, k: Float, densityDpi: Int, hingeY: Float?,
         screen: (SkinLayoutSpec, BoxRoom) -> SkinPlacement?,
     ): SkinPlacement? {
-        if (spec.boxes.isEmpty() || k <= 0f || densityDpi <= 0) return null
+        // a pack's box with no sizes passed over, a slot's first box only
+        val boxes = spec.boxes.filter { it.sizes.isNotEmpty() }.distinctBy { it.slot }
+        if (boxes.isEmpty() || k <= 0f || densityDpi <= 0) return null
         val dp = densityDpi / 160f
         val w = windowW.toFloat(); val h = windowH.toFloat()
         val edge = EDGE_DP * dp; val gap = GAP_DP * dp
@@ -72,9 +74,9 @@ object SkinBoxes {
         // room across for both side boxes, and the height a box may take
         val sideRoom = if (beside) w - 2f * edge - 2f * gap - minScreen else w - 2f * edge - gap
         val tall = h - 2f * edge
-        val sideCount = spec.boxes.count { it.slot == BoxSlot.LEFT || it.slot == BoxSlot.RIGHT }
+        val sideCount = boxes.count { it.slot == BoxSlot.LEFT || it.slot == BoxSlot.RIGHT }
         fun fits(b: BoxSpec, z: BoxSize) = z.h * k <= tall && (b.slot !in setOf(BoxSlot.LEFT, BoxSlot.RIGHT) || z.w * k <= sideRoom / maxOf(1, sideCount))
-        val picked = spec.boxes.associate { b -> b.slot to (pick(b, shape) { fits(b, it) } ?: b.sizes.firstOrNull() ?: return null) }
+        val picked = boxes.associate { b -> b.slot to (pick(b, shape) { fits(b, it) } ?: b.sizes.first()) }
         // a size with nothing in it: no box there on this device shape
         val sizes = picked.filterValues { it.pieces.isNotEmpty() || it.controls.isNotEmpty() }
         fun size(s: BoxSlot) = sizes[s]
@@ -178,7 +180,7 @@ object SkinBoxes {
         val anchorOf = mapOf(BoxSlot.LEFT to PieceAnchor.LEFT, BoxSlot.RIGHT to PieceAnchor.RIGHT, BoxSlot.TOP_ROW to PieceAnchor.CENTRE, BoxSlot.BOTTOM_ROW to PieceAnchor.CENTRE)
         val pieces = ArrayList(bare.pieces); val placedPieces = ArrayList(base.pieces)
         val controls = ArrayList<ControlSpec>(); val placedControls = ArrayList(base.controls)
-        for (b in spec.boxes) {
+        for (b in boxes) {
             val z = sizes[b.slot] ?: continue
             val (ox, oy) = origin(b.slot)
             val px = ox / k; val py = oy / k   // the box's corner, picture px

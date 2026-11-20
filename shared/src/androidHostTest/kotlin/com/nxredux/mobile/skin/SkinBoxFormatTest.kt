@@ -58,4 +58,32 @@ class SkinBoxFormatTest {
             }, "${pack.name} ${l.id} ${bx.slot} ${p.sx},${p.sy} ${p.w}x${p.h}")
         }
     }
+
+    // The format this app writes and reads: the packs declare it; an older pack still reads (its newer fields absent), a
+    // newer one does not (it may draw what this app cannot).
+    @Test
+    fun theFormatIsReadUpToThisAppsOwn() {
+        val dir = File("../androidApp/src/main/assets/skins")
+        for (pack in dir.listFiles()!!.filter { it.isDirectory }) assertEquals(SkinPackManifest.FORMAT, assertNotNull(SkinPackManifest.parse(File(pack, "skin.json").readText()), pack.name).format, pack.name)
+        assertEquals(2, SkinPackManifest.FORMAT)
+        fun pack(format: Int) = """{"format":$format,"id":"t","name":"T","layouts":[]}"""
+        assertNotNull(SkinPackManifest.parse(pack(1)))
+        assertNotNull(SkinPackManifest.parse(pack(2)))
+        assertEquals(null, SkinPackManifest.parse(pack(3)))
+        assertEquals(null, SkinPackManifest.parse(pack(0)))
+    }
+
+    // A pack's box list with a slot twice, or a box with no sizes, places as without them: the first box of a slot, the
+    // empty one passed over (not the whole layout lost).
+    @Test
+    fun aDuplicateOrEmptyBoxIsPassedOver() {
+        val pack = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
+        val d = GOLDEN_DEVICES.first { it.name == "cover_land" }
+        val before = assertNotNull(placeFor(pack, SkinVariant.SMS, d))
+        val id = before.spec.id
+        val odd = pack.copy(layouts = pack.layouts.map { l -> if (l.id != id) l else l.copy(boxes = l.boxes + l.boxes.first().copy(sizes = l.boxes.last().sizes) + BoxSpec(BoxSlot.TOP_ROW, emptyList())) })
+        val after = assertNotNull(placeFor(odd, SkinVariant.SMS, d), "still placed")
+        assertEquals(goldenOf(before), goldenOf(after))
+    }
+
 }

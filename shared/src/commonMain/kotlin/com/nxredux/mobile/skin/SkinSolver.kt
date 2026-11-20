@@ -640,8 +640,10 @@ object SkinSolver {
     private const val HINGE_CLEAR = 80f
 
     /** Piece [p]'s picture drawn [w] x [h] picture px: corners [c] as drawn, the edges and middle stretched. */
-    private fun nineSlice(p: PieceSpec, c: Float, w: Float, h: Float, cornerK: Float, dst: (Float, Float, Float, Float) -> PxRect): List<SkinPiece> {
+    private fun nineSlice(p: PieceSpec, corner: Float, w: Float, h: Float, cornerK: Float, dst: (Float, Float, Float, Float) -> PxRect): List<SkinPiece> {
         val sx = p.sx.toFloat(); val sy = p.sy.toFloat()
+        // a corner the art is too small for: as much as it has, its middle kept
+        val c = corner.coerceAtMost(((minOf(p.artW, p.artH) - 2) / 2f).coerceAtLeast(0f))
         val cols = listOf(Triple(sx, c, 0f to c), Triple(sx + c, p.artW - 2 * c, c to w - 2 * c), Triple(sx + p.artW - c, c, w - c to c))
         val rows = listOf(Triple(sy, c, 0f to c), Triple(sy + c, p.artH - 2 * c, c to h - 2 * c), Triple(sy + p.artH - c, c, h - c to c))
         return buildList {
@@ -651,7 +653,7 @@ object SkinSolver {
             }
             val g = p.glass
             if (g != null && p.hole.size == 4) { val (l, t, r, b) = p.hole
-                add(SkinPiece(PxRect(0f, 0f, 0f, 0f), dst(l.toFloat(), t.toFloat(), w - l - r, h - t - b), fill = g.corner * cornerK)) }
+                if (w - l - r > 0f && h - t - b > 0f) add(SkinPiece(PxRect(0f, 0f, 0f, 0f), dst(l.toFloat(), t.toFloat(), w - l - r, h - t - b), fill = g.corner * cornerK)) }
         }
     }
 
@@ -666,8 +668,10 @@ object SkinSolver {
         val g = frame.glass
         val bl = g.x.toFloat(); val bt = g.y.toFloat(); val br = (frame.w - g.x - g.w).toFloat(); val bb = (frame.h - g.y - g.h).toFloat()
         val gc = g.corner.toFloat()
-        val cl = maxOf(bl + gc, frame.corner.toFloat()); val ct = maxOf(bt + gc, frame.corner.toFloat())
-        val cr = maxOf(br + gc, frame.corner.toFloat()); val cb = maxOf(bb + gc, frame.corner.toFloat())
+        // corners the art is too small for share what it has, its 2 px middle kept
+        fun fit(a: Float, b: Float, art: Int) = (art - 2f).coerceAtLeast(0f).let { room -> if (a + b <= room) a to b else (a * room / (a + b)) to (b * room / (a + b)) }
+        val (cl, cr) = fit(maxOf(bl + gc, frame.corner.toFloat()), maxOf(br + gc, frame.corner.toFloat()), frame.artW)
+        val (ct, cb) = fit(maxOf(bt + gc, frame.corner.toFloat()), maxOf(bb + gc, frame.corner.toFloat()), frame.artH)
         val sx0 = frame.sx.toFloat(); val sy0 = frame.sy.toFloat()
         val colsSrc = listOf(sx0 to cl, sx0 + frame.artW / 2f - 1f to 2f, sx0 + frame.artW - cr to cr)
         val rowsSrc = listOf(sy0 to ct, sy0 + frame.artH / 2f - 1f to 2f, sy0 + frame.artH - cb to cb)
@@ -681,7 +685,8 @@ object SkinSolver {
                 add(SkinPiece(PxRect(colsSrc[i].first, rowsSrc[j].first, colsSrc[i].second, rowsSrc[j].second), dst(dX, dY, dW, dH)))
             }
             frame.hole.takeIf { it.size == 4 }?.let { (l, t, r, b) ->
-                add(SkinPiece(PxRect(0f, 0f, 0f, 0f), dst(fx + l * k, fy + t * k, fw - (l + r) * k, fh - (t + b) * k), fill = gc * cornerK))
+                val hw = fw - (l + r) * k; val hh = fh - (t + b) * k
+                if (hw > 0f && hh > 0f) add(SkinPiece(PxRect(0f, 0f, 0f, 0f), dst(fx + l * k, fy + t * k, hw, hh), fill = gc * cornerK))
             }
         }
     }
