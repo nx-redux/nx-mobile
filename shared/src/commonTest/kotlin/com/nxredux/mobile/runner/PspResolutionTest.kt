@@ -1,6 +1,7 @@
 package com.nxredux.mobile.runner
 
 import com.nxredux.mobile.options.ConsoleSettings
+import com.nxredux.mobile.options.CoreConfig
 import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.PspOptions
 import kotlin.test.Test
@@ -42,13 +43,6 @@ class PspResolutionTest {
         assertEquals(4, PspResolution.frameScale(1088))
     }
 
-    @Test fun thePspStartsAtOneAndTheOthersAtTheirScale() {
-        assertEquals(1, psp.launchScale(3))
-        assertEquals(3, Res3dConsole.N3DS.launchScale(3))
-        assertEquals(4, Res3dConsole.DS.launchScale(4))
-        assertEquals(2, Res3dConsole.PS2.launchScale(2))
-    }
-
     @Test fun autoStopsAtThreeUnlessRaised() {
         assertEquals(3, Nds3dResolution.valueFor(emptyMap(), current = 4, displayMax = 4, console = psp))
         assertEquals(4, Nds3dResolution.valueFor(mapOf(psp.maxScaleKey to "4"), current = 4, displayMax = 4, console = psp))
@@ -56,10 +50,17 @@ class PspResolutionTest {
     }
 
     @Test fun anOldRenderingResolutionBecomesTheMaxScale() {
-        assertEquals("4", FrontendOptions.fromConfig(mapOf("ppsspp_internal_resolution" to "1920x1088"), "PSP")[psp.maxScaleKey])
-        assertEquals("3", FrontendOptions.fromConfig(mapOf("ppsspp_internal_resolution" to "480x272"), "PSP")[psp.maxScaleKey])
-        assertEquals("2", FrontendOptions.fromConfig(mapOf("ppsspp_internal_resolution" to "1920x1088", psp.maxScaleKey to "2"), "PSP")[psp.maxScaleKey])
-        assertEquals("3", FrontendOptions.fromConfig(emptyMap(), "PSP")[psp.maxScaleKey])
+        // The launch's path: the core key is locked, so the resolve drops its stored value; the carry comes first.
+        val core = CoreRegistry.forId("ppsspp")!!
+        fun maxScale(config: String): String? {
+            val resolved = CoreConfig.resolve(core.defaultOptions, CoreConfig.parse(config), null, core.lockedOptions)
+            assertEquals(null, resolved.values["ppsspp_internal_resolution"]?.takeIf { it != "480x272" })
+            return FrontendOptions.fromConfig(resolved.values, "PSP")[psp.maxScaleKey]
+        }
+        assertEquals("4", maxScale("ppsspp_internal_resolution = 1920x1088\n"))
+        assertEquals("3", maxScale("ppsspp_internal_resolution = 480x272\n"))
+        assertEquals("2", maxScale("ppsspp_internal_resolution = 1920x1088\n${psp.maxScaleKey} = 2\n"))
+        assertEquals("3", maxScale(""))
     }
 
     @Test fun theRowsComeBeforeLocalWirelessAndTheCoreOptionIsTheApps() {

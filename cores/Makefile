@@ -194,6 +194,8 @@ ppsspp_LICENSE = LICENSE.TXT ext/ffmpeg/LICENSE.md
 # so ARTIFACT has no lib/ prefix and already carries the _android suffix.
 # patches/ppsspp/0011 (nx-redux's numbering) keeps every cheat retro_cheat_set is given: it took the cheat file's
 # header for a slot, so each cheat replaced the one before.
+# patches/ppsspp/0013: a Rendering Resolution change on Vulkan rebuilds the render buffers too (GLES gets a context
+# reset); without it a game kept drawing at the scale it started at.
 ppsspp_KIND = cmake
 ppsspp_BUILD_PATH = .
 ppsspp_CMAKE_TARGET = ppsspp_libretro

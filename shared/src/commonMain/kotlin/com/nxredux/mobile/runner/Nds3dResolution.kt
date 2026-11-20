@@ -46,14 +46,6 @@ enum class Res3dConsole(
     /** The three stored rows. */
     val keys: Set<String> get() = setOf(modeKey, maxScaleKey, scaleKey)
 
-    /**
-     * The scale a game starts at for [value]: the PSP starts at 1x and gets [value] with its first layout. On Vulkan the
-     * bridge sizes its offscreen surface from the first frame for the whole session, and PPSSPP presents to it every frame:
-     * started at 3x the AYANEO's Mali-G76 ran Dante's Inferno at ~40 fps at any scale, started at 1x and raised it held
-     * 60 at 3x. The core changes its scale mid-game on both renderers, so nothing is lost but the first second's sharpness.
-     */
-    fun launchScale(value: Int): Int = if (this == PSP) 1 else value
-
     /** This console's display maximum ([Nds3dResolution.displayMaxOf], [N3ds3dResolution.displayMaxOf]) for a [window] (px, width to height) of class [screen]. */
     fun displayMaxOf(window: Pair<Int, Int>?, screen: ScreenClass?): Int? = when (this) {
         DS -> Nds3dResolution.displayMaxOf(window, screen)

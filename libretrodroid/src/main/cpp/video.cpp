@@ -371,7 +371,7 @@ void Video::drawFrame(bool force) {
     }
 
     // A picture drawn above native size (setShaderSourceScale) goes the regions' way, which shrinks it for the preset.
-    if (presetRenderer && shaderSourceScale > 1) {
+    if (presetRenderer && sourceScale() > 1) {
         quadScratch.clear();
         quadScratch.push_back(RegionQuad{ videoLayout.getForegroundVertices(), videoLayout.getTextureCoordinates(), true, 1.0F, 1.0F, 1.0F });
         renderQuads(quadScratch, videoLayout, presetRenderer.get(), mainCrops);
@@ -466,7 +466,7 @@ void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layou
             // each screen gets the effect as if it were the frame.
             auto frameW = (unsigned) std::lround(quad.srcWidth * (float) texW);
             auto frameH = (unsigned) std::lround(quad.srcHeight * (float) texH);
-            const auto scale = (unsigned) shaderSourceScale;
+            const auto scale = (unsigned) sourceScale();
             const bool shrink = scale > 1 && frameW >= scale && frameH >= scale;
             if (shrink) {
                 frameW = (unsigned) std::lround((float) frameW / (float) scale);
@@ -871,6 +871,13 @@ float Video::pictureDensity(const std::array<float, 12>& vertices, const std::ar
 
 float Video::getScreenDensity(float screenWidth, float screenHeight) {
     return std::min(screenWidth / getTextureWidth(), screenHeight / getTextureHeight());
+}
+
+int Video::sourceScale() {
+    const auto frameHeight = (int) renderer->lastFrameSize.second;
+    if (shaderSourceFrameHeight <= 0 || frameHeight <= 0 || frameHeight == shaderSourceFrameHeight) return shaderSourceScale;
+    const auto scale = (int) std::lround((double) shaderSourceScale * frameHeight / shaderSourceFrameHeight);
+    return scale < 1 ? 1 : scale;
 }
 
 float Video::getTextureWidth() {

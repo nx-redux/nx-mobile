@@ -623,7 +623,14 @@ internal class FrontendRenderer(
         val packed = geometry ?: view.getGameGeometry()
         view.mainCovered = host.mainShowsNoPicture()
         screenMap = screenMapFor(view, packed)
-        view.shaderSourceScale = screenMap?.topScale(n3ds = isN3ds) ?: if (isPsp) PspResolution.frameScale(packed[1].roundToInt()) else 1
+        // The PSP reports exactly the frame it sends, so its scale can follow a new frame size before the next layout.
+        val frameHeight = packed[1].roundToInt()
+        val map = screenMap
+        view.shaderSourceScale = when {
+            map != null -> GLRetroView.ShaderSourceScale(map.topScale(n3ds = isN3ds))
+            isPsp -> GLRetroView.ShaderSourceScale(PspResolution.frameScale(frameHeight), frameHeight)
+            else -> GLRetroView.ShaderSourceScale()
+        }
         // 3DS on one display (and the Panel Up frame) from the map: the app rebuilds Azahar's own layout from it, and
         // that composed frame is the frame every later step lays out.
         val composition = n3dsComposition()

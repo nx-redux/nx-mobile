@@ -237,12 +237,15 @@ class GLRetroView(
 
     /**
      * The whole scale the core draws its screens at (1 = native): a preset gets each shaded screen shrunk back to native
-     * size, the pixels it is written for. Re-applied after create().
+     * size, the pixels it is written for, with the core frame height it was worked out for (0 = not known), so a frame
+     * of another height drawn before the next layout is shrunk by its own scale. Re-applied after create().
      */
-    var shaderSourceScale: Int by Delegates.observable(1) { _, old, value ->
+    var shaderSourceScale: ShaderSourceScale by Delegates.observable(ShaderSourceScale()) { _, old, value ->
         if (old == value) return@observable
-        queueEvent { LibretroDroid.setShaderSourceScale(value) }
+        queueEvent { LibretroDroid.setShaderSourceScale(value.scale, value.frameHeight) }
     }
+
+    data class ShaderSourceScale(val scale: Int = 1, val frameHeight: Int = 0)
 
     var screenRegions: List<ScreenRegion> by Delegates.observable(emptyList()) { _, old, value ->
         if (old == value) return@observable
@@ -471,7 +474,7 @@ class GLRetroView(
             LibretroDroid.setPictureHeld(held)
             LibretroDroid.setScreenRegions(regions)
             LibretroDroid.setComposition(composed?.width ?: 0, composed?.height ?: 0, composedParts)
-            LibretroDroid.setShaderSourceScale(sourceScale)
+            LibretroDroid.setShaderSourceScale(sourceScale.scale, sourceScale.frameHeight)
             LibretroDroid.setSecondaryRegions(secondary)
             setStickyPointers(sticky)
             pushShaderChain(chain)

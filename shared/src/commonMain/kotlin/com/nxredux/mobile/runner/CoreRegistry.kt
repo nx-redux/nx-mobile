@@ -102,7 +102,7 @@ object CoreRegistry {
         // The ad hoc network is the app's (PspOptions.LOCAL_WIRELESS and a Netplay sheet session; the launch sends these
         // through NetplayLinkOptions.pspNetwork): WLAN stays off unless the link is on, and the server, UPnP, port, MAC and
         // channel rows are locked, so hidden, whether or not it is.
-        // ppsspp_internal_resolution: 1x, where a PSP game starts (Res3dConsole.launchScale) before its first layout sends the scale
+        // ppsspp_internal_resolution is the app's (PSP 3D Resolution rows); 1x until the launch sends the scale.
         defaultOptions = mapOf(
             "ppsspp_backend" to "auto", "ppsspp_cheats" to "enabled", "ppsspp_vr_mode" to "Off", "ppsspp_enable_wlan" to "disabled",
             "ppsspp_internal_resolution" to "480x272",
