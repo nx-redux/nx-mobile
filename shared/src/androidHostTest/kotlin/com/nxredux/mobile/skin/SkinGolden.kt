@@ -110,36 +110,14 @@ fun recordPackSnapshot(file: String, pack: SkinPackManifest, v: SkinVariant?) {
 fun readPackSnapshot(file: String): JsonObject = Json.parseToJsonElement(File(PACK_DIR, "$file.json").readText()).jsonObject
 private val json = Json { prettyPrint = true }
 
-/** Writes [file]'s fixture: [v]'s placement on every [GOLDEN_DEVICES] class by the rules, every layout's boxes set aside. */
-fun recordGolden(file: String, pack: SkinPackManifest, v: SkinVariant?) {
-    GOLDEN_DIR.mkdirs()
-    val legacy = pack.copy(layouts = pack.layouts.map { it.copy(boxes = emptyList()) })
-    val all = buildJsonObject { GOLDEN_DEVICES.forEach { d -> put(d.name, goldenOf(placeFor(legacy, v, d))) } }
-    File(GOLDEN_DIR, "$file.json").writeText(json.encodeToString(JsonElement.serializer(), all))
-}
-
-fun goldenExists(file: String): Boolean = File(GOLDEN_DIR, "$file.json").exists()
-
-/**
- * Adds to [file]'s fixture the [GOLDEN_DEVICES] classes it lacks, placed from [pack] by the rules ([fromBoxes]: with its
- * boxes, for a console whose rules are already gone). The classes it has keep their recording.
- */
-fun recordMissing(file: String, pack: SkinPackManifest, v: SkinVariant?, fromBoxes: Boolean) {
-    val old = readGolden(file)
-    val src = if (fromBoxes) pack else pack.copy(layouts = pack.layouts.map { it.copy(boxes = emptyList()) })
-    val all = buildJsonObject {
-        GOLDEN_DEVICES.forEach { d -> put(d.name, old[d.name] ?: goldenOf(placeFor(src, v, d))) }
-    }
-    File(GOLDEN_DIR, "$file.json").writeText(json.encodeToString(JsonElement.serializer(), all))
-}
-
+/** The rules' placements frozen while the Dreamcast and the N64 still had them: what their drawing rules changed. */
 fun readGolden(file: String): JsonObject =
     Json.parseToJsonElement(File(GOLDEN_DIR, "$file.json").readText()).jsonObject
 
 /**
  * [actual] places as [expected] within [tol] window px: the same controls (by id and alternate), every piece and glass
  * matched by place (order free: a box layout lists them its own way). Groups are not compared: boxes group by kind
- * ([SkinBakeTest]'s rules test), not as the old layouts' overlaps did.
+ * ([SkinPackDrawingTest]'s rules test), not as the old layouts' overlaps did.
  */
 fun assertMatchesGolden(expected: JsonElement, actual: SkinPlacement?, tol: Float = 1f, label: String) {
     if (expected is JsonNull || actual == null) { assertEquals(expected is JsonNull, actual == null, "$label: placed / not placed"); return }

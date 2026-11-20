@@ -5,70 +5,22 @@ import kotlin.test.Test
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-class SkinBakeTest {
+/** The pack's drawing rules as its boxes place them on the device classes the user tuned. */
+class SkinPackDrawingTest {
+    /** A pad stacked under another on a side, drawn at this share of its size. */
+    private val LOWER_PAD = 0.85f
+
     private val pack = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
 
-    // The main menu baked into boxes places as it did on every device class. SKIN_BAKE=1 writes every baked console's
-    // boxes to SKIN_BAKE_OUT (layout id -> boxes) for merge_boxes.py.
+    // A layout's groups (what the controls editor moves) follow what the buttons are: the d-pad, the stick, the face
+    // buttons (the N64's C diamond and its A / B well apart), each shoulder alone, small caps by their outline.
     @Test
-    fun bakedMenuPlacesAsToday() {
-        // (against the rules' placements: the boxes on their bottom line, as they were baked from)
-        SkinBoxes.anchorAtTheBottom = true
-        val boxes = try { bake(pack, null, GOLDEN_DEVICES) } finally { SkinBoxes.anchorAtTheBottom = false }
-        assertTrue(boxes.isNotEmpty(), "some layouts baked")
-        val baked = withBoxes(pack, boxes)
-        val golden = readGolden("menu")
-        SkinBoxes.anchorAtTheBottom = true
-        try {
-            for (d in GOLDEN_DEVICES) {
-                // drawn from a game's boxes rather than baked: a phone half-folded, on the GBA's half-folded board
-                if (placeFor(pack, null, d)?.spec?.id == "flex_menu") continue
-                val p = placeFor(baked, null, d)
-                if (p != null) assertTrue(baked.layouts.first { it.id == p.spec.id }.boxes.isNotEmpty(), "menu ${d.name}: placed by its boxes")
-                assertMatchesGolden(golden.getValue(d.name), p, label = "menu ${d.name}")
-            }
-        } finally { SkinBoxes.anchorAtTheBottom = false }
-        writeBake(boxes)
-    }
-
-    // The consoles following the main menu (all but the 3DS so far) baked into boxes place as they did on every device class.
-    @Test
-    fun bakedFollowersPlaceAsToday() {
-        val all = HashMap<String, List<BoxSpec>>()
-        val failures = ArrayList<String>()
-        // (the rules read the menu's placement: the menu's boxes on their bottom line, as the rules' placements had it)
-        SkinBoxes.anchorAtTheBottom = true
-        try { for ((v, file) in BOXED) {
-            if (v == null || v == SkinVariant.N64) continue
-            val boxes = bake(pack, v, GOLDEN_DEVICES)
-            all += boxes
-            val baked = withBoxes(pack, boxes)
-            val golden = readGolden(file)
-            // drawn by hand rather than baked: the DS on a phone half-folded (the flat phone's pads round its touch screen)
-            // and on the Fold cover upright (the narrow touch frame, the regular L / R beside it)
-            for (d in GOLDEN_DEVICES) if (placeFor(pack, v, d)?.spec?.id !in setOf("flex_ds", "large_ds")) runCatching { assertMatchesGolden(golden.getValue(d.name), placeFor(baked, v, d), label = "$file ${d.name}") }
-                .onFailure { failures += (it.message ?: "").take(160) }
-        } } finally { SkinBoxes.anchorAtTheBottom = false }
-        assertTrue(failures.isEmpty(), failures.joinToString("\n"))
-        // the main menu the baseline: the games' pads where its are (both baked on their bottom line)
-        // (every fold board one kind: the DS's tablet twin is a fold board as the menu's is)
-        val menuBoxes = try { SkinBoxes.anchorAtTheBottom = true; bake(pack, null, GOLDEN_DEVICES) } finally { SkinBoxes.anchorAtTheBottom = false }
-        writeBake(all, menu = menuBoxes, familyOf = { id ->
-            pack.layouts.firstOrNull { it.id == id }?.let { l -> if (l.tree.parts.any { it.isHinge }) SkinFamily.TABLET else l.family }
-        })
-    }
-
-    // A baked layout's groups (what the controls editor moves) follow what the buttons are: the d-pad, the stick, the
-    // face buttons (the N64's C diamond and its A / B well apart), each shoulder alone, small caps by their outline.
-    @Test
-    fun bakedGroupsFollowTheButtonKinds() {
+    fun theGroupsFollowTheButtonKinds() {
         val shoulders = setOf("L", "R", "L1", "R1", "L2", "R2", "ZL", "ZR")
-        // the menu re-baked (its rules remain); the N64 as the pack has it (its rules are gone: its boxes are the source)
-        val baked = withBoxes(pack, bake(pack, null, GOLDEN_DEVICES))
         for (v in listOf(null, SkinVariant.N64)) for (d in GOLDEN_DEVICES) {
             // (the N64 on the Flip half-folded: its old flex layout draws the switch inside the A / B outline; for review)
             if (v == SkinVariant.N64 && d.name == "flip_half") continue
-            val p = placeFor(baked, v, d) ?: continue
+            val p = placeFor(pack, v, d) ?: continue
             val ids = SkinGroups.of(p.spec).map { it.id }
             val label = "${v ?: "menu"} ${d.name} $ids"
             fun groupOf(c: String) = ids.firstOrNull { c in it.split("+") }

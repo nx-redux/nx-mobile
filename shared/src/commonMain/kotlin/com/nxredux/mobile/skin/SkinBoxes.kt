@@ -47,13 +47,6 @@ object SkinBoxes {
         return box.sizes.filter(fits).maxByOrNull { it.w.toLong() * it.h }
     }
 
-    /**
-     * Side boxes stand on their bottom line (as they were baked from) instead of centring their main pad, and a 3DS board's
-     * touch screen keeps its room's size (not cut to its picture): only the bake's checks against the placements the rules
-     * gave set it.
-     */
-    internal var anchorAtTheBottom = false
-
     /** The least screen width the boxes leave, dp (the main menu's least). */
     private const val MIN_SCREEN_DP = 320f
 
@@ -117,7 +110,7 @@ object SkinBoxes {
         val fold = if (spec.tree.parts.any { it.isHinge }) (hingeY ?: (h / 2f)) else null
         // the control area: a fold board's half under the fold, else (sideways) the window's height; an upright phone's
         // boxes keep to the bottom (its screen takes the height they leave)
-        val area: ClosedFloatingPointRange<Float>? = if (anchorAtTheBottom) null else if (fold != null) fold..h else if (w > h) 0f..h else null
+        val area: ClosedFloatingPointRange<Float>? = if (fold != null) fold..h else if (w > h) 0f..h else null
         /** [z]'s main pad's middle (box px): its own [BoxSize.mainY], else the stick or d-pad, the face diamond's four. */
         fun mainY(s: BoxSlot, z: BoxSize): Float? {
             z.mainY?.let { return it }
