@@ -157,6 +157,7 @@ internal class FrontendRenderer(
     private val isNds get() = host.isNds
     private val isN3ds get() = host.isN3ds
     private val isPs2 get() = Res3dConsole.forTag(gameTag) == Res3dConsole.PS2
+    private val isPsp get() = Res3dConsole.forTag(gameTag) == Res3dConsole.PSP
     private val privateRoot get() = host.privateRoot
     private val dualMode get() = host.dualMode
     private val pictureOn get() = host.pictureOn
@@ -622,7 +623,7 @@ internal class FrontendRenderer(
         val packed = geometry ?: view.getGameGeometry()
         view.mainCovered = host.mainShowsNoPicture()
         screenMap = screenMapFor(view, packed)
-        view.shaderSourceScale = screenMap?.topScale(n3ds = isN3ds) ?: 1
+        view.shaderSourceScale = screenMap?.topScale(n3ds = isN3ds) ?: if (isPsp) PspResolution.frameScale(packed[1].roundToInt()) else 1
         // 3DS on one display (and the Panel Up frame) from the map: the app rebuilds Azahar's own layout from it, and
         // that composed frame is the frame every later step lays out.
         val composition = n3dsComposition()
@@ -732,6 +733,7 @@ internal class FrontendRenderer(
             if (generation != layoutGeneration) return
         }
         if (isPs2) reportPs2Resolution(w, h, screen, shown, g)
+        if (isPsp) reportPspResolution(w, h, screen, shown, g)
         if (viewport != lastViewport) {
             lastViewport = viewport
             view.viewport = viewport
@@ -776,6 +778,16 @@ internal class FrontendRenderer(
         val (current, second) = Ps2Resolution.shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
         report3d(w, h, screen, halfFolded = false, current, second) {
             Ps2Resolution.displayMax(w.roundToInt(), h.roundToInt())
+        }
+    }
+
+    /** The PSP 3D scale's inputs to the host, as [reportPs2Resolution], over the 272 px screen ([PspResolution]). */
+    private fun reportPspResolution(w: Float, h: Float, screen: ScreenClass, shown: PxRect, g: FloatArray) {
+        if (!gameReady || shown.height <= 0f) return
+        val main = shown.height.roundToInt().takeUnless { host.mainShowsNoPicture() }
+        val (current, second) = PspResolution.shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
+        report3d(w, h, screen, halfFolded = false, current, second) {
+            PspResolution.displayMax(w.roundToInt(), h.roundToInt())
         }
     }
 

@@ -37,20 +37,37 @@ enum class Res3dConsole(
 ) {
     DS(NdsRenderer.CORE_ID_MELONDSDS, "melonds_opengl_resolution", 8, 4, NdsOptions.MODE_3D, NdsOptions.MAX_SCALE_3D, NdsOptions.SCALE_3D),
     N3DS("azahar", "citra_resolution_factor", 10, 3, "nx_3ds_3d_resolution", "nx_3ds_3d_max_scale", "nx_3ds_3d_scale"),
-    PS2("armsx2", "armsx2_upscale", 4, 2, "nx_ps2_3d_resolution", "nx_ps2_3d_max_scale", "nx_ps2_3d_scale");
+    PS2("armsx2", "armsx2_upscale", 4, 2, "nx_ps2_3d_resolution", "nx_ps2_3d_max_scale", "nx_ps2_3d_scale"),
+    PSP("ppsspp", "ppsspp_internal_resolution", 10, 3, "nx_psp_3d_resolution", "nx_psp_3d_max_scale", "nx_psp_3d_scale");
+
+    /** The core draws its whole picture at the scale (PS2, PSP), not only the 3D: the rows say "the game", not "3D models". */
+    val wholePicture: Boolean get() = this == PS2 || this == PSP
 
     /** The three stored rows. */
     val keys: Set<String> get() = setOf(modeKey, maxScaleKey, scaleKey)
+
+    /**
+     * The scale a game starts at for [value]: the PSP starts at 1x and gets [value] with its first layout. On Vulkan the
+     * bridge sizes its offscreen surface from the first frame for the whole session, and PPSSPP presents to it every frame:
+     * started at 3x the AYANEO's Mali-G76 ran Dante's Inferno at ~40 fps at any scale, started at 1x and raised it held
+     * 60 at 3x. The core changes its scale mid-game on both renderers, so nothing is lost but the first second's sharpness.
+     */
+    fun launchScale(value: Int): Int = if (this == PSP) 1 else value
 
     /** This console's display maximum ([Nds3dResolution.displayMaxOf], [N3ds3dResolution.displayMaxOf]) for a [window] (px, width to height) of class [screen]. */
     fun displayMaxOf(window: Pair<Int, Int>?, screen: ScreenClass?): Int? = when (this) {
         DS -> Nds3dResolution.displayMaxOf(window, screen)
         N3DS -> N3ds3dResolution.displayMaxOf(window, screen)
         PS2 -> window?.let { Ps2Resolution.displayMax(it.first, it.second) }
+        PSP -> window?.let { PspResolution.displayMax(it.first, it.second) }
     }
 
-    /** The core option's value for scale [n]: ARMSX2 reads "2x", the DS and 3DS cores a bare number. */
-    fun coreValue(n: Int): String = if (this == PS2) "${n}x" else "$n"
+    /** The core option's value for scale [n]: ARMSX2 reads "2x", PPSSPP the size ("960x544"), the DS and 3DS cores a bare number. */
+    fun coreValue(n: Int): String = when (this) {
+        PS2 -> "${n}x"
+        PSP -> "${PspResolution.NATIVE_W * n}x${PspResolution.NATIVE_H * n}"
+        else -> "$n"
+    }
 
     companion object {
         /** The console for a system [tag]; null when it has no 3D Resolution. */
@@ -58,6 +75,7 @@ enum class Res3dConsole(
             "NDS" -> DS
             "3DS" -> N3DS
             "PS2" -> PS2
+            "PSP" -> PSP
             else -> null
         }
     }
@@ -164,6 +182,40 @@ object Ps2Resolution {
      * The shown scale and the second display's reach for a picture [mainHeightPx] tall on main (null: none there) and
      * [secondHeightPx] tall on the second display (null: none there; it then reaches only 1).
      */
+    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> {
+        val second = secondHeightPx?.let(::currentScale)
+        return listOfNotNull(mainHeightPx?.let(::currentScale), second).maxOrNull() to (second ?: 1)
+    }
+}
+
+/**
+ * The PSP (PPSSPP) 3D Resolution maths: the core draws the whole picture at a whole multiple of its 480 x 272 screen (1x to
+ * 10x), so scales come from the picture's height. A part-way scale rounds up, as the DS's: the picture is drawn at least as
+ * sharp as it is shown.
+ */
+object PspResolution {
+    const val NATIVE_W = 480
+    const val NATIVE_H = 272
+
+    /** The core's most. */
+    private const val MAX = 10
+
+    /** Below a whole scale by this much (a px or two of rounding) still counts as that scale. */
+    private const val SLACK = 0.02
+
+    private fun up(scale: Double): Int = ceil(scale - SLACK).toInt().coerceIn(1, MAX)
+
+    /** The scale the picture reaches fitted in a [w] x [h] px window, either way up, rounded up (1 to 10). */
+    fun displayMax(w: Int, h: Int): Int =
+        maxOf(up(minOf(w.toDouble() / NATIVE_W, h.toDouble() / NATIVE_H)), up(minOf(h.toDouble() / NATIVE_W, w.toDouble() / NATIVE_H)))
+
+    /** The scale a picture [pictureHeightPx] px tall shows at, rounded up (1 to 10). */
+    fun currentScale(pictureHeightPx: Int): Int = up(pictureHeightPx.toDouble() / NATIVE_H)
+
+    /** The scale a frame [heightPx] rows tall was drawn at: the nearest whole (the core's "crop to 16:9" sends 270 a scale). */
+    fun frameScale(heightPx: Int): Int = (heightPx / NATIVE_H.toDouble()).roundToInt().coerceIn(1, MAX)
+
+    /** The shown scale and the second display's reach, as [Ps2Resolution.shownScales]. */
     fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> {
         val second = secondHeightPx?.let(::currentScale)
         return listOfNotNull(mainHeightPx?.let(::currentScale), second).maxOrNull() to (second ?: 1)

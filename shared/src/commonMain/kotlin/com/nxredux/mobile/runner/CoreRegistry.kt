@@ -102,10 +102,16 @@ object CoreRegistry {
         // The ad hoc network is the app's (PspOptions.LOCAL_WIRELESS and a Netplay sheet session; the launch sends these
         // through NetplayLinkOptions.pspNetwork): WLAN stays off unless the link is on, and the server, UPnP, port, MAC and
         // channel rows are locked, so hidden, whether or not it is.
-        defaultOptions = mapOf("ppsspp_backend" to "auto", "ppsspp_cheats" to "enabled", "ppsspp_vr_mode" to "Off", "ppsspp_enable_wlan" to "disabled"),
-        lockedOptions = setOf("ppsspp_cheats", "ppsspp_backend", "ppsspp_vr_mode") + PSP_NETWORK_OPTIONS,
+        // ppsspp_internal_resolution: 1x, where a PSP game starts (Res3dConsole.launchScale) before its first layout sends the scale
+        defaultOptions = mapOf(
+            "ppsspp_backend" to "auto", "ppsspp_cheats" to "enabled", "ppsspp_vr_mode" to "Off", "ppsspp_enable_wlan" to "disabled",
+            "ppsspp_internal_resolution" to "480x272",
+        ),
+        // The resolution is the app's (PSP 3D Resolution, PspOptions), sent at launch and as the picture's size changes.
+        lockedOptions = setOf("ppsspp_cheats", "ppsspp_backend", "ppsspp_vr_mode", "ppsspp_internal_resolution") + PSP_NETWORK_OPTIONS,
         hiddenValues = mapOf("ppsspp_backend" to setOf("vulkan", "none")),
-        vulkan = VulkanSwitch(gles = mapOf("ppsspp_backend" to "auto"), vulkan = mapOf("ppsspp_backend" to "auto")),
+        // Auto is Vulkan on Mali, where OpenGL ES falls behind: the AYANEO's Mali-G76 held 3x at 60 fps on Vulkan, 42 on GLES.
+        vulkan = VulkanSwitch(gles = mapOf("ppsspp_backend" to "auto"), vulkan = mapOf("ppsspp_backend" to "auto"), autoOnMali = true),
         restartOnlyOptions = RestartOnlyOptions.ppsspp,
         // PPSSPP writes SAVEDATA/ under the save dir.
         name = "PPSSPP",

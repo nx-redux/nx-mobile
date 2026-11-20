@@ -370,6 +370,15 @@ void Video::drawFrame(bool force) {
         return;
     }
 
+    // A picture drawn above native size (setShaderSourceScale) goes the regions' way, which shrinks it for the preset.
+    if (presetRenderer && shaderSourceScale > 1) {
+        quadScratch.clear();
+        quadScratch.push_back(RegionQuad{ videoLayout.getForegroundVertices(), videoLayout.getTextureCoordinates(), true, 1.0F, 1.0F, 1.0F });
+        renderQuads(quadScratch, videoLayout, presetRenderer.get(), mainCrops);
+        frameCount++;
+        return;
+    }
+
     if (presetRenderer) {
         presetRenderer->render(
             frameTexture(), (unsigned) getTextureStorageWidth(), (unsigned) getTextureStorageHeight(),

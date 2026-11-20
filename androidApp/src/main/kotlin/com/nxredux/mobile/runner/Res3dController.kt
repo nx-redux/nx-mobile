@@ -117,7 +117,8 @@ internal class Res3dController(private val host: Res3dHost, private val renderer
             if (console == Res3dConsole.N3DS) CoreRegistry.forId(console.coreId)?.defaultOptions?.get(console.coreKey)?.toIntOrNull()?.let(renderer::startN3dsFactor)
             return emptyMap()
         }
-        val value = Nds3dResolution.valueFor(host.frontendValues, null, max, console, shaded = host.shaderOn)
+        // The scale it starts at ([Res3dConsole.launchScale]); the first layout then offers the one for the screen.
+        val value = console.launchScale(Nds3dResolution.valueFor(host.frontendValues, null, max, console, shaded = host.shaderOn))
         sender.offer(value, sizeChange = false, SystemClock.uptimeMillis())
         this.value = value
         if (console == Res3dConsole.N3DS) renderer.startN3dsFactor(value)

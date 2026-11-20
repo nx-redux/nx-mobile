@@ -1,5 +1,7 @@
 package com.nxredux.mobile.options
 
+import com.nxredux.mobile.runner.Res3dConsole
+
 /** One frontend (minarch) setting as the in-game Frontend page shows it. */
 data class FrontendOption(
     val key: String,
@@ -252,6 +254,7 @@ object FrontendOptions {
             val value = when {
                 key == SCALING -> migrateKey(values, SCALING, SCALING_V1, SCALING_V1_DEFAULT)
                 key in NO_PICK_KEYS -> layoutValue(values, key)   // null = no pick: left out
+                key == Res3dConsole.PSP.maxScaleKey -> values[key] ?: PspOptions.carriedMaxScale(values)
                 else -> values[key]
             }
             (value ?: defaults[key])?.let { key to it }
