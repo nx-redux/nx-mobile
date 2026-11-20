@@ -86,6 +86,7 @@ import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.runner.BottomScreen
 import com.nxredux.mobile.runner.Console
 import com.nxredux.mobile.runner.DsMenu
+import com.nxredux.mobile.runner.withConsole
 import com.nxredux.mobile.runner.withEntry
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
@@ -280,6 +281,8 @@ class AppDeps(
     val windowPx: () -> Pair<Int, Int>? = { null },
     /** The ".bin" names in Bios/PS2/ (Emulator Settings' PS2 BIOS row); blocking, called off the main thread. */
     val ps2BiosFiles: () -> List<String> = { emptyList() },
+    /** The ".bin" names in Bios/NDS/ (whether DS Download Play can boot the DS menu); blocking, called off the main thread. */
+    val ndsBiosFiles: () -> List<String> = { emptyList() },
     /** Opens the skin's button layout editor (Android: its own activity); it saves to the settings and ends with [AppState.onSkinLayoutEdited]. Null: no editor. */
     val skinEditor: SkinEditorLauncher? = null,
     /** Settings → Library → Saves: Export and Import (null: rows do nothing). */
@@ -2266,7 +2269,9 @@ class AppState(
     }
 
     private suspend fun showSystems(playable: List<SystemFolder>) {
-        offerSystems(takeSystemsGen(), playable)
+        val gen = takeSystemsGen()
+        dsMenuReady = tryOr({ false }) { withContext(deps.compute) { DsMenu.missing(deps.ndsBiosFiles().toSet()).isEmpty() } }
+        offerSystems(gen, DsMenu.withConsole(playable, dsMenuReady))
         invalidateCollectionCounts()
         rebuildMainRows()
         when {
@@ -4852,7 +4857,10 @@ class AppState(
      */
     private var consoleEntriesOf: Pair<List<SystemFolder>, HashMap<List<String>, Pair<List<SystemFolder>, List<Listed>>>>? = null
 
-    private fun buildConsoleEntries(systems: List<SystemFolder>): List<Listed> = DsMenu.withEntry(systems, gameEntries(systems))
+    /** The dumps DS Download Play boots from are in Bios/NDS/, as last read with the library ([showSystems]). */
+    private var dsMenuReady = false
+
+    private fun buildConsoleEntries(systems: List<SystemFolder>): List<Listed> = DsMenu.withEntry(systems, gameEntries(systems), dsMenuReady)
 
     private fun gameEntries(systems: List<SystemFolder>): List<Listed> {
         systems.singleOrNull()?.let { s -> return s.games.map { Listed(s, it) } }

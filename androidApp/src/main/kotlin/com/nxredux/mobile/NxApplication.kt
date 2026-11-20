@@ -34,7 +34,6 @@ class NxApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        com.nxredux.mobile.runner.DsMenu.listed = true
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityStarted(activity: Activity) { startedActivities++ }
             override fun onActivityStopped(activity: Activity) { startedActivities = (startedActivities - 1).coerceAtLeast(0) }

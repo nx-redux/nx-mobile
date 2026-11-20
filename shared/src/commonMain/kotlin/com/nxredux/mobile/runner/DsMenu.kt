@@ -20,9 +20,6 @@ object DsMenu {
     /** Native system files, in DS mode: the DSi menu has no DS Download Play, and Auto picks the DS without a game anyway. */
     val FORCED_OPTIONS = mapOf("melonds_sysfile_mode" to "native", "melonds_console_mode" to "ds")
 
-    /** Off by default, so the tests' DS lists (fixtures) stay as they are; the app turns the row on at start-up. */
-    var listed = false
-
     /** The row's art, one file per kind, as the app ships it. */
     val ART_FILES = listOf("boxart.png", "boxart2d.png", "screenshot.png", "wheel.png", "mix.png")
 
@@ -74,9 +71,28 @@ internal fun DsMenu.entry(): com.nxredux.mobile.library.GameEntry {
     )
 }
 
-/** [entries] with the DS menu's row on top when the console is the DS (a single NDS folder: a merged console is not). */
-internal fun DsMenu.withEntry(systems: List<com.nxredux.mobile.library.SystemFolder>, entries: List<com.nxredux.mobile.ui.Listed>): List<com.nxredux.mobile.ui.Listed> {
-    if (!DsMenu.listed) return entries
+/**
+ * [entries] with the DS menu's row on top when [ready] (the dumps it boots from are in Bios/NDS/) and the console is the
+ * DS (a single NDS folder: a merged console is not). Without the dumps the row could only refuse.
+ */
+internal fun DsMenu.withEntry(
+    systems: List<com.nxredux.mobile.library.SystemFolder>, entries: List<com.nxredux.mobile.ui.Listed>, ready: Boolean,
+): List<com.nxredux.mobile.ui.Listed> {
+    if (!ready) return entries
     val nds = systems.singleOrNull()?.takeIf { it.tag == "NDS" && it.core?.id == "melondsds" } ?: return entries
     return listOf(com.nxredux.mobile.ui.Listed(nds, entry())) + entries
+}
+
+/**
+ * [systems] with an empty DS console when [ready] and the library has none: a guest who owns no DS game still reaches
+ * DS Download Play, the only way to join a Download Play host. Placed by display name, as the consoles are listed.
+ */
+internal fun DsMenu.withConsole(systems: List<com.nxredux.mobile.library.SystemFolder>, ready: Boolean): List<com.nxredux.mobile.library.SystemFolder> {
+    if (!ready || systems.any { it.tag == "NDS" }) return systems
+    val core = CoreRegistry.forTag("NDS") ?: return systems
+    val name = CoreRegistry.consoleOf("NDS")?.displayName ?: "Nintendo DS"
+    val ds = com.nxredux.mobile.library.SystemFolder(name, "NDS", core, emptyList())
+    val at = systems.indexOfFirst { !it.unassigned && it.displayName.lowercase() > name.lowercase() }.takeIf { it >= 0 }
+        ?: systems.indexOfFirst { it.unassigned }.takeIf { it >= 0 } ?: systems.size
+    return systems.toMutableList().apply { add(at, ds) }
 }
