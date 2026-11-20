@@ -530,9 +530,9 @@ bool LibretroDroid::coreNeedsFullPath() {
     return system_info.need_fullpath;
 }
 
-void LibretroDroid::loadGame(const retro_game_info& gameInfo) {
+void LibretroDroid::loadGame(const retro_game_info* gameInfo) {
     threadsBeforeLoad = ThreadList::list();   // ADPF: the core's threads are the ones after this
-    if (!core->retro_load_game(&gameInfo)) {
+    if (!core->retro_load_game(gameInfo)) {
         LOGE("Cannot load game. Leaving.");
         throw std::runtime_error("Cannot load game");
     }
@@ -562,7 +562,7 @@ void LibretroDroid::loadGameFromPath(const std::string& gamePath) {
         game_info.size = file.size;
     }
 
-    loadGame(game_info);
+    loadGame(&game_info);
 }
 
 void LibretroDroid::loadGameFromBytes(std::unique_ptr<int8_t[]> data, size_t size) {
@@ -582,7 +582,7 @@ void LibretroDroid::loadGameFromBytes(std::unique_ptr<int8_t[]> data, size_t siz
         game_info.size = size;
     }
 
-    loadGame(game_info);
+    loadGame(&game_info);
 }
 
 void LibretroDroid::loadGameFromVirtualFiles(std::vector<VFSFile> virtualFiles) {
@@ -620,7 +620,13 @@ void LibretroDroid::loadGameFromVirtualFiles(std::vector<VFSFile> virtualFiles) 
         game_info.size = file.size;
     }
 
-    loadGame(game_info);
+    loadGame(&game_info);
+}
+
+// A core that starts without content (melonDS DS boots the DS menu) is handed no game info at all.
+void LibretroDroid::loadNoContent() {
+    LOGD("Performing libretrodroid loadNoContent");
+    loadGame(nullptr);
 }
 
 void LibretroDroid::addVirtualFiles(std::vector<VFSFile> virtualFiles) {

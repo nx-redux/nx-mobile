@@ -144,6 +144,7 @@ public:
     // Takes the buffer: it lives until retro_unload_game, as the core may keep pointing into it.
     void loadGameFromBytes(std::unique_ptr<int8_t[]> data, size_t size);
     void loadGameFromVirtualFiles(std::vector<VFSFile> virtualFiles);
+    void loadNoContent();
     // Files the core opens by name through the VFS beside the game, however the game itself loads. Before the load.
     void addVirtualFiles(std::vector<VFSFile> virtualFiles);
 
@@ -334,7 +335,7 @@ private:
     float findDefaultAspectRatio(const retro_system_av_info &system_av_info);
     bool coreNeedsFullPath();
     // retro_load_game, then afterGameLoad; throws when the core refuses the game.
-    void loadGame(const retro_game_info& gameInfo);
+    void loadGame(const retro_game_info* gameInfo);
     void afterGameLoad();
     void releaseCore();
     // The input state, replaced by a fresh one when pause()/resume() asked for it. Caller holds inputLock, and the

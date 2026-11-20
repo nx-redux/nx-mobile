@@ -85,6 +85,9 @@ import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.runner.BottomScreen
 import com.nxredux.mobile.runner.Console
+import com.nxredux.mobile.runner.DsMenu
+import com.nxredux.mobile.runner.withConsole
+import com.nxredux.mobile.runner.withEntry
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.EmulatorRunner
@@ -278,6 +281,8 @@ class AppDeps(
     val windowPx: () -> Pair<Int, Int>? = { null },
     /** The ".bin" names in Bios/PS2/ (Emulator Settings' PS2 BIOS row); blocking, called off the main thread. */
     val ps2BiosFiles: () -> List<String> = { emptyList() },
+    /** The ".bin" names in Bios/NDS/ (whether DS Download Play can boot the DS menu); blocking, called off the main thread. */
+    val ndsBiosFiles: () -> List<String> = { emptyList() },
     /** Opens the skin's button layout editor (Android: its own activity); it saves to the settings and ends with [AppState.onSkinLayoutEdited]. Null: no editor. */
     val skinEditor: SkinEditorLauncher? = null,
     /** Settings → Library → Saves: Export and Import (null: rows do nothing). */
@@ -1235,7 +1240,8 @@ class AppState(
         statsCache[key]?.takeIf { sameStatsTarget(it.first, top) }?.let { _topStats.value = it.second; return }
         if (_topStats.value?.key != key) _topStats.value = null   // never another target's page meanwhile
         // Built here: consoleEntries' cache belongs to the main thread.
-        val console = (top as? TopContent.ConsoleStats)?.let { it.systems to consoleEntries(it.systems) }
+        // The DS menu's row is no game: it neither counts nor takes a shelf tile.
+        val console = (top as? TopContent.ConsoleStats)?.let { it.systems to consoleEntries(it.systems).filterNot { e -> DsMenu.isMenu(e.game.ref.value) } }
         topStatsJob = scope.launch {
             val base = if (console != null) {
                 val (group, entries) = console
@@ -1277,7 +1283,7 @@ class AppState(
      */
     private fun followTopDetails(reread: Boolean = false) {
         val entry = (if (_dualMenu.value) DualMenu.top(_screen.value, _selection.value.index) as? TopContent.GameDetails else null)?.entry
-        ra.followRaDetails(entry)
+        ra.followRaDetails(entry?.takeIf { !DsMenu.isMenu(it.game.ref.value) })   // the DS menu has no achievements to look up
         if (entry == null) {
             topDetailsJob?.cancel(); topDetailsJob = null
             _topDetails.value = null
@@ -1295,7 +1301,7 @@ class AppState(
         topDetailsJob = scope.launch {
             val saves = !entry.system.android && !entry.system.unassigned
             val resume = if (saves) tryOr({ ResumeInfo.NONE }) { deps.userData.resumeInfo(entry.system.tag, entry.game.fileName) } else ResumeInfo.NONE
-            val scraped = ref?.let { r -> gameInfoStore?.read(r) }
+            val scraped = if (DsMenu.isMenu(entry.game.ref.value)) DsMenu.INFO else ref?.let { r -> gameInfoStore?.read(r) }
             val now = _topDetails.value?.takeIf { sameGame(it.entry, entry) } ?: return@launch
             _topDetails.value = now.copy(resume = resume, scraped = scraped)
         }
@@ -1308,6 +1314,13 @@ class AppState(
      */
     private fun followGameMeta() {
         val entry = (DualMenu.top(_screen.value, _selection.value.index) as? TopContent.GameDetails)?.entry
+        if (entry != null && DsMenu.isMenu(entry.game.ref.value)) {
+            val menuPath = entry.game.path
+            if (menuPath !in _gameMeta.value) _gameMeta.value += menuPath to DsMenu.INFO
+            metaFor = menuPath
+            infoFetcher?.follow(null)
+            return
+        }
         val ref = entry?.let(::infoRef)
         val path = ref?.gamePath
         if (path == metaFor) return
@@ -1319,7 +1332,7 @@ class AppState(
 
     /** [entry] as the info fetch and store name it; null for an Android or Unassigned game (no ScreenScraper info). */
     private fun infoRef(entry: Listed): LibraryGameRef? =
-        if (entry.system.android || entry.system.unassigned) null else artworkRef(entry.system.tag, entry.game)
+        if (entry.system.android || entry.system.unassigned || DsMenu.isMenu(entry.game.ref.value)) null else artworkRef(entry.system.tag, entry.game)
 
     /** [path]'s info was just fetched: the details page shows it when that game is still on it. */
     private suspend fun showFetchedInfo(path: String) {
@@ -2256,7 +2269,9 @@ class AppState(
     }
 
     private suspend fun showSystems(playable: List<SystemFolder>) {
-        offerSystems(takeSystemsGen(), playable)
+        val gen = takeSystemsGen()
+        dsMenuReady = tryOr({ false }) { withContext(deps.compute) { DsMenu.missing(deps.ndsBiosFiles().toSet()).isEmpty() } }
+        offerSystems(gen, DsMenu.withConsole(playable, dsMenuReady))
         invalidateCollectionCounts()
         rebuildMainRows()
         when {
@@ -4842,7 +4857,12 @@ class AppState(
      */
     private var consoleEntriesOf: Pair<List<SystemFolder>, HashMap<List<String>, Pair<List<SystemFolder>, List<Listed>>>>? = null
 
-    private fun buildConsoleEntries(systems: List<SystemFolder>): List<Listed> {
+    /** The dumps DS Download Play boots from are in Bios/NDS/, as last read with the library ([showSystems]). */
+    private var dsMenuReady = false
+
+    private fun buildConsoleEntries(systems: List<SystemFolder>): List<Listed> = DsMenu.withEntry(systems, gameEntries(systems), dsMenuReady)
+
+    private fun gameEntries(systems: List<SystemFolder>): List<Listed> {
         systems.singleOrNull()?.let { s -> return s.games.map { Listed(s, it) } }
         val all = systems.flatMap { s -> s.games.map { Listed(s, it) } }.sortedWith(compareBy({ it.game.shownName.lowercase() }, { it.system.tag }))
         val labels = MergedLabels.labels(all.map { MergedLabels.Row(it.game.shownName, it.game.fileName, it.system.tag) })

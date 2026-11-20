@@ -475,6 +475,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 screenClass = { windowScreenClass },
                 windowPx = { windowPx },
                 ps2BiosFiles = { BiosImport.binFiles(applicationContext, settings.treeRef, "PS2") },
+                ndsBiosFiles = { BiosImport.binFiles(applicationContext, settings.treeRef, "NDS") },
                 saveTransfer = saveTransfer,
                 biosIntake = biosIntake,
                 deviceSync = DeviceSyncs.get(this),

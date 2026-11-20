@@ -119,28 +119,31 @@ class TopDetailsTest {
 
     // A small top screen (inside its padding) gives the text the width first, then drops the next goal.
     @Test fun a_small_top_screen_drops_the_picture_then_the_next_goal() {
-        assertEquals(DetailsFit(picture = true, next = true, synopsis = true), detailsFit(560.dp, 320.dp))
-        assertEquals(DetailsFit(picture = true, next = true, synopsis = false), detailsFit(400.dp, 220.dp))
-        assertEquals(DetailsFit(picture = false, next = true, synopsis = true), detailsFit(399.dp, 320.dp))   // narrow: the text takes the width
-        assertEquals(DetailsFit(picture = false, next = true, synopsis = false), detailsFit(560.dp, 219.dp))
-        assertEquals(DetailsFit(picture = false, next = true, synopsis = false), detailsFit(560.dp, 176.dp))
-        assertEquals(DetailsFit(picture = false, next = false, synopsis = false), detailsFit(560.dp, 175.dp))
+        assertEquals(DetailsFit(picture = true, next = true), detailsFit(560.dp, 320.dp))
+        assertEquals(DetailsFit(picture = true, next = true), detailsFit(400.dp, 220.dp))
+        assertEquals(DetailsFit(picture = false, next = true), detailsFit(399.dp, 320.dp))   // narrow: the text takes the width
+        assertEquals(DetailsFit(picture = false, next = true), detailsFit(560.dp, 219.dp))
+        assertEquals(DetailsFit(picture = false, next = true), detailsFit(560.dp, 176.dp))
+        assertEquals(DetailsFit(picture = false, next = false), detailsFit(560.dp, 175.dp))
     }
 
     // The mark takes its band above the content only where the content loses nothing to it.
     @Test fun the_mark_shows_only_where_the_details_keep_all_they_would_without_it() {
         val band = TOP_MARK_BAND.value
         assertTrue(detailsMark(560.dp, 400.dp))
-        assertFalse(detailsMark(560.dp, (320 + band - 1).dp))   // it would cost the synopsis
-        assertTrue(detailsMark(560.dp, (320 + band).dp))
-        assertTrue(detailsMark(560.dp, 300.dp))                 // the synopsis is gone either way; the picture stays
+        assertTrue(detailsMark(560.dp, 300.dp))                 // the synopsis is beside the picture, not under the mark
         assertFalse(detailsMark(560.dp, (220 + band - 1).dp))   // it would cost the picture
         assertFalse(detailsMark(560.dp, 150.dp))                // too short for the content's least
     }
 
-    @Test fun synopsis_is_dropped_first_on_short_screens() {
-        assertEquals(DetailsFit(picture = true, next = true, synopsis = false), detailsFit(560.dp, 319.dp))
-        assertEquals(DetailsFit(picture = true, next = true, synopsis = false), detailsFit(560.dp, 220.dp))
+    // The synopsis takes the lines the other details leave: none below one line, never more than eight.
+    @Test fun the_synopsis_fits_the_space_left() {
+        assertEquals(0, synopsisLines(20.dp, 21.dp))    // the 10 dp gap leaves less than a line
+        assertEquals(1, synopsisLines(31.dp, 21.dp))
+        assertEquals(3, synopsisLines(80.dp, 21.dp))
+        assertEquals(8, synopsisLines(400.dp, 21.dp))
+        assertEquals(0, synopsisLines(0.dp, 21.dp))
+        assertEquals(0, synopsisLines((-5).dp, 21.dp))
     }
 
     @Test fun a_picture_keeps_its_own_aspect() {

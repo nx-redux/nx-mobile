@@ -24,6 +24,8 @@ class GLRetroViewData(context: Context) {
     var gameFilePath: String? = null
     var gameFileBytes: ByteArray? = null
     var gameVirtualFiles: List<VirtualFile> = listOf()
+    /** Start the core with no content (retro_load_game(NULL)); the game fields above stay empty. */
+    var loadWithoutContent: Boolean = false
 
     /** Files the core opens by name through the VFS beside the game (an N64 hi-res pack), however the game loads. */
     var extraVirtualFiles: List<VirtualFile> = listOf()

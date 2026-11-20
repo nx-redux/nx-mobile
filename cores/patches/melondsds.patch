@@ -5,6 +5,9 @@ dependency), requests a GLES 3.2 context, ports the compositor shaders to GLSL E
 around the screen blit. Also carries JesseTG/melonds-ds#335 (video views: the frontend lays the screens out). Applied to cores/src/melondsds.
 
 Local wireless: tells the frontend when the emulated radio is on, off or hosting (nx_nds_radio.h), writes the firmware dump back with its own MAC and nickname, and waits for multiplayer replies by wall clock, counting blank replies by sender like standalone melonDS.
+
+Firmware Wi-fi settings: wfcsettings.bin (written only for melonDS's generated firmware) is loaded only into the
+generated firmware, not over a native dump's own access points, which left DS Download Play and PictoChat hanging.
 diff --git a/CHANGELOG.md b/CHANGELOG.md
 index 49d182d..9868bba 100644
 --- a/CHANGELOG.md
@@ -120,6 +123,26 @@ index 20c526d..f8d4416 100644
          unsigned _numberOfScreenLayouts = 1;
          std::array<ScreenLayout, config::screen::MAX_SCREEN_LAYOUTS> _screenLayouts;
          unsigned _screenGap = 0;
+diff --git a/src/libretro/config/console.cpp b/src/libretro/config/console.cpp
+index 73b7e24..9fc3236 100644
+--- a/src/libretro/config/console.cpp
++++ b/src/libretro/config/console.cpp
+@@ -1196,7 +1196,14 @@ static void MelonDsDs::CustomizeFirmware(const CoreConfig& config, Firmware& fir
+     // If using generated firmware, we keep the wi-fi settings on the host disk separately.
+     // Wi-fi access point data includes Nintendo WFC settings,
+     // and if we didn't keep them then the player would have to reset them in each session.
+-    if (retro::rfile_ptr file = retro::make_rfile(*wfcsettingspath, RETRO_VFS_FILE_ACCESS_READ)) {
++    // Only for generated firmware, as FlushFirmware writes the file: a native dump keeps its own settings, at offsets of
++    // its own, and copying the generated layout over them breaks the access point checksums, so the firmware's
++    // wireless apps (DS Download Play, PictoChat) hang while starting.
++    const bool generated = header.Identifier == melonDS::GENERATED_FIRMWARE_IDENTIFIER;
++    if (!generated) {
++        retro::debug("Native firmware keeps its own Wi-fi settings; not loading {}\n", *wfcsettingspath);
++    }
++    else if (retro::rfile_ptr file = retro::make_rfile(*wfcsettingspath, RETRO_VFS_FILE_ACCESS_READ)) {
+         // If we have Wi-fi settings to load...
+         constexpr unsigned TOTAL_WFC_SETTINGS_SIZE =
+             3 * (sizeof(Firmware::WifiAccessPoint) + sizeof(Firmware::ExtendedWifiAccessPoint));
 diff --git a/src/libretro/config/constants.hpp b/src/libretro/config/constants.hpp
 index e51359f..7b96732 100644
 --- a/src/libretro/config/constants.hpp
