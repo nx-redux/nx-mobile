@@ -67,10 +67,9 @@ AVENIR = '/System/Library/Fonts/Avenir Next.ttc'
 cap = Image.open(W + '/cap_menu.png').convert('RGB')
 top, bot = native(cap, TOP), native(cap, BOT)
 
-# --- screenshot: both screens, as ScreenScraper's DS screenshots are (256x384)
-shot = Image.new('RGB', (256, 384))
-shot.paste(top, (0, 0)); shot.paste(bot, (0, 192))
-shot.save(OUT + 'screenshot.png')
+# --- screenshot: the touch screen alone (256x192), where the DS Download Play tile is; the top screen's clock and
+# calendar say nothing about it
+bot.save(OUT + 'screenshot.png')
 
 # The DS menu's Download Play tile, and the two-DS icon inside it.
 tile = bot.crop((129, 73, 223, 119))
