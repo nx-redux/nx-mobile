@@ -124,7 +124,10 @@ class NxCarbonPackTest {
                 assertTrue(apart, "$id ${ctl.spec.id} (${ctl.x}, ${ctl.y}) on the panel $r")
             }
             val pic = p.glass(GlassScreen.PICTURE)!!.rect
-            assertTrue(pic.y + pic.height <= hinge - 62f, "$id picture $pic")
+            // half-folded clear of the hinge; flat (no hinge drawn) the frame reaches the middle, the picture above it
+            val folded = consoleDevices.toMap().getValue(name).third != null
+            if (folded) assertTrue(pic.y + pic.height <= hinge - 62f, "$id picture $pic") else assertTrue(pic.y + pic.height < r.y, "$id picture $pic over the panel $r")
+            assertEquals(!folded, p.slab, "$id slab")
             // the touch shortcut strip under the panel, as every game layout has; no MIC or SWAP
             assertTrue((1..4).all { "TOUCH_$it" in c } && c.keys.none { it == "MIC" || it == "SWAP" }, "$id ${c.keys}")
             val strip = (1..4).map { c.getValue("TOUCH_$it") }
@@ -1198,7 +1201,8 @@ class NxCarbonPackTest {
 
     @Test
     fun foldInnerPortraitIsTheFoldBoardFlatAndHalfFolded() {
-        // the inner screen: the fold board, split at its hinge flat and half-folded alike (folding changes nothing)
+        // the inner screen: the fold board, split at its middle flat and half-folded alike; flat it is drawn without its
+        // hinge (one slab) and the top screen's frame reaches the middle, half-folded it keeps clear of the hinge
         for ((suffix, hinge) in listOf("flat" to null, "half" to 1224f)) {
             val ds = assertNotNull(place("fold_inner_$suffix", 1848, 2448, tablet = true, hinge = hinge, foldable = true))
             assertEquals("flex_ds_fold", ds.spec.id.removeSuffix("_tab"))
@@ -1208,7 +1212,9 @@ class NxCarbonPackTest {
             // with shell round it as a clamshell's: clear of the hinge (its top ~62 px above the fold) by the shell
             val top = ds.glass(GlassScreen.TOP)!!.rect
             assertTrue(top.width > 1600f && top.height > 1000f, "top $top")
-            assertTrue(top.y + top.height <= 1224f - 62f - 32f, "top $top: on the hinge")
+            if (hinge != null) assertTrue(top.y + top.height <= 1224f - 62f - 32f, "top $top: on the hinge")
+            else assertSlabGap(ds, top, ds.glass(GlassScreen.TOUCH)!!.rect)
+            assertEquals(hinge == null, ds.slab, "slab $suffix")
             assertTrue(top.x >= 32f && top.x + top.width <= 1848f - 32f, "top $top: edge to edge")
             val gba = assertNotNull(place("fold_inner_${suffix}_gba", 1848, 2448, tablet = true, ds = false, picture = 240f to 160f, hinge = hinge, foldable = true))
             assertEquals("flex_single_fold", gba.spec.id.removeSuffix("_tab"))
@@ -1243,11 +1249,21 @@ class NxCarbonPackTest {
     }
 
     /** Half-folded: the screen frame above the fold (a DS's top screen), the touch screen, the strip and the pad below it. */
+    /**
+     * Flat ([SkinPlacement.slab]) the top screen's frame runs past the middle down to 16 dp above the frame under it (its
+     * glass's border apart: the glasses at least that far apart, no more than a frame's borders more).
+     */
+    private fun assertSlabGap(p: SkinPlacement, above: com.nxredux.mobile.options.PxRect, under: com.nxredux.mobile.options.PxRect, dpi: Int = 420) {
+        val gap = under.y - (above.y + above.height)
+        assertTrue(gap >= 16f * dpi / 160f && gap < 16f * dpi / 160f + 200f, "${p.spec.id} glasses $gap apart: $above over $under")
+    }
+
     private fun assertHalfFolded(p: SkinPlacement, hinge: Float) {
         val ds = p.glass(GlassScreen.TOP) != null
         assertEquals(if (ds) "flex_ds" else "flex_single", p.spec.id.removeSuffix("_wide").removeSuffix("_fold"))
         val above = assertNotNull(p.glass(if (ds) GlassScreen.TOP else GlassScreen.PICTURE)).rect
-        assertTrue(above.y + above.height < hinge, "${p.spec.id} $above")
+        val under = p.glass(if (ds) GlassScreen.TOUCH else GlassScreen.PANEL)?.rect
+        if (p.slab && under != null) assertSlabGap(p, above, under) else assertTrue(above.y + above.height < hinge, "${p.spec.id} $above")
         if (ds) assertTrue(p.glass(GlassScreen.TOUCH)!!.rect.y > hinge)
         val below = p.controls.filter { it.spec.id in setOf("DPAD", "A", "L", "R", "START", "MENU") + if (ds) setOf("MIC", "SWAP", "TOUCH_1") else emptySet() }
         assertTrue(below.all { it.y > hinge }, "${p.spec.id} ${below.map { it.spec.id to it.y }}")
@@ -1314,10 +1330,16 @@ class NxCarbonPackTest {
         assertEquals("stacked_menu_fold", placed.spec.id, name)
         val top = placed.glasses.single { it.id == "menutop" }.rect
         val menu = placed.glasses.single { it.id == "menu" }.rect
-        assertTrue(top.y + top.height < hinge && hinge < menu.y, "$name top $top menu $menu hinge $hinge")
+        if (placed.slab) assertSlabGap(placed, top, menu, if (w == 1440) 280 else 420)
+        else assertTrue(top.y + top.height < hinge && hinge < menu.y, "$name top $top menu $menu hinge $hinge")
         val c = placed.controls.associateBy { it.spec.id }
         assertTrue("MIC" !in c && "SWAP" !in c, name)
-        assertTrue(c.getValue("MENU").y - c.getValue("MENU").spec.r > menu.y + menu.height, "$name menu glass $menu")
+        // MENU in the left group, mirroring START / SELECT on the right (level with the pair's middle, its label on its
+        // left); nothing under the menu's screen, which reaches the side groups' bottom
+        val m = c.getValue("MENU"); val st = c.getValue("START"); val se = c.getValue("SELECT")
+        assertTrue(m.x + m.spec.r < menu.x && m.spec.labelDx < 0f, "$name MENU ${m.x} beside the glass $menu")
+        assertEquals((st.y + se.y) / 2f, m.y, 1f, "$name MENU level with START / SELECT")
+        assertEquals(w - st.x, m.x, 2f, "$name MENU mirrors START")
     }
 
     @Test
@@ -1329,13 +1351,15 @@ class NxCarbonPackTest {
     @Test
     fun tabletMenuIsTwoScreens() {
         twoScreens("menu_tab_two", SkinChoice.placeMenu(pack, 1440, 2304, 280, tablet = true), 1440, 2304, 1152f)
-        // the tablet's wider room: the menu's touch screen grows (its shape kept); the Fold's keeps its own size
+        // the tablet's wider room: the menu's touch screen grows; the Fold's keeps the side groups' least spacing
         val tab = assertNotNull(SkinChoice.placeMenu(pack, 1440, 2304, 280, tablet = true))
         val tg = tab.glasses.single { it.id == "menu" }.rect
         assertTrue(tg.width / tab.k > 1100f, "tablet menu glass $tg")
-        assertEquals(944f / 740f, tg.width / tg.height, 0.02f)
+        // its shape kept as it grows, then taller down to the side groups' bottom (MENU beside the d-pad)
+        assertTrue(tg.height >= tg.width * 740f / 944f - 1f, "tablet menu glass $tg")
         val fold = assertNotNull(SkinChoice.placeMenu(pack, 1848, 2448, 420, foldable = true, tablet = true))
-        assertEquals(944f, fold.glasses.single { it.id == "menu" }.rect.width, 1f)
+        // the side groups at least 32 from the edges, the frame at least 6 from them: 22 narrower each side than the render
+        assertEquals(944f - 2f * 22f, fold.glasses.single { it.id == "menu" }.rect.width, 1f)
     }
 
     @Test
@@ -1347,7 +1371,7 @@ class NxCarbonPackTest {
 
     @Test
     fun tabletClustersCentreOnTheBottomScreen() {
-        // the tablet twins: the side clusters' span centred on the bottom screen, within a cap's radius
+        // the tablet twins: the side clusters' span centred on the bottom screen, within a cap's radius (a capped top screen aside)
         for (v in listOf(SkinVariant.SINGLE, SkinVariant.GBA, SkinVariant.PSP, SkinVariant.WII_SIDEWAYS, SkinVariant.N3DS_REGULAR, SkinVariant.PS1)) {
             val p = assertNotNull(SkinChoice.place(pack, 1440, 2304, 280, true, v == SkinVariant.N3DS_REGULAR, 640f to 480f, null, variant = v), "$v")
             assertTrue(p.spec.id.endsWith("_fold_tab"), "$v ${p.spec.id}")
@@ -1355,7 +1379,15 @@ class NxCarbonPackTest {
             val side = p.controls.filter { it.spec.id != "MENU" && it.y > screen.y - 200f && (it.x < screen.x || it.x > screen.x + screen.width) }
             fun ext(c: PlacedControl) = if (c.spec.shape == ControlShape.RECT) c.spec.hh else c.spec.r * (if (c.spec.shape == ControlShape.STICK) 1.07f else 1f)
             val mid = (side.minOf { it.y - ext(it) } + side.maxOf { it.y + ext(it) }) / 2f
-            assertEquals(screen.y + screen.height / 2f, mid, 40f * p.k, "$v clusters centred on the bottom screen")
+            if (v == SkinVariant.N3DS_REGULAR) {
+                // a capped top screen (the 3DS's wide one): the touch screen up under it, the controls centred in the height
+                // between the top screen's frame and the window's bottom instead
+                val top = p.glass(GlassScreen.TOP)!!.rect
+                val all = p.controls.filter { it.y > top.y + top.height }
+                val span = (all.minOf { it.y - ext(it) } + all.maxOf { it.y + ext(it) }) / 2f
+                assertTrue(span > top.y + top.height && span < 2304f, "$v controls under the frame: $span")
+                assertTrue(screen.y < mid - screen.height / 2f, "$v touch screen above the controls' middle: $screen $mid")
+            } else assertEquals(screen.y + screen.height / 2f, mid, 40f * p.k, "$v clusters centred on the bottom screen")
         }
     }
 

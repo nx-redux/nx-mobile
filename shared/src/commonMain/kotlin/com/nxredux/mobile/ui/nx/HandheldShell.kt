@@ -135,17 +135,22 @@ fun HandheldShell(
             val portrait = maxHeight > maxWidth
             val window = DpSize(maxWidth, maxHeight)
             // The skin's menu layout for this area (flat, portrait or landscape, with the pad shown only), its picture and its pieces' picture.
-            // Half-folded only the two-screen layout (a tablet-class window: the Fold's inner screen) keeps the skin, split at the hinge.
+            // Half-folded only the two-screen layout (a tablet-class window: the Fold's inner screen, upright or, half-folded,
+            // sideways) keeps the skin, split at the hinge.
             val hingeY = (posture as? Posture.Tabletop)?.let { (it.hingeTop + it.hingeBottom) / 2f }
-            val canTwo = top != null && tablet && twoScreens && portrait
+            // a camera cutout at the bottom (the Fold's inner screen turned so its camera is there): the skin runs down under
+            // the strip the caller pads below the shell, as it runs up under the top one; the bars alone stay clear
+            val cutoutBelow = WindowInsets.displayCutout.getBottom(density) > 0
+            val below = if (cutoutBelow) nxScreenInsets().getBottom(density) else 0
+            val canTwo = top != null && tablet && twoScreens && (portrait || hingeY != null)
             // App already folds the controller into [showPad] (it needs that for the keyboard's docking too); checked here
             // again so the shell's own rule ([menuSkinShown]) holds for any caller that passes the pad alone.
             val skinPlaced = if (skin != null && menuSkinShown(skinPicked = true, showPad, controllerConnected, canTwo, tabletop = posture is Posture.Tabletop)) {
                 val w = constraints.maxWidth
-                // the skin runs up under the cutout (the shell starts below it), its screen too: the frame keeps its own top
-                // margin and the glass reaches under the camera; the page inside clears it ([cutoutPad] below)
+                // the skin runs up under the cutout (the shell starts below it), and down under one below, its screen too: the
+                // frame keeps its own margins and the glass reaches under the camera; the page inside clears it ([cutoutPad] below)
                 val above = topInWindow ?: 0
-                val h = constraints.maxHeight + above
+                val h = constraints.maxHeight + above + below
                 val dpi = (density.density * 160f).roundToInt()
                 remember(skin, w, h, dpi, canTwo, hingeY) {
                     SkinChoice.placeMenu(skin.manifest, w, h, dpi, foldable = DeviceTraits.canHalfFold, tablet = tablet, hingeY = hingeY, twoScreens = canTwo)
@@ -181,7 +186,9 @@ fun HandheldShell(
                 val gw = (g.x + g.width).roundToInt() - gx
                 val gh = (g.y + g.height).roundToInt() - gy
                 val skinW = constraints.maxWidth
-                val skinH = constraints.maxHeight + above
+                val skinH = constraints.maxHeight + above + below
+                // a glass's px past the shell's bottom (skin px from the window's top): under the strip below, kept clear
+                fun pastBottom(y: Float, height: Float) = with(density) { (y + height - above - constraints.maxHeight).coerceAtLeast(0f).toDp() }
                 skinPad(
                     Modifier.layout { m, c ->
                         val p = m.measure(Constraints.fixed(skinW, skinH))
@@ -198,12 +205,13 @@ fun HandheldShell(
                     // the pages lay out for the glass's own shape (landscape: a wide glass between the side columns)
                     // the glass reaches under the camera cutout: the page starts below it (the shell's own top, [above])
                     val cutoutPad = with(density) { (above - g.y).coerceAtLeast(0f).toDp() }
-                    val glass = with(density) { DpSize(gw.toDp(), (gh.toFloat() - cutoutPad.toPx()).coerceAtLeast(0f).toDp()) }
+                    val cutoutPadBelow = pastBottom(g.y, g.height)
+                    val glass = with(density) { DpSize(gw.toDp(), (gh.toFloat() - cutoutPad.toPx() - cutoutPadBelow.toPx()).coerceAtLeast(0f).toDp()) }
                     CompositionLocalProvider(
                         LocalPortrait provides (gh > gw), LocalPadBelow provides true, LocalWindowSize provides window, LocalInSkin provides true,
                         LocalScreenArea provides glass,
                     ) {
-                        Box(Modifier.fillMaxSize().padding(top = cutoutPad)) { movableScreen(screenSlot) }
+                        Box(Modifier.fillMaxSize().padding(top = cutoutPad, bottom = cutoutPadBelow)) { movableScreen(screenSlot) }
                     }
                 }
                 if (topGlass != null && top != null) {
@@ -219,7 +227,7 @@ fun HandheldShell(
                     ) {
                         val cutoutPad = with(density) { (above - topGlass.y).coerceAtLeast(0f).toDp() }
                         CompositionLocalProvider(LocalPortrait provides (th > tw), LocalWindowSize provides window, LocalInSkin provides true) {
-                            Box(Modifier.fillMaxSize().padding(top = cutoutPad)) { top(Modifier.fillMaxSize()) }
+                            Box(Modifier.fillMaxSize().padding(top = cutoutPad, bottom = pastBottom(topGlass.y, topGlass.height))) { top(Modifier.fillMaxSize()) }
                         }
                     }
                 }

@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxHintBar
+import com.nxredux.mobile.ui.nx.NX_HINT_BAR_PAD
 import com.nxredux.mobile.ui.nx.nxPageInset
 import com.nxredux.mobile.ui.nx.nxScrollFade
 
@@ -72,7 +73,8 @@ fun SettingsRootScreen(
                 )
                 SettingsWordBlock(
                     title, words, selectedIndex, rowsFocused, onTap,
-                    Modifier.padding(start = settingsSectionStart(), end = settingsPlateEnd(), bottom = settingsBlockBottom()),
+                    // scrolled to its top (a skin's small touch screen), "Settings" as far off the screen's edge as the hints below
+                    Modifier.padding(start = settingsSectionStart(), end = settingsPlateEnd(), top = NX_HINT_BAR_PAD, bottom = settingsBlockBottom()),
                     headline = headline, description = description, extra = extra,
                 )
             }

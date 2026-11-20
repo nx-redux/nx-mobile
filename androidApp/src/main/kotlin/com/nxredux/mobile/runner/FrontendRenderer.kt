@@ -936,7 +936,8 @@ internal class FrontendRenderer(
         }
         val stack = glass?.let { fitAspect(it, 256f / 384f) }   // the two screens' stack, centred in the glass
         val top = stack?.copy(height = stack.height / 2f) ?: p.glass(GlassScreen.TOP)?.rect?.let { fitAspect(it, 256f / 192f) } ?: return null   // the top screen, centred in its glass
-        val bottom = stack?.copy(y = stack.y + stack.height / 2f, height = stack.height / 2f) ?: p.glass(GlassScreen.TOUCH)?.rect ?: return null
+        // the touch screen centred in its glass too (a fold board's frame may be wider than its picture)
+        val bottom = stack?.copy(y = stack.y + stack.height / 2f, height = stack.height / 2f) ?: p.glass(GlassScreen.TOUCH)?.rect?.let { fitAspect(it, 256f / 192f) } ?: return null
         val big = NdsSettings.parse(frontendValues).big
         return SkinDs(top, bottom, dsScreenRegions(top, bottom, DsKind.DS, big).withMap(screenMap))
     }

@@ -4,7 +4,8 @@ package com.nxredux.mobile.skin
  * Which of a pack's layouts a window gets, and that layout assembled to it.
  *
  * Landscape: the main menu's landscape shell, the game in its screen frame with the touch shortcut strip under it (a
- * DS's two screens stacked in it, MIC and SWAP beside MENU). Half-folded: the screen frame above the fold and the pad
+ * DS's two screens stacked in it, MIC and SWAP beside MENU); a book foldable's inner screen sideways (its hinge across
+ * the window) takes the fold board instead for a DS or 3DS, and for any game or the menu half-folded. Half-folded: the screen frame above the fold and the pad
  * below it (the flex layouts; a DS's touch screen below the fold with the pad), on a board with nothing but plates there.
  * Portrait DS flat: the large-screen layout on a tablet-class window or a shorter phone, the stacked one on a tall phone
  * (at least 2:1), each falling back to the other when it does not fit. Portrait one-screen consoles: the stacked layout.
@@ -18,6 +19,18 @@ package com.nxredux.mobile.skin
 object SkinChoice {
     private const val TALL = 2.0f
     private const val SNAP = 0.12f
+    /** The smallest the fold board is drawn, as a share of its size at the screen's density, before the phone board. */
+    private const val FOLD_MIN_SHRINK = 0.7f
+    /** Flat, between the fold board's top screen frame and the frame under it, dp ([foldPieces]). */
+    private const val FRAME_GAP_DP = 16f
+    /** Above and below a DS / 3DS top screen across its frame's whole width, dp: the most black its frame shows ([foldPieces]). */
+    private const val TOP_PAD_DP = 8f
+    /** On a window wider than the fold board's render, how far its side groups move in toward the bottom screen, dp at most. */
+    private const val SIDE_INSET_DP = 16f
+    /** The longest a book foldable's inner screen is to its short side (the Galaxy Fold 7 / 8 Ultra 1.11, the Pixel Folds 1.04). */
+    private const val NEAR_SQUARE = 1.2f
+    /** The consoles with two screens, which the fold board's hinge falls between. */
+    private val TWO_SCREEN = setOf(SkinVariant.DS, SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)
     /** The smallest menu glass side, picture px: less and the menu would not be usable in it. */
     private const val MENU_MIN_GLASS = 400f
 
@@ -83,8 +96,16 @@ object SkinChoice {
         if (windowW <= 0 || windowH <= 0 || windowW == windowH || densityDpi <= 0) return null
         val k = scaleFor(pack, densityDpi)
         val landscape = windowW > windowH
-        if (!landscape && tablet && twoScreens) widest(pack, SkinFamily.STACKED, SkinVariant.MENU, fold = true) { spec ->
-            SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, null, topInset.toFloat(), hingeY ?: (windowH / 2f))
+        // sideways, a book foldable's inner screen half-folded: the hinge runs across the window, so the two screens too
+        val twoUp = if (landscape) hingeY != null && (foldable || tablet) && nearSquare(windowW, windowH) else tablet
+        // sideways the flat menu is the landscape shell: half-folded, the bottom screen ends where that one's does, so
+        // folding and opening keep its bottom edge in place
+        val flatEnd = if (landscape) shell(pack, SkinFamily.GRIP, SkinVariant.MENU, windowW, windowH, k, null, topInset)
+            ?.glasses?.firstOrNull()?.rect?.let { windowH - (it.y + it.height) } else null
+        if (twoUp && twoScreens) shrunk(k) { s ->
+            widest(pack, SkinFamily.STACKED, SkinVariant.MENU, fold = true) { spec ->
+                foldPieces(spec.menuBesideTheDpad(), windowW, windowH, s, null, topInset, hingeY, densityDpi, bottomMargin = shellMargin(pack), bottomGlass = flatEnd)
+            }
         }?.let { return it }
         return shell(pack, if (landscape) SkinFamily.GRIP else SkinFamily.STACKED, SkinVariant.MENU, windowW, windowH, k, null, topInset)
     }
@@ -119,6 +140,62 @@ object SkinChoice {
 
     /** A layout on a foldable's board: its background has a hinge (an inner screen's two halves). */
     private val SkinLayoutSpec.foldBoard: Boolean get() = tree.parts.any { it.isHinge }
+
+    /**
+     * [placed] at scale [k], else at smaller scales down to [FOLD_MIN_SHRINK] of it: a dense inner screen (a large
+     * Display size, a wider Fold, its inner screen sideways) keeps the fold board, a little smaller, over another board. A
+     * scale within [SNAP] of 1 is tried at 1 first (drawn 1:1, crisp), then as it is.
+     */
+    private fun shrunk(k: Float, placed: (Float) -> SkinPlacement?): SkinPlacement? {
+        val tried = mutableSetOf<Float>()
+        fun attempt(s: Float) = if (tried.add(s)) placed(s) else null
+        attempt(k)?.let { return it }
+        var f = 1f
+        while (true) {
+            f *= 0.95f
+            if (f < FOLD_MIN_SHRINK) return null
+            val s = k * f
+            attempt(if (kotlin.math.abs(s - 1f) < SNAP) 1f else s)?.let { return it }
+            attempt(s)?.let { return it }
+        }
+    }
+
+    /**
+     * A fold board's [spec] placed at scale [k]. Half-folded ([hingeY] set) it is split at the fold, its hinge drawn and
+     * the top screen's frame clear of it. Flat (a tablet too) the board is one slab ([SkinSeam]): the hinge's height goes
+     * to the top screen, its frame down to [FRAME_GAP_DP] above the frame under it (the touch screen, the panel), the
+     * same on every device. A DS / 3DS top screen's frame is no taller than its picture needs ([TOP_PAD_DP]); flat, the
+     * touch screen then moves up to [FRAME_GAP_DP] under it, the controls centred in the height under the frame.
+     */
+    private fun foldPieces(
+        spec: SkinLayoutSpec, windowW: Int, windowH: Int, k: Float, picture: Pair<Float, Float>?, topInset: Int, hingeY: Float?, densityDpi: Int,
+        topScreen: Pair<Float, Float>? = null, bottomMargin: Float? = null, bottomGlass: Float? = null,
+    ): SkinPlacement? {
+        val w = windowW.toFloat(); val h = windowH.toFloat()
+        // a DS / 3DS top screen: its frame no taller than the screen across its width, plus a little ([TOP_PAD_DP])
+        val capPad = topScreen?.let { TOP_PAD_DP * densityDpi / 160f / k }
+        val sideInset = SIDE_INSET_DP * densityDpi / 160f / k
+        if (hingeY != null) return SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), hingeY, topScreen, capPad = capPad, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass)
+        val middle = h / 2f
+        val first = SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), middle, topScreen, hingeGap = 0f, capPad = capPad, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass) ?: return null
+        // the top of the frame under the middle: the highest of the pieces with a screen below it
+        val under = first.pieces.filter { it.piece >= 0 && spec.pieces[it.piece].glass != null && it.dst.y > middle }.minOfOrNull { it.dst.y }
+            ?: return first.copy(slab = true)
+        // only where there is room: the frame never ends above the middle for it (a frame under nearer than the gap)
+        val gap = minOf(0f, (middle - (under - FRAME_GAP_DP * densityDpi / 160f)) / k)
+        return (SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), middle, topScreen, hingeGap = gap, capPad = capPad, capLift = true, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass) ?: first).copy(slab = true)
+    }
+
+    /**
+     * The menu's landscape shell's frame margin from the window's bottom, picture px: the margin the main menu's bottom
+     * screen keeps on the fold board too, so folding or turning the device keeps the screen as far from the edge.
+     */
+    private fun shellMargin(pack: SkinPackManifest): Float? =
+        pack.layouts.firstOrNull { it.family == SkinFamily.GRIP && it.variant == SkinVariant.MENU && it.frame != null }
+            ?.frame?.let { f -> (if (f.bottom >= 0) f.bottom else f.top).takeIf { it >= 0 }?.toFloat() }
+
+    /** A window no more than [NEAR_SQUARE] long to short: a book foldable's inner screen, either way up. */
+    private fun nearSquare(w: Int, h: Int): Boolean = maxOf(w, h).toFloat() / minOf(w, h) <= NEAR_SQUARE
 
     /** Window px per picture px: [densityDpi] over the pack's, 1 within [SNAP] of it (drawn 1:1, crisp). */
     private fun scaleFor(pack: SkinPackManifest, densityDpi: Int): Float =
@@ -174,11 +251,22 @@ object SkinChoice {
         val top = when (v) { SkinVariant.N3DS, SkinVariant.N3DS_REGULAR -> 400f to 240f; SkinVariant.DS -> 256f to 192f; else -> null }
         val landscape = windowW > windowH
         // sideways: the main menu's landscape shell, the game in its screen frame (the strip under it; a DS's MIC, SWAP)
-        if (landscape) return shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset)
+        val foldBoard = {
+            shrunk(k) { s ->
+                widest(pack, SkinFamily.FLEX, v, fold = true, refH = windowH / s) { spec ->
+                    foldPieces(spec, windowW, windowH, s, picture, topInset, hingeY, densityDpi, top)
+                }
+            }
+        }
+        if (landscape) {
+            // a book foldable's inner screen sideways: its hinge runs across the window, where the board's is. A DS or 3DS
+            // takes the board flat too (the crease between its screens); a one-screen game only half-folded, as flat the
+            // landscape shell gives it the window's whole height.
+            if ((foldable || tablet) && nearSquare(windowW, windowH) && (hingeY != null || v in TWO_SCREEN)) foldBoard()?.let { return it }
+            return shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset)
+        }
         // a foldable's inner screen or a tablet: the fold board, split at its hinge flat or not (the window's middle when flat)
-        if (foldable || tablet) widest(pack, SkinFamily.FLEX, v, fold = true, refH = windowH / k) { spec ->
-            SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), hingeY ?: (windowH / 2f))
-        }?.let { return it }
+        if (foldable || tablet) foldBoard()?.let { return it }
         // half-folded: the screen frame above the fold, the pad below it (a DS's touch screen with it)
         if (hingeY != null) return widest(pack, SkinFamily.FLEX, v, fold = false) { spec ->
             if (spec.frame?.hinge?.let { it >= 0 } != true) null
