@@ -20,6 +20,12 @@ object DsMenu {
     /** Spike switch: the app turns the DS list's row on; tests (whose DS lists are fixtures) keep it off. */
     var listed = false
 
+    /** The row's art, one file per kind, as the app ships it. */
+    val ART_FILES = listOf("boxart.png", "boxart2d.png", "screenshot.png", "wheel.png", "mix.png")
+
+    /** The folder the app copied [ART_FILES] to; null = no art. */
+    var artDir: String? = null
+
     fun isMenu(content: String?): Boolean = content == CONTENT
 
     /** The dumps of [FILES] that are not in [present] (the NDS BIOS folder's names). */
@@ -30,14 +36,22 @@ object DsMenu {
 }
 
 /** The DS menu's row: first in the NDS list, a row the library never indexed. */
-internal fun DsMenu.entry(): com.nxredux.mobile.library.GameEntry = com.nxredux.mobile.library.GameEntry(
-    ref = ContentRef(DsMenu.CONTENT),
-    fileName = DsMenu.FILE_NAME,
-    shownName = DsMenu.TITLE,
-    folder = ContentRef(""),
-    sourceId = "nds-menu",
-    relativeDir = "",
-)
+internal fun DsMenu.entry(): com.nxredux.mobile.library.GameEntry {
+    val art = { name: String -> artDir?.let { ContentRef(com.nxredux.mobile.storage.FileRefs.SCHEME + "$it/$name") } }
+    return com.nxredux.mobile.library.GameEntry(
+        ref = ContentRef(DsMenu.CONTENT),
+        fileName = DsMenu.FILE_NAME,
+        shownName = DsMenu.TITLE,
+        boxartRef = art("boxart.png"),
+        screenshotRef = art("screenshot.png"),
+        box2dRef = art("boxart2d.png"),
+        wheelRef = art("wheel.png"),
+        mixRef = art("mix.png"),
+        folder = ContentRef(""),
+        sourceId = "nds-menu",
+        relativeDir = "",
+    )
+}
 
 /** [entries] with the DS menu's row on top when the console is the DS (a single NDS folder: a merged console is not). */
 internal fun DsMenu.withEntry(systems: List<com.nxredux.mobile.library.SystemFolder>, entries: List<com.nxredux.mobile.ui.Listed>): List<com.nxredux.mobile.ui.Listed> {

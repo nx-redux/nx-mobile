@@ -35,6 +35,7 @@ class NxApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         com.nxredux.mobile.runner.DsMenu.listed = true
+        com.nxredux.mobile.runner.DsMenu.artDir = DsMenuArt.install(this)
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityStarted(activity: Activity) { startedActivities++ }
             override fun onActivityStopped(activity: Activity) { startedActivities = (startedActivities - 1).coerceAtLeast(0) }

@@ -34,6 +34,17 @@ class DsMenuEntryTest {
         DsMenu.listed = false
     }
 
+    @Test fun the_row_points_its_art_at_the_shipped_files() {
+        DsMenu.listed = true
+        DsMenu.artDir = "/data/app/files/nds-menu"
+        val g = DsMenu.withEntry(listOf(system("NDS")), emptyList()).single().game
+        assertEquals("file:///data/app/files/nds-menu/boxart.png", g.boxartRef?.value)
+        assertEquals("file:///data/app/files/nds-menu/mix.png", g.mixRef?.value)
+        assertEquals("file:///data/app/files/nds-menu/wheel.png", g.wheelRef?.value)
+        DsMenu.artDir = null
+        DsMenu.listed = false
+    }
+
     @Test fun other_consoles_get_no_menu_row() {
         assertTrue(DsMenu.withEntry(listOf(system("GBA")), emptyList()).isEmpty())
     }
