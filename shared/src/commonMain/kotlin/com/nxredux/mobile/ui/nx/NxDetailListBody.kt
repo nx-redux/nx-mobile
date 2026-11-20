@@ -55,7 +55,7 @@ fun NxDetailListBody(
     landscapeColumnCount: Int = 2,
     landscapeWidth: Float = 1f,   // a landscape body's details and rows at most this share of its width (setup: long lines wrap)
     landscapeSplit: Boolean = false,   // pill rows on a landscape body: details and pinned rows at the left, the rest a full-height list at the right
-    quietRows: Boolean = false,   // pill rows: the unlit rows in inkName and the bottom-pinned actions in inkDim: the folder picker
+    quietRows: Boolean = false,   // pill rows: the unlit rows in inkName and the bottom-pinned actions in inkDim, the selected row on a grey pill (the accent the actions' alone): the folder picker
     fromLine: Float? = null,   // the title starts this share of the body down and the rows grow under it, the bottom-pinned rows staying at the bottom; a longer page moves up (the folder picker)
 ) {
     require(!(actionsAtTop && titleActions > 0)) { "actionsAtTop and titleActions do not combine" }
@@ -140,7 +140,9 @@ fun NxDetailListBody(
             // options list that fits takes only its own height.
             val rowsSlot = with(LocalDensity.current) { nxRowsSlotPx(rowHeight.roundToPx(), whole).toDp() }
             val optionsHeight = if (rowKind == NxRowKind.OPTIONS && !scrolls) nxOptionsFitHeight(options, rowHeight) else rowsSlot
-            Column(Modifier.fillMaxWidth()) {
+            // Pinned actions sit on the body's bottom, just above the hints, and the scrolling rows take all the room down to
+            // them (a part row under the fade) rather than leave a gap of what whole rows don't fill.
+            Column(Modifier.fillMaxWidth().then(if (tail.isNotEmpty()) Modifier.fillMaxHeight() else Modifier)) {
                 if (gap > 0.dp) Spacer(Modifier.height(gap))
                 if (headHere > 0) {
                     // The pill leaves the pinned rows past their end and enters the rest from above (and back), so a
@@ -159,9 +161,10 @@ fun NxDetailListBody(
                 } else {
                     NxList(
                         rest, (listSelected - pinned).takeIf { listSelected >= 0 && it in rest.indices } ?: -1, { onSelect(it + pinned) }, { onOpen(it + pinned) },
-                        Modifier.fillMaxWidth().height(rowsSlot).nxScrollFade(listState, height = rowHeight / 2, strong = true),
+                        Modifier.fillMaxWidth().then(if (tail.isNotEmpty()) Modifier.weight(1f) else Modifier.height(rowsSlot))
+                            .nxScrollFade(listState, height = rowHeight / 2, strong = true),
                         listState = listState, rowHeightOverride = rowHeight, textSizeOverride = rowText?.invoke(label) ?: label, edgeMargin = 1,
-                        restInk = if (quietRows) colors.inkName else null,
+                        restInk = if (quietRows) colors.inkName else null, greyPill = quietRows,
                     )
                 }
                 if (tail.isNotEmpty()) {

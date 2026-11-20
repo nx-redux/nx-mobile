@@ -1,5 +1,11 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.NxInfoIcon
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.foundation.text.InlineTextContent
 import com.nxredux.mobile.ui.nx.NX_SWATCH_AUTO
 import com.nxredux.mobile.settings.SecondaryAccent
 import com.nxredux.mobile.settings.AccentPreset
@@ -154,12 +160,28 @@ private fun SettingsTouchPage(
 internal fun nxShowsInfo(row: NxSettingRow, truncated: String?): Boolean =
     row.hasMoreInfo || (row.info.isNotBlank() && row.info == truncated)
 
-/** A touch page's lines under its title (Default emulators' caption), in the hint grey. */
+// the info icon's place in a page's lines ([SettingsDetailLines])
+private const val MORE_ICON = "more"
+
+/**
+ * A touch page's lines under its title (Default emulators' caption), in the hint grey. [onMore]: the info icon after the
+ * first line, a tap on it the fuller text (a setup step's warning kept off the page).
+ */
 @Composable
-internal fun SettingsDetailLines(lines: List<String>, separator: String = " ") {
+internal fun SettingsDetailLines(lines: List<String>, separator: String = " ", onMore: (() -> Unit)? = null) {
     val body = nxOptionsLabelSize(nxListLabel())
+    val text = buildAnnotatedString {
+        lines.forEachIndexed { i, line ->
+            if (i > 0) append(separator)
+            append(line)
+            if (i == 0 && onMore != null) { append(" "); appendInlineContent(MORE_ICON, "?") }
+        }
+    }
+    val icon = onMore?.let { open ->
+        mapOf(MORE_ICON to InlineTextContent(Placeholder(body * 1.9f, body * 1.4f, PlaceholderVerticalAlign.TextCenter)) { NxInfoIcon(body, open) })
+    }.orEmpty()
     Text(
-        lines.joinToString(separator), color = LocalNxColors.current.hint, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal,   // Regular, as a row's description
+        text, inlineContent = icon, color = LocalNxColors.current.hint, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal,   // Regular, as a row's description
         // The body size: an options row's label (16 sp at Large, under Appearance → Text size), the help note's line height.
         fontSize = body, lineHeight = body * 1.45f,
         modifier = Modifier.fillMaxWidth().padding(horizontal = nxListInset(), vertical = 4.dp),

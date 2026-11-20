@@ -491,6 +491,14 @@ interface AppSettings {
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
+    /**
+     * The DS / 3DS pad's mic button shown (the in-game Mic tile): hidden, the row closes up without it and the game hears
+     * nothing. Off by default. Defaulted, like [debugLog].
+     */
+    var micButtonShown: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
     /** The 3DS layout chord's tip ([com.nxredux.mobile.runner.LayoutTip]) hidden for good from its button. Defaulted, like [debugLog]. */
     var layoutTipHidden: Boolean
         get() = false

@@ -26,7 +26,7 @@ class ToolsTest {
 
     @Test fun sub_pages_name_their_tool() {
         assertEquals("RetroAchievements | Achievements", subPageTitle(ToolKind.RETRO_ACHIEVEMENTS, "Achievements"))
-        assertEquals("Artwork | Progress", subPageTitle(ToolKind.ARTWORK, "Progress"))
+        assertEquals("Artwork & Metadata | Progress", subPageTitle(ToolKind.ARTWORK, "Progress"))
         assertEquals("Cheats & Patches | X", subPageTitle(ToolKind.CHEAT_DB, "X"))
         assertEquals("Game Tracker | X", subPageTitle(ToolKind.GAME_TIME, "X"))
         assertEquals("X", subPageTitle(ToolKind.APP, "X"))
@@ -45,10 +45,10 @@ class ToolsTest {
         assertNull(toolPageCount(Screen.RaGames("Game Boy", emptyList())))
         assertNull(toolPageCount(Screen.RaConsoles(emptyList())))
         assertEquals("RetroAchievements | Settings", toolPageTitle(Screen.RaSettings(emptyList())))
-        assertEquals("Artwork | Fetch by console", toolPageTitle(Screen.ArtworkConsoles(emptyList())))
-        assertEquals("Artwork | Settings", toolPageTitle(Screen.ArtworkSettings(emptyList())))
-        assertEquals("Artwork | Reset artwork", toolPageTitle(Screen.ArtworkReset(emptyList())))
-        assertEquals("Artwork | Progress", toolPageTitle(Screen.ArtworkProgress(ScrapeState())))
+        assertEquals("Artwork & Metadata | Fetch by console", toolPageTitle(Screen.ArtworkConsoles(emptyList())))
+        assertEquals("Artwork & Metadata | Settings", toolPageTitle(Screen.ArtworkSettings(emptyList())))
+        assertEquals("Artwork & Metadata | Reset artwork", toolPageTitle(Screen.ArtworkReset(emptyList())))
+        assertEquals("Artwork & Metadata | Progress", toolPageTitle(Screen.ArtworkProgress(ScrapeState())))
         assertNull(toolPageTitle(Screen.Artwork(emptyList(), emptyList())))   // a tool's own page keeps its plain name
         assertNull(toolPageTitle(Screen.RetroAchievements()))
     }
@@ -68,7 +68,7 @@ class ToolsTest {
         assertEquals("Progress", toolPageTitle(Screen.ArtworkProgress(ScrapeState()), split = true))
         assertEquals("Settings", toolPageTitle(Screen.ArtworkSettings(emptyList()), split = true))
         assertEquals("Reset artwork", toolPageTitle(Screen.ArtworkReset(emptyList()), split = true))
-        assertEquals("Artwork | Settings", toolPageTitle(Screen.ArtworkSettings(emptyList())))
+        assertEquals("Artwork & Metadata | Settings", toolPageTitle(Screen.ArtworkSettings(emptyList())))
         // Full width keeps the tool's name.
         assertEquals("RetroAchievements | Settings", toolPageTitle(Screen.RaSettings(emptyList()), split = false))
         assertEquals("RetroAchievements | Super Mario Land", toolPageTitleHead(Screen.RaAchievement(game, achievement)))

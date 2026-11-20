@@ -953,6 +953,9 @@ class AppState(
     val screen: StateFlow<Screen> = _screen.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+    /** A page's own message (its title, its text) in an info dialog: A or B closes it. */
+    private val _message = MutableStateFlow<Pair<String, String>?>(null)
+    val message: StateFlow<Pair<String, String>?> = _message.asStateFlow()
     private val loader = ScreenLoader(scope)
     /** A screen load has run past its grace period: the loading overlay shows (B cancels, [ScreenLoader]). */
     val loading: StateFlow<Boolean> = loader.visible
@@ -1118,6 +1121,7 @@ class AppState(
         scope, _screen, _selection, deps.settings, deps.launcher, kids, onboarding,
         host = object : KidsHost {
             override fun showNotice(text: String) = this@AppState.showNotice(text)
+            override fun showMessage(title: String, text: String) { _message.value = title to text }
             override fun showSystemsNow(category: MenuCategory?) = this@AppState.showSystemsNow(category)
             override fun clearMenuTop() { pushedTab = null }
             override fun select(index: Int) = this@AppState.select(index)
@@ -5229,11 +5233,11 @@ class AppState(
     private fun toolRows(): List<ToolRow> = (listOfNotNull(
         deps.achievements?.let { ToolRow(ToolKind.RETRO_ACHIEVEMENTS, "RetroAchievements", null) },
         deps.gameTime?.let { ToolRow(ToolKind.GAME_TIME, "Game Tracker", null) },
-        artworkScreens?.let { ToolRow(ToolKind.ARTWORK, "Artwork", null) },
+        artworkScreens?.let { ToolRow(ToolKind.ARTWORK, ToolKind.ARTWORK.toolName!!, null) },
         ToolRow(ToolKind.CHEAT_DB, "Cheats & Patches", null),
         deps.deviceSync?.let { ToolRow(ToolKind.DEVICE_SYNC, "Device Sync", null) },
-        deps.launcher?.let { ToolRow(ToolKind.APPS, "Apps", null) },
-    ) + appToolRows()).sortedBy { it.label.lowercase() } + ToolRow(ToolKind.SETTINGS, "Settings", null)
+        deps.launcher?.let { ToolRow(ToolKind.APPS, ToolKind.APPS.toolName!!, null) },
+    ) + appToolRows()).sortedBy { it.label.lowercase() } + ToolRow(ToolKind.SETTINGS, ToolKind.SETTINGS.toolName!!, null)
 
     /**
      * The Android apps the user added; one not installed is skipped (and kept, for a reinstall), and so is
@@ -6141,6 +6145,7 @@ class AppState(
         // Press to bind waits on the controller's raw keys ([captureKey]): a touch hint's or the on-screen pad's B cancels, the rest wait.
         if (_capturingShortcut.value != null) { if (button == NxButton.B) cancelCapture(); return }
         if (_error.value != null) { if (button == NxButton.A || button == NxButton.B) dismissError(); return }
+        if (_message.value != null) { if (button == NxButton.A || button == NxButton.B) dismissMessage(); return }
         if (_androidGamesAsk.value != null) {   // the Android games question: A Yes, B Not now
             if (button == NxButton.A) answerAndroidGames(true) else if (button == NxButton.B) answerAndroidGames(false)
             return
@@ -6470,6 +6475,8 @@ class AppState(
     fun showError(message: String) { _error.value = message }
 
     fun dismissError() { _error.value = null }
+
+    fun dismissMessage() { _message.value = null }
 
     /**
      * The platform's home state or apps may have changed (the role dialog, Android's home settings, a new listing): System's

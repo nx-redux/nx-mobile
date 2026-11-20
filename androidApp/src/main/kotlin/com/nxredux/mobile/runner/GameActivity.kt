@@ -1872,11 +1872,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun menuCaptureKey(keyCode: Int, down: Boolean, repeat: Boolean): Boolean = menu.captureKey(keyCode, down, repeat)
 
     override fun speedTiles(): Pair<Boolean, Boolean?> = speed.tiles()
+    override fun ffSpeed(): Int = speed.ffSpeed
 
     override fun setSpeedToggle(ff: Boolean?, rewind: Boolean?) = speed.setToggle(ff, rewind)
     override fun micTile(): Boolean? = shortcuts.micTile()
 
-    override fun setMic(on: Boolean) = shortcuts.setMic(on)
+    override fun setMicButton(shown: Boolean) = shortcuts.setMicButton(shown)
 
     /**
      * A Reset shortcut or the dual-screen panel's Reset tile: reset always asks first, so the in-game menu opens on its

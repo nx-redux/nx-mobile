@@ -114,9 +114,10 @@ fun NxList(
     edgeMargin: Int = 0,          // rows kept in view past the selection: 1 under a scroll fade
     restInk: Color? = null,       // the unlit rows' label and icon ink (the folder picker's: inkName, its actions inkDim); null the list text
     wordInk: Color? = null,       // a word list (Settings' sections): no pill, regular weight, the selected row's label in this ink
+    greyPill: Boolean = false,    // the pill a fixed grey, the lit row's words in the list text: the accent kept for a page's actions (the folder picker)
 ) = NxList(
     rows, { selectedIndex }, onSelect, onOpen, modifier, listState, rowHeightOverride, pillPaddingOverride, textSizeOverride,
-    onLongPress, endPadOverride, outlined, edgeMargin = edgeMargin, restInk = restInk, wordInk = wordInk,
+    onLongPress, endPadOverride, outlined, edgeMargin = edgeMargin, restInk = restInk, wordInk = wordInk, greyPill = greyPill,
 )
 
 /**
@@ -142,8 +143,9 @@ internal fun NxList(
     edgeMargin: Int = 0,   // rows kept in view past the selection ([NxKeepSelectedInView]): 1 under a scroll fade
     restInk: Color? = null,
     wordInk: Color? = null,
+    greyPill: Boolean = false,
 ) {
-    val colors = LocalNxColors.current
+    val colors = LocalNxColors.current.let { if (greyPill) it.copy(onAccent = it.listText) else it }
     val font = LocalNxFont.current
     val state = listState
     val tapOpens = LocalNxTapOpens.current
@@ -161,7 +163,7 @@ internal fun NxList(
         val identity = remember(rows) { nxPillListIdentity(rows) }
         val glide = rememberNxPillGlide(identity, selectedIndex, rows.size, nxWholeRows(maxHeight, rowHeight, pxSlack = 1f / density.density))
         val pitch = with(density) { rowHeight.roundToPx() }
-        val highlight = nxHighlight()
+        val highlight = if (greyPill) colors.main.copy(alpha = NX_GREY_PILL_ALPHA) else nxHighlight()   // role: a list's grey selection pill
         // A word list ([wordInk]) draws no pill: the selected row's ink alone marks it.
         val pill = remember(glide, state, pitch, highlight, wordInk) { if (wordInk != null) Modifier.fillMaxSize() else Modifier.fillMaxSize().nxPillGlide(glide, state, pitch, highlight) }
         // The rows read the selection through this State, each in its own scope ([NxListRow]): a step recomposes the rows
@@ -196,6 +198,9 @@ internal const val NX_LIST_END_SHARE = 0.044f
 
 /** A word list's line box as a share of its size, as Settings' section words. */
 internal const val NX_WORD_LINE = 1.2f
+
+/** A [NxList]'s grey pill ([NxList]'s greyPill): the list text's grey, faint on black, so its words stay light. */
+internal const val NX_GREY_PILL_ALPHA = 0.22f
 
 /** What every row of one [NxList] shares: its pitch, label size, margins, font and colours. */
 internal data class NxListRowStyle(

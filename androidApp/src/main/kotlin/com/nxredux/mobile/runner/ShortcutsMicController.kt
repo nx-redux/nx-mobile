@@ -223,11 +223,25 @@ internal class ShortcutsMicController(
 
     fun publishShortcuts(model: InGameMenuModel) = model.setShortcuts(shortcutBase, shortcutOverrides, shortcutClaimed, host.canRewind, canMic)
 
-    /** The pad's fixed mic button ([PadMic]): the session's Mic toggle on DS / 3DS, hidden in netplay; null otherwise. */
+    /**
+     * The pad's fixed mic button ([PadMic]): the session's Mic toggle on DS / 3DS while the Mic tile shows it
+     * ([com.nxredux.mobile.settings.AppSettings.micButtonShown]), hidden in netplay; null otherwise.
+     */
     fun padMic(): PadMic? = padMicState.value
 
-    /** The panels' Mic tile: the toggle while shown ([MicControl.shown]); null (no tile) off DS / 3DS and in netplay. */
-    fun micTile(): Boolean? = mic?.takeIf { it.shown }?.on
+    /** The panels' Mic tile: the mic button shown; null (no tile) off DS / 3DS and in netplay ([MicControl.shown]). */
+    fun micTile(): Boolean? = mic?.takeIf { it.shown }?.let { host.settings.micButtonShown }
+
+    /**
+     * The Mic tile: the pad's mic button [shown] or hidden, kept for every game. Hidden turns the mic off (nothing left
+     * to turn it back on) and the skin closes its row up without the button ([PadLayoutController] re-places it).
+     */
+    fun setMicButton(shown: Boolean) {
+        if (mic == null) return
+        host.settings.micButtonShown = shown
+        if (!shown) setMic(false) else applyMic()
+        host.activity.findViewById<View?>(R.id.root)?.post { renderer.relayoutFrontend() }
+    }
 
     /**
      * The one way the Mic toggle changes (the pad's mic button, the Mic tile in the menu or the dual-screen panel, the
@@ -260,7 +274,7 @@ internal class ShortcutsMicController(
     fun applyMic() {
         val m = mic ?: return
         pushMicSource()
-        padMicState.value = if (m.shown) PadMic(m.on, ::toggleMic) else null
+        padMicState.value = if (m.shown && host.settings.micButtonShown) PadMic(m.on, ::toggleMic) else null
         menu.menuModel?.let(menu::publishSpeed)
         dual.refreshDualPanel()
     }

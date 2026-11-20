@@ -487,6 +487,8 @@ internal fun BoxScope.PageOverlays(state: AppState, chooser: ValueChooser?, erro
             onCancel = { state.answerUpdateConfirm(false) }, cancelLabel = "Cancel", scrimDismisses = false, scrollSteps = state.updateScroll)
     }
     error?.let { NxDialog("Problem", it, onConfirm = state::dismissError) }
+    val pageMessage by state.message.collectAsState()
+    pageMessage?.let { (title, text) -> NxDialog(title, text, onConfirm = state::dismissMessage) }
     notice?.let {
         Text(
             it, color = LocalNxColors.current.main, fontSize = 12.sp,

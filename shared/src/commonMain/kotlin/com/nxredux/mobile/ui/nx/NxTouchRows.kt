@@ -414,7 +414,7 @@ const val NX_SWATCH_AUTO = 0
 
 /** The info icon: a question mark in a circle, sized from the description; a tap ([onClick], null none) shows the full text. */
 @Composable
-private fun NxInfoIcon(textSize: TextUnit, onClick: (() -> Unit)?) {
+internal fun NxInfoIcon(textSize: TextUnit, onClick: (() -> Unit)?) {
     val colors = LocalNxColors.current
     val disc = with(LocalDensity.current) { (textSize * 1.25f).toDp() }
     // The padding widens the tap target past the small disc.

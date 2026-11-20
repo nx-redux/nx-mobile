@@ -256,8 +256,8 @@ sealed interface MenuEffect {
      * menu so the game runs with it on (spec). Turning one on turns the other off, as a Toggle binding does.
      */
     data class SetSpeed(val ff: Boolean?, val rewind: Boolean?) : MenuEffect
-    /** The panel's Mic tile: the session's mic to [on], then close the menu. */
-    data class SetMic(val on: Boolean) : MenuEffect
+    /** The panel's Mic tile: the pad's mic button [shown] or hidden, then close the menu. */
+    data class SetMicButton(val shown: Boolean) : MenuEffect
     /** The Reset dialog's Reset: restart the game, then close the menu. */
     data object ResetGame : MenuEffect
     /** Adjust buttons: the host opens the skin layout editor over the paused game; the menu stays as it is under it. */
@@ -296,7 +296,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** From [setSpeedTiles]: the panel's Fast forward and Rewind tiles' live state; [speedRewind] null: no Rewind tile. */
     private var speedFf = false
     private var speedRewind: Boolean? = null
-    /** From [setMicTile]: the panel's Mic tile's state; null: no tile (not a mic console). */
+    /** From [setMicTile]: the panel's Mic tile's state (the pad's mic button shown); null: no tile (not a mic console). */
     private var micTile: Boolean? = null
     /** The Reset dialog up was opened with the menu for it ([openResetDialog]): Cancel and B resume the game. */
     private var resetClosesOnCancel = false
@@ -1154,7 +1154,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         // The tiles are hidden in netplay; a stale tap there does nothing.
         is GamePanelEvent.SetFastForward -> if (sessionLocked) null else GamePanelModel.speedEffect(event)
         is GamePanelEvent.SetRewind -> if (sessionLocked || speedRewind == null) null else GamePanelModel.speedEffect(event)
-        is GamePanelEvent.SetMic -> if (netplay || micTile == null) null else MenuEffect.SetMic(event.on)
+        is GamePanelEvent.SetMicButton -> if (netplay || micTile == null) null else MenuEffect.SetMicButton(event.shown)
         GamePanelEvent.Reset -> { if (!sessionLocked) { push(resetPage()); resetClosesOnCancel = false }; null }
     }
 

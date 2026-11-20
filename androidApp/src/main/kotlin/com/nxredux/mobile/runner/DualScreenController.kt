@@ -141,7 +141,9 @@ internal interface DualScreenHost : GameScreenHost {
     fun placeMenu()
     /** The Fast forward / Rewind tiles' live state ([SpeedController.tiles]); null rewind: no Rewind tile. */
     fun speedTiles(): Pair<Boolean, Boolean?>
-    /** The Mic tile's state: null where this isn't a mic console or a session is on. */
+    /** The fast-forward speed (its Max fast forward option), shown on the Fast forward tile. */
+    fun ffSpeed(): Int
+    /** The Mic tile's state (the pad's mic button shown): null where this isn't a mic console or a session is on. */
     fun micTile(): Boolean?
     /** The Reset tile: reset always asks first, so the in-game menu opens on its Reset dialog. */
     fun askReset()
@@ -855,7 +857,7 @@ internal class DualScreenController(
             tab = GamePanelModel.resolveTab(dualPanelTab, tabs),
             shortcuts = GamePanelModel.shortcuts(
                 count, disc, netplayNow != null, ff, rewind, owner.micTile(),
-                touch = owner.panelTouchActions(), slot = panelSlotNow(),
+                touch = owner.panelTouchActions(), slot = panelSlotNow(), ffSpeed = owner.ffSpeed(),
             ).filter { !sessionLocked || it.shortcut == Shortcut.SWAP_DISC || it.shortcut == Shortcut.MIC },   // the DS wireless keeps the mic
             slots = if (!sessionLocked) owner.slotsUi.value else emptyList(),
             slot = panelSlotNow(),
@@ -970,11 +972,7 @@ internal class DualScreenController(
                 // The game runs with it on: a panel flipped up over the DS/3DS screen gives the screen back.
                 flipPanelDown()
             }
-            is GamePanelEvent.SetMic -> if (netplayNow == null && owner.micTile() != null) {
-                owner.handleMenuEffect(MenuEffect.SetMic(e.on))
-                // The game hears it now: a panel flipped up over the DS/3DS screen gives the screen back, as for FF.
-                flipPanelDown()
-            }
+            is GamePanelEvent.SetMicButton -> if (netplayNow == null && owner.micTile() != null) owner.handleMenuEffect(MenuEffect.SetMicButton(e.shown))
             GamePanelEvent.Reset -> if (!sessionLocked) owner.askReset()
         }
     }

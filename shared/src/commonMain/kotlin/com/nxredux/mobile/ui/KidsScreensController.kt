@@ -32,6 +32,8 @@ import kotlinx.coroutines.launch
  */
 internal interface KidsHost {
     fun showNotice(text: String)
+    /** [text] in an info dialog titled [title] (A or B closes it). */
+    fun showMessage(title: String, text: String)
     /** The main menu on [category] (null: the tab last shown). */
     fun showSystemsNow(category: MenuCategory? = null)
     /** The tiles screen replaces the menu: no hidden tab pushed over it, nothing game-related on the top screen. */
@@ -658,7 +660,7 @@ internal class KidsScreensController(
             is KidsSetupRow.Day -> kidsOpenDay(row.day, setup = true)
             KidsSetupRow.Next -> when {
                 !s.setup -> kidsShowPage(SettingsKind.KIDS_APPS)
-                s.step == KidsSetupStep.APPS && s.allowed.isEmpty() -> host.showNotice(KIDS_PICK_ONE_APP)   // the tiles would be empty
+                s.step == KidsSetupStep.APPS && s.allowed.isEmpty() -> host.showMessage("Allowed apps", KIDS_PICK_ONE_APP_MESSAGE)   // the tiles would be empty
                 else -> kidsSetupAfter(s.step)
             }
             KidsSetupRow.Grant -> if (s.step == KidsSetupStep.USAGE) k.openUsageAccess() else k.openExactAlarms()   // on with the step on resume
@@ -694,6 +696,8 @@ internal class KidsScreensController(
             }
             NxButton.A -> kidsSetupRow(sel.index)
             NxButton.B -> host.back()
+            // Continue (or Done) from anywhere in a long list of apps or days, without scrolling to it
+            NxButton.X -> rows.indexOf(KidsSetupRow.Next).takeIf { it >= 0 }?.let(::kidsSetupRow)
             else -> Unit
         }
     }
@@ -832,4 +836,4 @@ internal const val KIDS_FLAG_NAME = "kids-mode.flag"
 internal const val KIDS_FLAG_FAILED = "Flag file couldn't be created — check All files access"
 
 /** Setup's Apps step with none picked: its line, and the notice when Continue is refused. */
-internal const val KIDS_PICK_ONE_APP = "Pick at least one app"
+internal const val KIDS_PICK_ONE_APP_MESSAGE = "Pick at least one app your kid can open while games are closed."
