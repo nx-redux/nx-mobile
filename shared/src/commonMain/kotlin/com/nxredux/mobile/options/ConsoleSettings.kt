@@ -17,8 +17,8 @@ object ConsoleSettings {
      * [autoVulkan]: Graphics API's Auto is Vulkan for this console on this phone ([GraphicsApiOptions.autoIsVulkan]).
      */
     fun tableFor(tag: String, screen: ScreenClass? = null, displayMax: Int? = null, biosFiles: List<String> = emptyList(), gpuDrivers: List<GpuDriver>? = null, autoVulkan: Boolean = false): List<FrontendOption> = when {
-        NdsOptions.appliesTo(tag) -> NdsOptions.tableFor(screen, displayMax = displayMax) + NdsOptions.localWirelessRow
-        N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRowsFor(screen) + N3dsOptions.resolutionRows(displayMax) + N3dsOptions.newControlsRow + N3dsOptions.localWirelessRow
+        NdsOptions.appliesTo(tag) -> NdsOptions.tableFor(screen, displayMax = displayMax) + NdsOptions.shaderScreensRow + NdsOptions.localWirelessRow
+        N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRowsFor(screen) + N3dsOptions.resolutionRows(displayMax) + NdsOptions.shaderScreensRow + N3dsOptions.newControlsRow + N3dsOptions.localWirelessRow
         PspOptions.appliesTo(tag) -> listOf(PspOptions.localWirelessRow)
         WiiOptions.appliesTo(tag) -> WiiOptions.table
         Ps2Options.appliesTo(tag) -> Ps2Options.rowsFor(biosFiles) + Ps2Options.resolutionRows(displayMax)

@@ -88,6 +88,7 @@ import com.nxredux.mobile.netplay.NetplayRole
 import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.options.AudioOptions
+import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.FrameSkipOptions
 import com.nxredux.mobile.options.BottomScreenOptions
 import com.nxredux.mobile.options.ConfigFile
@@ -2073,6 +2074,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun publishMenuShaders() {
         withMenu { it.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams) }
+    }
+
+    override val shaderOn: Boolean get() = ShaderOptions.preset(renderer.shaderValues) != null
+
+    override fun onShaderPresetToggled() {
+        if (res3d.applies()) res3d.offer(sizeChange = false)
     }
 
     override fun publishMenuFrontend() {

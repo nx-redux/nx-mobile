@@ -17,8 +17,13 @@ data class ScreenMap(
 ) {
     fun src(screen: NdsScreen): FrameRect = if (screen == NdsScreen.TOP) top else bottom
 
+    /** The whole scale the core draws its screens at: the top screen's rows over a DS's 192 or a 3DS's 240 (at least 1). */
+    fun topScale(n3ds: Boolean): Int =
+        if (n3ds) N3dsSwap.factorFromTopHeight(topSizePx.second) else (topSizePx.second / DS_TOP_HEIGHT).coerceAtLeast(1)
+
     companion object {
         private const val EYE_RIGHT = 2
+        private const val DS_TOP_HEIGHT = 192
 
         /**
          * The map for a [frameW] x [frameH] frame; null with no views, a missing screen 0 or 1, a rectangle outside the

@@ -61,16 +61,12 @@ class DualScreenTest {
     }
     @Test fun nds_split_main_follows_area() =
         assertEquals(PxRect(0f, 0f, 1080f, 810f), DualScreen.ndsScreen(1080f, 1920f, NdsScreen.TOP).single().dst.let { it.copy(y = 0f) })
-    @Test fun nds_panel_up_is_side_by_side_with_bottom_touch() {
-        val r = DualScreen.ndsPanelUp(1920f, 1080f, NdsSettings(landscape = NdsLayoutChoice.PIP))
-        assertEquals(2, r.size); assertEquals(listOf(false, true), r.map { it.touch })
-    }
-    @Test fun nds_panel_up_keeps_its_own_fractional_fit() {
-        val r = DualScreen.ndsPanelUp(2400f, 1080f, NdsSettings())
-        assertEquals(PxRect(0f, 90f, 1200f, 900f), r[0].dst)
-        assertEquals(PxRect(1200f, 90f, 1200f, 900f), r[1].dst)
-        assertEquals(listOf(NdsScreen.TOP, NdsScreen.BOTTOM), r.map { it.screen })
-        assertEquals(listOf(NdsScreen.BOTTOM, NdsScreen.TOP), DualScreen.ndsPanelUp(2400f, 1080f, NdsSettings(big = NdsScreen.BOTTOM)).map { it.screen })
+    @Test fun nds_panel_up_keeps_the_picture_screen_as_it_was_split() {
+        // the panel covers the other display and the game is paused: the picture display keeps its one screen
+        assertEquals(DualScreen.ndsScreen(1920f, 1080f, NdsScreen.TOP), DualScreen.ndsPanelUp(1920f, 1080f, NdsSettings(landscape = NdsLayoutChoice.PIP)))
+        val swapped = DualScreen.ndsPanelUp(1920f, 1080f, NdsSettings(big = NdsScreen.BOTTOM)).single()
+        assertEquals(NdsScreen.BOTTOM, swapped.screen)
+        assertTrue(swapped.touch)
     }
     @Test fun n3ds_split_rects() {
         assertEquals(FrameRect(0.1f, 0.5f, 0.9f, 1f), DualScreen.n3dsScreen(1240f, 1080f, NdsScreen.TOP.other).single().src)
@@ -80,9 +76,13 @@ class DualScreenTest {
         mapOf("citra_layout_option" to "default", "citra_stacked_small_proportion" to "1",
               "citra_swap_screen" to "Top", "citra_swap_screen_mode" to "Hold"),
         DualScreen.n3dsCoreOptions(DualMode.SPLIT))
-    @Test fun n3ds_panel_up_side_by_side_swap_toggles() = assertEquals(
-        mapOf("citra_layout_option" to "side_by_side", "citra_swap_screen" to "Top", "citra_swap_screen_mode" to "Toggle"),
+    @Test fun n3ds_panel_up_single_screen_swap_toggles() = assertEquals(
+        mapOf("citra_layout_option" to "single_screen", "citra_swap_screen" to "Top", "citra_swap_screen_mode" to "Toggle"),
         DualScreen.n3dsCoreOptions(DualMode.PANEL_UP))
+    @Test fun n3ds_panel_up_composes_the_picture_screen_alone() {
+        assertEquals("single_screen" to false, DualScreen.n3dsPanelUp(NdsScreen.TOP))
+        assertEquals("single_screen" to true, DualScreen.n3dsPanelUp(NdsScreen.BOTTOM))
+    }
     @Test fun n3ds_off_restores() = assertNull(DualScreen.n3dsCoreOptions(DualMode.OFF))
 
     @Test fun n3ds_half_folded_pins_the_swap() = assertEquals(
@@ -169,8 +169,8 @@ class DualScreenTest {
         assertEquals(PictureOn.SECOND, DualScreen.penOn(main = top, second = bottom))       // split, bottom screen on the second display
         assertEquals(PictureOn.MAIN, DualScreen.penOn(main = bottom, second = top))         // split, swapped
         assertEquals(PictureOn.MAIN, DualScreen.penOn(main = bottom, second = emptyList())) // single screen
-        val both = DualScreen.ndsPanelUp(1920f, 1080f, NdsSettings())
-        assertEquals(PictureOn.SECOND, DualScreen.penOn(main = both, second = both))        // panel up, the picture on the second display
+        val up = DualScreen.ndsPanelUp(1920f, 1080f, NdsSettings())
+        assertNull(DualScreen.penOn(main = up, second = up))                               // panel up: the top screen alone, no pen
         assertNull(DualScreen.penOn(main = top, second = emptyList()))                     // top screen alone
         assertNull(DualScreen.penOn(emptyList(), emptyList()))                             // not split
     }
@@ -185,8 +185,6 @@ class DualScreenTest {
     }
 
     @Test fun onlyTheTopScreenIsShaded() {
-        val s = com.nxredux.mobile.options.NdsSettings.parse(emptyMap())
-        assertEquals(listOf(true, false), DualScreen.ndsPanelUp(1920f, 1080f, s).sortedBy { it.screen }.map { it.shaded })
         for (which in NdsScreen.entries) {
             assertEquals(which == NdsScreen.TOP, DualScreen.ndsScreen(1280f, 960f, which).single().shaded)
             assertEquals(which == NdsScreen.TOP, DualScreen.n3dsScreen(1280f, 960f, which).single().shaded)

@@ -239,4 +239,12 @@ class Nds3dResolutionTest {
     @Test fun ps2PictureOnBothTakesTheBiggerShown() {
         assertEquals(3 to 3, Ps2Resolution.shownScales(mainHeightPx = 720, secondHeightPx = 1440))
     }
+
+    @Test fun autoDrawsAtOneUnderAShaderTheOtherModesKeepTheirPick() {
+        // a preset is drawn from the native picture: drawing bigger only costs
+        assertEquals(1, Nds3dResolution.value(Nds3dMode.AUTO, 4, 2, 3, 9, shaded = true))
+        assertEquals(6, Nds3dResolution.value(Nds3dMode.QUALITY, 4, 2, 6, 9, shaded = true))
+        assertEquals(2, Nds3dResolution.value(Nds3dMode.PERFORMANCE, 4, 2, 6, 9, shaded = true))
+        assertEquals(1, Nds3dResolution.valueFor(emptyMap(), 3, 9, Res3dConsole.N3DS, shaded = true))
+    }
 }

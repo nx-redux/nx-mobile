@@ -12,8 +12,8 @@ import kotlin.math.min
 
 /**
  * What a second display is used for: [OFF] nothing; [SPLIT] DS/3DS, one screen per display; [PANEL_UP] DS/3DS with
- * the panel on the second display and both screens side by side on the main one; [PANEL] a regular game with the
- * panel on the second display.
+ * the panel over the touch screen's display and the picture display keeping its screen ([DualScreen.ndsPanelUp]);
+ * [PANEL] a regular game with the panel on the second display.
  */
 enum class DualMode { OFF, SPLIT, PANEL_UP, PANEL }
 
@@ -133,20 +133,16 @@ object DualScreen {
         ndsScreen(area.width, area.height, which).map { it.copy(dst = it.dst.copy(x = it.dst.x + area.x, y = it.dst.y + area.y)) }
 
     /**
-     * Both DS screens side by side on the main display (the panel is on the second one), edge to edge, fitted to the area
-     * (whole pixels, not whole-number scales) and centred; touch on the bottom screen. Dual screen keeps its own layout,
-     * whatever the layout settings say; [settings] only picks which screen is first.
+     * Panel up, the picture display's DS screen: the one it shows split ([settings]' big screen), alone. The panel covers
+     * the other display and the game is paused meanwhile, so the bottom screen beside it would only shrink the picture
+     * the panel's Sharpness and shader previews are judged on.
      */
-    fun ndsPanelUp(areaW: Float, areaH: Float, settings: NdsSettings): List<NdsRegion> {
-        if (areaW <= 0f || areaH <= 0f) return emptyList()
-        val size = NdsLayout.ScreenSize(min(areaW / 2f, areaH * DS_ASPECT), DS_ASPECT)
-        if (size.width <= 0f || size.height <= 0f) return emptyList()
-        val x = NdsLayout.wholePx((areaW - 2f * size.width) / 2f)
-        val y = NdsLayout.wholePx((areaH - size.height) / 2f)
-        return listOf(settings.big, settings.big.other).mapIndexed { i, screen ->
-            NdsRegion(screen, NdsLayout.src(screen), PxRect(x + i * size.width, y, size.width, size.height), shaded = NdsLayout.takesShader(screen), touch = screen == NdsScreen.BOTTOM)
-        }
-    }
+    fun ndsPanelUp(areaW: Float, areaH: Float, settings: NdsSettings): List<NdsRegion> = ndsScreen(areaW, areaH, settings.big)
+
+    /** Panel up, the 3DS frame the app composes: the picture screen alone, as split ([ndsPanelUp]); (layout, swapped). */
+    fun n3dsPanelUp(picture: NdsScreen): Pair<String, Boolean> = N3DS_PANEL_UP_LAYOUT to (picture == NdsScreen.BOTTOM)
+
+    private const val N3DS_PANEL_UP_LAYOUT = "single_screen"
 
     /** [screen]'s rectangle in the 3DS frame in the split (and half-folded) layout. */
     internal fun n3dsSrc(screen: NdsScreen): FrameRect = if (screen == NdsScreen.TOP) N3DS_TOP_SRC else N3DS_BOTTOM_SRC
@@ -168,9 +164,9 @@ object DualScreen {
             "citra_layout_option" to "default", "citra_stacked_small_proportion" to "1",
             SWAP_SCREEN to "Top", SWAP_SCREEN_MODE to "Hold",
         )
-        // Panel up, the whole frame is drawn and SWAP is Azahar's own key again: Toggle, so one press swaps the screens.
+        // Panel up, the picture screen alone as split ([n3dsPanelUp]) and SWAP is Azahar's own key again: Toggle.
         DualMode.PANEL_UP -> mapOf(
-            "citra_layout_option" to "side_by_side",
+            "citra_layout_option" to N3DS_PANEL_UP_LAYOUT,
             SWAP_SCREEN to "Top", SWAP_SCREEN_MODE to "Toggle",
         )
         DualMode.OFF, DualMode.PANEL -> null

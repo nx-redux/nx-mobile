@@ -235,6 +235,15 @@ class GLRetroView(
         queueEvent { LibretroDroid.setComposition(w, h, packed) }
     }
 
+    /**
+     * The whole scale the core draws its screens at (1 = native): a preset gets each shaded screen shrunk back to native
+     * size, the pixels it is written for. Re-applied after create().
+     */
+    var shaderSourceScale: Int by Delegates.observable(1) { _, old, value ->
+        if (old == value) return@observable
+        queueEvent { LibretroDroid.setShaderSourceScale(value) }
+    }
+
     var screenRegions: List<ScreenRegion> by Delegates.observable(emptyList()) { _, old, value ->
         if (old == value) return@observable
         val packed = ScreenRegions.pack(value)
@@ -450,6 +459,7 @@ class GLRetroView(
         val regions = ScreenRegions.pack(screenRegions)
         val composed = composition
         val composedParts = ScreenRegions.pack(composed?.parts.orEmpty())
+        val sourceScale = shaderSourceScale
         val secondary = ScreenRegions.pack(secondaryRegions)
         val sticky = stickyPointer
         val held = pictureHeld || mainCovered
@@ -461,6 +471,7 @@ class GLRetroView(
             LibretroDroid.setPictureHeld(held)
             LibretroDroid.setScreenRegions(regions)
             LibretroDroid.setComposition(composed?.width ?: 0, composed?.height ?: 0, composedParts)
+            LibretroDroid.setShaderSourceScale(sourceScale)
             LibretroDroid.setSecondaryRegions(secondary)
             setStickyPointers(sticky)
             pushShaderChain(chain)

@@ -64,13 +64,13 @@ class ScreenMapRegionsTest {
     private val stack3x = ScreenMap.from(listOf(MapView(0, 0, 768, 576, 0, 0), MapView(0, 576, 768, 576, 1, 0)), 768, 1152)
 
     @Test fun plainStackMapLeavesDsRegionsUnchanged() {
-        val regions = DualScreen.ndsPanelUp(1920f, 1080f, com.nxredux.mobile.options.NdsSettings.parse(emptyMap()))
+        val regions = DualScreen.ndsScreen(1920f, 1080f, NdsScreen.TOP) + DualScreen.ndsScreen(1920f, 1080f, NdsScreen.BOTTOM)
         assertEquals(regions, regions.withMap(stack3x))
     }
 
     @Test fun movedBottomViewMovesOnlyTheBottomSource() {
         val gap = ScreenMap.from(listOf(MapView(0, 0, 768, 576, 0, 0), MapView(0, 624, 768, 576, 1, 0)), 768, 1200)!!
-        val regions = DualScreen.ndsPanelUp(1920f, 1080f, com.nxredux.mobile.options.NdsSettings.parse(emptyMap()))
+        val regions = DualScreen.ndsScreen(1920f, 1080f, NdsScreen.TOP) + DualScreen.ndsScreen(1920f, 1080f, NdsScreen.BOTTOM)
         val mapped = regions.withMap(gap)
         assertEquals(regions.map { it.dst }, mapped.map { it.dst })
         assertEquals(FrameRect(0f, 0.52f, 1f, 1f), mapped.first { it.screen == NdsScreen.BOTTOM }.src)
@@ -80,5 +80,13 @@ class ScreenMapRegionsTest {
     @Test fun noMapLeavesRegionsUnchanged() {
         val regions = DualScreen.ndsScreen(1280f, 960f, NdsScreen.BOTTOM)
         assertEquals(regions, regions.withMap(null))
+    }
+
+    @Test fun topScaleIsTheTopScreensWholeScaleOverNative() {
+        assertEquals(3, stack3x!!.topScale(n3ds = false))   // a DS top of 576 rows: 3 x 192
+        val n3ds2x = ScreenMap.from(listOf(MapView(0, 0, 800, 480, 0, 0), MapView(80, 480, 640, 480, 1, 0)), 800, 960, byShape = true)!!
+        assertEquals(2, n3ds2x.topScale(n3ds = true))   // a 3DS top of 480 rows: 2 x 240
+        val native = ScreenMap.from(listOf(MapView(0, 0, 256, 192, 0, 0), MapView(0, 192, 256, 192, 1, 0)), 256, 384)!!
+        assertEquals(1, native.topScale(n3ds = false))
     }
 }

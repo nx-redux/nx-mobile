@@ -15,6 +15,8 @@ internal interface Res3dHost : GameScreenHost {
     /** melonds_render_mode this game started with, and whether OpenGL fell back to software. */
     val ndsRenderMode: String?
     val ndsFellBack: Boolean
+    /** A shader preset is on: Auto then draws at 1x ([Nds3dResolution.value]). */
+    val shaderOn: Boolean
     fun applyOptions(vars: List<Variable>)
     fun withMenu(block: (InGameMenuModel) -> Unit)
     fun withMenuIf(pred: (InGameMenuModel) -> Boolean, block: (InGameMenuModel) -> Unit)
@@ -67,7 +69,7 @@ internal class Res3dController(private val host: Res3dHost, private val renderer
         val console = console ?: return
         if (!canSend()) return
         val max = displayMax ?: return
-        val value = Nds3dResolution.valueFor(host.frontendValues, current, max, console)
+        val value = Nds3dResolution.valueFor(host.frontendValues, current, max, console, shaded = host.shaderOn)
         sender.offer(value, sizeChange, SystemClock.uptimeMillis())?.let(::send)
         scheduleTick()
     }
@@ -115,7 +117,7 @@ internal class Res3dController(private val host: Res3dHost, private val renderer
             if (console == Res3dConsole.N3DS) CoreRegistry.forId(console.coreId)?.defaultOptions?.get(console.coreKey)?.toIntOrNull()?.let(renderer::startN3dsFactor)
             return emptyMap()
         }
-        val value = Nds3dResolution.valueFor(host.frontendValues, null, max, console)
+        val value = Nds3dResolution.valueFor(host.frontendValues, null, max, console, shaded = host.shaderOn)
         sender.offer(value, sizeChange = false, SystemClock.uptimeMillis())
         this.value = value
         if (console == Res3dConsole.N3DS) renderer.startN3dsFactor(value)

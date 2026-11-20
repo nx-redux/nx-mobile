@@ -457,8 +457,14 @@ void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layou
             // each screen gets the effect as if it were the frame.
             auto frameW = (unsigned) std::lround(quad.srcWidth * (float) texW);
             auto frameH = (unsigned) std::lround(quad.srcHeight * (float) texH);
+            const auto scale = (unsigned) shaderSourceScale;
+            const bool shrink = scale > 1 && frameW >= scale && frameH >= scale;
+            if (shrink) {
+                frameW = (unsigned) std::lround((float) frameW / (float) scale);
+                frameH = (unsigned) std::lround((float) frameH / (float) scale);
+            }
             auto coordinates = frameCoordinates(quad.coordinates);
-            if (frameW > 0 && frameH > 0 && (quad.srcWidth < 0.999F || quad.srcHeight < 0.999F)) {
+            if (frameW > 0 && frameH > 0 && (shrink || quad.srcWidth < 0.999F || quad.srcHeight < 0.999F)) {
                 GLuint cropped = cropRegion(crops[index], coordinates, frameW, frameH);
                 const auto [u0, u1, v0, v1] = uvBounds(coordinates);
                 for (size_t i = 0; i < coordinates.size(); i += 2) {
@@ -586,7 +592,10 @@ GLuint Video::cropRegion(RegionCrop& crop, const std::array<float, 12>& coordina
     glUseProgram(s.gProgram);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, frameTexture());
-    applyFrameFilter(GL_NEAREST);
+    // Shrunk to native (setShaderSourceScale): linear, so at 2x each native pixel is the mean of its four.
+    const float srcW = (u1 - u0) * (float) getTextureStorageWidth();
+    const float srcH = (v1 - v0) * (float) getTextureStorageHeight();
+    applyFrameFilter(srcW > (float) width + 0.5F || srcH > (float) height + 0.5F ? GL_LINEAR : GL_NEAREST);
     glUniform1i(s.gTextureHandle, 0);
     glUniform2f(s.gTextureSizeHandle, (float) getTextureStorageWidth(), (float) getTextureStorageHeight());
     glUniform1f(s.gScreenDensityHandle, 1.0F);

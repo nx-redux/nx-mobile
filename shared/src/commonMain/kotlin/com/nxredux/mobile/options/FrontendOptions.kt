@@ -118,9 +118,12 @@ object FrontendOptions {
         ),
         FrontendOption(
             SHARPNESS, "Screen Sharpness", listOf("NEAREST", "LINEAR", "SHARP"), "NEAREST",
-            "LINEAR smooths lines, but works better when final image is at higher resolution, " +
-                "so either core that outputs higher resolution or upscaling with shaders.\n" +
-                "SHARP keeps pixels crisp and even when the picture is not a whole multiple.",
+            "How the game's picture is stretched to fill the screen.\n" +
+                "NEAREST keeps hard pixel edges.\n" +
+                "LINEAR blends neighbouring pixels for a softer look.\n" +
+                "SHARP keeps pixels crisp and even when the picture is not a whole multiple.\n" +
+                "The less the picture is stretched, the less this shows: with a 3D Resolution above 1x " +
+                "the game already draws at a size close to the screen, so the three look almost the same.",
             visual = true,
         ),
         // None for every console, whatever overlay files it has: an overlay shows only when the user picks one.

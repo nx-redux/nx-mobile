@@ -158,7 +158,10 @@ object NdsLayout {
     private fun full(screen: NdsScreen, dst: PxRect) =
         NdsRegion(screen, src(screen), dst, shaded = takesShader(screen), touch = screen == NdsScreen.BOTTOM)
 
-    /** Only the top screen takes the shader: the touch screen stays flat, so what is drawn is where a finger lands. */
+    /**
+     * Only the top screen takes the shader by default: the touch screen stays flat, so what is drawn is where a finger
+     * lands. Shader Screens Both shades it too ([NdsOptions.shaded], applied where the regions go to the view).
+     */
     fun takesShader(screen: NdsScreen): Boolean = screen == NdsScreen.TOP
 
     /** The largest whole scale that fits [space] with [cols] x [rows] screens of 256x192 each; 0 when not even 1x does. */

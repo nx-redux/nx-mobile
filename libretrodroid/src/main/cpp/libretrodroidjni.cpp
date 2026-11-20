@@ -1432,6 +1432,14 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setComposi
     LibretroDroid::getInstance().setComposition(width, height, ScreenRegion::unpack(data.data(), data.size()));
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setShaderSourceScale(
+    JNIEnv* env,
+    jclass obj,
+    jint scale
+) {
+    LibretroDroid::getInstance().setShaderSourceScale(scale);
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setScreenRegions(
     JNIEnv* env,
     jclass obj,

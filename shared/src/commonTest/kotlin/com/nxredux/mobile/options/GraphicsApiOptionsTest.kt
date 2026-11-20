@@ -19,7 +19,7 @@ class GraphicsApiOptionsTest {
         listOf("WII", "GC", "PSP", "PSX", "N64", "DC", "3DS").forEach { assertTrue(GraphicsApiOptions.appliesTo(it), it) }
         listOf("PS", "GBA", "NDS", "SNES", "").forEach { assertFalse(GraphicsApiOptions.appliesTo(it), it) }
         assertTrue(ConsoleSettings.tableFor("PSX").any { it.key == GraphicsApiOptions.KEY })
-        assertEquals(N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + listOf(N3dsOptions.newControlsRow, N3dsOptions.localWirelessRow, GraphicsApiOptions.row), ConsoleSettings.tableFor("3DS").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows) })
+        assertEquals(N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + listOf(NdsOptions.shaderScreensRow, N3dsOptions.newControlsRow, N3dsOptions.localWirelessRow, GraphicsApiOptions.row), ConsoleSettings.tableFor("3DS").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows) })
         assertTrue(ConsoleSettings.tableFor("PS").none { it.key == GraphicsApiOptions.KEY })
     }
 

@@ -107,13 +107,15 @@ object Nds3dResolution {
 
     /**
      * The scale to send for [mode]: [current] is the shown scale (null: no screens placed yet, so [displayMax] stands in),
-     * [maxScale] the Auto cap and [scale] the Performance pick.
+     * [maxScale] the Auto cap and [scale] the Performance pick. [shaded]: a shader preset is on; it is drawn from the native
+     * picture, so Auto draws at 1x rather than render detail the shader shrinks away.
      */
     fun value(
         mode: Nds3dMode, maxScale: Int, scale: Int, current: Int?, displayMax: Int, console: Res3dConsole = Res3dConsole.DS,
+        shaded: Boolean = false,
     ): Int {
         val v = when (mode) {
-            Nds3dMode.AUTO -> minOf(current ?: displayMax, maxScale, displayMax)
+            Nds3dMode.AUTO -> if (shaded) 1 else minOf(current ?: displayMax, maxScale, displayMax)
             Nds3dMode.QUALITY -> min(current ?: displayMax, displayMax)
             Nds3dMode.PERFORMANCE -> min(scale, performanceCeiling(displayMax, console))
         }
@@ -124,13 +126,16 @@ object Nds3dResolution {
      * [value] from [console]'s stored 3D Resolution rows in [values] (its mode, max scale and scale keys); a row unset or
      * unreadable takes its row default.
      */
-    fun valueFor(values: Map<String, String>, current: Int?, displayMax: Int, console: Res3dConsole = Res3dConsole.DS): Int = value(
+    fun valueFor(
+        values: Map<String, String>, current: Int?, displayMax: Int, console: Res3dConsole = Res3dConsole.DS, shaded: Boolean = false,
+    ): Int = value(
         mode = Nds3dMode.parse(values[console.modeKey]),
         maxScale = values[console.maxScaleKey]?.toIntOrNull() ?: console.defaultCap,
         scale = values[console.scaleKey]?.toIntOrNull() ?: DEFAULT_PERFORMANCE_SCALE,
         current = current,
         displayMax = displayMax,
         console = console,
+        shaded = shaded,
     )
 }
 
