@@ -340,7 +340,7 @@ internal class DualScreenController(
 
     /**
      * The DS/3DS screens cut for the second display, in px of its surface: split, the screen not on main; with the picture
-     * there, both DS screens side by side (panel up). Empty when it draws nothing, has no surface, or (split) the DS frame
+     * there, its DS screen alone (panel up, [DualScreen.ndsPanelUp]). Empty when it draws nothing, has no surface, or (split) the DS frame
      * is not the plain stack; null when it draws the whole frame instead ([secondRegions]). [g]: the game geometry.
      */
     fun secondDsRegions(g: FloatArray, map: ScreenMap?): List<NdsRegion>? {
@@ -404,10 +404,11 @@ internal class DualScreenController(
 
     /**
      * 3DS SWAP (the skin's SWAP, SELECT + L, a pad's left-stick click) [down] or up: split, a press swaps the displays and the core
-     * never sees it (Azahar's own swap would turn its frame under the fixed cuts). False when not split: Azahar's key.
+     * never sees it (Azahar's own swap would turn its frame under the fixed cuts); panel up, the picture screen with it, so
+     * closing the panel finds the same one. False otherwise: Azahar's key.
      */
     fun onN3dsSwapPressed(down: Boolean): Boolean {
-        if (!isN3ds || dualMode != DualMode.SPLIT) return false
+        if (!isN3ds || (dualMode != DualMode.SPLIT && dualMode != DualMode.PANEL_UP)) return false
         if (down) swapN3dsDisplays()
         return true
     }

@@ -213,9 +213,9 @@ internal class FrontendRenderer(
     private fun n3dsComposition(): FrameComposition? {
         val map = screenMap ?: return null
         if (!isN3ds || !n3dsViews || dualMode == DualMode.SPLIT || padLayout.skinShown) return null
-        val layout = if (dualMode == DualMode.PANEL_UP) "side_by_side" else n3dsComposeLayout
+        val (layout, swapped) = if (dualMode == DualMode.PANEL_UP) DualScreen.n3dsPanelUp(n3dsPicture) else n3dsComposeLayout to n3dsSwapped
         val factor = N3dsSwap.factorFromTopHeight(map.topSizePx.second)
-        val c = AzaharLayout.compose(layout, factor, n3dsProportion.toFloatOrNull() ?: 1f, n3dsSwapped)
+        val c = AzaharLayout.compose(layout, factor, n3dsProportion.toFloatOrNull() ?: 1f, swapped)
         val w = c.width.toFloat()
         val h = c.height.toFloat()
         return FrameComposition(c.width, c.height, c.placements.map { p ->
@@ -231,7 +231,7 @@ internal class FrontendRenderer(
 
     /** 3DS SWAP under views on one display: the app's Toggle / Hold ([N3dsSwap]); false when another layout owns it. */
     fun onN3dsViewsSwap(down: Boolean, mode: String): Boolean {
-        if (!isN3ds || !n3dsViews || screenMap == null || dualMode == DualMode.SPLIT || padLayout.skinShown) return false
+        if (!isN3ds || !n3dsViews || screenMap == null || dualMode == DualMode.SPLIT || dualMode == DualMode.PANEL_UP || padLayout.skinShown) return false
         val next = N3dsSwap.next(n3dsSwapped, mode, down)
         if (next != n3dsSwapped) {
             n3dsSwapped = next
