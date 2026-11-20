@@ -367,7 +367,7 @@ internal class DualScreenController(
         val surface = secondSurface ?: return emptyList()
         val sw = surface.width.toFloat()
         val sh = surface.height.toFloat()
-        return ds?.map { it.toScreenRegion(sw, sh) } ?: listOfNotNull(wholeFrameRegion(sw, sh, g))
+        return ds?.map { NdsOptions.shaded(it, frontendValues).toScreenRegion(sw, sh) } ?: listOfNotNull(wholeFrameRegion(sw, sh, g))
     }
 
     /**

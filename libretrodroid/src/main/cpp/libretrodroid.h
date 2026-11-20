@@ -270,6 +270,8 @@ public:
     void setScreenRegions(std::vector<ScreenRegion> regions);
     // The frame composed from the core's (Video::setComposition); width 0 clears it. Remembered like the regions. GL thread.
     void setComposition(int width, int height, std::vector<ScreenRegion> parts);
+    // The whole scale the core draws its screens at (Video::setShaderSourceScale). Remembered like the regions. GL thread.
+    void setShaderSourceScale(int scale);
 
     // Regions drawn on a second surface (dst 0..1 of that whole surface). Remembered like setScreenRegions. GL thread.
     void setSecondaryRegions(std::vector<ScreenRegion> regions);
@@ -390,6 +392,7 @@ private:
     int compositionWidth = 0;
     int compositionHeight = 0;
     std::vector<ScreenRegion> compositionParts;
+    int shaderSourceScale = 1;
     std::vector<ScreenRegion> secondaryRegions;
 
     std::atomic<float> geometryWidth { 0.0F };

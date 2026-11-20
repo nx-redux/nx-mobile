@@ -103,6 +103,8 @@ internal interface FrontendHost : LifecycleOwner {
     fun secondRegions(g: FloatArray, ds: List<NdsRegion>?): List<ScreenRegion>
     /** The open in-game menu's shader rows, and its frontend rows (overlay list, locks, overlay availability), again. */
     fun publishMenuShaders()
+    /** A shader preset was turned on or off: the 3D Resolution's Auto follows it ([Nds3dResolution.value]'s shaded). */
+    fun onShaderPresetToggled()
     fun publishMenuFrontend()
     fun toast(msg: String): android.widget.Toast
     /** The core is held (the in-game menu, another app focused): it makes no new frame meanwhile. */
@@ -221,7 +223,8 @@ internal class FrontendRenderer(
             ScreenRegion(
                 ScreenRect(src.left, src.top, src.right, src.bottom),
                 ScreenRect(p.dst.x / w, p.dst.y / h, (p.dst.x + p.dst.width) / w, (p.dst.y + p.dst.height) / h),
-                shaded = NdsLayout.takesShader(p.screen), touch = p.screen == NdsScreen.BOTTOM,
+                shaded = NdsLayout.takesShader(p.screen) || frontendValues[NdsOptions.SHADER_SCREENS] == NdsOptions.SHADER_BOTH,
+                touch = p.screen == NdsScreen.BOTTOM,
             )
         })
     }
@@ -338,6 +341,7 @@ internal class FrontendRenderer(
     fun applyShader(values: Map<String, String>) {
         val previous = shaderValues
         shaderValues = values
+        if ((ShaderOptions.preset(previous) != null) != (ShaderOptions.preset(values) != null)) host.onShaderPresetToggled()
         val view = retroView ?: return
         val preset = ShaderOptions.preset(values)
         // Compared with the last request, not the last completed load: any change (None included) must cancel a
@@ -618,6 +622,7 @@ internal class FrontendRenderer(
         val packed = geometry ?: view.getGameGeometry()
         view.mainCovered = host.mainShowsNoPicture()
         screenMap = screenMapFor(view, packed)
+        view.shaderSourceScale = screenMap?.topScale(n3ds = isN3ds) ?: 1
         // 3DS on one display (and the Panel Up frame) from the map: the app rebuilds Azahar's own layout from it, and
         // that composed frame is the frame every later step lays out.
         val composition = n3dsComposition()
@@ -671,7 +676,7 @@ internal class FrontendRenderer(
             // Under a skin the speed indicator goes on the top glass's screen.
             pictureBox.value = windowRect(origin, skinDs?.top ?: shown)
             shownPicture = null
-            view.screenRegions = nds.map { it.toScreenRegion(w, h) }
+            view.screenRegions = nds.map { NdsOptions.shaded(it, frontendValues).toScreenRegion(w, h) }
             // Under a skin the pad takes no room beside the screens.
             fitPad(if (skinDs != null) PadRoom.NONE else room, shown, frameKnown = true, h, overlayH)
             val scales = nds.joinToString(" + ") { "${it.screen.value}${if (it.inset) " inset" else ""} %.2fx".format(java.util.Locale.US, it.dst.height / 192f) }

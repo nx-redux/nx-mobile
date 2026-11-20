@@ -5,6 +5,7 @@ import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.runner.Nds3dMode
 import com.nxredux.mobile.runner.Res3dConsole
 import com.nxredux.mobile.runner.Nds3dResolution
+import com.nxredux.mobile.runner.NdsRegion
 import com.nxredux.mobile.settings.stepFrom
 
 /** A DS setting's stored [value] and what the menu and hotkey labels show. */
@@ -170,6 +171,22 @@ object NdsOptions {
         val pip = layoutShown(values, view.landscape, view.controllerMode, screen ?: ScreenClass.REGULAR_PHONE) == NdsLayoutChoice.PIP
         return rows.filter { (it.key !in LAYOUT_KEYS || it.key == active) && (it.key !in INSET_KEYS || pip) }
     }
+
+    /** Shader Screens (DS and 3DS): the shader on the top screen alone, or on the touch screen too. */
+    const val SHADER_SCREENS = "nx_shader_screens"
+    const val SHADER_TOP = "top"
+    const val SHADER_BOTH = "both"
+
+    val shaderScreensRow = FrontendOption(
+        SHADER_SCREENS, "Shader Screens", listOf(SHADER_TOP, SHADER_BOTH), SHADER_TOP,
+        "Which screens the shader draws on.\nThe touch screen is left plain by default: a shader that curves or moves the picture " +
+            "would put what you see away from where your finger lands.",
+        visual = true, valueLabels = listOf("Top screen", "Both screens"),
+    )
+
+    /** [region] with Shader Screens Both in [values] also shading the touch screen; a picture-in-picture inset stays plain. */
+    fun shaded(region: NdsRegion, values: Map<String, String>): NdsRegion =
+        if (region.shaded || region.inset || values[SHADER_SCREENS] != SHADER_BOTH) region else region.copy(shaded = true)
 
     private const val SPLIT_NOTE = "Screen Scaling and the screen offsets do not apply to the DS screens."
 
@@ -346,8 +363,9 @@ fun resolutionRows(console: Res3dConsole, displayMax: Int?): List<FrontendOption
     return listOfNotNull(
         FrontendOption(
             console.modeKey, "3D Resolution", Nds3dMode.entries.map { it.value }, Nds3dMode.AUTO.value,
-            if (console == Res3dConsole.PS2) "How sharply the game is drawn. The screen's size doesn't change."
-            else "How sharply 3D models are drawn. 2D art, text and the screen's size don't change.",
+            (if (console == Res3dConsole.PS2) "How sharply the game is drawn. The screen's size doesn't change."
+            else "How sharply 3D models are drawn. 2D art, text and the screen's size don't change.") +
+                "\nWith a shader on, Auto draws at 1x: the shader works from the console's own resolution.",
             visual = false, valueLabels = Nds3dMode.entries.map { it.label },
         ),
         FrontendOption(

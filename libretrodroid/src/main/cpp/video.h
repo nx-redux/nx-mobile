@@ -97,6 +97,9 @@ public:
     // While set, the core frame is first composed into a width x height frame from its parts (src: 0..1 of
     // the core frame, dst: 0..1 of the composed one), and that composed frame is what every draw samples.
     void setComposition(int width, int height, std::vector<ScreenRegion> parts);
+    // The whole scale the core draws its screens at (1 = native). A preset is written for a console's own pixels (a CRT
+    // preset puts one scanline per row and drops them on a tall source), so each shaded screen is shrunk back to native first.
+    void setShaderSourceScale(int scale) { shaderSourceScale = scale < 1 ? 1 : scale; }
     // A point (0..1) of the composed frame mapped back into the core frame through the touch part under it; outside
     // every touch part (-10, -10). Unchanged while not composing. ScreenRegions.mapCompositionTouch is its Kotlin twin.
     std::pair<float, float> mapCompositionPoint(float x, float y) const;
@@ -222,6 +225,7 @@ private:
     unsigned coreContentWidth = 0;
     unsigned coreContentHeight = 0;
     float coreAspectRatio = 0.0F;
+    int shaderSourceScale = 1;
     int compositionWidth = 0;
     int compositionHeight = 0;
     std::vector<ScreenRegion> compositionParts;
