@@ -28,14 +28,21 @@ object SkinGroups {
         // union-find over the pieces by overlapping rects
         val parent = idx.associateWith { it }.toMutableMap()
         fun root(i: Int): Int { var r = i; while (parent.getValue(r) != r) r = parent.getValue(r); return r }
-        for (a in idx) for (b in idx) if (a < b && joined(rects.getValue(a), rects.getValue(b))) parent[root(a)] = root(b)
+        // pieces naming their group join by it, the rest by overlap
+        fun together(a: Int, b: Int): Boolean {
+            val ga = spec.pieces[a].group; val gb = spec.pieces[b].group
+            return if (ga != null && gb != null) ga == gb else joined(rects.getValue(a), rects.getValue(b))
+        }
+        for (a in idx) for (b in idx) if (a < b && together(a, b)) parent[root(a)] = root(b)
         val clusters = idx.groupBy { root(it) }.values.map { it.sorted() }.sortedBy { it.first() }
         val unions = clusters.map { c -> union(c.map { rects.getValue(it) }) }
         val ids = Array(clusters.size) { sortedSetOf<String>() }
         for (c in spec.controls) {
             // a control belongs to the cluster holding its centre in one of its pieces, else in the union, else (a few
             // layouts draw START beside its piece) to the cluster whose piece is nearest
-            val at = clusters.indexOfFirst { cl -> cl.any { contains(rects.getValue(it), c.x, c.y) } }
+            // (a stick / d-pad switch's two on one spot: each with the pieces shown with it)
+            fun mine(i: Int) = c.alt == null || spec.pieces[i].alt == null || spec.pieces[i].alt == c.alt
+            val at = clusters.indexOfFirst { cl -> cl.any { mine(it) && contains(rects.getValue(it), c.x, c.y) } }
                 .takeIf { it >= 0 } ?: unions.indexOfFirst { contains(it, c.x, c.y) }.takeIf { it >= 0 }
                 ?: clusters.indices.minByOrNull { i -> clusters[i].minOf { gap(rects.getValue(it), c.x, c.y) } } ?: -1
             if (at >= 0) ids[at].add(c.id)
@@ -49,7 +56,7 @@ object SkinGroups {
     }
 
     /** A piece's drawn rect in the render (its [PieceSpec.scale] applied). */
-    private fun rect(p: PieceSpec) = PxRect(p.x.toFloat(), p.y.toFloat(), p.w * p.scale, p.h * p.scale)
+    private fun rect(p: PieceSpec) = PxRect(p.x.toFloat(), p.y.toFloat(), p.w * p.acrossScale, p.h * p.scale)
 
     /**
      * Two pieces are one cluster when their rects overlap by at least [JOIN_SHARE] of the smaller one: a button in its

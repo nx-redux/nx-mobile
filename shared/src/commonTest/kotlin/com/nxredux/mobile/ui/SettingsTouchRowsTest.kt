@@ -201,6 +201,8 @@ class SettingsTouchRowsTest {
         assertEquals(layout.values.map(layout::labelOf), console.choices); assertEquals(layout.values.indexOf(PadOptions.AUTO), console.index)
         assertEquals("", console.info); assertEquals(layout.info, console.detail)
         assertEquals(USE_EMULATOR_SETTINGS_INFO, emulatorTouchRow(EmulatorRow.UseEmulatorSettings).info)
+        assertEquals(EMULATOR_RESET_INFO, emulatorTouchRow(EmulatorRow.ResetDefaults).info)
+        assertEquals(EMULATOR_RESET_DETAIL, emulatorTouchRow(EmulatorRow.ResetDefaults).detail)
     }
 
     @Test fun emulatorHintsFollowTheControl() {

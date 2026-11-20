@@ -67,15 +67,16 @@ class EmulatorSettingsControllerTest {
                 EmulatorRow.Header("Controls"), EmulatorRow.Console(layout),
                 EmulatorRow.Gap,   // half a row of space between the app's and the core settings
                 EmulatorRow.Header("Emulator"), EmulatorRow.Core(optA, inCategory = false), EmulatorRow.Category("video", "Video"),
+                EmulatorRow.Gap, EmulatorRow.ResetDefaults,
             ),
             EmulatorRows.build(page(), null),
         )
     }
 
     @Test fun the_gap_is_only_between_console_and_core_settings() {
-        assertFalse(EmulatorRow.Gap in EmulatorRows.build(page(console = emptyList()), null))   // no console rows
+        assertEquals(listOf(EmulatorRow.Gap), EmulatorRows.build(page(console = emptyList()), null).filter { it == EmulatorRow.Gap })   // no console rows: only Reset's
         assertFalse(EmulatorRow.Gap in EmulatorRows.build(page(), "video"))                     // a category: core rows only
-        assertEquals(1, EmulatorRows.build(page(core = null), null).count { it == EmulatorRow.Gap })   // before the notice's header
+        assertEquals(2, EmulatorRows.build(page(core = null), null).count { it == EmulatorRow.Gap })   // before the notice's header, and Reset's
         assertEquals(2, EmulatorRows.build(page(forGame = true, gameFile = true), null).count { it == EmulatorRow.Gap })   // plus one before the last row, Use emulator settings
         assertEquals(1, EmulatorRows.build(page(forGame = true, gameFile = false), null).count { it == EmulatorRow.Gap })
     }
@@ -98,7 +99,7 @@ class EmulatorSettingsControllerTest {
     @Test fun the_gap_draws_as_half_a_row_of_space() {
         assertEquals(NxRow("", spacer = true), emulatorNxRow(EmulatorRow.Gap))
         val rows = EmulatorRows.build(page(), null).map(::emulatorNxRow)
-        assertEquals(20.dp * 5 + 10.dp, nxOptionsListHeight(rows, 20.dp))   // 5 rows and the gap
+        assertEquals(20.dp * 6 + 10.dp * 2, nxOptionsListHeight(rows, 20.dp))   // 6 rows and two gaps (the last before Reset to defaults)
     }
 
     @Test fun a_game_page_with_a_game_file_ends_with_use_emulator_settings() {
@@ -116,7 +117,7 @@ class EmulatorSettingsControllerTest {
     }
 
     @Test fun an_empty_core_table_gets_no_core_header() {
-        assertEquals(listOf(EmulatorRow.Header("Controls"), EmulatorRow.Console(layout)), EmulatorRows.build(page(core = emptyList()), null))
+        assertEquals(listOf(EmulatorRow.Header("Controls"), EmulatorRow.Console(layout), EmulatorRow.Gap, EmulatorRow.ResetDefaults), EmulatorRows.build(page(core = emptyList()), null))
     }
 
     // The app's settings under a header per group (Display, Controls, Gameplay, Audio), in group order, a gap between.
@@ -129,7 +130,8 @@ class EmulatorSettingsControllerTest {
                 EmulatorRow.Header("Display"), EmulatorRow.Console(bottom), EmulatorRow.Gap,
                 EmulatorRow.Header("Controls"), EmulatorRow.Console(layout), EmulatorRow.Gap,
                 EmulatorRow.Header("Gameplay"), EmulatorRow.Console(speed), EmulatorRow.Gap,
-                EmulatorRow.Header("Audio"), EmulatorRow.Console(audio),
+                EmulatorRow.Header("Audio"), EmulatorRow.Console(audio), EmulatorRow.Gap,
+                EmulatorRow.ResetDefaults,
             ),
             EmulatorRows.build(page(console = listOf(layout, audio, speed, bottom), core = emptyList()), null),
         )
@@ -149,6 +151,7 @@ class EmulatorSettingsControllerTest {
             listOf(
                 EmulatorRow.Header("Controls"), EmulatorRow.Console(layout), EmulatorRow.Gap,
                 EmulatorRow.Header("Emulator"), EmulatorRow.Core(optA, inCategory = false), EmulatorRow.Category("video", "Video"), EmulatorRow.Gap,
+                EmulatorRow.ResetDefaults, EmulatorRow.Gap,   // the reset leaves the app-wide rows alone, so it comes before them
                 EmulatorRow.Header("Cable Link"), delayRow, clearRow,
             ),
             EmulatorRows.build(page(), null, cableLink),
@@ -255,6 +258,7 @@ class EmulatorSettingsControllerTest {
         override suspend fun writeConsole(tag: String, coreId: String, text: String) { if (failWrites) error("disk full"); files[console(tag, coreId)] = text }
         override suspend fun writeGame(tag: String, coreId: String, romFileName: String, text: String) { if (failWrites) error("disk full"); files[game(tag, coreId, romFileName)] = text }
         override suspend fun deleteGame(tag: String, coreId: String, romFileName: String) { files.remove(game(tag, coreId, romFileName)) }
+        override suspend fun deleteConsole(tag: String, coreId: String) { files.remove(console(tag, coreId)) }
     }
 
     private val source = FakeRomsSource(
@@ -499,6 +503,35 @@ class EmulatorSettingsControllerTest {
         await { EmulatorRow.UseEmulatorSettings !in options(state).rows && selected(state) != EmulatorRow.UseEmulatorSettings }
         assertNull(configs.files["GBA-gpsp/Mario.cfg"])
         assertEquals("z", coreValue(state, "opt_a"))
+    }
+
+    @Test fun the_emulator_page_ends_with_reset_to_defaults_and_a_game_page_never_has_it() {
+        val rows = EmulatorRows.build(page(), null)
+        assertEquals(EmulatorRow.ResetDefaults, rows.last())
+        assertEquals(EmulatorRow.Gap, rows[rows.size - 2])
+        assertFalse(EmulatorRow.ResetDefaults in EmulatorRows.build(page(forGame = true, gameFile = true), null))
+        assertFalse(EmulatorRow.ResetDefaults in EmulatorRows.build(page(console = emptyList(), core = emptyList()), null))
+    }
+
+    @Test fun reset_to_defaults_asks_then_deletes_the_console_file_and_keeps_game_files() = runTest {
+        val configs = MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "opt_a = z\n", "GBA-gpsp/Mario.cfg" to "opt_a = y\n"))
+        val state = TestState(configs)
+        openCore(state, "gpsp")
+        await { state.screen.value is Screen.EmulatorOptions }
+        assertEquals("z", coreValue(state, "opt_a"))
+        repeat(options(state).rows.size) { if (selected(state) != EmulatorRow.ResetDefaults) state.onButton(NxButton.DOWN) }
+        assertEquals(EmulatorRow.ResetDefaults, selected(state))
+        state.onButton(NxButton.A)
+        assertTrue(options(state).confirmReset)
+        state.onButton(NxButton.B)   // B keeps everything
+        assertFalse(options(state).confirmReset)
+        assertEquals("opt_a = z\n", configs.files["GBA-gpsp/minarch.cfg"])
+        state.onButton(NxButton.A)
+        state.onButton(NxButton.A)   // A on the question resets
+        await { !options(state).confirmReset && coreValue(state, "opt_a") == "x" }
+        assertNull(configs.files["GBA-gpsp/minarch.cfg"])
+        assertEquals("opt_a = y\n", configs.files["GBA-gpsp/Mario.cfg"])
+        assertEquals(EmulatorRow.ResetDefaults, selected(state))
     }
 
     @Test fun b_from_a_game_page_restores_the_game_list() = runTest {

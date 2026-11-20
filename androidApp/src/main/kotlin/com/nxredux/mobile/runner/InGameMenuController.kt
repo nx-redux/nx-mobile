@@ -158,10 +158,10 @@ internal interface InGameMenuHost : GameScreenHost {
     fun speedTiles(): Pair<Boolean, Boolean?>
     /** A Fast forward / Rewind tile's toggles ([SpeedController.setToggle]). */
     fun setSpeedToggle(ff: Boolean?, rewind: Boolean?)
-    /** The panel's Mic tile: null where this isn't a mic console or a session is on, else the session's mic on/off. */
+    /** The panel's Mic tile: null where this isn't a mic console or a session is on, else whether the pad's mic button shows. */
     fun micTile(): Boolean?
-    /** The Mic tile's toggle: the session's mic to [on]. */
-    fun setMic(on: Boolean)
+    /** The Mic tile's toggle: the pad's mic button [shown] or hidden. */
+    fun setMicButton(shown: Boolean)
     /** The Reset dialog's Reset: the game restarts ([GLRetroView.reset]); a toggled rewind ends, a toggled FF stays. */
     fun resetGame()
     /** The menu's Adjust buttons: the skin layout editor over the paused game, back to the menu as it was after. */
@@ -660,7 +660,7 @@ internal class InGameMenuController(
             is MenuEffect.ShortcutsChanged -> host.applyShortcuts(effect.overrides)
             // A tile: the game runs with it on, so the menu closes.
             is MenuEffect.SetSpeed -> { host.setSpeedToggle(effect.ff, effect.rewind); closeMenu() }
-            is MenuEffect.SetMic -> { host.setMic(effect.on); closeMenu() }
+            is MenuEffect.SetMicButton -> { host.setMicButton(effect.shown); closeMenu() }
             MenuEffect.ResetGame -> { host.resetGame(); closeMenu() }
             MenuEffect.AdjustButtons -> host.adjustButtons()
             MenuEffect.UseTopScreen -> { dual.useTakenScreen(); closeMenu() }

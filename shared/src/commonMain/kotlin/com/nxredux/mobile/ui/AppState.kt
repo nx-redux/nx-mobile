@@ -335,9 +335,10 @@ class AppDeps(
 /**
  * Appearance → Button layout → Portrait or Landscape: edit [consoleId]'s pad skin buttons in that orientation, on this
  * screen. [wiiPad]: the Wii controller whose layout is edited (null for every other console). [n3dsNew]: the 3DS's New
- * 3DS controls layout (ZL / ZR, the C-stick), else the regular 3DS's.
+ * 3DS controls layout (ZL / ZR, the C-stick), else the regular 3DS's. [segaThree]: the Sega pad's 3-button layout, else
+ * the 6-button one.
  */
-data class SkinEditRequest(val consoleId: String, val landscape: Boolean, val wiiPad: WiiPad?, val n3dsNew: Boolean = false)
+data class SkinEditRequest(val consoleId: String, val landscape: Boolean, val wiiPad: WiiPad?, val n3dsNew: Boolean = false, val segaThree: Boolean = false)
 
 /** Opens the button layout editor for a [SkinEditRequest], [title] naming it there. */
 interface SkinEditorLauncher { fun open(request: SkinEditRequest, title: String) }
@@ -524,8 +525,10 @@ sealed interface Screen {
      * One tag's emulator settings page, or a game's (Game Settings, [game] set). [category]: the open category (null =
      * top level).
      */
+    /** [confirmReset]: Reset to defaults asks first ([EmulatorRow.ResetDefaults]): A resets, B keeps. */
     data class EmulatorOptions(
         val page: EmulatorPage, val rows: List<EmulatorRow>, val category: String? = null, val game: Listed? = null,
+        val confirmReset: Boolean = false,
     ) : Screen
     /** Tools -> Game Tracker: play time per game group, most played first; [modal]: an options / pick / confirm modal is open. */
     data class GameTime(val rows: List<GameTimeRow>, val grandTotalMs: Long, val modal: GameTimeModal? = null, val loading: Boolean = false) : Screen
@@ -589,7 +592,7 @@ internal val Screen.menuPushed: Boolean
 /** Kids Mode's first switch-on, in order (the spec's): PIN, allowed apps, play times, then the two permissions and home. */
 enum class KidsSetupStep { PIN, APPS, TIMES, USAGE, ALARMS, HOME }
 
-enum class SettingsKind { PLAYER_NAME, HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, GAME_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, SAVE_ON_QUIT, A_RESUMES, GPU_DRIVER, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, IMPORT_BIOS, IMPORT_BIOS_FOLDER, IMPORT_BIOS_FILES, IMPORT_BIOS_ZIP, IMPORT_BIOS_RETROARCH, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
+enum class SettingsKind { PLAYER_NAME, HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, GAME_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_SEGA_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, SAVE_ON_QUIT, A_RESUMES, GPU_DRIVER, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, IMPORT_BIOS, IMPORT_BIOS_FOLDER, IMPORT_BIOS_FILES, IMPORT_BIOS_ZIP, IMPORT_BIOS_RETROARCH, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
@@ -674,6 +677,8 @@ internal const val RESET_DEFAULTS_LABEL = "Reset to defaults"
 /** The Wii's and the 3DS's console ids: Button layout's Controller row is theirs. */
 private const val WII_CONSOLE = "wii"
 private const val N3DS_CONSOLE = "3ds"
+/** The consoles with the Sega pad's two skins ([com.nxredux.mobile.runner.PadMap.isSegaPadTag]'s). */
+private val SEGA_PAD_CONSOLES = setOf("md", "segacd", "32x")
 
 /** The global Shortcuts page's note on Toggle mic, which does nothing outside DS / 3DS. */
 internal const val MIC_ROW_NOTE = "DS / 3DS only"
@@ -954,6 +959,9 @@ class AppState(
     val screen: StateFlow<Screen> = _screen.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+    /** A page's own message (its title, its text) in an info dialog: A or B closes it. */
+    private val _message = MutableStateFlow<Pair<String, String>?>(null)
+    val message: StateFlow<Pair<String, String>?> = _message.asStateFlow()
     private val loader = ScreenLoader(scope)
     /** A screen load has run past its grace period: the loading overlay shows (B cancels, [ScreenLoader]). */
     val loading: StateFlow<Boolean> = loader.visible
@@ -1119,6 +1127,7 @@ class AppState(
         scope, _screen, _selection, deps.settings, deps.launcher, kids, onboarding,
         host = object : KidsHost {
             override fun showNotice(text: String) = this@AppState.showNotice(text)
+            override fun showMessage(title: String, text: String) { _message.value = title to text }
             override fun showSystemsNow(category: MenuCategory?) = this@AppState.showSystemsNow(category)
             override fun clearMenuTop() { pushedTab = null }
             override fun select(index: Int) = this@AppState.select(index)
@@ -3829,6 +3838,7 @@ class AppState(
      * its picker, X shows the selected row's info when it has more to say. False for every other press.
      */
     private fun onEmulatorTouchButton(s: Screen.EmulatorOptions, button: NxButton): Boolean {
+        if (s.confirmReset) return false   // the reset question takes the press
         val touch = settingsUi.settingTouchRow(_selection.value.index) ?: return false
         return when {
             button == NxButton.A && touch.choices.size >= 2 && touch.control == NxSettingControl.PICKER -> openEmulatorPicker(s)
@@ -3869,6 +3879,8 @@ class AppState(
     private var buttonLayoutWiiPad: WiiPad = WiiPad.CLASSIC
     /** The 3DS's New 3DS controls (most games resolve to the regular ones under Auto, so Regular first). */
     private var buttonLayoutN3dsNew: Boolean = false
+    /** The Sega pad consoles' 3-button pad (else the 6-button one, which the skin shows when the pad is unknown). */
+    private var buttonLayoutSegaThree: Boolean = false
 
     private fun buttonLayoutConsole(): Console = buttonLayoutConsole ?: buttonLayoutConsoles.first()
 
@@ -3881,6 +3893,8 @@ class AppState(
 
     private fun n3dsPadLabel(new: Boolean): String = if (new) "New" else "Regular"
 
+    private fun segaPadLabel(three: Boolean): String = if (three) "3-button" else "6-button"
+
     /** Any console has a tweak stored, skin or overlay: Appearance's Button layout row reads Custom. */
     private fun buttonLayoutCustom(): Boolean = listOf(deps.settings.skinTweaks, deps.settings.overlayTweaks)
         .any { stored -> SkinTweaks.decode(stored).values.any { c -> c.values.any { it.isNotEmpty() } } }
@@ -3891,6 +3905,7 @@ class AppState(
             SettingsRow(SettingsKind.BUTTON_LAYOUT_CONSOLE, "Console", console.displayName),
             if (console.id == WII_CONSOLE) SettingsRow(SettingsKind.BUTTON_LAYOUT_WII_PAD, "Controller", wiiPadLabel(buttonLayoutWiiPad)) else null,
             if (console.id == N3DS_CONSOLE) SettingsRow(SettingsKind.BUTTON_LAYOUT_N3DS_PAD, "Controller", n3dsPadLabel(buttonLayoutN3dsNew)) else null,
+            if (console.id in SEGA_PAD_CONSOLES) SettingsRow(SettingsKind.BUTTON_LAYOUT_SEGA_PAD, "Controller", segaPadLabel(buttonLayoutSegaThree)) else null,
             SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Portrait", landscape = false),
             SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Landscape", landscape = true),
             SettingsRow(SettingsKind.BUTTON_LAYOUT_RESET, "Reset console"),
@@ -3908,8 +3923,10 @@ class AppState(
         val pad = buttonLayoutWiiPad.takeIf { console.id == WII_CONSOLE }
         val n3ds = console.id == N3DS_CONSOLE
         val new = n3ds && buttonLayoutN3dsNew
-        val controller = pad?.let(::wiiPadLabel) ?: n3dsPadLabel(new).takeIf { n3ds }
-        editor.open(SkinEditRequest(console.id, landscape, pad, new), controller?.let { "${console.displayName} · $it" } ?: console.displayName)
+        val sega = console.id in SEGA_PAD_CONSOLES
+        val three = sega && buttonLayoutSegaThree
+        val controller = pad?.let(::wiiPadLabel) ?: n3dsPadLabel(new).takeIf { n3ds } ?: segaPadLabel(three).takeIf { sega }
+        editor.open(SkinEditRequest(console.id, landscape, pad, new, three), controller?.let { "${console.displayName} · $it" } ?: console.displayName)
     }
 
     /** The editor saved or left: republish the page if Settings is still showing (the activity wrote the settings). */
@@ -4325,6 +4342,7 @@ class AppState(
             SettingsKind.BUTTON_LAYOUT_CONSOLE -> cycle(buttonLayoutConsoles, buttonLayoutConsole(), { it.displayName }) { buttonLayoutConsole = it }
             SettingsKind.BUTTON_LAYOUT_WII_PAD -> cycle(wiiPads, buttonLayoutWiiPad, ::wiiPadLabel) { buttonLayoutWiiPad = it }
             SettingsKind.BUTTON_LAYOUT_N3DS_PAD -> cycle(listOf(false, true), buttonLayoutN3dsNew, ::n3dsPadLabel) { buttonLayoutN3dsNew = it }
+            SettingsKind.BUTTON_LAYOUT_SEGA_PAD -> cycle(listOf(false, true), buttonLayoutSegaThree, ::segaPadLabel) { buttonLayoutSegaThree = it }
             // Emulators, Saves (the handheld's formats in its order), Second screen and Developer.
             SettingsKind.PAUSE_UNFOCUSED -> flip(s.pauseWhenUnfocused) { s.pauseWhenUnfocused = it }
             SettingsKind.SCREEN_CARE -> flip(s.screenCare) { s.screenCare = it }
@@ -5259,11 +5277,11 @@ class AppState(
     private fun toolRows(): List<ToolRow> = (listOfNotNull(
         deps.achievements?.let { ToolRow(ToolKind.RETRO_ACHIEVEMENTS, "RetroAchievements", null) },
         deps.gameTime?.let { ToolRow(ToolKind.GAME_TIME, "Game Tracker", null) },
-        artworkScreens?.let { ToolRow(ToolKind.ARTWORK, "Artwork", null) },
+        artworkScreens?.let { ToolRow(ToolKind.ARTWORK, ToolKind.ARTWORK.toolName!!, null) },
         ToolRow(ToolKind.CHEAT_DB, "Cheats & Patches", null),
         deps.deviceSync?.let { ToolRow(ToolKind.DEVICE_SYNC, "Device Sync", null) },
-        deps.launcher?.let { ToolRow(ToolKind.APPS, "Apps", null) },
-    ) + appToolRows()).sortedBy { it.label.lowercase() } + ToolRow(ToolKind.SETTINGS, "Settings", null)
+        deps.launcher?.let { ToolRow(ToolKind.APPS, ToolKind.APPS.toolName!!, null) },
+    ) + appToolRows()).sortedBy { it.label.lowercase() } + ToolRow(ToolKind.SETTINGS, ToolKind.SETTINGS.toolName!!, null)
 
     /**
      * The Android apps the user added; one not installed is skipped (and kept, for a reinstall), and so is
@@ -6182,6 +6200,7 @@ class AppState(
         // Press to bind waits on the controller's raw keys ([captureKey]): a touch hint's or the on-screen pad's B cancels, the rest wait.
         if (_capturingShortcut.value != null) { if (button == NxButton.B) cancelCapture(); return }
         if (_error.value != null) { if (button == NxButton.A || button == NxButton.B) dismissError(); return }
+        if (_message.value != null) { if (button == NxButton.A || button == NxButton.B) dismissMessage(); return }
         if (_androidGamesAsk.value != null) {   // the Android games question: A Yes, B Not now
             if (button == NxButton.A) answerAndroidGames(true) else if (button == NxButton.B) answerAndroidGames(false)
             return
@@ -6398,6 +6417,7 @@ class AppState(
 
     /** Returns true when a screen was popped. */
     fun back(): Boolean {
+        if (_message.value != null) { dismissMessage(); return true }   // a page's message dialog: Back closes it, the page stays
         if (settingsUi.closePopup()) return true   // a touch chooser or a Settings row's info popup: Back closes it
         if (_capturingShortcut.value != null) { cancelCapture(); return true }   // press to bind: Back cancels it, the page stays
         if (systemButtonWaiting != null) { systemButtonWaiting = null; settingsUi.refreshSettings(); return true }   // likewise System buttons' wait
@@ -6510,6 +6530,8 @@ class AppState(
     fun showError(message: String) { _error.value = message }
 
     fun dismissError() { _error.value = null }
+
+    fun dismissMessage() { _message.value = null }
 
     /**
      * The platform's home state or apps may have changed (the role dialog, Android's home settings, a new listing): System's

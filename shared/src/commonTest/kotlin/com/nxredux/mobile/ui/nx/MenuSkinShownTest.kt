@@ -28,6 +28,13 @@ class MenuSkinShownTest {
         }
     }
 
+    // A phone upright half-folded keeps the skin (its screen above the fold); anything else half-folded needs two screens.
+    @Test fun a_phone_upright_half_folded_shows_the_skin() {
+        assertEquals(true, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = false, canTwo = false, tabletop = true, phoneUpright = true))
+        assertEquals(false, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = false, canTwo = false, tabletop = true, phoneUpright = false))
+        assertEquals(false, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = true, canTwo = false, tabletop = true, phoneUpright = true))
+    }
+
     // The same pad flips with the controller, both ways.
     @Test fun connecting_and_disconnecting_switches_it_both_ways() {
         assertEquals(true, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = false, canTwo = false, tabletop = false))

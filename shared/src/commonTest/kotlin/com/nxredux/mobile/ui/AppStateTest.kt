@@ -4651,7 +4651,7 @@ class AppStateTest {
         state.onConsoles()
         assertEquals(main.systems.size, state.selection.value.count)   // the Consoles tab: one row per console
         state.onButton(NxButton.R1)
-        assertEquals(listOf(ToolRow(ToolKind.CHEAT_DB, "Cheats & Patches", null), ToolRow(ToolKind.SETTINGS, "Settings", null)), state.screen.value.toolRows())
+        assertEquals(listOf(ToolRow(ToolKind.CHEAT_DB, "Cheats & Patches", null), ToolRow(ToolKind.SETTINGS, "App Settings", null)), state.screen.value.toolRows())
         assertEquals(ListSelection(0, 2), state.selection.value)
         state.onButton(NxButton.R1)                                    // wraps back to Home
         assertEquals(MenuCategory.HOME, assertIs<Screen.Systems>(state.screen.value).category)
@@ -5455,7 +5455,7 @@ class AppStateTest {
         val state = state(MemorySettings(ContentRef("Home")))
         state.load()
         state.openTools()
-        assertEquals(listOf("Cheats & Patches", "Settings"), state.screen.value.toolRows().map { it.label })
+        assertEquals(listOf("Cheats & Patches", "App Settings"), state.screen.value.toolRows().map { it.label })
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)
         val menu = assertIs<Screen.SettingsMenu>(state.screen.value)
         assertEquals(listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS, SettingsSection.SYSTEM), menu.sections)
@@ -7348,7 +7348,7 @@ class AppStateTest {
     @Test fun tools_lists_retroachievements_by_name_and_opens_its_page() = runTest {
         val (state, _) = stateWithAchievements()
         state.openTools()
-        assertEquals(listOf("Cheats & Patches", "RetroAchievements", "Settings"), state.screen.value.toolRows().map { it.label })
+        assertEquals(listOf("Cheats & Patches", "RetroAchievements", "App Settings"), state.screen.value.toolRows().map { it.label })
         assertTrue(state.screen.value.toolRows().all { it.secondary == null })   // titles only
         state.select(1); state.openSelected()
         assertIs<Screen.RetroAchievements>(state.screen.value)
@@ -13886,7 +13886,7 @@ class AppStateTest {
         launcher.missing = setOf("b/B")                                   // uninstalled since the menu was built
         state.onButton(NxButton.A)
         assertEquals("Could not open Beta", state.notice.value)
-        assertEquals(listOf("Apps", "Cheats & Patches", "Settings"), state.screen.value.toolRows().map { it.label })
+        assertEquals(listOf("All Apps", "Cheats & Patches", "App Settings"), state.screen.value.toolRows().map { it.label })
     }
 
     @Test fun go_home_waits_out_first_setup() = runTest {
@@ -13923,7 +13923,7 @@ class AppStateTest {
         state.onButton(NxButton.B)
         assertIs<Screen.Systems>(state.screen.value)
         assertEquals(settingsAt, state.selection.value.index)                 // B lands on the Settings row
-        state.select(0); state.onButton(NxButton.A)                           // Alpha, an app: launched
+        state.select(1); state.onButton(NxButton.A)                           // Alpha (after All Apps), an app: launched
         assertEquals(listOf("a/A"), launcher.launched)
     }
 
@@ -14013,7 +14013,7 @@ class AppStateTest {
         val state = state(settings, launcher = launcher)
         state.load()
         state.openTools()
-        assertEquals(listOf("Apps", "Cheats & Patches", "Settings"), state.screen.value.toolRows().map { it.label })
+        assertEquals(listOf("All Apps", "Cheats & Patches", "App Settings"), state.screen.value.toolRows().map { it.label })
         openToolApps(state)
         val drawer = assertIs<Screen.ToolApps>(state.screen.value)
         assertEquals(AppPick.TOOLS, drawer.pick)
@@ -14035,7 +14035,7 @@ class AppStateTest {
         state.onButton(NxButton.B)                                        // back on the Apps tile
         assertEquals(MenuCategory.TOOLS, assertIs<Screen.Systems>(state.screen.value).category)
         assertEquals(ToolKind.APPS, state.screen.value.toolRows()[state.selection.value.index].kind)
-        assertEquals(listOf("Alpha", "Apps", "Cheats & Patches", "Settings"), state.screen.value.toolRows().map { it.label })
+        assertEquals(listOf("All Apps", "Alpha", "Cheats & Patches", "App Settings"), state.screen.value.toolRows().map { it.label })
     }
 
     // Pin to Home from the drawer pins an app that is not in Tools; it opens from Home and unpins from the drawer again.
@@ -14072,18 +14072,18 @@ class AppStateTest {
         state.load()
         state.openTools()
         state.select(2); state.onButton(NxButton.MENU)
-        assertEquals(listOf(ContextKind.PIN_TOOL), menuKinds(state))     // Cheats & Patches: Alpha, Apps, Cheats & Patches
+        assertEquals(listOf(ContextKind.PIN_TOOL), menuKinds(state))     // Cheats & Patches: All Apps, Alpha, Cheats & Patches
         state.onButton(NxButton.B)
-        state.select(0); choose(state, ContextKind.REMOVE_FROM_TOOLS); advanceUntilIdle()   // Alpha
+        state.select(1); choose(state, ContextKind.REMOVE_FROM_TOOLS); advanceUntilIdle()   // Alpha
         assertEquals(emptyList(), settings.toolApps)
-        assertEquals(listOf("Apps", "Cheats & Patches", "Settings"), state.screen.value.toolRows().map { it.label })
+        assertEquals(listOf("All Apps", "Cheats & Patches", "App Settings"), state.screen.value.toolRows().map { it.label })
     }
 
     @Test fun no_launcher_no_apps_tool() = runTest {
         val state = state(MemorySettings(ContentRef("Home")))
         state.load()
         state.openTools()
-        assertEquals(listOf("Cheats & Patches", "Settings"), state.screen.value.toolRows().map { it.label })
+        assertEquals(listOf("Cheats & Patches", "App Settings"), state.screen.value.toolRows().map { it.label })
     }
 
     @Test fun tool_apps_picker_moves_as_a_grid() = runTest {
@@ -14216,7 +14216,7 @@ class AppStateTest {
         state.load()
         openToolApps(state)
         assertEquals(AppPick.TOOLS, assertIs<Screen.ToolApps>(state.screen.value).pick)
-        assertEquals("Apps", toolAppsTitle(AppPick.TOOLS)); assertEquals("Android games", toolAppsTitle(AppPick.GAMES))
+        assertEquals("All Apps", toolAppsTitle(AppPick.TOOLS)); assertEquals("Android games", toolAppsTitle(AppPick.GAMES))
         assertEquals(listOf(false, false), assertIs<Screen.ToolApps>(state.screen.value).apps.map { it.shown })   // detected games are not Tools apps
     }
 
@@ -14228,7 +14228,7 @@ class AppStateTest {
         state.load()
         state.openTools()
         val tools = state.screen.value.toolRows()
-        assertEquals(listOf("Alpha", "Apps", "Beta", "Cheats & Patches", "Settings"), tools.map { it.label })
+        assertEquals(listOf("All Apps", "Alpha", "Beta", "Cheats & Patches", "App Settings"), tools.map { it.label })
         assertEquals(ToolRow(ToolKind.APP, "Beta", null, appId = "b/B"), tools[2])
         state.select(2); state.onButton(NxButton.A)
         assertEquals(listOf("b/B"), launcher.launched)
@@ -14239,7 +14239,7 @@ class AppStateTest {
         val state = state(settings, launcher = FakeLauncher(listOf(alpha, beta)).apply { missing = setOf("a/A") })
         state.load()
         state.openTools()
-        assertEquals(listOf("Apps", "Beta", "Cheats & Patches", "Settings"), state.screen.value.toolRows().map { it.label })
+        assertEquals(listOf("All Apps", "Beta", "Cheats & Patches", "App Settings"), state.screen.value.toolRows().map { it.label })
         assertEquals(listOf("a/A", "b/B"), settings.toolApps)
     }
 
@@ -14844,7 +14844,7 @@ class AppStateTest {
         state.load(); advanceUntilIdle()
         assertEquals(listOf("b/B"), state.screen.value.homeRows.filterIsInstance<MainRow.PinnedTool>().map { it.row.appId })
         state.openTools()
-        assertEquals(listOf("Apps", "Beta", "Cheats & Patches", "Settings"), state.screen.value.toolRows().map { it.label })
+        assertEquals(listOf("All Apps", "Beta", "Cheats & Patches", "App Settings"), state.screen.value.toolRows().map { it.label })
         openToolApps(state)
         assertEquals(listOf("b/B"), assertIs<Screen.ToolApps>(state.screen.value).apps.map { it.id })
         state.onButton(NxButton.B)
@@ -14857,7 +14857,7 @@ class AppStateTest {
         state.goHome()
         assertEquals(listOf("a/A", "b/B"), state.screen.value.homeRows.filterIsInstance<MainRow.PinnedTool>().map { it.row.appId })
         state.openTools()
-        assertEquals(listOf("Alpha", "Apps", "Beta", "Cheats & Patches", "Settings"), state.screen.value.toolRows().map { it.label })
+        assertEquals(listOf("All Apps", "Alpha", "Beta", "Cheats & Patches", "App Settings"), state.screen.value.toolRows().map { it.label })
     }
 
     private fun searchSource() = FakeRomsSource(

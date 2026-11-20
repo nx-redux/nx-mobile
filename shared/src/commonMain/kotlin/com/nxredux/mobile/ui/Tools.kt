@@ -19,11 +19,11 @@ val ToolKind.toolName: String?
     get() = when (this) {
         ToolKind.RETRO_ACHIEVEMENTS -> "RetroAchievements"
         ToolKind.GAME_TIME -> "Game Tracker"
-        ToolKind.ARTWORK -> "Artwork"
+        ToolKind.ARTWORK -> "Artwork & Metadata"
         ToolKind.CHEAT_DB -> "Cheats & Patches"
         ToolKind.DEVICE_SYNC -> "Device Sync"
-        ToolKind.SETTINGS -> "Settings"
-        ToolKind.APPS -> "Apps"
+        ToolKind.SETTINGS -> "App Settings"
+        ToolKind.APPS -> "All Apps"
         ToolKind.APP -> null
         ToolKind.KIDS_LOCK -> "Lock Kids Mode"
     }

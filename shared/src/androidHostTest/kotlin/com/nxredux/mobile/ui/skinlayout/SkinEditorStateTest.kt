@@ -245,10 +245,10 @@ class SkinEditorStateTest {
     fun a_drag_onto_another_group_stops_and_leaves_it() {
         // the d-pad (earlier in the layout) moved right; the face buttons dragged onto it stop against it
         val p = menu()
-        val s = SkinEditorState(p, mapOf("DPAD" to SkinTweak(dx = 150f)), 1080f, 2520f)
+        val s = SkinEditorState(p, mapOf("DPAD" to SkinTweak(dx = 120f)), 1080f, 2520f)
         val face = p.controls.filter { it.spec.id in setOf("A", "B", "X", "Y") }
         s.select(centre(box(p, "A+B+X+Y"))); s.drag(Offset(-100f, 0f))
-        near(assertNotNull(s.tweaks["DPAD"]).dx, 150f, "the d-pad stays")
+        near(assertNotNull(s.tweaks["DPAD"]).dx, 120f, "the d-pad stays")
         val pad = s.placed().controls.single { it.spec.id == "DPAD" }
         val padRight = pad.x + pad.spec.r + 22f * p.k
         near(s.placed().controls.filter { it.spec.id in setOf("A", "B", "X", "Y") }.minOf { it.x - it.spec.r }, padRight, "the face buttons against it", e = 0.5f)

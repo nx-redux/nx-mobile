@@ -28,7 +28,13 @@ import com.nxredux.mobile.skin.SkinSeamDraw
 import com.nxredux.mobile.skin.SkinPackManifest
 import com.nxredux.mobile.skin.SkinPlacement
 import com.nxredux.mobile.skin.skinTiles
+import com.nxredux.mobile.ui.nx.KeypadKey
+import com.nxredux.mobile.ui.nx.KeypadPress
+import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.PadEvent
+import com.nxredux.mobile.ui.nx.keypadKeyAt
+import com.nxredux.mobile.ui.nx.keypadKeys
+import com.nxredux.mobile.ui.nx.markInk
 import com.nxredux.mobile.ui.nx.SkinPackSource
 import com.nxredux.mobile.ui.nx.SkinGlassPass
 import com.nxredux.mobile.ui.nx.SkinPadTouch
@@ -85,6 +91,10 @@ private val STRIP_PILL_ON_FILL = android.graphics.Color.argb(230, 255, 255, 255)
 private val STRIP_PILL_RING = android.graphics.Color.argb(128, 255, 255, 255)    // role: the pill's edge over any picture
 private val STRIP_PILL_OFF_INK = android.graphics.Color.argb(217, 255, 255, 255) // role: the word on the dark fill
 private val STRIP_PILL_ON_INK = android.graphics.Color.BLACK                      // role: the word on the lit fill
+private val KEYPAD_SCRIM = android.graphics.Color.argb(184, 0, 0, 0)                // role: the panel over the picture, the keys readable on any frame
+private val KEYPAD_KEY = android.graphics.Color.argb(36, 255, 255, 255)            // role: a key's face on the panel
+private val KEYPAD_KEY_HELD = android.graphics.Color.argb(92, 255, 255, 255)       // role: the key under the thumb
+private val KEYPAD_INK = android.graphics.Color.argb(230, 255, 255, 255)           // role: a key's digit
 
 /** What a skin's buttons do beyond the pad's own buttons. */
 internal enum class SkinAction(val slot: TouchSlot? = null) {
@@ -97,6 +107,8 @@ internal enum class SkinAction(val slot: TouchSlot? = null) {
     STICK_SWAP,
     /** The Wii Remote pads' MOTION: a tap turns the phone's motion on or off, a hold recentres it. */
     MOTION,
+    /** The ColecoVision's KEYPAD: its keypad over the picture, opened and closed ([PadSkinView.keypadOpen]). */
+    KEYPAD,
 }
 
 /**
@@ -185,6 +197,48 @@ internal class PadSkinView(
             field = value
             if (bare) alpha = value
         }
+    /** What a key on the console's keypad sends ([com.nxredux.mobile.ui.nx.colecoKeypad]); null: the skin has no keypad. */
+    var keypad: ((KeypadKey) -> KeypadPress)? = null
+    /**
+     * The keypad shows over the picture and takes its touches: a key is held as long as the thumb, and its release
+     * closes the keypad; a touch off the keys and the caps closes it too.
+     */
+    var keypadOpen: Boolean = false
+        set(value) {
+            val open = value && keypad != null
+            if (field == open) return
+            if (!open) keypadRelease()
+            field = open
+            invalidate()
+        }
+    /** The finger on a keypad key, and the key. */
+    private var keypadHeld: Pair<Long, KeypadKey>? = null
+    /** The keypad's keys now: over the biggest glass (the picture), view px. */
+    private fun keypadGrid(): List<Pair<KeypadKey, com.nxredux.mobile.options.PxRect>>? =
+        shown?.glasses?.maxByOrNull { it.rect.width * it.rect.height }?.let { keypadKeys(it.rect, resources.displayMetrics.density) }
+    private fun keypadSend(key: KeypadKey, down: Boolean) {
+        when (val p = keypad?.invoke(key) ?: return) {
+            is KeypadPress.Button -> onPad(if (down) PadEvent.Down(p.button) else PadEvent.Up(p.button))
+            is KeypadPress.Stick -> if (down) onStick(p.x, p.y) else onStick(0f, 0f)
+        }
+    }
+    /** A finger down off the caps with the keypad open: a key pressed, or the keypad closed. */
+    private fun keypadDown(id: Long, x: Float, y: Float) {
+        val key = keypadGrid()?.let { keypadKeyAt(it, x, y) }
+        if (key == null || keypadHeld != null) { if (keypadHeld == null) keypadOpen = false; return }
+        keypadHeld = id to key
+        keypadSend(key, true); tick(); invalidate()
+    }
+    /** [id] lifted: its key let go and the keypad closed (one number per opening). */
+    private fun keypadUp(id: Long) {
+        if (keypadHeld?.first != id) return
+        keypadOpen = false
+    }
+    private fun keypadRelease() {
+        keypadHeld?.let { (_, key) -> keypadSend(key, false) }
+        keypadHeld = null
+    }
+
     /** [placement] as drawn and hit-tested now: without the strip's shortcuts while [stripHidden]. */
     private var shown: SkinPlacement? = null
     private fun refresh() {
@@ -196,6 +250,7 @@ internal class PadSkinView(
         // the menu's room from the whole placement (its strip controls mark the room's foot)
         shown = if (underMenu && drawn != null) p?.stackedMenuRoom()?.let { drawn.underMenu(it) } ?: drawn else drawn
         touch.placement = shown
+        if (p == null) keypadOpen = false
         layer.invalidate()
         invalidate()
     }
@@ -207,6 +262,11 @@ internal class PadSkinView(
     private val src = Rect()
     private val dst = Rect()
     private val touch = SkinPadTouch(onPad, { id, down -> onAction(SkinAction.valueOf(id), down) }, ::tick, ::invalidate, onStick, onCStick)
+
+    /** The console's second d-pad (DPAD2) as its core's buttons ([SkinPadTouch.secondDpad]); empty: none. */
+    var secondDpad: Map<NxButton, NxButton>
+        get() = touch.secondDpad
+        set(value) { touch.secondDpad = value }
     /** The labels under the buttons, written here (the picture has none there). */
     private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = SKIN_LABEL_GREY
@@ -215,6 +275,9 @@ internal class PadSkinView(
             .getOrDefault(Typeface.DEFAULT_BOLD)
     }
     private val slotLabel = Paint(label)
+    private val mark = Paint(label)
+    /** The black inside a frame where no screen is ([com.nxredux.mobile.skin.SkinPiece.fill]). */
+    private val frameInk = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.BLACK }
     /** The overlay's touch shortcut pills ([stripPill]): their fill and their edge. */
     private val pillFill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val pillRing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -264,10 +327,33 @@ internal class PadSkinView(
         parts?.let { pp ->
             for (piece in p.pieces) {
                 if (piece.knob) continue   // the stick's knob moves: drawn over the layer ([dispatchDraw])
+                if (piece.fill >= 0f) {   // black inside a frame where no screen is: the screens cut out of it
+                    holes.reset()
+                    for (g in p.glasses) holes.addRoundRect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height, g.corner, g.corner, Path.Direction.CW)
+                    canvas.save(); canvas.clipOutPath(holes)
+                    canvas.drawRoundRect(piece.dst.x, piece.dst.y, piece.dst.x + piece.dst.width, piece.dst.y + piece.dst.height, piece.fill, piece.fill, frameInk)
+                    canvas.restore()
+                    continue
+                }
                 src.set(piece.src.x.roundToInt(), piece.src.y.roundToInt(), (piece.src.x + piece.src.width).roundToInt(), (piece.src.y + piece.src.height).roundToInt())
                 dst.set(piece.dst.x.roundToInt(), piece.dst.y.roundToInt(), (piece.dst.x + piece.dst.width).roundToInt(), (piece.dst.y + piece.dst.height).roundToInt())
                 canvas.drawBitmap(pp, src, dst, paint)
             }
+        }
+        for (c in p.controls) {   // the marks on the caps (their art is blank): a word cap height markH, or art markH tall
+            if (c.spec.markH <= 0f) continue
+            if (c.spec.markSw > 0 && c.spec.markSh > 0) {
+                val pp = parts ?: continue
+                val h = c.spec.markH; val w = h * c.spec.markSw / c.spec.markSh; val cy = c.y + c.spec.markDy
+                src.set(c.spec.markSx, c.spec.markSy, c.spec.markSx + c.spec.markSw, c.spec.markSy + c.spec.markSh)
+                dst.set((c.x - w / 2f).roundToInt(), (cy - h / 2f).roundToInt(), (c.x + w / 2f).roundToInt(), (cy + h / 2f).roundToInt())
+                canvas.drawBitmap(pp, src, dst, paint)
+                continue
+            }
+            val word = c.spec.mark ?: continue
+            mark.textSize = c.spec.markH / SKIN_LABEL_CAP
+            mark.color = markInk(c.spec)
+            canvas.drawText(word, c.x, c.y + c.spec.markDy + c.spec.markH / 2f, mark)
         }
         for (c in p.controls) {
             val text = c.spec.label ?: continue
@@ -319,6 +405,27 @@ internal class PadSkinView(
             is SkinPressShape.Circle -> canvas.drawCircle(shape.x, shape.y, shape.r, shade)
             is SkinPressShape.Box -> canvas.drawRoundRect(shape.left, shape.top, shape.right, shape.bottom, shape.corner, shape.corner, shade)
         }
+        if (keypadOpen) drawKeypad(canvas)
+    }
+
+    private val keypadPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val keypadInk by lazy { Paint(label).apply { color = KEYPAD_INK } }
+
+    /** The keypad: a dark panel round the grid, a key's face each, its digit centred. */
+    private fun drawKeypad(canvas: Canvas) {
+        val keys = keypadGrid() ?: return
+        val size = keys.first().second.width
+        val pad = size * 0.3f
+        keypadPaint.color = KEYPAD_SCRIM
+        canvas.drawRoundRect(keys.minOf { it.second.x } - pad, keys.minOf { it.second.y } - pad,
+            keys.maxOf { it.second.x + it.second.width } + pad, keys.maxOf { it.second.y + it.second.height } + pad, pad, pad, keypadPaint)
+        keypadInk.textSize = size * 0.4f / SKIN_LABEL_CAP   // the digit 40% of the key tall
+        for ((key, r) in keys) {
+            keypadPaint.color = if (keypadHeld?.second == key) KEYPAD_KEY_HELD else KEYPAD_KEY
+            canvas.drawRoundRect(r.x, r.y, r.x + r.width, r.y + r.height, size * 0.22f, size * 0.22f, keypadPaint)
+            val cy = r.y + r.height / 2f - (keypadInk.descent() + keypadInk.ascent()) / 2f
+            canvas.drawText(key.label, r.x + r.width / 2f, cy, keypadInk)
+        }
     }
 
     /** One slice: copied where its part is fixed, laid in mirrored tiles where it repeats ([skinTiles]); [flipY] all upside down. */
@@ -355,6 +462,7 @@ internal class PadSkinView(
     }
 
     override fun onDetachedFromWindow() {
+        keypadOpen = false
         touch.releaseAll()
         glass.cancel()
         super.onDetachedFromWindow()
@@ -369,17 +477,24 @@ internal class PadSkinView(
     override fun onTouchEvent(e: MotionEvent): Boolean {
         val i = e.actionIndex
         when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> return touch.press(e.getPointerId(0).toLong(), e.getX(0), e.getY(0))   // false: the game view gets it
+            MotionEvent.ACTION_DOWN -> {
+                val id = e.getPointerId(0).toLong()
+                val onCap = touch.press(id, e.getX(0), e.getY(0))
+                if (onCap || !keypadOpen) return onCap   // false: the game view gets it
+                keypadDown(id, e.getX(0), e.getY(0))   // the keypad over the picture takes it instead
+            }
             MotionEvent.ACTION_POINTER_DOWN -> {
                 val id = e.getPointerId(i).toLong()
-                glass.down(id, e.getX(i), e.getY(i), onCap = touch.press(id, e.getX(i), e.getY(i)))
+                val onCap = touch.press(id, e.getX(i), e.getY(i))
+                if (!onCap && keypadOpen) keypadDown(id, e.getX(i), e.getY(i)) else glass.down(id, e.getX(i), e.getY(i), onCap = onCap)
             }
             MotionEvent.ACTION_MOVE -> for (p in 0 until e.pointerCount) {
                 val id = e.getPointerId(p).toLong()
                 touch.move(id, e.getX(p), e.getY(p)); glass.move(id, e.getX(p), e.getY(p))
             }
-            MotionEvent.ACTION_POINTER_UP -> e.getPointerId(i).toLong().let { touch.release(it); glass.up(it) }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { touch.releaseAll(); glass.cancel() }
+            MotionEvent.ACTION_POINTER_UP -> e.getPointerId(i).toLong().let { touch.release(it); glass.up(it); keypadUp(it) }
+            MotionEvent.ACTION_UP -> { keypadUp(e.getPointerId(0).toLong()); touch.releaseAll(); glass.cancel() }
+            MotionEvent.ACTION_CANCEL -> { keypadOpen = false; touch.releaseAll(); glass.cancel() }
         }
         return true
     }

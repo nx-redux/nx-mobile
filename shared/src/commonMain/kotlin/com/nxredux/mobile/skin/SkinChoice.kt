@@ -27,6 +27,16 @@ object SkinChoice {
     private const val TOP_PAD_DP = 8f
     /** On a window wider than the fold board's render, how far its side groups move in toward the bottom screen, dp at most. */
     private const val SIDE_INSET_DP = 16f
+    /** From each window edge to its side group, dp with room ([RowSpacing.edge]). */
+    private const val ROW_EDGE_DP = 32f
+    /** From each side group to the screen between them, dp with room ([RowSpacing.gap]). */
+    private const val ROW_GAP_DP = 16f
+    /** Between a shoulder and its companion beside it (the arcade's L TB, TA R), dp. */
+    private const val PAIR_GAP_DP = 8f
+    /** The least those gaps shrink to, dp, before the board is drawn smaller. */
+    private const val ROW_MIN_GAP_DP = 4f
+    /** The narrowest the main menu's bottom screen gets, dp: the narrowest the app's pages lay out for. */
+    private const val MENU_MIN_DP = 320f
     /** The longest a book foldable's inner screen is to its short side (the Galaxy Fold 7 / 8 Ultra 1.11, the Pixel Folds 1.04). */
     private const val NEAR_SQUARE = 1.2f
     /** The consoles with two screens, which the fold board's hinge falls between. */
@@ -39,8 +49,8 @@ object SkinChoice {
      * buttons, no second pair of shoulders. Others keep the normal pad. The DS and the 3DS have their own layouts.
      */
     private val SINGLE_TAGS = setOf(
-        "GB", "SGB", "GBC", "GBA", "MGBA", "FC", "FDS", "SFC", "SUPA", "MD", "GPGX", "SMS", "GG", "SG1000", "SEGACD", "32X",
-        "NGP", "NGPC", "PCE", "VB", "LYNX", "A2600", "A7800", "PKM", "WS", "WSC", "COLECO", "FBN",
+        "GB", "SGB", "GBC", "GBA", "MGBA", "FC", "FDS", "SFC", "SUPA",
+        "FBN",
     )
 
     /**
@@ -48,11 +58,11 @@ object SkinChoice {
      * set (the Game Boys, the GBA), the DS's, or the shared one-screen set ([SINGLE_TAGS], and any console with none of its own). [gameCube]: a
      * GameCube disc run under the Wii tag (its pad is the GameCube's). [wiiPad]: the Wii game's resolved controller (each
      * Wii pad has its layout; the Classic Controller's until it resolves). [n3dsNew]: the resolved New 3DS Controls (the 3DS skin with
-     * ZL / ZR and the C-stick nub, else the regular 3DS's).
+     * ZL / ZR and the C-stick nub, else the regular 3DS's). [segaThree]: a Sega pad game resolved to the 3-button pad.
      */
     fun variantFor(
         baseTag: String, ds: Boolean, arcadeSet: Boolean = false, gameCube: Boolean = false, wiiPad: com.nxredux.mobile.runner.WiiPad? = null,
-        n3dsNew: Boolean = false,
+        n3dsNew: Boolean = false, segaThree: Boolean = false,
     ): SkinVariant = when {
         ds -> SkinVariant.DS
         gameCube || baseTag == "GC" -> SkinVariant.GC
@@ -66,8 +76,21 @@ object SkinChoice {
         // pcsx_rearmed / SwanStation (a DualShock on port 1) and ARMSX2 (its DualShock 2): the same skin
         baseTag == "PS" || baseTag == "PSX" || baseTag == "PS2" -> SkinVariant.PS1
         baseTag == "PSP" -> SkinVariant.PSP
+        baseTag in MD_TAGS -> if (segaThree) SkinVariant.MD3 else SkinVariant.MD   // unknown: the six (the core's 6-button default)
+        baseTag in SATURN_TAGS -> SkinVariant.SATURN
         baseTag == "P8" -> SkinVariant.P8   // fake-08: O (B) and X (A), START its pause
         baseTag == "PRBOOM" -> SkinVariant.DOOM   // PrBoom's Classic pad: the standard pad with L2 R2 L3 R3
+        baseTag == "SMS" || baseTag == "SG1000" -> SkinVariant.SMS   // picodrive: 1 (B), 2 (A), START the pause
+        baseTag == "GG" -> SkinVariant.GG
+        baseTag == "A7800" -> SkinVariant.A7800   // prosystem: 1 (B), 2 (A), SELECT, START the console's pause
+        baseTag == "NGP" || baseTag == "NGPC" -> SkinVariant.NGP   // race: A (B), B (A), START its OPTION
+        baseTag == "PCE" -> SkinVariant.PCE   // pce_fast: II (B), I (A), SELECT, RUN (START)
+        baseTag == "A2600" -> SkinVariant.A2600   // stella2014: Fire (B), SELECT, RESET (START)
+        baseTag == "LYNX" -> SkinVariant.LYNX   // handy: B, A, Option 1 / 2 (L / R), Pause (START)
+        baseTag == "PKM" -> SkinVariant.PKM   // pokemini: B, A, Shake (L), C (R); Power on SELECT (the menu's Reset does it)
+        baseTag == "VB" -> SkinVariant.VB   // beetle-vb: the right d-pad as L2 R2 L3 R3 ([com.nxredux.mobile.ui.nx.VB_SECOND_DPAD])
+        baseTag == "WS" || baseTag == "WSC" -> SkinVariant.WS   // beetle-wswan: the Y cursor as R2 L2 L R ([com.nxredux.mobile.ui.nx.WS_SECOND_DPAD])
+        baseTag == "COLECO" -> SkinVariant.COLECO   // gearcoleco: Yellow (B), Red (A), its keypad ([com.nxredux.mobile.ui.nx.colecoKeypad])
         baseTag == "A5200" -> SkinVariant.A5200   // a5200: FIRE 1 / 2 (A / B), * # (Y / X), KEYPAD (L: its on-screen keypad)
         // flycast: a NAOMI / Atomiswave set takes the arcade skin, a disc the Dreamcast one ([DcGames.isArcadeSet])
         baseTag == "DC" -> if (arcadeSet) SkinVariant.ARCADE else SkinVariant.DC
@@ -77,6 +100,10 @@ object SkinChoice {
 
     private val GB_TAGS = setOf("GB", "GBC", "SGB", "FC")   // the NES too: A B, fceumm's turbo on TA / TB, no DISK
     private val GBA_TAGS = setOf("GBA", "MGBA")
+    private val MD_TAGS = setOf("MD", "GPGX", "SEGACD", "32X")   // the Sega pad's ([com.nxredux.mobile.runner.PadMap.isSegaPadTag])
+    // the Saturn's tags (as other frontends name it), for when a Saturn core is added: its face as the Genesis's (A on Y,
+    // B on B, C on A, X on L, Y on X, Z on R), its L / R on L2 / R2
+    private val SATURN_TAGS = setOf("SATURN", "SS")
     private val ARCADE_TAGS = setOf("FBN")
 
     /**
@@ -95,19 +122,40 @@ object SkinChoice {
     ): SkinPlacement? {
         if (windowW <= 0 || windowH <= 0 || windowW == windowH || densityDpi <= 0) return null
         val k = scaleFor(pack, densityDpi)
+        val tuned = tunedFor(windowW, windowH, densityDpi, hingeY)
         val landscape = windowW > windowH
         // sideways, a book foldable's inner screen half-folded: the hinge runs across the window, so the two screens too
         val twoUp = if (landscape) hingeY != null && (foldable || tablet) && nearSquare(windowW, windowH) else tablet
         // sideways the flat menu is the landscape shell: half-folded, the bottom screen ends where that one's does, so
         // folding and opening keep its bottom edge in place
-        val flatEnd = if (landscape) shell(pack, SkinFamily.GRIP, SkinVariant.MENU, windowW, windowH, k, null, topInset)
-            ?.glasses?.firstOrNull()?.rect?.let { windowH - (it.y + it.height) } else null
+        val flatEnd = menuFlatEnd(pack, windowW, windowH, k, topInset, densityDpi)
         if (twoUp && twoScreens) shrunk(k) { s ->
-            widest(pack, SkinFamily.STACKED, SkinVariant.MENU, fold = true) { spec ->
-                foldPieces(spec.menuBesideTheDpad(), windowW, windowH, s, null, topInset, hingeY, densityDpi, bottomMargin = shellMargin(pack), bottomGlass = flatEnd)
+            widest(tuned, pack, SkinFamily.STACKED, SkinVariant.MENU, fold = true) { spec ->
+                foldPieces(spec, windowW, windowH, s, null, topInset, hingeY, densityDpi,
+                    bottomMargin = shellMargin(pack), bottomGlass = flatEnd, row = rowSpacing(densityDpi, s))
             }
         }?.let { return it }
-        return shell(pack, if (landscape) SkinFamily.GRIP else SkinFamily.STACKED, SkinVariant.MENU, windowW, windowH, k, null, topInset)
+        // a phone half-folded: the screen frame above the fold and the pad below it, as a game's half-folded board has them,
+        // so opening a game moves nothing
+        if (!landscape && !tablet && hingeY != null) widest(tuned, pack, SkinFamily.FLEX, SkinVariant.MENU, fold = false) { spec ->
+            if (spec.frame?.hinge?.let { it >= 0 } != true) null
+            else if (spec.boxes.isNotEmpty()) SkinBoxes.place(spec, windowW, windowH, k, densityDpi, hingeY) { s, r ->
+                SkinSolver.placePieces(s, windowW.toFloat(), windowH.toFloat(), k, null, topInset.toFloat(), hingeY, roomLeft = r.left, roomRight = r.right, roomBottom = r.bottom)
+            }
+            else SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, null, topInset.toFloat(), hingeY)
+        }?.let { return it }
+        return shell(tuned, pack, if (landscape) SkinFamily.GRIP else SkinFamily.STACKED, SkinVariant.MENU, windowW, windowH, k, densityDpi, null, topInset, rowSpacing(densityDpi, k), hingeY = hingeY)
+    }
+
+    /**
+     * Whether a layout has a box size drawn for this window ([BoxWhen]): such a layout is the one the device was tuned
+     * with, tried before its siblings (a box layout has no pieces to rule itself out by). Untuned, a box layout still
+     * goes before a sibling built from pieces, whose pads sit off the menu's spots.
+     */
+    private fun tunedFor(windowW: Int, windowH: Int, densityDpi: Int, hingeY: Float?): (SkinLayoutSpec) -> Boolean {
+        val dp = densityDpi / 160f
+        val shape = DeviceShape(windowW / dp, windowH / dp, hingeY != null)
+        return { spec -> spec.boxes.any { b -> b.sizes.any { it.`when`?.matches(shape) == true } } }
     }
 
     /**
@@ -115,13 +163,19 @@ object SkinChoice {
      * window stretches little), with a usable glass; a game's [picture] fitted in it.
      */
     private fun shell(
-        pack: SkinPackManifest, family: SkinFamily, variant: SkinVariant, windowW: Int, windowH: Int, k: Float,
-        picture: Pair<Float, Float>?, topInset: Int,
+        tuned: (SkinLayoutSpec) -> Boolean, pack: SkinPackManifest, family: SkinFamily, variant: SkinVariant, windowW: Int, windowH: Int, k: Float, densityDpi: Int,
+        picture: Pair<Float, Float>?, topInset: Int, row: RowSpacing? = null, refH: Float = windowH / k,
+        hingeY: Float? = null, pick: (SkinLayoutSpec) -> Boolean = { true }, adapt: (SkinLayoutSpec) -> SkinLayoutSpec = { it },
     ): SkinPlacement? =
-        pack.layouts.filter { it.family == family && it.variant == variant && it.frame != null && !it.foldBoard && it.minRefH <= windowH / k }
-            .sortedWith(compareByDescending<SkinLayoutSpec> { it.minRefH }.thenByDescending { it.height })
+        pack.layouts.filter { it.family == family && it.variant == variant && it.frame != null && !it.foldBoard && it.minRefH <= refH && pick(it) }
+            .sortedWith(compareByDescending<SkinLayoutSpec> { tuned(it) }.thenByDescending { it.boxes.isNotEmpty() }.thenByDescending { it.minRefH }.thenByDescending { it.height })
             .firstNotNullOfOrNull { spec ->
-                SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset = topInset.toFloat())?.takeIf { p ->
+                // a layout with boxes: placed as its boxes have it, never adapted
+                // (the hinge for the box sizes drawn half-folded: a shell itself ignores it)
+                (if (spec.boxes.isNotEmpty()) SkinBoxes.place(spec, windowW, windowH, k, densityDpi, hingeY) { s, r ->
+                    SkinSolver.placePieces(s, windowW.toFloat(), windowH.toFloat(), k, picture, topInset = topInset.toFloat(), row = row,
+                        roomLeft = r.left, roomRight = r.right, roomBottom = r.bottom)
+                } else SkinSolver.placePieces(adapt(spec), windowW.toFloat(), windowH.toFloat(), k, picture, topInset = topInset.toFloat(), row = row))?.takeIf { p ->
                     val g = p.glasses.first().rect
                     g.width / k >= MENU_MIN_GLASS && g.height / k >= MENU_MIN_GLASS
                 }
@@ -132,11 +186,11 @@ object SkinChoice {
      * board rendered for it (a background only grows, so a smaller window takes a smaller one).
      */
     private fun widest(
-        pack: SkinPackManifest, family: SkinFamily, variant: SkinVariant, fold: Boolean, refH: Float = Float.MAX_VALUE,
+        tuned: (SkinLayoutSpec) -> Boolean, pack: SkinPackManifest, family: SkinFamily, variant: SkinVariant, fold: Boolean, refH: Float = Float.MAX_VALUE,
         placed: (SkinLayoutSpec) -> SkinPlacement?,
     ): SkinPlacement? =
         pack.layouts.filter { it.family == family && it.variant == variant && it.foldBoard == fold && it.minRefH <= refH }
-            .sortedWith(compareByDescending<SkinLayoutSpec> { it.minRefH }.thenByDescending { it.width }).firstNotNullOfOrNull(placed)
+            .sortedWith(compareByDescending<SkinLayoutSpec> { tuned(it) }.thenByDescending { it.boxes.isNotEmpty() }.thenByDescending { it.minRefH }.thenByDescending { it.width }).firstNotNullOfOrNull(placed)
 
     /** A layout on a foldable's board: its background has a hinge (an inner screen's two halves). */
     private val SkinLayoutSpec.foldBoard: Boolean get() = tree.parts.any { it.isHinge }
@@ -169,22 +223,154 @@ object SkinChoice {
      */
     private fun foldPieces(
         spec: SkinLayoutSpec, windowW: Int, windowH: Int, k: Float, picture: Pair<Float, Float>?, topInset: Int, hingeY: Float?, densityDpi: Int,
-        topScreen: Pair<Float, Float>? = null, bottomMargin: Float? = null, bottomGlass: Float? = null,
+        topScreen: Pair<Float, Float>? = null, bottomMargin: Float? = null, bottomGlass: Float? = null, row: RowSpacing? = null,
+        centreControls: Boolean = true, room: BoxRoom? = null,
     ): SkinPlacement? {
+        // a layout with boxes: its screens by these rules in the room the boxes leave
+        if (spec.boxes.isNotEmpty()) return SkinBoxes.place(spec, windowW, windowH, k, densityDpi, hingeY) { s, r ->
+            foldPieces(s, windowW, windowH, k, picture, topInset, hingeY, densityDpi, topScreen, bottomMargin, bottomGlass, row, centreControls, r)
+        }
         val w = windowW.toFloat(); val h = windowH.toFloat()
         // a DS / 3DS top screen: its frame no taller than the screen across its width, plus a little ([TOP_PAD_DP])
         val capPad = topScreen?.let { TOP_PAD_DP * densityDpi / 160f / k }
         val sideInset = SIDE_INSET_DP * densityDpi / 160f / k
-        if (hingeY != null) return SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), hingeY, topScreen, capPad = capPad, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass)
+        if (hingeY != null) return SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), hingeY, topScreen, capPad = capPad, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass, row = row, centreControls = centreControls, roomLeft = room?.left, roomRight = room?.right, roomBottom = room?.bottom)
         val middle = h / 2f
-        val first = SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), middle, topScreen, hingeGap = 0f, capPad = capPad, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass) ?: return null
+        val first = SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), middle, topScreen, hingeGap = 0f, capPad = capPad, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass, row = row, centreControls = centreControls, roomLeft = room?.left, roomRight = room?.right, roomBottom = room?.bottom) ?: return null
         // the top of the frame under the middle: the highest of the pieces with a screen below it
         val under = first.pieces.filter { it.piece >= 0 && spec.pieces[it.piece].glass != null && it.dst.y > middle }.minOfOrNull { it.dst.y }
             ?: return first.copy(slab = true)
         // only where there is room: the frame never ends above the middle for it (a frame under nearer than the gap)
         val gap = minOf(0f, (middle - (under - FRAME_GAP_DP * densityDpi / 160f)) / k)
-        return (SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), middle, topScreen, hingeGap = gap, capPad = capPad, capLift = true, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass) ?: first).copy(slab = true)
+        return (SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), middle, topScreen, hingeGap = gap, capPad = capPad, capLift = true, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass, row = row, centreControls = centreControls, roomLeft = room?.left, roomRight = room?.right, roomBottom = room?.bottom) ?: first).copy(slab = true)
     }
+
+    /**
+     * A board's spacing ([RowSpacing]) at [densityDpi] and scale [k]: [ROW_EDGE_DP] from the window's edges, [ROW_GAP_DP]
+     * between the side groups and the screen, the gaps no smaller than [ROW_MIN_GAP_DP]; the screen no narrower than
+     * [MENU_MIN_DP].
+     */
+    private fun rowSpacing(densityDpi: Int, k: Float): RowSpacing {
+        val px = densityDpi / 160f / k
+        // every board's screen the menu's least, so a game's side groups stand where the menu's do (a touch screen's picture
+        // fits in it, a little smaller where it is narrower than the picture)
+        return RowSpacing(ROW_EDGE_DP * px, ROW_GAP_DP * px, ROW_MIN_GAP_DP * px, MENU_MIN_DP * px, PAIR_GAP_DP * px)
+    }
+
+    /**
+     * This flat board with [half]'s bottom half (the same board half-folded): its pieces under the lid (the touch screen,
+     * the side groups, the row), its controls and its touch glass; the lid (the top screen's frame, a piece of no layout
+     * piece) and the background this one's.
+     */
+    private fun SkinPlacement.bottomOf(half: SkinPlacement): SkinPlacement = copy(
+        pieces = pieces.filter { it.piece < 0 } + half.pieces.filter { it.piece >= 0 },
+        controls = half.controls,
+        glasses = glasses.filter { it.screen != GlassScreen.TOUCH } + half.glasses.filter { it.screen == GlassScreen.TOUCH },
+        sideIn = half.sideIn,
+    )
+
+    /**
+     * The touch screen's frame and glass widened about their middle into the room beside them, to [gap] from the nearer
+     * side's pieces (its picture keeps its shape in the glass, bars beside it); the frame's middle column stretched, its
+     * edges moved out, the touch shortcuts spread across the new width. As it is with no room to grow.
+     */
+    private fun SkinPlacement.touchWideToTheBoxes(gap: Float): SkinPlacement {
+        val g = glass(GlassScreen.TOUCH) ?: return this
+        val gi = spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
+        val frame = pieces.filter { it.piece == gi }
+        if (frame.isEmpty()) return this
+        val f0 = frame.minOf { it.dst.x }; val f1 = frame.maxOf { it.dst.x + it.dst.width }
+        val top = frame.minOf { it.dst.y }; val bottom = frame.maxOf { it.dst.y + it.dst.height }
+        val cx = (f0 + f1) / 2f
+        // the pieces beside it (not the screens', nor one across the window: the hinge)
+        val beside = pieces.filter { it.piece >= 0 && it.piece != gi && spec.pieces[it.piece].glass == null && it.dst.width < (f1 - f0) &&
+            it.dst.y < bottom && it.dst.y + it.dst.height > top }
+        val l1 = beside.filter { it.dst.x + it.dst.width / 2f < cx }.maxOfOrNull { it.dst.x + it.dst.width } ?: return this
+        val r0 = beside.filter { it.dst.x + it.dst.width / 2f > cx }.minOfOrNull { it.dst.x } ?: return this
+        val half = minOf(cx - (l1 + gap), (r0 - gap) - cx)
+        val extra = 2f * half - (f1 - f0)
+        if (extra < 1f) return this
+        val shift = extra / 2f
+        val moved = pieces.map { p -> when {
+            p.piece != gi -> p
+            kotlin.math.abs(p.dst.x - f0) < 0.5f -> p.copy(dst = p.dst.copy(x = p.dst.x - shift))
+            kotlin.math.abs(p.dst.x + p.dst.width - f1) < 0.5f -> p.copy(dst = p.dst.copy(x = p.dst.x + shift))
+            else -> p.copy(dst = p.dst.copy(x = p.dst.x - shift, width = p.dst.width + extra))
+        } }
+        val f = (g.rect.width + extra) / g.rect.width
+        val gcx = g.rect.x + g.rect.width / 2f
+        return copy(
+            pieces = moved,
+            glasses = glasses.map { if (it === g) it.copy(rect = it.rect.copy(x = it.rect.x - shift, width = it.rect.width + extra)) else it },
+            controls = controls.map { c -> if (c.spec.id.startsWith("TOUCH_")) c.copy(x = gcx + (c.x - gcx) * f, spec = c.spec.copy(hw = c.spec.hw * f)) else c },
+        )
+    }
+
+    /**
+     * The touch screen's frame cut to its 4:3 picture's height where its width holds the picture shorter than the glass
+     * (the Fold upright: no bars over and under the game), its top kept (its gap to the top screen's frame), its strip
+     * and the row under it up with its bottom. As it is where the picture fills the glass's height.
+     */
+    private fun SkinPlacement.touchToItsPictureHeight(): SkinPlacement {
+        val g = glass(GlassScreen.TOUCH) ?: return this
+        val cut = g.rect.height - g.rect.width * 3f / 4f
+        if (cut < 0.5f) return this
+        val gi = spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
+        val frame = pieces.filter { it.piece == gi && !it.strip }
+        if (frame.isEmpty()) return this
+        val top = frame.minOf { it.dst.y }; val bottom = frame.maxOf { it.dst.y + it.dst.height }
+        fun centre(i: Int) = pieces[i].piece >= 0 && spec.pieces[pieces[i].piece].let { it.glass == null && it.anchor == PieceAnchor.CENTRE }
+        val moved = pieces.mapIndexed { i, p -> when {
+            p.piece == gi && p.strip -> p.copy(dst = p.dst.copy(y = p.dst.y - cut))
+            p.piece == gi && kotlin.math.abs(p.dst.y - top) < 0.5f -> p
+            p.piece == gi && kotlin.math.abs(p.dst.y + p.dst.height - bottom) < 0.5f -> p.copy(dst = p.dst.copy(y = p.dst.y - cut))
+            p.piece == gi -> p.copy(dst = p.dst.copy(height = p.dst.height - cut))
+            centre(i) && p.dst.y >= bottom - 0.5f -> p.copy(dst = p.dst.copy(y = p.dst.y - cut))
+            else -> p
+        } }
+        return copy(
+            pieces = moved,
+            glasses = glasses.map { if (it === g) it.copy(rect = it.rect.copy(height = it.rect.height - cut)) else it },
+            controls = controls.map { c -> if (c.spec.id.startsWith("TOUCH_") || (c.spec.anchor == PieceAnchor.CENTRE && c.y > bottom)) c.copy(y = c.y - cut) else c },
+        )
+    }
+
+    /** Window px each side of the touch screen's glass past its 4:3 picture (its height the limit); 0 without one. */
+    private fun SkinPlacement.touchSpare(): Float =
+        glass(GlassScreen.TOUCH)?.rect?.let { (it.width - it.height * 4f / 3f) / 2f } ?: 0f
+
+    /**
+     * The touch screen's frame cut to its 4:3 picture (where its height holds the picture narrower than the glass), its
+     * strip's slots with it, centred where it was. As it is where the picture fills the glass's width.
+     */
+    private fun SkinPlacement.touchToItsPicture(): SkinPlacement {
+        val g = glass(GlassScreen.TOUCH) ?: return this
+        val cut = touchSpare()
+        if (cut < 0.5f) return this
+        val gi = spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
+        val frame = pieces.filter { it.piece == gi && !it.strip }
+        if (frame.isEmpty()) return this
+        val left = frame.minOf { it.dst.x }; val right = frame.maxOf { it.dst.x + it.dst.width }
+        val cx = g.rect.x + g.rect.width / 2f
+        val ratio = (g.rect.width - 2f * cut) / g.rect.width
+        fun across(x: Float) = cx + (x - cx) * ratio
+        return copy(
+            pieces = pieces.map { p -> when {
+                p.piece != gi -> p
+                p.strip -> p.copy(dst = p.dst.copy(x = across(p.dst.x + p.dst.width / 2f) - p.dst.width / 2f))
+                kotlin.math.abs(p.dst.x - left) < 0.5f -> p.copy(dst = p.dst.copy(x = p.dst.x + cut))
+                kotlin.math.abs(p.dst.x + p.dst.width - right) < 0.5f -> p.copy(dst = p.dst.copy(x = p.dst.x - cut))
+                else -> p.copy(dst = p.dst.copy(x = p.dst.x + cut, width = p.dst.width - 2f * cut))
+            } },
+            glasses = glasses.map { if (it === g) it.copy(rect = it.rect.copy(x = it.rect.x + cut, width = it.rect.width - 2f * cut)) else it },
+            controls = controls.map { c -> if (c.spec.id.startsWith("TOUCH_")) c.copy(spec = c.spec.copy(hw = c.spec.hw * ratio), x = across(c.x)) else c },
+        )
+    }
+
+    /** Sideways: window px between the menu's landscape shell's screen and the window's bottom (null upright). */
+    private fun menuFlatEnd(pack: SkinPackManifest, windowW: Int, windowH: Int, k: Float, topInset: Int, densityDpi: Int): Float? =
+        if (windowW <= windowH) null else shell(tunedFor(windowW, windowH, densityDpi, null), pack, SkinFamily.GRIP, SkinVariant.MENU, windowW, windowH, k, densityDpi, null, topInset, rowSpacing(densityDpi, k))
+            ?.glasses?.firstOrNull()?.rect?.let { windowH - (it.y + it.height) }
 
     /**
      * The menu's landscape shell's frame margin from the window's bottom, picture px: the margin the main menu's bottom
@@ -247,29 +433,59 @@ object SkinChoice {
         picture: Pair<Float, Float>?, hingeY: Float?, topInset: Int, foldable: Boolean, v: SkinVariant,
     ): SkinPlacement? {
         val k = scaleFor(pack, densityDpi)
+        val tuned = tunedFor(windowW, windowH, densityDpi, hingeY)
+        val dp = densityDpi / 160f
+        val row = rowSpacing(densityDpi, k)
         // the top screen's game size: the large layout's top frame takes its shape
         val top = when (v) { SkinVariant.N3DS, SkinVariant.N3DS_REGULAR -> 400f to 240f; SkinVariant.DS -> 256f to 192f; else -> null }
         val landscape = windowW > windowH
         // sideways: the main menu's landscape shell, the game in its screen frame (the strip under it; a DS's MIC, SWAP)
-        val foldBoard = {
-            shrunk(k) { s ->
-                widest(pack, SkinFamily.FLEX, v, fold = true, refH = windowH / s) { spec ->
-                    foldPieces(spec, windowW, windowH, s, picture, topInset, hingeY, densityDpi, top)
-                }
+        // [both]: the Dreamcast's board with the stick and the d-pad both, tried first at every scale (shrunk to fit) over the
+        // board showing one at a time
+        val flatEnd by lazy { menuFlatEnd(pack, windowW, windowH, k, topInset, densityDpi) }
+        fun foldBoardOf(both: Boolean?) = shrunk(k) { s ->
+            widest(tuned, pack, SkinFamily.FLEX, v, fold = true, refH = if (both != null) Float.MAX_VALUE else windowH / s) { spec ->
+                if (both != null && (spec.minRefH > 0) != both) return@widest null
+                // a screen frame with nothing under it as far from the window's bottom as the menu's
+                fun fold(hinge: Float? = hingeY) = foldPieces(spec, windowW, windowH, s, picture, topInset, hinge, densityDpi, top, bottomMargin = shellMargin(pack),
+                    bottomGlass = flatEnd, row = rowSpacing(densityDpi, s), centreControls = v !in N3DS_VARIANTS)
+                val placed = fold() ?: return@widest null
+                if (v !in N3DS_VARIANTS || spec.boxes.isEmpty()) return@widest placed
+                // the 3DS's touch screen, its 4:3 picture in a frame between the boxes: sideways (the room beside it) the frame
+                // cut to the picture's height and widened to the boxes, bars beside the picture; upright cut to the picture
+                if (!landscape) return@widest placed.touchToItsPicture().touchToItsPictureHeight()
+                fun wide(hinge: Float?) = fold(hinge)?.touchToItsPictureHeight()?.touchWideToTheBoxes(SkinBoxes.GAP_DP * dp)
+                val wide = wide(hingeY)
+                // flat: the bottom half as half-folded at the window's middle (the touch screen not grown up into the
+                // hinge's room), so folding never moves it; the flat lid kept
+                val half = if (hingeY == null && wide != null) wide(windowH / 2f) else null
+                if (wide != null && half != null) wide.bottomOf(half) else wide
             }
         }
+        val foldBoard = { if (v == SkinVariant.DC) foldBoardOf(true) ?: foldBoardOf(false) else foldBoardOf(null) }
         if (landscape) {
             // a book foldable's inner screen sideways: its hinge runs across the window, where the board's is. A DS or 3DS
             // takes the board flat too (the crease between its screens); a one-screen game only half-folded, as flat the
             // landscape shell gives it the window's whole height.
             if ((foldable || tablet) && nearSquare(windowW, windowH) && (hingeY != null || v in TWO_SCREEN)) foldBoard()?.let { return it }
-            return shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset)
+            // the Dreamcast, the N64 and the 3DS on a tablet / an inner screen: their shells with the stick and the d-pad both
+            if (v == SkinVariant.DC && (foldable || tablet)) shell(tuned, pack, SkinFamily.GRIP, v, windowW, windowH, k, densityDpi, picture, topInset, row, hingeY = hingeY,
+                refH = Float.MAX_VALUE, pick = { it.minRefH > 0 && it.controls.none { c -> c.id == "STICK_SWAP" } })?.let { return it }
+            if (v == SkinVariant.N64 && (foldable || tablet)) shell(tuned, pack, SkinFamily.GRIP, v, windowW, windowH, k, densityDpi, picture, topInset, row, hingeY = hingeY,
+                pick = { it.minRefH > 0 && it.controls.none { c -> c.id == "STICK_SWAP" } && it.controls.any { c -> c.id == "MENU" && c.anchor == PieceAnchor.RIGHT } })
+                ?.let { return it }
+            if (v in N3DS_VARIANTS) shell(tuned, pack, SkinFamily.GRIP, v, windowW, windowH, k, densityDpi, picture, topInset, row, hingeY = hingeY,
+                pick = { it.controls.none { c -> c.id == "STICK_SWAP" } })?.let { return it }
+            return shell(tuned, pack, SkinFamily.GRIP, v, windowW, windowH, k, densityDpi, picture, topInset, row, hingeY = hingeY)
         }
         // a foldable's inner screen or a tablet: the fold board, split at its hinge flat or not (the window's middle when flat)
         if (foldable || tablet) foldBoard()?.let { return it }
         // half-folded: the screen frame above the fold, the pad below it (a DS's touch screen with it)
-        if (hingeY != null) return widest(pack, SkinFamily.FLEX, v, fold = false) { spec ->
+        if (hingeY != null) return widest(tuned, pack, SkinFamily.FLEX, v, fold = false) { spec ->
             if (spec.frame?.hinge?.let { it >= 0 } != true) null
+            else if (spec.boxes.isNotEmpty()) SkinBoxes.place(spec, windowW, windowH, k, densityDpi, hingeY) { s, r ->
+                SkinSolver.placePieces(s, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), hingeY, roomLeft = r.left, roomRight = r.right, roomBottom = r.bottom)
+            }
             else SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), hingeY)
         }
         val families = when {
@@ -279,11 +495,16 @@ object SkinChoice {
             else -> listOf(SkinFamily.LARGE, SkinFamily.STACKED)
         }
         for (family in families) {
-            widest(pack, family, v, fold = false) { spec ->
-                if (spec.frame != null) SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), topScreen = top)
+            widest(tuned, pack, family, v, fold = false) { spec ->
+                if (spec.frame != null && spec.boxes.isNotEmpty()) SkinBoxes.place(spec, windowW, windowH, k, densityDpi, hingeY) { s, r ->
+                    SkinSolver.placePieces(s, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), topScreen = top, row = row,
+                        roomLeft = r.left, roomRight = r.right, roomBottom = r.bottom)
+                }
+                else if (spec.frame != null) SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), topScreen = top, row = row)
                 else SkinSolver.place(spec, windowW.toFloat(), windowH.toFloat(), k, picture)
             }?.let { return it }
         }
         return null
     }
+
 }

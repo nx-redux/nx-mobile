@@ -34,4 +34,8 @@ class AndroidEmulatorConfigStore(private val sdRoot: () -> File) : EmulatorConfi
     override suspend fun deleteGame(tag: String, coreId: String, romFileName: String) = withContext(Dispatchers.IO) {
         deleteConfig(File(sdRoot(), paths(tag, coreId, romFileName).gameConfig))
     }
+
+    override suspend fun deleteConsole(tag: String, coreId: String) = withContext(Dispatchers.IO) {
+        deleteConfig(File(sdRoot(), paths(tag, coreId, null).consoleConfig))
+    }
 }

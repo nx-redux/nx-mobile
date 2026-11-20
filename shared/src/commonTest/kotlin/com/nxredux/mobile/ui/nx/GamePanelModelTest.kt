@@ -19,6 +19,12 @@ class GamePanelModelTest {
         touch: List<ShortcutAction> = emptyList(), slot: Int? = null,
     ) = GamePanelModel.shortcuts(discCount, discIndex, netplay, ff, rewind, mic, touch, slot)
 
+    @Test fun fast_forward_shows_its_speed() {
+        val ff = GamePanelModel.shortcuts(1, 0, netplay = false, ff = false, rewind = null, ffSpeed = 4).first { it.shortcut == Shortcut.FAST_FORWARD }
+        assertEquals("4x", ff.value)
+        assertNull(shortcuts().first { it.shortcut == Shortcut.FAST_FORWARD }.value)   // no speed given: no value line
+    }
+
     @Test fun tabs_shortcuts_only() {
         assertEquals(listOf(GamePanelTab.SHORTCUTS), GamePanelModel.tabs(raAvailable = false, playerSlots = 1))
         assertEquals(listOf(GamePanelTab.SHORTCUTS), GamePanelModel.tabs(raAvailable = false, playerSlots = 0))
@@ -163,14 +169,19 @@ class GamePanelModelTest {
         assertEquals(false, list.single { it.shortcut == Shortcut.MIC }.on)
     }
 
+    @Test fun micTileSaysWhetherTheButtonShows() {
+        assertEquals("Hidden", shortcuts(mic = false).single { it.shortcut == Shortcut.MIC }.value)
+        assertEquals("Shown", shortcuts(mic = true).single { it.shortcut == Shortcut.MIC }.value)
+    }
+
     @Test fun micTileHidden() {
         assertTrue(shortcuts(mic = null).none { it.shortcut == Shortcut.MIC })
         assertTrue(shortcuts(netplay = true, mic = true).none { it.shortcut == Shortcut.MIC })
     }
 
     @Test fun micTileFlips() {
-        assertEquals(GamePanelEvent.SetMic(on = false), GamePanelModel.eventFor(shortcuts(mic = true).single { it.shortcut == Shortcut.MIC }))
-        assertEquals(GamePanelEvent.SetMic(on = true), GamePanelModel.eventFor(shortcuts(mic = false).single { it.shortcut == Shortcut.MIC }))
+        assertEquals(GamePanelEvent.SetMicButton(shown = false), GamePanelModel.eventFor(shortcuts(mic = true).single { it.shortcut == Shortcut.MIC }))
+        assertEquals(GamePanelEvent.SetMicButton(shown = true), GamePanelModel.eventFor(shortcuts(mic = false).single { it.shortcut == Shortcut.MIC }))
     }
 
     @Test fun netplayHidesAll() {

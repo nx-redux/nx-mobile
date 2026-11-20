@@ -1,5 +1,6 @@
 package com.nxredux.mobile.skinlayout
 
+import com.nxredux.mobile.skin.withoutControl
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -62,6 +63,7 @@ class SkinLayoutActivity : ComponentActivity() {
         val console = CoreRegistry.consoles.firstOrNull { it.id == intent.getStringExtra(EXTRA_CONSOLE) } ?: return finish()
         val wiiPad = WiiPad.entries.firstOrNull { it.name == intent.getStringExtra(EXTRA_WII_PAD) }
         val n3dsNew = intent.getBooleanExtra(EXTRA_N3DS_NEW, false)
+        val segaThree = intent.getBooleanExtra(EXTRA_SEGA_THREE, false)
         val title = intent.getStringExtra(EXTRA_TITLE) ?: console.displayName
         val settings = AndroidAppSettings(this)
         // the pad theme's pack, as the game reads it; NX Carbon when the theme has none or it can't be read
@@ -78,7 +80,7 @@ class SkinLayoutActivity : ComponentActivity() {
                     // until the window has turned to the asked orientation, nothing to place
                     if (w <= 0 || h <= 0 || (w > h) != landscape) return@BoxWithConstraints
                     // a new window size (folded, unfolded) is another layout: start again on it
-                    val made = remember(w, h) { place(pack, console, tag, wiiPad, n3dsNew, w, h, settings) }
+                    val made = remember(w, h) { place(pack, console, tag, wiiPad, n3dsNew, segaThree, w, h, settings) }
                     if (made == null) { LaunchedEffect(Unit) { noLayout() }; return@BoxWithConstraints }
                     val (state, spec) = made
                     SideEffect { editor = state }
@@ -101,13 +103,13 @@ class SkinLayoutActivity : ComponentActivity() {
      * bare buttons from the closest layout ([SkinChoice.placeClosest], so a tight window still opens), their own
      * (overlay) layout; null when none fits or its picture can't be read.
      */
-    private fun place(pack: PadSkinPack, console: Console, tag: String, wiiPad: WiiPad?, n3dsNew: Boolean, w: Int, h: Int, settings: AppSettings): Pair<SkinEditorState, Placed>? {
+    private fun place(pack: PadSkinPack, console: Console, tag: String, wiiPad: WiiPad?, n3dsNew: Boolean, segaThree: Boolean, w: Int, h: Int, settings: AppSettings): Pair<SkinEditorState, Placed>? {
         val base = CoreRegistry.baseTag(tag)
         val nds = NdsOptions.appliesTo(tag)
         val ds = nds || N3dsOptions.appliesTo(tag)
         // the 3DS: the regular pad or the New 3DS's (ZL / ZR, the C-stick), as asked
         val profile = PadProfile.forTag(tag, n3dsNew = n3dsNew, wii = wiiPad)
-        val variant = SkinChoice.variantFor(base, nds, arcadeSet = false, gameCube = profile.kind == PadProfile.Kind.GC, wiiPad = wiiPad, n3dsNew = profile.cStick)
+        val variant = SkinChoice.variantFor(base, nds, arcadeSet = false, gameCube = profile.kind == PadProfile.Kind.GC, wiiPad = wiiPad, n3dsNew = profile.cStick, segaThree = segaThree)
         // a one-screen console's glass at 4:3, as the game places it before its first frame (the shape never changes
         // which layout a window gets, SkinPictureAspectTest)
         val picture = if (ds) null else (4f / 3f * 240f) to 240f
@@ -116,13 +118,15 @@ class SkinLayoutActivity : ComponentActivity() {
         // The game's own checks that this can't make are left out: a game starts every Dual screen mode with the skin
         // allowed ([com.nxredux.mobile.skin.SkinDual.skinAllowed]; only flipping the panel up drops it), and its hinge
         // is placed only while half-folded in a game. The title says which layout this is ([SkinLayoutEdit.title]).
+        // without the mic button while the game hides it, so a nudge saved here is keyed on the group the game draws
+        val manifest = if (ds && !settings.micButtonShown) pack.manifest.withoutControl("MIC") else pack.manifest
         val skin = if (!settings.padSkin) null else SkinChoice.place(
-            pack.manifest, w, h, dpi, tablet, ds, picture, hingeY = null, topInset = 0, foldable = DeviceTraits.canHalfFold, variant = variant,
+            manifest, w, h, dpi, tablet, ds, picture, hingeY = null, topInset = 0, foldable = DeviceTraits.canHalfFold, variant = variant,
         )
         // the game's rule: the bare buttons wherever the skin is not drawn
         val bare = skin == null
         val placed: SkinPlacement = skin ?: SkinChoice.placeClosest(
-            pack.manifest, w, h, dpi, tablet, ds, picture, hingeY = null, topInset = 0, foldable = DeviceTraits.canHalfFold, variant = variant,
+            manifest, w, h, dpi, tablet, ds, picture, hingeY = null, topInset = 0, foldable = DeviceTraits.canHalfFold, variant = variant,
         ) ?: return null
         val stick = profile.stickByDefault || DcGames.stickFirst(base, arcadeSet = false) || profile.kind == PadProfile.Kind.GC
         val image = pack.picture(placed.spec.image)?.asImageBitmap() ?: return null
@@ -157,6 +161,7 @@ class SkinLayoutActivity : ComponentActivity() {
         private const val EXTRA_LANDSCAPE = "landscape"
         private const val EXTRA_WII_PAD = "wii_pad"
         private const val EXTRA_N3DS_NEW = "n3ds_new"
+        private const val EXTRA_SEGA_THREE = "sega_three"
         private const val EXTRA_TITLE = "title"
 
         fun intent(context: Context, request: SkinEditRequest, title: String): Intent = Intent(context, SkinLayoutActivity::class.java)
@@ -164,6 +169,7 @@ class SkinLayoutActivity : ComponentActivity() {
             .putExtra(EXTRA_LANDSCAPE, request.landscape)
             .putExtra(EXTRA_WII_PAD, request.wiiPad?.name)
             .putExtra(EXTRA_N3DS_NEW, request.n3dsNew)
+            .putExtra(EXTRA_SEGA_THREE, request.segaThree)
             .putExtra(EXTRA_TITLE, title)
     }
 }

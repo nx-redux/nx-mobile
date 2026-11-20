@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.DpSize
 import com.nxredux.mobile.layout.portraitBandPx
 import com.nxredux.mobile.runner.Posture
 import com.nxredux.mobile.skin.SkinChoice
+import com.nxredux.mobile.skin.SkinFamily
 import com.nxredux.mobile.skin.SkinPlacement
 import kotlin.math.roundToInt
 
@@ -92,10 +93,11 @@ val LocalPosture = compositionLocalOf<Posture> { Posture.Flat }
  * Whether the main menu tries its skin ([HandheldShell]): a skin is picked ([skinPicked]) and the pad shown
  * ([showPad], [com.nxredux.mobile.ui.AppState.menuPadShown]), with no controller connected ([controllerConnected]: any
  * gamepad, a clip-on and built-in controls too, as in a game); half-folded ([tabletop]) only for its two-screen layout
- * ([canTwo]). It shows when one of the skin's menu layouts also fits the window.
+ * ([canTwo]) or, on a phone upright ([phoneUpright]), its screen above the fold. It shows when one of the skin's menu
+ * layouts also fits the window.
  */
-fun menuSkinShown(skinPicked: Boolean, showPad: Boolean, controllerConnected: Boolean, canTwo: Boolean, tabletop: Boolean): Boolean =
-    skinPicked && showPad && !controllerConnected && (canTwo || !tabletop)
+fun menuSkinShown(skinPicked: Boolean, showPad: Boolean, controllerConnected: Boolean, canTwo: Boolean, tabletop: Boolean, phoneUpright: Boolean = false): Boolean =
+    skinPicked && showPad && !controllerConnected && (canTwo || phoneUpright || !tabletop)
 
 /**
  * The main menu's frame. [skin] (a pad skin's pack, NX Carbon) with [showPad] and no [controllerConnected]
@@ -136,7 +138,7 @@ fun HandheldShell(
             val window = DpSize(maxWidth, maxHeight)
             // The skin's menu layout for this area (flat, portrait or landscape, with the pad shown only), its picture and its pieces' picture.
             // Half-folded only the two-screen layout (a tablet-class window: the Fold's inner screen, upright or, half-folded,
-            // sideways) keeps the skin, split at the hinge.
+            // sideways) or a phone's upright one (its screen above the fold, the pad below) keeps the skin, split at the hinge.
             val hingeY = (posture as? Posture.Tabletop)?.let { (it.hingeTop + it.hingeBottom) / 2f }
             // a camera cutout at the bottom (the Fold's inner screen turned so its camera is there): the skin runs down under
             // the strip the caller pads below the shell, as it runs up under the top one; the bars alone stay clear
@@ -145,7 +147,7 @@ fun HandheldShell(
             val canTwo = top != null && tablet && twoScreens && (portrait || hingeY != null)
             // App already folds the controller into [showPad] (it needs that for the keyboard's docking too); checked here
             // again so the shell's own rule ([menuSkinShown]) holds for any caller that passes the pad alone.
-            val skinPlaced = if (skin != null && menuSkinShown(skinPicked = true, showPad, controllerConnected, canTwo, tabletop = posture is Posture.Tabletop)) {
+            val skinPlaced = if (skin != null && menuSkinShown(skinPicked = true, showPad, controllerConnected, canTwo, tabletop = posture is Posture.Tabletop, phoneUpright = portrait && !tablet)) {
                 val w = constraints.maxWidth
                 // the skin runs up under the cutout (the shell starts below it), and down under one below, its screen too: the
                 // frame keeps its own margins and the glass reaches under the camera; the page inside clears it ([cutoutPad] below)
@@ -154,7 +156,7 @@ fun HandheldShell(
                 val dpi = (density.density * 160f).roundToInt()
                 remember(skin, w, h, dpi, canTwo, hingeY) {
                     SkinChoice.placeMenu(skin.manifest, w, h, dpi, foldable = DeviceTraits.canHalfFold, tablet = tablet, hingeY = hingeY, twoScreens = canTwo)
-                        ?.takeIf { posture !is Posture.Tabletop || it.glasses.any { g -> g.id == TOP_GLASS } }?.let { p ->
+                        ?.takeIf { posture !is Posture.Tabletop || it.glasses.any { g -> g.id == TOP_GLASS } || it.spec.family == SkinFamily.FLEX }?.let { p ->
                         val parts = p.spec.parts?.let { skin.picture(it) ?: return@let null }
                         skin.picture(p.spec.image)?.takeIf { p.spec.parts == null || parts != null }?.let { Triple(p, it, parts) }
                     }

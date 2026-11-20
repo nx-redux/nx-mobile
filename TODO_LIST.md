@@ -330,3 +330,31 @@ Follow-ups, after #147:
 - [x] BIOS copies: the app copied BIOS files into its own system folder and never removed one whose original was gone, so a deleted or renamed BIOS still loaded and passed the check. It now records each copy by the Bios folder it came from and removes it once no folder has it (a bundled file is restored). Refused with bios_CD_U.bin renamed, re-copied and played with it back, MSU-MD Sample on the Nova, 2026-11-16.
 - [ ] More badges ([IndexedGame.badge] is general): from bracketed file-name tags ((Hack), [h], (Homebrew), (Translated), (Beta)/(Proto)) via a small table, a per-game choice in Options (wins over detected ones), or a DAT/ScreenScraper match. One badge per game today.
 - [ ] Docs: unzip MSU packs (a zip cannot be streamed); a pack in its own folder is one game.
+
+## PS2: ARMSX2 nightly-20261114 with LTO and upstream's profile (PR #152)
+
+Measured 2026-11-15, Budokai Tenkaichi 3 battle state: AYANEO (Mali-G76) 22–28 fps on OpenGL ES with the old pin →
+55–58 fps on Vulkan at native resolution, 38 fps at 2x; Nova (God of War II) unchanged. The official ARMSX2 app on the
+AYANEO holds 60 fps at 1x and 2x on Vulkan with the malisx2 driver, 30–34 fps on OpenGL.
+
+Device checks still owed (the areas core patches 0002–0006 touch):
+
+- [ ] Memory cards: save in game, quit, relaunch → the save is there; a card from the old pin still loads.
+- [ ] Two players: second controller claims port 2 and plays.
+- [ ] Cheats & Patches: a cheat from Cheats/PS2 and a patch from Cheats/PS2/Patches apply.
+- [ ] Resume: Home and return, quit and relaunch from slot 9, a slot save/load; a state from the old pin loads.
+- [ ] 16 KB pages (nx16k): a PS2 game starts and runs on the new pin.
+- [ ] OpenGL ES at 2x on the AYANEO with the optimised build, measured cool (the first passes heat-throttled).
+- [ ] Custom GPU driver on a build with the slang merge (#144): one launch on the Nova with a Turnip package.
+
+Follow-ups:
+
+- [ ] Graphics API Auto on Mali: Auto means OpenGL ES, so a Mali user must pick Vulkan to get the gain. Decide whether PS2 picks Vulkan there.
+- [ ] malisx2 through Settings → Emulation → GPU driver: it loads but fails the pre-check (no AHardwareBuffer import) and falls back. Needs the Vulkan path to present straight to the screen (a swapchain) instead of through the OpenGL presenter; overlays, shaders and the second screen sit on that presenter today.
+- [ ] AYANEO firmware drops broadcasts to the debug test hook (manifest receiver skipped); a run-time-registered receiver worked. Decide whether the debug build should register it that way.
+- [ ] Thread pinning is off on chips with two fast cores ("Performance Cores unavailable"); check whether pinning two of the four threads helps.
+
+Left on the devices (2026-11-16):
+
+- [ ] AYANEO: ARMSX2 Nightly installed (with the battle state and auto-load on); `/sdcard/NXReduxDev-perf-backup`; the battle state in slot 0 of Budokai Tenkaichi 3; malisx2 in the dev app's driver folder; Debug log on.
+- [ ] Nova: the temporary build with the PS2 4x override is still installed (install a current build); `/sdcard/NXRedux-gpu-test-backup-2`; Debug log on; `/sdcard/NXRedux/drivers` and 10 installed drivers from the GPU driver tests.

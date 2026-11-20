@@ -33,6 +33,9 @@ class PadMap private constructor(
     /** The button the app's menus act on for an on-screen [button]; the game still receives the raw button. */
     fun menuButton(button: NxButton): NxButton = menu[button] ?: button
 
+    /** The Sega pad resolved to 3 buttons (no X Y Z, no Mode): its skin is the A B C one. */
+    val segaThree: Boolean get() = segaCluster && SELECT in hidden
+
     /** The keycode a pressed [keyCode] reaches the core as; keys that are not face/shoulder/START/SELECT pass through. */
     fun sendKey(keyCode: Int): Int {
         val button = BY_KEY[keyCode] ?: return keyCode

@@ -141,8 +141,8 @@ sealed interface GamePanelEvent {
     data class SetFastForward(val on: Boolean) : GamePanelEvent
     /** The toggled rewind to [on]. */
     data class SetRewind(val on: Boolean) : GamePanelEvent
-    /** The session's mic toggled to [on] (the tile shows the live state). */
-    data class SetMic(val on: Boolean) : GamePanelEvent
+    /** The pad's mic button [shown] or hidden (hidden turns the mic off; the button itself turns it on and off). */
+    data class SetMicButton(val shown: Boolean) : GamePanelEvent
     /** Reset: always asks first (the in-game menu's Reset dialog). */
     data object Reset : GamePanelEvent
 }
@@ -218,19 +218,19 @@ object GamePanelModel {
      * The Shortcuts tab: the touch buttons' tiles ([touch], [panelTouchActions]; Save and Load on the save-state [slot]),
      * Swap disc for a multi-disc game outside netplay (disc swaps aren't synced), then Fast forward ([ff]: running now),
      * Rewind ([rewind]: rewinding now; null where the game can't rewind, the core or its Rewind row off: hidden, never
-     * greyed), Mic ([mic]: on now; null off DS/3DS: hidden) and Reset. Netplay and link sessions keep only Swap disc's
+     * greyed), Mic ([mic]: the pad's mic button shown, "Shown" / "Hidden"; null off DS/3DS: no tile) and Reset. Fast forward shows its speed ([ffSpeed], "4x"). Netplay and link sessions keep only Swap disc's
      * rule: the rest would desync the players. [discIndex] is 0-based.
      */
     fun shortcuts(
         discCount: Int, discIndex: Int, netplay: Boolean, ff: Boolean, rewind: Boolean?, mic: Boolean? = null,
-        touch: List<ShortcutAction> = emptyList(), slot: Int? = null,
+        touch: List<ShortcutAction> = emptyList(), slot: Int? = null, ffSpeed: Int? = null,
     ): List<ShortcutState> = buildList {
         if (!netplay) touch.forEach { add(touchTile(it, slot)) }
         if (discCount > 1 && !netplay) add(ShortcutState(Shortcut.SWAP_DISC, Shortcut.SWAP_DISC.label, true, "${discIndex + 1}/$discCount"))
         if (netplay) return@buildList
-        add(ShortcutState(Shortcut.FAST_FORWARD, Shortcut.FAST_FORWARD.label, true, on = ff))
+        add(ShortcutState(Shortcut.FAST_FORWARD, Shortcut.FAST_FORWARD.label, true, value = ffSpeed?.let { "${it}x" }, on = ff))
         if (rewind != null) add(ShortcutState(Shortcut.REWIND, Shortcut.REWIND.label, true, on = rewind))
-        if (mic != null) add(ShortcutState(Shortcut.MIC, Shortcut.MIC.label, true, on = mic))
+        if (mic != null) add(ShortcutState(Shortcut.MIC, Shortcut.MIC.label, true, value = if (mic) "Shown" else "Hidden", on = mic))
         add(ShortcutState(Shortcut.RESET, Shortcut.RESET.label, true))
     }
 
@@ -243,7 +243,7 @@ object GamePanelModel {
         Shortcut.SWAP_DISC -> GamePanelEvent.SwapDisc
         Shortcut.FAST_FORWARD -> s.on?.let { GamePanelEvent.SetFastForward(on = !it) }
         Shortcut.REWIND -> s.on?.let { GamePanelEvent.SetRewind(on = !it) }
-        Shortcut.MIC -> s.on?.let { GamePanelEvent.SetMic(on = !it) }
+        Shortcut.MIC -> s.on?.let { GamePanelEvent.SetMicButton(shown = !it) }
         Shortcut.RESET -> GamePanelEvent.Reset
     }
 

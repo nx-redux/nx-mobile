@@ -1,7 +1,13 @@
 package com.nxredux.mobile.ui.nx
 
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
+import kotlin.math.abs
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.foundation.layout.fillMaxHeight
 import kotlin.math.roundToInt
 import androidx.compose.foundation.lazy.LazyRow
@@ -99,15 +105,22 @@ fun GamePanel(
     val inset = nxPageInset()
     val page = if (menuInset) Modifier.padding(start = inset.pillStart, end = inset.pillEnd) else Modifier
     BoxWithConstraints(modifier.fillMaxSize().then(if (opaque) Modifier.background(colors.background) else Modifier)) {
-        // A short panel (a pad skin's small touch screen) keeps its room for the tabs: the header one line.
-        val compact = maxHeight < GP_COMPACT_BELOW
+        // A short panel (a pad skin's small touch screen) keeps its room for the rows: the header one line, or none (the
+        // clock and battery at the tab row's end).
+        val header = if (showHeader) gamePanelHeaderFor(maxHeight) else null
         Column(Modifier.fillMaxSize().then(page)) {
-            if (showHeader) { if (compact) GamePanelCompactHeader(state.header) else GamePanelHeaderBar(state.header) }
+            when (header) {
+                GamePanelHeaderStyle.FULL -> GamePanelHeaderBar(state.header)
+                GamePanelHeaderStyle.ONE_LINE -> GamePanelCompactHeader(state.header)
+                else -> {}
+            }
             if (showTabs) MenuTabRow(
                 tabs.map { it.label }, tabs.indexOf(tab).coerceAtLeast(0), onTab = { onEvent(GamePanelEvent.SelectTab(tabs[it])) },
                 // The row pads by the page inset itself, which the column already has: its words where the menu's start.
+                // On the panel's own page, its words on the panel's gutter, in line with the header and the rows.
                 modifier = if (menuInset) Modifier.offset(x = nxListInset() - inset.start) else Modifier,
-                focused = state.focus == PanelFocus.Tabs,
+                focused = state.focus == PanelFocus.Tabs, gutter = if (menuInset) null else GP_GUTTER,
+                hints = if (header == GamePanelHeaderStyle.NONE) { _ -> GamePanelStatus(state.header) } else null,
             )
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (tab) {
@@ -171,9 +184,38 @@ internal fun GamePanelCompactHeader(h: GamePanelHeader) {
         horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(h.title, Modifier.weight(1f), color = colors.listText, fontFamily = font, fontSize = GP_TITLE_SIZE, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        val status = listOfNotNull(h.clockText.takeIf { it.isNotEmpty() }, h.batteryPercent?.let { "$it%" }).joinToString("  ·  ")
-        if (status.isNotEmpty()) Text(status, color = colors.hint, fontFamily = font, fontSize = GP_SMALL_SIZE, maxLines = 1)
+        GamePanelStatus(h)
     }
+}
+
+/** The clock and battery on one line (the one-line header's end, the tab row's on a panel with no header). */
+@Composable
+private fun GamePanelStatus(h: GamePanelHeader) {
+    val status = listOfNotNull(h.clockText.takeIf { it.isNotEmpty() }, h.batteryPercent?.let { "$it%" }).joinToString("  ·  ")
+    if (status.isNotEmpty()) Text(status, color = LocalNxColors.current.hint, fontFamily = LocalNxFont.current, fontSize = GP_SMALL_SIZE, maxLines = 1)
+}
+
+/** How much header a panel [height] tall shows: the full one, one line, or none ([GP_ONE_LINE_BELOW], [GP_NO_HEADER_BELOW]). */
+internal enum class GamePanelHeaderStyle { FULL, ONE_LINE, NONE }
+
+internal fun gamePanelHeaderFor(height: Dp): GamePanelHeaderStyle = when {
+    height < GP_NO_HEADER_BELOW -> GamePanelHeaderStyle.NONE
+    height < GP_ONE_LINE_BELOW -> GamePanelHeaderStyle.ONE_LINE
+    else -> GamePanelHeaderStyle.FULL
+}
+
+/** A setting's name column: narrower on a narrow panel, where a long name takes two lines rather than crowd its control. */
+internal fun quickLabelFor(width: Dp): Dp = if (width < GP_ONE_LINE_BELOW) GP_QUICK_LABEL_NARROW else GP_QUICK_LABEL
+
+/**
+ * Whether a Settings row's [count] values fit side by side in a panel [width] wide: each value's share of the control
+ * (the row less the gutters, the name's column and the gap) holds the widest value ([widest]) and [GP_SEG_PAD] each side.
+ * Else the row shows one value between arrows, so no value's word is cut.
+ */
+internal fun quickSegmentsFit(width: Dp, widest: Dp, count: Int, label: Dp = quickLabelFor(width)): Boolean {
+    if (count <= 0) return false
+    val control = width - GP_GUTTER * 2 - label - GP_QUICK_GAP
+    return control / count >= widest + GP_SEG_PAD * 2
 }
 
 /**
@@ -361,6 +403,15 @@ private fun SettingsTab(rows: List<QuickSetting>, bottom: Dp, onEvent: (GamePane
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
     val scroll = rememberScrollState()
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val width = maxWidth
+    val labelWidth = quickLabelFor(width)
+    // a choice's widest value as its segment draws it
+    fun widest(c: QuickSetting.Choice): Dp = with(density) {
+        c.labels.maxOfOrNull { measurer.measure(it, TextStyle(fontFamily = font, fontSize = GP_SMALL_SIZE), maxLines = 1).size.width }?.toDp() ?: 0.dp
+    }
     Column(
         Modifier.fillMaxSize().nxScrollFade(scroll, height = 56.dp, strong = true).verticalScroll(scroll)
             .padding(start = GP_GUTTER, end = GP_GUTTER, top = 6.dp, bottom = bottom),
@@ -368,36 +419,84 @@ private fun SettingsTab(rows: List<QuickSetting>, bottom: Dp, onEvent: (GamePane
         rows.forEach { row ->
             val enabled = (row as? QuickSetting.Choice)?.enabled != false
             Row(
-                Modifier.fillMaxWidth().heightIn(min = GP_QUICK_ROW).alpha(if (enabled) 1f else NX_DISABLED_ALPHA),   // role: a disabled control
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+                Modifier.fillMaxWidth().heightIn(min = GP_QUICK_ROW).padding(vertical = 4.dp).alpha(if (enabled) 1f else NX_DISABLED_ALPHA),   // role: a disabled control
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(GP_QUICK_GAP),
             ) {
-                Text(row.label, Modifier.width(GP_QUICK_LABEL), color = colors.listText, fontFamily = font, fontSize = GP_LABEL_SIZE, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(row.label, Modifier.width(labelWidth), color = colors.listText, fontFamily = font, fontSize = GP_LABEL_SIZE, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 when (row) {
                     is QuickSetting.Volume -> {
                         // The thumb follows the finger; the device's volume has whole steps, so the row's own value lands on release.
                         var drag by remember { mutableStateOf<Float?>(null) }
-                        Slider(
-                            value = drag ?: row.value, onValueChange = { drag = it; onEvent(GamePanelEvent.SetVolume(it)) },
-                            onValueChangeFinished = { drag = null }, modifier = Modifier.weight(1f),
-                            colors = SliderDefaults.colors(
-                                thumbColor = colors.listText, activeTrackColor = colors.listText,
-                                inactiveTrackColor = colors.hint.copy(alpha = 0.3f),   // role: the track past the thumb
-                            ),
+                        QuickVolumeBar(
+                            value = drag ?: row.value, onChange = { drag = it; onEvent(GamePanelEvent.SetVolume(it)) },
+                            onDone = { drag = null }, modifier = Modifier.weight(1f),
                         )
                         Text("${((drag ?: row.value) * 100).roundToInt()}%", Modifier.width(44.dp), color = colors.hint, fontFamily = font, fontSize = GP_SMALL_SIZE, maxLines = 1, textAlign = TextAlign.End)
                     }
-                    is QuickSetting.Choice -> if (row.segments) QuickSegments(row, Modifier.weight(1f), onEvent) else QuickStepper(row, Modifier.weight(1f), onEvent)
+                    is QuickSetting.Choice -> if (row.segments && quickSegmentsFit(width, widest(row), row.values.size)) QuickSegments(row, Modifier.weight(1f), onEvent)
+                        else QuickStepper(row, Modifier.weight(1f), onEvent)
                     is QuickSetting.Shader -> QuickOpen(row.value, Modifier.weight(1f)) { onEvent(GamePanelEvent.OpenShaders) }
                 }
             }
         }
         Row(
-            Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = GP_QUICK_ROW).clip(RoundedCornerShape(GP_SLOT_RADIUS))
+            Modifier.fillMaxWidth().padding(top = 16.dp).heightIn(min = GP_QUICK_ROW).clip(RoundedCornerShape(GP_SLOT_RADIUS))
                 .clickable { onEvent(GamePanelEvent.OpenOptions) },
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(GP_QUICK_GAP * 2),
         ) {
             Text("Changes apply now. Save them from All options.", Modifier.weight(1f), color = colors.hint, fontFamily = font, fontSize = GP_SMALL_SIZE, maxLines = 2)
             Text("All options  \u203A", color = colors.listText, fontFamily = font, fontSize = GP_LABEL_SIZE, maxLines = 1)
+        }
+    }
+    }
+}
+
+/**
+ * The volume as a filled bar: the share of the track in use lit from the left, no thumb. A touch sets it where it lands
+ * and a drag follows the finger ([onChange], 0 to 1); [onDone] on the finger's lift.
+ */
+@Composable
+private fun QuickVolumeBar(value: Float, onChange: (Float) -> Unit, onDone: () -> Unit, modifier: Modifier) {
+    val colors = LocalNxColors.current
+    val lit = colors.listText
+    val track = colors.hint.copy(alpha = 0.3f)   // role: the track past the volume
+    val latest by rememberUpdatedState(onChange)
+    val done by rememberUpdatedState(onDone)
+    Box(
+        modifier.height(GP_QUICK_CONTROL)
+            .semantics { progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f); setProgress { latest(it.coerceIn(0f, 1f)); done(); true } }
+            .pointerInput(Unit) {
+                // A tap sets it; a drag follows once it is more sideways than up or down, so a scroll begun on the bar
+                // still scrolls the tab and leaves the volume alone.
+                val slop = viewConfiguration.touchSlop
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    fun at(x: Float) = (x / size.width).coerceIn(0f, 1f)
+                    var dragging = false
+                    while (true) {
+                        val e = awaitPointerEvent()
+                        val c = e.changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
+                        if (c.isConsumed && !dragging) return@awaitEachGesture   // the scroll took it
+                        if (!c.pressed) {
+                            if (!dragging) latest(at(down.position.x))
+                            done()
+                            return@awaitEachGesture
+                        }
+                        val moved = c.position - down.position
+                        if (!dragging && abs(moved.x) > slop && abs(moved.x) > abs(moved.y)) dragging = true
+                        if (!dragging && abs(moved.y) > slop) return@awaitEachGesture   // a scroll: not the bar's
+                        if (dragging) { latest(at(c.position.x)); c.consume() }
+                    }
+                }
+            },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Canvas(Modifier.fillMaxWidth().height(GP_VOLUME_BAR)) {
+            val r = CornerRadius(size.height / 2f)
+            drawRoundRect(track, cornerRadius = r)
+            val w = size.width * value.coerceIn(0f, 1f)
+            // never thinner than its round ends, so a little volume still reads as a dot
+            if (w > 0f) drawRoundRect(lit, size = Size(maxOf(w, size.height), size.height), cornerRadius = r)
         }
     }
 }
@@ -663,8 +762,18 @@ private val GP_LIST_BOTTOM = 76.dp   // the last row clears the Game pill (52 dp
 private val GP_LIST_END = 8.dp       // without the pill
 private val GP_ART = 64.dp
 private val GP_HEADER_BOTTOM = 16.dp   // between the header and the tabs (and the menu's list beside them)
-/** A panel shorter than this shows the one-line header ([GamePanelCompactHeader]): a pad skin's small touch screen. */
+/** A window shorter than this shows the in-game menu's one-line header ([GamePanelCompactHeader]). */
 internal val GP_COMPACT_BELOW = 320.dp
+/** A panel shorter than this shows the one-line header: a pad skin's screen under the game (the Fold's, 350 dp). */
+private val GP_ONE_LINE_BELOW = 400.dp
+/** A panel shorter than this shows no header, the clock in the tab row: a touch screen cut to its picture (the 3DS's, 270 dp). */
+private val GP_NO_HEADER_BELOW = 290.dp
+/** Between a Settings row's name and its control. */
+private val GP_QUICK_GAP = 14.dp
+/** Each side of a value in a Settings row's segment. */
+private val GP_SEG_PAD = 8.dp
+/** The volume bar's height. */
+private val GP_VOLUME_BAR = 14.dp
 /** Between the one-line header and the tabs. */
 private val GP_COMPACT_BOTTOM = 6.dp
 private val GP_BADGE = 32.dp
@@ -677,6 +786,7 @@ private val GP_SLOT_PICK = 2.dp      // the picked slot's accent ring
 private val GP_SLOT_DATE = 12.sp
 private val GP_QUICK_ROW = 50.dp      // a Settings tab row
 private val GP_QUICK_LABEL = 124.dp   // its name's column
+private val GP_QUICK_LABEL_NARROW = 100.dp   // a two-word name breaks onto two lines, its control keeps the room
 private val GP_QUICK_CONTROL = 38.dp  // its segments or stepper
 private val GP_TILE_RADIUS = 18.dp
 private val GP_TILE_RING = 1.5.dp     // a tile's grey outline

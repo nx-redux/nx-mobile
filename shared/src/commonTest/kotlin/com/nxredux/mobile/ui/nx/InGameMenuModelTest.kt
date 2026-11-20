@@ -1093,9 +1093,9 @@ class InGameMenuModelTest {
     @Test fun micTileEffect() {
         val m = model()
         m.setMicTile(false)
-        assertEquals(MenuEffect.SetMic(true), m.panelEvent(GamePanelEvent.SetMic(on = true)))
+        assertEquals(MenuEffect.SetMicButton(true), m.panelEvent(GamePanelEvent.SetMicButton(shown = true)))
         m.setMicTile(null)
-        assertNull(m.panelEvent(GamePanelEvent.SetMic(on = true)))
+        assertNull(m.panelEvent(GamePanelEvent.SetMicButton(shown = true)))
     }
 
     @Test fun resetTileOpensDialog() {

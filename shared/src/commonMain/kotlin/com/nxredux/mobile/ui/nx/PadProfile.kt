@@ -80,6 +80,9 @@ class PadProfile private constructor(
      */
     val cStick: Boolean get() = kind == Kind.N3DS && n3dsNew || wiiPad == WiiPad.CLASSIC || kind == Kind.GC
 
+    /** The Sega pad resolved to 3 buttons: the A B C skin ([com.nxredux.mobile.skin.SkinVariant.MD3]). */
+    val segaThree: Boolean get() = kind == Kind.TABLE && map.segaThree
+
     /** The pad has the MOTION button (tap toggles motion, long-press recentres): every Wii pad but the Classic Controller. */
     val motionButton: Boolean get() = kind == Kind.WII && wiiPad != WiiPad.CLASSIC
 

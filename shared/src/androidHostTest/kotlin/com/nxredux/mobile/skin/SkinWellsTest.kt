@@ -17,12 +17,12 @@ internal fun skinPreviewJson(w: Int, h: Int, p: SkinPlacement?): String {
     sb.append("],\"parts\":${p?.spec?.parts?.let { "\"$it\"" }},\"pieces\":[")
     p?.pieces?.forEachIndexed { i, c ->
         if (i > 0) sb.append(',')
-        sb.append("[${c.src.x},${c.src.y},${c.src.width},${c.src.height},${c.dst.x},${c.dst.y},${c.dst.width},${c.dst.height},${c.alt?.let { "\"$it\"" }}]")
+        sb.append("[${c.src.x},${c.src.y},${c.src.width},${c.src.height},${c.dst.x},${c.dst.y},${c.dst.width},${c.dst.height},${c.alt?.let { "\"$it\"" }},${c.fill}]")
     }
     sb.append("],\"glasses\":[")
     p?.glasses?.forEachIndexed { i, g -> if (i > 0) sb.append(','); sb.append("[\"${g.screen}\",${g.rect.x},${g.rect.y},${g.rect.width},${g.rect.height},${g.scale}]") }
     sb.append("],\"controls\":[")
-    p?.controls?.forEachIndexed { i, c -> if (i > 0) sb.append(','); sb.append("[\"${c.spec.id}\",${c.x},${c.y},${c.spec.r},${c.spec.hw},${c.spec.hh},${c.spec.label?.let { "\"$it\"" }},${c.spec.labelDy},${c.spec.labelH},${c.spec.labelDx}]") }
+    p?.controls?.forEachIndexed { i, c -> if (i > 0) sb.append(','); sb.append("[\"${c.spec.id}\",${c.x},${c.y},${c.spec.r},${c.spec.hw},${c.spec.hh},${c.spec.label?.let { "\"$it\"" }},${c.spec.labelDy},${c.spec.labelH},${c.spec.labelDx},${c.spec.mark?.let { "\"$it\"" }},${c.spec.markH},${c.spec.markDy},${c.spec.markColor?.let { "\"$it\"" }},${c.spec.markSx},${c.spec.markSy},${c.spec.markSw},${c.spec.markSh}]") }
     sb.append("]}")
     return sb.toString()
 }

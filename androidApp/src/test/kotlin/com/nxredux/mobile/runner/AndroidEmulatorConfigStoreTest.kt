@@ -49,6 +49,15 @@ class AndroidEmulatorConfigStoreTest {
         }
     }
 
+    @Test fun deleteConsoleRemovesOnlyConsoleFile() = runBlocking {
+        store.writeConsole("GBA", "mgba", "a = 1\n")
+        store.writeGame("GBA", "mgba", "Game.gba", "b = 2\n")
+        store.deleteConsole("GBA", "mgba")
+        assertFalse(file(paths.consoleConfig).exists())
+        assertTrue(file(paths.gameConfig).exists())
+        store.deleteConsole("GBA", "mgba")   // absent: no error
+    }
+
     @Test fun deleteGameRemovesOnlyGameFile() = runBlocking {
         store.writeConsole("GBA", "mgba", "a = 1\n")
         store.writeGame("GBA", "mgba", "Game.gba", "b = 2\n")

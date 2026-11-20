@@ -143,7 +143,9 @@ internal interface DualScreenHost : GameScreenHost {
     fun placeMenu()
     /** The Fast forward / Rewind tiles' live state ([SpeedController.tiles]); null rewind: no Rewind tile. */
     fun speedTiles(): Pair<Boolean, Boolean?>
-    /** The Mic tile's state: null where this isn't a mic console or a session is on. */
+    /** The fast-forward speed (its Max fast forward option), shown on the Fast forward tile. */
+    fun ffSpeed(): Int
+    /** The Mic tile's state (the pad's mic button shown): null where this isn't a mic console or a session is on. */
     fun micTile(): Boolean?
     /** The Reset tile: reset always asks first, so the in-game menu opens on its Reset dialog. */
     fun askReset()
@@ -761,21 +763,17 @@ internal class DualScreenController(
     private val boardPillGame = mutableStateOf(false)
     /** How far the board's side groups moved in from the window's edge, px ([com.nxredux.mobile.skin.SkinPlacement.sideIn]): the pill follows. */
     private val boardPillIn = mutableStateOf(0f)
-    /** How far a camera cutout in the window's bottom-right corner (where the pill sits) reaches in from the right, px; 0: none there. */
-    private val boardPillCutout = mutableStateOf(0)
 
     /**
      * On the skin's two-screen board ([boardTouchGlass]) the Panel pill, and the Game pill once the panel is up over the
-     * touch screen, at one spot: the window's bottom-right, outside the touch screen (clear of a cutout there), over the
-     * skin's shell. [on]: the board is up; else the pill goes.
+     * touch screen, at one spot: the window's bottom-right, outside the touch screen, over the skin's shell. Not stepped
+     * past a corner camera cutout: that would put it over the skin's small caps. [on]: the board is up; else the pill goes.
      */
     private fun syncBoardPill(on: Boolean) {
         val root = findViewById<FrameLayout>(R.id.root)
         if (!on) { boardPillHost?.let { root.removeView(it) }; boardPillHost = null; return }
         boardPillGame.value = boardPanelUp
         boardPillIn.value = padLayout.skinPlacement()?.sideIn ?: 0f
-        // read once the window is laid out (the cutout is in window px)
-        if (root.width > 0) readPillCutout(root) else root.post { readPillCutout(root) }
         if (boardPillHost == null) {
             val theme = panelTheme()
             val view = ComposeView(activity).apply {
@@ -783,29 +781,35 @@ internal class DualScreenController(
                     theme {
                         PanelPill(
                             if (boardPillGame.value) "Game" else "Panel",
-                            // as far in from the window's bottom as from its right, the side groups' move in included; a
-                            // camera cutout in the corner is stepped past to its left, the bottom margin kept
+                            // as far in from the window's bottom as from its right, the side groups' move in included
                             Modifier.padding(start = 10.dp, top = 10.dp).padding(with(LocalDensity.current) {
                                 val m = 10.dp + boardPillIn.value.toDp()
-                                PaddingValues(end = maxOf(m, boardPillCutout.value.toDp() + 10.dp), bottom = m)
+                                PaddingValues(end = m, bottom = m)
                             }),
                         ) { if (boardPillGame.value) flipPanelDown() else flipPanelUp() }
                     }
                 }
             }
             boardPillHost = view
-            // over the skin (which would take its touches) and the panel in its glass; the menu and notifications come later
             root.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END))
         }
+        placeBoardPill(root)
         syncMainPanelHost()
     }
 
-    /** [boardPillCutout] from [root]'s window insets: a cutout reaching into the bottom-right corner, its width from the right. */
-    private fun readPillCutout(root: View) {
-        val corner = PILL_CORNER_DP * root.resources.displayMetrics.density
-        boardPillCutout.value = root.rootWindowInsets?.displayCutout?.boundingRects
-            ?.filter { it.right > root.width - corner && it.bottom > root.height - corner }
-            ?.maxOfOrNull { root.width - it.left } ?: 0
+    /**
+     * The board's pill right over the skin's view (which would take its touches) and the panel in its glass, under the
+     * menu and the notifications: a new layout adds the skin's view again, over a pill added before it.
+     */
+    private fun placeBoardPill(root: FrameLayout) {
+        val pill = boardPillHost ?: return
+        val current = root.indexOfChild(pill)
+        fun without(i: Int) = if (current in 0 until i) i - 1 else i
+        val under = listOfNotNull(padLayout.skinViewNow, mainPanelHost).map { root.indexOfChild(it) }.filter { it >= 0 }.maxOrNull()?.let { without(it) } ?: return
+        val target = under + 1
+        if (current == target) return
+        if (current >= 0) root.removeView(pill)
+        root.addView(pill, target)
     }
 
     /**
@@ -855,7 +859,7 @@ internal class DualScreenController(
             tab = GamePanelModel.resolveTab(dualPanelTab, tabs),
             shortcuts = GamePanelModel.shortcuts(
                 count, disc, netplayNow != null, ff, rewind, owner.micTile(),
-                touch = owner.panelTouchActions(), slot = panelSlotNow(),
+                touch = owner.panelTouchActions(), slot = panelSlotNow(), ffSpeed = owner.ffSpeed(),
             ).filter { !sessionLocked || it.shortcut == Shortcut.SWAP_DISC || it.shortcut == Shortcut.MIC },   // the DS wireless keeps the mic
             slots = if (!sessionLocked) owner.slotsUi.value else emptyList(),
             slot = panelSlotNow(),
@@ -970,11 +974,7 @@ internal class DualScreenController(
                 // The game runs with it on: a panel flipped up over the DS/3DS screen gives the screen back.
                 flipPanelDown()
             }
-            is GamePanelEvent.SetMic -> if (netplayNow == null && owner.micTile() != null) {
-                owner.handleMenuEffect(MenuEffect.SetMic(e.on))
-                // The game hears it now: a panel flipped up over the DS/3DS screen gives the screen back, as for FF.
-                flipPanelDown()
-            }
+            is GamePanelEvent.SetMicButton -> if (netplayNow == null && owner.micTile() != null) owner.handleMenuEffect(MenuEffect.SetMicButton(e.shown))
             GamePanelEvent.Reset -> if (!sessionLocked) owner.askReset()
         }
     }
@@ -1106,6 +1106,3 @@ internal data class SecondSurface(val surface: Surface, val width: Int, val heig
 
 /** A display's real size in px and its density: a change needs a new window on it. */
 private data class DisplayShape(val width: Int, val height: Int, val densityDpi: Int)
-
-/** The board pill's corner, dp from the window's bottom-right: a camera cutout reaching into it is kept clear of. */
-private const val PILL_CORNER_DP = 120f

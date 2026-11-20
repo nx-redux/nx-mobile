@@ -102,6 +102,7 @@ fun MenuTabRow(
     onLongPress: (() -> Unit)? = null, underline: Boolean = true, trailing: (@Composable () -> Unit)? = null,
     labelSize: TextUnit = NxTextSizes.pageTitle.pinned() * nxTextScale(),   // the words' size: the page title's, or (the bottom tabs) a hint's
     hints: (@Composable (room: Dp) -> Unit)? = null,   // at the row's right end, given the room the words leave ([TAB_HINTS_GAP] clear of them)
+    gutter: Dp? = null,   // the first word's inset and the row's end, in place of the page's (a panel's own gutter)
 ) {
     val colors = LocalNxColors.current
     val portrait = LocalPortrait.current
@@ -135,7 +136,7 @@ fun MenuTabRow(
         scroll.animateScrollTo(to, tween(NX_MENU_GLIDE_MS, easing = NxMenuEasing))
     }
     val gap = if (portrait) 14.dp else 20.dp
-    val inset = nxPageInset()   // the first word on it, the row's end too
+    val inset = nxPageInset().let { if (gutter == null) it else it.copy(start = gutter, end = gutter) }   // the first word on it, the row's end too
     val size = labelSize   // Appearance → Text size
     var rowPx by remember { mutableIntStateOf(0) }   // the row's width inside its padding, for [hints]' room
     Row(

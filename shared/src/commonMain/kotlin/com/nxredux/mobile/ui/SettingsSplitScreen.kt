@@ -71,6 +71,7 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
             if ((s as? Screen.Settings)?.confirmRemove != null) SettingsRemoveDialog(state::onButton)
             (s as? Screen.Settings)?.confirmDriver?.let { GpuDriverRemoveDialog(it.name, state::onButton) }
             (s as? Screen.Settings)?.takeIf { it.confirmReset }?.let { settingsResetAsk(it, selection.value.index) }?.let { SettingsResetDialog(it, state::onButton) }
+            if ((s as? Screen.EmulatorOptions)?.confirmReset == true) SettingsResetDialog(EMULATOR_RESET_ASK, state::onButton)
         },
     )
 }

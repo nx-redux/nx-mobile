@@ -35,6 +35,9 @@ sealed interface SpeedEffect {
  */
 class SpeedControl {
     private var settings = SpeedSettings()
+
+    /** The fast-forward speed the game runs at while fast-forwarding (its Max fast forward option). */
+    val ffSpeed: Int get() = settings.maxFf
     private var canRewind = false
     private var engineCant = false   // the engine gave up on rewind for this game ([onRewindUnavailable])
     private var netplay = false

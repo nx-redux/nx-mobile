@@ -1,5 +1,11 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.NxInfoIcon
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.foundation.text.InlineTextContent
 import com.nxredux.mobile.ui.nx.NX_SWATCH_AUTO
 import com.nxredux.mobile.settings.SecondaryAccent
 import com.nxredux.mobile.settings.AccentPreset
@@ -152,12 +158,28 @@ private fun SettingsTouchPage(
 internal fun nxShowsInfo(row: NxSettingRow, truncated: String?): Boolean =
     row.hasMoreInfo || (row.info.isNotBlank() && row.info == truncated)
 
-/** A touch page's lines under its title (Default emulators' caption), in the hint grey. */
+// the info icon's place in a page's lines ([SettingsDetailLines])
+private const val MORE_ICON = "more"
+
+/**
+ * A touch page's lines under its title (Default emulators' caption), in the hint grey. [onMore]: the info icon after the
+ * first line, a tap on it the fuller text (a setup step's warning kept off the page).
+ */
 @Composable
-internal fun SettingsDetailLines(lines: List<String>, separator: String = " ") {
+internal fun SettingsDetailLines(lines: List<String>, separator: String = " ", onMore: (() -> Unit)? = null) {
     val body = nxOptionsLabelSize(nxListLabel())
+    val text = buildAnnotatedString {
+        lines.forEachIndexed { i, line ->
+            if (i > 0) append(separator)
+            append(line)
+            if (i == 0 && onMore != null) { append(" "); appendInlineContent(MORE_ICON, "?") }
+        }
+    }
+    val icon = onMore?.let { open ->
+        mapOf(MORE_ICON to InlineTextContent(Placeholder(body * 1.9f, body * 1.4f, PlaceholderVerticalAlign.TextCenter)) { NxInfoIcon(body, open) })
+    }.orEmpty()
     Text(
-        lines.joinToString(separator), color = LocalNxColors.current.hint, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal,   // Regular, as a row's description
+        text, inlineContent = icon, color = LocalNxColors.current.hint, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal,   // Regular, as a row's description
         // The body size: an options row's label (16 sp at Large, under Appearance → Text size), the help note's line height.
         fontSize = body, lineHeight = body * 1.45f,
         modifier = Modifier.fillMaxWidth().padding(horizontal = nxListInset(), vertical = 4.dp),
@@ -338,7 +360,7 @@ internal fun settingsNxRow(row: SettingsRow): NxRow = NxRow(
         SettingsKind.PAD_SKIN, SettingsKind.PAD_THEME,
         SettingsKind.DEFAULT_TAG, SettingsKind.MENU_STYLE, SettingsKind.GAME_LIST_STYLE,
         SettingsKind.MENU_ORIENTATION, SettingsKind.GAME_LIST_ORIENTATION, SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT,
-        SettingsKind.CONTROLLER_ART, SettingsKind.TAB_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.HINT_SHOWN, SettingsKind.LIST_ART, SettingsKind.BACKDROP_ART, SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS, SettingsKind.EXTRA_INFO, SettingsKind.GAME_INFO, SettingsKind.HOME_STATS, SettingsKind.LAYOUT_OPTIONS, SettingsKind.ACHIEVEMENTS_PANEL, SettingsKind.SWITCHER_LAYOUT, SettingsKind.PAD_VIBRATION, SettingsKind.GAME_RUMBLE, SettingsKind.BUTTON_LAYOUT_CONSOLE, SettingsKind.BUTTON_LAYOUT_WII_PAD, SettingsKind.BUTTON_LAYOUT_N3DS_PAD, SettingsKind.SHORTCUT_TOUCH, SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT, SettingsKind.TEXT_SIZE, SettingsKind.DEBUG_LOG, SettingsKind.KEYBOARD, SettingsKind.CABLE_LINK_DELAY, SettingsKind.CABLE_LINK_DELAY_OVERLAY, SettingsKind.SECOND_SCREEN_ENABLE, SettingsKind.BOTTOM_SCREEN, SettingsKind.PAUSE_UNFOCUSED, SettingsKind.SCREEN_CARE, SettingsKind.SAVE_ON_QUIT, SettingsKind.A_RESUMES, SettingsKind.SAVE_FORMAT, SettingsKind.STATE_FORMAT, SettingsKind.EXTRACTED_NAME -> true
+        SettingsKind.CONTROLLER_ART, SettingsKind.TAB_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.HINT_SHOWN, SettingsKind.LIST_ART, SettingsKind.BACKDROP_ART, SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS, SettingsKind.EXTRA_INFO, SettingsKind.GAME_INFO, SettingsKind.HOME_STATS, SettingsKind.LAYOUT_OPTIONS, SettingsKind.ACHIEVEMENTS_PANEL, SettingsKind.SWITCHER_LAYOUT, SettingsKind.PAD_VIBRATION, SettingsKind.GAME_RUMBLE, SettingsKind.BUTTON_LAYOUT_CONSOLE, SettingsKind.BUTTON_LAYOUT_WII_PAD, SettingsKind.BUTTON_LAYOUT_N3DS_PAD, SettingsKind.BUTTON_LAYOUT_SEGA_PAD, SettingsKind.SHORTCUT_TOUCH, SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT, SettingsKind.TEXT_SIZE, SettingsKind.DEBUG_LOG, SettingsKind.KEYBOARD, SettingsKind.CABLE_LINK_DELAY, SettingsKind.CABLE_LINK_DELAY_OVERLAY, SettingsKind.SECOND_SCREEN_ENABLE, SettingsKind.BOTTOM_SCREEN, SettingsKind.PAUSE_UNFOCUSED, SettingsKind.SCREEN_CARE, SettingsKind.SAVE_ON_QUIT, SettingsKind.A_RESUMES, SettingsKind.SAVE_FORMAT, SettingsKind.STATE_FORMAT, SettingsKind.EXTRACTED_NAME -> true
         else -> false
     },
 )

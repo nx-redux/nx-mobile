@@ -19,12 +19,17 @@ data class SkinPackManifest(
     val layouts: List<SkinLayoutSpec>,
 ) {
     companion object {
-        const val FORMAT = 1
+        /**
+         * The format this app writes and reads. 2: control boxes ([SkinLayoutSpec.boxes]), frames and screens drawn from
+         * smaller art ([FrameSpec.srcW], [FrameSpec.hole]) and cap marks ([ControlSpec.mark]) — fields an app reading 1
+         * would pass over and draw the pack wrong, so it refuses a 2.
+         */
+        const val FORMAT = 2
         private val json = Json { ignoreUnknownKeys = true }
 
         /** The manifest in [text]; null when it is not one this app reads (bad JSON, a newer [format]). */
         fun parse(text: String): SkinPackManifest? =
-            runCatching { json.decodeFromString(serializer(), text) }.getOrNull()?.takeIf { it.format <= FORMAT }
+            runCatching { json.decodeFromString(serializer(), text) }.getOrNull()?.takeIf { it.format in 1..FORMAT }
     }
 }
 
@@ -96,10 +101,38 @@ enum class SkinVariant {
     @SerialName("psp") PSP,
     /** PICO-8: the d-pad, O and X as a tilted pair, START (its pause). */
     @SerialName("p8") P8,
+    /** Genesis / Mega Drive, Sega CD, 32X on a 6-button game: the d-pad, A B C below X Y Z, MODE (SELECT) START; no shoulders. */
+    @SerialName("md") MD,
+    /** The same on a 3-button game: A B C alone (where they are on the six), START beside MENU; no MODE. */
+    @SerialName("md3") MD3,
+    /** Sega Saturn: the d-pad, the Sega pad's six (A B C below X Y Z), L R (L2 R2), START beside MENU. */
+    @SerialName("saturn") SATURN,
     /** The Atari 5200: the analog joystick (first), FIRE 1 / 2, * #, PAUSE START, KEYPAD (the core's on-screen keypad). */
     @SerialName("a5200") A5200,
     /** Doom (PrBoom's Classic pad): the d-pad, A B X Y, L R with L2 R2 (weapons), SELECT START, L3 R3. */
     @SerialName("doom") DOOM,
+    /** The Master System and SG-1000: the d-pad, 1 (the core's B) and 2 (A) as PICO-8's pair, START as PAUSE. */
+    @SerialName("sms") SMS,
+    /** The Game Gear: the Master System's pair, START. */
+    @SerialName("gg") GG,
+    /** The Atari 7800: the d-pad, 1 (B) and 2 (A) as PICO-8's pair, SELECT, START as PAUSE. */
+    @SerialName("a7800") A7800,
+    /** The Neo Geo Pocket (Color): the d-pad, A (the core's B) and B (A) as PICO-8's pair, START as OPTION. */
+    @SerialName("ngp") NGP,
+    /** The PC Engine / TurboGrafx-16: the d-pad, II (the core's B) and I (A) as PICO-8's pair, SELECT, START as RUN. */
+    @SerialName("pce") PCE,
+    /** The Atari 2600: the d-pad, one FIRE (B), SELECT, START as RESET. */
+    @SerialName("a2600") A2600,
+    /** The Atari Lynx: the d-pad, B and A as PICO-8's pair, OPTION 1 / 2 on L / R, START as PAUSE. */
+    @SerialName("lynx") LYNX,
+    /** The Pokémon mini: the d-pad, B and A as PICO-8's pair, SHAKE on L, C on R; no START. */
+    @SerialName("pkm") PKM,
+    /** The ColecoVision: the d-pad, Yellow (the core's B) and Red (A) as PICO-8's pair, KEYPAD opening its keypad over the picture. */
+    @SerialName("coleco") COLECO,
+    /** The Virtual Boy: its two d-pads level (the right one, DPAD2, on the face's spot), B / A, L / R, SELECT START. */
+    @SerialName("vb") VB,
+    /** The WonderSwan (and Color): the X cursor as the d-pad, the Y cursor as DPAD2 on the face's spot, B / A, START and ROTATE. */
+    @SerialName("ws") WS,
 }
 
 /**
@@ -134,7 +167,52 @@ data class SkinLayoutSpec(
      * height (the Dreamcast's stick above the d-pad on a tablet), tried before its siblings without it.
      */
     val minRefH: Int = 0,
+    /** Its controls as fixed-size boxes the engine places whole ([SkinBoxes]); empty: placed piece by piece ([SkinSolver.placePieces]). */
+    val boxes: List<BoxSpec> = emptyList(),
 )
+
+/** Where a [BoxSpec] stands: beside the screen on either side, or a row centred across under the screen or at the bottom. */
+@Serializable
+enum class BoxSlot {
+    @SerialName("left") LEFT,
+    @SerialName("right") RIGHT,
+    @SerialName("topRow") TOP_ROW,
+    @SerialName("bottomRow") BOTTOM_ROW,
+}
+
+/**
+ * The device shape a [BoxSize] was drawn for: [orientation] (`portrait` / `landscape`, null: either), the window's
+ * width and height in dp within [minWdp]..[maxWdp] and [minHdp]..[maxHdp], and half-folded or flat ([halfFolded], null: either).
+ */
+@Serializable
+data class BoxWhen(
+    val orientation: String? = null,
+    val minWdp: Float = 0f,
+    val maxWdp: Float = Float.MAX_VALUE,
+    val minHdp: Float = 0f,
+    val maxHdp: Float = Float.MAX_VALUE,
+    val halfFolded: Boolean? = null,
+)
+
+/**
+ * One drawing of a box: [w] x [h] picture px, its [pieces] and [controls] at their places inside it (from its top-left;
+ * their anchor, level, drop and inward are not used: the box is placed whole). [when]: the device shape it is for.
+ * [mainY]: where its main pad's middle is (box px), for a pad whose controls do not say it (the Sega pad's six, its X Y
+ * A B on both rows); null: from its controls (the stick or d-pad; the face diamond's four).
+ */
+@Serializable
+data class BoxSize(
+    val w: Int,
+    val h: Int,
+    val pieces: List<PieceSpec> = emptyList(),
+    val controls: List<ControlSpec> = emptyList(),
+    val `when`: BoxWhen? = null,
+    val mainY: Float? = null,
+)
+
+/** A box of a layout's controls in its [slot]: [sizes] its drawings, the first the full one, the others compact versions. */
+@Serializable
+data class BoxSpec(val slot: BoxSlot, val sizes: List<BoxSize>)
 
 /**
  * The screen frame of a layout built from pieces: [sx], [sy], [w] x [h] in the parts picture, at [x], [y] in the full
@@ -163,7 +241,18 @@ data class FrameSpec(
     val top: Int = -1,
     val bottom: Int = -1,
     val hinge: Int = -1,
-)
+    /** The art's size in the parts picture where it is smaller than [w] x [h] (corners and a middle, stretched); 0: [w] / [h]. */
+    val srcW: Int = 0,
+    val srcH: Int = 0,
+    /**
+     * The art's opening: px in from its left, top, right and bottom edges (drawn the same in the frame, its corners kept).
+     * Black over it where no screen is (a strip's band, a narrower screen's sides), its corners the glass's; empty: none.
+     */
+    val hole: List<Int> = emptyList(),
+) {
+    val artW: Int get() = if (srcW > 0) srcW else w
+    val artH: Int get() = if (srcH > 0) srcH else h
+}
 
 /**
  * The frame's on-screen buttons (the touch shortcut slots TOUCH_1..TOUCH_4): an even share of the screen's width each, centred [y] px above
@@ -243,7 +332,24 @@ data class PieceSpec(
     val knobOf: String = "STICK",
     /** As [ControlSpec.alt]: shown only with the stick ("stick") or the d-pad ("dpad"); null: always. */
     val alt: String? = null,
-)
+    /**
+     * The group it belongs to ([SkinGroups]) where that is not what overlaps (a box's pieces: a grown well over a
+     * neighbour's ring stays its own group, so a player's tweak keyed on it still finds it); null: by overlap.
+     */
+    val group: String? = null,
+    /** In a box: drawn this much of its width across in place of [scale] (a well stretched to hold a row of caps); 0: [scale]. */
+    val scaleX: Float = 0f,
+    /** As [FrameSpec.srcW] / [FrameSpec.srcH]: smaller art, nine-sliced to [w] x [h] with corners of [grow]. */
+    val srcW: Int = 0,
+    val srcH: Int = 0,
+    /** As [FrameSpec.hole], for a piece with a [glass]. */
+    val hole: List<Int> = emptyList(),
+) {
+    val artW: Int get() = if (srcW > 0) srcW else w
+    val artH: Int get() = if (srcH > 0) srcH else h
+    /** Its drawn width's scale: [scaleX], else [scale]. */
+    val acrossScale: Float get() = if (scaleX > 0f) scaleX else scale
+}
 
 /** How a [SliceNode] cuts its box: into side-by-side columns or stacked rows. */
 @Serializable
@@ -342,7 +448,10 @@ enum class ControlShape {
  * third of [r]). In a layout built from pieces, [anchor], [inward] and [level] place it like its piece (else it is where its slice
  * lands). [label]: a word the app writes under it (the skin's picture has none there), its cap height [labelH] centred
  * [labelDy] below the control's centre, and [labelDx] across (beside the button: right-aligned left of it when
- * negative, left-aligned right of it when positive).
+ * negative, left-aligned right of it when positive). [mark]: a word printed on the cap, drawn by the app (the cap's
+ * art is blank, so a new word needs no render): its cap height [markH], centred [markDy] below the control's centre, in
+ * [markColor] (`#RRGGBB`; null: the print's light grey). A mark that is art (an icon) is [markSx], [markSy], [markSw] x
+ * [markSh] in the parts picture instead, drawn [markH] tall (its own width to that), centred [markDy] below the centre.
  */
 @Serializable
 data class ControlSpec(
@@ -372,4 +481,17 @@ data class ControlSpec(
     val knobTravel: Float = 0f,
     /** Shown only with the stick ("stick") or only with the d-pad ("dpad") on a layout that swaps them; null: always. */
     val alt: String? = null,
-)
+    val mark: String? = null,
+    val markH: Float = 0f,
+    val markDy: Float = 0f,
+    val markColor: String? = null,
+    val markSx: Int = 0,
+    val markSy: Int = 0,
+    val markSw: Int = 0,
+    val markSh: Int = 0,
+) {
+    /** Its sizes at [k] times (a placement's scale); its place stays for the placement to set. */
+    fun scaled(k: Float): ControlSpec = copy(r = r * k, hw = hw * k, hh = hh * k, capR = capR * k, arm = arm * k,
+        labelDy = labelDy * k, labelDx = labelDx * k, labelH = labelH * k, travel = travel * k, knobTravel = knobTravel * k,
+        markH = markH * k, markDy = markDy * k)
+}

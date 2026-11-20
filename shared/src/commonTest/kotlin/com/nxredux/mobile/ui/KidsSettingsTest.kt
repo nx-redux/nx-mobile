@@ -626,14 +626,37 @@ class KidsSettingsTest {
         st.pressRow(SettingsKind.KIDS_ENABLE)
         st.typePin("123456"); st.typePin("123456")
         assertEquals(KidsSetupStep.APPS, st.setupStep())
-        assertTrue(KIDS_PICK_ONE_APP in kidsSetupLines(assertIs(st.screen.value)))
         st.next()
-        assertEquals(KidsSetupStep.APPS, st.setupStep())                   // refused
+        assertEquals(KidsSetupStep.APPS, st.setupStep())                   // refused, in a dialog
+        assertEquals("Allowed apps" to KIDS_PICK_ONE_APP_MESSAGE, st.message.value)
+        st.onButton(NxButton.A)
+        assertEquals(null, st.message.value)
         st.pickAlpha()
-        assertFalse(KIDS_PICK_ONE_APP in kidsSetupLines(assertIs(st.screen.value)))
-        st.next()
+        st.onButton(NxButton.X)                                            // Continue from the list
         assertEquals(KidsSetupStep.TIMES, st.setupStep())
-        assertFalse(KIDS_PICK_ONE_APP in kidsSetupLines(Screen.KidsSetup(KidsSetupStep.APPS, setup = false)))
+    }
+
+    /** The Apps step keeps its line short: the apps never to allow are behind its info icon, on setup and in Settings. */
+    @Test fun appsWarningBehindTheInfoIcon() {
+        listOf(true, false).forEach { setup ->
+            val s = Screen.KidsSetup(KidsSetupStep.APPS, setup = setup)
+            assertTrue(kidsSetupLines(s).none { KIDS_APPS_AVOID in it })
+            assertEquals(KIDS_APPS_AVOID, kidsSetupMore(s))
+        }
+        assertEquals(null, kidsSetupMore(Screen.KidsSetup(KidsSetupStep.TIMES, setup = true)))
+    }
+
+    /** Y (the info icon's tap) shows the Apps step's warning in the message dialog; Back closes it and setup stays. */
+    @Test fun appsWarningOpensFromYAndBackClosesIt() = runTest {
+        val st = setup().st
+        st.openSettings(SettingsSection.KIDS)
+        st.pressRow(SettingsKind.KIDS_ENABLE)
+        st.typePin("123456"); st.typePin("123456")
+        st.onButton(NxButton.Y)
+        assertEquals("Allowed apps" to KIDS_APPS_AVOID, st.message.value)
+        assertTrue(st.back())
+        assertEquals(null, st.message.value)
+        assertEquals(KidsSetupStep.APPS, st.setupStep())
     }
 
     /** A tap on an app row's name toggles it, as A does: the row's tap opens ([kidsSetupRow]), not just focuses. */

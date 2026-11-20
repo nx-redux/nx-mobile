@@ -1,5 +1,8 @@
 package com.nxredux.mobile.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import com.nxredux.mobile.ui.nx.LocalPortrait
 import com.nxredux.mobile.ui.nx.LocalPadBelow
@@ -115,13 +118,15 @@ fun OnboardingScreen(
  * up the group's top sits on a fixed line ([SETUP_LINE] of the body) and grows down, so the counter, title and rows are
  * level from step to step; a group that would come within [SETUP_BUTTON_GAP] of the button moves up instead, and past
  * the top its rows scroll under the rows block's fades.
- * [lineBreaks]: each line on its own (a list).
+ * [lineBreaks]: each line on its own (a list). [onMore]: an info icon after the first line, a tap on it this (the
+ * page's fuller text, in the app's message dialog). [pinButtons]: the buttons stay at the bottom over the menu pad too.
  */
 @Composable
 internal fun SetupBlockPage(
     counter: String, headline: String, lines: List<String>, rows: List<NxSettingRow>, buttons: Int,
     selected: Int, hints: List<Hint>, onSelect: (Int) -> Unit, onRow: (Int) -> Unit, onHint: (NxButton) -> Unit,
     modifier: Modifier = Modifier, onSetting: (NxSettingEvent) -> Unit = {}, picture: DrawableResource? = null, lineBreaks: Boolean = false,
+    onMore: (() -> Unit)? = null, pinButtons: Boolean = false,
 ) {
     val shown = buttons.coerceIn(0, rows.size)
     val list = rows.dropLast(shown)
@@ -136,10 +141,12 @@ internal fun SetupBlockPage(
     val listSelected = selected.takeIf { it < list.size } ?: -1
     // The menu pad under the page (setup's pad step) leaves a short body: the buttons go under the rows, scrolling with
     // them (the list keeps a selected one in view), so the head and the rows keep their room.
-    val scrollActions = LocalPadBelow.current && shown > 0 && list.isNotEmpty()
-    val actionsFooter = NxListFooter(height = { SETUP_SCROLLED_BUTTON_GAP + SETUP_BUTTON_TAP }) {
+    val scrollActions = !pinButtons && LocalPadBelow.current && shown > 0 && list.isNotEmpty()
+    // Bled out past the list's start by its side pad and the pad ring's room twice (the pill sits a ring's room left of its
+    // box, the ring round it another), so the list, which clips its footer to its own width, keeps the whole pill.
+    val actionsFooter = NxListFooter(bleedStart = NxOptionsSidePad + NxPadRingRoom * 2, height = { SETUP_SCROLLED_BUTTON_GAP + SETUP_BUTTON_TAP }) {
         // The word on the rows' text edge: the list's side pad back out ([nxListInset] is it plus the rows' own inset).
-        Box(Modifier.padding(top = SETUP_SCROLLED_BUTTON_GAP).offset(x = -NxOptionsSidePad)) {
+        Box(Modifier.padding(top = SETUP_SCROLLED_BUTTON_GAP, start = NxPadRingRoom * 2)) {
             SetupButtons(rows.takeLast(shown).map { it.label }, list.size, selected, word, onSelect, onRow)
         }
     }
@@ -165,7 +172,7 @@ internal fun SetupBlockPage(
                                 SetupHeader(counter, headline)
                                 // The gaps as seen (glyph to glyph, or plate): the line boxes add ~16 dp under the title (the
                                 // lines drawn 4 dp up into it) and ~4 dp under the lines, so their spacers are that much less.
-                                if (lines.isNotEmpty()) Box(Modifier.offset(y = -4.dp)) { SettingsDetailLines(lines, separator = if (lineBreaks) "\n" else " ") }
+                                if (lines.isNotEmpty()) Box(Modifier.offset(y = -4.dp)) { SettingsDetailLines(lines, separator = if (lineBreaks) "\n" else " ", onMore = onMore) }
                                 if (list.isNotEmpty() || picture != null) {
                                     Spacer(Modifier.height(if (lines.isNotEmpty()) SETUP_ROWS_GAP - 16.dp else SETUP_ROWS_GAP - 12.dp))
                                     Box(Modifier.fillMaxWidth().weight(1f, fill = false)) {
@@ -182,7 +189,9 @@ internal fun SetupBlockPage(
                             // The word's line box on the block's bottom (SETTINGS_BLOCK_BOTTOM up, as Settings' section words),
                             // its tap target's room below it hanging into that inset.
                             // The words on the rows' text edge ([nxListInset] in): their pill boxes start at the block's edge, an inset before them.
-                            Box(Modifier.offset(y = extra)) {
+                            // On a narrow page edge (the Fold's panel between the pad's clusters) the pill and its pad ring would
+                            // reach past the page and be cut: the words step in by what is missing.
+                            Box(Modifier.offset(y = extra).padding(start = (NxPadRingRoom * 2 - plateStart).coerceAtLeast(0.dp))) {
                                 SetupButtons(rows.takeLast(shown).map { it.label }, list.size, selected, word, onSelect, onRow)
                             }
                         }
@@ -208,6 +217,7 @@ internal fun SetupBlockPage(
  * [keys]: a pad button's glyph before a word that has a button of its own, in [labels]' order; null or missing: none.
  */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun SetupButtons(
     labels: List<String>, first: Int, selected: Int, size: TextUnit, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit,
     keys: List<NxButton?> = emptyList(),
@@ -216,7 +226,11 @@ internal fun SetupButtons(
     val inset = nxListInset()
     val pill = nxHighlight()
     val rings = nxPadRings()
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    // A button that does not fit beside the one before it goes to the next line, rather than its word being cut.
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(SETUP_BUTTON_SPACE - inset * 2),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
         labels.forEachIndexed { i, text ->
             val index = first + i
             val main = i == 0
@@ -247,7 +261,6 @@ internal fun SetupButtons(
                     )
                 }
             }
-            if (i < labels.lastIndex) Spacer(Modifier.width(SETUP_BUTTON_SPACE - inset * 2))
         }
     }
 }

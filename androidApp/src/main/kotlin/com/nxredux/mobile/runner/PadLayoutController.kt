@@ -39,6 +39,7 @@ import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_TAG
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.ui.nx.PadMic
+import com.nxredux.mobile.skin.withoutControl
 import com.nxredux.mobile.ui.nx.CornerButtons
 import com.nxredux.mobile.ui.nx.cornerShortcuts
 import com.nxredux.mobile.ui.nx.micCornerShown
@@ -215,12 +216,15 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private var bareCache: Pair<SkinKey, BareLayout?>? = null
     /**
      * [variant]: the layout set (a Wii pad resolving changes it); [tweaks] / [overlayTweaks]: the stored player tweaks
-     * for the skin and for its bare buttons ([SkinTweaks.decode]).
+     * for the skin and for its bare buttons ([SkinTweaks.decode]). [micHidden]: a DS / 3DS pad drawn without its mic
+     * button ([com.nxredux.mobile.settings.AppSettings.micButtonShown] off), its row closed up.
      */
     private data class SkinKey(
         val w: Int, val h: Int, val dpi: Int, val tablet: Boolean, val tag: String, val aspect: Float?, val hinge: Float?, val top: Int,
-        val variant: com.nxredux.mobile.skin.SkinVariant, val tweaks: String, val overlayTweaks: String,
+        val variant: com.nxredux.mobile.skin.SkinVariant, val tweaks: String, val overlayTweaks: String, val micHidden: Boolean = false,
     )
+    // the pack without the mic button, made once a pack ([placeUntweaked])
+    private var noMic: Pair<PadSkinPack, com.nxredux.mobile.skin.SkinPackManifest>? = null
     /** The band portrait's bare buttons take at the bottom ([skinBandHeight]), px; 0 in landscape or without them. */
     private var overlayHeight = 0
     /** Shows the pads that waited for the picture once [reveal]'s timeout has passed; one pending at a time. */
@@ -453,17 +457,19 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         // the skin and its screen run under the top camera cutout too (the frame keeps its own margin; the picture is centred
         // in the glass, so it reaches the camera only when it fills the glass's height)
         val top = 0
-        val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), NdsOptions.appliesTo(tag), host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC, wiiPad, padProfile().cStick)
+        val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), NdsOptions.appliesTo(tag), host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC, wiiPad, padProfile().cStick, padProfile().segaThree)
         val settings = AndroidAppSettings(activity)
-        return SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, top, variant, settings.skinTweaks, settings.overlayTweaks)
+        return SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, top, variant, settings.skinTweaks, settings.overlayTweaks, micHidden = ds && !settings.micButtonShown)
     }
 
     /** [pack]'s layout for [key] before any tweak ([SkinChoice.place], or [SkinChoice.placeClosest] when [closest]; [ds]: a DS or 3DS). */
     private fun placeUntweaked(pack: PadSkinPack, key: SkinKey, ds: Boolean, closest: Boolean): SkinPlacement? {
         val variant = key.variant
         val picture = key.aspect?.let { (it * 240f) to 240f }
-        return if (closest) SkinChoice.placeClosest(pack.manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, key.top, DeviceTraits.canHalfFold, variant)
-            else SkinChoice.place(pack.manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, key.top, DeviceTraits.canHalfFold, variant)
+        val manifest = if (!key.micHidden) pack.manifest
+            else noMic?.takeIf { it.first === pack }?.second ?: pack.manifest.withoutControl("MIC").also { noMic = pack to it }
+        return if (closest) SkinChoice.placeClosest(manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, key.top, DeviceTraits.canHalfFold, variant)
+            else SkinChoice.place(manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, key.top, DeviceTraits.canHalfFold, variant)
     }
 
     /** The smallest a control's touch area may be shrunk to here, window px. */
@@ -543,6 +549,11 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             onGlass = { x, y, down -> glassTouch(game, x, y, down) }, bare = bare)
         view.useStick = PadStickModes[padStickKey, stickDefault()]   // the player's choice, shared by the skin and its bare buttons
         view.dimmed = motionDim()
+        when (com.nxredux.mobile.runner.CoreRegistry.baseTag(layoutTag())) {
+            "COLECO" -> view.keypad = { com.nxredux.mobile.ui.nx.colecoKeypad(it) }
+            "VB" -> view.secondDpad = com.nxredux.mobile.ui.nx.VB_SECOND_DPAD
+            "WS", "WSC" -> view.secondDpad = com.nxredux.mobile.ui.nx.WS_SECOND_DPAD
+        }
         // under the menu and the notifications, over the game
         val below = listOfNotNull(menuView, notificationsView).map { root.indexOfChild(it) }.filter { it >= 0 }.minOrNull() ?: -1
         root.addView(view, below, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -638,6 +649,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 motionHandler.removeCallbacks(motionHold)
                 if (!motionHeld) { padMotion()?.onTap?.invoke(); motionHandler.post { skinViews().forEach { it.dimmed = motionDim() } } }
             }
+            // the ColecoVision's keypad over the picture, opened and closed by the cap
+            SkinAction.KEYPAD -> if (down) skinViews().forEach { it.keypadOpen = !it.keypadOpen }
             else -> host.onSkinShortcut(action, down)
         }
     }

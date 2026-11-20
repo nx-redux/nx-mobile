@@ -44,6 +44,8 @@ sealed interface EmulatorRow {
     data class Header(val label: String) : EmulatorRow
     /** Game Settings with a game file: deletes it, so the game follows the emulator settings again. */
     data object UseEmulatorSettings : EmulatorRow
+    /** The emulator's own page (not a game's): asks, then deletes the console file, so every value is its default again. */
+    data object ResetDefaults : EmulatorRow
     data class Console(val row: ConsoleRow) : EmulatorRow
     data class Core(val option: CoreOption, val inCategory: Boolean) : EmulatorRow
     data class Category(val key: String, val label: String) : EmulatorRow
@@ -110,6 +112,8 @@ object EmulatorRows {
             }
             if (page.console.isNotEmpty() && coreRows.isNotEmpty()) add(EmulatorRow.Gap)   // space between the two groups
             addAll(coreRows)
+            // The emulator's page with values of its own: Reset to defaults after them, before the app-wide rows it leaves alone.
+            if (!page.forGame && (page.console.isNotEmpty() || !core.isNullOrEmpty())) { add(EmulatorRow.Gap); add(EmulatorRow.ResetDefaults) }
             if (app != null && app.rows.isNotEmpty()) {
                 if (isNotEmpty()) add(EmulatorRow.Gap)
                 add(EmulatorRow.Header(app.label))
@@ -141,6 +145,7 @@ object EmulatorRows {
                 is EmulatorRow.Core -> r is EmulatorRow.Core && r.option.key == previous.option.key
                 is EmulatorRow.Category -> r is EmulatorRow.Category && r.key == previous.key
                 EmulatorRow.UseEmulatorSettings -> r == EmulatorRow.UseEmulatorSettings
+                EmulatorRow.ResetDefaults -> r == EmulatorRow.ResetDefaults
                 is EmulatorRow.App -> r is EmulatorRow.App && r.row.kind == previous.row.kind
                 else -> false
             }
@@ -301,6 +306,7 @@ internal class EmulatorSettingsController(
             is Screen.EmulatorList -> host.showEmulatorsSettings()
             is Screen.EmulatorConsoles -> showList(listRow)
             is Screen.EmulatorOptions -> when {
+                s.confirmReset -> screen.value = s.copy(confirmReset = false)   // B on the question keeps everything
                 s.category != null -> {
                     val rows = rows(s.page, null)
                     screen.value = s.copy(rows = rows, category = null)
@@ -392,6 +398,14 @@ internal class EmulatorSettingsController(
     }
 
     private fun onPageButton(s: Screen.EmulatorOptions, button: NxButton) {
+        if (s.confirmReset) {   // the question takes every button: A resets, B keeps
+            when (button) {
+                NxButton.A -> { screen.value = s.copy(confirmReset = false); resetDefaults(s) }
+                NxButton.B -> back(s)
+                else -> Unit
+            }
+            return
+        }
         val row = s.rows.getOrNull(selection.value.index)
         when (button) {
             NxButton.UP -> selection.value = ListSelection(EmulatorRows.step(s.rows, selection.value.index, -1), s.rows.size)
@@ -408,6 +422,7 @@ internal class EmulatorSettingsController(
                     selection.value = ListSelection(0, rows.size)
                 }
                 EmulatorRow.UseEmulatorSettings -> useEmulatorSettings(s)
+                EmulatorRow.ResetDefaults -> screen.value = s.copy(confirmReset = true)   // asks first
                 else -> Unit
             }
             NxButton.B -> back(s)
@@ -525,6 +540,27 @@ internal class EmulatorSettingsController(
                         error.value = "Could not save the setting"
                     }
                     tryOrNull { readPage(s.page.tag, d, game) }
+                }
+                page?.let { show(s, it) }
+            }
+        }
+    }
+
+    /** The confirmed Reset to defaults: deletes the console file and shows the page as the defaults have it. */
+    private fun resetDefaults(s: Screen.EmulatorOptions) {
+        if (s.game != null) return
+        val d = descriptorOf(s) ?: return
+        scope.launch {
+            lock.withLock {
+                val page = withContext(work) {
+                    try {
+                        configs.deleteConsole(s.page.tag, d.id)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Throwable) {
+                        error.value = "Could not reset the settings"
+                    }
+                    tryOrNull { readPage(s.page.tag, d, null) }
                 }
                 page?.let { show(s, it) }
             }

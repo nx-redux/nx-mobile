@@ -79,6 +79,7 @@ internal fun rowEditBlocked(s: Screen): Boolean = when (s) {
     is Screen.Settings -> s.confirmReset || s.confirmRemove != null || s.nameDraft != null || s.confirmDriver != null
     is Screen.RaSettings -> s.signingIn || s.confirm != null
     is Screen.ArtworkSettings -> s.dialogOpen
+    is Screen.EmulatorOptions -> s.confirmReset
     is Screen.Onboarding -> s.prompt || s.artSignIn || s.artKey != null
     else -> false
 }
