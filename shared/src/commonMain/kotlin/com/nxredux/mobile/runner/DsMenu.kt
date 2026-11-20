@@ -26,6 +26,14 @@ object DsMenu {
     /** The folder the app copied [ART_FILES] to; null = no art. */
     var artDir: String? = null
 
+    /** The row's details, in place of ScreenScraper's (which has no entry to fetch for it). */
+    val INFO = com.nxredux.mobile.scraper.StoredGameInfo(
+        synopsis = "Join a nearby friend's game without owning it. When another player hosts a game over DS Download Play " +
+            "(Mario Party DS, for one), it shows up here: pick it, and the game is sent to you over Wi-Fi so you can play " +
+            "together. Needs a real DS's bios7.bin, bios9.bin and firmware.bin in Bios/NDS/.",
+        genre = "System", year = "2004", publisher = "Nintendo", lang = "en", ssId = null, fetchedAt = 0,
+    )
+
     fun isMenu(content: String?): Boolean = content == CONTENT
 
     /** The dumps of [FILES] that are not in [present] (the NDS BIOS folder's names). */

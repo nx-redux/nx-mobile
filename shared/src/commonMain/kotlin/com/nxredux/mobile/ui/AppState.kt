@@ -1297,7 +1297,7 @@ class AppState(
         topDetailsJob = scope.launch {
             val saves = !entry.system.android && !entry.system.unassigned
             val resume = if (saves) tryOr({ ResumeInfo.NONE }) { deps.userData.resumeInfo(entry.system.tag, entry.game.fileName) } else ResumeInfo.NONE
-            val scraped = ref?.let { r -> gameInfoStore?.read(r) }
+            val scraped = if (DsMenu.isMenu(entry.game.ref.value)) DsMenu.INFO else ref?.let { r -> gameInfoStore?.read(r) }
             val now = _topDetails.value?.takeIf { sameGame(it.entry, entry) } ?: return@launch
             _topDetails.value = now.copy(resume = resume, scraped = scraped)
         }
@@ -1310,6 +1310,13 @@ class AppState(
      */
     private fun followGameMeta() {
         val entry = (DualMenu.top(_screen.value, _selection.value.index) as? TopContent.GameDetails)?.entry
+        if (entry != null && DsMenu.isMenu(entry.game.ref.value)) {
+            val menuPath = entry.game.path
+            if (menuPath !in _gameMeta.value) _gameMeta.value += menuPath to DsMenu.INFO
+            metaFor = menuPath
+            infoFetcher?.follow(null)
+            return
+        }
         val ref = entry?.let(::infoRef)
         val path = ref?.gamePath
         if (path == metaFor) return
@@ -1321,7 +1328,7 @@ class AppState(
 
     /** [entry] as the info fetch and store name it; null for an Android or Unassigned game (no ScreenScraper info). */
     private fun infoRef(entry: Listed): LibraryGameRef? =
-        if (entry.system.android || entry.system.unassigned) null else artworkRef(entry.system.tag, entry.game)
+        if (entry.system.android || entry.system.unassigned || DsMenu.isMenu(entry.game.ref.value)) null else artworkRef(entry.system.tag, entry.game)
 
     /** [path]'s info was just fetched: the details page shows it when that game is still on it. */
     private suspend fun showFetchedInfo(path: String) {
