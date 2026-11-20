@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.platform.LocalDensity
+import com.nxredux.mobile.runner.DsMenu
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -214,7 +215,8 @@ private fun DetailsText(details: TopDetails, now: Long, fit: DetailsFit, onAchie
                 )
             }
         }
-        Text(
+        // The DS menu keeps no play time: its play line would always say it was never played.
+        if (!DsMenu.isMenu(details.entry.game.ref.value)) Text(
             playLine(details.info, now), color = colors.listText, fontFamily = font, fontSize = 18.sp, maxLines = 1,
             overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 16.dp),
         )

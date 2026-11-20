@@ -1237,7 +1237,8 @@ class AppState(
         statsCache[key]?.takeIf { sameStatsTarget(it.first, top) }?.let { _topStats.value = it.second; return }
         if (_topStats.value?.key != key) _topStats.value = null   // never another target's page meanwhile
         // Built here: consoleEntries' cache belongs to the main thread.
-        val console = (top as? TopContent.ConsoleStats)?.let { it.systems to consoleEntries(it.systems) }
+        // The DS menu's row is no game: it neither counts nor takes a shelf tile.
+        val console = (top as? TopContent.ConsoleStats)?.let { it.systems to consoleEntries(it.systems).filterNot { e -> DsMenu.isMenu(e.game.ref.value) } }
         topStatsJob = scope.launch {
             val base = if (console != null) {
                 val (group, entries) = console
