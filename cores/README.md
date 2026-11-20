@@ -62,7 +62,7 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | fbneo | libretro/FBNeo | d15071abf14191eebb4a5d7c7147398edcf237c8 | ndk-build (`src/burner/libretro`, + `system/fbneo/`; 69.9 MB stripped) | 0:28 |
 | flycast (DC) | flyinghead/flycast | 7adbf3caef251b153e348df3f469a0f35878339d (master, 93 past v2.7) | cmake (dynarec, GLES3, patched; 6 submodules; 17.2 MB stripped) | 1:15 |
 | dolphin | libretro/dolphin | 32c61f9d0e933331bb7087ba57e96883241b4960 | cmake 3.30.3 (LTO, GLES, patched; 34 submodules; + system/dolphin-emu/Sys 14 MB; ~15 MB stripped) | 4:09 |
-| armsx2 (PS2) | ARMSX2/ARMSX2 | ba6892742e357085897d0a151bd8e40485dda968 (2.9.2) | cmake 3.30.3 (upstream's dependency script into build/armsx2-deps; GLES/Vulkan; page size read at runtime, so 4 KB and 16 KB kernels; games open through the libretro VFS, no ISO copy; + system/pcsx2/resources 11 MB; 31.0 MB stripped) | 5:12 |
+| armsx2 (PS2) | ARMSX2/ARMSX2 | 6d9511e29e3e00d5ab78899f5292b967ab850ddb (nightly-20261114) | cmake 3.30.3 (thin LTO + upstream's profile; upstream's dependency script into build/armsx2-deps; GLES/Vulkan; page size read at runtime, so 4 KB and 16 KB kernels; games open through the libretro VFS, no ISO copy; + system/pcsx2/resources 11 MB; 33.5 MB stripped) | 5:12 |
 
 melondsds (melonDS DS) replaced libretro/melonDS on 2026-09-27. Its eleven CMake FetchContent dependencies are pinned
 by full SHA in `MELONDSDS_DEPS` and cloned into `src/melondsds-deps/<name>-src` before configure, which runs with

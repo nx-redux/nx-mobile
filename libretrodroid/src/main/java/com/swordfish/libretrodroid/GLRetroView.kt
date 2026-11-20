@@ -383,7 +383,9 @@ class GLRetroView(
 
     init {
         openGLESVersion = getGLESVersion(context)
-        preserveEGLContextOnPause = true
+        // debug.nx.keepcontext=0 gives the context up at every pause: a lost context on demand, for checking that the
+        // picture comes back (a phone otherwise keeps it through Home, screen off and a memory trim).
+        preserveEGLContextOnPause = LibretroDroid.keepsContextOnPause()
         setEGLContextClientVersion(openGLESVersion)
         setRenderer(Renderer())
         // No keepScreenOn here: the host's window decides (nx-mobile's GameActivity holds the screen on while the game
@@ -402,6 +404,7 @@ class GLRetroView(
             data.vulkanDriverLibrary,
             context.applicationInfo.nativeLibraryDir,
             driverTmpDir(context),
+            data.vulkanDriverReader,
         )
         LibretroDroid.setVideoViewsEnabled(data.videoViews)
         LibretroDroid.setKeepCoreLoaded(data.keepCoreLoaded)
@@ -1182,11 +1185,11 @@ class GLRetroView(
 
         /**
          * Before the view (and its core) exists: whether the custom Vulkan driver [library] in [driverDir] can start the
-         * bridge ([LibretroDroid.probeVulkanDriver]), with the hook and temp directories a launch uses. Blocking: not
-         * on the main thread.
+         * bridge and how ([LibretroDroid.probeVulkanDriver]: one of its VULKAN_HANDOFF values), with the hook and temp
+         * directories a launch uses. Blocking: not on the main thread.
          */
         @JvmStatic
-        fun probeVulkanDriver(context: Context, driverDir: String, library: String): Boolean =
+        fun probeVulkanDriver(context: Context, driverDir: String, library: String): Int =
             LibretroDroid.probeVulkanDriver(driverDir, library, context.applicationInfo.nativeLibraryDir, driverTmpDir(context))
         private const val EMULATION_THREAD_TIMEOUT_SECONDS = 10L
         private const val DESTROY_TIMEOUT_SECONDS = 5L

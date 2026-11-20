@@ -54,7 +54,9 @@ namespace libretrodroid {
 // Instance-level, may be null: 1.1 core or their KHR extension names (tried second).
 #define LIBRETRODROID_VK_INSTANCE_OPTIONAL(X) \
     X(getPhysicalDeviceExternalSemaphoreProperties, vkGetPhysicalDeviceExternalSemaphoreProperties) \
-    X(getPhysicalDeviceProperties2, vkGetPhysicalDeviceProperties2)
+    X(getPhysicalDeviceProperties2, vkGetPhysicalDeviceProperties2) \
+    X(getPhysicalDeviceSurfaceSupportKHR, vkGetPhysicalDeviceSurfaceSupportKHR) \
+    X(getPhysicalDeviceSurfaceCapabilitiesKHR, vkGetPhysicalDeviceSurfaceCapabilitiesKHR)
 // Device-level: bindDevice().
 #define LIBRETRODROID_VK_DEVICE(X) \
     X(destroyDevice, vkDestroyDevice) \
@@ -84,7 +86,14 @@ namespace libretrodroid {
 // Device-level, may be null: the extensions the bridge checks for itself.
 #define LIBRETRODROID_VK_DEVICE_OPTIONAL(X) \
     X(getAndroidHardwareBufferPropertiesANDROID, vkGetAndroidHardwareBufferPropertiesANDROID) \
-    X(getSemaphoreFdKHR, vkGetSemaphoreFdKHR)
+    X(getSemaphoreFdKHR, vkGetSemaphoreFdKHR) \
+    X(createSwapchainKHR, vkCreateSwapchainKHR) \
+    X(destroySwapchainKHR, vkDestroySwapchainKHR) \
+    X(getSwapchainImagesKHR, vkGetSwapchainImagesKHR) \
+    X(acquireNextImageKHR, vkAcquireNextImageKHR) \
+    X(queuePresentKHR, vkQueuePresentKHR) \
+    X(cmdClearColorImage, vkCmdClearColorImage) \
+    X(getDeviceQueue, vkGetDeviceQueue)
 
 struct VulkanDispatch {
     PFN_vkGetInstanceProcAddr getInstanceProcAddr = nullptr;
@@ -117,6 +126,12 @@ struct VulkanDispatch {
     const char* missingInstanceFunction() const;
     const char* missingSurfaceFunction() const;
     const char* missingDeviceFunction() const;
+    // Everything a swapchain on a window needs is bound: the device was created with VK_KHR_swapchain.
+    bool hasSwapchain() const {
+        return getPhysicalDeviceSurfaceSupportKHR != nullptr && getPhysicalDeviceSurfaceCapabilitiesKHR != nullptr &&
+            createSwapchainKHR != nullptr && destroySwapchainKHR != nullptr && getSwapchainImagesKHR != nullptr &&
+            acquireNextImageKHR != nullptr && queuePresentKHR != nullptr && cmdClearColorImage != nullptr;
+    }
     // Every pointer back to null. dlcloses the system loader; a custom driver's handle stays loaded for the life of the
     // process (cached for its next launch): libadrenotools drivers are not written to be unloaded.
     void close();

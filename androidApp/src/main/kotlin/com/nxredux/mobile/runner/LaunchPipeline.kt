@@ -779,6 +779,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // minarch names saves after the unpacked file when Use extracted file name is on (ma_game.c:75-76): known only now.
             paths = paths.withInner(inner?.let { unpackedEntry })
             saves.open(if (cfg.np == null) SaveStates(dataRoot, paths) else null)   // netplay: no save states, no auto-resume
+            if (!settings.saveOnQuit) saves.unlinkAuto()
             dropStaleNdsResume(cfg.tag, cfg.coreId, cfg.romFileName)
             saves.refreshSlots()   // warm for the first menu open; after the cleanup, so it never lists a deleted state
             cfg.np?.let { gameNetplay.prepareSaves(it, cfg.tag, cfg.romFileName, dataRoot, paths) }
@@ -859,10 +860,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val biosPresent = if (biosDir == systemDir) present else withContext(Dispatchers.IO) { biosDir.list()?.toSet() ?: emptySet() }
             // An MSU-MD set plays its music from a Sega CD: Genesis Plus GX needs that console's BIOS for it, as for a disc
             // (PicoDrive fakes the one check the MSU-MD driver makes).
-            val biosExtension = if (inner == null && msuMdSheet(cfg) != null && cfg.descriptor?.id == SegaPadType.GPGX) "cue" else contentExtension
-            // A Sega CD disc boots with its own region's BIOS only: when its header is read, that file is checked (under
-            // any name the core takes) in place of "any of the three".
-            val discRegion = segaCdRegion(cfg, inner, contentExtension, biosPresent)
+            val msuMd = inner == null && msuMdSheet(cfg) != null && cfg.descriptor?.id == SegaPadType.GPGX
+            val biosExtension = if (msuMd) "cue" else contentExtension
+            // A Sega CD disc boots with its own region's BIOS only (an MSU-MD cartridge with its own region's): when its
+            // header is read, that file is checked (under any name the core takes) in place of "any of the three".
+            val discRegion = if (msuMd) msuMdRegion(cfg, biosPresent) else segaCdRegion(cfg, inner, contentExtension, biosPresent)
             val needs = CoreRegistry.requiredBios(cfg.tag).filterNot { discRegion != null && SegaCdBios.isSegaCdNeed(it) }
             BiosCheck.missing(needs, biosExtension, biosPresent).firstOrNull()?.let {
                 return refuse(BiosCheck.message(cfg.tag, it))
@@ -871,7 +873,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 val core = cfg.descriptor?.id.orEmpty()
                 SegaCdBios.missing(core, region, biosPresent)?.let { file ->
                     val folders = withContext(Dispatchers.IO) { biosFolderOf(cfg) }
-                    return refuse(SegaCdBios.message(cfg.tag, core, region, file, biosPresent, folders::get))
+                    return refuse(SegaCdBios.message(cfg.tag, core, region, file, biosPresent, folders::get, cartridge = msuMd))
                 }
             }
             // A NAOMI/Atomiswave set's BIOS archive (flycast opens <system>/dc/<bios>.zip or .7z); an unknown set is not checked.
@@ -915,7 +917,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     // Vulkan that could not start here before, or this is the relaunch after it did: OpenGL ES (VulkanFallback).
                     // On Vulkan, a custom GPU driver may load instead of the system one (GpuDriverChoice); the relaunch after
                     // it could not start forces the system driver.
-                    val apiValue = frontendValues[GraphicsApiOptions.KEY]
+                    // Auto is Vulkan for a core that follows the GPU on a Mali phone; the driver rows below then apply as on Vulkan.
+                    val apiValue = GraphicsApiOptions.effective(frontendValues[GraphicsApiOptions.KEY], cfg.descriptor?.vulkan) { AndroidDeviceInfo.gpu() }
                     val gamePath = activity.intent.getStringExtra(EXTRA_GAME_PATH)
                     // No library path, no crash record to keep: such a launch stays on the system driver.
                     val driversAvailable = gamePath != null && cfg.descriptor?.id !in GpuDriverOptions.EXCLUDED_CORES &&
@@ -926,6 +929,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     if (mayLoadDriver) driverCrashNotice = GpuDriverCrashSettle.settle(settings, setOf(Process.myPid()))
                     val driverStore = AndroidGpuDrivers(AndroidGpuDrivers.root(activity.filesDir), Build.VERSION.SDK_INT)
                     val drivers = if (mayLoadDriver) driverStore.installed() else emptyList()
+                    // The driver's frames go through a swapchain on an image reader: what its preflight found it can do.
+                    var driverReader = false
                     var launch = GpuDriverChoice.launch(
                         apiValue, frontendValues[GpuDriverOptions.KEY], settings.gpuDriver, drivers.mapTo(HashSet()) { it.id },
                         GpuDriverCrash.crashed(settings.gpuDriverCrashes, gamePath.orEmpty()), available = driversAvailable,
@@ -945,7 +950,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         // Before any core is loaded: a driver that cannot start the bridge is caught here, and this same
                         // launch goes on without it (a core torn down after a failed start can crash: PPSSPP, mupen64plus).
                         // Retried on every launch. The in-process relaunch stays for what the preflight cannot see.
-                        val ok = GLRetroView.probeVulkanDriver(activity, driverStore.directory(driver.id).absolutePath + "/", driver.libraryName)
+                        val handoff = GLRetroView.probeVulkanDriver(activity, driverStore.directory(driver.id).absolutePath + "/", driver.libraryName)
+                        val ok = handoff != LibretroDroid.VULKAN_HANDOFF_NONE
+                        driverReader = handoff == LibretroDroid.VULKAN_HANDOFF_READER
                         val after = GpuDriverChoice.afterPreflight(launch, ok, driver.name, cfg.descriptor?.id in settings.vulkanFailedCores)
                         if (after.clearMarker) clearDriverLaunchMarker()
                         if (after.launch != launch) {
@@ -989,6 +996,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         if (driver != null) {
                             vulkanDriverDir = driverStore.directory(driver.id).absolutePath + "/"
                             vulkanDriverLibrary = driver.libraryName
+                            vulkanDriverReader = driverReader
                         }
                         // DS / 3DS: the core reports where each screen sits in its frame (video views), the layouts read it.
                         videoViews = gameCoreId in VIDEO_VIEW_CORES
@@ -1015,24 +1023,19 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                             // a SAF game is copied: a disc set's files go next to its sheet in the cache, under the names the sheet uses.
                             val inPlace = RealPathLaunch.inPlace(cfg.content, fileName, cfg.companions)
                                 ?.takeIf { p -> File(p).canRead() && cfg.companions.all { (name, _) -> File(File(p).parentFile, name).canRead() } }
-                            val path = if (inPlace != null) {
+                            gameFilePath = if (inPlace != null) {
                                 inPlace
                             } else {
                                 for ((name, ref) in cfg.companions) copyToCache(ref, name)
                                 copyToCache(cfg.content, fileName).absolutePath
                             }
-                            // PicoDrive runs an MSU-MD set from its cue and finds the cartridge beside it; Genesis Plus GX
-                            // runs the cartridge and mounts the cue.
-                            val cue = msuMdSheet(cfg)?.takeIf { cfg.descriptor?.id == SegaPadType.PICODRIVE }
-                            gameFilePath = cue?.let { File(File(path).parentFile, it).absolutePath } ?: path
                         } else {
                             // With more than one virtual file the runner serves the core through its VFS (libretrodroid.cpp:391),
-                            // so the core opens /rom/<track>.bin by the name its cue gives.
-                            val opened = ArrayList<VirtualFile>(cfg.companions.size + 1)
+                            // so the core opens /rom/<track>.bin by the name its cue gives. The first file is the one loaded.
+                            val files = vfsFiles(cfg, fileName)
+                            val opened = ArrayList<VirtualFile>(files.size)
                             try {
-                                val pfd = refs.openFd(cfg.content, "r") ?: throw IOException("Cannot open file descriptor")
-                                opened += VirtualFile("/rom/$fileName", pfd)
-                                for ((name, ref) in cfg.companions) {
+                                for ((name, ref) in files) {
                                     opened += VirtualFile("/rom/$name", refs.openFd(ref, "r") ?: throw IOException("Cannot open $name"))
                                 }
                             } catch (e: Exception) {
@@ -1090,6 +1093,24 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     }
 
     /**
+     * The region whose Sega CD BIOS Genesis Plus GX loads for [cfg]'s MSU-MD cartridge: its forced region, else the
+     * cartridge header's ([SegaCdBios.cartridgeRegion]). Null when the header cannot be read, or when [present] holds
+     * every region's BIOS (nothing to refuse, so nothing is read).
+     */
+    private suspend fun msuMdRegion(cfg: LaunchConfig, present: Set<String>): DiscRegion? {
+        val core = SegaPadType.GPGX
+        if (DiscRegion.entries.all { SegaCdBios.missing(core, it, present) == null }) return null
+        SegaCdBios.gpgxForced(cfg.options.firstOrNull { it.key == SegaCdBios.GPGX_REGION_KEY }?.value)?.let { return it }
+        val refs = host.refs
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val size = refs.size(cfg.content) ?: return@runCatching null
+                refs.openInput(cfg.content)?.use { SegaCdBios.cartridgeRegion(readUpTo(it, SegaCdBios.CARTRIDGE_HEAD), size) }
+            }.getOrNull()
+        }
+    }
+
+    /**
      * Each BIOS file name in the home's `Bios/` folders [cfg]'s launch gathers from ([BiosFolders.forTag]), with the folder
      * it is in (the last, in that order: the copy [BiosImport] keeps on a name clash); empty without a home or on a read
      * failure. Only read for a refusal's message.
@@ -1112,6 +1133,16 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     /** The cue of [cfg]'s MSU-MD set, under the name it was handed to the core by; null when the game is none. */
     private fun msuMdSheet(cfg: LaunchConfig): String? =
         if (CoreRegistry.consoleOf(cfg.tag)?.id != "md") null else MsuSets.Folder(cfg.companions.map { it.first }).mdSheet(cfg.romFileName)
+
+    /**
+     * The files [cfg]'s launch serves under `/rom/`, by name, the loaded one first: the game as [fileName], then its
+     * companions; PicoDrive's MSU-MD set from its cue ([MsuSets.picodriveOrder]).
+     */
+    private fun vfsFiles(cfg: LaunchConfig, fileName: String): List<Pair<String, ContentRef>> {
+        val plain = listOf(fileName to cfg.content) + cfg.companions
+        if (cfg.descriptor?.id != SegaPadType.PICODRIVE || CoreRegistry.consoleOf(cfg.tag)?.id != "md") return plain
+        return MsuSets.picodriveOrder(fileName, cfg.content, cfg.companions) ?: plain
+    }
 
     private suspend fun attachView(cfg: LaunchConfig, prepared: PreparedContent, data: GLRetroViewData) {
         with(host) {
@@ -1142,7 +1173,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 wii.endedByCore = true   // before the drop suspends: no slot 9 may queue behind it
                 // Left without HOME this session (a game's own "Wii Menu", a channel launch): the resume point on disk is an
                 // older session's, behind the game's own save on the NAND. Dropped, so the next launch boots fresh.
-                if (!wii.homeSaved) saves.dropAutoInOrder()
+                if (WiiDolphinController.dropsResumePointOnCoreEnd(wii.homeSaved, settings.saveOnQuit)) saves.dropAutoInOrder()
                 quitGame(chosen = true, autoState = false)
             }
             // Subscribed before the login (startSession, after the first frame): events are not replayed.

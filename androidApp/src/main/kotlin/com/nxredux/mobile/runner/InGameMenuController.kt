@@ -80,7 +80,11 @@ import java.io.File
  * focus pause shares) is the activity's ([pauseForMenu], [resumeAfterMenu]).
  */
 internal interface InGameMenuHost : GameScreenHost {
+    val settings: AndroidAppSettings
     var menuOpen: Boolean
+    /** Kids Mode hides the game's settings from a kid ([InGameMenuModel.setKidsLocked]); [refreshKidsSettings] asks again. */
+    val kidsSettingsHidden: Boolean
+    fun refreshKidsSettings()
     val gameReady: Boolean
     val gameTag: String
     val isN3ds: Boolean
@@ -296,6 +300,7 @@ internal class InGameMenuController(
             initialSlot = (lastSlotCache ?: saveStates?.lastSlot()?.also { lastSlotCache = it } ?: 1) - 1,
         ).also {
             it.setStatus(configSource); it.cheatsAvailable = cheatsSupported
+            it.saveOnQuit = host.settings.saveOnQuit; it.refresh()
             it.screen = activity.screenClass()   // the DS / 3DS layout rows: this window's values and defaults
             it.displayMax3d = host.nds3dDisplayMax   // the DS / 3DS 3D Resolution rows' scales
             it.ndsView = host.ndsView                 // the DS / 3DS layout row in use, and the DS inset rows only in Picture in picture
@@ -311,7 +316,9 @@ internal class InGameMenuController(
             }
             it.setDsWireless(host.dsWireless)   // a DS game's wireless on the automatic route: Continue, Disconnect, Quit
             it.setIdleSeconds(host.dsIdleSeconds)
+            it.setKidsLocked(host.kidsSettingsHidden)   // Kids Mode without Parent mode: no Options for a kid
         }
+        host.refreshKidsSettings()
         if (retroView != null) {
             // Re-listed on every open so a bundled tree swapped in since launch, or a shader added to the home, is
             // picked up; on IO, the menu showing the cached lists until then (unchanged, as they almost always are,

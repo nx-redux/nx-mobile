@@ -39,6 +39,7 @@ class ShortcutsSettingsTest {
     private class Settings : AppSettings {
         override var treeRef: ContentRef? = ContentRef("Home")
         override var onboardingDone: Boolean? = true
+        override var saveOnQuit = true
         override var onboardingStep: String? = null
         override var extraFolders: List<ExtraFolder> = emptyList()
         override var defaultTags: Map<String, String> = emptyMap()
@@ -127,6 +128,15 @@ class ShortcutsSettingsTest {
         assertTrue(touch.all { it.secondary == "None" })
         assertEquals(SettingsRow(SettingsKind.RESET_DEFAULTS, "Clear all"), rows.last())
         assertEquals(binds + touch + rows.last(), rows)
+    }
+
+    @Test fun save_and_quit_is_named_quit_when_save_on_quit_is_off() = runTest {
+        val s = state(Settings().apply { saveOnQuit = false })
+        s.openShortcuts()
+        val binds = s.page().rows.filter { it.kind == SettingsKind.SHORTCUT_BIND }
+        assertEquals("Quit", binds.first { it.shortcut == ShortcutAction.SAVE_AND_QUIT }.label)
+        assertEquals(ShortcutAction.entries.filter { it != ShortcutAction.SAVE_AND_QUIT }.map { it.label },
+            binds.filter { it.shortcut != ShortcutAction.SAVE_AND_QUIT }.map { it.label })
     }
 
     @Test fun captureSingle() = runTest {
@@ -234,11 +244,11 @@ class ShortcutsSettingsTest {
         val s = state()
         s.openShortcuts()
         s.select(s.page().rows.indexOfFirst { it.label == "Touch button 1" })
-        s.onButton(NxButton.RIGHT)
+        s.padStep(NxButton.RIGHT)
         assertEquals("Toggle FF", s.row("Touch button 1").secondary)
-        s.onButton(NxButton.RIGHT)
+        s.padStep(NxButton.RIGHT)
         assertEquals("Hold FF", s.row("Touch button 1").secondary)
-        s.onButton(NxButton.LEFT); s.onButton(NxButton.LEFT)
+        s.padStep(NxButton.LEFT); s.padStep(NxButton.LEFT)   // its picker: None too
         assertEquals("None", s.row("Touch button 1").secondary)
         // Every action a touch button can do: Save & Quit is a controller's only.
         assertEquals(listOf("None") + ShortcutAction.entries.filter { it.touch }.map { it.label }, s.page().choices[s.selection.value.index]?.labels)
@@ -275,7 +285,7 @@ class ShortcutsSettingsTest {
         val s = state(settings)
         s.openShortcuts()
         s.bind(ShortcutAction.TOGGLE_FF); s.captureKey(110, true); s.captureKey(103, true)
-        s.select(s.page().rows.indexOfFirst { it.label == "Touch button 2" }); s.onButton(NxButton.RIGHT)
+        s.select(s.page().rows.indexOfFirst { it.label == "Touch button 2" }); s.padStep(NxButton.RIGHT)
         assertEquals("", settings.shortcuts)                    // not per change
         s.onButton(NxButton.B)
         assertEquals(SettingsSection.CONTROLS, s.page().section)

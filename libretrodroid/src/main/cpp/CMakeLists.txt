@@ -127,6 +127,7 @@ add_library(libretrodroid SHARED
         hwcontext.cpp
         vulkanbridge.h
         vulkanbridge.cpp
+        vulkanreader.cpp
         vulkandispatch.h
         vulkandispatch.cpp
         teardowncontext.h

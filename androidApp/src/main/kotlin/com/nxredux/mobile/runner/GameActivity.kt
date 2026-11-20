@@ -161,8 +161,10 @@ import com.nxredux.mobile.ui.nx.SlotUi
 import com.nxredux.mobile.ui.nx.PadMic
 import com.nxredux.mobile.ui.nx.PadMotion
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
@@ -184,6 +186,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     SaveSessionHost {
 
     companion object {
+        /** How long a quit waits for Save on quit's current value from the menu's process before using its own copy. */
+        private const val QUIT_SETTINGS_REFRESH_MS = 300L
+        /** Process-wide: false only until this process's first game screen; a process killed in the background starts over. */
+        private var screenShownInProcess = false
         /** The frontend rows a pad skin leaves out ([menuLocked]): it places the screens itself. */
         private val SKIN_HIDDEN_OPTIONS = setOf(
             com.nxredux.mobile.options.FrontendOptions.SCALING, com.nxredux.mobile.options.FrontendOptions.OVERLAY,
@@ -248,6 +254,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             if (!BuildConfig.DEBUG) return false
             val game = debugGame?.get()?.takeIf { !it.isFinishing } ?: return false
             game.quitWithAutoState(chosen = true)
+            return true
+        }
+
+        /** Debug builds only (the adb GAME_FF hook): fast forward on or off, as the panel's tile sets it. Main thread. */
+        internal fun debugFastForward(on: Boolean): Boolean {
+            if (!BuildConfig.DEBUG) return false
+            val game = debugGame?.get()?.takeIf { !it.isFinishing } ?: return false
+            game.handleMenuEffect(MenuEffect.SetSpeed(ff = on, rewind = if (on) false else null))
             return true
         }
 
@@ -579,7 +593,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Decided here, not after the launch's async setup, so a stop in between still records the slot.
         // A saved slot (recreated after a process kill) wins over the launch intent's.
         val savedSlot = savedInstanceState?.getInt(SaveSession.KEY_RESUME_SLOT, -1)?.takeIf { it in 0..NxPaths.AUTO_SLOT }
-        saves.startFrom(if (netplay != null) null else savedSlot ?: intent.getIntExtra(EXTRA_RESUME_SLOT, -1).takeIf { it in 0..NxPaths.AUTO_SLOT })
+        val launchSlot = intent.getIntExtra(EXTRA_RESUME_SLOT, -1).takeIf { it in 0..NxPaths.AUTO_SLOT }
+        // A bundle in a process that already showed a game screen is a recreate() (a driver relaunch), not a kill.
+        val afterKill = savedInstanceState != null && !screenShownInProcess
+        screenShownInProcess = true
+        saves.startFrom(SaveSession.startSlot(afterKill, savedSlot, launchSlot, settings.saveOnQuit, netplay != null))
         val claim = sessions.claim(::onSessionHandedOff).also { sessionClaim = it }
         // From the claim to the final release: the menu reads this as "a game screen is alive" (playing, suspended, closing).
         liveGameStore.write(LiveGame(
@@ -687,6 +705,29 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
     }
 
+    /**
+     * Kids Mode hides this game's settings from a kid (the menu's Options, the second-screen Settings tab): this process's
+     * stored copy at first, then the main process's answer ([refreshKidsSettings]), which alone knows Parent mode.
+     */
+    override val kidsSettingsHidden: Boolean get() = kidsHidden ?: settings.kidsEnabled
+    private var kidsHidden: Boolean? = null
+    private var kidsSettingsJob: Job? = null
+
+    /** Asks the main process again (a resume, a menu opening: Parent mode or Kids Mode may have changed meanwhile). */
+    override fun refreshKidsSettings() {
+        if (kidsSettingsJob?.isActive == true) return
+        val app = applicationContext
+        kidsSettingsJob = lifecycleScope.launch {
+            val hidden = withContext(Dispatchers.IO) {
+                runCatching { PrefsProvider.kidsSettingsHidden(app) }.onFailure { NxLog.w(TAG_LOG, "Kids Mode: no answer on game settings", it) }.getOrNull()
+            } ?: return@launch
+            if (hidden == kidsHidden || isDestroyed) return@launch
+            kidsHidden = hidden
+            withMenu { it.setKidsLocked(hidden) }
+            dual.refreshDualPanel()
+        }
+    }
+
     /** Kids Mode is on: input here is reported to the main process for Parent mode's idle time ([kidsInputSeen]). */
     private var kidsReportsInput = false
     private var kidsInputAt = -1L
@@ -739,6 +780,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         wii.syncMotionSensors(foreground = true)
         shortcuts.onResume()
         dual.syncDual()   // Settings → Second screen may have changed meanwhile
+        refreshKidsSettings()
     }
 
     private var topResumed = true   // the last onTopResumedActivityChanged (API 29+); below that, always the top one
@@ -906,7 +948,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // clears this screen. A quit writes its own; a game that never got ready writes nothing (writeAutoStateOnStop);
         // one that failed after starting and leaves through its dialog keeps the last good resume point.
         // API 26–27: onSaveInstanceState already ran; the outcome of the write is recorded in its bundle.
-        saves.onStop(writeAuto = !quitting && !wii.endedByCore && !relaunching && !(isFinishing && failShown) && !inRoom)
+        val saveOnQuit = settings.saveOnQuit
+        saves.onStop(
+            writeAuto = !quitting && !wii.endedByCore && !relaunching && !(isFinishing && failShown) && !inRoom && saveOnQuit,
+            unlinkAuto = !saveOnQuit,
+        )
         if (isFinishing) { input.gcClearTriggers(); stopAchievements() }
         input.onStop()   // the pen and 3DS hotkey ticks stop; onStart restarts them
         // A Presentation stays up while its activity is stopped: no second screen in the background.
@@ -1543,7 +1589,16 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         ach?.detach()
         achievements = null
         if (view == null || !gameReady) { ach?.stop(); finish(); return }   // not running yet: no save to write
-        saves.writeOnQuit(view, chosen, autoState, release = { live -> ach?.stop(native = live) }, finish = ::finish)
+        // Save on quit off: the quit keeps the resume point as is (no hidden state), its battery save still written.
+        if (!autoState) { saves.writeOnQuit(view, chosen, false, release = { live -> ach?.stop(native = live) }, finish = ::finish); return }
+        // The refresh is a blocking call into the menu's process: run apart, so the timeout can stop waiting for it.
+        // Not cancellable: onPause skipped its battery save for this quit, so the quit's write must not be lost to a destroy.
+        lifecycleScope.launch {
+            withContext(NonCancellable) {
+                val keep = SaveSession.readFresh(QUIT_SETTINGS_REFRESH_MS, refresh = { CoroutineScope(Dispatchers.IO).async { Prefs.refreshGame() }.await() }) { settings.saveOnQuit }
+                saves.writeOnQuit(view, chosen, keep, release = { live -> ach?.stop(native = live) }, finish = ::finish)
+            }
+        }
     }
 
     override fun refreshSlots() = saves.refreshSlots()
@@ -1989,12 +2044,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * the DS wireless is on: the reduced menu has no Options, and a menu opened in a room starts the cap.
      */
     override fun openOptions() {
-        if (quitting || !gameReady || dsWireless) return
+        if (quitting || !gameReady || dsWireless || kidsSettingsHidden) return
         if (!menuOpen) toggleMenu()
         withMenu { it.openOptions() }
     }
     override fun openShaderPicker() {
-        if (quitting || !gameReady || dsWireless) return
+        if (quitting || !gameReady || dsWireless || kidsSettingsHidden) return
         if (!menuOpen) toggleMenu()
         withMenu { it.openShaderPicker() }
     }

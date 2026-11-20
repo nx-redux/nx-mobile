@@ -44,10 +44,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Color
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import org.jetbrains.compose.resources.DrawableResource
 import com.nxredux.mobile.ui.nx.Hint
+import com.nxredux.mobile.ui.nx.NX_EDIT_HINTS
+import com.nxredux.mobile.ui.nx.padAHint
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxButtonGlyph
@@ -71,17 +74,19 @@ fun OnboardingScreen(
     onDraftUser: (String) -> Unit, onDraftPassword: (String) -> Unit, modifier: Modifier = Modifier,
     onSetting: (NxSettingEvent) -> Unit = {},
     onDraftKey: (String) -> Unit = {},
+    editing: Int = -1,   // the row the pad is changing ([AppState.rowEdit], [rowEditIndex]); -1 none
 ) {
-    // The last page: START finishes too, as Press Start does.
-    val hints = listOfNotNull(
-        if (screen.canGoBack) Hint(NxButton.B, "Back") else null, Hint(NxButton.A, "Choose"),
+    // A value row says what A does to it (Toggle, Choose, Change); the last page: START finishes too, as Press Start does.
+    val hints = if (editing >= 0) NX_EDIT_HINTS else listOfNotNull(
+        if (screen.canGoBack) Hint(NxButton.B, "Back") else null,
+        screen.touchRows?.getOrNull(selected)?.padAHint ?: Hint(NxButton.A, "Choose"),
         if (screen.step == OnboardingStep.DONE) Hint(NxButton.START, "Start") else null,
     )
     if (screen.step == OnboardingStep.WELCOME) {
         OnboardingWelcomePage(screen, onRow, modifier)
         return
     }
-    screen.touchRows?.let { rows ->
+    screen.touchRows?.mapIndexed { i, r -> if (i == editing) r.copy(editing = true) else r }?.let { rows ->
         val picture = when {
             screen.step == OnboardingStep.TITLE ->
                 chromePicture(title = screen.rows.getOrNull(0)?.secondary != "Hide", hints = screen.rows.getOrNull(1)?.secondary != "Hide")
@@ -229,8 +234,11 @@ internal fun SetupButtons(
         labels.forEachIndexed { i, text ->
             val index = first + i
             val main = i == 0
+            // The main button gives way when the row runs out (a long folder name in the picker's Use …): it ends in "…",
+            // the others keep their whole words.
             Box(
-                Modifier.heightIn(min = SETUP_BUTTON_TAP).clickable { onSelect(index); onOpen(index) },
+                (if (main) Modifier.weight(1f, fill = false) else Modifier)
+                    .heightIn(min = SETUP_BUTTON_TAP).clickable { onSelect(index); onOpen(index) },
                 contentAlignment = Alignment.CenterStart,
             ) {
                 val ink = if (main) colors.onAccent else colors.listText
@@ -249,6 +257,7 @@ internal fun SetupButtons(
                     Text(
                         text, color = ink,
                         fontFamily = LocalNxFont.current, fontWeight = FontWeight.Bold, fontSize = size, lineHeight = size * SETUP_WORD_LINE, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }

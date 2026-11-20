@@ -548,8 +548,8 @@ internal class RaScreenController(
         val row = s.rows.getOrNull(selection.value.index)
         when (button) {
             NxButton.UP, NxButton.DOWN -> selection.value = selection.value.step(if (button == NxButton.UP) -1 else 1) { s.rows.getOrNull(it)?.selectable == true }
-            // The value rows step either way (NX Redux ITEM_CYCLE): the durations stop at their ends, the sort order and the
-            // On/Off rows wrap. Enable needs an account, as on A.
+            // Heard only on a row A started changing ([SettingsController.onRowEditButton]); it steps either way (NX Redux
+            // ITEM_CYCLE): a duration stops at its ends, the rest wrap.
             NxButton.LEFT, NxButton.RIGHT -> if (row?.enabled != false) raSettingValue(row?.kind)?.let { v ->
                 v.change(if (button == NxButton.RIGHT) 1 else -1, wrap = !v.clamps)
             }

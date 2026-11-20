@@ -180,8 +180,11 @@ public:
     void setPreferVulkan(bool value) { preferVulkan = value; }
     void setVulkanSwapchainFrames(bool value) { vulkanSwapchainFrames = value; }
     // The next create()'s Vulkan bridge loads [libraryName] from [driverDir] through libadrenotools (empty: the system
-    // driver). [hookLibDir]: the app's nativeLibraryDir; [tmpDir]: patched libraries below API 29. Set before create().
-    void setVulkanDriver(std::string driverDir, std::string libraryName, std::string hookLibDir, std::string tmpDir) {
+    // driver). [hookLibDir]: the app's nativeLibraryDir; [tmpDir]: patched libraries below API 29. [reader]: its frames
+    // go through a swapchain on an image reader (it cannot import a shared buffer). Set before create().
+    void setVulkanDriver(std::string driverDir, std::string libraryName, std::string hookLibDir, std::string tmpDir,
+                         bool reader) {
+        vulkanDriverReader = reader;
         vulkanDriverDir = std::move(driverDir);
         vulkanDriverLibrary = std::move(libraryName);
         vulkanDriverHookLibDir = std::move(hookLibDir);
@@ -366,6 +369,7 @@ private:
     std::string vulkanDriverLibrary;
     std::string vulkanDriverHookLibDir;
     std::string vulkanDriverTmpDir;
+    bool vulkanDriverReader = false;
 
     ShaderManager::Config fragmentShaderConfig = ShaderManager::Config {
         ShaderManager::Type::SHADER_DEFAULT, { }

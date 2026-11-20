@@ -2,7 +2,6 @@ package com.nxredux.mobile.storage
 
 import android.content.Context
 import android.net.Uri
-import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.DocumentsContract
@@ -18,7 +17,6 @@ import com.nxredux.mobile.settings.SaveTransferRules
 import com.nxredux.mobile.settings.TransferReport
 import com.swordfish.libretrodroid.NxLog
 import java.io.File
-import java.io.FileInputStream
 import java.io.InputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
@@ -45,6 +43,8 @@ class AndroidSaveTransfer(
         fun createZip(suggestedName: String, onRef: (ContentRef?) -> Unit)
         fun openZip(onRef: (ContentRef?) -> Unit)
         fun openFolder(onRef: (ContentRef?) -> Unit)
+        /** Several single files (Import BIOS); empty: cancelled. */
+        fun openFiles(onRefs: (List<ContentRef>) -> Unit)
     }
 
     private val app = context.applicationContext
@@ -86,17 +86,16 @@ class AndroidSaveTransfer(
             ImportSource.ZIP -> pickers.openZip { ref ->
                 ref ?: return@openZip
                 importWork(progress, done) {
-                    val file = if (FileRefs.isFile(ref)) File(FileRefs.path(ref)) else null
-                    val open: () -> InputStream? = { if (file != null) FileInputStream(file) else resolver.openInputStream(Uri.parse(ref.value)) }
+                    val open = PickedRefs.opener(resolver, ref)
                     // The picker shows every file type (a zip filter hid everything on Samsung's picker): only a zip goes on.
-                    if (!isZip(open)) return@importWork ImportResult.Message("That file is not a zip")
+                    if (!looksLikeZip(open)) return@importWork ImportResult.Message("That file is not a zip")
                     ImportResult.Done(importer().run(ZipImportFiles { open() ?: error("cannot read the zip") }))
                 }
             }
             // With All files access every RetroArch root found is read; without it the user picks the RetroArch folder.
             ImportSource.RETROARCH -> if (AndroidAllFilesAccess.isGranted()) {
                 importWork(progress, done) {
-                    val roots = retroArchRoots()
+                    val roots = PickedRefs.retroArchRoots(RetroArchFolders.TOPS)
                     if (roots.isEmpty()) return@importWork ImportResult.Message(RetroArchFolders.NOT_FOUND)
                     val importer = importer()
                     retroArchResult(roots.map { importer.run(DirImportFiles(it, RetroArchFolders.TOPS), retroArch = true) }.reduce(ImportSummary::plus))
@@ -105,7 +104,7 @@ class AndroidSaveTransfer(
                 ref ?: return@openFolder
                 importWork(progress, done) {
                     val tree = ImportTree.of(resolver, ref)
-                    val start = treeStart(ref)
+                    val start = PickedRefs.treeStart(ref)
                     if (RetroArchFolders.TOPS.none { tree.child(start, it)?.isDirectory == true }) return@importWork ImportResult.Message(RetroArchFolders.NOT_IN_PICKED)
                     retroArchResult(importer().run(TreeImportFiles(tree, start, RetroArchFolders.TOPS), retroArch = true), RetroArchFolders.NOT_IN_PICKED)
                 }
@@ -117,10 +116,6 @@ class AndroidSaveTransfer(
     private fun retroArchResult(summary: ImportSummary, notFound: String = RetroArchFolders.NOT_FOUND): ImportResult =
         if (summary.isEmpty) ImportResult.Message(notFound) else ImportResult.Done(summary)
 
-    /** The RetroArch roots on shared storage that hold `saves` or `states`, in [RetroArchFolders.ROOTS] order. */
-    @Suppress("DEPRECATION")   // the shared storage root itself, read with All files access
-    private fun retroArchRoots(): List<File> = RetroArchFolders.ROOTS.map { File(Environment.getExternalStorageDirectory(), it) }
-        .filter { root -> RetroArchFolders.TOPS.any { File(root, it).isDirectory } }
 
     /**
      * An import's work on the transfer thread: asked again after a picker (a game may have started meanwhile); [importing]
@@ -144,14 +139,10 @@ class AndroidSaveTransfer(
         }
     }
 
-    /** A SAF pick is a tree URI: the walk starts at its root document. A file ref (All files access) is the folder itself. */
-    private fun treeStart(root: ContentRef): ContentRef = if (FileRefs.isFile(root)) root else Uri.parse(root.value).let {
-        ContentRef(DocumentsContract.buildDocumentUriUsingTree(it, DocumentsContract.getTreeDocumentId(it)).toString())
-    }
 
     /** Every file under the picked folder [root]. */
     private fun importTree(root: ContentRef): ImportSummary =
-        importer().run(TreeImportFiles(ImportTree.of(resolver, root), treeStart(root)))
+        importer().run(TreeImportFiles(ImportTree.of(resolver, root), PickedRefs.treeStart(root)))
 
     /**
      * Console folder → the handheld folder of the console's default emulator (Settings → Default emulators; GPGX_SMS's is
@@ -172,17 +163,6 @@ class AndroidSaveTransfer(
     private fun libraryIndex(): LibraryIndex? = runCatching {
         File(DataRoot.private(app), ".userdata/android/library.json").takeIf { it.isFile }?.readText()?.let(LibraryIndexCodec::decode)
     }.getOrNull()
-
-    /** True when the stream starts like a zip (`PK\3\4`, or `PK\5\6` for an empty one). */
-    private fun isZip(open: () -> InputStream?): Boolean = runCatching {
-        open()?.use { s ->
-            val head = ByteArray(4)
-            var n = 0
-            while (n < head.size) { val r = s.read(head, n, head.size - n); if (r < 0) break; n += r }
-            n == 4 && head[0] == 'P'.code.toByte() && head[1] == 'K'.code.toByte() &&
-                ((head[2] == 3.toByte() && head[3] == 4.toByte()) || (head[2] == 5.toByte() && head[3] == 6.toByte()))
-        } ?: false
-    }.getOrDefault(false)
 
     private fun deleteDocument(uri: Uri): Boolean =
         runCatching { DocumentsContract.deleteDocument(resolver, uri) }.onFailure { NxLog.w(TAG, "could not delete $uri", it) }.getOrDefault(false)
@@ -213,3 +193,14 @@ class AndroidSaveTransfer(
         internal val anyImporting: Boolean get() = importsRunning.get() > 0
     }
 }
+
+/** True when the stream starts like a zip (`PK\3\4`, or `PK\5\6` for an empty one). */
+internal fun looksLikeZip(open: () -> InputStream?): Boolean = runCatching {
+    open()?.use { s ->
+        val head = ByteArray(4)
+        var n = 0
+        while (n < head.size) { val r = s.read(head, n, head.size - n); if (r < 0) break; n += r }
+        n == 4 && head[0] == 'P'.code.toByte() && head[1] == 'K'.code.toByte() &&
+            ((head[2] == 3.toByte() && head[3] == 4.toByte()) || (head[2] == 5.toByte() && head[3] == 6.toByte()))
+    } ?: false
+}.getOrDefault(false)

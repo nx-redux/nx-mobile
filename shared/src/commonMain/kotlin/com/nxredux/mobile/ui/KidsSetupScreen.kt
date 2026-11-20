@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.launcher.InstalledApp
 import com.nxredux.mobile.ui.nx.Hint
+import com.nxredux.mobile.ui.nx.padAHint
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
@@ -90,12 +91,17 @@ internal fun KidsSetupScreen(
         KidsSetupStep.APPS, KidsSetupStep.TIMES -> 1
         else -> 2
     }
+    val touchRows = rows.map { kidsSetupTouchRow(it, s.setup) }
     // X: the Continue (Done) row from anywhere in the list ([KidsScreensController.onKidsSetupButton])
     val next = if (KidsSetupRow.Next in rows) Hint(NxButton.X, if (s.setup) "Continue" else "Done") else null
     val more = kidsSetupMore(s) != null
-    val hints = listOfNotNull(Hint(NxButton.B, if (s.setup) "Cancel" else "Back"), Hint(NxButton.A, "Choose"), next, if (more) Hint(NxButton.Y, "Info") else null)
+    // An app's switch says Toggle: A flips it (LEFT / RIGHT leave it alone, as on every settings page).
+    val hints = listOfNotNull(
+        Hint(NxButton.B, if (s.setup) "Cancel" else "Back"), touchRows.getOrNull(selected)?.padAHint ?: Hint(NxButton.A, "Choose"),
+        next, if (more) Hint(NxButton.Y, "Info") else null,
+    )
     SetupBlockPage(
-        if (s.setup) "Kids Mode setup" else "Kids Mode", headline, kidsSetupLines(s), rows.map { kidsSetupTouchRow(it, s.setup) }, buttons,
+        if (s.setup) "Kids Mode setup" else "Kids Mode", headline, kidsSetupLines(s), touchRows, buttons,
         selected, hints, onSelect, onRow, onHint, modifier, onSetting = onSetting,
         onMore = if (more) { { onHint(NxButton.Y) } } else null,   // Y's: the step's fuller text in the app's message dialog
         pinButtons = true,   // Continue stays in view at the bottom over the menu pad too; only the list scrolls

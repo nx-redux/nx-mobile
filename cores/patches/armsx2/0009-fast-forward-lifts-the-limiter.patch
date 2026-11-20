@@ -1,0 +1,101 @@
+diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
+--- a/pcsx2-libretro/Main.cpp
++++ b/pcsx2-libretro/Main.cpp
+@@ -521,9 +521,14 @@
+ 		fn();
+ 	}
+ }
++
++// VM vsyncs so far: retro_run reads how many passed between two presented
++// frames while the frontend fast-forwards.
++static std::atomic<u64> s_vsync_count{0};
+ 
+ void Host::PumpMessagesOnCPUThread()
+ {
++	s_vsync_count.fetch_add(1, std::memory_order_relaxed);
+ 	if (s_shutdown_requested.load(std::memory_order_acquire) && VMManager::HasValidVM())
+ 		VMManager::SetState(VMState::Stopping);
+ 
+@@ -2348,7 +2353,55 @@
+ 	bool options_updated = false;
+ 	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &options_updated) && options_updated)
+ 		ApplyCoreOptions(false);
++
++	// A frontend that fast-forwards calls retro_run more often, but the VM
++	// runs on its own thread against its own clock. Its limiter is lifted for
++	// as long, and each retro_run then stands for one VM vsync, so the
++	// frontend's speed is the game's: a call waits for the next presented
++	// frame (the VM is not far behind once unlimited), and a frame that took
++	// several vsyncs lets as many calls less go by without waiting (a game
++	// drawing 30 frames a second would otherwise run at twice the speed asked).
++	if (VMManager::HasValidVM())
++	{
++		bool fast_forward = false;
++		environ_cb(RETRO_ENVIRONMENT_GET_FASTFORWARDING, &fast_forward);
++		const LimiterModeType wanted = fast_forward ? LimiterModeType::Unlimited : LimiterModeType::Nominal;
++		if (VMManager::GetLimiterMode() != wanted)
++		{
++			Host::RunOnCPUThread([wanted]() {
++				if (VMManager::HasValidVM())
++					VMManager::SetLimiterMode(wanted);
++			}, false);
++		}
+ 
++		static u64 last_vsync = 0;
++		static u32 calls_to_skip = 0;
++		if (fast_forward && calls_to_skip > 0)
++		{
++			calls_to_skip--;
++		}
++		else if (fast_forward)
++		{
++			const auto has_frame = []() {
++#ifdef ENABLE_VULKAN
++				if (LibretroCore::s_hw_render_vulkan)
++					return VKLibretro::HasFrame();
++#endif
++				return GLLibretro::HasFrame();
++			};
++			// 50 ms at most: a VM that is paused or loading presents nothing.
++			for (int i = 0; i < 200 && !has_frame(); i++)
++				std::this_thread::sleep_for(std::chrono::microseconds(250));
++			const u64 vsync = s_vsync_count.load(std::memory_order_relaxed);
++			calls_to_skip = static_cast<u32>(std::clamp<u64>(vsync - last_vsync, 1, 4)) - 1;
++			last_vsync = vsync;
++		}
++		else
++		{
++			calls_to_skip = 0;
++		}
++	}
++
+ 	// M3 input: forward the libretro joypad straight into the DualShock2
+ 	// bind slots (bypasses InputManager entirely). Libretro port N drives
+ 	// PS2 port N+1, for the two players the core plugs in (InitializeConfig).
+diff --git a/pcsx2/GS/Renderers/Vulkan/VKLibretro.cpp b/pcsx2/GS/Renderers/Vulkan/VKLibretro.cpp
+--- a/pcsx2/GS/Renderers/Vulkan/VKLibretro.cpp
++++ b/pcsx2/GS/Renderers/Vulkan/VKLibretro.cpp
+@@ -177,6 +177,12 @@
+ 		return true;
+ 	}
+ 
++	bool HasFrame()
++	{
++		std::lock_guard<std::mutex> lock(s_frame_mutex);
++		return s_frame_serial != s_frame_consumed && s_frame.image != VK_NULL_HANDLE;
++	}
++
+ 	void SetPacing(bool enabled)
+ 	{
+ 		std::lock_guard<std::mutex> lock(s_frame_mutex);
+diff --git a/pcsx2/GS/Renderers/Vulkan/VKLibretro.h b/pcsx2/GS/Renderers/Vulkan/VKLibretro.h
+--- a/pcsx2/GS/Renderers/Vulkan/VKLibretro.h
++++ b/pcsx2/GS/Renderers/Vulkan/VKLibretro.h
+@@ -71,6 +71,7 @@
+ 	};
+ 	void PublishFrame(const Frame& frame);
+ 	bool ConsumeFrame(Frame* out_frame); // true if a new frame arrived since the last consume
++	bool HasFrame();                     // same, without consuming it
+ 
+ 	// Frame pacing: when enabled, PublishFrame blocks the GS thread until
+ 	// retro_run consumes the frame — the frontend's retro_run cadence becomes

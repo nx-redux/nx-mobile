@@ -14,6 +14,67 @@
 - [ ] Home during a slow PS2/Wii quit, tap the same game → starts fresh; Home during a big PS2 state resume → no ANR; then clear it from the launcher icon → SRAM survived.
 - [ ] Threaded cores across pause/resume (input lock): Dolphin GC/Wii incl. Wii pointer, Azahar, ARMSX2, PPSSPP; N64 netplay input still arrives; a game from a picked file still opens.
 
+## Vulkan frames through a swapchain on an image reader (malisx2)
+
+A custom driver that cannot import a shared buffer (malisx2 on Mali) now runs through a swapchain on an image reader;
+the OpenGL ES presenter is unchanged. AYANEO Pocket Air Mini (Mali-G76), Budokai Tenkaichi 3 battle state, 2026-11-16:
+malisx2 59/60/60 fps at 1x and 55–57 fps at 2x, against 54–57 and 38–39 on the stock driver. Checked there: picture at
+1x and 2x, a slang preset (crt-geom, 43 fps at 2x), video-mode size change, quit ×5, screen off/on, Home and return,
+PSP (Patapon 2) on the same driver, and the forced fallbacks (`setprop debug.nx.reader_fail_after <frame>`: failed
+start and mid-game both relaunch on the system driver).
+
+Checked on the Nova (Adreno 740, Turnip 27.0.0) on 2026-11-20, the reader hand-off forced on a driver that passes the
+import (`setprop debug.nx.reader_force 1`): PS2 (Budokai Tenkaichi 3, God of War II, Ace Combat 5 resumed from their
+states, 60 fps), PSP, 3DS, GameCube and N64 run with a correct picture; fast forward at 4x presents about 220 frames a
+second with none failed (PSP, 3DS, GameCube with Frame Skip on Auto, N64); Home and return twice, with a memory trim and
+screen off/on; a simulated second display (3DS: top screen there, touch screen on the main one); a reader buffer the
+OpenGL ES side cannot import (`setprop debug.nx.reader_gl_fail 1`) and a mid-game failure (2 of 2) both relaunch on
+the system driver, and the PS2 core quits cleanly after.
+
+Device checks still owed:
+
+- [x] Nova (Adreno): a Turnip package still passes its pre-check as "import" and measures as before (60 fps).
+- [ ] Fast forward on malisx2 itself (passes through the reader on Turnip).
+- [x] EGL context loss, forced with `setprop debug.nx.keepcontext 0` (the context given up at every pause): PS2 on the
+  AYANEO, Home and return twice, the picture comes back on malisx2 through the reader (57 fps after), on the stock
+  Vulkan driver and on OpenGL ES.
+- [ ] Other Mali devices and malisx2 versions; GameCube/Wii and N64 (Vulkan) on malisx2.
+- [x] PS2 fast forward did not speed the game up (the core's frame count stayed at 60 a second, any hand-off, OpenGL ES
+  too). Cause: the core's VM runs on its own thread with its own limiter and never asked whether the frontend
+  fast-forwards. Core patch 0009 lifts the limiter while it does and makes each call wait for the VM's next frame.
+  After it on the Nova at Max FF 4x: Ace Combat 5 226 fps on Vulkan and 229 on OpenGL ES; God of War II 118 at 2x;
+  Budokai Tenkaichi 3 116 (the phone's limit in a battle).
+- [x] A real second screen on the Nova with the reader hand-off forced (3DS): top screen there, touch screen on the main
+  one, fast forward, Home and return.
+- [x] Graphics API Auto on the AYANEO (Mali-G76): PS2 starts on Vulkan (malisx2 through the reader, 56–57 fps), Wii on
+  Vulkan, N64 stays on OpenGL ES. In Settings the PS2 page says "Auto is Vulkan" and shows the GPU driver row on Auto.
+- [x] PS2 fast forward on the AYANEO (malisx2, Max FF 4x): 118 fps at native resolution; at 2x the phone is already at
+  its limit (57 to 63 fps).
+- [x] Mario Kart 7 on the Nova's real second screen (same race from a save state, both screens captured): the reader
+  forced on Turnip, the import hand-off on Turnip, Vulkan on the system driver and OpenGL ES all draw the top screen
+  on the second display and the map on the main one. The darkened kart and driver showed up again on the system
+  driver with no reader involved (smoke beside it, right after a hit) and never on the reader, so it is the game's own
+  look, not the hand-off. The black top screen seen on a simulated display was the simulation.
+- Which consoles follow the GPU on Auto, from the AYANEO on 2026-11-20 (frames in 5 s, stutters counted by NXHITCH):
+  Wii (New Super Mario Bros. Wii) 240–279 on OpenGL ES against 291–302 on Vulkan; GameCube (Double Dash race) 285–300
+  against 301; so Dolphin follows it, with PS2. N64 (Mario Kart 64 from boot) holds 300 on OpenGL ES with 18 stutters
+  against 274–294 with about 950 on Vulkan (ParaLLEl), malisx2 no better. PSP (Tekken 6 fight), PS1 (SwanStation) and
+  Dreamcast (Soulcalibur fight) hold full speed on both with fewer stutters on OpenGL ES. 3DS (Mario Kart 7): the
+  low-memory killer ends the game seconds into a Vulkan launch (1.2 GB held on a 1.9 GB device).
+- [ ] N64, PSP, GameCube and Wii run on malisx2 through the reader on the AYANEO with a correct picture; other Mali
+  devices and malisx2 versions are still owed.
+- [ ] 3DS on Vulkan on the AYANEO: Mario Kart 7 from boot reaches 60 fps (through the reader on malisx2 too), then the
+  core aborts at the first 3D scene (`vk::DeviceLostError` in `waitForFences`). Same on a build from main and on the
+  stock driver. The game holds about 1.4 GB with swap on a 1.9 GB device and 23 MB was free at the abort, so most likely
+  the GPU kernel driver could not get memory (kernel log not readable there). OpenGL ES survives at about 5 fps.
+- [x] PS2 quit on the AYANEO aborted when the core library was closed (`pthread_mutex_lock called on a destroyed
+  mutex`): 6 of 13 quits on malisx2, also on the stock driver and on main. Cause: the settings interfaces kept for the
+  process (core patch 0004) saved themselves at unload, after the save lock was destroyed. Core patch 0007 saves them in
+  `retro_deinit` and keeps the lock. After it: 0 of 12 quits (8 malisx2, 4 stock).
+- [x] PS2 on the driver fallback relaunch (core reloaded in the same process) after core patch 0007: 3 of 3 forced
+  fallbacks relaunched and quit cleanly on the AYANEO, 3 of 3 on the Nova.
+- [x] PS2 resume booted from the disc although the state load reported success (5 of 13 launches on the AYANEO, either driver). Cause: the state loads during the BIOS boot, and the core swapped TLB entries one index at a time, so unmapping a stale entry could unmap pages a new entry had just mapped (a burst of `TLB Miss` in the log). Core patch 0008 unmaps all stale entries first. After it: 12 of 12 launches resumed.
+
 ## Slang shader presets
 
 Nova, 2026-11-14 (`tools/device-tests/slang_shaders.py`, 33 runs, no errors, screenshots looked at): SNES with crt-geom,
@@ -254,17 +315,19 @@ menu, survive Home and return, quit and reload slot 9 (8/8); save then quit at o
 
 Device checks still owed:
 
-- [ ] Genesis Plus GX with an MSU-MD set and a Sega CD BIOS: music plays (the cart mounts its cue through the VFS).
-- [ ] Play build (no All files access): an MSU-1 pack streams; an MSU-MD set on PicoDrive is copied to the cache and plays.
+- [x] Genesis Plus GX with an MSU-MD set and a Sega CD BIOS: music plays (the cart mounts its cue through the VFS). MSU-MD Sample on the Nova, 2026-11-16.
+- [ ] Play build (no All files access): an MSU-1 pack streams.
+- [x] Play build (no All files access): an MSU-MD set and a Sega CD disc on PicoDrive stream from a SAF folder (no cache copy) and play. MSU-MD Sample and Sonic CD (USA) on the Nova, 2026-11-16.
 - [ ] Device Sync of an MSU pack in an extra folder: the folder arrives whole; a loose set's `.msu`/`.pcm` or cue and tracks travel with its ROM.
 
 Follow-ups, after #147:
 
 - [x] Region-aware BIOS check (feat/region-bios): a Sega CD disc's header decides which region's BIOS it needs; the popup names the file and where the other regions' files are. Sonic CD (USA) on the Nova, 2026-11-15.
+- [x] PicoDrive on the libretro VFS (feat/picodrive-vfs, core patch picodrive/0003): it streams from descriptors like the other cores, so Sega CD discs and MSU-MD sets are no longer copied to the cache; only PrBoom keeps LoadMode.REAL_PATH. Emulator: MSU-MD Sample, Sonic CD (USA), a plain cartridge; Sonic CD on the Nova, 2026-11-15.
 - [ ] PC Engine CD: check whether a region-specific System Card matters (mednafen pce_fast takes syscard3.pce for both); add it to the region check if so.
 - [ ] BIOS checksums: check each BIOS file against the known good dumps, so a bad or misnamed dump gets its own message.
-- [ ] MSU-MD on Genesis Plus GX: it loads the Sega CD BIOS of the cartridge's region (its header's country codes, or the forced region); the launch still checks "any of the three" for it.
-- [ ] PicoDrive on the libretro VFS: its NDK build opens files by path, so it is the one core (with PrBoom) on LoadMode.REAL_PATH, copied to the cache on the Play build and from SAF extra folders. Building it with libretro-common's VFS lets it stream like the others and drops the copy (Sega CD discs, MSU-MD soundtracks).
+- [x] MSU-MD on Genesis Plus GX: the launch checks the Sega CD BIOS of the cartridge's region (its header's country codes, or the forced region), as the core loads it. Refused without bios_CD_U.bin and played with it, MSU-MD Sample on the Nova, 2026-11-16.
+- [x] BIOS copies: the app copied BIOS files into its own system folder and never removed one whose original was gone, so a deleted or renamed BIOS still loaded and passed the check. It now records each copy by the Bios folder it came from and removes it once no folder has it (a bundled file is restored). Refused with bios_CD_U.bin renamed, re-copied and played with it back, MSU-MD Sample on the Nova, 2026-11-16.
 - [ ] More badges ([IndexedGame.badge] is general): from bracketed file-name tags ((Hack), [h], (Homebrew), (Translated), (Beta)/(Proto)) via a small table, a per-game choice in Options (wins over detected ones), or a DAT/ScreenScraper match. One badge per game today.
 - [ ] Docs: unzip MSU packs (a zip cannot be streamed); a pack in its own folder is one game.
 

@@ -108,6 +108,8 @@ internal interface DualScreenHost : GameScreenHost {
     val netplayNow: NetplaySession?
     /** A netplay session or a DS game's wireless: the panel hides what would break it (touch, speed, Reset, slots, Cheats, Players). */
     val sessionLocked: Boolean
+    /** Kids Mode hides the game's settings from a kid: no Settings tab. */
+    val kidsSettingsHidden: Boolean
     val achievements: AchievementsBridge?
     /** The game's cheats (toggled through [handleMenuEffect]), whether the core takes any, and their folder: the Cheats tab. */
     val cheatsSupported: Boolean
@@ -846,7 +848,7 @@ internal class DualScreenController(
         val players = input.playerRows()
         val tabs = GamePanelModel.tabs(
             raAvailable = list.isNotEmpty(), playerSlots = if (sessionLocked) 0 else players?.first?.size ?: 0,
-            cheats = owner.cheatsSupported && !sessionLocked, settings = true,
+            cheats = owner.cheatsSupported && !sessionLocked, settings = !owner.kidsSettingsHidden,
         )
         val cheats = owner.cheatSet
         val (disc, count) = discs ?: (0 to 0)

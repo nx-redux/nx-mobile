@@ -26,15 +26,49 @@ object BiosImport {
         if (!own && FileRefs.accessOff(home, AndroidAllFilesAccess.isGranted())) return NxLog.w("BiosImport", "All files access is off; Bios import skipped")
         runCatching {
             val tree = ImportTree.of(context.contentResolver, home)
+            // No Bios folder at all (the home unmounted, or not set up yet) says nothing about the copies: none is removed.
             val bios = tree.child(home, "Bios")?.takeIf { it.isDirectory } ?: return
             val sync = TreeSync(tree)
+            val found = LinkedHashMap<String, Pair<Set<String>, Boolean>>()
             for (tag in tags) {
-                val tagDir = tree.child(bios.ref, tag)?.takeIf { it.isDirectory } ?: continue
-                runCatching { sync.importDir(tagDir.ref, biosDir, recursive = true, whenDiffers = true, extraNames = names) }
-                    .onFailure { NxLog.w("BiosImport", "Bios/$tag import failed", it) }
+                val tagDir = tree.child(bios.ref, tag)?.takeIf { it.isDirectory }
+                if (tagDir == null) { found[tag] = emptySet<String>() to true; continue }
+                val f = TreeSync.Found()
+                runCatching { sync.importDir(tagDir.ref, biosDir, recursive = true, whenDiffers = true, extraNames = names, found = f) }
+                    .onFailure { f.complete = false; NxLog.w("BiosImport", "Bios/$tag import failed", it) }
+                found[tag] = f.seen to f.complete
             }
+            dropStaleCopies(context, biosDir, tags, names, found)
         }.onFailure { NxLog.w("BiosImport", "Bios import failed", it) }
     }
+
+    /**
+     * Removes the copies in [biosDir] whose originals are gone ([BiosCopies]), restoring a bundled file a copy had
+     * replaced. For a folder with nothing on record yet, the launch's own BIOS [names] that are in [biosDir] and not
+     * bundled count as its copies: only an import puts them there (copies made before the record existed).
+     */
+    private fun dropStaleCopies(context: Context, biosDir: File, tags: List<String>, names: List<String>, found: Map<String, Pair<Set<String>, Boolean>>) {
+        val systemDir = File(context.filesDir, "system")
+        val recordFile = File(File(context.filesDir, RECORD_DIR), biosDir.relativeTo(context.filesDir).path.replace('/', '_') + ".tsv")
+        val recorded = if (recordFile.isFile) BiosCopies.parse(recordFile.readText()) else emptyMap()
+        val seeded by lazy {
+            names.filter { FileRefs.isPlainName(it) && File(biosDir, it).isFile && !SystemFiles.isBundled(context, systemDir, File(biosDir, it)) }.toSet()
+        }
+        val old = recorded + tags.filter { it !in recorded }.associateWith { seeded }.filterValues { it.isNotEmpty() }
+        val (record, stale) = BiosCopies.update(old, found)
+        for (path in stale) {
+            val file = File(biosDir, path)
+            if (!file.isFile) continue
+            if (SystemFiles.restoreBundled(context, systemDir, file)) NxLog.i("BiosImport", "restored bundled $path: its Bios copy is gone")
+            else if (file.delete()) NxLog.i("BiosImport", "removed $path: no Bios folder has it any more")
+        }
+        if (record != recorded) {
+            recordFile.parentFile?.mkdirs()
+            recordFile.writeAtomically(BiosCopies.format(record).encodeToByteArray())
+        }
+    }
+
+    private const val RECORD_DIR = "bios-copies"
 
     /**
      * The names of the ".bin" files in `Bios/<tag>/` (the ones ARMSX2 accepts), sorted; empty without a home, without access

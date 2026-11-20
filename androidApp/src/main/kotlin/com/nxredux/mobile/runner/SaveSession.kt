@@ -22,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -53,6 +54,29 @@ internal class SaveSession(
     companion object {
         // Instance-state key: the slot to resume from when the system recreates this activity after a process kill.
         internal const val KEY_RESUME_SLOT = "nx_resume_slot"
+
+        /**
+         * The game process's settings are a copy refreshed when it comes back to the front; a quit (a handoff from the
+         * menu, a game beside the menu) may come while the copy is behind. [refresh] gets at most [timeoutMs] (it calls
+         * into the menu's process, which may have to start first); then [read] answers on what is there.
+         */
+        internal suspend fun readFresh(timeoutMs: Long, refresh: suspend () -> Unit, read: () -> Boolean): Boolean {
+            withTimeoutOrNull(timeoutMs) { refresh() }
+            return read()
+        }
+
+        /**
+         * The disk slot a game screen starts from: none in netplay (a session launches cold); the [saved] one when the
+         * screen is recreated; else the launch's. Without Save on quit a screen recreated [afterKill] whose bundle names
+         * nothing starts fresh: falling back to the launch slot would resume after a kill all the same.
+         */
+        internal fun startSlot(afterKill: Boolean, saved: Int?, launch: Int?, saveOnQuit: Boolean, netplay: Boolean): Int? = when {
+            netplay -> null
+            saved != null -> saved
+            afterKill && !saveOnQuit -> null
+            else -> launch
+        }
+
         /** [writeAutoStateOnStop]: at most this long for the GL thread to start the serialize, and again to finish it. */
         private const val AUTO_SERIALIZE_WAIT_MS = 10_000L
         // Process-wide, single thread: the Home auto state and its thumbnail are written off the main thread
@@ -177,8 +201,10 @@ internal class SaveSession(
      * onStop: [writeAuto] queues the auto state ([writeAutoStateOnStop]); then, on API 26–27 where onSaveInstanceState
      * already ran, the outcome is recorded in its bundle.
      */
-    fun onStop(writeAuto: Boolean) {
+    fun onStop(writeAuto: Boolean, unlinkAuto: Boolean = false) {
         if (writeAuto) writeAutoStateOnStop()
+        // On [autoWriter], behind any slot-9 write still queued from before the switch went off.
+        if (unlinkAuto) unlinkAuto()
         pendingOutState?.let(::putResumeSlot)
         pendingOutState = null
     }
@@ -267,6 +293,16 @@ internal class SaveSession(
         }
         homeThumb?.let { queueHomeThumb(it) }
         homeThumb = null
+    }
+
+    /**
+     * Save on quit off: queues [SaveStates.unlinkAuto] on [autoWriter], behind any slot-9 write still queued from before
+     * the switch went off. Run at the game's start too, so a game that never reaches onStop (a crash, a force stop)
+     * leaves no pointer on a hidden state older than its in-game saves.
+     */
+    fun unlinkAuto() {
+        val ss = saveStates ?: return
+        autoWriter.execute { runCatching { ss.unlinkAuto() }.onFailure { NxLog.w("GameActivity", "unlinking the hidden state failed", it) } }
     }
 
     /** Loads the resume slot right after start, like minarch's State_resume; a failure keeps the fresh boot. */

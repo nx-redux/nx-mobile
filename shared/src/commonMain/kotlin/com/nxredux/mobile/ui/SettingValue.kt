@@ -43,9 +43,9 @@ internal class SettingValue<T>(
 
     /** Sets value [i] of [values] only (no [after]); false when [i] is out of range or already the one. */
     fun setTo(i: Int): Boolean {
-        val next = values.getOrNull(i) ?: return false
-        if (i == index) return false
-        set(next)
+        // By index, not getOrNull: a null value (a touch button's None) is a choice too.
+        if (i !in values.indices || i == index) return false
+        set(values[i])
         return true
     }
 }
@@ -62,13 +62,14 @@ internal fun rowEditKey(s: Screen): Any? = when (s) {
     is Screen.EmulatorOptions -> "emulator:${s.category}"
     is Screen.RaSettings -> "ra"
     is Screen.ArtworkSettings -> "artwork"
+    is Screen.Onboarding -> "onboarding:${s.step}"
     else -> null
 }
 
 /**
  * [s] is drawn beside another page on a [split] window: a Settings page, an emulator's console-wide options (a game's
- * own are a modal), RetroAchievements' or Artwork's settings. Only there do LEFT / RIGHT go between pages and A start a
- * change ([RowEdit]); one page keeps LEFT / RIGHT for its values.
+ * own are a modal), RetroAchievements' or Artwork's settings. Only there do LEFT / RIGHT go between pages; on any
+ * layout A starts a change ([RowEdit]) before LEFT / RIGHT step a value.
  */
 internal fun rowEditTwoPane(s: Screen, split: Boolean): Boolean =
     split && (settingsPane(s) != null || raSplitLevel(s) || artworkSplitLevel(s))
@@ -79,6 +80,7 @@ internal fun rowEditBlocked(s: Screen): Boolean = when (s) {
     is Screen.RaSettings -> s.signingIn || s.confirm != null
     is Screen.ArtworkSettings -> s.dialogOpen
     is Screen.EmulatorOptions -> s.confirmReset
+    is Screen.Onboarding -> s.prompt || s.artSignIn || s.artKey != null
     else -> false
 }
 

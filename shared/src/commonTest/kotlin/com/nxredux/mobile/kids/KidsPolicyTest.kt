@@ -2,7 +2,9 @@ package com.nxredux.mobile.kids
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class KidsPolicyTest {
 
@@ -123,5 +125,14 @@ class KidsPolicyTest {
         // Only today has a window and it has passed: same weekday next week.
         val onlyFri = none.withDay(5, PlayWindow(540, 1200))
         assertEquals(KidsMode.Locked(NextOpen(5, 540, 7)), mode(at(5, "21:00"), schedule = onlyFri))
+    }
+
+    @Test fun gameSettingsHiddenFromAKidOnly() {
+        assertFalse(kidsHidesGameSettings(KidsMode.Off, enabled = false))
+        assertFalse(kidsHidesGameSettings(KidsMode.Parent, enabled = true))
+        assertTrue(kidsHidesGameSettings(KidsMode.Open(1L), enabled = true))
+        assertTrue(kidsHidesGameSettings(KidsMode.Locked(null), enabled = true))
+        assertTrue(kidsHidesGameSettings(null, enabled = true))    // no controller: no Parent mode either
+        assertFalse(kidsHidesGameSettings(null, enabled = false))
     }
 }

@@ -107,6 +107,14 @@ fun CopySavesScreen(screen: Screen.CopySaves, selected: Int, onSelect: (Int) -> 
     SetupStepScreen("Storage", headline, listOf(line), if (screen.busy) emptyList() else copySavesRows(screen), canGoBack = !screen.busy, selected, onSelect, onRow, onHint, button = true)
 }
 
+/** A finished Import BIOS ([Screen.BiosImportResult]): what went where as plain lines, and Done, the only thing to pick. */
+@Composable
+fun BiosImportResultScreen(screen: Screen.BiosImportResult, selected: Int, onSelect: (Int) -> Unit, onDone: () -> Unit, onHint: (NxButton) -> Unit) =
+    SetupStepScreen(
+        "Import BIOS", screen.summary.headline(), screen.summary.lines(), listOf("Done"), canGoBack = true, selected, onSelect,
+        onRow = { onDone() }, onHint = onHint, button = true, lineBreaks = true,
+    )
+
 /** First setup, after the home pick: offer an existing ROMs folder as an extra source (scanned in place). [note]: a line above it ([AppState.setupNote]). */
 @Composable
 fun AddFirstExtraScreen(title: String, canGoBack: Boolean, selected: Int, onSelect: (Int) -> Unit, onRow: (Int) -> Unit, onHint: (NxButton) -> Unit, note: String? = null) =
@@ -131,8 +139,9 @@ fun AndroidGamesStepScreen(
 
 /**
  * First setup's summary of the ROMs folder just added ([Screen.FolderSummary]): what was found, a line per console, and
- * where the unassigned games are; the Move choice as a row (its On / Off on the right) and Continue the button under it.
- * B stops a running move. Continue with Move on asks first ([folderMoveAsk]): A moves, B goes back.
+ * where the unassigned games are, and Continue. The home's page adds its Move choice as a row (its On / Off on the right):
+ * B stops a running move, and Continue with Move on asks first ([folderMoveAsk]): A moves, B goes back. An added ROMs
+ * folder has no Move: it is only read.
  */
 @Composable
 fun FolderSummaryScreen(

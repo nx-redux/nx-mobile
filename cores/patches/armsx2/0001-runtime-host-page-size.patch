@@ -1,5 +1,5 @@
 diff --git a/cmake/BuildParameters.cmake b/cmake/BuildParameters.cmake
-index ce8cff1..4294c07 100644
+index ce8cff12a..4294c076a 100644
 --- a/cmake/BuildParameters.cmake
 +++ b/cmake/BuildParameters.cmake
 @@ -177,16 +177,8 @@ elseif("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64" OR "${CMAKE_SYSTEM_PROCESSOR
@@ -21,7 +21,7 @@ index ce8cff1..4294c07 100644
  		# 16K-page compatibility for the ELF itself: a 4K-internal-page build
  		# still has to load on a 16K kernel, which requires the segments be
 diff --git a/common/BitUtils.h b/common/BitUtils.h
-index 1255709..4b4f665 100644
+index 125570901..4b4f6658a 100644
 --- a/common/BitUtils.h
 +++ b/common/BitUtils.h
 @@ -67,7 +67,6 @@ namespace Common
@@ -33,10 +33,10 @@ index 1255709..4b4f665 100644
  	}
  
 diff --git a/common/Linux/LnxHostSys.cpp b/common/Linux/LnxHostSys.cpp
-index 6e3e240..6d01706 100644
+index fe680a67d..97e3d8b38 100644
 --- a/common/Linux/LnxHostSys.cpp
 +++ b/common/Linux/LnxHostSys.cpp
-@@ -176,6 +176,12 @@ void HostSys::DestroySharedMemory(void* ptr)
+@@ -180,6 +180,12 @@ void HostSys::DestroySharedMemory(void* ptr)
  	close(static_cast<int>(reinterpret_cast<intptr_t>(ptr)));
  }
  
@@ -46,11 +46,11 @@ index 6e3e240..6d01706 100644
 +const unsigned int __pageshift = std::bit_width(__pagemask);
 +#endif
 +
- #ifndef __APPLE__
- 
- size_t HostSys::GetRuntimePageSize()
+ bool HostSys::DiscardSharedMemory(void* ptr, size_t offset, size_t size)
+ {
+ #if defined(__linux__)
 diff --git a/common/Pcsx2Defs.h b/common/Pcsx2Defs.h
-index b79ab54..f949079 100644
+index b79ab546e..f94907990 100644
 --- a/common/Pcsx2Defs.h
 +++ b/common/Pcsx2Defs.h
 @@ -32,7 +32,13 @@ static constexpr bool IsDebugBuild = false;
@@ -69,7 +69,7 @@ index b79ab54..f949079 100644
  	static constexpr unsigned int __pagemask = __pagesize - 1;
  	static constexpr unsigned int __pageshift = std::bit_width(__pagemask);
 diff --git a/pcsx2/VMManager.cpp b/pcsx2/VMManager.cpp
-index 5e0443a..d6d11d9 100644
+index 106261a92..59c0eb4f7 100644
 --- a/pcsx2/VMManager.cpp
 +++ b/pcsx2/VMManager.cpp
 @@ -308,7 +308,7 @@ bool VMManager::PerformEarlyHardwareChecks(const char** error)
@@ -81,11 +81,28 @@ index 5e0443a..d6d11d9 100644
  	// Check page size. If it doesn't match, it is a fatal error.
  	const size_t runtime_host_page_size = HostSys::GetRuntimePageSize();
  	if (__pagesize != runtime_host_page_size)
+diff --git a/pcsx2/arm64/microVU_JumpTable-arm64.cpp b/pcsx2/arm64/microVU_JumpTable-arm64.cpp
+index d9091e8a3..823f7288a 100644
+--- a/pcsx2/arm64/microVU_JumpTable-arm64.cpp
++++ b/pcsx2/arm64/microVU_JumpTable-arm64.cpp
+@@ -19,7 +19,12 @@ namespace mVUJumpTable
+ {
+ 	namespace
+ 	{
++#ifdef PCSX2_RUNTIME_PAGE_SIZE
++		// The page size is read at run time: 16 KB is the largest an Android kernel uses, and a multiple of 4 KB.
++		static_assert((kBytes & (0x4000 - 1)) == 0, "a table covers whole pages");
++#else
+ 		static_assert((kBytes & (__pagesize - 1)) == 0, "a table covers whole pages");
++#endif
+ 
+ 		// Virtual address space only until a table is written.
+ 		constexpr size_t kTablesPerSlab = 256;
 diff --git a/pcsx2/vtlb.cpp b/pcsx2/vtlb.cpp
-index 7e816f9..e10907f 100644
+index e0dca3275..e784d2618 100644
 --- a/pcsx2/vtlb.cpp
 +++ b/pcsx2/vtlb.cpp
-@@ -835,14 +835,14 @@ __fi u32 vtlb_V2P(u32 vaddr)
+@@ -839,14 +839,14 @@ __fi u32 vtlb_V2P(u32 vaddr)
  	return paddr;
  }
  
@@ -102,7 +119,7 @@ index 7e816f9..e10907f 100644
  		return true;
  
  	return ((paddr & __pagemask) == 0);
-@@ -850,7 +850,7 @@ static bool vtlb_IsHostAligned(u32 paddr)
+@@ -854,7 +854,7 @@ static bool vtlb_IsHostAligned(u32 paddr)
  
  static u32 vtlb_HostPage(u32 page)
  {
@@ -111,7 +128,7 @@ index 7e816f9..e10907f 100644
  		return page;
  
  	return page >> (__pageshift - VTLB_PAGE_BITS);
-@@ -858,7 +858,7 @@ static u32 vtlb_HostPage(u32 page)
+@@ -862,7 +862,7 @@ static u32 vtlb_HostPage(u32 page)
  
  static u32 vtlb_HostAlignOffset(u32 offset)
  {
@@ -120,7 +137,7 @@ index 7e816f9..e10907f 100644
  		return offset;
  
  	return offset & ~__pagemask;
-@@ -866,15 +866,15 @@ static u32 vtlb_HostAlignOffset(u32 offset)
+@@ -870,15 +870,15 @@ static u32 vtlb_HostAlignOffset(u32 offset)
  
  static bool vtlb_IsHostCoalesced(u32 page)
  {
@@ -140,7 +157,7 @@ index 7e816f9..e10907f 100644
  
  		const u32 base = page & ~mask;
  		const u32 base_offset = s_fastmem_virtual_mapping[base];
-@@ -1515,7 +1515,8 @@ struct vtlb_PageProtectionInfo
+@@ -1524,7 +1524,8 @@ struct vtlb_PageProtectionInfo
  	vtlb_ProtectionMode Mode;
  };
  

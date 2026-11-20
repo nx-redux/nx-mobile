@@ -28,7 +28,8 @@ object DeviceSyncs {
      */
     @Volatile var screenOn: (Boolean) -> Unit = {}
     /** An Import (from any MainActivity's AndroidSaveTransfer) is writing saves; process state. */
-    @Volatile var importing: () -> Boolean = { AndroidSaveTransfer.anyImporting }
+    // A save or BIOS import writes the folders a sync copies: the sync waits for both.
+    @Volatile var importing: () -> Boolean = { AndroidSaveTransfer.anyImporting || com.nxredux.mobile.bios.AndroidBiosIntake.anyRunning }
     /** MainActivity's POST_NOTIFICATIONS request, asked once when the first sync starts (the sync runs either way). */
     @Volatile var onNeedNotificationPermission: (() -> Unit)? = null
     @Volatile private var askedPermission = false

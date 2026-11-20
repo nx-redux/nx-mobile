@@ -32,7 +32,6 @@ import com.nxredux.mobile.ui.nx.NxRowKind
 import com.nxredux.mobile.ui.nx.NxBanner
 import com.nxredux.mobile.ui.nx.NxScreenScaffold
 import com.nxredux.mobile.ui.nx.NX_EDIT_HINTS
-import com.nxredux.mobile.ui.nx.splitWindow
 import com.nxredux.mobile.ui.nx.valueHints
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
@@ -122,8 +121,7 @@ private fun SettingsTouchPage(
     val report = onTruncated
     val selected = rows.getOrNull(selectedIndex)
     val infoShown = selected != null && nxShowsInfo(selected, truncated)
-    val twoPane = rowEditTwoPane(screen, settingsSplit(splitWindow()))
-    val shownHints = hints ?: if (editing >= 0) NX_EDIT_HINTS else settingsHints(screen.rows, selectedIndex, selected, infoShown, twoPane)
+    val shownHints = hints ?: if (editing >= 0) NX_EDIT_HINTS else settingsHints(screen.rows, selectedIndex, selected, infoShown)
     val preview = onSetting == null
     val events = onSetting ?: {}
     Box(modifier.fillMaxSize()) {
@@ -201,7 +199,7 @@ internal fun settingsTouchPage(screen: Screen.Settings): Boolean =
 
 /** The Settings rows that open a page or an editor: their touch row ends in `›`. */
 private val OPENER_KINDS = setOf(
-    SettingsKind.HOME, SettingsKind.DEFAULTS, SettingsKind.EMULATORS, SettingsKind.SAVES, SettingsKind.IMPORT_SAVES,
+    SettingsKind.HOME, SettingsKind.DEFAULTS, SettingsKind.EMULATORS, SettingsKind.SAVES, SettingsKind.IMPORT_SAVES, SettingsKind.IMPORT_BIOS,
     SettingsKind.BUTTON_LAYOUT, SettingsKind.BUTTON_LAYOUT_ORIENTATION, SettingsKind.SHORTCUTS, SettingsKind.SYSTEM_BUTTONS, SettingsKind.ANDROID_GAMES, SettingsKind.HIDDEN, SettingsKind.UNASSIGNED,
     SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_GAMES_TAB, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER,
@@ -322,7 +320,7 @@ internal fun SettingsRemoveDialog(onHint: ((NxButton) -> Unit)?) {
  * The hint bar for the row at [selected]: no A on a read-only row (About's info rows, or a page of only those), "A Copy"
  * on About's Copy device info, "A Open" on Full list of licenses, "A Check" or "A Update" on its update row (none while busy), "A Select" elsewhere.
  */
-internal fun settingsHints(rows: List<SettingsRow>, selected: Int, touch: NxSettingRow? = null, info: Boolean = false, twoPane: Boolean = false): List<Hint> {
+internal fun settingsHints(rows: List<SettingsRow>, selected: Int, touch: NxSettingRow? = null, info: Boolean = false): List<Hint> {
     val back = Hint(NxButton.B, "Back")
     val kind = rows.getOrNull(selected)?.kind
     val infoHint = if (info) listOf(Hint(NxButton.X, "Info")) else emptyList()
@@ -336,10 +334,8 @@ internal fun settingsHints(rows: List<SettingsRow>, selected: Int, touch: NxSett
             else listOf(back, Hint(NxButton.A, "Bind"), Hint(NxButton.X, "Clear"))
         // System buttons' press to bind: B cancels a wait ([SettingsRow.note] set), else A binds.
         kind == SettingsKind.SYSTEM_BUTTON_BIND -> if (rows[selected].note != null) listOf(Hint(NxButton.B, "Cancel")) else listOf(back, Hint(NxButton.A, "Bind"))
-        // A touch value row ([valueHints]): two panes, A toggles a switch, opens a picker or starts changing segments;
-        // one page, LEFT / RIGHT change it. Use as home screen and All files access are Android's to change: A alone.
-        touch != null && touch.choices.size >= 2 -> listOf(back) +
-            touch.valueHints(twoPane, side = kind != SettingsKind.HOME_SCREEN && kind != SettingsKind.ALL_FILES && kind != SettingsKind.MIC_ACCESS) + infoHint
+        // A touch value row ([valueHints]): A toggles a switch, opens a picker or starts changing segments.
+        touch != null && touch.choices.size >= 2 -> listOf(back) + touch.valueHints + infoHint
         touch != null && !touch.enabled -> listOf(back) + infoHint
         else -> listOf(back, Hint(NxButton.A, "Select")) + infoHint
     }
@@ -364,7 +360,7 @@ internal fun settingsNxRow(row: SettingsRow): NxRow = NxRow(
         SettingsKind.PAD_SKIN, SettingsKind.PAD_THEME,
         SettingsKind.DEFAULT_TAG, SettingsKind.MENU_STYLE, SettingsKind.GAME_LIST_STYLE,
         SettingsKind.MENU_ORIENTATION, SettingsKind.GAME_LIST_ORIENTATION, SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT,
-        SettingsKind.CONTROLLER_ART, SettingsKind.TAB_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.HINT_SHOWN, SettingsKind.LIST_ART, SettingsKind.BACKDROP_ART, SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS, SettingsKind.EXTRA_INFO, SettingsKind.GAME_INFO, SettingsKind.HOME_STATS, SettingsKind.LAYOUT_OPTIONS, SettingsKind.ACHIEVEMENTS_PANEL, SettingsKind.SWITCHER_LAYOUT, SettingsKind.PAD_VIBRATION, SettingsKind.GAME_RUMBLE, SettingsKind.BUTTON_LAYOUT_CONSOLE, SettingsKind.BUTTON_LAYOUT_WII_PAD, SettingsKind.BUTTON_LAYOUT_N3DS_PAD, SettingsKind.BUTTON_LAYOUT_SEGA_PAD, SettingsKind.SHORTCUT_TOUCH, SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT, SettingsKind.TEXT_SIZE, SettingsKind.DEBUG_LOG, SettingsKind.KEYBOARD, SettingsKind.CABLE_LINK_DELAY, SettingsKind.CABLE_LINK_DELAY_OVERLAY, SettingsKind.SECOND_SCREEN_ENABLE, SettingsKind.BOTTOM_SCREEN, SettingsKind.PAUSE_UNFOCUSED, SettingsKind.SCREEN_CARE, SettingsKind.SAVE_FORMAT, SettingsKind.STATE_FORMAT, SettingsKind.EXTRACTED_NAME -> true
+        SettingsKind.CONTROLLER_ART, SettingsKind.TAB_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.HINT_SHOWN, SettingsKind.LIST_ART, SettingsKind.BACKDROP_ART, SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS, SettingsKind.EXTRA_INFO, SettingsKind.GAME_INFO, SettingsKind.HOME_STATS, SettingsKind.LAYOUT_OPTIONS, SettingsKind.ACHIEVEMENTS_PANEL, SettingsKind.SWITCHER_LAYOUT, SettingsKind.PAD_VIBRATION, SettingsKind.GAME_RUMBLE, SettingsKind.BUTTON_LAYOUT_CONSOLE, SettingsKind.BUTTON_LAYOUT_WII_PAD, SettingsKind.BUTTON_LAYOUT_N3DS_PAD, SettingsKind.BUTTON_LAYOUT_SEGA_PAD, SettingsKind.SHORTCUT_TOUCH, SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT, SettingsKind.TEXT_SIZE, SettingsKind.DEBUG_LOG, SettingsKind.KEYBOARD, SettingsKind.CABLE_LINK_DELAY, SettingsKind.CABLE_LINK_DELAY_OVERLAY, SettingsKind.SECOND_SCREEN_ENABLE, SettingsKind.BOTTOM_SCREEN, SettingsKind.PAUSE_UNFOCUSED, SettingsKind.SCREEN_CARE, SettingsKind.SAVE_ON_QUIT, SettingsKind.A_RESUMES, SettingsKind.SAVE_FORMAT, SettingsKind.STATE_FORMAT, SettingsKind.EXTRACTED_NAME -> true
         else -> false
     },
 )

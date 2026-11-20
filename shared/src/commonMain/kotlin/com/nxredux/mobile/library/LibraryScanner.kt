@@ -528,7 +528,7 @@ class LibraryScanner(
 
     /**
      * The `.media` folder [media]'s listing after the [legacyMove] ([homeSegments]: its home-relative path, null for an
-     * extra folder's own), and whether the move changed it (then it is listed again).
+     * extra folder's own, which the move leaves alone), and whether the move changed it (then it is listed again).
      */
     private suspend fun mediaEntries(reads: ScanReads, media: ContentRef, homeSegments: List<String>?, heroes: HeroShots): Pair<List<Entry>, Boolean> {
         val listed = reads.list(media)
@@ -554,7 +554,9 @@ class LibraryScanner(
 
     /**
      * Only the typed folders: an untyped `.media/<name>.png` (NX Redux's old mix) is not a game's art. The 2D box is
-     * `boxart2d/`, else the legacy `box2d/` per name.
+     * `boxart2d/`, else the legacy `box2d/` per name. An extra folder's own `.media` ([heroDir] null) is only read, never
+     * moved to the new names ([com.nxredux.mobile.scraper.LegacyArtMove]): its legacy `grid/` reads as the 2D box and
+     * `hero/` as the screenshot, each under the new folder's file of the same name.
      */
     private suspend fun mediaLookup(
         media: List<Entry>, names: Map<String, String>, reuse: Boolean = false, heroes: HeroShots, heroDir: List<String>?,
@@ -568,8 +570,12 @@ class LibraryScanner(
             val at = (heroDir + "screenshot").joinToString("/")
             if (all.isEmpty()) emptySet() else shotFiles.filterTo(HashMap()) { (_, f) -> "$at/${f.name}" in all }.keys
         }
+        val extraOwn = heroDir == null
+        val legacyBox = if (extraOwn) sub("grid") else emptyMap()
+        val legacyShots = if (extraOwn) art.subArtFiles(media, "hero", artMaps, reuse).mapValues { it.value.ref } else emptyMap()
         return FolderLookup(
-            sub("boxart"), sub("box2d") + sub("boxart2d"), shotFiles.mapValues { it.value.ref }, names, sub("wheel"), sub("mix"), heroes = hero,
+            sub("boxart"), legacyBox + sub("box2d") + sub("boxart2d"), legacyShots + shotFiles.mapValues { it.value.ref }, names, sub("wheel"), sub("mix"),
+            heroes = hero,
         )
     }
 

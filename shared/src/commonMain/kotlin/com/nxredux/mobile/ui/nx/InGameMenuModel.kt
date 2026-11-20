@@ -184,6 +184,8 @@ data class MenuState(
      * stop. A move, a tap on another row, a push or a pop ends it.
      */
     val editing: Boolean = false,
+    /** Hosted in the dual-screen panel ([InGameMenuModel.inPanel]): a visual row changes in place there, as any other, with no strip. */
+    val inPanel: Boolean = false,
 ) {
     val page: MenuPage get() = stack.last()
 
@@ -310,7 +312,22 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var previewPage: Pair<OptionsPreviewInputs, MenuPage>? = null
 
     var state: MenuState = MenuState(listOf(rootPage()), initialSlot.coerceIn(0, slotCount - 1))
-        private set(value) { field = withPreview(value) }
+        private set(value) { field = withPreview(keptEdit(value)).let { if (it.inPanel != inPanel) it.copy(inPanel = inPanel) else it } }
+
+    /** The option row A started changing ([MenuState.editing]), by key. */
+    private var editKey: String? = null
+
+    /**
+     * [s] still changing only while its highlighted row is the one A started on: a rebuild that drops or hides that row
+     * (a core option a change hid) moves the highlight to another, which LEFT / RIGHT must not change.
+     */
+    private fun keptEdit(s: MenuState): MenuState {
+        if (!s.editing) return s
+        val row = s.page.rows.getOrNull(s.page.selected) as? MenuRow.Option
+        // Still the row A started on, and still segments or swatches (a rebuild can turn it into a picker or one value).
+        val kept = row != null && row.key == editKey && (row.control == NxSettingControl.SEGMENTED || row.control == NxSettingControl.SWATCHES)
+        return if (kept) s else s.copy(editing = false)
+    }
 
     /** [s] with its [MenuState.preview] for the root's highlighted row (the Options page beside the Options row). */
     private fun withPreview(s: MenuState): MenuState {
@@ -431,6 +448,17 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     var netplayEnded: Boolean = false
 
     /**
+     * Settings → Emulation → Save on quit: off, leaving writes no hidden save state, so the root's Quit is the plain
+     * [MenuAction.QUIT_ONLY] with no Save & Quit to ask about. Set before the menu shows, then [refresh].
+     */
+    var saveOnQuit: Boolean
+        get() = !quitSaveOff
+        set(value) { quitSaveOff = !value }
+
+    // Inverted so the root built during construction, before this line's initializer runs, already reads it as on.
+    private var quitSaveOff = false
+
+    /**
      * netplay: the session is a link one (GB/GBC/GBA, each player on their own save): Leave ends the link and the game
      * plays on as a local one, which the root's footer says. Set with [netplay], then [refresh].
      */
@@ -463,6 +491,17 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         if (on == dsWireless || netplay) return
         dsWireless = on
         if (on) { resetClosesOnCancel = false; popTo(PageKind.Root) }
+        refreshRoot()
+    }
+
+    /** From [setKidsLocked]: Kids Mode is on without Parent mode, so the root has no Options (a kid changes no settings). */
+    private var kidsLocked = false
+
+    /** Kids Mode on without Parent mode ([kidsLocked]) or not: going on returns an open Options page (and what is under it) to the root. */
+    fun setKidsLocked(on: Boolean) {
+        if (on == kidsLocked) return
+        kidsLocked = on
+        if (on && state.stack.any { it.kind == PageKind.Options }) popTo(PageKind.Root)
         refreshRoot()
     }
 
@@ -553,7 +592,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             NxButton.LEFT -> return change(-1)
             NxButton.RIGHT -> return change(1)
             NxButton.A, NxButton.B -> { state = state.copy(editing = false); return null }
-            NxButton.UP, NxButton.DOWN -> state = state.copy(editing = false)   // and move, below
+            NxButton.UP, NxButton.DOWN -> return null   // only A or B end the change
             else -> Unit   // X its info, MENU closes
         }
         if (state.page.kind == PageKind.Shortcuts) {
@@ -593,26 +632,30 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             // The first word: UP goes up to the tab row over it (the words no longer wrap there).
             NxButton.UP -> { if (root && tabsShown() && state.page.selected == 0) state = state.copy(panelFocus = PanelFocus.Tabs) else move(-1); null }
             NxButton.DOWN -> { move(1); null }
-            // In two panes ([split]), off the root LEFT goes back to the page on the left and RIGHT opens a row's page:
-            // they never change a value there, A starts that ([editsOnA]). One page (no pane to go to): LEFT / RIGHT
-            // change a value row at once, as on the root's Disc row and Save / Load; B goes back.
+            // Off the root LEFT / RIGHT never change a value: A starts that ([editsOnA]). In two panes ([split]) LEFT goes
+            // back to the page on the left and RIGHT opens a row's page; one page leaves a value row alone (no pane to go
+            // to). The root's Disc row and Save / Load step at once.
             NxButton.LEFT -> when {
-                root || stepsOnSide() -> { intoAdjust(state.page.selected); change(-1) }
+                root -> { intoAdjust(state.page.selected); change(-1) }
+                holdsSides() -> null
                 else -> back()
             }
             NxButton.RIGHT -> when {
                 !root && opensPage(state.page.rows.getOrNull(state.page.selected)) -> activate(state.page.selected)
-                !root -> if (stepsOnSide()) { intoAdjust(state.page.selected); change(1) } else null
+                !root -> null
                 visualRow(state.page.selected) != null -> { intoAdjust(state.page.selected); change(1) }
                 // Options moves into its preview, as A, whether or not the menu splits.
                 (split || state.preview != null) && opensPage(state.page.rows.getOrNull(state.page.selected)) -> activate(state.page.selected)
                 else -> change(1)
             }
-            // A on Quit saves and quits; a touch tap ([activate]) asks how to quit instead. On two panes A on segments or
-            // swatches starts changing it ([MenuState.editing]); a tap changes it at once.
+            // A on Quit saves and quits; a touch tap ([activate]) asks how to quit instead. A on segments or swatches
+            // starts changing it ([MenuState.editing]); a tap changes it at once.
             NxButton.A -> when {
                 selectedAction() == MenuAction.QUIT -> MenuEffect.Quit
-                editsOnA(state.page.selected) -> { state = state.copy(editing = true); null }
+                editsOnA(state.page.selected) -> {
+                    editKey = (state.page.rows[state.page.selected] as MenuRow.Option).key
+                    state = state.copy(editing = true); null
+                }
                 else -> activate(state.page.selected)
             }
             NxButton.B -> back()
@@ -779,24 +822,24 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     /**
-     * A on row [index] of the top page starts changing it with LEFT / RIGHT ([MenuState.editing]), in two panes
-     * ([split]): an option row of segments or swatches, off the root and Achievements, not a visual row (its strip) nor a
-     * Shortcuts row that binds.
+     * A on row [index] of the top page starts changing it with LEFT / RIGHT ([MenuState.editing]): an option row of
+     * segments or swatches, off the root and Achievements, not a visual row (A adjusts it: its strip, in the panel in
+     * place) nor a Shortcuts row that binds.
      */
     private fun editsOnA(index: Int): Boolean {
-        if (!split) return false   // one page: LEFT / RIGHT change it at once ([stepsOnSide]), A as a tap
         val row = state.page.rows.getOrNull(index) as? MenuRow.Option ?: return false
         val kind = state.page.kind
-        if (kind == PageKind.Root || kind == PageKind.Achievements || row.visual) return false
+        // A visual row opens its live strip instead, except in the panel (no strip there: it changes as any other).
+        if (kind == PageKind.Root || kind == PageKind.Achievements || visualRow(index) != null) return false
         if (kind == PageKind.Shortcuts && row.choices.isEmpty()) return false
         return row.control == NxSettingControl.SEGMENTED || row.control == NxSettingControl.SWATCHES
     }
 
     /**
-     * LEFT / RIGHT change the top page's highlighted row at once: an option row of a page off the root drawn as one page
-     * (not [split]), where they have no pane to go to. A visual row opens its strip with the change.
+     * LEFT / RIGHT do nothing on the top page's highlighted row: an option row of a page off the root drawn as one page
+     * (not [split]), where they have no pane to go to and change no value until A ([editsOnA]).
      */
-    private fun stepsOnSide(): Boolean =
+    private fun holdsSides(): Boolean =
         !split && state.page.kind != PageKind.Root && state.page.kind != PageKind.Achievements &&
             state.page.rows.getOrNull(state.page.selected) is MenuRow.Option
 
@@ -988,7 +1031,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /** The second-screen panel's All options: the menu on its Options page. Nothing in netplay (its root has no Options). */
     fun openOptions() {
-        if (sessionLocked) return
+        if (sessionLocked || kidsLocked) return
         popTo(PageKind.Root)
         push(optionsPage())
     }
@@ -998,7 +1041,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * through them. Nothing in netplay, as [openOptions].
      */
     fun openShaderPicker() {
-        if (sessionLocked) return
+        if (sessionLocked || kidsLocked) return
         popTo(PageKind.Root)
         val options = optionsPage()
         push(options.copy(selected = options.rows.indexOfFirst { (it as? MenuRow.Submenu)?.target == PageKind.Shaders }.coerceAtLeast(0)))
@@ -1174,6 +1217,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      */
     fun setInPanel(on: Boolean) {
         inPanel = on
+        state = state.copy()   // the state carries it ([MenuState.inPanel])
         if (on) {
             val i = state.stack.indexOfLast { it.kind !is PageKind.Adjust }
             if (i >= 0 && i < state.stack.size - 1) state = state.copy(stack = state.stack.take(i + 1), editing = false)
@@ -1651,8 +1695,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             add(MenuRow.Slot("Load", SlotAction.LOAD))
             add(MenuRow.Action("Reset", MenuAction.ASK_RESET))   // asks first ([resetPage]); the panel's Reset tile before
             if (screenTaken) add(MenuRow.Action(USE_TOP_SCREEN_LABEL, MenuAction.USE_TOP_SCREEN))
-            add(MenuRow.Submenu("Options", PageKind.Options))
-            add(MenuRow.Action("Quit", MenuAction.QUIT))
+            if (!kidsLocked) add(MenuRow.Submenu("Options", PageKind.Options))
+            add(MenuRow.Action("Quit", if (saveOnQuit) MenuAction.QUIT else MenuAction.QUIT_ONLY))
         },
     )
 
@@ -1860,7 +1904,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         capturing = null
         return when (result) {
             is CaptureResult.Bound -> setBindOverride(shortcutOverrides.withBinding(action, result.binding))
-            is CaptureResult.Refused -> { refreshShortcutsPage(); push(message(action.label, result.reason)); null }
+            is CaptureResult.Refused -> { refreshShortcutsPage(); push(message(action.label(saveOnQuit), result.reason)); null }
             CaptureResult.Cancelled -> { refreshShortcutsPage(); null }
         }
     }
@@ -1940,9 +1984,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             val key = BIND_KEY_PREFIX + a.key
             val blocked = effective.blocked[a]
             when {
-                a == capturing -> MenuRow.Option(a.label, key, SHORTCUT_PROMPT, CAPTURE_LINE)
-                blocked != null -> MenuRow.Option(a.label, key, UNAVAILABLE, blocked.note)
-                else -> MenuRow.Option(a.label, key, shown(effective.bindings[a]?.let(KeyLabels::label) ?: NONE_LABEL, a !in shortcutOverrides.bindings))
+                a == capturing -> MenuRow.Option(a.label(saveOnQuit), key, SHORTCUT_PROMPT, CAPTURE_LINE)
+                blocked != null -> MenuRow.Option(a.label(saveOnQuit), key, UNAVAILABLE, blocked.note)
+                else -> MenuRow.Option(a.label(saveOnQuit), key, shown(effective.bindings[a]?.let(KeyLabels::label) ?: NONE_LABEL, a !in shortcutOverrides.bindings))
             }
         }
         val choices = touchChoices()

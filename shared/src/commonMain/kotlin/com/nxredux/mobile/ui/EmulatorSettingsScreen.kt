@@ -12,7 +12,6 @@ import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxScreenScaffold
 import com.nxredux.mobile.ui.nx.NX_EDIT_HINTS
-import com.nxredux.mobile.ui.nx.splitWindow
 import com.nxredux.mobile.ui.nx.valueHints
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
@@ -78,7 +77,7 @@ fun EmulatorOptionsScreen(
         NxSettingsPage(
             emulatorOptionsTitle(screen), rows, selectedIndex,
             hints = if (editing >= 0) NX_EDIT_HINTS
-                else emulatorOptionsHints(screen.rows.getOrNull(selectedIndex), rows.getOrNull(selectedIndex), truncated, rowEditTwoPane(screen, settingsSplit(splitWindow()))),
+                else emulatorOptionsHints(screen.rows.getOrNull(selectedIndex), rows.getOrNull(selectedIndex), truncated),
             onSelect = { i -> if (screen.rows.getOrNull(i)?.selectable == true) onSelect(i) },   // headers and notices take no tap
             onOpen = { i -> if (screen.rows.getOrNull(i)?.selectable == true) onOpen(i) },
             onEvent = { e -> if (screen.rows.getOrNull(e.row)?.selectable == true) onSetting(e) },
@@ -162,14 +161,10 @@ internal fun emulatorOptionsTitle(s: Screen.EmulatorOptions): String {
  * The page's hints for [row]: on a value row, with its touch row ([touch]), A's Toggle on a switch, Choose on a picker or
  * Change on segments ([padAHint]); X Info while its description is cut off ([truncated]) or says more.
  */
-internal fun emulatorOptionsHints(row: EmulatorRow?, touch: NxSettingRow? = null, truncated: String? = null, twoPane: Boolean = false): List<Hint> {
+internal fun emulatorOptionsHints(row: EmulatorRow?, touch: NxSettingRow? = null, truncated: String? = null): List<Hint> {
     val info = touch != null && nxShowsInfo(touch, truncated)
     val x = if (info) listOf(Hint(NxButton.X, "Info")) else emptyList()
-    fun valueRow() =
-        if (twoPane) listOf(Hint(NxButton.B, "Back")) + (if (touch == null) listOf(Hint(NxButton.A, "Select")) else touch.valueHints(true)) + x
-        // One page: LEFT / RIGHT change it at once, A toggles or opens a picker as before.
-        else listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.B, "Back")) +
-            (if (touch == null) listOf(Hint(NxButton.A, "Select")) else touch.valueHints(false).filter { it.button != NxButton.LEFT }) + x
+    fun valueRow() = listOf(Hint(NxButton.B, "Back")) + (touch?.valueHints ?: listOf(Hint(NxButton.A, "Select"))) + x
     return when (row) {
         is EmulatorRow.Console, is EmulatorRow.Core -> valueRow()
         // A hosted Settings row: a value row hints as a console row; Clear link ROM cache A Select, as on Settings.

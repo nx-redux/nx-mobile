@@ -17,6 +17,8 @@
 
 #include "ahbrenderer.h"
 
+#include <algorithm>
+
 #include <GLES2/gl2ext.h>
 #include <poll.h>
 #include <unistd.h>
@@ -88,7 +90,19 @@ void AhbRenderer::waitSyncFd(int fd) {
     close(fd);
 }
 
-void AhbRenderer::setFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd) {
+void AhbRenderer::setFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd,
+                           unsigned liveBuffers, uint64_t oldestLiveId) {
+    if (oldestLiveId > 0) {
+        size_t dropped = 0;
+        for (auto it = imports.begin(); it != imports.end();) {
+            if (it->id >= oldestLiveId) { ++it; continue; }
+            deleteImport(*it);
+            it = imports.erase(it);
+            dropped++;
+        }
+        if (dropped > 0) LOGI("AHB renderer: dropped %zu imports of replaced buffers", dropped);
+    }
+
     Import* found = nullptr;
     for (auto& import : imports) {
         if (import.id == id) { found = &import; break; }
@@ -98,11 +112,12 @@ void AhbRenderer::setFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width,
         auto& p = procs();
         if (p.getNativeClientBuffer == nullptr || p.createImage == nullptr || p.imageTargetTexture == nullptr) {
             LOGE("AHB renderer: EGL lacks AHardwareBuffer import");
+            importFailed = true;
             if (syncFd >= 0) close(syncFd);
             return;
         }
-        // At most the bridge's two live buffers: older imports are from buffers it has since replaced.
-        while (imports.size() >= 2) {
+        // At most the bridge's live buffers: older imports are from buffers it has since replaced.
+        while (imports.size() >= std::max(1u, liveBuffers)) {
             deleteImport(imports.front());
             imports.erase(imports.begin());
         }
@@ -115,6 +130,7 @@ void AhbRenderer::setFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width,
                                      attribs);
         if (import.image == EGL_NO_IMAGE_KHR) {
             LOGE("AHB renderer: eglCreateImageKHR(AHB) failed: 0x%x", eglGetError());
+            importFailed = true;
             if (syncFd >= 0) close(syncFd);
             return;
         }

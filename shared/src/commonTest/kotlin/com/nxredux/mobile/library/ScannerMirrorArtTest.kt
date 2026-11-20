@@ -66,6 +66,33 @@ class ScannerMirrorArtTest {
         assertEquals(ContentRef("$own/screenshot/Sonic.png"), game.screenshotRef)
     }
 
+    // An extra folder is only read: a scan with the legacy move on leaves its own grid/ and hero/ where they are and
+    // reads them there, as the 2D box and the screenshot (each under the new folder's file of the same name).
+    @Test fun anExtrasOwnLegacyArtIsReadInPlaceNeverMoved() = runTest {
+        val own = "sd/Ext/My Sega Genesis/.media"
+        val src = FakeRomsSource(
+            mapOf(
+                "Home" to listOf("Roms"), "Home/Roms" to emptyList(),
+                "sd/Ext" to listOf("My Sega Genesis"),
+                "sd/Ext/My Sega Genesis" to listOf("Sonic.md", "Streets.md", ".media"),
+                own to listOf("grid", "hero", "boxart2d"),
+                "$own/grid" to listOf("Sonic.png", "Streets.png"),
+                "$own/hero" to listOf("Sonic.jpg"),
+                "$own/boxart2d" to listOf("Streets.jpg"),
+            ),
+        )
+        val host = FakeHost(emptyList())
+        val move = LegacyArtMove(src, ArtLogStore(host, ArtworkController.LOG_FILE), host)
+        val index = LibraryScanner(src, Sidecars(src, MemorySidecarStore()) { home }, legacyMove = { move }).scan(home, listOf(x1), emptyMap())
+        val games = index.toSystems().flatMap { it.games }.associateBy { it.fileName }
+        assertEquals(ContentRef("$own/grid/Sonic.png"), games.getValue("Sonic.md").box2dRef)
+        assertEquals(ContentRef("$own/hero/Sonic.jpg"), games.getValue("Sonic.md").screenshotRef)
+        assertEquals(ContentRef("$own/boxart2d/Streets.jpg"), games.getValue("Streets.md").box2dRef)   // the new folder's wins
+        assertEquals(listOf("grid", "hero", "boxart2d"), src.childNames(own))                         // nothing made or moved
+        assertEquals(listOf("Sonic.png", "Streets.png"), src.childNames("$own/grid"))
+        assertEquals(listOf("Sonic.jpg"), src.childNames("$own/hero"))
+    }
+
     @Test fun aPickedScreenshotInTheMirrorWinsOverTheFoldersOwn() = runTest {
         // Change art writes a pick to the home mirror: for a picked game the mirror's screenshot wins, scan and art re-read.
         val own = "sd/Ext/My Sega Genesis/.media"

@@ -39,6 +39,8 @@
 #include "libretro_vulkan.h"
 #include "vulkandispatch.h"
 #include "vulkanframe.h"
+#include "vulkanhandoff.h"
+#include "vulkanreader.h"
 
 struct AImageReader;
 struct ANativeWindow;
@@ -56,10 +58,11 @@ public:
     // Before any core is loaded: whether the custom driver [library] in [dir] (arguments as setDriver's) can start the
     // bridge. On its own table and the process-wide cached loader: instance with the bridge's instance extensions, the
     // /proc/self/maps check, a device with the bridge's device extensions, and one AHardwareBuffer allocated and imported
-    // exactly as a frame slot is. Everything it made is destroyed; the loader stays open for the launch. False: the
-    // reason logged. Any thread; never touches the bridge's own state.
-    static bool probeCustomDriver(const std::string& dir, const std::string& library, const std::string& hookLibDir,
-                                  const std::string& tmpDir);
+    // exactly as a frame slot is (Import); when that fails, one frame through a swapchain on an image reader (Reader).
+    // Everything it made is destroyed; the loader stays open for the launch. None: neither works, the reason logged.
+    // Any thread; never touches the bridge's own state.
+    static HandoffMode probeCustomDriver(const std::string& dir, const std::string& library,
+                                         const std::string& hookLibDir, const std::string& tmpDir);
 
     // From RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE (the core keeps the struct alive).
     void setNegotiation(const retro_hw_render_context_negotiation_interface_vulkan* negotiation);
@@ -78,15 +81,22 @@ public:
         unsigned width = 0;
         unsigned height = 0;
         int syncFd = -1;        // sync_file signalled when the copy is done (owned by the receiver), -1 = already done
+        unsigned liveBuffers = 2;   // how many buffers frames cycle through: what the GL side keeps imported
+        uint64_t oldestLiveId = 0;  // imports with a lower id are of buffers that are gone (0: none to drop)
     };
 
     // In the core's video_cb (RETRO_HW_FRAME_BUFFER_VALID): copies the image from set_image into the next buffer.
     bool bridgeFrame(unsigned width, unsigned height, Frame& out);
 
-    // A custom driver could not create or import the shared AHardwareBuffer before any frame was bridged (Mali's
-    // malisx2: INVALID_EXTERNAL_HANDLE), so nothing it renders can reach the screen: the driver could not start. True
-    // once, after the bridgeFrame that failed; the system driver never reports it (its failed frame is skipped, as before).
+    // A custom driver whose frames cannot reach the screen: the driver could not start, or stopped working. Import: the
+    // shared AHardwareBuffer could not be created or imported before any frame was bridged. Reader: none of the first
+    // frames got through, the GLES side could not import the first buffer, or frames flowed and then all failed for a
+    // while (FailureStreak). True once; the system driver never reports it (its failed frame is skipped, as before).
     bool takeCustomSlotFailure();
+
+    // After the GLES side took a bridged frame: whether it could import the buffer. The Reader hand-off's frame only
+    // counts as through once GL has it; Import ignores this (its buffers are the bridge's own).
+    void noteGlImport(bool imported);
 
     // After the GL draw that sampled the last bridged buffer: fences it so the copy into it two frames later waits.
     void afterGlDraw();
@@ -105,8 +115,11 @@ public:
     // and [library]: the system driver. [hookLibDir]: the app's nativeLibraryDir; [tmpDir]: patched libraries below
     // API 29. One-shot like setSwapchainFrames: destroy() forgets it. A custom driver that fails to load fails
     // initialize(); the host decides whether to retry on the system driver.
+    // [mode]: how the driver's frames reach the GLES side, as its probeCustomDriver found (Reader: it cannot import a
+    // shared buffer). The system driver always imports.
     void setDriver(const std::string& dir, const std::string& library, const std::string& hookLibDir,
-                   const std::string& tmpDir);
+                   const std::string& tmpDir, HandoffMode mode);
+    HandoffMode handoff() const { return driverHandoff; }
 
 private:
     std::atomic<unsigned> maxFrameWidth { 0 };
@@ -116,6 +129,11 @@ private:
     std::string driverLibrary;
     std::string driverHookLibDir;
     std::string driverTmpDir;
+    HandoffMode driverHandoff = HandoffMode::Import;
+    // Reader hand-off: the swapchain on an image reader frames are presented to. Render thread only.
+    ReaderChain reader;
+    // The GLES side keeps one import per buffer the swapchain cycles through; more than any driver's count seen (7).
+    static constexpr unsigned READER_LIVE_BUFFERS = 12;
 
     VulkanBridge() = default;
 
@@ -214,6 +232,14 @@ private:
     bool bridgedAny = false;          // a frame has reached a slot since initialize()
     bool customSlotFailed = false;    // takeCustomSlotFailure's report, pending
     bool customSlotReported = false;  // reported once per initialize()
+    // Reader hand-off: tells a hand-off that stopped working from a dropped frame. Fed once per frame.
+    FailureStreak readerStreak;
+    bool readerImportedAny = false;   // GL has imported a reader buffer since initialize()
+    // debug.nx.reader_fail_after: every reader frame from this one on fails (0: off). For checking the fallback on a device.
+    unsigned readerFailAfter = 0;
+    bool readerGlFail = false;        // debug.nx.reader_gl_fail=1: every GLES import counts as failed
+    unsigned readerFrames = 0;
+    bool readerFrame(bool ok);        // feeds readerStreak with a frame's outcome; returns [ok]
 
     bool useSyncFd = false;
     bool queueFamilyForeign = false;

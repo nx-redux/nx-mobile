@@ -132,6 +132,19 @@ object MsuSets {
         return CompanionLookup.Found(out.distinctBy { it.fileName.lowercase() })
     }
 
+    /**
+     * PicoDrive's files for MSU-MD cartridge [fileName] ([content]) and its [companions] (as [companions] names them),
+     * the loaded one first: PicoDrive runs the set from its cue and finds the cartridge beside it, trying lowercase
+     * extensions only (its find_msu), so the cue comes first and the cartridge follows under that spelling. Null when
+     * [fileName] has no cue among them.
+     */
+    fun picodriveOrder(fileName: String, content: ContentRef, companions: List<Pair<String, ContentRef>>): List<Pair<String, ContentRef>>? {
+        val cue = Folder(companions.map { it.first }).mdSheet(fileName) ?: return null
+        val sheet = companions.firstOrNull { it.first == cue } ?: return null
+        val cartridge = Names.stripExtension(fileName) + "." + fileName.substringAfterLast('.').lowercase()
+        return listOf(sheet, cartridge to content) + companions.filter { it !== sheet }
+    }
+
     /** [companions]'s files under their names in [folder]: what a move or sync of the set takes along. */
     suspend fun loadedNames(source: RomsSource, folder: ContentRef, fileName: String, badge: String?): List<String> {
         val names = setListing(source, folder, badge)?.map { it.name } ?: return emptyList()

@@ -117,8 +117,12 @@ public:
 
     void onNewFrame(const void *data, unsigned width, unsigned height, size_t pitch);
 
-    // The next frame's buffer, for a Video created with vulkanBridge. Owns [syncFd].
-    void setExternalFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd);
+    // The next frame's buffer, for a Video created with vulkanBridge. Owns [syncFd]. [liveBuffers]: how many buffers the
+    // bridge cycles through, each imported once; [oldestLiveId]: imports with a lower id are dropped (0: none).
+    void setExternalFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd,
+                          unsigned liveBuffers, uint64_t oldestLiveId);
+    // True once after a setExternalFrame whose buffer the GLES side could not import.
+    bool takeExternalImportFailure();
 
     uintptr_t getCurrentFramebuffer() {
         return renderer->getFramebuffer();

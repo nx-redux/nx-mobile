@@ -365,13 +365,24 @@ class KidsSettingsTest {
             st.select(kidsDayRows(assertIs(st.screen.value)).indexOf(row))
             repeat(times) { st.onButton(button) }
         }
-        step(KidsDayRow.FROM, NxButton.RIGHT, 2)                          // 9:00 -> 10:00
-        step(KidsDayRow.TO, NxButton.LEFT, 4)                             // 20:00 -> 18:00
-        assertEquals(PlayWindow(600, 1080), KidsSchedule.decode(t.settings.kidsSchedule).days[5])
-        // From never reaches To: the steppers stop half an hour apart.
-        step(KidsDayRow.FROM, NxButton.RIGHT, 40)
-        assertEquals(PlayWindow(1050, 1080), KidsSchedule.decode(t.settings.kidsSchedule).days[5])
-        step(KidsDayRow.FROM, NxButton.LEFT, 9)
+        fun window() = KidsSchedule.decode(t.settings.kidsSchedule).days[5]
+        // LEFT / RIGHT change nothing, as on every settings page: A opens the time's picker.
+        step(KidsDayRow.FROM, NxButton.RIGHT, 2)
+        step(KidsDayRow.LOCKED, NxButton.LEFT, 1)
+        assertEquals(PlayWindow(540, 1200), window())
+        fun pick(row: KidsDayRow, by: Int) {
+            step(row, NxButton.A, 1)
+            assertNotNull(st.chooser.value)
+            repeat(kotlin.math.abs(by)) { st.onButton(if (by < 0) NxButton.UP else NxButton.DOWN) }
+            st.onButton(NxButton.A)
+        }
+        pick(KidsDayRow.FROM, 2)                                          // 9:00 -> 10:00
+        pick(KidsDayRow.TO, -4)                                           // 20:00 -> 18:00
+        assertEquals(PlayWindow(600, 1080), window())
+        // From never reaches To: its picker stops half an hour before.
+        assertEquals(1050, kidsDayTimes(window()!!, from = true).last())
+        pick(KidsDayRow.FROM, 6)                                          // 10:00 -> 13:00
+        assertEquals(PlayWindow(780, 1080), window())
         // Locked and back: the window it had returns.
         step(KidsDayRow.LOCKED, NxButton.A, 1)
         assertNull(KidsSchedule.decode(t.settings.kidsSchedule).days[5])

@@ -31,6 +31,13 @@ object GraphicsApiOptions {
         visual = false, valueLabels = listOf("Auto", "OpenGL ES", "Vulkan"), atLaunch = true,
     )
 
+    /** [row] where Auto is Vulkan ([autoIsVulkan]). */
+    val rowAutoVulkan = row.copy(
+        info = "How the console is drawn. Auto uses Vulkan on this\nphone's GPU (Arm Mali), where it is faster.\n" +
+            "Phones without Vulkan stay on OpenGL ES. Takes effect\nthe next time the game starts.",
+        brief = "Applies next launch. Auto is Vulkan",
+    )
+
     /** The row shows for a console whose core can render with Vulkan ([com.nxredux.mobile.runner.CoreDescriptor.vulkan]). */
     fun appliesTo(tag: String): Boolean = CoreRegistry.forTag(tag)?.vulkan != null
 
@@ -49,6 +56,17 @@ object GraphicsApiOptions {
         return GraphicsApiLaunch(vulkan, if (vulkan) switch.vulkan else switch.gles, vulkan && switch.swapchainFrames, env)
     }
 
-    /** Whether the runner offers the core Vulkan: only when picked. Auto stays on GLES, as fast or faster for Dolphin. */
+    /** Whether Auto is Vulkan for a core with [switch] on the GPU named [gpu] (GL_RENDERER, null: unknown). */
+    fun autoIsVulkan(switch: VulkanSwitch?, gpu: String?): Boolean =
+        switch?.autoOnMali == true && gpu?.trim()?.startsWith("Mali", ignoreCase = true) == true
+
+    /**
+     * The value a launch reads for the stored [value]: Vulkan in place of Auto (or no value) where [autoIsVulkan], else
+     * [value] itself. [gpu] is asked only for Auto on a core that follows the GPU.
+     */
+    inline fun effective(value: String?, switch: VulkanSwitch?, gpu: () -> String?): String? =
+        if ((value == null || value == AUTO) && switch?.autoOnMali == true && autoIsVulkan(switch, gpu())) VULKAN else value
+
+    /** Whether the runner offers the core Vulkan: only for the Vulkan value ([effective] turns Auto into it where it should be). */
     fun preferVulkan(value: String?): Boolean = value == VULKAN
 }

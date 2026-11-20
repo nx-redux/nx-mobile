@@ -43,6 +43,17 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "after 10 minutes the screens turn off on your phone's screen timeout. Press anything or touch a screen to bring " +
             "them back.",
     )
+    SettingsKind.SAVE_ON_QUIT -> quiet(
+        "Keep your place when you leave a game",
+        "Saves a hidden save state when you quit or leave a game, so it carries on where you left off. Turn it off and " +
+            "games start fresh: Quit just quits, and the Game Switcher, Continue and the shelf start games from the " +
+            "beginning. Your in-game saves and save slots are kept either way.",
+    )
+    SettingsKind.A_RESUMES -> quiet(
+        "Pressing A on a game continues from its save",
+        "Pressing A on a game with a save state continues from it. Turn it off and A starts games fresh; MENU → Resume " +
+            "still continues from the save.",
+    )
     SettingsKind.GPU_DRIVER -> SettingText("Replaces the phone's Vulkan driver in games set to Vulkan", GPU_DRIVER_INFO)
     SettingsKind.GPU_DRIVER_ADD -> SettingText("Install a driver from a zip file")
     SettingsKind.DEFAULT_TAG -> SettingText("")   // a single-emulator console says nothing: its emulator name is all there is
@@ -65,6 +76,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     )
     SettingsKind.EXPORT_SAVES -> quiet("Write one zip of your saves, states and slot pictures")
     SettingsKind.IMPORT_SAVES -> quiet("Copy saves in from a folder, a zip file or RetroArch")
+    SettingsKind.IMPORT_BIOS -> quiet("Copy BIOS in from a folder, files or a zip. You can also put them in Bios/ yourself.")
     // Second screen.
     SettingsKind.SECOND_SCREEN_ENABLE -> SettingText(
         "Off leaves it free for another app",

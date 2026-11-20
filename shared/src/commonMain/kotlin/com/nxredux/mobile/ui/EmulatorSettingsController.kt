@@ -16,6 +16,7 @@ import com.nxredux.mobile.gpudriver.GpuDriverChoice
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.options.EmulatorSettings
 import com.nxredux.mobile.options.GpuDriverOptions
+import com.nxredux.mobile.options.GraphicsApiOptions
 import com.nxredux.mobile.options.OptionGroup
 import com.nxredux.mobile.options.Ps2Options
 import com.nxredux.mobile.runner.CoreDescriptor
@@ -172,6 +173,9 @@ internal interface EmulatorSettingsHost {
 
     /** A on hosted row [row] that has no values (Clear link ROM cache): what A does on its Settings page. */
     fun runAppRow(row: SettingsRow)
+
+    /** Page [key] rebuilt, the selected row from [from] to [to] (null: gone): the row being changed follows ([SettingsController.followRowEdit]). */
+    fun followRowEdit(key: Any?, from: Int, to: Int?) {}
 }
 
 /**
@@ -214,7 +218,10 @@ internal class EmulatorSettingsController(
     private val gpuDriverCrashed: (gamePath: String) -> Set<String> = { emptySet() },
     /** Forgets the driver crashes recorded for the game at this library path. */
     private val clearGpuDriverCrash: (gamePath: String) -> Unit = {},
+    /** The phone's GPU name (GL_RENDERER; null: unknown), asked once and only for a core whose Graphics API Auto follows it. */
+    private val gpuName: suspend () -> String? = { null },
 ) {
+    private var gpu: String? = null   // [gpuName] once it answered
     private val lock = Mutex()
     private var listRows: List<EmulatorListRow> = emptyList()
     private var listRow: EmulatorListRow? = null          // the core whose picker or page is open
@@ -350,6 +357,7 @@ internal class EmulatorSettingsController(
             secondScreen = secondScreen(), screen = screen, displayMax = Res3dConsole.forTag(tag)?.displayMaxOf(windowPx(), screen),
             biosFiles = if (Ps2Options.appliesTo(tag)) ps2BiosFiles() else emptyList(),
             gpuDrivers = drivers, gpuDriverResolved = resolved, gpuDriverCrashNote = crashNote,
+            autoVulkan = GraphicsApiOptions.autoIsVulkan(d.vulkan, gpu),
         )
         val first = page()
         // The GPU driver row shows only on Vulkan, so its presence says the page's Graphics API is Vulkan and what it shows is what the launch reads.
@@ -363,8 +371,10 @@ internal class EmulatorSettingsController(
         return if (resolved || note != null) page(resolved, note) else first
     }
 
-    private suspend fun readPage(tag: String, d: CoreDescriptor, game: Listed?): EmulatorPage =
-        build(tag, d, game, configs.read(tag, d.id, game?.game?.fileName))
+    private suspend fun readPage(tag: String, d: CoreDescriptor, game: Listed?): EmulatorPage {
+        if (d.vulkan?.autoOnMali == true && gpu == null) gpu = gpuName()
+        return build(tag, d, game, configs.read(tag, d.id, game?.game?.fileName))
+    }
 
     /** Reads and shows [tag]'s page when [still] holds (the user has not moved on meanwhile); [opened] runs just before it shows. */
     private fun openPage(tag: String, d: CoreDescriptor, game: Listed?, still: () -> Boolean, opened: () -> Unit) {
@@ -584,12 +594,16 @@ internal class EmulatorSettingsController(
     private fun show(was: Screen.EmulatorOptions, page: EmulatorPage) {
         val cur = screen.value as? Screen.EmulatorOptions ?: return
         if (!samePage(cur, was)) return
-        val previous = cur.rows.getOrNull(selection.value.index)
+        val from = selection.value.index
+        val previous = cur.rows.getOrNull(from)
         val rows = rows(page, cur.category)
-        screen.value = cur.copy(page = page, rows = rows)
-        val at = EmulatorRows.indexOfSame(rows, previous)
-            ?: selection.value.index.takeIf { rows.getOrNull(it)?.selectable == true }
+        val next = cur.copy(page = page, rows = rows)
+        screen.value = next
+        val same = EmulatorRows.indexOfSame(rows, previous)
+        val at = same
+            ?: from.takeIf { rows.getOrNull(it)?.selectable == true }
             ?: EmulatorRows.firstSelectable(rows)
         selection.value = ListSelection(at, rows.size)
+        host.followRowEdit(rowEditKey(next), from, same)
     }
 }

@@ -291,4 +291,17 @@ class ContextMenusTest {
         assertEquals(MenuCategory.TOOLS, ContextMenus.tabOf(ContextKind.OPEN_TOOLS))
         assertEquals(null, ContextMenus.tabOf(ContextKind.PIN))
     }
+
+    @Test fun resume_leads_when_a_resumes_is_off() {
+        val e = entry("GB", file = "Tetris.gb")
+        val src = ListSource.Console(e.system)
+        val off = ContextMenus.itemsFor(src, e, pinned = false, canResume = true, aResumes = false).map { it.kind }
+        assertEquals(ContextKind.RESUME, off.first())
+        assertTrue(ContextKind.PLAY_FROM_START !in off)
+        assertEquals(ContextKind.PLAY_FROM_START, ContextMenus.itemsFor(src, e, pinned = false, canResume = true).first().kind)
+        assertTrue(ContextKind.RESUME !in ContextMenus.itemsFor(src, e, pinned = false, canResume = false, aResumes = false).map { it.kind })
+        assertEquals(listOf(ContextKind.RESUME, ContextKind.PIN), ContextMenus.homeGameItems(pinned = false, fromStart = true, aResumes = false).map { it.kind })
+        assertEquals(listOf(ContextKind.RESUME, ContextKind.UNPIN), ContextMenus.pinRowItems(fromStart = true, aResumes = false).map { it.kind })
+        assertTrue(ContextMenus.kidsMayPick(ContextKind.RESUME))
+    }
 }

@@ -134,4 +134,14 @@ class MsuSetsTest {
         assertEquals("", game.lookupDir)
         assertEquals(MsuSets.MSU1, game.badge)
     }
+    @Test fun picodrive_loads_an_msu_md_set_from_its_cue_with_the_cartridge_beside_it_in_lowercase() {
+        val cart = ContentRef("d/SoR2.GEN")
+        val cueRef = "SoR2.cue" to ContentRef("d/SoR2.CUE")
+        val track = "SoR2 (Track 01).bin" to ContentRef("d/SoR2 (Track 01).bin")
+        assertEquals(
+            listOf(cueRef, "SoR2.gen" to cart, track),
+            MsuSets.picodriveOrder("SoR2.GEN", cart, listOf(cueRef, track)),
+        )
+        assertNull(MsuSets.picodriveOrder("Plain.md", ContentRef("d/Plain.md"), emptyList()))
+    }
 }

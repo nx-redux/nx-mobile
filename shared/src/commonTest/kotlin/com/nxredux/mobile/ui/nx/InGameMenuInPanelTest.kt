@@ -5,6 +5,7 @@ import com.nxredux.mobile.options.OptionGroup
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -50,8 +51,11 @@ class InGameMenuInPanelTest {
     @Test fun in_the_panel_a_visual_row_changes_in_place() {
         val m = model().openDisplay()
         assertTrue((m.state.page.rows[0] as MenuRow.Option).visual)   // Screen Scaling
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Native"), m.press(NxButton.RIGHT))
+        assertNull(m.press(NxButton.RIGHT))                                         // the sides wait for A
+        m.press(NxButton.A)                                                         // its picker, in place
+        assertTrue(m.state.popup is MenuPopup.Picker)
         assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)   // no live preview strip
+        m.closePopup()
         m.setChoice(0, 0)
         assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)
     }
@@ -76,9 +80,29 @@ class InGameMenuInPanelTest {
         }
     }
 
+    // No strip in the panel: a visual row of segments changes as any other, A first, then LEFT / RIGHT either way, B done.
+    @Test fun in_the_panel_a_starts_changing_a_visual_row_of_segments() {
+        val m = model().openDisplay()
+        val i = m.state.page.rows.indexOfFirst { it is MenuRow.Option && it.visual && it.control == NxSettingControl.SEGMENTED }
+        assertTrue(i >= 0, "a visual row of segments on Display")
+        m.select(i)
+        assertEquals(Hint(NxButton.A, "Change"), hintsFor(m.state.page, m.state.page.rows[i], inPanel = m.state.inPanel).first())
+        val start = (m.state.page.rows[i] as MenuRow.Option).index
+        m.press(NxButton.A)
+        assertTrue(m.state.editing)
+        assertEquals(start, (m.state.page.rows[i] as MenuRow.Option).index)   // A changes nothing yet
+        m.press(NxButton.RIGHT)
+        assertNotEquals(start, (m.state.page.rows[i] as MenuRow.Option).index)
+        m.press(NxButton.LEFT)
+        assertEquals(start, (m.state.page.rows[i] as MenuRow.Option).index)   // and back
+        m.press(NxButton.B)
+        assertFalse(m.state.editing)
+        assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)
+    }
+
     @Test fun moving_into_the_panel_leaves_a_live_preview() {
         val m = model(inPanel = false).openDisplay()
-        m.press(NxButton.RIGHT)
+        m.press(NxButton.A)
         assertTrue(m.state.page.kind is PageKind.Adjust)
         m.setInPanel(true)
         assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)

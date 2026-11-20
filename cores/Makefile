@@ -400,6 +400,8 @@ swanstation_ARTIFACT = swanstation_libretro_android.so
 # 12-byte field with a bound; long database codes and parts overflowed both.
 # patches/picodrive/0002: the MSU-MD fake BIOS writes its "SEGA" ID in the 68k's byte order, so an MSU-MD game runs
 # without a Sega CD BIOS (raw bytes read back as "ESAG" on little-endian hosts).
+# patches/picodrive/0003: the NDK build sets USE_LIBRETRO_VFS (Makefile.libretro does), so the core opens games through
+# the runner's VFS (/rom/<name> descriptors) like the other cores, and needs no real path or cache copy.
 picodrive_REPO = https://github.com/irixxxx/picodrive
 picodrive_HASH = 9c298c1fe7347a50b07a494cdb8c91d2f9b40c6a
 picodrive_LICENSE = COPYING
@@ -534,7 +536,7 @@ dolphin_NINJA = $(SDK)/cmake/3.30.3/bin/ninja
 dolphin_PLATFORM = android-24
 dolphin_FLAGS = -DLIBRETRO=ON -DENABLE_LTO=ON -DANDROID_STL=c++_static
 
-# ARMSX2 (PS2): ARMSX2/ARMSX2 at its 2.9.2 release tag, a PCSX2 fork with arm64 recompilers. Its libretro port is
+# ARMSX2 (PS2): ARMSX2/ARMSX2 at its nightly-20261114 tag, a PCSX2 fork with arm64 recompilers. Its libretro port is
 # pcsx2-libretro/ (SHARED pcsx2-libretro, OUTPUT_NAME armsx2_libretro, empty prefix), added only with ENABLE_LIBRETRO=ON;
 # the build tree's bin/ holds it. Flags follow upstream's Android libretro CI (.gitlab-ci.yml .core-defs-android, API 28:
 # bionic's posix_spawn). Its static dependencies (png, jpeg-turbo, zstd, lz4, webp, SDL3, freetype, plutovg,
@@ -544,11 +546,17 @@ dolphin_FLAGS = -DLIBRETRO=ON -DENABLE_LTO=ON -DANDROID_STL=c++_static
 # fonts) is staged to system/pcsx2/resources, where the core looks; the BIOS goes in system/pcsx2/bios (Bios/PS2/).
 # patches/armsx2/0001: the host page size is read at runtime on Android (4 KB or 16 KB kernels); upstream fixes it at
 # build time and refuses a mismatched kernel. vtlb fastmem then maps at host-page granularity, as on 16 KB Apple hosts.
+# patches/armsx2/0007: the settings interfaces that 0004 keeps for the process are saved in retro_deinit, and the save
+# lock is never destroyed; a dirty one saved itself at library unload, after the lock was gone (abort on Android).
+# patches/armsx2/0008: a state load unmaps every replaced TLB entry before mapping the new ones; entry by entry, a load
+# during the BIOS boot could unmap pages a new entry had just mapped (the game then ran off into the disc boot).
+# patches/armsx2/0009: while the frontend fast-forwards, the VM's own speed limiter is lifted; the VM runs on its own
+# thread against its own clock, so more retro_run calls alone left the game at normal speed.
 # ARMSX2_EMBED_PATCHES=OFF: upstream fetches a patches.zip at configure time and compiles it in; that collection has no
 # licence, so it stays out of the .so. The app's Cheats & Patches tool downloads PCSX2's patches.zip at runtime and
 # extracts it into Cheats/PS2/Patches/, which patches/armsx2/0005 points the core at (cheats from Cheats/PS2/).
 armsx2_REPO = https://github.com/ARMSX2/ARMSX2
-armsx2_HASH = ba6892742e357085897d0a151bd8e40485dda968
+armsx2_HASH = 6d9511e29e3e00d5ab78899f5292b967ab850ddb
 armsx2_LICENSE = COPYING.GPLv3 3rdparty/cpuinfo/LICENSE 3rdparty/cubeb/LICENSE 3rdparty/discord-rpc/LICENSE \
   3rdparty/fast_float/LICENSE-MIT 3rdparty/fmt/LICENSE 3rdparty/imgui/LICENSE.txt 3rdparty/libchdr/LICENSE.txt \
   3rdparty/libzip/LICENSE 3rdparty/lzma/LICENSE.txt 3rdparty/plutosvg/LICENSE 3rdparty/plutovg/LICENSE \
@@ -573,10 +581,16 @@ armsx2_CMAKE = $(SDK)/cmake/3.30.3/bin/cmake
 armsx2_NINJA = $(SDK)/cmake/3.30.3/bin/ninja
 armsx2_PLATFORM = android-28
 ARMSX2_DEPS = $(abspath $(BUILD_ROOT))/armsx2-deps
+# Built as upstream's Android app is: thin LTO over the core (LTO_PCSX2_CORE, which needs the multi-ISA GS build that
+# DISABLE_ADVANCE_SIMD=OFF keeps) and upstream's own profile from the pinned tree. The profile is matched by function,
+# so a function that changed since it was recorded is built without it; the two warnings that reports are silenced.
+ARMSX2_PGO = -fprofile-use=$(CURDIR)/$(SRC_ROOT)/armsx2/platforms/android/pgo/armsx2.profdata \
+  -Wno-profile-instr-out-of-date -Wno-profile-instr-unprofiled -Wno-backend-plugin
 armsx2_FLAGS = -DCMAKE_PREFIX_PATH=$(ARMSX2_DEPS)/prefix -DCMAKE_FIND_ROOT_PATH=$(ARMSX2_DEPS)/prefix -DANDROID_STL=c++_static \
   -DENABLE_LIBRETRO=ON -DENABLE_QT_UI=OFF -DENABLE_SDL_FRONTEND=OFF -DENABLE_GSRUNNER=OFF -DENABLE_TESTS=OFF \
   -DENABLE_RECOMPILER_TEST_HOOKS=OFF -DENABLE_SETCAP=OFF -DUSE_BACKTRACE=OFF -DX11_API=OFF -DWAYLAND_API=OFF \
-  -DDISABLE_ADVANCE_SIMD=TRUE -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON -DARMSX2_EMBED_PATCHES=OFF
+  -DDISABLE_ADVANCE_SIMD=OFF -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON -DARMSX2_EMBED_PATCHES=OFF \
+  -DLTO_PCSX2_CORE=ON "-DCMAKE_C_FLAGS=$(ARMSX2_PGO)" "-DCMAKE_CXX_FLAGS=$(ARMSX2_PGO)"
 
 # Deviation from the generic pattern: ppsspp reads its data files (flash0, fonts,
 # shaders, ...) from <system>/PPSSPP/ at runtime, so stage the repo's assets/ dir

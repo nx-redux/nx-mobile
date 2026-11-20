@@ -1,0 +1,33 @@
+diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
+--- a/pcsx2-libretro/Main.cpp
++++ b/pcsx2-libretro/Main.cpp
+@@ -1866,6 +1866,15 @@
+ 
+ RETRO_API void retro_deinit(void)
+ {
++	// The settings interfaces live until the library is unloaded (see InitializeConfig) and save themselves from
++	// their destructors when dirty. Write them here instead, while the rest of the core is still up.
++	for (INISettingsInterface* si : {s_base_settings.get(), s_secrets_settings.get()})
++	{
++		Error err;
++		if (si && si->IsDirty() && !si->Save(&err))
++			Console.ErrorFmt("Failed to save {}: {}", si->GetFileName(), err.GetDescription());
++	}
++
+ 	LibretroCore::s_frame_buffer.clear();
+ 	LibretroCore::s_frame_buffer.shrink_to_fit();
+ }
+diff --git a/pcsx2/INISettingsInterface.cpp b/pcsx2/INISettingsInterface.cpp
+--- a/pcsx2/INISettingsInterface.cpp
++++ b/pcsx2/INISettingsInterface.cpp
+@@ -21,7 +21,9 @@
+ 
+ // To prevent races between saving and loading settings, particularly with game settings,
+ // we only allow one ini to be parsed at any point in time.
+-static std::mutex s_ini_load_save_mutex;
++// Never destroyed: an interface with static lifetime saves itself from its destructor when it is dirty, and at
++// library unload that can run after this file's statics are gone (locking a destroyed mutex aborts on Android).
++static std::mutex& s_ini_load_save_mutex = *new std::mutex;
+ 
+ static std::FILE* GetTemporaryFile(std::string* temporary_filename, const std::string& original_filename,
+ 	const char* mode, Error* error)

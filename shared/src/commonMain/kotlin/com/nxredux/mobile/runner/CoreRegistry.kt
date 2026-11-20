@@ -209,7 +209,7 @@ object CoreRegistry {
             "armsx2_widescreen_patches" to "disabled", "armsx2_no_interlacing_patches" to "disabled", "armsx2_cheats" to "disabled", "armsx2_sw_threads" to "2",
         ),
         lockedOptions = setOf("armsx2_renderer", "armsx2_bios", "armsx2_upscale", "armsx2_sw_threads"),
-        vulkan = VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan")),
+        vulkan = VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan"), autoOnMali = true),
         // The PS2's two controller ports, both DualShock2 (cores/patches/armsx2/0006); no multitap. Saves stay on card 1.
         players = 2,
         name = "ARMSX2",
@@ -292,8 +292,6 @@ object CoreRegistry {
     // its valid_extensions (sc, sgd and pco too, which no console here owns).
     private val picodrive = CoreDescriptor(
         "picodrive", "libpicodrive_libretro_android.so", setOf("32x", "bin", "md", "gen", "smd", "68k", "sms", "gg", "sg", "cue", "iso", "chd", "m3u"),
-        // Its NDK build has no libretro VFS (plain fopen on the path): give it a real file.
-        loadMode = LoadMode.REAL_PATH,
         // The Brick's MD, SEGACD and 32X paks' values (the rest of theirs are the core's defaults).
         defaultOptions = mapOf("picodrive_drc" to "enabled", "picodrive_sound_rate" to "44100"),
         // The 6-button pad on both ports; Controls → Controller Type replaces it at launch and live (SegaPadType).
@@ -485,7 +483,7 @@ object CoreRegistry {
         ),
         lockedOptions = dolphinLocked,
         hiddenValues = mapOf("dolphin_renderer" to setOf("Software", "Null")),
-        vulkan = VulkanSwitch(swapchainFrames = true),
+        vulkan = VulkanSwitch(swapchainFrames = true, autoOnMali = true),
         // Dolphin writes its NAND and memory cards under User/Wii and User/GC in its console's save dir (Saves/<console tag>/User).
         controllerPort0 = CoreDescriptor.WIIMOTE_SIDEWAYS,
         players = 4,
