@@ -1185,6 +1185,13 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setVideoVi
     LibretroDroid::getInstance().setVideoViewsEnabled(enabled);
 }
 
+JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_keepsContextOnPause(
+    JNIEnv* env,
+    jclass obj
+) {
+    return debugPropertyOff("debug.nx.keepcontext") ? JNI_FALSE : JNI_TRUE;
+}
+
 JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_videoViewsOffered(
     JNIEnv* env,
     jclass obj

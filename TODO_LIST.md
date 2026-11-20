@@ -35,8 +35,9 @@ Device checks still owed:
 
 - [x] Nova (Adreno): a Turnip package still passes its pre-check as "import" and measures as before (60 fps).
 - [ ] Fast forward on malisx2 itself (passes through the reader on Turnip).
-- [ ] EGL context loss (a long time in the background, or another app taking the GPU): the picture comes back. Home and
-  return, a memory trim and screen off/on keep the context, so this was not reached on the Nova or the AYANEO.
+- [x] EGL context loss, forced with `setprop debug.nx.keepcontext 0` (the context given up at every pause): PS2 on the
+  AYANEO, Home and return twice, the picture comes back on malisx2 through the reader (57 fps after), on the stock
+  Vulkan driver and on OpenGL ES.
 - [ ] Other Mali devices and malisx2 versions; GameCube/Wii and N64 (Vulkan) on malisx2.
 - [x] PS2 fast forward did not speed the game up (the core's frame count stayed at 60 a second, any hand-off, OpenGL ES
   too). Cause: the core's VM runs on its own thread with its own limiter and never asked whether the frontend
@@ -46,7 +47,14 @@ Device checks still owed:
 - [x] A real second screen on the Nova with the reader hand-off forced (3DS): top screen there, touch screen on the main
   one, fast forward, Home and return.
 - [x] Graphics API Auto on the AYANEO (Mali-G76): PS2 starts on Vulkan (malisx2 through the reader, 56–57 fps), Wii on
-  Vulkan, N64 stays on OpenGL ES. The GPU driver row showing on Auto in Settings is not looked at on a device yet.
+  Vulkan, N64 stays on OpenGL ES. In Settings the PS2 page says "Auto is Vulkan" and shows the GPU driver row on Auto.
+- [x] PS2 fast forward on the AYANEO (malisx2, Max FF 4x): 118 fps at native resolution; at 2x the phone is already at
+  its limit (57 to 63 fps).
+- [x] Mario Kart 7 on the Nova's real second screen (same race from a save state, both screens captured): the reader
+  forced on Turnip, the import hand-off on Turnip, Vulkan on the system driver and OpenGL ES all draw the top screen
+  on the second display and the map on the main one. The darkened kart and driver showed up again on the system
+  driver with no reader involved (smoke beside it, right after a hit) and never on the reader, so it is the game's own
+  look, not the hand-off. The black top screen seen on a simulated display was the simulation.
 - Which consoles follow the GPU on Auto, from the AYANEO on 2026-11-20 (frames in 5 s, stutters counted by NXHITCH):
   Wii (New Super Mario Bros. Wii) 240–279 on OpenGL ES against 291–302 on Vulkan; GameCube (Double Dash race) 285–300
   against 301; so Dolphin follows it, with PS2. N64 (Mario Kart 64 from boot) holds 300 on OpenGL ES with 18 stutters

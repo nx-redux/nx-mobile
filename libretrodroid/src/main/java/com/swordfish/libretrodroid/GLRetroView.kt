@@ -383,7 +383,9 @@ class GLRetroView(
 
     init {
         openGLESVersion = getGLESVersion(context)
-        preserveEGLContextOnPause = true
+        // debug.nx.keepcontext=0 gives the context up at every pause: a lost context on demand, for checking that the
+        // picture comes back (a phone otherwise keeps it through Home, screen off and a memory trim).
+        preserveEGLContextOnPause = LibretroDroid.keepsContextOnPause()
         setEGLContextClientVersion(openGLESVersion)
         setRenderer(Renderer())
         // No keepScreenOn here: the host's window decides (nx-mobile's GameActivity holds the screen on while the game
