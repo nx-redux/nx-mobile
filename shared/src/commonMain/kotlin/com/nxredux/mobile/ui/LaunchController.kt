@@ -13,6 +13,7 @@ import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.runner.ClassicNes
 import com.nxredux.mobile.runner.CoreDescriptor
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.runner.DsMenu
 import com.nxredux.mobile.runner.GameSession
 import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuStyle
@@ -128,6 +129,12 @@ internal class LaunchController(
         if (launchJob?.isActive == true) return null   // a launch is already in flight
         switcher.cancelLoad()   // a switcher still loading must not open over the launched game
         val job = scope.launch {
+            if (DsMenu.isMenu(game.ref.value)) {
+                // No file to check or companions to find: the game process boots the DS menu (and checks its BIOS).
+                host.dropPushedTab()
+                deps.runner.launch(GameSession(listed.tag, game.shownName, listed.core ?: return@launch, game.ref, game.folder, game.fileName, null, emptyList(), fresh = true), Recent(game.path, game.shownName))
+                return@launch
+            }
             val gone = "Could not find ${game.fileName}. If it was moved or deleted, use Rescan in Settings → Library."
             if (!stillThere(game)) {   // the index can be older than the tree: no recents entry, no runner call
                 launchError(gone)

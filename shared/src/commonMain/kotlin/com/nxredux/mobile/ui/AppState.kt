@@ -85,6 +85,8 @@ import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.runner.BottomScreen
 import com.nxredux.mobile.runner.Console
+import com.nxredux.mobile.runner.DsMenu
+import com.nxredux.mobile.runner.withEntry
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.EmulatorRunner
@@ -4842,7 +4844,9 @@ class AppState(
      */
     private var consoleEntriesOf: Pair<List<SystemFolder>, HashMap<List<String>, Pair<List<SystemFolder>, List<Listed>>>>? = null
 
-    private fun buildConsoleEntries(systems: List<SystemFolder>): List<Listed> {
+    private fun buildConsoleEntries(systems: List<SystemFolder>): List<Listed> = DsMenu.withEntry(systems, gameEntries(systems))
+
+    private fun gameEntries(systems: List<SystemFolder>): List<Listed> {
         systems.singleOrNull()?.let { s -> return s.games.map { Listed(s, it) } }
         val all = systems.flatMap { s -> s.games.map { Listed(s, it) } }.sortedWith(compareBy({ it.game.shownName.lowercase() }, { it.system.tag }))
         val labels = MergedLabels.labels(all.map { MergedLabels.Row(it.game.shownName, it.game.fileName, it.system.tag) })

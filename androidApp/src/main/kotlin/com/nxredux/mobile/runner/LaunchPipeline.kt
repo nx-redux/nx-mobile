@@ -452,7 +452,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         val options: List<Variable>,
         val linkOptions: Map<String, String>,
         val frontend: FrontendSettings,
-    )
+    ) {
+        /** The DS menu with no game ([DsMenu]): no file to open, hash or keep states for. */
+        val dsMenu: Boolean get() = DsMenu.isMenu(content.value)
+    }
 
     /** What [prepareContent] found that the view's data and the load-failure message read. */
     private class PreparedContent(
@@ -778,7 +781,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             // minarch names saves after the unpacked file when Use extracted file name is on (ma_game.c:75-76): known only now.
             paths = paths.withInner(inner?.let { unpackedEntry })
-            saves.open(if (cfg.np == null) SaveStates(dataRoot, paths) else null)   // netplay: no save states, no auto-resume
+            // netplay: no save states, no auto-resume; nor for the DS menu, whose state would hold a game it downloaded.
+            saves.open(if (cfg.np == null && !cfg.dsMenu) SaveStates(dataRoot, paths) else null)
             if (!settings.saveOnQuit) saves.unlinkAuto()
             dropStaleNdsResume(cfg.tag, cfg.coreId, cfg.romFileName)
             saves.refreshSlots()   // warm for the first menu open; after the cleanup, so it never lists a deleted state
@@ -869,6 +873,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             BiosCheck.missing(needs, biosExtension, biosPresent).firstOrNull()?.let {
                 return refuse(BiosCheck.message(cfg.tag, it))
             }
+            if (cfg.dsMenu) DsMenu.missing(biosPresent).takeIf { it.isNotEmpty() }?.let { return refuse(DsMenu.missingMessage(it)) }
             discRegion?.let { region ->
                 val core = cfg.descriptor?.id.orEmpty()
                 SegaCdBios.missing(core, region, biosPresent)?.let { file ->
@@ -887,7 +892,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             val savesDir = (cfg.sessionDir ?: File(dataRoot, paths.savesDir)).apply { mkdirs() }
             // netplay: a link session's game is the player's own, so it gets achievements as a normal launch; lockstep has none.
-            if (cfg.np == null || cfg.np.allowsAchievements) prepareAchievements(cfg.tag, cfg.romFileName, cfg.content, inner)
+            if (!cfg.dsMenu && (cfg.np == null || cfg.np.allowsAchievements)) prepareAchievements(cfg.tag, cfg.romFileName, cfg.content, inner)
             return PreparedContent(inner, systemDir, savesDir, sram, rtc, segaSetting, biosPresent, archiveAsIs, naomiSets, naomiBios)
         }
     }
@@ -981,7 +986,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                             NxLog.i(TAG_LOG, "N64 hi-res VRAM limit: $limit MB (device ${total / (1024 * 1024)} MB)")
                             mapOf(N64HiresPack.VRAM_KEY to limit)
                         } else emptyMap()
-                        val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + nds3dLaunch + ps2BiosOption + n64Vram + graphics.forcedOptions
+                        val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + nds3dLaunch + ps2BiosOption + n64Vram + graphics.forcedOptions +
+                            (if (cfg.dsMenu) DsMenu.FORCED_OPTIONS else emptyMap())
                         variables = withForced(cfg.options, forced).toTypedArray()
                         rumbleEventsEnabled = gameRumble != GameRumble.OFF   // Game rumble Off: the runner does not even read the core's state
                         preferLowLatencyAudio = true
@@ -1016,7 +1022,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         if (cfg.descriptor?.id == SegaPadType.GPGX) SegaPadType.gpgxPorts(launchSega, cfg.players)?.let { controllerPorts = it }
                         if (cfg.descriptor?.id == SegaPadType.PICODRIVE && launchSega != null) controllerPorts = SegaPadType.picodrivePorts(launchSega, launchSegaPad, cfg.players)
                         cfg.netplayPad?.ports?.takeIf { it.isNotEmpty() }?.let { controllerPorts = controllerPorts + it }   // netplay: the pak's ports 0-1
-                        if (prepared.inner != null) {
+                        if (cfg.dsMenu) {
+                            loadWithoutContent = true
+                        } else if (prepared.inner != null) {
                             gameFilePath = prepared.inner.absolutePath
                         } else if (cfg.realPath) {
                             // A file ref (All files access) is opened in place when it and its companions are readable there;
