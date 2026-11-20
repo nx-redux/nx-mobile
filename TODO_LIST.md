@@ -50,9 +50,11 @@ Device checks still owed:
   Vulkan, N64 stays on OpenGL ES. In Settings the PS2 page says "Auto is Vulkan" and shows the GPU driver row on Auto.
 - [x] PS2 fast forward on the AYANEO (malisx2, Max FF 4x): 118 fps at native resolution; at 2x the phone is already at
   its limit (57 to 63 fps).
-- [ ] Mario Kart 7 on the Nova's real second screen, reader forced on Turnip: one capture showed a kart and its driver
-  drawn black. Not compared with the import hand-off or OpenGL ES yet: a simulated display stopped showing the top
-  screen at all (on the build that showed it before too), so it needs the real screen again.
+- [x] Mario Kart 7 on the Nova's real second screen (same race from a save state, both screens captured): the reader
+  forced on Turnip, the import hand-off on Turnip, Vulkan on the system driver and OpenGL ES all draw the top screen
+  on the second display and the map on the main one. The darkened kart and driver showed up again on the system
+  driver with no reader involved (smoke beside it, right after a hit) and never on the reader, so it is the game's own
+  look, not the hand-off. The black top screen seen on a simulated display was the simulation.
 - Which consoles follow the GPU on Auto, from the AYANEO on 2026-11-20 (frames in 5 s, stutters counted by NXHITCH):
   Wii (New Super Mario Bros. Wii) 240–279 on OpenGL ES against 291–302 on Vulkan; GameCube (Double Dash race) 285–300
   against 301; so Dolphin follows it, with PS2. N64 (Mario Kart 64 from boot) holds 300 on OpenGL ES with 18 stutters
