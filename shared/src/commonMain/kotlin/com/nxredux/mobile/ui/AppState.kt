@@ -520,8 +520,10 @@ sealed interface Screen {
      * One tag's emulator settings page, or a game's (Game Settings, [game] set). [category]: the open category (null =
      * top level).
      */
+    /** [confirmReset]: Reset to defaults asks first ([EmulatorRow.ResetDefaults]): A resets, B keeps. */
     data class EmulatorOptions(
         val page: EmulatorPage, val rows: List<EmulatorRow>, val category: String? = null, val game: Listed? = null,
+        val confirmReset: Boolean = false,
     ) : Screen
     /** Tools -> Game Tracker: play time per game group, most played first; [modal]: an options / pick / confirm modal is open. */
     data class GameTime(val rows: List<GameTimeRow>, val grandTotalMs: Long, val modal: GameTimeModal? = null, val loading: Boolean = false) : Screen
@@ -3822,6 +3824,7 @@ class AppState(
      * its picker, X shows the selected row's info when it has more to say. False for every other press.
      */
     private fun onEmulatorTouchButton(s: Screen.EmulatorOptions, button: NxButton): Boolean {
+        if (s.confirmReset) return false   // the reset question takes the press
         val touch = settingsUi.settingTouchRow(_selection.value.index) ?: return false
         return when {
             button == NxButton.A && touch.choices.size >= 2 && touch.control == NxSettingControl.PICKER -> openEmulatorPicker(s)

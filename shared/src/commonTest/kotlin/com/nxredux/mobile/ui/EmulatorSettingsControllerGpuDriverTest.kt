@@ -43,6 +43,7 @@ class EmulatorSettingsControllerGpuDriverTest {
         override suspend fun writeConsole(tag: String, coreId: String, text: String) { files[console(tag, coreId)] = text }
         override suspend fun writeGame(tag: String, coreId: String, romFileName: String, text: String) { files[game(tag, coreId, romFileName)] = text }
         override suspend fun deleteGame(tag: String, coreId: String, romFileName: String) { files.remove(game(tag, coreId, romFileName)) }
+        override suspend fun deleteConsole(tag: String, coreId: String) { files.remove(console(tag, coreId)) }
     }
 
     private object NoTables : CoreOptionSource { override fun table(coreId: String): CoreOptionTable? = null }
