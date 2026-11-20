@@ -6364,6 +6364,7 @@ class AppState(
 
     /** Returns true when a screen was popped. */
     fun back(): Boolean {
+        if (_message.value != null) { dismissMessage(); return true }   // a page's message dialog: Back closes it, the page stays
         if (settingsUi.closePopup()) return true   // a touch chooser or a Settings row's info popup: Back closes it
         if (_capturingShortcut.value != null) { cancelCapture(); return true }   // press to bind: Back cancels it, the page stays
         if (systemButtonWaiting != null) { systemButtonWaiting = null; settingsUi.refreshSettings(); return true }   // likewise System buttons' wait

@@ -698,6 +698,7 @@ internal class KidsScreensController(
             NxButton.B -> host.back()
             // Continue (or Done) from anywhere in a long list of apps or days, without scrolling to it
             NxButton.X -> rows.indexOf(KidsSetupRow.Next).takeIf { it >= 0 }?.let(::kidsSetupRow)
+            NxButton.Y -> kidsSetupMore(s)?.let { host.showMessage(kidsSetupText(s).first, it) }   // the step's info icon
             else -> Unit
         }
     }

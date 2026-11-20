@@ -92,11 +92,12 @@ internal fun KidsSetupScreen(
     }
     // X: the Continue (Done) row from anywhere in the list ([KidsScreensController.onKidsSetupButton])
     val next = if (KidsSetupRow.Next in rows) Hint(NxButton.X, if (s.setup) "Continue" else "Done") else null
-    val hints = listOfNotNull(Hint(NxButton.B, if (s.setup) "Cancel" else "Back"), Hint(NxButton.A, "Choose"), next)
+    val more = kidsSetupMore(s) != null
+    val hints = listOfNotNull(Hint(NxButton.B, if (s.setup) "Cancel" else "Back"), Hint(NxButton.A, "Choose"), next, if (more) Hint(NxButton.Y, "Info") else null)
     SetupBlockPage(
         if (s.setup) "Kids Mode setup" else "Kids Mode", headline, kidsSetupLines(s), rows.map { kidsSetupTouchRow(it, s.setup) }, buttons,
         selected, hints, onSelect, onRow, onHint, modifier, onSetting = onSetting,
-        more = kidsSetupMore(s),
+        onMore = if (more) { { onHint(NxButton.Y) } } else null,   // Y's: the step's fuller text in the app's message dialog
         pinButtons = true,   // Continue stays in view at the bottom over the menu pad too; only the list scrolls
     )
 }

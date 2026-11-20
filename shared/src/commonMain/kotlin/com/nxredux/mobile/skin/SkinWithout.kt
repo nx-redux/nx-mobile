@@ -5,13 +5,14 @@ import kotlin.math.roundToInt
 
 /**
  * The pack with the control [id] taken out of every boxed layout ([BoxSize.withoutControl]): the DS / 3DS pads with
- * the mic button hidden. A layout without boxes keeps its pieces and loses only the control.
+ * the mic button hidden. A layout without boxes (the wide ones) loses the control and its cap, its well left as drawn.
  */
 fun SkinPackManifest.withoutControl(id: String): SkinPackManifest = copy(
     layouts = layouts.map { l ->
         if (l.controls.none { it.id == id } && l.boxes.all { b -> b.sizes.all { z -> z.controls.none { it.id == id } } }) l
         else l.copy(
             controls = l.controls.filter { it.id != id },
+            pieces = l.controls.firstOrNull { it.id == id }?.let { gone -> l.pieces.filter { capHolds(it, gone) == false } } ?: l.pieces,
             boxes = l.boxes.map { b -> b.copy(sizes = b.sizes.map { it.withoutControl(id) }) },
         )
     },
@@ -73,6 +74,14 @@ fun BoxSize.withoutControl(id: String): BoxSize {
     )
 }
 
+/**
+ * Whether [p] is [c]'s cap in a layout without boxes: square art on the same anchor holding [c]'s centre (the well's
+ * ends are half as wide as tall, its middle stretched).
+ */
+private fun capHolds(p: PieceSpec, c: ControlSpec): Boolean =
+    p.glass == null && p.scaleX == 0f && abs(p.w - p.h) <= minOf(p.w, p.h) / 5 && p.anchor == (c.anchor ?: p.anchor) &&
+        c.x > p.x && c.x < p.x + p.w * p.scale && c.y > p.y && c.y < p.y + p.h * p.scale
+
 private fun PieceSpec.shifted(across: Boolean, by: Float): PieceSpec =
     if (across) copy(x = (x + by).roundToInt()) else copy(y = (y + by).roundToInt())
 
@@ -83,9 +92,10 @@ private fun cut(p: PieceSpec, across: Boolean, close: (Float) -> Float, cutA: Fl
     val b = a + (if (across) p.w else p.h) * s
     if (b <= cutA || a >= cutB) return listOf(p.shifted(across, close(a) - a))
     if (across && p.scaleX > 0f) {
-        // a stretched slice: drawn narrower
+        // a stretched slice: drawn narrower; cut away whole, gone (a scaleX of 0 would mean "unset", its natural width)
         val na = close(a)
-        return listOf(p.copy(x = na.roundToInt(), scaleX = (close(b) - na) / p.w))
+        val across = (close(b) - na) / p.w
+        return if (across * p.w < 0.5f) emptyList() else listOf(p.copy(x = na.roundToInt(), scaleX = across))
     }
     // art: the parts outside the strip kept, in the picture's own px
     val out = mutableListOf<PieceSpec>()

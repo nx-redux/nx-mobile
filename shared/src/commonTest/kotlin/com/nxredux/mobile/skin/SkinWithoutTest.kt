@@ -65,6 +65,39 @@ class SkinWithoutTest {
         assertEquals(listOf(0, 220), out.pieces.map { it.sy })
     }
 
+    @Test fun a_slice_cut_away_whole_is_dropped() {
+        // a 2 px slice stretched over exactly the strip that goes: drawn at 0 it would fall back to its own width
+        val g = "MENU+MIC"
+        val pair = BoxSize(
+            w = 432, h = 144,
+            pieces = listOf(
+                PieceSpec(sx = 0, sy = 0, w = 146, h = 144, x = 0, y = 0, anchor = PieceAnchor.CENTRE, group = g),
+                PieceSpec(sx = 146, sy = 0, w = 2, h = 144, x = 146, y = 0, anchor = PieceAnchor.CENTRE, group = g, scaleX = 70f),
+                PieceSpec(sx = 286, sy = 0, w = 146, h = 144, x = 286, y = 0, anchor = PieceAnchor.CENTRE, group = g),
+            ),
+            controls = listOf(cap("MENU", 146f), cap("MIC", 286f)),
+        )
+        val out = pair.withoutControl("MIC")
+        assertTrue(out.pieces.none { it.scaleX > 0f || it.acrossScale <= 0f }, "${out.pieces}")
+        assertEquals(2, out.pieces.size)
+    }
+
+    @Test fun a_layout_without_boxes_loses_the_cap_too() {
+        val spec = SkinLayoutSpec(
+            id = "wide", family = SkinFamily.entries.first(), variant = SkinVariant.entries.first(), image = "x", width = 100, height = 100,
+            tree = SliceNode(), glasses = emptyList(), scales = emptyList(),
+            controls = listOf(cap("MIC", 484f, 1808f).copy(anchor = PieceAnchor.CENTRE), cap("MENU", 584f, 1808f).copy(anchor = PieceAnchor.CENTRE)),
+            pieces = listOf(
+                PieceSpec(sx = 0, sy = 0, w = 100, h = 100, x = 434, y = 1758, anchor = PieceAnchor.CENTRE),   // MIC's cap
+                PieceSpec(sx = 0, sy = 0, w = 100, h = 100, x = 534, y = 1758, anchor = PieceAnchor.CENTRE),   // MENU's
+                PieceSpec(sx = 0, sy = 0, w = 300, h = 144, x = 400, y = 1736, anchor = PieceAnchor.CENTRE),   // the well
+            ),
+        )
+        val out = SkinPackManifest(format = 2, id = "p", name = "p", layouts = listOf(spec)).withoutControl("MIC").layouts.single()
+        assertEquals(listOf("MENU"), out.controls.map { it.id })
+        assertEquals(listOf(534, 400), out.pieces.map { it.x })
+    }
+
     @Test fun a_box_without_the_button_is_left_as_it_is() {
         val plain = BoxSize(w = 10, h = 10, controls = listOf(cap("A", 5f)))
         assertTrue(plain.withoutControl("MIC") === plain)

@@ -124,7 +124,11 @@ internal class ShortcutsMicController(
     }
 
     fun onShortcut(action: ShortcutAction, down: Boolean) {
-        if (action == ShortcutAction.TOGGLE_MIC) { if (down && mic != null) toggleMic(); return }
+        // Hidden, nothing on the pad would show the mic is on: the binding says where to show it instead.
+        if (action == ShortcutAction.TOGGLE_MIC) {
+            if (down && mic != null) { if (host.settings.micButtonShown) toggleMic() else host.toast("Show the mic button from the Mic tile first") }
+            return
+        }
         when (host.speed.onAction(action, down)) {
             SpeedEffect.AskReset -> host.askReset()
             SpeedEffect.SaveAndQuit -> host.quitGame(chosen = true, autoState = true)   // the menu's Save & Quit
@@ -233,8 +237,8 @@ internal class ShortcutsMicController(
     fun micTile(): Boolean? = mic?.takeIf { it.shown }?.let { host.settings.micButtonShown }
 
     /**
-     * The Mic tile: the pad's mic button [shown] or hidden, kept for every game. Hidden turns the mic off (nothing left
-     * to turn it back on) and the skin closes its row up without the button ([PadLayoutController] re-places it).
+     * The Mic tile: the pad's mic button [shown] or hidden, kept for every game. Hidden turns the mic off (the Toggle mic
+     * binding waits for the button too) and the skin closes its row up without the button ([PadLayoutController] re-places it).
      */
     fun setMicButton(shown: Boolean) {
         if (mic == null) return

@@ -3,11 +3,6 @@ package com.nxredux.mobile.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import com.nxredux.mobile.ui.nx.NxDialog
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
 import androidx.compose.foundation.layout.Box
 import com.nxredux.mobile.ui.nx.LocalPortrait
 import com.nxredux.mobile.ui.nx.LocalPadBelow
@@ -118,17 +113,16 @@ fun OnboardingScreen(
  * up the group's top sits on a fixed line ([SETUP_LINE] of the body) and grows down, so the counter, title and rows are
  * level from step to step; a group that would come within [SETUP_BUTTON_GAP] of the button moves up instead, and past
  * the top its rows scroll under the rows block's fades.
- * [lineBreaks]: each line on its own (a list). [more]: a fuller text behind an info icon after the first line, shown
- * in an info dialog (the headline its title) on a tap. [pinButtons]: the buttons stay at the bottom over the menu pad too.
+ * [lineBreaks]: each line on its own (a list). [onMore]: an info icon after the first line, a tap on it this (the
+ * page's fuller text, in the app's message dialog). [pinButtons]: the buttons stay at the bottom over the menu pad too.
  */
 @Composable
 internal fun SetupBlockPage(
     counter: String, headline: String, lines: List<String>, rows: List<NxSettingRow>, buttons: Int,
     selected: Int, hints: List<Hint>, onSelect: (Int) -> Unit, onRow: (Int) -> Unit, onHint: (NxButton) -> Unit,
     modifier: Modifier = Modifier, onSetting: (NxSettingEvent) -> Unit = {}, picture: DrawableResource? = null, lineBreaks: Boolean = false,
-    more: String? = null, pinButtons: Boolean = false,
+    onMore: (() -> Unit)? = null, pinButtons: Boolean = false,
 ) {
-    var moreOpen by remember(more) { mutableStateOf(false) }
     val shown = buttons.coerceIn(0, rows.size)
     val list = rows.dropLast(shown)
     val density = LocalDensity.current
@@ -154,10 +148,8 @@ internal fun SetupBlockPage(
     val plateStart = settingsPlateStart()
     val gutter = settingsPlateEnd()   // the right side's plate edge
     // The rows block's list (its fades, its row pitch) and the hints on the rows' text edge, as Settings' ([settingsSectionStart]).
-    // a Box, so the info dialog draws over the whole page
-    Box(modifier.fillMaxSize()) {
     CompositionLocalProvider(LocalSettingsBlock provides SettingsBlockMode(crumb = counter), LocalNxHintBarStart provides settingsSectionStart()) {
-        Column(Modifier.fillMaxSize()) {
+        Column(modifier.fillMaxSize()) {
             // Sideways a picture takes a column of its own at the right, fitted to its height; upright it scrolls under the rows.
             val side = picture != null && !LocalPortrait.current
             Row(Modifier.weight(1f).fillMaxWidth()) {
@@ -175,7 +167,7 @@ internal fun SetupBlockPage(
                                 SetupHeader(counter, headline)
                                 // The gaps as seen (glyph to glyph, or plate): the line boxes add ~16 dp under the title (the
                                 // lines drawn 4 dp up into it) and ~4 dp under the lines, so their spacers are that much less.
-                                if (lines.isNotEmpty()) Box(Modifier.offset(y = -4.dp)) { SettingsDetailLines(lines, separator = if (lineBreaks) "\n" else " ", onMore = more?.let { { moreOpen = true } }) }
+                                if (lines.isNotEmpty()) Box(Modifier.offset(y = -4.dp)) { SettingsDetailLines(lines, separator = if (lineBreaks) "\n" else " ", onMore = onMore) }
                                 if (list.isNotEmpty() || picture != null) {
                                     Spacer(Modifier.height(if (lines.isNotEmpty()) SETUP_ROWS_GAP - 16.dp else SETUP_ROWS_GAP - 12.dp))
                                     Box(Modifier.fillMaxWidth().weight(1f, fill = false)) {
@@ -207,8 +199,6 @@ internal fun SetupBlockPage(
             }
             NxHintBar(hints, onHint = onHint)
         }
-    }
-    if (moreOpen && more != null) NxDialog(headline, more, onConfirm = { moreOpen = false })
     }
 }
 

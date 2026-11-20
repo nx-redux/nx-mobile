@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui.nx
 
+import kotlin.math.abs
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -465,17 +466,27 @@ private fun QuickVolumeBar(value: Float, onChange: (Float) -> Unit, onDone: () -
         modifier.height(GP_QUICK_CONTROL)
             .semantics { progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f); setProgress { latest(it.coerceIn(0f, 1f)); done(); true } }
             .pointerInput(Unit) {
+                // A tap sets it; a drag follows once it is more sideways than up or down, so a scroll begun on the bar
+                // still scrolls the tab and leaves the volume alone.
+                val slop = viewConfiguration.touchSlop
                 awaitEachGesture {
-                    val down = awaitFirstDown()
+                    val down = awaitFirstDown(requireUnconsumed = false)
                     fun at(x: Float) = (x / size.width).coerceIn(0f, 1f)
-                    latest(at(down.position.x)); down.consume()
+                    var dragging = false
                     while (true) {
                         val e = awaitPointerEvent()
-                        val c = e.changes.firstOrNull { it.id == down.id } ?: break
-                        if (!c.pressed) break
-                        latest(at(c.position.x)); c.consume()
+                        val c = e.changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
+                        if (c.isConsumed && !dragging) return@awaitEachGesture   // the scroll took it
+                        if (!c.pressed) {
+                            if (!dragging) latest(at(down.position.x))
+                            done()
+                            return@awaitEachGesture
+                        }
+                        val moved = c.position - down.position
+                        if (!dragging && abs(moved.x) > slop && abs(moved.x) > abs(moved.y)) dragging = true
+                        if (!dragging && abs(moved.y) > slop) return@awaitEachGesture   // a scroll: not the bar's
+                        if (dragging) { latest(at(c.position.x)); c.consume() }
                     }
-                    done()
                 }
             },
         contentAlignment = Alignment.CenterStart,

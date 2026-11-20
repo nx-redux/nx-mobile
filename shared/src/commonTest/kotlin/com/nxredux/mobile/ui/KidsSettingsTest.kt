@@ -635,6 +635,19 @@ class KidsSettingsTest {
         assertEquals(null, kidsSetupMore(Screen.KidsSetup(KidsSetupStep.TIMES, setup = true)))
     }
 
+    /** Y (the info icon's tap) shows the Apps step's warning in the message dialog; Back closes it and setup stays. */
+    @Test fun appsWarningOpensFromYAndBackClosesIt() = runTest {
+        val st = setup().st
+        st.openSettings(SettingsSection.KIDS)
+        st.pressRow(SettingsKind.KIDS_ENABLE)
+        st.typePin("123456"); st.typePin("123456")
+        st.onButton(NxButton.Y)
+        assertEquals("Allowed apps" to KIDS_APPS_AVOID, st.message.value)
+        assertTrue(st.back())
+        assertEquals(null, st.message.value)
+        assertEquals(KidsSetupStep.APPS, st.setupStep())
+    }
+
     /** A tap on an app row's name toggles it, as A does: the row's tap opens ([kidsSetupRow]), not just focuses. */
     @Test fun appRowTapToggles() = runTest {
         val row = kidsSetupTouchRow(KidsSetupRow.App(InstalledApp("a/A", "Alpha"), allowed = false), setup = true)
