@@ -737,7 +737,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val naomiBios = if (archiveAsIs) naomiSets.biosFor(Names.stripExtension(cfg.romFileName)) else null
             // The files this launch needs, looked up by name when a Bios folder will not list.
             val biosNames = CoreRegistry.requiredBios(cfg.tag).flatMap { it.anyOf } +
-                (systemSets + listOfNotNull(naomiBios)).flatMap { listOf("$it.zip", "$it.7z") }
+                (systemSets + listOfNotNull(naomiBios)).flatMap { listOf("$it.zip", "$it.7z") } +
+                (if (cfg.dsMenu) DsMenu.FILES else emptyList())   // the DS menu's dumps, by name when Bios/NDS will not list
             // Usually a stamp check: MainActivity pre-warms the copy after an update; if it is still running, this waits on its lock.
             val systemDir = withContext(Dispatchers.IO) { SystemFiles.ensure(host.activity) }
             // Bios/<TAG>/ lands in the core's BIOS folder: the system dir, or a subfolder of it (flycast's <system>/dc/).
@@ -873,7 +874,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             BiosCheck.missing(needs, biosExtension, biosPresent).firstOrNull()?.let {
                 return refuse(BiosCheck.message(cfg.tag, it))
             }
-            if (cfg.dsMenu) DsMenu.missing(biosPresent).takeIf { it.isNotEmpty() }?.let { return refuse(DsMenu.missingMessage(it)) }
+            if (cfg.dsMenu) {
+                // melonDS DS reads its dumps from the system dir or its own subfolder there.
+                val coreDir = withContext(Dispatchers.IO) { File(biosDir, DsMenu.CORE_SUBDIR).list()?.toSet() ?: emptySet() }
+                DsMenu.missing(biosPresent + coreDir).takeIf { it.isNotEmpty() }?.let { return refuse(DsMenu.missingMessage(it)) }
+            }
             discRegion?.let { region ->
                 val core = cfg.descriptor?.id.orEmpty()
                 SegaCdBios.missing(core, region, biosPresent)?.let { file ->

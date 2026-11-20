@@ -130,9 +130,14 @@ internal class LaunchController(
         switcher.cancelLoad()   // a switcher still loading must not open over the launched game
         val job = scope.launch {
             if (DsMenu.isMenu(game.ref.value)) {
-                // No file to check or companions to find: the game process boots the DS menu (and checks its BIOS).
+                // No file to check or companions to find: the game process boots the DS menu (and checks its BIOS). It
+                // still opens its own config and battery save, so an import or a sync refuses it as any game.
+                val core = listed.core ?: return@launch
+                SaveTransferRules.launchRefusal(deps.saveTransfer?.importing == true, deps.deviceSync?.running == true)?.let { host.showNotice(it); return@launch }
+                if (host.kidsLocked()) return@launch
                 host.dropPushedTab()
-                deps.runner.launch(GameSession(listed.tag, game.shownName, listed.core ?: return@launch, game.ref, game.folder, game.fileName, null, emptyList(), fresh = true), Recent(game.path, game.shownName))
+                switcher.onRunnerCalled(fromSwitcher)
+                deps.runner.launch(GameSession(listed.tag, game.shownName, core, game.ref, game.folder, game.fileName, null, emptyList(), fromSwitcher = fromSwitcher, fresh = true), Recent(game.path, game.shownName))
                 return@launch
             }
             val gone = "Could not find ${game.fileName}. If it was moved or deleted, use Rescan in Settings → Library."

@@ -14,10 +14,13 @@ object DsMenu {
 
     val FILES = listOf("bios7.bin", "bios9.bin", "firmware.bin")
 
+    /** melonDS DS's own folder in the system dir, read before the system dir itself. */
+    const val CORE_SUBDIR = "melonDS DS"
+
     /** Native system files, in DS mode: the DSi menu has no DS Download Play, and Auto picks the DS without a game anyway. */
     val FORCED_OPTIONS = mapOf("melonds_sysfile_mode" to "native", "melonds_console_mode" to "ds")
 
-    /** Spike switch: the app turns the DS list's row on; tests (whose DS lists are fixtures) keep it off. */
+    /** Off by default, so the tests' DS lists (fixtures) stay as they are; the app turns the row on at start-up. */
     var listed = false
 
     /** The row's art, one file per kind, as the app ships it. */
@@ -35,8 +38,19 @@ object DsMenu {
 
     fun isMenu(content: String?): Boolean = content == CONTENT
 
-    /** The dumps of [FILES] that are not in [present] (the NDS BIOS folder's names). */
-    fun missing(present: Set<String>): List<String> = FILES.filterNot { it in present }
+    /**
+     * The dumps of [FILES] that are not in [present] (the names in the system dir and melonDS DS's folder there). The core
+     * lists any DS firmware dump whatever its name (nds_firmware.bin, a dump kept as firmware_nds.bin), so a .bin naming
+     * firmware counts for firmware.bin; a DSi one does not, as the DSi menu has no DS Download Play.
+     */
+    fun missing(present: Set<String>): List<String> = FILES.filterNot { name ->
+        name in present || name == "firmware.bin" && present.any { isDsFirmwareName(it) }
+    }
+
+    private fun isDsFirmwareName(name: String): Boolean {
+        val n = name.lowercase()
+        return n.endsWith(".bin") && "firmware" in n && !n.startsWith("dsi")
+    }
 
     fun missingMessage(missing: List<String>): String =
         "DS Download Play needs a real DS's ${missing.joinToString(", ")} in Bios/NDS/"

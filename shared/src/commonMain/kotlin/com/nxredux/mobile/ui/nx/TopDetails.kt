@@ -179,10 +179,13 @@ fun TopDetailsPage(details: TopDetails, onAchievements: () -> Unit, prefer: Back
             val mark = detailsMark(maxWidth, maxHeight)
             val fit = detailsFit(maxWidth, if (mark) maxHeight - TOP_MARK_BAND else maxHeight)
             if (mark) TopMark()
-            // Only the picture's column stays under the mark's band (a tall picture never reaches it): the text column, on the
-            // other side, keeps the full height for the synopsis.
+            // The mark's band keeps the column under it clear: the picture's, beside a text column that keeps the full height
+            // for the synopsis; the text's when it takes the whole width (no picture).
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.Bottom) {
-                DetailsText(details, now, fit, onAchievements, Modifier.weight(TD_TEXT_SHARE))
+                DetailsText(
+                    details, now, fit, onAchievements,
+                    Modifier.weight(TD_TEXT_SHARE).padding(top = if (mark && !fit.picture) TOP_MARK_BAND else 0.dp),
+                )
                 if (fit.picture) {
                     Spacer(Modifier.width(gap))
                     DetailsPicture(details, now, prefer, Modifier.weight(1f - TD_TEXT_SHARE).padding(top = if (mark) TOP_MARK_BAND else 0.dp))

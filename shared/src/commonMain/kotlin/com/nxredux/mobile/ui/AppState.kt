@@ -1280,7 +1280,7 @@ class AppState(
      */
     private fun followTopDetails(reread: Boolean = false) {
         val entry = (if (_dualMenu.value) DualMenu.top(_screen.value, _selection.value.index) as? TopContent.GameDetails else null)?.entry
-        ra.followRaDetails(entry)
+        ra.followRaDetails(entry?.takeIf { !DsMenu.isMenu(it.game.ref.value) })   // the DS menu has no achievements to look up
         if (entry == null) {
             topDetailsJob?.cancel(); topDetailsJob = null
             _topDetails.value = null

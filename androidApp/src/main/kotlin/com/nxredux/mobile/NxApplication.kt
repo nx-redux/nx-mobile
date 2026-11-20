@@ -35,7 +35,6 @@ class NxApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         com.nxredux.mobile.runner.DsMenu.listed = true
-        com.nxredux.mobile.runner.DsMenu.artDir = DsMenuArt.install(this)
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityStarted(activity: Activity) { startedActivities++ }
             override fun onActivityStopped(activity: Activity) { startedActivities = (startedActivities - 1).coerceAtLeast(0) }
@@ -49,6 +48,9 @@ class NxApplication : Application() {
         // installer already took or the user cancelled), then starts moving older private data into the home folder.
         // Not in the game process: the menu process owns this, and a second run would race it.
         val game = AppProcess.isGame()
+        // Only the menu lists the row. The copy runs once per install or update (about 800 KB); after that it is a stamp
+        // check, done here so the first list already has its art.
+        if (!game) com.nxredux.mobile.runner.DsMenu.artDir = DsMenuArt.install(this)
         if (!game) {
             Thread({
                 File(cacheDir, "update").deleteRecursively()
