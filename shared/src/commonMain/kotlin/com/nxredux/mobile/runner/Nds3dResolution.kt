@@ -1,7 +1,6 @@
 package com.nxredux.mobile.runner
 
 import com.nxredux.mobile.layout.DeviceTraits
-
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.options.NdsLayoutChoice
 import com.nxredux.mobile.options.NdsOptions
@@ -48,11 +47,8 @@ enum class Res3dConsole(
     /** The three stored rows. */
     val keys: Set<String> get() = setOf(modeKey, maxScaleKey, scaleKey)
 
-    /**
-     * The Max Scale an unset game starts with. The PSP's is 2x on a Mali GPU: Dante's Inferno on the AYANEO's Mali-G76
-     * holds 60 fps at 2x and drops to ~42 at 3x on either renderer.
-     */
-    val defaultCap: Int get() = if (this == PSP && DeviceTraits.maliGpu) 2 else cap
+    /** The Max Scale an unset game starts with; the PSP's follows the GPU ([PspResolution.defaultCap]). */
+    val defaultCap: Int get() = if (this == PSP) PspResolution.defaultCap(DeviceTraits.gpu, cap) else cap
 
     /** This console's display maximum ([Nds3dResolution.displayMaxOf], [N3ds3dResolution.displayMaxOf]) for a [window] (px, width to height) of class [screen]. */
     fun displayMaxOf(window: Pair<Int, Int>?, screen: ScreenClass?): Int? = when (this) {
@@ -204,6 +200,33 @@ object PspResolution {
     private const val SLACK = 0.02
 
     private fun up(scale: Double): Int = ceil(scale - SLACK).toInt().coerceIn(1, MAX)
+
+    /** Max Scale on a modest GPU. */
+    private const val MODEST_CAP = 2
+
+    /**
+     * Max Scale for an unset game on the GPU named [gpu] (GL_RENDERER; null: not read yet, [full]). A Mali, a PowerVR,
+     * or an Adreno below the flagship ones gets [MODEST_CAP]: Dante's Inferno on the AYANEO's Mali-G76 holds 60 fps at
+     * 2x and drops to ~42 at 3x on either renderer, and mid-range and budget GPUs are no faster.
+     */
+    fun defaultCap(gpu: String?, full: Int): Int = if (modestGpu(gpu)) MODEST_CAP else full
+
+    private val ADRENO = Regex("""Adreno\D*(\d{3})""", RegexOption.IGNORE_CASE)
+
+    /**
+     * A Mali, a PowerVR, or an Adreno below the flagship ones: 640 / 650 / 660 (Snapdragon 855 to 888), 730 and up
+     * (8 Gen 1 on), 830 and up (8 Elite on). Any other GPU keeps the full cap.
+     */
+    fun modestGpu(gpu: String?): Boolean {
+        if (DeviceTraits.isMali(gpu) || gpu?.contains("PowerVR", ignoreCase = true) == true) return true
+        val model = gpu?.let { ADRENO.find(it) }?.groupValues?.get(1)?.toIntOrNull() ?: return false
+        return when (model / 100) {
+            6 -> model !in setOf(640, 650, 660)
+            7 -> model < 730
+            8 -> model < 830
+            else -> model < 600
+        }
+    }
 
     /** The scale the picture reaches fitted in a [w] x [h] px window, either way up, rounded up (1 to 10). */
     fun displayMax(w: Int, h: Int): Int =

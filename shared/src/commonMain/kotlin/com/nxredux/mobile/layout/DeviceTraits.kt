@@ -10,11 +10,11 @@ object DeviceTraits {
     var canHalfFold: Boolean = false
 
     /**
-     * The GPU is an Arm Mali (GL_RENDERER), set once a launch or settings page has read it: the PSP's Max Scale starts
-     * lower there ([com.nxredux.mobile.runner.Res3dConsole.defaultCap]).
+     * The GPU's name (GL_RENDERER), set once a launch or settings page has read it (null until then): the PSP's Max Scale
+     * starts lower on a modest GPU ([com.nxredux.mobile.runner.PspResolution.defaultCap]).
      */
     @kotlin.concurrent.Volatile
-    var maliGpu: Boolean = false
+    var gpu: String? = null
 
     fun isMali(gpu: String?): Boolean = gpu?.trim()?.startsWith("Mali", ignoreCase = true) == true
 }
