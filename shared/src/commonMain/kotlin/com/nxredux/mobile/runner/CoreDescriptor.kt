@@ -27,7 +27,15 @@ data class VulkanSwitch(
      * and Dolphin's Vulkan backend has no other way to blend them. malisx2 offers it; OpenGL ES is right on either.
      */
     val maliNeedsCustomDriver: Boolean = false,
-)
+    /**
+     * Graphics API "Auto" is Vulkan on a Samsung Xclipse GPU. Its OpenGL ES is ANGLE over Vulkan, which fails to compile
+     * some of a core's shaders without saying why (3DS: every geometry shader, so Pokémon Ultra Sun draws broken).
+     */
+    val autoOnXclipse: Boolean = false,
+) {
+    /** Auto depends on the GPU: [autoIsVulkan][com.nxredux.mobile.options.GraphicsApiOptions.autoIsVulkan] needs its name. */
+    val followsGpu: Boolean get() = autoOnMali || autoOnXclipse
+}
 
 data class CoreDescriptor(
     /** minarch's core name (the handheld `.so` basename cut at its last `_`); keys the state/config dirs. */

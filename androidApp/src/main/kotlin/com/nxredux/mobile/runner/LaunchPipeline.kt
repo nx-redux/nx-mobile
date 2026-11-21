@@ -576,7 +576,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             // Before the frontend values are read: a core that follows the GPU has defaults that do too (Res3dConsole.defaultCap),
             // and so may the options its 3D Resolution sets (Res3dConsole.followsGpu).
-            if (descriptor?.vulkan?.autoOnMali == true || Res3dConsole.forTag(tag)?.takeIf { it.coreId == coreId }?.followsGpu == true) {
+            if (descriptor?.vulkan?.followsGpu == true || Res3dConsole.forTag(tag)?.takeIf { it.coreId == coreId }?.followsGpu == true) {
                 DeviceTraits.gpu = AndroidDeviceInfo.gpu()
             }
             val store = CoreConfigStore(File(dataRoot, paths.consoleConfig), File(dataRoot, paths.gameConfig)).also { configStore = it }

@@ -35,7 +35,7 @@ object GraphicsApiOptions {
 
     /** [row] where Auto is Vulkan ([autoIsVulkan]). */
     val rowAutoVulkan = row.copy(
-        info = "How the console is drawn. Auto uses Vulkan on this\nphone's GPU (Arm Mali), where it is faster.\n" +
+        info = "How the console is drawn. Auto uses Vulkan on this\nphone's GPU, where it runs better than OpenGL ES.\n" +
             "Phones without Vulkan stay on OpenGL ES. Takes effect\nthe next time the game starts.",
         brief = "Applies next launch. Auto is Vulkan",
     )
@@ -73,15 +73,16 @@ object GraphicsApiOptions {
      * Whether Auto is Vulkan for a core with [switch] on the GPU named [gpu] (GL_RENDERER, null: unknown).
      * [customDriver]: a custom GPU driver is in use for the game, which a [VulkanSwitch.maliNeedsCustomDriver] core needs.
      */
-    fun autoIsVulkan(switch: VulkanSwitch?, gpu: String?, customDriver: Boolean = false): Boolean =
-        switch?.autoOnMali == true && DeviceTraits.isMali(gpu) && (!switch.maliNeedsCustomDriver || customDriver)
+    fun autoIsVulkan(switch: VulkanSwitch?, gpu: String?, customDriver: Boolean = false): Boolean = switch != null &&
+        (switch.autoOnXclipse && DeviceTraits.isXclipse(gpu) ||
+            switch.autoOnMali && DeviceTraits.isMali(gpu) && (!switch.maliNeedsCustomDriver || customDriver))
 
     /**
      * The value a launch reads for the stored [value]: Vulkan in place of Auto (or no value) where [autoIsVulkan], else
      * [value] itself. [gpu] is asked only for Auto on a core that follows the GPU.
      */
     inline fun effective(value: String?, switch: VulkanSwitch?, customDriver: Boolean = false, gpu: () -> String?): String? =
-        if ((value == null || value == AUTO) && switch?.autoOnMali == true && autoIsVulkan(switch, gpu(), customDriver)) VULKAN else value
+        if ((value == null || value == AUTO) && switch?.followsGpu == true && autoIsVulkan(switch, gpu(), customDriver)) VULKAN else value
 
     /** Whether the runner offers the core Vulkan: only for the Vulkan value ([effective] turns Auto into it where it should be). */
     fun preferVulkan(value: String?): Boolean = value == VULKAN
