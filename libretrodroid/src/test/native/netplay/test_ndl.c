@@ -550,6 +550,13 @@ static int case_auto_created_parked_stays_out(uint16_t port) {
 	CHECK(ndl_test_sent(room[2]) == 0);
 	CHECK(!ndl_in_room(room[2]));
 	CHECK(ndl_member_count(room[1]) == 1);
+	/* Local wireless switched on in the game: it looks again and joins the room there. */
+	ndl_rejoin(room[2]);
+	CHECK(ndl_presence_now(room[2]) == NDL_SEEKING);
+	advance(3000);
+	CHECK(ndl_in_room(room[2]));
+	CHECK(ndl_member_count(room[1]) == 2);
+	CHECK(ndl_presence_now(room[2]) == NDL_ROOM);
 	return 0;
 }
 

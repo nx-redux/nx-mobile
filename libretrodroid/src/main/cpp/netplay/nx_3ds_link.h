@@ -16,9 +16,10 @@
 struct nx_3ds_link_interface {
     int (*presence)(void);   // one of NX_3DS_LINK_*
     void (*leave)(void);     // leave at once and stay out: until local wireless is switched on again (3DS), or rejoin (a session)
-    void (*rejoin)(void);    // a session goes back to its room after leave; nothing on the automatic route
+    void (*rejoin)(void);    // undoes leave: a session goes back to its room, the automatic route looks for rooms again
     void (*set_cable)(int state, const char* broadcast);   // NX_3DS_CABLE_*, and the cable network's broadcast address (a /30)
     // Filled in by the frontend while it answers the call: puts a socket of the room on the cable's network
     // (cable != 0) or back on the Wi-Fi.
     void (*route_socket)(int fd, int cable);
+    int (*others)(void);     // other devices in the room, 0 in none; null: the core does not say
 };

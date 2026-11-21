@@ -1018,6 +1018,8 @@ void ndl_rejoin(ndl_link* l) {
 			open_room(l);
 		} else if (l->mode == NDL_JOIN && l->holder.sin_family == AF_INET) {
 			start_join(l, &l->holder);
+		} else if (l->mode == NDL_AUTO && l->parked) {
+			auto_reset(l);
 		}
 	}
 	pthread_mutex_unlock(&l->mu);

@@ -396,6 +396,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private var nds3dNow: Int? = null            // the DS 3D scale in use (null: unknown / not DS)
     private var nds3dSoftware = false            // the core renders in software: the 3D Resolution rows take no effect
+    private var localWirelessNow: String? = null // where the link stands, beside an On Local Wireless (null: nothing)
+
+    /** Where local wireless stands ("linked with 1 device"), shown beside Local Wireless while it is On; null: nothing. */
+    fun setLocalWirelessNow(now: String?) {
+        if (now == localWirelessNow) return
+        localWirelessNow = now
+        refreshFrontendPages()
+    }
 
     /**
      * The DS or 3DS 3D scale in use ([now], null: unknown) and whether the core renders in [software] (DS only: the 3D Resolution rows are
@@ -914,6 +922,13 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * [tag] (it selects the console's own rows, shown in the Options groups), and whether overlays can show
      * ([overlayAvailable] is false while the DS screens are split). Refreshes open group/Adjust pages.
      */
+    /** One frontend value the game changed rather than the menu (Disconnect turns Local Wireless off); refreshes open pages. */
+    fun showFrontendValue(key: String, value: String) {
+        if (frontend[key] == value) return
+        frontend = frontend + (key to value)
+        refreshFrontendPages()
+    }
+
     fun setFrontend(values: Map<String, String>, overlays: List<String>, locked: Set<String>, tag: String = "", overlayAvailable: Boolean = true) {
         val tagChanged = tag != frontendTag
         val hadGroups = shownGroups()
@@ -1843,7 +1858,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             val values = if (o.key == FrontendOptions.OVERLAY) FrontendOptions.choices(o.key, overlays) else o.values
             // The row's brief line (none: compact); the full text in its info popup.
             val now = nds3dNow
-            val shown = if (o.key == Res3dConsole.forTag(frontendTag)?.modeKey && now != null && value != Nds3dMode.PERFORMANCE.value) "${o.labelOf(value)} · ${now}x now" else o.labelOf(value)
+            val wireless = localWirelessNow
+            val shown = when {
+                o.key == Res3dConsole.forTag(frontendTag)?.modeKey && now != null && value != Nds3dMode.PERFORMANCE.value -> "${o.labelOf(value)} · ${now}x now"
+                o.key in LOCAL_WIRELESS_KEYS && wireless != null && value == N3dsOptions.LOCAL_WIRELESS_ON -> "${o.labelOf(value)} · $wireless"
+                else -> o.labelOf(value)
+            }
             MenuRow.Option(
                 o.label, o.key, shown, o.brief, visual = o.visual,
                 choices = values.map(o::labelOf), index = values.indexOf(value), detail = o.info,
@@ -2062,6 +2082,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         const val TOUCH_KEY_PREFIX = "nx:touch:"
         /** A Shortcuts row inheriting Controls → Shortcuts. */
         private const val DEFAULT_SUFFIX = " (default)"
+        /** The DS and 3DS Local Wireless rows: their On shows where the link stands ([setLocalWirelessNow]). */
+        private val LOCAL_WIRELESS_KEYS = setOf(NdsOptions.LOCAL_WIRELESS, N3dsOptions.LOCAL_WIRELESS)
         private const val NONE_LABEL = "None"
         private const val UNAVAILABLE = "Unavailable"
         /** The waiting bind row's line: B cancels (the hint says so). */

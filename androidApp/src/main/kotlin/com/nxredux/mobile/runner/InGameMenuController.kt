@@ -107,6 +107,8 @@ internal interface InGameMenuHost : GameScreenHost {
     val netplayQuitOnly: Boolean
     /** DS local wireless on the automatic route: the game's radio is up, so the root is Continue, Disconnect, Quit. */
     val dsWireless: Boolean
+    /** Where local wireless stands, beside an On Local Wireless row ([InGameMenuModel.setLocalWirelessNow]); null: nothing. */
+    val localWirelessNow: String?
     /** Seconds until a menu left open in a DS room leaves it by itself; null when nothing counts down. */
     val dsIdleSeconds: Int?
     // The game's config: the store in use, which layer it is, what is locked, forced or hidden, and its resolved values.
@@ -315,6 +317,7 @@ internal class InGameMenuController(
                 it.netplay = true; it.netplayLink = netplay?.endsAsLocalGame == true; it.netplayEnded = netplayEnded; it.netplayQuitOnly = netplayQuitOnly; it.refresh()
             }
             it.setDsWireless(host.dsWireless)   // a DS game's wireless on the automatic route: Continue, Disconnect, Quit
+            it.setLocalWirelessNow(host.localWirelessNow)
             it.setIdleSeconds(host.dsIdleSeconds)
             it.setKidsLocked(host.kidsSettingsHidden)   // Kids Mode without Parent mode: no Options for a kid
         }

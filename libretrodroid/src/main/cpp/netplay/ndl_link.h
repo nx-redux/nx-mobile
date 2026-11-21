@@ -119,12 +119,12 @@ typedef enum { NDL_CABLE_NONE = 0, NDL_CABLE_COMING = 1, NDL_CABLE_UP = 2 } ndl_
  * come up first and carry it. */
 void ndl_set_cable(ndl_link* l, ndl_cable state, const char* broadcast);
 
-/* Leaves at once, without the radio-off linger. The link then stays out of rooms until ndl_set_mode (in AUTO, until a
- * new link: the game's wireless coming on again does not end it). */
+/* Leaves at once, without the radio-off linger. The link then stays out of rooms until ndl_set_mode or ndl_rejoin (in
+ * AUTO, the game's wireless coming on again does not end it). */
 void ndl_leave_now(ndl_link* l);
 
-/* Undoes ndl_leave_now for a sheet session: HOST reopens its room, JOIN starts asking its holder again. Nothing while
- * in a room, and nothing in AUTO, which waits for the next radio ON. */
+/* Undoes ndl_leave_now: HOST reopens its room, JOIN starts asking its holder again, AUTO looks for rooms again while the
+ * radio is on. Nothing while in a room. */
 void ndl_rejoin(ndl_link* l);
 
 bool ndl_in_room(ndl_link* l);

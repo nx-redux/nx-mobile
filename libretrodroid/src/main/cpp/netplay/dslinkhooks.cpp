@@ -531,6 +531,16 @@ int presence() {
     return ndl_presence_now(theLink);
 }
 
+int others() {
+    {
+        std::lock_guard<std::mutex> guard(coreRoomMutex);
+        if (hasCoreRoom) return coreRoom.others != nullptr ? coreRoom.others() : -1;
+    }
+    std::lock_guard<std::mutex> guard(linkMutex);
+    const int count = ndl_member_count(theLink);
+    return count > 1 ? count - 1 : 0;
+}
+
 void leaveNow() {
     if (coreRoomLeave()) return;
     std::lock_guard<std::mutex> guard(linkMutex);
