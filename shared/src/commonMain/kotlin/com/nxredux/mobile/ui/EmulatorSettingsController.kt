@@ -358,7 +358,7 @@ internal class EmulatorSettingsController(
             secondScreen = secondScreen(), screen = screen, displayMax = Res3dConsole.forTag(tag)?.displayMaxOf(windowPx(), screen),
             biosFiles = if (Ps2Options.appliesTo(tag)) ps2BiosFiles() else emptyList(),
             gpuDrivers = drivers, gpuDriverResolved = resolved, gpuDriverCrashNote = crashNote,
-            autoVulkan = GraphicsApiOptions.autoIsVulkan(d.vulkan, gpu),
+            autoVulkan = GraphicsApiOptions.autoIsVulkan(d.vulkan, gpu, customDriver(d, game, files, drivers)),
         )
         val first = page()
         // The GPU driver row shows only on Vulkan, so its presence says the page's Graphics API is Vulkan and what it shows is what the launch reads.
@@ -370,6 +370,14 @@ internal class EmulatorSettingsController(
         val note = wanted?.takeIf { it in crashed }?.let { id -> GpuDriverOptions.CRASH_NOTE.replace("%s", drivers.first { it.id == id }.name) }
         val resolved = GpuDriverChoice.resolve(shown.value, gpuDriverAppWide(), installed, crashed) != null
         return if (resolved || note != null) page(resolved, note) else first
+    }
+
+    /** Whether the game (or, with no [game], the console's games) would load a custom GPU driver: the stored pick, else app-wide. */
+    private fun customDriver(d: CoreDescriptor, game: Listed?, files: Pair<ConfigFile?, ConfigFile?>, drivers: List<GpuDriver>?): Boolean {
+        if (drivers == null || d.vulkan?.maliNeedsCustomDriver != true) return false
+        val stored = (if (game != null) files.second ?: files.first else files.first)?.values?.get(GpuDriverOptions.KEY)
+        val crashed = game?.let { gpuDriverCrashed(it.game.path) }.orEmpty()
+        return GpuDriverChoice.resolve(stored, gpuDriverAppWide(), drivers.mapTo(HashSet()) { it.id }, crashed) != null
     }
 
     private suspend fun readPage(tag: String, d: CoreDescriptor, game: Listed?): EmulatorPage {

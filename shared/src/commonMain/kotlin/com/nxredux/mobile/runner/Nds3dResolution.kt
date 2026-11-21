@@ -39,22 +39,27 @@ enum class Res3dConsole(
     DS(NdsRenderer.CORE_ID_MELONDSDS, "melonds_opengl_resolution", 8, 4, NdsOptions.MODE_3D, NdsOptions.MAX_SCALE_3D, NdsOptions.SCALE_3D),
     N3DS("azahar", "citra_resolution_factor", 10, 3, "nx_3ds_3d_resolution", "nx_3ds_3d_max_scale", "nx_3ds_3d_scale"),
     PS2("armsx2", "armsx2_upscale", 4, 2, "nx_ps2_3d_resolution", "nx_ps2_3d_max_scale", "nx_ps2_3d_scale"),
-    PSP("ppsspp", "ppsspp_internal_resolution", 10, 3, "nx_psp_3d_resolution", "nx_psp_3d_max_scale", "nx_psp_3d_scale");
+    PSP("ppsspp", "ppsspp_internal_resolution", 10, 3, "nx_psp_3d_resolution", "nx_psp_3d_max_scale", "nx_psp_3d_scale"),
 
-    /** The core draws its whole picture at the scale (PS2, PSP), not only the 3D: the rows say "the game", not "3D models". */
-    val wholePicture: Boolean get() = this == PS2 || this == PSP
+    /** GameCube and Wii: one core, so one set of rows (each console's file keeps its own values). */
+    DOLPHIN("dolphin", "dolphin_efb_scale", 8, 3, "nx_dolphin_3d_resolution", "nx_dolphin_3d_max_scale", "nx_dolphin_3d_scale");
+
+    /** The core draws its whole picture at the scale (PS2, PSP, Dolphin), not only the 3D: the rows say "the game". */
+    val wholePicture: Boolean get() = this == PS2 || this == PSP || this == DOLPHIN
 
     /** The three stored rows. */
     val keys: Set<String> get() = setOf(modeKey, maxScaleKey, scaleKey)
 
     /**
      * The Max Scale an unset game starts with on a modest GPU ([DeviceTraits.modestGpu]); null: the same as elsewhere.
-     * On the AYANEO's Mali-G76, Dante's Inferno holds 60 fps at 2x and drops to ~42 at 3x, and Dragon Ball Z Budokai
-     * Tenkaichi 3 holds 60 at 1x and drops to ~21 at 2x.
+     * On the AYANEO's Mali-G76, Dante's Inferno holds 60 fps at 2x and drops to ~42 at 3x, Dragon Ball Z Budokai
+     * Tenkaichi 3 holds 60 at 1x and drops to ~21 at 2x, and Mario Kart: Double Dash!! holds 60 at 1x and drops to
+     * ~36-40 at 2x on either renderer.
      */
     private val modestCap: Int? get() = when (this) {
         PSP -> 2
         PS2 -> 1
+        DOLPHIN -> 1
         else -> null
     }
 
@@ -67,6 +72,7 @@ enum class Res3dConsole(
         N3DS -> N3ds3dResolution.displayMaxOf(window, screen)
         PS2 -> window?.let { Ps2Resolution.displayMax(it.first, it.second) }
         PSP -> window?.let { PspResolution.displayMax(it.first, it.second) }
+        DOLPHIN -> window?.let { DolphinResolution.displayMax(it.first, it.second) }
     }
 
     /** The core option's value for scale [n]: ARMSX2 reads "2x", PPSSPP the size ("960x544"), the DS and 3DS cores a bare number. */
@@ -83,6 +89,7 @@ enum class Res3dConsole(
             "3DS" -> N3DS
             "PS2" -> PS2
             "PSP" -> PSP
+            "GC", "WII" -> DOLPHIN
             else -> null
         }
     }
@@ -363,4 +370,38 @@ class Nds3dSender(private val settleMs: Long = 300) {
     }
 
     private fun send(value: Int): Int? = if (value == last) null else value.also { last = it }
+}
+
+/**
+ * Dolphin's internal resolution (dolphin_efb_scale): a whole multiple of the GameCube / Wii frame, 528 lines (576 on a
+ * PAL game, still read as one scale). The core changes it mid-game on both renderers: on Vulkan its swapchain follows the
+ * new size, so a raised scale is drawn and shown at it.
+ */
+object DolphinResolution {
+    const val NATIVE_W = 640
+    const val NATIVE_H = 528
+
+    /** The most the rows offer (the core goes to 12x, far past any phone screen). */
+    private const val MAX = 8
+
+    /** Below a whole scale by this much (a px or two of rounding) still counts as that scale. */
+    private const val SLACK = 0.02
+
+    private fun up(scale: Double): Int = ceil(scale - SLACK).toInt().coerceIn(1, MAX)
+
+    /** The scale the picture reaches fitted in a [w] x [h] px window, either way up, rounded up (1 to 8). */
+    fun displayMax(w: Int, h: Int): Int =
+        maxOf(up(minOf(w.toDouble() / NATIVE_W, h.toDouble() / NATIVE_H)), up(minOf(h.toDouble() / NATIVE_W, w.toDouble() / NATIVE_H)))
+
+    /** The scale a picture [pictureHeightPx] px tall shows at, rounded up (1 to 8). */
+    fun currentScale(pictureHeightPx: Int): Int = up(pictureHeightPx.toDouble() / NATIVE_H)
+
+    /** The scale a frame [heightPx] rows tall was drawn at: the nearest whole (a PAL frame is 576 a scale). */
+    fun frameScale(heightPx: Int): Int = (heightPx / NATIVE_H.toDouble()).roundToInt().coerceIn(1, MAX)
+
+    /** The shown scale and the second display's reach, as [Ps2Resolution.shownScales]. */
+    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> {
+        val second = secondHeightPx?.let(::currentScale)
+        return listOfNotNull(mainHeightPx?.let(::currentScale), second).maxOrNull() to (second ?: 1)
+    }
 }

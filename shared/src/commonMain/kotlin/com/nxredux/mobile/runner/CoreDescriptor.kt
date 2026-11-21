@@ -19,6 +19,12 @@ data class VulkanSwitch(
      * PSP, PS1, Dreamcast) or whose Vulkan renderer needs more memory than a 2 GB phone has (3DS).
      */
     val autoOnMali: Boolean = false,
+    /**
+     * [autoOnMali] only with a custom GPU driver in use. Dolphin on the stock Mali driver draws some games (Mario Kart:
+     * Double Dash!!) under a dark blue tint: Mali has no dual-source blending and the stock driver no framebuffer fetch,
+     * and Dolphin's Vulkan backend has no other way to blend them. malisx2 offers it; OpenGL ES is right on either.
+     */
+    val maliNeedsCustomDriver: Boolean = false,
 )
 
 data class CoreDescriptor(

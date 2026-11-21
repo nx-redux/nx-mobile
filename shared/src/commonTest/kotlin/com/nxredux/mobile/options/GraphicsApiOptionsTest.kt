@@ -8,9 +8,9 @@ import kotlin.test.assertTrue
 
 class GraphicsApiOptionsTest {
     @Test fun wii_and_gamecube_offer_the_graphics_api_row() {
-        assertEquals(WiiOptions.table + GraphicsApiOptions.row, ConsoleSettings.tableFor("WII").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row) })
+        assertEquals(WiiOptions.table + DolphinOptions.resolutionRows(null) + GraphicsApiOptions.row, ConsoleSettings.tableFor("WII").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row) })
         assertTrue(WiiOptions.screenRow in WiiOptions.table)
-        assertEquals(listOf(GraphicsApiOptions.row), ConsoleSettings.tableFor(" gc ").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row) })
+        assertEquals(DolphinOptions.resolutionRows(null) + GraphicsApiOptions.row, ConsoleSettings.tableFor(" gc ").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row) })
         assertEquals(listOf("Auto", "OpenGL ES", "Vulkan"), GraphicsApiOptions.row.values.map(GraphicsApiOptions.row::labelOf))
         assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.row.default)
     }
@@ -121,7 +121,14 @@ class GraphicsApiOptionsTest {
 
     @Test fun only_ps2_dolphin_and_psp_follow_the_gpu_on_auto() {
         assertEquals(setOf("armsx2", "dolphin", "ppsspp"), CoreRegistry.all.filter { it.vulkan?.autoOnMali == true }.map { it.id }.toSet())
-        assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("WII")!!.vulkan) { "Mali-G76 MC4" })
+        // Dolphin follows the Mali GPU only with a custom driver (the stock driver tints some games); PS2 and PSP always.
+        val wii = CoreRegistry.forTag("WII")!!.vulkan
+        assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, wii) { "Mali-G76 MC4" })
+        assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, wii, customDriver = true) { "Mali-G76 MC4" })
+        assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("GC")!!.vulkan, customDriver = true) { "Adreno (TM) 740" })
+        assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("PS2")!!.vulkan) { "Mali-G76 MC4" })
+        assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("PSP")!!.vulkan) { "Mali-G76 MC4" })
+        assertEquals(setOf("dolphin"), CoreRegistry.all.filter { it.vulkan?.maliNeedsCustomDriver == true }.map { it.id }.toSet())
         assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("GC")!!.vulkan) { "Adreno (TM) 740" })
         assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, n64) { error("asked") })
         assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, null) { error("asked") })

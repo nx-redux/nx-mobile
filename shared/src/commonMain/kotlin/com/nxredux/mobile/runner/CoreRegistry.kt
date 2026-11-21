@@ -466,6 +466,8 @@ object CoreRegistry {
         "dolphin_vr_mode" to "disabled",
         "dolphin_wiimote_default_device" to "frontend",
         "dolphin_log_popups_enabled" to "disabled",
+        // The app's (3D Resolution rows, Res3dConsole.DOLPHIN); 1x until the launch sends the scale.
+        "dolphin_efb_scale" to "1",
     )
     private val dolphinLocked = setOf(
         "dolphin_renderer", "dolphin_osd_enabled", "dolphin_debug_mode_enabled", "dolphin_bluetooth_passthrough",
@@ -474,7 +476,7 @@ object CoreRegistry {
         "dolphin_log_memmap_enabled", "dolphin_log_dspinterface_enabled", "dolphin_log_dsphle_enabled",
         "dolphin_log_dsplle_enabled", "dolphin_log_dsp_mail_enabled",
         "dolphin_hotkey_sideways_toggle", "dolphin_hotkey_upright_toggle", "dolphin_cheats_enabled",
-        "dolphin_vr_mode", "dolphin_wiimote_default_device", "dolphin_log_popups_enabled",
+        "dolphin_vr_mode", "dolphin_wiimote_default_device", "dolphin_log_popups_enabled", "dolphin_efb_scale",
         // Display → Wii Screen sets these at launch (WiiScreen): the shape, and the pointer geometry for it.
         "dolphin_widescreen", "dolphin_ir_yaw", "dolphin_ir_pitch", "dolphin_ir_offset",
     )
@@ -489,7 +491,7 @@ object CoreRegistry {
         ),
         lockedOptions = dolphinLocked,
         hiddenValues = mapOf("dolphin_renderer" to setOf("Software", "Null")),
-        vulkan = VulkanSwitch(swapchainFrames = true, autoOnMali = true),
+        vulkan = VulkanSwitch(swapchainFrames = true, autoOnMali = true, maliNeedsCustomDriver = true),
         // Dolphin writes its NAND and memory cards under User/Wii and User/GC in its console's save dir (Saves/<console tag>/User).
         controllerPort0 = CoreDescriptor.WIIMOTE_SIDEWAYS,
         players = 4,

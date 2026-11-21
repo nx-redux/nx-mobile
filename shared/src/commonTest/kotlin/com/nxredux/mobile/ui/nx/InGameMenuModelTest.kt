@@ -1455,10 +1455,11 @@ class InGameMenuModelTest {
     @Test fun rows_read_only_at_launch_stay_out_of_the_in_game_groups() {
         assertEquals(PICTURE_ROWS, inGameGroups("N64").getValue("Display"))   // no Graphics API
         val gc = inGameGroups("GC")
-        assertEquals(PICTURE_ROWS, gc.getValue("Display"))
+        // 3D Resolution and its Auto sub-row (Max Scale) apply while the game runs; Scale shows under Performance only.
+        assertEquals(listOf("3D Resolution", "Max Scale") + PICTURE_ROWS, gc.getValue("Display"))
         assertEquals(SPEED_ROWS + "Frame Skip", gc.getValue("Gameplay"))
         val wii = inGameGroups("WII")
-        assertEquals(PICTURE_ROWS, wii.getValue("Display"))                   // no Wii Screen
+        assertEquals(listOf("3D Resolution", "Max Scale") + PICTURE_ROWS, wii.getValue("Display"))   // no Wii Screen
         assertEquals(listOf("Wii Controller", "Motion Controls", "Controller Layout", "Pad Opacity (landscape)"), wii.getValue("Controls"))
         assertEquals(SPEED_ROWS + "Frame Skip", wii.getValue("Gameplay"))
     }

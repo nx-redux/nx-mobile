@@ -225,7 +225,8 @@ object FrontendOptions {
      * [values] with legacy keys renamed, handheld-only ones left out; an existing `nx_` value wins over its legacy twin.
      * An old Screen Scaling pick ([SCALING_V1], not its old default Aspect) is carried to [SCALING] when that is unset,
      * here on the stored values, so defaults laid under them later ([CoreConfig.resolve]) cannot hide it. An old PSP
-     * Rendering Resolution becomes its Max Scale ([PspOptions.carriedMaxScale]).
+     * Rendering Resolution becomes its Max Scale ([PspOptions.carriedMaxScale]), and a GameCube / Wii Internal Resolution
+     * its own ([DolphinOptions.carriedMaxScale]).
      */
     fun migrateKeys(values: Map<String, String>): Map<String, String> {
         val out = LinkedHashMap<String, String>()
@@ -234,6 +235,7 @@ object FrontendOptions {
         migrateKey(out, SCALING, SCALING_V1, SCALING_V1_DEFAULT)?.let { out.putIfAbsent(SCALING, it) }
         // Here, before the resolve drops the now-locked core key from the stored values.
         PspOptions.carriedMaxScale(out)?.let { out[Res3dConsole.PSP.maxScaleKey] = it }
+        DolphinOptions.carriedMaxScale(out)?.let { out[Res3dConsole.DOLPHIN.maxScaleKey] = it }
         return out
     }
 

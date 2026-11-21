@@ -512,7 +512,9 @@ azahar_FLAGS = -DENABLE_LIBRETRO=ON -DENABLE_VULKAN=ON -DENABLE_OPENGL=ON -DENAB
 # nx_disc_open_fd reads the frontend's SAF descriptor through DirectIOFile::FromFd, past the VFS, and a CreateBlobReader
 # overload taking an open file); retro_cheat_set adds codes not in the game INIs.
 # patches/dolphin/0002-arm64-texture-decoder.patch: upstream PR #14928 (merged 2026-10-31) backported, AArch64 SIMD texture
-# decoders for every format but XFB (AArch64 used the generic ones); drop it once the pin includes it. Sys/ is staged to system/dolphin-emu/Sys, where the core looks, minus Themes/ (Qt GUI icons, useless to
+# decoders for every format but XFB (AArch64 used the generic ones); drop it once the pin includes it.
+# patches/dolphin/0003: an Internal Resolution change mid-game sticks (the config layer gets it too) and, on Vulkan,
+# resizes the libretro swapchain (it kept the launch size). Sys/ is staged to system/dolphin-emu/Sys, where the core looks, minus Themes/ (Qt GUI icons, useless to
 # libretro). dolphin_LICENSE ships the notice of every statically linked external (and the GC font licences) in licenses/dolphin.txt.
 # libiconv/libcharset (LGPL-2.1+) vendor no licence text; libusb's COPYING is the same FSF LGPL-2.1 text, from the pinned
 # checkout. KissFFT's BSD notice lives only in its source header, so notices/dolphin-kissfft.txt carries it.
