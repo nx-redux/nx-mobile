@@ -1,0 +1,42 @@
+Licence: modifies Dolphin (https://github.com/libretro/dolphin), GPL-2.0-or-later; this patch is distributed under the same licence.
+An Internal Resolution change while a game runs:
+- The config layer gets the new scale too, as the boot sets it. VideoConfig::Refresh reloads g_Config from that layer
+  on any config change, which put a raised scale back to the one the game started at.
+- On Vulkan the libretro swapchain's images are made at the surface size, set only at context reset, so a new scale
+  rendered into the old size (the frame reported the new one, the picture stayed at the launch size). The surface size
+  follows the new scale and the presenter is asked to recreate the swapchain, as a window resize does.
+diff --git a/Source/Core/DolphinLibretro/Main.cpp b/Source/Core/DolphinLibretro/Main.cpp
+--- a/Source/Core/DolphinLibretro/Main.cpp
++++ b/Source/Core/DolphinLibretro/Main.cpp
+@@ -41,6 +41,9 @@
+ #include "DolphinLibretro/Input.h"
+ #include "DolphinLibretro/Common/Options.h"
+ #include "DolphinLibretro/Video.h"
++#ifdef HAS_VULKAN
++#include "DolphinLibretro/Vulkan.h"
++#endif
+ #include "DolphinLibretro/VR.h"
+ #include "VideoBackends/OGL/OGLTexture.h"
+ #include "VideoBackends/OGL/OGLGfx.h"
+@@ -372,7 +375,21 @@
+   {
+     g_Config.iEFBScale = Libretro::Options::GetCached<int>(
+       Libretro::Options::gfx_settings::EFB_SCALE);
++    // nx-redux: also the config layer, as the boot sets it. VideoConfig::Refresh reloads g_Config from it on any config
++    // change, which put a raised scale back to the one the game started at.
++    Config::SetBase(Config::GFX_EFB_SCALE, g_Config.iEFBScale);
+ 
++#ifdef HAS_VULKAN
++    // nx-redux: on Vulkan the libretro swapchain images are made at the surface size, set once at context reset, so a
++    // new scale rendered into the old size. Resize the surface and have the backend recreate its swapchain at it.
++    if (Libretro::Video::hw_render.context_type == RETRO_HW_CONTEXT_VULKAN)
++    {
++      Libretro::Video::Vk::SetSurfaceSize(Libretro::Video::GetAdjustedBaseWidth() * g_Config.iEFBScale,
++                                          Libretro::Video::GetAdjustedBaseHeight() * g_Config.iEFBScale);
++      if (g_presenter)
++        g_presenter->ResizeSurface();
++    }
++#endif
+     unsigned cmd = RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO;
+     if (Libretro::Video::hw_render.context_type == RETRO_HW_CONTEXT_D3D11 ||
+         Libretro::Video::hw_render.context_type == RETRO_HW_CONTEXT_D3D12)

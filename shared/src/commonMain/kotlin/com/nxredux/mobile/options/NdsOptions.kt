@@ -360,6 +360,7 @@ fun resolutionRows(console: Res3dConsole, displayMax: Int?): List<FrontendOption
         Res3dConsole.N3DS -> "3DS"
         Res3dConsole.PS2 -> "PS2"
         Res3dConsole.PSP -> "PSP"
+        Res3dConsole.DOLPHIN -> "console"
     }
     // what the scale draws: the PS2 and PSP cores draw the whole picture at it, the DS and 3DS ones only the 3D
     val drawn = if (console.wholePicture) "the game" else "3D"

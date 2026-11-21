@@ -838,11 +838,15 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
         if (!haveImage) return false;
     }
 
-    // A swapchain core (Dolphin) is bounded by the surface its images were made for; any other by its max geometry, so
-    // an upscaled or larger video mode is never cropped to the size it booted at.
-    const bool bySurface = swapchainFrames || maxFrameWidth == 0 || maxFrameHeight == 0;
-    FrameExtent extent = boundFrame(width, height, bySurface ? surfaceWidth : maxFrameWidth.load(),
-                                    bySurface ? surfaceHeight : maxFrameHeight.load());
+    // A core is bounded by its max geometry, so an upscaled or larger video mode is never cropped to the size it booted
+    // at. A swapchain core (Dolphin) is also allowed the surface its images were first made for, which its geometry
+    // can fall short of; it remakes them at a new internal resolution and announces the larger geometry first.
+    const unsigned maxW = maxFrameWidth.load();
+    const unsigned maxH = maxFrameHeight.load();
+    const bool known = maxW != 0 && maxH != 0;
+    const unsigned boundW = !known ? surfaceWidth : swapchainFrames ? std::max(surfaceWidth, maxW) : maxW;
+    const unsigned boundH = !known ? surfaceHeight : swapchainFrames ? std::max(surfaceHeight, maxH) : maxH;
+    FrameExtent extent = boundFrame(width, height, boundW, boundH);
     unsigned w = extent.width;
     unsigned h = extent.height;
 

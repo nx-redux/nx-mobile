@@ -158,6 +158,7 @@ internal class FrontendRenderer(
     private val isN3ds get() = host.isN3ds
     private val isPs2 get() = Res3dConsole.forTag(gameTag) == Res3dConsole.PS2
     private val isPsp get() = Res3dConsole.forTag(gameTag) == Res3dConsole.PSP
+    private val isDolphin get() = Res3dConsole.forTag(gameTag) == Res3dConsole.DOLPHIN
     private val privateRoot get() = host.privateRoot
     private val dualMode get() = host.dualMode
     private val pictureOn get() = host.pictureOn
@@ -623,12 +624,14 @@ internal class FrontendRenderer(
         val packed = geometry ?: view.getGameGeometry()
         view.mainCovered = host.mainShowsNoPicture()
         screenMap = screenMapFor(view, packed)
-        // The PSP reports exactly the frame it sends, so its scale can follow a new frame size before the next layout.
+        // The PSP and Dolphin report exactly the frame they send, so the scale can follow a new frame size before the next
+        // layout.
         val frameHeight = packed[1].roundToInt()
         val map = screenMap
         view.shaderSourceScale = when {
             map != null -> GLRetroView.ShaderSourceScale(map.topScale(n3ds = isN3ds))
             isPsp -> GLRetroView.ShaderSourceScale(PspResolution.frameScale(frameHeight), frameHeight)
+            isDolphin -> GLRetroView.ShaderSourceScale(DolphinResolution.frameScale(frameHeight), frameHeight)
             else -> GLRetroView.ShaderSourceScale()
         }
         // 3DS on one display (and the Panel Up frame) from the map: the app rebuilds Azahar's own layout from it, and
@@ -741,6 +744,7 @@ internal class FrontendRenderer(
         }
         if (isPs2) reportPs2Resolution(w, h, screen, shown, g)
         if (isPsp) reportPspResolution(w, h, screen, shown, g)
+        if (isDolphin) reportDolphinResolution(w, h, screen, shown, g)
         if (viewport != lastViewport) {
             lastViewport = viewport
             view.viewport = viewport
@@ -785,6 +789,16 @@ internal class FrontendRenderer(
         val (current, second) = Ps2Resolution.shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
         report3d(w, h, screen, halfFolded = false, current, second) {
             Ps2Resolution.displayMax(w.roundToInt(), h.roundToInt())
+        }
+    }
+
+    /** The GameCube / Wii scale's inputs to the host, as [reportPspResolution], over the 528-line frame ([DolphinResolution]). */
+    private fun reportDolphinResolution(w: Float, h: Float, screen: ScreenClass, shown: PxRect, g: FloatArray) {
+        if (!gameReady || shown.height <= 0f) return
+        val main = shown.height.roundToInt().takeUnless { host.mainShowsNoPicture() }
+        val (current, second) = DolphinResolution.shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
+        report3d(w, h, screen, halfFolded = false, current, second) {
+            DolphinResolution.displayMax(w.roundToInt(), h.roundToInt())
         }
     }
 
