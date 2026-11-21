@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.layout.DeviceTraits
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
@@ -553,6 +554,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 val gles = (activity.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).deviceConfigurationInfo.reqGlEsVersion
                 descriptorDefaults = NdsRenderer.defaults(gles) + descriptorDefaults
             }
+            // Before the frontend values are read: a core that follows the GPU has defaults that do too (Res3dConsole.defaultCap).
+            if (descriptor?.vulkan?.autoOnMali == true) DeviceTraits.gpu = AndroidDeviceInfo.gpu()
             val store = CoreConfigStore(File(dataRoot, paths.consoleConfig), File(dataRoot, paths.gameConfig)).also { configStore = it }
             val resolved = withContext(Dispatchers.IO) {
                 // fceumm's turbo default (Player 1): a cfg saved before it holds the old None as if picked ([FceummTurbo])

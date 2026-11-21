@@ -325,7 +325,7 @@ void LibretroDroid::onSurfaceCreated() {
     video->setPictureHeld(pictureHeld);
     video->updateScreenRegions(screenRegions);
     video->setComposition(compositionWidth, compositionHeight, compositionParts);
-    video->setShaderSourceScale(shaderSourceScale);
+    video->setShaderSourceScale(shaderSourceScale, shaderSourceFrameHeight);
     video->updateSecondaryRegions(secondaryRegions);
     video->setPresetChain(presetChain);
     geometryWidth = (float) system_av_info.geometry.base_width;
@@ -1534,9 +1534,10 @@ void LibretroDroid::setComposition(int width, int height, std::vector<ScreenRegi
     if (video) video->setComposition(compositionWidth, compositionHeight, compositionParts);
 }
 
-void LibretroDroid::setShaderSourceScale(int scale) {
+void LibretroDroid::setShaderSourceScale(int scale, int frameHeight) {
     shaderSourceScale = scale < 1 ? 1 : scale;
-    if (video) video->setShaderSourceScale(shaderSourceScale);
+    shaderSourceFrameHeight = frameHeight < 0 ? 0 : frameHeight;
+    if (video) video->setShaderSourceScale(shaderSourceScale, shaderSourceFrameHeight);
 }
 
 void LibretroDroid::setScreenRegions(std::vector<ScreenRegion> regions) {

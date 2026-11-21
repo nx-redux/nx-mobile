@@ -119,8 +119,8 @@ class GraphicsApiOptionsTest {
         }
     }
 
-    @Test fun only_ps2_and_dolphin_follow_the_gpu_on_auto() {
-        assertEquals(setOf("armsx2", "dolphin"), CoreRegistry.all.filter { it.vulkan?.autoOnMali == true }.map { it.id }.toSet())
+    @Test fun only_ps2_dolphin_and_psp_follow_the_gpu_on_auto() {
+        assertEquals(setOf("armsx2", "dolphin", "ppsspp"), CoreRegistry.all.filter { it.vulkan?.autoOnMali == true }.map { it.id }.toSet())
         assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("WII")!!.vulkan) { "Mali-G76 MC4" })
         assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("GC")!!.vulkan) { "Adreno (TM) 740" })
         assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, n64) { error("asked") })

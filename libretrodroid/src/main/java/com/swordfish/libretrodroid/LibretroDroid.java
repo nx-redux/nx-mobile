@@ -208,8 +208,11 @@ public class LibretroDroid {
     public static native void setScreenRegions(float[] packed);
     /** Compose a width x height frame from the core's (parts packed like setScreenRegions); width 0 clears it. GL thread. */
     public static native void setComposition(int width, int height, float[] packed);
-    /** The whole scale the core draws its screens at (1 = native); a preset gets each shaded screen shrunk back to native. GL thread. */
-    public static native void setShaderSourceScale(int scale);
+    /**
+     * The whole scale the core draws its screens at (1 = native); a preset gets each shaded screen shrunk back to native.
+     * frameHeight: the core frame height it was worked out for (0 = not known). GL thread.
+     */
+    public static native void setShaderSourceScale(int scale, int frameHeight);
     /** Same packing as setScreenRegions; dst is 0..1 of the whole second surface. GL thread. */
     public static native void setSecondaryRegions(float[] packed);
     /** Draws the last frame's secondary regions into the current default framebuffer (width x height); never runs the core. GL thread. */
