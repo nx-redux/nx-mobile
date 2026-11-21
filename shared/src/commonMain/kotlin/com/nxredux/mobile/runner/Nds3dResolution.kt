@@ -85,7 +85,7 @@ enum class Res3dConsole(
         else -> null
     }
 
-    /** Something here follows the GPU ([modestCap], ParaLLEl-RDP's ceiling in [alsoSet]): a launch reads it first. */
+    /** Something here follows the GPU ([modestCap], ParaLLEl-RDP's Auto in [alsoSet]): a launch reads it first. */
     val followsGpu: Boolean get() = modestCap != null || this == N64
 
     /** The Max Scale an unset game starts with: [modestCap] on a modest GPU, else the console's own. */
@@ -116,9 +116,12 @@ enum class Res3dConsole(
         else -> "$n"
     }
 
-    /** Other core options scale [n] sets with [coreKey]: ParaLLEl-RDP's upscaling for the N64 on Vulkan. */
-    fun alsoSet(n: Int): Map<String, String> = when (this) {
-        N64 -> mapOf(N64Resolution.PARALLEL_KEY to "${N64Resolution.parallelUpscaling(n)}x")
+    /**
+     * Other core options scale [n] sets with [coreKey]: ParaLLEl-RDP's upscaling for the N64 on Vulkan ([auto]: the
+     * rows are on Auto; [slowParallel]: ParaLLEl-RDP runs slowly on this GPU and driver, [N64Resolution.parallelUpscaling]).
+     */
+    fun alsoSet(n: Int, auto: Boolean, slowParallel: Boolean): Map<String, String> = when (this) {
+        N64 -> mapOf(N64Resolution.PARALLEL_KEY to "${N64Resolution.parallelUpscaling(n, auto, slowParallel)}x")
         else -> emptyMap()
     }
 
@@ -514,7 +517,7 @@ object DcResolution {
 
 /**
  * The N64's 320 x 240 picture on Mupen64Plus-Next. GLideN64 draws at a window of any whole multiple and hands over frames
- * that size; ParaLLEl-RDP upscales by 1, 2, 4 or 8 only, and the app uses 1x or 2x ([parallelMax]).
+ * that size; ParaLLEl-RDP upscales by 1, 2, 4 or 8 only ([parallelUpscaling]).
  */
 object N64Resolution {
     const val NATIVE_W = 320
@@ -531,16 +534,30 @@ object N64Resolution {
 
     private fun up(scale: Double): Int = ceil(scale - SLACK).toInt().coerceIn(1, MAX)
 
-    /** ParaLLEl-RDP's upscaling for scale [n]: 2x when both [n] and [parallelMax] reach it, else native (it offers no 3x). */
-    fun parallelUpscaling(n: Int, modestGpu: Boolean = DeviceTraits.modestGpu(DeviceTraits.gpu)): Int =
-        if (minOf(n, parallelMax(modestGpu)) >= 2) 2 else 1
+    /**
+     * ParaLLEl-RDP's upscaling for scale [n]: the biggest it offers (1, 2, 4 or 8) up to [n]. A pick made by hand is the
+     * player's, held only by the display; Auto ([auto]) stops at [AUTO_MAX], or native where ParaLLEl-RDP runs slowly
+     * ([slowParallel]). Mario Kart 64 mid-race: on the AYANEO (Mali-G76, 2 GB) 60 fps at 1x, ~40 at 2x (~35 on malisx2),
+     * and 4x has the game killed for memory at launch; on the Nova (Adreno 740) 60 at 2x and 45-51 at 4x on Turnip, ~48 at
+     * 1x and ~40 at 2x on its own driver. OpenGL ES (GLideN64) holds 60 at 4x on both.
+     */
+    fun parallelUpscaling(n: Int, auto: Boolean, slowParallel: Boolean): Int {
+        val top = if (auto) minOf(n, if (slowParallel) 1 else AUTO_MAX) else n
+        return PARALLEL_SCALES.last { it <= top.coerceAtLeast(1) }
+    }
+
+    /** What ParaLLEl-RDP offers. */
+    private val PARALLEL_SCALES = listOf(1, 2, 4, 8)
+
+    /** Auto's most on ParaLLEl-RDP: 60 fps on a flagship, where 4x is not. */
+    private const val AUTO_MAX = 2
 
     /**
-     * The most ParaLLEl-RDP upscales by: native on a modest GPU ([DeviceTraits.modestGpu]), else 2x. Mario Kart 64
-     * mid-race: on the AYANEO (Mali-G76, 2 GB) 60 fps at 1x, ~40 at 2x (~35 on malisx2), and 4x has the game killed for
-     * memory at launch; on the Nova (Adreno 740, Turnip) 60 at 2x, 45-51 at 4x. OpenGL ES (GLideN64) holds 60 at 4x on both.
+     * ParaLLEl-RDP runs slowly on [gpu]: a modest one ([DeviceTraits.modestGpu]), or an Adreno on its own driver
+     * ([customDriver] false), which takes the general shader ([VulkanSwitch.adrenoSystemDriverEnv]).
      */
-    private fun parallelMax(modestGpu: Boolean): Int = if (modestGpu) 1 else 2
+    fun slowParallel(gpu: String?, customDriver: Boolean): Boolean =
+        DeviceTraits.modestGpu(gpu) || (!customDriver && DeviceTraits.isAdreno(gpu))
 
     /** The scale the picture reaches fitted in a [w] x [h] px window, either way up, rounded up (1 to 8). */
     fun displayMax(w: Int, h: Int): Int =

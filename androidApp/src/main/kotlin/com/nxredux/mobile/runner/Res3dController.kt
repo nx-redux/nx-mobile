@@ -37,6 +37,8 @@ internal class Res3dController(private val host: Res3dHost, private val renderer
     var displayMax: Int? = null
         private set
     private val tick = Runnable { tick() }
+    /** ParaLLEl-RDP runs slowly on this GPU and driver ([N64Resolution.slowParallel]): set once the launch has picked its driver. */
+    @Volatile private var slowParallel = false
 
     /** The console whose 3D scale the app sets for this game: a DS on melonDS DS, a 3DS on Azahar, a PS2 on ARMSX2; null for any other. */
     val console: Res3dConsole? get() = Res3dConsole.forTag(host.gameTag)?.takeIf { host.gameCoreId == it.coreId }
@@ -99,7 +101,7 @@ internal class Res3dController(private val host: Res3dHost, private val renderer
         val console = console ?: return
         this.value = value
         NxLog.i(TAG_LOG, "${host.gameTag} 3D resolution ${value}x (${Nds3dMode.parse(host.frontendValues[console.modeKey]).value})")
-        host.applyOptions((mapOf(console.coreKey to console.coreValue(value)) + console.alsoSet(value)).map { (k, v) -> Variable(k, v) })
+        host.applyOptions((mapOf(console.coreKey to console.coreValue(value)) + alsoSet(console, value)).map { (k, v) -> Variable(k, v) })
         if (console == Res3dConsole.N3DS) renderer.onN3dsFactorSent(value)
         host.withMenu { publish(it) }
     }
@@ -122,8 +124,21 @@ internal class Res3dController(private val host: Res3dHost, private val renderer
         this.value = value
         if (console == Res3dConsole.N3DS) renderer.startN3dsFactor(value)
         NxLog.i(TAG_LOG, "${host.gameTag} 3D resolution ${value}x at launch (${Nds3dMode.parse(host.frontendValues[console.modeKey]).value})")
-        return mapOf(console.coreKey to console.coreValue(value)) + console.alsoSet(value)
+        return mapOf(console.coreKey to console.coreValue(value))
     }
+
+    /**
+     * The launch's other options for its 3D scale ([Res3dConsole.alsoSet]), once it knows its GPU driver: [customDriver]
+     * loads, on the GPU named [gpu]. After [launchOption]; off the main thread.
+     */
+    fun launchAlsoSet(customDriver: Boolean, gpu: String?): Map<String, String> {
+        slowParallel = N64Resolution.slowParallel(gpu, customDriver)
+        val console = console ?: return emptyMap()
+        return value?.let { alsoSet(console, it) }.orEmpty()
+    }
+
+    private fun alsoSet(console: Res3dConsole, value: Int): Map<String, String> =
+        console.alsoSet(value, auto = Nds3dMode.parse(host.frontendValues[console.modeKey]) == Nds3dMode.AUTO, slowParallel)
 
     /**
      * The in-game 3D Resolution rows' live state: the scale in use and whether the running game draws in software (the

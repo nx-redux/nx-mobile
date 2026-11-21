@@ -6,6 +6,7 @@ import com.nxredux.mobile.options.CoreConfig
 import com.nxredux.mobile.options.FrontendOptions
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /** The N64 3D Resolution on Mupen64Plus-Next: GLideN64 draws the whole picture at a whole multiple of 320 x 240, ParaLLEl-RDP at 1, 2, 4 or 8x. */
@@ -22,17 +23,26 @@ class N64ResolutionTest {
         assertTrue(n64.wholePicture)
     }
 
-    @Test fun parallelRdpTakesTheLargestUpscalingNotAboveTheScale() {
-        assertEquals(listOf(1, 2, 2, 2, 2, 2, 2, 2), (1..8).map { N64Resolution.parallelUpscaling(it, modestGpu = false) })   // the Nova: 45-51 fps at 4x
-        assertEquals(listOf(1, 1, 1, 1, 1, 1, 1, 1), (1..8).map { N64Resolution.parallelUpscaling(it, modestGpu = true) })
-        assertEquals(mapOf(N64Resolution.PARALLEL_KEY to "2x"), n64.alsoSet(3))
-        try {
-            DeviceTraits.gpu = "Mali-G76 MC4"
-            assertEquals(mapOf(N64Resolution.PARALLEL_KEY to "1x"), n64.alsoSet(4))   // the AYANEO: ~40 fps at 2x, 4x runs out of memory
-        } finally {
-            DeviceTraits.gpu = null
+    @Test fun aPickByHandGetsTheLargestUpscalingNotAboveIt() {
+        // held only by the display's list: on a slow GPU or driver too
+        for (slow in listOf(false, true)) {
+            assertEquals(listOf(1, 2, 2, 4, 4, 4, 4, 8), (1..8).map { N64Resolution.parallelUpscaling(it, auto = false, slowParallel = slow) })
         }
-        assertTrue(Res3dConsole.DC.alsoSet(3).isEmpty())
+        assertEquals(mapOf(N64Resolution.PARALLEL_KEY to "4x"), n64.alsoSet(5, auto = false, slowParallel = true))
+        assertTrue(Res3dConsole.DC.alsoSet(3, auto = false, slowParallel = false).isEmpty())
+    }
+
+    @Test fun autoStopsAt2xAndAtNativeWhereParallelRunsSlowly() {
+        assertEquals(listOf(1, 2, 2, 2, 2, 2, 2, 2), (1..8).map { N64Resolution.parallelUpscaling(it, auto = true, slowParallel = false) })   // the Nova on Turnip: 45-51 fps at 4x
+        assertEquals(listOf(1, 1, 1, 1, 1, 1, 1, 1), (1..8).map { N64Resolution.parallelUpscaling(it, auto = true, slowParallel = true) })
+    }
+
+    @Test fun parallelRunsSlowlyOnAModestGpuOrAnAdrenosOwnDriver() {
+        assertTrue(N64Resolution.slowParallel("Mali-G76 MC4", customDriver = false))   // the AYANEO: ~40 fps at 2x
+        assertTrue(N64Resolution.slowParallel("Mali-G76 MC4", customDriver = true))    // malisx2: ~35
+        assertTrue(N64Resolution.slowParallel("Adreno (TM) 740", customDriver = false))   // the Nova's own: ~40 at 2x, ~48 at 1x
+        assertFalse(N64Resolution.slowParallel("Adreno (TM) 740", customDriver = true))   // Turnip: 60 at 2x
+        assertFalse(N64Resolution.slowParallel(null, customDriver = false))
     }
 
     @Test fun aPartWayScaleRoundsUp() {

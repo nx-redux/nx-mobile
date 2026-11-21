@@ -978,7 +978,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     }
                     launchedOnVulkan = graphics.preferVulkan
                     launchedDriver = driver
-                    launchEnv = graphics.env
+                    val launchGpu = if (graphics.preferVulkan) AndroidDeviceInfo.gpu() else null
+                    launchEnv = GraphicsApiOptions.envFor(graphics, cfg.descriptor?.vulkan, customDriver = driver != null, gpu = launchGpu)
+                    // ParaLLEl-RDP's upscaling follows the driver just picked (Auto stays native on the Adreno's own one).
+                    val res3dAlso = res3d.launchAlsoSet(customDriver = driver != null, gpu = launchGpu ?: DeviceTraits.gpu)
                     // netplay link: the link options are this launch's too (a session's port, mode and peer; a solo mGBA's cable): never saved.
                     graphicsForcedOptions = graphics.forcedOptions.keys + cfg.linkOptions.keys
                     GLRetroViewData(host.activity).apply {
@@ -994,7 +997,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                             NxLog.i(TAG_LOG, "N64 hi-res VRAM limit: $limit MB (device ${total / (1024 * 1024)} MB)")
                             mapOf(N64HiresPack.VRAM_KEY to limit)
                         } else emptyMap()
-                        val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + nds3dLaunch + ps2BiosOption + n64Vram + graphics.forcedOptions
+                        val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + nds3dLaunch + res3dAlso + ps2BiosOption + n64Vram + graphics.forcedOptions
                         variables = withForced(cfg.options, forced).toTypedArray()
                         rumbleEventsEnabled = gameRumble != GameRumble.OFF   // Game rumble Off: the runner does not even read the core's state
                         preferLowLatencyAudio = true

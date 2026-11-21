@@ -88,6 +88,10 @@ object CoreRegistry {
             // ParaLLEl-RDP's 8/16-bit shader types fail to compile on the Adreno 840 driver (a black screen); with them off
             // it renders with subgroups still on. Safe on every GPU.
             vulkanEnv = mapOf("PARALLEL_RDP_SMALL_TYPES" to "0"),
+            // The Adreno 740's own driver fails to compile ParaLLEl-RDP's specialised shaders as well (a black screen at any
+            // scale); its one general shader compiles. Slower (the Nova, Mario Kart 64: ~48 fps at 1x against 60 on Turnip),
+            // so only there: Turnip and Mali's drivers take the specialised ones.
+            adrenoSystemDriverEnv = mapOf("PARALLEL_RDP_UBERSHADER" to "1"),
         ),
         players = 4,
         name = "Mupen64Plus-Next",

@@ -18,6 +18,8 @@ object DeviceTraits {
 
     fun isMali(gpu: String?): Boolean = gpu?.trim()?.startsWith("Mali", ignoreCase = true) == true
 
+    fun isAdreno(gpu: String?): Boolean = gpu?.contains("Adreno", ignoreCase = true) == true
+
     private val ADRENO = Regex("""Adreno\D*(\d{3})""", RegexOption.IGNORE_CASE)
 
     /**

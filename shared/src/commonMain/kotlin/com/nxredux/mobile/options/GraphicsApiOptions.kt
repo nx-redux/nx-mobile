@@ -59,6 +59,17 @@ object GraphicsApiOptions {
     }
 
     /**
+     * [launch]'s process environment with the switch's [VulkanSwitch.adrenoSystemDriverEnv]: set on a Vulkan launch on an
+     * Adreno [gpu] without a [customDriver], else unset (a launch in the same process after one that set it).
+     */
+    fun envFor(launch: GraphicsApiLaunch, switch: VulkanSwitch?, customDriver: Boolean, gpu: String?): Map<String, String?> {
+        val extra = switch?.adrenoSystemDriverEnv.orEmpty()
+        if (extra.isEmpty()) return launch.env
+        val on = launch.preferVulkan && !customDriver && DeviceTraits.isAdreno(gpu)
+        return launch.env + (if (on) extra else extra.mapValues { null })
+    }
+
+    /**
      * Whether Auto is Vulkan for a core with [switch] on the GPU named [gpu] (GL_RENDERER, null: unknown).
      * [customDriver]: a custom GPU driver is in use for the game, which a [VulkanSwitch.maliNeedsCustomDriver] core needs.
      */
