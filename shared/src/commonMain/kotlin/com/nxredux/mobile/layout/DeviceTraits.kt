@@ -20,6 +20,9 @@ object DeviceTraits {
 
     fun isAdreno(gpu: String?): Boolean = gpu?.contains("Adreno", ignoreCase = true) == true
 
+    /** Samsung's AMD-based GPU, whose OpenGL ES is ANGLE: "ANGLE ((Samsung Xclipse 540) on Vulkan 1.3.279)". */
+    fun isXclipse(gpu: String?): Boolean = gpu?.contains("Xclipse", ignoreCase = true) == true
+
     private val ADRENO = Regex("""Adreno\D*(\d{3})""", RegexOption.IGNORE_CASE)
 
     /**

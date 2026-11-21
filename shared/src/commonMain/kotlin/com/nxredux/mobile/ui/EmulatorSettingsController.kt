@@ -381,7 +381,7 @@ internal class EmulatorSettingsController(
     }
 
     private suspend fun readPage(tag: String, d: CoreDescriptor, game: Listed?): EmulatorPage {
-        if (d.vulkan?.autoOnMali == true && gpu == null) gpu = gpuName()?.also { DeviceTraits.gpu = it }
+        if (d.vulkan?.followsGpu == true && gpu == null) gpu = gpuName()?.also { DeviceTraits.gpu = it }
         return build(tag, d, game, configs.read(tag, d.id, game?.game?.fileName))
     }
 

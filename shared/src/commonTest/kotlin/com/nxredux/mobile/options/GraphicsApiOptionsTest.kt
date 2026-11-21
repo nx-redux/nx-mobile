@@ -134,6 +134,20 @@ class GraphicsApiOptionsTest {
         }
     }
 
+    @Test fun auto_is_vulkan_for_3ds_on_an_xclipse_gpu_only() {
+        val n3ds = CoreRegistry.forTag("3DS")!!.vulkan
+        val xclipse = "ANGLE ((Samsung Xclipse 540) on Vulkan 1.3.279)"
+        assertEquals(setOf("azahar"), CoreRegistry.all.filter { it.vulkan?.autoOnXclipse == true }.map { it.id }.toSet())
+        for (v in listOf(GraphicsApiOptions.AUTO, null)) {
+            assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(v, n3ds) { xclipse }, "$v")
+            assertEquals(v, GraphicsApiOptions.effective(v, n3ds) { "Mali-G76 MC4" }, "$v")
+            assertEquals(v, GraphicsApiOptions.effective(v, n3ds) { "Adreno (TM) 740" }, "$v")
+            assertEquals(v, GraphicsApiOptions.effective(v, ps2) { xclipse }, "$v")
+        }
+        assertEquals(GraphicsApiOptions.GLES, GraphicsApiOptions.effective(GraphicsApiOptions.GLES, n3ds) { error("asked") })
+        assertTrue(GraphicsApiOptions.autoIsVulkan(n3ds, xclipse))
+    }
+
     @Test fun only_ps2_dolphin_and_psp_follow_the_gpu_on_auto() {
         assertEquals(setOf("armsx2", "dolphin", "ppsspp"), CoreRegistry.all.filter { it.vulkan?.autoOnMali == true }.map { it.id }.toSet())
         // Dolphin follows the Mali GPU only with a custom driver (the stock driver tints some games); PS2 and PSP always.

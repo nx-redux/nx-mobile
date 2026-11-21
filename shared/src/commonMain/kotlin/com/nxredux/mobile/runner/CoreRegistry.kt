@@ -450,7 +450,7 @@ object CoreRegistry {
         hiddenValues = mapOf("citra_graphics_api" to setOf("Software")),
         // With Vulkan compiled in, Azahar's Android "Auto" picks Vulkan without asking the frontend
         // (GET_PREFERRED_HW_RENDER), so the API is always set explicitly: OpenGL, or Vulkan through Graphics API.
-        vulkan = VulkanSwitch(gles = mapOf("citra_graphics_api" to "OpenGL"), vulkan = mapOf("citra_graphics_api" to "Vulkan")),
+        vulkan = VulkanSwitch(gles = mapOf("citra_graphics_api" to "OpenGL"), vulkan = mapOf("citra_graphics_api" to "Vulkan"), autoOnXclipse = true),
         cheats = false,   // retro_cheat_set is empty
         name = "Azahar",
         rewind = false,
