@@ -51,16 +51,19 @@ class PspResolutionTest {
             assertEquals(3, Res3dConsole.N3DS.defaultCap)
             assertEquals(2, Nds3dResolution.valueFor(emptyMap(), current = 3, displayMax = 3, console = psp))
             assertEquals("2", FrontendOptions.fromConfig(emptyMap(), "PSP")[psp.maxScaleKey])
+            assertEquals(1, Res3dConsole.PS2.defaultCap)
             DeviceTraits.gpu = "Adreno (TM) 740"
             assertEquals(3, psp.defaultCap)
+            assertEquals(2, Res3dConsole.PS2.defaultCap)
         } finally {
             DeviceTraits.gpu = null
         }
         assertEquals(3, psp.defaultCap)   // not read yet
+        assertEquals(2, Res3dConsole.PS2.defaultCap)
         for (modest in listOf("Adreno (TM) 610", "Adreno (TM) 619", "Adreno (TM) 642L", "Adreno (TM) 644", "Adreno (TM) 725", "Adreno (TM) 810", "Adreno (TM) 540", "Mali-G57 MC2", "PowerVR Rogue GE8320"))
-            assertTrue(PspResolution.modestGpu(modest), modest)
+            assertTrue(DeviceTraits.modestGpu(modest), modest)
         for (full in listOf("Adreno (TM) 640", "Adreno (TM) 660", "Adreno (TM) 730", "Adreno (TM) 750", "Adreno (TM) 830", "Samsung Xclipse 940", null))
-            assertTrue(!PspResolution.modestGpu(full), full.toString())
+            assertTrue(!DeviceTraits.modestGpu(full), full.toString())
     }
 
     @Test fun autoStopsAtThreeUnlessRaised() {
