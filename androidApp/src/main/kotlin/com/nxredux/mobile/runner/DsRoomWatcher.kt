@@ -20,10 +20,9 @@ internal enum class DsPresence {
 }
 
 /**
- * DS, 3DS and PSP local wireless: whether this phone is out, seeking a room or in one, and how many other devices share
- * it, come from the link's network thread, which tells nobody, so they are read every [TICK_MS] on [scope] (the screen's
- * main-thread scope); [onChange] runs on each presence change and [onOthers] on each change of the count. The room's
- * comings and goings are seconds apart (searches, a 3 s silence), so a half-second read is soon enough.
+ * DS, 3DS and PSP local wireless: the link's presence and other-device count come from its network thread, which tells
+ * nobody, so they are read every [TICK_MS] on [scope] (the screen's main-thread scope). The room's comings and goings
+ * are seconds apart (searches, a 3 s silence), so a half-second read is soon enough.
  */
 internal class DsRoomWatcher(
     private val scope: CoroutineScope,

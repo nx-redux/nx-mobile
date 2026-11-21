@@ -511,8 +511,8 @@ static int case_auto_joins_a_sheet_host(uint16_t port) {
 }
 
 /* A sheet session turned into the automatic route while the game's wireless is on: the link starts parked, so it asks
- * nobody and joins no room (not even the sheet host still answering) for its whole life, the game's wireless going off
- * and on again included. */
+ * nobody and joins no room (not even the sheet host still answering), the game's wireless going off and on again
+ * included, until ndl_rejoin. */
 static int case_auto_created_parked_stays_out(uint16_t port) {
 	uint16_t sp = free_udp_port();
 	ndl_config c = config(NDL_HOST, "sheet", port, 8);
@@ -636,7 +636,7 @@ static int case_cable_sends_move_the_socket(uint16_t port) {
 	advance(400);
 	CHECK(wait_in_room(room[2], true, 2000));
 	CHECK(routed == 0);
-	/* A new link (a leave holds for the old one's life) with the cable up. */
+	/* A new link (a leave holds until ndl_rejoin) with the cable up. */
 	ndl_destroy(room[2]);
 	room[2] = ndl_create(&c);
 	CHECK(room[2] != NULL);

@@ -511,9 +511,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override val netplayEnded: Boolean get() = gameNetplay.ended
     override val netplayQuitOnly: Boolean get() = gameNetplay.quitOnly
     /**
-     * The automatic route plays as a session: a DS or 3DS game once another device is in its room (alone in one, as a game
-     * that keeps its wireless on always is, it plays as on its own), a PSP game whenever it is in ad hoc (its core refuses
-     * states there either way).
+     * The automatic route plays as a session: DS or 3DS with another device in the room (alone in one plays as on its
+     * own), PSP whenever it is in ad hoc (its core refuses states there anyway).
      */
     override val dsWireless: Boolean get() = launchPipeline.dsAutoRoute &&
         if (gameCoreId == "ppsspp") dsRoom.current != DsPresence.OUT else dsRoom.current == DsPresence.ROOM
@@ -659,8 +658,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * not out; a sheet session has both from its launch, a PSP game on the automatic route the broadcasts lock. On the
      * automatic route a room ([dsWireless]; for PSP seeking too) plays as a session (no save, load, speed or reset
      * shortcuts: they would break it for every member) and the menu is Continue, Disconnect, Quit; otherwise the full
-     * menu and shortcuts. A menu open meanwhile
-     * holds the core the way the room now asks: running for the members, or paused once alone.
+     * menu and shortcuts. A menu open meanwhile holds the core the way the room now asks: running for the members, or
+     * paused once alone.
      */
     private fun onDsPresenceChanged(presence: DsPresence) {
         launchPipeline.dsRoomChanged(presence == DsPresence.ROOM)
@@ -687,33 +686,35 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /**
      * A sheet session's room again after a leave for the background or a lost focus. Never on the automatic route, where
-     * the room comes back with the game's wireless: a session that fell back to it may still be a session in Azahar until
+     * only switching Local Wireless on rejoins: a session that fell back to it may still be a session in Azahar until
      * its next frame, and a rejoin would put it back in the room it was left for.
      */
     private fun rejoinSessionRoom() {
         if (!launchPipeline.dsAutoRoute) LibretroNetplay.dsRejoin()
     }
 
-    /** Leaves the room with the game running; the check lands the full menu and the paused core at once. */
-    /**
-     * The automatic route's Disconnect is Local Wireless switched off for this launch (the stored setting untouched): the
-     * row says Off and switching it on joins again. PSP (no in-game row) only leaves.
-     */
+    /** Leaves the room with the game running: on the automatic route, Local Wireless switched off (PSP has no row). */
     override fun disconnectDs() {
-        val key = localWirelessKey
-        if (key != null && launchPipeline.dsAutoRoute && frontendValues[key] != N3dsOptions.LOCAL_WIRELESS_OFF) {
-            val values = frontendValues + (key to N3dsOptions.LOCAL_WIRELESS_OFF)
-            frontendValues = values
-            withMenu { it.showFrontendValue(key, N3dsOptions.LOCAL_WIRELESS_OFF) }
-            switchLocalWireless(values)
-            return
-        }
+        val values = if (launchPipeline.dsAutoRoute) localWirelessShownOff() else null
+        if (values != null) return switchLocalWireless(values)
         LibretroNetplay.dsLeaveNow()
         dsRoom.check()
     }
 
     /** The DS or 3DS console's Local Wireless row key; null for any other console. */
     private val localWirelessKey: String? get() = when { isNds -> NdsOptions.LOCAL_WIRELESS; isN3ds -> N3dsOptions.LOCAL_WIRELESS; else -> null }
+
+    /**
+     * A leave shows Local Wireless Off for this launch (the stored setting untouched), so switching it on joins again.
+     * The new values; null with no row, or one already off.
+     */
+    private fun localWirelessShownOff(): Map<String, String>? {
+        val key = localWirelessKey ?: return null
+        if (frontendValues[key] == N3dsOptions.LOCAL_WIRELESS_OFF) return null
+        frontendValues = frontendValues + (key to N3dsOptions.LOCAL_WIRELESS_OFF)
+        withMenu { it.showFrontendValue(key, N3dsOptions.LOCAL_WIRELESS_OFF) }
+        return frontendValues
+    }
 
     /**
      * A newer game screen claimed the native session, or the menu starts another game ([endForHandoff]): leave through
@@ -1403,9 +1404,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /**
-     * The console's Local Wireless switched in the game: the link's new mode to the core, read on its next frame (the
-     * menu holds frames, so on Continue). Switched off, the room is left at once, as for Disconnect, so the menu and
-     * the locks follow now.
+     * Local Wireless switched in the game: the new mode reaches the core on its next frame; off also leaves the room at
+     * once, so the menu and locks follow now.
      */
     private fun switchLocalWireless(values: Map<String, String>) {
         val on = if (isNds) NdsOptions.localWireless(values) else N3dsOptions.localWireless(values)
@@ -1418,8 +1418,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         retroView?.let { view ->
             view.queueEvent { runCatching { view.updateVariables(*vars.map { (k, v) -> Variable(k, v) }.toTypedArray()) }.onFailure { NxLog.w("GameActivity", "switching local wireless failed", it) } }
         }
-        // On also undoes a leave directly: the core reads options only between frames, and the menu holds them, so an
-        // off and on there (or a Disconnect then on) can reach it as no change at all.
+        // Directly: the menu holds frames, so an off and on there (or Disconnect then on) reach the core as no change.
         if (on) LibretroNetplay.dsRejoin()
         NxLog.i("GameActivity", "local wireless switched ${if (on) "on" else "off"}")
     }
@@ -1438,7 +1437,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun applyFrontend(values: Map<String, String>) {
         val oldSegaSetting = frontendValues[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO
         val oldBottomScreen = frontendValues[BottomScreenOptions.KEY]
-        val localWirelessKey = localWirelessKey
         val oldLocalWireless = localWirelessKey?.let { frontendValues[it] }
         val res3dKeys = res3d.console?.keys.orEmpty()
         val old3d = res3dKeys.map { frontendValues[it] }
@@ -1447,8 +1445,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (res3d.applies() && res3dKeys.map { values[it] } != old3d) res3d.offer(sizeChange = false)
         // Display → Bottom screen (the menu, live): the picture may move. Posted, as for the Sega pad.
         if (values[BottomScreenOptions.KEY] != oldBottomScreen) findViewById<View?>(R.id.root)?.post { dual.recheckPictureOn() }
-        // Multiplayer → Local Wireless (the menu, live): the link switches off (out of its room at once) or back on.
-        if (localWirelessKey != null && values[localWirelessKey] != oldLocalWireless) switchLocalWireless(values)
+        // Multiplayer → Local Wireless (the menu, live).
+        if (localWirelessKey?.let { values[it] } != oldLocalWireless) switchLocalWireless(values)
         val segaSetting = values[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO
         if (segaSetting != oldSegaSetting && PadMap.isSegaPadTag(gameTag)) applySegaPad(segaSetting)
         if (isN3ds) {
@@ -1681,13 +1679,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun leaveLinkSession(kind: NetplayLinkKind): Map<String, String> {
         val left = launchPipeline.leaveLinkSession(kind)
         if (kind != NetplayLinkKind.PSPLINK && launchPipeline.dsAutoRoute) {
-            // The leave is a switch-off: the row says so, and switching it on joins again. For this launch only, the
-            // stored setting is untouched.
-            val key = localWirelessKey
-            if (key != null && frontendValues[key] != N3dsOptions.LOCAL_WIRELESS_OFF) {
-                frontendValues = frontendValues + (key to N3dsOptions.LOCAL_WIRELESS_OFF)
-                withMenu { it.showFrontendValue(key, N3dsOptions.LOCAL_WIRELESS_OFF) }
-            }
+            localWirelessShownOff()
             LibretroNetplay.dsLeaveNow()
             dsRoom.check()
             if (launchPipeline.dsCableAuto) dsCable.watch()

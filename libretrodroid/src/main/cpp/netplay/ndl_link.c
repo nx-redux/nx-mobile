@@ -124,7 +124,7 @@ struct ndl_link {
 
 	/* AUTO. */
 	uint64_t radio_off_ms; /* when the radio went off, 0 while it is on */
-	bool parked;		   /* left at once: no search for this link's life */
+	bool parked;		   /* left at once: no search until ndl_rejoin */
 	uint64_t search_until; /* a search is waiting for answers until then, 0 = none */
 	uint64_t next_search_ms;
 	uint64_t next_alone_ms;
@@ -960,8 +960,8 @@ void ndl_radio_changed(ndl_link* l, ndl_radio r) {
 			l->radio_off_ms = now_ms(l);
 	} else {
 		l->radio_off_ms = 0;
-		/* A leave holds through the game's wireless: a game that keeps it on (or turns it on again) would pull the
-		 * phone straight back in. Only a new link (the console's local wireless switched on) ends it. */
+		/* A leave holds through the game's wireless (a game that keeps it on would pull the phone straight back
+		 * in); only ndl_rejoin ends it. */
 		if (l->radio == NDL_RADIO_OFF && l->cable == NDL_CABLE_COMING)
 			l->cable_hold_until = now_ms(l) + NDL_CABLE_HOLD_MS;
 	}

@@ -383,7 +383,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         dsLocalWireless = on
         if (!dsAutoRoute) return emptyMap()
         val broadcastKey = if (core == "azahar") NetplayLinkOptions.N3DS_BROADCAST else NetplayLinkOptions.NDS_BROADCAST
-        return NetplayLinkOptions.soloLocalWireless(core, on) + (if (on) wifiBroadcast()?.let { mapOf(broadcastKey to it) }.orEmpty() else emptyMap())
+        val broadcast = if (on) wifiBroadcast() else null
+        return NetplayLinkOptions.soloLocalWireless(core, on) + listOfNotNull(broadcast?.let { broadcastKey to it })
     }
 
     /** A DS or 3DS launch's [NetplayCores.cableAuto], for the automatic route a sheet session may fall back to. */
@@ -400,9 +401,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         val broadcast = if (!dsLocalWireless) null else wifiBroadcast()
         val left = NetplayLinkOptions.dsSessionLeft(kind, dsLocalWireless, broadcast)
         if (left.isNotEmpty()) {
-            // The automatic route from here, on or switched off, so the console's Local Wireless can be switched in the
-            // game. The session held the broadcasts lock from launch; the automatic route holds it only while the game's
-            // wireless is on, and the link stays out until Local Wireless is switched on again ([dsWirelessChanged]).
+            // The automatic route from here. The session held the broadcasts lock from launch; the automatic route holds
+            // it only while the game's wireless is on ([dsWirelessChanged]).
             dropBroadcasts()
             dsCableAuto = dsCableCore
             dsAutoRoute = true
@@ -698,7 +698,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // A room answers other devices' searches, which arrive as broadcasts: Android drops those without this lock.
             // A DS or 3DS game outside a session takes it when its wireless goes on ([dsWirelessChanged]), a PSP one at launch (below).
             if (linkKind == NetplayLinkKind.N3DSLINK || linkKind == NetplayLinkKind.NDSLINK || linkKind == NetplayLinkKind.PSPLINK) holdBroadcasts()
-            val n3dsBroadcast = n3dsRoomName?.let { WifiNetworks.broadcast(WifiNetworks.address(activity.getSystemService(ConnectivityManager::class.java)))?.hostAddress }
+            val n3dsBroadcast = n3dsRoomName?.let { wifiBroadcast() }
             // A DS room runs under its own MAC (a seed kept per install) so rooms tell its members apart.
             val ndsMac = if (coreId == "melondsds" && (np == null || linkKind == NetplayLinkKind.NDSLINK)) NetplayLinkOptions.ndsMac(AndroidAppSettings(activity).ndsMacSeed) else null
             // PSP: the ad hoc link runs in a sheet session, or outside one while Local Wireless is on and the Wi-Fi has an address

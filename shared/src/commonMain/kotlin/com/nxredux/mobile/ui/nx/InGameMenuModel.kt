@@ -396,7 +396,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private var nds3dNow: Int? = null            // the DS 3D scale in use (null: unknown / not DS)
     private var nds3dSoftware = false            // the core renders in software: the 3D Resolution rows take no effect
-    private var localWirelessNow: String? = null // where the link stands, beside an On Local Wireless (null: nothing)
+    private var localWirelessNow: String? = null
 
     /** Where local wireless stands ("linked with 1 device"), shown beside Local Wireless while it is On; null: nothing. */
     fun setLocalWirelessNow(now: String?) {
@@ -916,19 +916,19 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         })
     }
 
-    /**
-     * The frontend values in use (missing keys take their defaults for [overlays] and [tag]), the overlay file names
-     * offered for the Overlay setting, the config's locked keys (locked frontend settings are hidden), the console's
-     * [tag] (it selects the console's own rows, shown in the Options groups), and whether overlays can show
-     * ([overlayAvailable] is false while the DS screens are split). Refreshes open group/Adjust pages.
-     */
-    /** One frontend value the game changed rather than the menu (Disconnect turns Local Wireless off); refreshes open pages. */
+    /** A frontend value the game changed, not the menu (Disconnect turns Local Wireless off). */
     fun showFrontendValue(key: String, value: String) {
         if (frontend[key] == value) return
         frontend = frontend + (key to value)
         refreshFrontendPages()
     }
 
+    /**
+     * The frontend values in use (missing keys take their defaults for [overlays] and [tag]), the overlay file names
+     * offered for the Overlay setting, the config's locked keys (locked frontend settings are hidden), the console's
+     * [tag] (it selects the console's own rows, shown in the Options groups), and whether overlays can show
+     * ([overlayAvailable] is false while the DS screens are split). Refreshes open group/Adjust pages.
+     */
     fun setFrontend(values: Map<String, String>, overlays: List<String>, locked: Set<String>, tag: String = "", overlayAvailable: Boolean = true) {
         val tagChanged = tag != frontendTag
         val hadGroups = shownGroups()
@@ -2082,7 +2082,6 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         const val TOUCH_KEY_PREFIX = "nx:touch:"
         /** A Shortcuts row inheriting Controls → Shortcuts. */
         private const val DEFAULT_SUFFIX = " (default)"
-        /** The DS and 3DS Local Wireless rows: their On shows where the link stands ([setLocalWirelessNow]). */
         private val LOCAL_WIRELESS_KEYS = setOf(NdsOptions.LOCAL_WIRELESS, N3dsOptions.LOCAL_WIRELESS)
         private const val NONE_LABEL = "None"
         private const val UNAVAILABLE = "Unavailable"

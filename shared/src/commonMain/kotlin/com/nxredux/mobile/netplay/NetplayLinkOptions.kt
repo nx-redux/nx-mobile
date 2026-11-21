@@ -126,7 +126,7 @@ object NetplayLinkOptions {
      * The variables a DS ([NetplayLinkKind.NDSLINK]) or 3DS ([NetplayLinkKind.N3DSLINK]) sheet session's Disconnect sends:
      * with the console's [localWireless] on, the automatic route's mode and [broadcast] as a launch outside a session sends
      * them ([forSolo]; the name, port and DS MAC are the session's, the same values), out of rooms until the console's
-     * Local Wireless is switched off and on again; otherwise the link switched off ([soloLocalWireless]), so switching
+     * Local Wireless is switched on in the game; otherwise the link switched off ([soloLocalWireless]), so switching
      * Local Wireless on later starts the automatic route. Empty for any other link.
      */
     fun dsSessionLeft(kind: NetplayLinkKind, localWireless: Boolean, broadcast: String?): Map<String, String> {

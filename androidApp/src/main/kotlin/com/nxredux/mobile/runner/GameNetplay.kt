@@ -326,7 +326,8 @@ internal class GameNetplay(private val host: GameNetplayHost) {
      * variable update, read at the next frame (the menu holds frames, so on Continue). A DS game leaves the runner's room,
      * a 3DS game Azahar's room (on its next frame) and the runner takes a PSP game out of ad hoc (its presence goes out, so
      * states work again): for good, or, with the console's Local Wireless on (for PSP also the Wi-Fi's addresses known),
-     * onto the automatic route, out of rooms with Local Wireless switched off until it is switched on in the game (DS, 3DS), or back once the game leaves and re-enters ad hoc
+     * onto the automatic route, out of rooms until Local Wireless is switched on in the game (DS, 3DS) or the game
+     * leaves and re-enters ad hoc (PSP)
      * ([GameNetplayHost.leaveLinkSession]). Set past [GameActivity.applyOptions]' guard and not stored: the link options
      * are this launch's ([GameActivity.graphicsForcedOptions]), never the user's config.
      */

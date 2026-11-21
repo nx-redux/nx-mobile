@@ -116,7 +116,7 @@ object LibretroNetplay {
     @JvmStatic external fun dsOthers(): Int
     /** The DS link: leave the room at once, without the radio-off linger (backgrounded, like closing the lid). Any thread. */
     @JvmStatic external fun dsLeaveNow()
-    /** The DS link: back in front after [dsLeaveNow], a sheet session's host reopens its room and a joiner asks its host again (nothing in the automatic route, which waits for the game's radio). Any thread. */
+    /** The DS link: undoes [dsLeaveNow], a sheet session's host reopens its room, a joiner asks its host again, the automatic route searches again. Any thread. */
     @JvmStatic external fun dsRejoin()
     /** The DS link: the Wi-Fi `Network.networkHandle` its sockets bind to (0 = the default network). Set before the core loads, and again when the Wi-Fi changes: sockets made from then on take it. Any thread. */
     @JvmStatic external fun dsSetNetwork(handle: Long)

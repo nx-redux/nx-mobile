@@ -76,8 +76,8 @@ typedef struct {
 	void* bind_ctx;
 	/* The game's radio when the link is made, as if ndl_radio_changed had told it. */
 	ndl_radio radio;
-	/* AUTO only: starts as after ndl_leave_now, out of rooms for this link's life. Set in the config rather than left
-	 * to a later call, so the network thread never sends a search before it. */
+	/* AUTO only: starts as after ndl_leave_now. Set in the config rather than left to a later call, so the network
+	 * thread never sends a search before it. */
 	bool parked;
 } ndl_config;
 
@@ -119,8 +119,8 @@ typedef enum { NDL_CABLE_NONE = 0, NDL_CABLE_COMING = 1, NDL_CABLE_UP = 2 } ndl_
  * come up first and carry it. */
 void ndl_set_cable(ndl_link* l, ndl_cable state, const char* broadcast);
 
-/* Leaves at once, without the radio-off linger. The link then stays out of rooms until ndl_set_mode or ndl_rejoin (in
- * AUTO, the game's wireless coming on again does not end it). */
+/* Leaves at once, without the radio-off linger. The link then stays out of rooms until ndl_set_mode or ndl_rejoin,
+ * whatever the game's wireless does. */
 void ndl_leave_now(ndl_link* l);
 
 /* Undoes ndl_leave_now: HOST reopens its room, JOIN starts asking its holder again, AUTO looks for rooms again while the
