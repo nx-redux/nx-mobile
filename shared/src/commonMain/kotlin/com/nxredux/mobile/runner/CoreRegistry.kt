@@ -193,9 +193,13 @@ object CoreRegistry {
         players = 2,
         // "Auto" asks GET_PREFERRED_HW_RENDER, so Graphics API decides; not locked, so OpenGL / Software stay the player's
         // choice on OpenGL ES. Vulkan is reached only through Graphics API, never offered as a value.
-        defaultOptions = mapOf("swanstation_GPU_Renderer" to "Auto", "swanstation_MemoryCards_Card1Type" to "Libretro"),
+        // swanstation_GPU_ResolutionScale is the app's (3D Resolution rows, Res3dConsole.PS1); 1x until the launch sends it.
+        defaultOptions = mapOf(
+            "swanstation_GPU_Renderer" to "Auto", "swanstation_MemoryCards_Card1Type" to "Libretro",
+            "swanstation_GPU_ResolutionScale" to "1",
+        ),
         // Card 1 as the frontend's battery save: one card per game named by the Save format, shared with PCSX ReARMed (Saves/PS).
-        lockedOptions = setOf("swanstation_MemoryCards_Card1Type"),
+        lockedOptions = setOf("swanstation_MemoryCards_Card1Type", "swanstation_GPU_ResolutionScale"),
         hiddenValues = mapOf("swanstation_GPU_Renderer" to setOf("Vulkan")),
         vulkan = VulkanSwitch(vulkan = mapOf("swanstation_GPU_Renderer" to "Auto"), lock = false),
         name = "SwanStation",
