@@ -1453,7 +1453,7 @@ class InGameMenuModelTest {
     // A row read only when the game starts (FrontendOption.atLaunch) is set in Game Settings or Emulator
     // Settings, not in the running game's menu.
     @Test fun rows_read_only_at_launch_stay_out_of_the_in_game_groups() {
-        assertEquals(PICTURE_ROWS, inGameGroups("N64").getValue("Display"))   // no Graphics API
+        assertEquals(listOf("3D Resolution", "Max Scale") + PICTURE_ROWS, inGameGroups("N64").getValue("Display"))   // no Graphics API
         val gc = inGameGroups("GC")
         // 3D Resolution and its Auto sub-row (Max Scale) apply while the game runs; Scale shows under Performance only.
         assertEquals(listOf("3D Resolution", "Max Scale") + PICTURE_ROWS, gc.getValue("Display"))

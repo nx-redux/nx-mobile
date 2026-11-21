@@ -7,6 +7,21 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class GraphicsApiOptionsTest {
+    // N64's ParaLLEl-RDP: its general shader only on an Adreno's own driver, whose compiler fails the specialised ones.
+    @Test fun parallelTakesItsGeneralShaderOnlyOnAnAdrenosOwnDriver() {
+        val switch = CoreRegistry.forTag("N64")!!.vulkan!!
+        val vulkan = GraphicsApiOptions.resolve(GraphicsApiOptions.VULKAN, switch, { true })
+        val gles = GraphicsApiOptions.resolve(GraphicsApiOptions.AUTO, switch, { true })
+        val adreno = "Adreno (TM) 740"
+        fun uber(launch: GraphicsApiLaunch, customDriver: Boolean, gpu: String?) =
+            GraphicsApiOptions.envFor(launch, switch, customDriver, gpu).let { it.containsKey("PARALLEL_RDP_UBERSHADER") to it["PARALLEL_RDP_UBERSHADER"] }
+        assertEquals(true to "1", uber(vulkan, customDriver = false, adreno))
+        assertEquals(true to null, uber(vulkan, customDriver = true, adreno))   // Turnip compiles the specialised ones
+        assertEquals(true to null, uber(vulkan, customDriver = false, "Mali-G76 MC4"))
+        assertEquals(true to null, uber(gles, customDriver = false, adreno))   // unset after a Vulkan launch
+        assertEquals("0", GraphicsApiOptions.envFor(vulkan, switch, false, adreno)["PARALLEL_RDP_SMALL_TYPES"])
+    }
+
     @Test fun wii_and_gamecube_offer_the_graphics_api_row() {
         assertEquals(WiiOptions.table + DolphinOptions.resolutionRows(null) + GraphicsApiOptions.row, ConsoleSettings.tableFor("WII").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row) })
         assertTrue(WiiOptions.screenRow in WiiOptions.table)

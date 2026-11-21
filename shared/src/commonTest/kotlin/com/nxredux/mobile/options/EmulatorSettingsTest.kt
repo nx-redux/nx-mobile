@@ -277,6 +277,8 @@ class EmulatorSettingsTest {
         CoreOption("mupen64plus-rdp-plugin", "gliden64", values = listOf("angrylion", "parallel", "gliden64"), defaultValue = "gliden64"),
         CoreOption("mupen64plus-rsp-plugin", "hle", values = listOf("cxd4", "parallel", "hle"), defaultValue = "hle"),
         CoreOption("mupen64plus-parallel-rdp-upscaling", "1x", values = listOf("1x", "2x"), defaultValue = "1x"),
+        CoreOption("mupen64plus-43screensize", "640x480", values = listOf("320x240", "640x480"), defaultValue = "640x480"),
+        CoreOption("mupen64plus-parallel-rdp-dither-filter", "True", values = listOf("True", "False"), defaultValue = "True"),
     ))
 
     @Test fun ppsspp_backend_follows_graphics_api_so_the_page_has_no_row_for_it() {
@@ -296,7 +298,9 @@ class EmulatorSettingsTest {
     @Test fun mupen_plugins_follow_graphics_api_and_its_parallel_rows_are_offered() {
         val core = EmulatorSettings.page("N64", mupen, mupenTable, mupen.defaultOptions, null, null, forGame = false).core!!
         assertTrue(core.none { it.key == "mupen64plus-rdp-plugin" || it.key == "mupen64plus-rsp-plugin" })
-        assertTrue(core.any { it.key == "mupen64plus-parallel-rdp-upscaling" })
+        assertTrue(core.any { it.key == "mupen64plus-parallel-rdp-dither-filter" })
+        // the resolution is the 3D Resolution rows'
+        assertTrue(core.none { it.key == "mupen64plus-parallel-rdp-upscaling" || it.key == "mupen64plus-43screensize" })
     }
 
     @Test fun a_stored_plugin_is_ignored() {

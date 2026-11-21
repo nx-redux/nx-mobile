@@ -554,8 +554,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 val gles = (activity.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).deviceConfigurationInfo.reqGlEsVersion
                 descriptorDefaults = NdsRenderer.defaults(gles) + descriptorDefaults
             }
-            // Before the frontend values are read: a core that follows the GPU has defaults that do too (Res3dConsole.defaultCap).
-            if (descriptor?.vulkan?.autoOnMali == true) DeviceTraits.gpu = AndroidDeviceInfo.gpu()
+            // Before the frontend values are read: a core that follows the GPU has defaults that do too (Res3dConsole.defaultCap),
+            // and so may the options its 3D Resolution sets (Res3dConsole.followsGpu).
+            if (descriptor?.vulkan?.autoOnMali == true || Res3dConsole.forTag(tag)?.takeIf { it.coreId == coreId }?.followsGpu == true) {
+                DeviceTraits.gpu = AndroidDeviceInfo.gpu()
+            }
             val store = CoreConfigStore(File(dataRoot, paths.consoleConfig), File(dataRoot, paths.gameConfig)).also { configStore = it }
             val resolved = withContext(Dispatchers.IO) {
                 // fceumm's turbo default (Player 1): a cfg saved before it holds the old None as if picked ([FceummTurbo])
@@ -975,7 +978,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     }
                     launchedOnVulkan = graphics.preferVulkan
                     launchedDriver = driver
-                    launchEnv = graphics.env
+                    val launchGpu = if (graphics.preferVulkan) AndroidDeviceInfo.gpu() else null
+                    launchEnv = GraphicsApiOptions.envFor(graphics, cfg.descriptor?.vulkan, customDriver = driver != null, gpu = launchGpu)
+                    // ParaLLEl-RDP's upscaling follows the driver just picked (Auto stays native on the Adreno's own one).
+                    val res3dAlso = res3d.launchAlsoSet(customDriver = driver != null, gpu = launchGpu ?: DeviceTraits.gpu)
                     // netplay link: the link options are this launch's too (a session's port, mode and peer; a solo mGBA's cable): never saved.
                     graphicsForcedOptions = graphics.forcedOptions.keys + cfg.linkOptions.keys
                     GLRetroViewData(host.activity).apply {
@@ -991,7 +997,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                             NxLog.i(TAG_LOG, "N64 hi-res VRAM limit: $limit MB (device ${total / (1024 * 1024)} MB)")
                             mapOf(N64HiresPack.VRAM_KEY to limit)
                         } else emptyMap()
-                        val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + nds3dLaunch + ps2BiosOption + n64Vram + graphics.forcedOptions
+                        val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + nds3dLaunch + res3dAlso + ps2BiosOption + n64Vram + graphics.forcedOptions
                         variables = withForced(cfg.options, forced).toTypedArray()
                         rumbleEventsEnabled = gameRumble != GameRumble.OFF   // Game rumble Off: the runner does not even read the core's state
                         preferLowLatencyAudio = true

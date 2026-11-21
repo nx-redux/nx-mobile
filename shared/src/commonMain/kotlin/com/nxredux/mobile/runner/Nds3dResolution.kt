@@ -55,10 +55,16 @@ enum class Res3dConsole(
     PCSX("pcsx_rearmed", "pcsx_rearmed_neon_enhancement_enable", 2, 2, "nx_pcsx_3d_resolution", "nx_pcsx_3d_max_scale", "nx_pcsx_3d_scale"),
 
     /** Dreamcast on Flycast: its Internal Resolution draws the whole picture at a multiple of 640 x 480. */
-    DC("flycast", "reicast_internal_resolution", 8, 3, "nx_dc_3d_resolution", "nx_dc_3d_max_scale", "nx_dc_3d_scale");
+    DC("flycast", "reicast_internal_resolution", 8, 3, "nx_dc_3d_resolution", "nx_dc_3d_max_scale", "nx_dc_3d_scale"),
+
+    /**
+     * Nintendo 64 on Mupen64Plus-Next: GLideN64 draws the whole picture at its window size, a multiple of 320 x 240
+     * (patches/mupen64plus_next/0014 applies it mid-game); ParaLLEl-RDP, on Vulkan, at its own upscaling ([alsoSet]).
+     */
+    N64("mupen64plus_next", "mupen64plus-43screensize", 8, 4, "nx_n64_3d_resolution", "nx_n64_3d_max_scale", "nx_n64_3d_scale");
 
     /** The core draws its whole picture at the scale (PS1, PS2, PSP, Dolphin, Dreamcast), not only the 3D: the rows say "the game". */
-    val wholePicture: Boolean get() = this == PS1 || this == PCSX || this == PS2 || this == PSP || this == DOLPHIN || this == DC
+    val wholePicture: Boolean get() = this == PS1 || this == PCSX || this == PS2 || this == PSP || this == DOLPHIN || this == DC || this == N64
 
     /** Performance draws at native size: no Scale row (the PS2 runs slowly above it; PCSX-ReARMed has only 1x and 2x). */
     val nativePerformance: Boolean get() = this == PS2 || this == PCSX
@@ -79,6 +85,9 @@ enum class Res3dConsole(
         else -> null
     }
 
+    /** Something here follows the GPU ([modestCap], ParaLLEl-RDP's Auto in [alsoSet]): a launch reads it first. */
+    val followsGpu: Boolean get() = modestCap != null || this == N64
+
     /** The Max Scale an unset game starts with: [modestCap] on a modest GPU, else the console's own. */
     val defaultCap: Int get() = modestCap?.takeIf { DeviceTraits.modestGpu(DeviceTraits.gpu) } ?: cap
 
@@ -91,10 +100,11 @@ enum class Res3dConsole(
         DOLPHIN -> window?.let { DolphinResolution.displayMax(it.first, it.second) }
         PS1, PCSX -> window?.let { Ps1Resolution.displayMax(it.first, it.second) }
         DC -> window?.let { DcResolution.displayMax(it.first, it.second) }
+        N64 -> window?.let { N64Resolution.displayMax(it.first, it.second) }
     }
 
     /**
-     * The core option's value for scale [n]: ARMSX2 reads "2x", PPSSPP and Flycast the size ("960x544", "1280x960"),
+     * The core option's value for scale [n]: ARMSX2 reads "2x", PPSSPP, Flycast and GLideN64 the size ("960x544", "1280x960"),
      * PCSX-ReARMed whether Enhanced Resolution is on, the others a bare number.
      */
     fun coreValue(n: Int): String = when (this) {
@@ -102,7 +112,17 @@ enum class Res3dConsole(
         PSP -> "${PspResolution.NATIVE_W * n}x${PspResolution.NATIVE_H * n}"
         PCSX -> if (n >= 2) "enabled" else "disabled"
         DC -> "${DcResolution.NATIVE_W * n}x${DcResolution.NATIVE_H * n}"
+        N64 -> "${N64Resolution.NATIVE_W * n}x${N64Resolution.NATIVE_H * n}"
         else -> "$n"
+    }
+
+    /**
+     * Other core options scale [n] sets with [coreKey]: ParaLLEl-RDP's upscaling for the N64 on Vulkan ([auto]: the
+     * rows are on Auto; [slowParallel]: ParaLLEl-RDP runs slowly on this GPU and driver, [N64Resolution.parallelUpscaling]).
+     */
+    fun alsoSet(n: Int, auto: Boolean, slowParallel: Boolean): Map<String, String> = when (this) {
+        N64 -> mapOf(N64Resolution.PARALLEL_KEY to "${N64Resolution.parallelUpscaling(n, auto, slowParallel)}x")
+        else -> emptyMap()
     }
 
     companion object {
@@ -116,6 +136,7 @@ enum class Res3dConsole(
             "PSX" -> PS1
             "PS" -> PCSX
             "DC" -> DC
+            "N64" -> N64
             else -> null
         }
     }
@@ -479,6 +500,64 @@ object DcResolution {
     private const val SLACK = 0.02
 
     private fun up(scale: Double): Int = ceil(scale - SLACK).toInt().coerceIn(1, MAX)
+
+    /** The scale the picture reaches fitted in a [w] x [h] px window, either way up, rounded up (1 to 8). */
+    fun displayMax(w: Int, h: Int): Int =
+        maxOf(up(minOf(w.toDouble() / NATIVE_W, h.toDouble() / NATIVE_H)), up(minOf(h.toDouble() / NATIVE_W, w.toDouble() / NATIVE_H)))
+
+    /** The scale a picture [pictureHeightPx] px tall shows at, rounded up (1 to 8). */
+    fun currentScale(pictureHeightPx: Int): Int = up(pictureHeightPx.toDouble() / NATIVE_H)
+
+    /** The shown scale and the second display's reach, as [Ps2Resolution.shownScales]. */
+    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> {
+        val second = secondHeightPx?.let(::currentScale)
+        return listOfNotNull(mainHeightPx?.let(::currentScale), second).maxOrNull() to (second ?: 1)
+    }
+}
+
+/**
+ * The N64's 320 x 240 picture on Mupen64Plus-Next. GLideN64 draws at a window of any whole multiple and hands over frames
+ * that size; ParaLLEl-RDP upscales by 1, 2, 4 or 8 only ([parallelUpscaling]).
+ */
+object N64Resolution {
+    const val NATIVE_W = 320
+    const val NATIVE_H = 240
+
+    /** ParaLLEl-RDP's upscaling option. */
+    const val PARALLEL_KEY = "mupen64plus-parallel-rdp-upscaling"
+
+    /** The most the rows offer (GLideN64's list stops at 12x, ParaLLEl-RDP's at 8x). */
+    private const val MAX = 8
+
+    /** Below a whole scale by this much (a px or two of rounding) still counts as that scale. */
+    private const val SLACK = 0.02
+
+    private fun up(scale: Double): Int = ceil(scale - SLACK).toInt().coerceIn(1, MAX)
+
+    /**
+     * ParaLLEl-RDP's upscaling for scale [n]: the biggest it offers (1, 2, 4 or 8) up to [n]. A pick made by hand is the
+     * player's, held only by the display; Auto ([auto]) stops at [AUTO_MAX], or native where ParaLLEl-RDP runs slowly
+     * ([slowParallel]). Mario Kart 64 mid-race: on the AYANEO (Mali-G76, 2 GB) 60 fps at 1x, ~40 at 2x (~35 on malisx2),
+     * and 4x has the game killed for memory at launch; on the Nova (Adreno 740) 60 at 2x and 45-51 at 4x on Turnip, ~48 at
+     * 1x and ~40 at 2x on its own driver. OpenGL ES (GLideN64) holds 60 at 4x on both.
+     */
+    fun parallelUpscaling(n: Int, auto: Boolean, slowParallel: Boolean): Int {
+        val top = if (auto) minOf(n, if (slowParallel) 1 else AUTO_MAX) else n
+        return PARALLEL_SCALES.last { it <= top.coerceAtLeast(1) }
+    }
+
+    /** What ParaLLEl-RDP offers. */
+    private val PARALLEL_SCALES = listOf(1, 2, 4, 8)
+
+    /** Auto's most on ParaLLEl-RDP: 60 fps on a flagship, where 4x is not. */
+    private const val AUTO_MAX = 2
+
+    /**
+     * ParaLLEl-RDP runs slowly on [gpu]: a modest one ([DeviceTraits.modestGpu]), or an Adreno on its own driver
+     * ([customDriver] false), which takes the general shader ([VulkanSwitch.adrenoSystemDriverEnv]).
+     */
+    fun slowParallel(gpu: String?, customDriver: Boolean): Boolean =
+        DeviceTraits.modestGpu(gpu) || (!customDriver && DeviceTraits.isAdreno(gpu))
 
     /** The scale the picture reaches fitted in a [w] x [h] px window, either way up, rounded up (1 to 8). */
     fun displayMax(w: Int, h: Int): Int =

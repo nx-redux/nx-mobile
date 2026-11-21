@@ -227,7 +227,8 @@ object FrontendOptions {
      * here on the stored values, so defaults laid under them later ([CoreConfig.resolve]) cannot hide it. An old PSP
      * Rendering Resolution becomes its Max Scale ([PspOptions.carriedMaxScale]), and a GameCube / Wii Internal Resolution
      * its own ([DolphinOptions.carriedMaxScale]), the PlayStation cores' resolution theirs ([Ps1Options.carriedMaxScale]),
-     * and a Dreamcast Internal Resolution its own ([DcOptions.carriedMaxScale]).
+     * a Dreamcast Internal Resolution its own ([DcOptions.carriedMaxScale]) and an N64 resolution its own
+     * ([N64Options.carriedMaxScale]).
      */
     fun migrateKeys(values: Map<String, String>): Map<String, String> {
         val out = LinkedHashMap<String, String>()
@@ -239,6 +240,7 @@ object FrontendOptions {
         DolphinOptions.carriedMaxScale(out)?.let { out[Res3dConsole.DOLPHIN.maxScaleKey] = it }
         out.putAll(Ps1Options.carriedMaxScale(out))
         DcOptions.carriedMaxScale(out)?.let { out[Res3dConsole.DC.maxScaleKey] = it }
+        N64Options.carriedMaxScale(out)?.let { out[Res3dConsole.N64.maxScaleKey] = it }
         return out
     }
 

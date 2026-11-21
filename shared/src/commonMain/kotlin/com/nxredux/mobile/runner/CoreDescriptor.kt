@@ -13,6 +13,8 @@ data class VulkanSwitch(
     val swapchainFrames: Boolean = false,
     /** Process environment the core reads on Vulkan (set before it loads; cleared on any other launch). */
     val vulkanEnv: Map<String, String> = emptyMap(),
+    /** More of it on an Adreno GPU running its own driver, not a custom one ([com.nxredux.mobile.options.GraphicsApiOptions.envFor]). */
+    val adrenoSystemDriverEnv: Map<String, String> = emptyMap(),
     /**
      * Graphics API "Auto" is Vulkan on an Arm Mali GPU, for a core its OpenGL ES driver runs slower than its Vulkan one
      * (measured on a Mali-G76: PS2 far slower, Wii short of full speed). Not for a core that is as fast on either (N64,
