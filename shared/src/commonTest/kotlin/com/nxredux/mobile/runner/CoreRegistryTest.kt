@@ -60,7 +60,11 @@ class CoreRegistryTest {
     }
     @Test fun the_bricks_pak_defaults_are_carried() {
         // The second memory card stays out, as the Brick's pin had it (upstream's default since 2026 is a shared card).
-        assertEquals(mapOf("pcsx_rearmed_dithering" to "enabled", "pcsx_rearmed_memcard2" to "none"), CoreRegistry.forTag("PS")!!.defaultOptions)
+        // Enhanced Resolution is the app's (Res3dConsole.PCSX): off until the launch sends the 3D Resolution.
+        assertEquals(
+            mapOf("pcsx_rearmed_dithering" to "enabled", "pcsx_rearmed_memcard2" to "none", "pcsx_rearmed_neon_enhancement_enable" to "disabled"),
+            CoreRegistry.forTag("PS")!!.defaultOptions,
+        )
         assertEquals(mapOf("race_dark_filter_level" to "50"), CoreRegistry.forTag("NGPC")!!.defaultOptions)
         assertEquals("anaglyph", CoreRegistry.forTag("VB")!!.defaultOptions["vb_3dmode"])
         assertEquals(

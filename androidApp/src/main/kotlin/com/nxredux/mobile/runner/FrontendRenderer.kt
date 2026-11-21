@@ -159,7 +159,7 @@ internal class FrontendRenderer(
     private val isPs2 get() = Res3dConsole.forTag(gameTag) == Res3dConsole.PS2
     private val isPsp get() = Res3dConsole.forTag(gameTag) == Res3dConsole.PSP
     private val isDolphin get() = Res3dConsole.forTag(gameTag) == Res3dConsole.DOLPHIN
-    private val isPs1 get() = Res3dConsole.forTag(gameTag) == Res3dConsole.PS1
+    private val isPs1 get() = Res3dConsole.forTag(gameTag).let { it == Res3dConsole.PS1 || it == Res3dConsole.PCSX }
     private val privateRoot get() = host.privateRoot
     private val dualMode get() = host.dualMode
     private val pictureOn get() = host.pictureOn

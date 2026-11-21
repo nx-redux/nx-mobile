@@ -174,7 +174,12 @@ object CoreRegistry {
         "pcsx_rearmed", "libpcsx_rearmed_libretro_android.so",
         setOf("bin", "cue", "img", "mdf", "pbp", "toc", "cbn", "m3u", "chd", "iso", "exe"),
         // No second memory card unless picked (the core's default is a card shared by all games).
-        defaultOptions = mapOf("pcsx_rearmed_dithering" to "enabled", "pcsx_rearmed_memcard2" to "none"),
+        // pcsx_rearmed_neon_enhancement_enable is the app's (3D Resolution rows, Res3dConsole.PCSX); off until the launch sends it.
+        defaultOptions = mapOf(
+            "pcsx_rearmed_dithering" to "enabled", "pcsx_rearmed_memcard2" to "none",
+            "pcsx_rearmed_neon_enhancement_enable" to "disabled",
+        ),
+        lockedOptions = setOf("pcsx_rearmed_neon_enhancement_enable"),
         biosFiles = listOf("psxonpsp660.bin", "scph101.bin", "scph5501.bin", "scph7001.bin", "scph1001.bin"),   // optional: HLE built in
         controllerPort0 = CoreDescriptor.PS_DUALSHOCK,
         players = 2,

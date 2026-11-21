@@ -361,7 +361,7 @@ fun resolutionRows(console: Res3dConsole, displayMax: Int?): List<FrontendOption
         Res3dConsole.PS2 -> "PS2"
         Res3dConsole.PSP -> "PSP"
         Res3dConsole.DOLPHIN -> "console"
-        Res3dConsole.PS1 -> "PS1"
+        Res3dConsole.PS1, Res3dConsole.PCSX -> "PS1"
     }
     // what the scale draws: the PS2 and PSP cores draw the whole picture at it, the DS and 3DS ones only the 3D
     val drawn = if (console.wholePicture) "the game" else "3D"
@@ -379,8 +379,8 @@ fun resolutionRows(console: Res3dConsole, displayMax: Int?): List<FrontendOption
             else "The most Auto draws 3D at, as a multiple of the $screen screen.",
             visual = false, valueLabels = maxScales.map { "${it}x" }, shownWhen = console.modeKey to setOf(Nds3dMode.AUTO.value),
         ),
-        // The PS2's Performance is native: no scale to pick.
-        if (console == Res3dConsole.PS2) null else FrontendOption(
+        // Performance at native size: no scale to pick.
+        if (console.nativePerformance) null else FrontendOption(
             console.scaleKey, "Scale", perfScales, Nds3dResolution.DEFAULT_PERFORMANCE_SCALE.toString(),
             "The fixed resolution Performance draws $drawn at, as a multiple of the $screen screen.",
             visual = false, valueLabels = perfScales.map { "${it}x" }, shownWhen = console.modeKey to setOf(Nds3dMode.PERFORMANCE.value),

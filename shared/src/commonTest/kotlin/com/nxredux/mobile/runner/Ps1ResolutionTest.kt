@@ -6,21 +6,19 @@ import com.nxredux.mobile.options.CoreConfig
 import com.nxredux.mobile.options.FrontendOptions
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** The PlayStation 3D Resolution: SwanStation draws the whole picture at a whole multiple of 320 x 240, the app picks it. */
+/** The PlayStation 3D Resolution on SwanStation: draws the whole picture at a whole multiple of 320 x 240, the app picks it. */
 class Ps1ResolutionTest {
     private val ps1 = Res3dConsole.PS1
 
-    @Test fun onlySwanStationGetsTheRows() {
+    @Test fun swanStationHasItsOwnRows() {
         assertEquals(ps1, Res3dConsole.forTag("PSX"))
-        assertNull(Res3dConsole.forTag("PS"))   // PCSX-ReARMed draws on the CPU at native size
         assertEquals("swanstation", ps1.coreId)
         assertEquals("swanstation_GPU_ResolutionScale", ps1.coreKey)
         assertEquals("4", ps1.coreValue(4))
         assertTrue(ps1.wholePicture)
-        assertTrue(ConsoleSettings.tableFor("PS").none { it.key in ps1.keys })
+        assertTrue(ConsoleSettings.tableFor("PS").none { it.key in ps1.keys })   // PCSX-ReARMed's are its own
     }
 
     @Test fun aPartWayScaleRoundsUp() {
