@@ -174,7 +174,12 @@ object CoreRegistry {
         "pcsx_rearmed", "libpcsx_rearmed_libretro_android.so",
         setOf("bin", "cue", "img", "mdf", "pbp", "toc", "cbn", "m3u", "chd", "iso", "exe"),
         // No second memory card unless picked (the core's default is a card shared by all games).
-        defaultOptions = mapOf("pcsx_rearmed_dithering" to "enabled", "pcsx_rearmed_memcard2" to "none"),
+        // pcsx_rearmed_neon_enhancement_enable is the app's (3D Resolution rows, Res3dConsole.PCSX); off until the launch sends it.
+        defaultOptions = mapOf(
+            "pcsx_rearmed_dithering" to "enabled", "pcsx_rearmed_memcard2" to "none",
+            "pcsx_rearmed_neon_enhancement_enable" to "disabled",
+        ),
+        lockedOptions = setOf("pcsx_rearmed_neon_enhancement_enable"),
         biosFiles = listOf("psxonpsp660.bin", "scph101.bin", "scph5501.bin", "scph7001.bin", "scph1001.bin"),   // optional: HLE built in
         controllerPort0 = CoreDescriptor.PS_DUALSHOCK,
         players = 2,
@@ -193,9 +198,13 @@ object CoreRegistry {
         players = 2,
         // "Auto" asks GET_PREFERRED_HW_RENDER, so Graphics API decides; not locked, so OpenGL / Software stay the player's
         // choice on OpenGL ES. Vulkan is reached only through Graphics API, never offered as a value.
-        defaultOptions = mapOf("swanstation_GPU_Renderer" to "Auto", "swanstation_MemoryCards_Card1Type" to "Libretro"),
+        // swanstation_GPU_ResolutionScale is the app's (3D Resolution rows, Res3dConsole.PS1); 1x until the launch sends it.
+        defaultOptions = mapOf(
+            "swanstation_GPU_Renderer" to "Auto", "swanstation_MemoryCards_Card1Type" to "Libretro",
+            "swanstation_GPU_ResolutionScale" to "1",
+        ),
         // Card 1 as the frontend's battery save: one card per game named by the Save format, shared with PCSX ReARMed (Saves/PS).
-        lockedOptions = setOf("swanstation_MemoryCards_Card1Type"),
+        lockedOptions = setOf("swanstation_MemoryCards_Card1Type", "swanstation_GPU_ResolutionScale"),
         hiddenValues = mapOf("swanstation_GPU_Renderer" to setOf("Vulkan")),
         vulkan = VulkanSwitch(vulkan = mapOf("swanstation_GPU_Renderer" to "Auto"), lock = false),
         name = "SwanStation",

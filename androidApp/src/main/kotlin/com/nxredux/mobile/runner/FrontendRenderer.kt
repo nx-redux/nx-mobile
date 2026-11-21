@@ -159,6 +159,7 @@ internal class FrontendRenderer(
     private val isPs2 get() = Res3dConsole.forTag(gameTag) == Res3dConsole.PS2
     private val isPsp get() = Res3dConsole.forTag(gameTag) == Res3dConsole.PSP
     private val isDolphin get() = Res3dConsole.forTag(gameTag) == Res3dConsole.DOLPHIN
+    private val isPs1 get() = Res3dConsole.forTag(gameTag).let { it == Res3dConsole.PS1 || it == Res3dConsole.PCSX }
     private val privateRoot get() = host.privateRoot
     private val dualMode get() = host.dualMode
     private val pictureOn get() = host.pictureOn
@@ -745,6 +746,7 @@ internal class FrontendRenderer(
         if (isPs2) reportPs2Resolution(w, h, screen, shown, g)
         if (isPsp) reportPspResolution(w, h, screen, shown, g)
         if (isDolphin) reportDolphinResolution(w, h, screen, shown, g)
+        if (isPs1) reportPs1Resolution(w, h, screen, shown, g)
         if (viewport != lastViewport) {
             lastViewport = viewport
             view.viewport = viewport
@@ -799,6 +801,16 @@ internal class FrontendRenderer(
         val (current, second) = DolphinResolution.shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
         report3d(w, h, screen, halfFolded = false, current, second) {
             DolphinResolution.displayMax(w.roundToInt(), h.roundToInt())
+        }
+    }
+
+    /** The PlayStation scale's inputs to the host, as [reportPspResolution], over the 240-line picture ([Ps1Resolution]). */
+    private fun reportPs1Resolution(w: Float, h: Float, screen: ScreenClass, shown: PxRect, g: FloatArray) {
+        if (!gameReady || shown.height <= 0f) return
+        val main = shown.height.roundToInt().takeUnless { host.mainShowsNoPicture() }
+        val (current, second) = Ps1Resolution.shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
+        report3d(w, h, screen, halfFolded = false, current, second) {
+            Ps1Resolution.displayMax(w.roundToInt(), h.roundToInt())
         }
     }
 

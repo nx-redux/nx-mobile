@@ -42,10 +42,23 @@ enum class Res3dConsole(
     PSP("ppsspp", "ppsspp_internal_resolution", 10, 3, "nx_psp_3d_resolution", "nx_psp_3d_max_scale", "nx_psp_3d_scale"),
 
     /** GameCube and Wii: one core, so one set of rows (each console's file keeps its own values). */
-    DOLPHIN("dolphin", "dolphin_efb_scale", 8, 3, "nx_dolphin_3d_resolution", "nx_dolphin_3d_max_scale", "nx_dolphin_3d_scale");
+    DOLPHIN("dolphin", "dolphin_efb_scale", 8, 3, "nx_dolphin_3d_resolution", "nx_dolphin_3d_max_scale", "nx_dolphin_3d_scale"),
 
-    /** The core draws its whole picture at the scale (PS2, PSP, Dolphin), not only the 3D: the rows say "the game". */
-    val wholePicture: Boolean get() = this == PS2 || this == PSP || this == DOLPHIN
+    /** PlayStation on SwanStation's hardware renderer. Light enough that the AYANEO's Mali-G76 holds 60 fps at 4x. */
+    PS1("swanstation", "swanstation_GPU_ResolutionScale", 8, 4, "nx_ps1_3d_resolution", "nx_ps1_3d_max_scale", "nx_ps1_3d_scale"),
+
+    /**
+     * PlayStation on PCSX-ReARMed: its NEON renderer draws on the CPU, at native size or, with Enhanced Resolution, at 2x
+     * (not the 640-wide and 480-line modes, already sharp). The AYANEO holds 60 fps at 2x in Marvel Super Heroes and
+     * Street Fighter EX Plus Alpha.
+     */
+    PCSX("pcsx_rearmed", "pcsx_rearmed_neon_enhancement_enable", 2, 2, "nx_pcsx_3d_resolution", "nx_pcsx_3d_max_scale", "nx_pcsx_3d_scale");
+
+    /** The core draws its whole picture at the scale (PS1, PS2, PSP, Dolphin), not only the 3D: the rows say "the game". */
+    val wholePicture: Boolean get() = this == PS1 || this == PCSX || this == PS2 || this == PSP || this == DOLPHIN
+
+    /** Performance draws at native size: no Scale row (the PS2 runs slowly above it; PCSX-ReARMed has only 1x and 2x). */
+    val nativePerformance: Boolean get() = this == PS2 || this == PCSX
 
     /** The three stored rows. */
     val keys: Set<String> get() = setOf(modeKey, maxScaleKey, scaleKey)
@@ -73,12 +86,17 @@ enum class Res3dConsole(
         PS2 -> window?.let { Ps2Resolution.displayMax(it.first, it.second) }
         PSP -> window?.let { PspResolution.displayMax(it.first, it.second) }
         DOLPHIN -> window?.let { DolphinResolution.displayMax(it.first, it.second) }
+        PS1, PCSX -> window?.let { Ps1Resolution.displayMax(it.first, it.second) }
     }
 
-    /** The core option's value for scale [n]: ARMSX2 reads "2x", PPSSPP the size ("960x544"), the DS and 3DS cores a bare number. */
+    /**
+     * The core option's value for scale [n]: ARMSX2 reads "2x", PPSSPP the size ("960x544"), PCSX-ReARMed whether Enhanced
+     * Resolution is on, the others a bare number.
+     */
     fun coreValue(n: Int): String = when (this) {
         PS2 -> "${n}x"
         PSP -> "${PspResolution.NATIVE_W * n}x${PspResolution.NATIVE_H * n}"
+        PCSX -> if (n >= 2) "enabled" else "disabled"
         else -> "$n"
     }
 
@@ -90,6 +108,8 @@ enum class Res3dConsole(
             "PS2" -> PS2
             "PSP" -> PSP
             "GC", "WII" -> DOLPHIN
+            "PSX" -> PS1
+            "PS" -> PCSX
             else -> null
         }
     }
@@ -135,7 +155,7 @@ object Nds3dResolution {
 
     /** Performance never goes above half the [displayMax], rounded up (the PS2: native, 1x). */
     fun performanceCeiling(displayMax: Int, console: Res3dConsole = Res3dConsole.DS): Int =
-        if (console == Res3dConsole.PS2) 1 else ceil(displayMax / 2.0).toInt().coerceIn(1, console.coreMax)
+        if (console.nativePerformance) 1 else ceil(displayMax / 2.0).toInt().coerceIn(1, console.coreMax)
 
     /**
      * The scale to send for [mode]: [current] is the shown scale (null: no screens placed yet, so [displayMax] stands in),
@@ -398,6 +418,37 @@ object DolphinResolution {
 
     /** The scale a frame [heightPx] rows tall was drawn at: the nearest whole (a PAL frame is 576 a scale). */
     fun frameScale(heightPx: Int): Int = (heightPx / NATIVE_H.toDouble()).roundToInt().coerceIn(1, MAX)
+
+    /** The shown scale and the second display's reach, as [Ps2Resolution.shownScales]. */
+    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> {
+        val second = secondHeightPx?.let(::currentScale)
+        return listOfNotNull(mainHeightPx?.let(::currentScale), second).maxOrNull() to (second ?: 1)
+    }
+}
+
+/**
+ * SwanStation's internal resolution (swanstation_GPU_ResolutionScale): a whole multiple of the PlayStation's picture, shown
+ * 4:3 at 240 lines (320 x 240). It changes mid-game: on OpenGL ES the frame follows; on Vulkan the core draws at the new
+ * scale but keeps handing over the size it launched at until the next launch.
+ */
+object Ps1Resolution {
+    const val NATIVE_W = 320
+    const val NATIVE_H = 240
+
+    /** The most the rows offer (the core goes to 16x). */
+    private const val MAX = 8
+
+    /** Below a whole scale by this much (a px or two of rounding) still counts as that scale. */
+    private const val SLACK = 0.02
+
+    private fun up(scale: Double): Int = ceil(scale - SLACK).toInt().coerceIn(1, MAX)
+
+    /** The scale the picture reaches fitted in a [w] x [h] px window, either way up, rounded up (1 to 8). */
+    fun displayMax(w: Int, h: Int): Int =
+        maxOf(up(minOf(w.toDouble() / NATIVE_W, h.toDouble() / NATIVE_H)), up(minOf(h.toDouble() / NATIVE_W, w.toDouble() / NATIVE_H)))
+
+    /** The scale a picture [pictureHeightPx] px tall shows at, rounded up (1 to 8). */
+    fun currentScale(pictureHeightPx: Int): Int = up(pictureHeightPx.toDouble() / NATIVE_H)
 
     /** The shown scale and the second display's reach, as [Ps2Resolution.shownScales]. */
     fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> {
