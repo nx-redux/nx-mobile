@@ -76,8 +76,8 @@ typedef struct {
 	void* bind_ctx;
 	/* The game's radio when the link is made, as if ndl_radio_changed had told it. */
 	ndl_radio radio;
-	/* AUTO only: starts as after ndl_leave_now, out of rooms until the next radio ON. Set in the config rather than
-	 * left to a later call, so the network thread never sends a search before it. */
+	/* AUTO only: starts as after ndl_leave_now, out of rooms for this link's life. Set in the config rather than left
+	 * to a later call, so the network thread never sends a search before it. */
 	bool parked;
 } ndl_config;
 
@@ -119,8 +119,8 @@ typedef enum { NDL_CABLE_NONE = 0, NDL_CABLE_COMING = 1, NDL_CABLE_UP = 2 } ndl_
  * come up first and carry it. */
 void ndl_set_cable(ndl_link* l, ndl_cable state, const char* broadcast);
 
-/* Leaves at once, without the radio-off linger. The link then stays out of rooms until ndl_set_mode (or, in AUTO, the
- * next radio ON). */
+/* Leaves at once, without the radio-off linger. The link then stays out of rooms until ndl_set_mode (in AUTO, until a
+ * new link: the game's wireless coming on again does not end it). */
 void ndl_leave_now(ndl_link* l);
 
 /* Undoes ndl_leave_now for a sheet session: HOST reopens its room, JOIN starts asking its holder again. Nothing while
@@ -130,8 +130,8 @@ void ndl_rejoin(ndl_link* l);
 bool ndl_in_room(ndl_link* l);
 
 /* Where the link stands for the in-game menu: out of any room and not looking for one (a leave parks the link here),
- * looking for or about to open one (the automatic route with the radio on and no leave of its own, or a join still
- * under way while the radio-off linger runs), or in a room. */
+ * looking for or about to open one (the automatic route with the radio on and no leave of its own, a join still under
+ * way while the radio-off linger runs, or alone in a room), or in a room with another phone. */
 typedef enum { NDL_OUT = 0, NDL_SEEKING = 1, NDL_ROOM = 2 } ndl_presence;
 ndl_presence ndl_presence_now(ndl_link* l);
 /* This phone's member id, -1 when not in a room. */

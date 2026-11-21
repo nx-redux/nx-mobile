@@ -335,9 +335,9 @@ void forgetCore() {
 void configure(const std::vector<Variable>& vars) {
     Settings wanted = read(vars);
     if (wanted == current) return;
-    // A sheet session left with the console's local wireless on: the automatic route from here, but the game is still
-    // in the wireless screen it was in, so the new link stays out (not even back in the session's room, which an
-    // automatic search prefers) until the game turns its wireless off and on.
+    // A sheet session left with the console's local wireless on: the automatic route from here, but out of rooms (not
+    // even back in the session's room, which an automatic search prefers) until the console's local wireless is
+    // switched off and on again, as after any leave.
     const bool sessionLeft = (current.mode == NDL_HOST || current.mode == NDL_JOIN) && wanted.mode == NDL_AUTO;
     current = wanted;
 
@@ -373,7 +373,7 @@ void configure(const std::vector<Variable>& vars) {
         theLink = created;
     }
     LOGI("DS link: %s on port %u%s", modeName(wanted.mode), (unsigned) wanted.port,
-         sessionLeft ? ", out of rooms until the game's wireless comes on again" : "");
+         sessionLeft ? ", out of rooms until local wireless is switched on again" : "");
 }
 
 void setNetwork(int64_t handle) {
