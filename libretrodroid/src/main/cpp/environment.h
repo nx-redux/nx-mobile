@@ -49,6 +49,10 @@ public:
     void operator=(Environment const&) = delete;
 
     static void callback_retro_log(enum retro_log_level level, const char *fmt, ...);
+    // Whether the core's warnings reach logcat with the Debug log on (errors always do). Off for a core whose warnings
+    // come in floods: melonDS DS logs "restore CPSR under bad mode" thousands of times a second in Mario Kart DS, and
+    // logd taking them cut the AYANEO from 36 to 6 fps.
+    static void setCoreWarningsLogged(bool value) { coreWarningsLogged.store(value, std::memory_order_relaxed); }
 
     static bool callback_set_sensor_state(unsigned port, enum retro_sensor_action action, unsigned rate);
 
@@ -81,6 +85,7 @@ public:
     bool getFastForwardingOverride(struct retro_fastforwarding_override &out);
 
 private:
+    static inline std::atomic<bool> coreWarningsLogged { true };
     Environment() {}
 
 public:

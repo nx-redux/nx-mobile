@@ -489,7 +489,8 @@ void Environment::callback_retro_log(enum retro_log_level level, const char *fmt
             if (nx_log_enabled()) __android_log_vprint(ANDROID_LOG_INFO, MODULE_NAME_CORE, fmt, argptr);
             break;
         case RETRO_LOG_WARN:
-            if (nx_log_enabled()) __android_log_vprint(ANDROID_LOG_WARN, MODULE_NAME_CORE, fmt, argptr);
+            if (nx_log_enabled() && coreWarningsLogged.load(std::memory_order_relaxed))
+                __android_log_vprint(ANDROID_LOG_WARN, MODULE_NAME_CORE, fmt, argptr);
             break;
         case RETRO_LOG_ERROR:   // always, as LOGE (the Debug log setting keeps errors)
             __android_log_vprint(ANDROID_LOG_ERROR, MODULE_NAME_CORE, fmt, argptr);
