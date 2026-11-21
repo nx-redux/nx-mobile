@@ -124,7 +124,7 @@ struct ndl_link {
 
 	/* AUTO. */
 	uint64_t radio_off_ms; /* when the radio went off, 0 while it is on */
-	bool parked;		   /* left at once: no search until the radio comes on again */
+	bool parked;		   /* left at once: no search until ndl_rejoin */
 	uint64_t search_until; /* a search is waiting for answers until then, 0 = none */
 	uint64_t next_search_ms;
 	uint64_t next_alone_ms;
@@ -960,10 +960,8 @@ void ndl_radio_changed(ndl_link* l, ndl_radio r) {
 			l->radio_off_ms = now_ms(l);
 	} else {
 		l->radio_off_ms = 0;
-		/* On comes only from the game switching its wireless on, which ends a leave even when no off came between
-		 * (a state loaded from before the wireless). */
-		if (r != l->radio || r == NDL_RADIO_ON)
-			l->parked = false;
+		/* A leave holds through the game's wireless (a game that keeps it on would pull the phone straight back
+		 * in); only ndl_rejoin ends it. */
 		if (l->radio == NDL_RADIO_OFF && l->cable == NDL_CABLE_COMING)
 			l->cable_hold_until = now_ms(l) + NDL_CABLE_HOLD_MS;
 	}
@@ -1020,6 +1018,8 @@ void ndl_rejoin(ndl_link* l) {
 			open_room(l);
 		} else if (l->mode == NDL_JOIN && l->holder.sin_family == AF_INET) {
 			start_join(l, &l->holder);
+		} else if (l->mode == NDL_AUTO && l->parked) {
+			auto_reset(l);
 		}
 	}
 	pthread_mutex_unlock(&l->mu);
@@ -1040,8 +1040,11 @@ ndl_presence ndl_presence_now(ndl_link* l) {
 		return NDL_OUT;
 	pthread_mutex_lock(&l->mu);
 	ndl_presence p = NDL_OUT;
-	if (l->role == R_HOLDER || l->role == R_MEMBER)
-		p = NDL_ROOM;
+	/* Alone in a room (one this phone holds with nobody in it yet) is no link: the game plays as on its own. */
+	if (l->role == R_HOLDER)
+		p = holder_count(l) > 1 ? NDL_ROOM : NDL_SEEKING;
+	else if (l->role == R_MEMBER)
+		p = l->count > 1 ? NDL_ROOM : NDL_SEEKING;
 	else if (l->mode == NDL_AUTO && auto_wanted(l, now_ms(l)))
 		p = NDL_SEEKING;
 	pthread_mutex_unlock(&l->mu);

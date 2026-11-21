@@ -1415,7 +1415,7 @@ class InGameMenuModelTest {
         m.setFrontend(FrontendOptions.defaults("NDS"), emptyList(), emptySet(), "NDS", overlayAvailable = false)
         m.select(4); m.activate(4)                           // Root → Options
         assertEquals(
-            FULL_OPTIONS,
+            FULL_OPTIONS.toMutableList().apply { add(indexOf("Audio"), "Multiplayer") },   // Local Wireless switches in the game
             m.state.page.rows.map { it.label },
         )
         assertEquals(MenuRow.Submenu("Display", DISPLAY), m.state.page.rows.first())
@@ -1464,14 +1464,20 @@ class InGameMenuModelTest {
         assertEquals(SPEED_ROWS + "Frame Skip", wii.getValue("Gameplay"))
     }
 
-    // Local Wireless is read when the game starts, so Multiplayer (its only row) has no page in the running game.
-    @Test fun multiplayer_has_no_in_game_page() {
-        for (tag in listOf("NDS", "PSP")) {
+    // PSP's Local Wireless is read when the game starts, so Multiplayer (its only row) has no page in its running game;
+    // the DS's and 3DS's switch in the game.
+    @Test fun multiplayer_has_an_in_game_page_where_local_wireless_switches_live() {
+        for ((tag, shown) in listOf("NDS" to true, "3DS" to true, "PSP" to false)) {
             val m = model()
             m.setFrontend(FrontendOptions.defaults(tag), emptyList(), emptySet(), tag)
             m.select(4); m.activate(4)
-            assertEquals(false, "Multiplayer" in m.state.page.rows.map { it.label }, tag)
+            assertEquals(shown, "Multiplayer" in m.state.page.rows.map { it.label }, tag)
         }
+        val m = model()
+        m.setFrontend(FrontendOptions.defaults("3DS"), emptyList(), emptySet(), "3DS")
+        m.select(4); m.activate(4)
+        assertNull(m.activate(m.optionsRow("Multiplayer")))
+        assertEquals(listOf("Local Wireless"), m.state.page.rows.map { it.label })
     }
 
     // Bottom screen (every console) shows on the running game's Display page only while a second display is

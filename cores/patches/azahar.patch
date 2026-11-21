@@ -1087,10 +1087,10 @@ index 0000000..e160fc7
 +#endif
 diff --git a/src/citra_libretro/nx_3ds_link.h b/src/citra_libretro/nx_3ds_link.h
 new file mode 100644
-index 0000000..b94614d
+index 0000000..68440c3
 --- /dev/null
 +++ b/src/citra_libretro/nx_3ds_link.h
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,37 @@
 +// Copyright Citra Emulator Project / Azahar Emulator Project
 +// Licensed under GPLv2 or any later version
 +// Refer to the license.txt file included.
@@ -1104,8 +1104,8 @@ index 0000000..b94614d
 +#define NX_ENVIRONMENT_SET_3DS_LINK (0x20000 /* RETRO_ENVIRONMENT_PRIVATE */ | 0x4e5a)
 +
 +#define NX_3DS_LINK_OUT 0     // in no room and not looking for one
-+#define NX_3DS_LINK_SEEKING 1 // looking for a room, about to open one, or asking a session's host
-+#define NX_3DS_LINK_ROOM 2    // in a room
++#define NX_3DS_LINK_SEEKING 1 // looking for a room, about to open one, asking a session's host, or alone in a room
++#define NX_3DS_LINK_ROOM 2    // in a room with another device
 +
 +#define NX_3DS_CABLE_NONE 0   // no phone-to-phone cable
 +#define NX_3DS_CABLE_COMING 1 // one is coming up: a room found off it waits a few seconds for it
@@ -1114,11 +1114,10 @@ index 0000000..b94614d
 +struct nx_3ds_link_interface {
 +    /// One of NX_3DS_LINK_*.
 +    int (*presence)(void);
-+    /// Leaves the room and stays out: until the game turns its wireless on again (automatic), or
-+    /// until rejoin (a session). Returns at once; presence is out from then, and the room is left
-+    /// within a moment, on the room's own thread.
++    /// Leaves the room and stays out until rejoin. Returns at once; presence is out from then, and
++    /// the room is left within a moment, on the room's own thread.
 +    void (*leave)(void);
-+    /// A session goes back to its room after leave. Nothing on the automatic route.
++    /// Undoes leave: a session goes back to its room, the automatic route looks for rooms again.
 +    void (*rejoin)(void);
 +    /// The phone-to-phone cable beside the Wi-Fi: one of NX_3DS_CABLE_*, and its network's
 +    /// broadcast address (a /30).
@@ -1126,6 +1125,8 @@ index 0000000..b94614d
 +    /// Filled in by the frontend while it answers the call: puts a socket of the room on the
 +    /// cable's network (cable != 0) or back on the Wi-Fi. Null: the frontend moves no sockets.
 +    void (*route_socket)(int fd, int cable);
++    /// Other devices in the room, 0 when in none.
++    int (*others)(void);
 +};
 diff --git a/src/citra_libretro/player_mii.cpp b/src/citra_libretro/player_mii.cpp
 new file mode 100644
@@ -1293,10 +1294,10 @@ index 0000000..0e6cf75
 +} // namespace LibRetro
 diff --git a/src/citra_libretro/room_link.cpp b/src/citra_libretro/room_link.cpp
 new file mode 100644
-index 0000000..6cf7233
+index 0000000..155d2c8
 --- /dev/null
 +++ b/src/citra_libretro/room_link.cpp
-@@ -0,0 +1,717 @@
+@@ -0,0 +1,793 @@
 +// Copyright Citra Emulator Project / Azahar Emulator Project
 +// Licensed under GPLv2 or any later version
 +// Refer to the license.txt file included.
@@ -1381,9 +1382,11 @@ index 0000000..6cf7233
 +std::atomic<bool> refused{false};
 +std::atomic<bool> joined_once{false};
 +std::atomic<bool> random_mac{false};
-+// The frontend took this device out of its room (LeaveNow): the automatic route stays out until
-+// the game turns its wireless on again, a session until Rejoin.
++// Out of rooms on the frontend's word (LeaveNow, or "standby") until Rejoin or "auto": a game
++// that keeps its wireless on would otherwise pull the device straight back in.
 +std::atomic<bool> parked{false};
++// The automatic route's mode as the frontend last sent it: "auto" or "standby".
++std::string auto_wanted;
 +// One at a time: the frontend's leave and rejoin (any thread) and the core's own LeaveRoom.
 +std::mutex control_mutex;
 +// A session's host address, for Rejoin.
@@ -1433,6 +1436,9 @@ index 0000000..6cf7233
 +std::atomic<int> shown_refusal{-1};
 +RoomMember::CallbackHandle<RoomMember::State> state_handle;
 +RoomMember::CallbackHandle<RoomMember::Error> error_handle;
++RoomMember::CallbackHandle<Network::StatusMessageEntry> status_handle;
++// When a device was last shown leaving: a host that leaves closes the room just after.
++std::atomic<Clock::rep> member_left_at{0};
 +
 +// Auto mode: what the game's wireless asks for, set from the emulation thread.
 +std::atomic<bool> wireless_on{false};
@@ -1470,6 +1476,18 @@ index 0000000..6cf7233
 +    default:
 +        return "the host refused the connection";
 +    }
++}
++
++/// A player name as people know it: the frontend adds "-" and four digits so two devices with one
++/// name can share a room.
++std::string ShownName(const std::string& nickname) {
++    const auto dash = nickname.rfind('-');
++    if (dash == std::string::npos || nickname.size() - dash != 5)
++        return nickname;
++    for (size_t i = dash + 1; i < nickname.size(); ++i)
++        if (nickname[i] < '0' || nickname[i] > '9')
++            return nickname;
++    return nickname.substr(0, dash);
 +}
 +
 +bool Sleep(int ms) {
@@ -1735,6 +1753,14 @@ index 0000000..6cf7233
 +    }
 +}
 +
++void StartAutoWorker() {
++    if (!worker_running.exchange(true)) {
++        if (worker.joinable())
++            worker.join();
++        worker = std::thread(AutoLoop);
++    }
++}
++
 +void OnWireless(WirelessState state) {
 +    const bool was_on = wireless_on;
 +    // Before the worker starts: one on its way out sees the wireless on and stays.
@@ -1752,10 +1778,8 @@ index 0000000..6cf7233
 +        wireless_off_at = Clock::now().time_since_epoch().count();
 +        break;
 +    }
-+    if (state == WirelessState::Off)
++    if (state == WirelessState::Off || parked)
 +        return;
-+    // The game uses its wireless again: a leave the frontend made is over.
-+    parked = false;
 +    if (!was_on && cable == NX_3DS_CABLE_COMING)
 +        HoldForCable();
 +    {
@@ -1763,11 +1787,7 @@ index 0000000..6cf7233
 +        if (!console_mac)
 +            console_mac = Service::CFG::GetConsoleMacAddress(Core::System::GetInstance());
 +    }
-+    if (!worker_running.exchange(true)) {
-+        if (worker.joinable())
-+            worker.join();
-+        worker = std::thread(AutoLoop);
-+    }
++    StartAutoWorker();
 +}
 +
 +void StopWorker() {
@@ -1792,8 +1812,11 @@ index 0000000..6cf7233
 +            member->Unbind(state_handle);
 +        if (error_handle)
 +            member->Unbind(error_handle);
++        if (status_handle)
++            member->Unbind(status_handle);
 +        state_handle.reset();
 +        error_handle.reset();
++        status_handle.reset();
 +    }
 +    LeaveAndClose();
 +    mode = Mode::Off;
@@ -1807,6 +1830,10 @@ index 0000000..6cf7233
 +        return NX_3DS_LINK_OUT;
 +    if (Linked())
 +        return NX_3DS_LINK_ROOM;
++    // Alone in a room (one this device opened, or a session's still waiting) is no link yet: the
++    // game plays as on its own.
++    if (auto member = Network::GetRoomMember().lock(); member && member->IsConnected())
++        return NX_3DS_LINK_SEEKING;
 +    if (now == Mode::Auto)
 +        return wireless_on ? NX_3DS_LINK_SEEKING : NX_3DS_LINK_OUT;
 +    return NX_3DS_LINK_SEEKING;
@@ -1835,6 +1862,16 @@ index 0000000..6cf7233
 +
 +void Rejoin() {
 +    std::scoped_lock control(control_mutex);
++    if (mode == Mode::Auto) {
++        // Called directly: the menu holds frames, so an off and on there reach the options as no change.
++        if (!parked.exchange(false))
++            return;
++        auto_wanted = "auto";
++        LOG_INFO(Frontend, "3DS link: looking for rooms again");
++        if (wireless_on)
++            StartAutoWorker();
++        return;
++    }
 +    if (mode != Mode::Session || !parked.exchange(false))
 +        return;
 +    LOG_INFO(Frontend, "3DS link: back to the session's room");
@@ -1861,7 +1898,15 @@ index 0000000..6cf7233
 +        Route(room_socket, state == NX_3DS_CABLE_UP);
 +}
 +
-+nx_3ds_link_interface link_interface{Presence, LeaveNow, Rejoin, SetCable, nullptr};
++int Others() {
++    auto member = Network::GetRoomMember().lock();
++    if (!member || !member->IsConnected())
++        return 0;
++    const auto count = static_cast<int>(member->GetMemberInformation().size());
++    return count > 1 ? count - 1 : 0;
++}
++
++nx_3ds_link_interface link_interface{Presence, LeaveNow, Rejoin, SetCable, nullptr, Others};
 +
 +void OnSocket(int fd, bool server, const std::string& address) {
 +    if (server) {
@@ -1877,10 +1922,10 @@ index 0000000..6cf7233
 +
 +void Start() {
 +    const std::string wanted = FetchVariable(MODE_KEY, "off");
-+    if (mode != Mode::Off || (wanted != "host" && wanted != "join" && wanted != "auto"))
++    if (mode != Mode::Off || (wanted != "host" && wanted != "join" && wanted != "auto" && wanted != "standby"))
 +        return;
 +    const bool host = wanted == "host";
-+    const bool automatic = wanted == "auto";
++    const bool automatic = wanted == "auto" || wanted == "standby";
 +    const std::string ip = wanted == "join" ? FetchVariable(IP_KEY, "") : "127.0.0.1";
 +    player_name = FetchVariable(NAME_KEY, host ? "Host" : "Player");
 +    room_port = Network::DefaultRoomPort;
@@ -1937,6 +1982,17 @@ index 0000000..6cf7233
 +            Notice(RoomOpen() ? "Local wireless: room open" : "Local wireless: connected");
 +        }
 +    });
++    status_handle = member->BindOnStatusMessageReceived([](const Network::StatusMessageEntry& entry) {
++        if (entry.nickname == player_name)
++            return; // this device's own arrival: "connected" or "room open" says it
++        if (entry.type == Network::IdMemberJoin)
++            Notice("Local wireless: " + ShownName(entry.nickname) + " joined");
++        else if (entry.type == Network::IdMemberLeave || entry.type == Network::IdMemberKicked ||
++                 entry.type == Network::IdMemberBanned) {
++            member_left_at = Clock::now().time_since_epoch().count();
++            Notice("Local wireless: " + ShownName(entry.nickname) + " left");
++        }
++    });
 +    error_handle = member->BindOnError([automatic](const RoomMember::Error& error) {
 +        if (parked)
 +            return; // the frontend's own leave is no lost connection
@@ -1947,7 +2003,9 @@ index 0000000..6cf7233
 +            return;
 +        }
 +        if (error == RoomMember::Error::LostConnection && joined_once) {
-+            Notice("Local wireless: connection lost");
++            const auto left = Clock::time_point(Clock::duration(member_left_at.load()));
++            if (Clock::now() - left > std::chrono::seconds(3))
++                Notice("Local wireless: connection lost"); // else the host left: "<name> left" says it
 +            return;
 +        }
 +        if (!automatic)
@@ -1961,6 +2019,9 @@ index 0000000..6cf7233
 +        wireless_on = false;
 +        wireless_hosting = false;
 +        wireless_off_at = 0;
++        // Standby still follows the game's wireless, so switching on finds it already on.
++        parked = wanted == "standby";
++        auto_wanted = wanted;
 +        mode = Mode::Auto;
 +        // The worker starts with the game's wireless: a game that never uses it costs nothing.
 +        Service::NWM::wireless_hook = OnWireless;
@@ -1982,21 +2043,37 @@ index 0000000..6cf7233
 +
 +bool Linked() {
 +    auto member = Network::GetRoomMember().lock();
-+    return member && member->IsConnected();
++    return member && member->IsConnected() && member->GetMemberInformation().size() > 1;
 +}
 +
 +void OnOptionsChanged() {
 +    const std::string wanted = FetchVariable(MODE_KEY, "off");
++    if (mode == Mode::Auto && (wanted == "auto" || wanted == "standby")) {
++        // Standby leaves the room on the worker's next turn.
++        std::scoped_lock control(control_mutex);
++        if (wanted == auto_wanted)
++            return;
++        auto_wanted = wanted;
++        parked = wanted == "standby";
++        LOG_INFO(Frontend, "3DS link: local wireless switched {}", parked ? "off" : "on");
++        if (!parked && wireless_on)
++            StartAutoWorker();
++        return;
++    }
++    if (mode == Mode::Off && (wanted == "auto" || wanted == "standby")) {
++        Start();
++        return;
++    }
 +    if (mode != Mode::Off && wanted == "off") {
 +        LeaveRoom();
 +        LOG_INFO(Frontend, "3DS link: left the room");
-+    } else if (mode == Mode::Session && wanted == "auto") {
-+        // A session left with the console's local wireless on: its room is left as for "off", then
-+        // the automatic route starts. Its hook only hears the game's next wireless on, so the game
-+        // stays out of every room, the session's included, until it turns its wireless on again.
++    } else if (mode == Mode::Session && (wanted == "auto" || wanted == "standby")) {
++        // A session left: the automatic route, out of rooms (the session's too) until Rejoin.
++        // Same thread as the wireless hook, so no search starts before parked is set.
 +        LeaveRoom();
 +        Start();
-+        LOG_INFO(Frontend, "3DS link: left the session's room, automatic from the game's next wireless on");
++        parked = true;
++        LOG_INFO(Frontend, "3DS link: left the session's room, out of rooms until local wireless is switched on");
 +    }
 +}
 +
@@ -2016,7 +2093,7 @@ index 0000000..6cf7233
 +} // namespace LibRetro::RoomLink
 diff --git a/src/citra_libretro/room_link.h b/src/citra_libretro/room_link.h
 new file mode 100644
-index 0000000..c6ddfc5
+index 0000000..33333f9
 --- /dev/null
 +++ b/src/citra_libretro/room_link.h
 @@ -0,0 +1,29 @@
@@ -2035,13 +2112,13 @@ index 0000000..c6ddfc5
 +/// Shows pending link notices; call once a frame.
 +void Poll();
 +
-+/// In a room now: the game's wireless state is shared with other devices, so a save state must
-+/// not replace it.
++/// In a room with another device now: the game's wireless state is shared with it, so a save
++/// state must not replace it. Alone in a room is not linked.
 +bool Linked();
 +
-+/// Re-reads the link mode; leaves the room when the frontend turned it off, and moves a session to
-+/// the automatic route (out of rooms until the game turns its wireless on again) when the frontend
-+/// asks for it.
++/// Re-reads the link mode; leaves the room when the frontend turned it off, switches the automatic
++/// route off ("standby": out of rooms, the game's wireless still followed) and back on ("auto"),
++/// and moves a session to the automatic route when the frontend asks for it.
 +void OnOptionsChanged();
 +
 +/// Leaves the room and shuts the network down. Call before the system shuts down: the worker is
@@ -2410,7 +2487,7 @@ index 003b3fd..b8b7ee4 100644
  };
  
 diff --git a/src/core/hle/service/nwm/nwm_uds.cpp b/src/core/hle/service/nwm/nwm_uds.cpp
-index e602bd3..3360ea5 100644
+index e602bd3..ceda121 100644
 --- a/src/core/hle/service/nwm/nwm_uds.cpp
 +++ b/src/core/hle/service/nwm/nwm_uds.cpp
 @@ -22,6 +22,7 @@
@@ -2518,7 +2595,43 @@ index e602bd3..3360ea5 100644
  
      {
          std::scoped_lock lock(connection_status_mutex);
-@@ -1734,14 +1804,34 @@ NWM_UDS::NWM_UDS(Core::System& system) : ServiceFramework("nwm::UDS"), system(sy
+@@ -1359,6 +1429,14 @@ void NWM_UDS::GetChannel(Kernel::HLERequestContext& ctx) {
+     LOG_DEBUG(Service_NWM, "called");
+ }
+ 
++void NWM_UDS::SetProbeResponseParam(Kernel::HLERequestContext& ctx) {
++    IPC::RequestParser rp(ctx);
++    rp.Skip(2, false);
++    IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
++    rb.Push(ResultSuccess);
++    LOG_DEBUG(Service_NWM, "called");
++}
++
+ class NWM_UDS::ThreadCallback : public Kernel::HLERequestContext::WakeupCallback {
+ public:
+     explicit ThreadCallback(u16 command_id_) : command_id(command_id_) {}
+@@ -1648,8 +1726,9 @@ Network::MacAddress NWM_UDS::GetMacAddress() {
+         room_member && room_member->IsConnected()) {
+         mac = room_member->GetMacAddress();
+         if (mac != CFG::GetConsoleMacAddress(system)) {
+-            LOG_WARNING(Service_NWM, "Room member mac address is different from the console mac "
+-                                     "address. Using room member mac address.");
++            // Asked on every packet: a warning here would flood the log while in a room.
++            LOG_DEBUG(Service_NWM, "Room member mac address is different from the console mac "
++                                   "address. Using room member mac address.");
+         }
+     } else {
+         // if we are not connected to the room, we can
+@@ -1709,7 +1788,7 @@ NWM_UDS::NWM_UDS(Core::System& system) : ServiceFramework("nwm::UDS"), system(sy
+         {0x001E, &NWM_UDS::ConnectToNetwork, "ConnectToNetwork"},
+         {0x001F, &NWM_UDS::DecryptBeaconData, "DecryptBeaconData"},
+         {0x0020, nullptr, "Flush"},
+-        {0x0021, nullptr, "SetProbeResponseParam"},
++        {0x0021, &NWM_UDS::SetProbeResponseParam, "SetProbeResponseParam"},
+         {0x0022, nullptr, "ScanOnConnection"},
+         // clang-format on
+     };
+@@ -1734,14 +1813,34 @@ NWM_UDS::NWM_UDS(Core::System& system) : ServiceFramework("nwm::UDS"), system(sy
      if (auto room_member = Network::GetRoomMember().lock()) {
          wifi_packet_received = room_member->BindOnWifiPacketReceived(
              [this](const Network::WifiPacket& packet) { OnWifiPacketReceived(packet); });
@@ -2555,10 +2668,29 @@ index e602bd3..3360ea5 100644
      system.CoreTiming().UnscheduleEvent(beacon_broadcast_event, 0);
  }
 diff --git a/src/core/hle/service/nwm/nwm_uds.h b/src/core/hle/service/nwm/nwm_uds.h
-index 694919c..1958920 100644
+index 694919c..731adbe 100644
 --- a/src/core/hle/service/nwm/nwm_uds.h
 +++ b/src/core/hle/service/nwm/nwm_uds.h
-@@ -560,6 +560,14 @@ private:
+@@ -350,6 +350,18 @@ private:
+      */
+     void GetChannel(Kernel::HLERequestContext& ctx);
+ 
++    /**
++     * NWM_UDS::SetProbeResponseParam service function. Rooms carry no probe responses, so this
++     * only acknowledges, quietly: games that host all the time (Festival Plaza) call it every ~2 s.
++     *  Inputs:
++     *      0 : Command header.
++     *      1-2 : Probe response parameters (unused).
++     *  Outputs:
++     *      0 : Return header
++     *      1 : Result of function, 0 on success, otherwise error code
++     */
++    void SetProbeResponseParam(Kernel::HLERequestContext& ctx);
++
+     /**
+      * NWM_UDS::Initialize service function
+      *  Inputs:
+@@ -560,6 +572,14 @@ private:
      /// Handles the deauthentication frames sent from clients to hosts, when they leave a session
      void HandleDeauthenticationFrame(const Network::WifiPacket& packet);
  
@@ -2573,7 +2705,7 @@ index 694919c..1958920 100644
      void HandleDataFrame(const Network::WifiPacket& packet);
  
      /// Callback to parse and handle a received wifi packet.
-@@ -639,6 +647,12 @@ private:
+@@ -639,6 +659,12 @@ private:
  
      // Callback identifier for the OnWifiPacketReceived event.
      Network::RoomMember::CallbackHandle<Network::WifiPacket> wifi_packet_received;
@@ -2791,6 +2923,37 @@ index 7ff2cfe..5ba2a78 100644
      gl_Position = vec4(vert_position, 0.0, 1.0);
 +    frag_color = vert_color;
  }
+diff --git a/src/video_core/renderer_opengl/gl_shader_disk_cache.cpp b/src/video_core/renderer_opengl/gl_shader_disk_cache.cpp
+index fbcf5ce..9509c95 100644
+--- a/src/video_core/renderer_opengl/gl_shader_disk_cache.cpp
++++ b/src/video_core/renderer_opengl/gl_shader_disk_cache.cpp
+@@ -124,6 +124,8 @@ std::optional<std::vector<ShaderDiskCacheRaw>> ShaderDiskCache::LoadTransferable
+         return std::nullopt;
+     }
+ 
++    // Opened to append: libretro's VFS then starts at the end of the file, where nothing is read.
++    transferable_file.Seek(0, SEEK_SET);
+     u32 version{};
+     if (transferable_file.ReadBytes(&version, sizeof(version)) != sizeof(version)) {
+         LOG_ERROR(Render_OpenGL,
+@@ -141,6 +143,8 @@ std::optional<std::vector<ShaderDiskCacheRaw>> ShaderDiskCache::LoadTransferable
+     if (version > NativeVersion) {
+         LOG_WARNING(Render_OpenGL, "Transferable shader cache was generated with a newer version "
+                                    "of the emulator - skipping");
++        // Back to the end, where new entries go: libretro's VFS writes at the read position.
++        transferable_file.Seek(0, SEEK_END);
+         return std::nullopt;
+     }
+ 
+@@ -189,6 +193,8 @@ ShaderDiskCache::LoadPrecompiled(bool compressed) {
+         return {};
+     }
+ 
++    // Opened to append: libretro's VFS then starts at the end of the file, where nothing is read.
++    precompiled_file.Seek(0, SEEK_SET);
+     const auto result = LoadPrecompiledFile(precompiled_file, compressed);
+     if (!result) {
+         LOG_INFO(Render_OpenGL,
 diff --git a/src/video_core/renderer_vulkan/renderer_vulkan.cpp b/src/video_core/renderer_vulkan/renderer_vulkan.cpp
 index 5221fdf..b050db2 100644
 --- a/src/video_core/renderer_vulkan/renderer_vulkan.cpp
