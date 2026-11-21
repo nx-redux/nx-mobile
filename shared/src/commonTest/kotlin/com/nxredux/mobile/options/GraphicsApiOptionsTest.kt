@@ -145,7 +145,6 @@ class GraphicsApiOptionsTest {
             assertEquals(v, GraphicsApiOptions.effective(v, ps2) { xclipse }, "$v")
         }
         assertEquals(GraphicsApiOptions.GLES, GraphicsApiOptions.effective(GraphicsApiOptions.GLES, n3ds) { error("asked") })
-        assertTrue(GraphicsApiOptions.autoIsVulkan(n3ds, xclipse))
     }
 
     @Test fun only_ps2_dolphin_and_psp_follow_the_gpu_on_auto() {

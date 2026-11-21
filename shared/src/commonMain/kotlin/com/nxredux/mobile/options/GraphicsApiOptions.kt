@@ -73,11 +73,9 @@ object GraphicsApiOptions {
      * Whether Auto is Vulkan for a core with [switch] on the GPU named [gpu] (GL_RENDERER, null: unknown).
      * [customDriver]: a custom GPU driver is in use for the game, which a [VulkanSwitch.maliNeedsCustomDriver] core needs.
      */
-    fun autoIsVulkan(switch: VulkanSwitch?, gpu: String?, customDriver: Boolean = false): Boolean = when {
-        switch == null -> false
-        switch.autoOnXclipse && DeviceTraits.isXclipse(gpu) -> true
-        else -> switch.autoOnMali && DeviceTraits.isMali(gpu) && (!switch.maliNeedsCustomDriver || customDriver)
-    }
+    fun autoIsVulkan(switch: VulkanSwitch?, gpu: String?, customDriver: Boolean = false): Boolean = switch != null &&
+        (switch.autoOnXclipse && DeviceTraits.isXclipse(gpu) ||
+            switch.autoOnMali && DeviceTraits.isMali(gpu) && (!switch.maliNeedsCustomDriver || customDriver))
 
     /**
      * The value a launch reads for the stored [value]: Vulkan in place of Auto (or no value) where [autoIsVulkan], else
