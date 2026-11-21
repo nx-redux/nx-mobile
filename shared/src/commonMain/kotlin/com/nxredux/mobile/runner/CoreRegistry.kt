@@ -65,14 +65,19 @@ object CoreRegistry {
         // The plugins follow Graphics API: GLideN64 on HLE for OpenGL ES, ParaLLEl-RDP with its ParaLLEl-RSP for Vulkan (the
         // RDP cannot run on HLE). The GLES pair is the default, so a locked key always has a value.
         // Hi-res packs are ready-made .hts files only (N64HiresPack): enhanced Hi-Res Storage is what reads one, so it is fixed on.
+        // The resolution is the app's (3D Resolution rows, Res3dConsole.N64): GLideN64 draws at the 4:3 Resolution's size, a
+        // wide aspect at that height (patches/mupen64plus_next/0014), with no native factor; native until the launch sends it.
         defaultOptions = mapOf(
             "mupen64plus-alt-map" to "True",
             "mupen64plus-rdp-plugin" to "gliden64", "mupen64plus-rsp-plugin" to "hle",
             "mupen64plus-EnableEnhancedHighResStorage" to "True",
+            "mupen64plus-43screensize" to "320x240", "mupen64plus-169screensize" to "960x540", "mupen64plus-EnableNativeResFactor" to "0",
+            N64Resolution.PARALLEL_KEY to "1x",
             N64HiresPack.VRAM_KEY to N64HiresPack.VRAM_AUTO,   // resolved by device memory at launch (GameActivity)
         ),
         lockedOptions = setOf(
             "mupen64plus-alt-map", "mupen64plus-rdp-plugin", "mupen64plus-rsp-plugin", "mupen64plus-EnableEnhancedHighResStorage",
+            "mupen64plus-43screensize", "mupen64plus-169screensize", "mupen64plus-EnableNativeResFactor", N64Resolution.PARALLEL_KEY,
         ),
         // A stored "0" is the old default every saved config holds: it reads as Auto; No limit is "none" (N64HiresPack).
         hiddenValues = mapOf(N64HiresPack.VRAM_KEY to setOf("0")),

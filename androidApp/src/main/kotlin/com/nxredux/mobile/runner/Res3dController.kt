@@ -99,7 +99,7 @@ internal class Res3dController(private val host: Res3dHost, private val renderer
         val console = console ?: return
         this.value = value
         NxLog.i(TAG_LOG, "${host.gameTag} 3D resolution ${value}x (${Nds3dMode.parse(host.frontendValues[console.modeKey]).value})")
-        host.applyOptions(listOf(Variable(console.coreKey, console.coreValue(value))))
+        host.applyOptions((mapOf(console.coreKey to console.coreValue(value)) + console.alsoSet(value)).map { (k, v) -> Variable(k, v) })
         if (console == Res3dConsole.N3DS) renderer.onN3dsFactorSent(value)
         host.withMenu { publish(it) }
     }
@@ -122,7 +122,7 @@ internal class Res3dController(private val host: Res3dHost, private val renderer
         this.value = value
         if (console == Res3dConsole.N3DS) renderer.startN3dsFactor(value)
         NxLog.i(TAG_LOG, "${host.gameTag} 3D resolution ${value}x at launch (${Nds3dMode.parse(host.frontendValues[console.modeKey]).value})")
-        return mapOf(console.coreKey to console.coreValue(value))
+        return mapOf(console.coreKey to console.coreValue(value)) + console.alsoSet(value)
     }
 
     /**

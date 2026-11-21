@@ -156,6 +156,8 @@ mgba_ARTIFACT = mgba_libretro.so
 
 # patches/mupen64plus_next/0012 (nx-redux's): retro_cheat_set sizes its code arrays to the code; database codes with
 # more than 256 parts overflowed them.
+# patches/mupen64plus_next/0014: the app's 3D Resolution applies mid-game (GLideN64 resizes its window, ParaLLEl-RDP
+# remakes its command processor at a new upscaling).
 mupen64plus_next_REPO = https://github.com/libretro/mupen64plus-libretro-nx
 mupen64plus_next_HASH = 15bada85906593376e8fd697f1b0b3af3a20f512
 mupen64plus_next_LICENSE = LICENSE GLideN64/LICENSE mupen64plus-core/LICENSES mupen64plus-rsp-hle/LICENSES mupen64plus-rsp-cxd4/COPYING \

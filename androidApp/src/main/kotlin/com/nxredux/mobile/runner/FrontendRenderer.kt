@@ -161,6 +161,7 @@ internal class FrontendRenderer(
     private val isDolphin get() = Res3dConsole.forTag(gameTag) == Res3dConsole.DOLPHIN
     private val isPs1 get() = Res3dConsole.forTag(gameTag).let { it == Res3dConsole.PS1 || it == Res3dConsole.PCSX }
     private val isDc get() = Res3dConsole.forTag(gameTag) == Res3dConsole.DC
+    private val isN64 get() = Res3dConsole.forTag(gameTag) == Res3dConsole.N64
     private val privateRoot get() = host.privateRoot
     private val dualMode get() = host.dualMode
     private val pictureOn get() = host.pictureOn
@@ -636,6 +637,8 @@ internal class FrontendRenderer(
             isDolphin -> GLRetroView.ShaderSourceScale(DolphinResolution.frameScale(frameHeight), frameHeight)
             // Flycast reports 640 x 480 whatever it draws at: 480 lines are 1x, each frame's own height gives its scale.
             isDc -> GLRetroView.ShaderSourceScale(1, DcResolution.NATIVE_H)
+            // Both N64 renderers hand over 240 lines a scale.
+            isN64 -> GLRetroView.ShaderSourceScale(1, N64Resolution.NATIVE_H)
             else -> GLRetroView.ShaderSourceScale()
         }
         // 3DS on one display (and the Panel Up frame) from the map: the app rebuilds Azahar's own layout from it, and
@@ -751,6 +754,7 @@ internal class FrontendRenderer(
         if (isDolphin) reportDolphinResolution(w, h, screen, shown, g)
         if (isPs1) reportPs1Resolution(w, h, screen, shown, g)
         if (isDc) reportDcResolution(w, h, screen, shown, g)
+        if (isN64) reportN64Resolution(w, h, screen, shown, g)
         if (viewport != lastViewport) {
             lastViewport = viewport
             view.viewport = viewport
@@ -825,6 +829,16 @@ internal class FrontendRenderer(
         val (current, second) = DcResolution.shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
         report3d(w, h, screen, halfFolded = false, current, second) {
             DcResolution.displayMax(w.roundToInt(), h.roundToInt())
+        }
+    }
+
+    /** The N64 scale's inputs to the host, as [reportPspResolution], over the 240-line picture ([N64Resolution]). */
+    private fun reportN64Resolution(w: Float, h: Float, screen: ScreenClass, shown: PxRect, g: FloatArray) {
+        if (!gameReady || shown.height <= 0f) return
+        val main = shown.height.roundToInt().takeUnless { host.mainShowsNoPicture() }
+        val (current, second) = N64Resolution.shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
+        report3d(w, h, screen, halfFolded = false, current, second) {
+            N64Resolution.displayMax(w.roundToInt(), h.roundToInt())
         }
     }
 
