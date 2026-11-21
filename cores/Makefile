@@ -211,7 +211,8 @@ ppsspp_FLAGS = -DLIBRETRO=ON -DANDROID=ON -DUSING_GLES2=ON -DUSE_SYSTEM_FFMPEG=O
 # melonDS DS (JesseTG), replacing libretro/melonDS on 2026-09-27. CMake kind like ppsspp. The libretro target is a
 # MODULE library, so the 16 KB page flag goes in CMAKE_MODULE_LINKER_FLAGS (the template only sets the SHARED one).
 # OpenGL is on via GLES3: upstream refuses GLES, so patches/melondsds.patch lifts that and ports its compositor, and
-# patches/melonds.patch (below, on the melonDS dependency) carries melonDS-android-lib's GLES port of the renderer.
+# patches/melonds.patch (below, on the melonDS dependency) carries melonDS-android-lib's GLES port of the renderer,
+# and logs melonDS's "restore CPSR under bad mode" warning once (Mario Kart DS hits it thousands of times a second).
 # 3D renders on the GPU when melonds_render_mode = opengl; the software renderer (with the JIT) stays the default.
 # Its configure step FetchContent-clones eleven dependencies by short hash or tag. They are pinned below by full SHA,
 # cloned once into src/melondsds-deps/<name>-src (FetchContent's layout under FETCHCONTENT_BASE_DIR), and configure
