@@ -41,9 +41,10 @@ android {
         debug {
             externalNativeBuild {
                 cmake {
-                    // Release optimisation (the NDK's -O3) with debug symbols and asserts kept: at -O0 the resampler and
-                    // the renderer cost several times what players pay, so device measurements on a dev build misled.
-                    arguments += listOf("-DCMAKE_C_FLAGS_DEBUG=-O3 -g", "-DCMAKE_CXX_FLAGS_DEBUG=-O3 -g")
+                    // Release's optimisation (AGP builds it as RelWithDebInfo: -O2) with asserts kept: at -O0 the resampler
+                    // and the renderer cost several times what players pay, so device measurements on a dev build misled.
+                    // -O3 measured no faster than -O2 in this library.
+                    arguments += listOf("-DCMAKE_C_FLAGS_DEBUG=-O2 -g", "-DCMAKE_CXX_FLAGS_DEBUG=-O2 -g")
                 }
             }
         }
