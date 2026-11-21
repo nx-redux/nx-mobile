@@ -362,6 +362,7 @@ object CoreRegistry {
             "reicast_alpha_sorting" to "per-strip (fast, least accurate)",
             "reicast_threaded_rendering" to "enabled",
             "reicast_delay_frame_swapping" to "enabled",
+            // The app's (3D Resolution rows, Res3dConsole.DC); native until the launch sends it.
             "reicast_internal_resolution" to "640x480",
             "reicast_region" to "USA",
             "reicast_language" to "English",
@@ -382,7 +383,7 @@ object CoreRegistry {
         // flycast writes <saves>/reicast/<game>.nvmem, .eeprom, .nvmem2 (arcade).
         // Detection off runs 30 fps games 2x (see its default), so a stored "disabled" must not win.
         // Any VMU mode but "VMU A1" moves the VMU out of <content>.A1.bin, where the runner looks for it.
-        lockedOptions = setOf("reicast_detect_vsync_swap_interval", "reicast_per_content_vmus"),
+        lockedOptions = setOf("reicast_detect_vsync_swap_interval", "reicast_per_content_vmus", "reicast_internal_resolution"),
         // Per-pixel sorting draws one flat colour on Adreno; a stored per-pixel value falls back to per-strip.
         hiddenValues = mapOf("reicast_alpha_sorting" to setOf("per-pixel (accurate)")),
         // Only read by the per-pixel sorting hidden above: dead rows out of game.

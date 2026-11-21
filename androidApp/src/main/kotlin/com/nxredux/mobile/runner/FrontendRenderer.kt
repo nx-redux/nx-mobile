@@ -160,6 +160,7 @@ internal class FrontendRenderer(
     private val isPsp get() = Res3dConsole.forTag(gameTag) == Res3dConsole.PSP
     private val isDolphin get() = Res3dConsole.forTag(gameTag) == Res3dConsole.DOLPHIN
     private val isPs1 get() = Res3dConsole.forTag(gameTag).let { it == Res3dConsole.PS1 || it == Res3dConsole.PCSX }
+    private val isDc get() = Res3dConsole.forTag(gameTag) == Res3dConsole.DC
     private val privateRoot get() = host.privateRoot
     private val dualMode get() = host.dualMode
     private val pictureOn get() = host.pictureOn
@@ -633,6 +634,8 @@ internal class FrontendRenderer(
             map != null -> GLRetroView.ShaderSourceScale(map.topScale(n3ds = isN3ds))
             isPsp -> GLRetroView.ShaderSourceScale(PspResolution.frameScale(frameHeight), frameHeight)
             isDolphin -> GLRetroView.ShaderSourceScale(DolphinResolution.frameScale(frameHeight), frameHeight)
+            // Flycast reports 640 x 480 whatever it draws at: 480 lines are 1x, each frame's own height gives its scale.
+            isDc -> GLRetroView.ShaderSourceScale(1, DcResolution.NATIVE_H)
             else -> GLRetroView.ShaderSourceScale()
         }
         // 3DS on one display (and the Panel Up frame) from the map: the app rebuilds Azahar's own layout from it, and
@@ -747,6 +750,7 @@ internal class FrontendRenderer(
         if (isPsp) reportPspResolution(w, h, screen, shown, g)
         if (isDolphin) reportDolphinResolution(w, h, screen, shown, g)
         if (isPs1) reportPs1Resolution(w, h, screen, shown, g)
+        if (isDc) reportDcResolution(w, h, screen, shown, g)
         if (viewport != lastViewport) {
             lastViewport = viewport
             view.viewport = viewport
@@ -811,6 +815,16 @@ internal class FrontendRenderer(
         val (current, second) = Ps1Resolution.shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
         report3d(w, h, screen, halfFolded = false, current, second) {
             Ps1Resolution.displayMax(w.roundToInt(), h.roundToInt())
+        }
+    }
+
+    /** The Dreamcast scale's inputs to the host, as [reportPspResolution], over the 480-line picture ([DcResolution]). */
+    private fun reportDcResolution(w: Float, h: Float, screen: ScreenClass, shown: PxRect, g: FloatArray) {
+        if (!gameReady || shown.height <= 0f) return
+        val main = shown.height.roundToInt().takeUnless { host.mainShowsNoPicture() }
+        val (current, second) = DcResolution.shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
+        report3d(w, h, screen, halfFolded = false, current, second) {
+            DcResolution.displayMax(w.roundToInt(), h.roundToInt())
         }
     }
 

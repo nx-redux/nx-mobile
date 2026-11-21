@@ -52,10 +52,13 @@ enum class Res3dConsole(
      * (not the 640-wide and 480-line modes, already sharp). The AYANEO holds 60 fps at 2x in Marvel Super Heroes and
      * Street Fighter EX Plus Alpha.
      */
-    PCSX("pcsx_rearmed", "pcsx_rearmed_neon_enhancement_enable", 2, 2, "nx_pcsx_3d_resolution", "nx_pcsx_3d_max_scale", "nx_pcsx_3d_scale");
+    PCSX("pcsx_rearmed", "pcsx_rearmed_neon_enhancement_enable", 2, 2, "nx_pcsx_3d_resolution", "nx_pcsx_3d_max_scale", "nx_pcsx_3d_scale"),
 
-    /** The core draws its whole picture at the scale (PS1, PS2, PSP, Dolphin), not only the 3D: the rows say "the game". */
-    val wholePicture: Boolean get() = this == PS1 || this == PCSX || this == PS2 || this == PSP || this == DOLPHIN
+    /** Dreamcast on Flycast: its Internal Resolution draws the whole picture at a multiple of 640 x 480. */
+    DC("flycast", "reicast_internal_resolution", 8, 3, "nx_dc_3d_resolution", "nx_dc_3d_max_scale", "nx_dc_3d_scale");
+
+    /** The core draws its whole picture at the scale (PS1, PS2, PSP, Dolphin, Dreamcast), not only the 3D: the rows say "the game". */
+    val wholePicture: Boolean get() = this == PS1 || this == PCSX || this == PS2 || this == PSP || this == DOLPHIN || this == DC
 
     /** Performance draws at native size: no Scale row (the PS2 runs slowly above it; PCSX-ReARMed has only 1x and 2x). */
     val nativePerformance: Boolean get() = this == PS2 || this == PCSX
@@ -87,16 +90,18 @@ enum class Res3dConsole(
         PSP -> window?.let { PspResolution.displayMax(it.first, it.second) }
         DOLPHIN -> window?.let { DolphinResolution.displayMax(it.first, it.second) }
         PS1, PCSX -> window?.let { Ps1Resolution.displayMax(it.first, it.second) }
+        DC -> window?.let { DcResolution.displayMax(it.first, it.second) }
     }
 
     /**
-     * The core option's value for scale [n]: ARMSX2 reads "2x", PPSSPP the size ("960x544"), PCSX-ReARMed whether Enhanced
-     * Resolution is on, the others a bare number.
+     * The core option's value for scale [n]: ARMSX2 reads "2x", PPSSPP and Flycast the size ("960x544", "1280x960"),
+     * PCSX-ReARMed whether Enhanced Resolution is on, the others a bare number.
      */
     fun coreValue(n: Int): String = when (this) {
         PS2 -> "${n}x"
         PSP -> "${PspResolution.NATIVE_W * n}x${PspResolution.NATIVE_H * n}"
         PCSX -> if (n >= 2) "enabled" else "disabled"
+        DC -> "${DcResolution.NATIVE_W * n}x${DcResolution.NATIVE_H * n}"
         else -> "$n"
     }
 
@@ -110,6 +115,7 @@ enum class Res3dConsole(
             "GC", "WII" -> DOLPHIN
             "PSX" -> PS1
             "PS" -> PCSX
+            "DC" -> DC
             else -> null
         }
     }
@@ -436,6 +442,37 @@ object Ps1Resolution {
     const val NATIVE_H = 240
 
     /** The most the rows offer (the core goes to 16x). */
+    private const val MAX = 8
+
+    /** Below a whole scale by this much (a px or two of rounding) still counts as that scale. */
+    private const val SLACK = 0.02
+
+    private fun up(scale: Double): Int = ceil(scale - SLACK).toInt().coerceIn(1, MAX)
+
+    /** The scale the picture reaches fitted in a [w] x [h] px window, either way up, rounded up (1 to 8). */
+    fun displayMax(w: Int, h: Int): Int =
+        maxOf(up(minOf(w.toDouble() / NATIVE_W, h.toDouble() / NATIVE_H)), up(minOf(h.toDouble() / NATIVE_W, w.toDouble() / NATIVE_H)))
+
+    /** The scale a picture [pictureHeightPx] px tall shows at, rounded up (1 to 8). */
+    fun currentScale(pictureHeightPx: Int): Int = up(pictureHeightPx.toDouble() / NATIVE_H)
+
+    /** The shown scale and the second display's reach, as [Ps2Resolution.shownScales]. */
+    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> {
+        val second = secondHeightPx?.let(::currentScale)
+        return listOfNotNull(mainHeightPx?.let(::currentScale), second).maxOrNull() to (second ?: 1)
+    }
+}
+
+/**
+ * Flycast's internal resolution (reicast_internal_resolution, read by its height): a whole multiple of the Dreamcast's
+ * 640 x 480 picture. The core reads it at every options change and hands over frames at the new size on either
+ * renderer; its geometry stays 640 x 480 whatever the scale.
+ */
+object DcResolution {
+    const val NATIVE_W = 640
+    const val NATIVE_H = 480
+
+    /** The most the rows offer (the core goes to 20x). */
     private const val MAX = 8
 
     /** Below a whole scale by this much (a px or two of rounding) still counts as that scale. */

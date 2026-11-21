@@ -114,7 +114,7 @@ class CoreRegistryDcTest {
     }
 
     @Test fun frame_rate_detection_is_locked_on_so_an_old_cfg_cannot_bring_back_2x_speed() {
-        assertEquals(setOf("reicast_detect_vsync_swap_interval", "reicast_per_content_vmus"), dc.lockedOptions)
+        assertEquals(setOf("reicast_detect_vsync_swap_interval", "reicast_per_content_vmus", "reicast_internal_resolution"), dc.lockedOptions)
         // A .cfg saved before the default existed stores flycast's own "disabled"; the locked default wins.
         val game = CoreConfig.parse("reicast_detect_vsync_swap_interval = disabled\nreicast_widescreen_hack = enabled\n")
         val r = CoreConfig.resolve(dc.defaultOptions, null, game, forced = dc.lockedOptions)
