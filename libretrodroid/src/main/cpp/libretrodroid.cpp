@@ -15,6 +15,7 @@
  *     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <cstring>
 #include <jni.h>
 
 #include <EGL/egl.h>
@@ -497,6 +498,11 @@ void LibretroDroid::create(
     psplink::forgetCore();
     dslink::forgetCore();
     core = std::make_unique<Core>(soFilePath);
+    {
+        struct retro_system_info info {};
+        core->retro_get_system_info(&info);
+        Environment::setCoreWarningsLogged(info.library_name == nullptr || strcmp(info.library_name, "melonDS DS") != 0);
+    }
 
     core->retro_set_video_refresh(&callback_hw_video_refresh);
     core->retro_set_environment(&Environment::callback_environment);
