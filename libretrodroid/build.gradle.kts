@@ -41,19 +41,14 @@ android {
         debug {
             externalNativeBuild {
                 cmake {
-                    // The release optimisation with debug symbols and asserts kept: at -O0 the resampler and the renderer
-                    // cost several times what players pay, so device measurements on a dev build misled.
-                    arguments += listOf("-DCMAKE_C_FLAGS_DEBUG=-O3 -g", "-DCMAKE_CXX_FLAGS_DEBUG=-O3 -g")
+                    // Release's optimisation (AGP builds it as RelWithDebInfo: -O2) with asserts kept: at -O0 the resampler
+                    // and the renderer cost several times what players pay, so device measurements on a dev build misled.
+                    // -O3 measured no faster than -O2 in this library.
+                    arguments += listOf("-DCMAKE_C_FLAGS_DEBUG=-O2 -g", "-DCMAKE_CXX_FLAGS_DEBUG=-O2 -g")
                 }
             }
         }
         release {
-            externalNativeBuild {
-                cmake {
-                    // AGP builds release as RelWithDebInfo, which CMake sets to -O2: -O3 instead, as dev builds use.
-                    arguments += listOf("-DCMAKE_C_FLAGS_RELWITHDEBINFO=-O3 -g -DNDEBUG", "-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-O3 -g -DNDEBUG")
-                }
-            }
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
