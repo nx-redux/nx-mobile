@@ -921,11 +921,18 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     // On Vulkan, a custom GPU driver may load instead of the system one (GpuDriverChoice); the relaunch after
                     // it could not start forces the system driver.
                     // Auto is Vulkan for a core that follows the GPU on a Mali phone; the driver rows below then apply as on Vulkan.
-                    val apiValue = GraphicsApiOptions.effective(frontendValues[GraphicsApiOptions.KEY], cfg.descriptor?.vulkan) { AndroidDeviceInfo.gpu() }
                     val gamePath = activity.intent.getStringExtra(EXTRA_GAME_PATH)
                     // No library path, no crash record to keep: such a launch stays on the system driver.
                     val driversAvailable = gamePath != null && cfg.descriptor?.id !in GpuDriverOptions.EXCLUDED_CORES &&
                         AndroidGpuDrivers.unavailableReason(BuildConfig.GPU_DRIVERS, Build.VERSION.SDK_INT) == null
+                    // A core whose Auto wants Vulkan on Mali only with a custom driver (Dolphin) asks which one the game would load.
+                    val customDriver = driversAvailable && cfg.descriptor?.vulkan?.maliNeedsCustomDriver == true &&
+                        GpuDriverChoice.resolve(
+                            frontendValues[GpuDriverOptions.KEY], settings.gpuDriver,
+                            AndroidGpuDrivers(AndroidGpuDrivers.root(activity.filesDir), Build.VERSION.SDK_INT).installed().mapTo(HashSet()) { it.id },
+                            GpuDriverCrash.crashed(settings.gpuDriverCrashes, gamePath.orEmpty()),
+                        ) != null
+                    val apiValue = GraphicsApiOptions.effective(frontendValues[GraphicsApiOptions.KEY], cfg.descriptor?.vulkan, customDriver) { AndroidDeviceInfo.gpu() }
                     val mayLoadDriver = driversAvailable && apiValue == GraphicsApiOptions.VULKAN
                     // An earlier custom-driver launch whose process died (the menu has not seen it yet): recorded first, so
                     // a crash in this very game already counts below.

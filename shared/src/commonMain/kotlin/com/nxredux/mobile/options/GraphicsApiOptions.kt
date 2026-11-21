@@ -58,16 +58,19 @@ object GraphicsApiOptions {
         return GraphicsApiLaunch(vulkan, if (vulkan) switch.vulkan else switch.gles, vulkan && switch.swapchainFrames, env)
     }
 
-    /** Whether Auto is Vulkan for a core with [switch] on the GPU named [gpu] (GL_RENDERER, null: unknown). */
-    fun autoIsVulkan(switch: VulkanSwitch?, gpu: String?): Boolean =
-        switch?.autoOnMali == true && DeviceTraits.isMali(gpu)
+    /**
+     * Whether Auto is Vulkan for a core with [switch] on the GPU named [gpu] (GL_RENDERER, null: unknown).
+     * [customDriver]: a custom GPU driver is in use for the game, which a [VulkanSwitch.maliNeedsCustomDriver] core needs.
+     */
+    fun autoIsVulkan(switch: VulkanSwitch?, gpu: String?, customDriver: Boolean = false): Boolean =
+        switch?.autoOnMali == true && DeviceTraits.isMali(gpu) && (!switch.maliNeedsCustomDriver || customDriver)
 
     /**
      * The value a launch reads for the stored [value]: Vulkan in place of Auto (or no value) where [autoIsVulkan], else
      * [value] itself. [gpu] is asked only for Auto on a core that follows the GPU.
      */
-    inline fun effective(value: String?, switch: VulkanSwitch?, gpu: () -> String?): String? =
-        if ((value == null || value == AUTO) && switch?.autoOnMali == true && autoIsVulkan(switch, gpu())) VULKAN else value
+    inline fun effective(value: String?, switch: VulkanSwitch?, customDriver: Boolean = false, gpu: () -> String?): String? =
+        if ((value == null || value == AUTO) && switch?.autoOnMali == true && autoIsVulkan(switch, gpu(), customDriver)) VULKAN else value
 
     /** Whether the runner offers the core Vulkan: only for the Vulkan value ([effective] turns Auto into it where it should be). */
     fun preferVulkan(value: String?): Boolean = value == VULKAN
