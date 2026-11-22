@@ -745,6 +745,13 @@ class MainActivity : ComponentActivity(), FolderPicker {
             gpuDriverNoticeShown = false
             scope.launch {   // the game process ending on its own (a crash); a hang already said it, so it wins
                 val exit = withContext(Dispatchers.IO) { GameExitCheck.check(applicationContext, hangShown = hang != null) }
+                // A game killed mid-play (swiped away, the system) leaves its session open until it reads as stale: with no
+                // game process alive it closes now, so Home and Game Time agree at once.
+                val closed = withContext(Dispatchers.IO) {
+                    val app = applicationContext
+                    !LiveGameStore.alive(app) && runCatching { GameTimeService.closeDead(app, System.currentTimeMillis() - DEAD_SESSION_GRACE_MS) }.getOrDefault(false)
+                }
+                if (closed) state.playTimeChanged()
                 // A custom GPU driver's crash (onResume) names the cause: the generic notice never replaces it.
                 GameExitCheck.notice(exit)?.takeIf { !gpuDriverNoticeShown }?.let(state::showError)
             }
@@ -885,6 +892,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
     companion object {
         /** How often Parent mode's idle time is looked at while the menu is resumed. */
         private const val KIDS_TICK_MS = 5_000L
+        /** A session touched this recently may belong to a game still starting up (its live record not written yet): left open. */
+        private const val DEAD_SESSION_GRACE_MS = 10_000L
         // Process-lifetime, unlike [scope]: a game reports its start from GameActivity, maybe after this activity was
         // destroyed ("Don't keep activities", OEM reaping during a long unpack), and its recent must still be written.
         private val processScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)

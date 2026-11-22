@@ -2949,6 +2949,9 @@ class AppState(
      * nothing came back. Home's stats are recomputed and its rows rebuilt (Continue's save may be new); that
      * rebuild uses app-private reads only (recents, pins, resume markers, tool pins, the in-memory index), never the tree.
      */
+    /** Play time moved outside the menu's own reads (a killed game's session closed): the screens read it again. */
+    fun playTimeChanged() = refreshGameInfo()
+
     fun onForeground() {
         kidsUi.kidsReturned()   // back from Usage access or Alarms & reminders: a setup step moves on once granted
         kidsUi.kidsHomeCheck()  // back from setup's home question: on once home
