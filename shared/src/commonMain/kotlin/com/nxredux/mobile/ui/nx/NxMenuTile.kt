@@ -357,7 +357,7 @@ private fun GameTile(
                 // it fits); on Home the info lines are a step under the title's 13 sp, at 11 sp on 14 dp lines.
                 // Home's cards: the info at the game list Carousel card's size, under Text size.
                 // A tile's name at [HOME_TILE_NAME] (half a step under the Carousel card's name, still over its info); the hero
-                // card's a step under the card's plus [HOME_HERO_NAME_PLUS], as before.
+                // card's a step under the card's plus [HOME_HERO_NAME_PLUS].
                 val homeName = if (heroName) (NxTextSizes.secondary(nxCardTitleSize()).value + HOME_HERO_NAME_PLUS).sp else HOME_TILE_NAME * nxTextScale()
                 val statsSp = if (homeCaption) nxCardStatsSize() else INFO_SP
                 val statsLine = if (homeCaption) HOME_INFO_LINE else LINE_HEIGHT
@@ -482,11 +482,10 @@ private fun TileText(
     align: TextAlign = TextAlign.Center, modifier: Modifier = Modifier, balanced: Boolean = false,
     inlineContent: Map<String, InlineTextContent> = emptyMap(), lineHeight: Float = LINE_HEIGHT, shadow: Shadow? = null,
 ) {
-    val scaled = size
     Text(
         text, modifier, color = color, maxLines = maxLines, overflow = TextOverflow.Ellipsis, inlineContent = inlineContent,
         style = TextStyle(
-            fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = scaled, lineHeight = scaled * lineHeight,
+            fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = size, lineHeight = size * lineHeight,
             textAlign = align, lineBreak = if (balanced) LineBreak.Heading else LineBreak.Unspecified, shadow = shadow,
         ),
     )
@@ -516,7 +515,7 @@ internal fun nxLitness(lit: Boolean): () -> Float {
 /**
  * A Grid Home picture at [litness]: greyscale at [DRAIN_PICTURE_ALPHA] unlit, full colour and opacity lit, eased between.
  * The picture fills its card, so the layer clips itself to the card's rounded shape: a parent's rounded clip misses a
- * child layer drawn with alpha (the corners came out square). The opacity rides on the greying's own layer
+ * child layer drawn with alpha. The opacity rides on the greying's own layer
  * ([nxSaturation]), so an unlit tile takes one GPU surface, not two.
  */
 internal fun Modifier.nxDrain(litness: () -> Float): Modifier = graphicsLayer {

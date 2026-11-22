@@ -4,7 +4,33 @@ melonDS on GLES 3.2: the OpenGL renderer (2D, 3D and compositor) runs on a GLES 
 3.20 (explicit float literals, a version/precision header and fragment output locations added by the loader), and the
 DS's 1555 colours go up as 5_5_5_1 and come back through RGBA8 where GLES lacks GL_UNSIGNED_SHORT_1_5_5_5_REV. Desktop
 GL is unchanged. Applied to cores/src/melondsds-deps/melonds-src (JesseTG/melonDS jtg/fix-uninitialized-opengl).
+Also: the "restore CPSR under bad mode" warning is logged once, not on every occurrence (Mario Kart DS hits it
+thousands of times a second, and formatting each one took over half the emulation thread on Android).
 
+diff --git a/src/ARM.cpp b/src/ARM.cpp
+index 3937a99..aa7db4f 100644
+--- a/src/ARM.cpp
++++ b/src/ARM.cpp
+@@ -436,9 +436,18 @@ void ARM::RestoreCPSR()
+         break;
+ 
+     default:
+-        Log(LogLevel::Warn, "!! attempt to restore CPSR under bad mode %02X, %08X\n", CPSR&0x1F, R[15]);
++    {
++        // Some games (Mario Kart DS) do this thousands of times a second: formatting each warning took over half the
++        // emulation thread on Android. The first one says all there is to say.
++        static bool warned = false;
++        if (!warned)
++        {
++            warned = true;
++            Log(LogLevel::Warn, "!! attempt to restore CPSR under bad mode %02X, %08X (further ones not logged)\n", CPSR&0x1F, R[15]);
++        }
+         break;
+     }
++    }
+ 
+     CPSR |= 0x00000010;
+ 
 diff --git a/src/GPU2D_OpenGL.cpp b/src/GPU2D_OpenGL.cpp
 index b823658..c743c85 100644
 --- a/src/GPU2D_OpenGL.cpp

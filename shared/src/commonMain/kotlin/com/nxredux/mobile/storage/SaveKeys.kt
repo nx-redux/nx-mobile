@@ -82,7 +82,7 @@ object SaveKeys {
     }
 
     /** The ROM file name a save or clock file name ends in (`Emerald.gba.sav` → `Emerald.gba`), else null. */
-    private fun carriedRom(fileName: String): String? {
+    internal fun carriedRom(fileName: String): String? {
         if (Names.extensionOf(fileName) !in CARRIED) return null
         return Names.stripExtension(fileName).takeIf { romKey(it) != it }
     }

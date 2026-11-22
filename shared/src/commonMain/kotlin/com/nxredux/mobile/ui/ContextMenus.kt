@@ -9,7 +9,7 @@ import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.DsMenu
 import com.nxredux.mobile.settings.MenuCategory
 
-enum class ContextKind { PIN, UNPIN, HIDE, UNHIDE, RENAME, ADD_TO_COLLECTION, GAME_SETTINGS, REMOVE_FROM_COLLECTION, REMOVE_RECENT, EMULATOR, CONSOLE, FETCH_ART, CHANGE_ART, PIN_TOOL, UNPIN_TOOL, ADD_TO_TOOLS, REMOVE_FROM_TOOLS, RENAME_COLLECTION, DELETE_COLLECTION, NETPLAY, PLAY_FROM_START, RESUME, OPEN_GAMES, OPEN_CONSOLES, OPEN_COLLECTIONS, OPEN_TOOLS, ACHIEVEMENTS, USE_TOP_SCREEN }
+enum class ContextKind { PIN, UNPIN, HIDE, RENAME, ADD_TO_COLLECTION, GAME_SETTINGS, REMOVE_FROM_COLLECTION, REMOVE_RECENT, EMULATOR, CONSOLE, FETCH_ART, CHANGE_ART, PIN_TOOL, UNPIN_TOOL, ADD_TO_TOOLS, REMOVE_FROM_TOOLS, RENAME_COLLECTION, DELETE_COLLECTION, NETPLAY, PLAY_FROM_START, RESUME, OPEN_GAMES, OPEN_CONSOLES, OPEN_COLLECTIONS, OPEN_TOOLS, ACHIEVEMENTS, USE_TOP_SCREEN }
 
 data class ContextItem(val kind: ContextKind, val label: String)
 
@@ -108,38 +108,33 @@ object ContextMenus {
         is ListSource.Console -> when {
             source.system.android -> listOfNotNull(if (pinned) unpin else pin, artItem(art))
             source.system.unassigned -> listOf(hide, rename, ContextItem(ContextKind.CONSOLE, "Console"))
-            else -> buildList {
-                addAll(lead)
-                add(if (pinned) unpin else pin); add(hide); add(rename); add(addToCollection)
-                if (hasCore(entry)) add(gameSettings)
-                if (below) add(netplayItem)
-                artItem(art)?.let(::add)
-                if ((CoreRegistry.consoleOf(entry.system.tag)?.tags?.size ?: 0) > 1) add(ContextItem(ContextKind.EMULATOR, "Emulator"))   // the game's own tag (a merged console mixes them)
-            }
+            // The game's own tag (a merged console mixes them).
+            (CoreRegistry.consoleOf(entry.system.tag)?.tags?.size ?: 0) > 1 ->
+                libraryItems(lead, entry, pinned, below, art) + ContextItem(ContextKind.EMULATOR, "Emulator")
+            else -> libraryItems(lead, entry, pinned, below, art)
         }
         ListSource.Recent -> lead + ContextItem(ContextKind.REMOVE_RECENT, "Remove from Recently Played")
-        is ListSource.Collection -> buildList {
-            addAll(lead)
-            add(if (pinned) unpin else pin); add(hide); add(rename); add(addToCollection)
-            if (hasCore(entry)) add(gameSettings)
-            if (below) add(netplayItem)
-            artItem(art)?.let(::add)
-            add(ContextItem(ContextKind.REMOVE_FROM_COLLECTION, "Remove from Collection"))
-        }
-        is ListSource.Search -> buildList {
-            addAll(lead)
-            add(if (pinned) unpin else pin); add(hide); add(rename); add(addToCollection)
-            if (hasCore(entry)) add(gameSettings)
-            if (below) add(netplayItem)
-            artItem(art)?.let(::add)
-        }
+        is ListSource.Collection ->
+            libraryItems(lead, entry, pinned, below, art) + ContextItem(ContextKind.REMOVE_FROM_COLLECTION, "Remove from Collection")
+        is ListSource.Search -> libraryItems(lead, entry, pinned, below, art)
         is ListSource.Filtered -> itemsFor(source.parent, entry, pinned, art, netplay, canResume, netplayLeads, aResumes)   // its list's own
         // Every console's games: a ROM's items are a search's, an Android game's those of the Android console's list.
         ListSource.AllGames ->
             if (entry.system.android) listOfNotNull(if (pinned) unpin else pin, artItem(art))
             else itemsFor(ListSource.Search(""), entry, pinned, art, netplay, canResume, netplayLeads, aResumes)
-        ListSource.Hidden -> emptyList()   // A unhides directly; UNHIDE stays in the enum for act's exhaustive when
+        ListSource.Hidden -> emptyList()   // A unhides directly
         }
+    }
+
+    /** A launchable game's items in a console, collection or search list, before what only that list adds. */
+    private fun libraryItems(
+        lead: List<ContextItem>, entry: Listed, pinned: Boolean, below: Boolean, art: ArtMenuItem,
+    ): List<ContextItem> = buildList {
+        addAll(lead)
+        add(if (pinned) unpin else pin); add(hide); add(rename); add(addToCollection)
+        if (hasCore(entry)) add(gameSettings)
+        if (below) add(netplayItem)
+        artItem(art)?.let(::add)
     }
 
     /**

@@ -35,10 +35,7 @@ import org.jetbrains.compose.resources.painterResource
 import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
-import com.nxredux.mobile.ui.nx.BandGround
-import com.nxredux.mobile.ui.nx.GameInfoPlacement
 import com.nxredux.mobile.ui.nx.NxTopIcons
-import com.nxredux.mobile.ui.nx.LocalNxListTopCut
 import com.nxredux.mobile.ui.nx.nxListTopCut
 import com.nxredux.mobile.ui.nx.rememberNxListTopCut
 import com.nxredux.mobile.ui.nx.launcherTopActions
@@ -75,7 +72,6 @@ import com.nxredux.mobile.ui.nx.NxBackdropStack
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NX_HINT_BAR_ROW_HEIGHT
-import com.nxredux.mobile.ui.nx.NxHintsBand
 import com.nxredux.mobile.ui.nx.NxScreenScaffold
 import com.nxredux.mobile.ui.nx.NxTileGrid
 import com.nxredux.mobile.ui.nx.PrefetchPads
@@ -88,16 +84,14 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableIntStateOf
-import com.nxredux.mobile.ui.nx.nxListInset
 import com.nxredux.mobile.ui.nx.MainListBody
 import com.nxredux.mobile.ui.nx.nxTopBandFade
-import com.nxredux.mobile.ui.nx.menuTabUnderlineBottom
 import com.nxredux.mobile.ui.nx.nxHintLabelSize
 
 /**
  * The main menu: the tab row and the current tab in its [style]. The selection-dependent inputs ([selectedIndex],
- * [info], [canNetplay], [tileInfo]) are lambdas read only where they show (the row or list, the caption, the hints, the
- * info band, the tab row's over-art look), so a selection change recomposes those and not the whole screen.
+ * [canNetplay], [tileInfo]) are lambdas read only where they show (the row or list, the caption, the hints, the tab
+ * row's over-art look), so a selection change recomposes those and not the whole screen.
  */
 @Composable
 fun MainMenuScreen(
@@ -106,7 +100,6 @@ fun MainMenuScreen(
     onTabSwipe: (Int) -> Unit = {},                 // a List or Minimal page swiped sideways: the next (1) or previous (−1) tab
     onSwipeSelect: ((Int) -> Unit)? = null,         // Minimal's swipe release: moves the highlight only, never the tap's open (default: onSelect)
     onHint: ((NxButton) -> Unit)? = null, onLongPress: ((Int) -> Unit)? = null,
-    info: () -> List<InfoLine> = { emptyList() },   // the selected row's info (a game's gameInfoLines, a console's or collection's game count): List's band
     rowInfo: (Int) -> List<InfoLine> = { emptyList() },   // Carousel Home: any row's full info by index (its caption stays on the last row item while the dock has focus)
     style: MenuStyle = MenuStyle.LIST,    // the tab's style
     orientation: MenuOrientation = MenuOrientation.HORIZONTAL,   // the tab's orientation (Carousel only: Vertical is the stack)
@@ -119,8 +112,6 @@ fun MainMenuScreen(
     continueInfo: () -> List<InfoLine> = { emptyList() },   // Home: Continue's game info (full)
     raSignedIn: Boolean = false,          // Home: false drops achievement data from Continue and the pinned games
     controllerArt: Boolean = false,       // a List or Carousel Consoles tab: Layouts → Consoles background is Controller
-    bandShade: Boolean = true,            // List: the info band's shade ([mainMenuListBand]: none on Consoles, Collections and Tools)
-    bandInfo: Boolean = true,             // List: the band shows the row's info ([mainMenuListBand]: none on Consoles, Collections and Tools)
     canSearch: Boolean = false,           // the library has games: the Search icon
     onKidsLock: (() -> Unit)? = null,     // Kids Mode while games are open: the lock icon after Search (the PIN, for a parent)
     onTopScreen: (() -> Unit)? = null,    // an app holds the top screen: the floating button that takes it back
@@ -191,6 +182,7 @@ fun MainMenuScreen(
             // take two ([mainRowTakesTwoTaps]).
             val tapOpens = remember(rows) { { i: Int -> !mainRowTakesTwoTaps(rows.getOrNull(i)) } }
             CompositionLocalProvider(LocalNxTapOpens provides tapOpens) {
+                val topRoom = topIconsRoom(chrome.tabRow, topIcons.isNotEmpty())
                 // A Grid or Carousel body in the scaffold's slot: no info band (a Grid's game info is in its tile, a
                 // row's under its centre item), so it runs from the tab row down to the hint bar. The scaffold draws no list
                 // here, so its index is unused.
@@ -210,7 +202,7 @@ fun MainMenuScreen(
                         // Its rows level with Recent and Search (tab row hidden) stop short of them, as a List tab's.
                         MenuStyle.LIST -> HomeListScreen(
                             rows, selection, homeView.strip, onSelect, onOpen, onLongPress, onHint,
-                            Modifier.weight(1f), tabMenu = tabMenu, iconsRoom = topIconsRoom(chrome.tabRow, topIcons.isNotEmpty()).pad,
+                            Modifier.weight(1f), tabMenu = tabMenu, iconsRoom = topRoom.pad,
                         )
                         MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> {
                             val carousel = @Composable { m: Modifier ->
@@ -230,7 +222,7 @@ fun MainMenuScreen(
                         MenuStyle.MINIMAL -> HomeMinimalScreen(
                             rows, selection, homeView.strip, onSelect, onOpen, onLongPress, onHint,
                             minimalSelected, modifier = Modifier.weight(1f).zIndex(-1f),   // its band ends on the tab row's top
-                            leaving = minimalOpening != null, iconsRoom = topIconsRoom(chrome.tabRow, topIcons.isNotEmpty()).pad,
+                            leaving = minimalOpening != null, iconsRoom = topRoom.pad,
                         )
                         MenuStyle.GRID -> slot { m ->
                             HomeScreen(
@@ -244,11 +236,10 @@ fun MainMenuScreen(
                 // Kids Mode's Apps tab: the tiles screen's big tiles, whatever the style; a tap opens the app at once.
                 if (screen.category == MenuCategory.APPS) {
                     val kidTiles = remember(rows) { rows.mapNotNull { r -> (r as? MainRow.Tool)?.row?.let { t -> t.appId?.let { KidsTile(it, t.label) } } } }
-                    val top = topIconsRoom(chrome.tabRow, topIcons.isNotEmpty())
                     slot { m ->
                         KidsTileGrid(
                             kidTiles, selection(), { i -> onSelect(i); onOpen(i) }, onGridLayout,
-                            m.padding(top = top.pad, bottom = top.pad),   // as much room under as the icons' row takes over: centred
+                            m.padding(top = topRoom.pad, bottom = topRoom.pad),   // as much room under as the icons' row takes over: centred
                         )
                     }
                     return@CompositionLocalProvider
@@ -256,7 +247,6 @@ fun MainMenuScreen(
                 when (style) {
                     MenuStyle.GRID -> {
                         val tiles = remember(rows) { gridTiles(rows) }
-                        val top = topIconsRoom(chrome.tabRow, topIcons.isNotEmpty())
                         slot { m ->
                             BoxWithConstraints(m) {
                                 // Home's stats header in the room left of Recent and Search ([homeStatsHeader], two
@@ -276,7 +266,7 @@ fun MainMenuScreen(
                                 NxTileGrid(
                                     tiles, selection, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
                                     onColumns = onGridLayout, tileInfo = tileInfo, layoutKey = layoutKey,
-                                    modifier = Modifier.padding(top = header?.height?.dp ?: top.pad),
+                                    modifier = Modifier.padding(top = header?.height?.dp ?: topRoom.pad),
                                     // Consoles' tiles show their logo alone ([GridTileKind.LOGO]).
                                     consoles = screen.category == MenuCategory.CONSOLES,
                                     topGap = screen.category != MenuCategory.TOOLS,   // nothing above Tools' tiles but the icons' row
@@ -311,29 +301,21 @@ fun MainMenuScreen(
                         val names = remember(rows) { minimalTabRows(rows) }
                         MinimalScreen(
                             names, selection, emptyList(), onSelect, onOpen, onLongPress, onHint, minimalSelected,
-                            Modifier.weight(1f).zIndex(-1f), top = topIconsRoom(chrome.tabRow, topIcons.isNotEmpty()).pad.value,
+                            Modifier.weight(1f).zIndex(-1f), top = topRoom.pad.value,
                             hideHints = chrome.emptyBarRoom, toBoxBottom = true, layoutKey = layoutKey, leaving = minimalOpening != null, onSwipeSelect = onSwipeSelect,
                         )
                     }
-                    // List: the info band on the hint bar; the rows fade where more scrolls in.
+                    // List: the rows fade where more scrolls in.
                     MenuStyle.LIST -> {
                         val listRows = remember(rows, shared) {
                             rows.map { r ->
-                                when (r) {
-                                    is MainRow.Pin -> NxRow(r.entry.game.shownName)
-                                    is MainRow.Shelf -> NxRow(r.entry.game.shownName)
-                                    is MainRow.System -> NxRow(r.system.displayName, tag = if (r.system.displayName in shared) r.system.tag else null)
-                                    is MainRow.Collection -> NxRow(r.name)
-                                    is MainRow.Tool -> NxRow(r.row.label)
-                                    is MainRow.PinnedTool -> NxRow(r.row.label)
-                                    is MainRow.Continue, is MainRow.MoreTools, MainRow.PickAGame -> homeOnly(r)
-                                }
+                                NxRow(mainRowName(r), tag = (r as? MainRow.System)?.system?.takeIf { it.displayName in shared }?.tag)
                             }
                         }
                         // As List Home's ([MainListBody]): the names on the page inset, the list under the icon row and on
                         // the tab row, the selection free until the third row from an edge.
                         MainListBody(
-                            listRows, selection, topIconsRoom(chrome.tabRow, topIcons.isNotEmpty()).pad,
+                            listRows, selection, topRoom.pad,
                             onSelect, onOpen, onLongPress, Modifier.weight(1f),
                             bottomRows = if (shown.tabRow) 0f else MENU_LIST_BOTTOM_ROWS,   // the tab row hidden: half a row off the bottom edge
                         )
@@ -419,16 +401,6 @@ internal fun smoothFadeStops(ground: Color): Array<Pair<Float, Color>> = Array(S
 
 private const val SMOOTH_FADE_STOPS = 20
 
-
-/**
- * A bandless main menu List's gaps above its first row and below its last, in rows: a quarter under the tab row, half
- * with none; a quarter over a shown hint bar, else what's left of the row the top took (the bottom fade's room).
- */
-internal fun mainMenuListEdges(tabRow: Boolean, barShown: Boolean): Pair<Float, Float> {
-    val top = if (tabRow) 0.25f else 0.5f
-    return top to if (barShown) 0.25f else 1f - top
-}
-
 /** The room a main menu tab's List keeps under its last row while the tab row is hidden, in row pitches (as List Home's). */
 internal const val MENU_LIST_BOTTOM_ROWS = 0.5f
 
@@ -439,15 +411,6 @@ internal fun mainMenuCarouselShift(tabRow: Boolean, barShown: Boolean): Dp =
 /** The main menu's rows have no caption block (a console's or collection's count is drawn by the row itself). */
 private val NoCaptionTitle: () -> String? = { null }
 private val NoCaptionInfo: () -> List<InfoLine> = { emptyList() }
-
-/**
- * The edge a main menu List's first pill is spaced from ([NxScreenScaffold]'s listTopEdge) with the tab row shown: the
- * selected tab's underline, [MENU_TAB_ROW_HEIGHT] less [menuTabUnderlineBottom] above the list's top, either
- * orientation. The scaffold spaces the rows so the gap under it equals the last pill's gap to the
- * band's arrows ([nxListFitUnder]). Null with no tab row: the scaffold uses its fixed listTopGap.
- */
-internal fun mainMenuListTopEdge(tabRow: Boolean): Dp? =
-    if (!tabRow) null else (MENU_TAB_ROW_HEIGHT.value - menuTabUnderlineBottom()).dp
 
 /** A page's top under a hidden title row: [pad] kept clear above its body, [titleRoom] its body takes from the row ([NxTileGrid]). */
 internal data class TopIconsRoom(val pad: Dp, val titleRoom: Dp)
@@ -487,18 +450,17 @@ internal fun mainMenuTopBand(home: Boolean, style: MenuStyle, tabRow: Boolean): 
     tabRow && (style == MenuStyle.LIST || !home && style != MenuStyle.MINIMAL)
 
 /** A Minimal tab's names: each row's name alone (a console's, a collection's, a tool's), no tag, count or art. */
-internal fun minimalTabRows(rows: List<MainRow>): List<NxRow> = rows.map { r ->
-    NxRow(
-        when (r) {
-            is MainRow.Pin -> r.entry.game.shownName
-            is MainRow.Shelf -> r.entry.game.shownName
-            is MainRow.System -> r.system.displayName
-            is MainRow.Collection -> r.name
-            is MainRow.Tool -> r.row.label
-            is MainRow.PinnedTool -> r.row.label
-            is MainRow.Continue, is MainRow.MoreTools, MainRow.PickAGame -> homeOnly(r)
-        },
-    )
+internal fun minimalTabRows(rows: List<MainRow>): List<NxRow> = rows.map { NxRow(mainRowName(it)) }
+
+/** A main menu row's name in a List or Minimal tab (Home's own rows are in neither). */
+private fun mainRowName(r: MainRow): String = when (r) {
+    is MainRow.Pin -> r.entry.game.shownName
+    is MainRow.Shelf -> r.entry.game.shownName
+    is MainRow.System -> r.system.displayName
+    is MainRow.Collection -> r.name
+    is MainRow.Tool -> r.row.label
+    is MainRow.PinnedTool -> r.row.label
+    is MainRow.Continue, is MainRow.MoreTools, MainRow.PickAGame -> homeOnly(r)
 }
 
 /** Whether [row] launches a game (Home's Continue, a pinned game, an Android game's pin too, a shelf game). */
@@ -510,20 +472,6 @@ internal fun mainRowLaunchesGame(row: MainRow?): Boolean = row is MainRow.Contin
  * other main menu item opens on one tap: a console, a collection, a Tools tab tool ([MainRow.Tool]), Home's "+N".
  */
 internal fun mainRowTakesTwoTaps(row: MainRow?): Boolean = mainRowLaunchesGame(row) || row is MainRow.PinnedTool
-
-/**
- * How the main menu's List band dresses a tab's selected row. [shade]: the band's fade (and, hints hidden,
- * its solid fill); [info]: the row's info text ("N games"). Consoles, Collections and Tools have neither: no band, their
- * rows fade to set gaps ([mainMenuListEdges]); Home (and a tab-less list) keeps both.
- */
-internal data class MainMenuListBand(val shade: Boolean, val info: Boolean)
-
-/** The List band for [category]'s tab ([MainMenuListBand]): none on Consoles, Collections and Tools, shaded with its info elsewhere. */
-internal fun mainMenuListBand(category: MenuCategory?): MainMenuListBand = when (category) {
-    // GAMES: never drawn here, the Games tab is a game list.
-    MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS, MenuCategory.APPS, MenuCategory.GAMES -> MainMenuListBand(shade = false, info = false)
-    MenuCategory.HOME, null -> MainMenuListBand(shade = true, info = true)
-}
 
 /** The lines of Home's stats header a main menu Grid's title takes: the name, then the count. */
 private const val GRID_TITLE_LINES = 2

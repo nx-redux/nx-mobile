@@ -1,6 +1,5 @@
 package com.nxredux.mobile.ui
 
-import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.kids.FlagSeen
 import com.nxredux.mobile.kids.KidsController
 import com.nxredux.mobile.kids.KidsFlag
@@ -15,19 +14,8 @@ import com.nxredux.mobile.launcher.InstalledApp
 import androidx.compose.ui.graphics.ImageBitmap
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.runner.ContentRef
-import com.nxredux.mobile.runner.EmulatorRunner
-import com.nxredux.mobile.runner.GameSession
-import com.nxredux.mobile.settings.AccentPreset
-import com.nxredux.mobile.settings.AppSettings
-import com.nxredux.mobile.settings.ExtraFolder
-import com.nxredux.mobile.settings.FolderPicker
-import com.nxredux.mobile.settings.MenuCategory
+import com.nxredux.mobile.settings.FakeAppSettings
 import com.nxredux.mobile.settings.MenuStyle
-import com.nxredux.mobile.settings.MenuStyles
-import com.nxredux.mobile.settings.MenuOrientation
-import com.nxredux.mobile.settings.PadTheme
-import com.nxredux.mobile.settings.SecondaryAccent
-import com.nxredux.mobile.settings.VerticalListAlignment
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.storage.SaveFormat
 import com.nxredux.mobile.storage.StateFormat
@@ -47,9 +35,9 @@ import kotlin.test.assertTrue
 /** Settings -> Kids Mode: its rows, the first switch-on's setup steps, Change PIN and a day's play time. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class KidsSettingsTest {
-    private class MemorySettings(override var treeRef: ContentRef? = ContentRef("Home")) : AppSettings {
-        override var extraFolders: List<ExtraFolder> = emptyList()
-        override var defaultTags: Map<String, String> = emptyMap()
+    // androidGamesAsked: no "Add Android games?" over the page (Beta is a game).
+    private class MemorySettings(treeRef: ContentRef? = ContentRef("Home")) :
+        FakeAppSettings(treeRef, padSkin = false, gameListStyle = MenuStyle.LIST, androidGamesAsked = true) {
         override var debugLog = false
         override var secondScreen = true
         override var pauseWhenUnfocused = true
@@ -57,34 +45,9 @@ class KidsSettingsTest {
         override var saveFormat = SaveFormat.DEFAULT
         override var stateFormat = StateFormat.DEFAULT
         override var useExtractedFileName = false
-        override var padTheme: PadTheme = PadTheme.DEFAULT
-        override var padSkin = false
-        override var menuStyles: Map<MenuCategory, MenuStyle> = emptyMap()
-        override var gameListStyle: MenuStyle = MenuStyle.LIST
-        override var menuOrientations: Map<MenuCategory, MenuOrientation> = emptyMap()
-        override var gameListOrientation: MenuOrientation = MenuStyles.DEFAULT_ORIENTATION
-        override var gameListVerticalAlignment: VerticalListAlignment = VerticalListAlignment.DEFAULT
-        override var toolApps: List<String> = emptyList()
-        override var androidConsoleApps: List<String> = emptyList()
-        override var androidGamesAsked = true   // no "Add Android games?" over the page (Beta is a game)
         override var allFilesAsked = false
         override var onboardingDone: Boolean? = true
         override var onboardingStep: String? = null
-        override var androidPins: List<String> = emptyList()
-        override var raEnabled = false
-        override var raUsername = ""
-        override var raToken: String? = null
-        override var raShowNotifications = true
-        override var raNotificationSeconds = 3
-        override var raProgressSeconds = 1
-        override var raSortOrder = RaSortOrder.DEFAULT
-        override var ssUsername = ""
-        override var ssPassword: String? = null
-        override var sgdbApiKey: String? = null
-        override var tgdbApiKey: String? = null
-        override var artReplaceExisting = false
-        override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = AccentPreset.DEFAULT
-        override var secondaryAccent: SecondaryAccent = SecondaryAccent.DEFAULT
         override var switcherLayout = com.nxredux.mobile.settings.SwitcherLayout.DEFAULT
         override var optionTextSize = com.nxredux.mobile.settings.OptionTextSize.DEFAULT
 
@@ -99,16 +62,6 @@ class KidsSettingsTest {
         override fun kidsPinMatches(pin: String) = pin == this.pin
         override val kidsPinSet get() = pin != null
         override fun clearKidsPin() { pin = null }
-    }
-
-    private class Runner : EmulatorRunner {
-        override suspend fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) {}
-    }
-
-    private class Picker : FolderPicker {
-        override fun pickHome() {}
-        override fun pickExtra() {}
-        override fun forget(ref: ContentRef) {}
     }
 
     private class Flag(var seen: FlagSeen = FlagSeen.MISSING, var writes: Boolean = true) : KidsFlag {
@@ -160,7 +113,7 @@ class KidsSettingsTest {
         val kids = KidsController(settings, platform)
         val launcher = Launcher(apps, home)
         val st = AppState(
-            AppDeps(settings, source, Runner(), Picker(), compute = UnconfinedTestDispatcher(testScheduler), launcher = launcher),
+            AppDeps(settings, source, NoopRunner, NoopFolderPicker, compute = UnconfinedTestDispatcher(testScheduler), launcher = launcher),
             CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
             kids,
         )
@@ -200,6 +153,13 @@ class KidsSettingsTest {
     private fun AppState.skip() = pressSetup { it == KidsSetupRow.Skip }
     /** Setup's Apps step: Alpha on the kid's list (Continue needs one). */
     private fun AppState.pickAlpha() = pressSetup { it is KidsSetupRow.App && it.app.id == "a/A" }
+
+    /** The Kids page's Enable, then the setup walked through: the PIN twice, Alpha picked, Next, Next. */
+    private fun AppState.runSetup() {
+        openSettings(SettingsSection.KIDS)
+        pressRow(SettingsKind.KIDS_ENABLE)
+        typePin("123456"); typePin("123456"); pickAlpha(); next(); next()
+    }
 
     @Test fun firstEnableRunsSetupInOrder() = runTest {
         val t = setup(usage = false, alarms = false, home = true)
@@ -246,9 +206,7 @@ class KidsSettingsTest {
     @Test fun homeIsSetupsLastStep() = runTest {
         val t = setup(home = false)
         val st = t.st
-        st.openSettings(SettingsSection.KIDS)
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.runSetup()
         assertEquals(KidsSetupStep.HOME, st.setupStep())
         assertEquals(listOf(KidsSetupRow.UseHome, KidsSetupRow.Cancel), kidsSetupRows(assertIs(st.screen.value)))
         st.pressSetup { it == KidsSetupRow.UseHome }
@@ -275,9 +233,7 @@ class KidsSettingsTest {
     @Test fun homeDeclinedLeavesItOff() = runTest {
         val t = setup(home = false)
         val st = t.st
-        st.openSettings(SettingsSection.KIDS)
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.runSetup()
         st.pressSetup { it == KidsSetupRow.UseHome }
         st.onHomeRoleRefused()                                             // declined
         assertFalse(t.settings.kidsEnabled)
@@ -291,9 +247,7 @@ class KidsSettingsTest {
     @Test fun homeStepCancelKeepsItOff() = runTest {
         val t = setup(home = false)
         val st = t.st
-        st.openSettings(SettingsSection.KIDS)
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.runSetup()
         st.pressSetup { it == KidsSetupRow.Cancel }
         assertFalse(t.settings.kidsEnabled)
         assertNull(t.settings.pin)                                         // nothing stored: a cancelled setup
@@ -395,9 +349,7 @@ class KidsSettingsTest {
     @Test fun turnOffDeletesFlag() = runTest {
         val t = setup()
         val st = t.st
-        st.openSettings(SettingsSection.KIDS)
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.runSetup()
         assertTrue(t.settings.kidsEnabled)
         assertEquals(FlagSeen.PRESENT, t.platform.flag.seen)
         t.parentAgain()
@@ -502,9 +454,7 @@ class KidsSettingsTest {
     @Test fun changePinAsksTwiceAndStores() = runTest {
         val t = setup()
         val st = t.st
-        st.openSettings(SettingsSection.KIDS)
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.runSetup()
         t.parentAgain()
         st.pressRow(SettingsKind.KIDS_PIN)
         assertEquals(PinPurpose.CHANGE, assertIs<Screen.KidsPin>(st.screen.value).purpose)
@@ -539,7 +489,7 @@ class KidsSettingsTest {
     @Test fun kidsSectionOnlyWithKidsMode() = runTest {
         val settings = MemorySettings()
         val st = AppState(
-            AppDeps(settings, source, Runner(), Picker(), compute = UnconfinedTestDispatcher(testScheduler)),
+            AppDeps(settings, source, NoopRunner, NoopFolderPicker, compute = UnconfinedTestDispatcher(testScheduler)),
             CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
         )
         st.load()
@@ -558,9 +508,7 @@ class KidsSettingsTest {
     @Test fun changePinPadGoesWhenParentIdlesIntoLocked() = runTest {
         val t = setup()
         val st = t.st
-        st.openSettings(SettingsSection.KIDS)
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.runSetup()
         t.parentAgain()
         assertEquals(KidsMode.Parent, t.kids.mode.value)
         st.pressRow(SettingsKind.KIDS_PIN)
@@ -593,9 +541,7 @@ class KidsSettingsTest {
     @Test fun setupNeverEndsWithoutAPin() = runTest {
         val t = setup(usage = false)
         val st = t.st
-        st.openSettings(SettingsSection.KIDS)
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.runSetup()
         assertEquals(KidsSetupStep.USAGE, st.setupStep())
         st.kidsNewPin = null                                               // the PIN lost before the end
         st.skip()                                                          // the last step: setup would end here
@@ -679,9 +625,7 @@ class KidsSettingsTest {
         val t = setup()
         t.platform.flag.writes = false
         val st = t.st
-        st.openSettings(SettingsSection.KIDS)
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.runSetup()
         assertTrue(t.settings.kidsEnabled)
         t.parentAgain()
         assertEquals(KIDS_FLAG_FAILED, st.page().rows.first { it.kind == SettingsKind.KIDS_FORGOT }.secondary)

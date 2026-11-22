@@ -125,6 +125,8 @@ class FolderMerge(private val source: RomsSource, private val home: ContentRef) 
                 } else if (Names.stripExtension(c.name).lowercase() in bases) {
                     val target = into() ?: continue
                     if (source.child(target, c.name) != null) continue
+                    // A copy whose original will not go is kept, unlike a game's: the art stays with its moved game, and
+                    // the leftover only keeps the old folder from being removed.
                     if (source.moveFile(dir, c.name, target) || (source.copyFile(dir, c.name, target) && source.delete(dir, c.name))) any = true
                 }
             }

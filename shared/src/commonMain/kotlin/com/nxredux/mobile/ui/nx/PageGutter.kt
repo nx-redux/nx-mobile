@@ -13,8 +13,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 
 /**
- * Every screen's side inset, dp, upright, sideways and on a tablet-class window (short side 600 dp or more): Home List's
- * old gutter plus a list row's inset ([nxListInset]: 16 + 14, 24 + 14, 48 + 14).
+ * Every screen's side inset, dp, upright, sideways and on a tablet-class window (short side 600 dp or more): a gutter
+ * plus a list row's inset ([nxListInset]: 16 + 14, 24 + 14, 48 + 14).
  */
 internal const val PAGE_INSET_UPRIGHT = 30f
 internal const val PAGE_INSET_SIDEWAYS = 38f
@@ -55,14 +55,13 @@ internal data class PageInset(val start: Dp, val end: Dp) {
 @Composable
 internal fun nxPageInset(): PageInset {
     val window = LocalWindowSize.current
-    // inside a pad skin the frame is already a margin: half the upright inset, whatever the window's size
-    val inset = if (LocalInSkin.current) PAGE_INSET_SKIN else pageInset(LocalPortrait.current, tablet = minOf(window.width, window.height) >= 600.dp)
+    val inSkin = LocalInSkin.current
+    val inset = if (inSkin) PAGE_INSET_SKIN else pageInset(LocalPortrait.current, tablet = minOf(window.width, window.height) >= 600.dp)
     val density = LocalDensity.current
     val dir = LocalLayoutDirection.current
     val cutout = WindowInsets.displayCutout
     val bars = restingSystemBars()
     // in a skin's glass a side cutout is under the shell beside it, never the page
-    val inSkin = LocalInSkin.current
     val left = if (inSkin) 0f else with(density) { (cutout.getLeft(this, dir) - bars.getLeft(this, dir)).coerceAtLeast(0).toDp().value }
     val right = if (inSkin) 0f else with(density) { (cutout.getRight(this, dir) - bars.getRight(this, dir)).coerceAtLeast(0).toDp().value }
     val (start, end) = if (dir == LayoutDirection.Ltr) left to right else right to left

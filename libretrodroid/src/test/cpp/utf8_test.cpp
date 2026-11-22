@@ -7,11 +7,10 @@
 #include <cstring>
 #include <string>
 
+#include "check.h"
+
 using libretrodroid::Utf8::isJniSafe;
 using libretrodroid::Utf8::toUtf16;
-
-static int failures = 0;
-static void check(bool ok, const char* what) { if (!ok) { std::printf("FAIL %s\n", what); failures++; } }
 
 static bool safe(const char* s) { return isJniSafe(s, std::strlen(s)); }
 static std::u16string wide(const char* s) { return toUtf16(s, std::strlen(s)); }

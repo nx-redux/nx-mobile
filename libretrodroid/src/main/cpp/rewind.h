@@ -34,7 +34,7 @@
 namespace libretrodroid {
 
 /**
- * Rewind, ported from the handheld's ma_rewind.c. The GL thread serializes the core into a free
+ * Rewind. The GL thread serializes the core into a free
  * capture-pool slot after retro_run; one worker thread XORs it against the previous stored state, LZ4-compresses it
  * and writes it to the ring, in capture order. Every 60th entry is a keyframe (the whole state), so the ring can drop
  * its oldest entries without losing the chain; a keyframe also carries its delta to the state before it, so stepping
@@ -45,9 +45,9 @@ namespace libretrodroid {
  * - clear() bumps a generation before draining the queue, so captures still queued are dropped, not stored into the
  *   cleared ring. The worker sleeps on a condition variable; nothing spins.
  * - stepBack pops the newest entry and restores the one before it, which becomes the new delta reference: playing on
- *   after a rewind continues the chain from there (NextUI #577). A state the core refuses is dropped from the newest end
+ *   after a rewind continues the chain from there. A state the core refuses is dropped from the newest end
  *   (SKIPPED) and the next step restores the one before it, instead of retrying it forever.
- * - configure rebuilds only when an effective value changed: the handheld reallocated many MB per config key.
+ * - configure rebuilds only when an effective value changed: a rebuild reallocates many MB.
  * Not thread-safe across callers: LibretroDroid makes every call under its core lock (step(), reset, state load, disc
  * swap), so a clear() never runs beside a capture. The worker is internal.
  */

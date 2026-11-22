@@ -34,8 +34,8 @@ internal const val UNFOCUSED_ALPHA = 0.6f
  * right. On the Settings root the sections have the focus and the rows preview the highlighted section (no selection,
  * a tap opens it on that row, [AppState.settingsPreviewTap]); on a page the rows have it and the current section drops
  * to the open grey with a "›" (a tap on a section, [AppState.settingsCategoryTap]). A Layouts group's picture is part
- * of its block, under the rows ([settingsWideBlockPage]); the Android games picker draws whole from the old pane's
- * edge. The Remove folder and Reset dialogs are drawn over the whole stage.
+ * of its block, under the rows ([settingsWideBlockPage]); the Android games picker draws whole from
+ * [SETTINGS_SPLIT_LEFT]. The Remove folder and Reset dialogs are drawn over the whole stage.
  */
 @Composable
 internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<ListSelection>, page: @Composable () -> Unit) {
@@ -60,7 +60,7 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
                     SettingsScreen(
                         preview, -1,
                         onSelect = state::settingsPreviewTap, onOpen = state::settingsPreviewTap,
-                        titled = true, hints = emptyList(),
+                        hints = emptyList(),
                     )
                 }
             }

@@ -53,6 +53,12 @@ class ArtworkControllerTest {
             },
             creds, runner, scope, clock = jobClock, optionCache = cache,
         )
+
+        /** Every game is found with a screenshot and a 2D box, and every picture downloads. */
+        fun answerAll() {
+            http.on("romnom=", Scrape.BOTH)
+            http.on("https://m/", OK_PNG)
+        }
     }
 
     @Test fun persistedQueueResumes() = runTest {
@@ -84,8 +90,7 @@ class ArtworkControllerTest {
     @Test fun aRunningJobIsSavedEveryFewGamesNotPerGame() = runTest {
         val games = (1..12).map { Scrape.homeGame("G$it.gb") }
         val rig = Rig(this, games, jobClock = { 0L })   // no time passes: only the count saves
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.controller.fetchMissing()
         advanceUntilIdle()
         assertEquals(JobPhase.DONE, rig.controller.state.value.phase)
@@ -96,8 +101,7 @@ class ArtworkControllerTest {
     @Test fun aSlowJobIsSavedAfterSomeSecondsEvenBeforeTenGames() = runTest {
         var now = 0L
         val rig = Rig(this, listOf(tetris, zelda, sonic), jobClock = { now += ArtworkController.SAVE_EVERY_MS; now })   // each game outlasts the interval
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.controller.fetchMissing()
         advanceUntilIdle()
         val saves = jobSaves(rig)
@@ -109,8 +113,7 @@ class ArtworkControllerTest {
 
     @Test fun pauseSavesTheJobAtOnce() = runTest {
         val rig = Rig(this, listOf(tetris, zelda, sonic))
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.http.latency = 100
         rig.controller.fetchMissing()
         while (rig.controller.state.value.done < 1) testScheduler.advanceTimeBy(50)
@@ -123,8 +126,7 @@ class ArtworkControllerTest {
     @Test fun aNewJobIsPersistedBeforeItsFirstGameFinishes() = runTest {
         val rig = Rig(this, listOf(tetris, zelda))
         rig.host.files[ArtworkController.JOB_FILE] = ScrapeJobCodec.encode(ScrapeState(JobPhase.DONE, listOf(Scrape.item(sonic, ItemStatus.DONE))), replace = false)
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.http.latency = 100
         rig.controller.fetchMissing()
         testScheduler.runCurrent()
@@ -170,12 +172,12 @@ class ArtworkControllerTest {
         val rig = Rig(this, listOf(tetris))
         val media = rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media"))!!
         rig.fs.writeBytes(media, "Tetris.png", byteArrayOf(1))
-        rig.fs.writeBytes(rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "boxart"))!!, "Tetris.png", byteArrayOf(2))
-        rig.fs.writeBytes(rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "box2d"))!!, "Tetris.jpg", byteArrayOf(3))
-        rig.fs.writeBytes(rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "screenshot"))!!, "Tetris.png", byteArrayOf(4))
-        rig.fs.writeBytes(rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "boxart2d"))!!, "Tetris.png", byteArrayOf(5))
-        rig.fs.writeBytes(rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "wheel"))!!, "Tetris.png", byteArrayOf(6))
-        rig.fs.writeBytes(rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "mix"))!!, "Tetris.png", byteArrayOf(7))
+        rig.fs.putMedia("boxart", "Tetris.png", byteArrayOf(2))
+        rig.fs.putMedia("box2d", "Tetris.jpg", byteArrayOf(3))
+        rig.fs.putMedia("screenshot", "Tetris.png", byteArrayOf(4))
+        rig.fs.putMedia("boxart2d", "Tetris.png", byteArrayOf(5))
+        rig.fs.putMedia("wheel", "Tetris.png", byteArrayOf(6))
+        rig.fs.putMedia("mix", "Tetris.png", byteArrayOf(7))
         rig.host.files[ArtworkController.LOG_FILE] =
             "Roms/GB/.media/Tetris.png\nRoms/GB/.media/boxart/Tetris.png\nRoms/GB/.media/box2d/Tetris.jpg\tscreenscraper\t42\tbox-2D/us\n" +
                 "Roms/GB/.media/boxart2d/Tetris.png\tscreenscraper\t42\tbox-2D/us\nRoms/GB/.media/wheel/Tetris.png\tsteamgriddb\t5\t6\n" +
@@ -189,8 +191,8 @@ class ArtworkControllerTest {
         assertNull(rig.fs.bytesAt("Home/Roms/GB/.media/mix/Tetris.png"))
         assertEquals("", rig.host.files.getValue(ArtworkController.LOG_FILE).trim())
         assertEquals(listOf("screenshot"), rig.fs.childNames("Home/Roms/GB/.media"))   // the emptied slot folders went
-        resetLeavesUnloggedFiles(rig)
-        resetReappliesArtOnDisk(rig)
+        assertNotNull(rig.fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.png"))
+        assertEquals(tetris.gamePath to ArtRefs(screenshot = "Home/Roms/GB/.media/screenshot/Tetris.png"), rig.host.applied.single())
     }
 
     @Test fun resetRemovesTheSlotFoldersItEmptiedAndMediaWhenNothingIsLeft() = runTest {
@@ -198,7 +200,7 @@ class ArtworkControllerTest {
         rig.http.on("romnom=", found("ss" to "https://m/ss.png", "box-2D" to "https://m/box.png"))
         rig.http.on("https://m/", OK_PNG)
         val gbMedia = rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media"))!!
-        rig.fs.writeBytes(rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "screenshot"))!!, "Mine.png", byteArrayOf(1))   // hand-placed
+        rig.fs.putMedia("screenshot", "Mine.png", byteArrayOf(1))   // hand-placed
         rig.controller.fetchMissing()
         advanceUntilIdle()
         assertEquals(ResetResult(4), rig.controller.resetArt(null))
@@ -272,12 +274,6 @@ class ArtworkControllerTest {
         assertNull(store.read(tetris))
         assertEquals(listOf("Mine.json"), rig.fs.childNames("Home/Roms/GB/.media/info"))
     }
-
-    private fun resetLeavesUnloggedFiles(rig: Rig) =
-        assertNotNull(rig.fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.png"))
-
-    private fun resetReappliesArtOnDisk(rig: Rig) =
-        assertEquals(tetris.gamePath to ArtRefs(screenshot = "Home/Roms/GB/.media/screenshot/Tetris.png"), rig.host.applied.single())
 
     @Test fun resetByConsoleDeletesOnlyItsGamesArtAndKeepsWhatElseIsOnDisk() = runTest {
         val switched = Scrape.homeGame("Zelda.gb", tag = "GBC", dir = "Roms/GB")   // tag-switched: GBC in GB's folder
@@ -376,8 +372,7 @@ class ArtworkControllerTest {
 
     @Test fun resetPausesOnlyAJobWithGamesInScope() = runTest {
         val rig = Rig(this, listOf(tetris, zelda, sonic))
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.http.latency = 100
         rig.controller.fetchConsole(setOf("MD"))
         testScheduler.runCurrent()
@@ -401,8 +396,7 @@ class ArtworkControllerTest {
         rig.host.files[ArtworkController.JOB_FILE] = ScrapeJobCodec.encode(
             ScrapeState(JobPhase.PAUSED, listOf(Scrape.item(tetris), Scrape.item(sonic))), replace = false,
         )
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.http.latency = 100
         rig.controller.fetchMissing()   // the Artwork page's restore has not run yet
         testScheduler.runCurrent()
@@ -464,9 +458,8 @@ class ArtworkControllerTest {
         assertFalse(rig.controller.tgdbAvailable)
         assertFalse(rig.controller.tgdbKeySet)
         assertNull(rig.controller.tgdbAllowance())
-        val unknownKey = """{"remaining_monthly_allowance":0,"allowance_refresh_timer":0}"""
         for ((answer, result) in listOf(
-            HttpResult(200, unknownKey.encodeToByteArray()) to KeyResult.BAD_KEY, HttpResult(403, null) to KeyResult.BAD_KEY,
+            HttpResult(200, TgdbFixtures.unknownKey.encodeToByteArray()) to KeyResult.BAD_KEY, HttpResult(403, null) to KeyResult.BAD_KEY,
             HttpResult(-1, null) to KeyResult.OFFLINE, HttpResult(503, null) to KeyResult.UNAVAILABLE,
         )) {
             tgHttp.set("apikey=BAD", answer)
@@ -483,7 +476,7 @@ class ArtworkControllerTest {
         assertEquals(2000, rig.controller.tgdbAllowance())
         assertEquals(2000, rig.controller.state.value.tgdbLeft)
         // A refused new key leaves the saved one.
-        tgHttp.set("apikey=OTHER", HttpResult(200, unknownKey.encodeToByteArray()))
+        tgHttp.set("apikey=OTHER", HttpResult(200, TgdbFixtures.unknownKey.encodeToByteArray()))
         assertEquals(KeyResult.BAD_KEY, rig.controller.setTgdbKey("OTHER"))
         assertEquals("GOOD", creds.tgdbUserKey)
         // Removing it turns the source off again and forgets the allowance.
@@ -604,8 +597,7 @@ class ArtworkControllerTest {
     @Test fun signOutForgetsTheQuota() = runTest {
         val rig = Rig(this, listOf(tetris))
         rig.http.on("ssuserInfos", Scrape.quota(5, 100))
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         assertEquals(SignInResult.OK, rig.controller.signIn("me", "pw"))
         rig.controller.signOut()
         assertNull(rig.controller.state.value.quota)
@@ -619,8 +611,7 @@ class ArtworkControllerTest {
     @Test fun missingCountAndAppendWhileRunning() = runTest {
         val rig = Rig(this, listOf(tetris, zelda.copy(have = Scrape.HAS_ART), Scrape.homeGame("Doom.sh", tag = "PORTS")))
         assertEquals(1, rig.controller.missingCount(rig.host.games))
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.http.latency = 100
         rig.controller.fetchMissing()
         testScheduler.runCurrent()
@@ -635,8 +626,7 @@ class ArtworkControllerTest {
 
     @Test fun appendAtRunEndChainsOntoOneJobThatPauses() = runTest {
         val rig = Rig(this, listOf(tetris, zelda.copy(have = Scrape.HAS_ART)))
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.http.latency = 100
         val fired = mutableSetOf<String>()
         rig.runner.hook = { p ->
@@ -662,8 +652,7 @@ class ArtworkControllerTest {
 
     @Test fun pauseRevertsTheInFlightItemAndResumeRedoesIt() = runTest {
         val rig = Rig(this, listOf(tetris, zelda))
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.http.latency = 100
         rig.controller.fetchMissing()
         testScheduler.runCurrent()
@@ -748,8 +737,7 @@ class ArtworkControllerTest {
     @Test fun appendWhilePausedMergesAndResumes() = runTest {
         val rig = Rig(this, listOf(tetris, zelda))
         rig.host.files[ArtworkController.JOB_FILE] = ScrapeJobCodec.encode(ScrapeState(JobPhase.PAUSED, listOf(Scrape.item(tetris))), replace = false)
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         assertTrue(rig.controller.restorePending())
         rig.controller.fetchMissing()
         advanceUntilIdle()
@@ -784,8 +772,7 @@ class ArtworkControllerTest {
 
     @Test fun aFailedRunKeepsNoDuplicatesAndResumeScrapesEachGameOnce() = runTest {
         val rig = Rig(this, listOf(tetris, zelda.copy(have = Scrape.HAS_ART)))
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.http.latency = 100
         rig.host.failApply = { it == tetris.gamePath }
         rig.controller.fetchMissing()
@@ -812,7 +799,7 @@ class ArtworkControllerTest {
     @Test fun resumeWaitsForASingleGameFetchOfAQueuedGame() = runTest {
         val rig = Rig(this, listOf(tetris, zelda))
         rig.host.files[ArtworkController.JOB_FILE] = ScrapeJobCodec.encode(ScrapeState(JobPhase.PAUSED, listOf(Scrape.item(tetris), Scrape.item(zelda))), replace = false)
-        rig.http.on("romnom=", found("ss" to "https://m/s.png", "box-2D" to "https://m/b.png"))   // a box and a screenshot: has art
+        rig.http.on("romnom=", Scrape.BOTH)   // a box and a screenshot: has art
         rig.http.on("https://m/", OK_PNG)
         rig.http.latency = 100
         assertTrue(rig.controller.restorePending())
@@ -830,8 +817,7 @@ class ArtworkControllerTest {
 
     @Test fun fetchGameWaitsForTheJobInsteadOfFetchingTwice() = runTest {
         val rig = Rig(this, listOf(tetris, zelda))
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.http.latency = 100
         rig.controller.fetchMissing()
         testScheduler.runCurrent()
@@ -845,8 +831,7 @@ class ArtworkControllerTest {
     @Test fun fetchGameDuringAJobLeavesTheJobsSourcesAsTheyAre() = runTest {
         val other = FakeSource("other")
         val rig = Rig(this, listOf(tetris, zelda.copy(have = Scrape.HAS_ART)), more = listOf(other))
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.http.latency = 100
         rig.controller.fetchMissing()   // Tetris only
         testScheduler.runCurrent()
@@ -866,8 +851,7 @@ class ArtworkControllerTest {
     @Test fun aSingleFetchDuringAStopStartsTheSourcesOnlyOnceTheStoppedRunEnded() = runTest {
         val other = FakeSource("other")
         val rig = Rig(this, listOf(tetris, zelda.copy(have = Scrape.HAS_ART)), more = listOf(other))
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.http.latency = 100
         rig.controller.fetchMissing()   // Tetris only
         testScheduler.runCurrent()
@@ -887,8 +871,7 @@ class ArtworkControllerTest {
         val other = FakeSource("other")
         val games = listOf(tetris.copy(have = Scrape.HAS_ART), zelda.copy(have = Scrape.HAS_ART))
         val rig = Rig(this, games, more = listOf(other), engineClock = { 0L })   // no time passes: the skips are never emitted
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.host.files[ArtworkController.JOB_FILE] = ScrapeJobCodec.encode(ScrapeState(JobPhase.PAUSED, games.map { Scrape.item(it) }), replace = false)
         assertTrue(rig.controller.restorePending())
         other.onEnd = { rig.controller.pause(); yield() }   // the pause lands as the run's last step ends
@@ -904,7 +887,7 @@ class ArtworkControllerTest {
     @Test fun fetchGameKeepsHandPlacedArtUnlessReplaceIsOn() = runTest {
         val placed = "Home/Roms/GB/.media/boxart/Tetris.png"
         val rig = Rig(this, listOf(tetris.copy(have = ArtHave(box = true), art = ArtRefs(boxart = placed))))
-        rig.fs.writeBytes(rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "boxart"))!!, "Tetris.png", byteArrayOf(7))
+        rig.fs.putMedia("boxart", "Tetris.png", byteArrayOf(7))
         rig.http.on("romnom=Tetris.gb", found("ss" to "https://m/t-ss.png", "box-3D" to "https://m/t-3d.png"))
         rig.http.on("https://m/", OK_PNG)
         assertEquals(ItemStatus.DONE, rig.controller.fetchGame(tetris.gamePath).status)
@@ -923,8 +906,7 @@ class ArtworkControllerTest {
         assertFalse(rig.controller.fetchable(loose))
         assertFalse(rig.controller.canFetch("", "Loose.gb"))
         assertEquals(1, rig.controller.missingCount(listOf(loose, tetris)))
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.controller.fetchAll(replaceExisting = true)
         advanceUntilIdle()
         assertEquals(listOf(tetris.gamePath), rig.controller.state.value.items.map { it.gamePath })
@@ -946,8 +928,7 @@ class ArtworkControllerTest {
 
     @Test fun anErrorOutsideTheEngineEndsTheJobPausedAndStopsKeepAlive() = runTest {
         val rig = Rig(this, listOf(tetris, zelda))
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.host.throwOnApply = { if (it == tetris.gamePath) Error("out of memory") else null }
         rig.controller.fetchMissing()
         advanceUntilIdle()
@@ -1004,8 +985,7 @@ class ArtworkControllerTest {
         val sg = sgdb("Tetris.gb")
         val tg = FakeSource(SourceId.TGDB, slots = setOf(ArtSlot.BOX_2D, ArtSlot.SCREENSHOT))
         val rig = Rig(this, listOf(tetris), more = listOf(tg, sg))
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.http.on("https://g/", OK_PNG)
         rig.controller.fetchGame(tetris.gamePath, wide = true)
         val lookups = rig.http.count("jeuInfos") to (sg.asked.size + tg.asked.size)
@@ -1246,7 +1226,7 @@ class ArtworkControllerTest {
         rig.http.on("https://m/z-ss", HttpResult(200, byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 2)))
         // Zelda's screenshot is hand-placed: the fetch keeps it, so its ScreenScraper one is not the current one.
         val zeldaShot = "Home/Roms/GB/.media/screenshot/Zelda.png"
-        rig.fs.writeBytes(rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "screenshot"))!!, "Zelda.png", byteArrayOf(7))
+        rig.fs.putMedia("screenshot", "Zelda.png", byteArrayOf(7))
         val t = listed(rig).options.first { it.source == SourceId.SS && it.slot == ArtSlot.SCREENSHOT }
         assertNotNull(rig.controller.optionImage(tetris.gamePath, t).ref)
         val zOptions = rig.controller.artOptions(zelda.gamePath, replaceExisting = false)
@@ -1374,7 +1354,7 @@ class ArtworkControllerTest {
 
     @Test fun currentKeysFromLog() = runTest {
         val rig = Rig(this, listOf(tetris))
-        rig.fs.writeBytes(rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "boxart"))!!, "Tetris.png", OK_PNG.body!!)
+        rig.fs.putMedia("boxart", "Tetris.png", OK_PNG.body!!)
         rig.host.files[ArtworkController.LOG_FILE] = logLines("Roms/GB/.media/boxart/Tetris.png" to ArtOrigin(SourceId.SS, "1", "a1"))
         val a1 = ArtOption(ArtSlot.BOX_3D, "https://m/b-a1.png", SourceId.SS, "1", "a1")
         val a2 = ArtOption(ArtSlot.BOX_3D, "https://m/b-a2.png", SourceId.SS, "1", "a2")
@@ -1521,8 +1501,7 @@ class ArtworkControllerTest {
         val rig = Rig(this, listOf(loose, tetris, zelda))
         assertFalse(rig.controller.wantsArt(loose))
         assertEquals(QuietArt.NOT_WANTED, rig.controller.fetchArtQuietly(loose))
-        rig.http.on("romnom=", Scrape.BOTH)
-        rig.http.on("https://m/", OK_PNG)
+        rig.answerAll()
         rig.http.latency = 1_000
         rig.controller.fetchMissing()
         advanceTimeBy(500)

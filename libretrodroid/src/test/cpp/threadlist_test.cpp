@@ -11,13 +11,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "check.h"
+
 using namespace libretrodroid;
-
-static int failures = 0;
-
-static void check(bool ok, const char* what) {
-    if (!ok) { std::printf("FAIL %s\n", what); failures++; }
-}
 
 int main() {
     // A fake task folder: thread ids as folder names, plus a stray non-numeric entry.

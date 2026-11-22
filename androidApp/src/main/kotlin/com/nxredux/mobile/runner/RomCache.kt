@@ -118,7 +118,7 @@ object RomCache {
                     if (deleteTree(entry)) freed += bytes else NxLog.w(TAG, "could not delete ${entry.path}")
                 }
             }.onFailure { NxLog.w(TAG, "sweep of $name failed", it) }
-            for (dir in root.listFiles().orEmpty()) if (dir.isDirectory && !isLink(dir) && dir.name != HOLDS) runCatching { dropStaleParts(dir, now, held) }
+            for (dir in root.listFiles().orEmpty()) if (dir.isDirectory && !isLink(dir) && dir.name != HOLDS && dir.name != LOCKS) runCatching { dropStaleParts(dir, now, held) }
                 .onFailure { NxLog.w(TAG, "part sweep of ${dir.name} failed", it) }
             if (victims.isNotEmpty()) NxLog.i(TAG, "swept ${victims.size} of ${listed.size} entries, ${freed shr 20} MiB")
         }.onFailure { NxLog.w(TAG, "sweep failed", it) }

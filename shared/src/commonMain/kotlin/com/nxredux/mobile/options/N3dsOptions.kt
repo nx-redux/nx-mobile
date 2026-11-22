@@ -34,20 +34,13 @@ object N3dsOptions {
 
     /**
      * Local Wireless (default on): a game's local multiplayer finds other NX Redux devices on the same network, through
-     * Azahar's own room, once the game turns its wireless on. Read when the game starts.
+     * Azahar's own room, once the game turns its wireless on. Switched in the game too: off leaves the room at once.
      */
     const val LOCAL_WIRELESS = "nx_3ds_local_wireless"
     const val LOCAL_WIRELESS_ON = "on"
     const val LOCAL_WIRELESS_OFF = "off"
 
-    val localWirelessRow = FrontendOption(
-        LOCAL_WIRELESS, "Local Wireless", listOf(LOCAL_WIRELESS_ON, LOCAL_WIRELESS_OFF), LOCAL_WIRELESS_ON,
-        "A game's local multiplayer finds other NX Redux\ndevices on the same Wi-Fi: start the game on each\ndevice and use its local play menu.\n" +
-            "Nothing is sent until a game turns its wireless on.\nA save state can't be loaded while a game is linked.\n" +
-            "Turn it off on a network you share with people\nyou don't want to play with.",
-        brief = "Local multiplayer with nearby devices",
-        visual = false, valueLabels = listOf("On", "Off"), atLaunch = true,
-    )
+    val localWirelessRow = NdsOptions.localWirelessRowFor(LOCAL_WIRELESS)
 
     fun localWireless(values: Map<String, String>): Boolean = values[LOCAL_WIRELESS] != LOCAL_WIRELESS_OFF
 
@@ -231,7 +224,7 @@ object N3dsOptions {
         return when (appLayoutFor(values, landscape, controllerMode, screen)) {
             "large" -> if (landscape || space == null) "2" else proportionText(fillProportion(space.width, space.height))
             // Stacked too short for the full-width top over even a half-size touch screen: two equal screens fitted to
-            // the height, as Stacked always was, never Large's half size
+            // the height, never Large's half size
             "stacked" -> if (landscape || space == null || !fullWidthFits(space.width, space.height)) "1"
                 else proportionText(fillProportion(space.width, space.height))
             else -> "1"

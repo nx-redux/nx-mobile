@@ -2,6 +2,7 @@ package com.nxredux.mobile.settings
 
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.FileRefs
+import com.nxredux.mobile.storage.percentDecode
 
 object Sources {
     private const val EXTERNAL_TREE = "content://com.android.externalstorage.documents/tree/"
@@ -55,18 +56,6 @@ object Sources {
         val path = id.substringAfter(':').trim('/')
         val base = if (volume == "primary") "/sdcard" else "/storage/$volume"
         return if (path.isEmpty()) base else "$base/$path"
-    }
-
-    /** URI percent-decoding over UTF-8 bytes ("%3A" -> ':', "%C3%A9" -> 'é'); a malformed escape is kept as written. */
-    private fun percentDecode(text: String): String {
-        if ('%' !in text) return text
-        val out = ArrayList<Byte>(text.length)
-        var i = 0
-        while (i < text.length) {
-            val hex = if (text[i] == '%' && i + 2 < text.length) text.substring(i + 1, i + 3).toIntOrNull(16) else null
-            if (hex != null) { out += hex.toByte(); i += 3 } else { text[i].toString().encodeToByteArray().forEach { out += it }; i++ }
-        }
-        return out.toByteArray().decodeToString()
     }
 
     /** [child] is [parent] itself or lies inside it. A volume root's id ends with ':' ("primary:"), so its children follow it with no '/'. */

@@ -99,13 +99,6 @@ RewindRing::Entry RewindRing::at(int k) const {
     return Entry{buffer_.data() + s.offset, s.size, s.keyframe};
 }
 
-RewindRing::Entry RewindRing::newest() const {
-    int idx = slotHead_ - 1;
-    if (idx < 0) idx += static_cast<int>(slots_.size());
-    const Slot& s = slots_[idx];
-    return Entry{buffer_.data() + s.offset, s.size, s.keyframe};
-}
-
 void RewindRing::popNewest() {
     if (count_ == 0) return;
     int idx = slotHead_ - 1;

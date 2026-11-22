@@ -68,9 +68,8 @@ class NxPathsTest {
         assertFalse(isRzipCompressed(ByteArray(0)))
     }
 
-    @Test fun recents_and_rom_paths_match_minarch() {
+    @Test fun recents_path_matches_minarch() {
         assertEquals(".userdata/shared/.minui/recent.txt", NxPaths.RECENTS)
-        assertEquals("/Roms/Game Boy (GB)/Tetris.gb", NxPaths.romPath("Game Boy (GB)", "Tetris.gb"))
     }
 
     @Test fun stem_is_the_rom_name_minus_a_short_extension() {

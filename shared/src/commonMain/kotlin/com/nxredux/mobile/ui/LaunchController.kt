@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.tryOrAny
 import com.nxredux.mobile.library.ArcadeCompanions
 import com.nxredux.mobile.library.CompanionLookup
 import com.nxredux.mobile.library.DiscSheet
@@ -21,7 +22,6 @@ import com.nxredux.mobile.settings.SaveTransferRules
 import com.nxredux.mobile.storage.Recent
 import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.ui.nx.ListSelection
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -200,8 +200,7 @@ internal class LaunchController(
     }
 
     /** [load]'s companion lookup, or null when it fails: any failure, an Error too, is a game not found. */
-    private inline fun <T : Any> companionsOrNull(load: () -> T): T? =
-        try { load() } catch (e: CancellationException) { throw e } catch (e: Throwable) { null }
+    private inline fun <T : Any> companionsOrNull(load: () -> T): T? = tryOrAny({ null }, load)
 
     /** [launch]'s Problem, shown now. */
     private fun launchError(text: String) { error.value = text }
@@ -217,47 +216,30 @@ internal class LaunchController(
         val sys = entry.system
         val game = entry.game
         if (sys.tag != ClassicNes.GPSP_TAG) return null
-        val picked = try {
+        val picked = tryOrAny({ return null }) {
             sidecars.read(game.sourceId, game.folder, game.relativeDir)[game.fileName]
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            return null
         }?.takeIf { CoreRegistry.consoleTag(it) == CoreRegistry.consoleTag(sys.tag) }   // another console's tag is ignored, as by the scan
         // Only a ROM mGBA's core takes (a .gba): a .bin would list under GBA again on the next scan, and mGBA's unpack would refuse it.
         val mgba = CoreRegistry.forTag(ClassicNes.MGBA_TAG) ?: return null
         val tag = ClassicNes.launchTag(sys.tag, picked) {
-            try {
+            tryOrAny({ null }) {
                 if (Names.isArchive(game.fileName)) deps.archiveHead(game.ref, game.fileName, mgba.extensions, ClassicNes.HEAD_BYTES)
                 else if (Names.extensionOf(game.fileName) in mgba.extensions) deps.source.readHead(game.ref, ClassicNes.HEAD_BYTES)
                 else null
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                null
             }
         }
         if (tag == sys.tag) return null
         // A failed write still runs mGBA now; the next launch reads the header again.
-        val recorded = try {
+        val recorded = tryOrAny({ false }) {
             sidecars.set(game.sourceId, game.folder, game.relativeDir, game.fileName, tag)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            false
         }
         if (recorded && host.moveInIndex(game, sys, tag)) host.refreshOpenList(select = game.path)
         return sys.copy(tag = tag, core = mgba)
     }
 
     /** The file is still where the index says: a non-directory child of its folder. Any failure (a revoked tree) counts as gone. */
-    private suspend fun stillThere(game: GameEntry): Boolean = try {
-        deps.source.child(game.folder, game.fileName)?.isDirectory == false
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Throwable) {
-        false
-    }
+    private suspend fun stillThere(game: GameEntry): Boolean =
+        tryOrAny({ false }) { deps.source.child(game.folder, game.fileName)?.isDirectory == false }
 
     /** Re-reads the highlighted game's resume marker: a list's, Home's Continue card's, pinned or shelf game's (after returning from a game). */
     fun refreshResume() {

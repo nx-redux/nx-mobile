@@ -1,11 +1,9 @@
 cmake_minimum_required(VERSION 3.22.1)
 
-# now build app's shared lib
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall")
 
 add_definitions("-DVFS_FRONTEND -DHAVE_STRL")
 
-# Let's include oboe
 set (OBOE_DIR oboe)
 add_subdirectory (${OBOE_DIR} oboe)
 include_directories (${OBOE_DIR}/include)
@@ -101,7 +99,6 @@ endif()
 set(GWL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../cores/gba_wifi_link)
 
 add_library(libretrodroid SHARED
-        libretrodroidjni.h
         libretrodroidjni.cpp
         libretrodroid.h
         libretrodroid.cpp
@@ -116,8 +113,6 @@ add_library(libretrodroid SHARED
         gldebug.cpp
         logflag.h
         logflag.cpp
-        immersivemode.h
-        immersivemode.cpp
         videolayout.h
         videolayout.cpp
         screenregion.h
@@ -157,8 +152,6 @@ add_library(libretrodroid SHARED
         renderers/es3/framebufferrenderer.cpp
         renderers/es3/ahbrenderer.h
         renderers/es3/ahbrenderer.cpp
-        renderers/es2/imagerendereres2.h
-        renderers/es2/imagerendereres2.cpp
         renderers/es3/imagerendereres3.h
         renderers/es3/imagerendereres3.cpp
         audio.h
@@ -204,7 +197,6 @@ add_library(libretrodroid SHARED
         utils/rect.h
         utils/rect.cpp
         errorcodes.h
-        errorcodes.cpp
         vfs/vfs.h
         vfs/vfs.cpp
         vfs/vfsfile.h
@@ -258,8 +250,8 @@ add_library(libretrodroid SHARED
         lz4/lz4.c
 )
 
-# Support 16k pages for Android 15
 target_include_directories(libretrodroid PRIVATE ${GWL_DIR})
+# 16 KB pages (Android 15+)
 target_link_options(libretrodroid PRIVATE "-Wl,-z,max-page-size=16384")
 if (${CMAKE_ANDROID_ARCH_ABI} STREQUAL arm64-v8a)
     add_dependencies(libretrodroid hook_impl main_hook file_redirect_hook gsl_alloc_hook)
@@ -270,7 +262,7 @@ endif()
 # of this library's exports, the linker drops what nothing reaches (about 1 MB of the stripped library).
 target_link_options(libretrodroid PRIVATE "-Wl,--gc-sections" "-Wl,--exclude-libs,ALL")
 
-# add lib dependencies. No libvulkan: every Vulkan call goes through VulkanDispatch (dlopen'd system loader or
+# No libvulkan: every Vulkan call goes through VulkanDispatch (dlopen'd system loader or
 # libadrenotools' custom one), so a direct vk* call fails to link instead of silently bypassing a custom driver.
 target_link_libraries(libretrodroid
                       android

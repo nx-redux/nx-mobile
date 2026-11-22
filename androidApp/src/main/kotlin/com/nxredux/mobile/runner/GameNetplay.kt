@@ -37,6 +37,7 @@ import kotlin.concurrent.thread
  * and the screen's ways out (the failure dialog, Quit, the local game a link session's end leaves).
  */
 internal interface GameNetplayHost : GameScreenHost {
+    val settings: AndroidAppSettings
     val menuOpen: Boolean
     val focusPaused: Boolean
     val cheatsSupported: Boolean
@@ -169,7 +170,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
 
     /**
      * netplay: the saves a session plays on, before the battery load. A host on its folder's own core keeps its
-     * real saves but loses the game's auto-resume state (handheld 19d3a5e1), so a later resume cannot roll back battery
+     * real saves but loses the game's auto-resume state (as on the handheld), so a later resume cannot roll back battery
      * saves written in the session; manual slots stay. A host on another core plays on a fresh copy of its own battery
      * saves in the session folder; one whose saves were not served (emptySaves) on an empty copy. A client plays on the
      * host's saves, committed there before launch (an empty folder when the host had none).
@@ -240,7 +241,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
         holdWifi(np)
         return when (np.linkKind) {
             null -> {
-                val settings = AndroidAppSettings(host.activity)
+                val settings = host.settings
                 val overlay = np.cableLink && settings.cableLinkDelayOverlay
                 NetplayGame(
                     np, host.lifecycleScope, SystemClock::elapsedRealtime, ::onNotice,
@@ -326,7 +327,8 @@ internal class GameNetplay(private val host: GameNetplayHost) {
      * variable update, read at the next frame (the menu holds frames, so on Continue). A DS game leaves the runner's room,
      * a 3DS game Azahar's room (on its next frame) and the runner takes a PSP game out of ad hoc (its presence goes out, so
      * states work again): for good, or, with the console's Local Wireless on (for PSP also the Wi-Fi's addresses known),
-     * onto the automatic route, back once the game turns its wireless off and on, or leaves and re-enters ad hoc
+     * onto the automatic route, out of rooms until Local Wireless is switched on in the game (DS, 3DS) or the game
+     * leaves and re-enters ad hoc (PSP)
      * ([GameNetplayHost.leaveLinkSession]). Set past [GameActivity.applyOptions]' guard and not stored: the link options
      * are this launch's ([GameActivity.graphicsForcedOptions]), never the user's config.
      */
@@ -340,7 +342,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
             else -> emptyList()
         }
         if (off.isNotEmpty()) host.retroView?.let { view ->
-            view.queueEvent { runCatching { view.updateVariables(*off.toTypedArray()) }.onFailure { NxLog.w("GameActivity", "ending the link failed", it) } }
+            view.queueEvent { runCatching { view.updateVariables(*off.toTypedArray()) }.onFailure { NxLog.w(TAG_LOG, "ending the link failed", it) } }
         }
         linkEnded()
     }

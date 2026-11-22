@@ -3,10 +3,10 @@
  *
  * With Frame Skip Off a game that can't keep up runs every frame and slows down (FPSSync drops the lag instead of
  * catching up), so it makes its sound slower than real time. The audio's rate controller only bends playback by about
- * 2%, so a game at 95% emptied the FIFO (gaps) and, once it caught up with the controller still wound down, overfilled
+ * 2%, so a game at 95% empties the FIFO (gaps) and, once it catches up with the controller still wound down, overfills
  * it (dropped samples): crackle. The audio instead plays at the speed the game reaches, measured here from the frames
  * run over wall time, smoothed, never above 1: a heavy moment slows the music with the game, as slowdown on the
- * console did, and the rate controller is left with the small remainder.
+ * console does, and the rate controller is left with the small remainder.
  */
 #pragma once
 

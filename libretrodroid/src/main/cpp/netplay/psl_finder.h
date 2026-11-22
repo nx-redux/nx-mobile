@@ -47,7 +47,6 @@ typedef struct {
     uint32_t server_ip;
     int serve;
     int settled;
-    int announce;
 } psl_choice;
 
 typedef struct {

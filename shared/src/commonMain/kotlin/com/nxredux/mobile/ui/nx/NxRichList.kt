@@ -108,7 +108,7 @@ internal val NxRichThumbGap = 4.dp
  * make rows up to twice the target, and more so above a footer (a game's achievements) than on a full-height list.
  */
 internal fun nxRichRowCountFor(listHeight: Dp, pitch: Dp = NxListPitch): Int =
-    maxOf(1, (listHeight.value / (pitch.value * 1.5f)).roundToInt())
+    maxOf(1, (listHeight.value / (pitch.value * RICH_ROW_OF_PITCH)).roundToInt())
 
 /**
  * The general two-line list with a thumbnail (NX Redux's rich rows): each row is ~1.5 plain rows tall, with a circular
@@ -162,9 +162,9 @@ fun NxRichList(
         val gap = NxRichThumbGap
         // In whole pixels, so the gaps above and below the thumbnail match its left gap exactly (no odd pixel below it).
         val thumb = with(density) { (rowHeight.roundToPx() - gap.roundToPx() * 2).toDp() }
-        val sidePad = maxWidth * 0.044f
+        val sidePad = maxWidth * NX_LIST_END_SHARE
         val identity = remember(rows) { nxPillListIdentity(rows) }
-        val glide = rememberNxPillGlide(identity, selectedIndex, rows.size, count)
+        val glide = rememberNxPillGlide(identity, { selectedIndex }, rows.size, count)
         val pitch = with(density) { rowHeight.roundToPx() }
         LazyColumn(
             state = listState, modifier = Modifier.fillMaxWidth().height(listHeight).nxPillGlide(glide, listState, pitch, nxHighlight()),

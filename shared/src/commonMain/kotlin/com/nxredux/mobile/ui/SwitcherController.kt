@@ -68,7 +68,7 @@ internal class SwitcherController(
 
     /** A game resumed from the switcher ended: the switcher opens again, once (a list or the main menu; elsewhere, nothing). */
     fun reopenSwitcher() {
-        if (!switcherReturn || switcherRestored) return   // a restored one opens once the first screen has loaded (init)
+        if (!switcherReturn || switcherRestored) return   // a restored one opens once the first screen has loaded ([restoreReturn])
         dropSwitcherReturn()
         openSwitcher()
     }
@@ -140,7 +140,7 @@ internal class SwitcherController(
 
     /**
      * A from the switcher: the game opens over the switcher, which stays ([switcherUnderGame]). A launch that never reaches the runner
-     * (the game gone, a transfer running: [launch]'s refusals) closes it as before, so B and the error land on its page.
+     * (the game gone, a transfer running: [launch]'s refusals) closes it, so B and the error land on its page.
      */
     private fun launchFromSwitcher(entry: Listed, resumeSlot: Int?) {
         switcherUnderGame = true

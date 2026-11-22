@@ -37,12 +37,8 @@ class GLRetroViewData(context: Context) {
     /** The clock file's bytes, applied after the battery save. */
     var rtcState: ByteArray? = null
     var shader: ShaderConfig = ShaderConfig.Default()
-    var viewportAlignment = ViewportAlignment.CENTER
     var rumbleEventsEnabled: Boolean = true
-    var preferLowLatencyAudio: Boolean = true
-    var skipDuplicateFrames: Boolean = false
     var enableMicrophone: Boolean = false
-    var immersiveMode: ImmersiveMode? = null
     /** With Settings → System → Debug log on at launch: log GL driver messages to tag NXGL (GL_KHR_debug callback, else glGetError polling). */
     var glDebugOutput: Boolean = false
     /**
@@ -78,12 +74,6 @@ class GLRetroViewData(context: Context) {
      * after the game loads and before the first retro_run, so a core that reads its pads at boot sees them.
      */
     var controllerPorts: Map<Int, Int> = emptyMap()
-}
-
-enum class ViewportAlignment(val value: Int) {
-    CENTER(0),
-    TOP(1),
-    BOTTOM(2)
 }
 
 /** How the picture fills the viewport: FIT keeps the core aspect, INTEGER uses whole multiples of the base size, STRETCH fills it. */

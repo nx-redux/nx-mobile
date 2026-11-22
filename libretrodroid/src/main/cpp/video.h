@@ -30,7 +30,6 @@
 #include "renderers/renderer.h"
 #include "shadermanager.h"
 #include "utils/rect.h"
-#include "immersivemode.h"
 #include "videolayout.h"
 #include "presetchain.h"
 #include "filtercache.h"
@@ -46,7 +45,6 @@ public:
         unsigned int height;
         bool useDepth;
         bool useStencil;
-        int openglESVersion;
         int pixelFormat;
         bool vulkanBridge = false;   // frames arrive as AHardwareBuffers (AhbRenderer)
     };
@@ -66,11 +64,7 @@ public:
         ShaderManager::Config shaderConfig,
         bool bottomLeftOrigin,
         float rotation,
-        bool skipDuplicateFrames,
-        bool immersiveMode,
-        Rect viewportRect,
-        ImmersiveMode::Config immersiveModeConfig,
-        unsigned int viewportAlignment
+        Rect viewportRect
     );
 
     // Deletes the GL objects when the context that made them is current; otherwise (no context, or a new one after
@@ -84,7 +78,6 @@ public:
     void updateAspectRatio(float aspectRatio);
     void updateScreenSize(unsigned screenWidth, unsigned screenHeight);
     void updateViewportSize(Rect viewportRect);
-    void updateViewportAlignment(unsigned int viewportAlignment);
     void updateRendererSize(unsigned width, unsigned height);
     void updateRotation(float rotation);
     void updateShaderType(ShaderManager::Config shaderConfig);
@@ -99,7 +92,11 @@ public:
     void setComposition(int width, int height, std::vector<ScreenRegion> parts);
     // The whole scale the core draws its screens at (1 = native). A preset is written for a console's own pixels (a CRT
     // preset puts one scanline per row and drops them on a tall source), so each shaded screen is shrunk back to native first.
-    void setShaderSourceScale(int scale) { shaderSourceScale = scale < 1 ? 1 : scale; }
+    // [frameHeight]: the core frame height the scale was worked out for (0 = not known).
+    void setShaderSourceScale(int scale, int frameHeight) {
+        shaderSourceScale = scale < 1 ? 1 : scale;
+        shaderSourceFrameHeight = frameHeight < 0 ? 0 : frameHeight;
+    }
     // A point (0..1) of the composed frame mapped back into the core frame through the touch part under it; outside
     // every touch part (-10, -10). Unchanged while not composing. ScreenRegions.mapCompositionTouch is its Kotlin twin.
     std::pair<float, float> mapCompositionPoint(float x, float y) const;
@@ -108,15 +105,11 @@ public:
     void updateSecondaryRegions(std::vector<ScreenRegion> regions);
 
     // Draws the last frame's secondary regions into the bound default framebuffer, width x height, shielding a GL core's
-    // state as renderFrame does. Never runs the core nor touches the main output's state (dirty flag, frame count,
-    // layout, preset FBOs). Black when there are no secondary regions or no frame yet.
+    // state as renderFrame does. Never runs the core nor touches the main output's state (frame count, layout,
+    // preset FBOs). Black when there are no secondary regions or no frame yet.
     void renderSecondary(unsigned width, unsigned height);
 
-    // force: draw even when skipDuplicateFrames would skip an unchanged frame.
-    void renderFrame(bool force = false);
-
-    // Redraws the last frame while the core is paused, shielding the core's GL state it doesn't expect changed.
-    void renderPausedFrame();
+    void renderFrame();
 
     void onNewFrame(const void *data, unsigned width, unsigned height, size_t pitch);
 
@@ -148,7 +141,9 @@ public:
     void updatePresetRenderer();
 
 private:
-    void drawFrame(bool force);
+    void drawFrame();
+    // The frame's picture, by whichever path the layout and shader call for.
+    void drawPicture();
     void updateProgram();
 
     float getScreenDensity(float screenWidth, float screenHeight);
@@ -171,9 +166,9 @@ private:
     // Compiles one shader pass and looks up the handles the built-in draw loops use. Throws when the program fails.
     static ShaderChainEntry createShaderChainEntry(const ShaderManager::Pass& pass);
 
-    // layout's region quads on framebuffer 0 at layout's screen size; preset (may be null) draws the shaded ones.
     // A screen cut from the frame, copied into its own texture so a preset sees it as a whole frame of its own.
     struct RegionCrop { GLuint framebuffer = 0; GLuint texture = 0; unsigned width = 0; unsigned height = 0; };
+    // layout's region quads on framebuffer 0 at layout's screen size; preset (may be null) draws the shaded ones.
     void renderRegions(VideoLayout& layout, ChainRenderer* preset, std::vector<RegionCrop>& crops);
     void renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layout, ChainRenderer* preset,
                      std::vector<RegionCrop>& crops);
@@ -191,6 +186,8 @@ private:
     void drawPlain(const RegionQuad& quad, unsigned screenWidth, unsigned screenHeight);
     // Sets filter on the frame texture, bound on the active unit, unless this draw already set it there.
     void applyFrameFilter(GLint filter);
+    // applyFrameFilter with the frame texture bound on unit 0 for the call, left unbound after.
+    void setFrameFilter(GLint filter);
     TextureFilterCache frameFilter;
     // Builds secondaryPresetRenderer from the requested chain when the main one is live and it isn't yet.
     void updateSecondaryPresetRenderer();
@@ -201,14 +198,11 @@ private:
     };
     std::optional<ShaderManager::Config> loadedShaderType = std::nullopt;
 
-    bool isDirty = false;
     bool pictureHeld = false;
-    bool skipDuplicateFrames = false;
     bool linearTexture = true;
 
     std::vector<ShaderChainEntry> shadersChain;
 
-    bool presetSupported = true;
     std::optional<PresetChain> requestedPreset;
     bool presetDirty = false;
     std::unique_ptr<ChainRenderer> presetRenderer;
@@ -226,6 +220,10 @@ private:
     unsigned coreContentHeight = 0;
     float coreAspectRatio = 0.0F;
     int shaderSourceScale = 1;
+    int shaderSourceFrameHeight = 0;
+    // shaderSourceScale for the frame being drawn: a core frame of another height than the scale was set for (a new
+    // internal resolution, drawn before the app lays out again) scales it by the same ratio.
+    int sourceScale();
     int compositionWidth = 0;
     int compositionHeight = 0;
     std::vector<ScreenRegion> compositionParts;
@@ -238,8 +236,6 @@ private:
     void composeFrame();
     void releaseComposition();
 
-    bool immersiveModeEnabled = false;
-    ImmersiveMode immersiveMode;
     VideoLayout videoLayout;
 
     // The second surface: its own layout (viewport = the whole surface) and its own preset chain instance, so its

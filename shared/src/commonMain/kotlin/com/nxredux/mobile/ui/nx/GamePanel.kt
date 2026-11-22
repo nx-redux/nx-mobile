@@ -66,6 +66,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
@@ -82,7 +83,7 @@ import org.jetbrains.compose.resources.painterResource
 /**
  * The game panel, in the in-game menu's look: the header (art or console logo, title, play time, achievement count,
  * clock and battery; on a short panel one line, [GamePanelCompactHeader]), the tab words with the underline ([MenuTabRow]), then the current tab: Shortcuts as hollow pill
- * buttons in a grid (4 columns, 2 or 1 where a label would not fit, [gamePanelColumns]; disabled ones dimmed and inert), Achievements as badge rows, Cheats as
+ * buttons in a grid (4 columns, 2 or 1 where a label would not fit, [gamePanelColumns]), Achievements as badge rows, Cheats as
  * rows with a switch, Players as the Players page's rows. The controller's [GamePanelState.focus] sits on the accent pill (the tab row's capsule on
  * Tabs). The Game pill (DS/3DS panel-up) sits bottom-right. The dual-screen panel and the in-game menu share it; the
  * menu draws the header itself across its top ([GamePanelHeaderBar]) and its own tab row across the menu ([showTabs] off:
@@ -328,8 +329,7 @@ private fun rememberWidestShortcut(shortcuts: List<ShortcutState>): Dp {
 }
 
 /**
- * A shortcut's tile: a rounded outline, the label (up to two lines) centred in it, its value under it; at 0.35 alpha and
- * not clickable while disabled. A toggle ([ShortcutState.on]) that is on is filled (the list text colour, dark words),
+ * A shortcut's tile: a rounded outline, the label (up to two lines) centred in it, its value under it. A toggle ([ShortcutState.on]) that is on is filled (the list text colour, dark words),
  * as a quick-settings tile. A touch button's tile ([Shortcut.TOUCH]) sends its press and its release
  * ([GamePanelEvent.Touch]), so a hold runs while the finger is down, and shades while pressed; any other sends
  * [GamePanelModel.eventFor] on a tap. The controller's tile ([selected]) gets an accent ring a gap outside it, so it
@@ -348,7 +348,6 @@ private fun ShortcutTile(s: ShortcutState, selected: Boolean, modifier: Modifier
     val send by rememberUpdatedState(onEvent)
     val touch = s.action?.takeIf { s.shortcut == Shortcut.TOUCH }
     val press = when {
-        !s.enabled -> Modifier
         touch != null -> Modifier.pointerInput(touch) {
             detectTapGestures(onPress = {
                 pressed = true; send(GamePanelEvent.Touch(touch, down = true))
@@ -359,15 +358,13 @@ private fun ShortcutTile(s: ShortcutState, selected: Boolean, modifier: Modifier
     }
     Column(
         modifier.bringIntoViewRequester(into).heightIn(min = GP_TILE_HEIGHT)
-            // Drawn outside the tile, in the grid's spacing (so the focus moving never resizes one), and before the dimming
-            // (an alpha layer would clip it to the tile and fade it on a disabled one).
+            // Drawn outside the tile, in the grid's spacing (so the focus moving never resizes one).
             .then(if (selected) Modifier.drawBehind { focusRing(colors.accent) } else Modifier)
-            .alpha(if (s.enabled) 1f else NX_DISABLED_ALPHA)   // role: a disabled control
             .clip(shape)
             .then(
                 if (filled) Modifier.background(colors.listText)
                 else Modifier.background(if (pressed) colors.listText.copy(alpha = 0.16f) else Color.Transparent)   // role: a pressed tile's shade
-                    .border(GP_TILE_RING, colors.hint.copy(alpha = 0.6f), shape),   // role: a button's grey ring
+                    .gpRing(colors, shape),
             )
             .then(press)
             .padding(horizontal = GP_PILL_PAD, vertical = 8.dp),
@@ -506,7 +503,7 @@ private fun QuickVolumeBar(value: Float, onChange: (Float) -> Unit, onDone: () -
 private fun QuickSegments(c: QuickSetting.Choice, modifier: Modifier, onEvent: (GamePanelEvent) -> Unit) {
     val colors = LocalNxColors.current
     val shape = RoundedCornerShape(50)
-    Row(modifier.height(GP_QUICK_CONTROL).clip(shape).border(GP_TILE_RING, colors.hint.copy(alpha = 0.6f), shape)) {   // role: a button's grey ring
+    Row(modifier.height(GP_QUICK_CONTROL).clip(shape).gpRing(colors, shape)) {
         c.values.forEachIndexed { i, v ->
             val on = i == c.index
             Box(
@@ -530,7 +527,7 @@ private fun QuickStepper(c: QuickSetting.Choice, modifier: Modifier, onEvent: (G
     val font = LocalNxFont.current
     val shape = RoundedCornerShape(50)
     val step = { delta: Int -> GamePanelModel.quickStep(c, delta)?.let { onEvent(GamePanelEvent.SetQuick(c.key, it)) } }
-    Box(modifier.height(GP_QUICK_CONTROL).clip(shape).border(GP_TILE_RING, colors.hint.copy(alpha = 0.6f), shape)) {   // role: a button's grey ring
+    Box(modifier.height(GP_QUICK_CONTROL).clip(shape).gpRing(colors, shape)) {
         Row(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxHeight().then(if (c.enabled) Modifier.clickable { step(-1) } else Modifier))
             Box(Modifier.weight(1f).fillMaxHeight().then(if (c.enabled) Modifier.clickable { step(1) } else Modifier))
@@ -553,7 +550,7 @@ private fun QuickOpen(value: String, modifier: Modifier, onOpen: () -> Unit) {
     val font = LocalNxFont.current
     val shape = RoundedCornerShape(50)
     Row(
-        modifier.height(GP_QUICK_CONTROL).clip(shape).border(GP_TILE_RING, colors.hint.copy(alpha = 0.6f), shape)   // role: a button's grey ring
+        modifier.height(GP_QUICK_CONTROL).clip(shape).gpRing(colors, shape)
             .clickable(onClick = onOpen).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -729,6 +726,10 @@ private fun RowSubText(text: String, selected: Boolean, maxLines: Int = 1) {
         maxLines = maxLines, overflow = TextOverflow.Ellipsis,
     )
 }
+
+/** A panel control's grey ring, [GP_TILE_RING] wide round [shape]. */
+private fun Modifier.gpRing(colors: NxColors, shape: Shape): Modifier =
+    border(GP_TILE_RING, colors.hint.copy(alpha = 0.6f), shape)   // role: a button's grey ring
 
 /** A small hollow pill ([nxButtonRing]) on black: the panel's Game pill, and the Panel pill over the DS/3DS screen. */
 @Composable

@@ -42,7 +42,6 @@ import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.SpanStyle
@@ -53,7 +52,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import com.nxredux.mobile.ui.INFO_SEPARATOR
 import com.nxredux.mobile.ui.InfoKind
-import com.nxredux.mobile.ui.ownRow
 import com.nxredux.mobile.ui.firstGenre
 import com.nxredux.mobile.ui.genreParts
 
@@ -148,7 +146,7 @@ internal fun MainListBody(
     val infoSize = nxDescSize()   // a Settings row's description size
     val basePitch = homeListPitch()
     val pill = basePitch * (1 - 2 * NX_PILL_PAD)   // the pill's height, whatever the rows stretch to
-    val basePx = with(density) { basePitch.roundToPx() }
+    val pitchPx = with(density) { basePitch.roundToPx() }
     val sel = selection()
     val inset = nxPageInset()   // the names on it, the pill's edges outside it
     val state = rememberLazyListState()
@@ -156,12 +154,12 @@ internal fun MainListBody(
     BoxWithConstraints(modifier.fillMaxSize()) {
         val start = top + basePitch * gapRows
         val bottom = basePitch * bottomRows
-        val band = (constraints.maxHeight - with(density) { (start + bottom).roundToPx() }).coerceAtLeast(basePx)
+        val band = (constraints.maxHeight - with(density) { (start + bottom).roundToPx() }).coerceAtLeast(pitchPx)
         // Every row its own pitch: a list longer than the band shows the whole rows that fit, never stretched apart.
-        val pitchPx = basePx
         val pitch = with(density) { pitchPx.toDp() }
         val heights = List(names.size) { pitchPx }
-        val viewport = homeListViewport(band, heights.sum(), pitchPx)
+        val total = names.size * pitchPx
+        val viewport = homeListViewport(band, total, pitchPx)
         if (onPageRows != null) {
             val report by rememberUpdatedState(onPageRows)
             val whole = maxOf(1, band / maxOf(1, pitchPx))
@@ -181,7 +179,7 @@ internal fun MainListBody(
         }
         // A list that fits sits on the band's bottom, the list just its rows tall (the pill counts rows from the list's
         // top, so no empty room above them); a longer one fills it, from right under its top to the tab row.
-        val fits = heights.sum() <= band
+        val fits = total <= band
         // One pill behind the rows, gliding from row to row as the other lists' does ([nxPillGlide]); a row's text takes
         // the on-pill colours while the pill covers it the most ([NxPillGlide.litIndex]).
         val identity = remember(names) { nxPillListIdentity(names) }
@@ -189,7 +187,7 @@ internal fun MainListBody(
         val pillStart = with(density) { inset.pillStart.toPx() }
         LazyColumn(
             Modifier.align(if (fits) Alignment.BottomStart else Alignment.TopStart).padding(top = if (fits) 0.dp else start, bottom = if (fits) bottom else 0.dp)
-                .fillMaxWidth().height(with(density) { (if (fits) heights.sum() else viewport).toDp() }).nxRowEdgeMask(state)
+                .fillMaxWidth().height(with(density) { (if (fits) total else viewport).toDp() }).nxRowEdgeMask(state)
                 .nxPillGlide(glide, state, pitchPx, colors.accent, start = pillStart),
             state = state, verticalArrangement = Arrangement.Bottom, flingBehavior = rememberNxRowSnapFling(state),
         ) {
@@ -334,18 +332,5 @@ internal fun HomeFactsLine(lines: List<InfoLine>, size: TextUnit, modifier: Modi
                 maxLines = 1, overflow = TextOverflow.Ellipsis, inlineContent = info.inlineContent,
             )
         }
-    }
-}
-
-/**
- * The selected game's facts under a game list's title ([HomeFactsLine]'s look) in [rows] lines of [line] dp each: one
- * line, or with two (a phone upright, where the icons leave the line little room)
- * its next goal ("Next: …") on the second. The room never changes with the selection, so the list under it never moves.
- */
-@Composable
-internal fun GameFactsLines(lines: List<InfoLine>, size: TextUnit, line: Dp, rows: Int, modifier: Modifier) {
-    Column(modifier.height(line * rows).fillMaxWidth()) {
-        HomeFactsLine(if (rows > 1) lines.filter { !it.ownRow } else lines, size, Modifier.fillMaxWidth().height(line))
-        if (rows > 1) HomeFactsLine(lines.filter { it.ownRow }, size, Modifier.fillMaxWidth().height(line))
     }
 }

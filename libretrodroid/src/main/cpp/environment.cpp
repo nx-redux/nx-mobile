@@ -117,7 +117,6 @@ void Environment::deinitialize() {
 
     rumbleStates.fill(libretrodroid::RumbleState {});
 
-    controllers.clear();
     useVirtualFileSystem = false;
     enableMicrophone = false;
     shutdownRequest.reset();
@@ -371,31 +370,6 @@ bool Environment::environment_handle_get_variable(struct retro_variable* request
     return true;
 }
 
-bool Environment::environment_handle_set_controller_info(const struct retro_controller_info* received) {
-    controllers.clear();
-
-    unsigned player = 0;
-    while (received[player].types != nullptr) {
-
-        auto currentPlayer = received[player];
-
-        controllers.emplace_back();
-
-        unsigned controller = 0;
-        while (controller < currentPlayer.num_types && currentPlayer.types[controller].desc != nullptr) {
-            auto currentController = currentPlayer.types[controller];
-            LOGD("Received controller for player %d: %d %s", player, currentController.id, currentController.desc);
-
-            controllers[player].push_back(Controller { currentController.id, currentController.desc });
-            controller++;
-        }
-
-        player++;
-    }
-
-    return true;
-}
-
 bool Environment::environment_handle_set_hw_render(struct retro_hw_render_callback* hw_render_callback) {
     // Cores ask from retro_load_game, which GLRetroView runs in onSurfaceCreated on the GL thread with the view's
     // context current, so the version queried here is the one the core will render with.
@@ -489,7 +463,8 @@ void Environment::callback_retro_log(enum retro_log_level level, const char *fmt
             if (nx_log_enabled()) __android_log_vprint(ANDROID_LOG_INFO, MODULE_NAME_CORE, fmt, argptr);
             break;
         case RETRO_LOG_WARN:
-            if (nx_log_enabled()) __android_log_vprint(ANDROID_LOG_WARN, MODULE_NAME_CORE, fmt, argptr);
+            if (nx_log_enabled() && coreWarningsLogged.load(std::memory_order_relaxed))
+                __android_log_vprint(ANDROID_LOG_WARN, MODULE_NAME_CORE, fmt, argptr);
             break;
         case RETRO_LOG_ERROR:   // always, as LOGE (the Debug log setting keeps errors)
             __android_log_vprint(ANDROID_LOG_ERROR, MODULE_NAME_CORE, fmt, argptr);
@@ -497,6 +472,7 @@ void Environment::callback_retro_log(enum retro_log_level level, const char *fmt
         default:
             break;
     }
+    va_end(argptr);
 }
 
 bool Environment::callback_set_sensor_state(unsigned port, enum retro_sensor_action action, unsigned rate) {
@@ -513,7 +489,7 @@ bool Environment::callback_set_rumble_state(unsigned port, enum retro_rumble_eff
 
 bool Environment::handle_callback_set_rumble_state(unsigned port, enum retro_rumble_effect effect, uint16_t strength) {
     LOGV("Setting rumble strength for port %i to %i", port, strength);
-    if (port < 0 || port > 3) return false;
+    if (port > 3) return false;
 
     if (effect == RETRO_RUMBLE_STRONG) {
         rumbleStates[port].strengthStrong = strength;
@@ -702,7 +678,7 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             auto message = static_cast<const struct retro_message*>(data);
             if (message && message->msg) {
                 LOGI("Core message: %s", message->msg);
-                Environment::getInstance().pushCoreMessage(message->msg);
+                pushCoreMessage(message->msg);
             }
             return true;
         }
@@ -711,7 +687,7 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             auto message = static_cast<const struct retro_message_ext*>(data);
             if (message && message->msg) {
                 LOGI("Core message: %s", message->msg);
-                Environment::getInstance().pushCoreMessage(message->msg);
+                pushCoreMessage(message->msg);
             }
             return true;
         }
@@ -775,7 +751,7 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
                 timingFps.store(avInfo->timing.fps, std::memory_order_relaxed);
                 timingUpdated.store(true, std::memory_order_release);
             }
-            // Pre-existing race, left as is: the geometry fields below are plain and read on the GL thread.
+            // Racy: the geometry fields below are plain and read on the GL thread.
             gameGeometryHeight = avInfo->geometry.base_height;
             gameGeometryWidth = avInfo->geometry.base_width;
             gameGeometryAspectRatio = avInfo->geometry.aspect_ratio;
@@ -795,7 +771,7 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
 
         case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
             LOGD("Called RETRO_ENVIRONMENT_SET_CONTROLLER_INFO");
-            return environment_handle_set_controller_info(static_cast<const struct retro_controller_info*>(data));
+            return true;
 
         case RETRO_ENVIRONMENT_GET_FASTFORWARDING:
             if (data == nullptr) return false;
@@ -955,10 +931,6 @@ const std::vector<struct Variable> Environment::getVariables() const {
     );
 
     return result;
-}
-
-const std::vector<std::vector<struct Controller>> &Environment::getControllers() const {
-    return controllers;
 }
 
 float Environment::retrieveGameSpecificAspectRatio() {

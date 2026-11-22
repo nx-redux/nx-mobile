@@ -11,7 +11,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.achievements.RaController
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
@@ -73,7 +72,7 @@ private fun RaParentPane(state: AppState, parent: RaParent) {
     val tap: (Int) -> Unit = remember(parent.screen::class) { { i -> state.raParentTap(parent.screen, i) } }
     val dim = Modifier.alpha(UNFOCUSED_ALPHA)   // role: an unfocused pane, dimmed
     when (val p = parent.screen) {
-        is Screen.RetroAchievements -> RetroAchievementsScreen(p, c, parent.row, tap, tap, modifier = dim, focused = false)
+        Screen.RetroAchievements -> RetroAchievementsScreen(c, parent.row, tap, tap, modifier = dim, focused = false)
         is Screen.RaConsoles -> RaConsolesScreen(p, parent.row, tap, tap, modifier = dim, onHint = {}, split = true, focused = false)
         is Screen.RaGames -> RaGamesScreen(p, parent.row, tap, tap, modifier = dim, onHint = {}, split = true, focused = false)
         is Screen.RaGame -> RaGameScreen(p, c, parent.row, tap, tap, modifier = dim, split = true, focused = false)

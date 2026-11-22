@@ -86,7 +86,7 @@ internal class NetplayLinkGame(
                     if (host) LibretroNetplay.ROLE_HOST else LibretroNetplay.ROLE_CLIENT,
                     session.peerIp, NetplayWire.GBALINK_PORT, if (host) mode else "",
                 )
-            }.onFailure { NxLog.w(TAG, "link start failed", it) }.getOrDefault(false)
+            }.onFailure { NxLog.w(TAG_LOG, "link start failed", it) }.getOrDefault(false)
         }
         if (!ok) return null
         live = true
@@ -155,7 +155,6 @@ internal class NetplayLinkGame(
     }
 
     private companion object {
-        const val TAG = "NXAPP"
         const val TICK_MS = 250L
         const val POLL_MS = 100L
     }

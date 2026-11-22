@@ -1,6 +1,5 @@
 package com.nxredux.mobile.ui
 
-import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.SystemFolder
@@ -19,15 +18,7 @@ import com.nxredux.mobile.options.AudioOptions
 import com.nxredux.mobile.options.SpeedOptions
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
-import com.nxredux.mobile.runner.EmulatorRunner
-import com.nxredux.mobile.runner.GameSession
-import com.nxredux.mobile.settings.AppSettings
-import com.nxredux.mobile.settings.ExtraFolder
-import com.nxredux.mobile.settings.FolderPicker
-import com.nxredux.mobile.settings.MenuCategory
-import com.nxredux.mobile.settings.MenuOrientation
-import com.nxredux.mobile.settings.MenuStyle
-import com.nxredux.mobile.settings.PadTheme
+import com.nxredux.mobile.settings.FakeAppSettings
 import com.nxredux.mobile.storage.EmulatorConfigStore
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.nx.ListSelection
@@ -47,6 +38,20 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+
+/** Files by "<TAG>-<coreId>/minarch.cfg" and "<TAG>-<coreId>/<rom>.cfg". */
+internal class MemoryConfigs(initial: Map<String, String> = emptyMap()) : EmulatorConfigStore {
+    val files = HashMap(initial)
+    var failWrites = false
+    private fun console(tag: String, core: String) = "$tag-$core/minarch.cfg"
+    private fun game(tag: String, core: String, rom: String) = "$tag-$core/${rom.substringBeforeLast('.')}.cfg"
+    override suspend fun read(tag: String, coreId: String, romFileName: String?): Pair<ConfigFile?, ConfigFile?> =
+        files[console(tag, coreId)]?.let(CoreConfig::parse) to romFileName?.let { files[game(tag, coreId, it)] }?.let(CoreConfig::parse)
+    override suspend fun writeConsole(tag: String, coreId: String, text: String) { if (failWrites) error("disk full"); files[console(tag, coreId)] = text }
+    override suspend fun writeGame(tag: String, coreId: String, romFileName: String, text: String) { if (failWrites) error("disk full"); files[game(tag, coreId, romFileName)] = text }
+    override suspend fun deleteGame(tag: String, coreId: String, romFileName: String) { files.remove(game(tag, coreId, romFileName)) }
+    override suspend fun deleteConsole(tag: String, coreId: String) { files.remove(console(tag, coreId)) }
+}
 
 class EmulatorSettingsControllerTest {
     // --- pure: rows ---
@@ -91,14 +96,11 @@ class EmulatorSettingsControllerTest {
     }
 
     @Test fun the_section_headers_are_grey_labels_not_rows() {
-        assertEquals(NxRow("Console settings", section = true), emulatorNxRow(EmulatorRow.Header("Console settings")))
         assertFalse(EmulatorRow.Header("Emulator").selectable)
-        assertFalse(emulatorNxRow(EmulatorRow.Core(optA, inCategory = false)).section)
     }
 
     @Test fun the_gap_draws_as_half_a_row_of_space() {
-        assertEquals(NxRow("", spacer = true), emulatorNxRow(EmulatorRow.Gap))
-        val rows = EmulatorRows.build(page(), null).map(::emulatorNxRow)
+        val rows = EmulatorRows.build(page(), null).map { NxRow("", spacer = it == EmulatorRow.Gap) }
         assertEquals(20.dp * 6 + 10.dp * 2, nxOptionsListHeight(rows, 20.dp))   // 6 rows and two gaps (the last before Reset to defaults)
     }
 
@@ -208,57 +210,11 @@ class EmulatorSettingsControllerTest {
         assertEquals(listOf("gpSP"), EmulatorSettingsController.listRows(listOf(system("GBA"))).map { it.emulator })
     }
 
-    @Test fun list_label_is_the_descriptor_name_without_a_table() {
-        assertEquals(listOf("gpSP"), EmulatorSettingsController.listRows(listOf(system("GBA"))).map { it.emulator })
-    }
-
     // --- controller through AppState ---
 
-    private class MemorySettings(override var treeRef: ContentRef? = null) : AppSettings {
-        override var extraFolders: List<ExtraFolder> = emptyList()
-        override var defaultTags: Map<String, String> = emptyMap()
-        override var padSkin: Boolean = true
-        override var padTheme: PadTheme = PadTheme.DEFAULT
-        override var menuStyles: Map<MenuCategory, MenuStyle> = emptyMap()
-        override var gameListStyle: MenuStyle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_GAME_LIST_STYLE
-        override var menuOrientations: Map<MenuCategory, MenuOrientation> = emptyMap()
-        override var gameListOrientation: MenuOrientation = com.nxredux.mobile.settings.MenuStyles.DEFAULT_ORIENTATION
-        override var gameListVerticalAlignment: com.nxredux.mobile.settings.VerticalListAlignment = com.nxredux.mobile.settings.VerticalListAlignment.DEFAULT
-        override var toolApps: List<String> = emptyList()
-        override var androidConsoleApps: List<String> = emptyList()
-        override var androidGamesAsked = false
-        override var androidPins: List<String> = emptyList()
-        override var raEnabled = false
-        override var raUsername = ""
-        override var raToken: String? = null
-        override var raShowNotifications = true
-        override var raNotificationSeconds = 3
-        override var raProgressSeconds = 1
-        override var raSortOrder = RaSortOrder.DEFAULT
-        override var ssUsername = ""
-        override var ssPassword: String? = null
-        override var sgdbApiKey: String? = null
-        override var tgdbApiKey: String? = null
-        override var artReplaceExisting = false
-        override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = com.nxredux.mobile.settings.MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = com.nxredux.mobile.settings.AccentPreset.DEFAULT; override var secondaryAccent: com.nxredux.mobile.settings.SecondaryAccent = com.nxredux.mobile.settings.SecondaryAccent.DEFAULT
+    private class MemorySettings(treeRef: ContentRef? = null) : FakeAppSettings(treeRef) {
         override var cableLinkDelayPin = com.nxredux.mobile.netplay.NetplayCores.CABLE_LINK_DELAY_DEFAULT
         override var cableLinkDelayOverlay = false
-    }
-    private object Runner : EmulatorRunner { override suspend fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) {} }
-    private object Picker : FolderPicker { override fun pickHome() {}; override fun pickExtra() {}; override fun forget(ref: ContentRef) {} }
-
-    /** Files by "<TAG>-<coreId>/minarch.cfg" and "<TAG>-<coreId>/<rom>.cfg". */
-    private class MemoryConfigs(initial: Map<String, String> = emptyMap()) : EmulatorConfigStore {
-        val files = HashMap(initial)
-        var failWrites = false
-        private fun console(tag: String, core: String) = "$tag-$core/minarch.cfg"
-        private fun game(tag: String, core: String, rom: String) = "$tag-$core/${rom.substringBeforeLast('.')}.cfg"
-        override suspend fun read(tag: String, coreId: String, romFileName: String?): Pair<ConfigFile?, ConfigFile?> =
-            files[console(tag, coreId)]?.let(CoreConfig::parse) to romFileName?.let { files[game(tag, coreId, it)] }?.let(CoreConfig::parse)
-        override suspend fun writeConsole(tag: String, coreId: String, text: String) { if (failWrites) error("disk full"); files[console(tag, coreId)] = text }
-        override suspend fun writeGame(tag: String, coreId: String, romFileName: String, text: String) { if (failWrites) error("disk full"); files[game(tag, coreId, romFileName)] = text }
-        override suspend fun deleteGame(tag: String, coreId: String, romFileName: String) { files.remove(game(tag, coreId, romFileName)) }
-        override suspend fun deleteConsole(tag: String, coreId: String) { files.remove(console(tag, coreId)) }
     }
 
     private val source = FakeRomsSource(
@@ -280,7 +236,7 @@ class EmulatorSettingsControllerTest {
         configs: MemoryConfigs, src: FakeRomsSource = source, tables: CoreOptionSource = Tables(), linkRomCache: LinkRomCache? = null,
         settings: MemorySettings = MemorySettings(ContentRef("Home")),
     ) = AppState(
-        AppDeps(settings, src, Runner, Picker, coreOptions = tables, emulatorConfigs = configs, compute = UnconfinedTestDispatcher(testScheduler), linkRomCache = linkRomCache),
+        AppDeps(settings, src, NoopRunner, NoopFolderPicker, coreOptions = tables, emulatorConfigs = configs, compute = UnconfinedTestDispatcher(testScheduler), linkRomCache = linkRomCache),
         CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
     )
 
@@ -305,6 +261,12 @@ class EmulatorSettingsControllerTest {
         val list = openList(state)
         state.select(list.rows.indexOfFirst { it.coreId == coreId })
         state.onButton(NxButton.A)
+    }
+
+    /** [openCore], waited until its options page shows. */
+    private fun TestScope.openOptions(state: AppState, coreId: String) {
+        openCore(state, coreId)
+        await { state.screen.value is Screen.EmulatorOptions }
     }
 
     private fun options(state: AppState) = assertIs<Screen.EmulatorOptions>(state.screen.value)
@@ -334,8 +296,7 @@ class EmulatorSettingsControllerTest {
     @Test fun right_on_a_core_row_writes_the_console_file_and_shows_the_value() = runTest {
         val configs = MemoryConfigs()
         val state = TestState(configs)
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         assertTrue(selected(state) !is EmulatorRow.Header)   // the first selectable row
         selectOptA(state)
         state.padStep(NxButton.RIGHT)
@@ -350,8 +311,7 @@ class EmulatorSettingsControllerTest {
     @Test fun a_change_goes_on_across_the_rebuilt_page() = runTest {
         val configs = MemoryConfigs()
         val state = TestState(configs)
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         selectOptA(state)
         state.onButton(NxButton.A)
         state.onButton(NxButton.RIGHT)
@@ -364,13 +324,11 @@ class EmulatorSettingsControllerTest {
     }
 
     // Touch only, a value row of three or more opens a chooser of its values; a pick writes it as stepping would.
-    // A touch row's picker lists the option's values; a pick writes it.
     @Test fun touch_a_core_option_opens_a_picker_and_a_pick_writes_it() = runTest {
         val configs = MemoryConfigs()
         val state = TestState(configs)
         state.onFooterMode(FooterMode.BUTTONS)
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         selectOptA(state)
         state.settingEvent(NxSettingEvent.OpenPicker(state.selection.value.index))
         val chooser = state.chooser.value ?: error("no chooser")
@@ -386,8 +344,7 @@ class EmulatorSettingsControllerTest {
     @Test fun a_failed_write_says_so_and_the_page_shows_the_disk() = runTest {
         val configs = MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "opt_a = z\n"))
         val state = TestState(configs)
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         selectOptA(state)
         configs.failWrites = true
         state.onButton(NxButton.A); state.onButton(NxButton.RIGHT)   // the change: its error stays up
@@ -398,8 +355,7 @@ class EmulatorSettingsControllerTest {
 
     @Test fun a_category_opens_and_b_returns_to_its_row() = runTest {
         val state = TestState(MemoryConfigs())
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         repeat(options(state).rows.size) { if (selected(state) !is EmulatorRow.Category) state.onButton(NxButton.DOWN) }
         state.onButton(NxButton.A)
         assertEquals("video", options(state).category)
@@ -411,8 +367,7 @@ class EmulatorSettingsControllerTest {
 
     @Test fun b_from_a_one_tag_core_page_returns_to_the_list_and_then_to_emulators_settings() = runTest {
         val state = TestState(MemoryConfigs())
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         state.onButton(NxButton.B)
         val list = assertIs<Screen.EmulatorList>(state.screen.value)
         assertEquals("gpsp", list.rows[state.selection.value.index].coreId)
@@ -467,8 +422,7 @@ class EmulatorSettingsControllerTest {
         val state = TestState(MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "-${PadOptions.LAYOUT} = ${PadOptions.AUTO}\n" +
             (SpeedOptions.table + AudioOptions.rows).joinToString("") { "-${it.key} = ${it.default}\n" })), tables = noOptions)
         state.onSecondScreenChanged(true)
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         assertEquals(listOf(BottomScreenOptions.KEY), options(state).rows.filterIsInstance<EmulatorRow.Console>().map { it.row.option.key })
         state.onSecondScreenChanged(false)
         await { state.screen.value is Screen.EmulatorList }   // back to the core list, as B goes
@@ -516,8 +470,7 @@ class EmulatorSettingsControllerTest {
     @Test fun reset_to_defaults_asks_then_deletes_the_console_file_and_keeps_game_files() = runTest {
         val configs = MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "opt_a = z\n", "GBA-gpsp/Mario.cfg" to "opt_a = y\n"))
         val state = TestState(configs)
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         assertEquals("z", coreValue(state, "opt_a"))
         repeat(options(state).rows.size) { if (selected(state) != EmulatorRow.ResetDefaults) state.onButton(NxButton.DOWN) }
         assertEquals(EmulatorRow.ResetDefaults, selected(state))
@@ -578,8 +531,7 @@ class EmulatorSettingsControllerTest {
 
     @Test fun closing_does_nothing_on_the_console_wide_page() = runTest {
         val state = TestState(MemoryConfigs())
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         val page = state.screen.value
         assertFalse(gameSettingsModal(page))
         state.closeGameSettings()
@@ -670,8 +622,7 @@ class EmulatorSettingsControllerTest {
 
     @Test fun mgbas_page_ends_with_cable_link_where_cable_link_exists() = runTest {
         val state = mgbaState(cacheOf())
-        openCore(state, "mgba")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "mgba")
         assertEquals("MGBA" to "mgba", options(state).page.tag to options(state).page.coreId)
         val rows = options(state).rows
         assertEquals(cableKinds, rows.takeLast(3).map { (it as EmulatorRow.App).row.kind })
@@ -683,25 +634,22 @@ class EmulatorSettingsControllerTest {
 
     @Test fun mgbas_page_has_no_cable_link_without_a_link_rom_cache() = runTest {
         val state = mgbaState(null)
-        openCore(state, "mgba")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "mgba")
         assertEquals(emptyList(), appRows(state))
         assertFalse(EmulatorRow.Header("Cable Link") in options(state).rows)
     }
 
     @Test fun gpsps_page_has_no_cable_link() = runTest {
         val state = mgbaState(cacheOf(), mgba = false)
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         assertEquals("gpsp", options(state).page.coreId)
         assertEquals(emptyList(), appRows(state))
     }
 
-    // Each row changes its setting as on its old Settings page, and the page stays, its selection on the row.
+    // Each row changes its setting as a Settings row does, and the page stays, its selection on the row.
     @Test fun the_cable_link_rows_change_their_settings_on_the_page() = runTest {
         val state = mgbaState(cacheOf())
-        openCore(state, "mgba")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "mgba")
         selectApp(state, SettingsKind.CABLE_LINK_DELAY)
         state.padStep(NxButton.RIGHT)
         assertEquals("2 frames", appRow(state, SettingsKind.CABLE_LINK_DELAY).row.secondary)
@@ -718,8 +666,7 @@ class EmulatorSettingsControllerTest {
 
     @Test fun input_delay_opens_its_picker_and_a_pick_sets_it() = runTest {
         val state = mgbaState(cacheOf())
-        openCore(state, "mgba")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "mgba")
         selectApp(state, SettingsKind.CABLE_LINK_DELAY)
         state.settingEvent(NxSettingEvent.OpenPicker(state.selection.value.index))
         val chooser = state.chooser.value ?: error("no chooser")
@@ -734,8 +681,7 @@ class EmulatorSettingsControllerTest {
     @Test fun clear_link_rom_cache_empties_it_and_shows_the_new_size() = runTest {
         val cache = cacheOf(2048)
         val state = mgbaState(cache)
-        openCore(state, "mgba")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "mgba")
         assertEquals("2.0 KB", appRow(state, SettingsKind.CLEAR_LINK_ROMS).row.secondary)
         selectApp(state, SettingsKind.CLEAR_LINK_ROMS)
         state.onButton(NxButton.A)
@@ -747,8 +693,7 @@ class EmulatorSettingsControllerTest {
     // The rows draw and explain themselves as on Settings: the same touch row, the same help text behind X.
     @Test fun the_cable_link_rows_draw_and_explain_as_on_settings() = runTest {
         val state = mgbaState(cacheOf())
-        openCore(state, "mgba")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "mgba")
         for (r in appRows(state)) assertEquals(settingsTouchRow(r.row, r.choices, SettingsSection.EMULATORS), emulatorTouchRow(r))
         assertEquals("Clear", emulatorTouchRow(appRow(state, SettingsKind.CLEAR_LINK_ROMS)).action)
         selectApp(state, SettingsKind.CABLE_LINK_DELAY)

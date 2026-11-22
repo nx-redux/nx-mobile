@@ -1,6 +1,5 @@
 package com.nxredux.mobile.skin
 
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -10,7 +9,7 @@ class SkinPackDrawingTest {
     /** A pad stacked under another on a side, drawn at this share of its size. */
     private val LOWER_PAD = 0.85f
 
-    private val pack = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
+    private val pack = skinPack()
 
     // A layout's groups (what the controls editor moves) follow what the buttons are: the d-pad, the stick, the face
     // buttons (the N64's C diamond and its A / B well apart), each shoulder alone, small caps by their outline.

@@ -14,23 +14,12 @@
 namespace libretrodroid {
 
 /**
- * Open a track from a CHD image.
- *
- * @param path Path the hasher asks for (resolved through AchievementsHash::lookup)
- * @param track Track number (1-based) or RC_HASH_CDTRACK_* special value
- * @return Track handle, or nullptr if the path is not a CHD or on error
+ * [path] is resolved through AchievementsHash::lookup; [track] is 1-based or an RC_HASH_CDTRACK_* value. nullptr when
+ * the path is not a CHD, or on error.
  */
 void* chdreader_open_track(const char* path, uint32_t track);
 
-/**
- * Read a sector from an open CHD track.
- *
- * @param track_handle Handle returned by chdreader_open_track
- * @param sector Absolute disc LBA
- * @param buffer Buffer to read data into
- * @param requested_bytes Number of bytes to read
- * @return Number of bytes actually read
- */
+/** [sector] is an absolute disc LBA. Returns the bytes read. */
 size_t chdreader_read_sector(void* track_handle, uint32_t sector, void* buffer, size_t requested_bytes);
 
 /** Close a CHD track handle (closes the CHD and the FILE it was opened on). */

@@ -34,7 +34,7 @@ namespace libretrodroid::gldebug {
 
 namespace {
 
-// GL_KHR_debug tokens (GLES 3.2 core names without the suffix); spelled out to need only gl2.h.
+// GL_KHR_debug tokens (GLES 3.2 core names without the suffix); spelled out, as gl3.h has none of them.
 constexpr GLenum DEBUG_OUTPUT = 0x92E0;
 constexpr GLenum DEBUG_OUTPUT_SYNCHRONOUS = 0x8242;
 constexpr GLenum DEBUG_SEVERITY_HIGH = 0x9146;

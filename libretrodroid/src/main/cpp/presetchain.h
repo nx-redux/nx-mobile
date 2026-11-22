@@ -138,6 +138,25 @@ std::unique_ptr<ChainRenderer> makeChainRenderer(const PresetChain& chain);
 // An upper bound of textureUnits() for the renderer chain would build.
 unsigned chainTextureUnits(const PresetChain& chain);
 
+// Compiles and links a pass program; label names the preset format in the log. Attributes 0 and 1 are bound to
+// names (null to keep the shader's own locations). Returns 0 and sets error on failure.
+GLuint linkChainProgram(const char* label, const std::string& vertex, const std::string& fragment,
+                        const char* attribute0, const char* attribute1, std::string& error);
+
+// Selects unit 0 with tightly packed client-memory unpacking for the LUT uploads, and puts back whatever a
+// GL core left (active unit, its unit 0 binding, unpack state) when it goes out of scope, throw or not:
+// GL cores cache that state.
+class ChainUploadState {
+public:
+    ChainUploadState();
+    ~ChainUploadState();
+    ChainUploadState(const ChainUploadState&) = delete;
+    ChainUploadState& operator=(const ChainUploadState&) = delete;
+
+private:
+    GLint activeTexture = GL_TEXTURE0, texture = 0, unpackBuffer = 0, alignment = 4, rowLength = 0;
+};
+
 // The bounding box of a clip-space quad (12 floats) in window pixels: x, y from the bottom-left, w, h.
 std::array<int, 4> foregroundRect(const std::array<float, 12>& vertices, int screenW, int screenH);
 
@@ -153,15 +172,11 @@ public:
 
     void setParameter(const std::string& id, float value) override;
 
-    // Whether render() saves and restores the texture bound on each unit it uses: needed only while a GL core owns
-    // those bindings (it caches them). Default on.
     void setPreserveTextureBindings(bool preserve) override { preserveTextureBindings = preserve; }
 
     // The texture units render() samples, from unit 0: Texture, Orig, the LUTs, then each pass's output.
     unsigned textureUnits() const override { return 2 + (unsigned) lutTextures.size() + (unsigned) passes.size(); }
 
-    // Forgets the GL names without deleting them: their context is gone, and deleting them would hit whatever
-    // reuses those names in the current one.
     void abandonGlObjects() override;
 
     // Draws the chain: source is the core frame texture (srcW x srcH texels); the part being drawn is frameW x frameH of
@@ -178,7 +193,7 @@ public:
                 int screenW, int screenH, bool defaultLinear, unsigned frameCount,
                 bool bottomLeftOrigin, unsigned slot) override;
 
-    // Pure helpers, exposed for review: version rewrite and pass sizing.
+    // Pure helpers: version rewrite and pass sizing.
     static std::string prefixSource(const std::string& source, bool vertex, const std::vector<std::string>& aliases);
     static unsigned passSize(int scaleType, float scale, unsigned previous, unsigned viewport, unsigned maxSize);
 

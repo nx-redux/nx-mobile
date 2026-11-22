@@ -75,7 +75,8 @@ object SkinGroups {
 
     private fun contains(r: PxRect, x: Float, y: Float) = x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height
 
-    private fun gap(r: PxRect, x: Float, y: Float): Float {
+    /** The squared distance from ([x], [y]) to [r]; 0 inside it. */
+    internal fun gap(r: PxRect, x: Float, y: Float): Float {
         val dx = maxOf(r.x - x, 0f, x - (r.x + r.width)); val dy = maxOf(r.y - y, 0f, y - (r.y + r.height))
         return dx * dx + dy * dy
     }

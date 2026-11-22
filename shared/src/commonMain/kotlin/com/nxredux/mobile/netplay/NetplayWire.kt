@@ -1,8 +1,10 @@
 package com.nxredux.mobile.netplay
 
+import com.nxredux.mobile.storage.Bytes
+
 /**
- * NX Redux netplay wire format, byte-compatible with the handheld (nx-redux network_common.c, wizard_net.c at
- * 8f5a760b): ports, discovery packet, name escaping and normalisation. The control lines are in `wizard/`. Pure.
+ * NX Redux netplay wire format, byte-compatible with the handheld (nx-redux network_common.c,
+ * wizard_net.c): ports, discovery packet, name escaping and normalisation. The control lines are in `wizard/`. Pure.
  */
 object NetplayWire {
     const val CONTROL_PORT = 55440
@@ -67,9 +69,7 @@ object NetplayWire {
     private fun putInt(b: ByteArray, at: Int, v: Int) {
         b[at] = (v ushr 24).toByte(); b[at + 1] = (v ushr 16).toByte(); b[at + 2] = (v ushr 8).toByte(); b[at + 3] = v.toByte()
     }
-    private fun getInt(b: ByteArray, at: Int): Int =
-        ((b[at].toInt() and 0xff) shl 24) or ((b[at + 1].toInt() and 0xff) shl 16) or
-            ((b[at + 2].toInt() and 0xff) shl 8) or (b[at + 3].toInt() and 0xff)
+    private fun getInt(b: ByteArray, at: Int): Int = Bytes.be32(b, at).toInt()
 
     /** At most field-1 UTF-8 bytes, cut back to a character boundary, NUL-padded (always NUL-terminated). */
     private fun putString(b: ByteArray, at: Int, field: Int, s: String) {

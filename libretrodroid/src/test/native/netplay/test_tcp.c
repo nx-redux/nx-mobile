@@ -42,6 +42,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "test_util.h"
+
 static int fails;
 static uint16_t next_port;
 
@@ -50,19 +52,6 @@ static void report(const char* name, int ok) {
 	if (!ok)
 		fails++;
 	fflush(stdout);
-}
-
-#define CHECK(cond)                                                                    \
-	do {                                                                               \
-		if (!(cond)) {                                                                 \
-			fprintf(stderr, "  check failed %s:%d: %s\n", __FILE__, __LINE__, #cond); \
-			return -1;                                                                 \
-		}                                                                              \
-	} while (0)
-
-static void nap_ms(int ms) {
-	struct timespec ts = {ms / 1000, (long)(ms % 1000) * 1000000L};
-	nanosleep(&ts, NULL);
 }
 
 static struct in_addr addr_of(const char* ip) {

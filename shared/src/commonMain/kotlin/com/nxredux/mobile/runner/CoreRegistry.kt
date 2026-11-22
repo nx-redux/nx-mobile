@@ -65,14 +65,19 @@ object CoreRegistry {
         // The plugins follow Graphics API: GLideN64 on HLE for OpenGL ES, ParaLLEl-RDP with its ParaLLEl-RSP for Vulkan (the
         // RDP cannot run on HLE). The GLES pair is the default, so a locked key always has a value.
         // Hi-res packs are ready-made .hts files only (N64HiresPack): enhanced Hi-Res Storage is what reads one, so it is fixed on.
+        // The resolution is the app's (3D Resolution rows, Res3dConsole.N64): GLideN64 draws at the 4:3 Resolution's size, a
+        // wide aspect at that height (patches/mupen64plus_next/0014), with no native factor; native until the launch sends it.
         defaultOptions = mapOf(
             "mupen64plus-alt-map" to "True",
             "mupen64plus-rdp-plugin" to "gliden64", "mupen64plus-rsp-plugin" to "hle",
             "mupen64plus-EnableEnhancedHighResStorage" to "True",
+            "mupen64plus-43screensize" to "320x240", "mupen64plus-169screensize" to "960x540", "mupen64plus-EnableNativeResFactor" to "0",
+            N64Resolution.PARALLEL_KEY to "1x",
             N64HiresPack.VRAM_KEY to N64HiresPack.VRAM_AUTO,   // resolved by device memory at launch (GameActivity)
         ),
         lockedOptions = setOf(
             "mupen64plus-alt-map", "mupen64plus-rdp-plugin", "mupen64plus-rsp-plugin", "mupen64plus-EnableEnhancedHighResStorage",
+            "mupen64plus-43screensize", "mupen64plus-169screensize", "mupen64plus-EnableNativeResFactor", N64Resolution.PARALLEL_KEY,
         ),
         // A stored "0" is the old default every saved config holds: it reads as Auto; No limit is "none" (N64HiresPack).
         hiddenValues = mapOf(N64HiresPack.VRAM_KEY to setOf("0")),
@@ -83,6 +88,10 @@ object CoreRegistry {
             // ParaLLEl-RDP's 8/16-bit shader types fail to compile on the Adreno 840 driver (a black screen); with them off
             // it renders with subgroups still on. Safe on every GPU.
             vulkanEnv = mapOf("PARALLEL_RDP_SMALL_TYPES" to "0"),
+            // The Adreno 740's own driver fails to compile ParaLLEl-RDP's specialised shaders as well (a black screen at any
+            // scale); its one general shader compiles. Slower (the Nova, Mario Kart 64: ~48 fps at 1x against 60 on Turnip),
+            // so only there: Turnip and Mali's drivers take the specialised ones.
+            adrenoSystemDriverEnv = mapOf("PARALLEL_RDP_UBERSHADER" to "1"),
         ),
         players = 4,
         name = "Mupen64Plus-Next",
@@ -102,10 +111,16 @@ object CoreRegistry {
         // The ad hoc network is the app's (PspOptions.LOCAL_WIRELESS and a Netplay sheet session; the launch sends these
         // through NetplayLinkOptions.pspNetwork): WLAN stays off unless the link is on, and the server, UPnP, port, MAC and
         // channel rows are locked, so hidden, whether or not it is.
-        defaultOptions = mapOf("ppsspp_backend" to "auto", "ppsspp_cheats" to "enabled", "ppsspp_vr_mode" to "Off", "ppsspp_enable_wlan" to "disabled"),
-        lockedOptions = setOf("ppsspp_cheats", "ppsspp_backend", "ppsspp_vr_mode") + PSP_NETWORK_OPTIONS,
+        // ppsspp_internal_resolution is the app's (PSP 3D Resolution rows); 1x until the launch sends the scale.
+        defaultOptions = mapOf(
+            "ppsspp_backend" to "auto", "ppsspp_cheats" to "enabled", "ppsspp_vr_mode" to "Off", "ppsspp_enable_wlan" to "disabled",
+            "ppsspp_internal_resolution" to "480x272",
+        ),
+        // The resolution is the app's (PSP 3D Resolution, PspOptions), sent at launch and as the picture's size changes.
+        lockedOptions = setOf("ppsspp_cheats", "ppsspp_backend", "ppsspp_vr_mode", "ppsspp_internal_resolution") + PSP_NETWORK_OPTIONS,
         hiddenValues = mapOf("ppsspp_backend" to setOf("vulkan", "none")),
-        vulkan = VulkanSwitch(gles = mapOf("ppsspp_backend" to "auto"), vulkan = mapOf("ppsspp_backend" to "auto")),
+        // Auto is Vulkan on Mali, where OpenGL ES falls behind: the AYANEO's Mali-G76 held 3x at 60 fps on Vulkan, 42 on GLES.
+        vulkan = VulkanSwitch(gles = mapOf("ppsspp_backend" to "auto"), vulkan = mapOf("ppsspp_backend" to "auto"), autoOnMali = true, autoOnXclipse = true),
         restartOnlyOptions = RestartOnlyOptions.ppsspp,
         // PPSSPP writes SAVEDATA/ under the save dir.
         name = "PPSSPP",
@@ -168,7 +183,12 @@ object CoreRegistry {
         "pcsx_rearmed", "libpcsx_rearmed_libretro_android.so",
         setOf("bin", "cue", "img", "mdf", "pbp", "toc", "cbn", "m3u", "chd", "iso", "exe"),
         // No second memory card unless picked (the core's default is a card shared by all games).
-        defaultOptions = mapOf("pcsx_rearmed_dithering" to "enabled", "pcsx_rearmed_memcard2" to "none"),
+        // pcsx_rearmed_neon_enhancement_enable is the app's (3D Resolution rows, Res3dConsole.PCSX); off until the launch sends it.
+        defaultOptions = mapOf(
+            "pcsx_rearmed_dithering" to "enabled", "pcsx_rearmed_memcard2" to "none",
+            "pcsx_rearmed_neon_enhancement_enable" to "disabled",
+        ),
+        lockedOptions = setOf("pcsx_rearmed_neon_enhancement_enable"),
         biosFiles = listOf("psxonpsp660.bin", "scph101.bin", "scph5501.bin", "scph7001.bin", "scph1001.bin"),   // optional: HLE built in
         controllerPort0 = CoreDescriptor.PS_DUALSHOCK,
         players = 2,
@@ -187,11 +207,15 @@ object CoreRegistry {
         players = 2,
         // "Auto" asks GET_PREFERRED_HW_RENDER, so Graphics API decides; not locked, so OpenGL / Software stay the player's
         // choice on OpenGL ES. Vulkan is reached only through Graphics API, never offered as a value.
-        defaultOptions = mapOf("swanstation_GPU_Renderer" to "Auto", "swanstation_MemoryCards_Card1Type" to "Libretro"),
+        // swanstation_GPU_ResolutionScale is the app's (3D Resolution rows, Res3dConsole.PS1); 1x until the launch sends it.
+        defaultOptions = mapOf(
+            "swanstation_GPU_Renderer" to "Auto", "swanstation_MemoryCards_Card1Type" to "Libretro",
+            "swanstation_GPU_ResolutionScale" to "1",
+        ),
         // Card 1 as the frontend's battery save: one card per game named by the Save format, shared with PCSX ReARMed (Saves/PS).
-        lockedOptions = setOf("swanstation_MemoryCards_Card1Type"),
+        lockedOptions = setOf("swanstation_MemoryCards_Card1Type", "swanstation_GPU_ResolutionScale"),
         hiddenValues = mapOf("swanstation_GPU_Renderer" to setOf("Vulkan")),
-        vulkan = VulkanSwitch(vulkan = mapOf("swanstation_GPU_Renderer" to "Auto"), lock = false),
+        vulkan = VulkanSwitch(vulkan = mapOf("swanstation_GPU_Renderer" to "Auto"), lock = false, autoOnXclipse = true),
         name = "SwanStation",
     )
     // PS2 on ARMSX2 (ARMSX2/ARMSX2 2.9, cores/Makefile). Reads <system>/pcsx2/{bios,resources}. Opens the game
@@ -209,7 +233,7 @@ object CoreRegistry {
             "armsx2_widescreen_patches" to "disabled", "armsx2_no_interlacing_patches" to "disabled", "armsx2_cheats" to "disabled", "armsx2_sw_threads" to "2",
         ),
         lockedOptions = setOf("armsx2_renderer", "armsx2_bios", "armsx2_upscale", "armsx2_sw_threads"),
-        vulkan = VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan"), autoOnMali = true),
+        vulkan = VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan"), autoOnMali = true, autoOnXclipse = true),
         // The PS2's two controller ports, both DualShock2 (cores/patches/armsx2/0006); no multitap. Saves stay on card 1.
         players = 2,
         name = "ARMSX2",
@@ -222,9 +246,23 @@ object CoreRegistry {
         cheats = false,   // retro_cheat_set is empty
         name = "RACE",
     )
+    /**
+     * Beetle PCE Fast's CD BIOS option, and the file each of its values loads (the core's table; unset loads System Card 3).
+     * Above pceFast, which lists the files: an object's properties initialize in order.
+     */
+    const val PCE_CARD_KEY = "pce_fast_cdbios"
+    private const val PCE_DEFAULT_CARD = "syscard3.pce"
+    private val PCE_CARDS = mapOf(
+        "System Card 3" to PCE_DEFAULT_CARD,
+        "System Card 2" to "syscard2.pce",
+        "System Card 1" to "syscard1.pce",
+        "Games Express" to "gexpress.pce",
+        "System Card 3 US" to "syscard3u.pce",
+        "System Card 2 US" to "syscard2u.pce",
+    )
     private val pceFast = CoreDescriptor(
         "mednafen_pce_fast", "libmednafen_pce_fast_libretro_android.so", setOf("pce", "cue", "ccd", "chd", "toc", "m3u"),
-        biosFiles = listOf("syscard3.pce"),   // CD content only
+        biosFiles = PCE_CARDS.values.toList(),   // CD content only, the one the CD BIOS option picks
         players = 4,
         name = "Beetle PCE Fast",
     )
@@ -339,7 +377,7 @@ object CoreRegistry {
         biosFiles = listOf("dc/dc_boot.bin"),
         // Flycast has no renderer option and asks GET_PREFERRED_HW_RENDER; its libretro Vulkan context enables the frontend's
         // required device extensions only with patches/flycast.patch.
-        vulkan = VulkanSwitch(),
+        vulkan = VulkanSwitch(autoOnXclipse = true),
         // NX Redux's flycast defaults; values are flycast's exact strings (libretro_core_options.h), a misspelt one is ignored.
         // Per-game VMU: <save dir>/<content name>.A1.bin, with the game's saves.
         defaultOptions = mapOf(
@@ -347,6 +385,7 @@ object CoreRegistry {
             "reicast_alpha_sorting" to "per-strip (fast, least accurate)",
             "reicast_threaded_rendering" to "enabled",
             "reicast_delay_frame_swapping" to "enabled",
+            // The app's (3D Resolution rows, Res3dConsole.DC); native until the launch sends it.
             "reicast_internal_resolution" to "640x480",
             "reicast_region" to "USA",
             "reicast_language" to "English",
@@ -367,7 +406,7 @@ object CoreRegistry {
         // flycast writes <saves>/reicast/<game>.nvmem, .eeprom, .nvmem2 (arcade).
         // Detection off runs 30 fps games 2x (see its default), so a stored "disabled" must not win.
         // Any VMU mode but "VMU A1" moves the VMU out of <content>.A1.bin, where the runner looks for it.
-        lockedOptions = setOf("reicast_detect_vsync_swap_interval", "reicast_per_content_vmus"),
+        lockedOptions = setOf("reicast_detect_vsync_swap_interval", "reicast_per_content_vmus", "reicast_internal_resolution"),
         // Per-pixel sorting draws one flat colour on Adreno; a stored per-pixel value falls back to per-strip.
         hiddenValues = mapOf("reicast_alpha_sorting" to setOf("per-pixel (accurate)")),
         // Only read by the per-pixel sorting hidden above: dead rows out of game.
@@ -425,7 +464,7 @@ object CoreRegistry {
         hiddenValues = mapOf("citra_graphics_api" to setOf("Software")),
         // With Vulkan compiled in, Azahar's Android "Auto" picks Vulkan without asking the frontend
         // (GET_PREFERRED_HW_RENDER), so the API is always set explicitly: OpenGL, or Vulkan through Graphics API.
-        vulkan = VulkanSwitch(gles = mapOf("citra_graphics_api" to "OpenGL"), vulkan = mapOf("citra_graphics_api" to "Vulkan")),
+        vulkan = VulkanSwitch(gles = mapOf("citra_graphics_api" to "OpenGL"), vulkan = mapOf("citra_graphics_api" to "Vulkan"), autoOnXclipse = true),
         cheats = false,   // retro_cheat_set is empty
         name = "Azahar",
         rewind = false,
@@ -460,6 +499,8 @@ object CoreRegistry {
         "dolphin_vr_mode" to "disabled",
         "dolphin_wiimote_default_device" to "frontend",
         "dolphin_log_popups_enabled" to "disabled",
+        // The app's (3D Resolution rows, Res3dConsole.DOLPHIN); 1x until the launch sends the scale.
+        "dolphin_efb_scale" to "1",
     )
     private val dolphinLocked = setOf(
         "dolphin_renderer", "dolphin_osd_enabled", "dolphin_debug_mode_enabled", "dolphin_bluetooth_passthrough",
@@ -468,7 +509,7 @@ object CoreRegistry {
         "dolphin_log_memmap_enabled", "dolphin_log_dspinterface_enabled", "dolphin_log_dsphle_enabled",
         "dolphin_log_dsplle_enabled", "dolphin_log_dsp_mail_enabled",
         "dolphin_hotkey_sideways_toggle", "dolphin_hotkey_upright_toggle", "dolphin_cheats_enabled",
-        "dolphin_vr_mode", "dolphin_wiimote_default_device", "dolphin_log_popups_enabled",
+        "dolphin_vr_mode", "dolphin_wiimote_default_device", "dolphin_log_popups_enabled", "dolphin_efb_scale",
         // Display → Wii Screen sets these at launch (WiiScreen): the shape, and the pointer geometry for it.
         "dolphin_widescreen", "dolphin_ir_yaw", "dolphin_ir_pitch", "dolphin_ir_offset",
     )
@@ -483,7 +524,7 @@ object CoreRegistry {
         ),
         lockedOptions = dolphinLocked,
         hiddenValues = mapOf("dolphin_renderer" to setOf("Software", "Null")),
-        vulkan = VulkanSwitch(swapchainFrames = true, autoOnMali = true),
+        vulkan = VulkanSwitch(swapchainFrames = true, autoOnMali = true, maliNeedsCustomDriver = true),
         // Dolphin writes its NAND and memory cards under User/Wii and User/GC in its console's save dir (Saves/<console tag>/User).
         controllerPort0 = CoreDescriptor.WIIMOTE_SIDEWAYS,
         players = 4,
@@ -493,6 +534,9 @@ object CoreRegistry {
     )
     private val dolphinGc = dolphinWii.copy(
         defaultOptions = dolphinOptions,
+        // Xclipse: Vulkan runs GameCube faster than ANGLE's OpenGL ES (Sunshine 60 vs 47 fps on the Tab S10 FE); Wii
+        // games run slower on it there, so Wii keeps OpenGL ES.
+        vulkan = dolphinWii.vulkan?.copy(autoOnXclipse = true),
         controllerPort0 = CoreDescriptor.JOYPAD,
     )
 
@@ -745,6 +789,8 @@ object CoreRegistry {
         return byTag.filterValues { it.id == id }.keys.toList()
     }
 
+    private val pceCdCard = BiosNeed(listOf(PCE_DEFAULT_CARD), setOf("cue", "ccd", "chd", "toc", "m3u"))
+
     /** The Sega CD BIOS a launch accepts any of, by its generic need; [SegaCdBios] narrows it to the disc's region. */
     val SEGA_CD_BIOS = listOf("bios_CD_U.bin", "bios_CD_E.bin", "bios_CD_J.bin")
     private val segaCdDiscs = BiosNeed(SEGA_CD_BIOS, setOf("cue", "chd", "iso", "m3u"))
@@ -754,7 +800,7 @@ object CoreRegistry {
         "SEGACD" to listOf(BiosNeed(SEGA_CD_BIOS)),
         "GPGX" to listOf(segaCdDiscs),
         "MD" to listOf(segaCdDiscs),
-        "PCE" to listOf(BiosNeed(listOf("syscard3.pce"), setOf("cue", "ccd", "chd", "toc", "m3u"))),
+        "PCE" to listOf(pceCdCard),
         "COLECO" to listOf(BiosNeed(listOf("colecovision.rom", "coleco.rom"))),
         "DC" to listOf(BiosNeed(listOf("dc_boot.bin"), setOf("chd", "cdi", "gdi", "cue", "m3u"))),   // arcade sets bring their own BIOS
         "PS2" to listOf(BiosNeed(emptyList(), anySuffix = ".bin")),   // the core's scan takes ".bin" only: .nvm / .mec do not count
@@ -762,4 +808,12 @@ object CoreRegistry {
 
     /** The BIOS a launch under [tag] cannot do without (checked before the core starts); empty for most tags. */
     fun requiredBios(tag: String): List<BiosNeed> = requiredBiosByTag[baseTag(tag)] ?: emptyList()
+
+    /**
+     * [requiredBios] under the core options a launch runs with ([option]: a key's value, null when unset): Beetle PCE
+     * Fast loads the System Card its CD BIOS option names ([PCE_CARD_KEY]), so the check asks for that file.
+     */
+    fun requiredBios(tag: String, option: (String) -> String?): List<BiosNeed> = requiredBios(tag).map { need ->
+        if (need == pceCdCard) need.copy(anyOf = listOf(PCE_CARDS[option(PCE_CARD_KEY)] ?: PCE_DEFAULT_CARD)) else need
+    }
 }

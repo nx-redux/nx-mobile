@@ -13,13 +13,9 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "check.h"
+
 using namespace libretrodroid;
-
-static int failures = 0;
-
-static void check(bool ok, const char* what) {
-    if (!ok) { std::printf("FAIL %s\n", what); failures++; }
-}
 
 static uint8_t* coreRam = nullptr;
 static size_t coreRamSize = 0;

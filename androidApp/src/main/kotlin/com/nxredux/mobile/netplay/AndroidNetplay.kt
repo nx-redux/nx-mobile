@@ -89,59 +89,44 @@ class AndroidNetplay(context: Context, private val sdRoot: () -> File) : Netplay
         runCatching { context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
 
-    override fun advertise(game: String): Advert {
-        val packet = NetplayWire.encodeDiscovery(game)
-        val running = AtomicBoolean(true)
-        val worker = thread(name = "nx-netplay-advert", isDaemon = true) {
-            val socket = try {
-                DatagramSocket().apply { broadcast = true }
-            } catch (e: IOException) {
-                NxLog.w(TAG, "advert socket failed: ${e.message}")
-                return@thread
+    override fun advertise(game: String): Advert = advert(game, "nx-netplay-advert", { DatagramSocket().apply { broadcast = true } }) { socket ->
+        var bound: Network? = null
+        return@advert {
+            val network = WifiNetworks.network(connectivity)
+            if (network != null && network != bound) {
+                runCatching { network.bindSocket(socket) }
+                bound = network
             }
-            var bound: Network? = null
-            try {
-                while (running.get()) {
-                    val network = WifiNetworks.network(connectivity)
-                    if (network != null && network != bound) {
-                        runCatching { network.bindSocket(socket) }
-                        bound = network
-                    }
-                    val target = WifiNetworks.broadcast(WifiNetworks.address(connectivity, network)) ?: InetAddress.getByName("255.255.255.255")
-                    try {
-                        socket.send(DatagramPacket(packet, packet.size, target, NetplayWire.DISCOVERY_PORT))
-                    } catch (e: IOException) {
-                        NxLog.w(TAG, "advert send failed: ${e.message}")
-                    }
-                    try { Thread.sleep(ADVERT_INTERVAL_MS) } catch (_: InterruptedException) { break }
-                }
-            } finally {
-                socket.close()
-            }
-        }
-        return object : Advert {
-            override fun stop() {
-                if (running.getAndSet(false)) worker.interrupt()
-            }
+            WifiNetworks.broadcast(WifiNetworks.address(connectivity, network)) ?: InetAddress.getByName("255.255.255.255")
         }
     }
 
-    override fun advertiseTo(game: String, ip: String): Advert {
+    override fun advertiseTo(game: String, ip: String): Advert = advert(game, "nx-netplay-advert-to", { DatagramSocket() }) { socket ->
+        UsbCables.get(context).network?.let { n -> runCatching { n.bindSocket(socket) } }   // leave from the cable address
+        val target = InetAddress.getByName(ip)
+        return@advert { target }
+    }
+
+    /**
+     * [game]'s discovery packet sent every [ADVERT_INTERVAL_MS] from its own thread until stopped. [prepare] sets the
+     * socket up once and returns where each round's packet goes.
+     */
+    private fun advert(game: String, threadName: String, open: () -> DatagramSocket, prepare: (DatagramSocket) -> () -> InetAddress): Advert {
         val packet = NetplayWire.encodeDiscovery(game)
         val running = AtomicBoolean(true)
-        val worker = thread(name = "nx-netplay-advert-to", isDaemon = true) {
+        val worker = thread(name = threadName, isDaemon = true) {
             val socket = try {
-                DatagramSocket()
+                open()
             } catch (e: IOException) {
                 NxLog.w(TAG, "advert socket failed: ${e.message}")
                 return@thread
             }
-            UsbCables.get(context).network?.let { n -> runCatching { n.bindSocket(socket) } }   // leave from the cable address
             try {
-                val target = InetAddress.getByName(ip)
+                val target = prepare(socket)
                 while (running.get()) {
+                    val to = target()
                     try {
-                        socket.send(DatagramPacket(packet, packet.size, target, NetplayWire.DISCOVERY_PORT))
+                        socket.send(DatagramPacket(packet, packet.size, to, NetplayWire.DISCOVERY_PORT))
                     } catch (e: IOException) {
                         NxLog.w(TAG, "advert send failed: ${e.message}")
                     }
@@ -304,7 +289,7 @@ class AndroidNetplay(context: Context, private val sdRoot: () -> File) : Netplay
     }
 
     override suspend fun gbaLinkMode(romFileName: String, content: ContentRef): String {
-        // The runner unpacks an archive; the probe reads only a bare ROM, so an archived game links as it did before.
+        // The runner unpacks an archive; the probe reads only a bare ROM, so an archived game has no link mode.
         if (Names.isArchive(romFileName)) return GbaWifiLink.NONE
         // A SAF document reads through its descriptor's /proc path, which the native probe opens like a file.
         return withContext(Dispatchers.IO) {

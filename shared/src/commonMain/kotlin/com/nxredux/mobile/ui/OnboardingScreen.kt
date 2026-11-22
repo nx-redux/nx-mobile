@@ -45,7 +45,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.graphics.Color
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import org.jetbrains.compose.resources.DrawableResource
 import com.nxredux.mobile.ui.nx.Hint
@@ -53,7 +52,6 @@ import com.nxredux.mobile.ui.nx.NX_EDIT_HINTS
 import com.nxredux.mobile.ui.nx.padAHint
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
 import com.nxredux.mobile.ui.nx.NxButton
-import com.nxredux.mobile.ui.nx.NxButtonGlyph
 import com.nxredux.mobile.ui.nx.nxPadRings
 import com.nxredux.mobile.ui.nx.nxPadRing
 import com.nxredux.mobile.ui.nx.NxPadRingRoom
@@ -214,13 +212,11 @@ internal fun SetupBlockPage(
  * [selected]) is the modal's white ring round the button ([nxPadRing], shown only where there is a pad). Each word
  * stays on its text edge, the pill reaching [nxListInset] past it either side (the ring's room hangs outside it), so the
  * words keep their places and spacing; a tap target [SETUP_BUTTON_TAP] tall. A tap selects and opens it.
- * [keys]: a pad button's glyph before a word that has a button of its own, in [labels]' order; null or missing: none.
  */
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
 internal fun SetupButtons(
     labels: List<String>, first: Int, selected: Int, size: TextUnit, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit,
-    keys: List<NxButton?> = emptyList(),
 ) {
     val colors = LocalNxColors.current
     val inset = nxListInset()
@@ -250,10 +246,6 @@ internal fun SetupButtons(
                         .padding(horizontal = inset, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    keys.getOrNull(i)?.let { key ->
-                        NxButtonGlyph(key, with(LocalDensity.current) { size.toDp() }, tint = ink)
-                        Spacer(Modifier.width(6.dp))
-                    }
                     Text(
                         text, color = ink,
                         fontFamily = LocalNxFont.current, fontWeight = FontWeight.Bold, fontSize = size, lineHeight = size * SETUP_WORD_LINE, maxLines = 1,

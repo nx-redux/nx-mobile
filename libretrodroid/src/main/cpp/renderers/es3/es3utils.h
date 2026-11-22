@@ -61,6 +61,9 @@ public:
 
     static void deleteFramebuffer(std::unique_ptr<Framebuffer> data);
 
+    // Deletes every pass framebuffer and empties the list.
+    static void deleteFramebuffers(Framebuffers& framebuffers);
+
     // Layer n draws into framebuffers[n] (none for the last, on-screen pass) and samples framebuffers[n - 1].
     static Renderer::PassData passData(const Framebuffers& framebuffers, unsigned int layer);
 };

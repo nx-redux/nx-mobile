@@ -31,51 +31,13 @@ public class LibretroDroid {
     public static final int MOTION_SOURCE_POINTER = 3;
 
     public static final int SHADER_DEFAULT = 0;
-    public static final int SHADER_CRT = 1;
-    public static final int SHADER_LCD = 2;
     public static final int SHADER_SHARP = 3;
-    public static final int SHADER_UPSCALE_CUT = 4;
-    public static final int SHADER_UPSCALE_CUT2 = 5;
-    public static final int SHADER_UPSCALE_CUT3 = 6;
 
     public static final String SHADER_DEFAULT_PARAM_LINEAR = "LINEAR";
 
     public static final int SCALE_MODE_FIT = 0;
     public static final int SCALE_MODE_INTEGER = 1;
     public static final int SCALE_MODE_STRETCH = 2;
-
-    public static final String SHADER_UPSCALE_CUT_PARAM_USE_DYNAMIC_BLEND = "USE_DYNAMIC_BLEND";
-    public static final String SHADER_UPSCALE_CUT_PARAM_BLEND_MIN_CONTRAST_EDGE = "BLEND_MIN_CONTRAST_EDGE";
-    public static final String SHADER_UPSCALE_CUT_PARAM_BLEND_MAX_CONTRAST_EDGE = "BLEND_MAX_CONTRAST_EDGE";
-    public static final String SHADER_UPSCALE_CUT_PARAM_BLEND_MIN_SHARPNESS = "BLEND_MIN_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT_PARAM_BLEND_MAX_SHARPNESS = "BLEND_MAX_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT_PARAM_STATIC_BLEND_SHARPNESS = "STATIC_BLEND_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT_PARAM_EDGE_USE_FAST_LUMA = "EDGE_USE_FAST_LUMA";
-    public static final String SHADER_UPSCALE_CUT_PARAM_EDGE_MIN_VALUE = "EDGE_MIN_VALUE";
-    public static final String SHADER_UPSCALE_CUT_PARAM_EDGE_MIN_CONTRAST = "EDGE_MIN_CONTRAST";
-
-    public static final String SHADER_UPSCALE_CUT2_PARAM_USE_DYNAMIC_BLEND = "USE_DYNAMIC_BLEND";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_BLEND_MIN_CONTRAST_EDGE = "BLEND_MIN_CONTRAST_EDGE";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_BLEND_MAX_CONTRAST_EDGE = "BLEND_MAX_CONTRAST_EDGE";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_BLEND_MIN_SHARPNESS = "BLEND_MIN_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_BLEND_MAX_SHARPNESS = "BLEND_MAX_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_STATIC_BLEND_SHARPNESS = "STATIC_BLEND_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_EDGE_USE_FAST_LUMA = "EDGE_USE_FAST_LUMA";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_SOFT_EDGES_SHARPENING = "SOFT_EDGES_SHARPENING";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_SOFT_EDGES_SHARPENING_AMOUNT = "SOFT_EDGES_SHARPENING_AMOUNT";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_HARD_EDGES_SEARCH_MAX_ERROR = "HARD_EDGES_SEARCH_MAX_ERROR";
-
-    public static final String SHADER_UPSCALE_CUT3_PARAM_USE_DYNAMIC_BLEND = "USE_DYNAMIC_BLEND";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_BLEND_MIN_CONTRAST_EDGE = "BLEND_MIN_CONTRAST_EDGE";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_BLEND_MAX_CONTRAST_EDGE = "BLEND_MAX_CONTRAST_EDGE";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_BLEND_MIN_SHARPNESS = "BLEND_MIN_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_BLEND_MAX_SHARPNESS = "BLEND_MAX_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_STATIC_BLEND_SHARPNESS = "STATIC_BLEND_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_EDGE_USE_FAST_LUMA = "EDGE_USE_FAST_LUMA";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_SOFT_EDGES_SHARPENING = "SOFT_EDGES_SHARPENING";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_SOFT_EDGES_SHARPENING_AMOUNT = "SOFT_EDGES_SHARPENING_AMOUNT";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_HARD_EDGES_SEARCH_MAX_ERROR = "HARD_EDGES_SEARCH_MAX_ERROR";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_HARD_EDGES_SEARCH_MAX_DISTANCE = "HARD_EDGES_SEARCH_MAX_DISTANCE";
 
     public static final int ERROR_LOAD_LIBRARY = 0;
     public static final int ERROR_LOAD_GAME = 1;
@@ -85,18 +47,14 @@ public class LibretroDroid {
     public static final int ERROR_GENERIC = -1;
 
     public static native void create(
-        int GLESVersion,
         String coreFilePath,
         String systemDir,
         String savesDir,
         Variable[] variables,
         GLRetroShader shaderConfig,
         float refreshRate,
-        boolean preferLowLatencyAudio,
         boolean enableVirtualFileSystem,
         boolean enableMicrophone,
-        boolean skipDuplicateFrames,
-        ImmersiveMode immersiveMode,
         String language
     );
 
@@ -151,10 +109,10 @@ public class LibretroDroid {
     public static native void setVideoViewsEnabled(boolean enabled);
     /** The core's video view map, 6 ints per view (x, y, width, height, screen, eye); empty when there is none. */
     public static native int[] getVideoViews();
-    /** False while setprop debug.nx.videoviews 0 withholds video views from the cores (the frontend's A/B switch). */
     /** False with `setprop debug.nx.keepcontext 0`: the view gives its EGL context up at every pause. */
     public static native boolean keepsContextOnPause();
 
+    /** False while setprop debug.nx.videoviews 0 withholds video views from the cores (the frontend's A/B switch). */
     public static native boolean videoViewsOffered();
     /** Whether this device can run the Vulkan bridge (a Vulkan 1.1 GPU with AHardwareBuffer import). Cached; any thread. */
     public static native boolean isVulkanSupported();
@@ -175,6 +133,12 @@ public class LibretroDroid {
     public static native void setFillAudioGaps(int mode);
     /** The display's presentation deadline (Display.getPresentationDeadlineNanos), for the sleep timer's frame stamps. Any thread. */
     public static native void setPresentationDeadline(long nanos);
+
+    /** The game's frame rate, 0 before a game runs. Any thread. */
+    public static native double getContentFps();
+
+    /** The display switched refresh rate: frames are paced for it from the next step. Any thread. */
+    public static native void setScreenRefreshRate(float rate);
     public static native void setAudioEnabled(boolean enabled);
     /**
      * Fast forward up to maxSpeed times the content's frame rate (0 = off), its audio played or muted. Separate from
@@ -201,7 +165,6 @@ public class LibretroDroid {
     public static native int rewindStatus();
     public static native void setShaderConfig(GLRetroShader shader);
     public static native void setViewport(float x, float y, float width, float height);
-    public static native void setViewportAlignment(int viewportAlignment);
     public static native void setScaleMode(int scaleMode);
     public static native void setScreenOffset(float x, float y);
     /** While held the view draws black, no picture. GL thread. */
@@ -210,8 +173,11 @@ public class LibretroDroid {
     public static native void setScreenRegions(float[] packed);
     /** Compose a width x height frame from the core's (parts packed like setScreenRegions); width 0 clears it. GL thread. */
     public static native void setComposition(int width, int height, float[] packed);
-    /** The whole scale the core draws its screens at (1 = native); a preset gets each shaded screen shrunk back to native. GL thread. */
-    public static native void setShaderSourceScale(int scale);
+    /**
+     * The whole scale the core draws its screens at (1 = native); a preset gets each shaded screen shrunk back to native.
+     * frameHeight: the core frame height it was worked out for (0 = not known). GL thread.
+     */
+    public static native void setShaderSourceScale(int scale, int frameHeight);
     /** Same packing as setScreenRegions; dst is 0..1 of the whole second surface. GL thread. */
     public static native void setSecondaryRegions(float[] packed);
     /** Draws the last frame's secondary regions into the current default framebuffer (width x height); never runs the core. GL thread. */
@@ -281,7 +247,6 @@ public class LibretroDroid {
 
     public static native void refreshAspectRatio();
 
-    public static native Controller[][] getControllers();
     public static native void setControllerType(int port, int type);
     public static native void setStickyPointer(int port, boolean sticky);
     public static native void setPointerVelocity(int port, float vx, float vy);
@@ -315,7 +280,6 @@ public class LibretroDroid {
     public static native void achievementsUnloadGame();
     public static native void achievementsServerResponse(int requestId, int httpStatus, String body);
     public static native AchievementInfo[] achievementsList();
-    public static native int[] achievementsSummary();
     /** {url, postData} for a softcore award of [achievementId], signed by rcheevos; null when the parameters are rejected. */
     public static native String[] achievementsBuildAwardRequest(String user, String token, int achievementId, String gameHash, int secondsSinceUnlock);
     /** md5 of the game for RetroAchievements, or null. [files] as loadGameFromVirtualFiles; the fds are closed by the call. */

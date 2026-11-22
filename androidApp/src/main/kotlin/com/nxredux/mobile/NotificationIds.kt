@@ -1,5 +1,11 @@
 package com.nxredux.mobile
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
+
 /**
  * Every notification id (the foreground services' and the update notice), in one place. Android keeps one notification record per (package, id):
  * two services sharing an id overwrite each other's text and progress, and the first to stop removes the other's
@@ -34,3 +40,8 @@ object NotificationIds {
     /** All of them, for the test that keeps them distinct. */
     val all: List<Int> = listOf(SCRAPE, RA_DOWNLOAD, DEVICE_SYNC, APP_UPDATE, APP_UPDATED, APP_UPDATE_WAIT, KIDS_WARN, KIDS_GUARD)
 }
+
+/** Android 13+ shows a notification only with the runtime grant; a caller without it skips its notice, never asks. */
+internal fun canPostNotifications(context: Context): Boolean =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED

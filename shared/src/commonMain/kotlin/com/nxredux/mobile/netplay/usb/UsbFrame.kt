@@ -1,5 +1,7 @@
 package com.nxredux.mobile.netplay.usb
 
+import com.nxredux.mobile.storage.Bytes
+
 /**
  * The NX Redux usblink frame, ported from nx-redux `workspace/all/usblink/usblink_frame.c` (GPL-3.0):
  * `[len lo][len hi][type][payload][pad?]`, one frame per USB bulk transfer. One zero pad byte follows whenever the framed
@@ -41,7 +43,7 @@ object UsbFrame {
      */
     fun decode(buf: ByteArray, n: Int): Frame? {
         if (n < HDR) return null
-        val len = (buf[0].toInt() and 0xff) or ((buf[1].toInt() and 0xff) shl 8)
+        val len = Bytes.le16(buf, 0)
         val extra = n - HDR - len
         if (len > PAYLOAD_MAX || extra < 0 || extra > 1) return null
         val type = buf[2].toInt() and 0xff
@@ -72,7 +74,7 @@ class UsbFrameStream {
         val out = ArrayList<UsbFrame.Frame>()
         var at = 0
         while (have - at >= UsbFrame.HDR) {
-            val len = (buf[at].toInt() and 0xff) or ((buf[at + 1].toInt() and 0xff) shl 8)
+            val len = Bytes.le16(buf, at)
             val type = buf[at + 2].toInt() and 0xff
             if (len > UsbFrame.PAYLOAD_MAX || type < UsbFrame.DATA || type > UsbFrame.SIO) {
                 broken = true

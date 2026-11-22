@@ -10,7 +10,6 @@ import com.nxredux.mobile.settings.MenuStyle
 import com.nxredux.mobile.settings.MenuStyles
 import com.nxredux.mobile.ui.nx.HomeShelf
 import com.nxredux.mobile.ui.nx.consolePad
-import com.nxredux.mobile.ui.nx.toolIcon
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs

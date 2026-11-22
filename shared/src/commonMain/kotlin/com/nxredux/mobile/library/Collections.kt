@@ -4,6 +4,7 @@ import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.storage.PathLines
 import com.nxredux.mobile.storage.SidecarStore
+import com.nxredux.mobile.tryOrAny
 import kotlinx.coroutines.CancellationException
 
 enum class CollectionWrite { ADDED, ALREADY, FAILED }
@@ -78,10 +79,10 @@ class Collections(private val source: RomsSource, private val store: SidecarStor
         val stored = store.read(GamePath.HOME, DIR, file(name))
         if (stored != null) return StampedLines(PathLines.parse(stored), CountStamps.stored(stored))
         var stamp: String? = null
-        val text = try {
+        val text = tryOrAny({ null }) {
             val f = folder()?.let { source.child(it, homeFile(it, name)) }?.takeIf { !it.isDirectory }
             if (f == null) { stamp = CountStamps.NONE; "" } else { stamp = CountStamps.file(f); source.readText(f.ref) }
-        } catch (e: CancellationException) { throw e } catch (e: Throwable) { null }
+        }
         return StampedLines(text?.let(PathLines::parse), stamp.takeIf { text != null })
     }
 
@@ -91,13 +92,13 @@ class Collections(private val source: RomsSource, private val store: SidecarStor
      */
     suspend fun stamps(names: List<String>): Map<String, String?> {
         if (names.isEmpty()) return emptyMap()
-        val dir = try { folder() } catch (e: CancellationException) { throw e } catch (e: Throwable) { return names.associateWith { null } }
+        val dir = tryOrAny({ return names.associateWith { null } }) { folder() }
         val listed = dir?.let {
             try { source.listChildren(it) } catch (e: CancellationException) { throw e } catch (e: ListingUnavailable) { null }
             catch (e: Throwable) { return names.associateWith { null } }
         }
         return names.associateWith { name ->
-            try {
+            tryOrAny({ null }) {
                 val stored = store.read(GamePath.HOME, DIR, file(name))
                 when {
                     stored != null -> CountStamps.stored(stored)
@@ -107,7 +108,7 @@ class Collections(private val source: RomsSource, private val store: SidecarStor
                         if (e == null || e.isDirectory) CountStamps.NONE else CountStamps.file(e)
                     }
                 }
-            } catch (e: CancellationException) { throw e } catch (e: Throwable) { null }
+            }
         }
     }
 
@@ -141,13 +142,13 @@ class Collections(private val source: RomsSource, private val store: SidecarStor
      * without a store copy or a readable home file.
      */
     suspend fun storeFollowsHome(name: String) {
-        try {
+        tryOrAny({}) {
             val stored = store.read(GamePath.HOME, DIR, file(name)) ?: return
             val homeLines = homeLines(name) ?: return
             val own = PathLines.parse(stored)
             val union = own + homeLines.filter { it !in own }
             if (union != own) store.write(GamePath.HOME, DIR, file(name), PathLines.render(union))
-        } catch (e: CancellationException) { throw e } catch (e: Throwable) { }
+        }
     }
 
     /**
@@ -156,7 +157,7 @@ class Collections(private val source: RomsSource, private val store: SidecarStor
      * the home), so the served folder is the real record. A home file that would not read is left alone.
      */
     suspend fun foldStoreIntoHome() {
-        try {
+        tryOrAny({}) {
             for (f in store.list(GamePath.HOME, DIR).filter { it.endsWith(".txt", ignoreCase = true) }) {
                 val name = f.dropLast(4)
                 val stored = PathLines.parse(store.read(GamePath.HOME, DIR, f) ?: continue)
@@ -164,7 +165,7 @@ class Collections(private val source: RomsSource, private val store: SidecarStor
                 if (home == stored) continue
                 write(name, PathLines.render(home + stored.filter { it !in home }))
             }
-        } catch (e: CancellationException) { throw e } catch (e: Throwable) { }
+        }
     }
 
     /** [name]'s home file lines; null when it would not read or is absent ([absentAsEmpty]: absent is empty). */
@@ -188,7 +189,7 @@ class Collections(private val source: RomsSource, private val store: SidecarStor
         for (part in parts) {
             val base = part.name.dropLast(".part".length)
             if (children.any { it.name.equals(base, ignoreCase = true) }) continue   // a file has the name: keep both
-            val ok = try { source.rename(dir, part.name, base) } catch (e: CancellationException) { throw e } catch (e: Throwable) { false }
+            val ok = tryOrAny({ false }) { source.rename(dir, part.name, base) }
             if (ok) recovered = true
         }
         return if (recovered) source.listChildren(dir) else children
@@ -274,7 +275,7 @@ class Collections(private val source: RomsSource, private val store: SidecarStor
      * Deletes the collection [name]: its home file, then its store copy. Only that file: the games it lists are untouched.
      * False when there is no such collection or the home file could not be deleted (the store copy is then kept).
      */
-    suspend fun delete(name: String): Boolean = try {
+    suspend fun delete(name: String): Boolean = tryOrAny({ false }) {
         val dir = folder()
         val homeName = dir?.let { existingHomeFile(it, name) }
         val stored = store.read(GamePath.HOME, DIR, file(name)) != null
@@ -284,14 +285,14 @@ class Collections(private val source: RomsSource, private val store: SidecarStor
             stored -> store.delete(GamePath.HOME, DIR, file(name))
             else -> true
         }
-    } catch (e: CancellationException) { throw e } catch (e: Throwable) { false }
+    }
 
     private suspend fun write(name: String, text: String): Boolean {
         val stored = store.read(GamePath.HOME, DIR, file(name))
-        val inHome = try {
+        val inHome = tryOrAny({ false }) {
             val h = home()
             h != null && source.canWrite(h) && folder(create = true)?.let { source.writeText(it, homeFile(it, name), text) } == true
-        } catch (e: CancellationException) { throw e } catch (e: Throwable) { false }
+        }
         if (inHome) {
             if (stored != null) store.write(GamePath.HOME, DIR, file(name), text)
             return true

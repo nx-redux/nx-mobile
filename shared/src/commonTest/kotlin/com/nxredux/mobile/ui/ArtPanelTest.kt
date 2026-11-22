@@ -1,6 +1,5 @@
 package com.nxredux.mobile.ui
 
-import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.SystemFolder
@@ -18,16 +17,13 @@ import com.nxredux.mobile.scraper.OptionImage
 import com.nxredux.mobile.scraper.SourceId
 import com.nxredux.mobile.settings.AppSettings
 import com.nxredux.mobile.settings.BackdropArt
+import com.nxredux.mobile.settings.FakeAppSettings
 import com.nxredux.mobile.settings.GameListArt
-import com.nxredux.mobile.settings.ExtraFolder
-import com.nxredux.mobile.settings.MenuCategory
-import com.nxredux.mobile.settings.MenuOrientation
-import com.nxredux.mobile.settings.MenuStyle
-import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.ui.nx.NxButton
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -39,39 +35,12 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ArtPanelTest {
-    private class Settings : AppSettings {
-        override var treeRef: ContentRef? = ContentRef("Home")
+    private class Settings : FakeAppSettings(ContentRef("Home"), padSkin = false) {
         override var onboardingDone: Boolean? = true
         override var onboardingStep: String? = null
-        override var extraFolders: List<ExtraFolder> = emptyList()
-        override var defaultTags: Map<String, String> = emptyMap()
-        override var padTheme = PadTheme.DEFAULT
-        override var padSkin = false
-        override var menuStyles: Map<MenuCategory, MenuStyle> = emptyMap()
-        override var gameListStyle: MenuStyle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_GAME_LIST_STYLE
-        override var menuOrientations: Map<MenuCategory, MenuOrientation> = emptyMap()
-        override var gameListOrientation: MenuOrientation = com.nxredux.mobile.settings.MenuStyles.DEFAULT_ORIENTATION
-        override var gameListVerticalAlignment: com.nxredux.mobile.settings.VerticalListAlignment = com.nxredux.mobile.settings.VerticalListAlignment.DEFAULT
-        override var toolApps: List<String> = emptyList()
-        override var androidConsoleApps: List<String> = emptyList()
-        override var androidGamesAsked = false
-        override var androidPins: List<String> = emptyList()
-        override var raEnabled = false
-        override var raUsername = ""
-        override var raToken: String? = null
-        override var raShowNotifications = true
-        override var raNotificationSeconds = 3
-        override var raProgressSeconds = 1
-        override var raSortOrder = RaSortOrder.DEFAULT
-        override var ssUsername = ""
-        override var ssPassword: String? = null
-        override var sgdbApiKey: String? = null
-        override var tgdbApiKey: String? = null
-        override var artReplaceExisting = false
         override var artBox2d = false
         override var artWheel = false
         override var artMix = false
-        override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = com.nxredux.mobile.settings.MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = com.nxredux.mobile.settings.AccentPreset.DEFAULT; override var secondaryAccent: com.nxredux.mobile.settings.SecondaryAccent = com.nxredux.mobile.settings.SecondaryAccent.DEFAULT
     }
 
     /**
@@ -119,6 +88,10 @@ class ArtPanelTest {
         val file = "Tetris.gb"
         Listed(s, GameEntry(ContentRef("Home/Roms/GB/$file"), file, Names.stripExtension(file), folder = ContentRef("Home/Roms/GB"), sourceId = GamePath.HOME, relativeDir = "Roms/GB"))
     }
+
+    /** A panel on [port], opened on [game] without a fetch first, and settled. */
+    private fun TestScope.opened(port: ArtOptionsPort, settings: Settings = Settings()): ArtPanelController =
+        ArtPanelController(this, port, settings, onPicked = {}).also { it.open(game, fetchFirst = false); advanceUntilIdle() }
 
     private fun opt(slot: ArtSlot, source: String, id: String, note: String? = null) =
         ArtOption(slot, "https://m/$id", source, gameId = "g", assetId = id, note = note)
@@ -175,9 +148,7 @@ class ArtPanelTest {
         val bad = ArtOption(ArtSlot.SCREENSHOT, "https://m/bad", SourceId.TGDB, assetId = "s2")
         val gone = ArtOption(ArtSlot.SCREENSHOT, "https://m/gone", SourceId.LIBRETRO, assetId = "s3")
         val port = FakePort(listOf(opt(ArtSlot.SCREENSHOT, SourceId.SS, "s1"), gone, bad))
-        val c = ArtPanelController(this, port, Settings(), onPicked = {})
-        c.open(game, fetchFirst = false)
-        advanceUntilIdle()
+        val c = opened(port)
         val p = assertNotNull(c.panel.value)
         assertEquals(listOf("s1", "s2"), p.tiles.map { it.option.assetId })
         assertEquals(listOf(false, true), p.tiles.map { it.failed })   // "Couldn't load" for the offline one
@@ -211,9 +182,7 @@ class ArtPanelTest {
 
     @Test fun picking_the_current_picture_goes_through() = runTest {
         val port = FakePort(mixed, currentKey = mixed[0].key)   // the ScreenScraper screenshot, tile 0
-        val c = ArtPanelController(this, port, Settings(), onPicked = {})
-        c.open(game, fetchFirst = false)
-        advanceUntilIdle()
+        val c = opened(port)
         assertEquals(0, c.panel.value!!.focus)
         c.onButton(NxButton.A)
         advanceUntilIdle()
@@ -222,9 +191,7 @@ class ArtPanelTest {
 
     @Test fun search_again_reloads_with_search_again_true() = runTest {
         val port = FakePort(mixed)
-        val c = ArtPanelController(this, port, Settings(), onPicked = {})
-        c.open(game, fetchFirst = false)
-        advanceUntilIdle()
+        val c = opened(port)
         repeat(4) { c.onButton(NxButton.DOWN) }   // the screenshots' rows, the 2D box, then Search again (it stays)
         assertEquals(mixed.size, c.panel.value!!.focus)
         port.options = mixed.take(1)
@@ -242,9 +209,7 @@ class ArtPanelTest {
 
     @Test fun a_grid_and_hero_with_one_asset_id_are_two_tiles() = runTest {
         val port = FakePort(listOf(opt(ArtSlot.GRID, SourceId.SGDB, "77"), opt(ArtSlot.HERO, SourceId.SGDB, "77")))
-        val c = ArtPanelController(this, port, Settings(), onPicked = {})
-        c.open(game, fetchFirst = false)
-        advanceUntilIdle()
+        val c = opened(port)
         val p = assertNotNull(c.panel.value)
         assertEquals(listOf("SteamGridDB · Hero", "SteamGridDB · Grid"), p.tiles.map { it.label })
         assertEquals(2, p.tiles.map { it.option.key }.toSet().size)
@@ -336,9 +301,7 @@ class ArtPanelTest {
     @Test fun switchingAMixQuestionLeavesBackdropArt() = runTest {
         val mix = opt(ArtSlot.MIX, SourceId.SS, "m1")
         val s = Settings().apply { backdropArt = BackdropArt.WHEEL; gameListArt = GameListArt.SCREENSHOT }
-        val c = ArtPanelController(this, FakePort(listOf(mix)), s, onPicked = {})
-        c.open(game, fetchFirst = false)
-        advanceUntilIdle()
+        val c = opened(FakePort(listOf(mix)), s)
         c.tap(0)
         advanceUntilIdle()
         assertEquals(LayoutQuestion(null, GameListArt.MIX, true, true), c.panel.value!!.question)
@@ -351,9 +314,7 @@ class ArtPanelTest {
         val box = opt(ArtSlot.BOX_3D, SourceId.SS, "b3")
         val s = Settings().apply { backdropArt = BackdropArt.WHEEL; gameListArt = GameListArt.BOX2D }
         val port = FakePort(listOf(opt(ArtSlot.SCREENSHOT, SourceId.SS, "s1"), box))
-        val c = ArtPanelController(this, port, s, onPicked = {})
-        c.open(game, fetchFirst = false)
-        advanceUntilIdle()
+        val c = opened(port, s)
         // Keep: nothing changes, B too.
         c.tap(1)
         advanceUntilIdle()
@@ -389,9 +350,7 @@ class ArtPanelTest {
     @Test fun answerByTap() = runTest {
         val s = Settings()
         val port = FakePort(listOf(opt(ArtSlot.WHEEL, SourceId.SS, "w1")))
-        val c = ArtPanelController(this, port, s, onPicked = {})
-        c.open(game, fetchFirst = false)
-        advanceUntilIdle()
+        val c = opened(port, s)
         c.tap(0)
         advanceUntilIdle()
         assertNotNull(c.panel.value!!.question)
@@ -406,9 +365,7 @@ class ArtPanelTest {
         val port = object : ArtOptionsPort by FakePort(listOf(opt(ArtSlot.BOX_2D, SourceId.SS, "b2"))) {
             override suspend fun pickOption(gamePath: String, option: ArtOption): Boolean = false
         }
-        val c = ArtPanelController(this, port, Settings(), onPicked = {})
-        c.open(game, fetchFirst = false)
-        advanceUntilIdle()
+        val c = opened(port)
         c.onButton(NxButton.A)
         advanceUntilIdle()
         assertNull(c.panel.value!!.question)
@@ -418,9 +375,7 @@ class ArtPanelTest {
     @Test fun aPickFinishingOverAnotherListMarksNothing() = runTest {
         val box = opt(ArtSlot.BOX_2D, SourceId.SS, "b2")
         val port = FakePort(listOf(box)).apply { pickGate = CompletableDeferred() }
-        val c = ArtPanelController(this, port, Settings(), onPicked = {})
-        c.open(game, fetchFirst = false)
-        advanceUntilIdle()
+        val c = opened(port)
         c.onButton(NxButton.A)   // the pick waits
         runCurrent()
         c.onButton(NxButton.DOWN); c.onButton(NxButton.A)   // Search again
@@ -445,9 +400,7 @@ class ArtPanelTest {
         val s1 = opt(ArtSlot.SCREENSHOT, SourceId.SS, "s1"); val s2 = opt(ArtSlot.SCREENSHOT, SourceId.TGDB, "s2")
         val b1 = opt(ArtSlot.BOX_2D, SourceId.TGDB, "b1"); val g1 = opt(ArtSlot.GRID, SourceId.SGDB, "g1")
         val port = FakePort(listOf(s1, s2, b1, g1), currentKeys = mapOf(ArtSlot.SCREENSHOT to s2.key, ArtSlot.BOX_2D to g1.key))
-        val c = ArtPanelController(this, port, Settings(), onPicked = {})
-        c.open(game, fetchFirst = false)
-        advanceUntilIdle()
+        val c = opened(port)
         val p = assertNotNull(c.panel.value)
         assertEquals(listOf(false, true, false, true), p.tiles.map { p.isCurrent(it) })
         assertEquals(1, p.focus)   // the first one in use
@@ -493,9 +446,7 @@ class ArtPanelTest {
 
     @Test fun search_again_shows_tiles_as_they_come() = runTest {
         val port = FakePort(mixed)
-        val c = ArtPanelController(this, port, Settings(), onPicked = {})
-        c.open(game, fetchFirst = false)
-        advanceUntilIdle()
+        val c = opened(port)
         port.early = listOf(mixed.take(2)); port.searchGate = CompletableDeferred()
         c.tap(mixed.size)   // Search again
         runCurrent()

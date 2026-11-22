@@ -1,7 +1,6 @@
 package com.nxredux.mobile.skin
 
 import com.nxredux.mobile.options.PxRect
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -9,7 +8,7 @@ import kotlin.test.assertTrue
 
 /** The bare skin (the overlay over the full-screen game): the built-in pack's buttons without the board, frame or screens. */
 class SkinBareTest {
-    private val pack = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
+    private val pack = skinPack()
 
     @Test
     fun bare_drops_glass_pieces_and_the_frame() {

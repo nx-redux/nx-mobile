@@ -61,9 +61,8 @@ private fun gameTile(e: Listed, title: String, shot: String? = null) =
  * Home's [continuePictures]). An Android game's is [abstractAppArtUrl] by its app id: seeded by [ANDROID_TAG] and the
  * app id (stable per app, so its shapes never match a ROM of the same name), in its launcher icon's colours with the
  * icon in the middle. Never art for fetching: the refs stay empty, so a game showing it still counts as missing.
- * Non-null for every game.
  */
-internal fun abstractArtFor(e: Listed): String? =
+internal fun abstractArtFor(e: Listed): String =
     e.appId?.let(::abstractAppArtUrl) ?: abstractArtUrl(e.system.tag, e.game.fileName)
 
 /** Continue's resume frame: the hidden save state's (Save & Quit's, [HomeShot]), else the resume slot's screenshot. */
@@ -93,7 +92,7 @@ internal fun gameBackground(e: Listed, portrait: Boolean): String? =
  * ([abstractAppArtUrl] icon = false: the same palette and shapes; the Backdrop cover already shows the icon, and a
  * centred icon reads oddly behind a list); a ROM's as [abstractArtFor].
  */
-internal fun abstractBackgroundFor(e: Listed): String? =
+internal fun abstractBackgroundFor(e: Listed): String =
     e.appId?.let { abstractAppArtUrl(it, icon = false) } ?: abstractArtFor(e)
 
 /**

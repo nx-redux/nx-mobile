@@ -77,8 +77,8 @@
  * handheld's 10 s state waits start late enough.
  *
  * Pair mode (phones only, both sides set it; off, nothing below happens and the wire is unchanged):
- * - drift check: after every NP_PAIR_CHECK_INTERVAL (120th) frame both sides send HASH (frame = frames run, u64 BE hash of the core) and
- *   compare it with the peer's; equal hashes make that frame the verified checkpoint;
+ * - drift check: after every NP_PAIR_CHECK_INTERVAL (120th) frame both sides send HASH (frame = frames run, u64 BE
+ *   hash of the core) and compare it with the peer's; equal hashes make that frame the verified checkpoint;
  * - resync: on a mismatch the host sends RESYNC (frame R = its run frame + 16, past any frame the client can have
  *   reached). Both run up to R and hold; the host serialises there and sends STATE_HDR (frame R) + raw bytes, the
  *   client unserialises them at R and acks (STATE_ACK, frame R), and both carry on. Inputs keep flowing: frame
@@ -115,8 +115,6 @@
 #include <unistd.h>
 
 // Constants kept from netplay.h (wire-relevant ones must not change)
-#define NETPLAY_DEFAULT_PORT 55435
-#define NETPLAY_PROTOCOL_VERSION 3
 #define NP_INPUT_SIZE 10		// u16 buttons + i16 LX, LY, RX, RY (protocol 3)
 #define NP_INPUT_SIZE_LEGACY 2	// u16 buttons only (protocol 2 peers): sticks centred
 
@@ -159,7 +157,7 @@ enum { PAIR_END_DRIFT = 1, PAIR_END_TOO_SLOW = 2 };
 #define NP_TOO_SLOW_MS 10000
 
 // Timers (milliseconds)
-#define NP_COUNTDOWN_MS 30000	  // stall / pause countdown (v2)
+#define NP_COUNTDOWN_MS 30000	  // stall / pause countdown
 #define NP_KEEPALIVE_MS 500		  // KEEPALIVE while stalled
 #define NP_SYNC_TIMEOUT_MS 10000  // each network wait during the state sync
 // The client's wait for STATE_HDR: a phone host listens early in its game start and serialises only once its core
@@ -213,7 +211,6 @@ static pthread_mutex_t np_mutex = PTHREAD_MUTEX_INITIALIZER;
 static struct {
 	bool started;
 	bool stop;
-	bool thread_started;
 	pthread_t thread;
 
 	np_role role;
@@ -477,7 +474,7 @@ static void complete_state_sync(uint64_t now) {
 		slot->frame = i;
 		slot->p1_input = 0;
 		slot->p2_input = 0;
-		memset(slot->p1_analog, 0, sizeof(slot->p1_analog)); // the latency prefill frames are centred
+		memset(slot->p1_analog, 0, sizeof(slot->p1_analog));
 		memset(slot->p2_analog, 0, sizeof(slot->p2_analog));
 		slot->have_p1 = true;
 		slot->have_p2 = true;
@@ -625,7 +622,7 @@ static void handle_packet(const np_packet* p, uint64_t now) {
 			return;
 		}
 		FrameInput* slot = get_frame_slot(p->frame);
-		if (slot->frame != p->frame) // ring fix: the slot still holds frame - 64
+		if (slot->frame != p->frame) // the slot still holds frame - 64
 			init_frame_slot(p->frame);
 		uint16_t remote_input = (uint16_t)get_be16(p->payload);
 		int16_t axes[NP_ANALOG_AXES] = {0, 0, 0, 0};
@@ -730,7 +727,7 @@ static void handle_packet(const np_packet* p, uint64_t now) {
 		}
 		return;
 	case CMD_KEEPALIVE:
-		// Keepalive: the peer is alive. Deliberately does not clear the countdown (v2).
+		// The peer is alive, but the countdown runs on: only input for the run frame or a RESUME clears it.
 		return;
 	case CMD_HASH:
 		if (!np.pair || np.phase != NP_RUNNING || p->size != 8 || (int64_t)p->frame <= np.hash_floor)
@@ -990,7 +987,6 @@ int np_start(np_role role, const char* peer_ip, uint16_t port, np_clock_fn clock
 	}
 	np.phase = NP_CONNECTING;
 	np.started = true;
-	np.thread_started = true;
 	// Consumed: a later session is in pair mode only when asked again (the hash belongs to this session's core).
 	np_pair_wanted = false;
 	np_hash_wanted = NULL;
@@ -1178,7 +1174,7 @@ static bool resync_at_frame(np_size_fn size, np_ser_fn ser, np_unser_fn unser, u
 }
 
 // Store and send our input for every frame up to run_frame + delay not sent yet. Initialise a slot only when it still
-// holds an older frame: an early remote input for that frame (ring fix) must survive.
+// holds an older frame: an early remote input for that frame must survive.
 static void send_local_inputs(uint16_t local, const int16_t axes[NP_ANALOG_AXES]) {
 	uint32_t target = np.run_frame + (uint32_t)np.delay;
 	while ((int32_t)(target - np.sent_upto) > 0) {
@@ -1434,12 +1430,10 @@ void np_shutdown(void) {
 	end_session(NP_ENDED, NP_REASON_NONE, true);
 	np.stop = true;
 	wake_thread();
-	bool join = np.thread_started;
 	pthread_t thread = np.thread;
 	pthread_mutex_unlock(&np_mutex);
 
-	if (join)
-		pthread_join(thread, NULL);
+	pthread_join(thread, NULL);
 
 	pthread_mutex_lock(&np_mutex);
 	np_tcp_release(&np.sock, &np.listen_fd, &np.wake, &np.out);

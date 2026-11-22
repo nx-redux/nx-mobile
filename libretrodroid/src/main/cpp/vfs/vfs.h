@@ -21,7 +21,6 @@
 #include "unistd.h"
 #include "retro_common_api.h"
 #include "libretro.h"
-#include "vfs.h"
 #include "vfsfile.h"
 
 #include <vector>

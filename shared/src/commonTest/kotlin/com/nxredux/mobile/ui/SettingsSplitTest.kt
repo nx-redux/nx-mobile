@@ -59,7 +59,7 @@ class SettingsSplitTest {
         assertFalse(gameSettingsModal(Screen.Settings(SettingsSection.APPEARANCE, emptyList())))
         val wide = DpSize(933.dp, 704.dp)
         assertFalse(settingsSplitView(wide, gameSettings))                     // drawn the same on every window
-        assertTrue(settingsSplitView(wide, consoleWide))                       // Settings -> Library's page: the right pane
+        assertTrue(settingsSplitView(wide, consoleWide))                       // an emulator's own page: the right pane
         assertTrue(settingsSplitView(wide, Screen.SettingsMenu(SettingsSection.entries)))
         assertFalse(settingsSplitView(DpSize(704.dp, 933.dp), consoleWide))    // portrait: one page
         assertFalse(settingsSplitView(wide, Screen.Systems(emptyList())))
@@ -78,10 +78,10 @@ class SettingsSplitTest {
             assertTrue(twoPaneView(DpSize(933.dp, 704.dp), s))
             assertFalse(twoPaneView(DpSize(560.dp, 360.dp), s))
         }
-        assertFalse(raSplitView(DpSize(933.dp, 704.dp), Screen.RetroAchievements()))   // the page is drawn whole
+        assertFalse(raSplitView(DpSize(933.dp, 704.dp), Screen.RetroAchievements))   // the page is drawn whole
         assertFalse(raSplitView(DpSize(933.dp, 704.dp), Screen.Settings(SettingsSection.SYSTEM, emptyList())))
         assertTrue(twoPaneView(DpSize(933.dp, 704.dp), Screen.Settings(SettingsSection.SYSTEM, emptyList())))
-        assertFalse(twoPaneView(DpSize(933.dp, 704.dp), Screen.RetroAchievements()))
+        assertFalse(twoPaneView(DpSize(933.dp, 704.dp), Screen.RetroAchievements))
         // The page's row the left pane highlights: Settings beside the settings, Achievements beside the consoles.
         assertEquals(RaAction.SETTINGS, RaAction.entries[raPageRow(ra)!!])
         assertEquals(RaAction.ACHIEVEMENTS, RaAction.entries[raPageRow(Screen.RaConsoles(emptyList()))!!])
@@ -112,7 +112,7 @@ class SettingsSplitTest {
             assertFalse(artworkSplitView(DpSize(560.dp, 360.dp), s))     // the cover screen and narrow windows
             assertFalse(twoPaneView(DpSize(933.dp, 704.dp), s))          // Settings' background: no centred watermark to move
         }
-        assertFalse(artworkSplitView(DpSize(933.dp, 704.dp), Screen.RetroAchievements()))
+        assertFalse(artworkSplitView(DpSize(933.dp, 704.dp), Screen.RetroAchievements))
     }
 
     @Test fun theWatermarkCentresOnTheRightPaneWhenSplit() {

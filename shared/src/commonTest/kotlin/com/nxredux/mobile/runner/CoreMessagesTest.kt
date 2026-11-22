@@ -4,7 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
-/** Which core messages show as a toast: only fceumm's FDS disk inserts. */
+/** Which core messages show as a toast: fceumm's FDS disk inserts and Azahar's local wireless news. */
 class CoreMessagesTest {
     @Test
     fun fceummInsertedShows() {
@@ -26,5 +26,13 @@ class CoreMessagesTest {
     fun otherFceummTextHidden() {
         assertNull(CoreMessages.toast("fceumm", "Insert Coin"))
         assertNull(CoreMessages.toast("fceumm", "Eject disk before selecting"))
+    }
+
+    @Test fun azahar_local_wireless_news_is_shown_but_an_empty_room_is_not() {
+        assertEquals("Local wireless: Fatins Ta joined", CoreMessages.toast("azahar", "Local wireless: Fatins Ta joined"))
+        assertEquals("Local wireless: connected", CoreMessages.toast("azahar", "Local wireless: connected"))
+        assertNull(CoreMessages.toast("azahar", "Local wireless: room open"))
+        assertNull(CoreMessages.toast("azahar", "Shader cache loaded"))
+        assertNull(CoreMessages.toast("melondsds", "Local wireless: connected"))
     }
 }

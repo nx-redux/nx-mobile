@@ -1,0 +1,49 @@
+Licence: modifies PCSX-ReARMed (https://github.com/libretro/pcsx_rearmed), GPL-2.0; this patch is distributed under the same licence.
+Enhanced Resolution (the NEON renderer's 2x) switched while a game runs:
+- On: the doubled buffer is filled from VRAM when it becomes active. It held the picture from the last time it was on
+  (or nothing), shown as noise until the game redrew every pixel.
+- Off: the output size change marks the dimensions changed, so the frontend clears its buffer; every row is cleared, not
+  only the picture's. The 2x frame's rows otherwise stayed below the smaller picture.
+diff --git a/frontend/libretro.c b/frontend/libretro.c
+index 734fc30..df3b21b 100644
+--- a/frontend/libretro.c
++++ b/frontend/libretro.c
+@@ -431,7 +431,8 @@ static void vout_flip(const void *vram_, int vram_ofs, int bgr24,
+    if (vram == NULL || dims_changed || (in_enable_crosshair[0] + in_enable_crosshair[1]) > 0)
+    {
+       unsigned char *dest2 = dest;
+-      int h2 = h, ll = vout_width * bytes_pp;
++      // nx-redux: every row, not only the picture's, so the rows below a smaller picture are cleared too
++      int h2 = vout_height, ll = vout_width * bytes_pp;
+       if (dstride == ll)
+          memset(dest2, 0, dstride * vout_height);
+       else
+diff --git a/plugins/gpu_neon/psx_gpu_if.c b/plugins/gpu_neon/psx_gpu_if.c
+index b5d3b9b..eee5aa0 100644
+--- a/plugins/gpu_neon/psx_gpu_if.c
++++ b/plugins/gpu_neon/psx_gpu_if.c
+@@ -162,6 +162,9 @@ void renderer_update_caches(int x, int y, int w, int h, int state_changed)
+       egpu.enhancement_scanout_eselect = 0;
+       update_enhancement_buf_scanouts(&egpu,
+         gpu.screen.src_x, gpu.screen.src_y, gpu.screen.hres, vres);
++      // nx-redux: fill the doubled buffer from VRAM now. Turned on mid-game it still held the picture from the last
++      // time it was on (or nothing), shown until the game redrew every pixel.
++      sync_enhancement_buffers(0, 0, 1024, 512);
+       return;
+     }
+     sync_enhancement_buffers(x, y, w, h);
+diff --git a/plugins/gpulib/vout_pl.c b/plugins/gpulib/vout_pl.c
+index 07cf6da..218270f 100644
+--- a/plugins/gpulib/vout_pl.c
++++ b/plugins/gpulib/vout_pl.c
+@@ -59,6 +59,10 @@ static void check_mode_change(struct psx_gpu *gpu, int force)
+       || w_out != gpu->state.w_out_old || h_out != gpu->state.h_out_old)
+   {
+     gpu->state.status_vo_old = gpu->status;
++    // nx-redux: a size change (Enhanced Resolution switched mid-game) leaves the old frame's edges in the output
++    // buffer; dims_changed has the frontend clear it.
++    if (w_out != gpu->state.w_out_old || h_out != gpu->state.h_out_old)
++      gpu->state.dims_changed = 1;
+     gpu->state.w_out_old = w_out;
+     gpu->state.h_out_old = h_out;
+ 

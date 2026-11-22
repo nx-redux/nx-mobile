@@ -168,7 +168,7 @@ class FilePickerControllerTest {
         assertEquals(listOf<ContentRef?>(null), h.results)
     }
 
-    // ".." (below the action row) goes up as B does: to the parent on the folder it came from, then to the volumes.
+    // ".." goes up as B does: to the parent on the folder it came from, then to the volumes.
     @Test fun the_up_row_goes_up_like_b() = runTest {
         val h = harness()
         h.open(FilePickMode.ImportFolder, FileRefs.of("$root/NXRedux"))
@@ -371,8 +371,7 @@ class FilePickerControllerTest {
         assertEquals(listOf<ContentRef?>(FileRefs.of("$root/Alpha/SAVES.zip")), fresh.results)   // nothing to replace: no question
     }
 
-    // Folders and volumes open like folders: they carry the folder icon; the action, a zip and the empty line do not.
-    // An action is a word, no icon; folders and storages carry the folder icon, ".." the up arrow.
+    // Folders and storages carry the folder icon, ".." the up arrow, a file its own; an action is a word, no icon.
     @Test fun folder_and_volume_rows_carry_the_folder_icon() {
         val rows = pickerListRows(listOf(
             PickerRow.Action("Use Roms"), PickerRow.NewFolder, PickerRow.Up, PickerRow.Volume(internal), PickerRow.Folder("Roms"), PickerRow.Zip("a.zip"),
@@ -422,7 +421,7 @@ class FilePickerControllerTest {
         assertNull(pickActionLabel(FilePickMode.ImportZip, "Games"))
     }
 
-    // The action rows stay pinned above the list (a gap between): Use <folder> and New folder, none in Import a zip.
+    // The action rows stay pinned under the list: Use <folder> and New folder, none in Import a zip.
     @Test fun the_action_rows_are_pinned() {
         assertEquals(2, pickerPinnedRows(listOf(PickerRow.Up, PickerRow.Folder("A"), PickerRow.Action("Use Roms"), PickerRow.NewFolder)))
         assertEquals(0, pickerPinnedRows(listOf(PickerRow.Up, PickerRow.Folder("A"), PickerRow.Zip("a.zip"))))

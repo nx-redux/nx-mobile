@@ -40,7 +40,7 @@ class ShortcutCaptureTest {
         )
     }
 
-    // L23: MENU alone opens the in-game menu, so pressing and releasing it binds nothing and keeps waiting.
+    // MENU alone opens the in-game menu, so pressing and releasing it binds nothing and keeps waiting.
     @Test fun aModifierAloneBindsNothing() {
         val c = started()
         assertNull(c.onKey(menu, true)); assertNull(c.onKey(menu, false))

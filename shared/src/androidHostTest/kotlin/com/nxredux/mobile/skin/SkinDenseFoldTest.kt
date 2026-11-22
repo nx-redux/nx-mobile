@@ -1,6 +1,5 @@
 package com.nxredux.mobile.skin
 
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -8,7 +7,7 @@ import kotlin.test.assertTrue
 
 /** A dense inner screen (the Z Fold 8 Ultra's 2256x2504 at 480 dpi) keeps the fold board, drawn a little smaller. */
 class SkinDenseFoldTest {
-    private val pack = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
+    private val pack = skinPack()
     private val foldBoard = { p: SkinPlacement -> p.spec.tree.parts.any { it.isHinge } }
 
     @Test

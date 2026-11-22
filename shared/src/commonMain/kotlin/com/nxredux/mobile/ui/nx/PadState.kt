@@ -13,14 +13,11 @@ data class PadMic(val on: Boolean, val onTap: () -> Unit)
 
 /**
  * The d-pad / stick choice per game for the process's life. The game rebuilds its pad per layout (rotate, fold: a new
- * view each time, so nothing remembered inside the pad survives) and reads `PadStickModes[game]`, writing the player's
- * choice back, so the choice outlives the rebuild. Snapshot state: a reader recomposes when it changes.
+ * view each time, so nothing remembered inside the pad survives) and reads `PadStickModes[game, default]`, writing the
+ * player's choice back, so the choice outlives the rebuild. Snapshot state: a reader recomposes when it changes.
  */
 object PadStickModes {
     private val byGame = mutableStateMapOf<String, Boolean>()
-
-    /** The stick (true) or the d-pad (false, the default) for [game]. */
-    operator fun get(game: String): Boolean = byGame[game] ?: false
 
     /** The player's choice for [game], or [default] until they make one (the pad's [PadProfile.stickByDefault]). */
     operator fun get(game: String, default: Boolean): Boolean = byGame[game] ?: default

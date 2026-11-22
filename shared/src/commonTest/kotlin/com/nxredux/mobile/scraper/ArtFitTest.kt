@@ -12,8 +12,6 @@ class ArtFitTest {
     private val grid = ArtCaps.of(ArtSlot.GRID)
     private val box3d = ArtCaps.of(ArtSlot.BOX_3D)
     private val box2d = ArtCaps.of(ArtSlot.BOX_2D)
-    /** A photographic cap (PNG only for a PNG source or alpha): no slot uses it since the 2D box went full-colour PNG. */
-    private val photo = ArtCap(900, 900, photo = true)
 
     @Test fun capsPerSlot() {
         assertEquals(ArtCap(900, 900, ArtEncoding.PNG), box3d)
@@ -56,23 +54,12 @@ class ArtFitTest {
     }
 
     @Test fun jpegSourceStaysJpeg() {
-        assertEquals(ArtEncoding.JPEG, ArtFit.encoding(ImageType.JPEG, hasAlpha = false, photo))
         assertEquals(ArtEncoding.JPEG, ArtFit.encoding(ImageType.JPEG, hasAlpha = false, shot))
     }
 
     @Test fun pngWithAlphaStaysPng() {
-        assertEquals(ArtEncoding.PNG, ArtFit.encoding(ImageType.PNG, hasAlpha = true, photo))
         assertEquals(ArtEncoding.PNG, ArtFit.encoding(ImageType.PNG, hasAlpha = false, shot))   // pixel art stays lossless
         assertEquals(ArtEncoding.PNG, ArtFit.encoding(ImageType.WEBP, hasAlpha = false, shot))
-        assertEquals(ArtEncoding.PNG, ArtFit.encoding(ImageType.GIF, hasAlpha = true, photo))
-        assertEquals(ArtEncoding.PNG, ArtFit.encoding(ImageType.PNG, hasAlpha = false, photo))
-    }
-
-    @Test fun photoWithoutPngOrAlphaIsJpeg() {
-        // A photo cap is PNG only for a PNG source or alpha; an opaque WebP or GIF scan becomes JPEG q90.
-        assertEquals(ArtEncoding.JPEG, ArtFit.encoding(ImageType.GIF, hasAlpha = false, photo))
-        assertEquals(ArtEncoding.JPEG, ArtFit.encoding(ImageType.WEBP, hasAlpha = false, photo))
-        assertFalse(ArtFit.passThrough(ImageType.WEBP, 100, 100, hasAlpha = false, photo))
     }
 
     @Test fun heroForcedJpeg() {

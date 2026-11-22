@@ -11,7 +11,6 @@ import com.nxredux.mobile.achievements.RaDownload
 import com.nxredux.mobile.achievements.RaState
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.NxButton
-import com.nxredux.mobile.ui.nx.NxDialog
 import com.nxredux.mobile.ui.nx.NxProgressBody
 
 /**
@@ -19,12 +18,12 @@ import com.nxredux.mobile.ui.nx.NxProgressBody
  * "RetroAchievements" label, its head (the user bold, then points and the last sync, [SettingsWordHead]) and the
  * actions as large words (Achievements / Sync now with the unlocks waiting / Settings, and Progress once there is a
  * download); a tap on a word opens it; a progress body while a sync, sign-in or reset runs (B cancels a sync; the others run to
- * the end), and the destructive confirm. A download keeps the rows: it has a page of its own ([RaDownloadScreen]).
+ * the end). A download keeps the rows: it has a page of its own ([RaDownloadScreen]).
  * [focused] = false: the dimmed left pane of the column browser ([RaSplitScreen]), with no hints.
  */
 @Composable
 fun RetroAchievementsScreen(
-    screen: Screen.RetroAchievements, controller: RaController, selectedIndex: Int,
+    controller: RaController, selectedIndex: Int,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, modifier: Modifier = Modifier,
     onHint: ((NxButton) -> Unit)? = null,
     focused: Boolean = true,
@@ -45,9 +44,6 @@ fun RetroAchievementsScreen(
                 headline = raHeadline(state), description = raDetails(state),
                 hints = if (focused) SETTINGS_ROOT_HINTS else emptyList(),
             )
-        }
-        if (focused) screen.confirm?.let { c ->
-            NxDialog(c.title, c.text, onConfirm = { onHint?.invoke(NxButton.A) }, confirmLabel = c.confirmLabel, onCancel = { onHint?.invoke(NxButton.B) })
         }
     }
 }

@@ -102,24 +102,6 @@ class HomeLayoutTest {
 
     private fun HomeScrollStep.round() = copy(to = kotlin.math.round(to * 100f) / 100f)
 
-    // Continue and the pinned games share one caption fade: eased, 0.92 at the bottom edge, power 3, over the bottom 80%.
-    @Test fun continueAndPinnedGamesShareTheCaptionFade() {
-        assertEquals(0.8f, HOME_CAPTION_SHARE)
-        assertEquals(0.92f, homeCaptionAlpha(0f), 0.0001f)                        // at the edge
-        assertEquals(0.92f * 0.875f * 0.875f * 0.875f, homeCaptionAlpha(0.5f), 0.0001f)   // (1 − 0.5³)³: power 3, not 2
-        assertEquals(0f, homeCaptionAlpha(1f), 0.0001f)                           // clear at the fade's top
-    }
-
-    // Continue's picture is zoomed 1.15× about (0.5, 0.4), its crop point: the band of the cropped picture left in view
-    // cuts a black border of up to 5.2% at the top and 7.8% at the bottom.
-    @Test fun continueZoomCutsTheBorders() {
-        val band = homeContinueVisible()
-        assertEquals(0.4f - 0.4f / 1.15f, band.start, 0.0001f)
-        assertEquals(0.4f + 0.6f / 1.15f, band.endInclusive, 0.0001f)
-        assertEquals(0.0522f, band.start, 0.0005f)
-        assertEquals(0.9217f, band.endInclusive, 0.0005f)
-    }
-
     @Test fun signedOutDropsAchievementData() {
         val lines = listOf(InfoLine(InfoKind.TIME, "Today - 1m 31s"), InfoLine(InfoKind.ACHIEVEMENTS, "0 of 35"), InfoLine(InfoKind.NEXT, "Next: That Was Easy"))
         assertEquals(lines, homeInfo(lines, signedIn = true))
@@ -153,11 +135,10 @@ class HomeLayoutTest {
         }
     }
 
-    // The mark is the app's own nx_mark, white at 10% (black at 8% on the selected, white-filled card).
+    // The mark is the app's own nx_mark, at 10%.
     @Test fun theMarkIsFaint() {
         assertEquals(com.nxredux.mobile.shared.res.Res.drawable.nx_mark, homePickMark)
-        assertEquals(0.10f, homeMarkAlpha(lit = false))
-        assertEquals(0.08f, homeMarkAlpha(lit = true))
+        assertEquals(0.10f, HOME_MARK_ALPHA)
     }
 
     // The real Flip in landscape (dumpsys): a 2520 × 1080 window at 480 dpi, less the 36 dp cutout on the left and the

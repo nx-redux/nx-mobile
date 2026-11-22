@@ -529,8 +529,8 @@ interface AppSettings {
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
     /**
-     * First-launch onboarding was finished or skipped (true), is to run (false), or was never decided (null): an install
-     * from before onboarding, which [com.nxredux.mobile.ui.AppState.load] settles from whether it has a home folder.
+     * First-launch onboarding was finished or skipped (true), is to run (false), or is not decided yet (null): the first
+     * [com.nxredux.mobile.ui.AppState.load] settles it from whether a home folder is set.
      * Defaulted, like [debugLog].
      */
     var onboardingDone: Boolean?

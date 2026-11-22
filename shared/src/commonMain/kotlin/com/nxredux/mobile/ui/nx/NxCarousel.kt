@@ -97,7 +97,7 @@ fun NxCarousel(
         // A game list's selected title follows Appearance → Text size (the room below follows it too).
         val nameSize = if (gameList) nxCardTitleSize() else CAROUSEL_TITLE_SP
         val nameStyle = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = nameSize, textAlign = TextAlign.Center)
-        // A game list's details at 80% of its name, as the vertical stack's lines ([NxCarouselStack]'s infoShare).
+        // A game list's details at 80% of its name, as the vertical stack's lines ([StackCaption]).
         val infoStyle = TextStyle(fontFamily = font, fontSize = if (gameList) nameSize * STACK_INFO_SHARE else 14.sp, textAlign = TextAlign.Center)
         val room = rememberCaptionRoom(CAPTION_GAP, nameStyle, infoStyle, infoRows = if (gameList) 0 else CAROUSEL_INFO_ROWS).takeIf { cardInfo == null } ?: 0f
         // One size in both orientations, shrunk only so the tile and the caption room fit the body's height (the shown
@@ -111,7 +111,7 @@ fun NxCarousel(
             maxItemH = need?.let { carouselItemHMax(maxHeight.value, it) },
         )
         // Capped, the tile and its caption keep the breathing room the cap reserved over and under them
-        // ([carouselMargins]); uncapped, today's margins, the tile placed as before.
+        // ([carouselMargins]).
         val margins = carouselMargins(maxHeight.value, g.itemH, need ?: 0f, capped)
         val captionMax = carouselCaptionMax(maxHeight.value, g.itemH, margins)
         if (g.itemW <= 1f || g.itemH <= 1f || tiles.isEmpty()) return@BoxWithConstraints
@@ -242,7 +242,7 @@ internal fun carouselGameLines(lines: List<InfoLine>): CarouselGameLines {
 
 /**
  * Whether a game list Carousel card keeps its shade and stats block: lit, only with stats to show ([picture], read only
- * then); an unlit card draws neither whatever this says, so it keeps its layers as before.
+ * then); an unlit card draws neither whatever this says.
  */
 internal fun carouselCardShaded(lit: Boolean, picture: () -> List<InfoLine>): Boolean = !lit || picture().isNotEmpty()
 
@@ -267,11 +267,11 @@ internal const val CAROUSEL_BOTTOM_BREATH = 12f
 internal const val CAPTION_NEED_SLACK = 1f
 
 /**
- * A game list Carousel's [CaptionMargins] in a box [areaDp] tall with tiles [itemH] tall. Uncapped (![capped]), today's:
+ * A game list Carousel's [CaptionMargins] in a box [areaDp] tall with tiles [itemH] tall. Uncapped (![capped]):
  * the ring's room at the top (or the neighbours' top if that is higher) and [CAPTION_SPARE_MARGIN] at the bottom.
  * Capped ([carouselItemHMax] reserved it), [CAROUSEL_TOP_BREATH] and [CAROUSEL_BOTTOM_BREATH]; at the
  * [CAROUSEL_MIN_HEIGHT_SHARE] floor, where the box is short of that room once the caption's [needDp] is under the tile,
- * the breathing room gives way first, both margins back towards today's in step, before [captionRowsWithin] cuts a row.
+ * the breathing room gives way first, both margins back towards the uncapped ones in step, before [captionRowsWithin] cuts a row.
  */
 internal fun carouselMargins(areaDp: Float, itemH: Float, needDp: Float, capped: Boolean): CaptionMargins {
     val tight = CaptionMargins(min(GRID_RING_ROOM, rowNeighbourTop(areaDp, itemH)), CAPTION_SPARE_MARGIN)

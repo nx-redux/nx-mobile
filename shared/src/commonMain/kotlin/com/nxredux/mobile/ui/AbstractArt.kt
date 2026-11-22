@@ -64,9 +64,6 @@ internal fun abstractAppArtOf(url: String): AbstractAppArt? {
     return if (id.isBlank() || '?' in id) null else AbstractAppArt(id, icon)
 }
 
-/** The app id an [abstractAppArtUrl] carries (either form), or null for any other model (a ROM's picture included). */
-internal fun abstractAppIdOf(url: String): String? = abstractAppArtOf(url)?.appId
-
 /** An Android game's seed: the one [abstractArtUrl] gives for [ANDROID_TAG] and the app id. */
 internal fun abstractAppSeed(appId: String): Int = abstractSeed(abstractArtKey(ANDROID_TAG, appId))
 

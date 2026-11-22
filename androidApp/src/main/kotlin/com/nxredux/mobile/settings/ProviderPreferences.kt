@@ -18,9 +18,9 @@ fun interface PrefsChannel {
 
 /**
  * A [SharedPreferences] for the game process. Reads come from [local], this process's own instance of the file as it
- * stood at launch, until a [refresh] replaces it with the owner's current entries: a setting changed in the menu while
- * the game was away (launcher mode's Home) reaches it when it comes back. A read never calls the menu process, so a key
- * event never waits on it. Writes go to the owner, the
+ * stood at launch, until a [refreshAll] replaces it with the owner's current entries: a setting changed in the menu
+ * while the game was away (launcher mode's Home) reaches it when it comes back. A read never calls the menu process, so
+ * a key event never waits on it. Writes go to the owner, the
  * main process ([PrefsProvider]), so its cached copy never writes over them later; they are kept in memory here
  * ([written]) and read back at once. [apply] keeps the value here at once and sends it on [sender], one at a time in
  * order: the call may have to cold-start the menu's process, which must not stall the UI thread. [commit] waits for its
@@ -39,18 +39,21 @@ class ProviderPreferences(
     private val written = HashMap<String, Any>()
     /** A clear was applied: [local]'s (or [fetched]'s) entries are gone. */
     private var cleared = false
-    /** The owner's entries as the last [refresh] read them; null: none yet, [local] stands. */
+    /** The owner's entries as the last [refreshAll] read them; null: none yet, [local] stands. */
     private var fetched: Map<String, Any?>? = null
-    /** Counts this process's writes kept in [written]: a [refresh] tells whether one came while it was asking. */
+    /** Counts this process's writes kept in [written]: a [refreshAll] tells whether one came while it was asking. */
     private var writes = 0L
     /** [apply] sends queued and not yet answered: the owner's entries may not hold them yet. */
     private var unsent = 0
     /**
-     * [apply]s whose send failed, by key (a value or [REMOVED]): the owner never got them, so a [refresh] keeps them in
-     * [written]. A later successful send of the same key drops it (the owner holds the newer value).
+     * [apply]s whose send failed, by key (a value or [REMOVED]): the owner never got them, so a [refreshAll] keeps them
+     * in [written]. A later successful send of the same key drops it (the owner holds the newer value).
      */
     private val failed = HashMap<String, Any>()
-    /** An applied clear never reached the owner: its entries still stand there, so a [refresh] keeps every write here. */
+    /**
+     * An applied clear never reached the owner: its entries still stand there, so a [refreshAll] keeps every write
+     * here.
+     */
     private var failedClear = false
 
     /**
@@ -68,21 +71,6 @@ class ProviderPreferences(
             owners != null -> (owners[key] ?: def) as T
             else -> fromLocal()
         }
-    }
-
-    /**
-     * Reads the owner's current entries (one call into the main process) and reads from them from now on. Blocking:
-     * never on the key-event path. A failed call keeps the view as it was. This process's own writes stay in front only
-     * if one landed while the call ran (the owner's answer may predate it), or if its send failed (the owner never got
-     * it); otherwise the owner's entries already hold them, and a later change there wins.
-     */
-    fun refresh() {
-        val startedAt = beginRefresh()
-        @Suppress("UNCHECKED_CAST")
-        val entries = runCatching { channel.call(PrefsProvider.METHOD_GET_ALL, name, emptyMap())[PrefsProvider.RESULT_ENTRIES] as Map<String, Any?> }
-            .onFailure { NxLog.w("NXAPP", "settings read ($name): ${it.message}") }
-            .getOrNull() ?: return
-        endRefresh(startedAt, entries)
     }
 
     /** [writes] now, or -1 when an [apply] is still on its way: the owner's answer may predate it, so [written] stays. */
@@ -222,9 +210,12 @@ class ProviderPreferences(
             runCatching { SENDER.submit {}.get(timeoutMs, TimeUnit.MILLISECONDS); true }.getOrDefault(false)
 
         /**
-         * [refresh] for every file in [prefs] in one call into the owner: a call may have to start the menu's process, so
-         * one start, not one per file. Blocking, as [refresh]; a failed call keeps every view as it was, and a file the
-         * answer leaves out keeps its own.
+         * Reads the owner's current entries of every file in [prefs] and reads from them from now on, in one call into
+         * the main process: a call may have to start the menu's process, so one start, not one per file. Blocking:
+         * never on the key-event path. A failed call keeps every view as it was, and a file the answer leaves out keeps
+         * its own. This process's own writes stay in front only if one landed while the call ran (the owner's answer
+         * may predate it), or if its send failed (the owner never got it); otherwise the owner's entries already hold
+         * them, and a later change there wins.
          */
         fun refreshAll(channel: PrefsChannel, prefs: Collection<ProviderPreferences>) {
             if (prefs.isEmpty()) return

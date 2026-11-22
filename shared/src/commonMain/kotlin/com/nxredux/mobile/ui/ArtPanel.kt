@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.tryOrAny
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.runner.ContentRef
@@ -15,7 +16,6 @@ import com.nxredux.mobile.settings.AppSettings
 import com.nxredux.mobile.settings.BackdropArt
 import com.nxredux.mobile.settings.GameListArt
 import com.nxredux.mobile.ui.nx.NxButton
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -318,13 +318,7 @@ class ArtPanelController(
         val path = p.gamePath
         val shown = load   // the list the tile is from: a pick finishing after Search again or a reopen marks nothing
         picking = scope.launch {
-            val ok = try {
-                port.pickOption(path, tile.option)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Throwable) {
-                false
-            }
+            val ok = tryOrAny({ false }) { port.pickOption(path, tile.option) }
             if (ok) onPicked(path)
             val slot = tile.option.slot.fileSlot
             // The same load still running (tiles shown while the fetch goes on) marks it too.
@@ -360,7 +354,7 @@ class ArtPanelController(
                 if (!previewing.add(o.key)) return
                 loading.launch {
                     val got = gate.withPermit {
-                        try { port.optionImage(path, o) } catch (e: CancellationException) { throw e } catch (_: Throwable) { OptionImage(null) }
+                        tryOrAny({ OptionImage(null) }) { port.optionImage(path, o) }
                     }
                     if (got.dropped) dropped.update { it + o.key }
                     _panel.update { now ->
@@ -384,7 +378,10 @@ class ArtPanelController(
                 }
             }
             val replace = settings.artReplaceExisting
-            val result = try {
+            val result = tryOrAny({
+                _panel.update { it?.takeIf { p -> p.gamePath == path }?.copy(phase = ArtPanelPhase.READY, message = "Couldn't read the pictures", searching = false) ?: it }
+                return@launch
+            }) {
                 var fetchNote: String? = null
                 if (fetchFirst) {
                     val r = port.fetchGame(path, replace, wide = true, found)
@@ -393,11 +390,6 @@ class ArtPanelController(
                 }
                 // After its own Fetch art, the list as that fetch left it: a wide pass cut short is not run again here.
                 port.artOptions(path, replace, searchAgain, autoSearch = !fetchFirst, found).let { if (it.note == null && fetchNote != null) it.copy(note = fetchNote) else it }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Throwable) {
-                _panel.update { it?.takeIf { p -> p.gamePath == path }?.copy(phase = ArtPanelPhase.READY, message = "Couldn't read the pictures", searching = false) ?: it }
-                return@launch
             }
             note = result.note
             // One tile per key: the grid's item keys and the preview updates go by it.

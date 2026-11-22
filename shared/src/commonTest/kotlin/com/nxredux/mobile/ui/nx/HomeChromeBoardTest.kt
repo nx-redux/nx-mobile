@@ -11,7 +11,6 @@ import kotlin.test.assertTrue
  * the tab row is tested here.
  */
 class HomeChromeBoardTest {
-    private fun near(e: Float, a: Float, what: String) = assertEquals(e, a, 0.05f, what)
     private fun tiles(b: HomeBoard, k: HomeTopKind) = b.top.filter { it.kind == k }.map { it.rect }
     private fun continueOf(b: HomeBoard) = tiles(b, HomeTopKind.CONTINUE).single()
 
@@ -48,8 +47,8 @@ class HomeChromeBoardTest {
         }
     }
 
-    // The strip with no tab row: centred between the body's top (the screen's) and the top section, as it was between
-    // the underline and the top section. The room below ends at Continue's ring (3 dp above topY) and the two lines are
+    // The strip with no tab row: centred between the body's top (the screen's) and the top section, as it is between
+    // the underline and the top section with one. The room below ends at Continue's ring (3 dp above topY) and the two lines are
     // homeStripPitch apart: (48 − 3 − pitch − inkBottom − capTop) / 2 = 3.13 dp on the cover (the portrait strip
     // 14 / 18), one landscape line (28 − 3 − inkBottom − capTop) / 2 = 1.88.
     @Test fun theStripCentresUnderTheScreenTopWithNoTabRow() {

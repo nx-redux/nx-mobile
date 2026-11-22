@@ -15,22 +15,17 @@ class HomeModelTest {
     private val gba = SystemFolder("Game Boy Advance", "GBA", null, emptyList(), null, null, "Game Boy Advance (GBA)", false)
     private fun listed(name: String) = Listed(gba, GameEntry(ContentRef("r/$name"), "$name.gba", name, folder = ContentRef("f"), sourceId = "home", relativeDir = "Roms/Game Boy Advance (GBA)"))
     private val zelda = GameTotal(1, "Zelda", "GBA", "Roms/Game Boy Advance (GBA)/Zelda.gba", totalMs = 5_400_000, plays = 3, lastPlayedAt = 10)
-    private val settings = ToolRow(ToolKind.SETTINGS, "Settings", null)
-    private val cheats = ToolRow(ToolKind.CHEAT_DB, "Cheats & Patches", null)
-    private val last = MainRow.Continue(listed("Kirby"), ResumeInfo(9, "file:///shot.png"))
+    private val cont = MainRow.Continue(listed("Kirby"), ResumeInfo(9, "file:///shot.png"))
 
-    private val normal = HomeStats(playedMs = 7_200_000, unlocks = 4, signedIn = true, top = zelda, computed = true)
+    private val stats = HomeStats(playedMs = 7_200_000, unlocks = 4, signedIn = true, top = zelda, computed = true)
 
-    // Fixtures: games, tools, a Continue, the stats.
     private val g1 = listed("G1"); private val g2 = listed("G2"); private val g3 = listed("G3")
     private val t1 = ToolRow(ToolKind.SETTINGS, "Settings", null)
     private val t2 = ToolRow(ToolKind.CHEAT_DB, "Cheats & Patches", null)
     private val t3 = ToolRow(ToolKind.GAME_TIME, "Game Tracker", null)
     private val t4 = ToolRow(ToolKind.RETRO_ACHIEVEMENTS, "RetroAchievements", null)
     private val t5 = ToolRow(ToolKind.ARTWORK, "Artwork", null)
-    private val cont = last
     private fun contOf(g: Listed) = MainRow.Continue(g, ResumeInfo.NONE)
-    private val stats = normal
 
     // Every pinned game is a row game; the top section is Continue and the squares, "+N" last for the tools past them.
     @Test fun squaresComeFirstAndEveryGameIsARowGame() {
@@ -75,16 +70,16 @@ class HomeModelTest {
     }
 
     @Test fun normal() {
-        val home = buildHome(last, listOf(listed("Zelda")), listOf(settings), normal, slots = 3)
+        val home = buildHome(cont, listOf(listed("Zelda")), listOf(t1), stats, slots = 3)
         assertFalse(home.freshInstall)
-        assertEquals(listOf(last, MainRow.PinnedTool(settings)), home.top)
-        assertEquals(homeStrip(normal), home.strip)
+        assertEquals(listOf(cont, MainRow.PinnedTool(t1)), home.top)
+        assertEquals(homeStrip(stats), home.strip)
         assertEquals(listOf(MainRow.Pin(listed("Zelda"))), home.pins)
     }
 
     @Test fun lastGameWithoutResumeStateIsStillContinue() {
         val noResume = MainRow.Continue(listed("Kirby"), ResumeInfo.NONE)
-        val home = buildHome(noResume, emptyList(), emptyList(), normal, slots = 3)
+        val home = buildHome(noResume, emptyList(), emptyList(), stats, slots = 3)
         assertEquals(noResume, home.top.first())
         assertFalse(home.freshInstall)
     }
@@ -103,40 +98,40 @@ class HomeModelTest {
 
     @Test fun returningUserWithNoPlayInTheWindow() {
         val none = HomeStats(playedMs = 0, unlocks = 0, signedIn = true, top = null, computed = true)
-        val home = buildHome(last, emptyList(), emptyList(), none, slots = 3)
+        val home = buildHome(cont, emptyList(), emptyList(), none, slots = 3)
         assertFalse(home.freshInstall)
         assertEquals(HomeStrip(NO_PLAY_YET, true, "0", null), home.strip)   // one line: "No play yet", 0 achievements
         assertEquals(emptyList(), home.pins)
     }
 
     @Test fun pinsWithOnlyToolsAreNotAFreshInstall() {
-        val home = buildHome(null, emptyList(), listOf(cheats, settings), HomeStats(playedMs = 0, unlocks = 0, signedIn = true, top = null, computed = true), slots = 3)
+        val home = buildHome(null, emptyList(), listOf(t2, t1), HomeStats(playedMs = 0, unlocks = 0, signedIn = true, top = null, computed = true), slots = 3)
         assertFalse(home.freshInstall)
-        assertEquals(listOf(MainRow.PickAGame, MainRow.PinnedTool(cheats), MainRow.PinnedTool(settings)), home.top)   // Pick a game, then the squares
+        assertEquals(listOf(MainRow.PickAGame, MainRow.PinnedTool(t2), MainRow.PinnedTool(t1)), home.top)   // Pick a game, then the squares
         assertEquals(emptyList(), home.pins)
     }
 
     @Test fun pinnedGamesAloneAreNotAFreshInstall() {
-        val home = buildHome(null, listOf(listed("Zelda")), emptyList(), normal, slots = 3)
+        val home = buildHome(null, listOf(listed("Zelda")), emptyList(), stats, slots = 3)
         assertFalse(home.freshInstall)
         assertEquals(MainRow.PickAGame, home.top.first())
         assertEquals(listOf<MainRow>(MainRow.Pin(listed("Zelda"))), home.pins)
     }
 
     @Test fun gamesAndToolsKeepTheirOwnOrder() {
-        val home = buildHome(last, listOf(listed("B"), listed("A")), listOf(settings, cheats), normal, slots = 3)
-        assertEquals(listOf(last, MainRow.PinnedTool(settings), MainRow.PinnedTool(cheats)), home.top)
+        val home = buildHome(cont, listOf(listed("B"), listed("A")), listOf(t1, t2), stats, slots = 3)
+        assertEquals(listOf(cont, MainRow.PinnedTool(t1), MainRow.PinnedTool(t2)), home.top)
         assertEquals(listOf(MainRow.Pin(listed("B")), MainRow.Pin(listed("A"))), home.pins)
     }
 
     @Test fun unavailableToolIsSkipped() {
-        val available = listOf(cheats, settings)   // no RetroAchievements, Game Tracker or Artwork on this platform
+        val available = listOf(t2, t1)   // no RetroAchievements, Game Tracker or Artwork on this platform
         val rows = pinnedToolRows(listOf("GAME_TIME", "SETTINGS", "RETRO_ACHIEVEMENTS", "CHEAT_DB"), available)
-        assertEquals(listOf(settings, cheats), rows)
+        assertEquals(listOf(t1, t2), rows)
     }
 
     @Test fun onlyUnavailableToolPinnedIsAFreshInstall() {
-        val rows = pinnedToolRows(listOf("ARTWORK"), listOf(settings))
+        val rows = pinnedToolRows(listOf("ARTWORK"), listOf(t1))
         val home = buildHome(null, emptyList(), rows, HomeStats(0, 0, signedIn = true, top = null, computed = true), slots = 3)
         assertTrue(home.freshInstall)
     }

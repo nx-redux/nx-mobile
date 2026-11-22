@@ -43,14 +43,6 @@ import com.nxredux.mobile.ui.SetupButtons
 import kotlinx.coroutines.flow.Flow
 
 /**
- * The one modal frame: scrim, a dark panel holding a lighter card (a small caption and [content]), and below the card
- * a footer that follows [LocalFooterMode]: tappable key hints when a pad or controller exists, real buttons otherwise
- * (never for a MENU). A tap on the scrim sends B (A for INFO), unless [scrimDismisses] is false (it then only blocks
- * the page below). Every hint or button tap is delivered through [onButton], exactly as a pad press would be.
- * A card taller than the room scrolls, its edges fading while there is more that way ([nxScrollFade]); with [scrollSteps] (the host's d-pad presses for it, -1 up and +1 down)
- * the key hints also lead with a d-pad Scroll hint while it overflows, whose tap steps down (back to the top at the end).
- */
-/**
  * The top of the NX keyboard ([com.nxredux.mobile.ui.keyboard.NxKeyboardBar]), in the window; null while none is up. A page
  * can be laid out taller than the space the keyboard leaves (Settings keeps the window's height; over a pad the keys
  * reach into the screen), so a modal lifts clear of it wherever its page put it.
@@ -60,6 +52,14 @@ internal val nxKeyboardTop = mutableStateOf<Float?>(null)
 /** Inside a modal: it is in that short room, so its content drops its labels for words inside the fields. */
 val LocalModalTight = compositionLocalOf { false }
 
+/**
+ * The one modal frame: scrim, a dark panel holding a lighter card (a small caption and [content]), and below the card
+ * a footer that follows [LocalFooterMode]: tappable key hints when a pad or controller exists, real buttons otherwise
+ * (never for a MENU). A tap on the scrim sends B (A for INFO), unless [scrimDismisses] is false (it then only blocks
+ * the page below). Every hint or button tap is delivered through [onButton], exactly as a pad press would be.
+ * A card taller than the room scrolls, its edges fading while there is more that way ([nxScrollFade]); with [scrollSteps] (the host's d-pad presses for it, -1 up and +1 down)
+ * the key hints also lead with a d-pad Scroll hint while it overflows, whose tap steps down (back to the top at the end).
+ */
 @Composable
 fun NxModal(
     caption: String?, kind: ModalKind, onButton: (NxButton) -> Unit,

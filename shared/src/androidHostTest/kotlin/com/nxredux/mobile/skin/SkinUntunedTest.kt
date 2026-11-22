@@ -1,8 +1,6 @@
 package com.nxredux.mobile.skin
 
-import java.io.File
 import kotlin.test.Test
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -10,7 +8,7 @@ import kotlin.test.assertTrue
  * pieces' layout puts the pads off the menu's spots, so the pad jumps between the menu and the game.
  */
 class SkinUntunedTest {
-    private val pack = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
+    private val pack = skinPack()
     private val boxed = pack.layouts.filter { it.boxes.isNotEmpty() }.map { it.id }.toSet()
 
     @Test

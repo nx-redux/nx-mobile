@@ -273,7 +273,6 @@ fun NxHintBar(
     ) { measurables, c ->
         val gap = HINT_GAP.roundToPx()
         val all = measurables.map { it.measure(Constraints(maxHeight = c.maxHeight)) }
-        // Too many to fit: A Select and B Back go first (every list's A selects and B goes back); the rest as they fit.
         val whole = all.sumOf { it.width } + gap * (all.size - 1).coerceAtLeast(0)
         val kept = if (whole <= c.maxWidth) all.indices.toList() else all.indices.filterNot { plainHint(ordered[it]) }
         val shown = ArrayList<Pair<Placeable, Int>>()

@@ -1,6 +1,5 @@
 package com.nxredux.mobile.ui.nx
 
-import androidx.compose.foundation.Canvas
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.DrawableResource
 import androidx.compose.ui.graphics.ColorFilter
@@ -44,7 +43,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -442,31 +440,6 @@ internal fun NxKeepSelectedInView(state: LazyListState, selectedIndex: Int, coun
             is NxKeepInView.ToItem ->
                 if (animate) state.animateScrollToItem(scroll.index, scroll.offset) else state.scrollToItem(scroll.index, scroll.offset)
         }
-    }
-}
-
-/** The list scroll arrows' width: a fixed physical size, like the row pitch and the pill inset, so it matches on every screen. */
-val NxScrollArrowWidth = 28.dp
-
-/** Every scroll arrow's opacity: one quiet standard across lists, the main menu and the in-game menu. */
-const val NX_SCROLL_ARROW_ALPHA = 0.2f
-
-/** A wide, short scroll chevron (NX Redux's 24x6 = 4:1 arrow), drawn subtly; the caller centres it on the full screen width. */
-@Composable
-fun NxScrollArrow(up: Boolean, width: Dp, modifier: Modifier = Modifier, opacity: Float = NX_SCROLL_ARROW_ALPHA) {
-    val color = LocalNxColors.current.listText
-    Canvas(modifier.size(width = width, height = width / 4)) {
-        val w = size.width
-        val h = size.height
-        val path = Path().apply {
-            if (up) {
-                moveTo(0f, h); lineTo(w, h); lineTo(w / 2f, 0f)
-            } else {
-                moveTo(0f, 0f); lineTo(w, 0f); lineTo(w / 2f, h)
-            }
-            close()
-        }
-        drawPath(path, color, alpha = opacity)
     }
 }
 

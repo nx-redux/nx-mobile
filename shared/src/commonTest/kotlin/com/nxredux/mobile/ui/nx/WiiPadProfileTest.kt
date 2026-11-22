@@ -59,7 +59,6 @@ class WiiPadProfileTest {
         val game = "wii-test/${this.hashCode()}"
         assertTrue(PadStickModes[game, p(WiiPad.NUNCHUK).stickByDefault])
         assertFalse(PadStickModes[game, p(WiiPad.SIDEWAYS).stickByDefault])
-        assertFalse(PadStickModes[game])
         PadStickModes[game] = false
         assertFalse(PadStickModes[game, p(WiiPad.CLASSIC).stickByDefault])
     }

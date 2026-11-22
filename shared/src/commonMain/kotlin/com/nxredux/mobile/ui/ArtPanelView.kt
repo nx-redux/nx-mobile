@@ -184,17 +184,23 @@ private fun ArtGrid(p: ArtPanel, modifier: Modifier, onTap: (Int) -> Unit) {
             first += section.tiles.size
         }
         item(span = { GridItemSpan(maxLineSpan) }, key = "search-again") {
-            val lit = p.onSearchAgain
-            Text(
-                "Search again", color = if (lit) colors.onAccent else colors.listText, fontFamily = font, fontSize = nxModalSmall(),
-                fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(50))
-                    .then(if (lit) Modifier.background(colors.accent) else Modifier.border(1.dp, colors.inkEdge, RoundedCornerShape(50)))
-                    .pointerInput(tileCount) { detectTapGestures { onTap(tileCount) } }
-                    .padding(vertical = 9.dp),
-            )
+            ArtPanelPill("Search again", p.onSearchAgain, Modifier.fillMaxWidth().padding(top = 4.dp), tileCount) { onTap(tileCount) }
         }
     }
+}
+
+/** A pill button of the panel: the lit one in the accent, the other outlined. [key] restarts its tap handler. */
+@Composable
+private fun ArtPanelPill(label: String, lit: Boolean, modifier: Modifier, key: Any, onTap: () -> Unit) {
+    val colors = LocalNxColors.current
+    Text(
+        label, color = if (lit) colors.onAccent else colors.listText, fontFamily = LocalNxFont.current, fontSize = nxModalSmall(),
+        fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+        modifier = modifier.clip(RoundedCornerShape(50))
+            .then(if (lit) Modifier.background(colors.accent) else Modifier.border(1.dp, colors.inkEdge, RoundedCornerShape(50)))
+            .pointerInput(key) { detectTapGestures { onTap() } }
+            .padding(vertical = 9.dp),
+    )
 }
 
 /**
@@ -214,15 +220,7 @@ private fun LayoutQuestionCard(q: LayoutQuestion, text: String, onAnswer: (Boole
         Text(text, color = colors.hint, fontFamily = font, fontSize = nxModalText())
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ART_TILE_GAP)) {
             for ((label, yes) in listOf(LAYOUT_QUESTION_YES to true, LAYOUT_QUESTION_NO to false)) {
-                val lit = q.yesFocused == yes
-                Text(
-                    label, color = if (lit) colors.onAccent else colors.listText, fontFamily = font, fontSize = nxModalSmall(),
-                    fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(50))
-                        .then(if (lit) Modifier.background(colors.accent) else Modifier.border(1.dp, colors.inkEdge, RoundedCornerShape(50)))
-                        .pointerInput(yes) { detectTapGestures { onAnswer(yes) } }
-                        .padding(vertical = 9.dp),
-                )
+                ArtPanelPill(label, q.yesFocused == yes, Modifier.weight(1f), yes) { onAnswer(yes) }
             }
         }
     }

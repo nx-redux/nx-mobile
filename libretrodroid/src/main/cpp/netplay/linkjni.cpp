@@ -93,36 +93,21 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_linkPaus
     JNIEnv* env,
     jclass obj
 ) {
-    try {
-        nl_pause();
-    } catch (std::exception &exception) {
-        LOGE("Error in link pause: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_GENERIC);
-    }
+    nl_pause();
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_linkResume(
     JNIEnv* env,
     jclass obj
 ) {
-    try {
-        nl_resume();
-    } catch (std::exception &exception) {
-        LOGE("Error in link resume: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_GENERIC);
-    }
+    nl_resume();
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_linkLeave(
     JNIEnv* env,
     jclass obj
 ) {
-    try {
-        nl_leave();
-    } catch (std::exception &exception) {
-        LOGE("Error in link leave: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_GENERIC);
-    }
+    nl_leave();
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_linkUnblock(
@@ -136,12 +121,7 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_linkShut
     JNIEnv* env,
     jclass obj
 ) {
-    try {
-        nl_shutdown();
-    } catch (std::exception &exception) {
-        LOGE("Error in link shutdown: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_GENERIC);
-    }
+    nl_shutdown();
 }
 
 JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsPresence(
@@ -149,6 +129,13 @@ JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsPresen
     jclass obj
 ) {
     return dslink::presence();   // short locks; never throws
+}
+
+JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsOthers(
+    JNIEnv* env,
+    jclass obj
+) {
+    return dslink::others();   // short locks; never throws
 }
 
 JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsInRoom(
@@ -210,20 +197,14 @@ JNIEXPORT jintArray JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_lin
     JNIEnv* env,
     jclass obj
 ) {
-    try {
-        int seconds = 0;
-        nl_reason reason = NL_REASON_NONE;
-        nl_state state = nl_get_state(&seconds, &reason);
-        jint values[3] = { (jint) state, (jint) seconds, (jint) reason };
-        jintArray result = env->NewIntArray(3);
-        if (result == nullptr) return nullptr;   // OutOfMemoryError pending
-        env->SetIntArrayRegion(result, 0, 3, values);
-        return result;
-    } catch (std::exception &exception) {
-        LOGE("Error in link status: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_GENERIC);
-    }
-    return nullptr;
+    int seconds = 0;
+    nl_reason reason = NL_REASON_NONE;
+    nl_state state = nl_get_state(&seconds, &reason);
+    jint values[3] = { (jint) state, (jint) seconds, (jint) reason };
+    jintArray result = env->NewIntArray(3);
+    if (result == nullptr) return nullptr;   // OutOfMemoryError pending
+    env->SetIntArrayRegion(result, 0, 3, values);
+    return result;
 }
 
 }

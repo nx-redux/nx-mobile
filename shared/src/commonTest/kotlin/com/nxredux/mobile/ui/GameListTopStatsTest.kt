@@ -47,7 +47,7 @@ class GameListTopStatsTest {
         val ownRow = listOf(InfoLine(InfoKind.NEXT, "Win"), InfoLine(InfoKind.RELEASE, "1998"))
         // Text scale 1 without achievements: a 44 dp header, a 35 dp block (the title and one line) of 18 dp boxes.
         fun one(facts: List<InfoLine>) = gameListTitleTop(facts, next = false, height = 44f, block = 35f, lineH = 18f, pitch = 17.5f, iconsH = 44f)
-        assertEquals(4.5f, one(listOf(time)))   // a first-row line: today's top
+        assertEquals(4.5f, one(listOf(time)))   // a first-row line
         assertEquals(13f, one(emptyList()))   // no lines: the 18 dp box centred on the 44 dp icons
         assertEquals(4.5f, one(ownRow))   // next off: the own-row kinds are drawn on the first row
         // With achievements: a 61 dp header, the next goal's row kept under the first.
@@ -56,7 +56,7 @@ class GameListTopStatsTest {
         assertEquals(4f, two(listOf(time) + ownRow))
         assertEquals(13f, two(emptyList()))   // no lines
         assertEquals(13f, two(ownRow))   // only own-row lines: the first row is empty, the title alone (box 13–31, the row below from 39)
-        assertEquals(4f, two(ownRow, pitch = 8f))   // were the row below (from 20) to meet the lone title: today's top
+        assertEquals(4f, two(ownRow, pitch = 8f))   // were the row below (from 20) to meet the lone title: a first-row line's top
         // A huge font: a box taller than the icons never goes above the block's top.
         assertEquals(4f, gameListTitleTop(emptyList(), next = false, height = 150f, block = 142f, lineH = 54f, pitch = 50f, iconsH = 44f))
     }

@@ -116,7 +116,12 @@ class NetplayLinkOptionsTest {
             NetplayLinkOptions.forSolo("azahar", "KotakNova-0042"),
         )
         assertEquals("192.168.1.255", NetplayLinkOptions.forSolo("azahar", "KotakNova-0042", "192.168.1.255")["nx_3ds_link_broadcast"])
-        assertEquals(emptyMap(), NetplayLinkOptions.forSolo("azahar"))   // the console's Local Wireless option is off
+        assertEquals(emptyMap(), NetplayLinkOptions.forSolo("azahar"))   // no room name: no link
+        // The console's Local Wireless option off: the same variables, the route on standby, so it can be switched in the game.
+        assertEquals(
+            mapOf("nx_3ds_link" to "standby", "nx_3ds_link_name" to "KotakNova-0042", "nx_3ds_link_port" to "24872"),
+            NetplayLinkOptions.forSolo("azahar", "KotakNova-0042", localWireless = false),
+        )
         assertEquals(true, com.nxredux.mobile.options.N3dsOptions.localWireless(emptyMap()))
         assertEquals(false, com.nxredux.mobile.options.N3dsOptions.localWireless(mapOf("nx_3ds_local_wireless" to "off")))
         assertEquals(mapOf("mgba_link_mode" to "cable"), NetplayLinkOptions.forSolo("mgba", "x"))
@@ -137,6 +142,17 @@ class NetplayLinkOptionsTest {
             NetplayLinkOptions.forSolo("melondsds", "Ana-0042", "192.168.1.255", mac),
         )
         assertEquals(emptyMap(), NetplayLinkOptions.forSolo("melondsds", null, null, null))
+        // Off: the link off, its name, port, broadcast and MAC kept for switching it on in the game.
+        assertEquals("off", NetplayLinkOptions.forSolo("melondsds", "Ana-0042", "192.168.1.255", mac, localWireless = false)["nx_nds_link"])
+        assertEquals(mac, NetplayLinkOptions.forSolo("melondsds", "Ana-0042", "192.168.1.255", mac, localWireless = false)["melonds_mac_address_mode"])
+    }
+
+    @Test fun local_wireless_switched_in_game_sends_only_the_mode() {
+        assertEquals(mapOf("nx_3ds_link" to "auto"), NetplayLinkOptions.soloLocalWireless("azahar", true))
+        assertEquals(mapOf("nx_3ds_link" to "standby"), NetplayLinkOptions.soloLocalWireless("azahar", false))
+        assertEquals(mapOf("nx_nds_link" to "auto"), NetplayLinkOptions.soloLocalWireless("melondsds", true))
+        assertEquals(mapOf("nx_nds_link" to "off"), NetplayLinkOptions.soloLocalWireless("melondsds", false))
+        assertEquals(emptyMap(), NetplayLinkOptions.soloLocalWireless("ppsspp", true))
     }
 
     @Test fun a_ds_session_hosts_or_joins_with_its_own_mac() {
@@ -201,7 +217,7 @@ class NetplayLinkOptionsTest {
         assertFalse(session(NetplayRole.CLIENT, "gpsp").onCopy)
         assertFalse(NetplaySession(NetplayRole.CLIENT, "1.2.3.4", "gambatte", "gambatte", emptySaves = true).onCopy)
         assertFalse(NetplaySession(NetplayRole.HOST, "1.2.3.4", "mgba", "mgba").onCopy)
-        assertTrue(NetplaySession(NetplayRole.CLIENT, "1.2.3.4", "snes9x", "snes9x").onCopy)   // lockstep: unchanged
+        assertTrue(NetplaySession(NetplayRole.CLIENT, "1.2.3.4", "snes9x", "snes9x").onCopy)   // lockstep: the joiner on a copy
     }
 
     @Test fun only_a_link_session_ends_as_a_local_game() {
@@ -389,8 +405,9 @@ class NetplayLinkOptionsTest {
     @Test fun ds_session_left_is_off_without_local_wireless() {
         assertEquals(mapOf(NetplayLinkOptions.NDS_MODE to "off"), NetplayLinkOptions.dsSessionLeft(NetplayLinkKind.NDSLINK, false, "192.168.1.255"))
         assertEquals(mapOf(NetplayLinkOptions.NDS_MODE to "off"), NetplayLinkOptions.dsSessionLeft(NetplayLinkKind.NDSLINK, false, null))
-        assertEquals(mapOf(NetplayLinkOptions.N3DS_MODE to "off"), NetplayLinkOptions.dsSessionLeft(NetplayLinkKind.N3DSLINK, false, "192.168.1.255"))
-        assertEquals(mapOf(NetplayLinkOptions.N3DS_MODE to "off"), NetplayLinkOptions.dsSessionLeft(NetplayLinkKind.N3DSLINK, false, null))
+        // Azahar's route waits switched off (standby), so Local Wireless can be switched on later in the game.
+        assertEquals(mapOf(NetplayLinkOptions.N3DS_MODE to "standby"), NetplayLinkOptions.dsSessionLeft(NetplayLinkKind.N3DSLINK, false, "192.168.1.255"))
+        assertEquals(mapOf(NetplayLinkOptions.N3DS_MODE to "standby"), NetplayLinkOptions.dsSessionLeft(NetplayLinkKind.N3DSLINK, false, null))
     }
 
     @Test fun ds_session_left_is_nothing_for_other_links() {
@@ -410,10 +427,12 @@ class NetplayLinkOptionsTest {
             for (localWireless in listOf(false, true)) {
                 for (broadcast in listOf(null, "192.168.1.255")) {
                     val left = NetplayLinkOptions.dsSessionLeft(kind, localWireless, broadcast)
-                    val launch = NetplayLinkOptions.forSolo(core, if (localWireless) "Ana-0042" else null, broadcast, null)
-                    assertEquals(launch[keys.first] ?: "off", left[keys.first], "$kind $localWireless $broadcast")
-                    assertEquals(launch[keys.second], left[keys.second], "$kind $localWireless $broadcast")
-                    assertEquals(setOf(keys.first) + listOfNotNull(keys.second.takeIf { it in launch }), left.keys)
+                    val launch = NetplayLinkOptions.forSolo(core, "Ana-0042", broadcast, null, localWireless)
+                    assertEquals(launch[keys.first], left[keys.first], "$kind $localWireless $broadcast")
+                    // Switched off, no search: the broadcast goes when Local Wireless is switched on.
+                    val sentBroadcast = launch[keys.second].takeIf { localWireless }
+                    assertEquals(sentBroadcast, left[keys.second], "$kind $localWireless $broadcast")
+                    assertEquals(setOf(keys.first) + listOfNotNull(keys.second.takeIf { sentBroadcast != null }), left.keys)
                 }
             }
         }

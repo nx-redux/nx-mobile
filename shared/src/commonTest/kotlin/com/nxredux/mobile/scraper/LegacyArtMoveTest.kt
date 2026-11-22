@@ -11,7 +11,6 @@ import kotlinx.coroutines.test.runTest
 
 class LegacyArtMoveTest {
     private val media = "Home/Roms/GB/.media"
-    private val segments = listOf("Roms", "GB", ".media")
     private val sgdbGrid = ArtOrigin(SourceId.SGDB, "7", "11")
     private val sgdbHero = ArtOrigin(SourceId.SGDB, "7", "12")
 

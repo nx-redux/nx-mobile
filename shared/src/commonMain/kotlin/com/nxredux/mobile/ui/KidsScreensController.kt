@@ -195,8 +195,7 @@ internal class KidsScreensController(
     fun kidsLockPressed() {
         val k = kids ?: return
         if (screen.value != Screen.KidsHome) return
-        screen.value = Screen.KidsPin(PinPurpose.UNLOCK, waitUntil = k.waitUntil)
-        selection.value = ListSelection(0, KIDS_PIN_KEYS.size)
+        showPin(Screen.KidsPin(PinPurpose.UNLOCK, waitUntil = k.waitUntil))
         kidsUnlockInput()
     }
 
@@ -207,9 +206,14 @@ internal class KidsScreensController(
     fun kidsParentPressed() {
         val k = kids ?: return
         if (kidsMode !is KidsMode.Open || !screen.value.isMainMenu) return   // any tab, the Games tab too
-        screen.value = Screen.KidsPin(PinPurpose.UNLOCK, waitUntil = k.waitUntil)
-        selection.value = ListSelection(0, KIDS_PIN_KEYS.size)
+        showPin(Screen.KidsPin(PinPurpose.UNLOCK, waitUntil = k.waitUntil))
         kidsUnlockInput()
+    }
+
+    /** A PIN prompt, the highlight on its first key. */
+    private fun showPin(page: Screen.KidsPin) {
+        screen.value = page
+        selection.value = ListSelection(0, KIDS_PIN_KEYS.size)
     }
 
     /** Off the unlock PIN or the sheet without a choice: the tiles while Locked, else the main menu the lock was pressed on. */
@@ -562,8 +566,7 @@ internal class KidsScreensController(
 
     /** The new-PIN prompt (Change PIN's or setup's), with [message] under its dots. */
     private fun kidsAskNewPin(message: String?) {
-        screen.value = Screen.KidsPin(if (kidsPinChange) PinPurpose.CHANGE else PinPurpose.SETUP_NEW, message = message)
-        selection.value = ListSelection(0, KIDS_PIN_KEYS.size)
+        showPin(Screen.KidsPin(if (kidsPinChange) PinPurpose.CHANGE else PinPurpose.SETUP_NEW, message = message))
     }
 
     /** Enter on a new PIN: the first time asks again; the second must match, else both start over ([KIDS_PIN_MISMATCH]). */
@@ -571,8 +574,7 @@ internal class KidsScreensController(
         if (!kidsParentOnly()) return
         if (s.purpose != PinPurpose.SETUP_CONFIRM) {
             kidsNewPin = s.typed
-            screen.value = Screen.KidsPin(PinPurpose.SETUP_CONFIRM)
-            selection.value = ListSelection(0, KIDS_PIN_KEYS.size)
+            showPin(Screen.KidsPin(PinPurpose.SETUP_CONFIRM))
             return
         }
         val pin = kidsNewPin
@@ -595,7 +597,6 @@ internal class KidsScreensController(
         if (!kidsParentOnly()) return
         val k = kids ?: return
         val skip = when (step) {
-            KidsSetupStep.PIN -> return kidsAskNewPin(null)
             KidsSetupStep.USAGE -> k.hasUsageAccess()
             KidsSetupStep.ALARMS -> k.canExactAlarms()
             KidsSetupStep.HOME -> !kidsNeedsHome()

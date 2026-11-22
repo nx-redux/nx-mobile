@@ -4,6 +4,7 @@ import com.nxredux.mobile.library.ArtRefs
 import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.GamePath
+import com.nxredux.mobile.tryOrAny
 import com.nxredux.mobile.tryQuietly
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -195,7 +196,7 @@ class ArtworkController(
      * failure there is not the run's.
      */
     private suspend fun flushArt() = withContext(NonCancellable) {
-        try { host.flushArt() } catch (e: CancellationException) { throw e } catch (_: Throwable) {}
+        tryOrAny({}) { host.flushArt() }
     }
 
     /** Runs the engine, chaining onto games appended meanwhile; publishes the end, and stops keep-alive, exactly once. */
@@ -474,8 +475,7 @@ class ArtworkController(
     private suspend fun currentKeys(ref: LibraryGameRef, saved: GameOptions?): Map<ArtSlot, String> {
         val options = saved?.options.orEmpty()
         if (options.isEmpty()) return emptyMap()
-        val t = if (ref.android) null
-            else try { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) } catch (_: IllegalArgumentException) { null }
+        val t = if (ref.android) null else ArtPaths.targetOrNull(ref)
         val disk = t?.let { engine.artOnDisk(ref, heroes = false) }
         val out = LinkedHashMap<ArtSlot, String>()
         for (slot in PICK_SLOTS) {
@@ -756,7 +756,7 @@ class ArtworkController(
      * encodings, the 2D box's legacy `box2d/` files, the legacy untyped mix and the game info file.
      */
     private fun artPaths(g: LibraryGameRef): List<String> {
-        val t = try { ArtPaths.target(g.sourceId, g.relativeDir, g.fileName, g.folderGame) } catch (_: IllegalArgumentException) { return emptyList() }
+        val t = ArtPaths.targetOrNull(g) ?: return emptyList()
         return ArtEncoding.entries.flatMap { e -> ArtSlot.entries.map { t.path(it, e) } + t.legacyBox2dPath(e) } + t.legacyMixPath + t.infoPath
     }
 }

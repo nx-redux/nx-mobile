@@ -113,7 +113,5 @@ class MenuStylesTest {
             }
             assertEquals(expected, MenuStyles.dualGameListLayout(style, o), "$style $o")
         }
-        assertEquals(MenuStyles.GAME_LIST_STYLES, MenuStyles.gameListStyles(dual = true))
-        assertEquals(MenuStyles.GAME_LIST_STYLES, MenuStyles.gameListStyles(dual = false))
     }
 }

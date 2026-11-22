@@ -42,7 +42,7 @@ import com.nxredux.mobile.settings.VerticalListAlignment
 import com.nxredux.mobile.ui.InfoLine
 
 private const val STACK_SLIDE_MS = 300   // the stack's slide and scale, as the horizontal row's
-/** The fade to transparent at the top and bottom of a stack's body ([NxStack]'s edgeFade). */
+/** The fade to transparent at the top and bottom of a stack's body ([NxStack]'s edgeFadeHeight). */
 private val STACK_EDGE_FADE = 20.dp
 
 /**
@@ -53,7 +53,7 @@ private val STACK_EDGE_FADE = 20.dp
  * and, on release, settles on the item nearest where it would rest ([rowSwipeTarget]), the same as the row's on X.
  * A tap on a neighbour selects it, a tap on the selection opens it ([LocalNxTapOpens]), a long press calls [onLongPress].
  * The body is clipped (a hidden page title's room is part of the body, so the stack runs up into it; the caller centres
- * [g] in the whole body); [edgeFade]: its top and bottom fade out over [edgeFadeHeight] (the items alone: the picture
+ * [g] in the whole body); its top and bottom fade out over [edgeFadeHeight] (the items alone: the picture
  * behind a Backdrop is the caller's, so it stays whole).
  * [item] draws item i in its slot ([StackGeometry.slotW] × [StackGeometry.slotH]; `distance` is i − the animated
  * position, read at draw time); [overlay] draws over the stack in body coordinates (a count, a caption), inside the clip
@@ -66,14 +66,14 @@ private val STACK_EDGE_FADE = 20.dp
  */
 @Composable
 internal fun NxStack(
-    count: Int, selectedIndex: () -> Int, g: StackGeometry, style: RowStyle, edgeFade: Boolean,
+    count: Int, selectedIndex: () -> Int, g: StackGeometry, style: RowStyle,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?,
     layoutKey: Any?, dataKey: Any?,
     modifier: Modifier = Modifier,
     marks: Boolean = false,
     reach: ((Int) -> StackReach)? = null,
     sideAlpha: ((distance: Float) -> Float)? = null,
-    edgeFadeHeight: Dp = STACK_EDGE_FADE,   // [edgeFade]'s height
+    edgeFadeHeight: Dp = STACK_EDGE_FADE,
     item: @Composable BoxScope.(i: Int, selected: Boolean, distance: () -> Float) -> Unit,
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
@@ -92,7 +92,7 @@ internal fun NxStack(
 
     Box(
         modifier.fillMaxSize().clipToBounds()
-            .then(if (edgeFade) Modifier.nxStackEdgeFade(edgeFadeHeight) else Modifier)
+            .nxStackEdgeFade(edgeFadeHeight)
             .axisSwipe(
                 vertical = true, key = pos, value = pos, live = dragPos, perDp = -1f / rowSwipeStep(row),
                 lo = 0f, hi = (count - 1).toFloat(), give = 0.5f, ms = STACK_SLIDE_MS,
@@ -189,7 +189,8 @@ internal fun stackCaptionRows(lines: List<InfoLine>): List<List<InfoLine>> = lin
  * the caption gap after the stack) or right-aligned (RIGHT, the mirror: it ends the gap before the stack, so it hugs the
  * stack rather than the screen edge), the block vertically centred on the selected item ([StackGeometry.centreY]). The
  * name ([title], [nameSp] SemiBold, up to three balanced lines, then an ellipsis), then
- * the time, the trophy count and "Next: <name>", a row each, at 14 sp in grey ([stackCaptionRows] via [CaptionInfoRows]: a
+ * the time, the trophy count and "Next: <name>", a row each, at [STACK_INFO_SHARE] of the name's size in grey
+ * ([stackCaptionRows] via [CaptionInfoRows]: a
  * row without data is left out; a next goal too long takes up to two lines, the block growing round its centre), 3 dp
  * apart. [shadow]: Backdrop's text shadow (over a picture). [splitNext] (the portrait family): "Next: <name>"
  * always on its own lines, long or not.
@@ -198,7 +199,6 @@ internal fun stackCaptionRows(lines: List<InfoLine>): List<List<InfoLine>> = lin
 internal fun StackCaption(
     title: String?, info: List<InfoLine>, g: StackGeometry, bodyW: Float, bodyH: Float, shadow: Boolean, nameSp: Float = 18f,
     splitNext: Boolean = false, alignment: VerticalListAlignment = VerticalListAlignment.LEFT,
-    infoShare: Float? = null,   // the info rows at this share of the name's size; null: 14 sp
     badge: String? = null,      // a pill after the name (the game's badge, [com.nxredux.mobile.library.GameEntry.badge])
 ) {
     if (title == null) return
@@ -212,7 +212,7 @@ internal fun StackCaption(
         fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = nameSize, textAlign = align,
         lineBreak = LineBreak.Heading, shadow = textShadow,
     )
-    val infoStyle = TextStyle(fontFamily = font, fontSize = infoShare?.let { (nameSp * it).sp } ?: 14.sp, textAlign = align, shadow = textShadow)
+    val infoStyle = TextStyle(fontFamily = font, fontSize = (nameSp * STACK_INFO_SHARE).sp, textAlign = align, shadow = textShadow)
     val width = (bodyW - g.captionRight - g.captionX).coerceAtLeast(0f)
     Column(
         Modifier.stackCaptionPlace(g).width(width.dp).captionTap(),

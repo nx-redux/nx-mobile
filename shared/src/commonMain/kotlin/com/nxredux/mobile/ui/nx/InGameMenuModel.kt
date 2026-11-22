@@ -250,12 +250,12 @@ sealed interface MenuEffect {
     data object RestoreDefaults : MenuEffect
     /**
      * The in-game Shortcuts page changed this console's or game's [overrides]: the host's bindings follow now; persisted
-     * only by Save Changes, which writes the overridden rows alone (spec: overrides inherit).
+     * only by Save Changes, which writes the overridden rows alone (overrides inherit).
      */
     data class ShortcutsChanged(val overrides: ShortcutOverrides) : MenuEffect
     /**
      * The panel's Fast forward or Rewind tile: set the toggles ([ff], [rewind]; null leaves one alone), then close the
-     * menu so the game runs with it on (spec). Turning one on turns the other off, as a Toggle binding does.
+     * menu so the game runs with it on. Turning one on turns the other off, as a Toggle binding does.
      */
     data class SetSpeed(val ff: Boolean?, val rewind: Boolean?) : MenuEffect
     /** The panel's Mic tile: the pad's mic button [shown] or hidden, then close the menu. */
@@ -396,6 +396,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private var nds3dNow: Int? = null            // the DS 3D scale in use (null: unknown / not DS)
     private var nds3dSoftware = false            // the core renders in software: the 3D Resolution rows take no effect
+    private var localWirelessNow: String? = null
+
+    /** Where local wireless stands ("linked with 1 device"), shown beside Local Wireless while it is On; null: nothing. */
+    fun setLocalWirelessNow(now: String?) {
+        if (now == localWirelessNow) return
+        localWirelessNow = now
+        refreshFrontendPages()
+    }
 
     /**
      * The DS or 3DS 3D scale in use ([now], null: unknown) and whether the core renders in [software] (DS only: the 3D Resolution rows are
@@ -562,7 +570,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         private set
 
     /**
-     * The menu is drawn as two panes ([inGameMenuSplit], set by the host's UI): RIGHT on a row that opens a page opens
+     * The menu is drawn as two panes ([com.nxredux.mobile.ui.settingsSplit], set by the host's UI): RIGHT on a row that opens a page opens
      * it, as A (a column browser); value rows still change.
      */
     var split: Boolean = false
@@ -597,7 +605,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         }
         if (state.page.kind == PageKind.Shortcuts) {
             // Waiting for a press, the controller's keys are the capture's ([captureKey]); a touch B cancels, nothing
-            // else (MENU included, L23) does anything.
+            // else (MENU included) does anything.
             if (capturing != null) { if (button == NxButton.B) cancelCapture(); return null }
             when (button) {
                 NxButton.X -> return clearShortcut(state.page.selected)
@@ -629,7 +637,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         }
         val root = state.page.kind == PageKind.Root
         return when (button) {
-            // The first word: UP goes up to the tab row over it (the words no longer wrap there).
+            // The first word: UP goes up to the tab row over it (the words do not wrap there).
             NxButton.UP -> { if (root && tabsShown() && state.page.selected == 0) state = state.copy(panelFocus = PanelFocus.Tabs) else move(-1); null }
             NxButton.DOWN -> { move(1); null }
             // Off the root LEFT / RIGHT never change a value: A starts that ([editsOnA]). In two panes ([split]) LEFT goes
@@ -908,6 +916,13 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         })
     }
 
+    /** A frontend value the game changed, not the menu (Disconnect turns Local Wireless off). */
+    fun showFrontendValue(key: String, value: String) {
+        if (frontend[key] == value) return
+        frontend = frontend + (key to value)
+        refreshFrontendPages()
+    }
+
     /**
      * The frontend values in use (missing keys take their defaults for [overlays] and [tag]), the overlay file names
      * offered for the Overlay setting, the config's locked keys (locked frontend settings are hidden), the console's
@@ -1079,7 +1094,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private fun changeDisc(delta: Int): MenuEffect? {
         if (discCount < 2) return null
-        discIndex = ((discIndex + delta) % discCount + discCount) % discCount
+        discIndex = (discIndex + delta).mod(discCount)
         refreshRoot()
         return MenuEffect.ChangeDisc(discIndex)
     }
@@ -1234,7 +1249,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /**
      * Achievements with a set; Cheats for a core that takes them (none for the game: the tab says how to add some); Players
-     * with more than one slot. Never Cheats or Players in netplay (the root had no Options or Players row there).
+     * with more than one slot. Never Cheats or Players in netplay (the root has no Options or Players row there).
      */
     private fun panelTabs(): List<GamePanelTab> = GamePanelModel.tabs(
         raAvailable = achievementsAvailable && !achievements.isNullOrEmpty(), playerSlots = if (sessionLocked) 0 else playerSlots.size,
@@ -1388,7 +1403,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         MenuAction.DISCONNECT_DS -> MenuEffect.DisconnectDs
         MenuAction.SAVE_FOR_CONSOLE -> { popTo(PageKind.Options); MenuEffect.SaveForConsole }
         MenuAction.SAVE_FOR_GAME -> { popTo(PageKind.Options); MenuEffect.SaveForGame }
-        // The overrides go with the file (spec: Restore defaults drops them); the host sets the restored layer's after.
+        // The overrides go with the file (Restore defaults drops them); the host sets the restored layer's after.
         MenuAction.RESTORE_DEFAULTS -> { popTo(PageKind.Options); shortcutOverrides = ShortcutOverrides.NONE; MenuEffect.RestoreDefaults }
         MenuAction.RESET_SHADER_PARAMS -> {
             val entries = ShaderOptions.resetEntries(params)
@@ -1431,7 +1446,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private fun change(delta: Int): MenuEffect? = when (val row = state.page.rows.getOrNull(state.page.selected)) {
         is MenuRow.Slot -> {
-            state = state.copy(slotIndex = ((state.slotIndex + delta) % slotCount + slotCount) % slotCount)
+            state = state.copy(slotIndex = (state.slotIndex + delta).mod(slotCount))
             null
         }
         is MenuRow.Option -> when {
@@ -1580,7 +1595,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         val visual = owner.rows.indices.filter { (owner.rows[it] as? MenuRow.Option)?.visual == true }
         if (visual.isEmpty()) return
         val at = visual.indexOfFirst { (owner.rows[it] as MenuRow.Option).key == key }.coerceAtLeast(0)
-        val target = visual[((at + delta) % visual.size + visual.size) % visual.size]
+        val target = visual[(at + delta).mod(visual.size)]
         val targetKey = (owner.rows[target] as MenuRow.Option).key
         state = state.copy(stack = state.stack.take(ownerIndex) + owner.copy(selected = target) + adjustPage(targetKey))
     }
@@ -1620,7 +1635,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun move(delta: Int) {
         val p = state.page
         if (p.rows.isEmpty()) return
-        replaceTop(p.copy(selected = ((p.selected + delta) % p.rows.size + p.rows.size) % p.rows.size))
+        replaceTop(p.copy(selected = (p.selected + delta).mod(p.rows.size)))
         state = state.copy(editing = false)
     }
 
@@ -1693,7 +1708,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             if (discCount > 1) add(MenuRow.Option(DISC_LABEL, DISC_KEY, "${discIndex + 1}/$discCount", choices = (1..discCount).map { "Disc $it" }, index = discIndex, detail = DISC_INFO))
             add(MenuRow.Slot("Save", SlotAction.SAVE))
             add(MenuRow.Slot("Load", SlotAction.LOAD))
-            add(MenuRow.Action("Reset", MenuAction.ASK_RESET))   // asks first ([resetPage]); the panel's Reset tile before
+            add(MenuRow.Action("Reset", MenuAction.ASK_RESET))   // asks first ([resetPage])
             if (screenTaken) add(MenuRow.Action(USE_TOP_SCREEN_LABEL, MenuAction.USE_TOP_SCREEN))
             if (!kidsLocked) add(MenuRow.Submenu("Options", PageKind.Options))
             add(MenuRow.Action("Quit", if (saveOnQuit) MenuAction.QUIT else MenuAction.QUIT_ONLY))
@@ -1843,7 +1858,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             val values = if (o.key == FrontendOptions.OVERLAY) FrontendOptions.choices(o.key, overlays) else o.values
             // The row's brief line (none: compact); the full text in its info popup.
             val now = nds3dNow
-            val shown = if (o.key == Res3dConsole.forTag(frontendTag)?.modeKey && now != null && value != Nds3dMode.PERFORMANCE.value) "${o.labelOf(value)} · ${now}x now" else o.labelOf(value)
+            val wireless = localWirelessNow
+            val shown = when {
+                o.key == Res3dConsole.forTag(frontendTag)?.modeKey && now != null && value != Nds3dMode.PERFORMANCE.value -> "${o.labelOf(value)} · ${now}x now"
+                o.key in LOCAL_WIRELESS_KEYS && wireless != null && value == N3dsOptions.LOCAL_WIRELESS_ON -> "${o.labelOf(value)} · $wireless"
+                else -> o.labelOf(value)
+            }
             MenuRow.Option(
                 o.label, o.key, shown, o.brief, visual = o.visual,
                 choices = values.map(o::labelOf), index = values.indexOf(value), detail = o.info,
@@ -1896,7 +1916,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /**
      * A raw key the host gave press to bind ([takesKey]): [MenuEffect.ShortcutsChanged] when it bound the waiting row. A
      * button or combo the console's hotkeys use (or the SELECT+START menu chord) is refused, saying which hotkey has it
-     * (spec: built-in hotkeys win); B or Back alone cancels.
+     * (built-in hotkeys win); B or Back alone cancels.
      */
     fun captureKey(keyCode: Int, down: Boolean): MenuEffect? {
         val result = capture.onKey(keyCode, down) ?: return null
@@ -1973,7 +1993,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /**
      * One row per action (no rewind rows without rewind), then the two touch buttons: each shows what fires here, marked
      * "(default)" while it inherits Controls → Shortcuts; an action on a button the console's hotkeys use shows
-     * Unavailable with the hotkey as its line (spec: built-in hotkeys win). The row waiting for a press says so. With no
+     * Unavailable with the hotkey as its line (built-in hotkeys win). The row waiting for a press says so. With no
      * controller the bind rows give way to [SHORTCUTS_NO_CONTROLLER] as the page's intro; their overrides stay.
      */
     private fun shortcutsPage(): MenuPage {
@@ -2062,6 +2082,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         const val TOUCH_KEY_PREFIX = "nx:touch:"
         /** A Shortcuts row inheriting Controls → Shortcuts. */
         private const val DEFAULT_SUFFIX = " (default)"
+        private val LOCAL_WIRELESS_KEYS = setOf(NdsOptions.LOCAL_WIRELESS, N3dsOptions.LOCAL_WIRELESS)
         private const val NONE_LABEL = "None"
         private const val UNAVAILABLE = "Unavailable"
         /** The waiting bind row's line: B cancels (the hint says so). */

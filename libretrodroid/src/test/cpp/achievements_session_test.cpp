@@ -7,7 +7,7 @@
 //   clang++ -std=c++17 -fsanitize=address -DRC_DISABLE_LUA -DRC_CLIENT_SUPPORTS_HASH -Ilibretrodroid/src/test/cpp/shim \
 //     -I$c -I$c/rcheevos/include -I$r -I$c/libretro/libretro-common/include \
 //     libretrodroid/src/test/cpp/achievements_session_test.cpp $c/achievements/achievements.cpp \
-//     $c/achievements/memoryregiontable.cpp "$d"/*.o -o "$d/achievements_session_test" && "$d/achievements_session_test"
+//     $c/achievements/memoryregiontable.cpp $c/logflag.cpp "$d"/*.o -o "$d/achievements_session_test" && "$d/achievements_session_test"
 // Built with AddressSanitizer: touching the freed memory of a previous "core" aborts the run.
 #include "achievements/achievements.h"
 #include "achievements/achievementshash.h"
@@ -18,6 +18,8 @@
 #include <cstring>
 #include <string>
 
+#include "check.h"
+
 namespace libretrodroid {
 // The real one lives with the CHD reader (libchdr); the session tests never hash.
 const rc_hash_callbacks_t* AchievementsHash::callbacks() {
@@ -27,12 +29,6 @@ const rc_hash_callbacks_t* AchievementsHash::callbacks() {
 }
 
 using namespace libretrodroid;
-
-static int failures = 0;
-
-static void check(bool ok, const char* what) {
-    if (!ok) { std::printf("FAIL %s\n", what); failures++; }
-}
 
 static uint8_t* coreRam = nullptr;
 static size_t coreRamSize = 0;

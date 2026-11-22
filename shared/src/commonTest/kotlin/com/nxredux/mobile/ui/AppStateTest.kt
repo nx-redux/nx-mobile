@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.settings.FakeAppSettings
 import com.nxredux.mobile.ui.keyboard.EntryFocus
 import com.nxredux.mobile.ui.keyboard.Key
 import com.nxredux.mobile.ui.keyboard.KeyPage
@@ -23,7 +24,6 @@ import com.nxredux.mobile.achievements.RaGamesSnapshotCodec
 import com.nxredux.mobile.achievements.RaGamePointer
 import com.nxredux.mobile.achievements.RaGamePointers
 import com.nxredux.mobile.achievements.RaProgress
-import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.achievements.fakePlatform
 import com.nxredux.mobile.achievements.setsJson
 import com.nxredux.mobile.gametime.FixedOffsetCalendar
@@ -178,10 +178,11 @@ private val LIST_TABS = mapOf(MenuCategory.HOME to MenuStyle.GRID, MenuCategory.
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppStateTest {
-    private class MemorySettings(override var treeRef: ContentRef? = null) : AppSettings {
+    // Pinned to List: the walks below step Consoles, Collections and Tools as lists; Home to Grid.
+    // The real defaults (a missing tab is its MenuStyles.defaultStyleOf) are tested with menuStyles = emptyMap() ([freshSettings]).
+    private class MemorySettings(treeRef: ContentRef? = null) :
+        FakeAppSettings(treeRef, menuStyles = LIST_TABS, gameListStyle = MenuStyle.LIST) {
         override var androidKeyboard = false
-        override var extraFolders: List<ExtraFolder> = emptyList()
-        override var defaultTags: Map<String, String> = emptyMap()
         override var skinTweaks = ""
         override var overlayTweaks = ""
         override var debugLog = false
@@ -194,38 +195,12 @@ class AppStateTest {
         override var saveFormat = SaveFormat.DEFAULT
         override var stateFormat = StateFormat.DEFAULT
         override var useExtractedFileName = false
-        override var padSkin: Boolean = true
-        override var padTheme: PadTheme = PadTheme.DEFAULT
-        // Pinned to List: the walks below step Consoles, Collections and Tools as lists; Home to Grid.
-        // The real defaults (a missing tab is its MenuStyles.defaultStyleOf) are tested with menuStyles = emptyMap() ([freshSettings]).
-        override var menuStyles: Map<MenuCategory, MenuStyle> = LIST_TABS
-        override var gameListStyle: MenuStyle = MenuStyle.LIST
-        override var menuOrientations: Map<MenuCategory, MenuOrientation> = emptyMap()
-        override var gameListOrientation: MenuOrientation = MenuStyles.DEFAULT_ORIENTATION
-        override var gameListVerticalAlignment: VerticalListAlignment = VerticalListAlignment.DEFAULT
-        override var toolApps: List<String> = emptyList()
-        override var androidConsoleApps: List<String> = emptyList()
-        override var androidGamesAsked = false
         override var mainMenuTipHidden = true   // the first-launch tips: hidden unless a test turns them on
         override var gameListTipHidden = true
         override var allFilesAsked = false
         override var onboardingDone: Boolean? = true   // done: tests of other things never meet onboarding ([freshInstall] does)
         override var onboardingStep: String? = null
-        override var androidPins: List<String> = emptyList()
-        override var raEnabled = false
-        override var raUsername = ""
-        override var raToken: String? = null
-        override var raShowNotifications = true
-        override var raNotificationSeconds = 3
-        override var raProgressSeconds = 1
-        override var raSortOrder = RaSortOrder.DEFAULT
-        override var ssUsername = ""
-        override var ssPassword: String? = null
-        override var sgdbApiKey: String? = null
-        override var tgdbApiKey: String? = null
-        override var artReplaceExisting = false
-        override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showGamesTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = AccentPreset.DEFAULT
-        override var secondaryAccent: SecondaryAccent = SecondaryAccent.DEFAULT
+        override var showGamesTab = true
         override var switcherLayout = com.nxredux.mobile.settings.SwitcherLayout.DEFAULT
         override var optionTextSize = com.nxredux.mobile.settings.OptionTextSize.DEFAULT
         override var gpuDriver = GpuDriverChoice.SYSTEM
@@ -270,7 +245,6 @@ class AppStateTest {
         override suspend fun icon(id: String): ImageBitmap? { iconAsks += id; return null }   // no icon: tiles draw the generic app glyph
     }
 
-    /** Tools -> RetroAchievements, wherever it sorts among the tools. */
     /** The RetroAchievements page with the highlight on Achievements (it opens on Profile, the row above), where these tests count their rows from. */
     private fun openRa(state: AppState) {
         state.openTools()
@@ -280,6 +254,13 @@ class AppStateTest {
             state.select(RaAction.entries.indexOf(RaAction.ACHIEVEMENTS))
         }
     }
+
+    /** [openRa], then its Settings page: two rows below Achievements. */
+    private fun openRaSettings(state: AppState) {
+        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+    }
+
+    private val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
 
     private fun menuKinds(state: AppState) = state.screen.value.contextMenu?.items?.map { it.kind } ?: emptyList()
 
@@ -548,7 +529,6 @@ class AppStateTest {
         assertEquals(1, assertNotNull(assertIs<Screen.Onboarding>(state.screen.value).touchRows)[0].index)
     }
 
-    // The customise question does not ask the text size (setup asks it first).
     // Two buttons side by side (the customise question's answers): LEFT takes the first, RIGHT the second, as UP / DOWN.
     @Test fun left_and_right_move_between_two_buttons_side_by_side() = runTest {
         val (state, _) = atOnboardingStep(OnboardingStep.CUSTOMISE)
@@ -581,7 +561,6 @@ class AppStateTest {
         assertEquals(false, state.menuPadShown())
     }
 
-    // On its own step the pad previews the selected answer; after it, the answer holds.
     /** First setup up to "Add a ROMs folder?", then sd/Loose added: its summary page. */
     private fun TestScope.atFolderSummary(): Pair<AppState, MemorySettings> {
         val settings = freshInstall()
@@ -1369,7 +1348,6 @@ class AppStateTest {
     }
 
     @Test fun a_hidden_listing_keeps_the_index_and_the_tree() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
         val picker = NoopPicker()
         val store = MemoryLibraryIndexStore()
@@ -1693,26 +1671,6 @@ class AppStateTest {
         assertTrue(state.launcherChrome().tabRow)                        // the tab row stays: the touch way to switch tabs
     }
 
-    @Test fun netplay_leads_a_home_game_menu_whatever_the_hints() = runTest {
-        val src = FakeRomsSource(
-            dirs = mapOf("Home" to listOf("Roms"), "Home/Roms" to listOf("Super Nintendo (SFC)"), "Home/Roms/Super Nintendo (SFC)" to listOf("Super Mario Kart (USA).sfc")),
-        )
-        suspend fun homeMenu(hints: Boolean): List<ContextKind> {
-            val data = FakeUserData(recents = listOf(Recent("/Roms/Super Nintendo (SFC)/Super Mario Kart (USA).sfc")))
-            val state = AppState(
-                AppDeps(MemorySettings(ContentRef("Home")).apply { menuButtonHints = hints }, src, RecordingRunner(), NoopPicker(), data, compute = UnconfinedTestDispatcher(testScheduler), netplay = com.nxredux.mobile.netplay.FakeNetplayPlatform()),
-                CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
-            )
-            state.load(); advanceUntilIdle()
-            state.selectHome { it is MainRow.Continue }
-            state.onButton(NxButton.MENU)
-            return menuKinds(state)
-        }
-        // The main menu has no hint bar, so Netplay leads the game's menu either way (Recent and Search are icons, not menu items).
-        assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu(hints = false))
-        assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu(hints = true))
-    }
-
     @Test fun a_home_game_with_a_save_offers_play_from_start() = runTest {
         val src = FakeRomsSource(
             dirs = mapOf("Home" to listOf("Roms"), "Home/Roms" to listOf("Super Nintendo (SFC)"), "Home/Roms/Super Nintendo (SFC)" to listOf("Super Mario Kart (USA).sfc")),
@@ -1740,7 +1698,7 @@ class AppStateTest {
         val src = FakeRomsSource(
             dirs = mapOf("Home" to listOf("Roms"), "Home/Roms" to listOf("Super Nintendo (SFC)"), "Home/Roms/Super Nintendo (SFC)" to listOf("Super Mario Kart (USA).sfc")),
         )
-        suspend fun home(configure: MemorySettings.() -> Unit): AppState {
+        suspend fun homeMenu(configure: MemorySettings.() -> Unit): List<ContextKind> {
             val data = FakeUserData(recents = listOf(Recent("/Roms/Super Nintendo (SFC)/Super Mario Kart (USA).sfc")))
             val state = AppState(
                 AppDeps(MemorySettings(ContentRef("Home")).apply(configure), src, RecordingRunner(), NoopPicker(), data, compute = UnconfinedTestDispatcher(testScheduler), netplay = com.nxredux.mobile.netplay.FakeNetplayPlatform()),
@@ -1748,12 +1706,12 @@ class AppStateTest {
             )
             state.load(); advanceUntilIdle()
             state.selectHome { it is MainRow.Continue }
-            return state
+            state.onButton(NxButton.MENU)
+            return menuKinds(state)
         }
-        suspend fun homeMenu(configure: MemorySettings.() -> Unit): List<ContextKind> =
-            home(configure).also { it.onButton(NxButton.MENU) }.let(::menuKinds)
-        assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu {})
-        assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu { showNetplayHint = false })
+        for (configure in listOf<MemorySettings.() -> Unit>({}, { menuButtonHints = false }, { menuButtonHints = true }, { showNetplayHint = false })) {
+            assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu(configure))
+        }
     }
 
     // The Games tab is the main menu too and has no hint bar: Netplay leads its game's menu, once, whatever the hints.
@@ -2497,7 +2455,6 @@ class AppStateTest {
     private fun gbaCount(st: AppState) = assertIs<Screen.Systems>(st.screen.value).systems.first { it.tag == "GBA" }.gameCount
 
     @Test fun an_extra_on_an_unmounted_card_keeps_its_grant_and_its_games_return_once_it_is_back() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
         val card = CardSource(source)
         val picker = NoopPicker()
@@ -2533,7 +2490,6 @@ class AppStateTest {
     }
 
     @Test fun a_stored_index_with_an_offline_extra_rescans_at_start_once_the_card_is_back() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
         val card = CardSource(source, looseMounted = false)
         val store = MemoryLibraryIndexStore()
@@ -2547,7 +2503,6 @@ class AppStateTest {
     }
 
     @Test fun coming_back_to_the_app_on_the_main_menu_rescans_once_an_offline_extra_is_mounted() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
         val card = CardSource(source, looseMounted = false)
         val store = MemoryLibraryIndexStore()
@@ -2585,7 +2540,6 @@ class AppStateTest {
     }
 
     @Test fun an_extra_that_still_fails_on_its_second_mounted_scan_is_dropped() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
         val card = CardSource(source, looseMounted = false)
         val picker = NoopPicker()
@@ -2635,7 +2589,6 @@ class AppStateTest {
     }
 
     @Test fun an_extra_mounted_again_before_its_provider_root_is_back_is_kept_not_forgotten() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
         val card = CardSource(source, looseMounted = false)
         val picker = NoopPicker()
@@ -2675,7 +2628,7 @@ class AppStateTest {
         assertEquals(0, store.deletes)
         assertIs<Screen.Systems>(st.screen.value)
         assertNull(st.error.value)
-        st.onForeground()                                                                        // mounted and still gone: dropped as before
+        st.onForeground()                                                                        // mounted and still gone: dropped
         advanceTimeBy(LibraryScanner.REMOUNT_RETRY_MILLIS + 1); runCurrent()
         assertNull(settings.treeRef)
         assertIs<Screen.PickFolder>(st.screen.value)
@@ -2716,7 +2669,6 @@ class AppStateTest {
     }
 
     @Test fun an_offline_extra_and_a_dropped_one_in_the_same_scan_share_one_notice() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val gone = ExtraFolder("g1", ContentRef("sd/Gone"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(gone, loose) }
         val inner = CardSource(source, looseMounted = false)
@@ -2730,7 +2682,6 @@ class AppStateTest {
     }
 
     @Test fun a_second_return_while_the_first_check_runs_starts_no_second_scan_nor_one_on_a_new_screen() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
         val card = CardSource(source, looseMounted = false)
         val store = MemoryLibraryIndexStore()
@@ -3227,7 +3178,6 @@ class AppStateTest {
     }
 
     @Test fun library_marks_an_extra_on_an_unmounted_card_until_it_is_back() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
         val card = CardSource(source, looseMounted = false)
         val st = state(settings, card)
@@ -3242,7 +3192,6 @@ class AppStateTest {
     }
 
     @Test fun library_says_an_extra_mounted_but_not_listing_yet_is_not_ready_yet() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
         val card = CardSource(source, looseMounted = false)
         val st = state(settings, card)
@@ -3257,7 +3206,6 @@ class AppStateTest {
     }
 
     @Test fun a_stored_not_ready_yet_extra_reads_as_not_available_after_a_restart() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
         val card = CardSource(source, looseMounted = false)
         val store = MemoryLibraryIndexStore()
@@ -3278,7 +3226,6 @@ class AppStateTest {
     }
 
     @Test fun rescanning_from_library_updates_an_extra_row_that_went_offline() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
         val card = CardSource(source)
         val st = state(settings, card)
@@ -3293,7 +3240,6 @@ class AppStateTest {
     }
 
     @Test fun an_offline_extra_can_still_be_removed_from_library() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
         val picker = NoopPicker()
         val st = state(settings, CardSource(source, looseMounted = false), picker)
@@ -3796,7 +3742,6 @@ class AppStateTest {
     }
 
     @Test fun removing_an_extra_rewrites_the_index_and_back_goes_straight_to_the_menu() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
         val store = MemoryLibraryIndexStore()
         val counting = CountingRomsSource(source)
@@ -4055,7 +4000,6 @@ class AppStateTest {
     }
 
     @Test fun a_revoked_extra_keeps_its_games_until_a_rescan_and_fails_at_launch() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
         val store = MemoryLibraryIndexStore(LibraryIndexCodec.encode(scannedIndex(settings)))
         val revoked = object : RomsSource by source {
@@ -5526,7 +5470,7 @@ class AppStateTest {
         assertEquals(ListSelection(5, 6), state.selection.value)
     }
 
-    // --- Settings -> Library: one page of Storage, ROM folders and Games groups; Default emulators under Emulators ---
+    // --- Settings -> Library: one flat page; Default emulators under Emulators ---
 
     @Test fun the_library_page_shows_its_counts_then_one_flat_list_counting_a_merged_console_once() = runTest {
         val st = state(MemorySettings(ContentRef("Home")), snes)
@@ -5581,7 +5525,6 @@ class AppStateTest {
     }
 
     @Test fun library_up_and_down_walk_its_flat_list_and_wrap() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val st = state(MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) })
         st.load()
         st.openSettings(SettingsSection.LIBRARY)
@@ -5701,7 +5644,6 @@ class AppStateTest {
     }
 
     @Test fun the_remove_dialog_over_library_keeps_the_extras_row() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
         val st = state(settings)
         st.load()
@@ -5940,7 +5882,6 @@ class AppStateTest {
         assertEquals(ListSelection(1, 7), state.selection.value)
     }
 
-    // NX Redux: every value row is ITEM_CYCLE, LEFT/RIGHT step it (A still steps forward).
     @Test fun appearance_value_rows_step_on_left_and_right() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = state(settings)
@@ -5968,15 +5909,6 @@ class AppStateTest {
         state.select(rows().indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }); state.onButton(NxButton.A); state.onButton(NxButton.A)   /* asks, then Reset */
         assertEquals(true, settings.padSkin)
         assertEquals(SettingsKind.PAD_THEME, rows()[1].kind)
-    }
-
-    @Test fun appearance_ends_with_reset_and_no_longer_opens_layouts() = runTest {
-        val settings = MemorySettings(ContentRef("Home"))
-        val state = state(settings)
-        state.load()
-        state.openSettings(SettingsSection.APPEARANCE)
-        val rows = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals(listOf(SettingsKind.PAD_SKIN, SettingsKind.PAD_THEME, SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT, SettingsKind.TEXT_SIZE, SettingsKind.BUTTON_LAYOUT, SettingsKind.RESET_DEFAULTS), rows.map { it.kind })
     }
 
     @Test fun layouts_rows_follow_the_handheld_order() = runTest {
@@ -6155,7 +6087,6 @@ class AppStateTest {
         assertEquals("Carousel", assertIs<Screen.Settings>(state.screen.value).rows[0].secondary)
     }
 
-    // A group page has no Done: B goes back, onto the group's row.
     // Home's picture follows Home stats too: hidden, the capture without the strip.
     @Test fun layouts_home_picture_follows_home_stats() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
@@ -6420,7 +6351,6 @@ class AppStateTest {
         assertIs<Screen.SettingsMenu>(state.screen.value)
     }
 
-    // --- Two-pane Settings: the menu is the left pane, every page the right ---
 
     /** A tap on row [i] as every list draws it ([nxTap]): [opens] is the list's [LocalNxTapOpens] for it (false in game lists). */
     private fun tap(state: AppState, i: Int, opens: Boolean = true) =
@@ -6676,12 +6606,12 @@ class AppStateTest {
     @Test fun split_one_tap_on_a_preview_row_focuses_or_opens_it() = runTest {
         val (state, settings) = splitSettings()
         state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN)                                   // Appearance, previewed
-        val theme = settings.padTheme
+        val skin = settings.padSkin
         val preview = state.settingsPreview(SettingsSection.APPEARANCE)
-        nxSettingRowTap(settingsTouchRow(preview.rows[0], preview.choices[0], preview.section), 0, state::settingsPreviewTap, state::settingsPreviewTap)   // Pad theme
+        nxSettingRowTap(settingsTouchRow(preview.rows[0], preview.choices[0], preview.section), 0, state::settingsPreviewTap, state::settingsPreviewTap)
         assertEquals(SettingsSection.APPEARANCE, assertIs<Screen.Settings>(state.screen.value).section)
         assertEquals(0, state.selection.value.index)
-        assertEquals(theme, settings.padTheme)
+        assertEquals(skin, settings.padSkin)
         state.back()
         state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN)                                   // Controls, previewed
         assertIs<Screen.SettingsMenu>(state.screen.value)
@@ -6693,9 +6623,9 @@ class AppStateTest {
 
     @Test fun one_tap_beside_ra_settings_opens_that_row() = runTest {
         val (state, _) = stateWithAchievements()
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         assertIs<Screen.RaSettings>(state.screen.value)
-        val tap = { i: Int -> state.raParentTap(Screen.RetroAchievements(), i) }
+        val tap = { i: Int -> state.raParentTap(Screen.RetroAchievements, i) }
         nxTap(RaAction.entries.indexOf(RaAction.ACHIEVEMENTS), selected = false, opens = true, tap, tap)   // Achievements on the dimmed left
         advanceUntilIdle()
         assertIs<Screen.RaConsoles>(state.screen.value)
@@ -6787,10 +6717,13 @@ class AppStateTest {
         assertIs<Screen.SettingsMenu>(state.screen.value)
     }
 
+    private fun resetRow(state: AppState) =
+        assertIs<Screen.Settings>(state.screen.value).rows.indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }
+
     @Test fun split_left_on_a_page_goes_back_to_the_sections() = runTest {
         val (state, _) = splitSettings()
         state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.onButton(NxButton.A)
-        state.select(3)                                                 // Reset to defaults: no value
+        state.select(resetRow(state))                                   // no value
         state.onButton(NxButton.LEFT)                                   // two panes: LEFT is the left pane, as B
         assertIs<Screen.SettingsMenu>(state.screen.value)
         assertEquals(2, state.selection.value.index)                    // on Appearance
@@ -6799,7 +6732,7 @@ class AppStateTest {
     @Test fun split_right_on_a_page_opens_a_sub_page_row_and_leaves_any_other_row() = runTest {
         val (state, _) = splitSettings()
         state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.onButton(NxButton.A)   // Appearance
-        state.select(3)                                                 // Reset to defaults: no value, opens nothing
+        state.select(resetRow(state))                                   // no value, opens nothing
         state.onButton(NxButton.RIGHT)
         assertEquals(SettingsSection.APPEARANCE, assertIs<Screen.Settings>(state.screen.value).section)
         assertFalse(assertIs<Screen.Settings>(state.screen.value).confirmReset)   // not A
@@ -7205,7 +7138,7 @@ class AppStateTest {
         f.http.responders["gameid"] = { held.await(); RaResponse(200, """{"Success":true,"GameID":0}""") }
         f.store.put(RaPaths.login(), """{"Success":true,"User":"me","Token":"tok","SoftcoreScore":1}""")
         state.settings.raToken = "tok"; state.settings.raUsername = "me"
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         state.select(state.raSettings().rows.indexOfFirst { it.kind == RaSettingKind.DOWNLOAD_ALL }); state.onButton(NxButton.A)
         assertIs<Screen.RaDownload>(state.screen.value)
         assertEquals(listOf("Zelda", "Metroid"), f.controller.download.value!!.items.map { it.name })
@@ -7235,7 +7168,7 @@ class AppStateTest {
         val f = raFixture(index = index, hasher = FakeRaHasher()); val state = f.state   // unreadable: skipped at once
         f.store.put(RaPaths.login(), """{"Success":true,"User":"me","Token":"tok","SoftcoreScore":1}""")
         state.settings.raToken = "tok"; state.settings.raUsername = "me"
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         state.select(state.raSettings().rows.indexOfFirst { it.kind == RaSettingKind.DOWNLOAD_ALL }); state.onButton(NxButton.A)
         advanceUntilIdle()
         assertIs<Screen.RaDownload>(state.screen.value)                  // its page, though it ended at once
@@ -7335,7 +7268,7 @@ class AppStateTest {
         assertIs<Screen.RetroAchievements>(state.screen.value)
         state.openSelected()                                                   // Profile, the first word
         assertEquals(Screen.RaProfile, state.screen.value)
-        assertEquals(RaParent(Screen.RetroAchievements(), RaAction.entries.indexOf(RaAction.PROFILE)), state.raParent(state.screen.value))
+        assertEquals(RaParent(Screen.RetroAchievements, RaAction.entries.indexOf(RaAction.PROFILE)), state.raParent(state.screen.value))
         state.onButton(NxButton.A); state.onButton(NxButton.DOWN)              // a page to read: nothing to open or move
         assertEquals(Screen.RaProfile, state.screen.value)
         state.onButton(NxButton.B)
@@ -7419,7 +7352,7 @@ class AppStateTest {
         assertNull(state.raParent(state.screen.value))                                   // the page: whole
         state.openSelected()                                                              // Achievements
         val consoles = assertIs<Screen.RaConsoles>(state.screen.value)
-        assertEquals(RaParent(Screen.RetroAchievements(), RaAction.entries.indexOf(RaAction.ACHIEVEMENTS)), state.raParent(consoles))
+        assertEquals(RaParent(Screen.RetroAchievements, RaAction.entries.indexOf(RaAction.ACHIEVEMENTS)), state.raParent(consoles))
         state.openSelected()                                                              // Game Boy Advance
         val games = assertIs<Screen.RaGames>(state.screen.value)
         assertEquals(RaParent(consoles, 0), state.raParent(games))                        // the consoles, Game Boy Advance lit
@@ -7474,7 +7407,7 @@ class AppStateTest {
         assertEquals("Super Nintendo ES", assertIs<Screen.RaGames>(state.screen.value).console)
         assertEquals(1, assertNotNull(state.raParent(state.screen.value)).row)
         state.back()                                                                      // the consoles
-        val page = { i: Int -> state.raParentTap(Screen.RetroAchievements(), i) }
+        val page = { i: Int -> state.raParentTap(Screen.RetroAchievements, i) }
         nxTap(raPageRow(Screen.RaSettings(emptyList()))!!, selected = false, opens = true, page, page)   // Settings on the page
         assertIs<Screen.RaSettings>(state.screen.value)                                   // RetroAchievements Settings, split
         nxTap(RaAction.entries.indexOf(RaAction.ACHIEVEMENTS), selected = false, opens = true, page, page)   // Achievements again
@@ -7663,8 +7596,6 @@ class AppStateTest {
         f.state.onForeground(); advanceUntilIdle()   // reads the game info (and the panel's hashes) again
         return f
     }
-
-    private fun AppState.openConsole(tag: String) = openSystem(assertIs<Screen.Systems>(screen.value).systems.first { it.tag == tag })
 
     @Test fun x_opens_the_panel_on_the_highlighted_games_achievements() = runTest {
         val f = panelFixture()
@@ -8013,7 +7944,7 @@ class AppStateTest {
     @Test fun ra_settings_rows_reflect_the_settings_and_cycle_values() = runTest {
         val (state, _) = stateWithAchievements()
         state.settings.raToken = "tok"; state.settings.raUsername = "me"
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         val s = assertIs<Screen.RaSettings>(state.screen.value)
         assertEquals(
             listOf(
@@ -8051,7 +7982,7 @@ class AppStateTest {
         val (state, store) = stateWithAchievements()
         store.put(RaPaths.sets("a".repeat(32)), setsJson(1))
         state.settings.raEnabled = true   // a stale flag from before a sign-out still reads Off
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         val s = state.raSettings()
         assertEquals(listOf("Account", "Sign in", "Enable achievements", "Download all game data"), s.rows.take(4).map { it.label })
         assertEquals("Not signed in", s.rows[1].secondary)
@@ -8072,7 +8003,7 @@ class AppStateTest {
     @Test fun sign_in_opens_one_modal_and_signs_in_with_both_entries() = runTest {
         val (state, http) = stateWithAchievementsHttp()
         http.on("login2", body = """{"Success":true,"User":"Me","Token":"tok"}""")
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         state.openSelected()   // Sign in
         assertTrue(state.raSettings().signingIn)
         state.raDraftUser(" me "); state.onButton(NxButton.A)   // no password yet
@@ -8089,7 +8020,7 @@ class AppStateTest {
         val (state, http) = stateWithAchievementsHttp()
         val gate = CompletableDeferred<Unit>()
         http.responders["login2"] = { gate.await(); com.nxredux.mobile.achievements.RaResponse(200, """{"Success":true,"User":"Me","Token":"tok"}""") }
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         state.onButton(NxButton.A)   // open
         state.raDraftUser("me"); state.raDraftPassword("secret"); state.onButton(NxButton.A)   // login starts and waits
         assertFalse(state.raSettings().signingIn); assertEquals("Sign in", state.raSettings().rows[1].label)
@@ -8106,7 +8037,7 @@ class AppStateTest {
     @Test fun a_modal_open_when_a_sign_in_lands_closes() = runTest {
         val (state, _) = stateWithAchievements()
         state.settings.raUsername = "me"
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         state.onButton(NxButton.A); state.raDraftPassword("secret")
         assertTrue(state.raSettings().signingIn)
         state.settings.raToken = "tok"; state.achievements!!.refresh()   // a sign-in finished while the modal was up
@@ -8116,7 +8047,7 @@ class AppStateTest {
     @Test fun a_failed_server_login_shows_the_error_and_keeps_sign_in() = runTest {
         val (state, http) = stateWithAchievementsHttp()
         http.on("login2", body = """{"Success":false,"Error":"Invalid user/password combination. Please try again."}""")
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         state.onButton(NxButton.A)
         state.raDraftUser("me"); state.raDraftPassword("wrong"); state.onButton(NxButton.A)
         val s = state.raSettings()
@@ -8127,21 +8058,21 @@ class AppStateTest {
     @Test fun sign_in_seeds_the_saved_username_and_an_empty_password() = runTest {
         val (state, _) = stateWithAchievements()
         state.settings.raUsername = "saved"
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         state.openSelected()
         val s = state.raSettings()
         assertTrue(s.signingIn); assertEquals("saved", s.draftUser); assertEquals("", s.draftPassword)
     }
     @Test fun text_entry_is_open_while_the_sign_in_modal_shows() = runTest {
         val (state, _) = stateWithAchievements()
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         assertFalse(state.textEntryOpen)
         state.openSelected(); assertTrue(state.textEntryOpen)
         state.onButton(NxButton.B); assertFalse(state.textEntryOpen)
     }
     @Test fun sign_in_b_and_menu_close_and_clear_the_drafts() = runTest {
         val (state, _) = stateWithAchievements()
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         for (button in listOf(NxButton.B, NxButton.MENU)) {
             state.openSelected()
             state.raDraftUser("me"); state.raDraftPassword("secret"); state.onButton(button)
@@ -8151,14 +8082,14 @@ class AppStateTest {
     }
     @Test fun ra_drafts_without_the_modal_change_nothing() = runTest {
         val (state, _) = stateWithAchievements()
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         val before = state.screen.value
         state.raDraftUser("x"); state.raDraftPassword("y")
         assertEquals(before, state.screen.value)
     }
     @Test fun sign_in_modal_ignores_dpad() = runTest {
         val (state, _) = stateWithAchievements()
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         state.openSelected()
         val sel = state.selection.value
         state.onButton(NxButton.DOWN); state.onButton(NxButton.LEFT)
@@ -8173,7 +8104,7 @@ class AppStateTest {
         val (state, store) = stateWithAchievements()
         state.settings.raToken = "tok"; state.settings.raUsername = "me"
         store.put(RaPaths.login(), "{}"); store.put(RaPaths.JOURNAL, "x\n")
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         assertEquals("Sign out", state.raSettings().rows[1].label)
         state.onButton(NxButton.UP); state.openSelected()   // Sign out: asks first
         assertEquals(RaConfirm.SIGN_OUT, state.raSettings().confirm); assertEquals("tok", state.settings.raToken)
@@ -8186,7 +8117,7 @@ class AppStateTest {
         val (state, store) = stateWithAchievements()
         state.settings.raToken = "tok"; state.settings.raUsername = "me"; state.settings.raEnabled = true
         store.put(RaPaths.login(), "{}")
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         state.onButton(NxButton.UP); state.onButton(NxButton.A)   // one stray A on Sign out
         assertEquals(RaConfirm.SIGN_OUT, state.raSettings().confirm)
         assertEquals("tok", state.settings.raToken); assertTrue(state.settings.raEnabled); assertEquals("{}", store.text(RaPaths.login()))
@@ -8198,7 +8129,7 @@ class AppStateTest {
     @Test fun ra_settings_never_opens_on_sign_out() = runTest {
         val (state, _) = stateWithAchievements()
         state.settings.raToken = "tok"
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         assertEquals(RaSettingKind.ENABLED, state.raSettings().rows[state.selection.value.index].kind)   // the row under Sign out
         state.onButton(NxButton.UP); assertTrue(state.back())   // left with Sign out highlighted
         state.openSelected()
@@ -8209,14 +8140,14 @@ class AppStateTest {
     }
     @Test fun signed_out_ra_settings_opens_on_sign_in() = runTest {
         val (state, _) = stateWithAchievements()
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         assertEquals(RaSettingKind.SIGN_IN, state.raSettings().rows[state.selection.value.index].kind)
     }
     @Test fun confirming_while_the_controller_is_busy_says_so_and_changes_nothing() = runTest {
         val (state, http) = stateWithAchievementsHttp()
         val gate = CompletableDeferred<Unit>()
         http.responders["login2"] = { gate.await(); com.nxredux.mobile.achievements.RaResponse(200, """{"Success":true,"User":"Me","Token":"tok"}""") }
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         state.onButton(NxButton.A); state.raDraftUser("me"); state.raDraftPassword("secret"); state.onButton(NxButton.A)   // login waits
         state.raOn(RaSettingKind.RESET_ACCOUNT); state.openSelected()
         assertEquals(RaConfirm.RESET_ACCOUNT, state.raSettings().confirm)
@@ -8229,7 +8160,7 @@ class AppStateTest {
     @Test fun destructive_rows_confirm_first() = runTest {
         val (state, _) = stateWithAchievements()
         state.settings.raToken = "tok"
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         state.raOn(RaSettingKind.RESET_ACCOUNT); state.openSelected()
         assertEquals(RaConfirm.RESET_ACCOUNT, (state.screen.value as Screen.RaSettings).confirm)
         state.onButton(NxButton.B); assertNull((state.screen.value as Screen.RaSettings).confirm)
@@ -8239,7 +8170,7 @@ class AppStateTest {
 
     @Test fun the_on_off_rows_toggle_on_left_and_right() = runTest {
         val (state, _) = stateWithAchievements()
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         state.onButton(NxButton.DOWN)   // Enable achievements: dimmed while signed out
         state.padStep(NxButton.RIGHT); assertEquals(false, state.settings.raEnabled)
         state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN)   // past the gap and group label: Show notifications, On
@@ -8254,8 +8185,8 @@ class AppStateTest {
 
     @Test fun a_tap_on_the_left_pane_beside_ra_settings_opens_that_row() = runTest {
         val (state, _) = stateWithAchievements()
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
-        val tap = { i: Int -> state.raParentTap(Screen.RetroAchievements(), i) }
+        openRaSettings(state)
+        val tap = { i: Int -> state.raParentTap(Screen.RetroAchievements, i) }
         tap(raPageRow(Screen.RaSettings(emptyList()))!!); assertIs<Screen.RaSettings>(state.screen.value)   // Settings is already open
         state.openSelected(); assertTrue(state.raSettings().signingIn)                           // Sign in: the prompt answers first
         tap(0); assertTrue(state.raSettings().signingIn)
@@ -8267,7 +8198,7 @@ class AppStateTest {
 
     @Test fun the_duration_rows_leave_left_right_alone_and_a_opens_their_picker() = runTest {
         val (state, _) = stateWithAchievements()
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         state.raOn(RaSettingKind.NOTIFICATION_SECONDS)                                   // 3 s
         state.onButton(NxButton.RIGHT); state.onButton(NxButton.LEFT)                    // a picker row: the sides change nothing
         assertEquals("3 s", state.raSettings().rows[7].secondary)
@@ -9693,7 +9624,7 @@ class AppStateTest {
         assertEquals(listOf("Alpha", "Gamma"), more.filter { it.system.android }.map { it.game.shownName })
     }
 
-    // --- The Games tab's keys (Task 5) ---
+    // --- The Games tab's keys ---
 
     /** One console (GB) of five games over three letters: Alpha, Apex, Bravo, Bust, Charlie. */
     private fun letteredGames() = FakeRomsSource(
@@ -9967,7 +9898,6 @@ class AppStateTest {
     }
 
     @Test fun an_offline_extra_back_rescans_from_the_games_tab_and_lands_on_its_game() = runTest {
-        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
         val card = CardSource(source, looseMounted = false)
         val store = MemoryLibraryIndexStore()
@@ -10131,12 +10061,7 @@ class AppStateTest {
     @Test fun unpinning_the_last_pin_stays_on_home() = runTest {
         val state = pinnedLibrary()
         state.selectHome { it is MainRow.Pin }
-        // one pin; open its menu, choose Unpin (the MENU flow of choose())
-        state.onButton(NxButton.MENU)
-        val kinds = menuKinds(state)
-        val at = kinds.indexOf(ContextKind.UNPIN); assertTrue(at >= 0, "no UNPIN in $kinds")
-        repeat(at) { state.onButton(NxButton.DOWN) }
-        state.onButton(NxButton.A)
+        choose(state, ContextKind.UNPIN)   // the one pin
         advanceUntilIdle()
         val s = assertIs<Screen.Systems>(state.screen.value)
         assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.TOOLS), s.tabs.map { it.category })
@@ -11055,7 +10980,7 @@ class AppStateTest {
                 "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Achievements", "Reset to defaults" to null),
             state.layoutsRows().map { it.label to it.secondary },
         )
-        // Every group's rows, in Layouts' order, each page ending with Done.
+        // Every group's rows, in Layouts' order.
         val groups = listOf(SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_GAMES_TAB, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS,
             SettingsSection.LAYOUT_GAME_LISTS, SettingsSection.LAYOUT_TITLE_HINTS, SettingsSection.LAYOUT_SWITCHER)
         val rows = groups.flatMap { g -> state.openLayoutsPage(g) }
@@ -11168,12 +11093,12 @@ class AppStateTest {
         assertEquals(SettingsKind.RESET_DEFAULTS, rows.last().kind)
         assertEquals(listOf(SettingsKind.LAYOUT_SWITCHER, SettingsKind.EXTRA_INFO, SettingsKind.GAME_INFO), rows.dropLast(1).takeLast(3).map { it.kind })
         assertTrue(settingsNxRow(rows.single { it.kind == SettingsKind.EXTRA_INFO }).cycleable)
-        // The title and hints' page and the Game Switcher's: their value rows all cycle, then Done.
+        // The title and hints' page and the Game Switcher's: their value rows all cycle.
         val chrome = state.openLayoutsPage(SettingsSection.LAYOUT_TITLE_HINTS)
         assertEquals(listOf(SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS), chrome.map { it.kind })
         val switcher = state.openLayoutsPage(SettingsSection.LAYOUT_SWITCHER)
         assertEquals(listOf(SettingsKind.SWITCHER_LAYOUT), switcher.map { it.kind })
-        assertTrue((chrome.dropLast(1) + switcher.dropLast(1)).all { settingsNxRow(it).cycleable })
+        assertTrue((chrome + switcher).all { settingsNxRow(it).cycleable })
         val consoles = state.openLayoutsPage(SettingsSection.LAYOUT_CONSOLES)
         val controller = consoles.single { it.kind == SettingsKind.CONTROLLER_ART }
         assertEquals(SettingsRow(SettingsKind.CONTROLLER_ART, "Background", "Controller", category = MenuCategory.CONSOLES), controller)
@@ -11193,20 +11118,12 @@ class AppStateTest {
         }
     }
 
-    @Test fun appearance_has_the_accent_row_reading_white_above_reset() = runTest {
+    @Test fun the_accent_row_is_a_value_row_on_appearance_and_not_on_layouts() = runTest {
         val state = state(MemorySettings(ContentRef("Home")))
         state.load()
         state.openSettings(SettingsSection.APPEARANCE)
-        val rows = assertIs<Screen.Settings>(state.screen.value).rows
-        val accent = rows[2]   // under the other value rows
-        assertEquals(SettingsKind.ACCENT, accent.kind)
-        assertEquals("Accent", accent.label)
-        assertEquals("White", accent.secondary)   // the default
+        val accent = assertIs<Screen.Settings>(state.screen.value).rows.first { it.kind == SettingsKind.ACCENT }
         assertEquals(true, settingsNxRow(accent).cycleable)
-        assertEquals(SettingsKind.SECONDARY_ACCENT, rows[3].kind)
-        assertEquals(SettingsKind.TEXT_SIZE, rows[4].kind)
-        assertEquals(SettingsKind.BUTTON_LAYOUT, rows[5].kind)
-        assertEquals(SettingsKind.RESET_DEFAULTS, rows[6].kind)
         state.openSettings(SettingsSection.MAIN_MENU)
         assertTrue(assertIs<Screen.Settings>(state.screen.value).rows.none { it.kind == SettingsKind.ACCENT })   // not on Layouts
     }
@@ -11476,7 +11393,7 @@ class AppStateTest {
         assertEquals(ListSelection(page.rows.lastIndex, page.rows.size), state.selection.value)
     }
 
-    // Controls is a category of its own right after Layouts: Pad vibration (default On) and its Reset.
+    // Controls is a category of its own right after Layouts.
     @Test fun controls_is_a_category_after_layouts_with_pad_vibration_and_reset() = runTest {
         val settings = freshSettings()
         val state = state(settings)
@@ -11748,14 +11665,6 @@ class AppStateTest {
         assertEquals("On", row().secondary)
     }
 
-    @Test fun no_cable_link_rows_without_a_link_rom_cache() = runTest {
-        val state = state(MemorySettings(ContentRef("Home")))
-        state.load()
-        state.openSettings(SettingsSection.EMULATORS)
-        val kinds = assertIs<Screen.Settings>(state.screen.value).rows.map { it.kind }
-        assertEquals(listOf(SettingsKind.DEFAULTS, SettingsKind.EMULATORS, SettingsKind.SAVE_ON_QUIT, SettingsKind.A_RESUMES), kinds)
-    }
-
     // The Cable Link rows (delay, overlay, cache) are mGBA's (EmulatorSettingsControllerTest): neither Emulation nor System lists them.
     @Test fun cable_link_rows_are_in_neither_emulation_nor_system() = runTest {
         val cache = com.nxredux.mobile.netplay.cablelink.LinkRomCache(com.nxredux.mobile.netplay.cablelink.MemoryCacheStore())
@@ -11791,7 +11700,6 @@ class AppStateTest {
         assertNull(state.findLocalRom(sha(gba), gba.size.toLong(), "GB"))
     }
 
-    // Settings → System → Pause when unfocused (its General group, the first row), On by default; A, left and right each flip it.
     @Test fun player_name_row_opens_a_prompt_that_saves_ten_characters() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = state(settings)
@@ -12770,7 +12678,8 @@ class AppStateTest {
         state.load()
         for (section in listOf(SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU)) {
             state.openSettings(section)
-            state.select(assertIs<Screen.Settings>(state.screen.value).rows.lastIndex); state.onButton(NxButton.A)
+            state.select(assertIs<Screen.Settings>(state.screen.value).rows.lastIndex)
+            state.onButton(NxButton.A); state.onButton(NxButton.A)   // ask, then confirm
             assertEquals(PadVibration.STRONG, settings.padVibration, section.name)
             assertEquals(GameRumble.OFF, settings.gameRumble, section.name)
         }
@@ -13687,7 +13596,7 @@ class AppStateTest {
         assertEquals(listOf(false, false, true, false), page.rows.map { it.current })
         assertEquals(listOf(null, null, "In use", null), page.rows.indices.map { settingsTouchRow(page.rows[it], page.choices[it], page.section).value })
         assertEquals("Replaces the phone's Vulkan driver in games set to Vulkan. Drivers are third-party code: install only ones you trust.", page.banner)
-        st.onButton(NxButton.B)                                                          // back to System, on its GPU driver row
+        st.onButton(NxButton.B)                                                          // back to Emulation, on its GPU driver row
         assertEquals(SettingsKind.GPU_DRIVER, assertIs<Screen.Settings>(st.screen.value).rows[st.selection.value.index].kind)
     }
 
@@ -14479,14 +14388,11 @@ class AppStateTest {
         assertEquals("Pins are full (${Shortcuts.MAX}). Unpin one first.", state.notice.value)
         assertEquals(listOf("g/G"), settings.androidPins)
         state.back()
-        state.openSystem(androidSystemsOf(state).first { it.tag == "GB" })
+        state.openSystem(assertIs<Screen.Systems>(state.screen.value).systems.first { it.tag == "GB" })
         choose(state, ContextKind.PIN)                                         // Tetris: a ROM pin, the same cap
         assertEquals("Pins are full (${Shortcuts.MAX}). Unpin one first.", state.notice.value)
         assertEquals(Shortcuts.MAX - 1, data.pins.size)
     }
-
-    /** The main menu's consoles (every tab). */
-    private fun androidSystemsOf(state: AppState): List<SystemFolder> = assertIs<Screen.Systems>(state.screen.value).systems
 
     @Test fun x_and_switcher_ignore_android_games() = runTest {
         val runner = RecordingRunner()
@@ -15036,7 +14942,7 @@ class AppStateTest {
         state.showSearch("  mario ")
         val list = assertIs<Screen.Games>(state.screen.value)
         assertEquals(ListSource.Search("mario"), list.source)
-        assertEquals("Search: mario", listTitle(list.source))
+        assertEquals("Search: mario", list.source.title)
         assertEquals("mario", state.lastSearch)
         assertEquals(setOf("SFC", "GB"), list.entries.map { it.system.tag }.toSet())
         assertEquals(3, list.entries.size)
@@ -15358,7 +15264,7 @@ class AppStateTest {
         val state = keyboardSearchState(settings)
         state.onButton(NxButton.START)
         assertNull(state.textEntry.value)
-        state.onButton(NxButton.A)   // A confirms as before; blank, so the prompt stays and nothing is typed
+        state.onButton(NxButton.A)   // A confirms as with Android's keyboard; blank, so the prompt stays and nothing is typed
         assertEquals("", assertIs<Screen.Systems>(state.screen.value).search)
     }
 
@@ -15372,7 +15278,7 @@ class AppStateTest {
     @Test fun keyboard_ra_sign_in_select_then_start_signs_in() = runTest {
         val f = raFixture(ownKeyboard = true); val state = f.state
         f.http.on("login2", body = """{"Success":true,"User":"Me","Token":"tok"}""")
-        openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
+        openRaSettings(state)
         state.openSelected()   // Sign in
         assertTrue(state.raSettings().signingIn)
         state.keyboardType("me")

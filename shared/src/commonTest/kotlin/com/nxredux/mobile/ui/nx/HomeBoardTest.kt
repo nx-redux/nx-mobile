@@ -5,8 +5,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+internal fun near(e: Float, a: Float, what: String) = assertEquals(e, a, 0.05f, what)
+
 class HomeBoardTest {
-    private fun near(e: Float, a: Float, what: String) = assertEquals(e, a, 0.05f, what)
     private fun tiles(b: HomeBoard, k: HomeTopKind) = b.top.filter { it.kind == k }
 
     // The Tools page's tile, w wide: 2 · 10 + 0.6 · w + 6 + 2 · 12 · 1.15 + 6 = 59.6 + 0.6 · w tall at a text scale of 1,

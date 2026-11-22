@@ -13,7 +13,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * The handheld's control-channel exchange (nx-redux wizard_net.c at 8f5a760b), both roles: HELLO 2 with caps,
+ * The handheld's control-channel exchange (nx-redux wizard_net.c), both roles: HELLO 2 with caps,
  * the gates (version, game, role, core; gpSP with mGBA passes only for the same Wi-Fi mode, and mGBA off the cable only
  * with a peer that sent `wl=`, WizCaps_linkMismatch),
  * `REJECT core-<core>.<tag>` (`link-<core>.<wl>.<wl>` when both games are in Wi-Fi modes that can't link), SYNC-READY + `FILE <name>` with an rsync pull,
@@ -32,9 +32,6 @@ object Wizard {
 
     /** The handheld's `%255s` game field. */
     const val GAME_TOKEN_MAX = 255
-
-    /** A Cable Link session runs both GBAs on mGBA, whatever either side's Emulator row says. */
-    const val CABLE_LINK_CORE = NetplayCores.CABLE_LINK_CORE
 
     /** [HostOutcome.Turned.reason] for a Cable Link exchange that failed before the saves (hashes or a ROM); never sent. */
     const val GAME_COPY_FAILED = "game"
@@ -111,14 +108,14 @@ object Wizard {
     private suspend fun hostCableLink(
         ch: NetplayChannel, offer: HostOffer, cl: CableLinkOffer, onTransfer: (CableLinkProgress) -> Unit,
     ): HostOutcome {
-        ch.writeLine(HelloCodec.format(Hello.host(wireGame(offer.game), 2, Caps.of(CABLE_LINK_CORE, offer.tag, cableLink = true))))
+        ch.writeLine(HelloCodec.format(Hello.host(wireGame(offer.game), 2, Caps.of(NetplayCores.CABLE_LINK_CORE, offer.tag, cableLink = true))))
         val setup = when (val r = CableLinkExchange.run(ch, cl, host = true, onTransfer)) {
             is CableLinkExchange.Result.Done -> r.setup
             is CableLinkExchange.Result.Failed -> return HostOutcome.Turned(if (r.beforeSaves) GAME_COPY_FAILED else RejectReason.SYNC.wire)
         }
         ch.writeLine("START 2")
         if (ch.readLine(RECV_MS) != "START") return HostOutcome.Turned(null)
-        return HostOutcome.Started(CABLE_LINK_CORE, ch.remoteAddress, emptySaves = false, cableLink = setup)
+        return HostOutcome.Started(NetplayCores.CABLE_LINK_CORE, ch.remoteAddress, emptySaves = false, cableLink = setup)
     }
 
     /**
@@ -248,7 +245,7 @@ object Wizard {
         ch: NetplayChannel, offer: ClientOffer, cl: CableLinkOffer, onWaiting: (Int) -> Unit, onTransfer: (CableLinkProgress) -> Unit,
     ): ClientOutcome {
         try {
-            ch.writeLine(HelloCodec.format(Hello.client(wireGame(offer.game), offer.any, Caps.of(CABLE_LINK_CORE, offer.tag, cableLink = true))))
+            ch.writeLine(HelloCodec.format(Hello.client(wireGame(offer.game), offer.any, Caps.of(NetplayCores.CABLE_LINK_CORE, offer.tag, cableLink = true))))
             val reply = ch.readLine(RECV_MS)
             // A host that knows Cable Link checks `cl=1` right after version, game and role, so any other refusal here
             // (an older phone's or the handheld's core or link-mode gate) means the host is not on Cable Link.
@@ -271,7 +268,7 @@ object Wizard {
             Reject.parse(line)?.let { return ClientOutcome.Refused(rejectText(it, offer)) }
             if (line != "START" && !line.startsWith("START ")) return ClientOutcome.Refused(NetplayText.UNEXPECTED)
             ch.writeLine("START")
-            return ClientOutcome.Started(CABLE_LINK_CORE, h.player, emptySaves = false, cableLink = setup)
+            return ClientOutcome.Started(NetplayCores.CABLE_LINK_CORE, h.player, emptySaves = false, cableLink = setup)
         } catch (e: NetplayIoException) {
             return ClientOutcome.Refused(NetplayText.NO_ANSWER)
         }

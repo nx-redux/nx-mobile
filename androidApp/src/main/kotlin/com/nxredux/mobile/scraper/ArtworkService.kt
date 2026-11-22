@@ -1,9 +1,9 @@
 package com.nxredux.mobile.scraper
 
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
+import com.nxredux.mobile.BuildConfig
 import com.nxredux.mobile.library.ArtRefs
 import com.nxredux.mobile.library.Entry
 import com.nxredux.mobile.library.RomsSource
@@ -58,7 +58,7 @@ object ArtworkService {
         // The engine is built once; the home is read at each call so a new home folder (or the media fallback) is honoured.
         val homes = AndroidHomeLocator(app)
         val source = HomeRomsSource(AndroidRomsSources.of(app)) { homes.current() }
-        val http = AndroidScraperHttp("nx-mobile/${versionName(app)}")
+        val http = AndroidScraperHttp("nx-mobile/${BuildConfig.VERSION_NAME}")
         val fitter = AndroidImageFitter()
         val hasher = AndroidRomHasher(AndroidRefs(app.contentResolver))
         val androidArt = AndroidArtFiles(app)
@@ -94,14 +94,6 @@ object ArtworkService {
         return ArtworkController(relay, factory, credentials, runner, scope, work = Dispatchers.Default,
             optionCache = AndroidArtOptionCache(app))
     }
-
-    private fun versionName(context: Context): String {
-        val pm = context.packageManager
-        val info = if (android.os.Build.VERSION.SDK_INT >= 33) pm.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
-        else @Suppress("DEPRECATION") pm.getPackageInfo(context.packageName, 0)
-        return info.versionName ?: "?"
-    }
-
 }
 
 /**

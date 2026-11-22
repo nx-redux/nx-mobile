@@ -10,12 +10,9 @@ import com.nxredux.mobile.ui.HomeStrip
 import com.nxredux.mobile.ui.MainRow
 import kotlin.math.max
 
-/** Minimal Home's names: List Home's rows ([homeListRows]), each game's reason tag too (Continue, New or Not started). */
-internal fun homeMinimalRows(rows: List<MainRow>): List<NxRow> = homeListRows(rows)
-
 /**
  * Home in the Minimal style (Layouts → Home layout: Minimal): the stats strip, then Home's [rows] as big names
- * ([homeMinimalRows]: Continue, the pinned games, the shelves' games, the pinned tools) in the shared Minimal layout
+ * ([homeListRows]: Continue, the pinned games, the shelves' games, the pinned tools) in the shared Minimal layout
  * ([MinimalScreen]), the selected name's tag at the end of its name. The names' band runs from the strip's bottom (or,
  * with no strip, from under the page's icons: [iconsRoom]) to the box's bottom, the tab row's top: nothing shows under
  * either. [selected] keeps the selected name as laid out, where B's morph lands.
@@ -37,7 +34,7 @@ internal fun HomeMinimalScreen(
     val pageStrip = shownStrip?.takeIf { header == null }
     val (capTop, inkH) = homeStripInk(frame, stripLines)
     val inkTop = homeListStripInkTop(homeUnderlineAbove(frame), inkH, null)
-    val names = remember(rows) { homeMinimalRows(rows) }
+    val names = remember(rows) { homeListRows(rows) }
     val top = when {
         header != null -> header.height.toFloat()
         pageStrip != null -> max(0f, inkTop + inkH + 4f)

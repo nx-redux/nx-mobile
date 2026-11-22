@@ -1,7 +1,7 @@
 package com.nxredux.mobile.runner
 
 import com.nxredux.mobile.library.FakeRomsSource
-import com.nxredux.mobile.library.disc.ChdHeaderTest
+import com.nxredux.mobile.library.disc.chdBytes
 import com.nxredux.mobile.library.disc.DiscProbe
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -119,7 +119,7 @@ class SegaCdBiosTest {
             ),
             bytes = mapOf(
                 "d/U (Track 1).bin" to rawBin(header(0x7A)), "d/E.iso" to header(0x64), "d/J.bin" to rawBin(header(0xA1)),
-                "d/C.chd" to ChdHeaderTest().chdBytes("CHT2"), "d/A.bin" to ByteArray(2352),
+                "d/C.chd" to chdBytes("CHT2"), "d/A.bin" to ByteArray(2352),
             ),
         )
         val dir = src.listChildren(com.nxredux.mobile.runner.ContentRef("d"))

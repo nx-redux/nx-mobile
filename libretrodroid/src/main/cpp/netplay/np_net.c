@@ -64,11 +64,9 @@ void np_net_configure_tcp(int fd) {
 	if (fd < 0)
 		return;
 
-	// Enable TCP_NODELAY to disable Nagle's algorithm
 	int opt = 1;
 	setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
 
-	// Set socket buffer sizes
 	int size = NP_TCP_BUFFER_SIZE;
 	setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &size, sizeof(size));
 	setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));

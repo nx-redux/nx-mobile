@@ -39,7 +39,7 @@ bool isJniSafe(const char* s, size_t n);
 
 /**
  * [s] as UTF-16 for NewString: 1 to 3 byte sequences decoded, a well-formed 4-byte sequence (an emoji) as its surrogate
- * pair, and every byte that starts no well-formed sequence (Latin-1, a torn tail) as '?', as the core log always did.
+ * pair, and every byte that starts no well-formed sequence (Latin-1, a torn tail) as '?'.
  */
 std::u16string toUtf16(const char* s, size_t n);
 

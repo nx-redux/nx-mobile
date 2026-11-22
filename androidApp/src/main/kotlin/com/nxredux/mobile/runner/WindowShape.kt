@@ -11,15 +11,13 @@ import kotlin.math.min
 
 /**
  * The window as the pad layout measures it, one reading for the renderer, the pad, the input router's cycles and the
- * settings pages so none of them can disagree near a threshold: its size in px, the display cutout's insets on it, and
- * the display's density and ydpi (the button unit).
+ * settings pages so none of them can disagree near a threshold: its size in px, the display cutout's top inset on it,
+ * and the display's density and ydpi (the button unit).
  */
 internal data class WindowShape(
     val widthPx: Int,
     val heightPx: Int,
     val cutoutTop: Int,
-    val cutoutLeft: Int,
-    val cutoutRight: Int,
     val density: Float,
     val ydpi: Float,
 ) {
@@ -47,13 +45,11 @@ internal fun Activity.windowShape(): WindowShape {
     if (Build.VERSION.SDK_INT >= 30) {
         val metrics = windowManager.currentWindowMetrics
         val cut = metrics.windowInsets.getInsets(WindowInsets.Type.displayCutout())
-        return WindowShape(metrics.bounds.width(), metrics.bounds.height(), cut.top, cut.left, cut.right, dm.density, dm.ydpi)
+        return WindowShape(metrics.bounds.width(), metrics.bounds.height(), cut.top, dm.density, dm.ydpi)
     }
     val size = Point().also { @Suppress("DEPRECATION") windowManager.defaultDisplay.getRealSize(it) }
     val cutout = if (Build.VERSION.SDK_INT >= 28) window?.decorView?.rootWindowInsets?.displayCutout else null
-    return WindowShape(
-        size.x, size.y, cutout?.safeInsetTop ?: 0, cutout?.safeInsetLeft ?: 0, cutout?.safeInsetRight ?: 0, dm.density, dm.ydpi,
-    )
+    return WindowShape(size.x, size.y, cutout?.safeInsetTop ?: 0, dm.density, dm.ydpi)
 }
 
 /** This activity's window's [ScreenClass] ([windowShape]; the class does not change on rotation). */

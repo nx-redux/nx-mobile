@@ -1,6 +1,6 @@
 package com.nxredux.mobile.scraper
 
-import kotlinx.serialization.json.Json
+import com.nxredux.mobile.scraper.LenientJson.str
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -27,13 +27,9 @@ data class SsGame(val names: List<String>, val medias: List<SsMedia>)
 
 /** jeuInfos / ssuserInfos parsing (NX Redux `scraper_api.c:181-256, 377-378`); any failure is NotFound / null, never a throw. */
 object ScraperResponse {
-    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
-
-    private fun parse(body: String?): JsonObject? =
-        body?.let { runCatching { json.parseToJsonElement(it) as? JsonObject }.getOrNull() }
+    private fun parse(body: String?): JsonObject? = LenientJson.parseObject(body)
 
     private fun JsonObject.obj(key: String): JsonObject? = this[key] as? JsonObject
-    private fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.takeIf { it.isString }?.content   // JSON null = absent
     private fun JsonElement?.int(): Int? = (this as? JsonPrimitive)?.let { it.intOrNull ?: it.content.trim().toIntOrNull() }
 
     /** [body] is a JSON object (a `jeuInfos` answer without a game is a not-found, not an unreadable answer). */

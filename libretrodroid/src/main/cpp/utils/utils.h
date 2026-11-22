@@ -32,8 +32,6 @@ public:
     // of the descriptor and closes it on every path, a failure included.
     static ReadResult readFileAsBytes(const int fileDescriptor);
 
-    static const char* cloneToCString(const std::string &input);
-
     static size_t getFileSize(FILE* file);
 };
 

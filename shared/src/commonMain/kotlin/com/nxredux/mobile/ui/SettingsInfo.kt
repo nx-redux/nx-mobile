@@ -7,7 +7,7 @@ import com.nxredux.mobile.ui.nx.NxButton
 internal data class SettingText(val line: String, val detail: String = "")
 
 /** A compact row: no line, [text] (or a fuller [detail]) behind the info icon only. */
-private fun quiet(text: String, detail: String = "") = SettingText("", detail.ifEmpty { text })
+internal fun quiet(text: String, detail: String = "") = SettingText("", detail.ifEmpty { text })
 
 /** Reset to defaults' line on each page that has one, and the fuller text behind its info icon. */
 private fun resetText(section: SettingsSection?): SettingText = when (section) {

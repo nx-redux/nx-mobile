@@ -1,17 +1,14 @@
 package com.nxredux.mobile.update
 
-import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
+import com.nxredux.mobile.canPostNotifications
 import com.nxredux.mobile.BuildConfig
 import com.nxredux.mobile.LaunchActivity
 import com.nxredux.mobile.NotificationIds
@@ -48,11 +45,9 @@ class AppUpdatedReceiver : BroadcastReceiver() {
 
     private fun postNotice(context: Context) {
         // API 33+ needs the runtime grant; without it the notice is skipped, not asked for.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) return
+        if (!canPostNotifications(context)) return
         val nm = context.getSystemService(NotificationManager::class.java) ?: return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm.getNotificationChannel(CHANNEL_ID) == null) {
+        if (nm.getNotificationChannel(CHANNEL_ID) == null) {
             nm.createNotificationChannel(
                 NotificationChannel(CHANNEL_ID, "App updated", NotificationManager.IMPORTANCE_HIGH).apply {
                     description = "Says when NX Redux was updated"

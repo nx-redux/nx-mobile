@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.IntRect
 import com.nxredux.mobile.layout.portraitBandPx
 import com.nxredux.mobile.runner.Posture
 import com.nxredux.mobile.skin.SkinChoice
@@ -120,10 +121,9 @@ fun HandheldShell(
 ) {
     val colors = LocalNxColors.current
     val density = LocalDensity.current
-    val ydpi = rememberDisplayYdpi()
     val posture = LocalPosture.current
     var topInWindow by remember { mutableStateOf<Int?>(null) }   // the shell's top in window px, for the hinge
-    // The screen and pad move between the branches below rather than being rebuilt: a rotation or a fold keeps their
+    // The screen moves between the branches below rather than being rebuilt: a rotation or a fold keeps its
     // lazy states, glides, animations and focus. The latest lambdas are read through, so the movable content stays one.
     val currentScreen by rememberUpdatedState(screen)
     val movableScreen = remember { movableContentOf { m: Modifier -> currentScreen(m) } }
@@ -183,10 +183,14 @@ fun HandheldShell(
                 val topGlass = topPlaced?.rect
                 // the pages are drawn over the skin: clipped to the glass's rounded corners, as the frame's hole is cut
                 fun corner(px: Float) = RoundedCornerShape(with(density) { px.toDp() })
-                val gx = g.x.roundToInt()
-                val gy = g.y.roundToInt()
-                val gw = (g.x + g.width).roundToInt() - gx
-                val gh = (g.y + g.height).roundToInt() - gy
+                val menuPx = g.roundedPx()
+                val gw = menuPx.width
+                val gh = menuPx.height
+                // a glass's whole-px rect, placed for the window from its top
+                fun Modifier.atGlass(r: IntRect) = layout { m, _ ->
+                    val p = m.measure(Constraints.fixed(r.width, r.height))
+                    layout(r.width, r.height) { p.place(r.left, r.top - above) }
+                }
                 val skinW = constraints.maxWidth
                 val skinH = constraints.maxHeight + above + below
                 // a glass's px past the shell's bottom (skin px from the window's top): under the strip below, kept clear
@@ -198,12 +202,7 @@ fun HandheldShell(
                     },
                     placement, picture, parts,
                 )
-                Box(
-                    Modifier.layout { m, _ ->
-                        val p = m.measure(Constraints.fixed(gw, gh))
-                        layout(gw, gh) { p.place(gx, gy - above) }
-                    }.clip(corner(menuGlass.corner)),
-                ) {
+                Box(Modifier.atGlass(menuPx).clip(corner(menuGlass.corner))) {
                     // the pages lay out for the glass's own shape (landscape: a wide glass between the side columns)
                     // the glass reaches under the camera cutout: the page starts below it (the shell's own top, [above])
                     val cutoutPad = with(density) { (above - g.y).coerceAtLeast(0f).toDp() }
@@ -217,18 +216,10 @@ fun HandheldShell(
                     }
                 }
                 if (topGlass != null && top != null) {
-                    val tx = topGlass.x.roundToInt()
-                    val ty = topGlass.y.roundToInt()
-                    val tw = (topGlass.x + topGlass.width).roundToInt() - tx
-                    val th = (topGlass.y + topGlass.height).roundToInt() - ty
-                    Box(
-                        Modifier.layout { m, _ ->
-                            val p = m.measure(Constraints.fixed(tw, th))
-                            layout(tw, th) { p.place(tx, ty - above) }
-                        }.clip(corner(topPlaced?.corner ?: 0f)),
-                    ) {
+                    val topPx = topGlass.roundedPx()
+                    Box(Modifier.atGlass(topPx).clip(corner(topPlaced?.corner ?: 0f))) {
                         val cutoutPad = with(density) { (above - topGlass.y).coerceAtLeast(0f).toDp() }
-                        CompositionLocalProvider(LocalPortrait provides (th > tw), LocalWindowSize provides window, LocalInSkin provides true) {
+                        CompositionLocalProvider(LocalPortrait provides (topPx.height > topPx.width), LocalWindowSize provides window, LocalInSkin provides true) {
                             Box(Modifier.fillMaxSize().padding(top = cutoutPad, bottom = pastBottom(topGlass.y, topGlass.height))) { top(Modifier.fillMaxSize()) }
                         }
                     }

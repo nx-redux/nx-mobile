@@ -1,28 +1,12 @@
 package com.nxredux.mobile.achievements
 
-import com.nxredux.mobile.runner.ContentRef
-import com.nxredux.mobile.settings.AppSettings
-import com.nxredux.mobile.settings.ExtraFolder
-import com.nxredux.mobile.settings.MenuCategory
-import com.nxredux.mobile.settings.MenuOrientation
-import com.nxredux.mobile.settings.MenuStyle
-import com.nxredux.mobile.settings.PadTheme
+import com.nxredux.mobile.settings.FakeAppSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlinx.coroutines.test.runTest
 
 class RaUnlocksSinceTest {
-    private class Settings : AppSettings {
-        override var treeRef: ContentRef? = null; override var extraFolders: List<ExtraFolder> = emptyList(); override var defaultTags: Map<String, String> = emptyMap()
-        override var padSkin = true
-        override var padTheme = PadTheme.DEFAULT
-        override var menuStyles: Map<MenuCategory, MenuStyle> = emptyMap(); override var gameListStyle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_GAME_LIST_STYLE; override var menuOrientations: Map<MenuCategory, MenuOrientation> = emptyMap(); override var gameListOrientation = com.nxredux.mobile.settings.MenuStyles.DEFAULT_ORIENTATION; override var gameListVerticalAlignment = com.nxredux.mobile.settings.VerticalListAlignment.DEFAULT; override var toolApps: List<String> = emptyList()
-        override var androidConsoleApps: List<String> = emptyList(); override var androidGamesAsked = false; override var androidPins: List<String> = emptyList()
-        override var raEnabled = false; override var raUsername = ""; override var raToken: String? = null; override var raShowNotifications = true
-        override var raNotificationSeconds = 3; override var raProgressSeconds = 1; override var raSortOrder = RaSortOrder.DEFAULT
-        override var ssUsername = ""; override var ssPassword: String? = null; override var sgdbApiKey: String? = null; override var tgdbApiKey: String? = null; override var artReplaceExisting = false; override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = com.nxredux.mobile.settings.MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = com.nxredux.mobile.settings.AccentPreset.DEFAULT; override var secondaryAccent: com.nxredux.mobile.settings.SecondaryAccent = com.nxredux.mobile.settings.SecondaryAccent.DEFAULT
-    }
 
     private val h1 = "a".repeat(32); private val h2 = "b".repeat(32)
     private val pathA = "/Roms/Game Boy Advance (GBA)/A.gba"; private val pathB = "/Roms/Game Boy (GB)/B.gb"
@@ -92,7 +76,7 @@ class RaUnlocksSinceTest {
 
     @Test fun signedOutTheControllerReturnsNull() = runTest {
         seed(unlocksA = """{"ID":1,"When":2000}""")
-        val settings = Settings()
+        val settings = FakeAppSettings()
         val c = RaController(fakePlatform(store), settings, { null }, this, now = { 0L })
         assertNull(c.unlocksSince(1_000_000L, setOf(pathA)))                              // no token, no user
         settings.raUsername = "user"
@@ -103,7 +87,7 @@ class RaUnlocksSinceTest {
 
     @Test fun signedInTheControllerConvertsMillisecondsToSeconds() = runTest {
         seed(unlocksA = """{"ID":1,"When":999},{"ID":2,"When":1000}""")
-        val settings = Settings().apply { raUsername = "user"; raToken = "tok" }
+        val settings = FakeAppSettings().apply { raUsername = "user"; raToken = "tok" }
         val c = RaController(fakePlatform(store), settings, { null }, this, now = { 0L })
         assertEquals(1, c.unlocksSince(1_000_000L, setOf(pathA)))
     }
@@ -111,7 +95,7 @@ class RaUnlocksSinceTest {
     @Test fun aStoreFailureCountsZero() = runTest {
         seed(unlocksA = """{"ID":1,"When":2000}""")
         store.failList = true
-        val settings = Settings().apply { raUsername = "user"; raToken = "tok" }
+        val settings = FakeAppSettings().apply { raUsername = "user"; raToken = "tok" }
         val c = RaController(fakePlatform(store), settings, { null }, this, now = { 0L })
         assertEquals(0, c.unlocksSince(1_000_000L, setOf(pathA)))
     }

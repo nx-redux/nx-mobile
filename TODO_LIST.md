@@ -358,3 +358,20 @@ Left on the devices (2026-11-16):
 
 - [ ] AYANEO: ARMSX2 Nightly installed (with the battle state and auto-load on); `/sdcard/NXReduxDev-perf-backup`; the battle state in slot 0 of Budokai Tenkaichi 3; malisx2 in the dev app's driver folder; Debug log on.
 - [ ] Nova: the temporary build with the PS2 4x override is still installed (install a current build); `/sdcard/NXRedux-gpu-test-backup-2`; Debug log on; `/sdcard/NXRedux/drivers` and 10 installed drivers from the GPU driver tests.
+
+## Codebase review (comments, stale code, repeated code, simplifications, AppState split): device checks owed
+
+Checked on the emulator only (GBA game starts, draws, quits; first setup up to Permissions). On real devices:
+
+- [ ] A hardware-rendered game on OpenGL ES and one on Vulkan start, draw and quit (the native start-up call lost five
+      options and the ES2 path; Dolphin, PPSSPP, ARMSX2 on the Nova; one on the AYANEO).
+- [ ] Shaders: Sharp and a slang preset still apply; Default after either.
+- [ ] Custom GPU driver: add a package from a zip on Android 9–12 (the AYANEO) and on the Nova.
+- [ ] First setup end to end on a fresh install (text size → permissions → folders → Device Sync step → artwork and
+      RetroAchievements sign-in → Done); kill the app mid-setup and reopen.
+- [ ] Controls → Shortcuts press-to-bind and System buttons bind and cancel with a controller, leaving the page mid-wait.
+- [ ] Settings: Button layout editor round trip; each Layouts page; Reset to defaults on Appearance and Main menu.
+- [ ] Dual screen (Nova): the top screen's details and stats while moving through lists; the menu's top screen.
+- [ ] A zip and a 7z game launch; a password-protected 7z says so.
+- [ ] Netplay: host advertises over Wi-Fi and over the cable; a second device finds it.
+- [ ] Settings survive the update: second screen, pause when unfocused, screen care, tool apps, tips hidden.

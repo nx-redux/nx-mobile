@@ -2,22 +2,13 @@ package com.nxredux.mobile.ui
 
 import androidx.compose.ui.graphics.ImageBitmap
 import com.nxredux.mobile.achievements.RaController
-import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.achievements.fakePlatform
 import com.nxredux.mobile.launcher.AppLauncher
 import com.nxredux.mobile.launcher.InstalledApp
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.netplay.FakeNetplayPlatform
 import com.nxredux.mobile.runner.ContentRef
-import com.nxredux.mobile.runner.EmulatorRunner
-import com.nxredux.mobile.runner.GameSession
-import com.nxredux.mobile.settings.AppSettings
-import com.nxredux.mobile.settings.ExtraFolder
-import com.nxredux.mobile.settings.FolderPicker
-import com.nxredux.mobile.settings.MenuCategory
-import com.nxredux.mobile.settings.MenuOrientation
-import com.nxredux.mobile.settings.MenuStyle
-import com.nxredux.mobile.settings.PadTheme
+import com.nxredux.mobile.settings.FakeAppSettings
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.update.AppRelease
@@ -47,45 +38,12 @@ import kotlin.test.assertTrue
 /** The updater in a real [AppState]: the main menu's popup, Settings → System's About update row and the host's install gate. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppUpdateUiTest {
-    private class Settings : AppSettings {
-        override var treeRef: ContentRef? = ContentRef("Home")
+    private class Settings : FakeAppSettings(ContentRef("Home"), androidGamesAsked = true) {
         override var onboardingDone: Boolean? = true
         override var onboardingStep: String? = null
-        override var extraFolders: List<ExtraFolder> = emptyList()
-        override var defaultTags: Map<String, String> = emptyMap()
-        override var padSkin = true
-        override var padTheme = PadTheme.DEFAULT
-        override var menuStyles: Map<MenuCategory, MenuStyle> = emptyMap()
-        override var gameListStyle: MenuStyle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_GAME_LIST_STYLE
-        override var menuOrientations: Map<MenuCategory, MenuOrientation> = emptyMap()
-        override var gameListOrientation: MenuOrientation = com.nxredux.mobile.settings.MenuStyles.DEFAULT_ORIENTATION
-        override var gameListVerticalAlignment: com.nxredux.mobile.settings.VerticalListAlignment = com.nxredux.mobile.settings.VerticalListAlignment.DEFAULT
-        override var toolApps: List<String> = emptyList()
-        override var androidConsoleApps: List<String> = emptyList()
-        override var androidGamesAsked = true
-        override var androidPins: List<String> = emptyList()
-        override var raEnabled = false
-        override var raUsername = ""
-        override var raToken: String? = null
-        override var raShowNotifications = true
-        override var raNotificationSeconds = 3
-        override var raProgressSeconds = 1
-        override var raSortOrder = RaSortOrder.DEFAULT
-        override var ssUsername = ""
-        override var ssPassword: String? = null
-        override var sgdbApiKey: String? = null
-        override var tgdbApiKey: String? = null
-        override var artReplaceExisting = false
         override var artBox2d = false
         override var artWheel = false
         override var artMix = false
-        override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = com.nxredux.mobile.settings.MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = com.nxredux.mobile.settings.AccentPreset.DEFAULT; override var secondaryAccent: com.nxredux.mobile.settings.SecondaryAccent = com.nxredux.mobile.settings.SecondaryAccent.DEFAULT
-    }
-
-    private object Picker : FolderPicker { override fun pickHome() {}; override fun pickExtra() {}; override fun forget(ref: ContentRef) {} }
-
-    private class Runner : EmulatorRunner {
-        override suspend fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) {}
     }
 
     private class Launcher(private val apps: List<InstalledApp>) : AppLauncher {
@@ -134,6 +92,9 @@ class AppUpdateUiTest {
 
     private class Rig(val state: AppState, val updater: UpdateController, val platform: FakePlatform, val settings: Settings)
 
+    /** The hint row of the Settings page's selected row. */
+    private fun Rig.hints() = settingsHints(assertIs<Screen.Settings>(state.screen.value).rows, state.selection.value.index)
+
     private val source = FakeRomsSource(
         dirs = mapOf(
             "Home" to listOf("Roms"),
@@ -152,7 +113,7 @@ class AppUpdateUiTest {
         val updater = UpdateController(platform, CoroutineScope(backgroundScope.coroutineContext + UnconfinedTestDispatcher(testScheduler)), now = now)
         val state = AppState(
             AppDeps(
-                settings, source, Runner(), Picker, compute = UnconfinedTestDispatcher(testScheduler), launcher = launcher,
+                settings, source, NoopRunner, NoopFolderPicker, compute = UnconfinedTestDispatcher(testScheduler), launcher = launcher,
                 netplay = netplay, updater = updater.takeIf { withUpdater },
                 achievements = if (!signedIn) null else {
                     settings.raUsername = "me"; settings.raToken = "t"
@@ -336,7 +297,7 @@ class AppUpdateUiTest {
         r.openAbout()
         r.pressUpdateRow()                                                  // Idle: Check for updates
         assertEquals("Up to date (0.3.0)", r.updateRow()?.label)            // the page refreshed itself
-        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Check")), settingsHints(assertIs<Screen.Settings>(r.state.screen.value).rows, r.state.selection.value.index))
+        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Check")), r.hints())
 
         p.feedError = IllegalStateException("offline")
         r.pressUpdateRow()                                                  // UpToDate: checks again
@@ -349,7 +310,7 @@ class AppUpdateUiTest {
         p.feed = releaseJson("v0.4.0")
         r.pressUpdateRow()
         assertEquals("Update to 0.4.0", r.updateRow()?.label)
-        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Update")), settingsHints(assertIs<Screen.Settings>(r.state.screen.value).rows, r.state.selection.value.index))
+        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Update")), r.hints())
         assertNull(r.state.updatePopup.value)                               // About's check never pops up
 
         p.downloadGate = CompletableDeferred()
@@ -360,7 +321,7 @@ class AppUpdateUiTest {
         r.state.onButton(NxButton.A)                                        // its Update
         assertNull(r.state.updateConfirm.value)
         assertEquals("Downloading 50%", r.updateRow()?.label)
-        assertEquals(listOf(Hint(NxButton.B, "Back")), settingsHints(assertIs<Screen.Settings>(r.state.screen.value).rows, r.state.selection.value.index))
+        assertEquals(listOf(Hint(NxButton.B, "Back")), r.hints())
         r.pressUpdateRow()                                                  // Downloading: nothing
         assertEquals(1, p.downloads)
         assertEquals(4, p.fetches)
@@ -380,7 +341,7 @@ class AppUpdateUiTest {
         r.pressUpdateRow()                                                  // check
         r.pressUpdateRow(); pastGuard(); r.state.onButton(NxButton.A)     // Update to 0.4.0, confirmed: held off the menu
         assertEquals("Ready to install", r.updateRow()?.label)
-        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Install")), settingsHints(assertIs<Screen.Settings>(r.state.screen.value).rows, r.state.selection.value.index))
+        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Install")), r.hints())
         r.pressUpdateRow()
         assertEquals("Installing…", r.updateRow()?.label)
         assertEquals(1, p.installs)
@@ -392,7 +353,7 @@ class AppUpdateUiTest {
         r.openAbout()
         r.pressUpdateRow()                                                  // check: no checksum
         assertEquals("Update not verified: GitHub sent no checksum", r.updateRow()?.label)
-        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Check")), settingsHints(assertIs<Screen.Settings>(r.state.screen.value).rows, r.state.selection.value.index))
+        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Check")), r.hints())
         p.feed = releaseJson("v0.4.0")
         r.pressUpdateRow()                                                  // checks again, no confirm
         assertNull(r.state.updateConfirm.value)
@@ -408,7 +369,7 @@ class AppUpdateUiTest {
         r.pressUpdateRow()                                                  // check
         r.pressUpdateRow(); pastGuard(); r.state.onButton(NxButton.A)     // Update to 0.4.0, confirmed: fails
         assertEquals("Update failed", r.updateRow()?.label)
-        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Update")), settingsHints(assertIs<Screen.Settings>(r.state.screen.value).rows, r.state.selection.value.index))
+        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Update")), r.hints())
         p.downloadGate = CompletableDeferred()
         r.pressUpdateRow()                                                  // Failed with a release: the confirm
         assertEquals("0.4.0", r.state.updateConfirm.value?.version)
@@ -469,7 +430,7 @@ class AppUpdateUiTest {
     @Test fun releasing_an_older_host_keeps_the_newer_one_and_a_menu_takes_it_back() = runTest {
         val r = rig()
         val newer = AppState(
-            AppDeps(Settings(), source, Runner(), Picker, compute = UnconfinedTestDispatcher(testScheduler), updater = r.updater),
+            AppDeps(Settings(), source, NoopRunner, NoopFolderPicker, compute = UnconfinedTestDispatcher(testScheduler), updater = r.updater),
             CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
         )
         assertEquals("", r.updater.hostBusy())                              // the newer instance hosts now (not loaded: off the menu)

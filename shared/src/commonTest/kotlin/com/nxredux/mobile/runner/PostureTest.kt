@@ -2,7 +2,6 @@ package com.nxredux.mobile.runner
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 
 class PostureTest {
     // The Flip half-folded upright, measured on the device: 1080 x 2520 window, FoldingFeature bounds (0, 1260 - 1080, 1260),

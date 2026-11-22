@@ -1,10 +1,6 @@
 package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.library.FakeRomsSource
-import com.nxredux.mobile.runner.ContentRef
-import com.nxredux.mobile.runner.EmulatorRunner
-import com.nxredux.mobile.runner.GameSession
-import com.nxredux.mobile.settings.FolderPicker
 import com.nxredux.mobile.shortcuts.KeyCodes
 import com.nxredux.mobile.shortcuts.PadModel
 import com.nxredux.mobile.shortcuts.PhysicalKey
@@ -28,9 +24,6 @@ import kotlin.test.assertTrue
 /** Settings → Controls → System buttons: the pad pressed last, its three roles, rebind and reset. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SystemButtonsSettingsTest {
-    private object Picker : FolderPicker { override fun pickHome() {}; override fun pickExtra() {}; override fun forget(ref: ContentRef) {} }
-    private class Runner : EmulatorRunner { override suspend fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) {} }
-
     private val source = FakeRomsSource(dirs = mapOf("Home" to listOf("Roms"), "Home/Roms" to emptyList()))
     private val aya = PadModel(0x4001, 0x0428, "AYANEO Controller")
     private val xbox = PadModel(0x045e, 0x028e, "Xbox 360 Controller")
@@ -38,7 +31,7 @@ class SystemButtonsSettingsTest {
 
     private fun TestScope.state(settings: SystemButtonsOnboardingTest.Settings = SystemButtonsOnboardingTest.Settings()): AppState {
         val state = AppState(
-            AppDeps(settings, source, Runner(), Picker, compute = UnconfinedTestDispatcher(testScheduler), connectedPads = { pads }),
+            AppDeps(settings, source, NoopRunner, NoopFolderPicker, compute = UnconfinedTestDispatcher(testScheduler), connectedPads = { pads }),
             CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
         )
         state.load(); runCurrent()

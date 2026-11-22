@@ -24,32 +24,27 @@ class AndroidUserDataStore(context: Context) : UserDataStore {
     private val app = context.applicationContext
     private val root: File get() = DataRoot.of(app)
 
-    override suspend fun readRecents(): List<Recent> = withContext(Dispatchers.IO) {
-        runCatching { File(root, NxPaths.RECENTS).takeIf { it.exists() }?.readText()?.let(Recents::parse) }.getOrNull() ?: emptyList()
+    override suspend fun readRecents(): List<Recent> = readList(NxPaths.RECENTS, Recents::parse)
+
+    override suspend fun writeRecents(list: List<Recent>) {
+        writeText(NxPaths.RECENTS, "recents") { Recents.render(list) }
     }
 
-    override suspend fun writeRecents(list: List<Recent>) = withContext(Dispatchers.IO) {
-        runCatching { File(root, NxPaths.RECENTS).writeAtomically(Recents.render(list).encodeToByteArray()) }
-            .onFailure { NxLog.e("UserData", "writing recents failed", it) }
-        Unit
+    override suspend fun readPins(): List<Shortcut> = readList(NxPaths.SHORTCUTS, Shortcuts::parse)
+
+    override suspend fun writePins(list: List<Shortcut>): Boolean = writeText(NxPaths.SHORTCUTS, "pins") { Shortcuts.render(list) }
+
+    override suspend fun readHidden(): List<String> = readList(NxPaths.HIDDEN, PathLines::parse)
+
+    override suspend fun writeHidden(list: List<String>): Boolean = writeText(NxPaths.HIDDEN, "hidden") { PathLines.render(list) }
+
+    private suspend fun <T> readList(path: String, parse: (String) -> List<T>): List<T> = withContext(Dispatchers.IO) {
+        runCatching { File(root, path).takeIf { it.exists() }?.readText()?.let(parse) }.getOrNull() ?: emptyList()
     }
 
-    override suspend fun readPins(): List<Shortcut> = withContext(Dispatchers.IO) {
-        runCatching { File(root, NxPaths.SHORTCUTS).takeIf { it.exists() }?.readText()?.let(Shortcuts::parse) }.getOrNull() ?: emptyList()
-    }
-
-    override suspend fun writePins(list: List<Shortcut>): Boolean = withContext(Dispatchers.IO) {
-        runCatching { File(root, NxPaths.SHORTCUTS).writeAtomically(Shortcuts.render(list).encodeToByteArray()); true }
-            .onFailure { NxLog.e("UserData", "writing pins failed", it) }.getOrDefault(false)
-    }
-
-    override suspend fun readHidden(): List<String> = withContext(Dispatchers.IO) {
-        runCatching { File(root, NxPaths.HIDDEN).takeIf { it.exists() }?.readText()?.let(PathLines::parse) }.getOrNull() ?: emptyList()
-    }
-
-    override suspend fun writeHidden(list: List<String>): Boolean = withContext(Dispatchers.IO) {
-        runCatching { File(root, NxPaths.HIDDEN).writeAtomically(PathLines.render(list).encodeToByteArray()); true }
-            .onFailure { NxLog.e("UserData", "writing hidden failed", it) }.getOrDefault(false)
+    private suspend fun writeText(path: String, what: String, render: () -> String): Boolean = withContext(Dispatchers.IO) {
+        runCatching { File(root, path).writeAtomically(render().encodeToByteArray()); true }
+            .onFailure { NxLog.e("UserData", "writing $what failed", it) }.getOrDefault(false)
     }
 
     override suspend fun resumeInfo(tag: String, fileName: String): ResumeInfo = withContext(Dispatchers.IO) {

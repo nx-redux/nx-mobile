@@ -3,14 +3,13 @@ package com.nxredux.mobile.runner
 import com.nxredux.mobile.library.ListingUnavailable
 import com.nxredux.mobile.storage.ImportTree
 import com.nxredux.mobile.storage.MirrorRules
-import com.nxredux.mobile.storage.SyncAction
 import com.nxredux.mobile.storage.TreeEntry
 import com.swordfish.libretrodroid.NxLog
 import java.io.File
 
 /**
  * Imports a tree folder (SAF, or a file ref with All files access: [ImportTree]) into a local one (BIOS): newer-wins
- * ([MirrorRules.decide]), or with `whenDiffers` whenever size or last-modified differ (user dumps are often older than the
+ * ([MirrorRules.treeIsNewer]), or with `whenDiffers` whenever size or last-modified differ (user dumps are often older than the
  * bundled files). A leftover part is never imported ([MirrorRules.isTransient]), and after every copy the local file's
  * mtime is set to the tree entry's last-modified. A folder the provider will not list ([ListingUnavailable]) is imported
  * by name: the local names and the caller's extra names are looked up. Blocking: Dispatchers.IO.
@@ -85,7 +84,7 @@ class TreeSync(private val tree: ImportTree) {
             !local.exists() || (e.size != null && local.length() != e.size) ||
                 (e.lastModified != null && local.lastModified() != e.lastModified)
         } else {
-            MirrorRules.decide(local.takeIf { it.exists() }?.lastModified(), e.lastModified) == SyncAction.IMPORT
+            MirrorRules.treeIsNewer(local.takeIf { it.exists() }?.lastModified(), e.lastModified)
         }
         if (!copy) return true
         return runCatching {

@@ -79,67 +79,6 @@ const char* copyFragment =
     "  color = vec4(texture(source, uv).rgb, 1.0);\n"
     "}\n";
 
-std::string firstLine(const std::string& log, const char* fallback) {
-    auto start = log.find_first_not_of(" \t\r\n");
-    if (start == std::string::npos) return fallback;
-    auto end = log.find_first_of("\r\n", start);
-    return log.substr(start, end == std::string::npos ? std::string::npos : end - start);
-}
-
-GLuint compileStage(GLenum type, const std::string& source, std::string& error) {
-    GLuint shader = glCreateShader(type);
-    const char* text = source.c_str();
-    glShaderSource(shader, 1, &text, nullptr);
-    glCompileShader(shader);
-    GLint compiled = GL_FALSE;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
-    if (compiled == GL_TRUE) return shader;
-
-    GLint length = 0;
-    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
-    std::string log(std::max(length, 1), '\0');
-    glGetShaderInfoLog(shader, length, nullptr, log.data());
-    LOGE("Slang shader compile failed:\n%s", log.c_str());
-    error = firstLine(log, type == GL_VERTEX_SHADER ? "vertex shader failed to compile" : "fragment shader failed to compile");
-    glDeleteShader(shader);
-    return 0;
-}
-
-// Attributes 0 and 1 are bound to names (empty to keep the shader's own locations). Returns 0 and sets error on failure.
-GLuint linkProgram(const std::string& vertex, const std::string& fragment, const char* attribute0, const char* attribute1,
-                   std::string& error) {
-    GLuint vs = compileStage(GL_VERTEX_SHADER, vertex, error);
-    if (!vs) return 0;
-    GLuint fs = compileStage(GL_FRAGMENT_SHADER, fragment, error);
-    if (!fs) {
-        glDeleteShader(vs);
-        return 0;
-    }
-
-    GLuint program = glCreateProgram();
-    glAttachShader(program, vs);
-    glAttachShader(program, fs);
-    if (attribute0) glBindAttribLocation(program, 0, attribute0);
-    if (attribute1) glBindAttribLocation(program, 1, attribute1);
-    glLinkProgram(program);
-    // The program keeps them alive while attached.
-    glDeleteShader(vs);
-    glDeleteShader(fs);
-
-    GLint linked = GL_FALSE;
-    glGetProgramiv(program, GL_LINK_STATUS, &linked);
-    if (linked == GL_TRUE) return program;
-
-    GLint length = 0;
-    glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
-    std::string log(std::max(length, 1), '\0');
-    glGetProgramInfoLog(program, length, nullptr, log.data());
-    LOGE("Slang program link failed:\n%s", log.c_str());
-    error = firstLine(log, "program failed to link");
-    glDeleteProgram(program);
-    return 0;
-}
-
 bool hasExtension(const char* name) {
     auto* extensions = (const char*) glGetString(GL_EXTENSIONS);
     return extensions && std::strstr(extensions, name) != nullptr;
@@ -174,35 +113,6 @@ GLint mipLevels(unsigned width, unsigned height) {
     for (unsigned size = std::max(width, height); size > 1; size >>= 1) ++levels;
     return levels;
 }
-
-// Unit 0 with tightly packed client-memory unpacking for the LUT uploads; puts back what a GL core left (active
-// unit, its unit 0 binding, unpack state) when it goes out of scope, throw or not: GL cores cache that state.
-class UploadState {
-public:
-    UploadState() {
-        glGetIntegerv(GL_ACTIVE_TEXTURE, &activeTexture);
-        glActiveTexture(GL_TEXTURE0);
-        glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
-        glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &unpackBuffer);
-        glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
-        glGetIntegerv(GL_UNPACK_ROW_LENGTH, &rowLength);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-    }
-    ~UploadState() {
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, rowLength);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, (GLuint) unpackBuffer);
-        glBindTexture(GL_TEXTURE_2D, (GLuint) texture);
-        glActiveTexture((GLenum) activeTexture);
-    }
-    UploadState(const UploadState&) = delete;
-    UploadState& operator=(const UploadState&) = delete;
-
-private:
-    GLint activeTexture = GL_TEXTURE0, texture = 0, unpackBuffer = 0, alignment = 4, rowLength = 0;
-};
 
 // The uniform buffer bindings a chain draw uses (the generic one and points 0 and 1), put back for a GL core.
 class UniformBufferState {
@@ -291,7 +201,7 @@ SlangChainRenderer::SlangChainRenderer(const PresetChain& chain) : params(chain.
             }
         }
         if (!chain.luts.empty()) {
-            UploadState state;
+            ChainUploadState state;
             for (auto& lut : chain.luts) {
                 Lut entry;
                 entry.width = lut.width;
@@ -317,8 +227,8 @@ SlangChainRenderer::SlangChainRenderer(const PresetChain& chain) : params(chain.
             auto& program = pass.cfg.program;
 
             std::string error;
-            pass.program = linkProgram(
-                program.vertex.glsl, program.fragment.glsl,
+            pass.program = linkChainProgram(
+                "Slang", program.vertex.glsl, program.fragment.glsl,
                 (std::string(slangnames::ATTRIBUTE_PREFIX) + "0").c_str(),
                 (std::string(slangnames::ATTRIBUTE_PREFIX) + "1").c_str(),
                 error
@@ -388,7 +298,7 @@ SlangChainRenderer::SlangChainRenderer(const PresetChain& chain) : params(chain.
         }
 
         std::string error;
-        copyProgram = linkProgram(copyVertex, copyFragment, nullptr, nullptr, error);
+        copyProgram = linkChainProgram("Slang", copyVertex, copyFragment, nullptr, nullptr, error);
         if (!copyProgram) throw std::runtime_error("copy: " + error);
         copyTexture = glGetUniformLocation(copyProgram, "source");
     } catch (...) {

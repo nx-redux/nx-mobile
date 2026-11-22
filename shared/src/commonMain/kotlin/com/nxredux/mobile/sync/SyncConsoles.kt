@@ -110,17 +110,22 @@ object SyncConsoles {
     /** A system folder of either side: its [name], [display] name, folder [tag] (uppercase) and phone [console], if any. */
     private class Mapped(val name: String, val display: String, val tag: String, val console: Console?)
 
+    private val BLANKS = Regex("\\s+")
+
+    /** A `--list-only` line's columns: mode, size, date, time, then the name whole (it may hold spaces). */
+    private fun fields(line: String): List<String> = line.trim().split(BLANKS, limit = 5)
+
     /** `rsync --list-only rsync://…/roms/` lines → the top-level directory names (not `.`). */
     fun parseListing(lines: List<String>): List<String> = lines.mapNotNull { line ->
         if (!line.startsWith("d")) return@mapNotNull null
-        val parts = line.trim().split(Regex("\\s+"), limit = 5)
+        val parts = fields(line)
         parts.getOrNull(4)?.let(::unescape)?.takeIf { it != "." && it.isNotEmpty() }
     }
 
     /** `--list-only -R` lines of `<folder>/.retroachievements/hashes.json` → the folders that have one. */
     fun parseHashFolders(lines: List<String>): Set<String> = lines.mapNotNull { line ->
         if (!line.startsWith("-")) return@mapNotNull null
-        val path = line.trim().split(Regex("\\s+"), limit = 5).getOrNull(4)?.let(::unescape) ?: return@mapNotNull null
+        val path = fields(line).getOrNull(4)?.let(::unescape) ?: return@mapNotNull null
         path.removeSuffix(HASHES_TAIL).takeIf { it != path && it.isNotEmpty() && "/" !in it }
     }.toSet()
 
@@ -137,13 +142,21 @@ object SyncConsoles {
         }
     }
 
+    /** [siblings] by display name, and when [mapped] the folders of the same phone console too. */
+    fun siblings(folder: String, all: List<String>, mapped: Boolean): List<String> {
+        val named = siblings(folder, all)
+        if (!mapped) return named
+        val console = SyncMap.consoleOf(folder)?.id ?: return named
+        return (named + all.filter { it != folder && !it.startsWith(".") && SyncMap.consoleOf(it)?.id == console }).distinct()
+    }
+
     /**
      * `rsync --list-only rsync://…/roms/<folder>/` lines → every top-level entry name, files and folders (not `.`). Only
      * a line that starts with a mode string (`-rw-r--r--`, `drwxr-xr-x`, …) is an entry, so a daemon MOTD or a warning
      * line is never a name.
      */
     fun parseEntries(lines: List<String>): List<String> = lines.mapNotNull { line ->
-        val parts = line.trim().split(Regex("\\s+"), limit = 5)
+        val parts = fields(line)
         if (parts.size < 5 || !MODE.matches(parts[0])) return@mapNotNull null
         val name = if (line.startsWith("l")) parts[4].substringBefore(" -> ") else parts[4]
         unescape(name).takeIf { it != "." && it.isNotEmpty() }

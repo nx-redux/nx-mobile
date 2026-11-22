@@ -1,6 +1,5 @@
 package com.nxredux.mobile.skin
 
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -8,8 +7,7 @@ import kotlin.test.assertTrue
 
 /** The button groups of the built-in NX Carbon layouts. */
 class SkinGroupsTest {
-    private val dir = File("../androidApp/src/main/assets/skins/nx-carbon")
-    private val pack = assertNotNull(SkinPackManifest.parse(File(dir, "skin.json").readText()))
+    private val pack = skinPack()
     private fun layout(id: String) = pack.layouts.first { it.id == id }
 
     @Test

@@ -12,10 +12,6 @@ import kotlinx.coroutines.test.runTest
 class HeadReadsTest {
     private val ps = "H/Roms/Sony PlayStation (PS)"
 
-    private fun zipHead(name: String): ByteArray {
-        val n = name.encodeToByteArray(); val h = ByteArray(30 + n.size)
-        h[0] = 0x50; h[1] = 0x4B; h[2] = 0x03; h[3] = 0x04; h[26] = n.size.toByte(); n.copyInto(h, 30); return h
-    }
 
     private fun library() = FakeRomsSource(
         mapOf(

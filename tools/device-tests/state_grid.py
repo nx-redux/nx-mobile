@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Save-state grid: do auto states cross between the Brick (minarch) and the phone (NX Redux mobile)?
 
-Design: docs/superpowers/specs/2026-10-16-device-test-automation-design.md, "Save-state grid".
-
 For each core both devices pin the same (plus mupen64plus_next, pinned differently, as an expected-fail control):
 copy the smallest ROM the Brick has for the core's tag to nxtest-<core>.<ext> on both devices, then
   - phone fresh: GAME ~20 s, GAME_STOP -> the phone's auto state (and its path, the phone's naming);
@@ -23,8 +21,9 @@ import sys
 import tempfile
 import time
 
-from brick import AUTO_RESUME_PATH, ERROR_MARKERS, RESUME_SLOT_PATH, SDCARD, Brick, BrickError, BrickGone, q
-from fold import PRIV, ROMS as PHONE_ROMS, TEST_DIR, Fold
+from brick import (AUTO_RESUME_PATH, DEFAULT_SERIAL as BRICK_SERIAL, ERROR_MARKERS, RESUME_SLOT_PATH, SDCARD,
+                   Brick, BrickError, BrickGone, q)
+from fold import DEFAULT_SERIAL as FOLD_SERIAL, PRIV, ROMS as PHONE_ROMS, TEST_DIR, Fold
 
 B_ROMS = SDCARD + "/Roms"
 PLAY_S = 20
@@ -107,7 +106,7 @@ def phone_quit(f):
 
 
 def phone_play(f, path, tag, slot=None):
-    """GAME, wait for running (90 s budget). Returns (game.json, resume.json, still_running, crash)."""
+    """GAME, wait for running (90 s budget). Returns (game.json, resume.json); resume.json only with a slot."""
     f.clear_crash_log()
     g = f.game(path, tag, slot=slot, timeout=90)
     resume = None
@@ -279,8 +278,8 @@ def table(rows):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--fold", default="adb-R5GL66XJS2F-uwbsP9._adb-tls-connect._tcp")
-    ap.add_argument("--brick", default="5c000c8997414781d1d")
+    ap.add_argument("--fold", default=FOLD_SERIAL)
+    ap.add_argument("--brick", default=BRICK_SERIAL)
     ap.add_argument("--only", default="")
     ap.add_argument("--out", default=os.path.join(os.getcwd(), ".local/device-tests/state-grid-%s.md"
                                                   % time.strftime("%Y-%m-%d")))

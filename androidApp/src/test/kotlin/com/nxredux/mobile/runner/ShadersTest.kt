@@ -1,6 +1,7 @@
 package com.nxredux.mobile.runner
 
 import com.nxredux.mobile.shaders.GlslPreset
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -13,6 +14,8 @@ class ShadersTest {
     private val private = File(base, "private")
     private val home = File(base, "home")
     private val roots = Shaders.Roots(private, home)
+
+    @After fun cleanUp() { base.deleteRecursively() }
 
     private fun write(root: File, rel: String, text: String = "x") = File(File(root, Shaders.DIR), rel).apply { parentFile.mkdirs(); writeText(text) }
 

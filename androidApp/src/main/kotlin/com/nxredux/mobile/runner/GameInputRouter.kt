@@ -122,62 +122,28 @@ internal class GameInputRouter(private val host: GameInputHost) {
         private val STICK_CORES = setOf("mupen64plus_next", "ppsspp", "pcsx_rearmed", "swanstation", "flycast", "dolphin", "armsx2")
     }
 
-    private val retroView get() = host.retroView
-    private val menuOpen get() = host.menuOpen
-    private val gameTag get() = host.gameTag
     private val n3dsSwapKey = N3dsSwapKey()
-    private val gameCoreId get() = host.gameCoreId
-    private val frontendValues get() = host.frontendValues
-    private val lockedOptions get() = host.lockedOptions
-    private val padMap get() = host.padMap
-    private val wiiPad get() = host.wiiPad
-    private val isN64 get() = host.isN64
-    private val isDc get() = host.isDc
-    private val isNds get() = host.isNds
-    private val isN3ds get() = host.isN3ds
-    private val isWii get() = host.isWii
-    private val isDolphin get() = host.isDolphin
-    private val rumbles get() = host.rumbles
-    private val inputManager get() = host.inputManager
-    private val notifications get() = host.notifications
-    private val menuRouter get() = host.menuRouter
     private val lifecycleScope get() = host.lifecycleScope
-    private val ndsRegions get() = host.ndsRegions
-    private val secondNdsRegions get() = host.secondNdsRegions
-    private val presentation get() = host.presentation
-    private fun padProfile() = host.padProfile()
-    private fun publishNotifications() = host.publishNotifications()
-    private fun toggleMenu() = host.toggleMenu()
-    private fun backPressed() = host.backPressed()
-    private fun pressWiiHome() = host.pressWiiHome()
-    private fun recenterWiiMotion() = host.recenterWiiMotion()
-    private fun onN3dsSwapPressed(down: Boolean) = host.onN3dsSwapPressed(down)
-    private fun connectDolphinPorts() = host.connectDolphinPorts()
-    private fun onInputDevicesChanged() = host.onInputDevicesChanged()
-    private fun applyFrontend(values: Map<String, String>) = host.applyFrontend(values)
-    private fun syncN3dsCore() = host.syncN3dsCore()
-    private fun isLandscape() = host.isLandscape()
-    private fun ndsControllerMode() = host.ndsControllerMode()
 
     val dpadHat = DpadHat()
 
     // Re-lay-out when a controller is plugged/unplugged so the on-screen pad (and a DS portrait band) hides/shows live.
     val inputDeviceListener = object : InputManager.InputDeviceListener {
-        override fun onInputDeviceAdded(deviceId: Int) = onInputDevicesChanged()
+        override fun onInputDeviceAdded(deviceId: Int) = host.onInputDevicesChanged()
         override fun onInputDeviceRemoved(deviceId: Int) {
             padLayouts.remove(deviceId)
-            rumbles.forEach { it.deviceRemoved(deviceId) }
+            host.rumbles.forEach { it.deviceRemoved(deviceId) }
             val key = keysById.remove(deviceId)
             val port = key?.let { k -> slots?.disconnected(k) }
             // A pad unplugged mid-press never sends its key-up or its axes back to rest. One player's pad lets go of
             // its own port only; a one-player core lets go of everything. The open menu released it all already.
-            if (!menuOpen) { if (slots == null) releaseAllGameInput() else port?.let(::releasePort) }
-            onInputDevicesChanged()
+            if (!host.menuOpen) { if (slots == null) releaseAllGameInput() else port?.let(::releasePort) }
+            host.onInputDevicesChanged()
         }
         override fun onInputDeviceChanged(deviceId: Int) {
             padLayouts.remove(deviceId)
-            keysById[deviceId]?.let { k -> inputManager?.getInputDevice(deviceId)?.let { padNames[k] = it.name } }
-            onInputDevicesChanged()
+            keysById[deviceId]?.let { k -> host.inputManager?.getInputDevice(deviceId)?.let { padNames[k] = it.name } }
+            host.onInputDevicesChanged()
         }
     }
 
@@ -194,7 +160,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
      * that button sends. A key-up repeats its key-down's.
      */
     private fun runnerKey(event: KeyEvent, keyCode: Int, port: Int): Int? {
-        if (isN64) {
+        if (host.isN64) {
             // By name on every pad, as on the handheld: the printed letter picks the N64 input; R2 and SELECT send nothing.
             val printed = positionOf(event, keyCode)
             val button = PadKeymap.buttonFor(printed) ?: return printed
@@ -208,7 +174,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         return sent.down(held, send(event, keyCode))
     }
 
-    private fun send(event: KeyEvent, keyCode: Int): Int = padMap.sendKey(positionOf(event, keyCode))
+    private fun send(event: KeyEvent, keyCode: Int): Int = host.padMap.sendKey(positionOf(event, keyCode))
 
     /**
      * The console button [keyCode] is for this game, as its keycode ([PhysicalKeys.toRunner]): the printed letter
@@ -217,13 +183,13 @@ internal class GameInputRouter(private val host: GameInputHost) {
      */
     private fun positionOf(event: KeyEvent, keyCode: Int): Int {
         val detected = detectedLayout(event)
-        return PhysicalKeys.toRunner(gameTag, keyCode, detected, PadOptions.printedLayout(frontendValues, detected))
+        return PhysicalKeys.toRunner(host.gameTag, keyCode, detected, PadOptions.printedLayout(host.frontendValues, detected))
     }
 
     /** The letter printed on [keyCode] ([PhysicalKeys.printed]): what the in-game menus act on, so A confirms where A is printed. */
     private fun printedKey(event: KeyEvent, keyCode: Int): Int {
         val detected = detectedLayout(event)
-        return PhysicalKeys.printed(keyCode, detected, PadOptions.printedLayout(frontendValues, detected))
+        return PhysicalKeys.printed(keyCode, detected, PadOptions.printedLayout(host.frontendValues, detected))
     }
 
     /** Where [event]'s device has its face keycodes ([PadFaceLayout.detectDevice]), cached per device id. */
@@ -232,16 +198,16 @@ internal class GameInputRouter(private val host: GameInputHost) {
             event.device?.let { d -> PadFaceLayout.detectDevice(event.deviceId, d.isVirtual, d.vendorId, d.name.orEmpty()) }
                 .also { padLayouts[event.deviceId] = it }
 
-    val menuAxes = AxisDirections { menuRouter.onEvent(it) }   // the hat / left stick as held menu directions
+    val menuAxes = AxisDirections { host.menuRouter.onEvent(it) }   // the hat / left stick as held menu directions
 
     /** The on-screen stick: the game's left analog while playing, held menu directions while the menu is open. */
     val stickRouter = VirtualStickRouter(
         onAnalog = { x, y ->
-            if (isN3ds && n3dsHotkeys.onStick(x, y)) syncN3dsCursor()
-            else if (isNds && ndsHotkeys.onStick(x, y)) wakePen()
-            else retroView?.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, x, y, 0)
+            if (host.isN3ds && n3dsHotkeys.onStick(x, y)) syncN3dsCursor()
+            else if (host.isNds && ndsHotkeys.onStick(x, y)) wakePen()
+            else host.retroView?.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, x, y, 0)
         },
-        onMenu = { menuRouter.onEvent(it) },
+        onMenu = { host.menuRouter.onEvent(it) },
     )
 
     /**
@@ -294,7 +260,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
      * The core reads a pad's left stick as an analog stick ([STICK_CORES]). Any other core gets the stick folded into the
      * d-pad (onGenericMotionEvent).
      */
-    private val coreHasStick: Boolean get() = gameCoreId in STICK_CORES   // netplay too: sticks are synced
+    private val coreHasStick: Boolean get() = host.gameCoreId in STICK_CORES   // netplay too: sticks are synced
 
     /** The DS's stylus toggle, as R2's. */
     fun toggleNdsStylus() {
@@ -310,12 +276,12 @@ internal class GameInputRouter(private val host: GameInputHost) {
 
     /** The skin's SWAP: Azahar's swap-screens key (L3), held as long as the cap; split, it swaps the displays on press. */
     fun onN3dsSwap(down: Boolean) {
-        if (onN3dsSwapPressed(down)) return
-        retroView?.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BUTTON_THUMBL)
+        if (host.onN3dsSwapPressed(down)) return
+        host.retroView?.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BUTTON_THUMBL)
     }
 
     /** Dolphin is running a GameCube game, so the pad is the GameCube's ([PadProfile.Kind.GC]) and L / R are analog triggers. */
-    val gcPad: Boolean get() = isDolphin && padProfile().kind == PadProfile.Kind.GC
+    val gcPad: Boolean get() = host.isDolphin && host.padProfile().kind == PadProfile.Kind.GC
 
     /** The GameCube pad's L and R: one tap/hold gesture, applied state, hold timer each. */
     private val gcGestures = mapOf(NxButton.L2 to TriggerGesture(), NxButton.R2 to TriggerGesture())
@@ -343,7 +309,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private fun gcApply(btn: NxButton, state: TriggerGesture.State) {
         val was = gcStates[btn]
         gcStates[btn] = state
-        val view = retroView ?: return
+        val view = host.retroView ?: return
         fun level(b: NxButton) = when (gcStates[b]) { TriggerGesture.State.SOFT -> 0.5f; TriggerGesture.State.FULL -> 1f; else -> 0f }
         view.sendTriggers(0, level(NxButton.L2), level(NxButton.R2))
         val full = state == TriggerGesture.State.FULL
@@ -364,12 +330,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
 
     /** An on-screen right stick (the PS2's): the core's right analog on port 0. */
     fun onRightStick(x: Float, y: Float) {
-        if (menuOpen) return
-        retroView?.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, x, y, 0)
+        if (host.menuOpen) return
+        host.retroView?.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, x, y, 0)
     }
-
-    /** The on-screen Classic Controller's (or GameCube C-) right stick: the same right analog ([onRightStick]). */
-    fun onWiiRightStick(x: Float, y: Float) = onRightStick(x, y)
 
     /** NDS hotkeys and stylus for one button event; true when it goes on to the core. A key repeat only asks whether its press did. */
     private fun routeNds(button: NxButton, down: Boolean, repeat: Boolean = false): Boolean {
@@ -381,17 +344,17 @@ internal class GameInputRouter(private val host: GameInputHost) {
     }
 
     fun applyNdsAction(action: NdsAction) {
-        val landscape = isLandscape()
+        val landscape = host.isLandscape()
         when (action) {
-            NdsAction.SwapScreens -> setNdsKey(NdsOptions.swapBigScreen(frontendValues))
+            NdsAction.SwapScreens -> setNdsKey(NdsOptions.swapBigScreen(host.frontendValues))
             is NdsAction.CycleLayout -> {
                 if (host.layoutSetByDual()) return
                 // From the layout showing on this screen (an unset row steps from its default).
                 setNdsKey(NdsOptions.cycleLayout(
-                    frontendValues, landscape, ndsControllerMode(), action.delta, host.screenClass(),
+                    host.frontendValues, landscape, host.ndsControllerMode(), action.delta, host.screenClass(),
                 ))
             }
-            is NdsAction.CycleCorner -> NdsOptions.cycleCorner(frontendValues, action.delta).let { (key, value) ->
+            is NdsAction.CycleCorner -> NdsOptions.cycleCorner(host.frontendValues, action.delta).let { (key, value) ->
                 setNdsKey(key to value, "PiP: " + NdsOptions.valueLabel(key, value))
             }
             is NdsAction.Stylus -> {
@@ -408,8 +371,8 @@ internal class GameInputRouter(private val host: GameInputHost) {
      */
     private fun setNdsKey(change: Pair<String, String>, label: String = NdsOptions.valueLabel(change.first, change.second)) {
         val (key, value) = change
-        if (key in lockedOptions) return
-        applyFrontend(frontendValues + change)
+        if (key in host.lockedOptions) return
+        host.applyFrontend(host.frontendValues + change)
         showNdsLabel(label)
         host.persistGameKey(key, value, "Could not save the screen layout")
     }
@@ -419,40 +382,40 @@ internal class GameInputRouter(private val host: GameInputHost) {
 
     /** A notice over the picture for [ms] (a tip: [LayoutTip]), with a button [action] whose tap runs [onAction] and closes it. */
     fun showNotice(text: String, ms: Long, action: String? = null, onAction: () -> Unit = {}) {
-        val id = notifications.push(text, null, ms, SystemClock.elapsedRealtime(), action)
+        val id = host.notifications.push(text, null, ms, SystemClock.elapsedRealtime(), action)
         if (action != null && id >= 0) noticeActions[id] = onAction
-        publishNotifications()
+        host.publishNotifications()
     }
 
     /** A notice's Close was tapped: it goes, its action not run. */
     fun onNoticeDismiss(id: Long) {
         noticeActions.remove(id)
-        notifications.dismiss(id)
-        publishNotifications()
+        host.notifications.dismiss(id)
+        host.publishNotifications()
     }
 
     /** A notice's button was tapped: its action, and the notice goes. */
     fun onNoticeAction(id: Long) {
         noticeActions.remove(id)?.invoke()
-        notifications.dismiss(id)
-        publishNotifications()
+        host.notifications.dismiss(id)
+        host.publishNotifications()
     }
 
     private fun showNdsLabel(text: String) {
-        notifications.push(text, null, NDS_LABEL_MS, SystemClock.elapsedRealtime())
-        publishNotifications()
+        host.notifications.push(text, null, NDS_LABEL_MS, SystemClock.elapsedRealtime())
+        host.publishNotifications()
     }
 
     /** The d-pad, left stick and A now drive the pen: the core must not keep what they held. */
     private fun releaseStylusInputs() {
-        val view = retroView ?: return
+        val view = host.retroView ?: return
         releaseDirections(view)
         PadKeymap.keyCodeFor(NxButton.A)?.let { view.sendKeyEvent(KeyEvent.ACTION_UP, it) }
     }
 
     /** Sends the pen when it changed (pressed, or just lifted), moves the cursor, and keeps the pen ticking in stylus mode. */
     fun syncPen() {
-        val view = retroView ?: return
+        val view = host.retroView ?: return
         val pen = ndsHotkeys.pen.takeIf { ndsHotkeys.stylus }
         if (pen != sentPen) {
             when {
@@ -476,13 +439,13 @@ internal class GameInputRouter(private val host: GameInputHost) {
      * nothing (nothing held, or pushed against an edge) and while the menu is open (it lets go of everything).
      */
     private fun wakePen() {
-        if (!ndsHotkeys.stylus || menuOpen || penJob?.isActive == true) return
+        if (!ndsHotkeys.stylus || host.menuOpen || penJob?.isActive == true) return
         penJob = lifecycleScope.launch {
             var last = SystemClock.elapsedRealtime()
             while (true) {
                 delay(PEN_TICK_MS)
                 val now = SystemClock.elapsedRealtime()
-                if (menuOpen || !ndsHotkeys.tick(now - last)) break
+                if (host.menuOpen || !ndsHotkeys.tick(now - last)) break
                 last = now
                 syncPen()
             }
@@ -494,16 +457,16 @@ internal class GameInputRouter(private val host: GameInputHost) {
      * on the second display when the bottom screen is drawn there; hidden on the other display, and without stylus mode.
      */
     fun positionPen() {
-        val on = if (ndsHotkeys.stylus) DualScreen.penOn(ndsRegions, secondNdsRegions) else null
+        val on = if (ndsHotkeys.stylus) DualScreen.penOn(host.ndsRegions, host.secondNdsRegions) else null
         val pen = ndsHotkeys.pen
-        val mainRegion = ndsRegions.firstOrNull { it.screen == NdsScreen.BOTTOM }.takeIf { on == PictureOn.MAIN }
+        val mainRegion = host.ndsRegions.firstOrNull { it.screen == NdsScreen.BOTTOM }.takeIf { on == PictureOn.MAIN }
         if (mainRegion == null) penDot?.hide() else {
             val (cx, cy) = NdsLayout.pointIn(mainRegion, pen.x, pen.y)
             // Above the GL surface in the game container.
             (penDot ?: PenDot(host.gameContainer).also { penDot = it }).show(cx, cy, pen.pressed)
         }
-        val secondRegion = secondNdsRegions.firstOrNull { it.screen == NdsScreen.BOTTOM }.takeIf { on == PictureOn.SECOND }
-        presentation?.let { p ->
+        val secondRegion = host.secondNdsRegions.firstOrNull { it.screen == NdsScreen.BOTTOM }.takeIf { on == PictureOn.SECOND }
+        host.presentation?.let { p ->
             if (secondRegion == null) p.hidePen() else {
                 val (cx, cy) = NdsLayout.pointIn(secondRegion, pen.x, pen.y)
                 p.showPen(cx, cy, pen.pressed)
@@ -567,9 +530,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
 
     /** The keys the 3DS hotkeys produced: L3 (Azahar's swap screens), R3 (its touch at the cursor), the game's SELECT. */
     private fun sendN3dsKeys() {
-        val view = retroView
+        val view = host.retroView
         for (e in n3dsHotkeys.takeKeys()) {
-            if (e.key == N3dsKey.L3 && onN3dsSwapPressed(e.down)) continue   // split: SELECT + R swaps the displays, as the skin's SWAP does
+            if (e.key == N3dsKey.L3 && host.onN3dsSwapPressed(e.down)) continue   // split: SELECT + R swaps the displays, as the skin's SWAP does
             val code = when (e.key) {
                 N3dsKey.L3 -> KeyEvent.KEYCODE_BUTTON_THUMBL
                 N3dsKey.R3 -> KeyEvent.KEYCODE_BUTTON_THUMBR
@@ -584,15 +547,15 @@ internal class GameInputRouter(private val host: GameInputHost) {
             is N3dsAction.CycleLayout -> {
                 if (host.layoutSetByDual()) return
                 // The row in use (orientation, controller), as the DS's; applyFrontend sets the core's layout from it.
-                val (key, value) = N3dsOptions.cycleLayout(frontendValues, isLandscape(), ndsControllerMode(), action.delta, host.screenClass())
-                if (key in lockedOptions) return
-                applyFrontend(frontendValues + (key to value))   // Azahar re-lays its screens out on its next frame
+                val (key, value) = N3dsOptions.cycleLayout(host.frontendValues, host.isLandscape(), host.ndsControllerMode(), action.delta, host.screenClass())
+                if (key in host.lockedOptions) return
+                host.applyFrontend(host.frontendValues + (key to value))   // Azahar re-lays its screens out on its next frame
                 showNdsLabel(N3dsOptions.layoutLabel(value))
                 host.persistGameKey(key, value, "Could not save the screen layout")
             }
             is N3dsAction.Stylus -> {
                 n3dsStylusOn.value = action.on
-                syncN3dsCore()   // the cursor stays shown while stylus mode is on
+                host.syncN3dsCore()   // the cursor stays shown while stylus mode is on
                 // On: the d-pad, left stick and A now drive the cursor, so the core must not keep what they held. Off: the
                 // hotkeys lift a touch held, and syncN3dsCursor gives the right stick back.
                 if (action.on) releaseStylusInputs()
@@ -608,7 +571,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
      */
     fun syncN3dsCursor() {
         sendN3dsKeys()
-        val view = retroView ?: return
+        val view = host.retroView ?: return
         // The on-screen C-stick while it is off centre, else the hardware stick.
         val right = n3dsHotkeys.cursor ?: n3dsPadRight.takeIf { it != CENTRED } ?: n3dsHwRight
         if (right != n3dsSentRight) {
@@ -621,7 +584,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
             while (n3dsHotkeys.ticking) {
                 delay(PEN_TICK_MS)
                 val now = SystemClock.elapsedRealtime()
-                if (!menuOpen) n3dsHotkeys.tick(now - last)
+                if (!host.menuOpen) n3dsHotkeys.tick(now - last)
                 last = now
                 syncN3dsCursor()
             }
@@ -655,8 +618,8 @@ internal class GameInputRouter(private val host: GameInputHost) {
     /** An axis trigger's press or release: to the DS hotkeys, the 3DS hotkeys (ZL/ZR, always forwarded) or the core. */
     private fun sendAxisTrigger(button: NxButton, down: Boolean, port: Int) {
         when {
-            isNds -> routeNds(button, down)
-            isN3ds -> if (routeN3ds(button, down)) sendTriggerKey(button, down)
+            host.isNds -> routeNds(button, down)
+            host.isN3ds -> if (routeN3ds(button, down)) sendTriggerKey(button, down)
             else -> sendTriggerKey(button, down, port)
         }
     }
@@ -670,7 +633,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         val t = inputs[port].triggers
         if (!down) { t.untake(button); return }
         val pressed = t.take(button)
-        if (isDc || gcPad) retroView?.sendTriggers(port, t.analogLeft, t.analogRight)
+        if (host.isDc || gcPad) host.retroView?.sendTriggers(port, t.analogLeft, t.analogRight)
         else if (pressed) sendAxisTrigger(button, false, port)
     }
 
@@ -699,15 +662,15 @@ internal class GameInputRouter(private val host: GameInputHost) {
     /** An axis trigger's press or release to the core, as its L2/R2 key would be sent (by name on N64, else the pad map). */
     private fun sendTriggerKey(button: NxButton, down: Boolean, port: Int = 0) {
         val keyCode = PadKeymap.keyCodeFor(button) ?: return
-        val code = if (isN64) N64Input.toRunner(button, keyCode) else padMap.sendKey(keyCode)
-        code?.let { retroView?.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, it, port) }
+        val code = if (host.isN64) N64Input.toRunner(button, keyCode) else host.padMap.sendKey(keyCode)
+        code?.let { host.retroView?.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, it, port) }
     }
 
     /** The activity's onStop: no pen or 3DS hotkey tick in the background; onStart restarts them ([syncPen], [syncN3dsCursor]). */
     fun onStop() {
-        penJob?.cancel()   // no 60 Hz pen tick in the background; onStart restarts it (stylus mode itself is kept)
+        penJob?.cancel()   // stylus mode itself is kept
         penJob = null
-        if (isN3ds) {   // backgrounded: no held-back SELECT or forwarded key left hanging, and no tick
+        if (host.isN3ds) {   // backgrounded: no held-back SELECT or forwarded key left hanging, and no tick
             n3dsHotkeys.releaseAll()
             sendN3dsKeys()
         }
@@ -725,20 +688,20 @@ internal class GameInputRouter(private val host: GameInputHost) {
         p0.selectHeld = false
         p0.startHeld = false
         for (p in 1 until inputs.count) releasePort(p)
-        val view = retroView ?: return
+        val view = host.retroView ?: return
         RELEASED_BUTTONS.forEach { b -> PadKeymap.keyCodeFor(b)?.let { view.sendKeyEvent(KeyEvent.ACTION_UP, it) } }
         RELEASED_THUMB_KEYS.forEach { view.sendKeyEvent(KeyEvent.ACTION_UP, it) }
         releaseDirections(view)
         // An analog trigger value wins over the keys in the runner and the menu swallows the release axis: zero it.
-        if (isDc || gcPad) view.sendTriggers(0, 0f, 0f)
+        if (host.isDc || gcPad) view.sendTriggers(0, 0f, 0f)
         if (gcPad) gcClearTriggers()
-        if (isWii) view.setPointerVelocity(0, 0f, 0f)   // the menu swallows the stick's return to rest: the pointer stops
+        if (host.isWii) view.setPointerVelocity(0, 0f, 0f)   // the menu swallows the stick's return to rest: the pointer stops
         ndsHotkeys.releaseAll()
         ndsHatX = 0
         ndsHatY = 0
         syncPen()
         releaseShortcuts()   // their releases go to the menu now
-        if (isN3ds) {
+        if (host.isN3ds) {
             n3dsHotkeys.releaseAll()   // sends up what it held in the core (L3, R3, a tapping SELECT); a held-back SELECT is dropped
             n3dsHatX = 0
             n3dsHatY = 0
@@ -762,13 +725,13 @@ internal class GameInputRouter(private val host: GameInputHost) {
     fun releasePort(port: Int) {
         inputs[port].reset()
         if (port == 0) releaseShortcuts()   // P1's pad went: a SELECT or Hold FF held on it must not stay held
-        val view = retroView ?: return
+        val view = host.retroView ?: return
         RELEASED_BUTTONS.forEach { b -> PadKeymap.keyCodeFor(b)?.let { view.sendKeyEvent(KeyEvent.ACTION_UP, it, port) } }
         RELEASED_THUMB_KEYS.forEach { view.sendKeyEvent(KeyEvent.ACTION_UP, it, port) }
         releaseDirections(view, port)
         view.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, 0f, 0f, port)
-        if (isWii) view.setPointerVelocity(port, 0f, 0f)   // an unplugged pad's tilted stick must not keep moving the pointer
-        if (isDc || gcPad) view.sendTriggers(port, 0f, 0f)
+        if (host.isWii) view.setPointerVelocity(port, 0f, 0f)   // an unplugged pad's tilted stick must not keep moving the pointer
+        if (host.isDc || gcPad) view.sendTriggers(port, 0f, 0f)
     }
 
     /**
@@ -798,37 +761,37 @@ internal class GameInputRouter(private val host: GameInputHost) {
 
     fun onPad(event: PadEvent) {
         // The menus follow the letter the on-screen pad shows (Dreamcast draws "A" on NxButton.B); the game gets the raw button.
-        rumbles.firstOrNull()?.useDevice(null)   // the on-screen pad: the phone in the player's hands takes the rumble
-        if (menuOpen) { menuRouter.onEvent(event.map(padProfile()::menuButton)); return }
+        host.rumbles.firstOrNull()?.useDevice(null)   // the on-screen pad: the phone in the player's hands takes the rumble
+        if (host.menuOpen) { host.menuRouter.onEvent(event.map(host.padProfile()::menuButton)); return }
         val btn = event.button
         val down = event is PadEvent.Down
         // MENU opens the pause menu (not forwarded to the core).
-        if (btn == NxButton.MENU) { if (down) toggleMenu(); return }
-        // The Wii's HOME: a resume point first, then a tap of the core's Home ([pressWiiHome]); the release is the tap's.
-        if (btn == NxButton.HOME) { if (down && isWii) pressWiiHome(); return }
+        if (btn == NxButton.MENU) { if (down) host.toggleMenu(); return }
+        // The Wii's HOME: a resume point first, then a tap of the core's Home ([GameInputHost.pressWiiHome]); the release is the tap's.
+        if (btn == NxButton.HOME) { if (down && host.isWii) host.pressWiiHome(); return }
         // SELECT + START held together also opens it (the on-screen pad is P1, port 0).
-        if (inputs.menuChord(0, btn, down)) { toggleMenu(); return }
-        if (isNds && !routeNds(btn, down)) return   // L3, L2, R2, the SELECT chords and the stylus inputs stay out of the core
-        if (isN3ds && !routeN3ds(btn, down)) return  // SELECT (held back for chords), its chords and the stylus inputs: routeN3ds sends what they become
-        val view = retroView ?: return
+        if (inputs.menuChord(0, btn, down)) { host.toggleMenu(); return }
+        if (host.isNds && !routeNds(btn, down)) return   // L3, L2, R2, the SELECT chords and the stylus inputs stay out of the core
+        if (host.isN3ds && !routeN3ds(btn, down)) return  // SELECT (held back for chords), its chords and the stylus inputs: routeN3ds sends what they become
+        val view = host.retroView ?: return
         if (gcPad && (btn == NxButton.L2 || btn == NxButton.R2)) { gcTrigger(btn, down); return }
         if (btn.isDirection) {
             if (down) dpadHat.press(btn) else dpadHat.release(btn)
             view.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, dpadHat.x.toFloat(), dpadHat.y.toFloat(), 0)
         } else {
-            val code = if (isN64) N64Input.toRunner(btn, PadKeymap.keyCodeFor(btn) ?: 0)
-                else PadKeymap.keyCodeFor(padMap.sends(btn))
+            val code = if (host.isN64) N64Input.toRunner(btn, PadKeymap.keyCodeFor(btn) ?: 0)
+                else PadKeymap.keyCodeFor(host.padMap.sends(btn))
             if (code == null || code == 0) return
             val sent = if (down) padSent.down(btn, code) else padSent.up(btn, code)
             view.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, sent)
         }
     }
 
-    fun onStick(x: Float, y: Float) = stickRouter.onStick(x, y, menuOpen)
+    fun onStick(x: Float, y: Float) = stickRouter.onStick(x, y, host.menuOpen)
 
     /** The on-screen New 3DS C-stick: the core's right analog (Azahar's C-stick, and its pointer in the default mode). */
     fun onCStick(x: Float, y: Float) {
-        if (menuOpen || !isN3ds) return
+        if (host.menuOpen || !host.isN3ds) return
         n3dsPadRight = x to y
         syncN3dsCursor()
     }
@@ -838,9 +801,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
         // One lookup per event: this is the hot path.
         val joystick = event != null && event.isFromSource(InputDevice.SOURCE_JOYSTICK)
         val padPort = if (joystick) portFor(event?.device, claim = false)?.also { noteRumbleDevice(event?.device, it) } else null
-        if (menuOpen) { event?.let { routeMenuMotion(it) }; return true }
-        val view = retroView ?: return host.superGenericMotionEvent(event)
-        if (event != null && isN3ds) {
+        if (host.menuOpen) { event?.let { routeMenuMotion(it) }; return true }
+        val view = host.retroView ?: return host.superGenericMotionEvent(event)
+        if (event != null && host.isN3ds) {
             if (event.isFromSource(InputDevice.SOURCE_JOYSTICK)) {
                 routeN3dsHat(view, event)
                 routeTriggerAxes(event)     // L2/R2 are ZL/ZR: an axis-only trigger presses them too
@@ -855,7 +818,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
             }
             return host.superGenericMotionEvent(event)
         }
-        if (event != null && isNds) {
+        if (event != null && host.isNds) {
             // Joystick events only: a mouse or hover event reads its hat, trigger and stick axes as 0, which would
             // release a held hat, re-fire a trigger or move the pen.
             if (event.isFromSource(InputDevice.SOURCE_JOYSTICK)) {
@@ -888,7 +851,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
             }
             val inp = inputs[port]
             // Dreamcast triggers are analog (flycast reads RETRO_DEVICE_INDEX_ANALOG_BUTTON).
-            if (isDc || gcPad) {   // GameCube triggers too: Dolphin reads them as analog buttons
+            if (host.isDc || gcPad) {   // GameCube triggers too: Dolphin reads them as analog buttons
                 val t = inp.triggers
                 t.analog(leftTrigger(event), rightTrigger(event))
                 view.sendTriggers(port, t.analogLeft, t.analogRight)   // a shortcut's pull reads at rest
@@ -911,7 +874,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
             view.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, sx, sy, port)
             val rx = event.getAxisValue(MotionEvent.AXIS_Z)
             val ry = event.getAxisValue(MotionEvent.AXIS_RZ)
-            if (isWii && wiiPad != null && wiiPad != WiiPad.CLASSIC) {
+            if (host.isWii && host.wiiPad != null && host.wiiPad != WiiPad.CLASSIC) {
                 // Wiimote types: the right stick aims the IR pointer (Dolphin's pointer reads POINTER, ir_mode 2).
                 view.setPointerVelocity(port, WiiPointer.velocity(rx), WiiPointer.velocity(ry))
             } else {
@@ -928,11 +891,8 @@ internal class GameInputRouter(private val host: GameInputHost) {
 
     /** A real controller's input on [port]: that port's rumble follows it (to its vibrator; port 0: else the phone's). */
     private fun noteRumbleDevice(device: InputDevice?, port: Int) {
-        if (device != null && !device.isVirtual) rumbles.getOrNull(port)?.useDevice(device.id)
+        if (device != null && !device.isVirtual) host.rumbles.getOrNull(port)?.useDevice(device.id)
     }
-
-    /** A physical pad ([isController]; a DualSense's touchpad device is none). */
-    fun isPad(d: InputDevice): Boolean = d.isController()
 
     /**
      * The port [device]'s input goes to: 0 for a one-player core, the on-screen pad or a non-pad device; else its
@@ -941,7 +901,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
      */
     private fun portFor(device: InputDevice?, claim: Boolean): Int? {
         val s = slots ?: return 0
-        if (device == null || !isPad(device)) return 0
+        if (device == null || !device.isController()) return 0
         // A device id is never reused for another device, and its descriptor never changes: one key per id.
         val key = keysById[device.id] ?: DeviceKey(device.descriptor).also {
             keysById[device.id] = it
@@ -949,7 +909,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         }
         if (!claim) return s.portOf(key)
         val c = s.claim(key) ?: return null
-        if (c.joined) { onPlayerJoined(c.port, device); connectDolphinPorts() }
+        if (c.joined) { onPlayerJoined(c.port, device); host.connectDolphinPorts() }
         return c.port
     }
 
@@ -961,8 +921,8 @@ internal class GameInputRouter(private val host: GameInputHost) {
 
     /** A pad took (or came back to) player slot [port]: a notice says who is who. */
     private fun onPlayerJoined(port: Int, device: InputDevice) {
-        notifications.push("Player ${port + 1}: ${device.name}", null, PLAYER_NOTICE_MS, SystemClock.elapsedRealtime())
-        publishNotifications()
+        host.notifications.push("Player ${port + 1}: ${device.name}", null, PLAYER_NOTICE_MS, SystemClock.elapsedRealtime())
+        host.publishNotifications()
     }
 
     /** The Players page's rows: each slot (Empty, a live pad, a held one) and each connected pad, names numbered; null without slots. */
@@ -988,15 +948,15 @@ internal class GameInputRouter(private val host: GameInputHost) {
 
     /** The connected physical pads, one per descriptor (a pad may show as several input devices). */
     private fun connectedPads(): List<InputDevice> {
-        val im = inputManager ?: return emptyList()
-        return im.inputDeviceIds.toList().mapNotNull(im::getInputDevice).filter(::isPad).distinctBy { it.descriptor }
+        val im = host.inputManager ?: return emptyList()
+        return im.inputDeviceIds.toList().mapNotNull(im::getInputDevice).filter { it.isController() }.distinctBy { it.descriptor }
     }
 
     /** Acts on [ShortcutKeys]' [verdict] for [keyCode] on [port]; true when the key is taken (it goes no further). */
     private fun shortcut(verdict: KeyVerdict, keyCode: Int = 0, port: Int = 0): Boolean = when (verdict) {
         KeyVerdict.Pass -> false
         KeyVerdict.Swallow -> true
-        KeyVerdict.OpenMenu -> { toggleMenu(); true }
+        KeyVerdict.OpenMenu -> { host.toggleMenu(); true }
         is KeyVerdict.Fire -> { takeTrigger(keyCode, port, verdict.down); host.onShortcut(verdict.action, verdict.down); true }
     }
 
@@ -1004,89 +964,89 @@ internal class GameInputRouter(private val host: GameInputHost) {
         if (isVolumeKey(keyCode)) return host.superKeyDown(keyCode, event)
         // The rumble follows the pad in use, on its own port (a one-player core: port 0); a pad with no slot yet claims below.
         portFor(event.device, claim = false)?.let { noteRumbleDevice(event.device, it) }
-        if (menuOpen) {
+        if (host.menuOpen) {
             // Press to bind first, on the raw code (as [ShortcutKeys] matches it in game), Back too: it cancels.
             if (host.menuCaptureKey(keyCode, down = true, repeat = event.repeatCount > 0)) return true
-            if (keyCode == KeyEvent.KEYCODE_BACK) { if (event.repeatCount == 0) backPressed(); return true }
-            if (event.repeatCount == 0) PadKeymap.buttonFor(printedKey(event, keyCode))?.let { menuRouter.onEvent(PadEvent.Down(it)) }
+            if (keyCode == KeyEvent.KEYCODE_BACK) { if (event.repeatCount == 0) host.backPressed(); return true }
+            if (event.repeatCount == 0) PadKeymap.buttonFor(printedKey(event, keyCode))?.let { host.menuRouter.onEvent(PadEvent.Down(it)) }
             return true
         }
-        if (keyCode == KeyEvent.KEYCODE_BACK) { if (event.repeatCount == 0) backPressed(); return true }
+        if (keyCode == KeyEvent.KEYCODE_BACK) { if (event.repeatCount == 0) host.backPressed(); return true }
         val first = event.repeatCount == 0
         val button = PadKeymap.buttonFor(keyCode)
         // Any pad can pause, before the slot lookup: also one with no slot (table full) or benched. It claims nothing. With a
         // MENU combo bound, MENU is a modifier first: the menu opens on its release if no combo fired ([ShortcutKeys]).
         if (button == NxButton.MENU) {
             val keys = host.shortcutKeys
-            if (keys?.holdsMenu == true) keys.onDown(keyCode, repeat = !first) else if (first) toggleMenu()
+            if (keys?.holdsMenu == true) keys.onDown(keyCode, repeat = !first) else if (first) host.toggleMenu()
             return true
         }
         val port = portFor(event.device, claim = true) ?: return true   // no slot: dropped
-        // Wii: the left-stick click recentres the phone's motion, the right-stick click is HOME ([pressWiiHome]); neither
+        // Wii: the left-stick click recentres the phone's motion, the right-stick click is HOME ([GameInputHost.pressWiiHome]); neither
         // reaches the core as itself. 3DS split: the left-stick click is SWAP between the displays. Elsewhere (the PS2's
         // L3 / R3) they go on to the core.
-        when (thumbKeyRoute(keyCode, isWii, isN3ds)) {
-            ThumbKeyRoute.WII_RECENTER -> { if (first) recenterWiiMotion(); return true }
-            ThumbKeyRoute.WII_HOME -> { if (first) pressWiiHome(); return true }
-            ThumbKeyRoute.N3DS_SWAP -> if (n3dsSwapKey.down(repeat = !first) { onN3dsSwapPressed(down = true) }) return true
+        when (thumbKeyRoute(keyCode, host.isWii, host.isN3ds)) {
+            ThumbKeyRoute.WII_RECENTER -> { if (first) host.recenterWiiMotion(); return true }
+            ThumbKeyRoute.WII_HOME -> { if (first) host.pressWiiHome(); return true }
+            ThumbKeyRoute.N3DS_SWAP -> if (n3dsSwapKey.down(repeat = !first) { host.onN3dsSwapPressed(down = true) }) return true
             ThumbKeyRoute.CORE -> {}
         }
         noteRumbleDevice(event.device, port)
         // SELECT + START opens the menu: P1's (port 0's) only. Held state follows every down, repeats too.
-        if (button != null && inputs.menuChord(port, button, down = true) && first) { toggleMenu(); return true }
+        if (button != null && inputs.menuChord(port, button, down = true) && first) { host.toggleMenu(); return true }
         // Shortcuts, P1's (port 0's) only, as the menu chord: after the built-in hotkeys above, which they can't bind
         // ([com.nxredux.mobile.shortcuts.EffectiveShortcuts.blocked]), before the DS / 3DS routing and the core.
         if (port == 0) host.shortcutKeys?.let { keys -> if (shortcut(keys.onDown(keyCode, repeat = !first), keyCode, port)) return true }
         // The hotkeys and stylus see the console button the key is (its printed letter on DS/3DS), as the core will.
         val placed = PadKeymap.buttonFor(positionOf(event, keyCode))
-        if (isNds) (placed ?: ndsThumbButton(keyCode))?.let { b ->
+        if (host.isNds) (placed ?: ndsThumbButton(keyCode))?.let { b ->
             if (b == NxButton.L2 || b == NxButton.R2) { if (first && routeTriggerKey(b, down = true)) routeNds(b, down = true); return true }
             if (!routeNds(b, down = true, repeat = !first)) return true
         }
         if (gcPad) placed?.let { b -> if (gcAnalogTriggerKey(b, event.device)) return true }
-        if (!isNds && !isDc && first) placed?.let { b ->
+        if (!host.isNds && !host.isDc && first) placed?.let { b ->
             if ((b == NxButton.L2 || b == NxButton.R2) && !routeTriggerKey(b, down = true, port)) return true   // its axis pressed it
         }
-        if (isN3ds) placed?.let { b ->
+        if (host.isN3ds) placed?.let { b ->
             if (!routeN3ds(b, down = true, repeat = !first)) return true
         }
         // As printed (or by position on positional consoles) through the console's pad map; N64 by name ([runnerKey]).
-        runnerKey(event, keyCode, port)?.let { retroView?.sendKeyEvent(event.action, it, port) }
+        runnerKey(event, keyCode, port)?.let { host.retroView?.sendKeyEvent(event.action, it, port) }
         return true
     }
 
     fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
         if (isVolumeKey(keyCode)) return host.superKeyUp(keyCode, event)
-        if (menuOpen) {
+        if (host.menuOpen) {
             if (host.menuCaptureKey(keyCode, down = false, repeat = false)) return true
-            PadKeymap.buttonFor(printedKey(event, keyCode))?.let { menuRouter.onEvent(PadEvent.Up(it)) }
+            PadKeymap.buttonFor(printedKey(event, keyCode))?.let { host.menuRouter.onEvent(PadEvent.Up(it)) }
             return true
         }
         if (keyCode == KeyEvent.KEYCODE_BACK) return true
         // A held-back MENU (a MENU combo is bound): its release opens the menu if no combo fired, from any pad as its press.
         if (PadKeymap.buttonFor(keyCode) == NxButton.MENU) host.shortcutKeys?.takeIf { it.holdsMenu }?.let { shortcut(it.onUp(keyCode)); return true }
         val port = portFor(event.device, claim = false) ?: return true
-        when (thumbKeyRoute(keyCode, isWii, isN3ds)) {
+        when (thumbKeyRoute(keyCode, host.isWii, host.isN3ds)) {
             ThumbKeyRoute.WII_RECENTER, ThumbKeyRoute.WII_HOME -> return true
-            ThumbKeyRoute.N3DS_SWAP -> if (onN3dsSwapPressed(down = false)) return true
+            ThumbKeyRoute.N3DS_SWAP -> if (host.onN3dsSwapPressed(down = false)) return true
             ThumbKeyRoute.CORE -> {}
         }
         PadKeymap.buttonFor(keyCode)?.let { inputs.menuChord(port, it, down = false) }
         if (port == 0) host.shortcutKeys?.let { keys -> if (shortcut(keys.onUp(keyCode), keyCode, port)) return true }
         val placed = PadKeymap.buttonFor(positionOf(event, keyCode))   // as on the down
-        if (isNds) (placed ?: ndsThumbButton(keyCode))?.let { b ->
+        if (host.isNds) (placed ?: ndsThumbButton(keyCode))?.let { b ->
             if (b == NxButton.L2 || b == NxButton.R2) { if (routeTriggerKey(b, down = false)) routeNds(b, down = false); return true }
             if (!routeNds(b, down = false)) return true
         }
         if (gcPad) placed?.let { b -> if (gcAnalogTriggerKey(b, event.device)) return true }
-        if (!isNds && !isDc) placed?.let { b ->
+        if (!host.isNds && !host.isDc) placed?.let { b ->
             if ((b == NxButton.L2 || b == NxButton.R2) && !routeTriggerKey(b, down = false, port)) return true   // not held
         }
-        if (isN3ds) placed?.let { b ->
+        if (host.isN3ds) placed?.let { b ->
             if (!routeN3ds(b, down = false)) return true
         }
         // As printed (or by position on positional consoles) through the console's pad map; N64 by name ([runnerKey]).
-        runnerKey(event, keyCode, port)?.let { retroView?.sendKeyEvent(event.action, it, port) }
+        runnerKey(event, keyCode, port)?.let { host.retroView?.sendKeyEvent(event.action, it, port) }
         return true
     }
 }

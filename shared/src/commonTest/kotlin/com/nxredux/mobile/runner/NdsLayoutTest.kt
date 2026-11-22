@@ -61,7 +61,7 @@ class NdsLayoutTest {
         expected.forEachIndexed { i, e -> near(e, scales(actual)[i], "scale $i") }
     }
 
-    // --- The spec's table: Fold cover (stubby phone) ---
+    // --- Fold cover (stubby phone) ---
 
     @Test fun fold_cover_landscape_large_4x_2x() = assertScales(4f, 2f, actual = layout(1474f, 1248f, LARGE, true, STUBBY_PHONE))
 
@@ -99,7 +99,7 @@ class NdsLayoutTest {
      * for the screens.
      */
     private val unfoldedLandscape: PxRect = run {
-        val side = (77f + 526f) / 2f   // half the reach a side, as the landscape pad beside the picture set aside
+        val side = (77f + 526f) / 2f
         PxRect(side, 0f, 2448f - 2f * side, 1848f)
     }
 

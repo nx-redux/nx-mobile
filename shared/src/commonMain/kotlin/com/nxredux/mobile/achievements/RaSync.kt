@@ -189,7 +189,7 @@ class RaSync(
                 val sets = RaSetsCache.summary(store, hash) ?: return@mapNotNull null
                 if (sets.gameId == 0 || sets.consoleId == 0) return@mapNotNull null   // not a usable set reply
                 val session = store.readJson(RaPaths.session(sets.gameId), SessionBody.serializer())
-                Cached(hash, sets.gameId, sets.setGameIds.orEmpty().ifEmpty { listOf(sets.gameId) }, sets.consoleId, session?.let(::unlockCount) ?: -1, sets.title)
+                Cached(hash, sets.gameId, sets.setGameIds.ifEmpty { listOf(sets.gameId) }, sets.consoleId, session?.let(::unlockCount) ?: -1, sets.title)
             }
             val serverCounts = HashMap<Int, Int>()
             var complete = true   // every console's progress read and every stale game refreshed

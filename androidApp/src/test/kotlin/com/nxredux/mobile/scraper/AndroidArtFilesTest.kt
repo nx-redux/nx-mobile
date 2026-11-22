@@ -4,6 +4,7 @@ import coil3.filePath
 import coil3.toUri
 import com.nxredux.mobile.runner.ContentRef
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -16,8 +17,11 @@ import java.io.File
 import java.nio.file.Files
 
 class AndroidArtFilesTest {
-    private val dir = File(Files.createTempDirectory("art").toFile(), AndroidArtFiles.DIR)
+    private val tmp = Files.createTempDirectory("art").toFile()
+    private val dir = File(tmp, AndroidArtFiles.DIR)
     private val store = AndroidArtFiles(dir)
+
+    @After fun cleanUp() { tmp.deleteRecursively() }
 
     @Test fun storesByPackageAndReturnsAVersionedFileRef() = runBlocking {
         assertNull(store.art("com.example.game/.Main", ArtSlot.SCREENSHOT))

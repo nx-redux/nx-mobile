@@ -45,17 +45,8 @@ object SkinChoice {
     private const val MENU_MIN_GLASS = 400f
 
     /**
-     * One-screen consoles a skin draws (its d-pad, A B X Y, L R, SELECT START cover their pads): no analog stick, no C
-     * buttons, no second pair of shoulders. Others keep the normal pad. The DS and the 3DS have their own layouts.
-     */
-    private val SINGLE_TAGS = setOf(
-        "GB", "SGB", "GBC", "GBA", "MGBA", "FC", "FDS", "SFC", "SUPA",
-        "FBN",
-    )
-
-    /**
      * The skin layout set for the console [baseTag] (upper case, GPGX prefix dropped; [ds]: a DS game): its own button
-     * set (the Game Boys, the GBA), the DS's, or the shared one-screen set ([SINGLE_TAGS], and any console with none of its own). [gameCube]: a
+     * set (the Game Boys, the GBA), the DS's, or the shared one-screen set (any console with none of its own). [gameCube]: a
      * GameCube disc run under the Wii tag (its pad is the GameCube's). [wiiPad]: the Wii game's resolved controller (each
      * Wii pad has its layout; the Classic Controller's until it resolves). [n3dsNew]: the resolved New 3DS Controls (the 3DS skin with
      * ZL / ZR and the C-stick nub, else the regular 3DS's). [segaThree]: a Sega pad game resolved to the 3-button pad.

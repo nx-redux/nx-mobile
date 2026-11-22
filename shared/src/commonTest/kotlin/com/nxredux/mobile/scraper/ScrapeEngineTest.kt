@@ -132,7 +132,7 @@ class ScrapeEngineTest {
         val rig = Rig(this)
         rig.http.on("romnom=Tetris.gb", found("ss" to "https://m/t-ss.png"))
         rig.http.on("https://m/", OK_PNG)
-        rig.engine.run(ScrapeState(items = listOf(Scrape.item(tetris))), { tetris }) {}   // no found: as before
+        rig.engine.run(ScrapeState(items = listOf(Scrape.item(tetris))), { tetris }) {}   // no found listener
         assertEquals(1, rig.options.single().second.size)
         assertTrue(rig.found.isEmpty())
     }
@@ -561,8 +561,8 @@ class ScrapeEngineTest {
 
     @Test fun artOnDiskTheIndexMissedIsSkippedAndReported() = runTest {
         val fs = Scrape.homeTree()
-        fs.writeBytes(fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "boxart2d"))!!, "Tetris.jpg", byteArrayOf(7))
-        fs.writeBytes(fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "screenshot"))!!, "Tetris.png", byteArrayOf(8))
+        fs.putMedia("boxart2d", "Tetris.jpg", byteArrayOf(7))
+        fs.putMedia("screenshot", "Tetris.png", byteArrayOf(8))
         val rig = Rig(this, fs = fs)
         val item = rig.run(listOf(tetris)).items.single()
         assertEquals(ItemStatus.SKIPPED to "Has art", item.status to item.reason)
@@ -840,7 +840,7 @@ class ScrapeEngineTest {
 
     @Test fun artOnDiskIsReadWithAnyExtensionCaseAndPngFirst() = runTest {
         val fs = Scrape.homeTree()
-        fs.writeBytes(fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "boxart2d"))!!, "Tetris.JPEG", byteArrayOf(7))
+        fs.putMedia("boxart2d", "Tetris.JPEG", byteArrayOf(7))
         val shot = fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "screenshot"))!!
         fs.writeBytes(shot, "Tetris.jpeg", byteArrayOf(8)); fs.writeBytes(shot, "Tetris.jpg", byteArrayOf(9)); fs.writeBytes(shot, "Tetris.PNG", byteArrayOf(10))
         val rig = Rig(this, fs = fs)

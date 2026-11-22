@@ -26,6 +26,7 @@ import com.nxredux.mobile.ui.nx.NxDialog
 import com.nxredux.mobile.ui.nx.NxProgressBody
 import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxRowKind
+import com.nxredux.mobile.sync.SyncLink
 
 /**
  * Tools → Device Sync, in the Settings root's look ([SettingsRootScreen]), in the tool and setup's sync step alike:
@@ -41,21 +42,20 @@ fun DeviceSyncScreen(
     setup: SyncSetup? = null, onSetupTap: (index: Int, open: Boolean) -> Unit = { _, _ -> },
 ) {
     val page by controller.page.collectAsState()
-    val chrome = setup
-    val title = chrome?.title ?: DeviceSyncText.TITLE
+    val title = setup?.title ?: DeviceSyncText.TITLE
     Box(modifier.fillMaxSize()) {
         when (val p = page) {
             is DeviceSyncPage.Ready -> {
-                val skip = chrome?.inSetup == true
+                val skip = setup?.inSetup == true
                 val all = syncSetupRows(p, skip = skip)
                 val off = if (p.romsAvailable) 1 else 0   // Sync ROMs, first in [syncSetupRows], is a row, not a word
                 val words = all.drop(off).map {
                     when (it) {
                         is SyncSetupRow.Link -> DeviceSyncText.linkLabel(it.link)
-                        else -> if (chrome?.synced == true) "Continue" else "Skip"
+                        else -> if (setup?.synced == true) "Continue" else "Skip"
                     }
                 }
-                val focus = chrome?.focus ?: SyncFocus.LINK
+                val focus = setup?.focus ?: SyncFocus.LINK
                 val at = syncSetupIndex(p, focus, skip = skip)
                 val lines = listOf(if (p.roms) DeviceSyncText.HEADLINE_ROMS else DeviceSyncText.HEADLINE, DeviceSyncText.hint(p.link))
                 val roms: (@Composable () -> Unit)? = if (!p.romsAvailable) null else ({ SyncRomsRow(p.roms, lit = focus == SyncFocus.ROMS) { open -> onSetupTap(0, open) } })
@@ -87,12 +87,12 @@ fun DeviceSyncScreen(
                 if (p.confirmStop) NxDialog(DeviceSyncText.STOP_TITLE, DeviceSyncText.STOP_BODY,
                     onConfirm = { onHint(NxButton.A) }, confirmLabel = "Stop", onCancel = { onHint(NxButton.B) })
             }
-            is DeviceSyncPage.Done -> if (chrome?.inSetup == true) {
+            is DeviceSyncPage.Done -> if (setup?.inSetup == true) {
                 // Setup: Continue as the page's one word.
                 SyncPage(title, listOf(DeviceSyncText.done(p.received, p.sent)) + p.notes, listOf("Continue"), 0,
                     listOf(Hint(NxButton.A, "Continue"), Hint(NxButton.B, "Back")), onHint, onTap = { onHint(NxButton.A) })
             } else message(title, listOf(DeviceSyncText.done(p.received, p.sent)) + p.notes,
-                listOf(Hint(NxButton.A, if (chrome != null) "Continue" else "Sync again"), Hint(NxButton.B, "Back")), onHint)
+                listOf(Hint(NxButton.A, if (setup != null) "Continue" else "Sync again"), Hint(NxButton.B, "Back")), onHint)
             is DeviceSyncPage.Failed -> message(title, listOfNotNull(p.reason, p.detail), listOf(Hint(NxButton.A, "Retry"), Hint(NxButton.B, "Back")), onHint)
         }
     }
@@ -133,3 +133,33 @@ private fun SyncRomsRow(on: Boolean, lit: Boolean, onTap: (open: Boolean) -> Uni
 @Composable
 private fun message(title: String, lines: List<String>, hints: List<Hint>, onHint: (NxButton) -> Unit) =
     SyncPage(title, lines, emptyList(), -1, hints, onHint)
+
+/** Where setup's sync page has the selection: the Sync ROMs row, the link the page shows, or Skip. */
+enum class SyncFocus { ROMS, LINK, SKIP }
+
+/**
+ * Device Sync's page state: its [title], where the selection is, and whether it is setup's sync step ([inSetup]: a
+ * headline and the Skip row, which reads Continue once a sync ended there, [synced]).
+ */
+data class SyncSetup(val title: String, val synced: Boolean, val focus: SyncFocus, val inSetup: Boolean = true) {
+    val skipSelected: Boolean get() = focus == SyncFocus.SKIP
+}
+
+sealed interface SyncSetupRow {
+    data object Roms : SyncSetupRow
+    data class Link(val link: SyncLink) : SyncSetupRow
+    data object Skip : SyncSetupRow
+}
+
+/** Device Sync's Ready rows on [page]: Sync ROMs where ROM sync is available, the links, and in setup ([skip]) Skip. */
+fun syncSetupRows(page: DeviceSyncPage.Ready, skip: Boolean = true): List<SyncSetupRow> =
+    listOfNotNull(SyncSetupRow.Roms.takeIf { page.romsAvailable }) + SyncLink.entries.map { SyncSetupRow.Link(it) } + listOfNotNull(SyncSetupRow.Skip.takeIf { skip })
+
+/** The row [focus] is on, on [page]. */
+fun syncSetupIndex(page: DeviceSyncPage.Ready, focus: SyncFocus, skip: Boolean = true): Int = syncSetupRows(page, skip).indexOfFirst {
+    when (focus) {
+        SyncFocus.ROMS -> it == SyncSetupRow.Roms
+        SyncFocus.LINK -> it == SyncSetupRow.Link(page.link)
+        SyncFocus.SKIP -> it == SyncSetupRow.Skip
+    }
+}.coerceAtLeast(0)

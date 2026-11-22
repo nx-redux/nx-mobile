@@ -76,8 +76,8 @@ typedef struct {
 	void* bind_ctx;
 	/* The game's radio when the link is made, as if ndl_radio_changed had told it. */
 	ndl_radio radio;
-	/* AUTO only: starts as after ndl_leave_now, out of rooms until the next radio ON. Set in the config rather than
-	 * left to a later call, so the network thread never sends a search before it. */
+	/* AUTO only: starts as after ndl_leave_now. Set in the config rather than left to a later call, so the network
+	 * thread never sends a search before it. */
 	bool parked;
 } ndl_config;
 
@@ -131,19 +131,19 @@ typedef struct {
  * each too, and a send there goes through route_socket. Replaces the last list; n = 0 clears it. */
 void ndl_set_local(ndl_link* l, const ndl_subnet* nets, int n);
 
-/* Leaves at once, without the radio-off linger. The link then stays out of rooms until ndl_set_mode (or, in AUTO, the
- * next radio ON). */
+/* Leaves at once, without the radio-off linger. The link then stays out of rooms until ndl_set_mode or ndl_rejoin,
+ * whatever the game's wireless does. */
 void ndl_leave_now(ndl_link* l);
 
-/* Undoes ndl_leave_now for a sheet session: HOST reopens its room, JOIN starts asking its holder again. Nothing while
- * in a room, and nothing in AUTO, which waits for the next radio ON. */
+/* Undoes ndl_leave_now: HOST reopens its room, JOIN starts asking its holder again, AUTO looks for rooms again while the
+ * radio is on. Nothing while in a room. */
 void ndl_rejoin(ndl_link* l);
 
 bool ndl_in_room(ndl_link* l);
 
 /* Where the link stands for the in-game menu: out of any room and not looking for one (a leave parks the link here),
- * looking for or about to open one (the automatic route with the radio on and no leave of its own, or a join still
- * under way while the radio-off linger runs), or in a room. */
+ * looking for or about to open one (the automatic route with the radio on and no leave of its own, a join still under
+ * way while the radio-off linger runs, or alone in a room), or in a room with another phone. */
 typedef enum { NDL_OUT = 0, NDL_SEEKING = 1, NDL_ROOM = 2 } ndl_presence;
 ndl_presence ndl_presence_now(ndl_link* l);
 /* This phone's member id, -1 when not in a room. */

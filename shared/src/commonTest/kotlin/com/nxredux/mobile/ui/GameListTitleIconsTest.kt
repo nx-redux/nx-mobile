@@ -34,7 +34,7 @@ class GameListTitleIconsTest {
 
     // On a device with a touchscreen, Recent, Search and Layout show whatever the bar shows.
     @Test fun aTouchscreenShowsRecentSearchAndLayoutAlways() {
-        val withBar = LauncherChrome()   // a controller with the hint bar: no top icons before
+        val withBar = LauncherChrome()   // a controller with the hint bar
         var searched = 0; var layout = 0
         val icons = gameListTitleIcons(withBar, emptyList(), {}, recentIcon = true, touch = false, touchscreen = true, onSearch = { searched++ }, onLayout = { layout++ }, layoutOpen = true)
         assertEquals(listOf("Recent", "Search", "Layout"), icons.map { it.description })

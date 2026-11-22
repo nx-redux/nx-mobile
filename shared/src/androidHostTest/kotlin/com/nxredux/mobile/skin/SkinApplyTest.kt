@@ -2,7 +2,6 @@ package com.nxredux.mobile.skin
 
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.ui.nx.SkinPadTouch
-import java.io.File
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -11,9 +10,7 @@ import kotlin.test.assertTrue
 
 /** Player tweaks applied to the built-in packs' placed layouts: groups move and scale, clear of the screens. */
 class SkinApplyTest {
-    private fun pack(id: String) =
-        assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/$id/skin.json").readText()))
-    private val carbon = pack("nx-carbon")
+    private val carbon = skinPack()
 
     private fun menu(pack: SkinPackManifest = carbon) = assertNotNull(SkinChoice.placeMenu(pack, 1080, 2520, 420)).also {
         assertEquals("stacked_menu", it.spec.id)
@@ -289,7 +286,7 @@ class SkinApplyTest {
     @Test
     fun the_same_tweaks_give_the_same_result_on_every_colour_pack() {
         val a = menu(carbon)
-        val b = menu(pack("nx-plasma"))
+        val b = menu(skinPack("nx-plasma"))
         val tweaks = SkinGroups.of(a.spec).associate { it.id to SkinTweak(dx = 20f, dy = -30f, scale = 1.1f) }
         val ca = SkinTweaks.apply(a, tweaks, 1080f, 2520f).controls
         val cb = SkinTweaks.apply(b, tweaks, 1080f, 2520f).controls

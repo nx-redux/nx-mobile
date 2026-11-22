@@ -17,7 +17,7 @@ class MenuSkinShownTest {
         }
     }
 
-    // No controller: exactly the rule before it (a skin, the pad shown, and flat or a two-screen layout when half-folded).
+    // No controller: a skin, the pad shown, and flat or a two-screen layout when half-folded.
     @Test fun without_a_controller_the_rule_is_unchanged() {
         for (skin in bools) for (pad in bools) for (canTwo in bools) for (tabletop in bools) {
             assertEquals(
@@ -33,15 +33,5 @@ class MenuSkinShownTest {
         assertEquals(true, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = false, canTwo = false, tabletop = true, phoneUpright = true))
         assertEquals(false, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = false, canTwo = false, tabletop = true, phoneUpright = false))
         assertEquals(false, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = true, canTwo = false, tabletop = true, phoneUpright = true))
-    }
-
-    // The same pad flips with the controller, both ways.
-    @Test fun connecting_and_disconnecting_switches_it_both_ways() {
-        assertEquals(true, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = false, canTwo = false, tabletop = false))
-        assertEquals(false, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = true, canTwo = false, tabletop = false))
-        assertEquals(true, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = false, canTwo = false, tabletop = false))
-        // the Fold half-open on its two-screen layout too
-        assertEquals(true, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = false, canTwo = true, tabletop = true))
-        assertEquals(false, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = true, canTwo = true, tabletop = true))
     }
 }

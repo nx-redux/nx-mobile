@@ -308,7 +308,7 @@ class ScrapeEngine(
      */
     private inner class InfoFiles : GameInfoFiles {
         private fun target(ref: LibraryGameRef): ArtTarget? =
-            if (ref.android) null else guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) }
+            if (ref.android) null else ArtPaths.targetOrNull(ref)
 
         override fun path(ref: LibraryGameRef): String? = target(ref)?.infoPath
 
@@ -340,7 +340,7 @@ class ScrapeEngine(
      * Reset's before pass, whose refs are only compared).
      */
     suspend fun artOnDisk(ref: LibraryGameRef, heroes: Boolean = true): ArtRefs =
-        guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) }?.let { artOnDisk(it, Listings(), heroes) } ?: ArtRefs()
+        ArtPaths.targetOrNull(ref)?.let { artOnDisk(it, Listings(), heroes) } ?: ArtRefs()
 
     /**
      * Held by a run's write into a pick slot (with its pick check right before it) and its index update, and by a
@@ -468,7 +468,7 @@ class ScrapeEngine(
      *
      * The extras ([extras], NX Redux's flow): with the 2D box on, a game being fetched also gets its 2D box (a 2D box hit,
      * else a grid) as its own download beside the 3D one (a 2D box written while the game has no box is its box, as
-     * without the setting); with the wheel wanted ([ArtExtras.wantWheel]) its wheel, from the first source that has
+     * without the setting); with the wheel on ([ArtExtras.wheel]) its wheel, from the first source that has
      * one, a [ArtSource.wheelLast] source's only once every other has been asked (it is asked for the wheel only beside other slots in turn, and for
      * the wheel alone only when no other source had one). Neither is ever a reason to fetch a game nor counts toward
      * DONE. With Mix on, a game without a mix is fetched (only for what it lacks, so a game with a screenshot and a box
@@ -495,7 +495,7 @@ class ScrapeEngine(
             info?.let(onInfo)
             return hits
         }
-        val target = guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) }
+        val target = ArtPaths.targetOrNull(ref)
             ?: return ItemStatus.ERROR to "No place for its art"
         val ex = extras()
         /** The engine's folder before this game's writes ([indexArt] tells the mirror's files from an extra's own). */
@@ -505,7 +505,7 @@ class ScrapeEngine(
         var needShot = replace || !ref.have.screenshot
         // The extras: without Replace only when the index and the disk have none.
         var want2d = ex.box2d && (replace || !(ref.have.box2d || onDisk.box2d))
-        var wantWheel = ex.wantWheel && (replace || !(ref.have.wheel || onDisk.wheel))
+        var wantWheel = ex.wheel && (replace || !(ref.have.wheel || onDisk.wheel))
         if (!replace) {
             if (onDisk.box) needBox = false
             if (onDisk.screenshot) needShot = false
@@ -776,7 +776,7 @@ class ScrapeEngine(
     suspend fun writePick(ref: LibraryGameRef, slot: ArtSlot, image: ByteArray, option: ArtOption): ArtRefs? {
         if (option.slot.fileSlot != slot) return null
         if (ref.android) return writeAndroidPick(ref, slot, image, option)
-        val target = guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) } ?: return null
+        val target = ArtPaths.targetOrNull(ref) ?: return null
         val fitted = fitFor(option.slot, image) ?: return null
         return pickWrites.withLock {
             val ls = Listings()

@@ -1,6 +1,7 @@
 package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.tryOr
+import com.nxredux.mobile.tryOrAny
 import com.nxredux.mobile.library.CollectionRename
 import com.nxredux.mobile.library.CollectionWrite
 import com.nxredux.mobile.library.Collections
@@ -20,7 +21,6 @@ import com.nxredux.mobile.storage.ToolPins
 import com.nxredux.mobile.storage.UserDataStore
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxButton
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -311,7 +311,6 @@ internal class ContextMenuController(
             else ContextMenus.toolItems(pinned = row.row.pinKey in host.toolPins, app = row.row.kind == ToolKind.APP, pin = !host.kidsOn)
                 .takeIf { it.isNotEmpty() }?.let { ContextMenu(null, it, tool = row.row) }
         is MainRow.PinnedTool -> ContextMenu(null, ContextMenus.toolItems(pinned = true), tool = row.row)
-        is MainRow.MoreTools -> null   // Home's "+N": no menu
         else -> null
     }
 
@@ -374,27 +373,15 @@ internal class ContextMenuController(
             promptFocusStep(m.promptFocus, button)?.let { setMenu(m.copy(promptFocus = it)); return }
             if (button == NxButton.A && m.promptFocus == 1) { closeContextMenu(); return }
         }
-        when (p) {
-            is MenuPrompt.Rename -> when (button) {
-                NxButton.A -> confirmRename(m, p.draft)
-                NxButton.B, NxButton.MENU -> closeContextMenu()
-                else -> Unit
+        when (button) {
+            NxButton.A -> when (p) {
+                is MenuPrompt.Rename -> confirmRename(m, p.draft)
+                is MenuPrompt.NewCollection -> confirmNewCollection(m, p.draft)
+                is MenuPrompt.RenameCollection -> confirmRenameCollection(m, p)
+                is MenuPrompt.DeleteCollection -> deleteCollection(m, p.name)
             }
-            is MenuPrompt.NewCollection -> when (button) {
-                NxButton.A -> confirmNewCollection(m, p.draft)
-                NxButton.B, NxButton.MENU -> closeContextMenu()
-                else -> Unit
-            }
-            is MenuPrompt.RenameCollection -> when (button) {
-                NxButton.A -> confirmRenameCollection(m, p)
-                NxButton.B, NxButton.MENU -> closeContextMenu()
-                else -> Unit
-            }
-            is MenuPrompt.DeleteCollection -> when (button) {
-                NxButton.A -> deleteCollection(m, p.name)
-                NxButton.B, NxButton.MENU -> closeContextMenu()
-                else -> Unit
-            }
+            NxButton.B, NxButton.MENU -> closeContextMenu()
+            else -> Unit
         }
     }
 
@@ -428,8 +415,7 @@ internal class ContextMenuController(
             }
             ContextKind.PIN -> pin(m)
             ContextKind.UNPIN -> unpin(m)
-            ContextKind.HIDE -> setHidden(m, true)
-            ContextKind.UNHIDE -> setHidden(m, false)
+            ContextKind.HIDE -> hide(m)
             ContextKind.REMOVE_RECENT -> removeRecent(m)
             ContextKind.REMOVE_FROM_COLLECTION -> ((_screen.value as? Screen.Games)?.source?.base as? ListSource.Collection)?.let { removeFromCollection(m, it.name) } ?: closeContextMenu()
             ContextKind.RENAME -> setMenu(m.copy(prompt = MenuPrompt.Rename(m.game.game.shownName), promptFocus = -1))
@@ -447,15 +433,25 @@ internal class ContextMenuController(
     private fun menuAction(m: ContextMenu, block: suspend () -> Unit) {
         setMenu(m.copy(busy = true))
         scope.launch {
-            try {
-                block()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
+            tryOrAny({ e ->
                 closeContextMenu()
                 _error.value = "Something went wrong: ${e.message ?: e::class.simpleName}"
-            }
+            }) { block() }
         }
+    }
+
+    /** A change that could not be made: the menu closes and [text] shows as the error. */
+    private fun fail(text: String) {
+        closeContextMenu()
+        _error.value = text
+    }
+
+    /** A change made: the main menu is rebuilt, the menu closes, the open list follows (on [select]), and [notice] says so. */
+    private suspend fun done(notice: String? = null, select: String? = null) {
+        host.rebuildMainRows()
+        closeContextMenu()
+        host.refreshOpenList(select)
+        notice?.let(host::showNotice)
     }
 
     /**
@@ -465,7 +461,7 @@ internal class ContextMenuController(
     private fun pin(m: ContextMenu) = menuAction(m) {
         val game = m.game.game
         val android = m.game.system.android
-        val known = if (android) game.fileName in settings.androidPins else host.pins.any { it.path in game.lines }
+        val known = pinned(m.game)
         if (!known && host.pins.size + settings.androidPins.size >= Shortcuts.MAX) {
             closeContextMenu(); host.showNotice("Pins are full (${Shortcuts.MAX}). Unpin one first."); return@menuAction
         }
@@ -474,12 +470,9 @@ internal class ContextMenuController(
         } else {
             val added = Shortcuts.add(host.pins, Shortcut(game.path, game.shownName))
             if (added == null) { closeContextMenu(); host.showNotice("Pins are full (${Shortcuts.MAX}). Unpin one first."); return@menuAction }
-            if (!userData.writePins(added)) { closeContextMenu(); _error.value = "Could not save the pin"; return@menuAction }
+            if (!userData.writePins(added)) { fail("Could not save the pin"); return@menuAction }
         }
-        host.rebuildMainRows()
-        closeContextMenu()
-        host.refreshOpenList()
-        host.showNotice("Pinned")
+        done("Pinned")
     }
 
     /** Unpins [m]'s game from its list ([AppSettings.androidPins] for an Android game, else shortcuts.txt). */
@@ -489,22 +482,16 @@ internal class ContextMenuController(
         } else {
             // Every line for the game: a pin written for a copy the scan hides behind it is this game's pin too.
             val left = m.game.game.lines.fold(host.pins) { pins, line -> Shortcuts.remove(pins, line) }
-            if (!userData.writePins(left)) { closeContextMenu(); _error.value = "Could not save the pin"; return@menuAction }
+            if (!userData.writePins(left)) { fail("Could not save the pin"); return@menuAction }
         }
-        host.rebuildMainRows()
-        closeContextMenu()
-        host.refreshOpenList()
-        host.showNotice("Unpinned")
+        done("Unpinned")
     }
 
     /** Pins or unpins the tool [key] (its [pinKey]) in the app-private tool-pins.txt (shortcuts.txt is never touched), then rebuilds the main menu. */
     private fun setToolPinned(m: ContextMenu, key: String, pinned: Boolean) = menuAction(m) {
         val next = if (pinned) ToolPins.add(host.toolPins, key) else ToolPins.remove(host.toolPins, key)
-        if (!host.writeToolPins(next)) { closeContextMenu(); _error.value = "Could not save the pin"; return@menuAction }
-        host.rebuildMainRows()
-        closeContextMenu()
-        host.refreshOpenList()
-        host.showNotice(if (pinned) "Pinned" else "Unpinned")
+        if (!host.writeToolPins(next)) { fail("Could not save the pin"); return@menuAction }
+        done(if (pinned) "Pinned" else "Unpinned")
     }
 
     /** Adds the app [id] to Tools or removes it ([on]), then says so. */
@@ -515,23 +502,18 @@ internal class ContextMenuController(
         host.showNotice(if (on) "Added to Tools" else "Removed from Tools")
     }
 
-    /** Hides or unhides [m]'s game: hidden.txt, then the playable cache, the main menu and the open list are rebuilt. */
-    private fun setHidden(m: ContextMenu, hidden: Boolean) = menuAction(m) { host.applyHidden(m.game, hidden, closeMenu = true) }
+    /** Hides [m]'s game: hidden.txt, then the playable cache, the main menu and the open list are rebuilt. */
+    private fun hide(m: ContextMenu) = menuAction(m) { host.applyHidden(m.game, true, closeMenu = true) }
 
     private fun removeRecent(m: ContextMenu) = menuAction(m) {
         recentsLock.withLock { userData.writeRecents(m.game.game.lines.fold(userData.readRecents()) { r, line -> Recents.remove(r, line) }) }
-        host.rebuildMainRows()
-        closeContextMenu()
-        host.refreshOpenList()
+        done()
     }
 
     private fun removeFromCollection(m: ContextMenu, name: String) = menuAction(m) {
-        if (!m.game.game.lines.all { collections.remove(name, it) }) { closeContextMenu(); _error.value = "Could not save the collection"; return@menuAction }
+        if (!m.game.game.lines.all { collections.remove(name, it) }) { fail("Could not save the collection"); return@menuAction }
         host.collectionChanged(name)
-        host.rebuildMainRows()   // the collection's count on the Collections tab
-        closeContextMenu()
-        host.refreshOpenList()
-        host.showNotice("Removed from $name")
+        done("Removed from $name")   // the collection's count on the Collections tab
     }
 
     /** Rename Rom: a blank, invalid or unchanged name closes the menu with no write. */
@@ -542,7 +524,7 @@ internal class ContextMenuController(
         menuAction(m.copy(prompt = null)) {
             val key = if (g.lookupDir != g.relativeDir) g.relativeDir.substringAfterLast('/') else g.fileName   // a disc folder is keyed by its folder name
             val ok = tryOr({ false }) { sidecars.setName(g.sourceId, g.lookupDir, key, name) }
-            if (!ok) { closeContextMenu(); _error.value = "Could not save the name"; return@menuAction }
+            if (!ok) { fail("Could not save the name"); return@menuAction }
             if (!host.renameInIndex(g, name)) { closeContextMenu(); host.rescan(); return@menuAction }   // stale list: the alias is saved, the scan shows it
             val path = g.path
             recentsLock.withLock {
@@ -550,10 +532,7 @@ internal class ContextMenuController(
                 if (recents.any { it.path == path }) userData.writeRecents(Recents.updateAlias(recents, path, name))
             }
             if (host.pins.any { it.path == path }) userData.writePins(Shortcuts.rename(host.pins, path, name))
-            host.rebuildMainRows()
-            closeContextMenu()
-            host.refreshOpenList(select = path)
-            host.showNotice("Renamed")
+            done("Renamed", select = path)
         }
     }
 
@@ -575,11 +554,7 @@ internal class ContextMenuController(
 
     private fun confirmNewCollection(m: ContextMenu, draft: String) {
         val name = Names.validCollectionName(draft)
-        if (name == null) {
-            closeContextMenu()
-            _error.value = INVALID_NAME
-            return
-        }
+        if (name == null) { fail(INVALID_NAME); return }
         addToCollection(m, name)
     }
 
@@ -589,7 +564,7 @@ internal class ContextMenuController(
             ContextKind.EMULATOR -> { val from = consoleOf(m) ?: return closeContextMenu(); if (value == from.tag) closeContextMenu() else applyTag(m, value) }
             ContextKind.CONSOLE -> CoreRegistry.consoles.firstOrNull { it.id == value }?.let { c -> applyTag(m, c.defaultTagFor(settings.defaultTags[c.id])) }
             ContextKind.ADD_TO_COLLECTION -> if (value.isEmpty()) setMenu(m.copy(sub = null, prompt = MenuPrompt.NewCollection(), promptFocus = -1)) else addToCollection(m, value)
-            ContextKind.PIN, ContextKind.UNPIN, ContextKind.HIDE, ContextKind.UNHIDE, ContextKind.RENAME,
+            ContextKind.PIN, ContextKind.UNPIN, ContextKind.HIDE, ContextKind.RENAME,
             ContextKind.REMOVE_FROM_COLLECTION, ContextKind.REMOVE_RECENT, ContextKind.GAME_SETTINGS, ContextKind.FETCH_ART, ContextKind.CHANGE_ART,
             ContextKind.PIN_TOOL, ContextKind.UNPIN_TOOL, ContextKind.ADD_TO_TOOLS, ContextKind.REMOVE_FROM_TOOLS,
             ContextKind.RENAME_COLLECTION, ContextKind.DELETE_COLLECTION, ContextKind.NETPLAY, ContextKind.PLAY_FROM_START, ContextKind.RESUME,
@@ -604,13 +579,13 @@ internal class ContextMenuController(
      */
     private fun confirmRenameCollection(m: ContextMenu, p: MenuPrompt.RenameCollection) {
         val name = Names.validCollectionName(p.draft)
-        if (name == null) { closeContextMenu(); _error.value = INVALID_NAME; return }
+        if (name == null) { fail(INVALID_NAME); return }
         val old = p.initial
         if (name == old) { closeContextMenu(); return }
         menuAction(m.copy(prompt = null)) {
             when (collections.rename(old, name)) {
-                CollectionRename.EXISTS -> { closeContextMenu(); _error.value = "There is already a collection named $name"; return@menuAction }
-                CollectionRename.FAILED -> { closeContextMenu(); _error.value = "Could not rename the collection"; return@menuAction }
+                CollectionRename.EXISTS -> { fail("There is already a collection named $name"); return@menuAction }
+                CollectionRename.FAILED -> { fail("Could not rename the collection"); return@menuAction }
                 CollectionRename.RENAMED -> Unit
             }
             host.collectionChanged(old)
@@ -625,12 +600,9 @@ internal class ContextMenuController(
 
     /** A collection's Delete, confirmed: only its file goes (never a game); the highlight lands on the row now in its place. */
     private fun deleteCollection(m: ContextMenu, name: String) = menuAction(m.copy(prompt = null)) {
-        if (!collections.delete(name)) { closeContextMenu(); _error.value = "Could not delete the collection"; return@menuAction }
+        if (!collections.delete(name)) { fail("Could not delete the collection"); return@menuAction }
         host.collectionChanged(name)
-        host.rebuildMainRows()   // the last one gone drops the tab
-        closeContextMenu()
-        host.refreshOpenList()
-        host.showNotice("Deleted $name")
+        done("Deleted $name")   // the last one gone drops the tab
     }
 
     /** Writes the game's sidecar entry, then moves the game in the index and opens the new tag's list. */
@@ -653,3 +625,10 @@ internal class ContextMenuController(
 
 /** The main menu's menu item (and the floating button's meaning) while an app holds the top screen. */
 internal const val USE_TOP_SCREEN_LABEL = "Use top screen"
+
+/** [menu] over the rebuilt [entries], on its game's fresh entry; dropped when that game left the list. */
+internal fun keptMenu(menu: ContextMenu?, entries: List<Listed>): ContextMenu? {
+    val entry = menu?.entry ?: return menu
+    val fresh = entries.firstOrNull { it.game.path == entry.game.path } ?: return null
+    return menu.copy(entry = fresh)
+}

@@ -10,7 +10,7 @@ class SkinBoxFormatTest {
     // A layout's control boxes: a slot and its sizes, a compact one tagged for a device shape.
     @Test
     fun aLayoutWithBoxesParses() {
-        val text = """{"format":1,"id":"t","name":"T","layouts":[{"id":"grip_t","family":"grip","variant":"menu","image":"t.webp",
+        val text = """{"format":2,"id":"t","name":"T","layouts":[{"id":"grip_t","family":"grip","variant":"menu","image":"t.webp",
             "width":10,"height":10,"tree":{"part":"a"},"glasses":[],"scales":[],"controls":[],
             "boxes":[{"slot":"right","sizes":[
               {"w":420,"h":980,"controls":[{"id":"A","shape":"circle","x":300,"y":200,"r":80}]},
@@ -26,7 +26,7 @@ class SkinBoxFormatTest {
     // A pack without boxes (every pack before them) still parses, every layout with none.
     @Test
     fun aLayoutWithoutBoxesStillParses() {
-        val pack = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
+        val pack = skinPack()
         assertTrue(pack.layouts.isNotEmpty())
     }
 
@@ -59,16 +59,15 @@ class SkinBoxFormatTest {
         }
     }
 
-    // The format this app writes and reads: the packs declare it; an older pack still reads (its newer fields absent), a
-    // newer one does not (it may draw what this app cannot).
+    // The format this app writes and reads: the packs declare it, and a pack of any other format is refused.
     @Test
-    fun theFormatIsReadUpToThisAppsOwn() {
+    fun onlyThisAppsOwnFormatIsRead() {
         val dir = File("../androidApp/src/main/assets/skins")
         for (pack in dir.listFiles()!!.filter { it.isDirectory }) assertEquals(SkinPackManifest.FORMAT, assertNotNull(SkinPackManifest.parse(File(pack, "skin.json").readText()), pack.name).format, pack.name)
         assertEquals(2, SkinPackManifest.FORMAT)
         fun pack(format: Int) = """{"format":$format,"id":"t","name":"T","layouts":[]}"""
-        assertNotNull(SkinPackManifest.parse(pack(1)))
         assertNotNull(SkinPackManifest.parse(pack(2)))
+        assertEquals(null, SkinPackManifest.parse(pack(1)))
         assertEquals(null, SkinPackManifest.parse(pack(3)))
         assertEquals(null, SkinPackManifest.parse(pack(0)))
     }
@@ -77,7 +76,7 @@ class SkinBoxFormatTest {
     // empty one passed over (not the whole layout lost).
     @Test
     fun aDuplicateOrEmptyBoxIsPassedOver() {
-        val pack = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
+        val pack = skinPack()
         val d = GOLDEN_DEVICES.first { it.name == "cover_land" }
         val before = assertNotNull(placeFor(pack, SkinVariant.SMS, d))
         val id = before.spec.id

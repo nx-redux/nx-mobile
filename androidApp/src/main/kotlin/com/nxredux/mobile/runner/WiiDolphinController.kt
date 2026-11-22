@@ -325,7 +325,7 @@ internal class WiiDolphinController(
         val wide = WiiScreen.isWide(g[2])
         if (wide != pointerWide) {
             pointerWide = wide
-            NxLog.i("GameActivity", "Wii game draws ${if (wide) "16:9" else "4:3"} (launched ${if (launchWide) "16:9" else "4:3"}): pointer follows")
+            NxLog.i(TAG_LOG, "Wii game draws ${if (wide) "16:9" else "4:3"} (launched ${if (launchWide) "16:9" else "4:3"}): pointer follows")
             host.applyOptions(pointerOptions(wide).map { (k, v) -> Variable(k, v) })
         }
         if (!shapeNoted) WiiScreen.keptShapeNote(wide, launchWide)?.let {

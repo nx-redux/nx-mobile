@@ -144,12 +144,6 @@ internal class SaveSession(
         lastResumePoint = slot
     }
 
-    /** The launch dropped the resume slot (a stale one): this launch boots fresh. */
-    fun dropResume() {
-        resumeSlot = null
-        resumePending = false
-    }
-
     /** The game's save states (null: none, as in netplay), once its paths are known. */
     fun open(states: SaveStates?) { saveStates = states }
 
@@ -193,7 +187,7 @@ internal class SaveSession(
         val ss = saveStates ?: return
         val ok = autoWriteOk ?: return
         autoWriter.execute {
-            if (ok.get()) runCatching { ss.writeAutoThumb(bmp) }.onFailure { NxLog.w("GameActivity", "auto-resume thumb on stop failed", it) }
+            if (ok.get()) runCatching { ss.writeAutoThumb(bmp) }.onFailure { NxLog.w(TAG_LOG, "auto-resume thumb on stop failed", it) }
         }
     }
 
@@ -259,13 +253,13 @@ internal class SaveSession(
                     try {
                         serialized.run {
                             val bytes = runCatching { view.serializeState() }
-                                .onFailure { NxLog.e("GameActivity", "auto-resume state on stop failed", it) }.getOrNull()
-                            NxLog.i("GameActivity", "auto-state on stop: serialize=${SystemClock.elapsedRealtime() - t0}ms")
+                                .onFailure { NxLog.e(TAG_LOG, "auto-resume state on stop failed", it) }.getOrNull()
+                            NxLog.i(TAG_LOG, "auto-state on stop: serialize=${SystemClock.elapsedRealtime() - t0}ms")
                             bytes
                         }
                     } finally { stopSerializes.decrementAndGet() }
                 }
-            }.onFailure { NxLog.e("GameActivity", "auto-resume state on stop failed", it) }.isSuccess
+            }.onFailure { NxLog.e(TAG_LOG, "auto-resume state on stop failed", it) }.isSuccess
         }
         if (!queued) { stopSerializes.decrementAndGet(); return }
         autoWrittenOnStop = true
@@ -285,11 +279,11 @@ internal class SaveSession(
                 ss.writeAuto(bytes)
                 ok.set(true)   // the state is replaced: its thumb must follow even if the slot pointer fails
                 lastResumePoint = NxPaths.AUTO_SLOT
-            }.onFailure { failed.set(true); NxLog.e("GameActivity", "auto-resume state on stop failed", it) }
+            }.onFailure { failed.set(true); NxLog.e(TAG_LOG, "auto-resume state on stop failed", it) }
             if (ok.get()) runCatching { ss.markAuto(onlyIfNotManual = true) }
-                .onFailure { NxLog.e("GameActivity", "auto-resume slot pointer on stop failed", it) }
+                .onFailure { NxLog.e(TAG_LOG, "auto-resume slot pointer on stop failed", it) }
             runCatching { lastSlotCache = ss.lastSlot() }   // the pointer may name slot 9 (shown as slot 1)
-            NxLog.i("GameActivity", "auto-state on stop: write=${SystemClock.elapsedRealtime() - t1}ms bytes=${bytes.size}")
+            NxLog.i(TAG_LOG, "auto-state on stop: write=${SystemClock.elapsedRealtime() - t1}ms bytes=${bytes.size}")
         }
         homeThumb?.let { queueHomeThumb(it) }
         homeThumb = null
@@ -302,7 +296,7 @@ internal class SaveSession(
      */
     fun unlinkAuto() {
         val ss = saveStates ?: return
-        autoWriter.execute { runCatching { ss.unlinkAuto() }.onFailure { NxLog.w("GameActivity", "unlinking the hidden state failed", it) } }
+        autoWriter.execute { runCatching { ss.unlinkAuto() }.onFailure { NxLog.w(TAG_LOG, "unlinking the hidden state failed", it) } }
     }
 
     /** Loads the resume slot right after start, like minarch's State_resume; a failure keeps the fresh boot. */
@@ -355,7 +349,7 @@ internal class SaveSession(
                         lastResumePoint = NxPaths.AUTO_SLOT
                     }.get()
                     onSaved()
-                }.onFailure { NxLog.w("GameActivity", "resume point before Wii HOME failed", it) }
+                }.onFailure { NxLog.w(TAG_LOG, "resume point before Wii HOME failed", it) }
                 withContext(Dispatchers.Main) { done() }
             }.also { trackSlotJob(it) }
         }
@@ -402,7 +396,7 @@ internal class SaveSession(
                             // On the GL thread (a core may draw inside it: Azahar), waited for under the lock: the GL
                             // thread never takes coreLock, so the destroy observer just waits for it.
                             val state = runCatching { view.serializeState() }
-                                .onFailure { NxLog.e("GameActivity", "auto-resume state failed", it) }
+                                .onFailure { NxLog.e(TAG_LOG, "auto-resume state failed", it) }
                             writeBatterySave(notify = true)   // local: always completes, before the native destroy
                             release(true)
                             state
@@ -421,7 +415,7 @@ internal class SaveSession(
                                 ss.markAuto(onlyIfNotManual = !chosen)
                             }.get()
                             true
-                        }.onFailure { NxLog.e("GameActivity", "auto-resume state failed", it) }.getOrDefault(false)
+                        }.onFailure { NxLog.e(TAG_LOG, "auto-resume state failed", it) }.getOrDefault(false)
                     }
                     ok
                 }
@@ -451,7 +445,7 @@ internal class SaveSession(
         slotsJob = host.lifecycleScope.launch {
             val (slots, last) = withContext(Dispatchers.IO) {
                 runCatching { readSlots(ss) to ss.lastSlot() }
-                    .onFailure { NxLog.w("GameActivity", "could not list the slots", it) }.getOrNull()
+                    .onFailure { NxLog.w(TAG_LOG, "could not list the slots", it) }.getOrNull()
             } ?: return@launch
             slotsUi.value = slots
             lastSlotCache = last
@@ -541,11 +535,11 @@ internal class SaveSession(
         // The read is in the job too, not on main: a state file is up to tens of MB (PSP and DC).
         trackSlotJob(host.lifecycleScope.launch(Dispatchers.IO) {
             val read = runCatching { ss.readState(slot) }
-                .onFailure { NxLog.e("GameActivity", "could not read slot $slot", it) }
+                .onFailure { NxLog.e(TAG_LOG, "could not read slot $slot", it) }
             if (read.getOrNull() == null && read.isSuccess) return@launch   // empty slot: ignore (the menu stays open)
             val ok = read.getOrNull()?.let { bytes -> runCatching { host.speed.aroundState { view.unserializeState(bytes) } }.getOrDefault(false) } ?: false
             if (ok) runCatching { saveStates?.rememberSlot(slot) }
-                .onFailure { NxLog.e("GameActivity", "could not record last slot", it) }
+                .onFailure { NxLog.e(TAG_LOG, "could not record last slot", it) }
             // The loaded state's rumble may stay latched unreported: start from still rather than re-apply the old one.
             withContext(Dispatchers.Main) {
                 if (ok) {
@@ -631,13 +625,13 @@ internal class SaveSession(
                 // The clock file alongside (minarch writes both together); its failure is logged, never toasted.
                 val clockWrote = clockSave?.let { c ->
                     runCatching { c.write(view.serializeRTC(useEmulationThread = false)) }
-                        .onFailure { NxLog.e("GameActivity", "clock save failed", it) }.getOrDefault(false)
+                        .onFailure { NxLog.e(TAG_LOG, "clock save failed", it) }.getOrDefault(false)
                 } ?: false
                 wrote || clockWrote
             }
         }
             .onFailure {
-                NxLog.e("GameActivity", "battery save failed", it)
+                NxLog.e(TAG_LOG, "battery save failed", it)
                 if (notify) host.activity.runOnUiThread { host.toast("Battery save failed") }
             }.getOrDefault(false)
     }

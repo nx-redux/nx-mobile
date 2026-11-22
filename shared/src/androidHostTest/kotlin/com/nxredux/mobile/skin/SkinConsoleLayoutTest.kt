@@ -3,7 +3,6 @@ package com.nxredux.mobile.skin
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.PadEvent
 import com.nxredux.mobile.ui.nx.SkinPadTouch
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -11,7 +10,7 @@ import kotlin.test.assertTrue
 
 /** The GB family and GBA layouts of the built-in NX Carbon pack: picked by variant, with a fallback, and TL / TR pressing L2 / R2. */
 class SkinConsoleLayoutTest {
-    private val pack = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
+    private val pack = skinPack()
     private val gba = 240f to 160f
 
     @Test

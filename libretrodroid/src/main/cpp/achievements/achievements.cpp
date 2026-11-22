@@ -109,7 +109,7 @@ uint32_t Achievements::readMemory(uint32_t address, uint8_t* buffer, uint32_t nu
         self.initMemoryRegions();
     }
     if (self.regions.ready()) return self.regions.read(address, buffer, numBytes);
-    // Fallback (nx-redux ra_integration.c): raw system RAM, then save RAM, with an overflow-safe bounds check.
+    // No region table: raw system RAM, then save RAM (as nx-redux ra_integration.c).
     for (unsigned id : { (unsigned) RETRO_MEMORY_SYSTEM_RAM, (unsigned) RETRO_MEMORY_SAVE_RAM }) {
         if (!self.coreGetMemoryData || !self.coreGetMemorySize) break;
         auto* data = (uint8_t*) self.coreGetMemoryData(id);
@@ -277,8 +277,7 @@ void Achievements::loadGameCallback(int result, const char* errorMessage, rc_cli
 void Achievements::unloadGame() {
     if (!client) return;
     rc_client_unload_game(client);
-    regions.invalidate();
-    regionsInitTried = false;
+    invalidateMemoryRegions();
 }
 
 std::vector<AchievementInfo> Achievements::list() {
@@ -306,17 +305,6 @@ std::vector<AchievementInfo> Achievements::list() {
     }
     rc_client_destroy_achievement_list(list);
     return out;
-}
-
-AchievementSummary Achievements::summary() {
-    AchievementSummary s;
-    if (!client || !rc_client_is_game_loaded(client)) return s;
-    rc_client_user_game_summary_t summary {};
-    rc_client_get_user_game_summary(client, &summary);
-    s.unlocked = summary.num_unlocked_achievements;
-    s.total = summary.num_core_achievements;
-    s.points = summary.points_unlocked;
-    return s;
 }
 
 bool Achievements::buildAwardRequest(const std::string& user, const std::string& token, uint32_t achievementId,

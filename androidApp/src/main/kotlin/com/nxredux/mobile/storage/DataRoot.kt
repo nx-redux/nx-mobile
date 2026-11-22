@@ -417,7 +417,7 @@ object DataRoot {
         }
     }
 
-    private fun sameBytes(x: java.io.InputStream, y: java.io.InputStream): Boolean {
+    internal fun sameBytes(x: java.io.InputStream, y: java.io.InputStream): Boolean {
         val p = ByteArray(BLOCK)
         val q = ByteArray(BLOCK)
         while (true) {
@@ -429,7 +429,7 @@ object DataRoot {
     }
 
     /** Fills [buf] from [input] as far as it goes: the bytes read, short only at the end. */
-    private fun readBlock(input: java.io.InputStream, buf: ByteArray): Int {
+    internal fun readBlock(input: java.io.InputStream, buf: ByteArray): Int {
         var n = 0
         while (n < buf.size) {
             val r = input.read(buf, n, buf.size - n)

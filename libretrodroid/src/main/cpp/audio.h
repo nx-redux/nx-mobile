@@ -57,7 +57,7 @@ private:
 
 public:
     // [bufferMs]: the sound kept ready on average (Audio Buffer), 0 for the default (about 33 ms).
-    Audio(int32_t sampleRate, double refreshRate, bool preferLowLatencyAudio, int32_t bufferMs = 0);
+    Audio(int32_t sampleRate, double refreshRate, int32_t bufferMs = 0);
     ~Audio() override;
 
     void start();
@@ -108,7 +108,7 @@ private:
     bool openStreamLocked();
     void reopenStream();
     void tuneLatency();
-    std::unique_ptr<Audio::AudioLatencySettings> findBestLatencySettings(bool preferLowLatencyAudio);
+    std::unique_ptr<Audio::AudioLatencySettings> findBestLatencySettings();
     double computeMaximumLatency() const;
     int32_t requestedBufferMs = 0;
     // libsamplerate's input callback: the next INPUT_CHUNK_FRAMES from the FIFO (zeros past what it holds).

@@ -73,7 +73,6 @@ class PrefsProvider : ContentProvider() {
                 }
                 encode(mapOf(RESULT_OK to editor.commit()))
             }
-            METHOD_GET_ALL -> encode(mapOf(RESULT_ENTRIES to HashMap(prefs.all)))
             else -> null
         }
     }
@@ -91,16 +90,16 @@ class PrefsProvider : ContentProvider() {
         const val ARG_REMOVE = "remove"
         const val ARG_CLEAR = "clear"
         const val RESULT_OK = "ok"
-        /** Every entry of the file `arg` as this process holds it now; result [RESULT_ENTRIES] (key to value). */
-        const val METHOD_GET_ALL = "getAll"
-        const val RESULT_ENTRIES = "entries"
-        /** [METHOD_GET_ALL] for each file named in [ARG_NAMES], in one call; result [RESULT_FILES] (name to entries). The `arg` name is unused. */
+        /**
+         * Every entry of each file named in [ARG_NAMES] as this process holds it now, in one call; result
+         * [RESULT_FILES] (name to its entries, key to value). The `arg` name is unused.
+         */
         const val METHOD_GET_ALL_FILES = "getAllFiles"
         const val ARG_NAMES = "names"
         const val RESULT_FILES = "files"
         /** The data root as [DataRoot.settled] answers in the main process; result [RESULT_PATH]. The `arg` name is unused. */
         const val METHOD_DATA_ROOT_SETTLED = "dataRootSettled"
-        /** [ARG_BEGIN] true: [DataRoot.useBegin], false: [DataRoot.useEnd]; the game process holds off the data move through it. */
+        /** [ARG_BEGIN] true: [DataRoot.gameUseBegin], false: [DataRoot.gameUseEnd]; the game process holds off the data move through it. */
         const val METHOD_DATA_ROOT_USE = "dataRootUse"
         const val ARG_BEGIN = "begin"
         const val RESULT_PATH = "path"

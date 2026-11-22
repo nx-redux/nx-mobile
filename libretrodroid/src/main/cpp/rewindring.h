@@ -25,8 +25,8 @@
 namespace libretrodroid {
 
 /**
- * The rewind ring buffer: compressed entries packed into one byte buffer, indexed by a fixed table. Ported from the
- * handheld's ma_rewind_ring.c. Entries are a delta chain, so they only ever leave from the oldest end, and a delta
+ * The rewind ring buffer: compressed entries packed into one byte buffer, indexed by a fixed table.
+ * Entries are a delta chain, so they only ever leave from the oldest end, and a delta
  * never outlives the keyframe it builds on: the oldest stored entry is always a keyframe. Not thread-safe; the caller
  * holds its own lock.
  */
@@ -55,9 +55,6 @@ public:
 
     bool empty() const { return count_ == 0; }
     size_t count() const { return count_; }
-
-    /** The newest entry; the ring must not be empty. */
-    Entry newest() const;
 
     /** The k-th entry counting from the oldest (0 = oldest, count() - 1 = newest); k must be in range. */
     Entry at(int k) const;

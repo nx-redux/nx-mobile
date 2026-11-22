@@ -5,7 +5,7 @@ import com.nxredux.mobile.library.Entry
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.runner.ContentRef
-import kotlinx.coroutines.CancellationException
+import com.nxredux.mobile.tryOrAny
 
 /**
  * A CD CHD's first data track, read through the platform's CHD decoder: [sectors] (relative to the track's start) as 2048
@@ -27,17 +27,12 @@ data class ProbeResult(val console: String?, val read: Boolean, val data: Entry?
  * needs [chd] (without it only a GD or DVD CHD is placed, by its metadata). Never throws.
  */
 class DiscProbe(private val source: RomsSource, private val chd: ChdSectors? = null) {
-    /** [file]'s console; [dir] is its folder's listing (a cue's, gdi's or m3u's files are found there). */
-    suspend fun identify(file: Entry, dir: List<Entry>): String? = probe(file, dir).console
-
-    /** [identify] with whether [file] (and the data file a sheet names) could be read. */
-    suspend fun probe(file: Entry, dir: List<Entry>): ProbeResult = try {
-        resultOf(file, dir, followM3u = true)
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Throwable) {
-        ProbeResult(null, read = false)
-    }
+    /**
+     * [file]'s console, with whether [file] (and the data file a sheet names) could be read; [dir] is its folder's
+     * listing (a cue's, gdi's or m3u's files are found there).
+     */
+    suspend fun probe(file: Entry, dir: List<Entry>): ProbeResult =
+        tryOrAny({ ProbeResult(null, read = false) }) { resultOf(file, dir, followM3u = true) }
 
     private suspend fun resultOf(file: Entry, dir: List<Entry>, followM3u: Boolean): ProbeResult = when (Names.extensionOf(file.name)) {
         "iso" -> {
@@ -95,13 +90,8 @@ class DiscProbe(private val source: RomsSource, private val chd: ChdSectors? = n
      * region), as [probe] finds the track: a bare iso/bin/img, a cue's first data track, a CD CHD's, an m3u's first disc.
      * Null when it cannot be read, has no data track, or is not a CD image. Never throws.
      */
-    suspend fun firstDataSector(file: Entry, dir: List<Entry>): ByteArray? = try {
-        sector0(file, dir, followM3u = true)
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Throwable) {
-        null
-    }
+    suspend fun firstDataSector(file: Entry, dir: List<Entry>): ByteArray? =
+        tryOrAny({ null }) { sector0(file, dir, followM3u = true) }
 
     private suspend fun sector0(file: Entry, dir: List<Entry>, followM3u: Boolean): ByteArray? = when (Names.extensionOf(file.name)) {
         "iso" -> sector0Of(file.ref, DiscImages.rawTrack(file.name, ByteArray(0)))

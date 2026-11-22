@@ -70,7 +70,7 @@ class SettingsBlockTest {
         val side = settingsLayoutPictureWidth(SettingsSizeClass.PHONE_LANDSCAPE, 915.dp, sectionRight = 180.dp, gutter = 24.dp)
         assertEquals(915.dp - 24.dp - 180.dp - 24.dp, side)
         assertTrue(side!! > settingsFrameWidth(915.dp, sectionRight = 180.dp, gutter = 24.dp))
-        // A tablet-class window: unchanged, the rows' width.
+        // A tablet-class window: the rows' width.
         assertEquals(null, settingsLayoutPictureWidth(SettingsSizeClass.TABLET, 1200.dp, sectionRight = 250.dp, gutter = 48.dp))
         // Never below zero.
         assertEquals(0.dp, settingsLayoutPictureWidth(SettingsSizeClass.PHONE_UPRIGHT, 20.dp, sectionRight = 0.dp, gutter = 16.dp))

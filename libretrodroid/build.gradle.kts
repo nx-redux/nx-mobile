@@ -22,12 +22,11 @@ listOf(
 android {
     namespace = "com.swordfish.libretrodroid"
     compileSdk = 37
-    // The NDK the cores are built with (cores/Makefile, release.yaml NDK_VERSION); AGP's default moves with AGP.
+    // The NDK the cores are built with (cores/ndk.mk, release.yaml NDK_VERSION); AGP's default moves with AGP.
     ndkVersion = "29.0.14206865"
 
     defaultConfig {
         minSdk = 26
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
         externalNativeBuild {
             cmake {
@@ -38,9 +37,18 @@ android {
     }
 
     buildTypes {
+        debug {
+            externalNativeBuild {
+                cmake {
+                    // Release's optimisation (AGP builds it as RelWithDebInfo: -O2) with asserts kept: at -O0 the resampler
+                    // and the renderer cost several times what players pay, so device measurements on a dev build misled.
+                    // -O3 measured no faster than -O2 in this library.
+                    arguments += listOf("-DCMAKE_C_FLAGS_DEBUG=-O2 -g", "-DCMAKE_CXX_FLAGS_DEBUG=-O2 -g")
+                }
+            }
+        }
         release {
             isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 

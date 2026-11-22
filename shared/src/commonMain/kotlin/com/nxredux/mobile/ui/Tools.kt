@@ -4,8 +4,10 @@ import com.nxredux.mobile.cheats.db.CheatDatabase
 import com.nxredux.mobile.cheats.db.CheatDbSource
 import com.nxredux.mobile.cheats.db.CheatDbState
 
-/** [APPS]: the app drawer (every launchable app); [APP]: one Android app added to Tools or pinned on Home. */
-/** [KIDS_LOCK]: Kids Mode's Lock row, first in Tools while a parent has the full menu; never pinned, no menu. */
+/**
+ * [APPS]: the app drawer (every launchable app); [APP]: one Android app added to Tools or pinned on Home.
+ * [KIDS_LOCK]: Kids Mode's Lock row, first in Tools while a parent has the full menu; never pinned, no menu.
+ */
 enum class ToolKind { RETRO_ACHIEVEMENTS, GAME_TIME, ARTWORK, CHEAT_DB, DEVICE_SYNC, SETTINGS, APPS, APP, KIDS_LOCK }
 
 /** A row on the Tools screen: the tool's name and a one-line status. [appId]: an Android app's id ([ToolKind.APP] only). */
@@ -29,8 +31,8 @@ val ToolKind.toolName: String?
     }
 
 /**
- * A page opened from inside a tool: the tool's name, then the page's ("RetroAchievements | Achievements"), the same
- * separator as a game list's [listTitle]. The tool's own top page keeps its plain name. [split]: a pane of a split
+ * A page opened from inside a tool: the tool's name, then the page's ("RetroAchievements | Achievements"). The
+ * tool's own top page keeps its plain name. [split]: a pane of a split
  * (two panes), whose left pane already shows where it came from: the page's own name alone ("Settings", not
  * "RetroAchievements | Settings").
  */

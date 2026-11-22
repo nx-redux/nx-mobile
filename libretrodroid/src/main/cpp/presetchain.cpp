@@ -78,7 +78,7 @@ std::string firstLine(const std::string& log, const char* fallback) {
     return log.substr(start, end == std::string::npos ? std::string::npos : end - start);
 }
 
-GLuint compileStage(GLenum type, const std::string& source, std::string& error) {
+GLuint compileStage(const char* label, GLenum type, const std::string& source, std::string& error) {
     GLuint shader = glCreateShader(type);
     const char* text = source.c_str();
     glShaderSource(shader, 1, &text, nullptr);
@@ -91,41 +91,9 @@ GLuint compileStage(GLenum type, const std::string& source, std::string& error) 
     glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
     std::string log(std::max(length, 1), '\0');
     glGetShaderInfoLog(shader, length, nullptr, log.data());
-    LOGE("Preset shader compile failed:\n%s", log.c_str());
+    LOGE("%s shader compile failed:\n%s", label, log.c_str());
     error = firstLine(log, type == GL_VERTEX_SHADER ? "vertex shader failed to compile" : "fragment shader failed to compile");
     glDeleteShader(shader);
-    return 0;
-}
-
-// Returns 0 and sets error on failure.
-GLuint linkProgram(const std::string& vertex, const std::string& fragment, std::string& error) {
-    GLuint vs = compileStage(GL_VERTEX_SHADER, vertex, error);
-    if (!vs) return 0;
-    GLuint fs = compileStage(GL_FRAGMENT_SHADER, fragment, error);
-    if (!fs) {
-        glDeleteShader(vs);
-        return 0;
-    }
-
-    GLuint program = glCreateProgram();
-    glAttachShader(program, vs);
-    glAttachShader(program, fs);
-    glLinkProgram(program);
-    // The program keeps them alive while attached.
-    glDeleteShader(vs);
-    glDeleteShader(fs);
-
-    GLint linked = GL_FALSE;
-    glGetProgramiv(program, GL_LINK_STATUS, &linked);
-    if (linked == GL_TRUE) return program;
-
-    GLint length = 0;
-    glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
-    std::string log(std::max(length, 1), '\0');
-    glGetProgramInfoLog(program, length, nullptr, log.data());
-    LOGE("Preset program link failed:\n%s", log.c_str());
-    error = firstLine(log, "program failed to link");
-    glDeleteProgram(program);
     return 0;
 }
 
@@ -168,37 +136,61 @@ void unbindAttrib(GLint location) {
     if (location != -1) glDisableVertexAttribArray(location);
 }
 
-// Selects unit 0 with tightly packed client-memory unpacking for the LUT uploads, and puts back whatever a
-// GL core left (active unit, its unit 0 binding, unpack state) when it goes out of scope, throw or not:
-// GL cores cache that state.
-class UploadState {
-public:
-    UploadState() {
-        glGetIntegerv(GL_ACTIVE_TEXTURE, &activeTexture);
-        glActiveTexture(GL_TEXTURE0);
-        glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
-        glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &unpackBuffer);
-        glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
-        glGetIntegerv(GL_UNPACK_ROW_LENGTH, &rowLength);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-    }
-    ~UploadState() {
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, rowLength);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, (GLuint) unpackBuffer);
-        glBindTexture(GL_TEXTURE_2D, (GLuint) texture);
-        glActiveTexture((GLenum) activeTexture);
-    }
-    UploadState(const UploadState&) = delete;
-    UploadState& operator=(const UploadState&) = delete;
-
-private:
-    GLint activeTexture = GL_TEXTURE0, texture = 0, unpackBuffer = 0, alignment = 4, rowLength = 0;
-};
-
 } // namespace
+
+GLuint linkChainProgram(const char* label, const std::string& vertex, const std::string& fragment,
+                        const char* attribute0, const char* attribute1, std::string& error) {
+    GLuint vs = compileStage(label, GL_VERTEX_SHADER, vertex, error);
+    if (!vs) return 0;
+    GLuint fs = compileStage(label, GL_FRAGMENT_SHADER, fragment, error);
+    if (!fs) {
+        glDeleteShader(vs);
+        return 0;
+    }
+
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vs);
+    glAttachShader(program, fs);
+    if (attribute0) glBindAttribLocation(program, 0, attribute0);
+    if (attribute1) glBindAttribLocation(program, 1, attribute1);
+    glLinkProgram(program);
+    // The program keeps them alive while attached.
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+
+    GLint linked = GL_FALSE;
+    glGetProgramiv(program, GL_LINK_STATUS, &linked);
+    if (linked == GL_TRUE) return program;
+
+    GLint length = 0;
+    glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
+    std::string log(std::max(length, 1), '\0');
+    glGetProgramInfoLog(program, length, nullptr, log.data());
+    LOGE("%s program link failed:\n%s", label, log.c_str());
+    error = firstLine(log, "program failed to link");
+    glDeleteProgram(program);
+    return 0;
+}
+
+ChainUploadState::ChainUploadState() {
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &activeTexture);
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
+    glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &unpackBuffer);
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
+    glGetIntegerv(GL_UNPACK_ROW_LENGTH, &rowLength);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+}
+
+ChainUploadState::~ChainUploadState() {
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, rowLength);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, (GLuint) unpackBuffer);
+    glBindTexture(GL_TEXTURE_2D, (GLuint) texture);
+    glActiveTexture((GLenum) activeTexture);
+}
 
 std::array<int, 4> foregroundRect(const std::array<float, 12>& vertices, int screenW, int screenH) {
     float minX = std::numeric_limits<float>::max(), maxX = std::numeric_limits<float>::lowest();
@@ -320,7 +312,7 @@ PresetChainRenderer::PresetChainRenderer(const PresetChain& chain) : params(chai
             }
         }
         if (!chain.luts.empty()) {
-            UploadState state;
+            ChainUploadState state;
             for (auto& lut : chain.luts) {
                 GLuint texture = 0;
                 glGenTextures(1, &texture);
@@ -337,10 +329,11 @@ PresetChainRenderer::PresetChainRenderer(const PresetChain& chain) : params(chai
             pass.cfg = chain.passes[index];
 
             std::string error;
-            pass.program = linkProgram(
+            pass.program = linkChainProgram(
+                "Preset",
                 prefixSource(pass.cfg.source, true, aliases),
                 prefixSource(pass.cfg.source, false, aliases),
-                error
+                nullptr, nullptr, error
             );
             if (!pass.program) throw std::runtime_error("pass " + std::to_string(index) + ": " + error);
             passes.push_back(pass);
@@ -403,7 +396,7 @@ PresetChainRenderer::PresetChainRenderer(const PresetChain& chain) : params(chai
             if (!last.toScreen) {
                 std::string error;
                 Blit b;
-                b.program = linkProgram(blitVertex, blitFragment, error);
+                b.program = linkChainProgram("Preset", blitVertex, blitFragment, nullptr, nullptr, error);
                 if (!b.program) throw std::runtime_error("blit: " + error);
                 b.vertexCoord = glGetAttribLocation(b.program, "VertexCoord");
                 b.texCoord = glGetAttribLocation(b.program, "TexCoord");

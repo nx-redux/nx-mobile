@@ -6,13 +6,9 @@
 #include <cmath>
 #include <cstdio>
 
+#include "check.h"
+
 using namespace libretrodroid;
-
-static int failures = 0;
-
-static void check(bool ok, const char* what) {
-    if (!ok) { std::printf("FAIL %s\n", what); failures++; }
-}
 
 static bool near(double a, double b) { return std::abs(a - b) < 0.01; }
 

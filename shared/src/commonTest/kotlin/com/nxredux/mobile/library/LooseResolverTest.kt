@@ -9,10 +9,6 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 
 class LooseResolverTest {
-    private fun zipHead(name: String): ByteArray {
-        val n = name.encodeToByteArray(); val h = ByteArray(30 + n.size)
-        h[0] = 0x50; h[1] = 0x4B; h[2] = 0x03; h[3] = 0x04; h[26] = n.size.toByte(); n.copyInto(h, 30); return h
-    }
     private val source = FakeRomsSource(
         dirs = mapOf(
             "sd/ROMs" to listOf("x.gb", "y.gba", "z.nds", "w.zip", "s.7z", "v.iso", "notes.txt", ".media", "Genesis", "Game Boy (GB)", "Old.gb.disabled", "systems.txt"),
@@ -23,7 +19,10 @@ class LooseResolverTest {
         texts = mapOf("sd/ROMs/systems.txt" to "v.iso\tPSP\nt.gb\tGBC\n"),   // t.gb lives in a subfolder: the root sidecar must not touch it
         bytes = mapOf("sd/ROMs/w.zip" to zipHead("Mario.gba"), "sd/ROMs/Genesis/r.zip" to zipHead("readme.txt")),
     )
-    private val resolver = LooseResolver(source, Sidecars(source, MemorySidecarStore()) { null }) { it.defaultTag }
+    private fun resolverOf(source: RomsSource, sidecars: Sidecars) =
+        LooseResolver(source, ScanReads(source, sidecars, null), { it.defaultTag })
+
+    private val resolver = resolverOf(source, Sidecars(source, MemorySidecarStore()) { null })
 
     @Test fun named_root_folders_are_not_walked() = runTest {
         val src = FakeRomsSource(mapOf(
@@ -32,7 +31,7 @@ class LooseResolverTest {
             "H/Bios" to listOf("GBA"), "H/Bios/GBA" to listOf("gba_bios.bin"),
             "H/Games" to listOf("Kirby.gba", "Roms"), "H/Games/Roms" to listOf("Mario.gba"),   // only the root's Roms is skipped
         ))
-        val files = LooseResolver(src, Sidecars(src, MemorySidecarStore()) { null }) { it.defaultTag }
+        val files = resolverOf(src, Sidecars(src, MemorySidecarStore()) { null })
             .scan(ContentRef("H"), "home-outside", skipTop = setOf("roms", "bios"))
         assertEquals(setOf("Tetris.gb" to "GB", "Kirby.gba" to "GBA", "Mario.gba" to "GBA"), files.map { it.entry.name to it.tag }.toSet())
     }
@@ -55,7 +54,7 @@ class LooseResolverTest {
     }
     @Test fun unassigned_files_carry_a_null_tag() = runTest {
         val src = FakeRomsSource(dirs = mapOf("sd/Mixed" to listOf("a.chd", "b.zip")), bytes = mapOf("sd/Mixed/b.zip" to zipHead("readme.txt")))
-        val files = LooseResolver(src, Sidecars(src, MemorySidecarStore()) { null }) { it.defaultTag }.scan(ContentRef("sd/Mixed"), "e2")
+        val files = resolverOf(src, Sidecars(src, MemorySidecarStore()) { null }).scan(ContentRef("sd/Mixed"), "e2")
         assertEquals(listOf(null, null), files.map { it.tag })
         assertEquals(listOf("", ""), files.map { it.relativeDir })
     }
@@ -66,7 +65,7 @@ class LooseResolverTest {
             "sd/Games/My Sony PlayStation/Mega Man X4" to listOf("Mega Man X4.cue", "Mega Man X4.bin"),
             "sd/Games/My Sony Playstation Portable" to listOf("FIFA Street 2.iso"),
         ))
-        val files = LooseResolver(src, Sidecars(src, MemorySidecarStore()) { null }) { it.defaultTag }.scan(ContentRef("sd/Games"), "e5")
+        val files = resolverOf(src, Sidecars(src, MemorySidecarStore()) { null }).scan(ContentRef("sd/Games"), "e5")
             .associate { "${it.relativeDir}|${it.entry.name}" to it.tag }
         assertEquals("PS", files["My Sony PlayStation|Tekken 3.PBP"])
         assertEquals("PS", files["My Sony PlayStation/Mega Man X4|Mega Man X4.cue"])
@@ -75,13 +74,13 @@ class LooseResolverTest {
     }
     @Test fun the_root_folder_name_counts_as_an_ancestor() = runTest {
         val src = FakeRomsSource(dirs = mapOf("sd/PSP" to listOf("game.iso")))
-        val files = LooseResolver(src, Sidecars(src, MemorySidecarStore()) { null }) { it.defaultTag }.scan(ContentRef("sd/PSP"), "e3")
+        val files = resolverOf(src, Sidecars(src, MemorySidecarStore()) { null }).scan(ContentRef("sd/PSP"), "e3")
         assertEquals("PSP", files.single().tag)
     }
     @Test fun sidecar_falls_back_to_the_store_when_the_tree_has_none() = runTest {
         val src = FakeRomsSource(dirs = mapOf("sd/Mixed" to listOf("a.chd")), writable = false)
         val store = MemorySidecarStore().apply { map["e4||systems.txt"] = "a.chd\tMD\n" }
-        val files = LooseResolver(src, Sidecars(src, store) { null }) { it.defaultTag }.scan(ContentRef("sd/Mixed"), "e4")
+        val files = resolverOf(src, Sidecars(src, store) { null }).scan(ContentRef("sd/Mixed"), "e4")
         assertEquals("MD", files.single().tag)
     }
     @Test fun a_store_choice_over_an_in_extra_sidecar_takes_effect() = runTest {
@@ -92,7 +91,7 @@ class LooseResolverTest {
         )
         val store = MemorySidecarStore()
         assertTrue(Sidecars(src, store) { null }.set("e6", ContentRef("sd/RO"), "", "b.chd", "PSP"))
-        val files = LooseResolver(src, Sidecars(src, store) { null }) { it.defaultTag }.scan(ContentRef("sd/RO"), "e6").associate { it.entry.name to it.tag }
+        val files = resolverOf(src, Sidecars(src, store) { null }).scan(ContentRef("sd/RO"), "e6").associate { it.entry.name to it.tag }
         assertEquals(mapOf("a.chd" to "MD", "b.chd" to "PSP"), files)
     }
     @Test fun a_home_copy_retags_a_loose_file_over_the_in_extra_sidecar() = runTest {
@@ -104,7 +103,7 @@ class LooseResolverTest {
             ),
             texts = mapOf("sd/G/systems.txt" to "Mario.gba\tGBA\n", "Home/Roms/.sources/e8/systems.txt" to "Mario.gba\tMGBA\n"),
         )
-        val files = LooseResolver(src, Sidecars(src, MemorySidecarStore()) { ContentRef("Home") }) { it.defaultTag }.scan(ContentRef("sd/G"), "e8")
+        val files = resolverOf(src, Sidecars(src, MemorySidecarStore()) { ContentRef("Home") }).scan(ContentRef("sd/G"), "e8")
         assertEquals("MGBA", files.single().tag)
     }
 
@@ -119,7 +118,7 @@ class LooseResolverTest {
             ),
         )
         val counting = CountingRomsSource(src)
-        val files = LooseResolver(counting, Sidecars(src, MemorySidecarStore()) { null }) { it.defaultTag }.scan(ContentRef("sd/PSX"), "e9")
+        val files = resolverOf(counting, Sidecars(src, MemorySidecarStore()) { null }).scan(ContentRef("sd/PSX"), "e9")
         assertEquals(listOf("Crash.cue" to "PS", "FF7.m3u" to "PS", "Loose.bin" to "PS"), files.map { it.entry.name to it.tag })
         assertEquals(4, counting.calls.count { it.startsWith("readHead:") })   // one read per cue/m3u
     }
@@ -129,7 +128,7 @@ class LooseResolverTest {
             "sd/G/Pico-8" to listOf("celeste.p8.png", "ld45.p8"),
             "sd/G/Doom" to listOf("demo2.lmp", "freedoom2.wad"),
         ))
-        val files = LooseResolver(src, Sidecars(src, MemorySidecarStore()) { null }) { it.defaultTag }.scan(ContentRef("sd/G"), "e10")
+        val files = resolverOf(src, Sidecars(src, MemorySidecarStore()) { null }).scan(ContentRef("sd/G"), "e10")
             .associate { "${it.relativeDir}|${it.entry.name}" to it.tag }
         assertEquals(
             mapOf("Pico-8|celeste.p8.png" to "P8", "Pico-8|ld45.p8" to "P8", "Doom|demo2.lmp" to "PRBOOM", "Doom|freedoom2.wad" to "PRBOOM"),
@@ -147,7 +146,7 @@ class LooseResolverTest {
             texts = mapOf("sd/PSX/Crash/Crash.cue" to "FILE \"Crash.bin\" BINARY\n", "sd/PSX/Two/Two.m3u" to "Two (Disc 1).chd\nTwo (Disc 2).chd\n"),
         )
         val counting = CountingRomsSource(src)
-        val files = LooseResolver(counting, Sidecars(src, MemorySidecarStore()) { null }) { it.defaultTag }.scan(ContentRef("sd/PSX"), "e11")
+        val files = resolverOf(counting, Sidecars(src, MemorySidecarStore()) { null }).scan(ContentRef("sd/PSX"), "e11")
         assertEquals(
             listOf("Crash|Crash.cue" to "PS", "Two|Two.m3u" to "PS", "|Loose.chd" to "PS"),
             files.map { "${it.relativeDir}|${it.entry.name}" to it.tag },
@@ -165,12 +164,12 @@ class LooseResolverTest {
             dirs = mapOf("sd/PSX" to listOf("Mega Man X4"), "sd/PSX/Mega Man X4" to listOf("Mega Man X4.cue", "Mega Man X4.bin")),
             texts = mapOf("sd/PSX/Mega Man X4/Mega Man X4.cue" to "FILE \"Mega Man X4 (USA).bin\" BINARY\n"),
         )
-        val files = LooseResolver(src, Sidecars(src, MemorySidecarStore()) { null }) { it.defaultTag }.scan(ContentRef("sd/PSX"), "e12")
+        val files = resolverOf(src, Sidecars(src, MemorySidecarStore()) { null }).scan(ContentRef("sd/PSX"), "e12")
         assertEquals(listOf("Mega Man X4.cue" to "PS"), files.map { it.entry.name to it.tag })   // the launch reports the missing bin
     }
     @Test fun a_subfolder_without_its_own_sheet_is_walked_as_before() = runTest {
         val src = FakeRomsSource(dirs = mapOf("sd/PSX" to listOf("Misc"), "sd/PSX/Misc" to listOf("a.gb", "b.cue")))
-        val files = LooseResolver(src, Sidecars(src, MemorySidecarStore()) { null }) { it.defaultTag }.scan(ContentRef("sd/PSX"), "e13")
+        val files = resolverOf(src, Sidecars(src, MemorySidecarStore()) { null }).scan(ContentRef("sd/PSX"), "e13")
         assertEquals(listOf("Misc|a.gb" to "GB", "Misc|b.cue" to "PS"), files.map { "${it.relativeDir}|${it.entry.name}" to it.tag })
         assertEquals(listOf(ContentRef("sd/PSX/Misc"), ContentRef("sd/PSX/Misc")), files.map { it.lookupFolder })
         assertEquals(listOf("Misc", "Misc"), files.map { it.lookupDir })
@@ -180,7 +179,7 @@ class LooseResolverTest {
             dirs = mapOf("sd/PSX" to listOf("Rally"), "sd/PSX/Rally" to listOf("RALLY.CUE", "rally.bin")),
             texts = mapOf("sd/PSX/Rally/RALLY.CUE" to "FILE \"rally.bin\" BINARY\n"),
         )
-        val files = LooseResolver(src, Sidecars(src, MemorySidecarStore()) { null }) { it.defaultTag }.scan(ContentRef("sd/PSX"), "e14")
+        val files = resolverOf(src, Sidecars(src, MemorySidecarStore()) { null }).scan(ContentRef("sd/PSX"), "e14")
         assertEquals(listOf("Rally|RALLY.CUE" to "PS"), files.map { "${it.relativeDir}|${it.entry.name}" to it.tag })
     }
 
@@ -189,7 +188,7 @@ class LooseResolverTest {
             dirs = mapOf("sd/Games" to listOf("Crazy Taxi.gdi", "track01.bin", "track 02.raw", "track03.bin", "Stray.raw")),
             texts = mapOf("sd/Games/Crazy Taxi.gdi" to "3\r\n1 0 4 2352 track01.bin 0\r\n2 756 0 2352 \"track 02.raw\" 0\r\n3 45000 4 2352 track03.bin 0\r\n"),
         )
-        val files = LooseResolver(src, Sidecars(src, MemorySidecarStore()) { null }) { it.defaultTag }.scan(ContentRef("sd/Games"), "e20")
+        val files = resolverOf(src, Sidecars(src, MemorySidecarStore()) { null }).scan(ContentRef("sd/Games"), "e20")
         assertEquals(listOf("Crazy Taxi.gdi" to "DC"), files.map { it.entry.name to it.tag })   // a stray .raw is no core's file
     }
 
@@ -204,7 +203,7 @@ class LooseResolverTest {
             ),
             texts = mapOf("sd/Games/Crazy Taxi/Crazy Taxi.gdi" to gdi, "sd/Games/Tosec/disc.gdi" to "2\n1 0 4 2352 track01.bin 0\n2 756 0 2352 track02.raw 0\n"),
         )
-        val files = LooseResolver(src, Sidecars(src, MemorySidecarStore()) { null }) { it.defaultTag }.scan(ContentRef("sd/Games"), "e21")
+        val files = resolverOf(src, Sidecars(src, MemorySidecarStore()) { null }).scan(ContentRef("sd/Games"), "e21")
         assertEquals(
             listOf("Crazy Taxi|Crazy Taxi.gdi" to "DC", "Tosec|disc.gdi" to "DC", "Two|a.gdi" to "DC", "Two|b.gdi" to "DC"),
             files.map { "${it.relativeDir}|${it.entry.name}" to it.tag },
@@ -218,12 +217,12 @@ class LooseResolverTest {
 
     @Test fun a_zip_in_a_folder_that_decides_its_tag_is_never_opened() = runTest {
         val counting = CountingRomsSource(source)
-        LooseResolver(counting, Sidecars(source, MemorySidecarStore()) { null }) { it.defaultTag }.scan(ContentRef("sd/ROMs"), "e1")
+        resolverOf(counting, Sidecars(source, MemorySidecarStore()) { null }).scan(ContentRef("sd/ROMs"), "e1")
         assertEquals(listOf("readHead:sd/ROMs/w.zip"), counting.calls.filter { it.startsWith("readHead:") })   // Genesis/r.zip: the alias folder decides
     }
     @Test fun each_folder_is_listed_once_and_its_sidecar_found_in_that_listing() = runTest {
         val counting = CountingRomsSource(source)
-        LooseResolver(counting, Sidecars(counting, MemorySidecarStore()) { null }) { it.defaultTag }.scan(ContentRef("sd/ROMs"), "e1")
+        resolverOf(counting, Sidecars(counting, MemorySidecarStore()) { null }).scan(ContentRef("sd/ROMs"), "e1")
         val lists = counting.calls.filter { it.startsWith("listChildren:") }
         assertEquals(lists.distinct(), lists)
         assertEquals(emptyList(), counting.calls.filter { it.startsWith("child:") })   // systems.txt comes from the listing

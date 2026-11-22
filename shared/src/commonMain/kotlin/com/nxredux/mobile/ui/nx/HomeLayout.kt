@@ -118,7 +118,7 @@ internal fun homeStatsHeader(f: HomeFrame, stripLines: Int): HomeStatsHeader? {
 internal const val HOME_GRID_HEADER_PAD = 4f
 
 /** [f]'s body height as it would be with the tab row shown: what decides the face. */
-internal fun homeShownH(f: HomeFrame): Float = f.h - (if (f.titleHidden) HOME_TITLE_ROOM else 0f)
+internal fun homeShownH(f: HomeFrame): Float = f.h - homeTitleRoom(f)
 
 /**
  * The room the stats strip's [stripLines] take above the top section, which the top section takes while Home stats
@@ -147,7 +147,7 @@ data class HomeTopTile(val kind: HomeTopKind, val rect: HomeRect)
  * large face). The shelves have no headers: their games wear their reason on the tile.
  */
 data class HomeBoard(
-    val mode: HomeToolMode, val wide: Boolean, val stripLines: Int, val topY: Float, val topH: Float,
+    val mode: HomeToolMode, val stripLines: Int, val topY: Float, val topH: Float,
     val top: List<HomeTopTile>, val slots: Int, val more: Int,
     val gutter: Float, val gap: Float, val perRow: Int, val pinW: Float, val pinH: Float,
     val tilesY: Float, val rowGames: Int, val pageH: Float, val toolW: Float, val toolH: Float, val stripY: Float = HOME_STRIP_TOP,
@@ -435,7 +435,7 @@ internal fun homeBoard(
         HomeShelfShape(perRow, pinW, pinH, min(homeShelfMax(shelf), homeShelfCap(f.portrait, perRow)))
     }
     return HomeBoard(
-        mode, false, lines, topY, topH, top, block.slots, block.more, gutter, gap, perRow, pinW, pinH, bands.tilesY, rowGames, bands.pageH,
+        mode, lines, topY, topH, top, block.slots, block.more, gutter, gap, perRow, pinW, pinH, bands.tilesY, rowGames, bands.pageH,
         block.toolW(), block.toolH(), homeStripTop(f, lines), bands.tiles, bands.sizes, inlineGames = inline, shelfCols = bands.cols,
     )
 }
@@ -492,7 +492,7 @@ private fun homeBands(
 /**
  * The portrait type's pin rows are this many times their 4:3 half shape tall (tw · 3 / 4 of the 4-column grid): the same
  * width and per-row count, a taller tile, the art cropped to it; the rows scroll. On the Fold cover that is
- * 215.5 × 114.47 dp, close to the cover's landscape pins (225 × 119.5); twice as tall was too large on the device.
+ * 215.5 × 114.47 dp, close to the cover's landscape pins (225 × 119.5).
  */
 internal const val HOME_PORTRAIT_PIN_TALL = 1.5f
 
@@ -550,7 +550,7 @@ private fun homeBoardWide(f: HomeFrame, stripLines: Int, freed: Float, tools: In
         HomeShelfShape(perRow, pinW, pinH, min(homeShelfMax(shelf), homeShelfCap(false, perRow)))
     }
     return HomeBoard(
-        HomeToolMode.WIDE, true, stripLines, topY, topH, top, block.slots, block.more, gutter, gap, perRow, pinW, pinH, bands.tilesY, rowGames,
+        HomeToolMode.WIDE, stripLines, topY, topH, top, block.slots, block.more, gutter, gap, perRow, pinW, pinH, bands.tilesY, rowGames,
         bands.pageH, block.toolW(), block.toolH(), homeStripTop(f, stripLines), bands.tiles, bands.sizes, inline, bands.cols,
     )
 }
@@ -613,7 +613,7 @@ private fun homeBoardLarge(f: HomeFrame, stripLines: Int, freed: Float, tools: I
         HomeShelfShape(HOME_LARGE_PIN_COLS, pinW, pinH, min(homeShelfMax(shelf), homeShelfCap(false, HOME_LARGE_PIN_COLS)))
     }
     return HomeBoard(
-        HomeToolMode.LARGE, false, stripLines, topY, topH, top, block.slots, block.more, gutter, gap, HOME_LARGE_PIN_COLS, pinW, pinH,
+        HomeToolMode.LARGE, stripLines, topY, topH, top, block.slots, block.more, gutter, gap, HOME_LARGE_PIN_COLS, pinW, pinH,
         bands.tilesY, rowGames, bands.pageH, block.toolW(), block.toolH(), homeStripTop(f, stripLines), bands.tiles, bands.sizes, inline, bands.cols,
     )
 }
@@ -639,9 +639,6 @@ internal const val HOME_CAPTION_SHARE = 0.8f
 private const val HOME_CAPTION_EDGE = 0.92f   // its alpha at the bottom edge
 private const val HOME_CAPTION_POWER = 3f     // eased: dark further up than the Grid's linear one
 
-/** Home's caption fade's alpha at [t] (0 at the bottom edge, 1 at its top): [easedFadeAlpha], edge 0.92, power 3. */
-internal fun homeCaptionAlpha(t: Float): Float = easedFadeAlpha(HOME_CAPTION_EDGE, t, HOME_CAPTION_POWER)
-
 /**
  * Home's caption fade of [ground] over the element's bounds (size it to [HOME_CAPTION_SHARE] of the card): the Continue
  * card's and a lit pinned game's, one fade for both ([nxEasedFade]: edge 0.92, power 3, 20 stops).
@@ -653,10 +650,6 @@ internal const val HOME_CONTINUE_ZOOM = 1.15f
 /** The zoom's pivot, (0.5, 0.4) of the card: the same point the Crop frames the picture at (40% from the top). */
 internal const val HOME_CONTINUE_PIVOT_X = 0.5f
 internal const val HOME_CONTINUE_PIVOT_Y = 0.4f
-
-/** The band of Continue's cropped picture (0 top, 1 bottom) still in the card after the zoom. */
-internal fun homeContinueVisible(): ClosedFloatingPointRange<Float> =
-    (HOME_CONTINUE_PIVOT_Y - HOME_CONTINUE_PIVOT_Y / HOME_CONTINUE_ZOOM)..(HOME_CONTINUE_PIVOT_Y + (1 - HOME_CONTINUE_PIVOT_Y) / HOME_CONTINUE_ZOOM)
 
 /** A selected tile's ring room plus 5 dp: how far it stays from the body's top and bottom (the tab row, the hint bar). */
 private const val HOME_SCROLL_CLEAR = NX_TILE_RING + 5f
@@ -708,8 +701,8 @@ internal fun homeScrollStep(
  */
 internal fun homeMarkBox(cardH: Float): Float = 0.6f * cardH * 108f / 44.13f
 
-/** The mark's alpha: white at 10%, black at 8% on the selected (white-filled) card. */
-internal fun homeMarkAlpha(lit: Boolean): Float = if (lit) 0.08f else 0.10f
+/** The mark's alpha: the ink at 10%. */
+internal const val HOME_MARK_ALPHA = 0.10f
 
 /** A Home title tile's name: its line height, times its size (the tiles' text line height). */
 private const val HOME_TITLE_LINE = 1.15f

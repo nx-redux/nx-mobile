@@ -143,23 +143,21 @@ class AndroidStorageUpgrade(context: Context) : StorageUpgradePlatform {
         internal fun rewriteKeys(private: File, collections: List<File>, extraId: String) {
             val files = listOf(NxPaths.RECENTS, NxPaths.SHORTCUTS, NxPaths.HIDDEN).map { File(private, it) } +
                 collections.filter { it.name.endsWith(".txt") }
-            for (f in files) {
-                if (!f.isFile) continue
-                val text = f.readText()
-                val next = GameKeys.rewriteLines(text, extraId)
-                if (next == text) continue
-                val mtime = f.lastModified()
-                f.writeAtomically(next.encodeToByteArray())
-                f.setLastModified(mtime)
-            }
+            rewriteEach(files) { GameKeys.rewriteLines(it, extraId) }
         }
 
         /** [rewriteKeys] the other way: the extra [extraId]'s keys in [private]'s recents, shortcuts and hidden list back to home keys. */
         internal fun restoreKeys(private: File, extraId: String) {
-            for (f in listOf(NxPaths.RECENTS, NxPaths.SHORTCUTS, NxPaths.HIDDEN).map { File(private, it) }) {
+            rewriteEach(listOf(NxPaths.RECENTS, NxPaths.SHORTCUTS, NxPaths.HIDDEN).map { File(private, it) }) {
+                GameKeys.rewriteLinesToHome(it, extraId)
+            }
+        }
+
+        private fun rewriteEach(files: List<File>, rewrite: (String) -> String) {
+            for (f in files) {
                 if (!f.isFile) continue
                 val text = f.readText()
-                val next = GameKeys.rewriteLinesToHome(text, extraId)
+                val next = rewrite(text)
                 if (next == text) continue
                 val mtime = f.lastModified()
                 f.writeAtomically(next.encodeToByteArray())

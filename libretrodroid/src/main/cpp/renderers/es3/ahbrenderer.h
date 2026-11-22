@@ -74,8 +74,6 @@ private:
     GLuint currentTexture = 0;
     unsigned textureWidth = 0;
     unsigned textureHeight = 0;
-    unsigned passWidth = 0;
-    unsigned passHeight = 0;
     bool passesDirty = true;
 
     ShaderManager::Chain shaders;

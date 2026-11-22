@@ -3,6 +3,7 @@ package com.nxredux.mobile.scraper
 import com.nxredux.mobile.library.ArtRefs
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.library.RomsSource
+import com.nxredux.mobile.library.ensurePath
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.storage.PrivateFiles
@@ -59,7 +60,7 @@ class FakePixels(var failEncode: Boolean = false, var undecodable: (ByteArray) -
     }
     override suspend fun encodePng(image: ArgbImage): ByteArray? {
         encoded += image
-        return if (failEncode) null else byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47) + "MIX".encodeToByteArray()
+        return if (failEncode) null else MIX_PNG
     }
     companion object { val MIX_PNG = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47) + "MIX".encodeToByteArray() }
 }
@@ -96,7 +97,7 @@ class FakeSource(
     }
 }
 
-/** An engine with ScreenScraper as its first source (then [more]); the old engine's argument order. */
+/** An engine with ScreenScraper as its first source (then [more]). */
 fun ssEngine(
     http: ScraperHttp, fitter: ImageFitter, hasher: RomHasher, source: RomsSource, home: ContentRef,
     auth: () -> ScraperAuth, now: () -> Long, sleep: suspend (Long) -> Unit,
@@ -113,11 +114,9 @@ fun ssEngine(
 
 /** The written-art log as a set of paths; [origins]: each path's origin ([LoggedArt.origin]), a rig's writes recorded there. */
 class FakeLoggedArt(private val paths: MutableSet<String>, val origins: MutableMap<String, ArtOrigin> = mutableMapOf()) : LoggedArt {
-    /** Each removal call's paths, in order. */
-    val removals = mutableListOf<List<String>>()
     override suspend fun contains(path: String) = path in paths
     override suspend fun remove(path: String) = remove(listOf(path))
-    override suspend fun remove(paths: Collection<String>) { removals += paths.toList(); this.paths -= paths.toSet(); origins -= paths.toSet() }
+    override suspend fun remove(paths: Collection<String>) { this.paths -= paths.toSet(); origins -= paths.toSet() }
     override suspend fun origin(path: String): ArtOrigin? = origins[path]
     /** Records [written] origins (an engine's onWritten), as the app's log does before each write. */
     fun record(written: List<Pair<String, ArtOrigin?>>) { for ((p, o) in written) if (o != null) origins[p] = o }
@@ -217,6 +216,8 @@ object Scrape {
     /** A download with JPEG's magic bytes. */
     val OK_JPEG = HttpResult(200, byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte(), 4))
     fun json(s: String) = HttpResult(200, s.encodeToByteArray())
+    /** A download with PNG's magic bytes, then [b]. */
+    fun png(b: Int) = HttpResult(200, byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, b.toByte()))
     /** A jeuInfos body (game id 42) with the given (type → url) media, all region us. */
     fun found(vararg media: Pair<String, String>) = json(
         """{"response":{"jeu":{"id":"42","medias":[${media.joinToString(",") { (t, u) -> """{"type":"$t","region":"us","url":"$u"}""" }}]}}}""",
@@ -265,3 +266,7 @@ class FakeOptionCache : ArtOptionCache {
     override suspend fun remove(keys: Collection<String>) { keys.forEach { files.remove(it) } }
     override suspend fun clear(): Long = size().also { files.clear() }
 }
+
+/** Writes [name] into the GB folder's `.media/`[slot] of [Scrape.homeTree], making the folders. */
+suspend fun FakeRomsSource.putMedia(slot: String, name: String, bytes: ByteArray) =
+    writeBytes(ensurePath(Scrape.home, listOf("Roms", "GB", ".media", slot))!!, name, bytes)

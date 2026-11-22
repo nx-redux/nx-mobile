@@ -18,7 +18,7 @@
 #include "fdwrapper.h"
 
 libretrodroid::FDWrapper::~FDWrapper() {
-    if (fd > 0) {
+    if (fd >= 0) {
         close(fd);
         fd = -1;
     }

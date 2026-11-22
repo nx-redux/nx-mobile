@@ -22,10 +22,9 @@ object SaveLookup {
 
 /** minarch `State_read`'s header probe (ma_saves.c:176, 219-229). */
 object StateBytes {
-    private val MAGIC = "RASTATE".encodeToByteArray()
     private const val HEADER_SIZE = 16
 
     /** [bytes] after a 16-byte RetroArch `RASTATE` header, as minarch reads it; unchanged without one. */
     fun stripRaStateHeader(bytes: ByteArray): ByteArray =
-        if (bytes.size >= HEADER_SIZE && MAGIC.indices.all { bytes[it] == MAGIC[it] }) bytes.copyOfRange(HEADER_SIZE, bytes.size) else bytes
+        if (bytes.size >= HEADER_SIZE && Bytes.startsWithAscii(bytes, "RASTATE")) bytes.copyOfRange(HEADER_SIZE, bytes.size) else bytes
 }

@@ -99,7 +99,8 @@ class AndroidGpuDrivers(private val root: File, private val sdkInt: Int) {
                 heads[e.name] = head.toByteArray()
                 if (metaBytes != null) meta = metaBytes.toString(Charsets.UTF_8)
             }
-            hashed.copyTo(java.io.OutputStream.nullOutputStream())   // trailing bytes count toward the hash
+            // Trailing bytes count toward the hash. Not OutputStream.nullOutputStream(): that is Android 13+.
+            while (hashed.read(buf) >= 0) Unit
         }
         if (count == 0) return null
         val id = digest.digest().joinToString("") { "%02x".format(it) }.take(ID_LENGTH)
@@ -154,12 +155,11 @@ class AndroidGpuDrivers(private val root: File, private val sdkInt: Int) {
         fun root(filesDir: File): File = File(filesDir, "gpu_drivers")
 
         /**
-         * Null when custom drivers are available here, else why not (shown as is); "" when the feature is off (no row at all).
+         * Null when custom drivers are available here, else why not (shown as is).
          * The app does not check that a package matches the phone's GPU: a package for the wrong GPU fails to start and the
          * launch falls back.
          */
-        fun unavailableReason(enabled: Boolean, sdkInt: Int): String? = when {
-            !enabled -> ""
+        fun unavailableReason(sdkInt: Int): String? = when {
             sdkInt < 28 -> "Custom drivers need Android 9 or later"
             else -> null
         }

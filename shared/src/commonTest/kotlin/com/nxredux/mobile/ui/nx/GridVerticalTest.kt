@@ -82,7 +82,7 @@ class GridVerticalTest {
         val g = gridMatched(369f, 200f, 369f, 293f, GridTileKind.ICON, portrait = false, insetStart = 20f, skin = true)
         assertEquals(GRID_PAD_MIN_ROWS, g.rows)
         assertTrue(g.tileH >= 75f, "tile ${g.tileH} dp tall")
-        // Without a skin the same box keeps three rows (a phone's own landscape is left as it was).
+        // Without a skin the same box keeps three rows, as a phone's own landscape does.
         assertEquals(GRID_MIN_ROWS, gridMatched(369f, 200f, 369f, 293f, GridTileKind.ICON, portrait = false, insetStart = 20f).rows)
     }
 

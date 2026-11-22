@@ -1,6 +1,6 @@
 package com.nxredux.mobile.library
 
-import com.nxredux.mobile.library.disc.DiscProbeTest
+import com.nxredux.mobile.library.disc.ps1BinBytes
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.settings.ExtraFolder
 import com.nxredux.mobile.storage.MemorySidecarStore
@@ -17,7 +17,7 @@ class LooseProbeTest {
         val fake = FakeRomsSource(
             mapOf("H" to listOf("Roms"), "H/Roms" to emptyList(), "x" to listOf("G.bin", "G.cue", "K.gba")),
             texts = mapOf("x/G.cue" to cue),
-            bytes = mapOf("x/G.bin" to DiscProbeTest().ps1BinBytes(), "x/K.gba" to ByteArray(4)),
+            bytes = mapOf("x/G.bin" to ps1BinBytes(), "x/K.gba" to ByteArray(4)),
         ).apply { stamps["x/G.cue"] = 1_000L; stamps["x/G.bin"] = 1_000L }
         val src = CountingRomsSource(fake)
         val scanner = LibraryScanner(src, Sidecars(src, MemorySidecarStore()) { ContentRef("H") })
@@ -55,7 +55,7 @@ class LooseProbeTest {
         val extra = ExtraFolder("x-1", ContentRef("x"))
         val missing = scanner.scan(ContentRef("H"), listOf(extra), emptyMap())
         assertTrue(missing.probes.isEmpty())                                        // the bin is not there yet: nothing kept
-        fake.writeBytes(ContentRef("x"), "G.bin", DiscProbeTest().ps1BinBytes())
+        fake.writeBytes(ContentRef("x"), "G.bin", ps1BinBytes())
         val found = scanner.scan(ContentRef("H"), listOf(extra), emptyMap(), previous = missing)
         assertEquals(listOf("G"), found.systems.first { it.tag == "PS" }.games.map { it.name })
         fake.sizes["x/G.bin"] = 99L                                                 // the bin changed
@@ -67,7 +67,7 @@ class LooseProbeTest {
     // Without a modified time a same-size rewrite would go unseen: such a file is probed every scan, never kept.
     @Test fun a_file_without_a_modified_time_is_probed_again_and_kept_once() = runTest {
         val fake = FakeRomsSource(mapOf("x" to listOf("G.cue", "G.bin", "N.cue", "N.bin")), texts = mapOf("x/G.cue" to cue, "x/N.cue" to cue.replace("G.bin", "N.bin")),
-            bytes = mapOf("x/G.bin" to DiscProbeTest().ps1BinBytes(), "x/N.bin" to DiscProbeTest().ps1BinBytes()))
+            bytes = mapOf("x/G.bin" to ps1BinBytes(), "x/N.bin" to ps1BinBytes()))
             .apply { stamps["x/G.cue"] = 1_000L; stamps["x/G.bin"] = 1_000L }
         val src = CountingRomsSource(fake)
         val dir = fake.listChildren(ContentRef("x"))

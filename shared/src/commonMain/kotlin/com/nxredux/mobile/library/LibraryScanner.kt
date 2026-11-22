@@ -12,6 +12,7 @@ import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.storage.GameRef
 import com.nxredux.mobile.storage.MemorySidecarStore
 import com.nxredux.mobile.storage.Recents
+import com.nxredux.mobile.tryOrAny
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.CancellationException
@@ -512,7 +513,7 @@ class LibraryScanner(
 
     /** The picked slots per game; a failed read is none (the folders' own files then). */
     private suspend fun pickedGames(): Map<String, Set<ArtSlot>> =
-        try { picks() } catch (e: CancellationException) { throw e } catch (_: Throwable) { emptyMap() }
+        tryOrAny({ emptyMap() }) { picks() }
 
     /** An extra folder's game's picked slots in [picked] (a home game's pick is in its own folder: nothing to prefer). */
     private fun pickedSlots(picked: Map<String, Set<ArtSlot>>, sourceId: String, dir: String, file: String): Set<ArtSlot> =
@@ -522,7 +523,7 @@ class LibraryScanner(
     private inner class HeroShots {
         private var shots: Set<String>? = null
         suspend fun get(): Set<String> = shots
-            ?: (try { heroShots() } catch (e: CancellationException) { throw e } catch (_: Throwable) { emptySet() }).also { shots = it }
+            ?: tryOrAny({ emptySet() }) { heroShots() }.also { shots = it }
         fun stale() { shots = null }
     }
 
@@ -555,8 +556,8 @@ class LibraryScanner(
     /**
      * Only the typed folders: an untyped `.media/<name>.png` (NX Redux's old mix) is not a game's art. The 2D box is
      * `boxart2d/`, else the legacy `box2d/` per name. An extra folder's own `.media` ([heroDir] null) is only read, never
-     * moved to the new names ([com.nxredux.mobile.scraper.LegacyArtMove]): its legacy `grid/` reads as the 2D box and
-     * `hero/` as the screenshot, each under the new folder's file of the same name.
+     * moved to the typed names ([com.nxredux.mobile.scraper.LegacyArtMove]): its legacy `grid/` reads as the 2D box and
+     * `hero/` as the screenshot, each under the typed folder's file of the same name.
      */
     private suspend fun mediaLookup(
         media: List<Entry>, names: Map<String, String>, reuse: Boolean = false, heroes: HeroShots, heroDir: List<String>?,

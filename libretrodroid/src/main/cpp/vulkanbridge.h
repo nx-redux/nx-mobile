@@ -43,7 +43,6 @@
 #include "vulkanreader.h"
 
 struct AImageReader;
-struct ANativeWindow;
 
 namespace libretrodroid {
 
@@ -91,7 +90,7 @@ public:
     // A custom driver whose frames cannot reach the screen: the driver could not start, or stopped working. Import: the
     // shared AHardwareBuffer could not be created or imported before any frame was bridged. Reader: none of the first
     // frames got through, the GLES side could not import the first buffer, or frames flowed and then all failed for a
-    // while (FailureStreak). True once; the system driver never reports it (its failed frame is skipped, as before).
+    // while (FailureStreak). True once; the system driver never reports it (its failed frame is skipped).
     bool takeCustomSlotFailure();
 
     // After the GLES side took a bridged frame: whether it could import the buffer. The Reader hand-off's frame only
@@ -151,7 +150,7 @@ private:
         GLsync glFence = nullptr;
     };
 
-    static constexpr unsigned SYNC_COUNT = 2;
+    static constexpr unsigned SYNC_COUNT = ReaderChain::SYNC_COUNT;
 
     bool createInstance();
     bool bindInstance();   // the instance-level table for [instance]; false when a required entry point is missing
@@ -191,7 +190,6 @@ private:
     std::vector<std::string> enabledDeviceExtensions;   // what the device was created with (core's + ours)
 
     AImageReader* imageReader = nullptr;
-    ANativeWindow* window = nullptr;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     unsigned surfaceWidth = 0;
     unsigned surfaceHeight = 0;

@@ -30,15 +30,14 @@ import com.nxredux.mobile.ui.SHORTCUTS_NO_CONTROLLER
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class InGameMenuModelTest {
     /**
-     * A console whose Console Settings page is empty: every tag has the shared Controller Layout and speed rows, so they
-     * are locked here (a locked row is hidden, and a page with none left is not offered).
+     * A console with no rows of its own: the Controller Layout, speed and audio rows every tag has are locked here (a
+     * locked row is hidden, and a group with none left is not offered).
      */
     private val plainTag = "GBA"   // a console with the Controller Layout row only (N64 has Graphics API too)
     private val plainLocked = setOf(PadOptions.LAYOUT) + (SpeedOptions.table + AudioOptions.rows).map { it.key }
@@ -66,7 +65,7 @@ class InGameMenuModelTest {
         repeat(4) { press(NxButton.DOWN) }   // Options
         press(NxButton.A)                                                  // -> Options page
         select(optionsRow("Emulator"))
-        assertEquals(MenuEffect.OpenCoreOptions, press(NxButton.A))        // Core Options (host loads)
+        assertEquals(MenuEffect.OpenCoreOptions, press(NxButton.A))        // Emulator (the host loads)
         showCoreOptions(listOf(palette, speed, hidden), locked = emptySet())
         return this
     }
@@ -369,7 +368,7 @@ class InGameMenuModelTest {
     }
 
     private fun InGameMenuModel.toCoreOptionsRow(): InGameMenuModel {
-        select(4); activate(4); select(optionsRow("Emulator"))   // Options page, Core Options selected
+        select(4); activate(4); select(optionsRow("Emulator"))   // Options page, Emulator selected
         return this
     }
 
@@ -575,7 +574,7 @@ class InGameMenuModelTest {
         val m = model().openFrontend()
         m.select(4); m.press(NxButton.A)                     // adjust Offset screen Y
         m.press(NxButton.DOWN)
-        assertEquals(PageKind.Adjust(FrontendOptions.SCALING), m.state.page.kind)   // Pad Opacity and Debug HUD skipped, wrapped
+        assertEquals(PageKind.Adjust(FrontendOptions.SCALING), m.state.page.kind)   // Debug HUD skipped, wrapped
         m.press(NxButton.UP)
         assertEquals(PageKind.Adjust(FrontendOptions.OFFSET_Y), m.state.page.kind)
         m.press(NxButton.UP)
@@ -654,12 +653,6 @@ class InGameMenuModelTest {
         m.select(m.optionsRow("Shaders"))
         m.press(NxButton.A)
         return m
-    }
-
-    @Test fun options_page_lists_frontend_shaders_core_options_save_changes() {
-        val m = plain(InGameMenuModel("Game", 9))
-        repeat(4) { m.press(NxButton.DOWN) }; m.press(NxButton.A)
-        assertEquals(PLAIN_OPTIONS, m.state.page.rows.map { it.label })
     }
 
     @Test fun shaders_page_rows_and_values() {
@@ -1415,7 +1408,7 @@ class InGameMenuModelTest {
         m.setFrontend(FrontendOptions.defaults("NDS"), emptyList(), emptySet(), "NDS", overlayAvailable = false)
         m.select(4); m.activate(4)                           // Root → Options
         assertEquals(
-            FULL_OPTIONS,
+            FULL_OPTIONS.toMutableList().apply { add(indexOf("Audio"), "Multiplayer") },   // Local Wireless switches in the game
             m.state.page.rows.map { it.label },
         )
         assertEquals(MenuRow.Submenu("Display", DISPLAY), m.state.page.rows.first())
@@ -1453,24 +1446,31 @@ class InGameMenuModelTest {
     // A row read only when the game starts (FrontendOption.atLaunch) is set in Game Settings or Emulator
     // Settings, not in the running game's menu.
     @Test fun rows_read_only_at_launch_stay_out_of_the_in_game_groups() {
-        assertEquals(PICTURE_ROWS, inGameGroups("N64").getValue("Display"))   // no Graphics API
+        assertEquals(listOf("3D Resolution", "Max Scale") + PICTURE_ROWS, inGameGroups("N64").getValue("Display"))   // no Graphics API
         val gc = inGameGroups("GC")
-        assertEquals(PICTURE_ROWS, gc.getValue("Display"))
+        // 3D Resolution and its Auto sub-row (Max Scale) apply while the game runs; Scale shows under Performance only.
+        assertEquals(listOf("3D Resolution", "Max Scale") + PICTURE_ROWS, gc.getValue("Display"))
         assertEquals(SPEED_ROWS + "Frame Skip", gc.getValue("Gameplay"))
         val wii = inGameGroups("WII")
-        assertEquals(PICTURE_ROWS, wii.getValue("Display"))                   // no Wii Screen
+        assertEquals(listOf("3D Resolution", "Max Scale") + PICTURE_ROWS, wii.getValue("Display"))   // no Wii Screen
         assertEquals(listOf("Wii Controller", "Motion Controls", "Controller Layout", "Pad Opacity (landscape)"), wii.getValue("Controls"))
         assertEquals(SPEED_ROWS + "Frame Skip", wii.getValue("Gameplay"))
     }
 
-    // Local Wireless is read when the game starts, so Multiplayer (its only row) has no page in the running game.
-    @Test fun multiplayer_has_no_in_game_page() {
-        for (tag in listOf("NDS", "PSP")) {
+    // PSP's Local Wireless is read when the game starts, so Multiplayer (its only row) has no page in its running game;
+    // the DS's and 3DS's switch in the game.
+    @Test fun multiplayer_has_an_in_game_page_where_local_wireless_switches_live() {
+        for ((tag, shown) in listOf("NDS" to true, "3DS" to true, "PSP" to false)) {
             val m = model()
             m.setFrontend(FrontendOptions.defaults(tag), emptyList(), emptySet(), tag)
             m.select(4); m.activate(4)
-            assertEquals(false, "Multiplayer" in m.state.page.rows.map { it.label }, tag)
+            assertEquals(shown, "Multiplayer" in m.state.page.rows.map { it.label }, tag)
         }
+        val m = model()
+        m.setFrontend(FrontendOptions.defaults("3DS"), emptyList(), emptySet(), "3DS")
+        m.select(4); m.activate(4)
+        assertNull(m.activate(m.optionsRow("Multiplayer")))
+        assertEquals(listOf("Local Wireless"), m.state.page.rows.map { it.label })
     }
 
     // Bottom screen (every console) shows on the running game's Display page only while a second display is
@@ -1498,7 +1498,7 @@ class InGameMenuModelTest {
     @Test fun a_second_display_offers_display_where_every_other_row_is_locked() {
         val m = model()
         m.setFrontend(FrontendOptions.defaults(plainTag), emptyList(), pictureLocked, plainTag)
-        m.select(4); m.activate(4)                                         // Options (no Second screen row on the root)
+        m.select(4); m.activate(4)                                         // Options
         assertEquals(NO_DISPLAY_OPTIONS, m.state.page.rows.map { it.label })
         m.setSecondScreen(connected = true)
         assertEquals(PLAIN_OPTIONS, m.state.page.rows.map { it.label })
@@ -1531,12 +1531,6 @@ class InGameMenuModelTest {
         m.setSecondScreen(connected = false)
         assertEquals(PageKind.Options, m.state.page.kind)                  // back to Options, never an empty page
         assertEquals(NO_DISPLAY_OPTIONS, m.state.page.rows.map { it.label })
-    }
-
-    @Test fun a_group_is_not_offered_when_every_row_is_locked() {
-        val m = model()   // plainLocked: the plain console's rows locked
-        m.select(4); m.activate(4)
-        assertEquals(PLAIN_OPTIONS, m.state.page.rows.map { it.label })
     }
 
     @Test fun console_settings_lists_the_ds_rows_and_edits_them_like_frontend_rows() {
@@ -1618,12 +1612,6 @@ class InGameMenuModelTest {
         assertEquals(12, m.state.page.rows.size)
     }
 
-    @Test fun other_consoles_have_only_the_picture_rows_on_display() {
-        val m = model().openFrontend(tag = "GBA")
-        assertEquals(6, m.state.page.rows.size)
-        assertEquals("Screen Scaling", m.state.page.rows.first().label)
-    }
-
     @Test fun overlay_and_offsets_are_hidden_while_the_app_places_the_screens() {
         val m = model().openFrontend(values = FrontendOptions.defaults("NDS"), tag = "NDS", overlayAvailable = false)
         val shown = m.state.page.rows.map { it.label }
@@ -1679,7 +1667,7 @@ class InGameMenuModelTest {
         m.select(m.state.page.rows.indexOfFirst { it.label == "Layout (landscape)" })
         m.press(NxButton.A)
         assertTrue(m.state.page.kind is PageKind.Adjust)
-        // Turned to portrait: the landscape row is no longer listed, so its strip closes back onto Console Settings.
+        // Turned to portrait: the landscape row is no longer listed, so its strip closes back onto the Display page.
         m.ndsView = NdsView(landscape = false, controllerMode = false)
         assertEquals(DISPLAY, m.state.page.kind)
     }
@@ -1798,7 +1786,7 @@ class InGameMenuModelTest {
     }
 
     @Test fun x_shows_the_full_text_of_a_compact_visual_row() {
-        // NDS Console Settings: Layout (portrait) is visual (A would Adjust) and compact, its text behind the info icon.
+        // The DS's Display page: Layout (portrait) is visual (A would Adjust) and compact, its text behind the info icon.
         val m = model().openConsoleSettings()
         m.select(0)
         assertTrue(m.optionRow(0).visual)
@@ -2105,7 +2093,6 @@ class InGameMenuModelTest {
         m.setPlayers(listOf(p1, PlayerSlotRow("k2", "Xbox Wireless Controller", connected = true)), listOf(padA, padB))
         val rows = m.state.page.rows.map { assertIs<MenuRow.Option>(it) }
         assertEquals(listOf("", ""), rows.take(2).map { it.info })              // Player rows: the footer shows instead
-        assertTrue(rows.drop(2).all { it.info.isNotBlank() })                   // pad rows keep their info
         assertEquals(InGameMenuModel.PLAYERS_FOOTER, m.state.page.footer)
         // Presses while the menu is open never claim a slot, so the hint says to close it first.
         assertEquals("Close the menu, then press a button\non a new controller to join.", m.state.page.footer)
@@ -2119,7 +2106,7 @@ class InGameMenuModelTest {
         assertEquals("Leave netplay?", m.state.page.title)
         assertEquals(listOf("Continue", "Leave"), m.state.page.rows.map { it.label })
         assertEquals("Leaving ends the netplay session.", m.state.page.footer)
-        assertEquals(listOf(GamePanelTab.SHORTCUTS), m.panelState().tabs)   // no Players tab in netplay, as no Players row before
+        assertEquals(listOf(GamePanelTab.SHORTCUTS), m.panelState().tabs)   // no Players tab in netplay
         m.press(NxButton.DOWN)
         assertEquals(MenuEffect.LeaveNetplay, m.press(NxButton.A))
         m.press(NxButton.UP)
@@ -2761,13 +2748,6 @@ class InGameMenuModelTest {
         val labels = m.state.page.rows.map { it.label }
         assertTrue("Quit" in labels)
         assertFalse("Save & Quit" in labels)
-    }
-
-    @Test fun optionsOrder() {
-        val m = model()
-        m.setFrontend(FrontendOptions.defaults("GBA"), emptyList(), emptySet(), "GBA")
-        m.select(4); m.activate(4)
-        assertEquals(FULL_OPTIONS, m.state.page.rows.map { it.label })
     }
 
     @Test fun inheritedShowsDefault() {

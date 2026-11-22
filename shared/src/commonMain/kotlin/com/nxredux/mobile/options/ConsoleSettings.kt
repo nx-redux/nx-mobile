@@ -19,8 +19,12 @@ object ConsoleSettings {
     fun tableFor(tag: String, screen: ScreenClass? = null, displayMax: Int? = null, biosFiles: List<String> = emptyList(), gpuDrivers: List<GpuDriver>? = null, autoVulkan: Boolean = false): List<FrontendOption> = when {
         NdsOptions.appliesTo(tag) -> NdsOptions.tableFor(screen, displayMax = displayMax) + NdsOptions.shaderScreensRow + NdsOptions.localWirelessRow
         N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRowsFor(screen) + N3dsOptions.resolutionRows(displayMax) + NdsOptions.shaderScreensRow + N3dsOptions.newControlsRow + N3dsOptions.localWirelessRow
-        PspOptions.appliesTo(tag) -> listOf(PspOptions.localWirelessRow)
-        WiiOptions.appliesTo(tag) -> WiiOptions.table
+        PspOptions.appliesTo(tag) -> PspOptions.resolutionRows(displayMax) + PspOptions.localWirelessRow
+        WiiOptions.appliesTo(tag) -> WiiOptions.table + DolphinOptions.resolutionRows(displayMax)
+        DolphinOptions.appliesTo(tag) -> DolphinOptions.resolutionRows(displayMax)
+        Ps1Options.appliesTo(tag) -> Ps1Options.resolutionRows(tag, displayMax)
+        DcOptions.appliesTo(tag) -> DcOptions.resolutionRows(displayMax)
+        N64Options.appliesTo(tag) -> N64Options.resolutionRows(displayMax)
         Ps2Options.appliesTo(tag) -> Ps2Options.rowsFor(biosFiles) + Ps2Options.resolutionRows(displayMax)
         else -> emptyList()
     } + graphicsRows(tag, gpuDrivers, autoVulkan) + BottomScreenOptions.row + PadOptions.tableFor(tag) + SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.rowsFor(tag)
@@ -46,5 +50,5 @@ object ConsoleSettings {
 
     /** Every console's rows (keys are unique across them); built when read, as [NdsOptions.table]. */
     val all: List<FrontendOption> get() =
-        NdsOptions.table + NdsOptions.localWirelessRow + N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + N3dsOptions.newControlsRow + N3dsOptions.localWirelessRow + PspOptions.localWirelessRow + WiiOptions.table + Ps2Options.biosRow(emptyList()) + Ps2Options.resolutionRows(null) + GraphicsApiOptions.row + GpuDriverOptions.row(emptyList()) + BottomScreenOptions.row + PadOptions.all + SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row
+        NdsOptions.table + NdsOptions.localWirelessRow + N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + N3dsOptions.newControlsRow + N3dsOptions.localWirelessRow + PspOptions.localWirelessRow + WiiOptions.table + DolphinOptions.resolutionRows(null) + Ps1Options.allResolutionRows + DcOptions.resolutionRows(null) + N64Options.resolutionRows(null) + Ps2Options.biosRow(emptyList()) + Ps2Options.resolutionRows(null) + GraphicsApiOptions.row + GpuDriverOptions.row(emptyList()) + BottomScreenOptions.row + PadOptions.all + SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row
 }

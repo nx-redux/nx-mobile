@@ -15,6 +15,7 @@
  *     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <cstring>
 #include <jni.h>
 
 #include <EGL/egl.h>
@@ -45,7 +46,6 @@
 #include "environment.h"
 #include "corelog.h"
 #include "renderers/es3/framebufferrenderer.h"
-#include "renderers/es2/imagerendereres2.h"
 #include "renderers/es3/imagerendereres3.h"
 #include "utils/utils.h"
 #include "utils/rect.h"
@@ -97,13 +97,6 @@ int16_t LibretroDroid::callback_set_input_state(
     return LibretroDroid::getInstance().handleSetInputState(port, device, index, id);
 }
 
-void LibretroDroid::updateAudioSampleRateMultiplier() {
-    if (audio) {
-        audio->setPlaybackSpeed(frameSpeed.load());
-        audio->setFastForwardSpeed(fastForwardPlaybackSpeed.load());
-    }
-}
-
 void LibretroDroid::updateFastForwardAudioSpeed() {
     // Audible FF plays at the game's achieved speed. Audio combines it with the pause speed, so a pause (0) still wins
     // over an FF speed computed before it.
@@ -115,41 +108,41 @@ void LibretroDroid::resetGlobalVariables() {
     audio = nullptr;
     video = nullptr;
     fpsSync = nullptr;
+    contentFps.store(0.0, std::memory_order_relaxed);
     // Not dropped here (UI thread): the GL thread may be reading it. Its next access starts from a fresh state.
     inputResetPending = true;
     rumble = nullptr;
 }
 
 int LibretroDroid::availableDisks() {
-    return Environment::getInstance().getRetroDiskControlCallback() != nullptr
-           ? Environment::getInstance().getRetroDiskControlCallback()->get_num_images()
-           : 0;
+    auto* disk = Environment::getInstance().getRetroDiskControlCallback();
+    return disk != nullptr ? disk->get_num_images() : 0;
 }
 
 int LibretroDroid::currentDisk() {
-    return Environment::getInstance().getRetroDiskControlCallback() != nullptr
-           ? Environment::getInstance().getRetroDiskControlCallback()->get_image_index()
-           : 0;
+    auto* disk = Environment::getInstance().getRetroDiskControlCallback();
+    return disk != nullptr ? disk->get_image_index() : 0;
 }
 
 void LibretroDroid::changeDisk(unsigned int index) {
     // The rewind history is cleared with the swap; the lock keeps that off a running step's capture.
     std::lock_guard<std::mutex> lock(coreLock);
 
-    if (Environment::getInstance().getRetroDiskControlCallback() == nullptr) {
+    auto* disk = Environment::getInstance().getRetroDiskControlCallback();
+    if (disk == nullptr) {
         LOGE("Cannot swap disk. This platform does not support it.");
         return;
     }
 
-    if (index >= Environment::getInstance().getRetroDiskControlCallback()->get_num_images()) {
+    if (index >= disk->get_num_images()) {
         LOGE("Requested image index is not valid.");
         return;
     }
 
-    if (Environment::getInstance().getRetroDiskControlCallback()->get_image_index() != index) {
-        Environment::getInstance().getRetroDiskControlCallback()->set_eject_state(true);
-        Environment::getInstance().getRetroDiskControlCallback()->set_image_index((unsigned) index);
-        Environment::getInstance().getRetroDiskControlCallback()->set_eject_state(false);
+    if (disk->get_image_index() != index) {
+        disk->set_eject_state(true);
+        disk->set_image_index((unsigned) index);
+        disk->set_eject_state(false);
         // Rewinding past the swap would restore states that expect the other disc.
         rewind.clear();
     }
@@ -161,10 +154,6 @@ void LibretroDroid::updateVariable(const Variable& variable) {
 
 std::vector<Variable> LibretroDroid::getVariables() {
     return Environment::getInstance().getVariables();
-}
-
-std::vector<std::vector<struct Controller>> LibretroDroid::getControllers() {
-    return Environment::getInstance().getControllers();
 }
 
 void LibretroDroid::setControllerType(unsigned int port, unsigned int type) {
@@ -299,7 +288,6 @@ void LibretroDroid::onSurfaceCreated() {
         system_av_info.geometry.base_height,
         Environment::getInstance().isUseDepth(),
         Environment::getInstance().isUseStencil(),
-        openglESVersion,
         Environment::getInstance().getPixelFormat(),
         vulkan
     };
@@ -310,11 +298,7 @@ void LibretroDroid::onSurfaceCreated() {
         fragmentShaderConfig,
         Environment::getInstance().isBottomLeftOrigin(),
         Environment::getInstance().getScreenRotation(),
-        skipDuplicateFrames,
-        immersiveModeEnabled,
-        viewportRect,
-        immersiveModeConfig,
-        viewportAlignment
+        viewportRect
     );
 
     video = std::unique_ptr<Video>(newVideo);
@@ -324,7 +308,7 @@ void LibretroDroid::onSurfaceCreated() {
     video->setPictureHeld(pictureHeld);
     video->updateScreenRegions(screenRegions);
     video->setComposition(compositionWidth, compositionHeight, compositionParts);
-    video->setShaderSourceScale(shaderSourceScale);
+    video->setShaderSourceScale(shaderSourceScale, shaderSourceFrameHeight);
     video->updateSecondaryRegions(secondaryRegions);
     video->setPresetChain(presetChain);
     geometryWidth = (float) system_av_info.geometry.base_width;
@@ -393,18 +377,14 @@ void LibretroDroid::onKeyEvent(unsigned int port, int action, int keyCode) {
 }
 
 void LibretroDroid::create(
-    unsigned int GLESVersion,
     const std::string& soFilePath,
     const std::string& systemDir,
     const std::string& savesDir,
     std::vector<Variable> variables,
     const ShaderManager::Config& shaderConfig,
     float refreshRate,
-    bool lowLatencyAudio,
     bool enableVirtualFileSystem,
     bool enableMicrophone,
-    bool duplicateFrames,
-    std::optional<ImmersiveMode::Config> immersiveModeConfig,
     const std::string& language
 ) {
     LOGD("Performing libretrodroid create");
@@ -460,11 +440,7 @@ void LibretroDroid::create(
     vulkanDriverTmpDir.clear();
     Environment::getInstance().setPreferVulkan(offerVulkan);
 
-    openglESVersion = GLESVersion;
     screenRefreshRate = refreshRate;
-    skipDuplicateFrames = duplicateFrames;
-    immersiveModeEnabled = GLESVersion >= 3 && immersiveModeConfig.has_value();
-    this->immersiveModeConfig = immersiveModeConfig.value_or(ImmersiveMode::Config{});
     audioEnabled = true;
     frameSpeed = 1;
     // A new view starts without FF; GLRetroView re-applies its own value right after create().
@@ -497,6 +473,11 @@ void LibretroDroid::create(
     psplink::forgetCore();
     dslink::forgetCore();
     core = std::make_unique<Core>(soFilePath);
+    {
+        struct retro_system_info info {};
+        core->retro_get_system_info(&info);
+        Environment::setCoreWarningsLogged(info.library_name == nullptr || strcmp(info.library_name, "melonDS DS") != 0);
+    }
 
     core->retro_set_video_refresh(&callback_hw_video_refresh);
     core->retro_set_environment(&Environment::callback_environment);
@@ -512,12 +493,6 @@ void LibretroDroid::create(
     core->retro_init();
     coreInitialized = true;
     lock.unlock();
-
-    preferLowLatencyAudio = lowLatencyAudio;
-
-    if (Environment::getInstance().isUseHwAcceleration() && openglESVersion < 3) {
-        throw LibretroDroidError("OpenGL ES 3 is required for this Core", ERROR_GL_NOT_COMPATIBLE);
-    }
 
     fragmentShaderConfig = shaderConfig;
 
@@ -668,7 +643,7 @@ void LibretroDroid::releaseCore() {
 void LibretroDroid::destroy() {
     netplay::shutdown();   // before the lock: it joins the engine thread; a no-op without a session
     gbalink::shutdown();   // the GBA link too: DISCONNECT, join its thread; a no-op without a session
-    dslink::shutdown();    // the DS room hears this phone leave now; the link itself ends with the core below
+    dslink::leaveNow();    // the DS room hears this phone leave now; the link itself ends with the core below
     std::lock_guard<std::mutex> lock(coreLock);
 
     LOGD("Performing libretrodroid destroy");
@@ -696,6 +671,7 @@ void LibretroDroid::destroy() {
     video = nullptr;
     rumble = nullptr;
     fpsSync = nullptr;
+    contentFps.store(0.0, std::memory_order_relaxed);
     audio = nullptr;
     {
         std::lock_guard<std::mutex> guard(inputLock);
@@ -847,6 +823,7 @@ void LibretroDroid::step() {
     const float frameSeconds = fpsSync ? 1.0f / static_cast<float>(fpsSync->getContentRefreshRate()) : 1.0f / 60.0f;
     // FF runs the frames its pacer has due, never fpsSync's catch-up × a speed, which would make the speed follow the display.
     unsigned runs = frames * speed;
+    const unsigned videoCallbacksBefore = videoCallbacks;
     if (rewinding) {
         runs = stepRewinding(frameSeconds);
         hitchProbe.ranCore(HitchProbe::Clock::now(), runs);
@@ -892,12 +869,17 @@ void LibretroDroid::step() {
             // Paused, or an FF step with no frame due: the core doesn't run, so redraw its last frame with the current
             // shader and layout. GL cores otherwise draw only inside their video callback, leaving the picture stale.
             // An FF step that ran frames shows its last one like any step.
-            video->renderPausedFrame();
+            video->renderFrame();
             // A hw core's second surface is drawn from inside its frame (frameDrawnHook); the paused redraw is that
             // frame here, so a shader picked from the menu shows on the second display at once.
             if (video->rendersInVideoCallback() && frameDrawnHook) frameDrawnHook();
         } else if (!video->rendersInVideoCallback()) {
             video->renderFrame();
+        } else if (videoCallbacks == videoCallbacksBefore) {
+            // The core ran without a video callback at all, not even a duplicate (Dolphin on Vulkan between a 30 fps
+            // game's frames): redraw its last frame, or the swap shows a buffer that doesn't hold it (flicker).
+            video->renderFrame();
+            if (Environment::getInstance().isUseVulkan()) VulkanBridge::get().afterGlDraw();
         }
     }
 
@@ -940,9 +922,15 @@ void LibretroDroid::step() {
     // Swapped after wait(): a fresh FPSSync has no start time until advanceFrames(), and sleep_until(min) never returns.
     // Audio keeps its stream: the sample rate is unchanged and its rate controller absorbs the vsync stretch change.
     double fps = 0.0;
+    const float screenRate = pendingScreenRate.exchange(0.0f, std::memory_order_relaxed);
+    if (fpsSync && screenRate > 0.0f && std::abs(screenRate - screenRefreshRate) > 0.5f) {
+        screenRefreshRate = screenRate;
+        fpsSync = std::make_unique<FPSSync>(fpsSync->getContentRefreshRate(), screenRefreshRate);
+    }
     if (fpsSync && Environment::getInstance().consumeTimingUpdate(fps)) {
         if (std::abs(fps - fpsSync->getContentRefreshRate()) > 0.01) {
             LOGI("Core changed its frame rate from %f to %f", fpsSync->getContentRefreshRate(), fps);
+            contentFps.store(fps, std::memory_order_relaxed);
             fpsSync = std::make_unique<FPSSync>(fps, screenRefreshRate);
             if (fastForwardPacer.active()) {
                 fastForwardPacer.start(fps, appliedFastForwardSpeed, std::chrono::steady_clock::now());
@@ -1234,6 +1222,7 @@ void LibretroDroid::handleVideoRefresh(
     // Runs inside the core's retro_run: a C++ exception must not unwind through the core's C frames. Keep the
     // first one and rethrow it from step() once retro_run has returned.
     if (videoCallbackError) return;
+    videoCallbacks++;
     try {
         // A duplicate frame (data == nullptr) says nothing about how the core renders.
         if (data != nullptr) hardwareFrame.store(data == RETRO_HW_FRAME_BUFFER_VALID);
@@ -1317,7 +1306,7 @@ void LibretroDroid::reset() {
     if (core == nullptr) return;
     dslink::leaveNow();   // a reset DS starts with its radio off: it leaves the room as the game would
     core->retro_reset();
-    // A bare retro_reset left the old game's snapshots to rewind into, and fpsSync's clock counting from before.
+    // The snapshots from before the reset must not be rewound into, and fpsSync's clock restarts.
     rewind.clear();
     if (fpsSync) fpsSync->reset();
 }
@@ -1419,18 +1408,18 @@ void LibretroDroid::afterGameLoad() {
     }
 
     fpsSync = std::make_unique<FPSSync>(fps, screenRefreshRate);
+    contentFps.store(fps, std::memory_order_relaxed);
 
     double inputSampleRate = sampleRate * fpsSync->getTimeStretchFactor();
 
     audio = std::make_unique<Audio>(
         (int32_t) std::lround(inputSampleRate),
         fps,
-        preferLowLatencyAudio,
         audioBufferMs.load()
     );
     audio->setResamplingQuality(resamplingQuality.load());
-
-    updateAudioSampleRateMultiplier();
+    audio->setPlaybackSpeed(frameSpeed.load());
+    updateFastForwardAudioSpeed();
 
     defaultAspectRatio = findDefaultAspectRatio(system_av_info);
     geometryWidth = (float) system_av_info.geometry.base_width;
@@ -1465,11 +1454,6 @@ std::vector<AchievementInfo> LibretroDroid::achievementsList() {
     return Achievements::getInstance().list();
 }
 
-AchievementSummary LibretroDroid::achievementsSummary() {
-    std::lock_guard<std::mutex> lock(coreLock);
-    return Achievements::getInstance().summary();
-}
-
 float LibretroDroid::findDefaultAspectRatio(const retro_system_av_info& system_av_info) {
     float result = system_av_info.geometry.aspect_ratio;
     // libretro: an aspect_ratio <= 0 means base_width / base_height (gearcoleco's default "1:1 PAR" reports 0).
@@ -1491,14 +1475,6 @@ void LibretroDroid::setViewport(Rect viewportRect) {
 
     if (video != nullptr) {
         video->updateViewportSize(viewportRect);
-    }
-}
-
-void LibretroDroid::setViewportAlignment(unsigned int viewportAlignment) {
-    this-> viewportAlignment = viewportAlignment;
-
-    if (video) {
-        this->video->updateViewportAlignment(viewportAlignment);
     }
 }
 
@@ -1534,9 +1510,10 @@ void LibretroDroid::setComposition(int width, int height, std::vector<ScreenRegi
     if (video) video->setComposition(compositionWidth, compositionHeight, compositionParts);
 }
 
-void LibretroDroid::setShaderSourceScale(int scale) {
+void LibretroDroid::setShaderSourceScale(int scale, int frameHeight) {
     shaderSourceScale = scale < 1 ? 1 : scale;
-    if (video) video->setShaderSourceScale(shaderSourceScale);
+    shaderSourceFrameHeight = frameHeight < 0 ? 0 : frameHeight;
+    if (video) video->setShaderSourceScale(shaderSourceScale, shaderSourceFrameHeight);
 }
 
 void LibretroDroid::setScreenRegions(std::vector<ScreenRegion> regions) {
@@ -1566,12 +1543,7 @@ void LibretroDroid::renderSecondaryInFrame(unsigned width, unsigned height) {
 
 void LibretroDroid::renderSecondary(unsigned width, unsigned height) {
     std::lock_guard<std::mutex> lock(coreLock);
-    if (!video) return;
-    try {
-        video->renderSecondary(width, height);
-    } catch (const std::exception& e) {
-        LOGE("Error rendering the second screen: %s", e.what());
-    }
+    renderSecondaryInFrame(width, height);
 }
 
 std::vector<VideoView> LibretroDroid::getVideoViews() {

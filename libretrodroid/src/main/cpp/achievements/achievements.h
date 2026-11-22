@@ -47,8 +47,6 @@ struct AchievementInfo {
     int state; int64_t unlockTime; std::string progress; float percent; float rarity; int type; int category;
 };
 
-struct AchievementSummary { uint32_t unlocked = 0, total = 0, points = 0; };
-
 /**
  * Owns the rc_client. HTTP is delegated to the host: server_call queues an AchievementServerCall that the
  * JNI step flushes to Kotlin; Kotlin answers through serverResponse() from any thread and the answer is
@@ -89,7 +87,6 @@ public:
     std::vector<AchievementServerCall> takeServerCalls();
 
     std::vector<AchievementInfo> list();
-    AchievementSummary summary();
     /** Builds the signed award request; hardcore 0. Returns false when rcheevos rejects the parameters. */
     static bool buildAwardRequest(const std::string& user, const std::string& token, uint32_t achievementId,
                                   const std::string& hash, uint32_t secondsSinceUnlock, std::string& url, std::string& post);

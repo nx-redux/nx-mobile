@@ -9,14 +9,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-/** What [LegacyArtMove] asks of the written-art log ([ArtLogStore] implements it). */
-interface MovedArtLog {
-    suspend fun contains(path: String): Boolean
-    /** The entry at [from] (when logged) now at [to], its origin kept; nothing when [from] is not logged. */
-    suspend fun move(from: String, to: String)
-    suspend fun remove(path: String)
-}
-
 /**
  * The hand-placed `hero/` files the one-time move put in `screenshot/` ([LegacyArtMove]), as home-relative paths
  * (`Roms/GB/.media/screenshot/Tetris.jpg`), kept in the app-private [FILE] (one per line): still heroes (drawn as one)
@@ -69,7 +61,7 @@ class MovedHeroes(private val host: ArtworkHost) {
  * written leaves it unmarked, to try again on the next scan.
  */
 class LegacyArtMove(
-    private val source: RomsSource, private val log: MovedArtLog, private val host: ArtworkHost,
+    private val source: RomsSource, private val log: ArtLogStore, private val host: ArtworkHost,
     private val heroes: MovedHeroes = MovedHeroes(host),
 ) {
     private val lock = Mutex()
@@ -104,30 +96,30 @@ class LegacyArtMove(
                         if (targetName == ArtSlot.BOX_2D.folder) entries.firstOrNull { it.isDirectory && it.name == LEGACY_BOX2D_FOLDER }?.let { b ->
                             source.listChildren(b.ref).filter { !it.isDirectory }.mapNotNullTo(taken) { imageBase(it.name) }
                         }
-                        fun path(folder: String, name: String) = homeSegments?.let { (it + folder + name).joinToString("/") }
+                        fun path(folder: String, name: String) = (homeSegments + folder + name).joinToString("/")
                         for (f in files) {
                             val base = imageBase(f.name)!!
                             val from = path(dir.name, f.name)
                             if (base in taken) {
                                 // The slot has its file: the app's own old copy goes, a hand-placed one stays.
-                                if (from == null || !log.contains(from)) continue
+                                if (!log.contains(from)) continue
                                 if (source.delete(dir.ref, f.name)) { changed = true; log.remove(from) } else ok = false
                             } else {
                                 // A hand-placed hero is listed first (a failed move takes it back): never moved unlisted.
                                 val to = path(targetName, f.name)
-                                val handHero = dir.name == HERO && from != null && !log.contains(from)
-                                if (handHero) heroes.add(to!!)
+                                val handHero = dir.name == HERO && !log.contains(from)
+                                if (handHero) heroes.add(to)
                                 val moved = try { source.moveFile(dir.ref, f.name, target) } catch (t: Throwable) {
-                                    if (handHero) withContext(NonCancellable) { heroes.remove(to!!) }
+                                    if (handHero) withContext(NonCancellable) { heroes.remove(to) }
                                     throw t
                                 }
                                 if (moved) {
                                     changed = true
                                     taken += base
-                                    if (from != null && !handHero) log.move(from, to!!)
+                                    if (!handHero) log.move(from, to)
                                 } else {
                                     ok = false
-                                    if (handHero) heroes.remove(to!!)
+                                    if (handHero) heroes.remove(to)
                                 }
                             }
                         }

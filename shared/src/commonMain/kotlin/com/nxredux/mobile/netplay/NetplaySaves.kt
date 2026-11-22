@@ -75,7 +75,7 @@ object NetplaySaves {
 
     /**
      * A host session on real saves drops the game's auto-resume state, so resuming it later can't roll back battery
-     * saves written in the session (handheld 19d3a5e1 Menu_dropAutoResumeForSession). Manual slots are never touched.
+     * saves written in the session (the handheld's Menu_dropAutoResumeForSession). Manual slots are never touched.
      * Paths are relative to the SD root, like [NxPaths].
      */
     fun resumeVictims(tag: String, folderCoreId: String, romFileName: String, markerText: String?, naming: SaveNaming = SaveNaming.DEFAULT, innerFileName: String? = null, exists: (String) -> Boolean): List<String> {

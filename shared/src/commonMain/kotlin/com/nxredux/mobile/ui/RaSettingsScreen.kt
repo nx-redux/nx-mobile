@@ -88,9 +88,6 @@ internal fun raSettingsTouchRow(row: RaSettingsRow): NxSettingRow {
 /** Rows whose secondary (the status, the cached count) is their description, not a value. */
 private val RA_DESCRIBED_KINDS = setOf(RaSettingKind.SIGN_IN, RaSettingKind.SIGN_OUT, RaSettingKind.DOWNLOAD_ALL)
 
-/** A compact row: no line, [text] (or a fuller [detail]) behind the info icon only. */
-private fun quiet(text: String, detail: String = "") = SettingText("", detail.ifEmpty { text })
-
 /**
  * [row]'s description, from the user guide's RetroAchievements page: a line for a status (the account, the cached count),
  * a consequence (the resets) or a dimmed row's reason, the fuller text behind the info icon; the rest compact ([quiet]).

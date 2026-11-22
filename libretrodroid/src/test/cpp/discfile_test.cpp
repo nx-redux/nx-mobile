@@ -9,10 +9,9 @@
 #include <string>
 #include <vector>
 
-using namespace libretrodroid;
+#include "check.h"
 
-static int failures = 0;
-static void check(bool ok, const char* what) { if (!ok) { std::printf("FAIL %s\n", what); failures++; } }
+using namespace libretrodroid;
 
 static std::vector<uint8_t> image;
 static int opened = 0;
@@ -40,12 +39,10 @@ static std::vector<uint8_t> make(int magicOffset, uint32_t magic) {
 }
 
 int main() {
-    check(!discfile::available(), "no api: unavailable");
     check(discfile::open(7) == nullptr, "no api: open is null");
     check(discfile::consoleFor(7, 19) == 19, "no api: console kept");
 
     discfile::setApi(&fake);
-    check(discfile::available(), "api set: available");
 
     image = make(0x1C, 0xC2339F3Du);
     check(discfile::consoleFor(7, 19) == 16, "GC magic gives 16");

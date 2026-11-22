@@ -136,13 +136,13 @@ class ContextMenusTest {
     @Test fun game_list_titles_are_the_lists_own_names() {
         val sfc = SystemFolder("Super Nintendo ES", "SFC", CoreRegistry.forTag("SFC"), emptyList())
         val supa = SystemFolder("Super Nintendo ES", "SUPA", CoreRegistry.forTag("SUPA"), emptyList())
-        assertEquals("ColecoVision", listTitle(ListSource.Console(SystemFolder("ColecoVision", "COLECO", CoreRegistry.forTag("COLECO"), emptyList()))))
-        assertEquals("Super Nintendo ES", listTitle(ListSource.Console(listOf(sfc, supa))))
-        assertEquals("Android", listTitle(ListSource.Console(SystemFolder("Android", ANDROID_TAG, null, emptyList(), android = true))))
-        assertEquals("RPGs", listTitle(ListSource.Collection("RPGs")))
-        assertEquals("Unassigned", listTitle(ListSource.Console(SystemFolder("Unassigned", "", null, emptyList(), unassigned = true))))
-        assertEquals("Hidden games", listTitle(ListSource.Hidden))
-        assertEquals("Recently Played", listTitle(ListSource.Recent))
+        assertEquals("ColecoVision", ListSource.Console(SystemFolder("ColecoVision", "COLECO", CoreRegistry.forTag("COLECO"), emptyList())).title)
+        assertEquals("Super Nintendo ES", ListSource.Console(listOf(sfc, supa)).title)
+        assertEquals("Android", ListSource.Console(SystemFolder("Android", ANDROID_TAG, null, emptyList(), android = true)).title)
+        assertEquals("RPGs", ListSource.Collection("RPGs").title)
+        assertEquals("Unassigned", ListSource.Console(SystemFolder("Unassigned", "", null, emptyList(), unassigned = true)).title)
+        assertEquals("Hidden games", ListSource.Hidden.title)
+        assertEquals("Recently Played", ListSource.Recent.title)
     }
     @Test fun emulator_menu_lists_the_consoles_tags_with_the_current_one_marked() {
         val m = ContextMenus.emulatorMenu(system("MGBA"))!!
