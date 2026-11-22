@@ -120,7 +120,7 @@ object CoreRegistry {
         lockedOptions = setOf("ppsspp_cheats", "ppsspp_backend", "ppsspp_vr_mode", "ppsspp_internal_resolution") + PSP_NETWORK_OPTIONS,
         hiddenValues = mapOf("ppsspp_backend" to setOf("vulkan", "none")),
         // Auto is Vulkan on Mali, where OpenGL ES falls behind: the AYANEO's Mali-G76 held 3x at 60 fps on Vulkan, 42 on GLES.
-        vulkan = VulkanSwitch(gles = mapOf("ppsspp_backend" to "auto"), vulkan = mapOf("ppsspp_backend" to "auto"), autoOnMali = true),
+        vulkan = VulkanSwitch(gles = mapOf("ppsspp_backend" to "auto"), vulkan = mapOf("ppsspp_backend" to "auto"), autoOnMali = true, autoOnXclipse = true),
         restartOnlyOptions = RestartOnlyOptions.ppsspp,
         // PPSSPP writes SAVEDATA/ under the save dir.
         name = "PPSSPP",
@@ -215,7 +215,7 @@ object CoreRegistry {
         // Card 1 as the frontend's battery save: one card per game named by the Save format, shared with PCSX ReARMed (Saves/PS).
         lockedOptions = setOf("swanstation_MemoryCards_Card1Type", "swanstation_GPU_ResolutionScale"),
         hiddenValues = mapOf("swanstation_GPU_Renderer" to setOf("Vulkan")),
-        vulkan = VulkanSwitch(vulkan = mapOf("swanstation_GPU_Renderer" to "Auto"), lock = false),
+        vulkan = VulkanSwitch(vulkan = mapOf("swanstation_GPU_Renderer" to "Auto"), lock = false, autoOnXclipse = true),
         name = "SwanStation",
     )
     // PS2 on ARMSX2 (ARMSX2/ARMSX2 2.9, cores/Makefile). Reads <system>/pcsx2/{bios,resources}. Opens the game
@@ -233,7 +233,7 @@ object CoreRegistry {
             "armsx2_widescreen_patches" to "disabled", "armsx2_no_interlacing_patches" to "disabled", "armsx2_cheats" to "disabled", "armsx2_sw_threads" to "2",
         ),
         lockedOptions = setOf("armsx2_renderer", "armsx2_bios", "armsx2_upscale", "armsx2_sw_threads"),
-        vulkan = VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan"), autoOnMali = true),
+        vulkan = VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan"), autoOnMali = true, autoOnXclipse = true),
         // The PS2's two controller ports, both DualShock2 (cores/patches/armsx2/0006); no multitap. Saves stay on card 1.
         players = 2,
         name = "ARMSX2",
@@ -377,7 +377,7 @@ object CoreRegistry {
         biosFiles = listOf("dc/dc_boot.bin"),
         // Flycast has no renderer option and asks GET_PREFERRED_HW_RENDER; its libretro Vulkan context enables the frontend's
         // required device extensions only with patches/flycast.patch.
-        vulkan = VulkanSwitch(),
+        vulkan = VulkanSwitch(autoOnXclipse = true),
         // NX Redux's flycast defaults; values are flycast's exact strings (libretro_core_options.h), a misspelt one is ignored.
         // Per-game VMU: <save dir>/<content name>.A1.bin, with the game's saves.
         defaultOptions = mapOf(
@@ -534,6 +534,9 @@ object CoreRegistry {
     )
     private val dolphinGc = dolphinWii.copy(
         defaultOptions = dolphinOptions,
+        // Xclipse: Vulkan runs GameCube faster than ANGLE's OpenGL ES (Sunshine 60 vs 47 fps on the Tab S10 FE); Wii
+        // games run slower on it there, so Wii keeps OpenGL ES.
+        vulkan = dolphinWii.vulkan?.copy(autoOnXclipse = true),
         controllerPort0 = CoreDescriptor.JOYPAD,
     )
 

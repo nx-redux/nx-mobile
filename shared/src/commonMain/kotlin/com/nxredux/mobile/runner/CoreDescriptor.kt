@@ -28,8 +28,9 @@ data class VulkanSwitch(
      */
     val maliNeedsCustomDriver: Boolean = false,
     /**
-     * Graphics API "Auto" is Vulkan on a Samsung Xclipse GPU. Its OpenGL ES is ANGLE over Vulkan, which fails to compile
-     * some of a core's shaders without saying why (3DS: every geometry shader, so Pokémon Ultra Sun draws broken).
+     * Graphics API "Auto" is Vulkan on a Samsung Xclipse GPU, whose OpenGL ES is ANGLE over Vulkan: for a core it draws
+     * wrong (3DS geometry shaders, PS2's God of War II) or slower (GameCube), or as fast either way (PSP, PSX, Dreamcast).
+     * Not N64 or Wii, which run slower on Vulkan there (measured on the Tab S10 FE and Galaxy Z Flip 8).
      */
     val autoOnXclipse: Boolean = false,
 ) {

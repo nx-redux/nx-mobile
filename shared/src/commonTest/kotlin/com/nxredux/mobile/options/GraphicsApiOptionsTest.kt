@@ -134,15 +134,20 @@ class GraphicsApiOptionsTest {
         }
     }
 
-    @Test fun auto_is_vulkan_for_3ds_on_an_xclipse_gpu_only() {
-        val n3ds = CoreRegistry.forTag("3DS")!!.vulkan
+    @Test fun auto_is_vulkan_on_an_xclipse_gpu_except_n64_and_wii() {
         val xclipse = "ANGLE ((Samsung Xclipse 540) on Vulkan 1.3.279)"
-        assertEquals(setOf("azahar"), CoreRegistry.all.filter { it.vulkan?.autoOnXclipse == true }.map { it.id }.toSet())
+        val onXclipse = listOf("3DS", "PS2", "GC", "PSP", "PSX", "DC")
+        for (tag in onXclipse + listOf("N64", "WII")) {
+            val switch = CoreRegistry.forTag(tag)!!.vulkan
+            for (v in listOf(GraphicsApiOptions.AUTO, null)) {
+                val expected = if (tag in onXclipse) GraphicsApiOptions.VULKAN else v
+                assertEquals(expected, GraphicsApiOptions.effective(v, switch) { xclipse }, "$tag $v")
+            }
+        }
+        val n3ds = CoreRegistry.forTag("3DS")!!.vulkan
         for (v in listOf(GraphicsApiOptions.AUTO, null)) {
-            assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(v, n3ds) { xclipse }, "$v")
             assertEquals(v, GraphicsApiOptions.effective(v, n3ds) { "Mali-G76 MC4" }, "$v")
             assertEquals(v, GraphicsApiOptions.effective(v, n3ds) { "Adreno (TM) 740" }, "$v")
-            assertEquals(v, GraphicsApiOptions.effective(v, ps2) { xclipse }, "$v")
         }
         assertEquals(GraphicsApiOptions.GLES, GraphicsApiOptions.effective(GraphicsApiOptions.GLES, n3ds) { error("asked") })
     }
