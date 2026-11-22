@@ -153,15 +153,11 @@ public:
 
     void setParameter(const std::string& id, float value) override;
 
-    // Whether render() saves and restores the texture bound on each unit it uses: needed only while a GL core owns
-    // those bindings (it caches them). Default on.
     void setPreserveTextureBindings(bool preserve) override { preserveTextureBindings = preserve; }
 
     // The texture units render() samples, from unit 0: Texture, Orig, the LUTs, then each pass's output.
     unsigned textureUnits() const override { return 2 + (unsigned) lutTextures.size() + (unsigned) passes.size(); }
 
-    // Forgets the GL names without deleting them: their context is gone, and deleting them would hit whatever
-    // reuses those names in the current one.
     void abandonGlObjects() override;
 
     // Draws the chain: source is the core frame texture (srcW x srcH texels); the part being drawn is frameW x frameH of
@@ -178,7 +174,7 @@ public:
                 int screenW, int screenH, bool defaultLinear, unsigned frameCount,
                 bool bottomLeftOrigin, unsigned slot) override;
 
-    // Pure helpers, exposed for review: version rewrite and pass sizing.
+    // Pure helpers: version rewrite and pass sizing.
     static std::string prefixSource(const std::string& source, bool vertex, const std::vector<std::string>& aliases);
     static unsigned passSize(int scaleType, float scale, unsigned previous, unsigned viewport, unsigned maxSize);
 

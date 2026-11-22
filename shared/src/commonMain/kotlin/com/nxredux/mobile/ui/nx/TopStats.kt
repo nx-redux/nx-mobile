@@ -195,7 +195,6 @@ fun TopStatsPage(stats: TopStats, onLaunch: (Listed) -> Unit, prefer: BackdropAr
             val loose = Constraints(maxWidth = constraints.maxWidth)
             val head = subcompose("head") {
                 Column {
-                    // Trimmed line spacing: the title and the facts line read as one block.
                     Text(
                         stats.title, color = colors.listText, fontFamily = font, fontSize = 40.sp, lineHeight = 42.sp, fontWeight = FontWeight.Bold,
                         maxLines = 2, overflow = TextOverflow.Ellipsis, style = TextStyle(lineHeightStyle = TOP_TIGHT_LINES),

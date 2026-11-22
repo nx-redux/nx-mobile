@@ -45,7 +45,7 @@ class SaveStates(private val root: File, private val paths: NxPaths) {
 
     private fun encode(bytes: ByteArray) = if (paths.stateCompressed) Rzip.encode(bytes) else bytes
 
-    /** As minarch reads a state (ma_saves.c:177-291): RZIP or raw, a RetroArch RASTATE header skipped; null when malformed. */
+    /** As minarch reads a state (ma_saves.c): RZIP or raw, a RetroArch RASTATE header skipped; null when malformed. */
     private fun decode(raw: ByteArray): ByteArray? = Rzip.decode(raw)?.let(StateBytes::stripRaStateHeader)
 
     fun stateFile(slot: Int) = File(root, paths.state(slot - 1))   // where a save writes

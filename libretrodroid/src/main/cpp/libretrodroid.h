@@ -310,7 +310,6 @@ public:
 
     void resetGlobalVariables();
 
-    // Handle callbacks
     void handleVideoRefresh(const void *data, unsigned width, unsigned height, size_t pitch);
     void rethrowVideoCallbackError();
     size_t handleAudioCallback(const int16_t* data, size_t frames);

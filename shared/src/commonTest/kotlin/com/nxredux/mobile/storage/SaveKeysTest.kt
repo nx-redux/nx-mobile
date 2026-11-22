@@ -28,7 +28,7 @@ class SaveKeysTest {
             }
         }
     }
-    /** Follow-up 7: a ROM inside an archive named after it (`X.gb.zip`): every format's name, and the ROM, give one key. */
+    /** A ROM inside an archive named after it (`X.gb.zip`): every format's name, and the ROM, give one key. */
     @Test fun an_archived_rom_name_round_trips_to_one_key() {
         val rom = "X.gb.zip"
         val game = SaveKeys.romKey(rom)

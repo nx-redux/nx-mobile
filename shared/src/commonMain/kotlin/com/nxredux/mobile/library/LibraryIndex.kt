@@ -112,7 +112,7 @@ data class IndexedGame(
      */
     val hiddenCopies: List<String> = emptyList(),
     /**
-     * A word shown as a pill by its name, marking what kind of game this is, else null. Now [MsuSets.MSU1] or
+     * A word shown as a pill by its name, marking what kind of game this is, else null: [MsuSets.MSU1] or
      * [MsuSets.MSU_MD] for a ROM whose MSU set lies beside it.
      */
     val badge: String? = null,

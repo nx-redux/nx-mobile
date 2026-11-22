@@ -364,7 +364,6 @@ class EmulatorSettingsControllerTest {
     }
 
     // Touch only, a value row of three or more opens a chooser of its values; a pick writes it as stepping would.
-    // A touch row's picker lists the option's values; a pick writes it.
     @Test fun touch_a_core_option_opens_a_picker_and_a_pick_writes_it() = runTest {
         val configs = MemoryConfigs()
         val state = TestState(configs)
@@ -697,7 +696,7 @@ class EmulatorSettingsControllerTest {
         assertEquals(emptyList(), appRows(state))
     }
 
-    // Each row changes its setting as on its old Settings page, and the page stays, its selection on the row.
+    // Each row changes its setting as a Settings row does, and the page stays, its selection on the row.
     @Test fun the_cable_link_rows_change_their_settings_on_the_page() = runTest {
         val state = mgbaState(cacheOf())
         openCore(state, "mgba")

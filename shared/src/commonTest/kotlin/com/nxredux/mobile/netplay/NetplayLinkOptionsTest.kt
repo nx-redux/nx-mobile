@@ -217,7 +217,7 @@ class NetplayLinkOptionsTest {
         assertFalse(session(NetplayRole.CLIENT, "gpsp").onCopy)
         assertFalse(NetplaySession(NetplayRole.CLIENT, "1.2.3.4", "gambatte", "gambatte", emptySaves = true).onCopy)
         assertFalse(NetplaySession(NetplayRole.HOST, "1.2.3.4", "mgba", "mgba").onCopy)
-        assertTrue(NetplaySession(NetplayRole.CLIENT, "1.2.3.4", "snes9x", "snes9x").onCopy)   // lockstep: unchanged
+        assertTrue(NetplaySession(NetplayRole.CLIENT, "1.2.3.4", "snes9x", "snes9x").onCopy)   // lockstep: the joiner on a copy
     }
 
     @Test fun only_a_link_session_ends_as_a_local_game() {

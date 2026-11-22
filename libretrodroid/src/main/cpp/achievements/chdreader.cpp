@@ -95,12 +95,10 @@ static int parse_chd_tracks(chd_file* chd, chd_track_info_t* tracks, int* num_tr
 										 metadata, sizeof(metadata),
 										 &metadata_size, NULL, NULL);
 		if (err != CHDERR_NONE) {
-			// Try older format
 			err = chd_get_metadata(chd, CDROM_TRACK_METADATA_TAG, i,
 								   metadata, sizeof(metadata),
 								   &metadata_size, NULL, NULL);
 			if (err != CHDERR_NONE) {
-				// Try GD-ROM format
 				err = chd_get_metadata(chd, GDROM_TRACK_METADATA_TAG, i,
 									   metadata, sizeof(metadata),
 									   &metadata_size, NULL, NULL);
@@ -115,7 +113,6 @@ static int parse_chd_tracks(chd_file* chd, chd_track_info_t* tracks, int* num_tr
 			metadata_size = sizeof(metadata) - 1;
 		metadata[metadata_size] = '\0';
 
-		// Parse the metadata string
 		int track_num, frames, pad = 0, pregap = 0, postgap = 0;
 		char type_str[32] = {0};
 		char subtype_str[32] = {0};
@@ -257,7 +254,6 @@ static int find_track(chd_track_handle_t* handle, uint32_t track_request) {
 	if (handle->num_tracks == 0)
 		return -1;
 
-	// Handle special track requests
 	if (track_request == (uint32_t)-1) {
 		// RC_HASH_CDTRACK_FIRST_DATA - first data track
 		for (int i = 0; i < handle->num_tracks; i++) {
@@ -388,7 +384,6 @@ void* chdreader_open_track(const char* path, uint32_t track) {
 	handle->track_type = handle->tracks[track_idx].type;
 	handle->track_pregap = handle->tracks[track_idx].pregap_frames;
 
-	// Determine sector format based on track type
 	get_sector_format(handle->track_type, handle->frame_size,
 					  &handle->sector_header_size, &handle->raw_data_size);
 
@@ -414,8 +409,6 @@ size_t chdreader_read_sector(void* track_handle, uint32_t sector, void* buffer, 
 		return 0; // before this track: not addressable through this handle
 	uint32_t frame = handle->track_start_frame + (sector - handle->track_lba_start);
 
-	// Always skip pregap for data tracks - the pregap frames are allocated
-	// in the CHD regardless of whether they contain real data or silence.
 	if (is_data_track(handle->track_type) && handle->track_pregap > 0) {
 		frame += handle->track_pregap;
 	}
@@ -423,7 +416,6 @@ size_t chdreader_read_sector(void* track_handle, uint32_t sector, void* buffer, 
 	uint32_t hunk_num = frame / handle->frames_per_hunk;
 	uint32_t frame_in_hunk = frame % handle->frames_per_hunk;
 
-	// Read hunk if not cached
 	if (hunk_num != handle->cached_hunk) {
 		chd_error err = chd_read(handle->chd, hunk_num, handle->hunk_buffer);
 		if (err != CHDERR_NONE) {
@@ -435,7 +427,6 @@ size_t chdreader_read_sector(void* track_handle, uint32_t sector, void* buffer, 
 	uint32_t offset = frame_in_hunk * handle->frame_size;
 	uint8_t* src = handle->hunk_buffer + offset;
 
-	// Use pre-calculated sector format from track type
 	size_t header_skip = handle->sector_header_size;
 	size_t data_size = handle->raw_data_size;
 

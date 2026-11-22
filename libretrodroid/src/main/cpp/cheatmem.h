@@ -24,8 +24,8 @@
 namespace libretrodroid {
 
 // RetroArch's frontend-side ("handler 1") cheats: no code for the core, just a
-// RAM patch the frontend applies every frame. Ported from nx-redux's
-// ma_cheat_mem.h; pure logic, host-tested by src/test/cpp/cheatmem_test.cpp.
+// RAM patch the frontend applies every frame. The same logic as nx-redux's
+// ma_cheat_mem.h; pure, host-tested by src/test/cpp/cheatmem_test.cpp.
 // LibretroDroid owns the patches and the memory.
 
 #define CHEAT_MEM_MAX_REGIONS 64

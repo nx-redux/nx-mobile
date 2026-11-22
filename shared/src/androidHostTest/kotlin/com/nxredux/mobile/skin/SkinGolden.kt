@@ -23,7 +23,7 @@ import kotlin.test.fail
 /** A window a layout is tuned for: [w] x [h] px at [dpi]; [hingeY] while half-folded. */
 data class DeviceClass(val name: String, val w: Int, val h: Int, val dpi: Int, val tablet: Boolean, val foldable: Boolean, val hingeY: Float? = null)
 
-/** The device classes the converted layouts must place as before on (the Fold's and the Ultra's inner screens tablet-class, as the app sees them). */
+/** The device classes the layouts are recorded on (the Fold's and the Ultra's inner screens tablet-class, as the app sees them). */
 val GOLDEN_DEVICES = listOf(
     DeviceClass("phone", 1080, 2520, 480, tablet = false, foldable = false),
     DeviceClass("phone_land", 2520, 1080, 480, tablet = false, foldable = false),

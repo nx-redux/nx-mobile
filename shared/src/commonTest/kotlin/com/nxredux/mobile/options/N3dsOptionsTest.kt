@@ -137,7 +137,7 @@ class N3dsOptionsTest {
     @Test fun fill_proportion_fills_the_height_left_under_the_top() {
         // The unfolded Fold, portrait, band hidden: the top 4.62x fills the width, the bottom takes the 650 px left.
         assertEquals(1.71f, N3dsOptions.fillProportion(1848f, 1759f))
-        // Too short for the top and a half-size bottom: today's half size (the picture shrinks to fit).
+        // Too short for the top and a half-size bottom: the half size (the picture shrinks to fit).
         assertEquals(2f, N3dsOptions.fillProportion(1400f, 1080f))
         assertEquals(2f, N3dsOptions.fillProportion(1080f, 900f))
         // Room for both at the top's scale: the bottom as big as the top, never bigger.

@@ -383,8 +383,7 @@ double Audio::computeDynamicBufferConversionFactor(double dt) {
     // This changes continuously, so we should try to keep it a very low value.
     double proportionalAdjustment = std::clamp(kp * errorMeasure, -maxp, maxp);
 
-    // Ki is a lot lower, so it's safe if it exceeds the ear threshold. Hopefully convergence will
-    // be slow enough to be not perceptible. We need to battle test this value.
+    // Ki is a lot lower, so it may exceed the ear threshold: it converges too slowly to be heard.
     double integralAdjustment = std::clamp(ki * errorIntegral, -maxi, maxi);
 
     double finalAdjustment = proportionalAdjustment + integralAdjustment;

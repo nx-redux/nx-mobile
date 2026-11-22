@@ -10,10 +10,10 @@ import com.nxredux.mobile.runner.SegaPadType
  * so a game that probes the pad takes the same path on both devices (a 6-button probe against a 3-button pad desyncs).
  * Single player never reads this: it keeps Controls → Controller Type ([SegaPadType]).
  *
- * Sources, nx-redux origin/main aa85f72c, `skeleton/SYSTEM/tg5040/paks/Emus/<TAG>.pak/default.cfg` and `launch.sh`:
+ * Sources, nx-redux `skeleton/SYSTEM/tg5040/paks/Emus/<TAG>.pak/default.cfg` and `launch.sh`:
  * - SMS.pak, GG.pak, SG1000.pak: `-picodrive_input1 = 3 button pad`, `-picodrive_input2 = 3 button pad`.
  * - MD.pak, SEGACD.pak, 32X.pak: no `picodrive_input*`, so picodrive's own default, `3 button pad`.
- * picodrive since 2026 takes its pad as the port device instead of those options: its 3-button pad on ports 0-1 here.
+ * picodrive takes its pad as the port device, not those options: its 3-button pad on ports 0-1 here.
  * - GPGX.pak: no `minarch_gamepad_type`, so minarch's `set_controller_port_device(0/1, RETRO_DEVICE_JOYPAD)` after load
  *   (`workspace/all/minarch/ma_core.c:298-299`) stands: genesis_plus_gx's auto pad (2B/3B/6B from the cart header).
  *   A phone-only genesis_plus_gx session on MD/SMS/GG/SG1000/SEGACD gets the same (no pak runs it there; both phones agree).

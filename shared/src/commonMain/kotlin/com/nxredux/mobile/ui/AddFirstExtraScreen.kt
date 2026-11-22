@@ -34,7 +34,6 @@ fun PermissionsStepScreen(
     screen: Screen.PermissionsStep, title: String, canGoBack: Boolean, selected: Int, onSelect: (Int) -> Unit, onRow: (Int) -> Unit, onHint: (NxButton) -> Unit,
 ) {
     fun status(granted: Boolean?) = if (granted == true) "Allowed" else "Not allowed"
-    // Each permission its status on the right (a tap asks for it), Continue the button under them.
     val rows = permissionRows(screen).map {
         when (it) {
             PermissionRow.ALL_FILES -> NxSettingRow("All files access", value = status(screen.allFiles))

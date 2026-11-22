@@ -65,7 +65,7 @@ class AndroidRaStoreLockTest {
         try {
             assertEquals("locked", child.inputStream.bufferedReader().readLine())
             var ran = false
-            // Off the IO pool, as a menu caller is: the hop back from the lock is where a cancel used to land.
+            // Off the IO pool, as a menu caller is: a cancel can land on the hop back from the lock.
             val waiting = launch(Dispatchers.Default) { store.locked(RaPaths.JOURNAL) { ran = true } }
             Thread.sleep(500)
             waiting.cancel()

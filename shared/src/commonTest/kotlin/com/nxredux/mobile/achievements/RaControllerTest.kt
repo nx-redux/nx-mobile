@@ -376,7 +376,7 @@ class RaControllerTest {
     }
 
     // The walks' reads and parses (a cached game's sets.json, the journal, the status read) run on [work], off the
-    // caller's (main) dispatcher; the download's page and the state end as they always did.
+    // caller's (main) dispatcher; the download's page and the state end the same.
     @Test fun the_download_and_the_sync_read_and_parse_on_the_work_context() = runTest {
         val store = FakeRaStore(); val http = FakeRaHttp()
         store.put(RaPaths.login(), """{"Success":true,"User":"me","Token":"tok","SoftcoreScore":1}""")

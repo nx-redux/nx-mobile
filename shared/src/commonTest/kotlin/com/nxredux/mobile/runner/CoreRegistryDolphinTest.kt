@@ -45,7 +45,7 @@ class CoreRegistryDolphinTest {
     }
     @Test fun upstream_options_that_do_not_fit_the_app_stay_off() {
         for (d in listOf(wii, gc)) {
-            // The pushed audio we tested: libretrodroid has no audio or frame-time callback for the other modes.
+            // Pushed audio: libretrodroid has no audio or frame-time callback for the other modes.
             assertEquals("0", d.defaultOptions["dolphin_call_back_audio_method"])
             // No VR frontend; Wii Controller sets each port's device; popups are RetroArch notifications.
             assertEquals("disabled", d.defaultOptions["dolphin_vr_mode"])

@@ -169,7 +169,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
 
     /**
      * netplay: the saves a session plays on, before the battery load. A host on its folder's own core keeps its
-     * real saves but loses the game's auto-resume state (handheld 19d3a5e1), so a later resume cannot roll back battery
+     * real saves but loses the game's auto-resume state (as on the handheld), so a later resume cannot roll back battery
      * saves written in the session; manual slots stay. A host on another core plays on a fresh copy of its own battery
      * saves in the session folder; one whose saves were not served (emptySaves) on an empty copy. A client plays on the
      * host's saves, committed there before launch (an empty folder when the host had none).

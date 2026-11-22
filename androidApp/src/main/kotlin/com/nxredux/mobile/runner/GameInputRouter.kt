@@ -705,7 +705,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
 
     /** The activity's onStop: no pen or 3DS hotkey tick in the background; onStart restarts them ([syncPen], [syncN3dsCursor]). */
     fun onStop() {
-        penJob?.cancel()   // no 60 Hz pen tick in the background; onStart restarts it (stylus mode itself is kept)
+        penJob?.cancel()   // stylus mode itself is kept
         penJob = null
         if (isN3ds) {   // backgrounded: no held-back SELECT or forwarded key left hanging, and no tick
             n3dsHotkeys.releaseAll()

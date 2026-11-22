@@ -48,8 +48,8 @@ class HomeChromeBoardTest {
         }
     }
 
-    // The strip with no tab row: centred between the body's top (the screen's) and the top section, as it was between
-    // the underline and the top section. The room below ends at Continue's ring (3 dp above topY) and the two lines are
+    // The strip with no tab row: centred between the body's top (the screen's) and the top section, as it is between
+    // the underline and the top section with one. The room below ends at Continue's ring (3 dp above topY) and the two lines are
     // homeStripPitch apart: (48 − 3 − pitch − inkBottom − capTop) / 2 = 3.13 dp on the cover (the portrait strip
     // 14 / 18), one landscape line (28 − 3 − inkBottom − capTop) / 2 = 1.88.
     @Test fun theStripCentresUnderTheScreenTopWithNoTabRow() {

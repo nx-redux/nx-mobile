@@ -100,7 +100,7 @@ class PrefsProvider : ContentProvider() {
         const val RESULT_FILES = "files"
         /** The data root as [DataRoot.settled] answers in the main process; result [RESULT_PATH]. The `arg` name is unused. */
         const val METHOD_DATA_ROOT_SETTLED = "dataRootSettled"
-        /** [ARG_BEGIN] true: [DataRoot.useBegin], false: [DataRoot.useEnd]; the game process holds off the data move through it. */
+        /** [ARG_BEGIN] true: [DataRoot.gameUseBegin], false: [DataRoot.gameUseEnd]; the game process holds off the data move through it. */
         const val METHOD_DATA_ROOT_USE = "dataRootUse"
         const val ARG_BEGIN = "begin"
         const val RESULT_PATH = "path"

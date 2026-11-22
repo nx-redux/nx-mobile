@@ -9,7 +9,7 @@ import kotlin.test.assertEquals
  * of its hue.
  */
 class SecondaryAccentTest {
-    // Auto, which on the default White accent is NX teal: the default look is unchanged.
+    // Auto, which on the default White accent is NX teal.
     @Test fun theDefaultIsAutoTealOnWhite() {
         assertEquals(SecondaryAccent.Auto, SecondaryAccent.DEFAULT)
         assertEquals(0x006666, SecondaryAccent.DEFAULT.rgb(AccentPreset.DEFAULT))

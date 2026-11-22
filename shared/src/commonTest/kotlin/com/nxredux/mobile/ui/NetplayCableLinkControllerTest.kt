@@ -73,7 +73,7 @@ class NetplayCableLinkControllerTest {
         val c = controller(p)
         c.open(ruby); runCurrent()
         val wifi = assertIs<NetplayPage.Role>(c.page.value)
-        assertEquals(NetplayLink.WIFI, wifi.connection)                    // a row now, even without a cable
+        assertEquals(NetplayLink.WIFI, wifi.connection)                    // a row even without a cable
         assertEquals(listOf(NetplayRoleRow.CONNECTION, NetplayRoleRow.EMULATOR, NetplayRoleRow.HOST, NetplayRoleRow.JOIN), wifi.rows)
         c.press(NxButton.UP, NxButton.UP, NxButton.RIGHT)
         val cable = assertIs<NetplayPage.Role>(c.page.value)

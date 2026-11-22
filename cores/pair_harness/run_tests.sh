@@ -79,7 +79,7 @@ pair() {
 		--opt mgba_pair_rtc=1762646400 "$@" > "$out" 2> "$out.log" || true
 }
 
-# Step 2's baseline: no pair mode, A alone, the serialize hash every 60 frames.
+# The baseline: no pair mode, A alone, the serialize hash every 60 frames.
 "$H" --core "$PAIR" --rom "$PAIR_ROM_A" --frames 600 --every 60 > "$T/solo1" 2> "$T/solo1.log" || true
 "$H" --core "$PAIR" --rom "$PAIR_ROM_A" --frames 600 --every 60 > "$T/solo2" 2> "$T/solo2.log" || true
 if same "$T/solo1" "$T/solo2" && [ -s "$T/solo1" ]; then pass single_runs_identical; else fail single_runs_identical "two runs differ (a game with a clock as PAIR_ROM_A?)"; fi

@@ -175,9 +175,9 @@ private:
     // Compiles one shader pass and looks up the handles the built-in draw loops use. Throws when the program fails.
     static ShaderChainEntry createShaderChainEntry(const ShaderManager::Pass& pass);
 
-    // layout's region quads on framebuffer 0 at layout's screen size; preset (may be null) draws the shaded ones.
     // A screen cut from the frame, copied into its own texture so a preset sees it as a whole frame of its own.
     struct RegionCrop { GLuint framebuffer = 0; GLuint texture = 0; unsigned width = 0; unsigned height = 0; };
+    // layout's region quads on framebuffer 0 at layout's screen size; preset (may be null) draws the shaded ones.
     void renderRegions(VideoLayout& layout, ChainRenderer* preset, std::vector<RegionCrop>& crops);
     void renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layout, ChainRenderer* preset,
                      std::vector<RegionCrop>& crops);

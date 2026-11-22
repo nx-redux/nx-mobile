@@ -91,7 +91,7 @@ public:
     // A custom driver whose frames cannot reach the screen: the driver could not start, or stopped working. Import: the
     // shared AHardwareBuffer could not be created or imported before any frame was bridged. Reader: none of the first
     // frames got through, the GLES side could not import the first buffer, or frames flowed and then all failed for a
-    // while (FailureStreak). True once; the system driver never reports it (its failed frame is skipped, as before).
+    // while (FailureStreak). True once; the system driver never reports it (its failed frame is skipped).
     bool takeCustomSlotFailure();
 
     // After the GLES side took a bridged frame: whether it could import the buffer. The Reader hand-off's frame only

@@ -29,7 +29,7 @@ class DiscProbeTest {
         val src = FakeRomsSource(mapOf("d" to listOf("S.iso", "M.cue")), texts = mapOf("d/M.cue" to "FILE \"gone.bin\" BINARY\n TRACK 01 MODE1/2352\n"), bytes = mapOf("d/S.iso" to sat))
         val dir = src.listChildren(ContentRef("d"))
         assertNull(DiscProbe(src).identify(dir.first { it.name == "S.iso" }, dir))
-        assertNull(DiscProbe(src).identify(dir.first { it.name == "M.cue" }, dir))      // Review Focus 2: its bin is missing
+        assertNull(DiscProbe(src).identify(dir.first { it.name == "M.cue" }, dir))      // its bin is missing
     }
 
     @Test fun chd_by_metadata_then_by_its_sectors() = runTest {

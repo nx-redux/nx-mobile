@@ -30,7 +30,7 @@ Mac-side Python 3 (stdlib only) driver for a TrimUI Brick (tg5040) on NX Redux, 
 
 ### After a Dolphin pin bump
 
-1. `gmake -C cores dolphin`: the patches apply in order (`dolphin.patch`, `dolphin/0001…`, `dolphin/0002…`); on a
+1. `gmake -C cores dolphin`: the patches apply in order (`dolphin.patch`, then `dolphin/*.patch` in name order); on a
    clash regenerate them on the new head with `git apply -3`, and drop a backport the pin now has (0002 once the
    libretro fork includes upstream PR #14928). Keep each patch's licence header.
 2. Pacing, SMG2 from a state (Nova): `pacing.py --tag WII --core dolphin --rom <SMG2> --state <state> --runs 2 --work`;

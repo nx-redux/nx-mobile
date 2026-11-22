@@ -779,7 +779,6 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         return activity.windowShape().portraitBandPx.roundToInt()
     }
 
-    /** Portrait keeps the game below a top camera cutout; landscape leaves the (centred) picture full-screen. */
     /** The layout is the overlay pad: no pad skin, no controller ([OverlayMode.BARE]). */
     private var overlayPadLayout = false
 

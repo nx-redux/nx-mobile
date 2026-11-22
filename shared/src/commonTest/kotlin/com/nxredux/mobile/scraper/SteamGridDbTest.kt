@@ -471,7 +471,7 @@ class SteamGridDbTest {
         val sg = FakeSource(SourceId.SGDB, slots = setOf(ArtSlot.GRID)).apply { offer("Tetris.gb", ArtSlot.GRID, "https://sg/grid") }
         val rig = EngineRig(ss, sg, extras = ArtExtras(box2d = true))
         val item = rig.run(Scrape.homeGame("Tetris.gb")).items.single()
-        assertEquals(ItemStatus.DONE to "ss, steamgriddb", item.status to item.reason)   // the box is no longer missing
+        assertEquals(ItemStatus.DONE to "ss, steamgriddb", item.status to item.reason)   // the grid is the box
         assertNotNull(rig.fs.bytesAt("Home/Roms/GB/.media/boxart2d/Tetris.jpg"))
         assertNull(rig.fs.bytesAt("Home/Roms/GB/.media/boxart/Tetris.png"))
         assertTrue(ArtHave.of(rig.arts.single()).box)

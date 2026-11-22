@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Device Sync scenarios between a phone (NX Redux mobile, debug build) and a TrimUI Brick, over Wi-Fi.
 
-Design: docs/superpowers/specs/2026-10-16-device-test-automation-design.md, "Device Sync scenarios".
-
   1. handheld saves of a GBA-folder and an MGBA-folder game reach the phone's Saves/GBA
   2. changed phone saves go back to each game's own handheld folder
   3. a second unchanged sync moves no save (odd-second mtimes vs FAT's 2 s rounding)

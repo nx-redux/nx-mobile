@@ -1332,7 +1332,7 @@ void LibretroDroid::reset() {
     if (core == nullptr) return;
     dslink::leaveNow();   // a reset DS starts with its radio off: it leaves the room as the game would
     core->retro_reset();
-    // A bare retro_reset left the old game's snapshots to rewind into, and fpsSync's clock counting from before.
+    // The snapshots from before the reset must not be rewound into, and fpsSync's clock restarts.
     rewind.clear();
     if (fpsSync) fpsSync->reset();
 }

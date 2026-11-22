@@ -25,8 +25,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 /**
- * A tool page around an [NxRichList]: the grey title, the list centred below it between its up and down scroll chevrons
- * (each in a strip of the same height, as far from the list), and the hint bar. [emptyText] replaces an empty list.
+ * A tool page around an [NxRichList]: the grey title, the list centred below it, fading at an edge more rows scroll in
+ * from, and the hint bar. [emptyText] replaces an empty list.
  * With a [sidePane], the list takes [listFraction] of the width and the pane fills the rest, between the title and the
  * hint bar.
  */

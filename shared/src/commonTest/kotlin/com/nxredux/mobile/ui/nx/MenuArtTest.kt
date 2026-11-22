@@ -23,7 +23,7 @@ class MenuArtTest {
 
     @Test fun androidAndThe3dsHaveLogos() {
         assertNotNull(consoleLogo(com.nxredux.mobile.ui.ANDROID_TAG))
-        assertNotNull(consoleLogosById["3ds"])   // no console uses it yet
+        assertNotNull(consoleLogosById["3ds"])
     }
 
     @Test fun anUnknownTagHasNoLogo() { assertNull(consoleLogo("NOPE")) }

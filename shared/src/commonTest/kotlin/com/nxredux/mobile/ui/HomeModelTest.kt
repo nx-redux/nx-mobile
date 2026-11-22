@@ -21,7 +21,6 @@ class HomeModelTest {
 
     private val normal = HomeStats(playedMs = 7_200_000, unlocks = 4, signedIn = true, top = zelda, computed = true)
 
-    // Fixtures: games, tools, a Continue, the stats.
     private val g1 = listed("G1"); private val g2 = listed("G2"); private val g3 = listed("G3")
     private val t1 = ToolRow(ToolKind.SETTINGS, "Settings", null)
     private val t2 = ToolRow(ToolKind.CHEAT_DB, "Cheats & Patches", null)

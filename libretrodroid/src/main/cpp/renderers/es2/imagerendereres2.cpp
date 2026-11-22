@@ -50,11 +50,10 @@ void ImageRendererES2::onNewFrame(const void *data, unsigned width, unsigned hei
         glTexImage2D(GL_TEXTURE_2D, 0, glInternalFormat, width, height, 0, glFormat, glType, nullptr);
     }
 
-    // If the given texture has the correct size we just upload it.
     if (bytesPerPixel * width == pitch) {
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, glFormat, glType, data);
     } else {
-        // Here we are forced to take the long and slow way to upload the padded texture.
+        // ES2 has no GL_UNPACK_ROW_LENGTH: a padded frame uploads row by row.
         for (int i = 0; i < height; i++) {
             auto row = (char*) data + (pitch) * i;
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, i, width, 1, glFormat, glType, row);
@@ -111,7 +110,7 @@ void ImageRendererES2::setShaders(ShaderManager::Chain shaders) {
     this->linear = shaders.linearTexture;
 }
 
-// ES2 Renderer doesn't currently support multiple passes.
+// No multiple passes on ES2.
 Renderer::PassData ImageRendererES2::getPassData(unsigned int layer) {
     return { };
 }

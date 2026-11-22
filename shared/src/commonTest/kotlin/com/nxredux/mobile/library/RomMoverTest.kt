@@ -60,7 +60,7 @@ class RomMoverTest {
         assertEquals(listOf("N.chd"), names(src, "x"))
     }
 
-    // Review Focus 4: a name already in the target leaves both where they are.
+    // A name already in the target leaves both where they are.
     @Test fun a_clash_leaves_the_game_in_place() = runTest {
         val src = source(home = listOf("K.gba"))
         val mover = RomMover(src, ContentRef("H"))
@@ -76,7 +76,7 @@ class RomMoverTest {
         assertEquals(listOf("N.chd"), names(src, "x"))
     }
 
-    // Review Focus 5: cancel stops between games; the first moved whole, the second untouched.
+    // Cancel stops between games; the first moved whole, the second untouched.
     @Test fun cancel_stops_after_the_current_game() = runTest {
         val src = source()
         val mover = RomMover(src, ContentRef("H"))
@@ -95,7 +95,7 @@ class RomMoverTest {
         assertTrue("G.cue" in names(src, "x"))
     }
 
-    // Review Focus 5 again: a cancelled coroutine (the app closing) mid-set still moves the set whole.
+    // A cancelled coroutine (the app closing) mid-set still moves the set whole.
     @Test fun cancelling_the_job_mid_set_leaves_no_half_set() = runTest {
         val src = source()
         val mover = RomMover(src, ContentRef("H"))
@@ -143,7 +143,7 @@ class RomMoverTest {
         assertEquals(listOf("K.gba"), names(src, "H/Stuff"))
     }
 
-    // I4: a folder is removed only when its parent's listing still shows it: a provider whose listings come back empty
+    // A folder is removed only when its parent's listing still shows it: a provider whose listings come back empty
     // (the Fold's Android 17 fault) never gets a delete that would take a full folder with it.
     @Test fun nothing_is_pruned_while_listings_come_back_empty() = runTest {
         val src = FakeRomsSource(mapOf("H" to listOf("Roms", "Stuff"), "H/Stuff" to listOf("K.gba")))

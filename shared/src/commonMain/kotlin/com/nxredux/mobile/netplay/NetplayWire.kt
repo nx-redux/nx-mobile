@@ -1,8 +1,8 @@
 package com.nxredux.mobile.netplay
 
 /**
- * NX Redux netplay wire format, byte-compatible with the handheld (nx-redux network_common.c, wizard_net.c at
- * 8f5a760b): ports, discovery packet, name escaping and normalisation. The control lines are in `wizard/`. Pure.
+ * NX Redux netplay wire format, byte-compatible with the handheld (nx-redux network_common.c,
+ * wizard_net.c): ports, discovery packet, name escaping and normalisation. The control lines are in `wizard/`. Pure.
  */
 object NetplayWire {
     const val CONTROL_PORT = 55440

@@ -501,7 +501,7 @@ private fun RowScope.StripMost(m: HomeStripMost) {
  * Continue: the last game's resume frame, else its screenshot (a hero one not in [portrait]), else its abstract
  * picture ([continuePictures], all through the one image loader). The picture is cropped, framed at 40% from the top, then zoomed [HOME_CONTINUE_ZOOM]
  * about that point and clipped to the card. Over it, the pinned games' caption fade ([homeCaptionFade], the bottom 80%)
- * holds the name (up to 2 balanced lines where the card holds them) and the time ([info], TIME only) at the name's size.
+ * holds the name (one line) and the time ([info], TIME only) at the name's size.
  * With no picture at all it is a title card: the name large in the middle, the time at the bottom. A "Continue"
  * [HomeBadge] sits top-left. No ring or edge: selected, the picture in colour and the name in the accent; not, grey.
  */
@@ -548,9 +548,8 @@ private fun ContinueCard(row: MainRow.Continue, lit: Boolean, info: List<InfoLin
                 )
                 // The pinned games' caption fade, over the card's bottom 80%; the text sits on it at the bottom.
                 Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(HOME_CAPTION_SHARE).homeCaptionFade(colors.background))
-                // The name wraps to a second, balanced line where the card holds it ([homeCaptionTitleLines]),
-                // growing upward from the bottom-anchored block; the time sits under it a step smaller, as on the
-                // pinned games' cards ([nxCardTitleSize] the name, [nxCardStatsSize] the time).
+                // The time sits under the name a step smaller, as on the pinned games' cards ([nxCardTitleSize] the
+                // name, [nxCardStatsSize] the time).
                 val gap = if (portrait) 1.7f else 2.55f
                 val bottom = if (portrait) 8.5f else 10.2f
                 val scale = LocalDensity.current.fontScale

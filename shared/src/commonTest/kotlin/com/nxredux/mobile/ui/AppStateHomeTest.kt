@@ -56,8 +56,6 @@ class AppStateHomeTest {
         override var useExtractedFileName = false
         override var padSkin: Boolean = true
         override var padTheme: PadTheme = PadTheme.DEFAULT
-        // Pinned to List: the walks below step Consoles, Collections and Tools as lists. The
-        // real defaults (a missing tab is its MenuStyles.defaultStyleOf) are tested with menuStyles = emptyMap() (AppStateTest).
         override var menuStyles: Map<MenuCategory, MenuStyle> = emptyMap()
         override var gameListStyle: MenuStyle = MenuStyle.LIST
         override var menuOrientations: Map<MenuCategory, MenuOrientation> = emptyMap()
@@ -67,7 +65,7 @@ class AppStateHomeTest {
         override var androidConsoleApps: List<String> = emptyList()
         override var androidGamesAsked = false
         override var allFilesAsked = false
-        override var onboardingDone: Boolean? = true   // done: tests of other things never meet onboarding ([freshInstall] does)
+        override var onboardingDone: Boolean? = true   // done: only the tests that clear it meet onboarding
         override var onboardingStep: String? = null
         override var androidPins: List<String> = emptyList()
         override var raEnabled = false
@@ -257,7 +255,6 @@ class AppStateHomeTest {
         st.select(folderSummaryRows(home).lastIndex); st.onButton(NxButton.A)
         val (offer, _) = st.setupChrome()
         // After Text size; no pick between Permissions and the home page, which counts once the scan found games, as after a pick.
-        // The total grows by the home's page once the scan found games.
         assertEquals(listOf("Setup · Step 2/10", "Setup · Step 3/11", "Setup · Step 4/11"), listOf(permissions, homePage, offer))
         // Permissions, the home page, the ROMs folder offer, then onboarding's own steps: no pick among them.
         st.skipFirstExtra()

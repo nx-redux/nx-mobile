@@ -51,7 +51,7 @@ class ScraperResponseTest {
         assertNull(ScraperMedia.screenshotOnly(listOf(SsMedia("sstitle", "us", "t"))))
     }
     @Test fun wheelHdBeforeWheelThenRegion() {
-        // NR scraper_api.c:251-253: wheel-hd, then wheel; within each type us, wor, eu, the rest.
+        // As NX Redux's `scraper_api.c`: wheel-hd, then wheel; within each type us, wor, eu, the rest.
         val m = listOf(SsMedia("wheel", "us", "w-us"), SsMedia("wheel-hd", "jp", "hd-jp"), SsMedia("wheel-hd", "eu", "hd-eu"), SsMedia("wheel", "wor", "w-wor"))
         assertEquals("hd-eu", ScraperMedia.choose(m)[ArtSlot.WHEEL]?.url)
         assertEquals(listOf("hd-eu", "hd-jp", "w-us", "w-wor"), ScraperMedia.rank(m, ArtSlot.WHEEL).map { it.url })

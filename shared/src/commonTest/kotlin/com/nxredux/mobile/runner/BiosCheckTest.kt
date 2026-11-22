@@ -66,7 +66,7 @@ class BiosCheckTest {
     @Test fun every_emulator_imports_the_console_bios_folder_before_its_own() {
         assertEquals(listOf("GBA", "SGB", "MGBA"), BiosFolders.forTag("MGBA"))   // SGB shares the mGBA core
         assertEquals(listOf("GBA"), BiosFolders.forTag("GBA"))
-        assertEquals(listOf("FC", "FDS"), BiosFolders.forTag("FDS"))   // unchanged: core sharing still adds FC
+        assertEquals(listOf("FC", "FDS"), BiosFolders.forTag("FDS"))   // core sharing adds FC
         assertEquals(listOf("PS", "PSX"), BiosFolders.forTag("PSX"))
     }
     @Test fun the_message_names_the_console_folder() {

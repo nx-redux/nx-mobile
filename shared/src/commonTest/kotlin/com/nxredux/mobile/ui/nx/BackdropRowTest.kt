@@ -45,7 +45,7 @@ class BackdropRowTest {
         assertEquals(17f * kl, backdropToolNameSp(land, kl, BackdropSlot.BOX), 1e-4f)   // the spec: room to spare
         val logo = rowGeometry(RowStyle.BACKDROP, true, 120f)
         val klogo = backdropContentScale(logo, BackdropSlot.LOGO, portrait = false)
-        assertEquals(17f * klogo, backdropToolNameSp(logo, klogo, BackdropSlot.LOGO), 1e-4f)   // the Consoles / Collections logo slot: unchanged
+        assertEquals(17f * klogo, backdropToolNameSp(logo, klogo, BackdropSlot.LOGO), 1e-4f)   // the Consoles / Collections logo slot: never shrunk
     }
 
     // The composed window around the animated position is exactly the items rowItem shows.
@@ -144,7 +144,7 @@ class BackdropRowTest {
         assertEquals(GRID_RING_ROOM, backdropPlacement(100f, 120f, null, 0.5f).rowTop, 0.01f)   // short body: under the header
     }
 
-    // The main-menu Consoles row (main-menu sync): its 130 dp logo slot centred alone in the body, with its shadow room.
+    // The main-menu Consoles row: its 130 dp logo slot centred alone in the body, with its shadow room.
     @Test fun consolesRowIsCentredAlone() {
         assertEquals((344f - 130f - GRID_RING_ROOM) / 2, backdropPlacement(344f, 130f, null, 1f).rowTop, 0.01f)
         val logo = backdropSlotGeometry(BackdropSlot.LOGO, 344f)

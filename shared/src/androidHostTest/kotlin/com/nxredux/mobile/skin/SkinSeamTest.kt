@@ -89,7 +89,7 @@ class SkinSeamTest {
             // half-folded it stays below the hinge
             if (hinge == null) assertTrue(touch.y - (top.y + top.height) in 42f..242f, "$top over $touch")
             else assertTrue(touch.y > hinge, "$touch")
-            // the frame no taller than its 4:3 picture (no bars over and under the game: user), the row under it up with it
+            // the frame no taller than its 4:3 picture (no bars over and under the game), the row under it up with it
             assertEquals(touch.width * 3f / 4f, touch.height, 1f, "$hinge touch $touch")
             val menu = p.controls.single { it.spec.id == "MENU" }
             assertTrue(menu.y > touch.y + touch.height && menu.y - (touch.y + touch.height) < 200f, "$hinge row under the frame: $touch $menu")
@@ -120,8 +120,8 @@ class SkinSeamTest {
             assertEquals(32f * dp, 2504f - right.maxOf { it.dst.x + it.dst.width }, 2f, "$name right edge")
             assertTrue(frame.minOf { it.dst.x } - left.maxOf { it.dst.x + it.dst.width } >= 16f * dp - 1f, "$name left gap")
             assertTrue(right.minOf { it.dst.x } - frame.maxOf { it.dst.x + it.dst.width } >= 16f * dp - 1f, "$name right gap")
-            // L level with R, the stick with the face buttons, the d-pad under the stick (its place: the user's tweak,
-            // SkinBakeTest.the3dsOnTheUltraSidewaysHasItsCapsInARowUnderTheTouchScreen)
+            // L level with R, the stick with the face buttons, the d-pad under the stick (its place:
+            // SkinPackDrawingTest.the3dsOnTheUltraSidewaysHasItsCapsInARowUnderTheTouchScreen)
             assertEquals(c.getValue("R").y, c.getValue("L").y, 1f, "$name L level with R")
             val face = (c.getValue("X").y + c.getValue("B").y) / 2f
             assertEquals(face, c.getValue("STICK").y, 1f, "$name stick level with the face")
@@ -186,7 +186,7 @@ class SkinSeamTest {
         // the DS, the regular 3DS, the GB and a one-screen game's boards, on the Fold and the Ultra (upright, sideways)
         for ((w, h, dpi, hinge) in listOf(Quad(1848, 2448, 420, 1224f), Quad(2256, 2504, 480, 1252f), Quad(2504, 2256, 480, 1128f))) {
             for (v in listOf(SkinVariant.DS, SkinVariant.N3DS_REGULAR, SkinVariant.GB, SkinVariant.SINGLE)) {
-                // the 3DS on the Ultra sideways: its touch frame cut to its picture (onAWideWindowThe3dsTouchFrameFitsItsPictureAndTheDpadMovesIn)
+                // the 3DS on the Ultra sideways: its touch frame cut to its picture (onAWideWindowThe3dsTouchFrameWidensIntoTheRoom)
                 // the 3DS on the Ultra upright too: its touch screen cut to its picture, the row under it
                 if (v == SkinVariant.N3DS_REGULAR && (w == 2504 || w == 2256)) continue
                 val ds = v == SkinVariant.DS || v == SkinVariant.N3DS_REGULAR
@@ -279,7 +279,7 @@ class SkinSeamTest {
             val c = p.controls.associateBy { it.spec.id }
             assertEquals(c.getValue("R").y, c.getValue("L").y, 1f, "$name L level with R")
             assertEquals((c.getValue("X").y + c.getValue("B").y) / 2f, c.getValue("STICK").y, 1f, "$name stick level with the face")
-            // (the d-pad's size and place: the pack draws them, SkinBakeTest.the3dsOnTheFoldUprightHasItsDpadUpAndIn)
+            // (the d-pad's size and place: the pack draws them, SkinPackDrawingTest.the3dsOnTheFoldUprightHasItsDpadUpAndIn)
             fun ring(id: String) = c.getValue(id).let { k -> p.pieces.filter { it.piece >= 0 && p.spec.pieces[it.piece].glass == null &&
                 kotlin.math.abs(it.dst.x + it.dst.width / 2f - k.x) < 2f && kotlin.math.abs(it.dst.y + it.dst.height / 2f - k.y) < 2f }.maxOf { it.dst.width } }
             val s = c.getValue("STICK"); val d = c.getValue("DPAD")
@@ -321,7 +321,7 @@ class SkinSeamTest {
             val row = listOf("MIC", "MENU", "SWAP", "SELECT", "START").map { c.getValue(it) }
             row.zipWithNext().forEach { (a, b) -> assertEquals(a.y, b.y, 1f, "$name row level"); assertTrue(b.x > a.x, "$name row order") }
             assertTrue(row.all { it.y > touch.y + touch.height && it.x > touch.x && it.x < touch.x + touch.width }, "$name row under the touch screen")
-            // (the d-pad: where the user's tweak put it, SkinBakeTest.the3dsOnTheUltraUprightIsAsTheFolds)
+            // (the d-pad: SkinPackDrawingTest.the3dsOnTheUltraUprightIsAsTheFolds)
         }
     }
 
@@ -334,7 +334,7 @@ class SkinSeamTest {
             for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) {
                 val g = assertNotNull(SkinChoice.place(pack, w, h, 420, tablet = false, ds = true, variant = v)).controls.associateBy { it.spec.id }
                 // (upright, the New 3DS's ZL / ZR stand where SELECT / START were: those in the row under the pad; sideways
-                // the small caps in one row each side, the height short of two: user)
+                // the small caps in one row each side, the height short of two)
                 val caps = if ((v == SkinVariant.N3DS && h > w) || w > h) emptyList() else listOf("START" to "START", "SELECT" to "SELECT")
                 for ((id, its) in listOf("STICK" to "DPAD", "DPAD" to "DPAD", "X" to "X", "Y" to "Y", "A" to "A", "B" to "B") + caps) {
                     assertEquals(menu.getValue(its).x, g.getValue(id).x, 1f, "$v ${w}x$h $id x")

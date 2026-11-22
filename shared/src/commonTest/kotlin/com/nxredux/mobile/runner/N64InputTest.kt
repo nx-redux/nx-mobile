@@ -52,7 +52,7 @@ class N64InputTest {
     }
 
     @Test fun every_sent_keycode_is_one_releaseAll_covers() {
-        // GameActivity.releaseAllGameInput sends key-up for A B X Y L1 L2 R1 R2 START SELECT MENU's own keycodes.
+        // GameInputRouter.releaseAllGameInput sends key-up for A B X Y L1 L2 R1 R2 START SELECT MENU's own keycodes.
         val released = setOf(A, B, X, Y, L1, L2, R1, R2, START, SELECT)
         for (b in NxButton.entries.filterNot { it.isDirection || it == NxButton.MENU }) {
             val sent = N64Input.toRunner(b, ORIGINAL) ?: continue

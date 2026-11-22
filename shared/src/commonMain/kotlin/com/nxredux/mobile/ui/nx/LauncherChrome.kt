@@ -49,7 +49,7 @@ fun launcherChromeFor(
 }
 
 /**
- * The main menu body's chrome under [shown] (the chrome in effect): the tabs moved to the bottom and the main menu has no
+ * The main menu body's chrome under [shown] (the chrome in effect): the tabs are at the bottom and the main menu has no
  * hint bar, so the body is laid out as on a touch-only screen with the tab row hidden: no tab row and no bar above or
  * under it, Recent and Search icons at the top right, Netplay in the game's menu.
  */

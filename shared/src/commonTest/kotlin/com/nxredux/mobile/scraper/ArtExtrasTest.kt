@@ -173,7 +173,7 @@ class ArtExtrasTest {
     }
 
     @Test fun aWheelLastSourcesWheelIsTriedOnlyAfterTheOthers() = runTest {
-        // Decision order: ScreenScraper, then SteamGridDB's logos, then TheGamesDB's clear logo (asked earlier for its screenshot).
+        // The order: ScreenScraper, then SteamGridDB's logos, then TheGamesDB's clear logo (asked earlier for its screenshot).
         val tgdb = FakeSource("tgdb", slots = setOf(ArtSlot.SCREENSHOT, ArtSlot.WHEEL), wheelLast = true)
             .apply { offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://t/ss"); offer("Tetris.gb", ArtSlot.WHEEL, "https://t/logo") }
         val sgdb = FakeSource("sgdb", slots = setOf(ArtSlot.GRID, ArtSlot.WHEEL)).apply { offer("Tetris.gb", ArtSlot.WHEEL, "https://s/logo") }

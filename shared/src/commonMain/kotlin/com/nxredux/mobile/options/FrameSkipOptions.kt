@@ -8,7 +8,7 @@ import com.nxredux.mobile.runner.CoreRegistry
  * them; Off shows every frame and lets the game slow down instead (its sound may then crackle). A frontend `nx_` key, per game with a console default, applied live.
  *
  * Off by default on Dolphin (Wii, GameCube): SMG2 at 3x on a Retroid Pocket Nova showed ~37 fps with Auto (frames
- * skipped to hold speed) against ~56 fps with Off at 94-96% speed, smoother than standalone Dolphin (2026-11-03).
+ * skipped to hold speed) against ~56 fps with Off at 94-96% speed, smoother than standalone Dolphin.
  */
 object FrameSkipOptions {
     const val KEY = "nx_frame_skip"

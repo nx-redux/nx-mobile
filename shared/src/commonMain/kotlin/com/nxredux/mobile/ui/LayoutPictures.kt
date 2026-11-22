@@ -255,8 +255,8 @@ internal fun layoutPictureFooter(picture: DrawableResource, aspect: Float): NxLi
 ) { w -> if (w >= PREVIEW_MIN_WIDTH) Box(Modifier.padding(top = LAYOUT_PICTURE_ROWS_GAP)) { FramedPicture(picture, aspect, w) } }
 
 /**
- * A page of value rows with one picture of their current values (onboarding's layout and page title steps, a Settings →
- * Layouts group): the page [title] and [details] lines, the value rows right under them, the [picture] ([aspect] its
+ * A page of value rows with one picture of their current values (a Settings → Layouts group): the page [title] and
+ * [details] lines, the value rows right under them, the [picture] ([aspect] its
  * width over height; null: none) at the page's width (up to [PREVIEW_MAX_WIDTH]). [titleAction]: the last of [rows]
  * (Continue) sits at the title's right; without, every row is a value row (B leaves). Non-wide landscape keeps the lines
  * and rows to [landscapeWidth] of the width. A wide landscape screen ([PREVIEW_WIDE_RATIO]: a 16:9 phone, not the Fold's
@@ -275,7 +275,6 @@ internal fun LayoutPreviewPage(
     val font = LocalNxFont.current
     val values = if (titleAction) rows.dropLast(1) else rows
     val last = rows.lastIndex
-    // Continue at the title's right; landscape fits the picture to the height left.
     val portrait = LocalPortrait.current
     val label = NxTextSizes.listLabel(NxListPitch) * nxTextScale()   // Appearance → Text size
     // [rowsMax]: the most the touch rows may take, so the picture under them keeps its room (they scroll past it).
@@ -322,7 +321,7 @@ internal fun LayoutPreviewPage(
                     )
                 }
                 else Column {
-                    // No value rows (not a Settings group today): the options rows, the picture under them.
+                    // No touch rows: the options rows, the picture under them.
                     val optionPitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)   // Appearance → Text size
                     NxOptionsList(
                         values, selected.takeIf { it < values.size } ?: -1, onSelect, onRow, rowHeight = optionPitch, listText = NxTextSizes.listLabel(optionPitch),

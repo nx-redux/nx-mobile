@@ -364,11 +364,6 @@ object SkinSolver {
             // the screen's left edge moved right by -leftOut, the piece by its share less the render's (the right likewise)
             return maxOf(0f, if (anchor == PieceAnchor.LEFT) -leftOut - (across(anchor, inward) - inward) else (across(anchor, inward) + inward) - rightOut)
         }
-        /**
-         * A side group's piece or control ([anchor] LEFT or RIGHT, [inward] as placed) moved toward the screen between them
-         * by [sideInset], or what its gap to that screen gained over the render's where less: never nearer the screen
-         * than the render has it.
-         */
         // [row]'s small button columns (START / SELECT, MENU beside a side group): their pieces (a well, its caps) and
         // controls, and how far each side's moves on from its group, so its inner edge sits two gaps from the screen
         val columnIds = setOf("START", "SELECT", "MENU", "MIC", "SWAP", "STICK_SWAP", "DISK")
@@ -490,6 +485,11 @@ object SkinSolver {
         val companionLeft = companionMove(PieceAnchor.LEFT)
         val companionRight = companionMove(PieceAnchor.RIGHT)
         fun companionOf(anchor: PieceAnchor?) = when (anchor) { PieceAnchor.LEFT -> companionLeft; PieceAnchor.RIGHT -> companionRight; else -> 0f to 0f }
+        /**
+         * A side group's piece or control ([anchor] LEFT or RIGHT, [inward] as placed) moved toward the screen between them
+         * by [sideInset], or what its gap to that screen gained over the render's where less: never nearer the screen
+         * than the render has it.
+         */
         fun sideShift(anchor: PieceAnchor, inward: Int): Float {
             if (anchor == PieceAnchor.CENTRE) return 0f
             rowPlan?.let { return if (anchor == PieceAnchor.LEFT) it[0] else it[1] }
@@ -547,8 +547,6 @@ object SkinSolver {
         val widenLeft = if (boxAt != null) boxAt[0] - roomLeft!! / k else if (rowAt != null) rowAt[0] - rowPlan!![2] else widen(PieceAnchor.LEFT)
         val widenRight = if (boxAt != null) (roomRight!! - roomLeft!!) / k - (between!!.w + boxAt[2]) * between.scale - widenLeft
             else if (rowAt != null) rowPlan!![3] - (between!!.w + rowAt[2]) * between.scale - widenLeft else widen(PieceAnchor.RIGHT)
-        // With nothing under it (the main menu's, its MENU with the side groups), the screen's frame grows down to the
-        // window's bottom, [bottomMargin] from it.
         // nothing under the screen: it may grow up and down (the main menu's, its MENU with the side groups)
         val free = between?.takeIf { sideInset > 0f }?.let { sp ->
             val at = spot(sp)

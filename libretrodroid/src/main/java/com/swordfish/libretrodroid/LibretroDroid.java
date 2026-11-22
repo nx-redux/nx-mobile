@@ -149,10 +149,10 @@ public class LibretroDroid {
     public static native void setVideoViewsEnabled(boolean enabled);
     /** The core's video view map, 6 ints per view (x, y, width, height, screen, eye); empty when there is none. */
     public static native int[] getVideoViews();
-    /** False while setprop debug.nx.videoviews 0 withholds video views from the cores (the frontend's A/B switch). */
     /** False with `setprop debug.nx.keepcontext 0`: the view gives its EGL context up at every pause. */
     public static native boolean keepsContextOnPause();
 
+    /** False while setprop debug.nx.videoviews 0 withholds video views from the cores (the frontend's A/B switch). */
     public static native boolean videoViewsOffered();
     /** Whether this device can run the Vulkan bridge (a Vulkan 1.1 GPU with AHardwareBuffer import). Cached; any thread. */
     public static native boolean isVulkanSupported();

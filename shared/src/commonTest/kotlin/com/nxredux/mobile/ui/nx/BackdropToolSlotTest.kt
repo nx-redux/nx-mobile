@@ -63,7 +63,7 @@ class BackdropToolSlotTest {
         assertEquals(BackdropSlot.BOX, backdropSlot(games = true, tiles = listOf(tool)))                               // All pinned, a tool among games
     }
 
-    // Collections (main-menu sync): the tool slot's height 160 and gap 14, but 240 wide, × f, the side items at half size.
+    // Collections: the tool slot's height 160 and gap 14, but 240 wide, × f, the side items at half size.
     @Test fun collectionsSideItemsAreHalfSize() {
         for (h in listOf(358f, 298f, 120f)) {
             val f = minOf(1f, (h - GRID_RING_ROOM) / 160f)

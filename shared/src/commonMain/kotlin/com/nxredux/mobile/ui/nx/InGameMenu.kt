@@ -270,7 +270,7 @@ private fun InGameMenuContent(
             .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Vertical)),
     ) {
         // The title and the body's words on the page inset, as every screen's: the body laid out [nxListInset] in from
-        // the highlights' edge ([PageInset.pillStart]), where its labels and title always started. The hint bar below
+        // the highlights' edge ([PageInset.pillStart]). The hint bar below
         // spans the width, its glyphs on the inset.
         val inset = nxPageInset()
         Column(Modifier.weight(1f).fillMaxWidth().padding(start = inset.pillStart, end = inset.pillEnd)) {
@@ -404,7 +404,7 @@ private fun leftPane(state: MenuState, split: SplitUi, onSelect: (Int) -> Unit, 
 
 /**
  * The root's words' column in a body [width] wide ([RootBody]): as wide as its longest row needs at the current text
- * size ([rememberWordListWidth]), never under the share it always had ([rootListShare]).
+ * size ([rememberWordListWidth]), never under its share of the width ([rootListShare]).
  */
 @Composable
 private fun rememberRootWordsColumn(root: MenuPage, width: Dp): Dp =
@@ -985,8 +985,8 @@ private fun pageHints(page: MenuPage, row: MenuRow?, infoTruncated: Boolean, pan
     page.rows.isEmpty() -> listOf(Hint(NxButton.B, "Back"))   // e.g. an empty category: A does nothing
     page.kind == PageKind.Root && row is MenuRow.Slot ->
         listOf(Hint(NxButton.LEFT, "Slot"), Hint(NxButton.A, row.label), Hint(NxButton.B, "Resume"))
-    // The root has no info area (Disc N/M): A opens the info there.
     page.kind == PageKind.Shortcuts && row is MenuRow.Option -> shortcutHints(row)
+    // The root has no info area (Disc N/M): A opens the info there.
     page.kind == PageKind.Root && row is MenuRow.Option -> buildList {
         add(Hint(NxButton.LEFT, "Change"))
         if (row.fullInfo.isNotBlank()) add(Hint(NxButton.A, "Info"))

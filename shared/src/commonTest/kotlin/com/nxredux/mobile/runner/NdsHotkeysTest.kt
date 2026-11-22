@@ -121,7 +121,7 @@ class NdsHotkeysTest {
     @Test fun select_start_is_left_to_the_menu_chord() {
         val h = NdsHotkeys()
         h.down(NxButton.SELECT)
-        // Forwarded, not consumed: GameActivity checks SELECT+START before the hotkeys and opens the menu.
+        // Forwarded, not consumed: GameInputRouter checks SELECT+START before the hotkeys and opens the menu.
         assertEquals(NdsDecision(true), h.down(NxButton.START))
     }
 

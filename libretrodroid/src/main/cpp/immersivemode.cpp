@@ -231,7 +231,7 @@ void ImmersiveMode::renderBackground(
         renderToFramebuffer(texture, framebufferVertices);
     }
 
-    // Let's update the blurred texture every other frame.
+    // The blurred texture updates once every blurSkipUpdate frames.
     blendFramebufferCurrent = (blendFramebufferCurrent + 1) % blurSkipUpdate;
 
     renderToFinalOutput(screenWidth, screenHeight, backgroundVertices, foregroundBounds);

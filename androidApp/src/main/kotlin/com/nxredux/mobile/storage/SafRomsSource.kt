@@ -72,7 +72,7 @@ class SafRomsSource(private val resolver: ContentResolver, private val storage: 
         }.getOrNull()
     }
 
-    /** The provider's move (API 24+), refused when [toDir] already holds [name]. */
+    /** The provider's move, refused when [toDir] already holds [name]. */
     override suspend fun moveFile(fromDir: ContentRef, name: String, toDir: ContentRef): Boolean = withContext(Dispatchers.IO) {
         try {
             val from = Uri.parse(fromDir.value)

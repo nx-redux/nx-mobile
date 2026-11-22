@@ -120,7 +120,7 @@ fun settingsFrameWidth(stageWidth: Dp, sectionRight: Dp, gutter: Dp): Dp =
  * A Layouts group's picture width on a phone, the whole room it has: upright ([SettingsSizeClass.PHONE_UPRIGHT]) the
  * window inside the [gutter] on both sides; on its side (the wide stage) from the section block's right edge
  * ([sectionRight]) plus [SETTINGS_FRAME_GAP] to the right gutter, wider than the rows pane. A tablet-class window: null
- * (the rows' width, as before). Never below zero.
+ * (the rows' width). Never below zero.
  */
 fun settingsLayoutPictureWidth(sizeClass: SettingsSizeClass, windowWidth: Dp, sectionRight: Dp, gutter: Dp): Dp? = when (sizeClass) {
     SettingsSizeClass.PHONE_UPRIGHT -> (windowWidth - gutter * 2).coerceAtLeast(0.dp)

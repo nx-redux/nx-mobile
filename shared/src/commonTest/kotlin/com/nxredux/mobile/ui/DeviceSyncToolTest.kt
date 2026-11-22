@@ -165,7 +165,7 @@ class DeviceSyncToolTest {
         assertEquals(Screen.DeviceSync, state.screen.value)
     }
 
-    /** Plays Tetris from the Game Boy list, as AppStateTest's import launch-refusal test plays its game. */
+    /** Plays Tetris from the Game Boy list. */
     private fun Rig.launchFirstGame() {
         val systems = assertIs<Screen.Systems>(state.screen.value).tabs.flatMap { it.rows }.flatMap { (it as? MainRow.System)?.systems.orEmpty() }
         state.openSystem(systems.first { it.tag == "GB" })
@@ -318,8 +318,7 @@ class DeviceSyncToolTest {
     }
 
     @Test fun a_tap_on_a_link_row_picks_it_and_open_selected_is_a() = runTest {
-        // DeviceSyncScreen calls controller.pick(SyncLink.entries[i]) on select and state.onButton(A) on open;
-        // here: openSelected on Screen.DeviceSync acts as A.
+        // openSelected on Screen.DeviceSync acts as A.
         val r = rig(); r.openDeviceSync()
         r.platform.wifi = null
         r.sync.pick(SyncLink.WIFI); r.state.openSelected(); runCurrent()

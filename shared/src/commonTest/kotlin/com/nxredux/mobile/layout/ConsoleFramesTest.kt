@@ -6,7 +6,7 @@ import kotlin.test.assertTrue
 
 /** Each handheld and filling console has its usual frame in [CONSOLE_FRAMES]. */
 class ConsoleFramesTest {
-    // The consoles once scaled by a whole number of their own size, and the ones that fill their space.
+    // The handhelds, and the consoles that fill their space.
     private val framed = setOf("gb", "gbc", "gba", "sgb", "gg", "ngp", "ngpc", "wsc", "lynx", "pkm", "vb", "p8") +
         setOf("n64", "ps", "dc", "gc", "wii", "psp", "ps2")
 

@@ -109,7 +109,7 @@ uint32_t Achievements::readMemory(uint32_t address, uint8_t* buffer, uint32_t nu
         self.initMemoryRegions();
     }
     if (self.regions.ready()) return self.regions.read(address, buffer, numBytes);
-    // Fallback (nx-redux ra_integration.c): raw system RAM, then save RAM, with an overflow-safe bounds check.
+    // No region table: raw system RAM, then save RAM (as nx-redux ra_integration.c).
     for (unsigned id : { (unsigned) RETRO_MEMORY_SYSTEM_RAM, (unsigned) RETRO_MEMORY_SAVE_RAM }) {
         if (!self.coreGetMemoryData || !self.coreGetMemorySize) break;
         auto* data = (uint8_t*) self.coreGetMemoryData(id);

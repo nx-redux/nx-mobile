@@ -165,7 +165,7 @@ class NetplayGameTest {
         assertEquals("This phone can't run both games at full speed, so the session ended.", NetplayText.ENDED_TOO_SLOW)
         assertEquals(NetplayNotice.Ended(NetplayText.ENDED_PEER_TOO_SLOW), notice(LibretroNetplay.STATE_ENDED, reason = LibretroNetplay.REASON_PEER_TOO_SLOW))
         assertEquals("The other phone can't run both games at full speed, so the session ended.", NetplayText.ENDED_PEER_TOO_SLOW)
-        // The other player leaving keeps today's text.
+        // The other player leaving keeps the plain ended text.
         assertEquals(NetplayNotice.Ended("${NetplayText.ENDED}\n${NetplayText.ENDED_DETAIL}"), notice(LibretroNetplay.STATE_ENDED, reason = LibretroNetplay.REASON_PEER_LEFT))
         assertEquals(NetplayNotice.Pill(NetplayText.SYNCING), notice(LibretroNetplay.STATE_RESYNCING))
 

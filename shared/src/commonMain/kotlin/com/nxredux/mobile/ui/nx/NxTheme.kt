@@ -40,8 +40,8 @@ data class NxColors(
     val success: Color = Color(0xFF82DC82),     // a good state line (unlocked): NX Redux {130,220,130}
     val warning: Color = Color(0xFFFFC850),     // an attention state line (pending): NX Redux {255,200,80}
     // Darker so they read on the accent (every accent is light, its text black).
-    val successSelected: Color = Color(0xFF237A2E),   // [success] on the white pill: darker so it reads on white
-    val warningSelected: Color = Color(0xFF9A6500),   // [warning] on the white pill
+    val successSelected: Color = Color(0xFF237A2E),   // [success] on the accent
+    val warningSelected: Color = Color(0xFF9A6500),   // [warning] on the accent
     /**
      * The one colour of every selection mark: the NxList / NxRichList pill, the tab underline and tab-focus plate, a game
      * tile's ring, Home's lit cards, ToolAppsScreen's lit tile, NxOptionsRow's label rect (as NX Redux's

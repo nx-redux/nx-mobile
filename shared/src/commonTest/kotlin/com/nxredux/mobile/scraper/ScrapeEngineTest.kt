@@ -132,7 +132,7 @@ class ScrapeEngineTest {
         val rig = Rig(this)
         rig.http.on("romnom=Tetris.gb", found("ss" to "https://m/t-ss.png"))
         rig.http.on("https://m/", OK_PNG)
-        rig.engine.run(ScrapeState(items = listOf(Scrape.item(tetris))), { tetris }) {}   // no found: as before
+        rig.engine.run(ScrapeState(items = listOf(Scrape.item(tetris))), { tetris }) {}   // no found listener
         assertEquals(1, rig.options.single().second.size)
         assertTrue(rig.found.isEmpty())
     }

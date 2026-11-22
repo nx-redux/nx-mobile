@@ -36,7 +36,7 @@ class DiscSignaturesTest {
         assertEquals(DiscKind.WII, DiscSignatures.nintendo(wii))
     }
 
-    // Review Focus 1: a cartridge .bin (a GBA header, or noise) has no disc signature.
+    // A cartridge .bin (a GBA header, or noise) has no disc signature.
     @Test fun a_cartridge_or_noise_is_nothing() {
         val gba = ByteArray(2048).also { "NINTENDO".encodeToByteArray().copyInto(it, 0xA0) }
         assertNull(DiscSignatures.identify(DataSectors(gba, gba, gba)))
@@ -45,7 +45,7 @@ class DiscSignaturesTest {
         assertNull(DiscSignatures.nintendo(ByteArray(4)))
     }
 
-    // A PS2 disc says PLAYSTATION too; its volume is past a CD's size (and PS2 is not a console here): nothing.
+    // A PS2 disc says PLAYSTATION too; its volume is past a CD's size: no disc kind.
     @Test fun a_ps2_disc_is_not_a_playstation_one() {
         val ps2 = pvd("PLAYSTATION").also { p -> val n = 2_000_000; for (i in 0..3) p[80 + i] = (n shr (8 * i)).toByte() }
         assertNull(DiscSignatures.identify(DataSectors(sector(), sector(), ps2)))

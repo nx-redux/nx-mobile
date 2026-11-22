@@ -73,7 +73,7 @@ internal fun kidsPinStatus(s: Screen.KidsPin, nowMs: Long): String? = when {
 }
 
 /**
- * Kids Mode's PIN prompt: its title, four dots (filled as digits are typed) and a 3 × 4 pad of 1–9, Back, 0 and Enter,
+ * Kids Mode's PIN prompt: its title, a dot per digit (filled as typed) and a 3 × 4 pad of 1–9, Back, 0 and Enter,
  * the keys named in words. A wrong PIN shakes the dots; the wait after the fifth counts down in place of the keys' use.
  * Taps press keys; the d-pad's key ([selectedIndex]) is lit as the menu's selection is.
  */

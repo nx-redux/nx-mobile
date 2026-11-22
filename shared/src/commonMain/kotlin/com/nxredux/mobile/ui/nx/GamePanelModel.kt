@@ -19,7 +19,7 @@ const val MENU_TAB_LABEL = "Menu"
 
 /**
  * The Shortcuts tab's tiles, in display order: the player's touch buttons ([TOUCH], each its own action), then the
- * panel's own. No Screenshot: the spec dropped it everywhere.
+ * panel's own.
  */
 enum class Shortcut(val label: String) {
     TOUCH(""), SWAP_DISC("Swap disc"), FAST_FORWARD("Fast forward"), REWIND("Rewind"), MIC("Mic"), RESET("Reset"),
