@@ -20,11 +20,14 @@ import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.NxLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -372,7 +375,9 @@ internal class SaveSession(
         // While a resume is still loading, the running state is the fresh boot: keep the resume point as is. Without
         // [autoState] (the core asked to end) the running state is not worth resuming: keep it as is too.
         if (ss == null || resumePending || !autoState) {
-            host.lifecycleScope.launch {
+            // Not cancellable: the system may destroy the screen during the quit (stopped, low memory), and the battery
+            // save must still be written; only the finish after it is then moot.
+            host.lifecycleScope.launch(NonCancellable) {
                 // A manual Save/Load or a Wii HOME write still running reads the core off the main thread: it must end
                 // before the destroy, which waits only for the auto writes.
                 joinSlotJobs(slotJobs)
@@ -381,11 +386,11 @@ internal class SaveSession(
                     if (!live) release(false)
                 }
                 finish()
-            }
+            }.invokeOnCompletion { quitWritten.countDown() }
             return
         }
         captureThumbnail { bmp ->
-            host.lifecycleScope.launch {
+            host.lifecycleScope.launch(NonCancellable) {   // as above: a destroy mid-quit must not drop the resume point
                 // A manual Save/Load still running must finish before the state is serialized.
                 joinSlotJobs(slotJobs)
                 // true = written, null = skipped (the core can't save states), false = failed.
@@ -421,9 +426,17 @@ internal class SaveSession(
                 }
                 if (ok == false) host.toast("Could not save resume point")
                 finish()
-            }
+            }.invokeOnCompletion { quitWritten.countDown() }
         }
     }
+
+    /**
+     * Counted down once the quit's write ([writeOnQuit]) has ended, also when the screen was destroyed under it.
+     */
+    private val quitWritten = CountDownLatch(1)
+
+    /** Off the main thread: waits up to [timeoutMs] for the quit's write; false when it has not ended by then. */
+    fun awaitQuitWrite(timeoutMs: Long): Boolean = quitWritten.await(timeoutMs, TimeUnit.MILLISECONDS)
 
     /**
      * Runs [block] (off-main native calls) unless the core is destroyed; null when it is. Holding [coreLock] keeps the
