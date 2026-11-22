@@ -244,6 +244,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private const val HUNG_FINISH_GRACE_MS = 500L
         /** [endProcess]: at most this long for the netplay engine's shutdown before the process goes anyway. */
         private const val PROCESS_END_WAIT_S = 5L
+        /** A quit's save of a large state (Wii, PS2) on a slow phone; past it the process ends without it. */
+        private const val QUIT_WRITE_WAIT_MS = 60_000L
 
         /** Debug builds only: the latest game screen, for the adb GAME_STOP hook ([debugQuit]). Main thread. */
         private var debugGame: java.lang.ref.WeakReference<GameActivity>? = null
@@ -1069,7 +1071,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         driverMarkerClear = null
         val clearMarker = driverMarker.abandon()
         if (isFinishing) launchRecords.drop(launchId)   // quit before the first frame: the launch never started
-        if (BuildConfig.DEBUG && isFinishing) debugReportStopped()
+        // A quit the system destroyed the screen under (stopped, low memory) before its own finish: the game is over all the same.
+        val quitCut = quitting && !isFinishing
+        val over = isFinishing || quitting
+        if (BuildConfig.DEBUG && over) debugReportStopped()
         input.gcClearTriggers()   // a latched soft press never outlives the game
         stopAchievements()
         inputManager?.unregisterInputDeviceListener(input.inputDeviceListener)
@@ -1084,7 +1089,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         screens--
         if (latest?.get() === this) latest = null
         // The game process ends with its last screen's finish (not a recreation: the GLES relaunch, a config change).
-        val endsProcess = isFinishing && screens == 0 && AppProcess.isGame()
+        val endsProcess = over && screens == 0 && AppProcess.isGame()
         // Ending the process, the record stays until the process is gone: the menu waits for that before it starts another
         // game, which must never land in this dying process. It reads as stale then (its pid is gone).
         if (!endsProcess) liveGameStore.clear(Process.myPid(), launchId)
@@ -1097,7 +1102,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             // First: it may wait for a marker commit in flight, and its clear must be queued before endProcess waits for the sends.
             if (clearMarker) driverMarker.clear()
             if (endUse) runCatching { DataRoot.useEnd(app) }.onFailure { NxLog.w(TAG_LOG, "could not end the data use", it) }
-            if (endsProcess) endProcess()
+            if (endsProcess) {
+                // The quit's write is still running (the finish it would end with never comes): the process waits for it.
+                if (quitCut && !saves.awaitQuitWrite(QUIT_WRITE_WAIT_MS)) NxLog.w(TAG_LOG, "the quit's save did not end in time")
+                endProcess()
+            }
         }
         coreWatchdog?.stop()   // last: a hung core also hangs the native destroy above, which it must still catch
         coreWatchdog = null

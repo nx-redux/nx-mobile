@@ -17,9 +17,11 @@
             android:exported="true"
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.NoDisplay" />
+        <!-- In the game's task: a start in the menu's task would bring the menu forward and stop the game it quits. -->
         <activity
             android:name="com.nxredux.mobile.test.NxGameStopActivity"
             android:process=":game"
+            android:taskAffinity="${applicationId}.game"
             android:exported="true"
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.NoDisplay" />
