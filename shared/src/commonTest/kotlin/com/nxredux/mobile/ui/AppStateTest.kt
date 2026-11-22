@@ -270,7 +270,6 @@ class AppStateTest {
         override suspend fun icon(id: String): ImageBitmap? { iconAsks += id; return null }   // no icon: tiles draw the generic app glyph
     }
 
-    /** Tools -> RetroAchievements, wherever it sorts among the tools. */
     /** The RetroAchievements page with the highlight on Achievements (it opens on Profile, the row above), where these tests count their rows from. */
     private fun openRa(state: AppState) {
         state.openTools()
@@ -548,7 +547,6 @@ class AppStateTest {
         assertEquals(1, assertNotNull(assertIs<Screen.Onboarding>(state.screen.value).touchRows)[0].index)
     }
 
-    // The customise question does not ask the text size (setup asks it first).
     // Two buttons side by side (the customise question's answers): LEFT takes the first, RIGHT the second, as UP / DOWN.
     @Test fun left_and_right_move_between_two_buttons_side_by_side() = runTest {
         val (state, _) = atOnboardingStep(OnboardingStep.CUSTOMISE)
@@ -581,7 +579,6 @@ class AppStateTest {
         assertEquals(false, state.menuPadShown())
     }
 
-    // On its own step the pad previews the selected answer; after it, the answer holds.
     /** First setup up to "Add a ROMs folder?", then sd/Loose added: its summary page. */
     private fun TestScope.atFolderSummary(): Pair<AppState, MemorySettings> {
         val settings = freshInstall()
@@ -2675,7 +2672,7 @@ class AppStateTest {
         assertEquals(0, store.deletes)
         assertIs<Screen.Systems>(st.screen.value)
         assertNull(st.error.value)
-        st.onForeground()                                                                        // mounted and still gone: dropped as before
+        st.onForeground()                                                                        // mounted and still gone: dropped
         advanceTimeBy(LibraryScanner.REMOUNT_RETRY_MILLIS + 1); runCurrent()
         assertNull(settings.treeRef)
         assertIs<Screen.PickFolder>(st.screen.value)
@@ -5526,7 +5523,7 @@ class AppStateTest {
         assertEquals(ListSelection(5, 6), state.selection.value)
     }
 
-    // --- Settings -> Library: one page of Storage, ROM folders and Games groups; Default emulators under Emulators ---
+    // --- Settings -> Library: one flat page; Default emulators under Emulators ---
 
     @Test fun the_library_page_shows_its_counts_then_one_flat_list_counting_a_merged_console_once() = runTest {
         val st = state(MemorySettings(ContentRef("Home")), snes)
@@ -5940,7 +5937,6 @@ class AppStateTest {
         assertEquals(ListSelection(1, 7), state.selection.value)
     }
 
-    // NX Redux: every value row is ITEM_CYCLE, LEFT/RIGHT step it (A still steps forward).
     @Test fun appearance_value_rows_step_on_left_and_right() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = state(settings)
@@ -6155,7 +6151,6 @@ class AppStateTest {
         assertEquals("Carousel", assertIs<Screen.Settings>(state.screen.value).rows[0].secondary)
     }
 
-    // A group page has no Done: B goes back, onto the group's row.
     // Home's picture follows Home stats too: hidden, the capture without the strip.
     @Test fun layouts_home_picture_follows_home_stats() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
@@ -6420,7 +6415,6 @@ class AppStateTest {
         assertIs<Screen.SettingsMenu>(state.screen.value)
     }
 
-    // --- Two-pane Settings: the menu is the left pane, every page the right ---
 
     /** A tap on row [i] as every list draws it ([nxTap]): [opens] is the list's [LocalNxTapOpens] for it (false in game lists). */
     private fun tap(state: AppState, i: Int, opens: Boolean = true) =
@@ -6676,12 +6670,12 @@ class AppStateTest {
     @Test fun split_one_tap_on_a_preview_row_focuses_or_opens_it() = runTest {
         val (state, settings) = splitSettings()
         state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN)                                   // Appearance, previewed
-        val theme = settings.padTheme
+        val skin = settings.padSkin
         val preview = state.settingsPreview(SettingsSection.APPEARANCE)
-        nxSettingRowTap(settingsTouchRow(preview.rows[0], preview.choices[0], preview.section), 0, state::settingsPreviewTap, state::settingsPreviewTap)   // Pad theme
+        nxSettingRowTap(settingsTouchRow(preview.rows[0], preview.choices[0], preview.section), 0, state::settingsPreviewTap, state::settingsPreviewTap)
         assertEquals(SettingsSection.APPEARANCE, assertIs<Screen.Settings>(state.screen.value).section)
         assertEquals(0, state.selection.value.index)
-        assertEquals(theme, settings.padTheme)
+        assertEquals(skin, settings.padSkin)
         state.back()
         state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN)                                   // Controls, previewed
         assertIs<Screen.SettingsMenu>(state.screen.value)
@@ -6787,10 +6781,13 @@ class AppStateTest {
         assertIs<Screen.SettingsMenu>(state.screen.value)
     }
 
+    private fun resetRow(state: AppState) =
+        assertIs<Screen.Settings>(state.screen.value).rows.indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }
+
     @Test fun split_left_on_a_page_goes_back_to_the_sections() = runTest {
         val (state, _) = splitSettings()
         state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.onButton(NxButton.A)
-        state.select(3)                                                 // Reset to defaults: no value
+        state.select(resetRow(state))                                   // no value
         state.onButton(NxButton.LEFT)                                   // two panes: LEFT is the left pane, as B
         assertIs<Screen.SettingsMenu>(state.screen.value)
         assertEquals(2, state.selection.value.index)                    // on Appearance
@@ -6799,7 +6796,7 @@ class AppStateTest {
     @Test fun split_right_on_a_page_opens_a_sub_page_row_and_leaves_any_other_row() = runTest {
         val (state, _) = splitSettings()
         state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.onButton(NxButton.A)   // Appearance
-        state.select(3)                                                 // Reset to defaults: no value, opens nothing
+        state.select(resetRow(state))                                   // no value, opens nothing
         state.onButton(NxButton.RIGHT)
         assertEquals(SettingsSection.APPEARANCE, assertIs<Screen.Settings>(state.screen.value).section)
         assertFalse(assertIs<Screen.Settings>(state.screen.value).confirmReset)   // not A
@@ -9693,7 +9690,7 @@ class AppStateTest {
         assertEquals(listOf("Alpha", "Gamma"), more.filter { it.system.android }.map { it.game.shownName })
     }
 
-    // --- The Games tab's keys (Task 5) ---
+    // --- The Games tab's keys ---
 
     /** One console (GB) of five games over three letters: Alpha, Apex, Bravo, Bust, Charlie. */
     private fun letteredGames() = FakeRomsSource(
@@ -11055,7 +11052,7 @@ class AppStateTest {
                 "Game Switcher" to "Full screen", "Extra info" to "Show", "Game info" to "Achievements", "Reset to defaults" to null),
             state.layoutsRows().map { it.label to it.secondary },
         )
-        // Every group's rows, in Layouts' order, each page ending with Done.
+        // Every group's rows, in Layouts' order.
         val groups = listOf(SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_GAMES_TAB, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS,
             SettingsSection.LAYOUT_GAME_LISTS, SettingsSection.LAYOUT_TITLE_HINTS, SettingsSection.LAYOUT_SWITCHER)
         val rows = groups.flatMap { g -> state.openLayoutsPage(g) }
@@ -11168,12 +11165,12 @@ class AppStateTest {
         assertEquals(SettingsKind.RESET_DEFAULTS, rows.last().kind)
         assertEquals(listOf(SettingsKind.LAYOUT_SWITCHER, SettingsKind.EXTRA_INFO, SettingsKind.GAME_INFO), rows.dropLast(1).takeLast(3).map { it.kind })
         assertTrue(settingsNxRow(rows.single { it.kind == SettingsKind.EXTRA_INFO }).cycleable)
-        // The title and hints' page and the Game Switcher's: their value rows all cycle, then Done.
+        // The title and hints' page and the Game Switcher's: their value rows all cycle.
         val chrome = state.openLayoutsPage(SettingsSection.LAYOUT_TITLE_HINTS)
         assertEquals(listOf(SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS), chrome.map { it.kind })
         val switcher = state.openLayoutsPage(SettingsSection.LAYOUT_SWITCHER)
         assertEquals(listOf(SettingsKind.SWITCHER_LAYOUT), switcher.map { it.kind })
-        assertTrue((chrome.dropLast(1) + switcher.dropLast(1)).all { settingsNxRow(it).cycleable })
+        assertTrue((chrome + switcher).all { settingsNxRow(it).cycleable })
         val consoles = state.openLayoutsPage(SettingsSection.LAYOUT_CONSOLES)
         val controller = consoles.single { it.kind == SettingsKind.CONTROLLER_ART }
         assertEquals(SettingsRow(SettingsKind.CONTROLLER_ART, "Background", "Controller", category = MenuCategory.CONSOLES), controller)
@@ -11476,7 +11473,7 @@ class AppStateTest {
         assertEquals(ListSelection(page.rows.lastIndex, page.rows.size), state.selection.value)
     }
 
-    // Controls is a category of its own right after Layouts: Pad vibration (default On) and its Reset.
+    // Controls is a category of its own right after Layouts.
     @Test fun controls_is_a_category_after_layouts_with_pad_vibration_and_reset() = runTest {
         val settings = freshSettings()
         val state = state(settings)
@@ -11791,7 +11788,6 @@ class AppStateTest {
         assertNull(state.findLocalRom(sha(gba), gba.size.toLong(), "GB"))
     }
 
-    // Settings → System → Pause when unfocused (its General group, the first row), On by default; A, left and right each flip it.
     @Test fun player_name_row_opens_a_prompt_that_saves_ten_characters() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = state(settings)
@@ -12770,7 +12766,8 @@ class AppStateTest {
         state.load()
         for (section in listOf(SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU)) {
             state.openSettings(section)
-            state.select(assertIs<Screen.Settings>(state.screen.value).rows.lastIndex); state.onButton(NxButton.A)
+            state.select(assertIs<Screen.Settings>(state.screen.value).rows.lastIndex)
+            state.onButton(NxButton.A); state.onButton(NxButton.A)   // ask, then confirm
             assertEquals(PadVibration.STRONG, settings.padVibration, section.name)
             assertEquals(GameRumble.OFF, settings.gameRumble, section.name)
         }
@@ -13687,7 +13684,7 @@ class AppStateTest {
         assertEquals(listOf(false, false, true, false), page.rows.map { it.current })
         assertEquals(listOf(null, null, "In use", null), page.rows.indices.map { settingsTouchRow(page.rows[it], page.choices[it], page.section).value })
         assertEquals("Replaces the phone's Vulkan driver in games set to Vulkan. Drivers are third-party code: install only ones you trust.", page.banner)
-        st.onButton(NxButton.B)                                                          // back to System, on its GPU driver row
+        st.onButton(NxButton.B)                                                          // back to Emulation, on its GPU driver row
         assertEquals(SettingsKind.GPU_DRIVER, assertIs<Screen.Settings>(st.screen.value).rows[st.selection.value.index].kind)
     }
 
@@ -15358,7 +15355,7 @@ class AppStateTest {
         val state = keyboardSearchState(settings)
         state.onButton(NxButton.START)
         assertNull(state.textEntry.value)
-        state.onButton(NxButton.A)   // A confirms as before; blank, so the prompt stays and nothing is typed
+        state.onButton(NxButton.A)   // A confirms as with Android's keyboard; blank, so the prompt stays and nothing is typed
         assertEquals("", assertIs<Screen.Systems>(state.screen.value).search)
     }
 

@@ -498,6 +498,7 @@ void Environment::callback_retro_log(enum retro_log_level level, const char *fmt
         default:
             break;
     }
+    va_end(argptr);
 }
 
 bool Environment::callback_set_sensor_state(unsigned port, enum retro_sensor_action action, unsigned rate) {
@@ -776,7 +777,7 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
                 timingFps.store(avInfo->timing.fps, std::memory_order_relaxed);
                 timingUpdated.store(true, std::memory_order_release);
             }
-            // Pre-existing race, left as is: the geometry fields below are plain and read on the GL thread.
+            // Racy: the geometry fields below are plain and read on the GL thread.
             gameGeometryHeight = avInfo->geometry.base_height;
             gameGeometryWidth = avInfo->geometry.base_width;
             gameGeometryAspectRatio = avInfo->geometry.aspect_ratio;

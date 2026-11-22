@@ -99,7 +99,8 @@ class AndroidGpuDrivers(private val root: File, private val sdkInt: Int) {
                 heads[e.name] = head.toByteArray()
                 if (metaBytes != null) meta = metaBytes.toString(Charsets.UTF_8)
             }
-            hashed.copyTo(java.io.OutputStream.nullOutputStream())   // trailing bytes count toward the hash
+            // Trailing bytes count toward the hash. Not OutputStream.nullOutputStream(): that is Android 13+.
+            while (hashed.read(buf) >= 0) Unit
         }
         if (count == 0) return null
         val id = digest.digest().joinToString("") { "%02x".format(it) }.take(ID_LENGTH)
