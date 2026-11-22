@@ -396,6 +396,8 @@ flycast_FLAGS = -DLIBRETRO=ON -DUSE_GLES=ON -DUSE_OPENMP=OFF -DCMAKE_OSX_ARCHITE
 # never copies an unfinished frame; the Large screen layout puts its small screen top-right (upstream: bottom-right).
 # It also starts Azahar's multiplayer room for local wireless between devices and names the console after the player
 # (README, Azahar).
+# patches/azahar/0001: the Vulkan upload buffer is sized from the device's RAM (64 MiB on 2 GB) instead of a fixed 512 MiB the
+# driver keeps resident. patches/azahar/0002: save states stream through ZSTD both ways, never whole and uncompressed in memory.
 # The top-level CMakeLists needs CMake >= 3.25, above the SDK's 3.22.1 every other core uses: sdkmanager "cmake;3.30.3"
 # (upstream CI's version) and azahar_CMAKE / azahar_NINJA below. No FetchContent: ~35 git submodules, all initialised
 # recursively by the template's default. Built-in AES keyblob and open-source shared font: no BIOS. Decrypted games only.
