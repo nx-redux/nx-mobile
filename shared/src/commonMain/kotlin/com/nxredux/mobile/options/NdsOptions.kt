@@ -352,10 +352,11 @@ private fun scales(console: Res3dConsole, max: Int): List<String> = (1..max.coer
 
 /**
  * [console]'s 3D Resolution row and its two sub-rows: Max Scale (Auto) and Scale (Performance). [displayMax] is the biggest
- * scale the display reaches (null, unknown, offers every scale the core has). Not [visual][FrontendOption.visual]: the
- * core is paused while the menu shows, so an Adjust strip over the frozen frame could never show the 3D change.
+ * scale the display reaches (null, unknown, offers every scale the core has); [cap] the Max Scale an unset game starts
+ * with. Not [visual][FrontendOption.visual]: the core is paused while the menu shows, so an Adjust strip over the frozen
+ * frame could never show the 3D change.
  */
-fun resolutionRows(console: Res3dConsole, displayMax: Int?): List<FrontendOption> {
+fun resolutionRows(console: Res3dConsole, displayMax: Int?, cap: Int = console.defaultCap): List<FrontendOption> {
     val maxScales = scales(console, displayMax ?: console.coreMax)
     val perfScales = scales(console, displayMax?.let { Nds3dResolution.performanceCeiling(it, console) } ?: console.coreMax)
     val screen = when (console) {
@@ -379,7 +380,7 @@ fun resolutionRows(console: Res3dConsole, displayMax: Int?): List<FrontendOption
             visual = false, valueLabels = Nds3dMode.entries.map { it.label },
         ),
         FrontendOption(
-            console.maxScaleKey, "Max Scale", maxScales, console.defaultCap.toString(),
+            console.maxScaleKey, "Max Scale", maxScales, cap.toString(),
             if (console.wholePicture) "The most Auto draws the game at, as a multiple of the $screen's own resolution."
             else "The most Auto draws 3D at, as a multiple of the $screen screen.",
             visual = false, valueLabels = maxScales.map { "${it}x" }, shownWhen = console.modeKey to setOf(Nds3dMode.AUTO.value),

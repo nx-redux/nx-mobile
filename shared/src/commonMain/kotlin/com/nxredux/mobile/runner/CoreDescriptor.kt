@@ -75,7 +75,7 @@ data class CoreDescriptor(
     /**
      * Single values the app never offers, per option key: skipped when cycling the in-game Core Options page, and a stored
      * one in a `.cfg` is ignored ([com.nxredux.mobile.options.CoreConfig.resolve]'s `hidden`). Values are the core's exact strings.
-     * Every key needs a [defaultOptions] entry with a value that is not hidden, so the core's own default never slips through.
+     * A key needs a [defaultOptions] entry with a value that is not hidden, unless the core's own default is the one wanted.
      */
     val hiddenValues: Map<String, Set<String>> = emptyMap(),
     /**

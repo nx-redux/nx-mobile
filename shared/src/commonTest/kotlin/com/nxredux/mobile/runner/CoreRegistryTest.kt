@@ -1,6 +1,7 @@
 package com.nxredux.mobile.runner
 
 import com.nxredux.mobile.library.Names
+import com.nxredux.mobile.options.CoreConfig
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -151,16 +152,27 @@ class CoreRegistryTest {
     }
     @Test fun every_hidden_value_key_has_a_default_that_is_not_hidden() {
         // A hidden value is only skipped in the menu and ignored in a .cfg: with no default of ours, the core's own
-        // default (possibly the hidden value) would reach the core.
+        // default (possibly the hidden value) would reach the core. melonDS's file paths are the exception: its own
+        // default is the file it finds, the placeholder only when there is none.
+        val coreDefaultWanted = setOf("melonds_firmware_nds_path", "melonds_firmware_dsi_path", "melonds_dsi_nand_path")
         for (tag in CoreRegistry.tags) {
             val core = CoreRegistry.forTag(tag)!!
             val defaults = core.defaultOptions.mapKeys { it.key.removePrefix("-") }
-            for ((key, values) in core.hiddenValues) {
+            for ((key, values) in core.hiddenValues - coreDefaultWanted) {
                 val default = defaults[key]
                 assertTrue(default != null, "$tag ${core.id}: $key has hidden values but no defaultOptions entry")
                 assertFalse(default in values, "$tag ${core.id}: $key defaults to a hidden value")
             }
         }
+    }
+    @Test fun a_stored_melonds_none_found_file_is_left_to_the_core() {
+        val nds = CoreRegistry.forTag("NDS")!!
+        fun resolved(cfg: String) = CoreConfig.resolve(nds.defaultOptions, null, CoreConfig.parse(cfg), nds.lockedOptions, nds.hiddenValues).values
+        val r = resolved("melonds_firmware_nds_path = /notfound\nmelonds_firmware_dsi_path = /notfound\nmelonds_sysfile_mode = native\n")
+        assertFalse("melonds_firmware_nds_path" in r)
+        assertFalse("melonds_firmware_dsi_path" in r)
+        assertEquals("native", r["melonds_sysfile_mode"])
+        assertEquals("/sys/firmware.bin", resolved("melonds_firmware_nds_path = /sys/firmware.bin\n")["melonds_firmware_nds_path"])
     }
     @Test fun values_and_keys_the_app_cannot_serve_are_kept_from_emulator_settings() {
         // Any affinity mask but 0x0 aborts the app at load: locked, so neither the page nor a .cfg can set one.

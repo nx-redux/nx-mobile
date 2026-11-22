@@ -23,7 +23,7 @@ class GraphicsApiOptionsTest {
     }
 
     @Test fun wii_and_gamecube_offer_the_graphics_api_row() {
-        assertEquals(WiiOptions.table + DolphinOptions.resolutionRows(null) + GraphicsApiOptions.row, ConsoleSettings.tableFor("WII").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row) })
+        assertEquals(WiiOptions.table + DolphinOptions.wiiResolutionRows(null) + GraphicsApiOptions.row, ConsoleSettings.tableFor("WII").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row) })
         assertTrue(WiiOptions.screenRow in WiiOptions.table)
         assertEquals(DolphinOptions.resolutionRows(null) + GraphicsApiOptions.row, ConsoleSettings.tableFor(" gc ").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row) })
         assertEquals(listOf("Auto", "OpenGL ES", "Vulkan"), GraphicsApiOptions.row.values.map(GraphicsApiOptions.row::labelOf))
