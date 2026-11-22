@@ -849,6 +849,7 @@ void LibretroDroid::step() {
     const float frameSeconds = fpsSync ? 1.0f / static_cast<float>(fpsSync->getContentRefreshRate()) : 1.0f / 60.0f;
     // FF runs the frames its pacer has due, never fpsSync's catch-up × a speed, which would make the speed follow the display.
     unsigned runs = frames * speed;
+    const unsigned videoCallbacksBefore = videoCallbacks;
     if (rewinding) {
         runs = stepRewinding(frameSeconds);
         hitchProbe.ranCore(HitchProbe::Clock::now(), runs);
@@ -900,6 +901,11 @@ void LibretroDroid::step() {
             if (video->rendersInVideoCallback() && frameDrawnHook) frameDrawnHook();
         } else if (!video->rendersInVideoCallback()) {
             video->renderFrame();
+        } else if (videoCallbacks == videoCallbacksBefore) {
+            // The core ran without a video callback at all, not even a duplicate (Dolphin on Vulkan between a 30 fps
+            // game's frames): redraw its last frame, or the swap shows a buffer that doesn't hold it (flicker).
+            video->renderPausedFrame();
+            if (Environment::getInstance().isUseVulkan()) VulkanBridge::get().afterGlDraw();
         }
     }
 
@@ -1242,6 +1248,7 @@ void LibretroDroid::handleVideoRefresh(
     // Runs inside the core's retro_run: a C++ exception must not unwind through the core's C frames. Keep the
     // first one and rethrow it from step() once retro_run has returned.
     if (videoCallbackError) return;
+    videoCallbacks++;
     try {
         // A duplicate frame (data == nullptr) says nothing about how the core renders.
         if (data != nullptr) hardwareFrame.store(data == RETRO_HW_FRAME_BUFFER_VALID);

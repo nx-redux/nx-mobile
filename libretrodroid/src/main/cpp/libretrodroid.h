@@ -459,6 +459,7 @@ private:
     PerfHint perfHint;
     std::atomic<long> presentationLeadMicros { 0 };
     std::atomic<double> contentFps { 0.0 };
+    unsigned videoCallbacks = 0;   // the core's video callbacks so far (GL thread): a step with none drew nothing
     std::atomic<float> pendingScreenRate { 0.0f };
     unsigned perfHintSteps = 0;
     void updatePerfHint(std::chrono::steady_clock::time_point stepStart, unsigned runs);
