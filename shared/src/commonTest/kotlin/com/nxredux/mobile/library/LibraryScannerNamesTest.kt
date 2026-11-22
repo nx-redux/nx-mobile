@@ -197,11 +197,11 @@ class LibraryScannerNamesTest {
 
     @Test fun unassigned_keeps_the_stem_rule_and_its_dir_subtitles() = runTest {
         val index = scan(
-            mapOf("sd/A" to listOf("Mystery (Proto).chd"), "sd/B" to listOf("Mystery (Beta).chd")),
+            mapOf("sd/A" to listOf("Mystery (USA).chd"), "sd/B" to listOf("Mystery (Europe).chd")),
             extras = listOf(ExtraFolder("a", ContentRef("sd/A")), ExtraFolder("b", ContentRef("sd/B"))),
         )
         val un = index.systems.single { it.unassigned }
-        assertEquals(setOf("Mystery (Proto)", "Mystery (Beta)"), un.games.map { it.name }.toSet())
+        assertEquals(setOf("Mystery (USA)", "Mystery (Europe)"), un.games.map { it.name }.toSet())
         assertEquals(listOf("/", "/"), index.toSystems().single { it.unassigned }.games.map { it.subtitle })
     }
 }

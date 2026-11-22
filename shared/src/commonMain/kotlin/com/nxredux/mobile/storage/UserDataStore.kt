@@ -11,6 +11,10 @@ interface UserDataStore {
     /** `hidden.txt`: game paths hidden from every list. */
     suspend fun readHidden(): List<String>
     suspend fun writeHidden(list: List<String>): Boolean
+
+    /** `badges.txt`: each game's own badge choice by game path ([com.nxredux.mobile.library.GameBadges.parse]). */
+    suspend fun readBadges(): Map<String, String> = emptyMap()
+    suspend fun writeBadges(choices: Map<String, String>): Boolean = true
     /** From `<rom.ext>.txt` / `<rom.ext>.<slot>.bmp` (PNG data; older files BMP) under `.userdata/shared/.minui/<tag>/`. */
     suspend fun resumeInfo(tag: String, fileName: String): ResumeInfo
     /** The hidden (auto) save state's frame, `<rom.ext>.9.bmp`, as a coil-loadable URI: what Save & Quit leaves; null when none. */

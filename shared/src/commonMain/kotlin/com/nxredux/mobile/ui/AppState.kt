@@ -55,6 +55,7 @@ import com.nxredux.mobile.library.move
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.library.withArt
 import com.nxredux.mobile.library.rename
+import com.nxredux.mobile.library.setBadgeChoice
 import com.nxredux.mobile.library.playableSystems
 import com.nxredux.mobile.library.withFirstSeen
 import com.nxredux.mobile.options.CoreOptionSource
@@ -379,6 +380,7 @@ class AppState(
         deps.source, sidecars, deps.arcadeSets, deps.naomiSets, compute = deps.compute, chdSectors = deps.chdSectors,
         picks = { artworkController?.picks().orEmpty() },               // a picked extra game slot keeps its mirror file
         heroShots = { artworkController?.heroShots().orEmpty() },       // a SteamGridDB hero screenshot keeps hero drawing
+        badgeChoices = { deps.userData.readBadges() },                   // a game's own badge choice wins over its tags
         legacyMove = { legacyArtMove },                                  // old grid/ and hero/ files move once
     )
 
@@ -3378,17 +3380,34 @@ class AppState(
 
     // --- Emulator Settings (Settings -> Emulation -> Default settings) and Game Settings ---
 
-    internal val emulatorSettings = EmulatorSettingsController(
+    /** Game Settings' Badge row: a saved choice goes into the index, and the lists and Home show it. */
+    private val gameBadges = GameBadgeEditor(
+        scope, deps.userData, deps.compute,
+        saved = { game, choice -> mutateIndex(IndexRefresh(rows = true, openList = true, ui = true)) { current -> current?.setBadgeChoice(game, choice) } },
+        failed = { _error.value = "Could not save the badge"; emulatorSettings.refreshOpenPage() },
+    )
+
+    /** The game whose Game Settings page is open, for its Badge row. */
+    private fun badgeGame(): GameEntry? = (_screen.value as? Screen.EmulatorOptions)?.game?.game
+
+    internal val emulatorSettings: EmulatorSettingsController = EmulatorSettingsController(
         scope, _screen, _selection, _error, deps.coreOptions, deps.emulatorConfigs, deps.coreDefaults,
         host = object : EmulatorSettingsHost {
             override fun showEmulatorsSettings() = settingsUi.showSettingsOn(SettingsSection.EMULATORS, SettingsKind.EMULATORS)
             override fun followRowEdit(key: Any?, from: Int, to: Int?) = settingsUi.followRowEdit(key, from, to)
-            override fun appSection(page: EmulatorPage): EmulatorAppSection? =
-                if (!EmulatorRows.hostsCableLink(page)) null
-                else EmulatorAppSection(EmulatorRows.CABLE_LINK_LABEL, settingsContent.cableLinkRows().map { EmulatorRow.App(it, settingsUi.settingChoices(it)) })
+            override fun appSection(page: EmulatorPage, game: Listed?): EmulatorAppSection? = when {
+                page.forGame -> game?.let { gameBadges.section(it.game) }
+                EmulatorRows.hostsCableLink(page) ->
+                    EmulatorAppSection(EmulatorRows.CABLE_LINK_LABEL, settingsContent.cableLinkRows().map { EmulatorRow.App(it, settingsUi.settingChoices(it)) })
+                else -> null
+            }
             // Without the value's `after`: it republishes a Settings page, which would leave this one (the controller shows the rows).
-            override fun stepAppRow(row: SettingsRow, delta: Int) { settingsContent.settingValue(row)?.step(delta) }
-            override fun chooseAppRow(row: SettingsRow, index: Int) { settingsContent.settingValue(row)?.setTo(index) }
+            override fun stepAppRow(row: SettingsRow, delta: Int) {
+                if (row.kind == SettingsKind.GAME_BADGE) badgeGame()?.let { gameBadges.step(it, delta) } else settingsContent.settingValue(row)?.step(delta)
+            }
+            override fun chooseAppRow(row: SettingsRow, index: Int) {
+                if (row.kind == SettingsKind.GAME_BADGE) badgeGame()?.let { gameBadges.choose(it, index) } else settingsContent.settingValue(row)?.setTo(index)
+            }
             override fun runAppRow(row: SettingsRow) { if (row.kind == SettingsKind.CLEAR_LINK_ROMS) deps.linkRomCache?.clear() }
             override fun restore(screen: Screen, selection: ListSelection) {
                 _screen.value = screen
