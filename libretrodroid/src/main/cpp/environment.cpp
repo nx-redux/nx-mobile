@@ -117,7 +117,6 @@ void Environment::deinitialize() {
 
     rumbleStates.fill(libretrodroid::RumbleState {});
 
-    controllers.clear();
     useVirtualFileSystem = false;
     enableMicrophone = false;
     shutdownRequest.reset();
@@ -368,31 +367,6 @@ bool Environment::environment_handle_get_variable(struct retro_variable* request
     }
 
     requested->value = foundVariable->second.value.c_str();
-    return true;
-}
-
-bool Environment::environment_handle_set_controller_info(const struct retro_controller_info* received) {
-    controllers.clear();
-
-    unsigned player = 0;
-    while (received[player].types != nullptr) {
-
-        auto currentPlayer = received[player];
-
-        controllers.emplace_back();
-
-        unsigned controller = 0;
-        while (controller < currentPlayer.num_types && currentPlayer.types[controller].desc != nullptr) {
-            auto currentController = currentPlayer.types[controller];
-            LOGD("Received controller for player %d: %d %s", player, currentController.id, currentController.desc);
-
-            controllers[player].push_back(Controller { currentController.id, currentController.desc });
-            controller++;
-        }
-
-        player++;
-    }
-
     return true;
 }
 
@@ -797,7 +771,7 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
 
         case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
             LOGD("Called RETRO_ENVIRONMENT_SET_CONTROLLER_INFO");
-            return environment_handle_set_controller_info(static_cast<const struct retro_controller_info*>(data));
+            return true;
 
         case RETRO_ENVIRONMENT_GET_FASTFORWARDING:
             if (data == nullptr) return false;
@@ -957,10 +931,6 @@ const std::vector<struct Variable> Environment::getVariables() const {
     );
 
     return result;
-}
-
-const std::vector<std::vector<struct Controller>> &Environment::getControllers() const {
-    return controllers;
 }
 
 float Environment::retrieveGameSpecificAspectRatio() {

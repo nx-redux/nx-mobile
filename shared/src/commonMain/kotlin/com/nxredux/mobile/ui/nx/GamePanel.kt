@@ -82,7 +82,7 @@ import org.jetbrains.compose.resources.painterResource
 /**
  * The game panel, in the in-game menu's look: the header (art or console logo, title, play time, achievement count,
  * clock and battery; on a short panel one line, [GamePanelCompactHeader]), the tab words with the underline ([MenuTabRow]), then the current tab: Shortcuts as hollow pill
- * buttons in a grid (4 columns, 2 or 1 where a label would not fit, [gamePanelColumns]; disabled ones dimmed and inert), Achievements as badge rows, Cheats as
+ * buttons in a grid (4 columns, 2 or 1 where a label would not fit, [gamePanelColumns]), Achievements as badge rows, Cheats as
  * rows with a switch, Players as the Players page's rows. The controller's [GamePanelState.focus] sits on the accent pill (the tab row's capsule on
  * Tabs). The Game pill (DS/3DS panel-up) sits bottom-right. The dual-screen panel and the in-game menu share it; the
  * menu draws the header itself across its top ([GamePanelHeaderBar]) and its own tab row across the menu ([showTabs] off:
@@ -328,8 +328,7 @@ private fun rememberWidestShortcut(shortcuts: List<ShortcutState>): Dp {
 }
 
 /**
- * A shortcut's tile: a rounded outline, the label (up to two lines) centred in it, its value under it; at 0.35 alpha and
- * not clickable while disabled. A toggle ([ShortcutState.on]) that is on is filled (the list text colour, dark words),
+ * A shortcut's tile: a rounded outline, the label (up to two lines) centred in it, its value under it. A toggle ([ShortcutState.on]) that is on is filled (the list text colour, dark words),
  * as a quick-settings tile. A touch button's tile ([Shortcut.TOUCH]) sends its press and its release
  * ([GamePanelEvent.Touch]), so a hold runs while the finger is down, and shades while pressed; any other sends
  * [GamePanelModel.eventFor] on a tap. The controller's tile ([selected]) gets an accent ring a gap outside it, so it
@@ -348,7 +347,6 @@ private fun ShortcutTile(s: ShortcutState, selected: Boolean, modifier: Modifier
     val send by rememberUpdatedState(onEvent)
     val touch = s.action?.takeIf { s.shortcut == Shortcut.TOUCH }
     val press = when {
-        !s.enabled -> Modifier
         touch != null -> Modifier.pointerInput(touch) {
             detectTapGestures(onPress = {
                 pressed = true; send(GamePanelEvent.Touch(touch, down = true))
@@ -359,10 +357,8 @@ private fun ShortcutTile(s: ShortcutState, selected: Boolean, modifier: Modifier
     }
     Column(
         modifier.bringIntoViewRequester(into).heightIn(min = GP_TILE_HEIGHT)
-            // Drawn outside the tile, in the grid's spacing (so the focus moving never resizes one), and before the dimming
-            // (an alpha layer would clip it to the tile and fade it on a disabled one).
+            // Drawn outside the tile, in the grid's spacing (so the focus moving never resizes one).
             .then(if (selected) Modifier.drawBehind { focusRing(colors.accent) } else Modifier)
-            .alpha(if (s.enabled) 1f else NX_DISABLED_ALPHA)   // role: a disabled control
             .clip(shape)
             .then(
                 if (filled) Modifier.background(colors.listText)

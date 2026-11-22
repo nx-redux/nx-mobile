@@ -35,8 +35,6 @@ class LooseResolver internal constructor(
     /** The sheet and zip head reads, reused across scans while a file is unchanged ([HeadReads]). */
     private val heads: HeadReads = HeadReads(source, emptyList()),
 ) {
-    constructor(source: RomsSource, sidecars: Sidecars, defaultTag: (Console) -> String) : this(source, ScanReads(source, sidecars, null), defaultTag)
-
     /** [skipTop]: lowercase names of folders at [tree]'s root that are not walked (a home's `Roms`, `Bios` ...). */
     suspend fun scan(tree: ContentRef, sourceId: String, skipTop: Set<String> = emptySet()): List<LooseFile> {
         val out = ArrayList<LooseFile>()

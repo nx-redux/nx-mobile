@@ -71,14 +71,14 @@ fun NxBackdropStack(
                 LaunchedEffect(shown) { report(shown) }
             }
             NxStack(
-                games.size, selectedIndex, g, RowStyle.BACKDROP, edgeFade = true,
+                games.size, selectedIndex, g, RowStyle.BACKDROP,
                 onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
                 layoutKey = layoutKey, dataKey = games, edgeFadeHeight = BACKDROP_STACK_EDGE_FADE,
                 // The unselected boxes in greyscale, as the row's ([backdropSaturation]).
                 item = { i, _, distance -> Box(Modifier.matchParentSize().nxSaturation(BOX_SHADOW_REACH) { backdropSaturation(distance()) }) { BoxArt(games[i]) } },
                 overlay = { StackCaption(
                     captionTitle(), captionInfo(), g, bodyW, bodyH, shadow = true, nameSp = 18f * nxTextScale(),   // Appearance → Text size
-                    splitNext = stackPortraitFamily(screenW, screenH, portrait), alignment = alignment, infoShare = 0.8f,
+                    splitNext = stackPortraitFamily(screenW, screenH, portrait), alignment = alignment,
                     badge = captionBadge(),
                 ) },
             )
@@ -106,7 +106,7 @@ fun NxBackdropStack(
         val k = backdropContentScale(itemRow, slot, portrait && slot != BackdropSlot.LOGO)   // a console: the row's slot, so its scale
         val toolNameSp = backdropToolNameSp(itemRow, k, slot)
         NxStack(
-            count, selectedIndex, g, RowStyle.BACKDROP, edgeFade = true,
+            count, selectedIndex, g, RowStyle.BACKDROP,
             onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
             layoutKey = layoutKey, dataKey = tiles, marks = true,
             reach = reaches?.let { r -> { i: Int -> r[i] } },

@@ -26,10 +26,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxFont
-import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingsList
-import com.nxredux.mobile.ui.nx.NxTextSizes
 
 /** The panel's widest, and its tallest share of the window. */
 private val GAME_SETTINGS_MAX_WIDTH = 560.dp
@@ -45,7 +43,7 @@ private const val GAME_SETTINGS_MAX_HEIGHT = 0.85f
 @Composable
 internal fun GameSettingsModal(
     screen: Screen.EmulatorOptions, selectedIndex: Int,
-    onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onHint: (NxButton) -> Unit, onClose: () -> Unit,
+    onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onClose: () -> Unit,
     onSetting: (NxSettingEvent) -> Unit = {}, onTruncated: (String, Boolean) -> Unit = { _, _ -> },
     editing: Int = -1,   // the row the pad is changing ([AppState.rowEdit]); -1 none
 ) {

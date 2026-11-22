@@ -27,10 +27,10 @@ data class ProbeResult(val console: String?, val read: Boolean, val data: Entry?
  * needs [chd] (without it only a GD or DVD CHD is placed, by its metadata). Never throws.
  */
 class DiscProbe(private val source: RomsSource, private val chd: ChdSectors? = null) {
-    /** [file]'s console; [dir] is its folder's listing (a cue's, gdi's or m3u's files are found there). */
-    suspend fun identify(file: Entry, dir: List<Entry>): String? = probe(file, dir).console
-
-    /** [identify] with whether [file] (and the data file a sheet names) could be read. */
+    /**
+     * [file]'s console, with whether [file] (and the data file a sheet names) could be read; [dir] is its folder's
+     * listing (a cue's, gdi's or m3u's files are found there).
+     */
     suspend fun probe(file: Entry, dir: List<Entry>): ProbeResult = try {
         resultOf(file, dir, followM3u = true)
     } catch (e: CancellationException) {

@@ -15,7 +15,11 @@ class ProviderPreferencesTest {
         override fun call(method: String, name: String, args: Map<String, Any?>): Map<String, Any?> {
             calls++
             if (failing) error("menu gone")
-            if (method == PrefsProvider.METHOD_GET_ALL) return mapOf(PrefsProvider.RESULT_ENTRIES to HashMap(data))
+            if (method == PrefsProvider.METHOD_GET_ALL_FILES) {
+                @Suppress("UNCHECKED_CAST")
+                val names = args[PrefsProvider.ARG_NAMES] as List<String>
+                return mapOf(PrefsProvider.RESULT_FILES to names.associateWith { HashMap(data) })
+            }
             check(method == PrefsProvider.METHOD_APPLY) { method }
             if (args[PrefsProvider.ARG_CLEAR] == true) data.clear()
             @Suppress("UNCHECKED_CAST")
@@ -94,13 +98,13 @@ class ProviderPreferencesTest {
         val sender = HeldSender()
         val prefs = ProviderPreferences("p", owner, LocalFile(mapOf("k" to "old")), sender)
         prefs.edit().putString("k", "new").apply()
-        prefs.refresh()   // the owner still has "old": the apply is on its way
+        ProviderPreferences.refreshAll(owner, listOf(prefs))   // the owner still has "old": the apply is on its way
         assertEquals("new", prefs.getString("k", null))
         sender.runAll()
-        prefs.refresh()
+        ProviderPreferences.refreshAll(owner, listOf(prefs))
         assertEquals("new", prefs.getString("k", null))
         owner.data["k"] = "menu"
-        prefs.refresh()   // everything landed: the menu's later change wins
+        ProviderPreferences.refreshAll(owner, listOf(prefs))   // everything landed: the menu's later change wins
         assertEquals("menu", prefs.getString("k", null))
     }
 
@@ -117,12 +121,12 @@ class ProviderPreferencesTest {
         val prefs = ProviderPreferences("p", owner, LocalFile(mapOf("k" to "old", "gone" to "x")), java.util.concurrent.Executor { it.run() })
         prefs.edit().putString("k", "new").remove("gone").apply()
         owner.failing = false
-        prefs.refresh()
+        ProviderPreferences.refreshAll(owner, listOf(prefs))
         assertEquals("new", prefs.getString("k", null))
         assertNull(prefs.getString("gone", null))
         prefs.edit().putString("k", "newer").apply()   // lands: the owner holds it now
         owner.data["k"] = "menu"
-        prefs.refresh()
+        ProviderPreferences.refreshAll(owner, listOf(prefs))
         assertEquals("menu", prefs.getString("k", null))
         assertNull(prefs.getString("gone", null))   // still never sent
     }
@@ -133,7 +137,7 @@ class ProviderPreferencesTest {
         prefs.edit().clear().apply()
         owner.failing = false
         prefs.edit().putString("b", "2").apply()
-        prefs.refresh()
+        ProviderPreferences.refreshAll(owner, listOf(prefs))
         assertNull(prefs.getString("a", null))
         assertEquals("2", prefs.getString("b", null))
     }
@@ -193,7 +197,7 @@ class ProviderPreferencesTest {
         val prefs = ProviderPreferences("p", owner, LocalFile(mapOf("screen" to "AUTO", "pause" to true, "gone" to "x")))
         owner.data["screen"] = "OFF"; owner.data["pause"] = false; owner.data.remove("gone"); owner.data["new"] = 5
         assertEquals("AUTO", prefs.getString("screen", null))   // nothing reaches the game until it asks
-        prefs.refresh()
+        ProviderPreferences.refreshAll(owner, listOf(prefs))
         assertEquals("OFF", prefs.getString("screen", null))
         assertFalse(prefs.getBoolean("pause", true))
         assertNull(prefs.getString("gone", null))
@@ -209,16 +213,16 @@ class ProviderPreferencesTest {
         val owner = FakeOwner(hashMapOf("a" to "1"))
         val prefs = ProviderPreferences("p", owner, LocalFile(mapOf("a" to "1")))
         prefs.edit().putString("mine", "game").remove("a").commit()
-        prefs.refresh()
+        ProviderPreferences.refreshAll(owner, listOf(prefs))
         assertEquals("game", prefs.getString("mine", null))
         assertNull(prefs.getString("a", null))
         // The menu changes a key this process wrote earlier: the next refresh shows the menu's value.
         owner.data["mine"] = "menu"
-        prefs.refresh()
+        ProviderPreferences.refreshAll(owner, listOf(prefs))
         assertEquals("menu", prefs.getString("mine", null))
         // A clear here, then a refresh: still cleared.
         prefs.edit().clear().commit()
-        prefs.refresh()
+        ProviderPreferences.refreshAll(owner, listOf(prefs))
         assertEquals(emptyMap<String, Any?>(), prefs.all)
     }
 
@@ -227,7 +231,7 @@ class ProviderPreferencesTest {
         val prefs = ProviderPreferences("p", owner, LocalFile(mapOf("k" to "old")))
         owner.data["k"] = "new"
         owner.failing = true
-        prefs.refresh()
+        ProviderPreferences.refreshAll(owner, listOf(prefs))
         assertEquals("old", prefs.getString("k", null))
     }
 

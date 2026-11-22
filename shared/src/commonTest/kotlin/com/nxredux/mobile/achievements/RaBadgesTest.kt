@@ -4,7 +4,6 @@ import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.runner.ContentRef
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
@@ -24,27 +23,23 @@ class RaBadgesTest {
     @Test fun a_404_is_remembered_and_nothing_is_written() = runTest {
         val http = FakeRaHttp().apply { getBytesResponder = { 404 to ByteArray(0) } }
         val tree = home(); val badges = RaBadges(tree, http)
-        assertFalse(badges.ensure(folder, "9", locked = false)); assertFalse(badges.ensure(folder, "9", locked = false))
-        assertEquals(1, http.gets.size); assertEquals(emptyMap(), tree.listing(folder))
-    }
-    @Test fun a_404_under_ensureAll_is_requested_once() = runTest {
-        val http = FakeRaHttp().apply { getBytesResponder = { 404 to ByteArray(0) } }
-        val badges = RaBadges(home(), http)
         val names = listOf("00001", "00002", "00003")
         badges.ensureAll(folder, names); badges.ensureAll(folder, names)
         val urls = names.flatMap { listOf("${RaRequests.MEDIA_BADGE}$it.png", "${RaRequests.MEDIA_BADGE}${it}_lock.png") }
-        assertEquals(urls.sorted(), http.gets.sorted())
+        assertEquals(urls.sorted(), http.gets.sorted()); assertEquals(emptyMap(), tree.listing(folder))
     }
     @Test fun transport_errors_and_server_errors_are_not_remembered() = runTest {
         var answer: suspend () -> Pair<Int, ByteArray> = { throw RaHttpException("offline") }
         val http = FakeRaHttp().apply { getBytesResponder = { answer() } }
-        val badges = RaBadges(home(), http)
-        assertFalse(badges.ensure(folder, "00001", false))
+        val tree = home(); val badges = RaBadges(tree, http)
+        badges.ensureAll(folder, listOf("00001"))
         answer = { 503 to ByteArray(0) }
-        assertFalse(badges.ensure(folder, "00001", false))
+        badges.ensureAll(folder, listOf("00001"))
+        assertEquals(emptyMap(), tree.listing(folder))
         answer = { 200 to "PNG".encodeToByteArray() }
-        assertTrue(badges.ensure(folder, "00001", false))
-        assertEquals(3, http.gets.size)
+        badges.ensureAll(folder, listOf("00001"))
+        assertEquals(setOf("00001.png", "00001_lock.png"), tree.listing(folder).keys)
+        assertEquals(6, http.gets.size)
     }
     @Test fun no_home_means_no_folder() = runTest {
         val noHome = RaHomeTree(FakeRomsSource(emptyMap())) { null }
@@ -84,7 +79,6 @@ class RaBadgesTest {
         assertEquals(folder, badges.folder(p, 42))
         assertEquals(setOf("00001.png", "00001_lock.png"), tree.listing(folder).keys)
         badges.ensureAll(folder, listOf("00001", "00002"))
-        assertFalse(badges.ensure(folder, "00003", locked = false))
         assertTrue(http.gets.isEmpty())   // nothing could be stored, so nothing is downloaded
     }
 }

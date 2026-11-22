@@ -66,7 +66,7 @@ typedef struct {
 static pthread_mutex_t nl_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static struct {
-	bool started, stop, thread_started;
+	bool started, stop;
 	pthread_t thread;
 	nl_role role;
 	uint16_t port;
@@ -92,7 +92,7 @@ static struct {
 	uint8_t hdr[NL_HDR_SIZE];
 	size_t hdr_have, payload_have, skip;
 	uint8_t cmd;
-	uint16_t size, cid;
+	uint16_t size;
 	uint8_t payload[NL_MAX_PAYLOAD];
 	// received, not yet handed to the core
 	nl_pkt rfu[NL_RFU_SLOTS];
@@ -366,7 +366,6 @@ static void process_bytes(const uint8_t* b, size_t n, uint64_t now) {
 				break;
 			nl.cmd = nl.hdr[0];
 			nl.size = (uint16_t)((nl.hdr[1] << 8) | nl.hdr[2]);
-			nl.cid = (uint16_t)((nl.hdr[3] << 8) | nl.hdr[4]);
 			nl.payload_have = 0;
 			if (nl.size > NL_MAX_PAYLOAD) { // skip just this packet: its size still frames the stream (recv_packet)
 				NP_LOG("link: skipped an oversized packet (%u bytes)", nl.size);
@@ -647,7 +646,6 @@ int nl_start(nl_role role, const char* peer_ip, uint16_t port, const char* mode,
 	}
 	nl.phase = NL_CONNECTING;
 	nl.started = true;
-	nl.thread_started = true;
 	NP_LOG(role == NL_ROLE_HOST ? "link: hosting on port %u" : "link: joining on port %u", port);
 	pthread_mutex_unlock(&nl_mutex);
 	return 0;
@@ -818,12 +816,10 @@ void nl_shutdown(void) {
 	end_session(NL_ENDED, NL_REASON_NONE, true);
 	nl.stop = true;
 	wake_thread();
-	bool join = nl.thread_started;
 	pthread_t thread = nl.thread;
 	pthread_mutex_unlock(&nl_mutex);
 
-	if (join)
-		pthread_join(thread, NULL);
+	pthread_join(thread, NULL);
 
 	pthread_mutex_lock(&nl_mutex);
 	np_tcp_release(&nl.sock, &nl.listen_fd, &nl.wake, &nl.out);

@@ -31,7 +31,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.nx.AchievementDetail
 import com.nxredux.mobile.ui.nx.LocalNxColors
@@ -68,7 +67,6 @@ fun RaPanelOverlay(panel: RaPanel?, onRow: (Int) -> Unit, onButton: (NxButton) -
 private fun ColumnScope.RaPanelBody(p: RaPanel, onRow: (Int) -> Unit, onButton: (NxButton) -> Unit) {
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
-    val scale = nxTextScale()   // Appearance → Text size: the header, the rows, the messages
     // The header: the game and its progress, nothing else (B or the system back leave a details view; a tap beside the
     // panel, B or X close it).
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = PANEL_EDGE, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {

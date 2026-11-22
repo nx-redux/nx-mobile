@@ -1128,9 +1128,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     private fun onCoreHung(stalledMillis: Long) {
         val title = intentTitle ?: "The game"
-        NxLog.e("GameActivity", "the core has been stuck in one frame for ${stalledMillis / 1000} s: closing $title")
+        NxLog.e(TAG_LOG, "the core has been stuck in one frame for ${stalledMillis / 1000} s: closing $title")
         runCatching { CoreHangNotice.record(applicationContext, title) }
-        runCatching { finish() }.onFailure { NxLog.w("GameActivity", "could not finish the hung game", it) }
+        runCatching { finish() }.onFailure { NxLog.w(TAG_LOG, "could not finish the hung game", it) }
         SystemClock.sleep(HUNG_FINISH_GRACE_MS)   // the finish reaches the system before the process goes
         android.os.Process.killProcess(android.os.Process.myPid())
     }
@@ -1416,11 +1416,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             dsRoom.check()
         }
         retroView?.let { view ->
-            view.queueEvent { runCatching { view.updateVariables(*vars.map { (k, v) -> Variable(k, v) }.toTypedArray()) }.onFailure { NxLog.w("GameActivity", "switching local wireless failed", it) } }
+            view.queueEvent { runCatching { view.updateVariables(*vars.map { (k, v) -> Variable(k, v) }.toTypedArray()) }.onFailure { NxLog.w(TAG_LOG, "switching local wireless failed", it) } }
         }
         // Directly: the menu holds frames, so an off and on there (or Disconnect then on) reach the core as no change.
         if (on) LibretroNetplay.dsRejoin()
-        NxLog.i("GameActivity", "local wireless switched ${if (on) "on" else "off"}")
+        NxLog.i(TAG_LOG, "local wireless switched ${if (on) "on" else "off"}")
     }
 
     /** The core layout and touch-screen proportion last sent for the 3DS ([syncN3dsCore]); null before the first. */
@@ -1567,7 +1567,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             val written = configWrites.withLock {
                 withContext(Dispatchers.IO) {
                     runCatching { save(store) }
-                        .onFailure { NxLog.w("GameActivity", "saving $key failed", it) }.getOrNull()
+                        .onFailure { NxLog.w(TAG_LOG, "saving $key failed", it) }.getOrNull()
                 }
             }
             if (written == null) { toast(failure); return@launch }
@@ -1587,12 +1587,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val view = retroView ?: return
         if (vars.isEmpty()) return
         vars.firstOrNull { it.key == N3dsOptions.STACKED_SMALL_PROPORTION }?.value?.let { renderer.n3dsProportion = it }
-        view.queueEvent { runCatching { view.updateVariables(*vars.toTypedArray()) }.onFailure { NxLog.w("GameActivity", "setting options failed", it) } }
+        view.queueEvent { runCatching { view.updateVariables(*vars.toTypedArray()) }.onFailure { NxLog.w(TAG_LOG, "setting options failed", it) } }
     }
 
     private suspend fun readDolphinBuiltIn(): String? = withContext(Dispatchers.IO) {
         val file = File(dolphinBuiltInPath ?: return@withContext null)
-        if (file.isFile) runCatching { file.readText() }.onFailure { NxLog.w("GameActivity", "cannot read Dolphin's cheats", it) }.getOrNull() else null
+        if (file.isFile) runCatching { file.readText() }.onFailure { NxLog.w(TAG_LOG, "cannot read Dolphin's cheats", it) }.getOrNull() else null
     }
 
     /** First launch of a Wii/GameCube game: Dolphin has written its built-in list by the first frame, so combine again. */
@@ -1624,7 +1624,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 LibretroDroid.resetCheat()
                 codes.forEachIndexed { i, code -> view.setCheat(i, true, code, useEmulationThread = false) }
                 LibretroDroid.setMemoryCheats(patches)
-            }.onFailure { NxLog.w("GameActivity", "applying cheats failed", it) }
+            }.onFailure { NxLog.w(TAG_LOG, "applying cheats failed", it) }
         }
     }
 
@@ -1774,7 +1774,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun toggleMute(id: Int) {
         val b = achievements ?: return
         lifecycleScope.launch {
-            runCatching { b.toggleMute(id) }.onFailure { NxLog.w("GameActivity", "mute toggle failed", it) }
+            runCatching { b.toggleMute(id) }.onFailure { NxLog.w(TAG_LOG, "mute toggle failed", it) }
             refreshMenuAchievements()
         }
     }
@@ -1957,7 +1957,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
     override fun onSkinPlaced() = dual.syncPanel()
     override fun onLayoutControllersChanged() = dual.recheckPictureOn()
-    override fun placeMainPanelHost() = dual.placeMainPanelHost()
 
     // The in-game menu's view, input and layout, owned by [menu].
     override val menuView: ComposeView? get() = menu.menuView
@@ -2017,7 +2016,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val view = retroView ?: return
         speed.setToggle(rewind = false)
         lifecycleScope.launch(Dispatchers.IO) {
-            runCatching { view.reset() }.onFailure { NxLog.w("GameActivity", "reset failed", it) }
+            runCatching { view.reset() }.onFailure { NxLog.w(TAG_LOG, "reset failed", it) }
         }
     }
 

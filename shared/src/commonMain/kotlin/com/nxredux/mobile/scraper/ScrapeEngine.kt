@@ -468,7 +468,7 @@ class ScrapeEngine(
      *
      * The extras ([extras], NX Redux's flow): with the 2D box on, a game being fetched also gets its 2D box (a 2D box hit,
      * else a grid) as its own download beside the 3D one (a 2D box written while the game has no box is its box, as
-     * without the setting); with the wheel wanted ([ArtExtras.wantWheel]) its wheel, from the first source that has
+     * without the setting); with the wheel on ([ArtExtras.wheel]) its wheel, from the first source that has
      * one, a [ArtSource.wheelLast] source's only once every other has been asked (it is asked for the wheel only beside other slots in turn, and for
      * the wheel alone only when no other source had one). Neither is ever a reason to fetch a game nor counts toward
      * DONE. With Mix on, a game without a mix is fetched (only for what it lacks, so a game with a screenshot and a box
@@ -505,7 +505,7 @@ class ScrapeEngine(
         var needShot = replace || !ref.have.screenshot
         // The extras: without Replace only when the index and the disk have none.
         var want2d = ex.box2d && (replace || !(ref.have.box2d || onDisk.box2d))
-        var wantWheel = ex.wantWheel && (replace || !(ref.have.wheel || onDisk.wheel))
+        var wantWheel = ex.wheel && (replace || !(ref.have.wheel || onDisk.wheel))
         if (!replace) {
             if (onDisk.box) needBox = false
             if (onDisk.screenshot) needShot = false

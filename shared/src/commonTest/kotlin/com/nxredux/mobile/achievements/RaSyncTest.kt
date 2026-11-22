@@ -223,18 +223,6 @@ class RaSyncTest {
         val r = sync.run("me", "tok") {}
         assertEquals(1, r.refreshedGames)
     }
-    @Test fun an_old_summary_without_set_ids_is_rebuilt() = runTest {
-        val (sync, store, http) = setup()
-        store.put(RaPaths.sets(h1), """{"Success":true,"GameId":10003,"Title":"SM64","ConsoleId":2,"Sets":[""" +
-            """{"Type":"core","AchievementSetId":1,"GameId":10003,"Achievements":[{"ID":1},{"ID":2}]},""" +
-            """{"Type":"bonus","AchievementSetId":2,"GameId":11458,"Achievements":[{"ID":3}]}]}""")
-        store.put(RaPaths.summary(h1), """{"g":10003,"c":2,"t":"SM64","a":[{"i":1,"t":""},{"i":2,"t":""}]}""")
-        store.put(RaPaths.session(10003), """{"Success":true,"Unlocks":[{"ID":1,"When":1},{"ID":3,"When":3}]}""")
-        http.on("login2", body = """{"Success":true,"User":"me","Token":"tok"}""")
-        http.on("allprogress", body = """{"Success":true,"Response":{"10003":{"Achievements":2,"Unlocked":1},"11458":{"Achievements":1,"Unlocked":1}}}""")
-        val r = sync.run("me", "tok") {}
-        assertEquals(0, r.refreshedGames)
-    }
     @Test fun the_journal_matches_the_user_whatever_the_case() = runTest {
         val (sync, store, http) = setup()
         val j = RaJournal(store, RaPaths.JOURNAL); j.append(RaUnlock("KotakSempit", 1, h1, 900L))

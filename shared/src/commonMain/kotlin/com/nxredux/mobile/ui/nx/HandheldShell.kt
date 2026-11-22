@@ -120,7 +120,6 @@ fun HandheldShell(
 ) {
     val colors = LocalNxColors.current
     val density = LocalDensity.current
-    val ydpi = rememberDisplayYdpi()
     val posture = LocalPosture.current
     var topInWindow by remember { mutableStateOf<Int?>(null) }   // the shell's top in window px, for the hinge
     // The screen moves between the branches below rather than being rebuilt: a rotation or a fold keeps its

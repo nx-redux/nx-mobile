@@ -131,9 +131,6 @@ fun downloadUrlAllowed(url: String, local: Boolean): Boolean {
 /** Whether a feed at [url] is on this device's loopback (a debug build's `-PnxUpdateFeed` through adb reverse). */
 fun loopbackUrl(url: String): Boolean = urlParts(url)?.host in LOOPBACK_HOSTS
 
-/** The release [readLatestRelease] found, or null when there is none to install. */
-fun parseLatestRelease(json: String, dev: Boolean): AppRelease? = (readLatestRelease(json, dev) as? LatestRelease.Found)?.release
-
 /** When the updater checks and when it interrupts. */
 object UpdatePolicy {
     const val CHECK_INTERVAL_MS = 86_400_000L

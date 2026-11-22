@@ -948,7 +948,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     val gamePath = activity.intent.getStringExtra(EXTRA_GAME_PATH)
                     // No library path, no crash record to keep: such a launch stays on the system driver.
                     val driversAvailable = gamePath != null && cfg.descriptor?.id !in GpuDriverOptions.EXCLUDED_CORES &&
-                        AndroidGpuDrivers.unavailableReason(BuildConfig.GPU_DRIVERS, Build.VERSION.SDK_INT) == null
+                        AndroidGpuDrivers.unavailableReason(Build.VERSION.SDK_INT) == null
                     // A core whose Auto wants Vulkan on Mali only with a custom driver (Dolphin) asks which one the game would load.
                     val customDriver = driversAvailable && cfg.descriptor?.vulkan?.maliNeedsCustomDriver == true &&
                         GpuDriverChoice.resolve(
@@ -1021,7 +1021,6 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + nds3dLaunch + res3dAlso + ps2BiosOption + n64Vram + graphics.forcedOptions
                         variables = withForced(cfg.options, forced).toTypedArray()
                         rumbleEventsEnabled = gameRumble != GameRumble.OFF   // Game rumble Off: the runner does not even read the core's state
-                        preferLowLatencyAudio = true
                         // DS / 3DS: the frontend feeds the core's mic ([ShortcutsMicController.applyMic] picks silence, the phone mic or noise).
                         enableMicrophone = shortcuts.canMic
                         // GL driver messages and a frame probe to tag NXGL, with Settings → System → Debug log on at
@@ -1186,7 +1185,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // Graphics API's process environment for the core (ParaLLEl-RDP's switches), before it loads; unset otherwise.
             launchEnv.forEach { (k, v) ->
                 runCatching { if (v != null) android.system.Os.setenv(k, v, true) else android.system.Os.unsetenv(k) }
-                    .onFailure { NxLog.w("GameActivity", "could not set $k", it) }
+                    .onFailure { NxLog.w(TAG_LOG, "could not set $k", it) }
             }
             if (isN3ds) wii.offerN3dsMotion()
             val view = GLRetroView(activity, data)
@@ -1358,7 +1357,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 val victims = NdsResumeCleanup.victims(tag, coreId, romFileName, marker, paths.naming, paths.innerFileName) { File(dataRoot, it).exists() }
                 victims.forEach { File(dataRoot, it).delete() }
                 victims.isNotEmpty()
-            }.onFailure { NxLog.w("GameActivity", "stale NDS resume cleanup failed", it) }.getOrDefault(false)
+            }.onFailure { NxLog.w(TAG_LOG, "stale NDS resume cleanup failed", it) }.getOrDefault(false)
         }
         if (dropped) host.saves.dropResume()
     }
@@ -1510,7 +1509,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 if (!part.renameTo(target)) throw IOException("Cannot move ${part.name} into place")
                 // An unknown size never matches (reuseRealPathCopy), so its stamp is not worth writing.
                 if (size >= 0) runCatching { stampFile.writeAtomically(stamp.encodeToByteArray()) }
-                    .onFailure { NxLog.w("GameActivity", "could not stamp the cache copy of $fileName", it) }
+                    .onFailure { NxLog.w(TAG_LOG, "could not stamp the cache copy of $fileName", it) }
             } finally {
                 part.delete()
                 RomCache.release(host.activity, part.name)

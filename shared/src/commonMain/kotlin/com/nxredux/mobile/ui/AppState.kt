@@ -88,7 +88,6 @@ import com.nxredux.mobile.runner.Console
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.EmulatorRunner
-import com.nxredux.mobile.runner.GameSession
 import com.nxredux.mobile.scraper.AndroidArtStore
 import com.nxredux.mobile.scraper.ArtSlot
 import com.nxredux.mobile.scraper.ArtHave
@@ -196,7 +195,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -491,8 +489,8 @@ sealed interface Screen {
     data class CheatDb(val confirmRemove: Boolean = false) : Screen
     /** Tools → Device Sync: no list selection here; its page (and the link choice) live in [AppDeps.deviceSync]. */
     data object DeviceSync : Screen
-    /** The RetroAchievements tool page; [confirm]: a destructive action's dialog is open. */
-    data class RetroAchievements(val confirm: RaConfirm? = null) : Screen
+    /** The RetroAchievements tool page. */
+    data object RetroAchievements : Screen
     /** Tools -> RetroAchievements -> the game data download's progress ([RaController.download]); [confirmCancel]: "Cancel download?" is open. */
     data class RaDownload(val confirmCancel: Boolean = false) : Screen
     /** Tools -> RetroAchievements -> Profile: the signed-in player's summary ([AppState.raProfile]), to read; B goes back. */
@@ -2335,15 +2333,10 @@ class AppState(
             else -> Unit
         }
         // First setup between the welcome and HANDHELD (the folder steps and their pickers): not asked yet.
-        val step = onboarding.step ?: return deps.settings.padSkin && deps.settings.onboardingDone != false &&
-            padScreen(_screen.value)
+        val step = onboarding.step ?: return deps.settings.padSkin && deps.settings.onboardingDone != false
         // Setup shows it on its own page only (the choice, live); every other page keeps the full height.
         return step == OnboardingStep.PAD && deps.settings.padSkin
     }
-
-    /** The screens the pad skin is drawn round after setup: every one, the tools' pages too. */
-    @Suppress("UNUSED_PARAMETER")
-    private fun padScreen(s: Screen): Boolean = true
 
     /**
      * The page title onboarding's current step shows: its place in first setup's one count ([setupCounter]): Text size,
@@ -2567,11 +2560,8 @@ class AppState(
         )
         OnboardingStep.SYNC_OFFER -> Triple(
             "Sync with your handheld",
-            listOfNotNull(
-                "Copies games, BIOS, saves, save states and collections both ways. Open Device Sync on the handheld too.",
-                onboardingSynced?.takeIf { it.isNotEmpty() }?.let { "Last sync: $it." },
-            ),
-            if (onboardingSynced == null) listOf(NxRow("Sync now"), NxRow("Later")) else listOf(NxRow("Sync again"), NxRow("Continue")),
+            listOf("Copies games, BIOS, saves, save states and collections both ways. Open Device Sync on the handheld too."),
+            listOf(NxRow("Sync now"), NxRow("Later")),
         )
         // The three imports, then (in place) a running one's progress with the rows waiting, or its summary and skipped files.
         OnboardingStep.IMPORT_SAVES -> when (val r = onboardingImported) {
@@ -2719,12 +2709,6 @@ class AppState(
                 else -> onboardingNext()
             }
             OnboardingStep.RA_DOWNLOAD -> { if (index == 0) deps.achievements?.prefetchAll(); onboardingNext() }
-            OnboardingStep.SYNC_OFFER -> if (index == 0) {
-                val sync = deps.deviceSync ?: return onboardingNext()
-                onboardingSync = true
-                sync.open()
-                _screen.value = Screen.DeviceSync
-            } else onboardingNext()
             else -> onboardingNext()
         }
     }
@@ -2795,7 +2779,7 @@ class AppState(
         val step = onboarding.step ?: return
         val category = ONBOARDING_TAB_STEPS[step]
         if (category == null) {
-            deps.settings.gameListStyle = MenuStyles.gameListStyles(_dualMenu.value).stepFrom(gameListLayout().first, by)
+            deps.settings.gameListStyle = MenuStyles.GAME_LIST_STYLES.stepFrom(gameListLayout().first, by)
             deps.settings.gameListOrientation = MenuStyles.DEFAULT_ORIENTATION
             deps.settings.gameListVerticalAlignment = VerticalListAlignment.DEFAULT
         } else {
@@ -4284,7 +4268,7 @@ class AppState(
                 }) { s.menuStyles = s.menuStyles + (c to it) }
             }
             // Two screens: from the style drawn, never through Backdrop; the saved one changes only when stepped.
-            SettingsKind.GAME_LIST_STYLE -> cycle(MenuStyles.gameListStyles(_dualMenu.value), gameListLayout().first, ::menuStyleLabel) { s.gameListStyle = it }
+            SettingsKind.GAME_LIST_STYLE -> cycle(MenuStyles.GAME_LIST_STYLES, gameListLayout().first, ::menuStyleLabel) { s.gameListStyle = it }
             SettingsKind.MENU_ORIENTATION -> row.category?.let { c ->
                 cycle(MenuOrientation.entries, MenuStyles.orientationOf(s.menuOrientations, c), ::orientationLabel) { s.menuOrientations = s.menuOrientations + (c to it) }
             }
@@ -5476,7 +5460,7 @@ class AppState(
             is Screen.ToolApps -> if (s.pick == AppPick.GAMES) androidApps.toggleAndroidGame(s) else androidApps.launchDrawerApp(s)
             is Screen.CheatDb -> onCheatDbButton(s, NxButton.A)
             Screen.DeviceSync -> onDeviceSyncButton(NxButton.A)
-            is Screen.RetroAchievements -> ra.onRaButton(s, NxButton.A)
+            Screen.RetroAchievements -> ra.onRaButton(NxButton.A)
             is Screen.RaDownload -> Unit   // its rows only read (A, Done, comes through onButton)
             is Screen.RaConsoles, is Screen.RaGames, is Screen.RaGame -> ra.onRaBrowserButton(s, NxButton.A)
             is Screen.RaAchievement, Screen.RaProfile -> Unit   // a detail page: nothing to open
@@ -6232,7 +6216,7 @@ class AppState(
         (_screen.value as? Screen.KidsSetup)?.let { kidsUi.onKidsSetupButton(it, button); return }
         (_screen.value as? Screen.KidsDayEdit)?.let { kidsUi.onKidsDayButton(it, button); return }
         _screen.value.takeIf { it is Screen.Settings || it is Screen.SettingsMenu }?.let { onSettingsButton(it, button); return }
-        (_screen.value as? Screen.ToolApps)?.takeIf { it.menu == null }?.let { androidApps.onToolAppsButton(it, button); return }
+        (_screen.value as? Screen.ToolApps)?.takeIf { it.menu == null }?.let { androidApps.onToolAppsButton(button); return }
         _screen.value.contextMenu?.let { contextMenus.onMenuButton(it, button); return }
         (_screen.value as? Screen.Systems)?.let { s -> s.search?.let { onSearchButton(s, it, button); return } }
         (_screen.value as? Screen.Games)?.let { s ->
@@ -6258,7 +6242,7 @@ class AppState(
         }
         (_screen.value as? Screen.CheatDb)?.let { onCheatDbButton(it, button); return }   // before the generic when: UP/DOWN use the action-row count
         if (_screen.value == Screen.DeviceSync) { onDeviceSyncButton(button); return }   // every button is the controller's
-        (_screen.value as? Screen.RetroAchievements)?.let { ra.onRaButton(it, button); return }   // same: UP/DOWN use the action-row count
+        if (_screen.value == Screen.RetroAchievements) { ra.onRaButton(button); return }   // same: UP/DOWN use the action-row count
         (_screen.value as? Screen.RaDownload)?.let { ra.onRaDownloadButton(it, button); return }
         (_screen.value as? Screen.RaSettings)?.let {   // LEFT/RIGHT change values; dialogs take the buttons; X the selected row's info
             if (button == NxButton.X && !it.signingIn && it.confirm == null) { if (settingsUi.selectedSettingShowsInfo()) showSettingInfo(_selection.value.index); return }
@@ -6577,9 +6561,6 @@ class AppState(
         val installed = installedCache ?: return null
         return androidConsoleOf(androidGames(installed), deps.androidArtStore)
     }
-
-    /** The app ids the Android games console holds by the settings now (their icons are kept, [AppIcons.retain]). */
-    private fun androidConsoleIds(): List<String> = androidGames(installedCache.orEmpty()).map { it.id }
 
     /**
      * Rebuilds [androidConsole]; the main menu's rows follow when they were built with another, and so does an open

@@ -8,7 +8,7 @@ import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.settings.MenuCategory
 
-enum class ContextKind { PIN, UNPIN, HIDE, UNHIDE, RENAME, ADD_TO_COLLECTION, GAME_SETTINGS, REMOVE_FROM_COLLECTION, REMOVE_RECENT, EMULATOR, CONSOLE, FETCH_ART, CHANGE_ART, PIN_TOOL, UNPIN_TOOL, ADD_TO_TOOLS, REMOVE_FROM_TOOLS, RENAME_COLLECTION, DELETE_COLLECTION, NETPLAY, PLAY_FROM_START, RESUME, OPEN_GAMES, OPEN_CONSOLES, OPEN_COLLECTIONS, OPEN_TOOLS, ACHIEVEMENTS, USE_TOP_SCREEN }
+enum class ContextKind { PIN, UNPIN, HIDE, RENAME, ADD_TO_COLLECTION, GAME_SETTINGS, REMOVE_FROM_COLLECTION, REMOVE_RECENT, EMULATOR, CONSOLE, FETCH_ART, CHANGE_ART, PIN_TOOL, UNPIN_TOOL, ADD_TO_TOOLS, REMOVE_FROM_TOOLS, RENAME_COLLECTION, DELETE_COLLECTION, NETPLAY, PLAY_FROM_START, RESUME, OPEN_GAMES, OPEN_CONSOLES, OPEN_COLLECTIONS, OPEN_TOOLS, ACHIEVEMENTS, USE_TOP_SCREEN }
 
 data class ContextItem(val kind: ContextKind, val label: String)
 
@@ -135,7 +135,7 @@ object ContextMenus {
         ListSource.AllGames ->
             if (entry.system.android) listOfNotNull(if (pinned) unpin else pin, artItem(art))
             else itemsFor(ListSource.Search(""), entry, pinned, art, netplay, canResume, netplayLeads, aResumes)
-        ListSource.Hidden -> emptyList()   // A unhides directly; UNHIDE stays in the enum for act's exhaustive when
+        ListSource.Hidden -> emptyList()   // A unhides directly
         }
     }
 

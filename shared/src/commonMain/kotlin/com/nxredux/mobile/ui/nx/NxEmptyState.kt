@@ -22,7 +22,6 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.nx_mark
-import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 
 /** A centred empty state (mark, title, explanation, pills), like the handheld's UI_renderEmptyState. */
@@ -33,7 +32,6 @@ fun NxEmptyState(
     hints: List<Hint>,
     onHint: (NxButton) -> Unit,
     modifier: Modifier = Modifier,
-    icon: DrawableResource = Res.drawable.nx_mark,
 ) {
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
@@ -42,7 +40,7 @@ fun NxEmptyState(
         val label = nxListLabelSize()
         val body = NxTextSizes.secondary(label)
         Column(Modifier.padding(horizontal = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Image(painterResource(icon), contentDescription = null, modifier = Modifier.size(64.dp), colorFilter = ColorFilter.tint(colors.main))
+            Image(painterResource(Res.drawable.nx_mark), contentDescription = null, modifier = Modifier.size(64.dp), colorFilter = ColorFilter.tint(colors.main))
             Spacer(Modifier.height(16.dp))
             Text(
                 title,

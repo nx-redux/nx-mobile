@@ -31,10 +31,6 @@ JniString::~JniString() {
     if (nativeString != nullptr) env->ReleaseStringUTFChars(javaString, nativeString);
 }
 
-const char* JniString::cString() {
-    return strdup(nativeString != nullptr ? nativeString : "");
-}
-
 std::string JniString::stdString() {
     return nativeString != nullptr ? std::string(nativeString) : std::string();
 }

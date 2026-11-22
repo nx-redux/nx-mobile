@@ -3,7 +3,6 @@ package com.nxredux.mobile.gpudriver
 import android.content.Context
 import android.net.Uri
 import android.os.Build
-import com.nxredux.mobile.BuildConfig
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.FileRefs
 import java.io.File
@@ -27,7 +26,7 @@ class AndroidGpuDriverStore(
     private val app = context.applicationContext
     private val drivers = AndroidGpuDrivers(AndroidGpuDrivers.root(app.filesDir), Build.VERSION.SDK_INT)
 
-    override fun unavailableReason(): String? = AndroidGpuDrivers.unavailableReason(BuildConfig.GPU_DRIVERS, Build.VERSION.SDK_INT)
+    override fun unavailableReason(): String? = AndroidGpuDrivers.unavailableReason(Build.VERSION.SDK_INT)
 
     override fun installed(): List<GpuDriver> = drivers.installed()
 

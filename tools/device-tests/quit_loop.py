@@ -14,7 +14,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from fold import Fold, FoldError, q  # noqa: E402
+from fold import Fold, FoldError  # noqa: E402
 
 GAME_PROCESS = "com.nxredux.mobile.dev:game"
 

@@ -190,14 +190,14 @@ static const psl_peer* best_server(const psl* s, int64_t now_ms) {
 }
 
 psl_choice psl_step(psl* s, int64_t now_ms) {
-    psl_choice c = {0, 0, 0, 0};
+    psl_choice c = {0, 0, 0};
     if (s->parked) {  /* a session's host or joiner too: a leave ends what it serves or follows */
         s->serving = 0;
         return c;
     }
     if (s->mode == PSL_HOST) {
         c.server_ip = s->self_ip;
-        c.serve = c.settled = c.announce = 1;
+        c.serve = c.settled = 1;
         return c;
     }
     if (s->mode == PSL_JOIN) {
@@ -210,11 +210,10 @@ psl_choice psl_step(psl* s, int64_t now_ms) {
         if (s->serving && !s->grouped && now_ms - s->left_ms >= PSL_LINGER_MS) s->serving = 0;
         if (s->serving) {
             c.server_ip = s->self_ip;
-            c.serve = c.settled = c.announce = 1;
+            c.serve = c.settled = 1;
         }
         return c;
     }
-    c.announce = 1;
     const psl_peer* best = best_server(s, now_ms);
     if (s->serving && best && !s->grouped && outranks(peer_rank(best), self_rank(s))) s->serving = 0;
     if (!s->serving) {

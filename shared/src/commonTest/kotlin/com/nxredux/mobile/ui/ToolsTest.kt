@@ -50,7 +50,7 @@ class ToolsTest {
         assertEquals("Artwork & Metadata | Reset artwork", toolPageTitle(Screen.ArtworkReset(emptyList())))
         assertEquals("Artwork & Metadata | Progress", toolPageTitle(Screen.ArtworkProgress(ScrapeState())))
         assertNull(toolPageTitle(Screen.Artwork(emptyList(), emptyList())))   // a tool's own page keeps its plain name
-        assertNull(toolPageTitle(Screen.RetroAchievements()))
+        assertNull(toolPageTitle(Screen.RetroAchievements))
     }
 
     @Test fun a_split_pane_title_drops_the_tool_the_left_pane_shows() {

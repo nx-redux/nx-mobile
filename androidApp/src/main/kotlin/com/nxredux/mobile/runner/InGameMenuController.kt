@@ -375,7 +375,6 @@ internal class InGameMenuController(
         // The accent and the Secondary accent, as the Settings pages; read on every open, so a change made since launch shows.
         val colors = AndroidAppSettings(activity).let { nxColorsFor(it.accent, it.secondaryAccent) }
         menuContent = { onSecond, windowOverride ->
-            val config = LocalConfiguration.current
             NxTheme(colors = colors) {
                 // No controller: hints show the on-screen pad's own labels (Sega C, PS ○); one attached: the A/B art.
                 // Keyed on the profile's revision: a live Controller Type change redraws them with the menu open.
@@ -653,7 +652,7 @@ internal class InGameMenuController(
                 if (effect.toast) dual.discs?.let { (index, count) -> dual.discToast(index, count) }
                 dual.refreshDualPanel()
                 lifecycleScope.launch(Dispatchers.IO) {
-                    runCatching { view.changeDisk(effect.index) }.onFailure { NxLog.w("GameActivity", "disc change failed", it) }
+                    runCatching { view.changeDisk(effect.index) }.onFailure { NxLog.w(TAG_LOG, "disc change failed", it) }
                 }
             }
             MenuEffect.SaveForConsole -> saveOptions(game = false)
@@ -735,7 +734,7 @@ internal class InGameMenuController(
                     withContext(Dispatchers.IO) {
                         runCatching {
                             if (game) store.saveGame(values, drop) else store.saveConsole(values, drop).also { store.deleteGame() }
-                        }.onFailure { NxLog.w("GameActivity", "saving options failed", it) }.getOrNull()
+                        }.onFailure { NxLog.w(TAG_LOG, "saving options failed", it) }.getOrNull()
                     }
                 }
                 if (written == null) toast("Could not save options") else {
@@ -771,7 +770,7 @@ internal class InGameMenuController(
                             }
                             val (console, game) = store.read()
                             CoreConfig.resolve(descriptorDefaults, console, game, forcedOptions, hiddenValues)
-                        }.onFailure { NxLog.w("GameActivity", "restoring options failed", it) }.getOrNull()
+                        }.onFailure { NxLog.w(TAG_LOG, "restoring options failed", it) }.getOrNull()
                     }
                 }
                 if (next == null) {

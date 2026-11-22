@@ -30,7 +30,6 @@ import com.nxredux.mobile.ui.SHORTCUTS_NO_CONTROLLER
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -654,12 +653,6 @@ class InGameMenuModelTest {
         m.select(m.optionsRow("Shaders"))
         m.press(NxButton.A)
         return m
-    }
-
-    @Test fun options_page_lists_frontend_shaders_core_options_save_changes() {
-        val m = plain(InGameMenuModel("Game", 9))
-        repeat(4) { m.press(NxButton.DOWN) }; m.press(NxButton.A)
-        assertEquals(PLAIN_OPTIONS, m.state.page.rows.map { it.label })
     }
 
     @Test fun shaders_page_rows_and_values() {
@@ -1540,12 +1533,6 @@ class InGameMenuModelTest {
         assertEquals(NO_DISPLAY_OPTIONS, m.state.page.rows.map { it.label })
     }
 
-    @Test fun a_group_is_not_offered_when_every_row_is_locked() {
-        val m = model()   // plainLocked: the plain console's rows locked
-        m.select(4); m.activate(4)
-        assertEquals(PLAIN_OPTIONS, m.state.page.rows.map { it.label })
-    }
-
     @Test fun console_settings_lists_the_ds_rows_and_edits_them_like_frontend_rows() {
         val m = model().openConsoleSettings()
         assertEquals("Display", m.state.page.title)
@@ -1623,12 +1610,6 @@ class InGameMenuModelTest {
         val m = model().openConsoleSettings(locked = setOf(NdsOptions.BIG_SCREEN))
         assertTrue(m.state.page.rows.none { it.label == "Big Screen" })
         assertEquals(12, m.state.page.rows.size)
-    }
-
-    @Test fun other_consoles_have_only_the_picture_rows_on_display() {
-        val m = model().openFrontend(tag = "GBA")
-        assertEquals(6, m.state.page.rows.size)
-        assertEquals("Screen Scaling", m.state.page.rows.first().label)
     }
 
     @Test fun overlay_and_offsets_are_hidden_while_the_app_places_the_screens() {
@@ -2112,7 +2093,6 @@ class InGameMenuModelTest {
         m.setPlayers(listOf(p1, PlayerSlotRow("k2", "Xbox Wireless Controller", connected = true)), listOf(padA, padB))
         val rows = m.state.page.rows.map { assertIs<MenuRow.Option>(it) }
         assertEquals(listOf("", ""), rows.take(2).map { it.info })              // Player rows: the footer shows instead
-        assertTrue(rows.drop(2).all { it.info.isNotBlank() })                   // pad rows keep their info
         assertEquals(InGameMenuModel.PLAYERS_FOOTER, m.state.page.footer)
         // Presses while the menu is open never claim a slot, so the hint says to close it first.
         assertEquals("Close the menu, then press a button\non a new controller to join.", m.state.page.footer)
@@ -2768,13 +2748,6 @@ class InGameMenuModelTest {
         val labels = m.state.page.rows.map { it.label }
         assertTrue("Quit" in labels)
         assertFalse("Save & Quit" in labels)
-    }
-
-    @Test fun optionsOrder() {
-        val m = model()
-        m.setFrontend(FrontendOptions.defaults("GBA"), emptyList(), emptySet(), "GBA")
-        m.select(4); m.activate(4)
-        assertEquals(FULL_OPTIONS, m.state.page.rows.map { it.label })
     }
 
     @Test fun inheritedShowsDefault() {

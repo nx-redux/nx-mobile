@@ -428,8 +428,7 @@ internal class ContextMenuController(
             }
             ContextKind.PIN -> pin(m)
             ContextKind.UNPIN -> unpin(m)
-            ContextKind.HIDE -> setHidden(m, true)
-            ContextKind.UNHIDE -> setHidden(m, false)
+            ContextKind.HIDE -> hide(m)
             ContextKind.REMOVE_RECENT -> removeRecent(m)
             ContextKind.REMOVE_FROM_COLLECTION -> ((_screen.value as? Screen.Games)?.source?.base as? ListSource.Collection)?.let { removeFromCollection(m, it.name) } ?: closeContextMenu()
             ContextKind.RENAME -> setMenu(m.copy(prompt = MenuPrompt.Rename(m.game.game.shownName), promptFocus = -1))
@@ -515,8 +514,8 @@ internal class ContextMenuController(
         host.showNotice(if (on) "Added to Tools" else "Removed from Tools")
     }
 
-    /** Hides or unhides [m]'s game: hidden.txt, then the playable cache, the main menu and the open list are rebuilt. */
-    private fun setHidden(m: ContextMenu, hidden: Boolean) = menuAction(m) { host.applyHidden(m.game, hidden, closeMenu = true) }
+    /** Hides [m]'s game: hidden.txt, then the playable cache, the main menu and the open list are rebuilt. */
+    private fun hide(m: ContextMenu) = menuAction(m) { host.applyHidden(m.game, true, closeMenu = true) }
 
     private fun removeRecent(m: ContextMenu) = menuAction(m) {
         recentsLock.withLock { userData.writeRecents(m.game.game.lines.fold(userData.readRecents()) { r, line -> Recents.remove(r, line) }) }
@@ -589,7 +588,7 @@ internal class ContextMenuController(
             ContextKind.EMULATOR -> { val from = consoleOf(m) ?: return closeContextMenu(); if (value == from.tag) closeContextMenu() else applyTag(m, value) }
             ContextKind.CONSOLE -> CoreRegistry.consoles.firstOrNull { it.id == value }?.let { c -> applyTag(m, c.defaultTagFor(settings.defaultTags[c.id])) }
             ContextKind.ADD_TO_COLLECTION -> if (value.isEmpty()) setMenu(m.copy(sub = null, prompt = MenuPrompt.NewCollection(), promptFocus = -1)) else addToCollection(m, value)
-            ContextKind.PIN, ContextKind.UNPIN, ContextKind.HIDE, ContextKind.UNHIDE, ContextKind.RENAME,
+            ContextKind.PIN, ContextKind.UNPIN, ContextKind.HIDE, ContextKind.RENAME,
             ContextKind.REMOVE_FROM_COLLECTION, ContextKind.REMOVE_RECENT, ContextKind.GAME_SETTINGS, ContextKind.FETCH_ART, ContextKind.CHANGE_ART,
             ContextKind.PIN_TOOL, ContextKind.UNPIN_TOOL, ContextKind.ADD_TO_TOOLS, ContextKind.REMOVE_FROM_TOOLS,
             ContextKind.RENAME_COLLECTION, ContextKind.DELETE_COLLECTION, ContextKind.NETPLAY, ContextKind.PLAY_FROM_START, ContextKind.RESUME,

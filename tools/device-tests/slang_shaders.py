@@ -74,7 +74,7 @@ def run_case(args, tag, core, folder, game, presets, out_dir):
     rom = "%s/Roms/%s/%s" % (args.home, folder, game)
     a = SimpleNamespace(serial=args.serial, verbose=False, home=args.home, tag=tag, core=core, rom=rom, work=True,
                         state=None, slot=0, opt=[], ab=None, ab_prop=None, warmup=args.warmup, seconds=args.seconds,
-                        content_fps=60.0, runs=1)
+                        content_fps=60.0, runs=1, open_first=0)
     p = Pacing(a)
     if not p.sh("ls %s 2>/dev/null" % q(rom)).strip():
         print("%-4s skipped: %s is not on the device" % (tag, rom), flush=True)

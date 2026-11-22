@@ -63,7 +63,6 @@ import com.nxredux.mobile.launcher.TopScreenHost
 import com.nxredux.mobile.launcher.TopScreenTaken
 import com.nxredux.mobile.launcher.currentDisplayId
 import com.nxredux.mobile.launcher.hideTaskFromRecents
-import com.nxredux.mobile.launcher.ownAppTask
 import com.nxredux.mobile.launcher.topScreenDisplay
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.netplay.AndroidNetplay

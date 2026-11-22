@@ -161,16 +161,6 @@ internal fun backdropContentScale(g: RowGeometry, slot: BackdropSlot, portrait: 
     return min(1f, g.itemW / spec)
 }
 
-/** What one Backdrop item draws: a game's box art ([BoxArt]) or a tile ([SlotTile]). */
-internal sealed interface BackdropItem {
-    data class Box(val game: BackdropGame) : BackdropItem
-    data class Tile(val tile: GridTile) : BackdropItem
-}
-
-/** Item [i] of a Backdrop row: its game from a games row ([games]), else its tile from the plain row of [tiles]; null past it. */
-internal fun backdropItem(games: List<BackdropGame>?, tiles: List<GridTile>, i: Int): BackdropItem? =
-    if (games != null) games.getOrNull(i)?.let(BackdropItem::Box) else tiles.getOrNull(i)?.let(BackdropItem::Tile)
-
 /** A tool's name lines in a slot: one in the wide logo slot, two in the tool (and collection) slot. */
 internal fun backdropToolNameLines(slot: BackdropSlot): Int = if (slot == BackdropSlot.LOGO) 1 else 2
 

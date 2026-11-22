@@ -22,7 +22,7 @@ class HomeWideBoardTest {
     // page's left (38), 8 dp apart. The top section 225 + 14 + 110 = 349, the page 28 + 349 + 8 = 385.
     @Test fun twoGamesStackInOneDoubleWideColumn() {
         val b = homeBoard(flip, 1, tools = 6, games = 2)
-        assertEquals(HomeToolMode.WIDE, b.mode); assertTrue(b.wide); assertEquals(8, b.slots)
+        assertEquals(HomeToolMode.WIDE, b.mode); assertEquals(8, b.slots)
         assertEquals(2, b.inlineGames); assertEquals(0, b.rowGames)
         near(28f, b.topY, "topY"); near(349f, b.topH, "topH"); near(84f, b.toolW, "toolW"); near(110f, b.toolH, "toolH")
         assertEquals(listOf(HomeTopKind.CONTINUE, HomeTopKind.GAME, HomeTopKind.GAME) + List(6) { HomeTopKind.TOOL }, b.top.map { it.kind })

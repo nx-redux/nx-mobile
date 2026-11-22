@@ -23,7 +23,7 @@ class N3dsHotkeysTest {
 
     // ---- under a pad skin: the touch screen is under the finger and the skin places the screens
 
-    @Test fun under_a_skin_select_l_does_nothing() {
+    @Test fun under_a_skin_select_r_does_nothing() {
         val h = N3dsHotkeys().apply { skinShown = true }
         h.down(NxButton.SELECT)
         assertEquals(keep, h.down(NxButton.R1))                                 // kept from the core, no Stylus action
@@ -54,7 +54,7 @@ class N3dsHotkeysTest {
         assertEquals(emptyList(), h.takeKeys())
     }
 
-    @Test fun under_a_skin_select_r_still_swaps() {
+    @Test fun under_a_skin_select_l_still_swaps() {
         val h = N3dsHotkeys().apply { skinShown = true }
         h.down(NxButton.SELECT)
         assertEquals(keep, h.down(NxButton.L1))
@@ -226,7 +226,7 @@ class N3dsHotkeysTest {
 
     // ---- the chords
 
-    @Test fun select_r_goes_to_the_core_as_l3_the_swap_screens_button() {
+    @Test fun select_l_goes_to_the_core_as_l3_the_swap_screens_button() {
         val h = N3dsHotkeys()
         h.down(NxButton.SELECT)
         assertEquals(keep, h.down(NxButton.L1))
@@ -249,7 +249,7 @@ class N3dsHotkeysTest {
         assertEquals(forward, s.down(NxButton.R2))
     }
 
-    @Test fun select_r_is_l3_in_stylus_mode_too() {
+    @Test fun select_l_is_l3_in_stylus_mode_too() {
         val h = stylusOn()
         h.down(NxButton.SELECT)
         h.down(NxButton.L1)
@@ -257,7 +257,7 @@ class N3dsHotkeysTest {
         assertEquals(listOf(press(N3dsKey.L3), release(N3dsKey.L3)), h.takeKeys())
     }
 
-    @Test fun select_l_toggles_the_stylus_and_l_never_reaches_the_core() {
+    @Test fun select_r_toggles_the_stylus_and_r_never_reaches_the_core() {
         val h = N3dsHotkeys()
         assertFalse(h.stylus)                                                   // off at every launch
         h.down(NxButton.SELECT)
@@ -404,7 +404,7 @@ class N3dsHotkeysTest {
         assertEquals(0, h.joystickDirection(0.3f))
     }
 
-    @Test fun the_stylus_pill_toggles_like_select_l1() {
+    @Test fun the_stylus_pill_toggles_like_select_r1() {
         val h = N3dsHotkeys()
         assertEquals(N3dsAction.Stylus(true), h.toggleStylus())
         assertTrue(h.stylus)

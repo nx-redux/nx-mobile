@@ -72,7 +72,6 @@ android {
         versionCode = nxVersionCode
         versionName = nxVersionName
         ndk { abiFilters += listOf("arm64-v8a") }
-        buildConfigField("boolean", "GPU_DRIVERS", "true")
         buildConfigField("String", "GIT_COMMIT", buildConfigString(gitCommit))
         buildConfigField("String", "COMMIT_DATE", buildConfigString(gitCommitDate))
         for ((name, value) in listOf(

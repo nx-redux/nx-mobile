@@ -8,8 +8,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class N3ds3dResolutionTest {
-    private fun region(screen: NdsScreen, width: Float, inset: Boolean = false) = NdsRegion(
-        screen, NdsLayout.TOP_SRC, PxRect(0f, 0f, width, width * 0.6f), shaded = true, touch = false, inset = inset,
+    private fun region(screen: NdsScreen, width: Float) = NdsRegion(
+        screen, NdsLayout.TOP_SRC, PxRect(0f, 0f, width, width * 0.6f), shaded = true, touch = false, inset = false,
     )
 
     @Test

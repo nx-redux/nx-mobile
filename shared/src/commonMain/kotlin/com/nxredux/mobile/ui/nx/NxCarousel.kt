@@ -97,7 +97,7 @@ fun NxCarousel(
         // A game list's selected title follows Appearance → Text size (the room below follows it too).
         val nameSize = if (gameList) nxCardTitleSize() else CAROUSEL_TITLE_SP
         val nameStyle = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = nameSize, textAlign = TextAlign.Center)
-        // A game list's details at 80% of its name, as the vertical stack's lines ([NxCarouselStack]'s infoShare).
+        // A game list's details at 80% of its name, as the vertical stack's lines ([StackCaption]).
         val infoStyle = TextStyle(fontFamily = font, fontSize = if (gameList) nameSize * STACK_INFO_SHARE else 14.sp, textAlign = TextAlign.Center)
         val room = rememberCaptionRoom(CAPTION_GAP, nameStyle, infoStyle, infoRows = if (gameList) 0 else CAROUSEL_INFO_ROWS).takeIf { cardInfo == null } ?: 0f
         // One size in both orientations, shrunk only so the tile and the caption room fit the body's height (the shown

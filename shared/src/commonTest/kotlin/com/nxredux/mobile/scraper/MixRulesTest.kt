@@ -399,7 +399,6 @@ class MixRulesTest {
         val gate = CompletableDeferred<Unit>()
         var entered = false
         override fun knows(ref: LibraryGameRef) = true
-        override suspend fun startJob() {}
         override suspend fun find(ref: LibraryGameRef, wanted: Set<ArtSlot>): List<ArtHit> {
             entered = true
             withContext(NonCancellable) { gate.await() }

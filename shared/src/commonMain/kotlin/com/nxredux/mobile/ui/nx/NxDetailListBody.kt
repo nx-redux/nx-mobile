@@ -15,14 +15,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Constraints
@@ -32,15 +29,13 @@ import com.nxredux.mobile.ui.LocalSettingsBlock
 /**
  * A tool page in the nx-redux shape: grey title, a details block (headline + dim lines), the rows, the hint bar.
  * [headline] false draws every detail line as a caption (dim, one step below the dim lines): a short explanation, not a
- * status. [headlineStartEllipsis]: the headline is a path, kept to one line by cutting its start ("…/Games/NXRedux"),
- * so the folder itself stays readable.
+ * status.
  */
 @Composable
 fun NxDetailListBody(
     title: String, details: List<String>, rows: List<NxRow>, selectedIndex: Int, hints: List<Hint>,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, modifier: Modifier = Modifier, onHint: ((NxButton) -> Unit)? = null,
     headline: Boolean = true,
-    headlineStartEllipsis: Boolean = false,
     rowKind: NxRowKind = NxRowKind.PILL,   // OPTIONS: NX Redux's options rows at 0.75 of the pitch
     rowText: ((TextUnit) -> TextUnit)? = null,   // pill rows: the row label's size from the list label (a row's secondary follows one step below); same pitch
     rowsAtTop: Boolean = false,   // a page without details: rows directly under the title instead of centred in the space
@@ -49,10 +44,8 @@ fun NxDetailListBody(
     actionRows: Int = 0,   // options rows: the last this many are pill rows at the list pitch under the options, half a row apart (Continue)
     actionsAtTop: Boolean = false,   // the action rows at the title's right instead ([NxTitleActions]): a landscape setup page
     titleActions: Int = 0,   // the last this many rows at the title's right, the action rows (if any) the ones before them; not with actionsAtTop
-    actionsOutlined: Boolean = true,   // the action rows under the options with the button ring
     actionsSideBySide: Boolean = false,   // pill rows: the bottom-pinned actions side by side as setup's buttons ([SetupButtons]): the first on the accent, the rest outlined, the pad's place a ring (the folder picker)
     landscapeColumns: IntRange? = null,   // these detail lines in columns on a landscape body (a long console list)
-    landscapeColumnCount: Int = 2,
     landscapeWidth: Float = 1f,   // a landscape body's details and rows at most this share of its width (setup: long lines wrap)
     landscapeSplit: Boolean = false,   // pill rows on a landscape body: details and pinned rows at the left, the rest a full-height list at the right
     quietRows: Boolean = false,   // pill rows: the unlit rows in inkName and the bottom-pinned actions in inkDim, the selected row on a grey pill (the accent the actions' alone): the folder picker
@@ -156,7 +149,7 @@ fun NxDetailListBody(
                 if (rowKind == NxRowKind.OPTIONS) {
                     NxOptionsList(
                         options, selectedIndex.takeIf { it < options.size } ?: -1, onSelect, onOpen, rowHeight = rowHeight, listText = label,
-                        modifier = Modifier.fillMaxWidth().height(optionsHeight), listState = listState, scrollFade = true,
+                        modifier = Modifier.fillMaxWidth().height(optionsHeight), listState = listState,
                     )
                 } else {
                     NxList(
@@ -177,7 +170,7 @@ fun NxDetailListBody(
                         SetupButtons(tail.map { it.label }, tailStart, listSelected, label, onSelect, onOpen)
                     } else NxList(
                         tail, tailLit, { onSelect(it + tailStart) }, { onOpen(it + tailStart) },
-                        Modifier.fillMaxWidth().height(tailHeight), rowHeightOverride = listPitch, textSizeOverride = label, outlined = actionsOutlined,
+                        Modifier.fillMaxWidth().height(tailHeight), rowHeightOverride = listPitch, textSizeOverride = label, outlined = true,
                         restInk = if (quietRows) colors.inkDim else null,
                     )
                 }
@@ -192,7 +185,7 @@ fun NxDetailListBody(
                 val titleView: @Composable () -> Unit = { NxPageTitle(title, bottom = if (headline) 8.dp else 0.dp, trailing = trailing) }   // a caption sits right under the title
                 val lined = fromLine != null && !split && landscapeColumns == null
                 if (!lined) titleView()
-                // A landscape body lays [landscapeColumns] out in [landscapeColumnCount] columns, filled down then across.
+                // A landscape body lays [landscapeColumns] out in two columns, filled down then across.
                 // Only when the lines in one column would leave the rows too little room (measured below).
                 val columnable = landscapeColumns?.takeIf { landscape && it.first > 0 && it.last < details.size && it.count() > 1 }
                 val dimLine: @Composable (String, Modifier) -> Unit = { line, m ->
@@ -205,7 +198,7 @@ fun NxDetailListBody(
                             if (columned != null && i in columned) {
                                 if (i == columned.first) {
                                     val lines = details.subList(columned.first, columned.last + 1)
-                                    val count = landscapeColumnCount.coerceAtLeast(1)
+                                    val count = 2
                                     val down = (lines.size + count - 1) / count
                                     Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                         (0 until count).map { c -> lines.drop(c * down).take(down) }.forEach { col ->
@@ -217,17 +210,7 @@ fun NxDetailListBody(
                                 }
                                 return@forEachIndexed
                             }
-                            if (i == 0 && headline && headlineStartEllipsis) {
-                                BoxWithConstraints(Modifier.fillMaxWidth()) {
-                                    val style = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = headlineSize)
-                                    val measurer = rememberTextMeasurer()
-                                    val width = constraints.maxWidth
-                                    val shown = remember(line, style, width) {
-                                        startEllipsized(line) { measurer.measure(it, style, maxLines = 1, softWrap = false).size.width <= width }
-                                    }
-                                    Text(shown, color = colors.listText, style = style, maxLines = 1, softWrap = false)
-                                }
-                            } else if (i == 0 && headline) {
+                            if (i == 0 && headline) {
                                 Text(line, color = colors.listText, fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = headlineSize)
                             } else {
                                 if (i > 0) Spacer(Modifier.height(2.dp))
@@ -300,25 +283,6 @@ fun NxDetailListBody(
             NxHintBar(hints, onHint = onHint)
         }
     }
-}
-
-/**
- * [text] cut from the start until [fits] takes it: whole leading folders first ("…/Games/NXRedux"), then characters
- * when even the last one is too long ("…Redux"). Unchanged when it already fits.
- */
-internal fun startEllipsized(text: String, fits: (String) -> Boolean): String {
-    if (fits(text)) return text
-    var slash = text.indexOf('/', 1)
-    while (slash > 0) {
-        val candidate = "…" + text.substring(slash)
-        if (fits(candidate)) return candidate
-        slash = text.indexOf('/', slash + 1)
-    }
-    for (k in 1 until text.length) {
-        val candidate = "…" + text.substring(k)
-        if (fits(candidate)) return candidate
-    }
-    return "…"
 }
 
 /** A detail page's gap between its last detail line and its list. */

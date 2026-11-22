@@ -1,6 +1,5 @@
 package com.nxredux.mobile.runner
 
-import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.options.ConsoleSettings
 import com.nxredux.mobile.options.CoreConfig
 import com.nxredux.mobile.options.FrontendOptions

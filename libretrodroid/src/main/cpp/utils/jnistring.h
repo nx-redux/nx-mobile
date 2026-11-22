@@ -27,7 +27,6 @@ public:
     JniString(JNIEnv *env, jstring javaString);
     ~JniString();
 
-    const char* cString();
     std::string stdString();
 
     JniString(const JniString& other) = delete;

@@ -91,14 +91,11 @@ class EmulatorSettingsControllerTest {
     }
 
     @Test fun the_section_headers_are_grey_labels_not_rows() {
-        assertEquals(NxRow("Console settings", section = true), emulatorNxRow(EmulatorRow.Header("Console settings")))
         assertFalse(EmulatorRow.Header("Emulator").selectable)
-        assertFalse(emulatorNxRow(EmulatorRow.Core(optA, inCategory = false)).section)
     }
 
     @Test fun the_gap_draws_as_half_a_row_of_space() {
-        assertEquals(NxRow("", spacer = true), emulatorNxRow(EmulatorRow.Gap))
-        val rows = EmulatorRows.build(page(), null).map(::emulatorNxRow)
+        val rows = EmulatorRows.build(page(), null).map { NxRow("", spacer = it == EmulatorRow.Gap) }
         assertEquals(20.dp * 6 + 10.dp * 2, nxOptionsListHeight(rows, 20.dp))   // 6 rows and two gaps (the last before Reset to defaults)
     }
 
@@ -205,10 +202,6 @@ class EmulatorSettingsControllerTest {
             listOf(EmulatorListRow("mgba", "mGBA", listOf("MGBA", "SGB"))),
             EmulatorSettingsController.listRows(listOf(system("SGB")), always = listOf("MGBA")),
         )
-        assertEquals(listOf("gpSP"), EmulatorSettingsController.listRows(listOf(system("GBA"))).map { it.emulator })
-    }
-
-    @Test fun list_label_is_the_descriptor_name_without_a_table() {
         assertEquals(listOf("gpSP"), EmulatorSettingsController.listRows(listOf(system("GBA"))).map { it.emulator })
     }
 

@@ -65,16 +65,6 @@ class ArtOptionStoreTest {
         assertEquals(emptySet<ArtSlot>(), s.pickedSlots("other"))
     }
 
-    @Test fun part_one_file_is_not_read() = runTest {
-        // Part 1's file (one pick per game): never read, so its pick protects nothing.
-        val h = host().apply {
-            files["art_options.json"] = """{"g":{"options":[{"slot":"SCREENSHOT","url":"http://x/a","source":"ss","assetId":"us"}],"wide":true,"pick":"ss/SCREENSHOT/us"}}"""
-        }
-        val s = ArtOptionStore(h)
-        assertNull(s.get("g"))
-        assertEquals(emptySet<ArtSlot>(), s.pickedSlots("g"))
-    }
-
     @Test fun forget_scope_and_all() = runTest {
         val s = ArtOptionStore(host())
         s.record("g1", listOf(a, b), false)

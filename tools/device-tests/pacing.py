@@ -157,7 +157,7 @@ class Pacing:
             self.sh("setprop %s %s" % prop)
         self.sh("am force-stop com.nxredux.mobile.dev; input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; "
                 "settings put global stay_on_while_plugged_in 3")
-        if getattr(self.a, "open_first", 0):
+        if self.a.open_first:
             # Android 11 holds a broadcast to a force-stopped app: open it so the GAME hook is heard.
             self.sh("input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; "
                     "am start -n com.nxredux.mobile.dev/com.nxredux.mobile.LaunchActivity")
@@ -196,8 +196,8 @@ class Pacing:
             key, values = self.a.ab.split("=", 1)
             variants = [("%s=%s" % (key, v), None) for v in values.split(",")]
         elif self.a.ab_prop:
-            name, values = self.a.ab_prop.split("=", 1)
-            variants = [(None, (name, v)) for v in values.split(",")]
+            name, values = self.props()[0]
+            variants = [(None, (name, v)) for v in values]
         for n in range(1, self.a.runs + 1):
             for option, prop in variants:   # alternated, so warming affects every variant alike
                 label = option or ("%s=%s" % prop if prop else "run")

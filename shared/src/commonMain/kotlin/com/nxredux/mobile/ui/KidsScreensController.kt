@@ -595,7 +595,6 @@ internal class KidsScreensController(
         if (!kidsParentOnly()) return
         val k = kids ?: return
         val skip = when (step) {
-            KidsSetupStep.PIN -> return kidsAskNewPin(null)
             KidsSetupStep.USAGE -> k.hasUsageAccess()
             KidsSetupStep.ALARMS -> k.canExactAlarms()
             KidsSetupStep.HOME -> !kidsNeedsHome()

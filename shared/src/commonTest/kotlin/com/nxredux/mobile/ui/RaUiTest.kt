@@ -56,7 +56,7 @@ class RaUiTest {
         assertEquals(listOf(NxTone.SUCCESS, NxTone.WARNING, NxTone.DIM), listOf(RaTone.UNLOCKED, RaTone.PENDING, RaTone.LOCKED).map { it.toNxTone() })
         val c = NxColors()
         assertEquals(listOf(c.hint, c.success, c.warning), NxTone.entries.map { c.toneColor(it, selected = false) })
-        assertEquals(listOf(c.secondarySelected, c.successSelected, c.warningSelected), NxTone.entries.map { c.toneColor(it, selected = true) })
+        assertEquals(listOf(c.onAccentMuted, c.successOnAccent, c.warningOnAccent), NxTone.entries.map { c.toneColor(it, selected = true) })
     }
     @Test fun rarity_has_exactly_two_decimals() {
         assertEquals("12.50", raRarityPercent(12.5f)); assertEquals("3.14", raRarityPercent(3.14159f)); assertEquals("0.00", raRarityPercent(0f))

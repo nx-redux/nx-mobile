@@ -7,7 +7,6 @@ import com.nxredux.mobile.ui.nx.nxModalText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,7 +21,6 @@ import com.nxredux.mobile.ui.nx.NxModalControlHeight
 import com.nxredux.mobile.ui.nx.NxPadRingRoom
 import com.nxredux.mobile.ui.nx.nxPadRing
 import com.nxredux.mobile.ui.nx.nxPadRings
-import com.nxredux.mobile.ui.nx.nxHighlight
 import com.nxredux.mobile.ui.nx.nxModalButton
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -44,8 +42,6 @@ import com.nxredux.mobile.ui.nx.NxDialog
 import com.nxredux.mobile.ui.nx.NxList
 import com.nxredux.mobile.ui.nx.NxModal
 import com.nxredux.mobile.ui.nx.NxRow
-import com.nxredux.mobile.ui.nx.NxTextSizes
-import com.nxredux.mobile.ui.nx.nxOptionsValueText
 
 private val SheetRowHeight = 28.dp
 

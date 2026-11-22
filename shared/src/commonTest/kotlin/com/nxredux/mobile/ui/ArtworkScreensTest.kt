@@ -42,7 +42,6 @@ import com.nxredux.mobile.ui.nx.HintTouch
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
-import com.nxredux.mobile.ui.nx.nxTap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -372,16 +371,15 @@ class ArtworkScreensTest {
         return n
     }
 
-    /** A page host with one Game Boy game; [inputs] stands in for the index, hidden set and Android console. */
+    /** A page host with one Game Boy game. */
     private class OneGameHost : ArtworkScreenHost {
-        var inputs: List<Any?> = listOf(Any())
         var games = listOf(
             com.nxredux.mobile.scraper.LibraryGameRef("/gb/Tetris.gb", "GB", "Tetris", "Tetris.gb", ContentRef("t"), "", "", folderGame = false, have = com.nxredux.mobile.scraper.ArtHave()),
         )
         override fun showNotice(text: String) {}
         override fun showTools() {}
         override fun games(): List<com.nxredux.mobile.scraper.LibraryGameRef> = games
-        override fun gamesInputs(): List<Any?> = inputs
+        override fun gamesInputs(): List<Any?> = listOf(Unit)
         override fun consoles(): List<Pair<String, Set<String>>> = emptyList()
     }
 

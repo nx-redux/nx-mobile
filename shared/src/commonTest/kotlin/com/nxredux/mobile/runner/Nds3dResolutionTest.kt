@@ -130,9 +130,9 @@ class Nds3dResolutionTest {
 
     @Test
     fun valueForUnsetRowsUsesTheRowDefaults() {
-        assertEquals(Nds3dResolution.DEFAULT_CAP, Nds3dResolution.valueFor(emptyMap(), current = 6, displayMax = 7))
+        assertEquals(Res3dConsole.DS.defaultCap, Nds3dResolution.valueFor(emptyMap(), current = 6, displayMax = 7))
         assertEquals(2, Nds3dResolution.valueFor(mapOf(NdsOptions.MODE_3D to "performance"), current = 6, displayMax = 7))
-        assertEquals(Nds3dResolution.DEFAULT_CAP, Nds3dResolution.valueFor(mapOf(NdsOptions.MAX_SCALE_3D to "junk"), current = 6, displayMax = 7))
+        assertEquals(Res3dConsole.DS.defaultCap, Nds3dResolution.valueFor(mapOf(NdsOptions.MAX_SCALE_3D to "junk"), current = 6, displayMax = 7))
     }
 
     @Test

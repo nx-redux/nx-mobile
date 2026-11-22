@@ -25,9 +25,7 @@ const val LEGACY_BOX2D_FOLDER = "box2d"
  * an extra download beside the 3D box, [wheel] the game's logo, [mix] the handheld's mix picture (ScreenScraper's, else the
  * device-made one of the screenshot, box and wheel). With [mix] on a game has art only with its mix ([ArtHave.complete]).
  */
-data class ArtExtras(val box2d: Boolean = false, val wheel: Boolean = false, val mix: Boolean = false) {
-    val wantWheel: Boolean get() = wheel
-}
+data class ArtExtras(val box2d: Boolean = false, val wheel: Boolean = false, val mix: Boolean = false)
 
 /** How the app writes a fitted image; [ext] is the file extension. */
 enum class ArtEncoding(val ext: String) { PNG("png"), JPEG("jpg") }
@@ -47,11 +45,10 @@ fun imageTypeOf(bytes: ByteArray): ImageType {
 }
 
 /**
- * Fit within [maxW] x [maxH], never upscaled; [force] = always this encoding. Otherwise, with [photo] (scans are
- * photographic) PNG only for a PNG source or one with alpha, else JPEG; without it, as the source (PNG unless the source
+ * Fit within [maxW] x [maxH], never upscaled; [force] = always this encoding, else as the source (PNG unless the source
  * is JPEG without alpha). [jpegQuality] for a JPEG encode.
  */
-data class ArtCap(val maxW: Int, val maxH: Int, val force: ArtEncoding? = null, val jpegQuality: Int = 90, val photo: Boolean = false)
+data class ArtCap(val maxW: Int, val maxH: Int, val force: ArtEncoding? = null, val jpegQuality: Int = 90)
 
 /**
  * The per-slot caps. Pixel size never filters or ranks a pick; it only bounds what is written. The 2D box and the wheel
@@ -82,15 +79,9 @@ object ArtFit {
         }
     }
 
-    /**
-     * The cap's forced encoding; else for a [ArtCap.photo] cap PNG for a PNG source or alpha, JPEG otherwise; else JPEG
-     * for a JPEG source without alpha, PNG otherwise.
-     */
-    fun encoding(type: ImageType, hasAlpha: Boolean, cap: ArtCap): ArtEncoding = cap.force ?: when {
-        cap.photo -> if (type == ImageType.PNG || hasAlpha) ArtEncoding.PNG else ArtEncoding.JPEG
-        type == ImageType.JPEG && !hasAlpha -> ArtEncoding.JPEG
-        else -> ArtEncoding.PNG
-    }
+    /** The cap's forced encoding; else JPEG for a JPEG source without alpha, PNG otherwise. */
+    fun encoding(type: ImageType, hasAlpha: Boolean, cap: ArtCap): ArtEncoding =
+        cap.force ?: if (type == ImageType.JPEG && !hasAlpha) ArtEncoding.JPEG else ArtEncoding.PNG
 
     /** True when the download can be written as-is: within the cap and already in the target encoding. */
     fun passThrough(type: ImageType, w: Int, h: Int, hasAlpha: Boolean, cap: ArtCap): Boolean {

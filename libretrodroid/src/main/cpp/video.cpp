@@ -34,7 +34,6 @@
 #include "renderers/es3/ahbrenderer.h"
 #include <unistd.h>
 #include "renderers/es3/imagerendereres3.h"
-#include "renderers/es2/imagerendereres2.h"
 
 namespace libretrodroid {
 
@@ -177,13 +176,8 @@ Video::ShaderChainEntry Video::createShaderChainEntry(const ShaderManager::Pass&
 }
 
 void Video::setPresetChain(std::optional<PresetChain> chain) {
-    if (!presetSupported) {
-        if (chain) LOGW("Preset chains need OpenGL ES 3");
-        return;
-    }
     requestedPreset = std::move(chain);
     presetDirty = true;
-    isDirty = true;
 }
 
 void Video::setPresetParameter(const std::string& id, float value) {
@@ -191,7 +185,6 @@ void Video::setPresetParameter(const std::string& id, float value) {
     if (requestedPreset) requestedPreset->params[id] = value;
     if (presetRenderer) presetRenderer->setParameter(id, value);
     if (secondaryPresetRenderer) secondaryPresetRenderer->setParameter(id, value);
-    isDirty = true;
 }
 
 std::optional<std::string> Video::takePresetError() {
@@ -296,7 +289,7 @@ private:
 };
 
 unsigned Video::sampledTextureUnits() const {
-    // The built-in shaders and immersive mode sample units 0 and 1.
+    // The built-in chain samples units 0 and 1.
     unsigned units = 2;
     // The chain is (re)built inside this draw, after the guard; it will sample what chainTextureUnits counts. A held
     // picture keeps it pending and the current chains alive (the second surface still draws with them), so both count.
@@ -307,15 +300,12 @@ unsigned Video::sampledTextureUnits() const {
     return units;
 }
 
-void Video::renderFrame(bool force) {
+void Video::renderFrame() {
     CoreGlStateGuard guard(hasCoreGlState(), sampledTextureUnits());
-    drawFrame(force);
+    drawFrame();
 }
 
-void Video::drawFrame(bool force) {
-    if (skipDuplicateFrames && !isDirty && !force) return;
-    isDirty = false;
-
+void Video::drawFrame() {
     glDisable(GL_DEPTH_TEST);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -327,18 +317,6 @@ void Video::drawFrame(bool force) {
 
     // Not placed yet: black, as the surface was, rather than the picture somewhere it is about to leave.
     if (pictureHeld) return;
-
-    // Immersive mode's blurred background samples the whole texture, not the frame's sub-rectangle (frameCoordinates).
-    if (immersiveModeEnabled) {
-        immersiveMode.renderBackground(
-            videoLayout.getScreenWidth(),
-            videoLayout.getScreenHeight(),
-            videoLayout.getBackgroundVertices(),
-            videoLayout.getRelativeForegroundBounds(),
-            videoLayout.getFramebufferVertices().data(),
-            frameTexture()
-        );
-    }
 
     updateProgram();
     updatePresetRenderer();
@@ -711,11 +689,9 @@ void Video::drawPlain(const RegionQuad& quad, unsigned screenWidth, unsigned scr
 
 void Video::updateScreenRegions(std::vector<ScreenRegion> regions) {
     videoLayout.updateScreenRegions(std::move(regions));
-    isDirty = true;
 }
 
 void Video::updateSecondaryRegions(std::vector<ScreenRegion> regions) {
-    // Not isDirty: the main output is unchanged; the second surface is redrawn every frame anyway.
     secondaryLayout.updateScreenRegions(std::move(regions));
 }
 
@@ -767,7 +743,6 @@ void Video::setComposition(int width, int height, std::vector<ScreenRegion> part
         videoLayout.updateContentSize(coreContentWidth, coreContentHeight);
         if (coreAspectRatio > 0.0F) videoLayout.updateAspectRatio(coreAspectRatio);
     }
-    isDirty = true;
 }
 
 std::pair<float, float> Video::mapCompositionPoint(float x, float y) const {
@@ -854,7 +829,7 @@ void Video::composeFrame() {
 }
 
 void Video::renderPausedFrame() {
-    renderFrame(true);
+    renderFrame();
 }
 
 float Video::pictureDensity(const std::array<float, 12>& vertices, const std::array<float, 12>& coordinates,
@@ -918,7 +893,6 @@ std::array<float, 12> Video::frameCoordinates(const std::array<float, 12>& coord
 void Video::onNewFrame(const void *data, unsigned width, unsigned height, size_t pitch) {
     if (data != nullptr) {
         renderer->onNewFrame(data, width, height, pitch);
-        isDirty = true;
     }
 }
 
@@ -943,10 +917,6 @@ void Video::updateViewportSize(Rect viewportRect) {
     videoLayout.updateViewportSize(viewportRect);
 }
 
-void Video::updateViewportAlignment(unsigned int viewportAlignment) {
-    videoLayout.updateViewportAlignment(viewportAlignment);
-}
-
 void Video::updateRendererSize(unsigned int width, unsigned int height) {
     LOGD("Updating renderer size: %d x %d", width, height);
     renderer->updateRenderedResolution(width, height);
@@ -962,7 +932,6 @@ void Video::updateScaleMode(unsigned int scaleMode) {
 void Video::setPictureHeld(bool held) {
     if (pictureHeld == held) return;
     pictureHeld = held;
-    isDirty = true;   // released while paused or with duplicate frames skipped: draw the picture now
 }
 
 void Video::updateScreenOffset(float x, float y) {
@@ -985,18 +954,11 @@ Video::Video(
     ShaderManager::Config shaderConfig,
     bool bottomLeftOrigin,
     float rotation,
-    bool skipDuplicateFrames,
-    bool immersiveModeEnabled,
-    Rect viewportRect,
-    ImmersiveMode::Config immersiveModeConfig,
-    unsigned int viewportAlignment
+    Rect viewportRect
 ) :
     requestedShaderConfig(std::move(shaderConfig)),
-    skipDuplicateFrames(skipDuplicateFrames),
-    immersiveModeEnabled(immersiveModeEnabled),
-    immersiveMode(immersiveModeConfig),
-    videoLayout(bottomLeftOrigin, rotation, viewportRect, viewportAlignment),
-    secondaryLayout(bottomLeftOrigin, rotation, Rect(0.0F, 0.0F, 1.0F, 1.0F), V_ALIGN_CENTER) {
+    videoLayout(bottomLeftOrigin, rotation, viewportRect),
+    secondaryLayout(bottomLeftOrigin, rotation, Rect(0.0F, 0.0F, 1.0F, 1.0F)) {
 
     glContext = eglGetCurrentContext();
 
@@ -1020,7 +982,6 @@ Video::~Video() {
         for (const auto& entry : shadersChain) glDeleteProgram(entry.gProgram);
         if (plainShader) glDeleteProgram(plainShader->gProgram);
         if (plainSharpShader) glDeleteProgram(plainSharpShader->gProgram);
-        immersiveMode.releaseGlObjects();
         if (renderer) renderer->releaseGlObjects();
         releaseComposition();
         releaseCrops();
@@ -1053,15 +1014,8 @@ void Video::initializeRenderer(RenderingOptions renderingOptions) {
             std::move(shaders)
         );
     } else {
-        if (renderingOptions.openglESVersion >= 3) {
-            renderer = std::make_unique<ImageRendererES3>();
-        } else {
-            renderer = std::make_unique<ImageRendererES2>();
-        }
+        renderer = std::make_unique<ImageRendererES3>();
     }
-
-    // Preset chains render through ES3 framebuffers.
-    presetSupported = renderingOptions.openglESVersion >= 3;
 
     renderer->setPixelFormat(renderingOptions.pixelFormat);
     updateProgram();

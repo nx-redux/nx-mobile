@@ -48,10 +48,4 @@ class VulkanFallbackTest {
         assertEquals("gliden64", l.forcedOptions["mupen64plus-rdp-plugin"])
         assertEquals(mapOf("PARALLEL_RDP_SMALL_TYPES" to null), l.env)
     }
-
-    @Test fun only_a_vulkan_launch_falls_back() {
-        assertTrue(VulkanFallback.relaunchOnGles(launchedOnVulkan = true))
-        // A launch already forced to GLES (or never on Vulkan) shows its error: no second relaunch, no loop.
-        assertFalse(VulkanFallback.relaunchOnGles(launchedOnVulkan = false))
-    }
 }

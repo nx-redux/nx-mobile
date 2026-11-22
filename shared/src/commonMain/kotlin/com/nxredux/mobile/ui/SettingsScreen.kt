@@ -12,7 +12,6 @@ import com.nxredux.mobile.settings.AccentPreset
 import com.nxredux.mobile.ui.nx.LocalNxHintBarHidden
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -37,9 +36,7 @@ import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.NxSettingsList
 import com.nxredux.mobile.ui.nx.NxSettingsPage
-import com.nxredux.mobile.ui.nx.control
 import com.nxredux.mobile.ui.nx.hasMoreInfo
-import com.nxredux.mobile.ui.nx.nxDialogBody
 import com.nxredux.mobile.ui.nx.LocalNxFontWeights
 import com.nxredux.mobile.ui.nx.nxListInset
 import com.nxredux.mobile.ui.nx.nxListLabel
@@ -52,15 +49,13 @@ import com.nxredux.mobile.ui.nx.nxOptionsLabelSize
  * plain rows under their name. A page of only navigation rows uses list rows, one with a value row NX Redux's options rows
  * ([listRowKind]). A page with a value row ([settingsTouchPage]) draws touch rows instead, as the in-game menu's options
  * ([NxSettingsList]): [onSetting] takes their controls' and info icons' taps, [onTruncated] whether the selected row's
- * description fits. [titled]: the two-pane Settings' right pane (the split draws the remove dialog); [hints] (null: its
- * own) the pane's.
+ * description fits. [hints] (null: its own): the two-pane Settings' right pane's.
  */
 @Composable
 fun SettingsScreen(
     screen: Screen.Settings, selectedIndex: Int,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, modifier: Modifier = Modifier,
     onHint: ((NxButton) -> Unit)? = null,
-    titled: Boolean = false,
     hints: List<Hint>? = null,
     dialog: Boolean = true,   // false: the two-pane Settings draws the remove dialog over both panes
     onSetting: ((NxSettingEvent) -> Unit)? = null,   // null: a preview, its controls take no taps

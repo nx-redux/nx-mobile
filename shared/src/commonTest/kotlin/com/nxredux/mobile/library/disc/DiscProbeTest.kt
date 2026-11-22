@@ -20,16 +20,16 @@ class DiscProbeTest {
         val src = FakeRomsSource(mapOf("d" to listOf("G.bin", "G.cue")), texts = mapOf("d/G.cue" to "FILE \"G.bin\" BINARY\n TRACK 01 MODE2/2352\n  INDEX 01 00:00:00\n"), bytes = mapOf("d/G.bin" to ps1Bin()))
         val dir = src.listChildren(ContentRef("d"))
         val probe = DiscProbe(src)
-        assertEquals("ps", probe.identify(dir.first { it.name == "G.bin" }, dir))
-        assertEquals("ps", probe.identify(dir.first { it.name == "G.cue" }, dir))
+        assertEquals("ps", probe.probe(dir.first { it.name == "G.bin" }, dir).console)
+        assertEquals("ps", probe.probe(dir.first { it.name == "G.cue" }, dir).console)
     }
 
     @Test fun saturn_and_unknowns_stay_unplaced() = runTest {
         val sat = ByteArray(2048 * 17).also { "SEGA SEGASATURN ".encodeToByteArray().copyInto(it, 0) }
         val src = FakeRomsSource(mapOf("d" to listOf("S.iso", "M.cue")), texts = mapOf("d/M.cue" to "FILE \"gone.bin\" BINARY\n TRACK 01 MODE1/2352\n"), bytes = mapOf("d/S.iso" to sat))
         val dir = src.listChildren(ContentRef("d"))
-        assertNull(DiscProbe(src).identify(dir.first { it.name == "S.iso" }, dir))
-        assertNull(DiscProbe(src).identify(dir.first { it.name == "M.cue" }, dir))      // its bin is missing
+        assertNull(DiscProbe(src).probe(dir.first { it.name == "S.iso" }, dir).console)
+        assertNull(DiscProbe(src).probe(dir.first { it.name == "M.cue" }, dir).console)      // its bin is missing
     }
 
     @Test fun chd_by_metadata_then_by_its_sectors() = runTest {
@@ -38,9 +38,9 @@ class DiscProbeTest {
         val dir = src.listChildren(ContentRef("d"))
         val segaZero = ByteArray(2048).also { "SEGADISCSYSTEM  ".encodeToByteArray().copyInto(it, 0) }
         val probe = DiscProbe(src) { _, _ -> listOf(segaZero, null, null) }
-        assertEquals("dc", probe.identify(dir.first { it.name == "D.chd" }, dir))
-        assertEquals("segacd", probe.identify(dir.first { it.name == "S.chd" }, dir))
-        assertNull(DiscProbe(src).identify(dir.first { it.name == "S.chd" }, dir))       // no CHD reader: a CD CHD stays unplaced
+        assertEquals("dc", probe.probe(dir.first { it.name == "D.chd" }, dir).console)
+        assertEquals("segacd", probe.probe(dir.first { it.name == "S.chd" }, dir).console)
+        assertNull(DiscProbe(src).probe(dir.first { it.name == "S.chd" }, dir).console)       // no CHD reader: a CD CHD stays unplaced
     }
 
     // A cue a Windows editor saved with a UTF-8 byte order mark: its first line is still its FILE.
@@ -48,7 +48,7 @@ class DiscProbeTest {
         val cue = "\uFEFFFILE \"G.bin\" BINARY\n TRACK 01 MODE2/2352\n  INDEX 01 00:00:00\n"
         val src = FakeRomsSource(mapOf("d" to listOf("G.bin", "G.cue")), bytes = mapOf("d/G.cue" to cue.encodeToByteArray(), "d/G.bin" to ps1Bin()))
         val dir = src.listChildren(ContentRef("d"))
-        assertEquals("ps", DiscProbe(src).identify(dir.first { it.name == "G.cue" }, dir))
+        assertEquals("ps", DiscProbe(src).probe(dir.first { it.name == "G.cue" }, dir).console)
     }
 
     // A Windows-1252 cue whose FILE differs in case and code page from the bin on disk: read as the scanner reads it.

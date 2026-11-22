@@ -24,13 +24,13 @@
 
 namespace libretrodroid {
 
-Audio::Audio(int32_t sampleRate, double refreshRate, bool preferLowLatencyAudio, int32_t bufferMs) {
+Audio::Audio(int32_t sampleRate, double refreshRate, int32_t bufferMs) {
     LOGI("Audio initialization has been called with input sample rate %d", sampleRate);
     requestedBufferMs = std::max(bufferMs, 0);
 
     contentRefreshRate = refreshRate;
     inputSampleRate = sampleRate;
-    audioLatencySettings = findBestLatencySettings(preferLowLatencyAudio);
+    audioLatencySettings = findBestLatencySettings();
 
     int32_t audioBufferSize = computeAudioBufferSize();
     fifoBuffer = std::make_unique<oboe::FifoBuffer>(2, audioBufferSize);
@@ -121,8 +121,8 @@ void Audio::reopenStream() {
     }
 }
 
-std::unique_ptr<Audio::AudioLatencySettings> Audio::findBestLatencySettings(bool preferLowLatencyAudio) {
-    if (oboe::AudioStreamBuilder::isAAudioRecommended() && preferLowLatencyAudio) {
+std::unique_ptr<Audio::AudioLatencySettings> Audio::findBestLatencySettings() {
+    if (oboe::AudioStreamBuilder::isAAudioRecommended()) {
         return std::make_unique<AudioLatencySettings>(LOW_LATENCY_SETTINGS);
     } else {
         return std::make_unique<AudioLatencySettings>(DEFAULT_LATENCY_SETTINGS);

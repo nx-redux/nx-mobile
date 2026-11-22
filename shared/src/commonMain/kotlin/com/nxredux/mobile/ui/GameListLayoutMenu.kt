@@ -33,7 +33,6 @@ import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxFont
 import com.nxredux.mobile.ui.nx.MENU_TAB_ROW_HEIGHT
 import com.nxredux.mobile.ui.nx.nxTextScale
-import com.nxredux.mobile.ui.nx.NxTextSizes
 import com.nxredux.mobile.ui.nx.TOP_ICON_INSET
 
 /** A dropdown row's height: a List pill's, slim, so the choices fit a phone's landscape height or scroll ([GameListLayoutMenu]). */

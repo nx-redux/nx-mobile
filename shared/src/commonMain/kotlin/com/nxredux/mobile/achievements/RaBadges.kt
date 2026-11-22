@@ -20,15 +20,6 @@ class RaBadges(private val home: RaHomeTree, private val http: RaHttp, permits: 
     suspend fun folder(pointer: RaGamePointer?, gameId: Int): List<String>? =
         if (!home.readable()) null else pointer?.let { home.consoleFolder(it) }?.let { RaBadgeFolders.segments(it, gameId) }
 
-    /** True when [name]'s variant is in [folder] afterwards; [present] is the folder's listing when the caller has one. */
-    suspend fun ensure(folder: List<String>, name: String, locked: Boolean, present: Set<String>? = null): Boolean {
-        val file = RaBadgeFolders.fileName(name, locked) ?: return false
-        if (present?.contains(file) == true || (present == null && home.has(folder, file))) return true
-        if (!home.available()) return false   // a read-only home: the download would be discarded
-        val bytes = fetch(file) ?: return false
-        return home.writeBytes(folder, file, bytes) != null
-    }
-
     /**
      * Both variants of every name, at most `permits` fetches in flight. The folder is made (or found) and listed once,
      * before any fetch, and every file is written into it: concurrent walks would race to create it (SAF leaves
