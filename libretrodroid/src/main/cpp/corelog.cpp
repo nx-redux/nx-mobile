@@ -68,17 +68,7 @@ JNIEXPORT jobjectArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_ge
     JNIEnv* env,
     jclass obj
 ) {
-    std::vector<std::string> lines = libretrodroid::CoreLog::recent();
-    jclass stringClass = env->FindClass("java/lang/String");
-    jobjectArray result = env->NewObjectArray((jsize) lines.size(), stringClass, nullptr);
-    for (size_t i = 0; i < lines.size(); i++) {
-        // A core's bytes: newSafeJString keeps an emoji and turns only the bytes that start no sequence into '?'.
-        jstring s = newSafeJString(env, lines[i]);
-        env->SetObjectArrayElement(result, (jsize) i, s);
-        env->DeleteLocalRef(s);
-    }
-    env->DeleteLocalRef(stringClass);
-    return result;
+    return newSafeJStringArray(env, libretrodroid::CoreLog::recent());
 }
 
 }

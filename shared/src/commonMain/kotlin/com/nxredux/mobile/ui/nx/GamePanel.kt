@@ -66,6 +66,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
@@ -363,7 +364,7 @@ private fun ShortcutTile(s: ShortcutState, selected: Boolean, modifier: Modifier
             .then(
                 if (filled) Modifier.background(colors.listText)
                 else Modifier.background(if (pressed) colors.listText.copy(alpha = 0.16f) else Color.Transparent)   // role: a pressed tile's shade
-                    .border(GP_TILE_RING, colors.hint.copy(alpha = 0.6f), shape),   // role: a button's grey ring
+                    .gpRing(colors, shape),
             )
             .then(press)
             .padding(horizontal = GP_PILL_PAD, vertical = 8.dp),
@@ -502,7 +503,7 @@ private fun QuickVolumeBar(value: Float, onChange: (Float) -> Unit, onDone: () -
 private fun QuickSegments(c: QuickSetting.Choice, modifier: Modifier, onEvent: (GamePanelEvent) -> Unit) {
     val colors = LocalNxColors.current
     val shape = RoundedCornerShape(50)
-    Row(modifier.height(GP_QUICK_CONTROL).clip(shape).border(GP_TILE_RING, colors.hint.copy(alpha = 0.6f), shape)) {   // role: a button's grey ring
+    Row(modifier.height(GP_QUICK_CONTROL).clip(shape).gpRing(colors, shape)) {
         c.values.forEachIndexed { i, v ->
             val on = i == c.index
             Box(
@@ -526,7 +527,7 @@ private fun QuickStepper(c: QuickSetting.Choice, modifier: Modifier, onEvent: (G
     val font = LocalNxFont.current
     val shape = RoundedCornerShape(50)
     val step = { delta: Int -> GamePanelModel.quickStep(c, delta)?.let { onEvent(GamePanelEvent.SetQuick(c.key, it)) } }
-    Box(modifier.height(GP_QUICK_CONTROL).clip(shape).border(GP_TILE_RING, colors.hint.copy(alpha = 0.6f), shape)) {   // role: a button's grey ring
+    Box(modifier.height(GP_QUICK_CONTROL).clip(shape).gpRing(colors, shape)) {
         Row(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxHeight().then(if (c.enabled) Modifier.clickable { step(-1) } else Modifier))
             Box(Modifier.weight(1f).fillMaxHeight().then(if (c.enabled) Modifier.clickable { step(1) } else Modifier))
@@ -549,7 +550,7 @@ private fun QuickOpen(value: String, modifier: Modifier, onOpen: () -> Unit) {
     val font = LocalNxFont.current
     val shape = RoundedCornerShape(50)
     Row(
-        modifier.height(GP_QUICK_CONTROL).clip(shape).border(GP_TILE_RING, colors.hint.copy(alpha = 0.6f), shape)   // role: a button's grey ring
+        modifier.height(GP_QUICK_CONTROL).clip(shape).gpRing(colors, shape)
             .clickable(onClick = onOpen).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -725,6 +726,10 @@ private fun RowSubText(text: String, selected: Boolean, maxLines: Int = 1) {
         maxLines = maxLines, overflow = TextOverflow.Ellipsis,
     )
 }
+
+/** A panel control's grey ring, [GP_TILE_RING] wide round [shape]. */
+private fun Modifier.gpRing(colors: NxColors, shape: Shape): Modifier =
+    border(GP_TILE_RING, colors.hint.copy(alpha = 0.6f), shape)   // role: a button's grey ring
 
 /** A small hollow pill ([nxButtonRing]) on black: the panel's Game pill, and the Panel pill over the DS/3DS screen. */
 @Composable

@@ -21,8 +21,9 @@ import sys
 import tempfile
 import time
 
-from brick import AUTO_RESUME_PATH, ERROR_MARKERS, RESUME_SLOT_PATH, SDCARD, Brick, BrickError, BrickGone, q
-from fold import PRIV, ROMS as PHONE_ROMS, TEST_DIR, Fold
+from brick import (AUTO_RESUME_PATH, DEFAULT_SERIAL as BRICK_SERIAL, ERROR_MARKERS, RESUME_SLOT_PATH, SDCARD,
+                   Brick, BrickError, BrickGone, q)
+from fold import DEFAULT_SERIAL as FOLD_SERIAL, PRIV, ROMS as PHONE_ROMS, TEST_DIR, Fold
 
 B_ROMS = SDCARD + "/Roms"
 PLAY_S = 20
@@ -277,8 +278,8 @@ def table(rows):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--fold", default="adb-R5GL66XJS2F-uwbsP9._adb-tls-connect._tcp")
-    ap.add_argument("--brick", default="5c000c8997414781d1d")
+    ap.add_argument("--fold", default=FOLD_SERIAL)
+    ap.add_argument("--brick", default=BRICK_SERIAL)
     ap.add_argument("--only", default="")
     ap.add_argument("--out", default=os.path.join(os.getcwd(), ".local/device-tests/state-grid-%s.md"
                                                   % time.strftime("%Y-%m-%d")))

@@ -277,8 +277,7 @@ void Achievements::loadGameCallback(int result, const char* errorMessage, rc_cli
 void Achievements::unloadGame() {
     if (!client) return;
     rc_client_unload_game(client);
-    regions.invalidate();
-    regionsInitTried = false;
+    invalidateMemoryRegions();
 }
 
 std::vector<AchievementInfo> Achievements::list() {

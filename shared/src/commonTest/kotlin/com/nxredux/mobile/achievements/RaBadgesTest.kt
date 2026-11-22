@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 
 class RaBadgesTest {
-    private fun home() = RaHomeTree(FakeRomsSource(mapOf("home" to listOf("Roms"), "home/Roms" to emptyList()))) { ContentRef("home") }
+    private fun home() = RaHomeTree(raHomeSource()) { ContentRef("home") }
     private val folder = RaBadgeFolders.segments("Game Boy (GB)", 42)!!
 
     @Test fun fetches_both_variants_into_the_game_folder_once() = runTest {
@@ -52,7 +52,7 @@ class RaBadgesTest {
         assertEquals(folder, badges.folder(p, 42)); assertNull(badges.folder(p, 0)); assertNull(badges.folder(null, 42))
     }
     @Test fun ensureAll_makes_each_folder_level_once() = runTest {
-        val src = FakeRomsSource(mapOf("home" to listOf("Roms"), "home/Roms" to emptyList())).apply { yieldInCreate = true }
+        val src = raHomeSource().apply { yieldInCreate = true }
         val http = FakeRaHttp().apply { getBytesResponder = { 200 to "PNG".encodeToByteArray() } }
         val tree = RaHomeTree(src) { ContentRef("home") }
         RaBadges(tree, http).ensureAll(folder, listOf("00001", "00002", "00003"))

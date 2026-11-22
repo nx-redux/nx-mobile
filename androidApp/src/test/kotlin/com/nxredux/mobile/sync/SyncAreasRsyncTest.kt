@@ -11,15 +11,8 @@ import java.io.File
 class SyncAreasRsyncTest {
     @get:Rule val tmp = TemporaryFolder()
 
-    private fun rsync(): String? = listOf("/opt/homebrew/bin/rsync", "/usr/local/bin/rsync", "/usr/bin/rsync").firstOrNull { path ->
-        File(path).canExecute() && runCatching {
-            val out = ProcessBuilder(path, "--version").redirectErrorStream(true).start().inputStream.bufferedReader().readText()
-            Regex("""version (\d+)\.(\d+)""").find(out)?.destructured?.let { (a, b) -> a.toInt() > 3 || (a.toInt() == 3 && b.toInt() >= 1) } == true
-        }.getOrDefault(false)
-    }
-
     @Test fun rsync_copies_exactly_the_files_in_shared_accepts() {
-        val bin = rsync()
+        val bin = hostRsync()
         assumeTrue("no rsync >= 3.1 on this machine", bin != null)
         val paths = listOf(
             "GB-gambatte/Tetris.gb.st0", ".minui/GB/Tetris.gb.0.bmp", "DC-flycast/Crazy Taxi.state", "N64-mupen64plus_next/M.state1",

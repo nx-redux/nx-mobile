@@ -60,13 +60,7 @@ class CollectionPaths(
         return encode(game, to)
     }
 
-    /** The other folders in [all] of [folder]'s console: by display name, and when [mapped] by phone console too. */
-    private fun siblings(folder: String, all: List<String>): List<String> {
-        val named = SyncConsoles.siblings(folder, all)
-        if (!mapped) return named
-        val console = SyncMap.consoleOf(folder)?.id ?: return named
-        return (named + all.filter { it != folder && !it.startsWith(".") && SyncMap.consoleOf(it)?.id == console }).distinct()
-    }
+    private fun siblings(folder: String, all: List<String>): List<String> = SyncConsoles.siblings(folder, all, mapped)
 
     /** [line] on [side] as a game of a pair; null when it is none. */
     private fun decode(line: String, side: Side): Game? {

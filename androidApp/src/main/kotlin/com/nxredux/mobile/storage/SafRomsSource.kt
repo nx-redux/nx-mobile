@@ -17,9 +17,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** [SafRomsSource.readHead]'s read size: a head is grown in these steps up to its file's size or the cap. */
-private const val READ_CHUNK = 64 * 1024
-
 /**
  * RomsSource over persisted SAF trees. A ContentRef is a document URI string; the tree root passed by the
  * picker is a tree URI and children are addressed by document id inside that tree. [storage] tells an unmounted
@@ -47,14 +44,7 @@ class SafRomsSource(private val resolver: ContentResolver, private val storage: 
 
     override suspend fun readHead(file: ContentRef, max: Int): ByteArray? = withContext(Dispatchers.IO) {
         runCatching {
-            saf.openRead(Uri.parse(file.value))?.use { input ->
-                // Grown as read, never [max] up front: the scraper's image mix reads its inputs with a 32 MB cap.
-                val out = java.io.ByteArrayOutputStream(minOf(max, READ_CHUNK))
-                val buf = ByteArray(minOf(max, READ_CHUNK))
-                var n = 0
-                while (n < max) { val r = input.read(buf, 0, minOf(buf.size, max - n)); if (r < 0) break; out.write(buf, 0, r); n += r }
-                out.toByteArray()
-            }
+            saf.openRead(Uri.parse(file.value))?.use { it.readHead(max) }
         }.getOrNull()
     }
 

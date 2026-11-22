@@ -42,7 +42,7 @@ class RaFingerprintsTest {
     }
 
     @Test fun an_extra_rom_never_hits_a_home_entry_of_the_same_name() = runTest {
-        val src = FakeRomsSource(mapOf("home" to listOf("Roms"), "home/Roms" to listOf("GBA (GBA)"), "home/Roms/GBA (GBA)" to emptyList()))
+        val src = raHomeSource("GBA (GBA)")
         val fp = RaFingerprints(RaHomeTree(src) { ContentRef("home") })
         val hk = fp.keyFor(home)!!; val ek = fp.keyFor(extra)!!
         fp.update(hk.consoleFolder) { it.record(hk.key, 1, 1, 5, h, 9) }
@@ -62,7 +62,7 @@ class RaFingerprintsTest {
     }
 
     @Test fun update_without_a_change_writes_nothing() = runTest {
-        val src = FakeRomsSource(mapOf("home" to listOf("Roms"), "home/Roms" to listOf("G (GBA)"), "home/Roms/G (GBA)" to emptyList()))
+        val src = raHomeSource("G (GBA)")
         val fp = RaFingerprints(RaHomeTree(src) { ContentRef("home") })
         fp.update("G (GBA)") { }
         assertTrue(src.written.isEmpty())
@@ -102,7 +102,7 @@ class RaFingerprintsTest {
     }
 
     @Test fun a_console_folder_without_ra_data_gets_its_first_file() = runTest {
-        val src = FakeRomsSource(mapOf("home" to listOf("Roms"), "home/Roms" to emptyList()))
+        val src = raHomeSource()
         val fp = RaFingerprints(RaHomeTree(src) { ContentRef("home") })
         fp.update("G (GBA)") { it.record("T.gba", 1, 1, 5, h, 3) }
         assertEquals(RaFingerprint(h, 3), fp.snapshot("G (GBA)").lookup("T.gba", 1, 1, 5))

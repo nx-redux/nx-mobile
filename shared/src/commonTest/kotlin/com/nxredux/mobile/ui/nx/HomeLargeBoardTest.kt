@@ -6,7 +6,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class HomeLargeBoardTest {
-    private fun near(e: Float, a: Float, what: String) = assertEquals(e, a, 0.05f, what)
     private val fold = HomeFrame(933f, 572f, false, 933f / 660f)
     private fun tiles(b: HomeBoard, k: HomeTopKind) = b.top.filter { it.kind == k }
     // Shelf sizes as offered; the large face draws at most 4 a shelf (its row of 4, [homeShelfCap]). With 7 pinned games

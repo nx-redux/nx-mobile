@@ -107,5 +107,5 @@ fun NxRichListBody(
 /** The list's edge fade: a short fixed hint that more rows are there, not rows' worth (tall art rows would leave a dark band). */
 private val RICH_LIST_FADE = 24.dp
 
-/** A rich row's height in plain rows ([nxRichRowCountFor]'s 1.5). */
-private const val RICH_ROW_OF_PITCH = 1.5f
+/** A rich row's height in plain rows. */
+internal const val RICH_ROW_OF_PITCH = 1.5f

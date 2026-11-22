@@ -18,7 +18,7 @@ import subprocess
 import tempfile
 import time
 
-from brick import nxtest_targets
+from brick import AdbDevice, q, remove_nxtest_targets
 
 # The debug build's application id (applicationIdSuffix ".dev", installed beside the release app); the receiver's
 # class and actions keep the code's package.
@@ -37,18 +37,14 @@ ROMS = HOME + "/Roms"
 TEST_DIR = "/sdcard/nxtest-dir"
 XFER = "/data/local/tmp/nxtest-xfer"
 TERMINAL_SYNC = ("done", "failed", "timeout", "refused", "stopped")
+DEFAULT_SERIAL = "adb-R5GL66XJS2F-uwbsP9._adb-tls-connect._tcp"
 
 
 class FoldError(RuntimeError):
     pass
 
 
-def q(s):
-    """Single-quote for the device's /system/bin/sh."""
-    return "'" + str(s).replace("'", "'\\''") + "'"
-
-
-class Fold:
+class Fold(AdbDevice):
     def __init__(self, serial, verbose=True, activity_hooks=False):
         self.serial = serial
         self.verbose = verbose
@@ -73,18 +69,9 @@ class Fold:
                                                         p.stderr.decode("utf-8", "replace").strip()))
         return p
 
-    def present(self):
-        p = subprocess.run(["adb", "-s", self.serial, "get-state"], capture_output=True)
-        return p.returncode == 0 and p.stdout.strip() == b"device"
-
     def require_present(self):
         if not self.present():
             raise FoldError("Fold %s is not on adb" % self.serial)
-
-    def sh(self, cmd, timeout=60):
-        """One adb shell command (as the shell user); stdout with \\r stripped."""
-        p = self._adb(["shell", cmd], timeout=timeout, check=False)
-        return p.stdout.decode("utf-8", "replace").replace("\r", "")
 
     def run_as(self, cmd, timeout=60):
         """A shell command as the app (cwd = its data dir), through a pushed script
@@ -148,16 +135,9 @@ class Fold:
             raise FoldError("refusing to remove a non-nxtest file: %s" % rel)
         self.run_as("rm -f %s" % q(PRIV + "/" + rel))
 
-    def md5(self, path):
-        out = self.sh("md5sum %s 2>/dev/null" % q(path)).split()
-        return out[0] if out else None
-
     def mtime(self, path):
         out = self.sh("stat -c %%Y %s 2>/dev/null" % q(path)).strip()
         return int(out) if out.isdigit() else None
-
-    def exists(self, path):
-        return self.sh("[ -e %s ] && echo Y" % q(path)).strip() == "Y"
 
     @staticmethod
     def wait_for(fn, timeout, interval=1.0):
@@ -246,20 +226,14 @@ class Fold:
         Returns paths removed (dirs end in /)."""
         removed = []
         find = "find %s -name 'nxtest-*' " % q(HOME)
-        targets = nxtest_targets(self.sh(find + "-type f 2>/dev/null", timeout=300),
-                                 self.sh(find + "-type d -prune 2>/dev/null", timeout=300))
-        for p in targets:
-            self.sh(("rm -rf %s" if p.endswith("/") else "rm -f %s") % q(p.rstrip("/")))
-            removed.append(p)
+        removed += remove_nxtest_targets(self.sh, self.sh(find + "-type f 2>/dev/null", timeout=300),
+                                         self.sh(find + "-type d -prune 2>/dev/null", timeout=300))
         if self.exists(TEST_DIR):
             self.sh("rm -rf %s" % TEST_DIR)
             removed.append(TEST_DIR + "/")
         find = "find %s -name 'nxtest-*' " % q(PRIV)
-        targets = nxtest_targets(self.run_as(find + "-type f 2>/dev/null", timeout=120),
-                                 self.run_as(find + "-type d -prune 2>/dev/null", timeout=120))
-        for p in targets:
-            self.run_as(("rm -rf %s" if p.endswith("/") else "rm -f %s") % q(p.rstrip("/")))
-            removed.append(p)
+        removed += remove_nxtest_targets(self.run_as, self.run_as(find + "-type f 2>/dev/null", timeout=120),
+                                         self.run_as(find + "-type d -prune 2>/dev/null", timeout=120))
         self.run_as("rm -f %s/*.json" % RESULTS)
         self.sh("rm -f /data/local/tmp/nxtest-*")
         return removed

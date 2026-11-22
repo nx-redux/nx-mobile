@@ -93,6 +93,11 @@ void ES3Utils::deleteFramebuffer(std::unique_ptr<ES3Utils::Framebuffer> data) {
     }
 }
 
+void ES3Utils::deleteFramebuffers(Framebuffers& framebuffers) {
+    for (auto& pass : framebuffers) deleteFramebuffer(std::move(pass));
+    framebuffers.clear();
+}
+
 std::unique_ptr<ES3Utils::Framebuffers> ES3Utils::buildShaderPasses(
     unsigned int width,
     unsigned int height,

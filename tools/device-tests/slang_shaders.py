@@ -27,7 +27,7 @@ import time
 from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from fold import q  # noqa: E402
+from fold import PKG, q  # noqa: E402
 from pacing import Pacing, parse_timestats, work_from_log  # noqa: E402
 
 # tag, core id (names the option folder), folder under Roms/, game, presets (relative to the library, no extension).
@@ -93,8 +93,8 @@ def run_case(args, tag, core, folder, game, presets, out_dir):
             # The game's own options stay as they are; only its shader is replaced.
             kept = [x for x in (p.saved_cfg or "").splitlines() if x.strip() and not x.strip().startswith("nx_shader")]
             p.write_cfg("".join(x + "\n" for x in kept) + "nx_shader = %s\n" % value)
-            p.sh("am force-stop com.nxredux.mobile.dev; input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; "
-                 "settings put global stay_on_while_plugged_in 3; logcat -c; logcat -b crash -c")
+            p.sh("am force-stop %s; input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; "
+                 "settings put global stay_on_while_plugged_in 3; logcat -c; logcat -b crash -c" % PKG)
             row = {"tag": tag, "preset": preset or "(none)", "frames": None, "uneven": None, "held33": None,
                    "ready": "", "error": ""}
             try:
@@ -142,7 +142,7 @@ def run_case(args, tag, core, folder, game, presets, out_dir):
                     stopped = None
                 if not stopped:
                     row["error"] = (row["error"] + "; " if row["error"] else "") + "did not quit: force-stopped"
-                p.sh("am force-stop com.nxredux.mobile.dev; settings put global stay_on_while_plugged_in 0")
+                p.sh("am force-stop %s; settings put global stay_on_while_plugged_in 0" % PKG)
             rows.append(row)
             print(format_row(row), flush=True)
     finally:

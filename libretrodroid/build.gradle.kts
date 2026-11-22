@@ -22,7 +22,7 @@ listOf(
 android {
     namespace = "com.swordfish.libretrodroid"
     compileSdk = 37
-    // The NDK the cores are built with (cores/Makefile, release.yaml NDK_VERSION); AGP's default moves with AGP.
+    // The NDK the cores are built with (cores/ndk.mk, release.yaml NDK_VERSION); AGP's default moves with AGP.
     ndkVersion = "29.0.14206865"
 
     defaultConfig {

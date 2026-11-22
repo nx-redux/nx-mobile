@@ -1,6 +1,5 @@
 package com.nxredux.mobile.skin
 
-import java.io.File
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,7 +12,7 @@ import kotlin.test.assertTrue
  * bottom screen moves up by what that saves.
  */
 class SkinTopScreenTest {
-    private val carbon = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
+    private val carbon = skinPack()
 
     private fun cover(variant: SkinVariant) =
         assertNotNull(SkinChoice.place(carbon, 1248, 1972, 420, tablet = false, ds = true, variant = variant), "$variant")

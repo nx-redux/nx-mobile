@@ -11,7 +11,6 @@ import kotlin.test.assertEquals
  * its floor for the tool rows stays there: the rows and the pins move up by the freed room.
  */
 class HomeExtraInfoBoardTest {
-    private fun near(e: Float, a: Float, what: String) = assertEquals(e, a, 0.05f, what)
     private fun tiles(b: HomeBoard, k: HomeTopKind) = b.top.filter { it.kind == k }.map { it.rect }
     private fun continueOf(b: HomeBoard) = tiles(b, HomeTopKind.CONTINUE).single()
     private fun hide(f: HomeFrame) = f.copy(statsHidden = true)

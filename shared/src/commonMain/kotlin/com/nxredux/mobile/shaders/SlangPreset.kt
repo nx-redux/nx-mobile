@@ -1,5 +1,7 @@
 package com.nxredux.mobile.shaders
 
+import com.nxredux.mobile.storage.TextLines
+
 /**
  * One pass of a RetroArch slang preset: each stage a complete `#version 450` source (includes expanded, the other
  * stage's lines and the slang pragmas blanked, so both stages number their lines alike).
@@ -42,7 +44,6 @@ object SlangPreset {
     private const val FLOAT_FORMAT = "R16G16B16A16_SFLOAT"
     private const val MAX_DEPTH = 32
     private const val MAX_SOURCE_CHARS = 8 * 1024 * 1024
-    private const val BOM = "﻿"
     private val REFERENCE = Regex("""^\s*#reference\s+"?([^"]+?)"?\s*$""")
     private val INCLUDE = Regex("""^\s*#include\s+"([^"]+)"""")
     private val INCLUDE_OPTIONAL = Regex("""^\s*#pragma\s+include_optional\s+"([^"]+)"""")
@@ -137,7 +138,7 @@ object SlangPreset {
         val text = read(path) ?: throw PresetException("not found: $path")
         val dir = path.substringBeforeLast('/', "")
         val own = LinkedHashMap<String, Entry>()
-        for (raw in text.removePrefix(BOM).lines()) {
+        for (raw in TextLines.stripBom(text).lines()) {
             val line = raw.trim()
             if (line.isEmpty()) continue
             val reference = REFERENCE.find(line)
@@ -182,7 +183,7 @@ object SlangPreset {
         budget[0] -= text.length
         if (budget[0] < 0) throw PresetException("shader too large: $path")
         val dir = path.substringBeforeLast('/', "")
-        for (line in text.removePrefix(BOM).lines()) {
+        for (line in TextLines.stripBom(text).lines()) {
             val include = INCLUDE.find(line)
             val optional = if (include == null) INCLUDE_OPTIONAL.find(line) else null
             val name = (include ?: optional)?.groupValues?.get(1)

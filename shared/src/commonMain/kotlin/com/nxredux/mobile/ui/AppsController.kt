@@ -55,13 +55,19 @@ internal class AppsController(
 ) {
     private var toolAppsColumns = 0   // the Android apps picker's column count; 0 until it lays out (it steps as one column)
 
+    /** Starts the app [id]; a failed start says so by its [label]. True when it started. */
+    private fun start(id: String, label: String): Boolean {
+        if (launcher?.launch(id) == true) return true
+        host.showNotice("Could not open $label")
+        return false
+    }
+
     /**
      * An Android game: the platform starts its app; nothing is recorded (no recent, no game time). A failed start (the
      * app gone meanwhile) says so and re-lists the apps, so the console drops it. True when it started.
      */
     fun launchApp(entry: Listed): Boolean {
-        if (launcher?.launch(entry.game.fileName) == true) return true
-        host.showNotice("Could not open ${entry.shown}")
+        if (start(entry.game.fileName, entry.shown)) return true
         host.refreshInstalled()
         return false
     }
@@ -72,8 +78,7 @@ internal class AppsController(
      */
     fun openApp(row: ToolRow): Boolean {
         val id = row.appId ?: return false
-        if (launcher?.launch(id) == true) return true
-        host.showNotice("Could not open ${row.label}")
+        if (start(id, row.label)) return true
         scope.launch { host.rebuildMainRows(); host.swapMainRows() }   // likely gone since the menu was built
         return false
     }
@@ -126,8 +131,7 @@ internal class AppsController(
     /** The drawer's A: opens the selected app; one gone since the drawer opened says so and leaves the grid. */
     fun launchDrawerApp(s: Screen.ToolApps) {
         val row = s.apps.getOrNull(selection.value.index) ?: return
-        if (launcher?.launch(row.id) == true) return
-        host.showNotice("Could not open ${row.label}")
+        if (start(row.id, row.label)) return
         val apps = s.apps - row
         screen.value = s.copy(apps = apps)
         selection.value = ListSelection(selection.value.index, apps.size).clampedTo(apps.size)

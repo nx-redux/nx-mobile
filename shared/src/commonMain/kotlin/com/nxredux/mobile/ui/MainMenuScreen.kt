@@ -310,15 +310,7 @@ fun MainMenuScreen(
                     MenuStyle.LIST -> {
                         val listRows = remember(rows, shared) {
                             rows.map { r ->
-                                when (r) {
-                                    is MainRow.Pin -> NxRow(r.entry.game.shownName)
-                                    is MainRow.Shelf -> NxRow(r.entry.game.shownName)
-                                    is MainRow.System -> NxRow(r.system.displayName, tag = if (r.system.displayName in shared) r.system.tag else null)
-                                    is MainRow.Collection -> NxRow(r.name)
-                                    is MainRow.Tool -> NxRow(r.row.label)
-                                    is MainRow.PinnedTool -> NxRow(r.row.label)
-                                    is MainRow.Continue, is MainRow.MoreTools, MainRow.PickAGame -> homeOnly(r)
-                                }
+                                NxRow(mainRowName(r), tag = (r as? MainRow.System)?.system?.takeIf { it.displayName in shared }?.tag)
                             }
                         }
                         // As List Home's ([MainListBody]): the names on the page inset, the list under the icon row and on
@@ -459,18 +451,17 @@ internal fun mainMenuTopBand(home: Boolean, style: MenuStyle, tabRow: Boolean): 
     tabRow && (style == MenuStyle.LIST || !home && style != MenuStyle.MINIMAL)
 
 /** A Minimal tab's names: each row's name alone (a console's, a collection's, a tool's), no tag, count or art. */
-internal fun minimalTabRows(rows: List<MainRow>): List<NxRow> = rows.map { r ->
-    NxRow(
-        when (r) {
-            is MainRow.Pin -> r.entry.game.shownName
-            is MainRow.Shelf -> r.entry.game.shownName
-            is MainRow.System -> r.system.displayName
-            is MainRow.Collection -> r.name
-            is MainRow.Tool -> r.row.label
-            is MainRow.PinnedTool -> r.row.label
-            is MainRow.Continue, is MainRow.MoreTools, MainRow.PickAGame -> homeOnly(r)
-        },
-    )
+internal fun minimalTabRows(rows: List<MainRow>): List<NxRow> = rows.map { NxRow(mainRowName(it)) }
+
+/** A main menu row's name in a List or Minimal tab (Home's own rows are in neither). */
+private fun mainRowName(r: MainRow): String = when (r) {
+    is MainRow.Pin -> r.entry.game.shownName
+    is MainRow.Shelf -> r.entry.game.shownName
+    is MainRow.System -> r.system.displayName
+    is MainRow.Collection -> r.name
+    is MainRow.Tool -> r.row.label
+    is MainRow.PinnedTool -> r.row.label
+    is MainRow.Continue, is MainRow.MoreTools, MainRow.PickAGame -> homeOnly(r)
 }
 
 /** Whether [row] launches a game (Home's Continue, a pinned game, an Android game's pin too, a shelf game). */

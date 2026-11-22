@@ -222,9 +222,6 @@ internal fun artworkSettingTouchRow(row: ArtworkSettingRow): NxSettingRow {
 
 private val ART_ON_OFF = listOf("Off", "On")
 
-/** A compact row: no line, [text] (or a fuller [detail]) behind the info icon only. */
-private fun quiet(text: String, detail: String = "") = SettingText("", detail.ifEmpty { text })
-
 /**
  * [row]'s description, from the user guide's Artwork page: a line for a status (today's requests, the allowance left),
  * its fuller text behind the info icon; the rest compact ([quiet]), why a row is dimmed in its fuller text.

@@ -9,10 +9,6 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 
 class LooseResolverTest {
-    private fun zipHead(name: String): ByteArray {
-        val n = name.encodeToByteArray(); val h = ByteArray(30 + n.size)
-        h[0] = 0x50; h[1] = 0x4B; h[2] = 0x03; h[3] = 0x04; h[26] = n.size.toByte(); n.copyInto(h, 30); return h
-    }
     private val source = FakeRomsSource(
         dirs = mapOf(
             "sd/ROMs" to listOf("x.gb", "y.gba", "z.nds", "w.zip", "s.7z", "v.iso", "notes.txt", ".media", "Genesis", "Game Boy (GB)", "Old.gb.disabled", "systems.txt"),

@@ -40,14 +40,7 @@ object N3dsOptions {
     const val LOCAL_WIRELESS_ON = "on"
     const val LOCAL_WIRELESS_OFF = "off"
 
-    val localWirelessRow = FrontendOption(
-        LOCAL_WIRELESS, "Local Wireless", listOf(LOCAL_WIRELESS_ON, LOCAL_WIRELESS_OFF), LOCAL_WIRELESS_ON,
-        "A game's local multiplayer finds other NX Redux\ndevices on the same Wi-Fi: start the game on each\ndevice and use its local play menu.\n" +
-            "Nothing is sent until a game turns its wireless on.\nA save state can't be loaded while another device\nis linked. Switched off in a game, it leaves at once\n(Disconnect switches it off); switched on, it joins again.\n" +
-            "Turn it off on a network you share with people\nyou don't want to play with.",
-        brief = "Local multiplayer with nearby devices",
-        visual = false, valueLabels = listOf("On", "Off"),
-    )
+    val localWirelessRow = NdsOptions.localWirelessRowFor(LOCAL_WIRELESS)
 
     fun localWireless(values: Map<String, String>): Boolean = values[LOCAL_WIRELESS] != LOCAL_WIRELESS_OFF
 

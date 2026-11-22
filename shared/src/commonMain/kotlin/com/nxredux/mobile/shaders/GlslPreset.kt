@@ -1,5 +1,7 @@
 package com.nxredux.mobile.shaders
 
+import com.nxredux.mobile.storage.TextLines
+
 enum class ScaleType { NONE, SOURCE, VIEWPORT, ABSOLUTE }
 /** [BORDER] (transparent black outside the texture) is asked for by slang presets only; GLSL presets get [EDGE] for it. */
 enum class WrapMode { EDGE, REPEAT, MIRRORED, BORDER }
@@ -36,7 +38,6 @@ object GlslPreset {
     const val MAX_PASSES = 8
     const val MAX_LUTS = 16
     private val IGNORED_PASS_KEYS = listOf("float_framebuffer", "srgb_framebuffer", "rgb10_framebuffer", "mipmap_input")
-    private const val BOM = "\uFEFF"
     private val PRAGMA = Regex("""^\s*#pragma\s+parameter\s+(\S+)\s+"([^"]*)"\s+(\S+)\s+(\S+)\s+(\S+)(?:\s+(\S+))?(?:\s.*)?$""")
 
     fun parse(presetPath: String, read: (String) -> String?): ParsedChain {
@@ -50,7 +51,7 @@ object GlslPreset {
         val dir = path.substringBeforeLast('/', "")
         val warnings = mutableListOf<String>()
         val cfg = LinkedHashMap<String, String>()
-        for (raw in text.removePrefix(BOM).lines()) {
+        for (raw in TextLines.stripBom(text).lines()) {
             val line = raw.trim()
             if (line.isEmpty()) continue
             if (line.startsWith("#reference")) throw PresetException("unsupported: #reference")
@@ -105,7 +106,7 @@ object GlslPreset {
 
     fun pragmas(source: String): List<ShaderParam> {
         val out = mutableListOf<ShaderParam>()
-        for (line in source.removePrefix(BOM).lines()) {
+        for (line in TextLines.stripBom(source).lines()) {
             val m = PRAGMA.find(line) ?: continue
             val (id, label, def, min, max, step) = m.destructured
             val minF = min.toFloatOrNull() ?: continue
@@ -121,7 +122,7 @@ object GlslPreset {
 
     /** [source] without its pragma lines and without a leading BOM, which would hide a first-line `#version`. */
     fun stripPragmas(source: String): String =
-        source.removePrefix(BOM).lines().filterNot { PRAGMA.matches(it) }.joinToString("\n")
+        TextLines.stripBom(source).lines().filterNot { PRAGMA.matches(it) }.joinToString("\n")
 
     fun normalize(path: String): String? {
         val parts = ArrayDeque<String>()

@@ -283,7 +283,11 @@ internal fun GameListFrame(
                 // Words and bars on the page inset in every layout, as Home's stats and tab words: the title, its facts line,
                 // the names, the hint bar. Backdrop: the title over the selected game's screenshot.
                 val textStart = inset.start
-                val titleStart = inset.start
+                // Where a B morph back to a Minimal tab starts (while this page shows); hidden while the name flies in.
+                fun titleModifier(title: String, titleStyle: TextStyle) = Modifier.onGloballyPositioned {
+                    titleText[0] = it
+                    if (minimalPage?.live?.value == true) morphPlace(it).let { (at, s) -> minimalPage.morph.title = MorphText(title, at, it.size.width.toFloat(), s, titleStyle) }
+                }.graphicsLayer { alpha = if (flown.value < 1f) 0f else 1f }
                 // The page's icons at the title's right ([gameListTitleIcons]).
                 // With the selected game's info shown under it ([gameListTopStats]: List, Minimal and Grid), the main menu's
                 // two-line header instead, as Consoles' name over its count ([GridTitleLines]): the name in Home's strip type
@@ -311,15 +315,11 @@ internal fun GameListFrame(
                     // anyway, so the shift is a plain value, not deferred to layout.
                     val titleShift = gameListTitleTop(facts, next, height, block, lh, pitch) - blockTop
                     Box(Modifier.fillMaxWidth().height(height.dp)) {
-                        Column(Modifier.fillMaxWidth().padding(start = titleStart, end = inset.end + iconsRoom, top = blockTop.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(start = textStart, end = inset.end + iconsRoom, top = blockTop.dp)) {
                             Box(Modifier.offset(y = titleShift.dp).height(lh.dp), contentAlignment = Alignment.CenterStart) { WithTitle(titleOf) { title ->
                                 Text(
                                     title, style = titleStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                    // Where a B morph back to a Minimal tab starts (while this page shows); hidden while the name flies in.
-                                    modifier = Modifier.onGloballyPositioned {
-                                        titleText[0] = it
-                                        if (minimalPage?.live?.value == true) morphPlace(it).let { (at, s) -> minimalPage.morph.title = MorphText(title, at, it.size.width.toFloat(), s, titleStyle) }
-                                    }.graphicsLayer { alpha = if (flown.value < 1f) 0f else 1f },
+                                    modifier = titleModifier(title, titleStyle),
                                 )
                             } }
                             // Each line [pitch] under the last: the boxes may overlap, as the main menu's.
@@ -331,12 +331,8 @@ internal fun GameListFrame(
                 } else if (chrome.listTitle) {
                     val titleStyle = menuTitleStyle()
                     WithTitle(titleOf) { title -> MenuTitleRow(
-                        title, overArt = style == MenuStyle.BACKDROP, textStart = titleStart,
-                        // Where a B morph back to a Minimal tab starts (while this page shows); hidden while the name flies in.
-                        textModifier = Modifier.onGloballyPositioned {
-                            titleText[0] = it
-                            if (minimalPage?.live?.value == true) morphPlace(it).let { (at, s) -> minimalPage.morph.title = MorphText(title, at, it.size.width.toFloat(), s, titleStyle) }
-                        }.graphicsLayer { alpha = if (flown.value < 1f) 0f else 1f },
+                        title, overArt = style == MenuStyle.BACKDROP, textStart = textStart,
+                        textModifier = titleModifier(title, titleStyle),
                         trailing = { NxTopIcons(titleIcons) },
                     ) }
                 }

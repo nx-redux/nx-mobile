@@ -15,7 +15,7 @@ import os
 import sys
 import time
 
-from brick import (AUTO_RESUME_PATH, ERROR_MARKERS, RESUME_SLOT_PATH, SDCARD,
+from brick import (AUTO_RESUME_PATH, DEFAULT_SERIAL, ERROR_MARKERS, RESUME_SLOT_PATH, SDCARD,
                    Brick, BrickGone, q)
 
 GBA_DIR = SDCARD + "/Roms/Game Boy Advance (GBA)"
@@ -37,7 +37,7 @@ def smallest_rom(b):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--serial", default="5c000c8997414781d1d")
+    ap.add_argument("--serial", default=DEFAULT_SERIAL)
     ap.add_argument("--out", default=os.path.join(os.getcwd(), "nxtest-out"))
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)

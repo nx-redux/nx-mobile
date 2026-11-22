@@ -5,7 +5,6 @@ import kotlin.test.assertEquals
 
 /** Grid Home on the portrait type shows the shelves under the pin rows, as the large face does. */
 class HomePortraitShelvesBoardTest {
-    private fun near(e: Float, a: Float, what: String) = assertEquals(e, a, 0.05f, what)
     private val cover = HomeFrame(475f, 291f, true)
     private val three = listOf(HomeShelf.NEW to 3, HomeShelf.NOT_STARTED to 3, HomeShelf.PICK_UP to 2)
 

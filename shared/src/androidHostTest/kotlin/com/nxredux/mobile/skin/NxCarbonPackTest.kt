@@ -27,7 +27,7 @@ class NxCarbonPackTest {
         assertEquals(top.x, under.x, 1f, "$what one column"); assertTrue(under.y > top.y, "$what in order")
     }
     private val dir = File("../androidApp/src/main/assets/skins/nx-carbon")
-    private val pack = assertNotNull(SkinPackManifest.parse(File(dir, "skin.json").readText()))
+    private val pack = skinPack()
 
     private fun place(name: String, w: Int, h: Int, dpi: Int = 420, tablet: Boolean = false, ds: Boolean = true, picture: Pair<Float, Float>? = null, hinge: Float? = null, foldable: Boolean = false): SkinPlacement? =
         SkinChoice.place(pack, w, h, dpi, tablet, ds, picture, hinge, foldable = foldable).also { p -> dump(name, w, h, p) }

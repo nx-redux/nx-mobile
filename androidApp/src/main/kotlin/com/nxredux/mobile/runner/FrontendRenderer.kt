@@ -156,10 +156,8 @@ internal class FrontendRenderer(
     private val menuOpen get() = host.menuOpen
     private val isNds get() = host.isNds
     private val isN3ds get() = host.isN3ds
-    private val isPs2 get() = Res3dConsole.forTag(gameTag) == Res3dConsole.PS2
     private val isPsp get() = Res3dConsole.forTag(gameTag) == Res3dConsole.PSP
     private val isDolphin get() = Res3dConsole.forTag(gameTag) == Res3dConsole.DOLPHIN
-    private val isPs1 get() = Res3dConsole.forTag(gameTag).let { it == Res3dConsole.PS1 || it == Res3dConsole.PCSX }
     private val isDc get() = Res3dConsole.forTag(gameTag) == Res3dConsole.DC
     private val isN64 get() = Res3dConsole.forTag(gameTag) == Res3dConsole.N64
     private val privateRoot get() = host.privateRoot
@@ -227,7 +225,7 @@ internal class FrontendRenderer(
             val src = map.src(p.screen)
             ScreenRegion(
                 ScreenRect(src.left, src.top, src.right, src.bottom),
-                ScreenRect(p.dst.x / w, p.dst.y / h, (p.dst.x + p.dst.width) / w, (p.dst.y + p.dst.height) / h),
+                p.dst.normalisedIn(w, h),
                 shaded = NdsLayout.takesShader(p.screen) || frontendValues[NdsOptions.SHADER_SCREENS] == NdsOptions.SHADER_BOTH,
                 touch = p.screen == NdsScreen.BOTTOM,
             )
@@ -749,12 +747,17 @@ internal class FrontendRenderer(
             // It laid out again with a new proportion (the app's own 3DS frame): that layout stands, not this stale one.
             if (generation != layoutGeneration) return
         }
-        if (isPs2) reportPs2Resolution(w, h, screen, shown, g)
-        if (isPsp) reportPspResolution(w, h, screen, shown, g)
-        if (isDolphin) reportDolphinResolution(w, h, screen, shown, g)
-        if (isPs1) reportPs1Resolution(w, h, screen, shown, g)
-        if (isDc) reportDcResolution(w, h, screen, shown, g)
-        if (isN64) reportN64Resolution(w, h, screen, shown, g)
+        when (Res3dConsole.forTag(gameTag)) {
+            Res3dConsole.PS2 -> reportFlat3d(w, h, screen, shown, g, Ps2Resolution::shownScales, Ps2Resolution::displayMax)
+            Res3dConsole.PSP -> reportFlat3d(w, h, screen, shown, g, PspResolution::shownScales, PspResolution::displayMax)
+            Res3dConsole.DOLPHIN ->
+                reportFlat3d(w, h, screen, shown, g, DolphinResolution::shownScales, DolphinResolution::displayMax)
+            Res3dConsole.PS1, Res3dConsole.PCSX ->
+                reportFlat3d(w, h, screen, shown, g, Ps1Resolution::shownScales, Ps1Resolution::displayMax)
+            Res3dConsole.DC -> reportFlat3d(w, h, screen, shown, g, DcResolution::shownScales, DcResolution::displayMax)
+            Res3dConsole.N64 -> reportFlat3d(w, h, screen, shown, g, N64Resolution::shownScales, N64Resolution::displayMax)
+            else -> Unit
+        }
         if (viewport != lastViewport) {
             lastViewport = viewport
             view.viewport = viewport
@@ -789,67 +792,23 @@ internal class FrontendRenderer(
     }
 
     /**
-     * The PS2 3D scale's inputs to the host, as [reportNds3d]: the [shown] picture's height over the 448 px frame, and the
-     * window's display maximum ([Ps2Resolution.displayMax]); with the picture on a second display, its height there.
-     * Nothing before the first frame (the launch's value stands).
+     * A one-picture console's 3D scale inputs to the host, as [reportNds3d]: the [shown] picture's height over the
+     * console's own frame ([shownScales]), and the window's display maximum ([displayMax]); with the picture on a second
+     * display, its height there. Nothing before the first frame (the launch's value stands).
      */
-    private fun reportPs2Resolution(w: Float, h: Float, screen: ScreenClass, shown: PxRect, g: FloatArray) {
+    private fun reportFlat3d(
+        w: Float,
+        h: Float,
+        screen: ScreenClass,
+        shown: PxRect,
+        g: FloatArray,
+        shownScales: (Int?, Int?) -> Pair<Int?, Int>,
+        displayMax: (Int, Int) -> Int,
+    ) {
         if (!gameReady || shown.height <= 0f) return
         val main = shown.height.roundToInt().takeUnless { host.mainShowsNoPicture() }
-        val (current, second) = Ps2Resolution.shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
-        report3d(w, h, screen, halfFolded = false, current, second) {
-            Ps2Resolution.displayMax(w.roundToInt(), h.roundToInt())
-        }
-    }
-
-    /** The GameCube / Wii scale's inputs to the host, as [reportPspResolution], over the 528-line frame ([DolphinResolution]). */
-    private fun reportDolphinResolution(w: Float, h: Float, screen: ScreenClass, shown: PxRect, g: FloatArray) {
-        if (!gameReady || shown.height <= 0f) return
-        val main = shown.height.roundToInt().takeUnless { host.mainShowsNoPicture() }
-        val (current, second) = DolphinResolution.shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
-        report3d(w, h, screen, halfFolded = false, current, second) {
-            DolphinResolution.displayMax(w.roundToInt(), h.roundToInt())
-        }
-    }
-
-    /** The PlayStation scale's inputs to the host, as [reportPspResolution], over the 240-line picture ([Ps1Resolution]). */
-    private fun reportPs1Resolution(w: Float, h: Float, screen: ScreenClass, shown: PxRect, g: FloatArray) {
-        if (!gameReady || shown.height <= 0f) return
-        val main = shown.height.roundToInt().takeUnless { host.mainShowsNoPicture() }
-        val (current, second) = Ps1Resolution.shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
-        report3d(w, h, screen, halfFolded = false, current, second) {
-            Ps1Resolution.displayMax(w.roundToInt(), h.roundToInt())
-        }
-    }
-
-    /** The Dreamcast scale's inputs to the host, as [reportPspResolution], over the 480-line picture ([DcResolution]). */
-    private fun reportDcResolution(w: Float, h: Float, screen: ScreenClass, shown: PxRect, g: FloatArray) {
-        if (!gameReady || shown.height <= 0f) return
-        val main = shown.height.roundToInt().takeUnless { host.mainShowsNoPicture() }
-        val (current, second) = DcResolution.shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
-        report3d(w, h, screen, halfFolded = false, current, second) {
-            DcResolution.displayMax(w.roundToInt(), h.roundToInt())
-        }
-    }
-
-    /** The N64 scale's inputs to the host, as [reportPspResolution], over the 240-line picture ([N64Resolution]). */
-    private fun reportN64Resolution(w: Float, h: Float, screen: ScreenClass, shown: PxRect, g: FloatArray) {
-        if (!gameReady || shown.height <= 0f) return
-        val main = shown.height.roundToInt().takeUnless { host.mainShowsNoPicture() }
-        val (current, second) = N64Resolution.shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
-        report3d(w, h, screen, halfFolded = false, current, second) {
-            N64Resolution.displayMax(w.roundToInt(), h.roundToInt())
-        }
-    }
-
-    /** The PSP 3D scale's inputs to the host, as [reportPs2Resolution], over the 272 px screen ([PspResolution]). */
-    private fun reportPspResolution(w: Float, h: Float, screen: ScreenClass, shown: PxRect, g: FloatArray) {
-        if (!gameReady || shown.height <= 0f) return
-        val main = shown.height.roundToInt().takeUnless { host.mainShowsNoPicture() }
-        val (current, second) = PspResolution.shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
-        report3d(w, h, screen, halfFolded = false, current, second) {
-            PspResolution.displayMax(w.roundToInt(), h.roundToInt())
-        }
+        val (current, second) = shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
+        report3d(w, h, screen, halfFolded = false, current, second) { displayMax(w.roundToInt(), h.roundToInt()) }
     }
 
     /**
@@ -1165,10 +1124,13 @@ internal class FrontendRenderer(
     }
 }
 
+/** The rect as 0..1 of a [w] x [h] area. */
+internal fun PxRect.normalisedIn(w: Float, h: Float) = ScreenRect(x / w, y / h, (x + width) / w, (y + height) / h)
+
 /** An [NdsRegion] in the fork's terms: dst as 0..1 of the [w] x [h] game area (the view's whole viewport). */
 internal fun NdsRegion.toScreenRegion(w: Float, h: Float) = ScreenRegion(
     src = ScreenRect(src.left, src.top, src.right, src.bottom),
-    dst = ScreenRect(dst.x / w, dst.y / h, (dst.x + dst.width) / w, (dst.y + dst.height) / h),
+    dst = dst.normalisedIn(w, h),
     shaded = shaded,
     touch = touch,
     alpha = alpha,

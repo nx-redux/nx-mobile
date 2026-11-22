@@ -5,21 +5,12 @@ $(error GNU make >= 3.82 required; on macOS run gmake (brew install make))
 endif
 
 # ---- tools -----------------------------------------------------------------
-# NDK r29, the one libretro's buildbot builds its Android cores with (libretro-build-android), and
-# flycast's and ARMSX2's own CI. r26's libc++ std::ranges::binary_search compared against the first element (Dolphin
-# flushed on most draws, ~600 glFlush a frame in Super Mario Galaxy 2).
-NDK_VERSION ?= 29.0.14206865
-NDK ?= $(or $(ANDROID_NDK_HOME),$(if $(ANDROID_HOME),$(ANDROID_HOME)/ndk/$(NDK_VERSION),$(HOME)/Library/Android/sdk/ndk/$(NDK_VERSION)))
+include ndk.mk
 SDK ?= $(or $(ANDROID_HOME),$(HOME)/Library/Android/sdk)
 CMAKE ?= $(SDK)/cmake/3.22.1/bin/cmake
 NINJA ?= $(SDK)/cmake/3.22.1/bin/ninja
-UNAME_S := $(shell uname -s)
-HOST_TAG := $(if $(filter Darwin,$(UNAME_S)),darwin-x86_64,linux-x86_64)
-LLVM_BIN := $(NDK)/toolchains/llvm/prebuilt/$(HOST_TAG)/bin
+CMAKE_330 = $(SDK)/cmake/3.30.3/bin
 NDK_BUILD := $(NDK)/ndk-build
-STRIP := $(LLVM_BIN)/llvm-strip
-READELF := $(LLVM_BIN)/llvm-readelf
-PROCS ?= -j$(shell sysctl -n hw.ncpu 2>/dev/null || nproc)
 ABI := arm64-v8a
 PLATFORM := android-26
 PAGE_LDFLAGS := -Wl,-z,max-page-size=16384
@@ -90,22 +81,13 @@ CORES = gambatte fceumm snes9x genesis_plus_gx mgba melondsds mupen64plus_next p
 gambatte_REPO = https://github.com/libretro/gambatte-libretro
 gambatte_HASH = 77f2567d718b8973d02caa2daa8dce4953faf811
 gambatte_LICENSE = COPYING
-gambatte_KIND = ndkbuild
 gambatte_BUILD_PATH = libgambatte/libretro
-# libgambatte/libretro/jni/Android.mk defines LOCAL_MODULE := retro -> libs/arm64-v8a/libretro.so
-gambatte_ARTIFACT = libs/$(ABI)/libretro.so
 # patches/gambatte/002: nx-redux's async slave reply for the network link cable (a service thread answers a master's
 # transfer at once from the cached SB byte; without it link-heavy games stutter on both sides). The wire is unchanged.
 
 fceumm_REPO = https://github.com/libretro/libretro-fceumm
 fceumm_HASH = e0f3086a8104f8fbbe49a2615b10401504a9533f
 fceumm_LICENSE = Copying src/ntsc/license.txt
-fceumm_KIND = ndkbuild
-# jni/Android.mk lives at the repo root for this pin (not src/drivers/libretro),
-# so the directory containing jni/ is the repo root -> BUILD_PATH = .
-fceumm_BUILD_PATH = .
-# jni/Android.mk defines LOCAL_MODULE := retro -> libs/arm64-v8a/libretro.so
-fceumm_ARTIFACT = libs/$(ABI)/libretro.so
 # patches/fceumm.patch: the FDS disk in one L press (eject, then the next side in a second later; L with the drive empty
 # puts the next side in), its pending flip kept in save states.
 
@@ -116,20 +98,14 @@ fceumm_ARTIFACT = libs/$(ABI)/libretro.so
 snes9x_REPO = https://github.com/libretro/snes9x
 snes9x_HASH = fae2fea08f74180759ef540ee94259213f503480
 snes9x_LICENSE = LICENSE
-snes9x_KIND = ndkbuild
 snes9x_BUILD_PATH = libretro
-# libretro/jni/Android.mk defines LOCAL_MODULE := retro -> libs/arm64-v8a/libretro.so
-snes9x_ARTIFACT = libs/$(ABI)/libretro.so
 
 # patches/genesis_plus_gx/0001: retro_cheat_set heap-copies the code and stops at MAX_CHEATS parts; the 151st part
 # wrote past cheatlist[] and codes over 255 chars were cut.
 genesis_plus_gx_REPO = https://github.com/libretro/Genesis-Plus-GX
 genesis_plus_gx_HASH = f27655b592ef43f317272d79883bcaa10d3ac8ad
 genesis_plus_gx_LICENSE = LICENSE.txt core/ntsc/license.txt
-genesis_plus_gx_KIND = ndkbuild
 genesis_plus_gx_BUILD_PATH = libretro
-# libretro/jni/Android.mk defines LOCAL_MODULE := retro -> libs/arm64-v8a/libretro.so
-genesis_plus_gx_ARTIFACT = libs/$(ABI)/libretro.so
 
 mgba_REPO = https://github.com/libretro/mgba
 mgba_HASH = 7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6
@@ -141,8 +117,6 @@ mgba_LICENSE = LICENSE
 # USE_SQLITE3=OFF: the host pkg-config finds the build machine's sqlite3 and mgba adds its
 # -L/usr/lib/x86_64-linux-gnu, so -lm picks up glibc's x86 linker script and lld fails. The core doesn't use it.
 mgba_KIND = cmake
-mgba_BUILD_PATH = .
-mgba_CMAKE_TARGET = mgba_libretro
 # Link: patches/mgba/001-sio-lockstep.patch is nx-redux's, the real link cable with a
 # CMakeLists.txt hunk that compiles cores/sio_lockstep in (NX_SIOLS_DIR). The core is then GPL-2.0-or-later (NOTICE.txt).
 # patches/mgba/003-wifi-link.patch adds gpSP's Wireless Adapter and cable protocols (cores/gba_wifi_link, NX_GWL_DIR).
@@ -160,7 +134,6 @@ mupen64plus_next_REPO = https://github.com/libretro/mupen64plus-libretro-nx
 mupen64plus_next_HASH = 15bada85906593376e8fd697f1b0b3af3a20f512
 mupen64plus_next_LICENSE = LICENSE GLideN64/LICENSE mupen64plus-core/LICENSES mupen64plus-rsp-hle/LICENSES mupen64plus-rsp-cxd4/COPYING \
   mupen64plus-rsp-paraLLEl/LICENSE mupen64plus-video-paraLLEl/parallel-rdp/LICENSE
-mupen64plus_next_KIND = ndkbuild
 # Output must carry the gles3 flavour; the generic default would be
 # mupen64plus_next_libretro_android.so, so set _CORE explicitly.
 mupen64plus_next_CORE = mupen64plus_next_gles3_libretro_android.so
@@ -173,8 +146,6 @@ mupen64plus_next_CORE = mupen64plus_next_gles3_libretro_android.so
 mupen64plus_next_SUBMODULES = ':(exclude)mupen64plus-rsp-paraLLEl/lightning/gnulib'
 # recipe jni path is "libretro/jni", so the directory containing jni/ is libretro/.
 mupen64plus_next_BUILD_PATH = libretro
-# libretro/jni/Android.mk defines LOCAL_MODULE := retro -> libs/arm64-v8a/libretro.so
-mupen64plus_next_ARTIFACT = libs/$(ABI)/libretro.so
 # GLES3=1 is the exact flag the libretro-super cores-android recipe passes for the
 # mupen64plus_next_gles3 target; Android.mk reads it: ifeq ($(GLES3),1) -> -lGLESv3.
 # STRINGS: its jni/Android.mk generates asm_defines_gas.h with the NDK's llvm-strings but hard-codes the linux-x86_64
@@ -197,8 +168,6 @@ ppsspp_LICENSE = LICENSE.TXT ext/ffmpeg/LICENSE.md
 # patches/ppsspp/0013: a Rendering Resolution change on Vulkan rebuilds the render buffers too (GLES gets a context
 # reset); without it a game kept drawing at the scale it started at.
 ppsspp_KIND = cmake
-ppsspp_BUILD_PATH = .
-ppsspp_CMAKE_TARGET = ppsspp_libretro
 ppsspp_ARTIFACT = ppsspp_libretro_android.so
 # Flags per the PPSSPP libretro Android build: LIBRETRO=ON selects the core target,
 # ANDROID/USING_GLES2 pick the mobile GL path, and the USE_SYSTEM_*/USE_DISCORD=OFF
@@ -220,8 +189,6 @@ ppsspp_FLAGS = -DLIBRETRO=ON -DANDROID=ON -DUSING_GLES2=ON -DUSE_SYSTEM_FFMPEG=O
 melondsds_REPO = https://github.com/JesseTG/melonds-ds
 melondsds_HASH = f394adbacb5722ee97c1b37c8064da9a25818310
 melondsds_KIND = cmake
-melondsds_BUILD_PATH = .
-melondsds_CMAKE_TARGET = melondsds_libretro
 melondsds_ARTIFACT = src/libretro/melondsds_libretro_android.so
 MELONDSDS_DEPS_DIR = $(abspath $(SRC_ROOT))/melondsds-deps
 melondsds_FLAGS = -DENABLE_JIT=ON -DENABLE_OPENGL=ON -DENABLE_OGLRENDERER=ON -DOPENGL_PROFILE=OpenGLES3 -DBUILD_TESTING=OFF \
@@ -252,62 +219,38 @@ MELONDSDS_DEPS_STAMP := $(shell printf %s '$(MELONDSDS_DEPS)' | shasum | cut -c1
 race_REPO = https://github.com/libretro/race
 race_HASH = c7810dd7f172827bfa2004813bc000b13786636b
 race_LICENSE = license.txt
-race_KIND = ndkbuild
-race_BUILD_PATH = .
-race_ARTIFACT = libs/$(ABI)/libretro.so
 
 # patches/mednafen_pce_fast/0001: retro_cheat_set heap-copies the code; upstream truncates it at 255 chars, dropping later parts.
 mednafen_pce_fast_REPO = https://github.com/libretro/beetle-pce-fast-libretro
 mednafen_pce_fast_HASH = 2de1ce1c3f237b161c126c54ba407990bb86d1e9
 mednafen_pce_fast_LICENSE = COPYING mednafen/tremor/COPYING
-mednafen_pce_fast_KIND = ndkbuild
-mednafen_pce_fast_BUILD_PATH = .
-mednafen_pce_fast_ARTIFACT = libs/$(ABI)/libretro.so
 
 mednafen_vb_REPO = https://github.com/libretro/beetle-vb-libretro
 mednafen_vb_HASH = d5ae54c8e23b573a3b34e888b2d48a588027e92c
 mednafen_vb_LICENSE = COPYING
-mednafen_vb_KIND = ndkbuild
-mednafen_vb_BUILD_PATH = .
-mednafen_vb_ARTIFACT = libs/$(ABI)/libretro.so
 
 handy_REPO = https://github.com/libretro/libretro-handy
 handy_HASH = bc55d462f0b2d6b073ea93dc552ebd73cec60fd1
 handy_LICENSE = lynx/license.txt
-handy_KIND = ndkbuild
-handy_BUILD_PATH = .
-handy_ARTIFACT = libs/$(ABI)/libretro.so
 
 # nx-redux names this make target a2600 (its clone dir); ours is the core id so the output is stella2014_libretro_android.so.
 stella2014_REPO = https://github.com/libretro/stella2014-libretro
 stella2014_HASH = 7d1361e407e63f29e52892655069e5fb4096e691
 stella2014_LICENSE = stella/license.txt
-stella2014_KIND = ndkbuild
-stella2014_BUILD_PATH = .
-stella2014_ARTIFACT = libs/$(ABI)/libretro.so
 
 # nx-redux: a7800.
 prosystem_REPO = https://github.com/libretro/prosystem-libretro
 prosystem_HASH = 8a88014287c7a01cd568067e5a557d0a2b2a051f
 prosystem_LICENSE = License.txt bupboop/License.txt
-prosystem_KIND = ndkbuild
-prosystem_BUILD_PATH = .
-prosystem_ARTIFACT = libs/$(ABI)/libretro.so
 
 a5200_REPO = https://github.com/libretro/a5200
 a5200_HASH = 40c6f2f1ad4a3145b328d5baaf010fae6c7e752b
 a5200_LICENSE = License.txt
-a5200_KIND = ndkbuild
-a5200_BUILD_PATH = .
-a5200_ARTIFACT = libs/$(ABI)/libretro.so
 
 # No Brick pak: pinned at upstream HEAD on the day it was added.
 mednafen_wswan_REPO = https://github.com/libretro/beetle-wswan-libretro
 mednafen_wswan_HASH = 4b01295838ea89e3f1355bbe4cb5cf98aa6108cd
 mednafen_wswan_LICENSE = COPYING
-mednafen_wswan_KIND = ndkbuild
-mednafen_wswan_BUILD_PATH = .
-mednafen_wswan_ARTIFACT = libs/$(ABI)/libretro.so
 # Its jni/Android.mk includes ../Makefile.common (cwd-relative), so ndk-build must run inside jni/.
 mednafen_wswan_FLAGS = -C jni
 
@@ -318,9 +261,6 @@ mednafen_wswan_FLAGS = -C jni
 mednafen_supafaust_REPO = https://github.com/libretro/supafaust
 mednafen_supafaust_HASH = 642d1d1b6684aa7e306a02a89885f3f5456a5157
 mednafen_supafaust_LICENSE = COPYING
-mednafen_supafaust_KIND = ndkbuild
-mednafen_supafaust_BUILD_PATH = .
-mednafen_supafaust_ARTIFACT = libs/$(ABI)/libretro.so
 # OwlResampler_neon.inc uses the C++17-removed `register` specifier; the NDK's clang makes that an error by default.
 mednafen_supafaust_FLAGS = APP_CPPFLAGS=-Wno-register
 
@@ -329,25 +269,18 @@ mednafen_supafaust_FLAGS = APP_CPPFLAGS=-Wno-register
 pokemini_REPO = https://github.com/libretro/PokeMini
 pokemini_HASH = 132111b76343559860532a1ccc094f93f1ed5650
 pokemini_LICENSE = LICENSE
-pokemini_KIND = ndkbuild
-pokemini_BUILD_PATH = .
-pokemini_ARTIFACT = libs/$(ABI)/libretro.so
 
 # fake08's libretro build lives in platform/libretro/jni with LOCAL_MODULE := fake08, so the artifact is
 # libfake08.so; the default recursive submodule init pulls libs/z8lua.
 fake08_REPO = https://github.com/jtothebell/fake-08
 fake08_HASH = 814991a2571ad3970e386cef48f3b148aa1c27b9
 fake08_LICENSE = LICENSE.MD libs/miniz/LICENSE libs/lodepng/LICENSE
-fake08_KIND = ndkbuild
 fake08_BUILD_PATH = platform/libretro
 fake08_ARTIFACT = libs/$(ABI)/libfake08.so
 
 prboom_REPO = https://github.com/libretro/libretro-prboom
 prboom_HASH = 4849268e7342494193f2bbf2d0128a751cf58da7
 prboom_LICENSE = COPYING
-prboom_KIND = ndkbuild
-prboom_BUILD_PATH = .
-prboom_ARTIFACT = libs/$(ABI)/libretro.so
 
 # Dynarec cores: both map RWX memory at runtime, so verify.sh's static check is not enough; smoke-test them on a
 # 16 KB-page arm64 image (load, 60 s, save state, relaunch, load it, 10 s).
@@ -359,9 +292,6 @@ prboom_ARTIFACT = libs/$(ABI)/libretro.so
 gpsp_REPO = https://github.com/libretro/gpsp
 gpsp_HASH = 5819380c2ffb0900219d700a382ee68c464ebb99
 gpsp_LICENSE = COPYING
-gpsp_KIND = ndkbuild
-gpsp_BUILD_PATH = .
-gpsp_ARTIFACT = libs/$(ABI)/libretro.so
 # Link: patches/gpsp/ holds nx-redux's 001 (RFU disconnect), 002 (RFU queue), 004 (real link
 # cable, gpsp_serial "lockstep"/"auto_cable") and 007 (rfu_net_receive bounds-checks a peer's broadcast and client
 # packets); its 003 (JIT cache) is left out, patches/gpsp.patch covers it. 004 compiles in cores/sio_lockstep through
@@ -372,9 +302,6 @@ gpsp_LICENSE_EXTRA = sio_lockstep/NOTICE.txt
 pcsx_rearmed_REPO = https://github.com/libretro/pcsx_rearmed
 pcsx_rearmed_HASH = 7b0e8f8fadfbce3d170d195b9d9eecaabfa08c8e
 pcsx_rearmed_LICENSE = COPYING
-pcsx_rearmed_KIND = ndkbuild
-pcsx_rearmed_BUILD_PATH = .
-pcsx_rearmed_ARTIFACT = libs/$(ABI)/libretro.so
 # Only libpicofe is needed (nx-redux does the same); the recursive default would pull unused nested submodules.
 pcsx_rearmed_SUBMODULES = frontend/libpicofe
 # jni/Android.mk defaults USE_LIBRETRO_VFS to 0, which makes the core fopen() paths itself and bypass the runner's
@@ -392,8 +319,6 @@ swanstation_REPO = https://github.com/libretro/swanstation
 swanstation_HASH = 631f0fb31b809e0f889d7c551fe695788e39c1d3
 swanstation_LICENSE = LICENSE
 swanstation_KIND = cmake
-swanstation_BUILD_PATH = .
-swanstation_CMAKE_TARGET = swanstation_libretro
 swanstation_ARTIFACT = swanstation_libretro_android.so
 
 # 32X only (GPGX runs MD/SMS/GG/SG/SEGACD). jni/Android.mk at the repo root, LOCAL_MODULE := retro. The default
@@ -408,9 +333,6 @@ swanstation_ARTIFACT = swanstation_libretro_android.so
 picodrive_REPO = https://github.com/irixxxx/picodrive
 picodrive_HASH = 9c298c1fe7347a50b07a494cdb8c91d2f9b40c6a
 picodrive_LICENSE = COPYING
-picodrive_KIND = ndkbuild
-picodrive_BUILD_PATH = .
-picodrive_ARTIFACT = libs/$(ABI)/libretro.so
 # Non-recursive: dr_libs (from 2026) has its test suite's miniaudio as a nested submodule at an old dr-soft URL, which
 # hangs the clone; the build uses none of the nested ones.
 picodrive_SUBMODULES = cpu/cyclone pico/cd/libchdr pico/sound/emu2413 platform/common/dr_libs platform/libpicofe
@@ -418,18 +340,14 @@ picodrive_SUBMODULES = cpu/cyclone pico/cd/libchdr pico/sound/emu2413 platform/c
 gearcoleco_REPO = https://github.com/drhelius/Gearcoleco
 gearcoleco_HASH = 2805e70fd56c3bb6a0412a4ddaf210eefc8a5d7c
 gearcoleco_LICENSE = LICENSE
-gearcoleco_KIND = ndkbuild
 gearcoleco_BUILD_PATH = platforms/libretro
-gearcoleco_ARTIFACT = libs/$(ABI)/libretro.so
 
 # FB Neo licence: non-commercial, and no donation asks for any project using its source (README Constraints).
 # 7z support on, Neo Geo CD off (upstream Android.mk defaults). No rotation patch: the runner honours SET_ROTATION.
 # patches/fbneo/0001: retro_unserialize rejects a state of another size; one from another version was read in misaligned and crashed.
 fbneo_REPO = https://github.com/libretro/FBNeo
 fbneo_HASH = d15071abf14191eebb4a5d7c7147398edcf237c8
-fbneo_KIND = ndkbuild
 fbneo_BUILD_PATH = src/burner/libretro
-fbneo_ARTIFACT = libs/$(ABI)/libretro.so
 
 # flycast (Dreamcast). master 7adbf3ca (93 commits past v2.7; no release since). CMake kind like
 # mgba/ppsspp: the top-level CMakeLists.txt builds the SHARED target flycast_libretro (empty prefix, build root) when
@@ -462,8 +380,6 @@ fbneo_ARTIFACT = libs/$(ABI)/libretro.so
 flycast_REPO = https://github.com/flyinghead/flycast
 flycast_HASH = 7adbf3caef251b153e348df3f469a0f35878339d
 flycast_KIND = cmake
-flycast_BUILD_PATH = .
-flycast_CMAKE_TARGET = flycast_libretro
 flycast_ARTIFACT = flycast_libretro.so
 flycast_SUBMODULES = --recursive core/deps/libchdr core/deps/tinygettext core/deps/asio \
   core/deps/glslang core/deps/Vulkan-Headers core/deps/VulkanMemoryAllocator
@@ -486,11 +402,10 @@ flycast_FLAGS = -DLIBRETRO=ON -DUSE_GLES=ON -DUSE_OPENMP=OFF -DCMAKE_OSX_ARCHITE
 azahar_REPO = https://github.com/azahar-emu/azahar
 azahar_HASH = 219d743a1e698101fe1ab8bef43e6563126c3c27
 azahar_KIND = cmake
-azahar_BUILD_PATH = .
 azahar_CMAKE_TARGET = citra_libretro
 azahar_ARTIFACT = bin/Release/azahar_libretro.so
-azahar_CMAKE = $(SDK)/cmake/3.30.3/bin/cmake
-azahar_NINJA = $(SDK)/cmake/3.30.3/bin/ninja
+azahar_CMAKE = $(CMAKE_330)/cmake
+azahar_NINJA = $(CMAKE_330)/ninja
 # android-21 as upstream CI: at API >= 23 bionic declares the GNU strerror_r under _GNU_SOURCE, and common/error.cpp
 # takes the XSI (int) form whenever HAVE_LIBRETRO is set, so android-26 fails to compile. The app's minSdk (26) is above.
 azahar_PLATFORM = android-21
@@ -527,11 +442,9 @@ dolphin_LICENSE = COPYING LICENSES/GPL-2.0-or-later.txt LICENSES/MIT.txt LICENSE
   Externals/libusb/libusb/COPYING Externals/licenses.md
 dolphin_LICENSE_EXTRA = notices/dolphin-kissfft.txt
 dolphin_KIND = cmake
-dolphin_BUILD_PATH = .
-dolphin_CMAKE_TARGET = dolphin_libretro
 dolphin_ARTIFACT = dolphin_libretro_android.so
-dolphin_CMAKE = $(SDK)/cmake/3.30.3/bin/cmake
-dolphin_NINJA = $(SDK)/cmake/3.30.3/bin/ninja
+dolphin_CMAKE = $(CMAKE_330)/cmake
+dolphin_NINJA = $(CMAKE_330)/ninja
 dolphin_PLATFORM = android-24
 dolphin_FLAGS = -DLIBRETRO=ON -DENABLE_LTO=ON -DANDROID_STL=c++_static
 
@@ -573,11 +486,10 @@ armsx2_LICENSE_EXTRA = $(addprefix $(ARMSX2_DEPS_SRC)/,libpng/LICENSE libjpeg-tu
   shaderc/third_party/spirv-tools/LICENSE shaderc/third_party/spirv-headers/LICENSE) \
   $(addprefix notices/armsx2-,ccc.txt demangler.txt freesurround.txt glad.txt rapidyaml.txt libretro.txt)
 armsx2_KIND = cmake
-armsx2_BUILD_PATH = .
 armsx2_CMAKE_TARGET = pcsx2-libretro
 armsx2_ARTIFACT = bin/armsx2_libretro.so
-armsx2_CMAKE = $(SDK)/cmake/3.30.3/bin/cmake
-armsx2_NINJA = $(SDK)/cmake/3.30.3/bin/ninja
+armsx2_CMAKE = $(CMAKE_330)/cmake
+armsx2_NINJA = $(CMAKE_330)/ninja
 armsx2_PLATFORM = android-28
 ARMSX2_DEPS = $(abspath $(BUILD_ROOT))/armsx2-deps
 # Built as upstream's Android app is: thin LTO over the core (LTO_PCSX2_CORE, which needs the multi-ISA GS build that
@@ -642,7 +554,7 @@ dolphin: $(OUTPUT_ROOT)/system/dolphin-emu/Sys/.staged
 $(ARMSX2_DEPS)/.built-$(armsx2_HASH): $(SRC_ROOT)/armsx2/.patched
 	rm -rf $(ARMSX2_DEPS)/prefix $(ARMSX2_DEPS)/.built-*
 	mkdir -p $(ARMSX2_DEPS)/prefix
-	cd $(ARMSX2_DEPS) && PATH="$(dir $(armsx2_CMAKE)):$$PATH" ANDROID_NDK=$(NDK) ANDROID_ABI=$(ABI) ANDROID_API=28 \
+	cd $(ARMSX2_DEPS) && PATH="$(dir $(armsx2_CMAKE)):$$PATH" ANDROID_NDK=$(NDK) ANDROID_ABI=$(ABI) ANDROID_API=$(armsx2_PLATFORM:android-%=%) \
 	  bash $(CURDIR)/$(SRC_ROOT)/armsx2/.github/workflows/scripts/android/build-dependencies.sh $(ARMSX2_DEPS)/prefix
 	touch $@
 $(OUTPUT_ROOT)/armsx2_libretro_android.so: $(ARMSX2_DEPS)/.built-$(armsx2_HASH)

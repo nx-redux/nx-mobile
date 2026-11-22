@@ -6,10 +6,10 @@
 #include <cmath>
 #include <cstdio>
 
+#include "check.h"
+
 using namespace libretrodroid;
 
-static int failures = 0;
-static void check(bool ok, const char* what) { if (!ok) { std::printf("FAIL %s\n", what); failures++; } }
 static bool near(float a, float b) { return std::fabs(a - b) < 1e-4f; }
 
 int main() {

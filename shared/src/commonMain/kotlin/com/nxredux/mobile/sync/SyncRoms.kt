@@ -252,12 +252,7 @@ object SyncRoms {
         p: ConsolePair, own: ExtrasManifest, peer: ExtrasManifest, homeNames: Map<String, Set<String>>,
         remoteNames: Map<String, Set<String>> = emptyMap(), peerFolders: List<String>? = null, mapped: Boolean = false,
     ): PairUnits {
-        fun siblings(folder: String, all: List<String>): List<String> {
-            val named = SyncConsoles.siblings(folder, all)
-            if (!mapped) return named
-            val console = SyncMap.consoleOf(folder)?.id ?: return named
-            return (named + all.filter { it != folder && !it.startsWith(".") && SyncMap.consoleOf(it)?.id == console }).distinct()
-        }
+        fun siblings(folder: String, all: List<String>): List<String> = SyncConsoles.siblings(folder, all, mapped)
         val home = homeNames[p.local].orEmpty()
         val homeLower = home.mapTo(HashSet()) { it.lowercase() }
         val inRemote = remoteNames[p.remote].orEmpty().mapTo(HashSet()) { it.lowercase() }

@@ -110,7 +110,8 @@ class SaveSyncPlan(
         return newestPerGame(phone).flatMap { (file, entry) ->
             val c = entry.console
             val key = entry.key ?: return@flatMap emptyList()
-            val roms = (listOfNotNull(romName(c, key.game), romFromReceivedName(entry.rest)) + handheldRomsOf[c]?.get(key.game).orEmpty())
+            // The ROM name the file itself carries too: one too many only adds a placeholder.
+            val roms = (listOfNotNull(romName(c, key.game), SaveKeys.carriedRom(entry.rest)) + handheldRomsOf[c]?.get(key.game).orEmpty())
             val names = when (key.kind) {
                 SaveKind.BATTERY -> listOf("${key.game}.srm", "${key.game}.sav") + roms.flatMap { r -> SaveFormat.entries.map { SaveKeys.batteryName(it, r) } }
                 SaveKind.CLOCK -> roms.map { "$it.rtc" }
@@ -231,17 +232,6 @@ class SaveSyncPlan(
 
     /** True when a handheld ROM folder tagged [t] of console [c] holds [game]. */
     private fun inFolder(c: String, t: String, game: String): Boolean = gamesIn[t to c]?.contains(game) == true
-
-    /**
-     * The ROM file name a save or clock name carries (`Emerald.gba.sav` → `Emerald.gba`), else null: for [seeds], where
-     * one ROM name too many only adds a placeholder ([fold] names saves by [SaveKeys.romOf]).
-     */
-    private fun romFromReceivedName(name: String): String? {
-        val dot = name.lastIndexOf('.')
-        if (dot <= 0 || name.substring(dot + 1).lowercase() !in setOf("sav", "srm", "rtc")) return null
-        val base = name.substring(0, dot)
-        return base.takeIf { SaveKeys.romKey(it) != it }
-    }
 
     companion object {
         /** How much newer than every phone copy a received save must be to win [fold]. */

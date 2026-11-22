@@ -1,6 +1,7 @@
 package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.layout.DeviceTraits
+import com.nxredux.mobile.tryOrAny
 import com.nxredux.mobile.tryOrNull
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.netplay.NetplayCores
@@ -27,7 +28,6 @@ import com.nxredux.mobile.storage.EmulatorConfigStore
 import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxButton
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -132,7 +132,7 @@ object EmulatorRows {
         val n = rows.size
         if (n == 0) return 0
         for (k in 1..n) {
-            val i = ((index + k * delta) % n + n) % n
+            val i = (index + k * delta).mod(n)
             if (rows[i].selectable) return i
         }
         return index
@@ -313,7 +313,7 @@ internal class EmulatorSettingsController(
                     screen.value = s.copy(rows = rows, category = null)
                     selection.value = ListSelection(rows.indexOf(rows.firstOrNull { it is EmulatorRow.Category && it.key == s.category }).coerceAtLeast(0), rows.size)
                 }
-                s.game != null -> gameReturn?.let { (to, at) -> gameReturn = null; host.restore(to, at) }
+                s.game != null -> closeGame(s)
                 fromPicker -> listRow?.let { showConsoles(it, s.page.tag) } ?: showList(null)
                 else -> showList(listRow)
             }
@@ -389,14 +389,10 @@ internal class EmulatorSettingsController(
     private fun openPage(tag: String, d: CoreDescriptor, game: Listed?, still: () -> Boolean, opened: () -> Unit) {
         scope.launch {
             val page = lock.withLock {
-                try {
-                    withContext(work) { readPage(tag, d, game) }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Throwable) {
+                tryOrAny({
                     error.value = "Could not read the settings"
                     null
-                }
+                }) { withContext(work) { readPage(tag, d, game) } }
             } ?: return@launch
             if (!still()) return@launch
             opened()
@@ -491,7 +487,10 @@ internal class EmulatorSettingsController(
         scope.launch {
             lock.withLock {
                 val page = withContext(work) {
-                    try {
+                    tryOrAny({
+                        error.value = "Could not save the setting"
+                        tryOrNull { readPage(tag, d, game) }
+                    }) {
                         val files = configs.read(tag, d.id, rom)
                         val page = build(tag, d, game, files)
                         val value = next(page, key) ?: return@withContext page
@@ -505,11 +504,6 @@ internal class EmulatorSettingsController(
                             if (key == GpuDriverOptions.KEY) game?.let { clearGpuDriverCrash(it.game.path) }
                             build(tag, d, game, files.first to CoreConfig.parse(text))
                         }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Throwable) {
-                        error.value = "Could not save the setting"
-                        tryOrNull { readPage(tag, d, game) }
                     }
                 }
                 page?.let { show(s, it) }
@@ -538,20 +532,8 @@ internal class EmulatorSettingsController(
     private fun useEmulatorSettings(s: Screen.EmulatorOptions) {
         val game = s.game ?: return
         val d = descriptorOf(s) ?: return
-        scope.launch {
-            lock.withLock {
-                val page = withContext(work) {
-                    try {
-                        configs.deleteGame(s.page.tag, d.id, game.game.fileName)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Throwable) {
-                        error.value = "Could not save the setting"
-                    }
-                    tryOrNull { readPage(s.page.tag, d, game) }
-                }
-                page?.let { show(s, it) }
-            }
+        deleteThenShow(s, d, game, "Could not save the setting") {
+            configs.deleteGame(s.page.tag, d.id, game.game.fileName)
         }
     }
 
@@ -559,17 +541,18 @@ internal class EmulatorSettingsController(
     private fun resetDefaults(s: Screen.EmulatorOptions) {
         if (s.game != null) return
         val d = descriptorOf(s) ?: return
+        deleteThenShow(s, d, null, "Could not reset the settings") { configs.deleteConsole(s.page.tag, d.id) }
+    }
+
+    /** Runs [delete] on a settings file (a failure says [failed]), then shows the page as the disk has it for [game]. */
+    private fun deleteThenShow(
+        s: Screen.EmulatorOptions, d: CoreDescriptor, game: Listed?, failed: String, delete: suspend () -> Unit,
+    ) {
         scope.launch {
             lock.withLock {
                 val page = withContext(work) {
-                    try {
-                        configs.deleteConsole(s.page.tag, d.id)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Throwable) {
-                        error.value = "Could not reset the settings"
-                    }
-                    tryOrNull { readPage(s.page.tag, d, null) }
+                    tryOrAny({ error.value = failed }) { delete() }
+                    tryOrNull { readPage(s.page.tag, d, game) }
                 }
                 page?.let { show(s, it) }
             }
@@ -581,7 +564,7 @@ internal class EmulatorSettingsController(
             val values = r.option.values
             if (values.isEmpty()) return null
             val i = values.indexOf(r.value)
-            return if (i < 0) (if (delta >= 0) values.first() else values.last()) else values[((i + delta) % values.size + values.size) % values.size]
+            return if (i < 0) (if (delta >= 0) values.first() else values.last()) else values[(i + delta).mod(values.size)]
         }
         return page.core?.firstOrNull { it.key == key }?.let { CoreOptionFilter.cycle(it, delta) }
     }

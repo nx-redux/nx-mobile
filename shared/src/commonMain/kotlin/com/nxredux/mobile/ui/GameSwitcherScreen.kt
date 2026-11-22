@@ -172,6 +172,13 @@ private fun KeepUntilLoaded(model: String, content: @Composable (shown: String, 
     }
 }
 
+/** [url] fitted in [modifier]'s box; a failed load reports it to [onFailed]. */
+@Composable
+private fun FitPicture(url: String, modifier: Modifier, onFailed: (String) -> Unit) = AsyncImage(
+    model = url, contentDescription = null, contentScale = ContentScale.Fit, modifier = modifier,
+    onState = { if (it is AsyncImagePainter.State.Error) onFailed(url) },
+)
+
 @Composable
 private fun RemoveDialog(entry: SwitcherEntry, onButton: (NxButton) -> Unit) = NxDialog(
     "Remove", "Remove \"${entry.game.shownName}\" from recents?",
@@ -228,22 +235,13 @@ private fun GameSwitcherFullScreen(screen: Screen.Switcher, onButton: (NxButton)
                         },
                     )
                 }
-                box is BoxShown.Art3d -> AsyncImage(
-                    model = box.url, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(),
-                    onState = { if (it is AsyncImagePainter.State.Error) failed = failed + box.url },
-                )
+                box is BoxShown.Art3d -> FitPicture(box.url, Modifier.fillMaxSize()) { failed = failed + it }
                 box is BoxShown.Cover -> BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     val (w, h) = placeholderBoxSize(maxWidth.value, maxHeight.value * 0.8f)
                     BoxCover(box.url, w, h, null) { failed = failed + box.url }
                 }
-                box is BoxShown.Wheel -> AsyncImage(
-                    model = box.url, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.6f).align(Alignment.Center),
-                    onState = { if (it is AsyncImagePainter.State.Error) failed = failed + box.url },
-                )
-                androidShot != null -> AsyncImage(
-                    model = androidShot, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(),
-                    onState = { if (it is AsyncImagePainter.State.Error) failed = failed + androidShot },
-                )
+                box is BoxShown.Wheel -> FitPicture(box.url, Modifier.fillMaxSize(0.6f).align(Alignment.Center)) { failed = failed + it }
+                androidShot != null -> FitPicture(androidShot, Modifier.fillMaxSize()) { failed = failed + it }
                 else -> Text("No Preview", color = colors.hint, fontFamily = font, fontSize = 18.sp, modifier = Modifier.align(Alignment.Center))
             }
             // The title, and under it the game's system and its place among the recents, on a full-width fade mirroring the

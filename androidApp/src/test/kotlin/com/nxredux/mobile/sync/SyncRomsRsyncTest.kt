@@ -10,9 +10,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
-import java.net.ServerSocket
-import java.net.Socket
-import java.util.concurrent.TimeUnit
 
 /**
  * ROM sync's rsync calls ([SyncRoms.plan], [SyncCommands.romArgs]) against a real rsync ≥ 3.1 daemon started with
@@ -20,51 +17,31 @@ import java.util.concurrent.TimeUnit
  */
 class SyncRomsRsyncTest {
     @get:Rule val tmp = TemporaryFolder()
-    private var daemon: Process? = null
+    private val daemon = RsyncDaemon()
     private val gb = ConsolePair("Game Boy (GB)", "GB Games (GB)", "GB")
     private val t = 1_700_000_000_000L
 
     @After fun stopDaemon() {
-        daemon?.let { it.destroy(); if (!it.waitFor(5, TimeUnit.SECONDS)) it.destroyForcibly() }
+        daemon.stop()
     }
-
-    private fun rsync(): String? = listOf("/opt/homebrew/bin/rsync", "/usr/local/bin/rsync", "/usr/bin/rsync").firstOrNull { path ->
-        File(path).canExecute() && runCatching {
-            val out = ProcessBuilder(path, "--version").redirectErrorStream(true).start().inputStream.bufferedReader().readText()
-            Regex("""version (\d+)\.(\d+)""").find(out)?.destructured?.let { (a, b) -> a.toInt() > 3 || (a.toInt() == 3 && b.toInt() >= 1) } == true
-        }.getOrDefault(false)
-    }
-
-    private fun freePort(): Int = ServerSocket(0).use { it.localPort }
 
     private class Served(val bin: String, val port: Int, val roms: File, val extras: List<File>, val bios: File)
 
     /** Starts the daemon serving a fresh `roms/`, [extras] extra folders and `bios/`; null (test skipped) without a usable rsync. */
     private fun serve(extras: Int = 0): Served {
-        val bin = rsync()
+        val bin = hostRsync()
         assumeTrue("no rsync >= 3.1 on this machine", bin != null)
         val work = tmp.newFolder("work")
         val roms = tmp.newFolder("served-roms")
         val bios = tmp.newFolder("served-bios")
         val extraDirs = (0 until extras).map { tmp.newFolder("extra-$it") }
         val manifest = tmp.newFolder("nx")
-        val port = freePort()
         val conf = SyncCommands.daemonConf("127.0.0.1", shared = tmp.newFolder("sh").path, saves = tmp.newFolder("sv").path,
             pidFile = File(work, "rsyncd.pid").path, logFile = File(work, "sync.log").path,
             roms = ServerRoms(roms.path, extraDirs.map { it.path }, manifest.path), bios = bios.path)
-            .replace("port = ${SyncWire.RSYNC_PORT}\n", "port = $port\n")
-        val confFile = File(work, "rsyncd.conf").apply { writeText(conf) }
-        daemon = ProcessBuilder(bin!!, "--daemon", "--no-detach", "--config=${confFile.path}")
-            .redirectErrorStream(true).redirectOutput(File(work, "daemon.out")).start()
-        val deadline = System.currentTimeMillis() + 5_000
-        while (runCatching { Socket("127.0.0.1", port).close() }.isFailure) {
-            check(System.currentTimeMillis() < deadline) { "daemon did not listen: ${File(work, "daemon.out").readText()}" }
-            Thread.sleep(50)
-        }
+        val port = daemon.start(bin!!, work, conf)
         return Served(bin, port, roms, extraDirs, bios)
     }
-
-    private fun swapPort(args: List<String>, port: Int) = args.map { it.replace("127.0.0.1:${SyncWire.RSYNC_PORT}/", "127.0.0.1:$port/") }
 
     private fun exec(args: List<String>): Pair<Int, String> {
         val p = ProcessBuilder(args).redirectErrorStream(true).start()

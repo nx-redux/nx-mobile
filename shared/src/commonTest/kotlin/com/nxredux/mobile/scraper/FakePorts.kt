@@ -3,6 +3,7 @@ package com.nxredux.mobile.scraper
 import com.nxredux.mobile.library.ArtRefs
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.library.RomsSource
+import com.nxredux.mobile.library.ensurePath
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.storage.PrivateFiles
@@ -215,6 +216,8 @@ object Scrape {
     /** A download with JPEG's magic bytes. */
     val OK_JPEG = HttpResult(200, byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte(), 4))
     fun json(s: String) = HttpResult(200, s.encodeToByteArray())
+    /** A download with PNG's magic bytes, then [b]. */
+    fun png(b: Int) = HttpResult(200, byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, b.toByte()))
     /** A jeuInfos body (game id 42) with the given (type → url) media, all region us. */
     fun found(vararg media: Pair<String, String>) = json(
         """{"response":{"jeu":{"id":"42","medias":[${media.joinToString(",") { (t, u) -> """{"type":"$t","region":"us","url":"$u"}""" }}]}}}""",
@@ -263,3 +266,7 @@ class FakeOptionCache : ArtOptionCache {
     override suspend fun remove(keys: Collection<String>) { keys.forEach { files.remove(it) } }
     override suspend fun clear(): Long = size().also { files.clear() }
 }
+
+/** Writes [name] into the GB folder's `.media/`[slot] of [Scrape.homeTree], making the folders. */
+suspend fun FakeRomsSource.putMedia(slot: String, name: String, bytes: ByteArray) =
+    writeBytes(ensurePath(Scrape.home, listOf("Roms", "GB", ".media", slot))!!, name, bytes)

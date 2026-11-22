@@ -645,7 +645,7 @@ void LibretroDroid::releaseCore() {
 void LibretroDroid::destroy() {
     netplay::shutdown();   // before the lock: it joins the engine thread; a no-op without a session
     gbalink::shutdown();   // the GBA link too: DISCONNECT, join its thread; a no-op without a session
-    dslink::shutdown();    // the DS room hears this phone leave now; the link itself ends with the core below
+    dslink::leaveNow();    // the DS room hears this phone leave now; the link itself ends with the core below
     std::lock_guard<std::mutex> lock(coreLock);
 
     LOGD("Performing libretrodroid destroy");

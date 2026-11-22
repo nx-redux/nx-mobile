@@ -1,5 +1,7 @@
 package com.nxredux.mobile.cheats
 
+import com.nxredux.mobile.library.Names
+
 /**
  * Which `.cht` files belong to a ROM, as nx-redux decides it (`ma_cheats.c` `Cheat_getPaths` and
  * `ma_cheat_match.c`): exact candidate names first, then a stem + region ranking over every file in the
@@ -49,13 +51,8 @@ object CheatMatch {
             out = out.substring(0, dot)
         }
         val beforeGroups = out
-        while (true) {
-            val i = out.lastIndexOf('(').takeIf { it >= 0 } ?: out.lastIndexOf('[')
-            if (i <= 0) break
-            out = out.substring(0, i)
-        }
         // Fallbacks after trimming, so a name that is only groups or blanks never comes back empty.
-        out = out.trimEnd()
+        out = Names.plainName(out).trimEnd()
         if (out.isEmpty()) out = beforeGroups.trimEnd()
         if (out.isEmpty()) return fileName
         return out

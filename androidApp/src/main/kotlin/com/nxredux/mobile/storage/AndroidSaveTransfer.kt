@@ -198,9 +198,7 @@ class AndroidSaveTransfer(
 internal fun looksLikeZip(open: () -> InputStream?): Boolean = runCatching {
     open()?.use { s ->
         val head = ByteArray(4)
-        var n = 0
-        while (n < head.size) { val r = s.read(head, n, head.size - n); if (r < 0) break; n += r }
-        n == 4 && head[0] == 'P'.code.toByte() && head[1] == 'K'.code.toByte() &&
+        DataRoot.readBlock(s, head) == 4 && head[0] == 'P'.code.toByte() && head[1] == 'K'.code.toByte() &&
             ((head[2] == 3.toByte() && head[3] == 4.toByte()) || (head[2] == 5.toByte() && head[3] == 6.toByte()))
     } ?: false
 }.getOrDefault(false)

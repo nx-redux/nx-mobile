@@ -379,7 +379,7 @@ internal class DualScreenController(
         val dst = wholeFrame(w, h, g) ?: return null
         return ScreenRegion(
             src = ScreenRect(0f, 0f, 1f, 1f),
-            dst = ScreenRect(dst.x / w, dst.y / h, (dst.x + dst.width) / w, (dst.y + dst.height) / h),
+            dst = dst.normalisedIn(w, h),
             shaded = true,
             touch = true,
         )

@@ -510,12 +510,6 @@ bool coreRoomLeave() {
     return hasCoreRoom;
 }
 
-void shutdown() {
-    if (coreRoomLeave()) return;
-    std::lock_guard<std::mutex> guard(linkMutex);
-    ndl_leave_now(theLink);
-}
-
 bool inRoom() {
     int core;
     if (coreRoomPresence(core)) return core == NX_3DS_LINK_ROOM;

@@ -53,9 +53,7 @@ void ImageRendererES3::onNewFrame(const void *data, unsigned width, unsigned hei
 }
 
 void ImageRendererES3::initializeTextures(unsigned int width, unsigned int height) {
-    for (auto& i : *framebuffers) {
-        ES3Utils::deleteFramebuffer(std::move(i));
-    }
+    ES3Utils::deleteFramebuffers(*framebuffers);
     framebuffers = libretrodroid::ES3Utils::buildShaderPasses(width, height, shaders);
 
     glBindTexture(GL_TEXTURE_2D, currentTexture);
@@ -84,10 +82,7 @@ void ImageRendererES3::applyGLSwizzle(int r, int g, int b, int a) {
 }
 
 void ImageRendererES3::releaseGlObjects() {
-    for (auto& framebuffer : *framebuffers) {
-        ES3Utils::deleteFramebuffer(std::move(framebuffer));
-    }
-    framebuffers->clear();
+    ES3Utils::deleteFramebuffers(*framebuffers);
     if (currentTexture != 0) glDeleteTextures(1, &currentTexture);
     currentTexture = 0;
 }

@@ -7,33 +7,35 @@ import kotlin.test.assertNull
 
 class ScreenMapTest {
     private fun view(x: Int, y: Int, w: Int, h: Int, screen: Int, eye: Int = 0) = MapView(x, y, w, h, screen, eye)
+    private val dsStack3x = listOf(view(0, 0, 768, 576, 0), view(0, 576, 768, 576, 1))
+    private val n3dsStack2x = listOf(view(0, 0, 800, 480, 0), view(80, 480, 640, 480, 1))
 
     @Test fun dsStackAt3x() {
-        val map = ScreenMap.from(listOf(view(0, 0, 768, 576, 0), view(0, 576, 768, 576, 1)), 768, 1152)!!
+        val map = ScreenMap.from(dsStack3x, 768, 1152)!!
         assertEquals(FrameRect(0f, 0f, 1f, 0.5f), map.src(NdsScreen.TOP))
         assertEquals(FrameRect(0f, 0.5f, 1f, 1f), map.src(NdsScreen.BOTTOM))
         assertEquals(768 to 576, map.topSizePx)
     }
 
     @Test fun n3dsStackAt2x() {
-        val map = ScreenMap.from(listOf(view(0, 0, 800, 480, 0), view(80, 480, 640, 480, 1)), 800, 960)!!
+        val map = ScreenMap.from(n3dsStack2x, 800, 960)!!
         assertEquals(FrameRect(0f, 0f, 1f, 0.5f), map.src(NdsScreen.TOP))
         assertEquals(FrameRect(0.1f, 0.5f, 0.9f, 1f), map.src(NdsScreen.BOTTOM))
         assertEquals(640 to 480, map.bottomSizePx)
     }
 
     @Test fun rectOutsideFrameIsNull() {
-        assertNull(ScreenMap.from(listOf(view(0, 0, 768, 576, 0), view(0, 576, 768, 576, 1)), 768, 1151))
+        assertNull(ScreenMap.from(dsStack3x, 768, 1151))
     }
 
     @Test fun staleMapInsideABiggerFrameIsNull() {
         // 3D Resolution raised: the 2x map arrives with the 3x frame's first relayout, or the reverse; it fits but is wrong.
-        assertNull(ScreenMap.from(listOf(view(0, 0, 800, 480, 0), view(80, 480, 640, 480, 1)), 1200, 1440, byShape = true))
-        assertNull(ScreenMap.from(listOf(view(0, 0, 768, 576, 0), view(0, 576, 768, 576, 1)), 1024, 1536))
+        assertNull(ScreenMap.from(n3dsStack2x, 1200, 1440, byShape = true))
+        assertNull(ScreenMap.from(dsStack3x, 1024, 1536))
     }
 
     @Test fun sameMapResentIsEqual() {
-        val views = listOf(view(0, 0, 800, 480, 0), view(80, 480, 640, 480, 1))
+        val views = n3dsStack2x
         assertEquals(ScreenMap.from(views, 800, 960, byShape = true), ScreenMap.from(views.toList(), 800, 960, byShape = true))
     }
 

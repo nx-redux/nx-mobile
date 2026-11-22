@@ -32,4 +32,11 @@ object ArtPaths {
         val root = if (sourceId == GamePath.HOME) ownerDir else listOf("Roms", ".sources", sourceId) + ownerDir
         return ArtTarget(root + ".media", base)
     }
+
+    /** [target] for [ref]; null for a folder game that names no disc folder. */
+    fun targetOrNull(ref: LibraryGameRef): ArtTarget? = try {
+        target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame)
+    } catch (_: IllegalArgumentException) {
+        null
+    }
 }

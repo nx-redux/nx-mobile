@@ -17,6 +17,7 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
+import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.skin.PlacedControl
 import com.nxredux.mobile.skin.stripPill
@@ -214,7 +215,7 @@ internal class PadSkinView(
     /** The finger on a keypad key, and the key. */
     private var keypadHeld: Pair<Long, KeypadKey>? = null
     /** The keypad's keys now: over the biggest glass (the picture), view px. */
-    private fun keypadGrid(): List<Pair<KeypadKey, com.nxredux.mobile.options.PxRect>>? =
+    private fun keypadGrid(): List<Pair<KeypadKey, PxRect>>? =
         shown?.glasses?.maxByOrNull { it.rect.width * it.rect.height }?.let { keypadKeys(it.rect, resources.displayMetrics.density) }
     private fun keypadSend(key: KeypadKey, down: Boolean) {
         when (val p = keypad?.invoke(key) ?: return) {
@@ -261,6 +262,13 @@ internal class PadSkinView(
     private val holes = Path()
     private val src = Rect()
     private val dst = Rect()
+
+    /** [r] moved by ([dx], [dy]), its edges on whole pixels. */
+    private fun Rect.set(r: PxRect, dx: Float = 0f, dy: Float = 0f) =
+        set((r.x + dx).roundToInt(), (r.y + dy).roundToInt(), (r.x + dx + r.width).roundToInt(), (r.y + dy + r.height).roundToInt())
+
+    private fun Canvas.drawRoundRect(r: PxRect, corner: Float, paint: Paint) =
+        drawRoundRect(r.x, r.y, r.x + r.width, r.y + r.height, corner, corner, paint)
     private val touch = SkinPadTouch(onPad, { id, down -> onAction(SkinAction.valueOf(id), down) }, ::tick, ::invalidate, onStick, onCStick)
 
     /** The console's second d-pad (DPAD2) as its core's buttons ([SkinPadTouch.secondDpad]); empty: none. */
@@ -331,12 +339,12 @@ internal class PadSkinView(
                     holes.reset()
                     for (g in p.glasses) holes.addRoundRect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height, g.corner, g.corner, Path.Direction.CW)
                     canvas.save(); canvas.clipOutPath(holes)
-                    canvas.drawRoundRect(piece.dst.x, piece.dst.y, piece.dst.x + piece.dst.width, piece.dst.y + piece.dst.height, piece.fill, piece.fill, frameInk)
+                    canvas.drawRoundRect(piece.dst, piece.fill, frameInk)
                     canvas.restore()
                     continue
                 }
-                src.set(piece.src.x.roundToInt(), piece.src.y.roundToInt(), (piece.src.x + piece.src.width).roundToInt(), (piece.src.y + piece.src.height).roundToInt())
-                dst.set(piece.dst.x.roundToInt(), piece.dst.y.roundToInt(), (piece.dst.x + piece.dst.width).roundToInt(), (piece.dst.y + piece.dst.height).roundToInt())
+                src.set(piece.src)
+                dst.set(piece.dst)
                 canvas.drawBitmap(pp, src, dst, paint)
             }
         }
@@ -375,8 +383,8 @@ internal class PadSkinView(
                 val r = stripPill(c.x, wy, c.spec.hw, c.spec.hh, slotLabel.measureText(text), p.k)
                 val round = r.height / 2f
                 pillFill.color = if (sc.on) STRIP_PILL_ON_FILL else STRIP_PILL_OFF_FILL
-                canvas.drawRoundRect(r.x, r.y, r.x + r.width, r.y + r.height, round, round, pillFill)
-                canvas.drawRoundRect(r.x, r.y, r.x + r.width, r.y + r.height, round, round, pillRing)
+                canvas.drawRoundRect(r, round, pillFill)
+                canvas.drawRoundRect(r, round, pillRing)
                 slotLabel.color = if (sc.on) STRIP_PILL_ON_INK else STRIP_PILL_OFF_INK
             } else slotLabel.color = if (sc.on) android.graphics.Color.WHITE else SKIN_LABEL_GREY
             canvas.drawText(text, c.x, wy + cap / 2f, slotLabel)
@@ -394,8 +402,8 @@ internal class PadSkinView(
             for (piece in p.pieces) {
                 if (!piece.knob) continue
                 val (kx, ky) = touch.knobOffset(piece.knobOf)
-                src.set(piece.src.x.roundToInt(), piece.src.y.roundToInt(), (piece.src.x + piece.src.width).roundToInt(), (piece.src.y + piece.src.height).roundToInt())
-                dst.set((piece.dst.x + kx).roundToInt(), (piece.dst.y + ky).roundToInt(), (piece.dst.x + kx + piece.dst.width).roundToInt(), (piece.dst.y + ky + piece.dst.height).roundToInt())
+                src.set(piece.src)
+                dst.set(piece.dst, kx, ky)
                 canvas.drawBitmap(pp, src, dst, paint)
             }
         }
@@ -422,7 +430,7 @@ internal class PadSkinView(
         keypadInk.textSize = size * 0.4f / SKIN_LABEL_CAP   // the digit 40% of the key tall
         for ((key, r) in keys) {
             keypadPaint.color = if (keypadHeld?.second == key) KEYPAD_KEY_HELD else KEYPAD_KEY
-            canvas.drawRoundRect(r.x, r.y, r.x + r.width, r.y + r.height, size * 0.22f, size * 0.22f, keypadPaint)
+            canvas.drawRoundRect(r, size * 0.22f, keypadPaint)
             val cy = r.y + r.height / 2f - (keypadInk.descent() + keypadInk.ascent()) / 2f
             canvas.drawText(key.label, r.x + r.width / 2f, cy, keypadInk)
         }
@@ -431,8 +439,8 @@ internal class PadSkinView(
     /** One slice: copied where its part is fixed, laid in mirrored tiles where it repeats ([skinTiles]); [flipY] all upside down. */
     private fun drawCell(canvas: Canvas, pic: Bitmap, c: SkinCell, k: Float, flipY: Boolean = false) {
         for (t in skinTiles(c, k, SKIN_STRETCH_MAX)) {
-            src.set(t.src.x.roundToInt(), t.src.y.roundToInt(), (t.src.x + t.src.width).roundToInt(), (t.src.y + t.src.height).roundToInt())
-            dst.set(t.dst.x.roundToInt(), t.dst.y.roundToInt(), (t.dst.x + t.dst.width).roundToInt(), (t.dst.y + t.dst.height).roundToInt())
+            src.set(t.src)
+            dst.set(t.dst)
             if (src.width() <= 0 || src.height() <= 0 || dst.width() <= 0 || dst.height() <= 0) continue
             val fy = t.flipY != flipY
             if (!t.flipX && !fy) { canvas.drawBitmap(pic, src, dst, paint); continue }

@@ -416,27 +416,27 @@ internal class InGameMenuController(
                         state = s,
                         slots = slotsUi.value,
                         onSelect = { i -> if (!quitting) menuModel?.let { it.select(i); menuState.value = it.state } },
-                        onActivate = { i -> if (!quitting) menuModel?.let { m -> val effect = m.activate(i); menuState.value = m.state; handle(effect) } },
-                        onDismiss = { if (!quitting) menuModel?.let { val e = it.press(NxButton.B); menuState.value = it.state; handle(e) } },
-                        onChange = { d -> if (!quitting) menuModel?.let { val e = it.press(if (d > 0) NxButton.RIGHT else NxButton.LEFT); menuState.value = it.state; handle(e) } },
+                        onActivate = { i -> act { it.activate(i) } },
+                        onDismiss = { onMenuPress(NxButton.B) },
+                        onChange = { d -> onMenuPress(if (d > 0) NxButton.RIGHT else NxButton.LEFT) },
                         onPress = ::onMenuPress,
                         badgePath = { a -> menuModel?.badgePath(a) },
                         rowAchievement = { r -> menuModel?.achievementOf(r) },   // the Achievements page's rows as the panel's
                         onInfoTruncated = { info, t -> if (!quitting) menuModel?.let { it.setInfoTruncated(info, t); menuState.value = it.state } },
                         // Two panes on a wide area (the unfolded Fold, a phone in landscape), as Settings.
                         onSplit = { split -> menuModel?.split = split },
-                        onParentTap = { kind, i -> if (!quitting) menuModel?.let { m -> val e = m.tapParent(kind, i); menuState.value = m.state; handle(e) } },
+                        onParentTap = { kind, i -> act { it.tapParent(kind, i) } },
                         // A row of the Options preview beside the root's Options row: the page opens on it.
-                        onPreviewTap = { i -> if (!quitting) menuModel?.let { m -> val e = m.tapPreview(i); menuState.value = m.state; handle(e) } },
+                        onPreviewTap = { i -> act { it.tapPreview(i) } },
                         // The game panel beside the root list (the model caches it until its inputs change).
                         panel = menuModel?.panelState(),
-                        onPanelEvent = { ev -> if (!quitting) menuModel?.let { m -> val e = m.panelEvent(ev); menuState.value = m.state; handle(e) } },
+                        onPanelEvent = { ev -> act { it.panelEvent(ev) } },
                         // Not in netplay: the header over Continue / Leave only.
                         panelBeside = menuModel?.panelBeside ?: true,
                         // In the dual-screen panel's place: opaque, as the panel it replaces.
                         opaque = menuModel?.inPanel == true || (!onSecond && dual.mainPanel.value != null),
                         // An options row's switch, segment, picker or info icon, and the popup over it.
-                        onOption = { ev -> if (!quitting) menuModel?.let { m -> val e = m.optionEvent(ev); menuState.value = m.state; handle(e) } },
+                        onOption = { ev -> act { it.optionEvent(ev) } },
                     )
                 }
                 }
@@ -585,10 +585,13 @@ internal class InGameMenuController(
     }
 
     /** Menu navigation from the InputRouter (hardware/on-screen). */
-    fun onMenuPress(button: NxButton) {
+    fun onMenuPress(button: NxButton) = act { it.press(button) }
+
+    /** One step on the menu's model, its new state published, then its effect handled. */
+    private fun act(step: (InGameMenuModel) -> MenuEffect?) {
         if (quitting) return   // frozen until finish()
         val model = menuModel ?: return
-        val effect = model.press(button)
+        val effect = step(model)
         menuState.value = model.state   // publish before handling: Close/Quit clear the menu state
         handle(effect)
     }

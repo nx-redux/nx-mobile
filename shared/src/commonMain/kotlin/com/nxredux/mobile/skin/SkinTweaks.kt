@@ -372,7 +372,7 @@ object SkinTweaks {
      */
     private fun ownControls(p: SkinPlacement, groups: List<SkinGroup>, g: SkinGroup, stripN: Int): List<Int> {
         val mine = p.spec.controls.filter { c ->
-            c.id in g.controls && groups.filter { c.id in it.controls && it.id != SkinGroups.STRIP }.minByOrNull { gap(it.ref, c.x, c.y) } == g
+            c.id in g.controls && groups.filter { c.id in it.controls && it.id != SkinGroups.STRIP }.minByOrNull { SkinGroups.gap(it.ref, c.x, c.y) } == g
         }.map { Triple(it.id, it.x, it.y) }.toSet()
         return p.controls.indices.filter { it >= stripN && Triple(p.controls[it].spec.id, p.controls[it].spec.x, p.controls[it].spec.y) in mine }
     }
@@ -398,11 +398,6 @@ object SkinTweaks {
         val w = minOf(a.x + a.width, b.x + b.width) - maxOf(a.x, b.x)
         val h = minOf(a.y + a.height, b.y + b.height) - maxOf(a.y, b.y)
         return if (w > 0f && h > 0f) w * h else 0f
-    }
-
-    private fun gap(r: PxRect, x: Float, y: Float): Float {
-        val dx = maxOf(r.x - x, 0f, x - (r.x + r.width)); val dy = maxOf(r.y - y, 0f, y - (r.y + r.height))
-        return dx * dx + dy * dy
     }
 
     /** [consoleId]'s tweaks for [layoutId] in the [stored] text ([decode]); none when it has none. */

@@ -24,6 +24,8 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,7 +72,21 @@ internal val TOP_MARK_BAND: Dp = SETTINGS_MARK + 16.dp
 internal fun BoxScope.TopMark() = SettingsMark(Modifier.align(Alignment.TopEnd))
 
 /** Trimmed line spacing: a title and the line under it read as one block. */
-internal val TOP_TIGHT_LINES = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both)
+private val TOP_TIGHT_LINES = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both)
+
+/** A top page's title: big and bold, two lines at most. */
+@Composable
+internal fun TopTitle(text: String) = Text(
+    text, color = LocalNxColors.current.listText, fontFamily = LocalNxFont.current, fontSize = 40.sp, lineHeight = 42.sp,
+    fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, style = TextStyle(lineHeightStyle = TOP_TIGHT_LINES),
+)
+
+/** The one grey line under a [TopTitle]. */
+@Composable
+internal fun TopLine(text: String) = Text(
+    text, color = LocalNxColors.current.hint, fontFamily = LocalNxFont.current, fontSize = 18.sp, maxLines = 1,
+    overflow = TextOverflow.Ellipsis, style = TextStyle(lineHeightStyle = TOP_TIGHT_LINES), modifier = Modifier.padding(top = 2.dp),
+)
 
 /**
  * [image] for [entry]: a picture cropped to the frame, or the box fitted over a blurred, darkened copy of itself; an

@@ -156,7 +156,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
 
     /** The stick (true) or the d-pad until the player chooses: the profile's, and a Dreamcast disc on its stick. */
     private fun stickDefault(): Boolean =
-        padProfile().stickByDefault || com.nxredux.mobile.skin.DcGames.stickFirst(com.nxredux.mobile.runner.CoreRegistry.baseTag(layoutTag()), host.dcArcadeSet) ||
+        padProfile().stickByDefault || com.nxredux.mobile.skin.DcGames.stickFirst(CoreRegistry.baseTag(layoutTag()), host.dcArcadeSet) ||
             padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC   // a GameCube disc under the Wii tag too
 
     /** The skin's bare buttons are laid out over the game ([addBareSkin]): the notifications move top-centre, clear of them. */
@@ -446,7 +446,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         // the skin and its screen run under the top camera cutout too (the frame keeps its own margin; the picture is centred
         // in the glass, so it reaches the camera only when it fills the glass's height)
         val top = 0
-        val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), NdsOptions.appliesTo(tag), host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC, wiiPad, padProfile().cStick, padProfile().segaThree)
+        val variant = SkinChoice.variantFor(CoreRegistry.baseTag(tag), NdsOptions.appliesTo(tag), host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC, wiiPad, padProfile().cStick, padProfile().segaThree)
         val settings = AndroidAppSettings(activity)
         return SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, top, variant, settings.skinTweaks, settings.overlayTweaks, micHidden = ds && !settings.micButtonShown)
     }
@@ -538,7 +538,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             onGlass = { x, y, down -> glassTouch(game, x, y, down) }, bare = bare)
         view.useStick = PadStickModes[padStickKey, stickDefault()]   // the player's choice, shared by the skin and its bare buttons
         view.dimmed = motionDim()
-        when (com.nxredux.mobile.runner.CoreRegistry.baseTag(layoutTag())) {
+        when (CoreRegistry.baseTag(layoutTag())) {
             "COLECO" -> view.keypad = { com.nxredux.mobile.ui.nx.colecoKeypad(it) }
             "VB" -> view.secondDpad = com.nxredux.mobile.ui.nx.VB_SECOND_DPAD
             "WS", "WSC" -> view.secondDpad = com.nxredux.mobile.ui.nx.WS_SECOND_DPAD
@@ -613,7 +613,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private val motionHold = Runnable { motionHeld = true; padMotion()?.onLongPress?.invoke() }
 
     /** A PlayStation game (its skin's right stick nub is the DualShock's right analog). */
-    private fun psSkin() = com.nxredux.mobile.runner.CoreRegistry.baseTag(layoutTag()) in setOf("PS", "PSX", "PSP", "PS2")
+    private fun psSkin() = CoreRegistry.baseTag(layoutTag()) in setOf("PS", "PSX", "PSP", "PS2")
 
     /** MIC and SWAP are the pad's own (the DS mic toggle, swap screens); the rest are the game's ([PadLayoutHost.onSkinShortcut]). */
     private fun onSkinAction(action: SkinAction, down: Boolean) {

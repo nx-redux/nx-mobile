@@ -191,19 +191,42 @@ object NetplayLinkOptions {
         "mgba" -> mapOf(MGBA_LINK to MGBA_DEFAULT)
         // 3DS local wireless with no session: Azahar finds or opens a room itself once the game turns its wireless on.
         "azahar" -> if (roomName == null) emptyMap() else buildMap {
-            putAll(soloLocalWireless(coreId, localWireless))
-            put(N3DS_NAME, roomName)
-            put(N3DS_PORT_KEY, N3DS_PORT.toString())
-            broadcast?.let { put(N3DS_BROADCAST, it) }
+            putSoloRoom(N3DS_ROOM, coreId, localWireless, roomName, broadcast)
         }
         "melondsds" -> if (roomName == null) emptyMap() else buildMap {
-            putAll(soloLocalWireless(coreId, localWireless))
-            put(NDS_NAME, roomName)
-            put(NDS_PORT_KEY, NDS_PORT.toString())
-            broadcast?.let { put(NDS_BROADCAST, it) }
+            putSoloRoom(NDS_ROOM, coreId, localWireless, roomName, broadcast)
             ndsMac?.let { put(NDS_MAC_MODE, it) }
         }
         else -> emptyMap()
+    }
+
+    /** One console's room link variables: the DS's and the 3DS's differ only in these. */
+    private class RoomKeys(
+        val mode: String, val name: String, val ip: String, val portKey: String, val port: Int, val broadcast: String,
+    )
+
+    private val N3DS_ROOM = RoomKeys(N3DS_MODE, N3DS_NAME, N3DS_IP, N3DS_PORT_KEY, N3DS_PORT, N3DS_BROADCAST)
+    private val NDS_ROOM = RoomKeys(NDS_MODE, NDS_NAME, NDS_IP, NDS_PORT_KEY, NDS_PORT, NDS_BROADCAST)
+
+    private fun MutableMap<String, String>.putSoloRoom(
+        room: RoomKeys, coreId: String, localWireless: Boolean, roomName: String, broadcast: String?,
+    ) {
+        putAll(soloLocalWireless(coreId, localWireless))
+        put(room.name, roomName)
+        put(room.portKey, room.port.toString())
+        broadcast?.let { put(room.broadcast, it) }
+    }
+
+    private fun MutableMap<String, String>.putSessionRoom(room: RoomKeys, session: NetplaySession, roomName: String?) {
+        put(room.portKey, room.port.toString())
+        if (session.role == NetplayRole.HOST) {
+            put(room.mode, N3DS_HOST)
+            put(room.name, roomName ?: "Player 1")
+        } else {
+            put(room.mode, N3DS_JOIN)
+            put(room.name, roomName ?: "Player 2")
+            put(room.ip, session.peerIp)
+        }
     }
 
     /**
@@ -292,27 +315,9 @@ object NetplayLinkOptions {
                 else -> emptyMap()
             }
         }
-        NetplayLinkKind.N3DSLINK -> buildMap {
-            put(N3DS_PORT_KEY, N3DS_PORT.toString())
-            if (session.role == NetplayRole.HOST) {
-                put(N3DS_MODE, N3DS_HOST)
-                put(N3DS_NAME, roomName ?: "Player 1")
-            } else {
-                put(N3DS_MODE, N3DS_JOIN)
-                put(N3DS_NAME, roomName ?: "Player 2")
-                put(N3DS_IP, session.peerIp)
-            }
-        }
+        NetplayLinkKind.N3DSLINK -> buildMap { putSessionRoom(N3DS_ROOM, session, roomName) }
         NetplayLinkKind.NDSLINK -> buildMap {
-            put(NDS_PORT_KEY, NDS_PORT.toString())
-            if (session.role == NetplayRole.HOST) {
-                put(NDS_MODE, N3DS_HOST)
-                put(NDS_NAME, roomName ?: "Player 1")
-            } else {
-                put(NDS_MODE, N3DS_JOIN)
-                put(NDS_NAME, roomName ?: "Player 2")
-                put(NDS_IP, session.peerIp)
-            }
+            putSessionRoom(NDS_ROOM, session, roomName)
             ndsMac?.let { put(NDS_MAC_MODE, it) }
         }
         NetplayLinkKind.PSPLINK ->

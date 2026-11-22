@@ -11,18 +11,9 @@
 #include <cstring>
 #include <vector>
 
-using namespace libretrodroid;
+#include "check.h"
 
-static int fails = 0;
-#define CHECK(cond, msg)                \
-    do {                                \
-        if (cond) {                     \
-            printf("PASS: %s\n", msg);  \
-        } else {                        \
-            printf("FAIL: %s\n", msg);  \
-            fails++;                    \
-        }                               \
-    } while (0)
+using namespace libretrodroid;
 
 static constexpr size_t STATE = 4096;
 static constexpr size_t WANT = 4 * 1024 * 1024;

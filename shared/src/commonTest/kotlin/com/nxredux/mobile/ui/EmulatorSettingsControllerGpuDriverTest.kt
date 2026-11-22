@@ -4,8 +4,6 @@ import com.nxredux.mobile.gpudriver.GpuDriver
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.library.path
-import com.nxredux.mobile.options.ConfigFile
-import com.nxredux.mobile.options.CoreConfig
 import com.nxredux.mobile.options.CoreOptionSource
 import com.nxredux.mobile.options.CoreOptionTable
 import com.nxredux.mobile.options.EmulatorPage
@@ -14,7 +12,6 @@ import com.nxredux.mobile.options.GraphicsApiOptions
 import com.nxredux.mobile.options.VulkanFallback
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
-import com.nxredux.mobile.storage.EmulatorConfigStore
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxButton
 import kotlinx.coroutines.CoroutineScope
@@ -33,18 +30,6 @@ class EmulatorSettingsControllerGpuDriverTest {
     private val turnip = GpuDriver("turnip", "Turnip 24.1", "24.1", "a", "d", "libvulkan_freedreno.so", 28)
     private val n64 = CoreRegistry.forTag("N64")!!
     private val vulkan = "nx_graphics_api = vulkan\n"
-
-    private class MemoryConfigs(initial: Map<String, String> = emptyMap()) : EmulatorConfigStore {
-        val files = HashMap(initial)
-        private fun console(tag: String, core: String) = "$tag-$core/minarch.cfg"
-        private fun game(tag: String, core: String, rom: String) = "$tag-$core/${rom.substringBeforeLast('.')}.cfg"
-        override suspend fun read(tag: String, coreId: String, romFileName: String?): Pair<ConfigFile?, ConfigFile?> =
-            files[console(tag, coreId)]?.let(CoreConfig::parse) to romFileName?.let { files[game(tag, coreId, it)] }?.let(CoreConfig::parse)
-        override suspend fun writeConsole(tag: String, coreId: String, text: String) { files[console(tag, coreId)] = text }
-        override suspend fun writeGame(tag: String, coreId: String, romFileName: String, text: String) { files[game(tag, coreId, romFileName)] = text }
-        override suspend fun deleteGame(tag: String, coreId: String, romFileName: String) { files.remove(game(tag, coreId, romFileName)) }
-        override suspend fun deleteConsole(tag: String, coreId: String) { files.remove(console(tag, coreId)) }
-    }
 
     private object NoTables : CoreOptionSource { override fun table(coreId: String): CoreOptionTable? = null }
     private object Host : EmulatorSettingsHost {

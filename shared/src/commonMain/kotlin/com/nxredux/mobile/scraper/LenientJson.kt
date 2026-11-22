@@ -8,9 +8,9 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 
 /**
- * The lenient JSON reads TheGamesDB's and SteamGridDB's parsers share: an unreadable body is null, never a throw, and
+ * The lenient JSON reads the art sources' parsers share: an unreadable body is null, never a throw, and
  * a field of the wrong kind reads as absent. ScreenScraper's ([ScraperResponse]) trims a number's text first and keeps
- * its own.
+ * its own `int`.
  */
 internal object LenientJson {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }

@@ -20,6 +20,7 @@ import android.os.Process
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.nxredux.mobile.canPostNotifications
 import com.nxredux.mobile.LaunchActivity
 import com.nxredux.mobile.NotificationIds
 import com.nxredux.mobile.launcher.TopScreenHost
@@ -263,9 +264,7 @@ object AndroidKids {
     }
 
     private fun postWarning(app: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(app, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) return
+        if (!canPostNotifications(app)) return
         val nm = app.getSystemService(NotificationManager::class.java) ?: return
         ensureChannel(nm)
         val notice = NotificationCompat.Builder(app, CHANNEL_ID)
