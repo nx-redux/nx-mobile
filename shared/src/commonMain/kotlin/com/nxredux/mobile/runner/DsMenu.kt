@@ -28,8 +28,9 @@ object DsMenu {
 
     /** The row's details, in place of ScreenScraper's (which has no entry to fetch for it). */
     val INFO = com.nxredux.mobile.scraper.StoredGameInfo(
-        synopsis = "Join a nearby friend's game without owning it. When someone hosts a game over DS Download Play, such " +
-            "as Mario Party DS, pick it here and it's sent to you over Wi-Fi. Needs a real DS's BIOS and firmware in Bios/NDS/.",
+        synopsis = "Join a nearby friend's game without owning it. When someone hosts one over DS Download Play, such as " +
+            "Mario Party DS, pick it here and it's sent to you. Smoothest on one device's hotspot or a USB cable. Needs a " +
+            "real DS's BIOS and firmware in Bios/NDS/.",
         genre = "System", year = "2004", publisher = "Nintendo", lang = "en", ssId = null, fetchedAt = 0,
     )
 
