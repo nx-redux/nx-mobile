@@ -40,7 +40,8 @@ def parse_timestats(text, frame_ms):
     on = False
     frames = None
     for i, line in enumerate(text.splitlines()):
-        if line.startswith("layerName = ") and "SurfaceView[" in line and "GameActivity" in line:
+        # "SurfaceView[…GameActivity](BLAST)#n"; Android 11 writes "SurfaceView - …/…GameActivity#0".
+        if line.startswith("layerName = ") and "SurfaceView" in line and "GameActivity" in line:
             on = True
         elif on and line.startswith("totalFrames = "):
             frames = int(line.split("=")[1])
@@ -73,7 +74,7 @@ def work_from_log(log):
 class Pacing:
     def __init__(self, args):
         self.a = args
-        self.dev = Fold(args.serial, verbose=args.verbose)
+        self.dev = Fold(args.serial, verbose=args.verbose, activity_hooks=getattr(args, "activity_hooks", False))
         self.home = args.home
         self.cfg_dir = "%s/.userdata/android/%s-%s" % (self.home, args.tag, args.core)
         self.cfg = "%s/%s.cfg" % (self.cfg_dir, os.path.basename(args.rom))
@@ -158,7 +159,8 @@ class Pacing:
                 "settings put global stay_on_while_plugged_in 3")
         if getattr(self.a, "open_first", 0):
             # Android 11 holds a broadcast to a force-stopped app: open it so the GAME hook is heard.
-            self.sh("am start -n com.nxredux.mobile.dev/com.nxredux.mobile.LaunchActivity")
+            self.sh("input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; "
+                    "am start -n com.nxredux.mobile.dev/com.nxredux.mobile.LaunchActivity")
             time.sleep(self.a.open_first)
         try:
             self.dev.game(self.a.rom, self.a.tag, slot=self.a.slot if self.a.state else None, timeout=90)
@@ -228,6 +230,8 @@ def main():
     p.add_argument("--work", action="store_true", help="turn the Debug log on for the runs (core work per frame)")
     p.add_argument("--open-first", type=float, default=0, metavar="SECONDS",
                    help="open the app and wait before each launch (Android 11 drops the hook for a force-stopped app)")
+    p.add_argument("--activity-hooks", action="store_true",
+                   help="send the GAME hooks as activity starts (devices that drop adb broadcasts, e.g. the AYANEO)")
     p.add_argument("--verbose", action="store_true")
     a = p.parse_args()
 
