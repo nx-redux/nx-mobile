@@ -311,7 +311,6 @@ internal class ContextMenuController(
             else ContextMenus.toolItems(pinned = row.row.pinKey in host.toolPins, app = row.row.kind == ToolKind.APP, pin = !host.kidsOn)
                 .takeIf { it.isNotEmpty() }?.let { ContextMenu(null, it, tool = row.row) }
         is MainRow.PinnedTool -> ContextMenu(null, ContextMenus.toolItems(pinned = true), tool = row.row)
-        is MainRow.MoreTools -> null   // Home's "+N": no menu
         else -> null
     }
 
@@ -374,27 +373,15 @@ internal class ContextMenuController(
             promptFocusStep(m.promptFocus, button)?.let { setMenu(m.copy(promptFocus = it)); return }
             if (button == NxButton.A && m.promptFocus == 1) { closeContextMenu(); return }
         }
-        when (p) {
-            is MenuPrompt.Rename -> when (button) {
-                NxButton.A -> confirmRename(m, p.draft)
-                NxButton.B, NxButton.MENU -> closeContextMenu()
-                else -> Unit
+        when (button) {
+            NxButton.A -> when (p) {
+                is MenuPrompt.Rename -> confirmRename(m, p.draft)
+                is MenuPrompt.NewCollection -> confirmNewCollection(m, p.draft)
+                is MenuPrompt.RenameCollection -> confirmRenameCollection(m, p)
+                is MenuPrompt.DeleteCollection -> deleteCollection(m, p.name)
             }
-            is MenuPrompt.NewCollection -> when (button) {
-                NxButton.A -> confirmNewCollection(m, p.draft)
-                NxButton.B, NxButton.MENU -> closeContextMenu()
-                else -> Unit
-            }
-            is MenuPrompt.RenameCollection -> when (button) {
-                NxButton.A -> confirmRenameCollection(m, p)
-                NxButton.B, NxButton.MENU -> closeContextMenu()
-                else -> Unit
-            }
-            is MenuPrompt.DeleteCollection -> when (button) {
-                NxButton.A -> deleteCollection(m, p.name)
-                NxButton.B, NxButton.MENU -> closeContextMenu()
-                else -> Unit
-            }
+            NxButton.B, NxButton.MENU -> closeContextMenu()
+            else -> Unit
         }
     }
 

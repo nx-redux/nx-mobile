@@ -48,8 +48,8 @@ class CoreConfigStore(private val console: File, private val game: File) {
             game.writeAtomically(CoreConfig.withKey(null, readFileStrict(game), FceummTurbo.KEY, FceummTurbo.ON).encodeToByteArray())
     }
 
-    fun deleteGame() = delete(game)
-    fun deleteConsole() = delete(console)
+    fun deleteGame() = deleteConfig(game)
+    fun deleteConsole() = deleteConfig(console)
 
     private fun write(file: File, values: List<Pair<String, String>>, drop: (String) -> Boolean): ConfigFile {
         val written = values.mapTo(HashSet()) { it.first }
@@ -57,8 +57,6 @@ class CoreConfigStore(private val console: File, private val game: File) {
         file.writeAtomically(text.encodeToByteArray())
         return CoreConfig.parse(text)
     }
-
-    private fun delete(file: File) = deleteConfig(file)
 
     private fun readFile(file: File): ConfigFile? =
         runCatching { file.takeIf { it.exists() }?.readText()?.let(CoreConfig::parse) }.getOrNull()

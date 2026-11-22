@@ -10061,12 +10061,7 @@ class AppStateTest {
     @Test fun unpinning_the_last_pin_stays_on_home() = runTest {
         val state = pinnedLibrary()
         state.selectHome { it is MainRow.Pin }
-        // one pin; open its menu, choose Unpin (the MENU flow of choose())
-        state.onButton(NxButton.MENU)
-        val kinds = menuKinds(state)
-        val at = kinds.indexOf(ContextKind.UNPIN); assertTrue(at >= 0, "no UNPIN in $kinds")
-        repeat(at) { state.onButton(NxButton.DOWN) }
-        state.onButton(NxButton.A)
+        choose(state, ContextKind.UNPIN)   // the one pin
         advanceUntilIdle()
         val s = assertIs<Screen.Systems>(state.screen.value)
         assertEquals(listOf(MenuCategory.HOME, MenuCategory.GAMES, MenuCategory.CONSOLES, MenuCategory.TOOLS), s.tabs.map { it.category })
@@ -14393,14 +14388,11 @@ class AppStateTest {
         assertEquals("Pins are full (${Shortcuts.MAX}). Unpin one first.", state.notice.value)
         assertEquals(listOf("g/G"), settings.androidPins)
         state.back()
-        state.openSystem(androidSystemsOf(state).first { it.tag == "GB" })
+        state.openSystem(assertIs<Screen.Systems>(state.screen.value).systems.first { it.tag == "GB" })
         choose(state, ContextKind.PIN)                                         // Tetris: a ROM pin, the same cap
         assertEquals("Pins are full (${Shortcuts.MAX}). Unpin one first.", state.notice.value)
         assertEquals(Shortcuts.MAX - 1, data.pins.size)
     }
-
-    /** The main menu's consoles (every tab). */
-    private fun androidSystemsOf(state: AppState): List<SystemFolder> = assertIs<Screen.Systems>(state.screen.value).systems
 
     @Test fun x_and_switcher_ignore_android_games() = runTest {
         val runner = RecordingRunner()
@@ -14950,7 +14942,7 @@ class AppStateTest {
         state.showSearch("  mario ")
         val list = assertIs<Screen.Games>(state.screen.value)
         assertEquals(ListSource.Search("mario"), list.source)
-        assertEquals("Search: mario", listTitle(list.source))
+        assertEquals("Search: mario", list.source.title)
         assertEquals("mario", state.lastSearch)
         assertEquals(setOf("SFC", "GB"), list.entries.map { it.system.tag }.toSet())
         assertEquals(3, list.entries.size)

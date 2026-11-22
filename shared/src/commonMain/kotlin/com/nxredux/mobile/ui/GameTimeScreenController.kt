@@ -122,8 +122,8 @@ internal class GameTimeScreenController(
                 NxButton.UP -> selection.value = selection.value.up()
                 NxButton.DOWN -> selection.value = selection.value.down()
                 NxButton.B -> leaveSessions()
-                NxButton.X -> if (s.canMerge) fromSessions { act { setModal(GameTimeModal.PickMerge(data.mergeCandidates(it.gameId))) } }
-                NxButton.SELECT -> if (s.game.members > 0) fromSessions { act { setModal(GameTimeModal.PickUnmerge(data.members(it.gameId).drop(1))) } }
+                NxButton.X -> if (s.canMerge) fromSessions { pickMerge(it) }
+                NxButton.SELECT -> if (s.game.members > 0) fromSessions { pickUnmerge(it) }
                 NxButton.Y -> fromSessions { setModal(GameTimeModal.ConfirmDelete) }
                 else -> Unit
             }
@@ -154,8 +154,8 @@ internal class GameTimeScreenController(
                 NxButton.UP, NxButton.DOWN -> setModal(modal.copy(index = step(modal.index, modal.actions.size)))
                 NxButton.B -> setModal(null)
                 NxButton.A -> when (modal.actions[modal.index]) {
-                    GameTimeAction.MERGE -> act { setModal(GameTimeModal.PickMerge(data.mergeCandidates(r.gameId))) }
-                    GameTimeAction.UNMERGE -> act { setModal(GameTimeModal.PickUnmerge(data.members(r.gameId).drop(1))) }
+                    GameTimeAction.MERGE -> pickMerge(r)
+                    GameTimeAction.UNMERGE -> pickUnmerge(r)
                     GameTimeAction.DELETE -> setModal(GameTimeModal.ConfirmDelete)
                 }
                 else -> Unit
@@ -172,7 +172,7 @@ internal class GameTimeScreenController(
             }
             is GameTimeModal.PickName -> when (button) {
                 NxButton.UP, NxButton.DOWN -> setModal(modal.copy(index = step(modal.index, modal.names.size)))
-                NxButton.B -> act { setModal(GameTimeModal.PickMerge(data.mergeCandidates(r.gameId))) }
+                NxButton.B -> pickMerge(r)
                 NxButton.A -> act { data.merge(r.gameId, modal.into.gameId, modal.names[modal.index]); setModal(null); reload() }
                 else -> Unit
             }
@@ -217,6 +217,9 @@ internal class GameTimeScreenController(
         if (r.members > 0) add(GameTimeAction.UNMERGE)
         add(GameTimeAction.DELETE)
     }
+
+    private fun pickMerge(r: GameTotal) = act { setModal(GameTimeModal.PickMerge(data.mergeCandidates(r.gameId))) }
+    private fun pickUnmerge(r: GameTotal) = act { setModal(GameTimeModal.PickUnmerge(data.members(r.gameId).drop(1))) }
 
     private var acting = false   // an [act] in flight: a second A (or B) on its modal waits for it, so nothing runs twice
 

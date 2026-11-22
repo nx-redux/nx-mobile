@@ -213,10 +213,10 @@ internal class NetplayGame(
         val ok = withContext(NetplayEngine.dispatcher) {
             runCatching {
                 if (!prepareEngine(engine, session, delayPin)) {
-                    NxLog.w(TAG, "netplay: the core has no pair mode")
+                    NxLog.w(TAG_LOG, "netplay: the core has no pair mode")
                     false
                 } else engine.start(role, peer, NetplayWire.ENGINE_PORT)
-            }.onFailure { NxLog.w(TAG, "netplay start failed", it) }.getOrDefault(false)
+            }.onFailure { NxLog.w(TAG_LOG, "netplay start failed", it) }.getOrDefault(false)
         }
         if (!ok) return false
         live = true
@@ -276,7 +276,6 @@ internal class NetplayGame(
     }
 
     companion object {
-        private const val TAG = "NXAPP"
         /**
          * The game screen is gone (after its native destroy, which shuts both engines too; a second shutdown is a no-op):
          * the engines are shut down, then [discardCopy] runs (the screen releases its own session copy), off the main thread.
@@ -288,7 +287,7 @@ internal class NetplayGame(
                     runCatching { LibretroNetplay.shutdown() }
                     runCatching { LibretroNetplay.linkShutdown() }
                 }
-                discardCopy?.let { runCatching { it() }.onFailure { e -> NxLog.e(TAG, "netplay session copy not released", e) } }
+                discardCopy?.let { runCatching { it() }.onFailure { e -> NxLog.e(TAG_LOG, "netplay session copy not released", e) } }
             }
         }
     }

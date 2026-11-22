@@ -111,9 +111,6 @@ public:
 
     void renderFrame();
 
-    // Redraws the last frame while the core is paused, shielding the core's GL state it doesn't expect changed.
-    void renderPausedFrame();
-
     void onNewFrame(const void *data, unsigned width, unsigned height, size_t pitch);
 
     // The next frame's buffer, for a Video created with vulkanBridge. Owns [syncFd]. [liveBuffers]: how many buffers the
@@ -145,6 +142,8 @@ public:
 
 private:
     void drawFrame();
+    // The frame's picture, by whichever path the layout and shader call for.
+    void drawPicture();
     void updateProgram();
 
     float getScreenDensity(float screenWidth, float screenHeight);

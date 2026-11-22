@@ -146,7 +146,7 @@ internal fun MainListBody(
     val infoSize = nxDescSize()   // a Settings row's description size
     val basePitch = homeListPitch()
     val pill = basePitch * (1 - 2 * NX_PILL_PAD)   // the pill's height, whatever the rows stretch to
-    val basePx = with(density) { basePitch.roundToPx() }
+    val pitchPx = with(density) { basePitch.roundToPx() }
     val sel = selection()
     val inset = nxPageInset()   // the names on it, the pill's edges outside it
     val state = rememberLazyListState()
@@ -154,12 +154,12 @@ internal fun MainListBody(
     BoxWithConstraints(modifier.fillMaxSize()) {
         val start = top + basePitch * gapRows
         val bottom = basePitch * bottomRows
-        val band = (constraints.maxHeight - with(density) { (start + bottom).roundToPx() }).coerceAtLeast(basePx)
+        val band = (constraints.maxHeight - with(density) { (start + bottom).roundToPx() }).coerceAtLeast(pitchPx)
         // Every row its own pitch: a list longer than the band shows the whole rows that fit, never stretched apart.
-        val pitchPx = basePx
         val pitch = with(density) { pitchPx.toDp() }
         val heights = List(names.size) { pitchPx }
-        val viewport = homeListViewport(band, heights.sum(), pitchPx)
+        val total = names.size * pitchPx
+        val viewport = homeListViewport(band, total, pitchPx)
         if (onPageRows != null) {
             val report by rememberUpdatedState(onPageRows)
             val whole = maxOf(1, band / maxOf(1, pitchPx))
@@ -179,7 +179,7 @@ internal fun MainListBody(
         }
         // A list that fits sits on the band's bottom, the list just its rows tall (the pill counts rows from the list's
         // top, so no empty room above them); a longer one fills it, from right under its top to the tab row.
-        val fits = heights.sum() <= band
+        val fits = total <= band
         // One pill behind the rows, gliding from row to row as the other lists' does ([nxPillGlide]); a row's text takes
         // the on-pill colours while the pill covers it the most ([NxPillGlide.litIndex]).
         val identity = remember(names) { nxPillListIdentity(names) }
@@ -187,7 +187,7 @@ internal fun MainListBody(
         val pillStart = with(density) { inset.pillStart.toPx() }
         LazyColumn(
             Modifier.align(if (fits) Alignment.BottomStart else Alignment.TopStart).padding(top = if (fits) 0.dp else start, bottom = if (fits) bottom else 0.dp)
-                .fillMaxWidth().height(with(density) { (if (fits) heights.sum() else viewport).toDp() }).nxRowEdgeMask(state)
+                .fillMaxWidth().height(with(density) { (if (fits) total else viewport).toDp() }).nxRowEdgeMask(state)
                 .nxPillGlide(glide, state, pitchPx, colors.accent, start = pillStart),
             state = state, verticalArrangement = Arrangement.Bottom, flingBehavior = rememberNxRowSnapFling(state),
         ) {

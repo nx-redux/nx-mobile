@@ -308,7 +308,6 @@ public:
     uintptr_t handleGetCurrentFrameBuffer();
 
 private:
-    void updateAudioSampleRateMultiplier();
     // GL thread: the audible-FF playback speed. Kept apart from frameSpeed's so a pause always wins.
     void updateFastForwardAudioSpeed();
     // GL thread, in step(): starts/stops the pacer and tells audio and the core (GET_FASTFORWARDING) on a change.

@@ -12,6 +12,7 @@ import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.storage.GameRef
 import com.nxredux.mobile.storage.MemorySidecarStore
 import com.nxredux.mobile.storage.Recents
+import com.nxredux.mobile.tryOrAny
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.CancellationException
@@ -512,7 +513,7 @@ class LibraryScanner(
 
     /** The picked slots per game; a failed read is none (the folders' own files then). */
     private suspend fun pickedGames(): Map<String, Set<ArtSlot>> =
-        try { picks() } catch (e: CancellationException) { throw e } catch (_: Throwable) { emptyMap() }
+        tryOrAny({ emptyMap() }) { picks() }
 
     /** An extra folder's game's picked slots in [picked] (a home game's pick is in its own folder: nothing to prefer). */
     private fun pickedSlots(picked: Map<String, Set<ArtSlot>>, sourceId: String, dir: String, file: String): Set<ArtSlot> =
@@ -522,7 +523,7 @@ class LibraryScanner(
     private inner class HeroShots {
         private var shots: Set<String>? = null
         suspend fun get(): Set<String> = shots
-            ?: (try { heroShots() } catch (e: CancellationException) { throw e } catch (_: Throwable) { emptySet() }).also { shots = it }
+            ?: tryOrAny({ emptySet() }) { heroShots() }.also { shots = it }
         fun stale() { shots = null }
     }
 

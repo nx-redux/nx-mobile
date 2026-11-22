@@ -1497,7 +1497,8 @@ class AppState(
     internal fun settingsSections(): List<SettingsSection> = settingsUi.settingsSections()
     fun openSettings(section: SettingsSection) = settingsUi.openSettings(section)
     fun onSettingsSplit(split: Boolean) = settingsUi.onSettingsSplit(split)
-    fun settingsPreview(section: SettingsSection): Screen.Settings = settingsUi.settingsPreview(section)
+    /** [section]'s page as the unfocused right pane shows it while its category is highlighted on the left. */
+    fun settingsPreview(section: SettingsSection): Screen.Settings = settingsUi.settingsPage(section)
     fun settingsCategoryTap(index: Int) = settingsUi.settingsCategoryTap(index)
     fun settingsPreviewTap(row: Int) = settingsUi.settingsPreviewTap(row)
 
@@ -1704,14 +1705,11 @@ class AppState(
         if (r.ui) withContext(uiContext) { steps() } else steps()
     }
 
-    /** Art results still waiting are written and shown now ([LibraryIndexHolder.flushArt]). */
-    private suspend fun flushArt() = libraryIndex.flushArt()
-
     /** The app left the foreground: art results still waiting are written now, not left to a debounce a kill would lose. */
     fun onBackground() {
         kidsUi.kidsCloseUnlock()   // the unlock PIN or sheet never waits behind another app for the kid to come back to
         if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) { closeShortcuts(); settingsUi.refreshSettings() }
-        scope.launch { flushArt() }
+        scope.launch { libraryIndex.flushArt() }
     }
 
     /**
@@ -5303,13 +5301,10 @@ class AppState(
 
     /** [row]'s tool opened (an app, [ToolKind.APP], launches). */
     private fun openTool(row: ToolRow) {
-        if (row.kind == ToolKind.KIDS_LOCK) return kidsUi.kidsLockNow()   // not a tool page: the tiles screen (or the menu, in a window)
-        openToolNow(row)
-    }
-
-    private fun openToolNow(row: ToolRow) {
-        // Kids Mode: no tool (Settings, Apps, an app, Device Sync …) but for a parent; the Apps tab's allowed apps open for the kid.
-        if (!kidsUi.kidsToolsAllowed && !(row.kind == ToolKind.APP && row.appId in deps.settings.kidsAllowedApps)) return
+        // Kids Mode: no tool (Settings, Apps, an app, Device Sync …) but for a parent; the Apps tab's allowed apps open
+        // for the kid, and the lock is not a tool page.
+        val kidsApp = row.kind == ToolKind.APP && row.appId in deps.settings.kidsAllowedApps
+        if (row.kind != ToolKind.KIDS_LOCK && !kidsApp && !kidsUi.kidsToolsAllowed) return
         when (row.kind) {
             ToolKind.RETRO_ACHIEVEMENTS -> if (deps.achievements != null) ra.showRetroAchievements()
             ToolKind.GAME_TIME -> gameTimeScreen?.open(onCancel = ::showTools)
@@ -5323,9 +5318,9 @@ class AppState(
                 showDeviceSync(deps.deviceSync ?: return)
             }
             ToolKind.SETTINGS -> openSettingsMenu()
-            ToolKind.APPS -> openToolApps(AppPick.TOOLS)
+            ToolKind.APPS -> androidApps.openToolApps(AppPick.TOOLS)
             ToolKind.APP -> androidApps.openApp(row)
-            ToolKind.KIDS_LOCK -> kidsUi.kidsLockNow()
+            ToolKind.KIDS_LOCK -> kidsUi.kidsLockNow()   // the tiles screen (or the menu, in a window)
         }
     }
 
@@ -5535,7 +5530,7 @@ class AppState(
                     SettingsKind.PLAYER_NAME -> _screen.value = s.copy(nameDraft = PlayerName.resolve(deps.settings.playerName, deps.deviceName()))
                     SettingsKind.APP_UPDATE -> deps.updater?.let(::appUpdateRowA)
                     SettingsKind.HOME_SCREEN -> deps.launcher?.let { it.setHome(!it.isHome()); settingsUi.refreshSettings() }
-                    SettingsKind.ANDROID_GAMES -> openToolApps(AppPick.GAMES)
+                    SettingsKind.ANDROID_GAMES -> androidApps.openToolApps(AppPick.GAMES)
                     SettingsKind.RESET_DEFAULTS -> _screen.value = s.copy(confirmReset = true)   // asks first
                     SettingsKind.ALL_FILES -> deps.allFilesAccess?.openSettings()
                     SettingsKind.MIC_ACCESS -> deps.micAccess?.request()
@@ -5712,7 +5707,7 @@ class AppState(
             libraryIndex.applyArt(ref, art)
         }
 
-        override suspend fun flushArt() = this@AppState.flushArt()
+        override suspend fun flushArt() = libraryIndex.flushArt()
 
         /** The art store has the new screenshot: the console is rebuilt from it, on the UI's thread. */
         override suspend fun refreshAndroidConsole() = withContext(uiContext) { applyAndroidConsole() }
@@ -5790,11 +5785,11 @@ class AppState(
 
     /**
      * The game menu's Fetch art / Change art panel over a game list; null without a controller. A pick's art is already
-     * in the index and shown ([com.nxredux.mobile.scraper.ArtworkHost.applyArt], then [flushArt]); the flush after it
-     * writes anything still batched.
+     * in the index and shown ([com.nxredux.mobile.scraper.ArtworkHost.applyArt], then [LibraryIndexHolder.flushArt]);
+     * the flush after it writes anything still batched.
      */
     private val artPanels: ArtPanelController? = artworkController?.let { c ->
-        ArtPanelController(scope, c, deps.settings, onPicked = { scope.launch { flushArt() } }, onLayoutSwitched = ::syncArtLayout)
+        ArtPanelController(scope, c, deps.settings, onPicked = { scope.launch { libraryIndex.flushArt() } }, onLayoutSwitched = ::syncArtLayout)
     }
     private val noArtPanel = MutableStateFlow<ArtPanel?>(null)
     private val _artLayout = MutableStateFlow(ArtLayout(deps.settings.backdropArt, deps.settings.gameListArt))
@@ -6743,9 +6738,6 @@ class AppState(
     }
 
     // --- Android apps: the picker and app launches live in AppsController ---
-
-    /** The apps grid for [pick] ([AppsController.openToolApps]): the Apps tool, the drawer preview's tap, Settings -> Library -> Android games. */
-    private fun openToolApps(pick: AppPick, selectId: String? = null) = androidApps.openToolApps(pick, selectId)
 
     /** The apps grid laid out [columns] tiles wide: the d-pad then steps by tiles. */
     fun onToolAppsLayout(columns: Int) = androidApps.onToolAppsLayout(columns)

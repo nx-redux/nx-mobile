@@ -573,12 +573,12 @@ internal fun gameListInfoInRow(barHidden: Boolean, extraInfo: Boolean, topStats:
 
 /**
  * The Games tab's title: the highlighted game's ([index] in [entries]) console, as that console's own list is titled
- * ([listTitle]: a merged console's shared display name, "Android" for Android games); a system with no name, its tag as
+ * ([ListSource.title]: a merged console's shared display name, "Android" for Android games); a system with no name, its tag as
  * the List's console line shows it ([tagLine]); "Games" with no game highlighted.
  */
 internal fun gamesTabTitle(entries: List<Listed>, index: Int): String {
-    val system = entries.getOrNull(index)?.system ?: return listTitle(ListSource.AllGames)
-    return listTitle(ListSource.Console(system)).ifBlank { CoreRegistry.handheldTag(system.tag) }
+    val system = entries.getOrNull(index)?.system ?: return ListSource.AllGames.title
+    return ListSource.Console(system).title.ifBlank { CoreRegistry.handheldTag(system.tag) }
 }
 
 /**

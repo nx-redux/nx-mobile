@@ -92,6 +92,9 @@ class AppUpdateUiTest {
 
     private class Rig(val state: AppState, val updater: UpdateController, val platform: FakePlatform, val settings: Settings)
 
+    /** The hint row of the Settings page's selected row. */
+    private fun Rig.hints() = settingsHints(assertIs<Screen.Settings>(state.screen.value).rows, state.selection.value.index)
+
     private val source = FakeRomsSource(
         dirs = mapOf(
             "Home" to listOf("Roms"),
@@ -294,7 +297,7 @@ class AppUpdateUiTest {
         r.openAbout()
         r.pressUpdateRow()                                                  // Idle: Check for updates
         assertEquals("Up to date (0.3.0)", r.updateRow()?.label)            // the page refreshed itself
-        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Check")), settingsHints(assertIs<Screen.Settings>(r.state.screen.value).rows, r.state.selection.value.index))
+        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Check")), r.hints())
 
         p.feedError = IllegalStateException("offline")
         r.pressUpdateRow()                                                  // UpToDate: checks again
@@ -307,7 +310,7 @@ class AppUpdateUiTest {
         p.feed = releaseJson("v0.4.0")
         r.pressUpdateRow()
         assertEquals("Update to 0.4.0", r.updateRow()?.label)
-        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Update")), settingsHints(assertIs<Screen.Settings>(r.state.screen.value).rows, r.state.selection.value.index))
+        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Update")), r.hints())
         assertNull(r.state.updatePopup.value)                               // About's check never pops up
 
         p.downloadGate = CompletableDeferred()
@@ -318,7 +321,7 @@ class AppUpdateUiTest {
         r.state.onButton(NxButton.A)                                        // its Update
         assertNull(r.state.updateConfirm.value)
         assertEquals("Downloading 50%", r.updateRow()?.label)
-        assertEquals(listOf(Hint(NxButton.B, "Back")), settingsHints(assertIs<Screen.Settings>(r.state.screen.value).rows, r.state.selection.value.index))
+        assertEquals(listOf(Hint(NxButton.B, "Back")), r.hints())
         r.pressUpdateRow()                                                  // Downloading: nothing
         assertEquals(1, p.downloads)
         assertEquals(4, p.fetches)
@@ -338,7 +341,7 @@ class AppUpdateUiTest {
         r.pressUpdateRow()                                                  // check
         r.pressUpdateRow(); pastGuard(); r.state.onButton(NxButton.A)     // Update to 0.4.0, confirmed: held off the menu
         assertEquals("Ready to install", r.updateRow()?.label)
-        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Install")), settingsHints(assertIs<Screen.Settings>(r.state.screen.value).rows, r.state.selection.value.index))
+        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Install")), r.hints())
         r.pressUpdateRow()
         assertEquals("Installing…", r.updateRow()?.label)
         assertEquals(1, p.installs)
@@ -350,7 +353,7 @@ class AppUpdateUiTest {
         r.openAbout()
         r.pressUpdateRow()                                                  // check: no checksum
         assertEquals("Update not verified: GitHub sent no checksum", r.updateRow()?.label)
-        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Check")), settingsHints(assertIs<Screen.Settings>(r.state.screen.value).rows, r.state.selection.value.index))
+        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Check")), r.hints())
         p.feed = releaseJson("v0.4.0")
         r.pressUpdateRow()                                                  // checks again, no confirm
         assertNull(r.state.updateConfirm.value)
@@ -366,7 +369,7 @@ class AppUpdateUiTest {
         r.pressUpdateRow()                                                  // check
         r.pressUpdateRow(); pastGuard(); r.state.onButton(NxButton.A)     // Update to 0.4.0, confirmed: fails
         assertEquals("Update failed", r.updateRow()?.label)
-        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Update")), settingsHints(assertIs<Screen.Settings>(r.state.screen.value).rows, r.state.selection.value.index))
+        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Update")), r.hints())
         p.downloadGate = CompletableDeferred()
         r.pressUpdateRow()                                                  // Failed with a release: the confirm
         assertEquals("0.4.0", r.state.updateConfirm.value?.version)

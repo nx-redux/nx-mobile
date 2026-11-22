@@ -4,6 +4,7 @@ import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.settings.SourceConversion
 import com.nxredux.mobile.settings.Sources
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -14,6 +15,8 @@ import java.nio.file.Files
 
 class AndroidStorageUpgradeTest {
     private val base = Files.createTempDirectory("upgrade").toFile()
+
+    @After fun cleanUp() { base.deleteRecursively() }
 
     private fun write(root: File, rel: String, text: String, mtime: Long = 1_000_000L) =
         File(root, rel).apply { parentFile!!.mkdirs(); writeText(text); setLastModified(mtime) }

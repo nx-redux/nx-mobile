@@ -58,8 +58,11 @@ private fun TextEntry.edited(text: String, cursor: Int): EntryStep {
     return EntryStep(copy(fields = fields, cursor = cursor), EntryOutcome.Edit(active, text))
 }
 
-/** [s] at the cursor, line breaks and tabs dropped (one-line fields); nothing for nothing. */
-private fun TextEntry.insert(s: String): EntryStep {
+/**
+ * [s] at the cursor (a key's character, the clipboard's text, a physical keyboard's printable text), line breaks and
+ * tabs dropped (one-line fields); nothing for nothing.
+ */
+fun TextEntry.insert(s: String): EntryStep {
     val clean = s.replace("\n", "").replace("\r", "").replace("\t", "")
     if (clean.isEmpty()) return none()
     return edited(text.substring(0, cursor) + clean + text.substring(cursor), cursor + clean.length)
@@ -149,12 +152,6 @@ fun TextEntry.tapKeyAt(at: KeyPos): EntryStep {
 
 /** A tap on field [index]: it becomes the active one, the cursor at its end. */
 fun TextEntry.tapField(index: Int): TextEntry = toField(index.coerceIn(0, fields.lastIndex), EntryFocus.Field)
-
-/** The clipboard's [text] at the cursor, as one line. */
-fun TextEntry.paste(text: String): EntryStep = insert(text)
-
-/** A physical keyboard's printable [text] at the cursor. */
-fun TextEntry.type(text: String): EntryStep = insert(text)
 
 /** The host's current [values]: a field changed from outside puts the cursor at its end when it is the active one. */
 fun TextEntry.withValues(values: List<String>): TextEntry {

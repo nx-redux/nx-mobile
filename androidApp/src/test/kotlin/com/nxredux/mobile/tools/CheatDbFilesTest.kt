@@ -10,6 +10,7 @@ import java.nio.file.Files
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -19,6 +20,8 @@ import org.junit.Test
 class CheatDbFilesTest {
     private val base = Files.createTempDirectory("cheatdb").toFile()
     private val sd = File(base, "sd").apply { mkdirs() }
+
+    @After fun cleanUp() { base.deleteRecursively() }
 
     private fun zip(name: String, entries: Map<String, String>): File = File(base, name).apply {
         ZipOutputStream(outputStream()).use { out ->

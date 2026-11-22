@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,14 +15,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
@@ -76,10 +73,8 @@ import com.nxredux.mobile.shared.res.onboarding_tab_tools_carousel
 import com.nxredux.mobile.shared.res.onboarding_tab_tools_carousel_vertical
 import com.nxredux.mobile.shared.res.onboarding_tab_tools_grid
 import com.nxredux.mobile.shared.res.onboarding_tab_tools_list
-import com.nxredux.mobile.ui.nx.NxSetupLandscapeWidth
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.LocalNxColors
-import com.nxredux.mobile.ui.nx.LocalNxFont
 import com.nxredux.mobile.ui.nx.LocalPortrait
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxHintBar
@@ -90,10 +85,8 @@ import com.nxredux.mobile.ui.nx.NxOptionsList
 import com.nxredux.mobile.ui.nx.nxOptionsFitHeight
 import com.nxredux.mobile.ui.nx.LocalNxOptionText
 import com.nxredux.mobile.ui.nx.nxOptionsRowHeight
-import com.nxredux.mobile.ui.nx.nxTextScale
 import com.nxredux.mobile.ui.nx.NxListPitch
 import com.nxredux.mobile.ui.nx.NxPageTitle
-import com.nxredux.mobile.ui.nx.NxTitleActions
 import com.nxredux.mobile.ui.nx.NxTextSizes
 import com.nxredux.mobile.ui.nx.nxListInset
 import org.jetbrains.compose.resources.DrawableResource
@@ -231,43 +224,28 @@ internal fun layoutPictureFooter(picture: DrawableResource, aspect: Float): NxLi
 ) { w -> if (w >= PREVIEW_MIN_WIDTH) Box(Modifier.padding(top = LAYOUT_PICTURE_ROWS_GAP)) { FramedPicture(picture, aspect, w) } }
 
 /**
- * A page of value rows with one picture of their current values (a Settings → Layouts group): the page [title] and
- * [details] lines, the value rows right under them, the [picture] ([aspect] its
- * width over height; null: none) at the page's width (up to [PREVIEW_MAX_WIDTH]). [titleAction]: the last of [rows]
- * (Continue) sits at the title's right; without, every row is a value row (B leaves). Non-wide landscape keeps the lines
- * and rows to [landscapeWidth] of the width. A wide landscape screen ([PREVIEW_WIDE_RATIO]: a 16:9 phone, not the Fold's
+ * A page of value rows with one picture of their current values (a Settings → Layouts group): the page [title], the
+ * value [rows] right under it (B leaves), the [picture] ([aspect] its width over height; null: none) at the page's
+ * width (up to [PREVIEW_MAX_WIDTH]). A wide landscape screen ([PREVIEW_WIDE_RATIO]: a 16:9 phone, not the Fold's
  * near-square one) puts the picture in a column of its own at the right, as large as that column takes it.
  * [touchRows]: the value rows' own list in place of the options rows (a Settings group's touch rows), given the room it may take
  * and, in the wide Settings rows block, the picture to draw under its last row (scrolling with the rows).
  */
 @Composable
 internal fun LayoutPreviewPage(
-    title: String, details: List<String>, rows: List<NxRow>, picture: DrawableResource?, aspect: Float, selected: Int, hints: List<Hint>,
+    title: String, rows: List<NxRow>, picture: DrawableResource?, aspect: Float, selected: Int, hints: List<Hint>,
     onSelect: (Int) -> Unit, onRow: (Int) -> Unit, onHint: (NxButton) -> Unit, modifier: Modifier = Modifier,
-    landscapeWidth: Float = NxSetupLandscapeWidth, titleAction: Boolean = true,
     touchRows: (@Composable (Modifier, NxListFooter?) -> Unit)? = null,
 ) {
-    val colors = LocalNxColors.current
-    val font = LocalNxFont.current
-    val values = if (titleAction) rows.dropLast(1) else rows
-    val last = rows.lastIndex
     val portrait = LocalPortrait.current
-    val label = NxTextSizes.listLabel(NxListPitch) * nxTextScale()   // Appearance → Text size
     // [rowsMax]: the most the touch rows may take, so the picture under them keeps its room (they scroll past it).
     val text: @Composable (Modifier, Dp, NxListFooter?) -> Unit = { cap, rowsMax, footer -> Column(cap) {
-        Column(Modifier.padding(horizontal = nxListInset())) {
-            details.forEachIndexed { i, line ->
-                if (i == 0) Text(line, color = colors.listText, fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = NxTextSizes.headline(label))
-                else Text(line, color = colors.hint, fontFamily = font, fontSize = NxTextSizes.secondary(label))
-            }
-        }
-        if (details.isNotEmpty()) Spacer(Modifier.height(12.dp))
         // The value rows, as the formats step draws them ("< value >" while selected); on a short page they scroll.
         val optionPitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)   // Appearance → Text size
         if (touchRows != null) touchRows(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = rowsMax), footer)
         else NxOptionsList(
-            values, selected.takeIf { it < values.size } ?: -1, onSelect, onRow, rowHeight = optionPitch, listText = NxTextSizes.listLabel(optionPitch),
-            modifier = Modifier.fillMaxWidth().weight(1f, fill = false).height(nxOptionsFitHeight(values, optionPitch)),
+            rows, selected.takeIf { it < rows.size } ?: -1, onSelect, onRow, rowHeight = optionPitch, listText = NxTextSizes.listLabel(optionPitch),
+            modifier = Modifier.fillMaxWidth().weight(1f, fill = false).height(nxOptionsFitHeight(rows, optionPitch)),
         )
     } }
     // Too little room left (a short page of many rows): no picture rather than a thumbnail.
@@ -300,8 +278,8 @@ internal fun LayoutPreviewPage(
                     // No touch rows: the options rows, the picture under them.
                     val optionPitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)   // Appearance → Text size
                     NxOptionsList(
-                        values, selected.takeIf { it < values.size } ?: -1, onSelect, onRow, rowHeight = optionPitch, listText = NxTextSizes.listLabel(optionPitch),
-                        modifier = Modifier.fillMaxWidth().weight(1f, fill = false).height(nxOptionsFitHeight(values, optionPitch)),
+                        rows, selected.takeIf { it < rows.size } ?: -1, onSelect, onRow, rowHeight = optionPitch, listText = NxTextSizes.listLabel(optionPitch),
+                        modifier = Modifier.fillMaxWidth().weight(1f, fill = false).height(nxOptionsFitHeight(rows, optionPitch)),
                     )
                     BoxWithConstraints(Modifier.fillMaxWidth()) {
                         if (maxWidth >= PREVIEW_MIN_WIDTH) footerOf(0.dp to 0.dp)?.content?.invoke(maxWidth)
@@ -323,7 +301,7 @@ internal fun LayoutPreviewPage(
         val gutterEnd = settingsPlateEnd()
         Column(Modifier.fillMaxSize()) {
             Column(Modifier.weight(1f).fillMaxWidth().padding(start = gutter, end = gutterEnd)) {
-                NxPageTitle(title, bottom = 8.dp, trailing = if (titleAction) ({ NxTitleActions(listOf(rows[last].label), last, selected, onSelect, onRow) }) else null)
+                NxPageTitle(title, bottom = 8.dp)
                 if (wide) {
                     // Text and rows at the left, the picture at the right, each half the width.
                     Row(Modifier.weight(1f).fillMaxWidth()) {
@@ -343,7 +321,7 @@ internal fun LayoutPreviewPage(
                     text(Modifier.weight(1f), Dp.Infinity, footerOf(bleed to bleed))
                 } else {
                     // Landscape (the Fold's near-square pane): the rows at most [PREVIEW_ROWS_SHARE] of the height, the picture the rest.
-                    text(if (portrait) Modifier else Modifier.fillMaxWidth(landscapeWidth), if (portrait) Dp.Infinity else pageH * PREVIEW_ROWS_SHARE, null)   // landscape: long lines wrap
+                    text(if (portrait) Modifier else Modifier.fillMaxWidth(), if (portrait) Dp.Infinity else pageH * PREVIEW_ROWS_SHARE, null)
                     // The picture at the page's width (inset), smaller when the rows leave less height; the room left stays below.
                     BoxWithConstraints(
                         Modifier.fillMaxWidth().weight(1f).padding(start = nxListInset(), end = nxListInset(), top = 16.dp, bottom = 12.dp),

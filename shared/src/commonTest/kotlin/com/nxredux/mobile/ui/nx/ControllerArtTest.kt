@@ -81,14 +81,14 @@ class ControllerArtTest {
 
     @Test fun stackPadBoxCentresOnTheLogoAndItsCount() {
         val r = StackReach(30f, 30f, countLine = 18f)   // a logo drawn 60 tall in a 100 slot, its count 26 under it
-        val b = stackPadBox(330f, 100f, r)
+        val b = stackPadBox(100f, r)
         assertEquals(280f, b.w, 1e-3f); assertEquals(180f, b.h, 1e-3f)   // the row's 2.8 × 1.8
         assertEquals(13f, b.dy, 1e-3f)   // the block's centre is 13 below the slot's
     }
 
     @Test fun aPadReachIsItsDrawnHalfEitherSideOfTheBlockPlusClearance() {
         val r = StackReach(30f, 30f, countLine = 18f)
-        val box = stackPadBox(330f, 100f, r)
+        val box = stackPadBox(100f, r)
         val withPad = r.withPad(box, padAspect = 0.5f)   // a wide pad: 280 × 140 drawn in the 280 × 180 box
         assertEquals(70f - 13f + PAD_CLEAR, withPad.padUp, 1e-4f)
         assertEquals(70f + 13f + PAD_CLEAR, withPad.padDown, 1e-4f)

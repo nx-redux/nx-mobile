@@ -570,7 +570,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         private set
 
     /**
-     * The menu is drawn as two panes ([inGameMenuSplit], set by the host's UI): RIGHT on a row that opens a page opens
+     * The menu is drawn as two panes ([com.nxredux.mobile.ui.settingsSplit], set by the host's UI): RIGHT on a row that opens a page opens
      * it, as A (a column browser); value rows still change.
      */
     var split: Boolean = false
@@ -1094,7 +1094,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private fun changeDisc(delta: Int): MenuEffect? {
         if (discCount < 2) return null
-        discIndex = ((discIndex + delta) % discCount + discCount) % discCount
+        discIndex = (discIndex + delta).mod(discCount)
         refreshRoot()
         return MenuEffect.ChangeDisc(discIndex)
     }
@@ -1446,7 +1446,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private fun change(delta: Int): MenuEffect? = when (val row = state.page.rows.getOrNull(state.page.selected)) {
         is MenuRow.Slot -> {
-            state = state.copy(slotIndex = ((state.slotIndex + delta) % slotCount + slotCount) % slotCount)
+            state = state.copy(slotIndex = (state.slotIndex + delta).mod(slotCount))
             null
         }
         is MenuRow.Option -> when {
@@ -1595,7 +1595,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         val visual = owner.rows.indices.filter { (owner.rows[it] as? MenuRow.Option)?.visual == true }
         if (visual.isEmpty()) return
         val at = visual.indexOfFirst { (owner.rows[it] as MenuRow.Option).key == key }.coerceAtLeast(0)
-        val target = visual[((at + delta) % visual.size + visual.size) % visual.size]
+        val target = visual[(at + delta).mod(visual.size)]
         val targetKey = (owner.rows[target] as MenuRow.Option).key
         state = state.copy(stack = state.stack.take(ownerIndex) + owner.copy(selected = target) + adjustPage(targetKey))
     }
@@ -1635,7 +1635,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun move(delta: Int) {
         val p = state.page
         if (p.rows.isEmpty()) return
-        replaceTop(p.copy(selected = ((p.selected + delta) % p.rows.size + p.rows.size) % p.rows.size))
+        replaceTop(p.copy(selected = (p.selected + delta).mod(p.rows.size)))
         state = state.copy(editing = false)
     }
 

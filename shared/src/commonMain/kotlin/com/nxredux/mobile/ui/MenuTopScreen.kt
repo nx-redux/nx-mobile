@@ -2,8 +2,6 @@ package com.nxredux.mobile.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -58,9 +56,8 @@ fun MenuTopScreen(state: AppState, inSkin: Boolean = false) {
     val touchscreen = rememberHasTouchscreen()
     NxTheme(colors = look.colors) {
         MenuLocals(state, look, footerModeFor(controllerConnected, padVisible = inSkin), touchscreen) {
-            Column(Modifier.fillMaxSize()) {
             BoxWithConstraints(
-                Modifier.weight(1f).fillMaxWidth().background(LocalNxColors.current.background)
+                Modifier.fillMaxSize().background(LocalNxColors.current.background)
                     .let { if (inSkin) it else it.windowInsetsPadding(nxScreenInsets()) }.clipToBounds(),
             ) {
                 // No HandheldShell here: the screen's own shape and size, as the shell gives App's pages.
@@ -75,7 +72,6 @@ fun MenuTopScreen(state: AppState, inSkin: Boolean = false) {
                         TopContent.Backdrop -> Backdrop()
                     }
                 }
-            }
             }
         }
     }

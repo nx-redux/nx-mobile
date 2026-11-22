@@ -710,9 +710,9 @@ object SkinSolver {
         spec: SkinLayoutSpec, windowW: Float, windowH: Float, k: Float, scales: List<Float>,
         game: Map<String, Pair<Float, Float>>, hingeY: Float?,
     ): Solved {
-        val ctx = Ctx(emptyMap(), null, ArrayList())
-        val placement = solveInto(spec, windowW, windowH, k, scales, game, hingeY) { ctx.tooBig = ctx.tooBig || it }
-        return Solved(placement, ctx.tooBig)
+        var tooBig = false
+        val placement = solveInto(spec, windowW, windowH, k, scales, game, hingeY) { tooBig = tooBig || it }
+        return Solved(placement, tooBig)
     }
 
     private fun solveInto(

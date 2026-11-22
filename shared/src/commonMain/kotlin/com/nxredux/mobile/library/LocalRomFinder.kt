@@ -5,6 +5,8 @@ import com.nxredux.mobile.netplay.cablelink.RomHash
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.MemoryPrivateFiles
 import com.nxredux.mobile.storage.PrivateFiles
+import com.nxredux.mobile.tryOrNull
+import com.nxredux.mobile.tryQuietly
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -53,7 +55,7 @@ class LocalRomFinder(private val source: RomsSource, private val store: PrivateF
 
     private suspend fun load(): MutableMap<String, Stamped> = hashes ?: run {
         val map = HashMap<String, Stamped>()
-        val text = try { store.read(FILE) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { null }
+        val text = tryOrNull { store.read(FILE) }
         text?.lineSequence()?.forEach { line ->
             val f = line.split('\t')
             val size = f.getOrNull(1)?.toLongOrNull()
@@ -71,7 +73,7 @@ class LocalRomFinder(private val source: RomsSource, private val store: PrivateF
         val refs = games.mapTo(HashSet()) { it.ref }
         known.keys.retainAll(refs)
         val text = known.entries.joinToString("") { (ref, s) -> "$ref\t${s.size}\t${s.modified ?: NO_TIME}\t${s.hash}\n" }
-        try { store.write(FILE, text); dirty = false } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { Unit }
+        tryQuietly { store.write(FILE, text); dirty = false }
     }
 
     companion object {

@@ -121,27 +121,26 @@ fun NxScreenScaffold(
                         // Untitled (the one-pane Settings pages), an options list fills the slot as the pill list does, so
                         // its first row sits where the Settings menu's does.
                         val options = rowKind == NxRowKind.OPTIONS && title != null
-                        val itemHeight = rowHeight   // options rows are list rows (Text size already in the pitch)
                         val slack = 2f / LocalDensity.current.density
-                        // A titled options list that fits takes its own height.
-                        val optionsHeight = if (options) nxOptionsFitHeight(rows, itemHeight) else 0.dp
+                        // A titled options list that fits takes its own height (its rows are list rows: Text size already in the pitch).
+                        val optionsHeight = if (options) nxOptionsFitHeight(rows, rowHeight) else 0.dp
                         val fits = options && optionsHeight.value <= maxHeight.value + slack
                         // An options gap takes half a row of the slot: the whole rows fit in the rest.
-                        val gap = if (rowKind == NxRowKind.OPTIONS && !fits && rows.any { it.spacer }) itemHeight * NX_OPTIONS_GAP else 0.dp
-                        val whole = nxWholeRows(maxHeight - gap, itemHeight, pxSlack = slack)
-                if (onPageRows != null) {
-                    val report by rememberUpdatedState(onPageRows)
-                    LaunchedEffect(whole) { report(whole) }
-                }
+                        val gap = if (rowKind == NxRowKind.OPTIONS && !fits && rows.any { it.spacer }) rowHeight * NX_OPTIONS_GAP else 0.dp
+                        val whole = nxWholeRows(maxHeight - gap, rowHeight, pxSlack = slack)
+                        if (onPageRows != null) {
+                            val report by rememberUpdatedState(onPageRows)
+                            LaunchedEffect(whole) { report(whole) }
+                        }
                         // In the rows' own rounded px, so the list rests on whole rows ([nxRowsSlotPx]).
-                                                val slot = if (fits) optionsHeight else with(density) { nxRowsSlotPx(itemHeight.roundToPx(), whole, gap.roundToPx()).toDp() }
+                        val slot = if (fits) optionsHeight else with(density) { nxRowsSlotPx(rowHeight.roundToPx(), whole, gap.roundToPx()).toDp() }
                         val listWidth = maxWidth
                         // An options list fades itself (its rows rest whole); a titled page's fade is half a row, the main menu's taller.
                         val fade = rowKind != NxRowKind.OPTIONS
-                        Box(Modifier.fillMaxWidth().height(slot).then(if (fade) Modifier.nxScrollFade(listState, height = if (gutters) itemHeight / 2 else 56.dp, strong = true) else Modifier)) {
+                        Box(Modifier.fillMaxWidth().height(slot).then(if (fade) Modifier.nxScrollFade(listState, height = if (gutters) rowHeight / 2 else 56.dp, strong = true) else Modifier)) {
                             if (rowKind == NxRowKind.OPTIONS) {
                                 NxOptionsList(
-                                    rows, selectedIndex, onSelect, onOpen, rowHeight = itemHeight, listText = NxTextSizes.listLabel(bandPitch),
+                                    rows, selectedIndex, onSelect, onOpen, rowHeight = rowHeight, listText = NxTextSizes.listLabel(bandPitch),
                                     modifier = Modifier.fillMaxSize(), listState = listState, onLongPress = onLongPress,
                                 )
                             } else if (!showArt) {

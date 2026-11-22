@@ -100,7 +100,7 @@ fun NxBackdropStack(
             val base = if (res == null) StackReach(g.slotH / 2, g.slotH / 2)
                 else key(res) { logoReach(logoDrawnHeight(g.slotW, g.slotH, logoAspect(res)), if (logo.count != null) countLine else 0f) }
             val pad = logo?.pad
-            if (pad == null) base else base.withPad(stackPadBox(g.slotW, g.slotH, base), padAspect(pad.res))
+            if (pad == null) base else base.withPad(stackPadBox(g.slotH, base), padAspect(pad.res))
         }
         val itemRow = g.asItemRow()
         val k = backdropContentScale(itemRow, slot, portrait && slot != BackdropSlot.LOGO)   // a console: the row's slot, so its scale
@@ -115,7 +115,7 @@ fun NxBackdropStack(
                 SlotTile(
                     tiles[i], k, g.slotW, scale = { stackItem(RowStyle.BACKDROP, distance(), g).scale }, toolLines = backdropToolNameLines(slot), toolNameSp = toolNameSp,
                     toolNamePad = backdropToolNamePad(slot), toolSplit = slot == BackdropSlot.TOOL, toolGap = backdropToolGap(slot),
-                    pad = reaches?.get(i)?.let { r -> PadFrame(stackPadBox(g.slotW, g.slotH, r)) { padAlpha(distance()) } },
+                    pad = reaches?.get(i)?.let { r -> PadFrame(stackPadBox(g.slotH, r)) { padAlpha(distance()) } },
                     lit = { slotLitness(distance()) },   // the selected item in the accent
                 )
             },

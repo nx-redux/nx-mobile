@@ -4,6 +4,7 @@ import com.nxredux.mobile.library.ArtRefs
 import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.GamePath
+import com.nxredux.mobile.tryOrAny
 import com.nxredux.mobile.tryQuietly
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -195,7 +196,7 @@ class ArtworkController(
      * failure there is not the run's.
      */
     private suspend fun flushArt() = withContext(NonCancellable) {
-        try { host.flushArt() } catch (e: CancellationException) { throw e } catch (_: Throwable) {}
+        tryOrAny({}) { host.flushArt() }
     }
 
     /** Runs the engine, chaining onto games appended meanwhile; publishes the end, and stops keep-alive, exactly once. */

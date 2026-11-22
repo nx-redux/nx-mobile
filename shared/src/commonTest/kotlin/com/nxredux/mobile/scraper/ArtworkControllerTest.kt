@@ -191,8 +191,8 @@ class ArtworkControllerTest {
         assertNull(rig.fs.bytesAt("Home/Roms/GB/.media/mix/Tetris.png"))
         assertEquals("", rig.host.files.getValue(ArtworkController.LOG_FILE).trim())
         assertEquals(listOf("screenshot"), rig.fs.childNames("Home/Roms/GB/.media"))   // the emptied slot folders went
-        resetLeavesUnloggedFiles(rig)
-        resetReappliesArtOnDisk(rig)
+        assertNotNull(rig.fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.png"))
+        assertEquals(tetris.gamePath to ArtRefs(screenshot = "Home/Roms/GB/.media/screenshot/Tetris.png"), rig.host.applied.single())
     }
 
     @Test fun resetRemovesTheSlotFoldersItEmptiedAndMediaWhenNothingIsLeft() = runTest {
@@ -274,12 +274,6 @@ class ArtworkControllerTest {
         assertNull(store.read(tetris))
         assertEquals(listOf("Mine.json"), rig.fs.childNames("Home/Roms/GB/.media/info"))
     }
-
-    private fun resetLeavesUnloggedFiles(rig: Rig) =
-        assertNotNull(rig.fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.png"))
-
-    private fun resetReappliesArtOnDisk(rig: Rig) =
-        assertEquals(tetris.gamePath to ArtRefs(screenshot = "Home/Roms/GB/.media/screenshot/Tetris.png"), rig.host.applied.single())
 
     @Test fun resetByConsoleDeletesOnlyItsGamesArtAndKeepsWhatElseIsOnDisk() = runTest {
         val switched = Scrape.homeGame("Zelda.gb", tag = "GBC", dir = "Roms/GB")   // tag-switched: GBC in GB's folder
@@ -464,9 +458,8 @@ class ArtworkControllerTest {
         assertFalse(rig.controller.tgdbAvailable)
         assertFalse(rig.controller.tgdbKeySet)
         assertNull(rig.controller.tgdbAllowance())
-        val unknownKey = """{"remaining_monthly_allowance":0,"allowance_refresh_timer":0}"""
         for ((answer, result) in listOf(
-            HttpResult(200, unknownKey.encodeToByteArray()) to KeyResult.BAD_KEY, HttpResult(403, null) to KeyResult.BAD_KEY,
+            HttpResult(200, TgdbFixtures.unknownKey.encodeToByteArray()) to KeyResult.BAD_KEY, HttpResult(403, null) to KeyResult.BAD_KEY,
             HttpResult(-1, null) to KeyResult.OFFLINE, HttpResult(503, null) to KeyResult.UNAVAILABLE,
         )) {
             tgHttp.set("apikey=BAD", answer)
@@ -483,7 +476,7 @@ class ArtworkControllerTest {
         assertEquals(2000, rig.controller.tgdbAllowance())
         assertEquals(2000, rig.controller.state.value.tgdbLeft)
         // A refused new key leaves the saved one.
-        tgHttp.set("apikey=OTHER", HttpResult(200, unknownKey.encodeToByteArray()))
+        tgHttp.set("apikey=OTHER", HttpResult(200, TgdbFixtures.unknownKey.encodeToByteArray()))
         assertEquals(KeyResult.BAD_KEY, rig.controller.setTgdbKey("OTHER"))
         assertEquals("GOOD", creds.tgdbUserKey)
         // Removing it turns the source off again and forgets the allowance.
@@ -806,7 +799,7 @@ class ArtworkControllerTest {
     @Test fun resumeWaitsForASingleGameFetchOfAQueuedGame() = runTest {
         val rig = Rig(this, listOf(tetris, zelda))
         rig.host.files[ArtworkController.JOB_FILE] = ScrapeJobCodec.encode(ScrapeState(JobPhase.PAUSED, listOf(Scrape.item(tetris), Scrape.item(zelda))), replace = false)
-        rig.http.on("romnom=", found("ss" to "https://m/s.png", "box-2D" to "https://m/b.png"))   // a box and a screenshot: has art
+        rig.http.on("romnom=", Scrape.BOTH)   // a box and a screenshot: has art
         rig.http.on("https://m/", OK_PNG)
         rig.http.latency = 100
         assertTrue(rig.controller.restorePending())

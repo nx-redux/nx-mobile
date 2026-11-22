@@ -1,16 +1,5 @@
 package com.nxredux.mobile.ui.nx
 
-import androidx.compose.ui.unit.DpSize
-import com.nxredux.mobile.ui.settingsSplit
-
-/**
- * Whether the in-game menu draws as two panes in a [window] of that size: the Settings and
- * RetroAchievements rule ([settingsSplit]: at least 600 dp wide and 1.3:1) on the window, as Settings decides, not on
- * the menu's own area (above the pad band in portrait). The unfolded Fold and a phone in landscape split; portrait,
- * the Fold's included, keeps one page at a time.
- */
-fun inGameMenuSplit(window: DpSize): Boolean = settingsSplit(window)
-
 /** What a pane of the two-pane in-game menu shows: a page's rows, the save-slot preview, the game panel, or nothing. */
 sealed interface MenuPaneContent {
     data class Page(val page: MenuPage) : MenuPaneContent

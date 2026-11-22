@@ -46,7 +46,7 @@ class GameProcessControl(
     fun prepare(session: GameSession): Decision {
         val live = store.current() ?: return Decision.START
         if (live.canBringBack(session) && bringToFront()) return Decision.BROUGHT_BACK
-        NxLog.i(TAG, "ending the game process ${live.pid} before the next launch")
+        NxLog.i(TAG_LOG, "ending the game process ${live.pid} before the next launch")
         sendEnd()
         if (!awaitEnd(live.pid)) {
             killPid(live.pid)
@@ -64,7 +64,7 @@ class GameProcessControl(
         while (true) {
             if (store.current()?.pid != pid) return true
             if (waited - lastLife >= STALL_MS || waited >= CAP_MS) {
-                NxLog.w(TAG, "the game process $pid has not ended after $waited ms (last sign of life at $lastLife ms): killing it")
+                NxLog.w(TAG_LOG, "the game process $pid has not ended after $waited ms (last sign of life at $lastLife ms): killing it")
                 return false
             }
             sleep(POLL_MS)
@@ -92,7 +92,6 @@ class GameProcessControl(
     }
 
     companion object {
-        private const val TAG = "NXAPP"
         private const val POLL_MS = 100L
         /** No heartbeat for this long: the ending game is stuck (it beats every [GameHeartbeat.INTERVAL_MS]). */
         const val STALL_MS = 5_000L
@@ -135,7 +134,7 @@ class GameProcessControl(
                     base == game || info.topActivity?.className == game
                 }.getOrDefault(false)
             } ?: return false
-            return runCatching { task.moveToFront() }.onFailure { NxLog.w(TAG, "could not bring the game back", it) }.isSuccess
+            return runCatching { task.moveToFront() }.onFailure { NxLog.w(TAG_LOG, "could not bring the game back", it) }.isSuccess
         }
     }
 }

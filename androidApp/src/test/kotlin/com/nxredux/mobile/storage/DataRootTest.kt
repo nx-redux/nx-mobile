@@ -2,6 +2,7 @@ package com.nxredux.mobile.storage
 
 import com.nxredux.mobile.cheats.db.CheatDbManifest
 import com.nxredux.mobile.runner.ContentRef
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -18,6 +19,8 @@ class DataRootTest {
     private val private = File(base, "sd").apply { mkdirs() }
     private val home = File(base, "home").apply { mkdirs() }
     private val media = File(base, "media").apply { mkdirs() }
+
+    @After fun cleanUp() { base.deleteRecursively() }
 
     private fun write(root: File, rel: String, text: String, mtime: Long? = null) =
         File(root, rel).apply { parentFile!!.mkdirs(); writeText(text); mtime?.let { setLastModified(it) } }

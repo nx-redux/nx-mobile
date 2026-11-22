@@ -51,23 +51,23 @@ class GridLayoutTest {
 
 /** The Tools grid's columns: as many rows as fit, the fewest columns that hold every tool, never under a square. */
 class ToolsColumnsTest {
-    @Test fun sevenToolsOnSixByThreeAreThreeThreeOne() = kotlin.test.assertEquals(3, toolsColumns(7, maxColumns = 6, rowsFit = 3))
+    @Test fun sevenToolsOnSixByThreeAreThreeThreeOne() = assertEquals(3, toolsColumns(7, maxColumns = 6, rowsFit = 3))
 
     @Test fun fewToolsStayInARowOrASquare() {
-        kotlin.test.assertEquals(2, toolsColumns(2, 6, 3))   // one row of two, not a column
-        kotlin.test.assertEquals(2, toolsColumns(4, 6, 3))   // 2 x 2
-        kotlin.test.assertEquals(3, toolsColumns(5, 6, 3))   // 3, 2
-        kotlin.test.assertEquals(1, toolsColumns(1, 6, 3))
+        assertEquals(2, toolsColumns(2, 6, 3))   // one row of two, not a column
+        assertEquals(2, toolsColumns(4, 6, 3))   // 2 x 2
+        assertEquals(3, toolsColumns(5, 6, 3))   // 3, 2
+        assertEquals(1, toolsColumns(1, 6, 3))
     }
 
     @Test fun fullerGridsFillTheRows() {
-        kotlin.test.assertEquals(4, toolsColumns(10, 6, 3))   // 4, 4, 2
-        kotlin.test.assertEquals(4, toolsColumns(12, 6, 3))   // 4 x 3
-        kotlin.test.assertEquals(6, toolsColumns(18, 6, 3))   // 6 x 3
+        assertEquals(4, toolsColumns(10, 6, 3))   // 4, 4, 2
+        assertEquals(4, toolsColumns(12, 6, 3))   // 4 x 3
+        assertEquals(6, toolsColumns(18, 6, 3))   // 6 x 3
     }
 
     @Test fun moreThanFitKeepsEveryColumnAndScrolls() {
-        kotlin.test.assertEquals(6, toolsColumns(20, 6, 3))
-        kotlin.test.assertEquals(2, toolsColumns(9, 2, 1))    // a narrow screen: what fits
+        assertEquals(6, toolsColumns(20, 6, 3))
+        assertEquals(2, toolsColumns(9, 2, 1))    // a narrow screen: what fits
     }
 }

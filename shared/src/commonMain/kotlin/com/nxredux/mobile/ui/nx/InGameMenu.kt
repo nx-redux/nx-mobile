@@ -70,6 +70,7 @@ import com.nxredux.mobile.ui.SETTINGS_SPLIT_LEFT
 import com.nxredux.mobile.ui.SHORTCUT_PROMPT
 import com.nxredux.mobile.ui.SplitPanes
 import com.nxredux.mobile.ui.UNFOCUSED_ALPHA
+import com.nxredux.mobile.ui.settingsSplit
 
 /** One save-state slot as shown in the preview. [thumbPath] is a coil-loadable model (e.g. a file:// URI). */
 data class SlotUi(
@@ -97,7 +98,7 @@ data class SlotUi(
  * ([MenuState.panelFocus]) the root list is dimmed. [opaque]: on the theme's background instead of the wash over the
  * paused frame (over the dual-screen panel, whose place the menu takes: the list seems to slide in beside it).
  *
- * On a wide window ([inGameMenuSplit] on [LocalWindowSize], the Settings rule, reported through [onSplit]) the menu draws
+ * On a wide window ([settingsSplit] on [LocalWindowSize], the Settings rule, reported through [onSplit]) the menu draws
  * as two panes ([menuPanes]) under the one header and over the one hint bar: the root beside the panel (or the slot
  * card), a deeper page beside its dimmed parent (a tap there calls [onParentTap] with the parent's kind). Adjust strips
  * and message pages stay whole. Otherwise (portrait) the root keeps the panel in its right column, the Options page
@@ -133,7 +134,7 @@ fun InGameMenu(
         // window turned to landscape would draw it ([menuRowHeight]).
         val rowHeight = menuRowHeight(maxHeight, if (LocalPortrait.current) minOf(window.width, window.height) else null)
         // The window, as Settings decides; the menu's own area without one.
-        val split = inGameMenuSplit(window)
+        val split = settingsSplit(window)
         // After every composition, so the model's input agrees with the panes drawn from the first frame.
         SideEffect { onSplit(split) }
         // A dialog page (Quit's, Reset's) draws over the page under it, which takes no input meanwhile (the scrim covers it).
@@ -509,8 +510,8 @@ private fun PagePane(
         // The Options page (its rows the setting pages) as Settings' section words ([RowsBody]); beside the root, its
         // preview with none selected, every word in inkDim.
         page.kind == PageKind.Options -> key(page.kind) {
-            if (focused) RowsBody(page, rowHeight, onSelect, onActivate, {}, modifier, focused = true)
-            else RowsBody(page.copy(selected = -1), rowHeight, split.onPreviewTap, split.onPreviewTap, {}, modifier)
+            if (focused) RowsBody(page, rowHeight, onSelect, onActivate, modifier, focused = true)
+            else RowsBody(page.copy(selected = -1), rowHeight, split.onPreviewTap, split.onPreviewTap, modifier)
         }
         page.kind == PageKind.Achievements -> AchievementsBody(page, detail, onSelect, modifier)
         else -> key(page.kind) { OptionsBody(page, rowHeight, onSelect, onActivate, onOption, onInfoTruncated, modifier) }
@@ -713,7 +714,7 @@ private fun PaneBody(
             contentAlignment = Alignment.TopStart,
         ) { RootList(page, rowHeight, onSelect, onActivate, onChange, focused, opened) }
         PageKind.Achievements -> AchievementsBody(page, detail, onSelect, Modifier.fillMaxSize().alpha(if (focused) 1f else UNFOCUSED_ALPHA))   // role: an unfocused pane, dimmed
-        else -> key(page.kind) { RowsBody(page, rowHeight, onSelect, onActivate, onChange, Modifier.fillMaxSize(), focused, opened) }
+        else -> key(page.kind) { RowsBody(page, rowHeight, onSelect, onActivate, Modifier.fillMaxSize(), focused, opened) }
     }
 }
 
@@ -735,7 +736,6 @@ private fun RowsBody(
     rowHeight: Dp,
     onSelect: (Int) -> Unit,
     onActivate: (Int) -> Unit,
-    onChange: (Int) -> Unit,
     modifier: Modifier,
     focused: Boolean = false,
     opened: Boolean = false,

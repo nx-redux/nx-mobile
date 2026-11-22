@@ -18,8 +18,6 @@
 #ifndef LIBRETRODROID_ENVIRONMENT_H
 #define LIBRETRODROID_ENVIRONMENT_H
 
-#define MODULE_NAME_CORE "Libretro Core"
-
 #include "videoviews.h"
 #include <vector>
 #include <string>

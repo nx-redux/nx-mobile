@@ -97,6 +97,7 @@ import kotlin.math.roundToInt
  * shares its effects and data with.
  */
 internal interface DualScreenHost : GameScreenHost {
+    val settings: AndroidAppSettings
     val frontendValues: Map<String, String>
     /** The config's resolved values (launch, or the last restore): the 3DS swap values leaving split puts back. */
     val storedValues: Map<String, String>
@@ -178,24 +179,7 @@ internal class DualScreenController(
     private fun <T : View> findViewById(id: Int): T = owner.activity.findViewById(id)
     private val lifecycle get() = owner.lifecycle
     private val lifecycleScope get() = owner.lifecycleScope
-    private val retroView get() = owner.retroView
-    private val frontendValues get() = owner.frontendValues
-    private val storedValues get() = owner.storedValues
-    private val gameReady get() = owner.gameReady
-    private val resumePending get() = owner.resumePending
-    private val quitting get() = owner.quitting
-    private val menuOpen get() = owner.menuOpen
-    private val isNds get() = owner.isNds
-    private val isN3ds get() = owner.isN3ds
-    private val netplayNow get() = owner.netplayNow
-    private val sessionLocked get() = owner.sessionLocked
-    private val achievements get() = owner.achievements
-    private val menuView get() = owner.menuView
-    private fun layoutTag() = owner.layoutTag()
     private fun menuLayoutParams(orientation: Int, overPanel: Boolean = false, glass: Boolean = false) = owner.menuLayoutParams(orientation, overPanel, glass)
-    private fun isLandscape() = owner.isLandscape()
-    private fun syncN3dsCore() = owner.syncN3dsCore()
-    private fun toast(msg: String) = owner.toast(msg)
 
     /** The display an app the player opened holds ([GameActivity.EXTRA_LEAVE_DISPLAY]); let go of by [useTakenScreen]. */
     private var leave = Display.INVALID_DISPLAY
@@ -220,7 +204,6 @@ internal class DualScreenController(
     private fun gameDisplayId(): Int =
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) activity.display?.displayId ?: Display.DEFAULT_DISPLAY
         else @Suppress("DEPRECATION") activity.windowManager.defaultDisplay.displayId
-    val appSettings by lazy { AndroidAppSettings(activity) }   // reads the prefs live: the dual paths' settings
     var presentation: SecondScreenPresentation? = null
         private set
     private var secondSurface: SecondSurface? = null   // the presentation's surface
@@ -278,8 +261,8 @@ internal class DualScreenController(
      * split noted the stored ones instead; values already noted (the other of the two holds them) are kept.
      */
     fun captureN3dsSwap() {
-        val view = retroView ?: return
-        if (netplayNow?.locksOptions == true) return   // no core option changes mid-session, so none to undo
+        val view = owner.retroView ?: return
+        if (owner.netplayNow?.locksOptions == true) return   // no core option changes mid-session, so none to undo
         view.queueEvent {
             if (n3dsSwapBeforeSplit != null) return@queueEvent
             n3dsSwapBeforeSplit = runCatching {
@@ -294,11 +277,11 @@ internal class DualScreenController(
      * proportion are back.
      */
     fun restoreN3dsScreen() {
-        val view = retroView ?: return
-        if (netplayNow?.locksOptions == true) return
-        val stored = storedValues
+        val view = owner.retroView ?: return
+        if (owner.netplayNow?.locksOptions == true) return
+        val stored = owner.storedValues
         val proportion = N3dsOptions.stackedSmallProportion(
-            frontendValues, isLandscape(), renderer.ndsControllerMode(), activity.screenClass(), false, renderer.n3dsPictureSpace,
+            owner.frontendValues, owner.isLandscape(), renderer.ndsControllerMode(), activity.screenClass(), false, renderer.n3dsPictureSpace,
         )
         renderer.n3dsProportion = proportion
         view.queueEvent {
@@ -348,12 +331,12 @@ internal class DualScreenController(
         if (!secondDraws() || surface == null || surface.width <= 0 || surface.height <= 0) return emptyList()
         val sw = surface.width.toFloat()
         val sh = surface.height.toFloat()
-        val dsFrame = isNds && (map != null || NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt()))
+        val dsFrame = owner.isNds && (map != null || NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt()))
         return when {
             // Not the plain DS stack (no frame yet, or another layout): main draws it whole, so nothing is cut for here.
-            dualMode == DualMode.SPLIT && isNds -> if (!dsFrame) emptyList() else DualScreen.ndsScreen(sw, sh, DualScreen.splitMain(NdsSettings.parse(frontendValues).big, pictureOn).other).withMap(map)
-            dualMode == DualMode.SPLIT && isN3ds -> DualScreen.n3dsScreen(sw, sh, DualScreen.splitMain(n3dsPicture, pictureOn).other).withMap(map)
-            dualMode == DualMode.PANEL_UP && dsFrame -> DualScreen.ndsPanelUp(sw, sh, NdsSettings.parse(frontendValues)).withMap(map)
+            dualMode == DualMode.SPLIT && owner.isNds -> if (!dsFrame) emptyList() else DualScreen.ndsScreen(sw, sh, DualScreen.splitMain(NdsSettings.parse(owner.frontendValues).big, pictureOn).other).withMap(map)
+            dualMode == DualMode.SPLIT && owner.isN3ds -> DualScreen.n3dsScreen(sw, sh, DualScreen.splitMain(n3dsPicture, pictureOn).other).withMap(map)
+            dualMode == DualMode.PANEL_UP && dsFrame -> DualScreen.ndsPanelUp(sw, sh, NdsSettings.parse(owner.frontendValues)).withMap(map)
             else -> null
         }
     }
@@ -367,7 +350,7 @@ internal class DualScreenController(
         val surface = secondSurface ?: return emptyList()
         val sw = surface.width.toFloat()
         val sh = surface.height.toFloat()
-        return ds?.map { NdsOptions.shaded(it, frontendValues).toScreenRegion(sw, sh) } ?: listOfNotNull(wholeFrameRegion(sw, sh, g))
+        return ds?.map { NdsOptions.shaded(it, owner.frontendValues).toScreenRegion(sw, sh) } ?: listOfNotNull(wholeFrameRegion(sw, sh, g))
     }
 
     /**
@@ -389,7 +372,7 @@ internal class DualScreenController(
     private fun wholeFrame(w: Float, h: Float, g: FloatArray): PxRect? {
         if (g[0] <= 0f || g[1] <= 0f) return null
         val frame = CoreFrame(g[0], g[1], g[2], rotated = abs(sin(g[3])) > 0.5f)
-        val s = FrontendSettings.parse(frontendValues)
+        val s = FrontendSettings.parse(owner.frontendValues)
         return DualScreen.scaledFrame(w, h, frame, s.scaling, s.offsetX, s.offsetY).takeIf { it.width > 0f && it.height > 0f }
     }
 
@@ -409,7 +392,7 @@ internal class DualScreenController(
      * closing the panel finds the same one. False otherwise: Azahar's key.
      */
     fun onN3dsSwapPressed(down: Boolean): Boolean {
-        if (!isN3ds || (dualMode != DualMode.SPLIT && dualMode != DualMode.PANEL_UP)) return false
+        if (!owner.isN3ds || (dualMode != DualMode.SPLIT && dualMode != DualMode.PANEL_UP)) return false
         if (down) swapN3dsDisplays()
         return true
     }
@@ -422,9 +405,9 @@ internal class DualScreenController(
 
     /** What the second display is for now: a qualifying display, the setting on, and the game (DS/3DS split, else the panel). */
     fun dualModeNow(): DualMode {
-        val tag = layoutTag()
+        val tag = owner.layoutTag()
         return DualScreen.mode(
-            secondScreens.current.value != null, appSettings.secondScreen,
+            secondScreens.current.value != null, owner.settings.secondScreen,
             NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag), panelUp,
         )
     }
@@ -435,7 +418,7 @@ internal class DualScreenController(
      */
     fun syncDual() {
         val wanted = if (isFinishing || isDestroyed) DualMode.OFF else dualModeNow()
-        val geometry = retroView?.getGameGeometry()
+        val geometry = owner.retroView?.getGameGeometry()
         val display = secondScreens.current.value.takeIf { wanted != DualMode.OFF }
         // A different display, or the same one at a new size or density: a new window.
         if (presentation?.display?.displayId != display?.displayId || (display != null && shapeOf(display) != presentationShape)) {
@@ -456,13 +439,13 @@ internal class DualScreenController(
         // Under a panel on the second display nothing is drawn there; with the picture there, the panel is on main.
         pushSecondSurface()
         syncPanel()
-        if ((changed || moved) && isN3ds) {
+        if ((changed || moved) && owner.isN3ds) {
             // Split and panel up set Azahar's layout and swap options; the other modes put the user's back.
             val forcedBefore = DualScreen.n3dsCoreOptions(old) != null
             val forced = DualScreen.n3dsCoreOptions(mode) != null
             // Under video views the core stays at its unswapped Default and SWAP is the app's: nothing to note or put back.
             if (forced && !forcedBefore && !renderer.n3dsViews) captureN3dsSwap()
-            syncN3dsCore()
+            owner.syncN3dsCore()
             if (forcedBefore && !forced && !renderer.n3dsViews) restoreN3dsScreen()
         }
         // A new mode builds the pad again too: the skin comes or goes with it ([SkinDual.skinAllowed]).
@@ -482,7 +465,7 @@ internal class DualScreenController(
         val w = if (root.width > 0) root.width else dm.widthPixels
         val h = if (root.height > 0) root.height else dm.heightPixels
         val real = android.graphics.Point().also { @Suppress("DEPRECATION") display.getRealSize(it) }
-        val bottom = BottomScreen.resolve(frontendValues[BottomScreenOptions.KEY], appSettings.bottomScreen)
+        val bottom = BottomScreen.resolve(owner.frontendValues[BottomScreenOptions.KEY], owner.settings.bottomScreen)
         return DualScreen.pictureOn(maxOf(w, h), minOf(w, h), real.x, real.y, bottom, skin = padLayout.dualSkinWanted(mode))
     }
 
@@ -518,7 +501,7 @@ internal class DualScreenController(
         p.onPanelPill = { panelUp = true; syncDual() }
         p.onInput = { owner.careInput() }
         p.onTouch = { x, y, down ->
-            retroView?.let { view ->
+            owner.retroView?.let { view ->
                 val point = view.mapSecondaryTouch(x, y)
                 if (down && point != null) view.sendPointer(point.x, point.y, true) else view.sendPointer(0f, 0f, false)
             }
@@ -553,7 +536,7 @@ internal class DualScreenController(
      * surface again: that clears the GL thread's dropped state after an EGL failure.
      */
     fun pushSecondSurface(force: Boolean = false) {
-        val view = retroView ?: return
+        val view = owner.retroView ?: return
         val want = secondSurface?.takeIf { secondDraws() }
         if ((want == pushedSecondSurface && !force) || (want != null && !view.isAttachedToWindow)) return
         // The second surface's frames are stamped to show at a steady time from a presentation deadline: the shorter of its
@@ -571,7 +554,7 @@ internal class DualScreenController(
     private fun dropSecondSurface() {
         secondSurface = null
         pushSecondSurface()
-        retroView?.secondaryRegions = emptyList()
+        owner.retroView?.secondaryRegions = emptyList()
         renderer.secondNdsRegions = emptyList()
         input.positionPen()
     }
@@ -590,8 +573,8 @@ internal class DualScreenController(
 
     /** The app's theme (accent, option text size) for the panel, on either display. */
     private fun panelTheme(): @Composable (@Composable () -> Unit) -> Unit {
-        val colors = nxColorsFor(appSettings.accent, appSettings.secondaryAccent)
-        val optionText = appSettings.optionTextSize.ofListLabel
+        val colors = nxColorsFor(owner.settings.accent, owner.settings.secondaryAccent)
+        val optionText = owner.settings.optionTextSize.ofListLabel
         return { content -> NxTheme(colors) { CompositionLocalProvider(LocalNxOptionText provides optionText) { content() } } }
     }
 
@@ -631,7 +614,7 @@ internal class DualScreenController(
         if ((mainPanelCoversWindow() && !wasCovering) || (inGlass != null && inGlass.rect != oldGlass?.rect)) input.releaseAllGameInput()
         if (wasCovering != mainPanelCoversWindow()) {
             padLayout.updatePadVisibility()
-            menuView?.layoutParams = menuLayoutParams(resources.configuration.orientation, overPanel = mainPanelCoversWindow(), glass = true)
+            owner.menuView?.layoutParams = menuLayoutParams(resources.configuration.orientation, overPanel = mainPanelCoversWindow(), glass = true)
             renderer.relayoutFrontend()   // the main picture stops or starts drawing; the 3D Resolution follows
         }
         // Re-read as it comes up; while up, each RA event, player, disc and setting change refreshes it.
@@ -712,7 +695,7 @@ internal class DualScreenController(
         val host = mainPanelHost ?: return
         if (mainPanel.value != null || !mainPanelPill.value) return
         val root = findViewById<View>(R.id.root)
-        val main = DualScreen.splitMain(if (isN3ds) n3dsPicture else NdsSettings.parse(frontendValues).big, pictureOn)
+        val main = DualScreen.splitMain(if (owner.isN3ds) n3dsPicture else NdsSettings.parse(owner.frontendValues).big, pictureOn)
         val g = SkinDual.splitGlass(padLayout.skinPlacement()?.takeIf { padLayout.skinShown }, main)
         host.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END).apply {
             if (g != null && root.width > 0) {
@@ -738,7 +721,7 @@ internal class DualScreenController(
         fun without(i: Int) = if (current in 0 until i) i - 1 else i
         val game = without(root.indexOfChild(findViewById(R.id.gameContainer)))
         // in a skin's glass: right above the skin's view (which would take its touches), under the menu and the notifications
-        val skin = padLayout.skinViewNow?.let { without(root.indexOfChild(it)) } ?: -1
+        val skin = padLayout.skinView?.let { without(root.indexOfChild(it)) } ?: -1
         val target = when {
             inGlass || pillOnly -> maxOf(game, skin) + 1
             else -> game + 1
@@ -753,9 +736,9 @@ internal class DualScreenController(
      * same header and panel in its place (with the list beside it), so the touch screen never shows two.
      */
     fun syncMainPanelHost() {
-        boardPillHost?.visibility = if (menuOpen) View.GONE else View.VISIBLE   // the board's pill under no open menu
+        boardPillHost?.visibility = if (owner.menuOpen) View.GONE else View.VISIBLE   // the board's pill under no open menu
         val host = mainPanelHost ?: return
-        val shown = if (mainPanel.value != null) !menuOpen || menuOnSecond() else mainPanelPill.value
+        val shown = if (mainPanel.value != null) !owner.menuOpen || menuOnSecond() else mainPanelPill.value
         host.visibility = if (shown) View.VISIBLE else View.GONE
     }
 
@@ -807,7 +790,7 @@ internal class DualScreenController(
         val pill = boardPillHost ?: return
         val current = root.indexOfChild(pill)
         fun without(i: Int) = if (current in 0 until i) i - 1 else i
-        val under = listOfNotNull(padLayout.skinViewNow, mainPanelHost).map { root.indexOfChild(it) }.filter { it >= 0 }.maxOrNull()?.let { without(it) } ?: return
+        val under = listOfNotNull(padLayout.skinView, mainPanelHost).map { root.indexOfChild(it) }.filter { it >= 0 }.maxOrNull()?.let { without(it) } ?: return
         val target = under + 1
         if (current == target) return
         if (current >= 0) root.removeView(pill)
@@ -844,13 +827,13 @@ internal class DualScreenController(
      * host's set: one owner, as the menu's), and the Players page's rows.
      */
     private fun panelState(): GamePanelState {
-        val b = achievements?.takeIf { it.available }
+        val b = owner.achievements?.takeIf { it.available }
         val summary = b?.summary()
-        val list = if (b != null && summary != null) b.list().sortedBy(appSettings.raSortOrder) else emptyList()
+        val list = if (b != null && summary != null) b.list().sortedBy(owner.settings.raSortOrder) else emptyList()
         val players = input.playerRows()
         val tabs = GamePanelModel.tabs(
-            raAvailable = list.isNotEmpty(), playerSlots = if (sessionLocked) 0 else players?.first?.size ?: 0,
-            cheats = owner.cheatsSupported && !sessionLocked, settings = !owner.kidsSettingsHidden,
+            raAvailable = list.isNotEmpty(), playerSlots = if (owner.sessionLocked) 0 else players?.first?.size ?: 0,
+            cheats = owner.cheatsSupported && !owner.sessionLocked, settings = !owner.kidsSettingsHidden,
         )
         val cheats = owner.cheatSet
         val (disc, count) = discs ?: (0 to 0)
@@ -860,10 +843,10 @@ internal class DualScreenController(
             tabs = tabs,
             tab = GamePanelModel.resolveTab(dualPanelTab, tabs),
             shortcuts = GamePanelModel.shortcuts(
-                count, disc, netplayNow != null, ff, rewind, owner.micTile(),
+                count, disc, owner.netplayNow != null, ff, rewind, owner.micTile(),
                 touch = owner.panelTouchActions(), slot = panelSlotNow(), ffSpeed = owner.ffSpeed(),
-            ).filter { !sessionLocked || it.shortcut == Shortcut.SWAP_DISC || it.shortcut == Shortcut.MIC },   // the DS wireless keeps the mic
-            slots = if (!sessionLocked) owner.slotsUi.value else emptyList(),
+            ).filter { !owner.sessionLocked || it.shortcut == Shortcut.SWAP_DISC || it.shortcut == Shortcut.MIC },   // the DS wireless keeps the mic
+            slots = if (!owner.sessionLocked) owner.slotsUi.value else emptyList(),
             slot = panelSlotNow(),
             quick = quickSettings(),
             achievements = list,
@@ -890,7 +873,7 @@ internal class DualScreenController(
         for (key in listOf(FrontendOptions.SCALING, FrontendOptions.SHARPNESS)) {
             val o = FrontendOptions.table.firstOrNull { it.key == key } ?: continue
             val labels = o.valueLabels.ifEmpty { o.values.map { v -> v.lowercase().replaceFirstChar { it.uppercase() } } }
-            add(GamePanelModel.quickChoice(key, o.label, o.values, frontendValues[key] ?: o.default, labels, enabled = key !in locked))
+            add(GamePanelModel.quickChoice(key, o.label, o.values, owner.frontendValues[key] ?: o.default, labels, enabled = key !in locked))
         }
         // Chosen in the in-game menu's picker: far too many presets to step through on a row.
         add(QuickSetting.Shader(ShaderOptions.PRESET_LABEL, ShaderBrowse.label(ShaderOptions.preset(renderer.shaderValues) ?: ShaderOptions.NONE)))
@@ -943,7 +926,7 @@ internal class DualScreenController(
      * Rewind toggle, or Reset (the in-game menu's dialog). Achievement rows ask for nothing.
      */
     private fun onGamePanelEvent(e: GamePanelEvent) {
-        if (quitting) return
+        if (owner.quitting) return
         when (e) {
             GamePanelEvent.SwapDisc -> swapDisc()
             is GamePanelEvent.SelectSlot -> { panelSlot = e.slot; refreshDualPanel() }
@@ -961,7 +944,7 @@ internal class DualScreenController(
             GamePanelEvent.OpenOptions -> owner.openOptions()
             GamePanelEvent.OpenShaders -> owner.openShaderPicker()
             // Hidden in a session; a stale press there does nothing, a release always lands.
-            is GamePanelEvent.Touch -> if (!sessionLocked || !e.down) {
+            is GamePanelEvent.Touch -> if (!owner.sessionLocked || !e.down) {
                 owner.onPanelTouch(e.action, e.down, panelSlotNow())
                 // A held action runs the game: a panel flipped up over the DS/3DS screen gives the screen back, as for FF.
                 if (e.down && (panelUp || boardPanelUp) && (e.action == ShortcutAction.HOLD_FF || e.action == ShortcutAction.HOLD_REWIND)) flipPanelDown()
@@ -971,13 +954,13 @@ internal class DualScreenController(
             is GamePanelEvent.SetCheat -> owner.handleMenuEffect(MenuEffect.SetCheat(e.index, e.on))
             GamePanelEvent.ShowGame -> flipPanelDown()
             // Hidden in netplay; a stale tap there does nothing. The tiles follow through the speed's onTiles.
-            is GamePanelEvent.SetFastForward, is GamePanelEvent.SetRewind -> GamePanelModel.speedEffect(e)?.takeIf { !sessionLocked }?.let {
+            is GamePanelEvent.SetFastForward, is GamePanelEvent.SetRewind -> GamePanelModel.speedEffect(e)?.takeIf { !owner.sessionLocked }?.let {
                 owner.handleMenuEffect(it)
                 // The game runs with it on: a panel flipped up over the DS/3DS screen gives the screen back.
                 flipPanelDown()
             }
-            is GamePanelEvent.SetMicButton -> if (netplayNow == null && owner.micTile() != null) owner.handleMenuEffect(MenuEffect.SetMicButton(e.shown))
-            GamePanelEvent.Reset -> if (!sessionLocked) owner.askReset()
+            is GamePanelEvent.SetMicButton -> if (owner.netplayNow == null && owner.micTile() != null) owner.handleMenuEffect(MenuEffect.SetMicButton(e.shown))
+            GamePanelEvent.Reset -> if (!owner.sessionLocked) owner.askReset()
         }
     }
 
@@ -986,8 +969,8 @@ internal class DualScreenController(
      * a "Disc N of M" toast on the picture's display, and the menu's Disc row (if open) following.
      */
     private fun swapDisc() {
-        val view = retroView ?: return
-        if (!gameReady || resumePending || netplayNow != null) return
+        val view = owner.retroView ?: return
+        if (!owner.gameReady || owner.resumePending || owner.netplayNow != null) return
         val (current, count) = discs ?: return
         if (count < 2) return
         val next = GamePanelModel.nextDisc(current, count)
@@ -1006,7 +989,7 @@ internal class DualScreenController(
     /** [text] as a toast on the display showing the game's picture. */
     fun pictureToast(text: String) {
         val p = presentation
-        if (p != null && pictureOn == PictureOn.SECOND) p.toast(text) else toast(text)
+        if (p != null && pictureOn == PictureOn.SECOND) p.toast(text) else owner.toast(text)
     }
 
     /**
@@ -1014,7 +997,7 @@ internal class DualScreenController(
      * menu and the dual-screen panel. Not before the game runs, nor in netplay (no disc swaps there).
      */
     fun refreshDiscs() {
-        val view = retroView?.takeIf { gameReady && netplayNow == null } ?: return
+        val view = owner.retroView?.takeIf { owner.gameReady && owner.netplayNow == null } ?: return
         lifecycleScope.launch {
             val (count, current) = withContext(Dispatchers.IO) {
                 runCatching { view.getAvailableDisks() to view.getCurrentDisk() }
@@ -1062,7 +1045,7 @@ internal class DualScreenController(
             panelClock = android.text.format.DateFormat.getTimeFormat(activity).format(java.util.Date(now))   // the phone's 12/24-hour setting
             panelBattery = batteryPercent()
         }
-        return GamePanelHeader(intent.getStringExtra(EXTRA_TITLE) ?: "Paused", art, layoutTag(), playTotalMs, null, panelClock, panelBattery)
+        return GamePanelHeader(intent.getStringExtra(EXTRA_TITLE) ?: "Paused", art, owner.layoutTag(), playTotalMs, null, panelClock, panelBattery)
     }
 
     /** The battery level from the sticky battery broadcast (no receiver is kept); null when it can't be read. */
@@ -1082,7 +1065,7 @@ internal class DualScreenController(
 
     /** While the menu is open or the dual-screen panel up (and the screen started), the header refreshes on each minute. */
     fun syncPanelClock() {
-        val want = (menuOpen || panelShown()) && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        val want = (owner.menuOpen || panelShown()) && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
         if (!want) { panelClockJob?.cancel(); panelClockJob = null; return }
         if (panelClockJob?.isActive == true) return
         panelClockJob = lifecycleScope.launch {

@@ -2,7 +2,6 @@ package com.nxredux.mobile.options
 
 import com.nxredux.mobile.gpudriver.GpuDriver
 import com.nxredux.mobile.gpudriver.GpuDriverChoice
-import com.nxredux.mobile.runner.CoreRegistry
 
 /**
  * The Console Settings row choosing which custom Vulkan driver a console (or one game) loads: a sub-row of Graphics API,
@@ -11,15 +10,11 @@ import com.nxredux.mobile.runner.CoreRegistry
 object GpuDriverOptions {
     const val KEY = "nx_gpu_driver"
 
-    /** Core ids that never load a custom driver. */
-    val EXCLUDED_CORES: Set<String> = emptySet()
-
     /** Put on the row of a game whose driver crashed in it ([name] replaces `%s`). */
     const val CRASH_NOTE = "%s crashed in this game; using the system driver."
 
-    /** The row shows for a console with a Vulkan path ([GraphicsApiOptions.appliesTo]) when the feature is [available] and its core is not excluded. */
-    fun appliesTo(tag: String, available: Boolean): Boolean =
-        GraphicsApiOptions.appliesTo(tag) && available && CoreRegistry.forTag(tag)?.id !in EXCLUDED_CORES
+    /** The row shows for a console with a Vulkan path ([GraphicsApiOptions.appliesTo]) when the feature is [available]. */
+    fun appliesTo(tag: String, available: Boolean): Boolean = GraphicsApiOptions.appliesTo(tag) && available
 
     /** [autoVulkan]: Graphics API's Auto is Vulkan here ([GraphicsApiOptions.autoIsVulkan]), so the row shows on Auto too. */
     fun row(installed: List<GpuDriver>, autoVulkan: Boolean = false): FrontendOption = FrontendOption(

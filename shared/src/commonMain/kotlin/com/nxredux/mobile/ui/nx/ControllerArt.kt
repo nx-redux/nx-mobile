@@ -109,7 +109,7 @@ internal const val PAD_CLEAR = 10f
  * The vertical stack's pad: the row's size ([rowPadBox]; the stack's slot is the row's),
  * centred on the logo and its count as one block (below the slot's centre).
  */
-internal fun stackPadBox(slotW: Float, slotH: Float, reach: StackReach): PadBox =
+internal fun stackPadBox(slotH: Float, reach: StackReach): PadBox =
     PadBox(slotH * PAD_W_K, slotH * PAD_H_K, (reach.downAt(1f) - reach.upAt(1f)) / 2)
 
 /** [this] reach with its pad drawn Fit in [box] ([padAspect]: height / width; null: half the box tall) plus [PAD_CLEAR] either side. */

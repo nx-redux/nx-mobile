@@ -55,8 +55,8 @@ class BatterySaves internal constructor(
      * malformed or empty file never hides a good save under another name.
      */
     fun load(): ByteArray? {
+        val names = paths.saveRamCandidates().map { it.substringAfterLast('/') }
         if (dsvStem != null) {
-            val names = paths.saveRamCandidates().map { it.substringAfterLast('/') }
             val plan = NdsDsvSave.plan(dsvStem, names, dir.list()?.toSet() ?: emptySet()) { n -> runCatching { readFile(File(dir, n)) }.getOrNull() }
             if (plan != null) {
                 dsv = plan
@@ -64,7 +64,6 @@ class BatterySaves internal constructor(
                 return plan.bytes
             }
         }
-        val names = paths.saveRamCandidates().map { it.substringAfterLast('/') }
         for (name in SaveLookup.ordered(names) { n -> File(dir, n).takeIf { it.isFile }?.lastModified() }) {
             val file = File(dir, name)
             // Taken before the read: a change between the two then shows as a stale stamp, never as a stale cache.

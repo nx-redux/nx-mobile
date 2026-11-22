@@ -71,9 +71,8 @@ class OptionsPagesTest {
 
     @Test fun settingsNavigationPagesUseTheListRows() {
         // Every row opens a page or runs an action: list rows at the list size, as the RetroAchievements page.
-        for (section in listOf(SettingsSection.EMULATORS)) {
-            assertEquals(NxRowKind.PILL, listRowKind(Screen.Settings(section, emptyList())), section.name)
-        }
+        val section = SettingsSection.EMULATORS
+        assertEquals(NxRowKind.PILL, listRowKind(Screen.Settings(section, emptyList())), section.name)
     }
 
     @Test fun settingsArrowsOnlyWhereLeftRightChangeTheValue() {

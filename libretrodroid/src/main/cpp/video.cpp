@@ -328,9 +328,13 @@ void Video::drawFrame() {
     frameFilter.invalidate();
     setFrameFilter(filter);
 
+    drawPicture();
+    frameCount++;
+}
+
+void Video::drawPicture() {
     if (!videoLayout.getRegionQuads().empty()) {
         renderRegions(videoLayout, presetRenderer.get(), mainCrops);
-        frameCount++;
         return;
     }
 
@@ -339,7 +343,6 @@ void Video::drawFrame() {
         quadScratch.clear();
         appendComposition(whole, quadScratch);
         renderQuads(quadScratch, videoLayout, presetRenderer.get(), mainCrops);
-        frameCount++;
         return;
     }
 
@@ -348,7 +351,6 @@ void Video::drawFrame() {
         quadScratch.clear();
         quadScratch.push_back(RegionQuad{ videoLayout.getForegroundVertices(), videoLayout.getTextureCoordinates(), true, 1.0F, 1.0F, 1.0F });
         renderQuads(quadScratch, videoLayout, presetRenderer.get(), mainCrops);
-        frameCount++;
         return;
     }
 
@@ -359,13 +361,11 @@ void Video::drawFrame() {
             frameCoordinates(videoLayout.getTextureCoordinates()), videoLayout.getForegroundVertices(),
             videoLayout.getFramebufferVertices(), videoLayout.getScreenWidth(), videoLayout.getScreenHeight(),
             linearTexture, frameCount, videoLayout.isBottomLeftOrigin(), 0);
-        frameCount++;
         return;
     }
 
     drawBuiltInChain(videoLayout.getForegroundVertices(), frameCoordinates(videoLayout.getTextureCoordinates()),
                      videoLayout.getScreenWidth(), videoLayout.getScreenHeight());
-    frameCount++;
 }
 
 void Video::renderRegions(VideoLayout& layout, ChainRenderer* preset, std::vector<RegionCrop>& crops) {
@@ -826,10 +826,6 @@ void Video::composeFrame() {
     glViewport(0, 0, videoLayout.getScreenWidth(), videoLayout.getScreenHeight());
 }
 
-void Video::renderPausedFrame() {
-    renderFrame();
-}
-
 float Video::pictureDensity(const std::array<float, 12>& vertices, const std::array<float, 12>& coordinates,
                            unsigned screenWidth, unsigned screenHeight) {
     auto box = foregroundRect(vertices, (int) screenWidth, (int) screenHeight);
@@ -918,9 +914,7 @@ void Video::updateViewportSize(Rect viewportRect) {
 void Video::updateRendererSize(unsigned int width, unsigned int height) {
     LOGD("Updating renderer size: %d x %d", width, height);
     renderer->updateRenderedResolution(width, height);
-    coreContentWidth = width;
-    coreContentHeight = height;
-    if (!composing()) videoLayout.updateContentSize(width, height);
+    updateContentSize(width, height);
 }
 
 void Video::updateScaleMode(unsigned int scaleMode) {

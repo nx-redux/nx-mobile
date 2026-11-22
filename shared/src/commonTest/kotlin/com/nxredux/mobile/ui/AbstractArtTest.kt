@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -70,8 +71,6 @@ class AbstractArtTest {
             }
         }
     }
-
-    private fun abs(v: Double) = if (v < 0) -v else v
 
     @Test fun shapesScaleWithTheBitmap() {
         val p = abstractPlan(abstractSeed("a"))

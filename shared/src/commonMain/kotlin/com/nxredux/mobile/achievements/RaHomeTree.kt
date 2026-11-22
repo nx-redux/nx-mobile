@@ -38,10 +38,10 @@ class RaHomeTree(private val source: RomsSource, private val home: () -> Content
      * True while the home can be written (a granted tree on mounted storage); without that nothing new can be stored, so
      * callers skip work (a download) that would be discarded. Never throws.
      */
-    suspend fun available(): Boolean = guard { home()?.let { !source.isOffline(it) && source.canWrite(it) } } == true
+    suspend fun available(): Boolean = tryOrNull { home()?.let { !source.isOffline(it) && source.canWrite(it) } } == true
 
     /** True while the home can be read (a granted tree, write or read only, on mounted storage). Never throws. */
-    suspend fun readable(): Boolean = guard { home()?.let { !source.isOffline(it) } } == true
+    suspend fun readable(): Boolean = tryOrNull { home()?.let { !source.isOffline(it) } } == true
 
     /** Where [p]'s shared RA files go: its own console folder, else the folder for its tag. */
     suspend fun consoleFolder(p: RaGamePointer): String? = RaBadgeFolders.ownFolder(p) ?: folderForTag(p.tag)
@@ -51,7 +51,7 @@ class RaHomeTree(private val source: RomsSource, private val home: () -> Content
         val key = CoreRegistry.consoleTag(tag)
         val h = home() ?: return null
         lock.withLock { tagFolders[h.value to key] }?.let { return it }
-        val existing = guard {
+        val existing = tryOrNull {
             source.child(h, "Roms")?.takeIf { it.isDirectory }?.let { source.listChildren(it.ref) }.orEmpty()
                 .firstOrNull { it.isDirectory && Names.parseSystemFolder(it.name)?.second?.uppercase() == key }?.name
         }
@@ -60,32 +60,32 @@ class RaHomeTree(private val source: RomsSource, private val home: () -> Content
     }
 
     /** File name → model (the document's URI string) for the non-empty files in [segments]; empty when absent. */
-    suspend fun listing(segments: List<String>): Map<String, String> = guard {
+    suspend fun listing(segments: List<String>): Map<String, String> = tryOrNull {
         home()?.let { source.findDir(it, segments) }?.let { filesIn(it) }
     } ?: emptyMap()
 
     /** [listing] of a folder [resolve] gave. */
-    suspend fun listing(dir: RaHomeDir): Map<String, String> = guard { filesIn(dir.ref) } ?: emptyMap()
+    suspend fun listing(dir: RaHomeDir): Map<String, String> = tryOrNull { filesIn(dir.ref) } ?: emptyMap()
 
     private suspend fun filesIn(dir: ContentRef): Map<String, String> =
         source.listChildren(dir).filter { !it.isDirectory && (it.sizeBytes ?: 1L) > 0L }.associate { it.name to it.ref.value }
 
     /** True when [segments] holds a non-empty file [name]. */
-    suspend fun has(segments: List<String>, name: String): Boolean = guard {
-        val dir = home()?.let { source.findDir(it, segments) } ?: return@guard null
+    suspend fun has(segments: List<String>, name: String): Boolean = tryOrNull {
+        val dir = home()?.let { source.findDir(it, segments) } ?: return@tryOrNull null
         source.child(dir, name)?.takeIf { !it.isDirectory && (it.sizeBytes ?: 1L) > 0L }
     } != null
 
     /** The folder at [segments], created where missing; null without a home, a write grant, or when a create fails. */
-    suspend fun resolve(segments: List<String>): RaHomeDir? = guard { home()?.let { source.ensurePath(it, segments) }?.let(::RaHomeDir) }
+    suspend fun resolve(segments: List<String>): RaHomeDir? = tryOrNull { home()?.let { source.ensurePath(it, segments) }?.let(::RaHomeDir) }
 
     /** Writes [bytes] as [name] in [segments] (folders created); the file's model, or null. */
     suspend fun writeBytes(segments: List<String>, name: String, bytes: ByteArray): String? =
         resolve(segments)?.let { writeBytes(it, name, bytes) }
 
     /** Writes [bytes] as [name] in [dir] (no walk); the file's model, or null. */
-    suspend fun writeBytes(dir: RaHomeDir, name: String, bytes: ByteArray): String? = guard {
-        if (!source.writeBytes(dir.ref, name, bytes)) return@guard null
+    suspend fun writeBytes(dir: RaHomeDir, name: String, bytes: ByteArray): String? = tryOrNull {
+        if (!source.writeBytes(dir.ref, name, bytes)) return@tryOrNull null
         source.child(dir.ref, name)?.ref?.value
     }
 
@@ -96,9 +96,9 @@ class RaHomeTree(private val source: RomsSource, private val home: () -> Content
      */
     suspend fun read(segments: List<String>, name: String): RaRead {
         val h = home() ?: return RaRead.Failed
-        guard { source.findDir(h, segments)?.let { source.child(it, name) }?.takeIf { !it.isDirectory }?.let { source.readText(it.ref) } }
+        tryOrNull { source.findDir(h, segments)?.let { source.child(it, name) }?.takeIf { !it.isDirectory }?.let { source.readText(it.ref) } }
             ?.let { return RaRead.Text(it) }
-        return guard { listed(h, segments, name) } ?: RaRead.Failed
+        return tryOrNull { listed(h, segments, name) } ?: RaRead.Failed
     }
 
     // Lists, never looks up by name: SAF's child lookup and read turn provider errors into "none", a listing throws them.
@@ -112,10 +112,8 @@ class RaHomeTree(private val source: RomsSource, private val home: () -> Content
     suspend fun readText(segments: List<String>, name: String): String? = (read(segments, name) as? RaRead.Text)?.text
 
     /** Writes [text] as [name] in [segments] (folders created, through `.part` where the platform can); false when skipped or failed. */
-    suspend fun writeText(segments: List<String>, name: String, text: String): Boolean = guard {
-        val dir = home()?.let { source.ensurePath(it, segments) } ?: return@guard null
+    suspend fun writeText(segments: List<String>, name: String, text: String): Boolean = tryOrNull {
+        val dir = home()?.let { source.ensurePath(it, segments) } ?: return@tryOrNull null
         source.writeText(dir, name, text).takeIf { it }
     } == true
-
-    private inline fun <T> guard(block: () -> T?): T? = tryOrNull(block)
 }

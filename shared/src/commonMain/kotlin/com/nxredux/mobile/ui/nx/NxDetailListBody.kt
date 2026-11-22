@@ -90,8 +90,7 @@ fun NxDetailListBody(
         // changes the pitch or text size. Only whole rows show; the rest scroll, fading at the edge more is that way
         // ([nxScrollFade]). With details the list starts a fixed gap under them; without, it is centred in the space. An
         // options list that fits is only as tall as its rows.
-        val listPitch = bodyHeight / nxRowCountFor(bodyHeight, pitch)
-        val rowHeight = listPitch   // options rows are list rows (Text size already in the pitch)
+        val listPitch = bodyHeight / nxRowCountFor(bodyHeight, pitch)   // options rows are list rows (Text size already in the pitch)
         // An options page with no details lays out its title as the titled lists do ([NxTitledBody]), its rows at the top under it.
         val balanced = rowKind == NxRowKind.OPTIONS && details.isEmpty()
         // Options rows, and any page's rows under details, sit at the top of the list area.
@@ -114,25 +113,25 @@ fun NxDetailListBody(
         // Landscape split: the scrolling rows get their own column at the right, so more of them show.
         val split = landscapeSplit && landscape && rowKind == NxRowKind.PILL && (details.isNotEmpty() || pinnedRows > 0)   // the left holds something
         val headHere = if (split) 0 else pinned   // the pinned rows the list area draws (split: the left column has them)
-        val headHeight = with(LocalDensity.current) { nxRowsSlotPx(rowHeight.roundToPx(), pinned).toDp() }
+        val headHeight = with(LocalDensity.current) { nxRowsSlotPx(listPitch.roundToPx(), pinned).toDp() }
         val topActions = (if (actionsAtTop) body.takeLast(actions) else rows.takeLast(atTitle)).map { it.label }
         val listArea: @Composable (Modifier) -> Unit = { area -> BoxWithConstraints(area, contentAlignment = listAlign) {
             val slack = 2f / LocalDensity.current.density
             val headHeight = if (split) 0.dp else headHeight
-            val headGap = if (headHere > 0) rowHeight * NX_OPTIONS_GAP else 0.dp
+            val headGap = if (headHere > 0) listPitch * NX_OPTIONS_GAP else 0.dp
             val tailHeight = if (actionsSideBySide && tail.isNotEmpty()) maxOf(SIDE_BY_SIDE_ACTIONS_HEIGHT, listPitch)
                 else with(LocalDensity.current) { nxRowsSlotPx(listPitch.roundToPx(), tail.size).toDp() }
             val tailGap = if (tail.isNotEmpty()) listPitch * NX_OPTIONS_GAP else 0.dp
             val listHeight = maxHeight - headHeight - headGap - tailHeight - tailGap
             // Under details the list keeps a fixed gap from the last detail line.
             val gap = if (underDetails && !split) NxDetailListGap else 0.dp
-            val scrolls = if (rowKind == NxRowKind.OPTIONS) nxOptionsListHeight(options, rowHeight).value > (listHeight - gap).value + slack   // its gaps are half rows
-                else rest.size > nxWholeRows(listHeight - gap, rowHeight, pxSlack = slack)
-            val whole = nxWholeRows(listHeight - gap, rowHeight, pxSlack = slack)
+            val scrolls = if (rowKind == NxRowKind.OPTIONS) nxOptionsListHeight(options, listPitch).value > (listHeight - gap).value + slack   // its gaps are half rows
+                else rest.size > nxWholeRows(listHeight - gap, listPitch, pxSlack = slack)
+            val whole = nxWholeRows(listHeight - gap, listPitch, pxSlack = slack)
             // The rows' slot in whole px, the rows' own rounded px, so it rests on whole rows ([nxRowsSlotPx]); an
             // options list that fits takes only its own height.
-            val rowsSlot = with(LocalDensity.current) { nxRowsSlotPx(rowHeight.roundToPx(), whole).toDp() }
-            val optionsHeight = if (rowKind == NxRowKind.OPTIONS && !scrolls) nxOptionsFitHeight(options, rowHeight) else rowsSlot
+            val rowsSlot = with(LocalDensity.current) { nxRowsSlotPx(listPitch.roundToPx(), whole).toDp() }
+            val optionsHeight = if (rowKind == NxRowKind.OPTIONS && !scrolls) nxOptionsFitHeight(options, listPitch) else rowsSlot
             // Pinned actions sit on the body's bottom, just above the hints, and the scrolling rows take all the room down to
             // them (a part row under the fade) rather than leave a gap of what whole rows don't fill.
             Column(Modifier.fillMaxWidth().then(if (tail.isNotEmpty()) Modifier.fillMaxHeight() else Modifier)) {
@@ -142,21 +141,21 @@ fun NxDetailListBody(
                     // step across the gap still reads as one move.
                     NxList(
                         head, selectedIndex.coerceAtMost(pinned), onSelect, onOpen, Modifier.fillMaxWidth().height(headHeight),
-                        rowHeightOverride = rowHeight, textSizeOverride = rowText?.invoke(label) ?: label,
+                        rowHeightOverride = listPitch, textSizeOverride = rowText?.invoke(label) ?: label,
                     )
                     Spacer(Modifier.height(headGap))
                 }
                 if (rowKind == NxRowKind.OPTIONS) {
                     NxOptionsList(
-                        options, selectedIndex.takeIf { it < options.size } ?: -1, onSelect, onOpen, rowHeight = rowHeight, listText = label,
+                        options, selectedIndex.takeIf { it < options.size } ?: -1, onSelect, onOpen, rowHeight = listPitch, listText = label,
                         modifier = Modifier.fillMaxWidth().height(optionsHeight), listState = listState,
                     )
                 } else {
                     NxList(
                         rest, (listSelected - pinned).takeIf { listSelected >= 0 && it in rest.indices } ?: -1, { onSelect(it + pinned) }, { onOpen(it + pinned) },
                         Modifier.fillMaxWidth().then(if (tail.isNotEmpty()) Modifier.weight(1f) else Modifier.height(rowsSlot))
-                            .nxScrollFade(listState, height = rowHeight / 2, strong = true),
-                        listState = listState, rowHeightOverride = rowHeight, textSizeOverride = rowText?.invoke(label) ?: label, edgeMargin = 1,
+                            .nxScrollFade(listState, height = listPitch / 2, strong = true),
+                        listState = listState, rowHeightOverride = listPitch, textSizeOverride = rowText?.invoke(label) ?: label, edgeMargin = 1,
                         restInk = if (quietRows) colors.inkName else null, greyPill = quietRows,
                     )
                 }
@@ -223,13 +222,13 @@ fun NxDetailListBody(
                     val buttons = hints.touchButtons()
                     if (touch && onHint != null && buttons.isNotEmpty()) NxTouchButtons(buttons, onHint, Modifier.padding(start = inset, top = 12.dp, bottom = NxTouchButtonsGap), Alignment.Start)
                 }
+                val tailNeed = if (tail.isNotEmpty()) listPitch * tail.size + listPitch * NX_OPTIONS_GAP else 0.dp
                 if (lined) {
                     // The title and details from the line, the rows under them; as high as the rows (and the pinned
                     // ones at the bottom) need when they would not fit below it, at the top at most.
                     val density = LocalDensity.current
                     val listNeed = with(density) {
-                        val tailNeed = if (tail.isNotEmpty()) listPitch * tail.size + listPitch * NX_OPTIONS_GAP else 0.dp
-                        ((if (underDetails) NxDetailListGap else 0.dp) + rowHeight * rest.size + tailNeed).roundToPx()
+                        ((if (underDetails) NxDetailListGap else 0.dp) + listPitch * rest.size + tailNeed).roundToPx()
                     }
                     SubcomposeLayout(Modifier.weight(1f).fillMaxWidth()) { c ->
                         val head = subcompose("head") { Column { titleView(); left(null) } }.map { it.measure(c.copy(minHeight = 0)) }
@@ -250,7 +249,7 @@ fun NxDetailListBody(
                             Spacer(Modifier.height(NxDetailListGap))
                             NxList(
                                 head, selectedIndex.coerceAtMost(pinned), onSelect, onOpen, Modifier.fillMaxWidth().height(headHeight),
-                                rowHeightOverride = rowHeight, textSizeOverride = rowText?.invoke(label) ?: label,
+                                rowHeightOverride = listPitch, textSizeOverride = rowText?.invoke(label) ?: label,
                             )
                         }
                     }
@@ -262,9 +261,8 @@ fun NxDetailListBody(
                     // The lines in one column first: columns only when that leaves the rows less than they need.
                     val density = LocalDensity.current
                     val listNeed = with(density) {
-                        val rowsNeed = if (rowKind == NxRowKind.OPTIONS) nxOptionsListHeight(options, rowHeight) else rowHeight * rest.size
-                        val tailNeed = if (tail.isNotEmpty()) listPitch * tail.size + listPitch * NX_OPTIONS_GAP else 0.dp
-                        (NxDetailListGap + headHeight + (if (pinned > 0) rowHeight * NX_OPTIONS_GAP else 0.dp) + rowsNeed + tailNeed).roundToPx()
+                        val rowsNeed = if (rowKind == NxRowKind.OPTIONS) nxOptionsListHeight(options, listPitch) else listPitch * rest.size
+                        (NxDetailListGap + headHeight + (if (pinned > 0) listPitch * NX_OPTIONS_GAP else 0.dp) + rowsNeed + tailNeed).roundToPx()
                     }
                     SubcomposeLayout(Modifier.weight(1f).fillMaxWidth()) { c ->
                         val oneColumn = subcompose("probe") { left(null) }
