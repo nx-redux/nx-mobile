@@ -20,16 +20,15 @@ data class SkinPackManifest(
 ) {
     companion object {
         /**
-         * The format this app writes and reads. 2: control boxes ([SkinLayoutSpec.boxes]), frames and screens drawn from
-         * smaller art ([FrameSpec.srcW], [FrameSpec.hole]) and cap marks ([ControlSpec.mark]) — fields an app reading 1
-         * would pass over and draw the pack wrong, so it refuses a 2.
+         * The one format this app writes and reads. A pack of another format may lack fields this app draws from, or
+         * hold ones it would pass over and draw wrong, so it is refused.
          */
         const val FORMAT = 2
         private val json = Json { ignoreUnknownKeys = true }
 
-        /** The manifest in [text]; null when it is not one this app reads (bad JSON, a newer [format]). */
+        /** The manifest in [text]; null when it is not one this app reads (bad JSON, another [format]). */
         fun parse(text: String): SkinPackManifest? =
-            runCatching { json.decodeFromString(serializer(), text) }.getOrNull()?.takeIf { it.format in 1..FORMAT }
+            runCatching { json.decodeFromString(serializer(), text) }.getOrNull()?.takeIf { it.format == FORMAT }
     }
 }
 
