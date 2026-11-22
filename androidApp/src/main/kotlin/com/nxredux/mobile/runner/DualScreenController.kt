@@ -371,8 +371,9 @@ internal class DualScreenController(
     }
 
     /**
-     * The whole core frame fitted at the game's aspect on a [w] x [h] surface, shaded; touch only for 3DS (Azahar's own
-     * side-by-side frame checks where a finger lands). Null before the first frame.
+     * The whole core frame fitted at the game's aspect on a [w] x [h] surface, shaded, taking touch as the main screen's
+     * whole picture does: the core decides what a touch means (Wii's pointer; the touch screen within Azahar's or
+     * melonDS's own frame). Null before the first frame.
      */
     private fun wholeFrameRegion(w: Float, h: Float, g: FloatArray): ScreenRegion? {
         val dst = wholeFrame(w, h, g) ?: return null
@@ -380,7 +381,7 @@ internal class DualScreenController(
             src = ScreenRect(0f, 0f, 1f, 1f),
             dst = ScreenRect(dst.x / w, dst.y / h, (dst.x + dst.width) / w, (dst.y + dst.height) / h),
             shaded = true,
-            touch = isN3ds,
+            touch = true,
         )
     }
 
