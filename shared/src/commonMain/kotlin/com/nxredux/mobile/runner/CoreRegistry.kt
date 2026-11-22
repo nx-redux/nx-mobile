@@ -56,6 +56,10 @@ object CoreRegistry {
             "melonds_firmware_nds_path", "melonds_firmware_dsi_path", "melonds_dsi_nand_path",
             "melonds_direct_network_interface",
         ),
+        // "/notfound" is the core's "None found..." placeholder: saved from a game run before the files were added, it
+        // would keep the built-in firmware afterwards. Unset, the core picks the files it finds.
+        hiddenValues = listOf("melonds_firmware_nds_path", "melonds_firmware_dsi_path", "melonds_dsi_nand_path")
+            .associateWith { setOf("/notfound") },
         name = "melonDS DS",
         microphone = true,
     )

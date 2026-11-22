@@ -10,6 +10,13 @@ object DolphinOptions {
     fun resolutionRows(displayMax: Int?): List<FrontendOption> = resolutionRows(Res3dConsole.DOLPHIN, displayMax)
 
     /**
+     * The Wii's rows start at most at 2x: on big screens Super Mario Galaxy 2 drops to 30-50 fps at 3x, where GameCube
+     * games hold 60.
+     */
+    fun wiiResolutionRows(displayMax: Int?): List<FrontendOption> =
+        resolutionRows(Res3dConsole.DOLPHIN, displayMax, minOf(Res3dConsole.DOLPHIN.defaultCap, 2))
+
+    /**
      * Max Scale from a game or console config written before the app set Dolphin's resolution: its Internal Resolution
      * above 1x becomes the most Auto draws at, so a player who raised it keeps that sharpness and phones that cannot keep
      * up still get less. Null when there is none to carry or the row is already set.

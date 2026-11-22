@@ -20,7 +20,7 @@ object ConsoleSettings {
         NdsOptions.appliesTo(tag) -> NdsOptions.tableFor(screen, displayMax = displayMax) + NdsOptions.shaderScreensRow + NdsOptions.localWirelessRow
         N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRowsFor(screen) + N3dsOptions.resolutionRows(displayMax) + NdsOptions.shaderScreensRow + N3dsOptions.newControlsRow + N3dsOptions.localWirelessRow
         PspOptions.appliesTo(tag) -> PspOptions.resolutionRows(displayMax) + PspOptions.localWirelessRow
-        WiiOptions.appliesTo(tag) -> WiiOptions.table + DolphinOptions.resolutionRows(displayMax)
+        WiiOptions.appliesTo(tag) -> WiiOptions.table + DolphinOptions.wiiResolutionRows(displayMax)
         DolphinOptions.appliesTo(tag) -> DolphinOptions.resolutionRows(displayMax)
         Ps1Options.appliesTo(tag) -> Ps1Options.resolutionRows(tag, displayMax)
         DcOptions.appliesTo(tag) -> DcOptions.resolutionRows(displayMax)

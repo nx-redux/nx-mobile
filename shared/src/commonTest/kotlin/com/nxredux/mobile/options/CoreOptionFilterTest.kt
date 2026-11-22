@@ -139,9 +139,12 @@ class CoreOptionFilterTest {
         assertEquals(listOf("per-strip (fast, least accurate)", "per-triangle (normal)"), CoreOptionFilter.visibleValues(shown))
         assertEquals("per-strip (fast, least accurate)", CoreOptionFilter.cycle(shown.copy(value = "per-triangle (normal)"), 1))
         // The others: renderers the runner can't serve (Vulkan is reached only through Graphics API) (EmulatorSettingsTest pins them),
-        // and N64's stale VRAM limit "0" (N64HiresPack.VRAM_NONE).
+        // N64's stale VRAM limit "0" (N64HiresPack.VRAM_NONE), and melonDS's "/notfound" file placeholder.
         assertEquals(
-            setOf("ppsspp_backend", "swanstation_GPU_Renderer", "citra_graphics_api", "dolphin_renderer", "mupen64plus-MaxHiResTxVramLimit"),
+            setOf(
+                "ppsspp_backend", "swanstation_GPU_Renderer", "citra_graphics_api", "dolphin_renderer", "mupen64plus-MaxHiResTxVramLimit",
+                "melonds_firmware_nds_path", "melonds_firmware_dsi_path", "melonds_dsi_nand_path",
+            ),
             com.nxredux.mobile.runner.CoreRegistry.all.filter { it.id != "flycast" }.flatMap { it.hiddenValues.keys }.toSet(),
         )
     }
