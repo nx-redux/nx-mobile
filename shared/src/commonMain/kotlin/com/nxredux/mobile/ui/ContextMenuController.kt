@@ -625,3 +625,10 @@ internal class ContextMenuController(
 
 /** The main menu's menu item (and the floating button's meaning) while an app holds the top screen. */
 internal const val USE_TOP_SCREEN_LABEL = "Use top screen"
+
+/** [menu] over the rebuilt [entries], on its game's fresh entry; dropped when that game left the list. */
+internal fun keptMenu(menu: ContextMenu?, entries: List<Listed>): ContextMenu? {
+    val entry = menu?.entry ?: return menu
+    val fresh = entries.firstOrNull { it.game.path == entry.game.path } ?: return null
+    return menu.copy(entry = fresh)
+}

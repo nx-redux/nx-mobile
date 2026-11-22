@@ -295,3 +295,14 @@ private const val COPY_FAILED = "Couldn't copy every save. The old folder still 
 
 /** The storage upgrade's error when its move did not finish. */
 private const val UPGRADE_FAILED = "Couldn't move your saves. They're safe; the app will try again next time."
+
+/** [s]'s rows: Allow and Not now on the first page, Pick folder on the pick, OK after (or after an error). */
+internal fun storageUpgradeRows(s: Screen.StorageUpgrade): List<String> = when {
+    s.error != null -> listOf("OK")
+    s.stage == Screen.StorageUpgrade.Stage.EXPLAIN -> listOf("Allow", "Not now")
+    s.stage == Screen.StorageUpgrade.Stage.PICK -> listOf("Pick folder")
+    else -> listOf("OK")
+}
+
+/** [s]'s rows: Copy and Keep separate; OK once a copy failed. */
+internal fun copySavesRows(s: Screen.CopySaves): List<String> = if (s.error != null) listOf("OK") else listOf("Copy", "Keep separate")

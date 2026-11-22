@@ -26,6 +26,7 @@ import com.nxredux.mobile.ui.nx.NxDialog
 import com.nxredux.mobile.ui.nx.NxProgressBody
 import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxRowKind
+import com.nxredux.mobile.sync.SyncLink
 
 /**
  * Tools → Device Sync, in the Settings root's look ([SettingsRootScreen]), in the tool and setup's sync step alike:
@@ -132,3 +133,33 @@ private fun SyncRomsRow(on: Boolean, lit: Boolean, onTap: (open: Boolean) -> Uni
 @Composable
 private fun message(title: String, lines: List<String>, hints: List<Hint>, onHint: (NxButton) -> Unit) =
     SyncPage(title, lines, emptyList(), -1, hints, onHint)
+
+/** Where setup's sync page has the selection: the Sync ROMs row, the link the page shows, or Skip. */
+enum class SyncFocus { ROMS, LINK, SKIP }
+
+/**
+ * Device Sync's page state: its [title], where the selection is, and whether it is setup's sync step ([inSetup]: a
+ * headline and the Skip row, which reads Continue once a sync ended there, [synced]).
+ */
+data class SyncSetup(val title: String, val synced: Boolean, val focus: SyncFocus, val inSetup: Boolean = true) {
+    val skipSelected: Boolean get() = focus == SyncFocus.SKIP
+}
+
+sealed interface SyncSetupRow {
+    data object Roms : SyncSetupRow
+    data class Link(val link: SyncLink) : SyncSetupRow
+    data object Skip : SyncSetupRow
+}
+
+/** Device Sync's Ready rows on [page]: Sync ROMs where ROM sync is available, the links, and in setup ([skip]) Skip. */
+fun syncSetupRows(page: DeviceSyncPage.Ready, skip: Boolean = true): List<SyncSetupRow> =
+    listOfNotNull(SyncSetupRow.Roms.takeIf { page.romsAvailable }) + SyncLink.entries.map { SyncSetupRow.Link(it) } + listOfNotNull(SyncSetupRow.Skip.takeIf { skip })
+
+/** The row [focus] is on, on [page]. */
+fun syncSetupIndex(page: DeviceSyncPage.Ready, focus: SyncFocus, skip: Boolean = true): Int = syncSetupRows(page, skip).indexOfFirst {
+    when (focus) {
+        SyncFocus.ROMS -> it == SyncSetupRow.Roms
+        SyncFocus.LINK -> it == SyncSetupRow.Link(page.link)
+        SyncFocus.SKIP -> it == SyncSetupRow.Skip
+    }
+}.coerceAtLeast(0)
