@@ -144,12 +144,6 @@ internal class SaveSession(
         lastResumePoint = slot
     }
 
-    /** The launch dropped the resume slot (a stale one): this launch boots fresh. */
-    fun dropResume() {
-        resumeSlot = null
-        resumePending = false
-    }
-
     /** The game's save states (null: none, as in netplay), once its paths are known. */
     fun open(states: SaveStates?) { saveStates = states }
 
