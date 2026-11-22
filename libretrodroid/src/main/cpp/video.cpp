@@ -315,11 +315,13 @@ void Video::drawFrame() {
     // Composed even while held: the second display draws the composed frame with main covered.
     composeFrame();
 
-    // Not placed yet: black, as the surface was, rather than the picture somewhere it is about to leave.
-    if (pictureHeld) return;
-
+    // Built even while held: the second display draws with these programs, and a shader picked from the menu must
+    // reach it while main stays covered.
     updateProgram();
     updatePresetRenderer();
+
+    // Not placed yet: black, as the surface was, rather than the picture somewhere it is about to leave.
+    if (pictureHeld) return;
     // Set per draw, not only when a renderer (re)creates its texture: a paused frame and a GL core's
     // framebuffer keep their texture, and a sharpness change must still show on them.
     // Bind on unit 0: a GL core may leave another unit active with its own texture bound, and it caches
