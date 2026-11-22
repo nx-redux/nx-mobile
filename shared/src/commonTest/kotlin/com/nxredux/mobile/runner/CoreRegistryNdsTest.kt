@@ -2,7 +2,6 @@ package com.nxredux.mobile.runner
 
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.CoreConfig
-import com.nxredux.mobile.storage.NdsResumeCleanup
 import com.nxredux.mobile.storage.NdsDsvSave
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,10 +21,9 @@ class CoreRegistryNdsTest {
         assertNull(CoreRegistry.forId("melonds"))
     }
 
-    @Test fun the_dsv_save_and_resume_cleanup_name_the_registered_core() {
-        // A renamed core id would otherwise silently turn both off.
+    @Test fun the_dsv_save_names_the_registered_core() {
+        // A renamed core id would otherwise silently turn it off.
         assertEquals(nds.id, NdsDsvSave.CORE_ID)
-        assertEquals(nds.id, NdsResumeCleanup.CORE_ID)
     }
 
     @Test fun the_core_draws_a_plain_stack_and_takes_touch_as_a_pointer() {

@@ -91,7 +91,6 @@ import com.nxredux.mobile.storage.DataRoot
 import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.storage.LibchdrSectors
 import com.nxredux.mobile.storage.NdsDsvSave
-import com.nxredux.mobile.storage.NdsResumeCleanup
 import com.nxredux.mobile.storage.NxPaths
 import com.nxredux.mobile.test.NxTestResults
 import com.nxredux.mobile.tools.CheatsRoot
@@ -811,8 +810,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             paths = paths.withInner(inner?.let { unpackedEntry })
             saves.open(if (cfg.np == null) SaveStates(dataRoot, paths) else null)   // netplay: no save states, no auto-resume
             if (!settings.saveOnQuit) saves.unlinkAuto()
-            dropStaleNdsResume(cfg.tag, cfg.coreId, cfg.romFileName)
-            saves.refreshSlots()   // warm for the first menu open; after the cleanup, so it never lists a deleted state
+            saves.refreshSlots()   // warm for the first menu open
             cfg.np?.let { gameNetplay.prepareSaves(it, cfg.tag, cfg.romFileName, dataRoot, paths) }
             // netplay: on a copy the battery save is the session folder's (read only: writeBatterySave skips it), under the
             // default names (the folder is mobile's own), with no clock file.
@@ -1339,27 +1337,6 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             if (cheatSet.hasEnabled()) applyCheats(view)
             achievements?.startSession()
         }
-    }
-
-    /**
-     * NDS moved from melonds to melonDS DS: a resume marker left pointing at an old-core state (which melonDS DS can't
-     * load) is deleted with its thumbnails, and this launch boots fresh instead of toasting "Resume failed". Once per
-     * game, since the marker is gone afterwards; the old core's states stay untouched.
-     */
-    private suspend fun dropStaleNdsResume(tag: String, coreId: String, romFileName: String) {
-        if (tag != NdsResumeCleanup.TAG || coreId != NdsResumeCleanup.CORE_ID) return
-        val dataRoot = host.dataRoot
-        val paths = host.paths
-        val dropped = withContext(Dispatchers.IO) {
-            SaveSession.awaitAutoWrites()   // a Home write of this game's auto state may still be landing
-            runCatching {
-                val marker = File(dataRoot, paths.lastSlot).takeIf { it.exists() }?.readText()
-                val victims = NdsResumeCleanup.victims(tag, coreId, romFileName, marker, paths.naming, paths.innerFileName) { File(dataRoot, it).exists() }
-                victims.forEach { File(dataRoot, it).delete() }
-                victims.isNotEmpty()
-            }.onFailure { NxLog.w(TAG_LOG, "stale NDS resume cleanup failed", it) }.getOrDefault(false)
-        }
-        if (dropped) host.saves.dropResume()
     }
 
     /**
