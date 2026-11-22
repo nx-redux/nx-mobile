@@ -303,6 +303,10 @@ internal class DualScreenController(
      * The in-game menu draws on the second display: in the panel there (the picture here), or over the picture there
      * (the DS / 3DS picture screen while split).
      */
+    /** The second display's size while the whole picture is drawn there, before any frame (the launch's 3D scale); else null. */
+    fun secondPictureDisplay(): Pair<Int, Int>? =
+        presentationShape?.takeIf { dualMode != DualMode.OFF && pictureOn == PictureOn.SECOND }?.let { it.width to it.height }
+
     fun menuOnSecond(): Boolean = DualMenu.menuOnSecond(menuHost(), dualMode, pictureOn, presentation != null)
 
     /** Shows [content] as the in-game menu on the second display; null takes it away. */
