@@ -116,6 +116,7 @@ void LibretroDroid::resetGlobalVariables() {
     audio = nullptr;
     video = nullptr;
     fpsSync = nullptr;
+    contentFps.store(0.0, std::memory_order_relaxed);
     // Not dropped here (UI thread): the GL thread may be reading it. Its next access starts from a fresh state.
     inputResetPending = true;
     rumble = nullptr;
@@ -696,6 +697,7 @@ void LibretroDroid::destroy() {
     video = nullptr;
     rumble = nullptr;
     fpsSync = nullptr;
+    contentFps.store(0.0, std::memory_order_relaxed);
     audio = nullptr;
     {
         std::lock_guard<std::mutex> guard(inputLock);
@@ -940,9 +942,15 @@ void LibretroDroid::step() {
     // Swapped after wait(): a fresh FPSSync has no start time until advanceFrames(), and sleep_until(min) never returns.
     // Audio keeps its stream: the sample rate is unchanged and its rate controller absorbs the vsync stretch change.
     double fps = 0.0;
+    const float screenRate = pendingScreenRate.exchange(0.0f, std::memory_order_relaxed);
+    if (fpsSync && screenRate > 0.0f && std::abs(screenRate - screenRefreshRate) > 0.5f) {
+        screenRefreshRate = screenRate;
+        fpsSync = std::make_unique<FPSSync>(fpsSync->getContentRefreshRate(), screenRefreshRate);
+    }
     if (fpsSync && Environment::getInstance().consumeTimingUpdate(fps)) {
         if (std::abs(fps - fpsSync->getContentRefreshRate()) > 0.01) {
             LOGI("Core changed its frame rate from %f to %f", fpsSync->getContentRefreshRate(), fps);
+            contentFps.store(fps, std::memory_order_relaxed);
             fpsSync = std::make_unique<FPSSync>(fps, screenRefreshRate);
             if (fastForwardPacer.active()) {
                 fastForwardPacer.start(fps, appliedFastForwardSpeed, std::chrono::steady_clock::now());
@@ -1419,6 +1427,7 @@ void LibretroDroid::afterGameLoad() {
     }
 
     fpsSync = std::make_unique<FPSSync>(fps, screenRefreshRate);
+    contentFps.store(fps, std::memory_order_relaxed);
 
     double inputSampleRate = sampleRate * fpsSync->getTimeStretchFactor();
 

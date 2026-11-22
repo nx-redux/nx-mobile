@@ -173,6 +173,12 @@ public class LibretroDroid {
     public static native void setFillAudioGaps(int mode);
     /** The display's presentation deadline (Display.getPresentationDeadlineNanos), for the sleep timer's frame stamps. Any thread. */
     public static native void setPresentationDeadline(long nanos);
+
+    /** The game's frame rate, 0 before a game runs. Any thread. */
+    public static native double getContentFps();
+
+    /** The display switched refresh rate: frames are paced for it from the next step. Any thread. */
+    public static native void setScreenRefreshRate(float rate);
     public static native void setAudioEnabled(boolean enabled);
     /**
      * Fast forward up to maxSpeed times the content's frame rate (0 = off), its audio played or muted. Separate from

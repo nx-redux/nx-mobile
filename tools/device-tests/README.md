@@ -17,7 +17,8 @@ Mac-side Python 3 (stdlib only) driver for a TrimUI Brick (tg5040) on NX Redux, 
   (`--ab nx_graphics_api=gles,vulkan`) or a system property (`--ab-prop debug.nx.presenttime=0,1`). Prints frames,
   uneven frames, frames held 33 ms+, the core's work per frame (`--work`: Debug log on for the runs) and the temperature.
   Each run ends with the game's Quit (GAME_STOP, so saves a core writes itself finish) before the force-stop; the
-  game's auto state is set aside for the runs and put back. `test_pacing.py`: that teardown, no device.
+  game's auto state is set aside for the runs and put back. `--open-first <s>` opens the app before each launch: Android 11 (the
+  AYANEO) drops the GAME hook for a force-stopped app. `test_pacing.py`: that teardown, no device.
 - `slang_shaders.py`: slang presets from the home's `Shaders/shaders_slang` on a phone (`--only SFC,NDS`, `--presets`):
   per console and preset, a launch through the GAME hook, a screenshot (`.local/device-tests/slang-shots/`), frame
   pacing, the time the preset took to prepare and any shader error from the log. Game options, resume points and the

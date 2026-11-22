@@ -205,6 +205,10 @@ public:
     // The display's presentation deadline (how early a frame must be queued to show at a refresh);
     // a sleep-timer frame is stamped to show at its deadline + this + 1.5 ms. 0 = unknown: one frame. Any thread.
     void setPresentationDeadline(int64_t nanos) { presentationLeadMicros = nanos > 0 ? nanos / 1000 + 1500 : 0; }
+    // The game's frame rate (0 before a game runs), for the app to ask the display for a mode that fits it. Any thread.
+    double getContentFps() const { return contentFps.load(std::memory_order_relaxed); }
+    // The display switched refresh rate: the pacer is rebuilt for it at the next step. Any thread.
+    void setScreenRefreshRate(float rate) { pendingScreenRate.store(rate, std::memory_order_relaxed); }
 
     // Fast forward up to maxSpeed × the content's rate (0 = off), with or without its audio.
     // Separate from frameSpeed, which stays pause (0) / run (1): a pause and resume never drop FF. Not applied in
@@ -454,6 +458,8 @@ private:
     std::vector<int> threadsBeforeLoad;
     PerfHint perfHint;
     std::atomic<long> presentationLeadMicros { 0 };
+    std::atomic<double> contentFps { 0.0 };
+    std::atomic<float> pendingScreenRate { 0.0f };
     unsigned perfHintSteps = 0;
     void updatePerfHint(std::chrono::steady_clock::time_point stepStart, unsigned runs);
     unsigned appliedFastForwardSpeed = 0;

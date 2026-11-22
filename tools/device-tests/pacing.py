@@ -156,6 +156,10 @@ class Pacing:
             self.sh("setprop %s %s" % prop)
         self.sh("am force-stop com.nxredux.mobile.dev; input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; "
                 "settings put global stay_on_while_plugged_in 3")
+        if getattr(self.a, "open_first", 0):
+            # Android 11 holds a broadcast to a force-stopped app: open it so the GAME hook is heard.
+            self.sh("am start -n com.nxredux.mobile.dev/com.nxredux.mobile.LaunchActivity")
+            time.sleep(self.a.open_first)
         try:
             self.dev.game(self.a.rom, self.a.tag, slot=self.a.slot if self.a.state else None, timeout=90)
             time.sleep(self.a.warmup)
@@ -222,6 +226,8 @@ def main():
     p.add_argument("--ab-prop", help="alternate one system property: debug.nx.presenttime=0,1")
     p.add_argument("--content-fps", type=float, default=60.0, help="the game's frame rate (steady frame length)")
     p.add_argument("--work", action="store_true", help="turn the Debug log on for the runs (core work per frame)")
+    p.add_argument("--open-first", type=float, default=0, metavar="SECONDS",
+                   help="open the app and wait before each launch (Android 11 drops the hook for a force-stopped app)")
     p.add_argument("--verbose", action="store_true")
     a = p.parse_args()
 
