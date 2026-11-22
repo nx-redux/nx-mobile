@@ -1,0 +1,251 @@
+# licence: modifies Azahar (https://github.com/azahar-emu/azahar), GPL-2.0 or later (its source files; license.txt is
+# the GPLv2 text; see LICENSES/azahar.txt); this patch is distributed under the same licence.
+Save states compressed as they are serialized and decompressed as they are read: the whole state never sits in memory
+uncompressed (nor copied), which a 2 GB device cannot spare beside the running game. The save serializes twice, first
+to count the bytes, so the ZSTD frame records its size and the file is the same as before.
+
+diff --git a/src/common/zstd_compression.h b/src/common/zstd_compression.h
+--- a/src/common/zstd_compression.h
++++ b/src/common/zstd_compression.h
+@@ -8,6 +8,8 @@
+ 
+ #pragma once
+ 
++#include <functional>
++#include <iosfwd>
+ #include <span>
+ #include <unordered_map>
+ #include <vector>
+@@ -57,6 +59,21 @@
+  */
+ [[nodiscard]] std::vector<u8> DecompressDataZSTD(std::span<const u8> compressed);
+ 
++/**
++ * A ZSTD frame of what [write] puts on its stream, compressed as it comes: the uncompressed data never sits in memory
++ * whole. [write] runs twice, first only to count the bytes, so the frame records its size as CompressDataZSTD's does.
++ * Empty on a failure.
++ */
++[[nodiscard]] std::vector<u8> CompressStreamZSTD(const std::function<void(std::ostream&)>& write,
++                                                 s32 compression_level);
++
++/** CompressStreamZSTD at ZSTD's default level, as CompressDataZSTDDefault. */
++[[nodiscard]] std::vector<u8> CompressStreamZSTDDefault(const std::function<void(std::ostream&)>& write);
++
++/** Hands [read] a stream of [compressed]'s data, decompressed as it is read; false when the frame is broken. */
++bool DecompressStreamZSTD(std::span<const u8> compressed,
++                          const std::function<void(std::istream&)>& read);
++
+ } // namespace Common::Compression
+ 
+ namespace FileUtil {
+diff --git a/src/common/zstd_compression.cpp b/src/common/zstd_compression.cpp
+--- a/src/common/zstd_compression.cpp
++++ b/src/common/zstd_compression.cpp
+@@ -24,6 +24,154 @@
+ #include "common/zstd_compression.h"
+ 
+ namespace Common::Compression {
++namespace {
++
++/** Counts what is written and keeps none of it. */
++class CountingBuf : public std::streambuf {
++public:
++    std::size_t count = 0;
++
++protected:
++    std::streamsize xsputn(const char*, std::streamsize n) override {
++        count += static_cast<std::size_t>(n);
++        return n;
++    }
++    int_type overflow(int_type c) override {
++        if (!traits_type::eq_int_type(c, traits_type::eof()))
++            ++count;
++        return traits_type::not_eof(c);
++    }
++};
++
++/** Compresses what is written into [out] in 1 MiB steps. */
++class CompressBuf : public std::streambuf {
++public:
++    CompressBuf(std::vector<u8>& out, std::size_t size, s32 level) : out{out}, input(1 << 20) {
++        ZSTD_CCtx_setParameter(ctx, ZSTD_c_compressionLevel, level);
++        ZSTD_CCtx_setPledgedSrcSize(ctx, size);
++        setp(input.data(), input.data() + input.size());
++    }
++    ~CompressBuf() override { ZSTD_freeCCtx(ctx); }
++
++    bool Finish() { return Drain(ZSTD_e_end); }
++
++protected:
++    int_type overflow(int_type c) override {
++        if (!Drain(ZSTD_e_continue))
++            return traits_type::eof();
++        if (!traits_type::eq_int_type(c, traits_type::eof())) {
++            *pptr() = traits_type::to_char_type(c);
++            pbump(1);
++        }
++        return traits_type::not_eof(c);
++    }
++
++private:
++    bool Drain(ZSTD_EndDirective mode) {
++        if (failed)
++            return false;
++        ZSTD_inBuffer in{input.data(), static_cast<std::size_t>(pptr() - pbase()), 0};
++        const std::size_t chunk = ZSTD_CStreamOutSize();
++        while (true) {
++            const std::size_t at = out.size();
++            out.resize(at + chunk);
++            ZSTD_outBuffer o{out.data() + at, chunk, 0};
++            const std::size_t left = ZSTD_compressStream2(ctx, &o, &in, mode);
++            out.resize(at + o.pos);
++            if (ZSTD_isError(left)) {
++                LOG_ERROR(Common, "Error compressing ZSTD stream: {}", ZSTD_getErrorName(left));
++                failed = true;
++                return false;
++            }
++            if (mode == ZSTD_e_end ? left == 0 : in.pos == in.size)
++                break;
++        }
++        setp(input.data(), input.data() + input.size());
++        return true;
++    }
++
++    std::vector<u8>& out;
++    std::vector<char> input;
++    ZSTD_CCtx* ctx = ZSTD_createCCtx();
++    bool failed = false;
++};
++
++/** Reads [compressed] decompressed, 1 MiB at a time. */
++class DecompressBuf : public std::streambuf {
++public:
++    explicit DecompressBuf(std::span<const u8> compressed)
++        : in{compressed.data(), compressed.size(), 0}, output(1 << 20) {
++        setg(output.data(), output.data(), output.data());
++    }
++    ~DecompressBuf() override { ZSTD_freeDCtx(ctx); }
++
++    bool failed = false;
++
++protected:
++    int_type underflow() override {
++        if (gptr() < egptr())
++            return traits_type::to_int_type(*gptr());
++        while (in.pos < in.size || !done) {
++            ZSTD_outBuffer o{output.data(), output.size(), 0};
++            const std::size_t left = ZSTD_decompressStream(ctx, &o, &in);
++            if (ZSTD_isError(left)) {
++                LOG_ERROR(Common, "Error decompressing ZSTD stream: {}", ZSTD_getErrorName(left));
++                failed = true;
++                return traits_type::eof();
++            }
++            done = left == 0;
++            if (o.pos > 0) {
++                setg(output.data(), output.data(), output.data() + o.pos);
++                return traits_type::to_int_type(*gptr());
++            }
++            if (in.pos == in.size)
++                break;
++        }
++        return traits_type::eof();
++    }
++
++private:
++    ZSTD_inBuffer in;
++    std::vector<char> output;
++    ZSTD_DCtx* ctx = ZSTD_createDCtx();
++    bool done = false;
++};
++
++} // namespace
++
++std::vector<u8> CompressStreamZSTD(const std::function<void(std::ostream&)>& write,
++                                   s32 compression_level) {
++    CountingBuf counter;
++    {
++        std::ostream counting{&counter};
++        write(counting);
++    }
++    std::vector<u8> out;
++    out.reserve(ZSTD_compressBound(counter.count) / 8);
++    CompressBuf compressor{out, counter.count,
++                           std::clamp(compression_level, ZSTD_minCLevel(), ZSTD_maxCLevel())};
++    {
++        std::ostream stream{&compressor};
++        write(stream);
++        stream.flush();
++    }
++    if (!compressor.Finish())
++        return {};
++    return out;
++}
++
++std::vector<u8> CompressStreamZSTDDefault(const std::function<void(std::ostream&)>& write) {
++    return CompressStreamZSTD(write, ZSTD_CLEVEL_DEFAULT);
++}
++
++bool DecompressStreamZSTD(std::span<const u8> compressed,
++                          const std::function<void(std::istream&)>& read) {
++    DecompressBuf buf{compressed};
++    std::istream stream{&buf};
++    read(stream);
++    return !buf.failed;
++}
++
+ std::vector<u8> CompressDataZSTD(std::span<const u8> source, s32 compression_level) {
+     compression_level = std::clamp(compression_level, ZSTD_minCLevel(), ZSTD_maxCLevel());
+     const std::size_t max_compressed_size = ZSTD_compressBound(source.size());
+diff --git a/src/core/savestate.cpp b/src/core/savestate.cpp
+--- a/src/core/savestate.cpp
++++ b/src/core/savestate.cpp
+@@ -243,14 +243,15 @@
+ }
+ 
+ std::vector<u8> System::SaveStateBuffer() const {
+-    std::ostringstream sstream{std::ios_base::binary};
+-    // Serialize
+-    oarchive oa{sstream};
+-    oa&* this;
+-
+-    const std::string& str{sstream.str()};
+-    const auto data = std::span<const u8>{reinterpret_cast<const u8*>(str.data()), str.size()};
+-    auto buffer = Common::Compression::CompressDataZSTDDefault(data);
++    // Compressed as it is serialized: the whole state (hundreds of MB with the New 3DS's memory) never sits in memory
++    // uncompressed, nor twice, which a phone with 2 GB cannot spare beside the running game.
++    auto buffer = Common::Compression::CompressStreamZSTDDefault([this](std::ostream& stream) {
++        oarchive oa{stream};
++        oa&* this;
++    });
++    if (buffer.empty()) {
++        throw std::runtime_error("Could not compress the save state");
++    }
+ 
+     CSTHeader header{};
+     header.filetype = header_magic_bytes;
+@@ -305,19 +306,12 @@
+                     Common::g_scm_rev, revision);
+     }
+ 
+-    std::vector<u8> state(buffer.begin() + sizeof(CSTHeader), buffer.end());
+-    auto decompressed = Common::Compression::DecompressDataZSTD(state);
+-
+-    std::istringstream sstream{
+-        std::string{reinterpret_cast<char*>(decompressed.data()), decompressed.size()},
+-        std::ios_base::binary};
+-    decompressed.clear();
+-
+-    // Deserialize
+-    iarchive ia{sstream};
+-    ia&* this;
+-
+-    return true;
++    // Decompressed as it is read, for the same reason as the save.
++    const auto state = std::span<const u8>{buffer}.subspan(sizeof(CSTHeader));
++    return Common::Compression::DecompressStreamZSTD(state, [this](std::istream& stream) {
++        iarchive ia{stream};
++        ia&* this;
++    });
+ }
+ 
+ } // namespace Core
