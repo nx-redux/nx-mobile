@@ -69,10 +69,10 @@ typedef struct {
 	/* Called on every socket the link creates, before bind: lets the platform pin it to one network (the default one
 	 * can be mobile data, which would carry replies away from the LAN). NULL = nothing. */
 	void (*bind_socket)(int fd, void* ctx);
-	/* Called before a socket sends to the other kind of address than its last send (cable: on the cable's network, see
-	 * ndl_set_cable): a socket pinned to one network cannot reach the other, so the platform moves it. A new socket is
-	 * off the cable. NULL = nothing. */
-	void (*route_socket)(int fd, bool cable, void* ctx);
+	/* Called before a socket sends to the other kind of address than its last send (off_wifi: on the cable's network,
+	 * see ndl_set_cable, or on one of the phone's own networks, see ndl_set_local): a socket pinned to the Wi-Fi cannot
+	 * reach those, so the platform moves it. A new socket is on the Wi-Fi. NULL = nothing. */
+	void (*route_socket)(int fd, bool off_wifi, void* ctx);
 	void* bind_ctx;
 	/* The game's radio when the link is made, as if ndl_radio_changed had told it. */
 	ndl_radio radio;
@@ -118,6 +118,18 @@ typedef enum { NDL_CABLE_NONE = 0, NDL_CABLE_COMING = 1, NDL_CABLE_UP = 2 } ndl_
  * from the cable is the one joined. COMING: a room found elsewhere is left unjoined for a few seconds, so the cable can
  * come up first and carry it. */
 void ndl_set_cable(ndl_link* l, ndl_cable state, const char* broadcast);
+
+/* A network this phone serves itself, its hotspot most often. Host order. */
+typedef struct {
+	uint32_t broadcast;
+	uint32_t mask;
+} ndl_subnet;
+
+#define NDL_LOCAL_MAX 4
+
+/* The phone's own networks (its hotspot), which Android gives no Network a socket could be pinned to: a search asks on
+ * each too, and a send there goes through route_socket. Replaces the last list; n = 0 clears it. */
+void ndl_set_local(ndl_link* l, const ndl_subnet* nets, int n);
 
 /* Leaves at once, without the radio-off linger. The link then stays out of rooms until ndl_set_mode (or, in AUTO, the
  * next radio ON). */

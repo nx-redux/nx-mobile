@@ -29,6 +29,7 @@
 #include <android/multinetwork.h>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "../environment.h"
 #include "../log.h"
@@ -57,11 +58,15 @@ std::atomic<int> cableState { NDL_CABLE_NONE };
 // The cable's network is 10.99.0.0/30 (the app's USB link VPN).
 constexpr const char* CABLE_BROADCAST = "10.99.0.3";
 
-// A socket pinned to the Wi-Fi skips the cable's VPN for everything but its broadcast address, so one that sends to
-// the cable is let go of first (it then follows the app's routes, where the cable's two addresses lead to the cable).
-void routeSocket(int fd, bool cable, void*) {
-    if (!cable) return bindToWifi(fd, nullptr);
-    if (android_setsocknetwork(NETWORK_UNSPECIFIED, fd) != 0) LOGW("DS link: cannot move a socket to the cable (errno %d)", errno);
+// The phone's own networks (its hotspot), kept here so a link made later starts with them. Under linkMutex.
+std::vector<ndl_subnet> localNetworks;
+
+// A socket pinned to the Wi-Fi skips the cable's VPN for everything but its broadcast address, and reaches no hotspot
+// this phone serves, so one that sends there is let go of first (it then follows the app's routes, where the cable's
+// two addresses lead to the cable and the hotspot's to the hotspot).
+void routeSocket(int fd, bool offWifi, void*) {
+    if (!offWifi) return bindToWifi(fd, nullptr);
+    if (android_setsocknetwork(NETWORK_UNSPECIFIED, fd) != 0) LOGW("DS link: cannot unpin a socket from the Wi-Fi (errno %d)", errno);
 }
 
 // A core's own room (Azahar's). Held across each call into it, so the core's nullptr returns only once none is running.
@@ -370,6 +375,7 @@ void configure(const std::vector<Variable>& vars) {
         // The cable's state is read under the lock setCable takes: one set meanwhile lands on this link or the read.
         std::lock_guard<std::mutex> guard(linkMutex);
         ndl_set_cable(created, (ndl_cable) cableState.load(), CABLE_BROADCAST);
+        ndl_set_local(created, localNetworks.data(), (int) localNetworks.size());
         theLink = created;
     }
     LOGI("DS link: %s on port %u%s", modeName(wanted.mode), (unsigned) wanted.port,
@@ -489,6 +495,18 @@ void setCable(int state) {
     std::lock_guard<std::mutex> guard(linkMutex);
     ndl_set_cable(theLink, (ndl_cable) state, CABLE_BROADCAST);
     LOGI("DS link: cable %s", state == NDL_CABLE_UP ? "up" : state == NDL_CABLE_COMING ? "coming" : "none");
+}
+
+void setLocalNetworks(const std::vector<ndl_subnet>& nets) {
+    std::lock_guard<std::mutex> guard(linkMutex);
+    const bool same = nets.size() == localNetworks.size() &&
+                      std::equal(nets.begin(), nets.end(), localNetworks.begin(), [](const ndl_subnet& a, const ndl_subnet& b) {
+                          return a.broadcast == b.broadcast && a.mask == b.mask;
+                      });
+    if (same) return;
+    localNetworks = nets;
+    ndl_set_local(theLink, localNetworks.data(), (int) localNetworks.size());
+    LOGI("DS link: %zu network(s) of this phone's own (hotspot)", localNetworks.size());
 }
 
 void stopCore() {

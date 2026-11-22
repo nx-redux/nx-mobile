@@ -128,13 +128,15 @@ struct ndl_link {
 	uint64_t search_until; /* a search is waiting for answers until then, 0 = none */
 	uint64_t next_search_ms;
 	uint64_t next_alone_ms;
-	bool fd_cable, sfd_cable; /* the socket's last send went to the cable (cfg.route_socket) */
+	bool fd_off_wifi, sfd_off_wifi; /* the socket's last send went to the cable or a local network (cfg.route_socket) */
 	bool found;
 	bool found_cable; /* the found room answered from the cable */
 	ndl_room_info found_info;
 	struct sockaddr_in found_addr;
 	ndl_cable cable;
 	uint32_t cable_broadcast;  /* host order, 0 = none */
+	ndl_subnet local[NDL_LOCAL_MAX]; /* ndl_set_local */
+	int local_n;
 	uint64_t cable_hold_until; /* COMING: a room found off the cable is not joined before then */
 #ifdef NDL_TESTING
 	uint32_t test_sent;
@@ -191,16 +193,25 @@ static bool on_cable(const ndl_link* l, const struct sockaddr_in* a) {
 	return l->cable_broadcast && (ntohl(a->sin_addr.s_addr) & ~3u) == (l->cable_broadcast & ~3u);
 }
 
+static bool on_local(const ndl_link* l, const struct sockaddr_in* a) {
+	uint32_t ip = ntohl(a->sin_addr.s_addr);
+	for (int i = 0; i < l->local_n; i++) {
+		if ((ip & l->local[i].mask) == (l->local[i].broadcast & l->local[i].mask))
+			return true;
+	}
+	return false;
+}
+
 static void send_on(ndl_link* l, int fd, const struct sockaddr_in* to, uint8_t type, uint16_t sender, uint16_t dest,
 					const void* payload, size_t n) {
 	if (fd < 0)
 		return;
 	if (l->cfg.route_socket) {
-		bool cable = on_cable(l, to);
-		bool* routed = fd == l->sfd ? &l->sfd_cable : &l->fd_cable;
-		if (cable != *routed) {
-			l->cfg.route_socket(fd, cable, l->cfg.bind_ctx);
-			*routed = cable;
+		bool off_wifi = on_cable(l, to) || on_local(l, to);
+		bool* routed = fd == l->sfd ? &l->sfd_off_wifi : &l->fd_off_wifi;
+		if (off_wifi != *routed) {
+			l->cfg.route_socket(fd, off_wifi, l->cfg.bind_ctx);
+			*routed = off_wifi;
 		}
 	}
 	uint8_t buf[NDL_DGRAM_MAX];
@@ -228,7 +239,7 @@ static bool same_addr(const struct sockaddr_in* a, const struct sockaddr_in* b) 
 /* ---- Socket ---- */
 
 static void close_search_socket(ndl_link* l) {
-	l->sfd_cable = false;
+	l->sfd_off_wifi = false;
 	if (l->sfd >= 0) {
 		close(l->sfd);
 		l->sfd = -1;
@@ -238,7 +249,7 @@ static void close_search_socket(ndl_link* l) {
 /* Both: a link without its room socket has nothing to answer searches for. */
 static void close_socket(ndl_link* l) {
 	close_search_socket(l);
-	l->fd_cable = false;
+	l->fd_off_wifi = false;
 	if (l->fd >= 0) {
 		close(l->fd);
 		l->fd = -1;
@@ -449,6 +460,10 @@ static void start_search(ndl_link* l) {
 	send_to(l, &to, T_ASK, 0, NDL_BROADCAST, NULL, 0);
 	if (l->cable == NDL_CABLE_UP && l->cable_broadcast) {
 		to.sin_addr.s_addr = htonl(l->cable_broadcast);
+		send_to(l, &to, T_ASK, 0, NDL_BROADCAST, NULL, 0);
+	}
+	for (int i = 0; i < l->local_n; i++) {
+		to.sin_addr.s_addr = htonl(l->local[i].broadcast);
 		send_to(l, &to, T_ASK, 0, NDL_BROADCAST, NULL, 0);
 	}
 	l->found = false;
@@ -989,6 +1004,33 @@ void ndl_set_cable(ndl_link* l, ndl_cable state, const char* broadcast) {
 		l->next_search_ms = 0;
 	}
 	l->cable = state;
+	pthread_mutex_unlock(&l->mu);
+	np_wake_poke(&l->wake);
+}
+
+void ndl_set_local(ndl_link* l, const ndl_subnet* nets, int n) {
+	if (!l)
+		return;
+	if (n < 0 || !nets)
+		n = 0;
+	if (n > NDL_LOCAL_MAX)
+		n = NDL_LOCAL_MAX;
+	pthread_mutex_lock(&l->mu);
+	bool added = false;
+	for (int i = 0; i < n; i++) {
+		bool known = false;
+		for (int j = 0; j < l->local_n; j++)
+			known = known || (l->local[j].broadcast == nets[i].broadcast && l->local[j].mask == nets[i].mask);
+		added = added || !known;
+	}
+	memcpy(l->local, nets, (size_t)n * sizeof(*nets));
+	l->local_n = n;
+	/* A phone that just turned its hotspot on: search there now rather than at the next lone search. */
+	if (added && l->role == R_IDLE) {
+		l->search_until = 0;
+		l->found = false;
+		l->next_search_ms = 0;
+	}
 	pthread_mutex_unlock(&l->mu);
 	np_wake_poke(&l->wake);
 }

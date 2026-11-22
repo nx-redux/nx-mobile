@@ -373,6 +373,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val wii = WiiDolphinController(this, input, saves)
     private val launchPipeline = LaunchPipeline(LaunchState())
     private val dsRoom = DsRoomWatcher(lifecycleScope, { DsPresence.of(LibretroNetplay.dsPresence()) }, ::onDsPresenceChanged)
+    private val ownNetworks by lazy { OwnNetworksWatcher(lifecycleScope, this) }
     private val dsCable = DsCable(this, lifecycleScope)
     // The cap is the Disconnect row pressed for the player: the automatic route leaves the room, a sheet session ends its link.
     private val dsMenuCap = DsMenuCap(lifecycleScope, onTick = { seconds -> withMenu { it.setIdleSeconds(seconds) } }) {
@@ -637,7 +638,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 NxLog.i(TAG_LOG, "the previous game screen is torn down: starting")
             }
             launchPipeline.start()
-            if (launchPipeline.dsLinked && !isDestroyed) dsRoom.start()
+            if (launchPipeline.dsLinked && !isDestroyed) {
+                dsRoom.start()
+                ownNetworks.start()
+            }
             if (launchPipeline.dsCableAuto && !isDestroyed) dsCable.watch()
         }
     }
@@ -1022,6 +1026,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         runCatching { unregisterReceiver(kidsWarn) }   // not registered when onCreate stopped early
         dsRoom.stop()   // launchPipeline.onDestroy lets the Wi-Fi lock go
         dsCable.close()
+        ownNetworks.stop()
         renderer.cancelGeometryWatch()
         res3d.cancelTick()
         rumbles.forEach { it.release() }

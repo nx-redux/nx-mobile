@@ -637,6 +637,36 @@ static int case_cable_sends_move_the_socket(uint16_t port) {
 	return 0;
 }
 
+/* A room on the phone's own network (its hotspot): the socket leaves the Wi-Fi before it sends there. */
+static int case_local_network_sends_move_the_socket(uint16_t port) {
+	uint16_t sp = free_udp_port();
+	ndl_config c = config(NDL_HOST, "sheet", port, 8);
+	c.search_port = sp;
+	room[1] = ndl_create(&c);
+	CHECK(room[1] != NULL);
+	int routed = 0;
+	c = auto_config("auto", port, sp);
+	c.route_socket = note_route;
+	c.bind_ctx = &routed;
+	room[2] = ndl_create(&c);
+	CHECK(room[2] != NULL);
+	ndl_subnet hotspot = { 0x7F0000FFu, 0xFFFFFF00u }; /* 127.0.0.0/24 */
+	ndl_set_local(room[2], &hotspot, 1);
+	ndl_radio_changed(room[2], NDL_RADIO_ON);
+	advance(400);
+	CHECK(wait_in_room(room[2], true, 2000));
+	CHECK(routed == 1);
+	/* The hotspot goes: back on the Wi-Fi. */
+	ndl_leave_now(room[2]);
+	ndl_set_local(room[2], NULL, 0);
+	routed = 0;
+	ndl_radio_changed(room[2], NDL_RADIO_ON);
+	advance(400);
+	CHECK(wait_in_room(room[2], true, 2000));
+	CHECK(routed != 1);
+	return 0;
+}
+
 /* The cable is up and its room is elsewhere: no wait either. */
 static int case_cable_up_does_not_hold(uint16_t port) {
 	CHECK(cable_pair(port, NDL_CABLE_UP, "10.99.0.3") == 0);
@@ -895,6 +925,7 @@ int main(void) {
 	run("cable_room_is_joined_at_once", case_cable_room_is_joined_at_once);
 	run("cable_up_does_not_hold", case_cable_up_does_not_hold);
 	run("cable_sends_move_the_socket", case_cable_sends_move_the_socket);
+	run("local_network_sends_move_the_socket", case_local_network_sends_move_the_socket);
 	run("auto_idle_without_radio", case_auto_idle_without_radio);
 	run("linger_then_leave", case_linger_then_leave);
 	run("leave_now_skips_linger", case_leave_now_skips_linger);

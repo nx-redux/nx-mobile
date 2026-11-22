@@ -120,6 +120,8 @@ object LibretroNetplay {
     @JvmStatic external fun dsSetNetwork(handle: Long)
     /** The DS link: the phone-to-phone cable beside the Wi-Fi. 0 none, 1 coming up (a room found on the Wi-Fi waits a few seconds for it), 2 up (rooms are looked for on it too, and one found there is the one joined). Any thread. */
     @JvmStatic external fun dsSetCable(state: Int)
+    /** The DS link: the phone's own IPv4 networks (its hotspot), which no `Network` handle covers: broadcast addresses and masks, host order, pairwise. Searches ask there too and sends there leave unpinned from the Wi-Fi. Replaces the last list. Any thread. */
+    @JvmStatic external fun dsSetLocalNetworks(broadcasts: IntArray, masks: IntArray)
 
     init {
         System.loadLibrary("libretrodroid")
