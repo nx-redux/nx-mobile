@@ -25,6 +25,8 @@ from brick import nxtest_targets
 PKG = "com.nxredux.mobile.dev"
 NS = "com.nxredux.mobile"
 RECEIVER = PKG + "/" + NS + ".test.NxTestReceiver"
+TEST_ACTIVITY = PKG + "/" + NS + ".test.NxTestActivity"
+GAME_STOP_ACTIVITY = PKG + "/" + NS + ".test.NxGameStopActivity"
 ACTION = NS + ".test."
 DATA = "/data/user/0/" + PKG
 FILES = DATA + "/files"
@@ -47,9 +49,11 @@ def q(s):
 
 
 class Fold:
-    def __init__(self, serial, verbose=True):
+    def __init__(self, serial, verbose=True, activity_hooks=False):
         self.serial = serial
         self.verbose = verbose
+        # The hooks as activity starts: some devices (the AYANEO, Android 11) drop adb broadcasts to a force-stopped app.
+        self.activity_hooks = activity_hooks
         self._n = 0
 
     # ---- plumbing -----------------------------------------------------
@@ -167,6 +171,17 @@ class Fold:
     # ---- hooks --------------------------------------------------------
 
     def broadcast(self, action, extras="", background_start=False):
+        if self.activity_hooks:
+            # GAME_STOP and GAME_FF act in the game process, through its own activity.
+            if action in ("GAME_STOP", "GAME_FF"):
+                target = GAME_STOP_ACTIVITY
+                extras = ("--ez ff %s" % ("false" if "--ez on false" in extras else "true")) if action == "GAME_FF" else ""
+            else:
+                target = TEST_ACTIVITY
+            out = self.sh("am start -n %s -a %s%s %s" % (target, ACTION, action, extras))
+            if "Error" in out:
+                raise FoldError("activity hook %s: %s" % (action, out.strip()))
+            return out
         cmd = "am broadcast %s-n %s -a %s%s %s" % (
             "--allow-background-activity-starts " if background_start else "", RECEIVER, ACTION, action, extras)
         out = self.sh(cmd)

@@ -10,7 +10,7 @@ ROM = "/sdcard/NXRedux/Roms/Nintendo 64 (N64)/Super Mario 64.z64"
 
 
 class FakeFold:
-    def __init__(self, serial, verbose=False):
+    def __init__(self, serial, verbose=False, activity_hooks=False):
         self.calls = []
         self.stop_fails = False
 
