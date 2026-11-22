@@ -246,9 +246,23 @@ object CoreRegistry {
         cheats = false,   // retro_cheat_set is empty
         name = "RACE",
     )
+    /**
+     * Beetle PCE Fast's CD BIOS option, and the file each of its values loads (the core's table; unset loads System Card 3).
+     * Above pceFast, which lists the files: an object's properties initialize in order.
+     */
+    const val PCE_CARD_KEY = "pce_fast_cdbios"
+    private const val PCE_DEFAULT_CARD = "syscard3.pce"
+    private val PCE_CARDS = mapOf(
+        "System Card 3" to PCE_DEFAULT_CARD,
+        "System Card 2" to "syscard2.pce",
+        "System Card 1" to "syscard1.pce",
+        "Games Express" to "gexpress.pce",
+        "System Card 3 US" to "syscard3u.pce",
+        "System Card 2 US" to "syscard2u.pce",
+    )
     private val pceFast = CoreDescriptor(
         "mednafen_pce_fast", "libmednafen_pce_fast_libretro_android.so", setOf("pce", "cue", "ccd", "chd", "toc", "m3u"),
-        biosFiles = listOf("syscard3.pce"),   // CD content only
+        biosFiles = PCE_CARDS.values.toList(),   // CD content only, the one the CD BIOS option picks
         players = 4,
         name = "Beetle PCE Fast",
     )
@@ -772,6 +786,8 @@ object CoreRegistry {
         return byTag.filterValues { it.id == id }.keys.toList()
     }
 
+    private val pceCdCard = BiosNeed(listOf(PCE_DEFAULT_CARD), setOf("cue", "ccd", "chd", "toc", "m3u"))
+
     /** The Sega CD BIOS a launch accepts any of, by its generic need; [SegaCdBios] narrows it to the disc's region. */
     val SEGA_CD_BIOS = listOf("bios_CD_U.bin", "bios_CD_E.bin", "bios_CD_J.bin")
     private val segaCdDiscs = BiosNeed(SEGA_CD_BIOS, setOf("cue", "chd", "iso", "m3u"))
@@ -781,7 +797,7 @@ object CoreRegistry {
         "SEGACD" to listOf(BiosNeed(SEGA_CD_BIOS)),
         "GPGX" to listOf(segaCdDiscs),
         "MD" to listOf(segaCdDiscs),
-        "PCE" to listOf(BiosNeed(listOf("syscard3.pce"), setOf("cue", "ccd", "chd", "toc", "m3u"))),
+        "PCE" to listOf(pceCdCard),
         "COLECO" to listOf(BiosNeed(listOf("colecovision.rom", "coleco.rom"))),
         "DC" to listOf(BiosNeed(listOf("dc_boot.bin"), setOf("chd", "cdi", "gdi", "cue", "m3u"))),   // arcade sets bring their own BIOS
         "PS2" to listOf(BiosNeed(emptyList(), anySuffix = ".bin")),   // the core's scan takes ".bin" only: .nvm / .mec do not count
@@ -789,4 +805,12 @@ object CoreRegistry {
 
     /** The BIOS a launch under [tag] cannot do without (checked before the core starts); empty for most tags. */
     fun requiredBios(tag: String): List<BiosNeed> = requiredBiosByTag[baseTag(tag)] ?: emptyList()
+
+    /**
+     * [requiredBios] under the core options a launch runs with ([option]: a key's value, null when unset): Beetle PCE
+     * Fast loads the System Card its CD BIOS option names ([PCE_CARD_KEY]), so the check asks for that file.
+     */
+    fun requiredBios(tag: String, option: (String) -> String?): List<BiosNeed> = requiredBios(tag).map { need ->
+        if (need == pceCdCard) need.copy(anyOf = listOf(PCE_CARDS[option(PCE_CARD_KEY)] ?: PCE_DEFAULT_CARD)) else need
+    }
 }

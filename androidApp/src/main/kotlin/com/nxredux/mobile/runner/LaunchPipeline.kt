@@ -761,7 +761,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val archiveAsIs = CoreRegistry.loadsArchive(cfg.tag, cfg.romFileName, naomiSets)
             val naomiBios = if (archiveAsIs) naomiSets.biosFor(Names.stripExtension(cfg.romFileName)) else null
             // The files this launch needs, looked up by name when a Bios folder will not list.
-            val biosNames = CoreRegistry.requiredBios(cfg.tag).flatMap { it.anyOf } +
+            val requiredBios = CoreRegistry.requiredBios(cfg.tag) { key -> cfg.options.firstOrNull { it.key == key }?.value }
+            val biosNames = requiredBios.flatMap { it.anyOf } +
                 (systemSets + listOfNotNull(naomiBios)).flatMap { listOf("$it.zip", "$it.7z") }
             // Usually a stamp check: MainActivity pre-warms the copy after an update; if it is still running, this waits on its lock.
             val systemDir = withContext(Dispatchers.IO) { SystemFiles.ensure(host.activity) }
@@ -893,7 +894,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // A Sega CD disc boots with its own region's BIOS only (an MSU-MD cartridge with its own region's): when its
             // header is read, that file is checked (under any name the core takes) in place of "any of the three".
             val discRegion = if (msuMd) msuMdRegion(cfg, biosPresent) else segaCdRegion(cfg, inner, contentExtension, biosPresent)
-            val needs = CoreRegistry.requiredBios(cfg.tag).filterNot { discRegion != null && SegaCdBios.isSegaCdNeed(it) }
+            val needs = requiredBios.filterNot { discRegion != null && SegaCdBios.isSegaCdNeed(it) }
             BiosCheck.missing(needs, biosExtension, biosPresent).firstOrNull()?.let {
                 return refuse(BiosCheck.message(cfg.tag, it))
             }
