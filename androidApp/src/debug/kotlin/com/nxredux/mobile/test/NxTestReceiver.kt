@@ -67,10 +67,10 @@ class NxTestReceiver : BroadcastReceiver() {
             }
             // The game runs in the game process: handed on to its receiver there ([NxGameStopReceiver]).
             ACTION_GAME_STOP -> if (LiveGameStore.alive(app)) app.sendBroadcast(Intent(app, NxGameStopReceiver::class.java))
+            else NxLog.w(TAG, "GAME_STOP: no live game")
             ACTION_GAME_FF -> if (LiveGameStore.alive(app)) {
                 app.sendBroadcast(Intent(app, NxGameStopReceiver::class.java).putExtra(NxGameStopReceiver.EXTRA_FF, intent.getBooleanExtra("on", true)))
-            }
-                else NxLog.w(TAG, "GAME_STOP: no live game")
+            } else NxLog.w(TAG, "GAME_FF: no live game")
         }
     }
 
