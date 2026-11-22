@@ -45,6 +45,24 @@ class FolderMergeTest {
         assertEquals(mapOf("/Roms/Game Boy Advance (MGBA)/K.gba" to "/Roms/Game Boy Advance (GBA)/K.gba"), moved)
     }
 
+    // The other folder's art cannot be deleted (a read-only `.media`): the game still gets its art in the main folder,
+    // and the old copy stays where it was.
+    @Test fun art_that_cannot_leave_the_other_folder_is_still_copied_to_the_moved_game() = runTest {
+        val src = FakeRomsSource(
+            mapOf(
+                "H" to listOf("Roms"), "H/Roms" to listOf("Game Boy Advance (GBA)", "Game Boy Advance (MGBA)"),
+                gba to listOf("A.gba"), mgba to listOf("K.gba", ".media"), "$mgba/.media" to listOf("K.png"),
+            ),
+            bytes = mapOf("$mgba/K.gba" to ByteArray(4), "$mgba/.media/K.png" to ByteArray(2)),
+            readOnly = setOf("$mgba/.media"),
+        ).apply { moveRefused = true }
+        val (result, _) = FolderMerge(src, ContentRef("H")).merge(index, splitFolders(index), LinkedHashMap(), { _, _ -> }) { false }
+        assertEquals(1, result.moved)
+        assertEquals(listOf("K.png"), listedNames(src, "$gba/.media"))
+        assertEquals(listOf("K.png"), listedNames(src, "$mgba/.media"))
+        assertEquals(listOf(".media"), listedNames(src, mgba))
+    }
+
     // Main's map.txt is there but gives no text: carrying the lines over would replace it with only them, so the lines stay
     // in the other folder (which then keeps its map.txt, and so is not removed).
     @Test fun lines_are_not_carried_into_a_main_map_txt_that_could_not_be_read() = runTest {

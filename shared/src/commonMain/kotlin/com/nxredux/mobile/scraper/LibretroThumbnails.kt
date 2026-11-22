@@ -1,6 +1,7 @@
 package com.nxredux.mobile.scraper
 
 import com.nxredux.mobile.library.Names
+import com.nxredux.mobile.storage.percentDecode
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -180,22 +181,6 @@ object Libretro {
 
     /** The region a name's first `(...)` group gives ("Tetris (Europe)" -> "Europe"), or null when it has none. */
     fun regionOf(name: String): String? = TAG_GROUP.find(name)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() }
-
-    /** `%XX` escapes decoded as UTF-8 bytes; any other text (and a malformed escape) kept as is. */
-    private fun percentDecode(s: String): String {
-        if ('%' !in s) return s
-        val out = ArrayList<Byte>(s.length)
-        var i = 0
-        while (i < s.length) {
-            val hex = if (s[i] == '%' && i + 3 <= s.length) s.substring(i + 1, i + 3).toIntOrNull(16) else null
-            if (hex != null) { out += hex.toByte(); i += 3; continue }
-            var j = i + 1
-            while (j < s.length && s[j] != '%') j++
-            for (b in s.substring(i, j).encodeToByteArray()) out += b
-            i = j
-        }
-        return out.toByteArray().decodeToString()
-    }
 
     private fun unescapeHtml(s: String): String = if ('&' !in s) s else s
         .replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&#x27;", "'")
