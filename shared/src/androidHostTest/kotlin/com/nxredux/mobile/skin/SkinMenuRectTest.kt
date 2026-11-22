@@ -1,7 +1,6 @@
 package com.nxredux.mobile.skin
 
 import com.nxredux.mobile.options.PxRect
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -9,7 +8,7 @@ import kotlin.test.assertTrue
 
 /** The in-game menu's room over a skin: its screen glass and the touch shortcut strip under it (hidden while it is open). */
 class SkinMenuRectTest {
-    private val carbon = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
+    private val carbon = skinPack()
 
     @Test
     fun the_menu_takes_the_glass_and_the_strip_under_it() {

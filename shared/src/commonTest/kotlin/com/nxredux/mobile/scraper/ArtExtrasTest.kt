@@ -2,7 +2,6 @@ package com.nxredux.mobile.scraper
 
 import com.nxredux.mobile.library.ArtRefs
 import com.nxredux.mobile.library.FakeRomsSource
-import com.nxredux.mobile.library.ensurePath
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -30,13 +29,12 @@ class ArtExtrasTest {
             engine.run(ScrapeState(items = games.map { Scrape.item(it) }), { p -> games.firstOrNull { it.gamePath == p } }, replace) {}
 
         fun put(folder: String, name: String, bytes: ByteArray) = suspend {
-            fs.writeBytes(fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", folder))!!, name, bytes)
+            fs.putMedia(folder, name, bytes)
         }
     }
 
     private val tetris = Scrape.homeGame("Tetris.gb")
     private val all = setOf(ArtSlot.BOX_3D, ArtSlot.BOX_2D, ArtSlot.SCREENSHOT, ArtSlot.WHEEL)
-    private fun png(b: Int) = HttpResult(200, byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, b.toByte()))
     private fun ss() = FakeSource("ss", slots = all)
     /** A source with the mix slot (ScreenScraper's). */
     private fun ssMix() = FakeSource("ss", slots = all + ArtSlot.MIX)
@@ -45,7 +43,7 @@ class ArtExtrasTest {
     @Test fun extrasOffKeepTheOldFlow() = runTest {
         val a = ss().apply { offer("Tetris.gb", ArtSlot.BOX_3D, "https://a/3d"); offer("Tetris.gb", ArtSlot.BOX_2D, "https://a/2d"); offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://a/ss"); offer("Tetris.gb", ArtSlot.WHEEL, "https://a/w") }
         val rig = Rig(a)
-        rig.http.on("https://a/", png(1))
+        rig.http.on("https://a/", Scrape.png(1))
         assertEquals(ItemStatus.DONE, rig.run(listOf(tetris)).items.single().status)
         assertEquals(setOf(ArtSlot.BOX_3D, ArtSlot.BOX_2D, ArtSlot.SCREENSHOT), a.asked.single().second)
         assertEquals(listOf("https://a/3d", "https://a/ss"), rig.http.calls)   // no 2D beside the 3D box, no wheel, no mix
@@ -55,11 +53,11 @@ class ArtExtrasTest {
     @Test fun box2dOnIsFetchedBesideThe3dBox() = runTest {
         val a = ss().apply { offer("Tetris.gb", ArtSlot.BOX_3D, "https://a/3d"); offer("Tetris.gb", ArtSlot.BOX_2D, "https://a/2d"); offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://a/ss") }
         val rig = Rig(a, extras = ArtExtras(box2d = true))
-        rig.http.on("https://a/3d", png(1)); rig.http.on("https://a/2d", png(2)); rig.http.on("https://a/ss", png(3))
+        rig.http.on("https://a/3d", Scrape.png(1)); rig.http.on("https://a/2d", Scrape.png(2)); rig.http.on("https://a/ss", Scrape.png(3))
         val item = rig.run(listOf(tetris)).items.single()
         assertEquals(ItemStatus.DONE to "ss", item.status to item.reason)
-        assertContentEquals(png(1).body, rig.fs.bytesAt("$media/boxart/Tetris.png"))
-        assertContentEquals(png(2).body, rig.fs.bytesAt("$media/boxart2d/Tetris.png"))   // NX Redux's folder
+        assertContentEquals(Scrape.png(1).body, rig.fs.bytesAt("$media/boxart/Tetris.png"))
+        assertContentEquals(Scrape.png(2).body, rig.fs.bytesAt("$media/boxart2d/Tetris.png"))   // NX Redux's folder
         assertEquals(
             ArtRefs(boxart = "$media/boxart/Tetris.png", box2d = "$media/boxart2d/Tetris.png", screenshot = "$media/screenshot/Tetris.png"),
             rig.arts.single().second,
@@ -70,7 +68,7 @@ class ArtExtrasTest {
         val a = ss().apply { offer("Tetris.gb", ArtSlot.BOX_2D, "https://a/2d"); offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://a/ss") }
         val grids = FakeSource("sgdb", slots = setOf(ArtSlot.GRID, ArtSlot.HERO)).apply { offer("Tetris.gb", ArtSlot.GRID, "https://g/1") }
         val rig = Rig(a, grids, extras = ArtExtras(box2d = true))
-        rig.http.on("https://", png(1))
+        rig.http.on("https://", Scrape.png(1))
         assertEquals(ItemStatus.DONE, rig.run(listOf(tetris)).items.single().status)
         assertNotNull(rig.fs.bytesAt("$media/boxart2d/Tetris.png"))
         assertTrue(grids.asked.isEmpty())
@@ -89,10 +87,10 @@ class ArtExtrasTest {
         val b = FakeSource("b", slots = setOf(ArtSlot.WHEEL)).apply { offer("Tetris.gb", ArtSlot.WHEEL, "https://b/w1"); offer("Tetris.gb", ArtSlot.WHEEL, "https://b/w2") }
         val rig = Rig(a, b, extras = ArtExtras(wheel = true))
         rig.http.on("https://b/w1", HttpResult(404, null))
-        rig.http.on("https://", png(4))
+        rig.http.on("https://", Scrape.png(4))
         val item = rig.run(listOf(tetris)).items.single()
         assertEquals(ItemStatus.DONE to "ss, b", item.status to item.reason)
-        assertContentEquals(png(4).body, rig.fs.bytesAt("$media/wheel/Tetris.png"))
+        assertContentEquals(Scrape.png(4).body, rig.fs.bytesAt("$media/wheel/Tetris.png"))
         assertEquals("Roms/GB/.media/wheel/Tetris.png" to ArtOrigin("b", "Tetris.gb", "https://b/w2"), rig.written.last())
         assertEquals("$media/wheel/Tetris.png", rig.arts.single().second.wheel)
         assertNull(rig.fs.bytesAt("$media/mix/Tetris.png"))   // the wheel alone makes no mix
@@ -106,7 +104,7 @@ class ArtExtrasTest {
         assertTrue(ArtSlot.WHEEL in ss.slots)
         val engine = ScrapeEngine(http, FakeFitter(), fs, Scrape.home, listOf(ss), { _, _ -> }, { written += it }, extras = { ArtExtras(wheel = true) })
         http.on("romnom=Tetris.gb", Scrape.found("ss" to "https://m/ss.png", "box-3D" to "https://m/3d.png", "wheel" to "https://m/w.png", "wheel-hd" to "https://m/whd.png"))
-        http.on("https://m/", png(1))
+        http.on("https://m/", Scrape.png(1))
         val end = engine.run(ScrapeState(items = listOf(Scrape.item(tetris))), { tetris }) {}
         assertEquals(ItemStatus.DONE, end.items.single().status)
         assertEquals(listOf("https://m/3d.png", "https://m/ss.png", "https://m/whd.png"), http.calls.filter { it.startsWith("https://m/") })
@@ -124,7 +122,7 @@ class ArtExtrasTest {
             onOptions = { _, o, _ -> options += o },
         )
         http.on("romnom=Tetris.gb", Scrape.found("ss" to "https://m/ss.png", "box-3D" to "https://m/3d.png", "wheel" to "https://m/w.png"))
-        http.on("https://m/", png(1))
+        http.on("https://m/", Scrape.png(1))
         val game = tetris.copy(have = Scrape.HAS_ART)
         engine.run(ScrapeState(items = listOf(Scrape.item(game))), { game }, wide = true) {}
         assertEquals(1, http.count("jeuInfos"))   // the wide pass's slots rode on the wheel's lookup
@@ -142,7 +140,7 @@ class ArtExtrasTest {
         val engine = ScrapeEngine(http, FakeFitter(), fs, Scrape.home, listOf(ss, other), { _, _ -> }, { written += it }, extras = { ArtExtras(wheel = true) })
         http.on("romnom=Tetris.gb", Scrape.found("ss" to "https://m/ss.png", "box-3D" to "https://m/3d.png", "wheel" to "https://m/w.png", "wheel-hd" to "https://m/whd.png"))
         http.on("https://m/whd.png", HttpResult(404, null))
-        http.on("https://", png(1))
+        http.on("https://", Scrape.png(1))
         assertEquals(ItemStatus.DONE, engine.run(ScrapeState(items = listOf(Scrape.item(tetris))), { tetris }) {}.items.single().status)
         assertEquals(1, http.count("jeuInfos"))   // the same answer, no second lookup
         assertEquals("Roms/GB/.media/wheel/Tetris.png" to ArtOrigin(SourceId.SS, "42", "wheel/us"), written.last())
@@ -157,14 +155,14 @@ class ArtExtrasTest {
         val t1 = tgdb()
         val sgdb = FakeSource("sgdb", slots = setOf(ArtSlot.GRID, ArtSlot.WHEEL)).apply { offer("Tetris.gb", ArtSlot.WHEEL, "https://s/logo") }
         val rig = Rig(a, t1, sgdb, extras = ArtExtras(wheel = true))
-        rig.http.on("https://", png(5))
+        rig.http.on("https://", Scrape.png(5))
         assertEquals(ItemStatus.DONE, rig.run(listOf(tetris.copy(have = ArtHave(box = true)))).items.single().status)
         assertTrue(t1.asked.isEmpty())
         assertEquals("Roms/GB/.media/wheel/Tetris.png" to ArtOrigin("sgdb", "Tetris.gb", "https://s/logo"), rig.written.last())
         // SteamGridDB without a logo: TheGamesDB is asked for the wheel alone, after it.
         val t2 = tgdb()
         val rig2 = Rig(a, t2, FakeSource("sgdb", slots = setOf(ArtSlot.GRID, ArtSlot.WHEEL)), extras = ArtExtras(wheel = true))
-        rig2.http.on("https://", png(5))
+        rig2.http.on("https://", Scrape.png(5))
         val item = rig2.run(listOf(tetris.copy(have = ArtHave(box = true)))).items.single()
         assertEquals(ItemStatus.DONE to "a, tgdb", item.status to item.reason)
         assertEquals(listOf("Tetris.gb" to setOf(ArtSlot.WHEEL)), t2.asked)
@@ -177,7 +175,7 @@ class ArtExtrasTest {
             .apply { offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://t/ss"); offer("Tetris.gb", ArtSlot.WHEEL, "https://t/logo") }
         val sgdb = FakeSource("sgdb", slots = setOf(ArtSlot.GRID, ArtSlot.WHEEL)).apply { offer("Tetris.gb", ArtSlot.WHEEL, "https://s/logo") }
         val rig = Rig(tgdb, sgdb, extras = ArtExtras(wheel = true))
-        rig.http.on("https://", png(5))
+        rig.http.on("https://", Scrape.png(5))
         rig.run(listOf(tetris.copy(have = ArtHave(box = true))))
         assertEquals(setOf(ArtSlot.SCREENSHOT, ArtSlot.WHEEL), tgdb.asked.single().second)
         assertEquals(setOf(ArtSlot.WHEEL), sgdb.asked.single().second)
@@ -185,7 +183,7 @@ class ArtExtrasTest {
         // Without a SteamGridDB logo, TheGamesDB's is written.
         val sgdb2 = FakeSource("sgdb", slots = setOf(ArtSlot.GRID, ArtSlot.WHEEL))
         val rig2 = Rig(tgdb, sgdb2, extras = ArtExtras(wheel = true))
-        rig2.http.on("https://", png(5))
+        rig2.http.on("https://", Scrape.png(5))
         assertEquals(ItemStatus.DONE, rig2.run(listOf(tetris.copy(have = ArtHave(box = true)))).items.single().status)
         assertEquals(listOf("https://t/ss", "https://t/logo"), rig2.http.calls)
         assertEquals("Roms/GB/.media/wheel/Tetris.png" to ArtOrigin("tgdb", "Tetris.gb", "https://t/logo"), rig2.written.last())
@@ -197,12 +195,12 @@ class ArtExtrasTest {
         }, extras = ArtExtras(wheel = true, mix = true))
         rig.put("boxart", "Tetris.png", byteArrayOf(11))()
         rig.put("screenshot", "Tetris.png", byteArrayOf(12))()
-        rig.http.on("https://a/w", png(13))
+        rig.http.on("https://a/w", Scrape.png(13))
         val item = rig.run(listOf(tetris.copy(have = Scrape.HAS_ART))).items.single()   // has art, but no mix: fetched
         assertEquals(ItemStatus.DONE to "ss", item.status to item.reason)
         assertEquals(setOf(ArtSlot.WHEEL, ArtSlot.MIX), rig.sources[0].asked.single().second)   // no mix offered: built
         assertEquals(listOf("https://a/w"), rig.http.calls)                        // no box or screenshot downloaded again
-        assertEquals(listOf(listOf<Byte>(12), listOf<Byte>(11), png(13).body!!.toList()), rig.pixels.decoded.map { it.toList() })
+        assertEquals(listOf(listOf<Byte>(12), listOf<Byte>(11), Scrape.png(13).body!!.toList()), rig.pixels.decoded.map { it.toList() })
         assertContentEquals(FakePixels.MIX_PNG, rig.fs.bytesAt("$media/mix/Tetris.png"))
         assertEquals("Roms/GB/.media/mix/Tetris.png" to ArtOrigin(ScrapeEngine.MIX_ORIGIN), rig.written.last())
         assertEquals(
@@ -219,24 +217,24 @@ class ArtExtrasTest {
             offer("Tetris.gb", ArtSlot.BOX_3D, "https://a/3d"); offer("Tetris.gb", ArtSlot.BOX_2D, "https://a/2d"); offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://a/ss")
         }
         val rig = Rig(a, extras = ArtExtras(box2d = true, mix = true))
-        rig.http.on("https://a/3d", png(1)); rig.http.on("https://a/2d", png(2)); rig.http.on("https://a/ss", png(3))
+        rig.http.on("https://a/3d", Scrape.png(1)); rig.http.on("https://a/2d", Scrape.png(2)); rig.http.on("https://a/ss", Scrape.png(3))
         assertEquals(ItemStatus.DONE, rig.run(listOf(tetris)).items.single().status)
-        assertEquals(listOf(png(3).body!!.toList(), png(1).body!!.toList()), rig.pixels.decoded.map { it.toList() })   // no wheel anywhere: left out
+        assertEquals(listOf(Scrape.png(3).body!!.toList(), Scrape.png(1).body!!.toList()), rig.pixels.decoded.map { it.toList() })   // no wheel anywhere: left out
         assertNotNull(rig.fs.bytesAt("$media/mix/Tetris.png"))
         // A grid as the box: written as the 2D box, so it is the mix's box layer.
         val grid = FakeSource("sgdb", slots = setOf(ArtSlot.GRID)).apply { offer("Tetris.gb", ArtSlot.GRID, "https://g/1") }
         val shots = FakeSource("b", slots = setOf(ArtSlot.SCREENSHOT)).apply { offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://b/ss") }
         val rig2 = Rig(shots, grid, extras = ArtExtras(mix = true))
-        rig2.http.on("https://g/", png(7)); rig2.http.on("https://b/", png(8))
+        rig2.http.on("https://g/", Scrape.png(7)); rig2.http.on("https://b/", Scrape.png(8))
         assertEquals(ItemStatus.DONE, rig2.run(listOf(tetris)).items.single().status)
-        assertEquals(listOf(png(8).body!!.toList(), png(7).body!!.toList()), rig2.pixels.decoded.map { it.toList() })
+        assertEquals(listOf(Scrape.png(8).body!!.toList(), Scrape.png(7).body!!.toList()), rig2.pixels.decoded.map { it.toList() })
     }
 
     @Test fun aMixThatFailsNeverFailsTheGame() = runTest {
         val a = ss().apply { offer("Tetris.gb", ArtSlot.BOX_3D, "https://a/3d"); offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://a/ss") }
         val rig = Rig(a, extras = ArtExtras(mix = true))
         rig.pixels.failEncode = true
-        rig.http.on("https://a/", png(1))
+        rig.http.on("https://a/", Scrape.png(1))
         assertEquals(ItemStatus.DONE, rig.run(listOf(tetris)).items.single().status)
         assertNull(rig.fs.bytesAt("$media/mix/Tetris.png"))
         assertEquals(1, rig.warns.size)
@@ -265,13 +263,13 @@ class ArtExtrasTest {
         rig.put("mix", "Tetris.png", byteArrayOf(9))()
         rig.logged += "Roms/GB/.media/mix/Tetris.png"
         rig.log.origins["Roms/GB/.media/mix/Tetris.png"] = ArtOrigin(ScrapeEngine.MIX_ORIGIN)
-        rig.http.on("https://a/", png(1))
+        rig.http.on("https://a/", Scrape.png(1))
         rig.run(listOf(game), replace = true)
         assertContentEquals(FakePixels.MIX_PNG, rig.fs.bytesAt("$media/mix/Tetris.png"))
         // Not in the log: hand-placed, kept (the build never overwrites it, Replace included).
         val rig2 = Rig(source(), extras = ArtExtras(mix = true))
         rig2.put("mix", "Tetris.png", byteArrayOf(9))()
-        rig2.http.on("https://a/", png(1))
+        rig2.http.on("https://a/", Scrape.png(1))
         rig2.run(listOf(game), replace = true)
         assertContentEquals(byteArrayOf(9), rig2.fs.bytesAt("$media/mix/Tetris.png"))
     }
@@ -292,7 +290,7 @@ class ArtExtrasTest {
         val rig = Rig(grid)
         rig.put("box2d", "Tetris.jpg", byteArrayOf(1))()
         rig.logged += "Roms/GB/.media/box2d/Tetris.jpg"
-        rig.http.on("https://g/", png(1))
+        rig.http.on("https://g/", Scrape.png(1))
         rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), replace = true)
         assertNull(rig.fs.bytesAt("$media/box2d/Tetris.jpg"))
         assertEquals("$media/boxart2d/Tetris.jpg", rig.arts.single().second.box2d)

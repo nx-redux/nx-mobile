@@ -8,13 +8,9 @@
 #include <cstring>
 #include <vector>
 
+#include "check.h"
+
 using namespace libretrodroid;
-
-static int failures = 0;
-
-static void check(bool ok, const char* what) {
-    if (!ok) { std::printf("FAIL %s\n", what); failures++; }
-}
 
 int main() {
     // 0RGB1555 -> RGB565, 2x2 frame with a padded pitch (3 pixels per row in memory).

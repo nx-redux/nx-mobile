@@ -166,8 +166,7 @@ void AhbRenderer::onNewFrame(const void *data, unsigned width, unsigned height, 
 
 void AhbRenderer::rebuildPasses() {
     passesDirty = false;
-    for (auto& pass : *framebuffers) ES3Utils::deleteFramebuffer(std::move(pass));
-    framebuffers->clear();
+    ES3Utils::deleteFramebuffers(*framebuffers);
     if (textureWidth == 0 || textureHeight == 0) return;
     framebuffers = ES3Utils::buildShaderPasses(textureWidth, textureHeight, shaders);
 }
@@ -194,8 +193,7 @@ void AhbRenderer::deleteImport(Import& import) {
 void AhbRenderer::releaseGlObjects() {
     for (auto& import : imports) deleteImport(import);
     imports.clear();
-    for (auto& pass : *framebuffers) ES3Utils::deleteFramebuffer(std::move(pass));
-    framebuffers->clear();
+    ES3Utils::deleteFramebuffers(*framebuffers);
 }
 
 }

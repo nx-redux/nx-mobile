@@ -72,25 +72,17 @@ private:
     void updateRegionQuads();
 
 private:
-    std::array<float, 12> foregroundVertices = {
-        -1.0F,
-        -1.0F,
-
-        -1.0F,
-        +1.0F,
-
-        +1.0F,
-        -1.0F,
-
-        +1.0F,
-        -1.0F,
-
-        -1.0F,
-        +1.0F,
-
-        +1.0F,
-        +1.0F,
+    // Two triangles over the whole target, in clip space.
+    static constexpr std::array<float, 12> FULL_QUAD = {
+        -1.0F, -1.0F,
+        -1.0F, +1.0F,
+        +1.0F, -1.0F,
+        +1.0F, -1.0F,
+        -1.0F, +1.0F,
+        +1.0F, +1.0F,
     };
+
+    std::array<float, 12> foregroundVertices = FULL_QUAD;
 
     std::array<float, 12> textureCoordinates {
         0.0F,
@@ -112,25 +104,7 @@ private:
         1.0F,
     };
 
-    std::array<float, 12> framebufferVertices = {
-        -1.0F,
-        -1.0F,
-
-        -1.0F,
-        +1.0F,
-
-        +1.0F,
-        -1.0F,
-
-        +1.0F,
-        -1.0F,
-
-        -1.0F,
-        +1.0F,
-
-        +1.0F,
-        +1.0F,
-    };
+    std::array<float, 12> framebufferVertices = FULL_QUAD;
 
     bool bottomLeftOrigin = false;
     float rotation = 0.0F;

@@ -41,6 +41,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "test_util.h"
+
 #ifndef MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0
 #endif
@@ -49,17 +51,6 @@ static _Atomic uint64_t fake_now = 1000000;
 static uint64_t fake_clock(void) { return atomic_load(&fake_now); }
 static void fake_set(uint64_t v) { atomic_store(&fake_now, v); }
 static void fake_add(uint64_t d) { atomic_fetch_add(&fake_now, d); }
-
-static uint64_t real_ms(void) {
-	struct timespec ts;
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	return (uint64_t)ts.tv_sec * 1000u + (uint64_t)ts.tv_nsec / 1000000u;
-}
-
-static void nap_ms(int ms) {
-	struct timespec ts = {ms / 1000, (long)(ms % 1000) * 1000000L};
-	nanosleep(&ts, NULL);
-}
 
 static int fails;
 static uint16_t next_port;
@@ -70,14 +61,6 @@ static void report(const char* name, int ok) {
 		fails++;
 	fflush(stdout);
 }
-
-#define CHECK(cond)                                                                    \
-	do {                                                                               \
-		if (!(cond)) {                                                                 \
-			fprintf(stderr, "  check failed %s:%d: %s\n", __FILE__, __LINE__, #cond); \
-			return -1;                                                                 \
-		}                                                                              \
-	} while (0)
 
 /* ---------------------------------------------------------------- the raw peer */
 

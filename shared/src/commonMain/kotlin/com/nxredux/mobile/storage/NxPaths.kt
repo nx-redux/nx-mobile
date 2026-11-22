@@ -106,8 +106,5 @@ internal fun minarchStem(name: String): String {
     return if (dot >= 0 && name.length - dot in 3..5) name.substring(0, dot) else name
 }
 
-private val RZIP_MAGIC = "#RZIPv".encodeToByteArray()
-
 /** True for RetroArch/minarch RZIP-compressed files. */
-fun isRzipCompressed(bytes: ByteArray): Boolean =
-    bytes.size >= RZIP_MAGIC.size && RZIP_MAGIC.indices.all { bytes[it] == RZIP_MAGIC[it] }
+fun isRzipCompressed(bytes: ByteArray): Boolean = Bytes.startsWithAscii(bytes, "#RZIPv")

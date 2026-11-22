@@ -11,7 +11,6 @@ import kotlin.test.assertTrue
  * them, a scroll away; the rest row games under it.
  */
 class HomeWideBoardTest {
-    private fun near(e: Float, a: Float, what: String) = assertEquals(e, a, 0.05f, what)
     private val flip = HomeFrame(804f, 261f, false, 804f / 330f)
     private fun tiles(b: HomeBoard, k: HomeTopKind) = b.top.filter { it.kind == k }.map { it.rect }
 

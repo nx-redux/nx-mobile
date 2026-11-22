@@ -14,14 +14,14 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from fold import Fold, FoldError  # noqa: E402
+from fold import PKG, Fold, FoldError  # noqa: E402
 
-GAME_PROCESS = "com.nxredux.mobile.dev:game"
+GAME_PROCESS = PKG + ":game"
 
 
 def one_run(dev, a, n):
-    dev.sh("am force-stop com.nxredux.mobile.dev; input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; "
-           "logcat -c; logcat -b events -c")
+    dev.sh("am force-stop %s; input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; "
+           "logcat -c; logcat -b events -c" % PKG)
     try:
         dev.game(a.rom, a.tag, timeout=90)
     except FoldError as e:

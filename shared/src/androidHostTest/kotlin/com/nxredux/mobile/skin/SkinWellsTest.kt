@@ -3,7 +3,6 @@ package com.nxredux.mobile.skin
 import com.nxredux.mobile.options.PxRect
 import java.io.File
 import kotlin.test.Test
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /** A placement as JSON for nx-skins' preview_place.py (the format NxCarbonPackTest's SKIN_PREVIEW_DIR dumps write). */
@@ -39,7 +38,7 @@ class SkinWellsTest {
     @Test
     fun every_button_piece_moves_with_a_group_and_every_control_sits_on_a_piece() {
         for (id in packs) {
-            val pack = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/$id/skin.json").readText()), id)
+            val pack = skinPack(id)
             for (spec in pack.layouts.filter { it.frame != null }) {
                 val grouped = SkinGroups.of(spec).flatMap { it.pieces }.toSet()
                 val buttons = spec.pieces.indices.filter { spec.pieces[it].glass == null }
@@ -52,7 +51,7 @@ class SkinWellsTest {
         }
     }
 
-    private val pack = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
+    private val pack = skinPack()
 
     @Test
     fun dumpEveryLayoutAtItsLimits() {

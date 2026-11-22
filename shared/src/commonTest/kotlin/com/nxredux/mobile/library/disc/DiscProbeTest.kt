@@ -33,7 +33,7 @@ class DiscProbeTest {
     }
 
     @Test fun chd_by_metadata_then_by_its_sectors() = runTest {
-        val gd = ChdHeaderTest().chdBytes("CHGD"); val cd = ChdHeaderTest().chdBytes("CHT2")
+        val gd = chdBytes("CHGD"); val cd = chdBytes("CHT2")
         val src = FakeRomsSource(mapOf("d" to listOf("D.chd", "S.chd")), bytes = mapOf("d/D.chd" to gd, "d/S.chd" to cd))
         val dir = src.listChildren(ContentRef("d"))
         val segaZero = ByteArray(2048).also { "SEGADISCSYSTEM  ".encodeToByteArray().copyInto(it, 0) }

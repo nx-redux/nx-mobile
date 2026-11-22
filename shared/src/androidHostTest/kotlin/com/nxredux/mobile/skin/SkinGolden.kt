@@ -17,8 +17,13 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
+
+/** The built-in pack [id], read from the app's assets. */
+fun skinPack(id: String = "nx-carbon"): SkinPackManifest =
+    assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/$id/skin.json").readText()), id)
 
 /** A window a layout is tuned for: [w] x [h] px at [dpi]; [hingeY] while half-folded. */
 data class DeviceClass(val name: String, val w: Int, val h: Int, val dpi: Int, val tablet: Boolean, val foldable: Boolean, val hingeY: Float? = null)

@@ -1,15 +1,13 @@
 package com.nxredux.mobile.ui
 
 import androidx.compose.ui.graphics.ImageBitmap
-import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.runner.ContentRef
-import com.nxredux.mobile.runner.EmulatorRunner
-import com.nxredux.mobile.runner.GameSession
 import com.nxredux.mobile.launcher.AppLauncher
 import com.nxredux.mobile.launcher.InstalledApp
 import com.nxredux.mobile.scraper.ArtSlot
 import com.nxredux.mobile.settings.BackdropArt
+import com.nxredux.mobile.settings.FakeAppSettings
 import com.nxredux.mobile.settings.GameListArt
 import com.nxredux.mobile.scraper.ArtworkController
 import com.nxredux.mobile.scraper.SgdbFixtures
@@ -28,13 +26,8 @@ import com.nxredux.mobile.scraper.ScrapeState
 import com.nxredux.mobile.scraper.Scrape
 import com.nxredux.mobile.scraper.ssEngine
 import com.nxredux.mobile.scraper.ScraperCredentials
-import com.nxredux.mobile.settings.AppSettings
 import com.nxredux.mobile.settings.ExtraFolder
-import com.nxredux.mobile.settings.FolderPicker
 import com.nxredux.mobile.settings.MenuCategory
-import com.nxredux.mobile.settings.MenuOrientation
-import com.nxredux.mobile.settings.MenuStyle
-import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.storage.MemoryPrivateFiles
 import com.nxredux.mobile.storage.PrivateFiles
 import com.nxredux.mobile.ui.nx.Hint
@@ -62,41 +55,14 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ArtworkScreensTest {
-    private class Settings : AppSettings {
-        override var treeRef: ContentRef? = ContentRef("Home")
+    private class Settings : FakeAppSettings(ContentRef("Home")) {
         override var onboardingDone: Boolean? = true
         override var onboardingStep: String? = null
-        override var extraFolders: List<ExtraFolder> = emptyList()
-        override var defaultTags: Map<String, String> = emptyMap()
-        override var padSkin = true
-        override var padTheme = PadTheme.DEFAULT
-        override var menuStyles: Map<MenuCategory, MenuStyle> = emptyMap()
-        override var gameListStyle: MenuStyle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_GAME_LIST_STYLE
-        override var menuOrientations: Map<MenuCategory, MenuOrientation> = emptyMap()
-        override var gameListOrientation: MenuOrientation = com.nxredux.mobile.settings.MenuStyles.DEFAULT_ORIENTATION
-        override var gameListVerticalAlignment: com.nxredux.mobile.settings.VerticalListAlignment = com.nxredux.mobile.settings.VerticalListAlignment.DEFAULT
-        override var toolApps: List<String> = emptyList()
-        override var androidConsoleApps: List<String> = emptyList()
-        override var androidGamesAsked = false
-        override var androidPins: List<String> = emptyList()
-        override var raEnabled = false
-        override var raUsername = ""
-        override var raToken: String? = null
-        override var raShowNotifications = true
-        override var raNotificationSeconds = 3
-        override var raProgressSeconds = 1
-        override var raSortOrder = RaSortOrder.DEFAULT
-        override var ssUsername = ""
-        override var ssPassword: String? = null
-        override var sgdbApiKey: String? = null
-        override var tgdbApiKey: String? = null
-        override var artReplaceExisting = false
         override var artBox2d = false
         override var artWheel = false
         override var artMix = false
         override var artWheelMigrated = false
         override var fetchGameInfo = true
-        override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = com.nxredux.mobile.settings.MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = com.nxredux.mobile.settings.AccentPreset.DEFAULT; override var secondaryAccent: com.nxredux.mobile.settings.SecondaryAccent = com.nxredux.mobile.settings.SecondaryAccent.DEFAULT
     }
 
     /** As on Android: the login lives in the settings. */
@@ -116,9 +82,6 @@ class ArtworkScreensTest {
             get() = s.tgdbApiKey
             set(v) { s.tgdbApiKey = v }
     }
-
-    private object Picker : FolderPicker { override fun pickHome() {}; override fun pickExtra() {}; override fun forget(ref: ContentRef) {} }
-    private object Runner : EmulatorRunner { override suspend fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) {} }
 
     /** The installed [apps] (no icons, nothing starts). */
     private class Launcher(private val apps: List<InstalledApp>) : AppLauncher {
@@ -193,7 +156,7 @@ class ArtworkScreensTest {
         }
         val state = AppState(
             AppDeps(
-                settings, source, Runner, Picker, artwork = factory, privateFiles = files, indexStore = store,
+                settings, source, NoopRunner, NoopFolderPicker, artwork = factory, privateFiles = files, indexStore = store,
                 launcher = apps?.let(::Launcher), androidArtStore = artStore, compute = UnconfinedTestDispatcher(testScheduler),
                 arcadeSets = { arcade ?: com.nxredux.mobile.library.ArcadeSets.EMPTY },
             ),
@@ -211,10 +174,6 @@ class ArtworkScreensTest {
         val rows = assertIs<Screen.Systems>(screen.value).also { assertEquals(MenuCategory.TOOLS, it.category) }.rows.map { (it as MainRow.Tool).row }
         select(rows.indexOfFirst { it.kind == ToolKind.ARTWORK }); openSelected()
     }
-
-    private fun AppState.openConsole(tag: String) = openSystem(
-        assertIs<Screen.Systems>(screen.value).tabs.flatMap { it.rows }.firstNotNullOf { (it as? MainRow.System)?.systems?.firstOrNull { s -> s.tag == tag } },
-    )
 
     private fun AppState.pick(action: ArtworkAction) {
         val rows = assertIs<Screen.Artwork>(screen.value).rows
@@ -927,9 +886,8 @@ class ArtworkScreensTest {
         assertIs<Screen.ArtworkSettings>(r.state.screen.value)
         r.state.dismissError()
 
-        val gb = r.state.run { openTools(); assertIs<Screen.Systems>(screen.value) }.tabs.flatMap { it.rows }
-            .firstNotNullOf { (it as? MainRow.System)?.systems?.firstOrNull { s -> s.tag == "GB" } }
-        r.state.openSystem(gb)
+        r.state.openTools()
+        r.state.openConsole("GB")
         r.state.onButton(NxButton.MENU)
         val kinds = assertNotNull(assertIs<Screen.Games>(r.state.screen.value).menu).items.map { it.kind }
         repeat(kinds.indexOf(ContextKind.FETCH_ART)) { r.state.onButton(NxButton.DOWN) }
@@ -1134,8 +1092,7 @@ class ArtworkScreensTest {
         val r = rig()
         r.http.on("romnom=Tetris.gb", Scrape.found("ss" to "https://m/t-ss.png", "box-2D" to "https://m/t-box.png"))
         r.http.on("https://m/", Scrape.OK_PNG)
-        val gb = assertIs<Screen.Systems>(r.state.screen.value).tabs.flatMap { it.rows }.firstNotNullOf { (it as? MainRow.System)?.systems?.firstOrNull { s -> s.tag == "GB" } }
-        r.state.openSystem(gb)
+        r.state.openConsole("GB")
         r.state.onButton(NxButton.MENU)
         val kinds = assertNotNull(assertIs<Screen.Games>(r.state.screen.value).menu).items.map { it.kind }
         repeat(kinds.indexOf(ContextKind.FETCH_ART)) { r.state.onButton(NxButton.DOWN) }
@@ -1156,8 +1113,7 @@ class ArtworkScreensTest {
 
     /** Opens GB, puts the row on [file] and MENU; the art item the menu offers (none, Fetch art or Change art). */
     private fun Rig.artItem(file: String): ContextKind? {
-        val gb = assertIs<Screen.Systems>(state.screen.value).tabs.flatMap { it.rows }.firstNotNullOf { (it as? MainRow.System)?.systems?.firstOrNull { s -> s.tag == "GB" } }
-        state.openSystem(gb)
+        state.openConsole("GB")
         state.select(assertIs<Screen.Games>(state.screen.value).entries.indexOfFirst { it.game.fileName == file })
         state.onButton(NxButton.MENU)
         val kinds = assertNotNull(assertIs<Screen.Games>(state.screen.value).menu).items.map { it.kind }
@@ -1178,8 +1134,7 @@ class ArtworkScreensTest {
 
     @Test fun no_fetch_art_without_credentials_or_for_excluded_tags() = runTest {
         val r = rig(available = false)
-        val gb = assertIs<Screen.Systems>(r.state.screen.value).tabs.flatMap { it.rows }.firstNotNullOf { (it as? MainRow.System)?.systems?.firstOrNull { s -> s.tag == "GB" } }
-        r.state.openSystem(gb)
+        r.state.openConsole("GB")
         r.state.onButton(NxButton.MENU)
         assertTrue(ContextKind.FETCH_ART !in assertNotNull(assertIs<Screen.Games>(r.state.screen.value).menu).items.map { it.kind })
     }

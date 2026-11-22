@@ -30,8 +30,6 @@ class FolderMergeTest {
         ))),
     )
 
-    private fun names(src: FakeRomsSource, dir: String) = kotlinx.coroutines.runBlocking { src.listChildren(ContentRef(dir)).map { it.name } }
-
     @Test fun a_console_with_games_in_two_folders_is_a_split() {
         assertEquals(listOf(SplitFolders("GBA", "Game Boy Advance (GBA)", listOf("Game Boy Advance (MGBA)"))), splitFolders(index))
     }
@@ -40,9 +38,9 @@ class FolderMergeTest {
         val src = source()
         val (result, moved) = FolderMerge(src, ContentRef("H")).merge(index, splitFolders(index), LinkedHashMap(), { _, _ -> }) { false }
         assertEquals(MoveResult(moved = 1, clashed = 1), result)
-        assertEquals(setOf("A.gba", "T.gba", "map.txt", "K.gba", ".media"), names(src, gba).toSet())
-        assertEquals(listOf("K.png"), names(src, "$gba/.media"))
-        assertEquals(setOf("T.gba", "map.txt", ".media"), names(src, mgba).toSet())   // the clash keeps its folder
+        assertEquals(setOf("A.gba", "T.gba", "map.txt", "K.gba", ".media"), listedNames(src, gba).toSet())
+        assertEquals(listOf("K.png"), listedNames(src, "$gba/.media"))
+        assertEquals(setOf("T.gba", "map.txt", ".media"), listedNames(src, mgba).toSet())   // the clash keeps its folder
         assertEquals("A.gba\tAdvance\nK.gba\tKirby\n", src.readText(ContentRef("$gba/map.txt")))
         assertEquals(mapOf("/Roms/Game Boy Advance (MGBA)/K.gba" to "/Roms/Game Boy Advance (GBA)/K.gba"), moved)
     }
@@ -85,7 +83,7 @@ class FolderMergeTest {
             ))))
         val (result, moved) = FolderMerge(src, ContentRef("H")).merge(idx, splitFolders(idx), LinkedHashMap(), { _, _ -> }) { false }
         assertEquals(MoveResult(moved = 2), result)
-        assertEquals(setOf("a.gba", "b.gba"), names(src, "$gba/Hacks").toSet())
+        assertEquals(setOf("a.gba", "b.gba"), listedNames(src, "$gba/Hacks").toSet())
         assertEquals(mapOf(
             "/Roms/Game Boy Advance (MGBA)/Hacks/a.gba" to "/Roms/Game Boy Advance (GBA)/Hacks/a.gba",
             "/Roms/Game Boy Advance (MGBA)/Hacks/b.gba" to "/Roms/Game Boy Advance (GBA)/Hacks/b.gba",
@@ -145,9 +143,9 @@ class FolderMergeTest {
         val moved = LinkedHashMap<String, String>()
         val (result, _) = FolderMerge(src, ContentRef("H")).merge(psIndex, splitFolders(psIndex), moved, { _, _ -> }) { false }
         assertEquals(MoveResult(moved = 2), result)
-        assertEquals(setOf("A.chd", "G.cue", "G.bin", "FF7"), names(src, ps).toSet())
-        assertEquals(listOf("readme.txt"), names(src, swan))                          // not a game: stays (and so does its folder)
-        assertEquals(listOf("X.chd"), names(src, "H/Roms/Misc (MISC)"))
+        assertEquals(setOf("A.chd", "G.cue", "G.bin", "FF7"), listedNames(src, ps).toSet())
+        assertEquals(listOf("readme.txt"), listedNames(src, swan))                          // not a game: stays (and so does its folder)
+        assertEquals(listOf("X.chd"), listedNames(src, "H/Roms/Misc (MISC)"))
         assertEquals(setOf("/Roms/Sony PlayStation (SWANSTATION)/G.cue", "/Roms/Sony PlayStation (SWANSTATION)/FF7/FF7.m3u"), moved.keys)
     }
 
@@ -157,7 +155,7 @@ class FolderMergeTest {
         kotlinx.coroutines.runBlocking { src.createDirectory(ContentRef(ps), "FF7"); src.writeText(ContentRef("$ps/FF7"), "FF7.cue", "x") }
         val (result, _) = FolderMerge(src, ContentRef("H")).merge(psIndex, splitFolders(psIndex), LinkedHashMap(), { _, _ -> }) { false }
         assertEquals(1, result.clashed)
-        assertEquals(listOf("FF7.cue"), names(src, "$ps/FF7"))
+        assertEquals(listOf("FF7.cue"), listedNames(src, "$ps/FF7"))
     }
 
     // An empty main folder (one setup made) is no split: the user's only folder stays as it is.
@@ -180,14 +178,6 @@ class FolderMergeTest {
         assertEquals(mapOf("/Roms/Game Boy Advance (MGBA)/K.gba" to "/Roms/Game Boy Advance (GBA)/K.gba"), moved)
     }
 
-    /**
-     * A cue written in Windows-1252 that names its second track in another case: [FakeRomsSource.readText] gives what a
-     * UTF-8 read makes of it (U+FFFD for each Latin-1 byte), its head the bytes as they are.
-     */
-    private val legacyCue = "FILE \"Pok\u00e9mon (Track 1).bin\" BINARY\n TRACK 01 MODE2/2352\nFILE \"pok\u00e9mon (track 2).BIN\" BINARY\n TRACK 02 AUDIO\n"
-    private val legacyCueBytes = ByteArray(legacyCue.length) { legacyCue[it].code.toByte() }
-    private val legacyCueUtf8 = legacyCue.replace('\u00e9', '\uFFFD')
-
     @Test fun a_legacy_cue_merges_with_its_bins() = runTest {
         val bins = listOf("Pok\u00e9mon (Track 1).bin", "Pok\u00e9mon (Track 2).bin")
         val ps = "H/Roms/Sony PlayStation (PS)"
@@ -205,6 +195,6 @@ class FolderMergeTest {
         )
         val (result, _) = FolderMerge(src, ContentRef("H")).merge(idx, splitFolders(idx), LinkedHashMap(), { _, _ -> }) { false }
         assertEquals(MoveResult(moved = 1), result)
-        assertEquals(setOf("A.chd", "P.cue") + bins, names(src, ps).toSet())
+        assertEquals(setOf("A.chd", "P.cue") + bins, listedNames(src, ps).toSet())
     }
 }

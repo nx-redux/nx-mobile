@@ -187,6 +187,8 @@ private:
     void drawPlain(const RegionQuad& quad, unsigned screenWidth, unsigned screenHeight);
     // Sets filter on the frame texture, bound on the active unit, unless this draw already set it there.
     void applyFrameFilter(GLint filter);
+    // applyFrameFilter with the frame texture bound on unit 0 for the call, left unbound after.
+    void setFrameFilter(GLint filter);
     TextureFilterCache frameFilter;
     // Builds secondaryPresetRenderer from the requested chain when the main one is live and it isn't yet.
     void updateSecondaryPresetRenderer();

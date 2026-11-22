@@ -213,6 +213,40 @@ object Nds3dResolution {
 }
 
 /**
+ * The shown scale and the second display's reach for a picture [mainHeightPx] tall on main (null: none there) and
+ * [secondHeightPx] tall on the second display (null: none there; it then reaches only 1), each height read by
+ * [scaleOf].
+ */
+private fun shownScalesBy(mainHeightPx: Int?, secondHeightPx: Int?, scaleOf: (Int) -> Int): Pair<Int?, Int> {
+    val second = secondHeightPx?.let(scaleOf)
+    return listOfNotNull(mainHeightPx?.let(scaleOf), second).maxOrNull() to (second ?: 1)
+}
+
+/**
+ * Scales of a picture a core draws at a whole multiple (1 to [max]) of its [nativeW] x [nativeH] frame; a part-way
+ * scale rounds up.
+ */
+private class WholeScale(private val nativeW: Int, private val nativeH: Int, private val max: Int) {
+    private fun up(scale: Double): Int = ceil(scale - SLACK).toInt().coerceIn(1, max)
+
+    /** The scale the picture reaches fitted in a [w] x [h] px window, either way up. */
+    fun displayMax(w: Int, h: Int): Int = maxOf(
+        up(minOf(w.toDouble() / nativeW, h.toDouble() / nativeH)), up(minOf(h.toDouble() / nativeW, w.toDouble() / nativeH)),
+    )
+
+    /** The scale a picture [pictureHeightPx] px tall shows at. */
+    fun currentScale(pictureHeightPx: Int): Int = up(pictureHeightPx.toDouble() / nativeH)
+
+    /** The scale a frame [heightPx] rows tall was drawn at: the nearest whole. */
+    fun frameScale(heightPx: Int): Int = (heightPx / nativeH.toDouble()).roundToInt().coerceIn(1, max)
+
+    private companion object {
+        /** Below a whole scale by this much (a px or two of rounding) still counts as that scale. */
+        const val SLACK = 0.02
+    }
+}
+
+/**
  * The PS2 (ARMSX2) 3D Resolution maths: the core draws the whole picture at a whole multiple of its 640 x 448 frame (1x to 4x),
  * so scales come from the picture's height. Performance is native (1x): there is no Scale row.
  */
@@ -237,10 +271,8 @@ object Ps2Resolution {
      * The shown scale and the second display's reach for a picture [mainHeightPx] tall on main (null: none there) and
      * [secondHeightPx] tall on the second display (null: none there; it then reaches only 1).
      */
-    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> {
-        val second = secondHeightPx?.let(::currentScale)
-        return listOfNotNull(mainHeightPx?.let(::currentScale), second).maxOrNull() to (second ?: 1)
-    }
+    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> =
+        shownScalesBy(mainHeightPx, secondHeightPx, ::currentScale)
 }
 
 /**
@@ -255,26 +287,20 @@ object PspResolution {
     /** The core's most. */
     private const val MAX = 10
 
-    /** Below a whole scale by this much (a px or two of rounding) still counts as that scale. */
-    private const val SLACK = 0.02
-
-    private fun up(scale: Double): Int = ceil(scale - SLACK).toInt().coerceIn(1, MAX)
+    private val scales = WholeScale(NATIVE_W, NATIVE_H, MAX)
 
     /** The scale the picture reaches fitted in a [w] x [h] px window, either way up, rounded up (1 to 10). */
-    fun displayMax(w: Int, h: Int): Int =
-        maxOf(up(minOf(w.toDouble() / NATIVE_W, h.toDouble() / NATIVE_H)), up(minOf(h.toDouble() / NATIVE_W, w.toDouble() / NATIVE_H)))
+    fun displayMax(w: Int, h: Int): Int = scales.displayMax(w, h)
 
     /** The scale a picture [pictureHeightPx] px tall shows at, rounded up (1 to 10). */
-    fun currentScale(pictureHeightPx: Int): Int = up(pictureHeightPx.toDouble() / NATIVE_H)
+    fun currentScale(pictureHeightPx: Int): Int = scales.currentScale(pictureHeightPx)
 
     /** The scale a frame [heightPx] rows tall was drawn at: the nearest whole (the core's "crop to 16:9" sends 270 a scale). */
-    fun frameScale(heightPx: Int): Int = (heightPx / NATIVE_H.toDouble()).roundToInt().coerceIn(1, MAX)
+    fun frameScale(heightPx: Int): Int = scales.frameScale(heightPx)
 
     /** The shown scale and the second display's reach, as [Ps2Resolution.shownScales]. */
-    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> {
-        val second = secondHeightPx?.let(::currentScale)
-        return listOfNotNull(mainHeightPx?.let(::currentScale), second).maxOrNull() to (second ?: 1)
-    }
+    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> =
+        shownScalesBy(mainHeightPx, secondHeightPx, ::currentScale)
 }
 
 /** The 3DS (Azahar) 3D Resolution maths: the core draws both screens at a factor of their native size, so scales come from frame widths. */
@@ -425,26 +451,20 @@ object DolphinResolution {
     /** The most the rows offer (the core goes to 12x, far past any phone screen). */
     private const val MAX = 8
 
-    /** Below a whole scale by this much (a px or two of rounding) still counts as that scale. */
-    private const val SLACK = 0.02
-
-    private fun up(scale: Double): Int = ceil(scale - SLACK).toInt().coerceIn(1, MAX)
+    private val scales = WholeScale(NATIVE_W, NATIVE_H, MAX)
 
     /** The scale the picture reaches fitted in a [w] x [h] px window, either way up, rounded up (1 to 8). */
-    fun displayMax(w: Int, h: Int): Int =
-        maxOf(up(minOf(w.toDouble() / NATIVE_W, h.toDouble() / NATIVE_H)), up(minOf(h.toDouble() / NATIVE_W, w.toDouble() / NATIVE_H)))
+    fun displayMax(w: Int, h: Int): Int = scales.displayMax(w, h)
 
     /** The scale a picture [pictureHeightPx] px tall shows at, rounded up (1 to 8). */
-    fun currentScale(pictureHeightPx: Int): Int = up(pictureHeightPx.toDouble() / NATIVE_H)
+    fun currentScale(pictureHeightPx: Int): Int = scales.currentScale(pictureHeightPx)
 
     /** The scale a frame [heightPx] rows tall was drawn at: the nearest whole (a PAL frame is 576 a scale). */
-    fun frameScale(heightPx: Int): Int = (heightPx / NATIVE_H.toDouble()).roundToInt().coerceIn(1, MAX)
+    fun frameScale(heightPx: Int): Int = scales.frameScale(heightPx)
 
     /** The shown scale and the second display's reach, as [Ps2Resolution.shownScales]. */
-    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> {
-        val second = secondHeightPx?.let(::currentScale)
-        return listOfNotNull(mainHeightPx?.let(::currentScale), second).maxOrNull() to (second ?: 1)
-    }
+    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> =
+        shownScalesBy(mainHeightPx, secondHeightPx, ::currentScale)
 }
 
 /**
@@ -459,23 +479,17 @@ object Ps1Resolution {
     /** The most the rows offer (the core goes to 16x). */
     private const val MAX = 8
 
-    /** Below a whole scale by this much (a px or two of rounding) still counts as that scale. */
-    private const val SLACK = 0.02
-
-    private fun up(scale: Double): Int = ceil(scale - SLACK).toInt().coerceIn(1, MAX)
+    private val scales = WholeScale(NATIVE_W, NATIVE_H, MAX)
 
     /** The scale the picture reaches fitted in a [w] x [h] px window, either way up, rounded up (1 to 8). */
-    fun displayMax(w: Int, h: Int): Int =
-        maxOf(up(minOf(w.toDouble() / NATIVE_W, h.toDouble() / NATIVE_H)), up(minOf(h.toDouble() / NATIVE_W, w.toDouble() / NATIVE_H)))
+    fun displayMax(w: Int, h: Int): Int = scales.displayMax(w, h)
 
     /** The scale a picture [pictureHeightPx] px tall shows at, rounded up (1 to 8). */
-    fun currentScale(pictureHeightPx: Int): Int = up(pictureHeightPx.toDouble() / NATIVE_H)
+    fun currentScale(pictureHeightPx: Int): Int = scales.currentScale(pictureHeightPx)
 
     /** The shown scale and the second display's reach, as [Ps2Resolution.shownScales]. */
-    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> {
-        val second = secondHeightPx?.let(::currentScale)
-        return listOfNotNull(mainHeightPx?.let(::currentScale), second).maxOrNull() to (second ?: 1)
-    }
+    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> =
+        shownScalesBy(mainHeightPx, secondHeightPx, ::currentScale)
 }
 
 /**
@@ -490,23 +504,17 @@ object DcResolution {
     /** The most the rows offer (the core goes to 20x). */
     private const val MAX = 8
 
-    /** Below a whole scale by this much (a px or two of rounding) still counts as that scale. */
-    private const val SLACK = 0.02
-
-    private fun up(scale: Double): Int = ceil(scale - SLACK).toInt().coerceIn(1, MAX)
+    private val scales = WholeScale(NATIVE_W, NATIVE_H, MAX)
 
     /** The scale the picture reaches fitted in a [w] x [h] px window, either way up, rounded up (1 to 8). */
-    fun displayMax(w: Int, h: Int): Int =
-        maxOf(up(minOf(w.toDouble() / NATIVE_W, h.toDouble() / NATIVE_H)), up(minOf(h.toDouble() / NATIVE_W, w.toDouble() / NATIVE_H)))
+    fun displayMax(w: Int, h: Int): Int = scales.displayMax(w, h)
 
     /** The scale a picture [pictureHeightPx] px tall shows at, rounded up (1 to 8). */
-    fun currentScale(pictureHeightPx: Int): Int = up(pictureHeightPx.toDouble() / NATIVE_H)
+    fun currentScale(pictureHeightPx: Int): Int = scales.currentScale(pictureHeightPx)
 
     /** The shown scale and the second display's reach, as [Ps2Resolution.shownScales]. */
-    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> {
-        val second = secondHeightPx?.let(::currentScale)
-        return listOfNotNull(mainHeightPx?.let(::currentScale), second).maxOrNull() to (second ?: 1)
-    }
+    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> =
+        shownScalesBy(mainHeightPx, secondHeightPx, ::currentScale)
 }
 
 /**
@@ -523,10 +531,7 @@ object N64Resolution {
     /** The most the rows offer (GLideN64's list stops at 12x, ParaLLEl-RDP's at 8x). */
     private const val MAX = 8
 
-    /** Below a whole scale by this much (a px or two of rounding) still counts as that scale. */
-    private const val SLACK = 0.02
-
-    private fun up(scale: Double): Int = ceil(scale - SLACK).toInt().coerceIn(1, MAX)
+    private val scales = WholeScale(NATIVE_W, NATIVE_H, MAX)
 
     /**
      * ParaLLEl-RDP's upscaling for scale [n]: the biggest it offers (1, 2, 4 or 8) up to [n]. A pick made by hand is the
@@ -554,15 +559,12 @@ object N64Resolution {
         DeviceTraits.modestGpu(gpu) || (!customDriver && DeviceTraits.isAdreno(gpu))
 
     /** The scale the picture reaches fitted in a [w] x [h] px window, either way up, rounded up (1 to 8). */
-    fun displayMax(w: Int, h: Int): Int =
-        maxOf(up(minOf(w.toDouble() / NATIVE_W, h.toDouble() / NATIVE_H)), up(minOf(h.toDouble() / NATIVE_W, w.toDouble() / NATIVE_H)))
+    fun displayMax(w: Int, h: Int): Int = scales.displayMax(w, h)
 
     /** The scale a picture [pictureHeightPx] px tall shows at, rounded up (1 to 8). */
-    fun currentScale(pictureHeightPx: Int): Int = up(pictureHeightPx.toDouble() / NATIVE_H)
+    fun currentScale(pictureHeightPx: Int): Int = scales.currentScale(pictureHeightPx)
 
     /** The shown scale and the second display's reach, as [Ps2Resolution.shownScales]. */
-    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> {
-        val second = secondHeightPx?.let(::currentScale)
-        return listOfNotNull(mainHeightPx?.let(::currentScale), second).maxOrNull() to (second ?: 1)
-    }
+    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> =
+        shownScalesBy(mainHeightPx, secondHeightPx, ::currentScale)
 }

@@ -22,8 +22,8 @@ import sys
 import tempfile
 import time
 
-from brick import SDCARD, Brick, BrickGone, q
-from fold import PRIV, ROMS as PHONE_ROMS, TERMINAL_SYNC, TEST_DIR, Fold
+from brick import DEFAULT_SERIAL as BRICK_SERIAL, SDCARD, Brick, BrickGone, q
+from fold import DEFAULT_SERIAL as FOLD_SERIAL, PRIV, ROMS as PHONE_ROMS, TERMINAL_SYNC, TEST_DIR, Fold
 
 B_ROMS = SDCARD + "/Roms"
 B_SAVES = SDCARD + "/Saves"
@@ -365,8 +365,8 @@ def write_report(path, res, cleanup):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--fold", default="adb-R5GL66XJS2F-uwbsP9._adb-tls-connect._tcp")
-    ap.add_argument("--brick", default="5c000c8997414781d1d")
+    ap.add_argument("--fold", default=FOLD_SERIAL)
+    ap.add_argument("--brick", default=BRICK_SERIAL)
     ap.add_argument("--out", default=os.path.join(os.getcwd(), ".local/device-tests/sync-test-%s.md"
                                                   % time.strftime("%Y-%m-%d")))
     ap.add_argument("--skip-roms", action="store_true")

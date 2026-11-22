@@ -45,11 +45,11 @@ object SkinN3ds {
             val upperH = minOf(stack.width / aspectOf(big), stack.height * UPPER_MAX_SHARE)
             stack.copy(height = upperH) to stack.copy(y = stack.y + upperH, height = stack.height - upperH)
         } else if (stack != null) {
-            val s = fit(stack, STACK_ASPECT)
+            val s = SkinDual.screenIn(stack, STACK_ASPECT)
             s.copy(height = s.height / 2f) to s.copy(y = s.y + s.height / 2f, height = s.height / 2f)
         } else (top ?: return null) to (touch ?: return null)
-        val a = fit(upper, aspectOf(big))
-        val b = fit(lower, aspectOf(big.other))
+        val a = SkinDual.screenIn(upper, aspectOf(big))
+        val b = SkinDual.screenIn(lower, aspectOf(big.other))
         return listOf(
             NdsRegion(big, DualScreen.n3dsSrc(big), a, shaded = NdsLayout.takesShader(big), touch = big == NdsScreen.BOTTOM),
             NdsRegion(big.other, DualScreen.n3dsSrc(big.other), b, shaded = NdsLayout.takesShader(big.other), touch = big.other == NdsScreen.BOTTOM),
@@ -67,19 +67,19 @@ object SkinN3ds {
             NdsRegion(screen, DualScreen.n3dsSrc(screen), dst, shaded = NdsLayout.takesShader(screen), touch = screen == NdsScreen.BOTTOM)
         return when (layout) {
             "side_by_side" -> {
-                val box = fit(stack, (wa + wb) / SCREEN_H)
+                val box = SkinDual.screenIn(stack, (wa + wb) / SCREEN_H)
                 val s = box.height / SCREEN_H
                 listOf(region(big, PxRect(box.x, box.y, wa * s, box.height)),
                     region(big.other, PxRect(box.x + wa * s, box.y, wb * s, box.height)))
             }
             "stacked" -> {
-                val box = fit(stack, maxOf(wa, wb) / (2f * SCREEN_H))
+                val box = SkinDual.screenIn(stack, maxOf(wa, wb) / (2f * SCREEN_H))
                 val s = box.height / (2f * SCREEN_H); val h = SCREEN_H * s
                 val cx = box.x + box.width / 2f
                 listOf(region(big, PxRect(cx - wa * s / 2f, box.y, wa * s, h)),
                     region(big.other, PxRect(cx - wb * s / 2f, box.y + h, wb * s, h)))
             }
-            "single_screen" -> listOf(region(big, fit(stack, aspectOf(big))))
+            "single_screen" -> listOf(region(big, SkinDual.screenIn(stack, aspectOf(big))))
             else -> null
         }
     }
@@ -90,15 +90,8 @@ object SkinN3ds {
     /** A frame that isn't the plain stack, whole at its own shape in the [stack] glass, else the [top] one; null without either. */
     fun whole(stack: PxRect?, top: PxRect?, frameW: Int, frameH: Int): PxRect? {
         val g = stack ?: top ?: return null
-        return if (frameW > 0 && frameH > 0) fit(g, frameW.toFloat() / frameH) else g
+        return if (frameW > 0 && frameH > 0) SkinDual.screenIn(g, frameW.toFloat() / frameH) else g
     }
 
     private fun aspectOf(screen: NdsScreen) = if (screen == NdsScreen.TOP) TOP_ASPECT else BOTTOM_ASPECT
-
-    /** The biggest [aspect] (width / height) rect centred in [r]. */
-    private fun fit(r: PxRect, aspect: Float): PxRect {
-        val w = minOf(r.width, r.height * aspect)
-        val h = w / aspect
-        return PxRect(r.x + (r.width - w) / 2f, r.y + (r.height - h) / 2f, w, h)
-    }
 }

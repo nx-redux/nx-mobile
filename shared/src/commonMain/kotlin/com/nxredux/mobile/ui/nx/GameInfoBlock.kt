@@ -158,18 +158,26 @@ internal fun rememberBadgedTitle(title: String?, badge: String?, tint: Color, st
                 val whole = badged(title)
                 if (maxWidthPx <= 0 || fits(whole)) whole
                 else {
-                    // The longest start of the name that fits with an ellipsis and the pill.
-                    var lo = 0
-                    var hi = title.length - 1
-                    while (lo < hi) {
-                        val mid = (lo + hi + 1) / 2
-                        if (fits(badged(title.take(mid).trimEnd() + "\u2026"))) lo = mid else hi = mid - 1
-                    }
-                    badged(title.take(lo).trimEnd() + "\u2026")
+                    // With an ellipsis and the pill.
+                    badged(ellipsizedToFit(title, title.length - 1) { fits(badged(it)) })
                 }
             }
         }
     }
+}
+
+/**
+ * The longest start of [text], [most] characters at most and its end trimmed, that [fits] with an ellipsis after it;
+ * the ellipsis alone when none does.
+ */
+internal fun ellipsizedToFit(text: String, most: Int, fits: (String) -> Boolean): String {
+    var lo = 0
+    var hi = most
+    while (lo < hi) {
+        val mid = (lo + hi + 1) / 2
+        if (fits(text.take(mid).trimEnd() + "\u2026")) lo = mid else hi = mid - 1
+    }
+    return text.take(lo).trimEnd() + "\u2026"
 }
 
 /** [word] as an outlined pill, inline in a text: [widthEm] by [heightEm] of its font size, the word at [textEm]. */

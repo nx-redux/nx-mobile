@@ -585,7 +585,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     tabMenu = s.hidden.isNotEmpty(),
                     dual = state.dualMenu.collectAsState().value,
                 )
-                s.menu?.let { ContextMenuOverlay(it, onButton = state::onButton, onSelect = state::menuSelect, onOpen = state::menuOpen, onDraft = state::menuDraft, onColumns = state::onMenuLayout) }
+                s.menu?.let { MenuOverlay(state, it) }
                 s.search?.let { NxTextPrompt("Search", it, state::searchDraft, onConfirm = { state.onButton(NxButton.A) }, onCancel = { state.onButton(NxButton.B) }) }
             }
             is Screen.Games -> GamesPage(state, s, selection, resume, gameInfo, now, shows)
@@ -602,7 +602,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                 // No hint bar in Settings unless Layouts → Button hints shows it: every button there is a console menu's.
                 if (gameSettingsModal(s)) Unit   // no list to draw under it: the modal alone (below)
                 // Its bars' hints start on the section words' edge, in line with the text above them.
-                else CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart()) {
+                else SettingsHintBar {
                     if (settingsSplitView(splitWindow(), s)) SettingsSplitScreen(state, s, selection) { SettingsPage(state, s, selection, titled = true) }
                     else NarrowSettingsPage(state, s, selection)
                     (s as? Screen.Settings)?.nameDraft?.let { NxTextPrompt("Player name", it, state::playerNameDraft, onConfirm = { state.onButton(NxButton.A) }, onCancel = { state.onButton(NxButton.B) }) }
@@ -646,7 +646,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             // look: the hint bar follows Layouts → Button hints and starts at the words' edge, as Settings'.
             is Screen.Artwork, is Screen.ArtworkConsoles, is Screen.ArtworkProgress, is Screen.ArtworkSettings,
             is Screen.ArtworkReset ->
-                if (artworkSplitView(splitWindow(), s)) CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart()) {
+                if (artworkSplitView(splitWindow(), s)) SettingsHintBar {
                     ArtworkStageScreen(state, s, selection)
                 }
                 else SettingsHintBar {
@@ -757,7 +757,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     }
     // The Games tab's is START's global search (the main menu's prompt); any other list's is its own search.
     s.search?.let { NxTextPrompt(if (s.isTab) "Search" else "Search ${listTitle(s.source.base)}", it, state::searchDraft, onConfirm = { state.onButton(NxButton.A) }, onCancel = { state.onButton(NxButton.B) }) }
-    s.menu?.let { ContextMenuOverlay(it, onButton = state::onButton, onSelect = state::menuSelect, onOpen = state::menuOpen, onDraft = state::menuDraft, onColumns = state::onMenuLayout) }
+    s.menu?.let { MenuOverlay(state, it) }
 }
 
 /**
@@ -826,7 +826,7 @@ private fun SettingsPage(state: AppState, s: Screen, selection: State<ListSelect
             // Only the picker showing reports its columns (one sliding out never overwrites the count).
             val onColumns: (Int) -> Unit = remember(s) { { columns -> if (state.screen.value === s) state.onToolAppsLayout(columns) } }
             WithIndex(selection) { ToolAppsScreen(s, it, state::select, { state.openSelected() }, onColumns, onHint = state::onButton, onLongPress = state::openContextMenu, titled = titled) }
-            s.menu?.let { ContextMenuOverlay(it, onButton = state::onButton, onSelect = state::menuSelect, onOpen = state::menuOpen, onDraft = state::menuDraft, onColumns = state::onMenuLayout) }
+            s.menu?.let { MenuOverlay(state, it) }
         }
         else -> Unit
     }
@@ -990,6 +990,13 @@ private fun MainMenuBackground(bg: MenuBackground, listArt: GameListArt) {
         MenuBackground.Plain -> Box(Modifier.fillMaxSize().background(LocalNxColors.current.background))
     }
 }
+
+/** The open context menu, its answers going to [state]. */
+@Composable
+private fun MenuOverlay(state: AppState, menu: ContextMenu) = ContextMenuOverlay(
+    menu, onButton = state::onButton, onSelect = state::menuSelect, onOpen = state::menuOpen, onDraft = state::menuDraft,
+    onColumns = state::onMenuLayout,
+)
 
 /**
  * [content] under the Settings hint bar's rules: shown only while Layouts → Button hints is on, starting at the section

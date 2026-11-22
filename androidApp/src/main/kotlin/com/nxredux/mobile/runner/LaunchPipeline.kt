@@ -473,7 +473,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         val options: List<Variable>,
         val linkOptions: Map<String, String>,
         val frontend: FrontendSettings,
-    )
+    ) {
+        fun option(key: String): String? = options.firstOrNull { it.key == key }?.value
+    }
 
     /** What [prepareContent] found that the view's data and the load-failure message read. */
     private class PreparedContent(
@@ -760,7 +762,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val archiveAsIs = CoreRegistry.loadsArchive(cfg.tag, cfg.romFileName, naomiSets)
             val naomiBios = if (archiveAsIs) naomiSets.biosFor(Names.stripExtension(cfg.romFileName)) else null
             // The files this launch needs, looked up by name when a Bios folder will not list.
-            val requiredBios = CoreRegistry.requiredBios(cfg.tag) { key -> cfg.options.firstOrNull { it.key == key }?.value }
+            val requiredBios = CoreRegistry.requiredBios(cfg.tag, cfg::option)
             val biosNames = requiredBios.flatMap { it.anyOf } +
                 (systemSets + listOfNotNull(naomiBios)).flatMap { listOf("$it.zip", "$it.7z") }
             // Usually a stamp check: MainActivity pre-warms the copy after an update; if it is still running, this waits on its lock.
@@ -793,7 +795,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             val inner: File? = unpacked?.file
             val unpackedEntry = unpacked?.entryName
-            cfg.dolphinContent.complete(inner?.name ?: cfg.romFileName)   // Dolphin names its cheat file after the inner disc, not the archive
+            val loadedName = inner?.name ?: cfg.romFileName
+            cfg.dolphinContent.complete(loadedName)   // Dolphin names its cheat file after the inner disc, not the archive
             if (inner != null && cfg.descriptor != null && Names.extensionOf(inner.name) !in cfg.descriptor.extensions) {
                 // Name a tag of the same console whose core runs the file only when one exists; otherwise the file is in the wrong folder.
                 val alt = CoreRegistry.consoleOf(cfg.tag)?.tags?.firstOrNull { t ->
@@ -846,10 +849,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // Sega Controller Type (Console Settings): the cart header's I/O field under Auto, else the forced pad.
             val segaSetting = if (PadMap.isSegaPadTag(cfg.tag)) frontendValues[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO else null
             if (segaSetting != null) {
-                val headerName = inner?.name ?: cfg.romFileName
-                val header = if (!SegaHeader.readable(headerName)) null else withContext(Dispatchers.IO) {
+                val header = if (!SegaHeader.readable(loadedName)) null else withContext(Dispatchers.IO) {
                     runCatching {
-                        (inner?.inputStream() ?: refs.openInput(cfg.content))?.use { SegaHeader.padType(readUpTo(it, SegaHeader.READ_LENGTH)) }
+                        (inner?.inputStream() ?: refs.openInput(cfg.content))?.use { SegaHeader.padType(it.readUpTo(SegaHeader.READ_LENGTH)) }
                     }.getOrNull()
                 }
                 segaHeader = header
@@ -859,8 +861,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             // New 3DS Controls (Console Settings): Auto reads the title from the file's NCSD / NCCH header, off the main thread.
             if (N3dsOptions.appliesTo(cfg.tag)) {
-                val headerName = inner?.name ?: cfg.romFileName
-                n3dsTitle = if (!N3dsTitle.readable(headerName)) null else withContext(Dispatchers.IO) {
+                n3dsTitle = if (!N3dsTitle.readable(loadedName)) null else withContext(Dispatchers.IO) {
                     runCatching { (inner?.inputStream() ?: refs.openInput(cfg.content))?.use(::readN3dsTitle) }
                         .onFailure { NxLog.w(TAG_LOG, "reading the 3DS header failed", it) }
                         .getOrNull()
@@ -875,14 +876,14 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 }
             }
             // Wii Controller and Motion Controls (Console Settings): Auto reads the disc ID and looks it up in GameTDB's table.
-            val wiiDisc = if (!WiiOptions.appliesTo(cfg.tag) || !WiiDiscId.readable(inner?.name ?: cfg.romFileName)) null else withContext(Dispatchers.IO) {
+            val wiiDisc = if (!WiiOptions.appliesTo(cfg.tag) || !WiiDiscId.readable(loadedName)) null else withContext(Dispatchers.IO) {
                 inner?.let(WiiDiscIdReader::read) ?: WiiDiscIdReader.read(refs, cfg.content, cfg.romFileName)
             }
             wii.resolveAtLaunch(cfg.tag, wiiDisc)
             padMap = if (isDc) PadMap.IDENTITY else PadMap.forTag(cfg.tag, segaPad)
             // Only 3-button draws differently from the six the pad was composed with in onCreate: recompose it.
             if (segaPad == SegaPad.THREE) relayoutPad()
-            val contentExtension = Names.extensionOf(inner?.name ?: cfg.romFileName)
+            val contentExtension = Names.extensionOf(loadedName)
             // A missing required BIOS: say which file goes where instead of letting the core fail silently.
             val present = withContext(Dispatchers.IO) { systemDir.list()?.toSet() ?: emptySet() }
             val biosPresent = if (biosDir == systemDir) present else withContext(Dispatchers.IO) { biosDir.list()?.toSet() ?: emptySet() }
@@ -1014,7 +1015,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         // N64: Max High-Res VRAM Limit's Auto becomes a number for this device's memory (N64HiresPack.vramLimit).
                         val n64Vram = if (cfg.descriptor?.id == MUPEN64PLUS_NEXT_ID) {
                             val total = ActivityManager.MemoryInfo().also { activity.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }.totalMem
-                            val limit = N64HiresPack.vramLimit(cfg.options.firstOrNull { it.key == N64HiresPack.VRAM_KEY }?.value, total)
+                            val limit = N64HiresPack.vramLimit(cfg.option(N64HiresPack.VRAM_KEY), total)
                             NxLog.i(TAG_LOG, "N64 hi-res VRAM limit: $limit MB (device ${total / (1024 * 1024)} MB)")
                             mapOf(N64HiresPack.VRAM_KEY to limit)
                         } else emptyMap()
@@ -1124,7 +1125,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             DiscProbe(AndroidRomsSources.of(host.activity), LibchdrSectors(host.activity.contentResolver)).firstDataSector(file, dir)
         }?.let(SegaCdBios::regionOf) ?: return null
-        val forced = if (core == SegaPadType.GPGX) SegaCdBios.gpgxForced(cfg.options.firstOrNull { it.key == SegaCdBios.GPGX_REGION_KEY }?.value) else null
+        val forced = if (core == SegaPadType.GPGX) SegaCdBios.gpgxForced(cfg.option(SegaCdBios.GPGX_REGION_KEY)) else null
         return forced ?: disc
     }
 
@@ -1136,12 +1137,12 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     private suspend fun msuMdRegion(cfg: LaunchConfig, present: Set<String>): DiscRegion? {
         val core = SegaPadType.GPGX
         if (DiscRegion.entries.all { SegaCdBios.missing(core, it, present) == null }) return null
-        SegaCdBios.gpgxForced(cfg.options.firstOrNull { it.key == SegaCdBios.GPGX_REGION_KEY }?.value)?.let { return it }
+        SegaCdBios.gpgxForced(cfg.option(SegaCdBios.GPGX_REGION_KEY))?.let { return it }
         val refs = host.refs
         return withContext(Dispatchers.IO) {
             runCatching {
                 val size = refs.size(cfg.content) ?: return@runCatching null
-                refs.openInput(cfg.content)?.use { SegaCdBios.cartridgeRegion(readUpTo(it, SegaCdBios.CARTRIDGE_HEAD), size) }
+                refs.openInput(cfg.content)?.use { SegaCdBios.cartridgeRegion(it.readUpTo(SegaCdBios.CARTRIDGE_HEAD), size) }
             }.getOrNull()
         }
     }
@@ -1527,7 +1528,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     private suspend fun n64HiresPack(values: Map<String, String>, onVulkan: Boolean, content: ContentRef, inner: File?, home: ContentRef?): List<VirtualFile> {
         if (!N64HiresPack.wanted(values, onVulkan)) return emptyList()
         val refs = host.refs
-        val head = runCatching { (inner?.inputStream() ?: refs.openInput(content))?.use { readUpTo(it, N64HiresPack.HEADER_BYTES) } }.getOrNull()
+        val head = runCatching { (inner?.inputStream() ?: refs.openInput(content))?.use { it.readUpTo(N64HiresPack.HEADER_BYTES) } }.getOrNull()
         val name = head?.let(N64HiresPack::headerName)
             ?: return emptyList<VirtualFile>().also { NxLog.w(TAG_LOG, "N64 hi-res pack: no ROM header name") }
         val source = AndroidRomsSources.of(host.activity)
@@ -1559,23 +1560,16 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     }
 }
 
-private fun readUpTo(input: java.io.InputStream, max: Int): ByteArray {
-    val buf = ByteArray(max)
-    var n = 0
-    while (n < max) { val r = input.read(buf, n, max - n); if (r < 0) break; n += r }
-    return buf.copyOf(n)
-}
-
 /**
  * The 3DS title from the start of [s] ([N3dsTitle.parse]): the first header, and for a cart image (NCSD) on to its
  * partition 0's NCCH header (0x4000 on dumped carts), a few KB in all.
  */
 private fun readN3dsTitle(s: java.io.InputStream): N3dsTitle? {
-    val head = readUpTo(s, N3dsTitle.HEADER)
+    val head = s.readUpTo(N3dsTitle.HEADER)
     if (head.size < N3dsTitle.HEADER) return null
     val offset = N3dsTitle.ncchOffset(head) ?: return N3dsTitle.parse(head)
     // On to the end of the NCCH header at [offset], which starts at or past the NCSD header's end.
-    return N3dsTitle.parse(head + readUpTo(s, offset.toInt()))
+    return N3dsTitle.parse(head + s.readUpTo(offset.toInt()))
 }
 
 /**

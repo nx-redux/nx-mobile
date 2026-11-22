@@ -3,7 +3,6 @@ package com.nxredux.mobile.runner
 import com.nxredux.mobile.storage.AndroidRefs
 import java.io.File
 import java.io.FileInputStream
-import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.util.zip.Inflater
 
@@ -17,14 +16,6 @@ object WiiDiscIdReader {
 
     private fun read(ch: FileChannel, fileName: String): WiiDisc? =
         WiiDiscId.read(fileName.substringAfterLast('.', ""), { off, len -> readAt(ch, off, len) }, ::inflate)
-
-    private fun readAt(ch: FileChannel, offset: Long, length: Int): ByteArray? {
-        if (offset < 0 || length <= 0) return null
-        val buf = ByteBuffer.allocate(length)
-        var at = offset
-        while (buf.hasRemaining()) { val n = ch.read(buf, at); if (n <= 0) break; at += n }
-        return buf.array().copyOf(buf.position()).takeIf { it.isNotEmpty() }
-    }
 
     private fun inflate(input: ByteArray, want: Int): ByteArray? {
         val inf = Inflater()

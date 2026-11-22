@@ -8,8 +8,7 @@
 #include <string>
 #include <type_traits>
 
-static int failures = 0;
-static void check(bool ok, const char* what) { if (!ok) { std::printf("FAIL %s\n", what); failures++; } }
+#include "check.h"
 
 // The JDK and the NDK name the function table differently; the field's type works for both.
 using FunctionTable = std::remove_const_t<std::remove_pointer_t<decltype(JNIEnv::functions)>>;

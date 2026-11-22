@@ -326,10 +326,7 @@ void Video::drawFrame() {
     // those bindings. Unit 0 is rebound and cleared by the pass loop below anyway.
     GLint filter = linearTexture ? GL_LINEAR : GL_NEAREST;
     frameFilter.invalidate();
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, frameTexture());
-    applyFrameFilter(filter);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    setFrameFilter(filter);
 
     if (!videoLayout.getRegionQuads().empty()) {
         renderRegions(videoLayout, presetRenderer.get(), mainCrops);
@@ -473,14 +470,15 @@ void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layou
             // A downscaled region samples linearly whatever the sharpness; put back after, as drawPlain does.
             bool down = regionDownscales(quad, (float) texW, (float) texH, (float) screenW, (float) screenH);
             GLint filter = (linearTexture || down) ? GL_LINEAR : GL_NEAREST;
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, frameTexture());
-            applyFrameFilter(filter);
-            glBindTexture(GL_TEXTURE_2D, 0);
+            setFrameFilter(filter);
             drawBuiltInChain(quad.vertices, frameCoordinates(quad.coordinates), screenW, screenH);
         }
     }
     GLint filter = linearTexture ? GL_LINEAR : GL_NEAREST;
+    setFrameFilter(filter);
+}
+
+void Video::setFrameFilter(GLint filter) {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, frameTexture());
     applyFrameFilter(filter);

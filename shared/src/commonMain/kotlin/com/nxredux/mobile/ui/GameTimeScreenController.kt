@@ -1,11 +1,11 @@
 package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.tryOr
+import com.nxredux.mobile.tryOrAny
 import com.nxredux.mobile.gametime.GameTimeData
 import com.nxredux.mobile.gametime.GameTotal
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxButton
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -224,9 +224,8 @@ internal class GameTimeScreenController(
         if (acting) return
         acting = true
         scope.launch {
-            try { block() }
-            catch (e: CancellationException) { throw e }   // the page left: not a failure
-            catch (e: Throwable) { error.value = "Couldn't change game time"; setModal(null) }
+            // A cancellation (the page left) is not a failure.
+            try { tryOrAny({ error.value = "Couldn't change game time"; setModal(null) }) { block() } }
             finally { acting = false }
         }
     }

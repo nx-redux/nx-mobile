@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.tryOrAny
 import com.nxredux.mobile.library.ArtRefs
 import com.nxredux.mobile.library.IndexedGame
 import com.nxredux.mobile.library.LibraryIndex
@@ -9,7 +10,6 @@ import com.nxredux.mobile.library.toSystems
 import com.nxredux.mobile.library.withArt
 import com.nxredux.mobile.storage.GameRef
 import com.nxredux.mobile.storage.LibraryIndexStore
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -151,7 +151,7 @@ internal class LibraryIndexHolder(
             library = null
             for (l in landing) l.other = true
             dropLookups()
-            try { store.delete() } catch (d: CancellationException) { throw d } catch (d: Throwable) { Unit }
+            tryOrAny({}) { store.delete() }
         }
     }
 
@@ -163,12 +163,8 @@ internal class LibraryIndexHolder(
     }
 
     /** The stored index, or null when there is none, it cannot be read, or it does not decode (garbage, another version). */
-    suspend fun readStored(): LibraryIndex? = try {
+    suspend fun readStored(): LibraryIndex? = tryOrAny({ null }) {
         store.read()?.let { LibraryIndexCodec.decode(it, compute) }   // decoded off the main thread
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Throwable) {
-        null
     }
 
     /**
@@ -176,21 +172,10 @@ internal class LibraryIndexHolder(
      * of trusting an older index that may still fit the settings. The platform store logs its own failures.
      */
     private suspend fun persist(index: LibraryIndex) {
-        val ok = try {
-            store.write(LibraryIndexCodec.encode(index, compute))   // the whole index: encoded off the main thread
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            false
-        }
+        // The whole index: encoded off the main thread.
+        val ok = tryOrAny({ false }) { store.write(LibraryIndexCodec.encode(index, compute)) }
         if (ok) return
-        try {
-            store.delete()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            Unit
-        }
+        tryOrAny({}) { store.delete() }
     }
 
     /**

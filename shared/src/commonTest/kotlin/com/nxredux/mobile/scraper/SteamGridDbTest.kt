@@ -56,7 +56,6 @@ object SgdbFixtures {
 
 class SteamGridDbTest {
     private val tetris = Scrape.homeGame("Tetris (World) (Rev 1).gb").copy(name = "Tetris (World) (Rev 1)")
-    private fun ok(s: String) = HttpResult(200, s.encodeToByteArray())
 
     private class Rig(key: String? = "K") {
         var clock = 0L
@@ -198,8 +197,8 @@ class SteamGridDbTest {
 
     @Test fun thumbFromAsset() = runTest {
         val r = Rig()
-        r.http.on("search/autocomplete/", ok(SgdbFixtures.autocomplete))
-        r.http.on("grids/game/", ok("""{"success":true,"data":[{"id":7,"score":1,"style":"alternate","width":600,"height":900,"mime":"image/jpeg","url":"https://cdn2.steamgriddb.com/grid/x.jpg","thumb":"https://cdn2.steamgriddb.com/thumb/x.jpg"}]}"""))
+        r.http.on("search/autocomplete/", Scrape.json(SgdbFixtures.autocomplete))
+        r.http.on("grids/game/", Scrape.json("""{"success":true,"data":[{"id":7,"score":1,"style":"alternate","width":600,"height":900,"mime":"image/jpeg","url":"https://cdn2.steamgriddb.com/grid/x.jpg","thumb":"https://cdn2.steamgriddb.com/thumb/x.jpg"}]}"""))
         val hit = r.src.find(tetris, setOf(ArtSlot.GRID)).single()
         assertEquals("https://cdn2.steamgriddb.com/grid/x.jpg", hit.url)
         assertEquals("https://cdn2.steamgriddb.com/thumb/x.jpg", hit.thumb)
@@ -244,7 +243,7 @@ class SteamGridDbTest {
         for (status in listOf(429, 503)) {
             val r = Rig()
             r.answerAll()
-            r.http.set("search/autocomplete/", HttpResult(status, null), ok(SgdbFixtures.autocomplete))
+            r.http.set("search/autocomplete/", HttpResult(status, null), Scrape.json(SgdbFixtures.autocomplete))
             assertTrue(r.src.find(tetris, setOf(ArtSlot.GRID)).isNotEmpty())
             assertEquals(2, r.http.count("search/autocomplete/"))
             assertTrue(r.clock >= SteamGridDbSource.BUSY_WAIT_MS)
@@ -257,14 +256,14 @@ class SteamGridDbTest {
 
     @Test fun gridsKeptWhenTheHeroCallStops() = runTest {
         val r = Rig()
-        r.http.on("search/autocomplete/", ok(SgdbFixtures.autocomplete))
-        r.http.on("grids/game/", ok(SgdbFixtures.grids))
+        r.http.on("search/autocomplete/", Scrape.json(SgdbFixtures.autocomplete))
+        r.http.on("grids/game/", Scrape.json(SgdbFixtures.grids))
         r.http.on("heroes/game/", HttpResult(429, null))
         val hits = r.src.find(tetris, setOf(ArtSlot.GRID, ArtSlot.HERO))
         assertTrue(hits.isNotEmpty() && hits.all { it.slot == ArtSlot.GRID })
         assertEquals(SteamGridDbSource.TOO_MANY, assertFailsWith<SourceStop> { r.src.find(tetris, setOf(ArtSlot.GRID)) }.note)
         r.src.startJob()   // a new run asks again
-        r.http.set("heroes/game/", ok(SgdbFixtures.heroes))
+        r.http.set("heroes/game/", Scrape.json(SgdbFixtures.heroes))
         assertTrue(r.src.find(tetris, setOf(ArtSlot.HERO)).isNotEmpty())
     }
 
@@ -397,7 +396,7 @@ class SteamGridDbTest {
     }
 
     private suspend fun EngineRig.putShot(name: String, bytes: ByteArray, origin: ArtOrigin?) {
-        fs.writeBytes(fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "screenshot"))!!, name, bytes)
+        fs.putMedia("screenshot", name, bytes)
         if (origin != null) log.origins["Roms/GB/.media/screenshot/$name"] = origin
     }
 

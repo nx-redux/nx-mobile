@@ -118,7 +118,7 @@ internal fun homeStatsHeader(f: HomeFrame, stripLines: Int): HomeStatsHeader? {
 internal const val HOME_GRID_HEADER_PAD = 4f
 
 /** [f]'s body height as it would be with the tab row shown: what decides the face. */
-internal fun homeShownH(f: HomeFrame): Float = f.h - (if (f.titleHidden) HOME_TITLE_ROOM else 0f)
+internal fun homeShownH(f: HomeFrame): Float = f.h - homeTitleRoom(f)
 
 /**
  * The room the stats strip's [stripLines] take above the top section, which the top section takes while Home stats

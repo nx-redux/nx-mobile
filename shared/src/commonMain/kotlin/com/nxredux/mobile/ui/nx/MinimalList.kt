@@ -334,14 +334,7 @@ private class MinimalTexts(
         val tag = row.tag ?: return minimalText(row.label, null)
         val room = rowW - tagWidths.getValue(tag) - width(" ")
         if (width(row.label) <= room) return minimalText(row.label, tag)
-        // The longest start of the name that fits with an ellipsis.
-        var lo = 0
-        var hi = row.label.length
-        while (lo < hi) {
-            val m = (lo + hi + 1) / 2
-            if (width(row.label.substring(0, m).trimEnd() + "\u2026") <= room) lo = m else hi = m - 1
-        }
-        return minimalText(row.label.substring(0, lo).trimEnd() + "\u2026", tag)
+        return minimalText(ellipsizedToFit(row.label, row.label.length) { width(it) <= room }, tag)
     }
 }
 

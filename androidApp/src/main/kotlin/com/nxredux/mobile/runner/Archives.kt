@@ -6,12 +6,17 @@ import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.storage.AndroidRefs
 import org.apache.commons.compress.MemoryLimitException
 import org.apache.commons.compress.PasswordRequiredException
+import org.apache.commons.compress.archivers.ArchiveEntry
+import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry
 import org.apache.commons.compress.archivers.sevenz.SevenZFile
+import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
 import org.apache.commons.compress.archivers.zip.ZipFile
+import java.io.Closeable
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileNotFoundException
 import java.io.IOException
+import java.io.InputStream
 import java.io.OutputStream
 import java.nio.channels.SeekableByteChannel
 import java.util.zip.ZipException
@@ -63,8 +68,7 @@ object Archives {
                 RomCache.hold(context, dir.name)
                 try {
                     FileInputStream(descriptor.fileDescriptor).channel.use { channel ->
-                        return if (ext == "zip") fromZip(channel, archiveName, dir, romExtensions, namedAfterArchive)
-                        else from7z(channel, archiveName, dir, romExtensions, namedAfterArchive)
+                        return unpackFrom(channel, ext, archiveName, dir, romExtensions, namedAfterArchive)
                     }
                 } catch (e: Throwable) {
                     RomCache.release(context, dir.name)
@@ -74,32 +78,16 @@ object Archives {
         }
     }
 
-    private fun fromZip(channel: SeekableByteChannel, archiveName: String, dir: File, romExtensions: Set<String>, namedAfterArchive: Boolean): Unpacked {
-        val zip = try {
-            ZipFile.builder().setSeekableByteChannel(channel).get()
-        } catch (e: OutOfMemoryError) {
-            throw unreadable(archiveName, e)
-        } catch (e: IOException) {
-            throw unreadable(archiveName, e)
-        } catch (e: RuntimeException) {
-            throw unreadable(archiveName, e)
-        }
-        zip.use {
-            val entries = it.entries.toList()
-            // Some Windows tools write `\` separators and omit a folder's trailing `/`; pick on normalised names, then map back by index.
-            val names = entries.map { e -> normalised(e.name, e.isDirectory) }
-            val chosen = choose(names, archiveName, romExtensions)
-            val entry = entries[names.indexOf(chosen.entry)]
-            val file = unpack(entry.size, dir, ArchiveEntries.unpackedName(archiveName, chosen.fileName, namedAfterArchive), archiveName) { out ->
-                it.getInputStream(entry).use { s -> s.copyTo(out, BUFFER) }
-            }
-            return Unpacked(file, chosen.fileName)
-        }
-    }
-
-    private fun from7z(channel: SeekableByteChannel, archiveName: String, dir: File, romExtensions: Set<String>, namedAfterArchive: Boolean): Unpacked {
-        val sevenZ = try {
-            SevenZFile.builder().setSeekableByteChannel(channel).setMaxMemoryLimitKb(MAX_7Z_MEMORY_KB).get()
+    private fun unpackFrom(
+        channel: SeekableByteChannel,
+        ext: String,
+        archiveName: String,
+        dir: File,
+        romExtensions: Set<String>,
+        namedAfterArchive: Boolean,
+    ): Unpacked {
+        val archive = try {
+            open(channel, ext)
         } catch (e: OutOfMemoryError) {
             throw unreadable(archiveName, e)
         } catch (e: PasswordRequiredException) {
@@ -109,18 +97,44 @@ object Archives {
         } catch (e: RuntimeException) {
             throw unreadable(archiveName, e)
         }
-        sevenZ.use {
-            val entries = it.entries.toList()
-            // Some Windows tools write `\` separators; 7z stores folders without a trailing `/`; a 7z entry may be unnamed.
-            // Pick on normalised names, then map back by index.
-            val names = entries.map { e -> normalised(e.name, e.isDirectory) }
-            val chosen = choose(names, archiveName, romExtensions)
-            val entry = entries[names.indexOf(chosen.entry)]
+        archive.use {
+            val (entry, chosen) = it.pick(archiveName, romExtensions)
             val file = unpack(entry.size, dir, ArchiveEntries.unpackedName(archiveName, chosen.fileName, namedAfterArchive), archiveName) { out ->
-                it.getInputStream(entry).use { s -> s.copyTo(out, BUFFER) }
+                it.stream(entry).use { s -> s.copyTo(out, BUFFER) }
             }
             return Unpacked(file, chosen.fileName)
         }
+    }
+
+    /** An open zip or 7z read the same way (Commons Compress gives the two no shared type). */
+    private class Opened(
+        archive: Closeable,
+        list: () -> List<ArchiveEntry>,
+        val stream: (ArchiveEntry) -> InputStream,
+    ) : Closeable by archive {
+        val entries: List<ArchiveEntry> by lazy(LazyThreadSafetyMode.NONE, list)
+
+        /**
+         * Some Windows tools write `\` separators and omit a folder's trailing `/`; 7z stores folders without one, and a
+         * 7z entry may be unnamed. Entries are picked on these names, then mapped back by index.
+         */
+        fun names(): List<String> = entries.map { normalised(it.name, it.isDirectory) }
+    }
+
+    /** Only a 7z can ask for a password at this point: opening a zip never throws [PasswordRequiredException]. */
+    private fun open(channel: SeekableByteChannel, ext: String): Opened =
+        if (ext == "zip") {
+            val zip = ZipFile.builder().setSeekableByteChannel(channel).get()
+            Opened(zip, { zip.entries.toList() }) { zip.getInputStream(it as ZipArchiveEntry) }
+        } else {
+            val sevenZ = SevenZFile.builder().setSeekableByteChannel(channel).setMaxMemoryLimitKb(MAX_7Z_MEMORY_KB).get()
+            Opened(sevenZ, { sevenZ.entries.toList() }) { sevenZ.getInputStream(it as SevenZArchiveEntry) }
+        }
+
+    private fun Opened.pick(archiveName: String, romExtensions: Set<String>): Pair<ArchiveEntry, ArchiveEntries.Pick.Single> {
+        val names = names()
+        val chosen = choose(names, archiveName, romExtensions)
+        return entries[names.indexOf(chosen.entry)] to chosen
     }
 
     /**
@@ -131,11 +145,7 @@ object Archives {
         val ext = Names.extensionOf(archiveName)
         if (ext !in Names.ARCHIVE_EXTENSIONS) return null
         AndroidRefs(context.contentResolver).openFd(ref, "r")?.use { descriptor ->
-            FileInputStream(descriptor.fileDescriptor).channel.use { channel ->
-                if (ext == "zip") ZipFile.builder().setSeekableByteChannel(channel).get().use { z -> z.entries.toList().map { normalised(it.name, it.isDirectory) } }
-                else SevenZFile.builder().setSeekableByteChannel(channel).setMaxMemoryLimitKb(MAX_7Z_MEMORY_KB).get()
-                    .use { s -> s.entries.map { normalised(it.name, it.isDirectory) } }
-            }
+            FileInputStream(descriptor.fileDescriptor).channel.use { channel -> open(channel, ext).use { it.names() } }
         }
     }.getOrNull()
 
@@ -149,32 +159,12 @@ object Archives {
         if (ext !in Names.ARCHIVE_EXTENSIONS) return null
         AndroidRefs(context.contentResolver).openFd(ref, "r")?.use { descriptor ->
             FileInputStream(descriptor.fileDescriptor).channel.use { channel ->
-                if (ext == "zip") ZipFile.builder().setSeekableByteChannel(channel).get().use { z ->
-                    val entries = z.entries.toList()
-                    val names = entries.map { normalised(it.name, it.isDirectory) }
-                    val entry = entries[names.indexOf(choose(names, archiveName, romExtensions).entry)]
-                    z.getInputStream(entry).use { readUpTo(it, max) }
-                } else SevenZFile.builder().setSeekableByteChannel(channel).setMaxMemoryLimitKb(MAX_7Z_MEMORY_KB).get().use { s ->
-                    val entries = s.entries.toList()
-                    val names = entries.map { normalised(it.name, it.isDirectory) }
-                    val entry = entries[names.indexOf(choose(names, archiveName, romExtensions).entry)]
-                    s.getInputStream(entry).use { readUpTo(it, max) }
+                open(channel, ext).use { a ->
+                    a.stream(a.pick(archiveName, romExtensions).first).use { it.readUpTo(max) }
                 }
             }
         }
     }.getOrNull()
-
-    /** Up to [max] bytes from [input]'s start (fewer only at its end); InputStream.readNBytes is API 33. */
-    private fun readUpTo(input: java.io.InputStream, max: Int): ByteArray {
-        val buf = ByteArray(max)
-        var n = 0
-        while (n < max) {
-            val r = input.read(buf, n, max - n)
-            if (r < 0) break
-            n += r
-        }
-        return buf.copyOf(n)
-    }
 
     /** An entry's path with `/` separators and a folder's trailing `/` (some Windows tools write `\` and omit it; a 7z entry may be unnamed). */
     private fun normalised(name: String?, isDirectory: Boolean): String =
@@ -238,4 +228,16 @@ object Archives {
         "$archiveName is not a valid zip/7z archive" + if (encrypted) " (password-protected)" else "",
         cause,
     )
+}
+
+/** Up to [max] bytes from the stream's start (fewer only at its end); InputStream.readNBytes is API 33. */
+internal fun InputStream.readUpTo(max: Int): ByteArray {
+    val buf = ByteArray(max)
+    var n = 0
+    while (n < max) {
+        val r = read(buf, n, max - n)
+        if (r < 0) break
+        n += r
+    }
+    return buf.copyOf(n)
 }

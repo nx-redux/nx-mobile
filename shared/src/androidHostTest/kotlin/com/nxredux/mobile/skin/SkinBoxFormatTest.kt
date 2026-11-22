@@ -26,7 +26,7 @@ class SkinBoxFormatTest {
     // A pack without boxes (every pack before them) still parses, every layout with none.
     @Test
     fun aLayoutWithoutBoxesStillParses() {
-        val pack = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
+        val pack = skinPack()
         assertTrue(pack.layouts.isNotEmpty())
     }
 
@@ -77,7 +77,7 @@ class SkinBoxFormatTest {
     // empty one passed over (not the whole layout lost).
     @Test
     fun aDuplicateOrEmptyBoxIsPassedOver() {
-        val pack = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
+        val pack = skinPack()
         val d = GOLDEN_DEVICES.first { it.name == "cover_land" }
         val before = assertNotNull(placeFor(pack, SkinVariant.SMS, d))
         val id = before.spec.id

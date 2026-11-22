@@ -2,6 +2,7 @@ package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.Recents
+import kotlin.test.assertIs
 
 /**
  * [AppState.setHome], then past first setup's home page when it shows (a home with games): Continue, with no Move
@@ -14,3 +15,8 @@ internal fun AppState.setHomePast(ref: ContentRef) {
     select(folderSummaryRows(s).lastIndex)
     onButton(com.nxredux.mobile.ui.nx.NxButton.A)
 }
+
+/** Opens the main menu's console tagged [tag] (a merged row's too). */
+internal fun AppState.openConsole(tag: String) = openSystem(
+    assertIs<Screen.Systems>(screen.value).tabs.flatMap { it.rows }.firstNotNullOf { (it as? MainRow.System)?.systems?.firstOrNull { s -> s.tag == tag } },
+)

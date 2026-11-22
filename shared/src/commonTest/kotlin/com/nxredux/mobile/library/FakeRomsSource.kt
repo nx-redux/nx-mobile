@@ -213,3 +213,14 @@ class FakeRomsSource(
 }
 
 enum class ListingFault { EMPTY, UNAVAILABLE }
+
+internal fun listedNames(src: FakeRomsSource, dir: String) =
+    kotlinx.coroutines.runBlocking { src.listChildren(ContentRef(dir)).map { it.name } }
+
+/**
+ * A cue written in Windows-1252 that names its second track in another case: [FakeRomsSource.readText] gives what a
+ * UTF-8 read makes of it (U+FFFD for each Latin-1 byte), its head the bytes as they are.
+ */
+internal val legacyCue = "FILE \"Pok\u00e9mon (Track 1).bin\" BINARY\n TRACK 01 MODE2/2352\nFILE \"pok\u00e9mon (track 2).BIN\" BINARY\n TRACK 02 AUDIO\n"
+internal val legacyCueBytes = ByteArray(legacyCue.length) { legacyCue[it].code.toByte() }
+internal val legacyCueUtf8 = legacyCue.replace('\u00e9', '\uFFFD')

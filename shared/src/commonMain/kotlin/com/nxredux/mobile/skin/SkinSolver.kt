@@ -62,6 +62,10 @@ data class RowSpacing(val edge: Float, val gap: Float, val minGap: Float, val fr
     }
 }
 
+/** [c] sits on this piece: on its anchor, its centre within the piece's box. */
+private fun PieceSpec.holds(c: ControlSpec): Boolean =
+    c.anchor == anchor && c.x >= x && c.x <= x + w * scale && c.y >= y && c.y <= y + h * scale
+
 /** The side controls a [RowSpacing] places: the d-pad / stick and face buttons, L / R, the small button columns. */
 internal val ROW_IDS = setOf("DPAD", "STICK", "X", "Y", "A", "B", "L", "R", "START", "SELECT", "MENU", "MIC", "SWAP", "STICK_SWAP", "DISK", "TURBO_A", "TURBO_B")
 
@@ -93,7 +97,7 @@ internal fun SkinLayoutSpec.rowIds(): Set<String> = ROW_IDS + shoulderIds() + co
 internal fun SkinLayoutSpec.tallTwinApart(): Boolean {
     // the Dreamcast's and the 3DS's (both shown on every fold / tablet board) take the row too
     if (minRefH <= 0 || variant == SkinVariant.DC || variant in N3DS_VARIANTS) return false
-    fun holdsOnly(p: PieceSpec, id: String) = controls.filter { c -> c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale }
+    fun holdsOnly(p: PieceSpec, id: String) = controls.filter { c -> p.holds(c) }
         .map { it.id }.toSet() == setOf(id)
     return pieces.any { holdsOnly(it, "STICK") } && pieces.any { holdsOnly(it, "DPAD") }
 }
@@ -240,6 +244,7 @@ object SkinSolver {
             PieceLevel.MIDDLE -> dy / 2f
             PieceLevel.BOTTOM -> dy
         }
+        fun x0(p: PieceSpec) = p.x + across(p.anchor, p.inward)
         fun win(x: Float, y: Float, pw: Float, ph: Float) = PxRect(x * k, y * k, pw * k, ph * k)
         val g = frame.glass
         // the frame's border round the glass, and the room the full render gives the frame, grown or shrunk with the window
@@ -248,14 +253,13 @@ object SkinSolver {
         // between them, as a fold board's screen between its groups); a portrait board's, the groups under it ([frameRow])
         val frameRow: FloatArray? = if (row == null || spec.pieces.any { it.glass != null }) null else {
             fun holds(p: PieceSpec) = spec.controls.any { c ->
-                c.id in spec.rowIds() && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+                c.id in spec.rowIds() && p.holds(c)
             }
             val sides = spec.pieces.filter { it.anchor != PieceAnchor.CENTRE }
             val leftG = sides.filter { it.anchor == PieceAnchor.LEFT }; val rightG = sides.filter { it.anchor == PieceAnchor.RIGHT }
             val shaped = sides.all { holds(it) } && spec.controls.filter { it.anchor == PieceAnchor.LEFT || it.anchor == PieceAnchor.RIGHT }.all { it.id in spec.rowIds() } &&
                 !spec.tallTwinApart()
             if (!shaped || leftG.isEmpty() || rightG.isEmpty()) null else {
-                fun x0(p: PieceSpec) = p.x + across(p.anchor, p.inward)
                 val l0 = leftG.minOf { x0(it) }; val gl = leftG.maxOf { x0(it) + it.w * it.scale } - l0
                 val r0 = rightG.minOf { x0(it) }; val gr = rightG.maxOf { x0(it) + it.w * it.scale } - r0
                 val room = w - gl - gr
@@ -337,7 +341,7 @@ object SkinSolver {
         // only a board whose side groups hold nothing but what the row places (rings, shoulders, small columns): another's
         // pieces (ZL / ZR, a C-stick, C buttons, L2 / R2) keep the side groups' own spacing
         fun holdsAny(p: PieceSpec, ids: Set<String>) = spec.controls.any { c ->
-            c.id in ids && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+            c.id in ids && p.holds(c)
         }
         val rowShaped = spec.pieces.filter { it.glass == null && it.anchor != PieceAnchor.CENTRE }.all { holdsAny(it, spec.rowIds()) } &&
             spec.controls.filter { it.anchor == PieceAnchor.LEFT || it.anchor == PieceAnchor.RIGHT }.all { it.id in spec.rowIds() } &&
@@ -346,7 +350,6 @@ object SkinSolver {
             val left = spec.pieces.filter { it.glass == null && it.anchor == PieceAnchor.LEFT }
             val right = spec.pieces.filter { it.glass == null && it.anchor == PieceAnchor.RIGHT }
             if (left.isEmpty() || right.isEmpty()) null else {
-                fun x0(p: PieceSpec) = p.x + across(p.anchor, p.inward)
                 val l0 = left.minOf { x0(it) }; val gl = left.maxOf { x0(it) + it.w * it.scale } - l0
                 val r0 = right.minOf { x0(it) }; val gr = right.maxOf { x0(it) + it.w * it.scale } - r0
                 val border = (between.w - (between.glass?.w ?: between.w)) * between.scale
@@ -369,12 +372,11 @@ object SkinSolver {
         val columnIds = setOf("START", "SELECT", "MENU", "MIC", "SWAP", "STICK_SWAP", "DISK")
         // (not another control's own piece over them: a New 3DS C-stick's ring under the face buttons)
         fun holdsColumn(p: PieceSpec) = p.glass == null && p.anchor != PieceAnchor.CENTRE && spec.controls.any { c ->
-            c.id in columnIds && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+            c.id in columnIds && p.holds(c)
         } && spec.controls.none { c -> c.id !in columnIds && c.anchor == p.anchor &&
             kotlin.math.abs(p.x + p.w * p.scale / 2f - c.x) < 2f && kotlin.math.abs(p.y + p.h * p.scale / 2f - c.y) < 2f }
         val columnShift: Pair<Float, Float> = if (rowPlan == null) 0f to 0f else {
             val gap = rowPlan[4]
-            fun x0(p: PieceSpec) = p.x + across(p.anchor, p.inward)
             // a side's small caps in a row (the 3DS's tall shell) stay as drawn, under their ring
             fun inRow(side: PieceAnchor) = spec.variant in N3DS_VARIANTS && spec.controls.filter { it.id in columnIds && it.anchor == side }.let { cs -> cs.size >= 2 && cs.all { kotlin.math.abs(it.y - cs[0].y) < 1f } }
             val left = spec.pieces.filter { it.anchor == PieceAnchor.LEFT && holdsColumn(it) }.takeUnless { inRow(PieceAnchor.LEFT) }.orEmpty()
@@ -388,15 +390,14 @@ object SkinSolver {
         // face buttons' right; both moved with their group alike, so the group shift cancels out)
         val shoulderIds = spec.shoulderIds()
         fun holdsShoulder(p: PieceSpec) = p.glass == null && p.anchor != PieceAnchor.CENTRE && spec.controls.any { c ->
-            c.id in shoulderIds && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+            c.id in shoulderIds && p.holds(c)
         }
         val shoulderShift: Pair<Float, Float> = if (rowPlan == null) 0f to 0f else {
-            fun x0(p: PieceSpec) = p.x + across(p.anchor, p.inward)
             val left = spec.pieces.filter { it.anchor == PieceAnchor.LEFT && holdsShoulder(it) }
             val right = spec.pieces.filter { it.anchor == PieceAnchor.RIGHT && holdsShoulder(it) }
             // the rings' outer edges (the d-pad's left, the face buttons' right, at their middle the circle's outline)
             fun ring(side: PieceAnchor, ids: Set<String>) = spec.pieces.filter { p -> p.glass == null && p.anchor == side && spec.controls.any { c ->
-                c.id in ids && c.anchor == side && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale } }
+                c.id in ids && p.holds(c) } }
             val lRing = ring(PieceAnchor.LEFT, setOf("DPAD", "STICK")); val rRing = ring(PieceAnchor.RIGHT, setOf("X", "Y", "A", "B"))
             val inset = row?.gap ?: 0f
             val l = if (left.isEmpty() || lRing.isEmpty()) 0f else (lRing.minOf { x0(it) } + inset) - left.minOf { x0(it) }
@@ -429,7 +430,7 @@ object SkinSolver {
             val col = spec.pieces.filter { it.anchor == anchor && holdsColumn(it) }
             // (a New 3DS C-stick under the face buttons too: the caps go under it)
             val pad = spec.pieces.filter { p -> p.glass == null && p.anchor == anchor && !holdsColumn(p) && spec.controls.any { c ->
-                (c.id in padIds || c.id == "CSTICK") && c.anchor == anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale } }
+                (c.id in padIds || c.id == "CSTICK") && p.holds(c) } }
             if (col.isEmpty() || pad.isEmpty()) return 0f
             // the d-pad where it goes under the stick
             return pad.maxOf { y0(it) + it.h * it.scale + (if (movesWithDpad(it)) dpadUnder.second else 0f) } + row.gap - col.minOf { y0(it) }
@@ -453,7 +454,7 @@ object SkinSolver {
             fun y0(p: PieceSpec) = p.y + down(p.level, p.drop)
             val sh = spec.pieces.filter { it.anchor == anchor && holdsShoulder(it) }
             fun holding(ids: Set<String>) = spec.pieces.filter { p -> p.glass == null && p.anchor == anchor && !holdsColumn(p) && !holdsShoulder(p) && spec.controls.any { c ->
-                c.id in ids && c.anchor == anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale } }
+                c.id in ids && p.holds(c) } }
             val rings = holding(padIds)
             // the 3DS's C-stick nub wholly over the face ring stands under the shoulders too (in the ring's corner it is clear)
             val pad = rings + holding(setOf("CSTICK")).filter { n -> rings.isNotEmpty() && n.y + n.h * n.scale <= rings.minOf { it.y } + 0.5f }
@@ -467,7 +468,7 @@ object SkinSolver {
         // from it, level with it
         val companionIds = spec.companionIds()
         fun holdsCompanion(p: PieceSpec) = p.glass == null && p.anchor != PieceAnchor.CENTRE && spec.controls.any { c ->
-            c.id in companionIds && c.anchor == p.anchor && c.x >= p.x && c.x <= p.x + p.w * p.scale && c.y >= p.y && c.y <= p.y + p.h * p.scale
+            c.id in companionIds && p.holds(c)
         }
         fun companionMove(side: PieceAnchor): Pair<Float, Float> {
             if (rowPlan == null || row == null) return 0f to 0f

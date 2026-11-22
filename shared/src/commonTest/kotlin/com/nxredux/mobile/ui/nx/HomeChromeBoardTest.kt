@@ -11,7 +11,6 @@ import kotlin.test.assertTrue
  * the tab row is tested here.
  */
 class HomeChromeBoardTest {
-    private fun near(e: Float, a: Float, what: String) = assertEquals(e, a, 0.05f, what)
     private fun tiles(b: HomeBoard, k: HomeTopKind) = b.top.filter { it.kind == k }.map { it.rect }
     private fun continueOf(b: HomeBoard) = tiles(b, HomeTopKind.CONTINUE).single()
 

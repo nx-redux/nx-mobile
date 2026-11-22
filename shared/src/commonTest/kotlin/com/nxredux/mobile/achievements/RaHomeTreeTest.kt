@@ -9,7 +9,6 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 
 class RaHomeTreeTest {
-    private fun tree(vararg roms: String) = FakeRomsSource(mapOf("home" to listOf("Roms"), "home/Roms" to roms.toList()) + roms.associate { "home/Roms/$it" to emptyList<String>() })
     private val gba = RaGamePointer("GBA", "home", "Roms/Game Boy Advance (GBA)", "E.gba", "E")
 
     @Test fun badge_folder_names() {
@@ -26,17 +25,17 @@ class RaHomeTreeTest {
         assertNull(RaBadgeFolders.ownFolder(gba.copy(source = "x1", dir = "a")))
     }
     @Test fun an_extra_rom_uses_the_folder_for_its_tag() = runTest {
-        val home = RaHomeTree(tree("Famicom (FC)")) { ContentRef("home") }
+        val home = RaHomeTree(raHomeSource("Famicom (FC)")) { ContentRef("home") }
         assertEquals("Famicom (FC)", home.consoleFolder(gba.copy(tag = "FC", source = "x1", dir = "a")))   // existing folder with the tag
         assertEquals("Game Boy Advance (GBA)", home.consoleFolder(gba.copy(source = "x1", dir = "a")))      // display name, created on write
         assertEquals("Game Boy Advance (GBA)", home.consoleFolder(gba.copy(dir = "Roms")))                   // a home ROM directly in Roms/
     }
     @Test fun an_extra_rom_of_a_second_emulator_uses_the_console_folder() = runTest {
-        assertEquals("Game Boy Advance (GBA)", RaHomeTree(tree("Game Boy Advance (GBA)")) { ContentRef("home") }.folderForTag("MGBA"))
-        assertEquals("Game Boy Advance (GBA)", RaHomeTree(tree()) { ContentRef("home") }.folderForTag("MGBA"))   // none there: the console-tag display name
+        assertEquals("Game Boy Advance (GBA)", RaHomeTree(raHomeSource("Game Boy Advance (GBA)")) { ContentRef("home") }.folderForTag("MGBA"))
+        assertEquals("Game Boy Advance (GBA)", RaHomeTree(raHomeSource()) { ContentRef("home") }.folderForTag("MGBA"))   // none there: the console-tag display name
     }
     @Test fun write_creates_folders_and_listing_maps_names_to_models() = runTest {
-        val src = tree(); val home = RaHomeTree(src) { ContentRef("home") }
+        val src = raHomeSource(); val home = RaHomeTree(src) { ContentRef("home") }
         val seg = RaBadgeFolders.segments("Game Boy Advance (GBA)", 7)!!
         val model = home.writeBytes(seg, "1.png", byteArrayOf(1))
         assertEquals("home/Roms/Game Boy Advance (GBA)/.retroachievements/badges/7/1.png", model)
@@ -44,14 +43,14 @@ class RaHomeTreeTest {
         assertTrue(home.has(seg, "1.png"))
     }
     @Test fun no_home_means_no_folder_and_no_writes() = runTest {
-        val home = RaHomeTree(tree()) { null }
+        val home = RaHomeTree(raHomeSource()) { null }
         assertNull(home.folderForTag("GBA"))
         assertNull(home.writeBytes(listOf("Roms", "X (GBA)"), "a.png", byteArrayOf(1)))
         assertEquals(emptyMap(), home.listing(listOf("Roms")))
         assertNull(home.readText(listOf("Roms"), "hashes.json"))
     }
     @Test fun a_display_name_fallback_is_not_remembered() = runTest {
-        val src = tree(); val home = RaHomeTree(src) { ContentRef("home") }
+        val src = raHomeSource(); val home = RaHomeTree(src) { ContentRef("home") }
         assertEquals("Game Boy Advance (GBA)", home.folderForTag("GBA"))   // none there yet: the name a write would create
         src.createDirectory(ContentRef("home/Roms"), "My GBA (GBA)")
         assertEquals("My GBA (GBA)", home.folderForTag("GBA"))

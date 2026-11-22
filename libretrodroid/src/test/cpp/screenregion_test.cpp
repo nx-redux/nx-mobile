@@ -7,19 +7,15 @@
 #include <cstdio>
 #include <cstdlib>
 
-using namespace libretrodroid;
+#include "check.h"
 
-static int failures = 0;
+using namespace libretrodroid;
 
 static void near(float expected, float actual, const char* what) {
     if (std::fabs(expected - actual) > 1e-5F) {
         std::printf("FAIL %s: expected %f, got %f\n", what, expected, actual);
         failures++;
     }
-}
-
-static void check(bool ok, const char* what) {
-    if (!ok) { std::printf("FAIL %s\n", what); failures++; }
 }
 
 int main() {

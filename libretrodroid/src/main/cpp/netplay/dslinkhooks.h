@@ -30,12 +30,12 @@ struct nx_3ds_link_interface;
 //
 // setNetpacket, forgetCore, configure, radio, preFrame and stopCore run on the frame (GL) thread, the core's emulation
 // thread, with coreLock held or no step possible (load, destroy); only that thread creates or destroys the link.
-// inRoom, presence, leaveNow, rejoin and shutdown may run on any thread.
+// inRoom, presence, leaveNow and rejoin may run on any thread.
 namespace libretrodroid::dslink {
     bool setNetpacket(const nl_netpacket_callback* callbacks);   // SET_NETPACKET_INTERFACE; NULL clears it
     void forgetCore();          // the core is gone or about to be replaced: drop its callbacks and the link
     void configure(const std::vector<Variable>& vars);   // the nx_nds_link* variables: create, replace or end the link
-    // A core that runs its own room (Azahar, nx_3ds_link.h): presence, inRoom, leaveNow, rejoin and shutdown go to it.
+    // A core that runs its own room (Azahar, nx_3ds_link.h): presence, inRoom, leaveNow and rejoin go to it.
     // nullptr: that room is gone. The calls are made under this module's lock, never after the nullptr returns.
     void setCoreRoom(struct ::nx_3ds_link_interface* room);
     void setCable(int state);   // ndl_cable: the phone-to-phone cable beside the Wi-Fi; any thread
@@ -47,7 +47,6 @@ namespace libretrodroid::dslink {
     void frameBegin();          // around retro_run while a room is open: timing stats for the diagnostics line
     void frameEnd();
     void stopCore();            // the core's stop() if its session is open, then the link ends; before retro_unload_game
-    void shutdown();            // leaves the room at once; the link itself ends in stopCore
     bool inRoom();
     int presence();             // ndl_presence: 0 out, 1 seeking a room, 2 in a room
     int others();               // other devices in the room, 0 in none; -1: the core's room does not say

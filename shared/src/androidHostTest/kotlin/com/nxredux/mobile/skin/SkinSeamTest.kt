@@ -1,6 +1,5 @@
 package com.nxredux.mobile.skin
 
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -9,7 +8,7 @@ import kotlin.test.assertTrue
 
 /** The fold board as one slab unless half-folded ([SkinSeam], [SkinPlacement.slab]). */
 class SkinSeamTest {
-    private val pack = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
+    private val pack = skinPack()
     private val stretchMax = 64f
 
     @Test

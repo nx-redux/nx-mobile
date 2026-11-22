@@ -304,7 +304,7 @@ class SaveImporter(
     private fun rzipSize(f: File): Long? {
         if (f.length() < RZIP_HEADER) return null
         val header = ByteArray(RZIP_HEADER)
-        f.inputStream().use { if (fill(it, header) < RZIP_HEADER) return null }
+        f.inputStream().use { if (DataRoot.readBlock(it, header) < RZIP_HEADER) return null }
         return Rzip.rawSize(header)
     }
 
@@ -427,33 +427,11 @@ class SaveImporter(
         target.setLastModified(mtime)
     }
 
-    private fun sameContent(a: File, b: File): Boolean {
-        if (a.length() != b.length()) return false
-        val bufA = ByteArray(BLOCK)
-        val bufB = ByteArray(BLOCK)
-        a.inputStream().use { x -> b.inputStream().use { y ->
-            while (true) {
-                val n = fill(x, bufA)
-                if (n != fill(y, bufB)) return false
-                if (n == 0) return true
-                for (i in 0 until n) if (bufA[i] != bufB[i]) return false
-            }
-        } }
-    }
-
-    /** Reads until [buf] is full or the stream ends (java.io only: no API 33 readNBytes). */
-    private fun fill(input: InputStream, buf: ByteArray): Int {
-        var n = 0
-        while (n < buf.size) {
-            val r = input.read(buf, n, buf.size - n)
-            if (r < 0) break
-            n += r
-        }
-        return n
-    }
+    /** As [DataRoot.sameContent], but a read failure throws: the caller reports the file as unreadable. */
+    private fun sameContent(a: File, b: File): Boolean =
+        a.length() == b.length() && a.inputStream().use { x -> b.inputStream().use { y -> DataRoot.sameBytes(x, y) } }
 
     private companion object {
-        const val BLOCK = 64 * 1024
         const val RZIP_HEADER = 20
         /** Where slot pictures wait during a run, under the root; removed when the run ends. */
         const val STAGING = ".userdata/${NxPaths.PLATFORM}/.import-staging"

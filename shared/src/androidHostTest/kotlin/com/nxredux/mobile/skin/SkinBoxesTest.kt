@@ -1,6 +1,5 @@
 package com.nxredux.mobile.skin
 
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -56,7 +55,7 @@ class SkinBoxesTest {
         assertSame(full, SkinBoxes.pick(b, DeviceShape(411f, 891f, halfFolded = false)) { true })
     }
 
-    private val pack = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
+    private val pack = skinPack()
 
     /**
      * [id]'s pieces and controls as boxes, as drawn: the left-anchored in the left box, the right-anchored in the right,

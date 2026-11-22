@@ -27,18 +27,6 @@ object PspSerialReader {
 
     private fun plain(ch: FileChannel): (Long, Int) -> ByteArray? = { offset, length -> readAt(ch, offset, length) }
 
-    private fun readAt(ch: FileChannel, offset: Long, length: Int): ByteArray? {
-        if (offset < 0 || length <= 0) return null
-        val buf = ByteBuffer.allocate(length)
-        var at = offset
-        while (buf.hasRemaining()) {
-            val n = ch.read(buf, at)
-            if (n <= 0) break
-            at += n
-        }
-        return buf.array().copyOf(buf.position()).takeIf { it.isNotEmpty() }
-    }
-
     /** A reader over the uncompressed image of a CISO file, or null when [ch] is no CISO v0/v1. */
     private fun cso(ch: FileChannel): ((Long, Int) -> ByteArray?)? {
         val head = readAt(ch, 0, 0x18)?.takeIf { it.size == 0x18 } ?: return null
@@ -85,4 +73,17 @@ object PspSerialReader {
             out.copyOf(done).takeIf { it.isNotEmpty() }
         }
     }
+}
+
+/** Up to [length] bytes of [ch] from [offset], without moving its position; null for none. */
+internal fun readAt(ch: FileChannel, offset: Long, length: Int): ByteArray? {
+    if (offset < 0 || length <= 0) return null
+    val buf = ByteBuffer.allocate(length)
+    var at = offset
+    while (buf.hasRemaining()) {
+        val n = ch.read(buf, at)
+        if (n <= 0) break
+        at += n
+    }
+    return buf.array().copyOf(buf.position()).takeIf { it.isNotEmpty() }
 }

@@ -3,6 +3,7 @@ package com.nxredux.mobile.ui
 import com.nxredux.mobile.library.LocalRomFinder
 import com.nxredux.mobile.netplay.cablelink.LinkRomCache
 import com.nxredux.mobile.tryOr
+import com.nxredux.mobile.tryOrAny
 import com.nxredux.mobile.tryOrNull
 import com.nxredux.mobile.tryQuietly
 import com.nxredux.mobile.sync.SyncLink
@@ -824,6 +825,14 @@ internal fun withAndroidConsole(rows: List<MainRow.System>, console: SystemFolde
     return rows.toMutableList().apply { add(at, MainRow.System(console)) }
 }
 
+/** Where the game at [path] is in the list; null when it is not there (or no path is given). */
+private fun List<Listed>.indexOfPath(path: String?): Int? =
+    path?.let { p -> indexOfFirst { it.game.path == p } }?.takeIf { it >= 0 }
+
+private fun onOff(on: Boolean) = if (on) "On" else "Off"
+
+private fun showHide(on: Boolean) = if (on) "Show" else "Hide"
+
 /** A main menu tab's or the game list's style, as the Appearance rows show it. */
 internal fun menuStyleLabel(style: MenuStyle): String = when (style) {
     MenuStyle.LIST -> "List"
@@ -1527,7 +1536,7 @@ class AppState(
                     val label = appUpdateLabel(st)
                     if (label == _updateLabel.value) return@collect
                     _updateLabel.value = label
-                    if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SYSTEM) settingsUi.refreshSettings()
+                    refreshSettingsOn(SettingsSection.SYSTEM)
                 }
             }
         }
@@ -2163,7 +2172,7 @@ class AppState(
      */
     private fun rememberedGame(entries: List<Listed>): ListSelection {
         val r = tabSelections[MenuCategory.GAMES] ?: return ListSelection(0, entries.size)
-        val at = gamesTabGame?.let { p -> entries.indexOfFirst { it.game.path == p } }?.takeIf { it >= 0 } ?: r.index
+        val at = entries.indexOfPath(gamesTabGame) ?: r.index
         return ListSelection(at, entries.size)
     }
 
@@ -2228,7 +2237,7 @@ class AppState(
         if (s is Screen.Games || screen is Screen.Games) {
             if (s !is Screen.Games || screen !is Screen.Games) return -1   // another tab
             val path = s.entries.getOrNull(_selection.value.index)?.game?.path
-            return screen.entries.indexOfFirst { it.game.path == path }.takeIf { it >= 0 } ?: _selection.value.index
+            return screen.entries.indexOfPath(path) ?: _selection.value.index
         }
         s as Screen.Systems; screen as Screen.Systems
         val highlighted = s.rows.getOrNull(_selection.value.index)
@@ -2307,10 +2316,7 @@ class AppState(
         // The sync step is Device Sync itself, in place under this page title.
         if (step == OnboardingStep.SYNC_OFFER) deps.deviceSync?.let { sync ->
             onboardingSync = true
-            sync.open()
-            _screen.value = Screen.DeviceSync
-            // Sync ROMs first where it is offered: the option before the links.
-            publishSyncSetup(if ((sync.page.value as? DeviceSyncPage.Ready)?.romsAvailable == true) SyncFocus.ROMS else SyncFocus.LINK)
+            showDeviceSync(sync)
             return
         }
         val pageTitle = onboardingPageTitle()
@@ -2371,6 +2377,13 @@ class AppState(
     private val _syncSetup = MutableStateFlow<SyncSetup?>(null)
     /** Device Sync's page state ([SyncSetup]): the tool's, or setup's sync step's; null while it is not showing. */
     val syncSetup: StateFlow<SyncSetup?> = _syncSetup.asStateFlow()
+
+    /** Opens Device Sync's page (the tool's, and setup's sync step), Sync ROMs first where it is offered: the option above the links. */
+    private fun showDeviceSync(sync: DeviceSyncController) {
+        sync.open()   // Ready on the cable, or the live page of a sync still running
+        _screen.value = Screen.DeviceSync
+        publishSyncSetup(if ((sync.page.value as? DeviceSyncPage.Ready)?.romsAvailable == true) SyncFocus.ROMS else SyncFocus.LINK)
+    }
 
     private fun publishSyncSetup(focus: SyncFocus = _syncSetup.value?.focus ?: SyncFocus.LINK) {
         _syncSetup.value = when {
@@ -2554,7 +2567,7 @@ class AppState(
             listOf(
                 NxRow("Save format", secondary = deps.settings.saveFormat.label, cycleable = true),
                 NxRow("Save state format", secondary = deps.settings.stateFormat.label, cycleable = true),
-                NxRow("Use extracted file name", secondary = if (deps.settings.useExtractedFileName) "On" else "Off", cycleable = true),
+                NxRow("Use extracted file name", secondary = onOff(deps.settings.useExtractedFileName), cycleable = true),
                 NxRow("Continue"),
             ),
         )
@@ -2617,7 +2630,7 @@ class AppState(
                 if (padController) "Disconnect your controller to see the pad." else null,
             ),
             listOfNotNull(
-                NxRow("Pad skin", secondary = if (deps.settings.padSkin) "On" else "Off", cycleable = true),
+                NxRow("Pad skin", secondary = onOff(deps.settings.padSkin), cycleable = true),
                 if (deps.settings.padSkin) NxRow("Pad theme", secondary = padThemeLabel(deps.settings.padTheme), cycleable = true) else null,
                 NxRow("Continue"),
             ),
@@ -2626,8 +2639,8 @@ class AppState(
         OnboardingStep.TITLE -> Triple(
             "Page title and button hints", listOf("The tab row at the top of the menu (L1 / R1 switch tabs either way) and the hint bar at the bottom."),
             listOf(
-                NxRow("Page title", secondary = if (deps.settings.menuPageTitle) "Show" else "Hide", cycleable = true),
-                NxRow("Button hints", secondary = if (deps.settings.menuButtonHints) "Show" else "Hide", cycleable = true),
+                NxRow("Page title", secondary = showHide(deps.settings.menuPageTitle), cycleable = true),
+                NxRow("Button hints", secondary = showHide(deps.settings.menuButtonHints), cycleable = true),
                 NxRow("Continue"),
             ),
         )
@@ -2690,8 +2703,7 @@ class AppState(
             }
             OnboardingStep.CUSTOMISE -> { onboarding.context = onboarding.context.copy(customise = index == 0); onboardingNext() }
             OnboardingStep.KIDS -> if (index == 1) kidsUi.kidsStartInOnboarding() else onboardingNext()
-            OnboardingStep.PAD -> if (index < s.rows.lastIndex) stepOnboardingValue(onboarding.step, index, 1) else onboardingNext()
-            OnboardingStep.TITLE, OnboardingStep.ACCENT -> if (index < s.rows.lastIndex) stepOnboardingValue(onboarding.step, index, 1) else onboardingNext()
+            OnboardingStep.PAD, OnboardingStep.TITLE, OnboardingStep.ACCENT -> if (index < s.rows.lastIndex) stepOnboardingValue(onboarding.step, index, 1) else onboardingNext()
             OnboardingStep.TAB_HOME, OnboardingStep.TAB_CONSOLES, OnboardingStep.TAB_COLLECTIONS, OnboardingStep.TAB_TOOLS,
             OnboardingStep.GAME_LISTS -> if (index < s.rows.lastIndex) stepOnboardingLayoutRow(index, 1) else onboardingNext()
             OnboardingStep.ARTWORK -> when (s.rows.getOrNull(index)?.label) {
@@ -2740,11 +2752,11 @@ class AppState(
         val category = ONBOARDING_TAB_STEPS[step]
         return onboardingLayoutKinds(step).map { kind ->
             when (kind) {
-                SettingsKind.HOME_STATS -> NxRow("Stats", secondary = if (s.menuHomeStats) "Show" else "Hide", cycleable = true)
+                SettingsKind.HOME_STATS -> NxRow("Stats", secondary = showHide(s.menuHomeStats), cycleable = true)
                 SettingsKind.MENU_ORIENTATION -> NxRow("Orientation", secondary = orientationLabel(MenuStyles.orientationOf(s.menuOrientations, category!!)), cycleable = true)
                 SettingsKind.GAME_LIST_ORIENTATION -> NxRow("Orientation", secondary = orientationLabel(s.gameListOrientation), cycleable = true)
                 SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT -> NxRow("Alignment", secondary = verticalAlignmentLabel(s.gameListVerticalAlignment), cycleable = true)
-                SettingsKind.TAB_SHOWN -> NxRow("Games tab", secondary = if (s.showGamesTab) "Show" else "Hide", cycleable = true)
+                SettingsKind.TAB_SHOWN -> NxRow("Games tab", secondary = showHide(s.showGamesTab), cycleable = true)
                 else -> NxRow("Layout", secondary = menuStyleLabel(onboardingLayout(step)), cycleable = true)
             }
         } + NxRow("Continue")
@@ -2754,9 +2766,15 @@ class AppState(
     private fun onboardingShot(step: OnboardingStep): LayoutShot? {
         if (step == OnboardingStep.GAME_LISTS) return gameListsShot()
         val c = ONBOARDING_TAB_STEPS[step] ?: return null
-        val style = MenuStyles.styleOf(deps.settings.menuStyles, c)
-        val vertical = style == MenuStyle.CAROUSEL && c != MenuCategory.HOME && MenuStyles.orientationOf(deps.settings.menuOrientations, c) == MenuOrientation.VERTICAL
-        return LayoutShot.Tab(c, style, stats = c != MenuCategory.HOME || deps.settings.menuHomeStats, vertical = vertical, art = consoleShotArt(c))
+        return tabShot(c)
+    }
+
+    /** [c]'s tab as its layout rows set it. */
+    private fun tabShot(c: MenuCategory): LayoutShot.Tab {
+        val s = deps.settings
+        val style = MenuStyles.styleOf(s.menuStyles, c)
+        val vertical = style == MenuStyle.CAROUSEL && c != MenuCategory.HOME && MenuStyles.orientationOf(s.menuOrientations, c) == MenuOrientation.VERTICAL
+        return LayoutShot.Tab(c, style, stats = c != MenuCategory.HOME || s.menuHomeStats, vertical = vertical, art = consoleShotArt(c))
     }
 
     /**
@@ -2976,11 +2994,18 @@ class AppState(
     /** How many folder steps first setup has before HANDHELD: All files (where shown or still to ask), home, ROMs, Android games (once shown). */
     private fun setupFolderSteps(): Int {
         if (!inFirstSetup()) return 0
-        val access = deps.allFilesAccess
-        val allFiles = allFilesStepShown || (access != null && access.declared && !access.granted() && !deps.settings.allFilesAsked)
-        val pick = if (mediaHomeTaken || !homePickShown()) 0 else 1   // no home pick on the media home
-        return (if (allFiles) 1 else 0) + 1 + pick + (if (folders.homePage != null) 1 else 0) + (if (addedExtraId != null) 1 else 0) + (if (androidStepShown) 1 else 0)
+        return allFilesSteps() + 1 + homePickSteps() + (if (folders.homePage != null) 1 else 0) + (if (addedExtraId != null) 1 else 0) + (if (androidStepShown) 1 else 0)
     }
+
+    /** The All files step in the count: 1 where it is shown or still to ask. */
+    private fun allFilesSteps(): Int {
+        val access = deps.allFilesAccess
+        val counts = allFilesStepShown || (access != null && access.declared && !access.granted() && !deps.settings.allFilesAsked)
+        return if (counts) 1 else 0
+    }
+
+    /** The home pick in the count: none on the media home. */
+    private fun homePickSteps(): Int = if (mediaHomeTaken || !homePickShown()) 0 else 1
 
     /**
      * A folder step's page title and whether B goes back from it: "Setup · Step n/m" (and back) in first setup; after
@@ -2989,11 +3014,9 @@ class AppState(
     fun setupChrome(): Pair<String, Boolean> {
         val screen = _screen.value
         if (!inFirstSetup()) return (if (screen is Screen.AddFirstExtra) "ROM folders" else "Home folder") to (screen is Screen.AddFirstExtra)
-        val access = deps.allFilesAccess
-        val allFiles = allFilesStepShown || (access != null && access.declared && !access.granted() && !deps.settings.allFilesAsked)
         val home = if (folders.homePage != null) 1 else 0   // the home page, between the pick and the ROMs folder offer
-        val pick = if (mediaHomeTaken || !homePickShown()) 0 else 1   // no home pick on the media home
-        val at = setupPreSteps() + (if (allFiles) 1 else 0) + when (screen) {
+        val pick = homePickSteps()
+        val at = setupPreSteps() + allFilesSteps() + when (screen) {
             is Screen.PermissionsStep -> 0
             Screen.PickFolder -> 1
             Screen.AddFirstExtra -> 1 + pick + home
@@ -3264,11 +3287,11 @@ class AppState(
 
     /** [ToolPins.FILE] (a suspending read, as the count cache's); a missing or unreadable file is no pins. */
     private suspend fun readToolPins(): List<String> =
-        try { ToolPins.decode(deps.privateFiles.read(ToolPins.FILE)) } catch (e: CancellationException) { throw e } catch (e: Throwable) { emptyList() }
+        tryOrAny({ emptyList() }) { ToolPins.decode(deps.privateFiles.read(ToolPins.FILE)) }
 
     /** Writes [keys] as [ToolPins.FILE] off the main thread, then keeps them; false (nothing changed) when the write fails. */
     private suspend fun writeToolPins(keys: List<String>): Boolean {
-        try { withContext(deps.compute) { deps.privateFiles.write(ToolPins.FILE, ToolPins.encode(keys)) } } catch (e: CancellationException) { throw e } catch (e: Throwable) { return false }
+        tryOrAny({ return false }) { withContext(deps.compute) { deps.privateFiles.write(ToolPins.FILE, ToolPins.encode(keys)) } }
         toolPins = keys
         return true
     }
@@ -3477,13 +3500,9 @@ class AppState(
     }
 
     /** The home probe: null when [root] lists, else the failure. */
-    private suspend fun probe(root: ContentRef): Throwable? = try {
+    private suspend fun probe(root: ContentRef): Throwable? = tryOrAny({ it }) {
         deps.source.listChildren(root)
         null
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Throwable) {
-        e
     }
 
     /** A failure that means the tree itself is gone or invalid: a revoked grant (SecurityException), a stale or deleted tree (IllegalArgumentException). */
@@ -3572,7 +3591,7 @@ class AppState(
             deps.settings.extraFolders.any { fileAccessOff(it.ref) } -> "Off: some ROM folders can't be read"
             else -> null
         }
-        return SettingsRow(SettingsKind.ALL_FILES, "All files access", if (granted) "On" else "Off", warning = note != null, note = note)
+        return SettingsRow(SettingsKind.ALL_FILES, "All files access", onOff(granted), warning = note != null, note = note)
     }
 
     /** True for a file ref read without All files access: its folder is not "offline", the permission is off. */
@@ -3657,7 +3676,7 @@ class AppState(
         }
         if (upgrade.upgradeOn) { upgrade.upgradeAccessChanged(); return }   // the upgrade screen answers it, never a library reload
         if (_screen.value is Screen.PermissionsStep) { showPermissions(keep = true); return }   // back from a prompt: the rows show its answer
-        if ((_screen.value as? Screen.Settings)?.section == SettingsSection.LIBRARY) settingsUi.refreshSettings()
+        refreshSettingsOn(SettingsSection.LIBRARY)
         // Granted meanwhile: SAF folders on external storage become paths. The main menu reloads at once (rescanning, as the
         // index no longer fits); any other page leaves it to the next load. A load in flight converts first itself. The
         // same when the home itself changed with the access (the saved one back, or the media one in its place).
@@ -3977,7 +3996,12 @@ class AppState(
 
     private fun setTouch(slot: TouchSlot, action: ShortcutAction?) { shortcutDraft = shortcutSet().withTouch(slot, action) }
 
-    private fun refreshShortcuts() { if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) settingsUi.refreshSettings() }
+    private fun refreshShortcuts() = refreshSettingsOn(SettingsSection.SHORTCUTS)
+
+    /** Rebuilds the Settings rows when one of [sections] is the open page. */
+    private fun refreshSettingsOn(vararg sections: SettingsSection) {
+        if ((_screen.value as? Screen.Settings)?.section in sections) settingsUi.refreshSettings()
+    }
 
     /**
      * The Shortcuts page closes (any screen but it, [_screen]; the app backgrounded): a capture ends, and the draft is
@@ -4015,18 +4039,18 @@ class AppState(
             add(SettingsRow(SettingsKind.DEFAULTS, "Default emulators"))
             add(SettingsRow(SettingsKind.EMULATORS, "Default settings"))
             deps.gpuDrivers?.let { store -> gpuDriverRow(store.unavailableReason(), deps.settings.gpuDriver, store::installed)?.let(::add) }
-            add(SettingsRow(SettingsKind.SAVE_ON_QUIT, "Save on quit", if (deps.settings.saveOnQuit) "On" else "Off"))
-            add(SettingsRow(SettingsKind.A_RESUMES, "A resumes", if (deps.settings.aResumes) "On" else "Off"))
+            add(SettingsRow(SettingsKind.SAVE_ON_QUIT, "Save on quit", onOff(deps.settings.saveOnQuit)))
+            add(SettingsRow(SettingsKind.A_RESUMES, "A resumes", onOff(deps.settings.aResumes)))
         }
         SettingsSection.SECOND_SCREEN -> listOf(
-            SettingsRow(SettingsKind.SECOND_SCREEN_ENABLE, "Enable", if (deps.settings.secondScreen) "On" else "Off"),
+            SettingsRow(SettingsKind.SECOND_SCREEN_ENABLE, "Enable", onOff(deps.settings.secondScreen)),
             SettingsRow(SettingsKind.BOTTOM_SCREEN, "Bottom screen", bottomScreenLabel(deps.settings.bottomScreen)),
         )
         // NX Redux's Settings → System save rows, so both devices name saves alike.
         SettingsSection.SAVES -> listOf(
             SettingsRow(SettingsKind.SAVE_FORMAT, "Save format", deps.settings.saveFormat.label),
             SettingsRow(SettingsKind.STATE_FORMAT, "Save state format", deps.settings.stateFormat.label),
-            SettingsRow(SettingsKind.EXTRACTED_NAME, "Use extracted file name", if (deps.settings.useExtractedFileName) "On" else "Off"),
+            SettingsRow(SettingsKind.EXTRACTED_NAME, "Use extracted file name", onOff(deps.settings.useExtractedFileName)),
             // Saves live only inside the app; these copy them out and back in.
             SettingsRow(SettingsKind.EXPORT_SAVES, "Export saves"),
             SettingsRow(SettingsKind.IMPORT_SAVES, "Import saves"),
@@ -4051,7 +4075,7 @@ class AppState(
         SettingsSection.SHORTCUTS -> shortcutRows()
         SettingsSection.SYSTEM_BUTTONS -> systemButtonRows()
         SettingsSection.APPEARANCE -> listOf<SettingsRow?>(
-            SettingsRow(SettingsKind.PAD_SKIN, "Pad skin", if (deps.settings.padSkin) "On" else "Off"),
+            SettingsRow(SettingsKind.PAD_SKIN, "Pad skin", onOff(deps.settings.padSkin)),
             // the skin's look: none to pick while the skin is Off (the full-screen overlay pad)
             if (deps.settings.padSkin) SettingsRow(SettingsKind.PAD_THEME, "Pad theme", padThemeLabel(deps.settings.padTheme)) else null,
             SettingsRow(SettingsKind.ACCENT, "Accent", deps.settings.accent.label),
@@ -4091,7 +4115,7 @@ class AppState(
     private fun cableLinkRows(): List<SettingsRow> = deps.linkRomCache?.let { cache ->
         listOf(
             SettingsRow(SettingsKind.CABLE_LINK_DELAY, "Input delay", cableLinkDelayLabel(deps.settings.cableLinkDelayPin)),
-            SettingsRow(SettingsKind.CABLE_LINK_DELAY_OVERLAY, "Delay overlay", if (deps.settings.cableLinkDelayOverlay) "On" else "Off"),
+            SettingsRow(SettingsKind.CABLE_LINK_DELAY_OVERLAY, "Delay overlay", onOff(deps.settings.cableLinkDelayOverlay)),
             SettingsRow(SettingsKind.CLEAR_LINK_ROMS, "Clear link ROM cache", formatBytes(cache.sizeBytes())),
         )
     }.orEmpty()
@@ -4102,12 +4126,12 @@ class AppState(
      */
     private fun systemRows(): List<SettingsRow> = buildList {
         add(SettingsRow(SettingsKind.PLAYER_NAME, "Player name", PlayerName.resolve(deps.settings.playerName, deps.deviceName())))
-        add(SettingsRow(SettingsKind.PAUSE_UNFOCUSED, "Pause when unfocused", if (deps.settings.pauseWhenUnfocused) "On" else "Off"))
-        add(SettingsRow(SettingsKind.SCREEN_CARE, "Screen care", if (deps.settings.screenCare) "On" else "Off"))
-        deps.launcher?.let { l -> add(SettingsRow(SettingsKind.HOME_SCREEN, "Use as home screen", if (l.isHome()) "On" else "Off")) }
+        add(SettingsRow(SettingsKind.PAUSE_UNFOCUSED, "Pause when unfocused", onOff(deps.settings.pauseWhenUnfocused)))
+        add(SettingsRow(SettingsKind.SCREEN_CARE, "Screen care", onOff(deps.settings.screenCare)))
+        deps.launcher?.let { l -> add(SettingsRow(SettingsKind.HOME_SCREEN, "Use as home screen", onOff(l.isHome()))) }
         if (deps.ownKeyboard) add(SettingsRow(SettingsKind.KEYBOARD, "Keyboard", keyboardLabel(deps.settings.androidKeyboard)))
         // Logging for a bug report; off, only errors reach logcat.
-        add(SettingsRow(SettingsKind.DEBUG_LOG, "Debug log", if (deps.settings.debugLog) "On" else "Off"))
+        add(SettingsRow(SettingsKind.DEBUG_LOG, "Debug log", onOff(deps.settings.debugLog)))
         add(SettingsRow(SettingsKind.GAP, ""))
         add(SettingsRow(SettingsKind.SECTION, "About"))
         queryGpu()   // the page (or its preview) shows: the GPU row reads "…" until this lands
@@ -4132,7 +4156,7 @@ class AppState(
     private fun queryGpu(): Job = gpuJob ?: scope.launch(start = CoroutineStart.LAZY) {
         val name = tryOrNull { deps.deviceGpu() }
         _gpu.value = name?.trim()?.ifEmpty { null } ?: UNKNOWN_INFO
-        if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SYSTEM) settingsUi.refreshSettings()
+        refreshSettingsOn(SettingsSection.SYSTEM)
     }.also { gpuJob = it; it.start() }
 
     private val localRomFinder = LocalRomFinder(deps.source, deps.privateFiles)
@@ -4216,7 +4240,7 @@ class AppState(
         }
         add(SettingsRow(SettingsKind.ADD_EXTRA, "Add ROM folder"))
         deps.allFilesAccess?.takeIf { it.declared }?.let { add(allFilesRow(it.granted(), root)) }
-        deps.micAccess?.takeIf { it.usable }?.let { add(SettingsRow(SettingsKind.MIC_ACCESS, "Microphone access", if (it.granted()) "On" else "Off")) }
+        deps.micAccess?.takeIf { it.usable }?.let { add(SettingsRow(SettingsKind.MIC_ACCESS, "Microphone access", onOff(it.granted()))) }
         add(SettingsRow(SettingsKind.SAVES, "Saves"))
         if (deps.biosIntake != null) add(SettingsRow(SettingsKind.IMPORT_BIOS, "Import BIOS"))
         if (deps.launcher != null) add(SettingsRow(SettingsKind.ANDROID_GAMES, "Android games", installedCache?.let { gamesCountLabel(androidGames(it).size) } ?: "…"))
@@ -4251,7 +4275,7 @@ class AppState(
             SettingValue(values, current, set, label, after = after)
         // Off / On, or Hide / Show for a row that shows or hides something (Layouts'): the touch row's switch reads either.
         fun flip(on: Boolean, show: Boolean = false, after: (Boolean) -> Unit = republish, set: (Boolean) -> Unit) =
-            cycle(listOf(false, true), on, { if (show) (if (it) "Show" else "Hide") else (if (it) "On" else "Off") }, after = after, set = set)
+            cycle(listOf(false, true), on, { if (show) showHide(it) else onOff(it) }, after = after, set = set)
         return when (row.kind) {
             // Appearance: the pad theme, the accent presets, Auto and the presets, Large / Small.
             SettingsKind.PAD_SKIN -> flip(s.padSkin) { s.padSkin = it }
@@ -4342,7 +4366,7 @@ class AppState(
             SettingsKind.KEYBOARD -> cycle(listOf(false, true), s.androidKeyboard, ::keyboardLabel) { s.androidKeyboard = it }
             // Kids Mode On / Off: the first switch-on runs setup (another screen), so the page is republished only if still up.
             SettingsKind.KIDS_ENABLE -> kids?.let {
-                flip(s.kidsEnabled, after = { if ((_screen.value as? Screen.Settings)?.section == SettingsSection.KIDS) settingsUi.refreshSettings() }) { on -> kidsUi.kidsSetEnabled(on) }
+                flip(s.kidsEnabled, after = { refreshSettingsOn(SettingsSection.KIDS) }) { on -> kidsUi.kidsSetEnabled(on) }
             }
             else -> null
         }
@@ -4470,7 +4494,7 @@ class AppState(
             SettingsRow(SettingsKind.LAYOUT_GAME_LISTS, SettingsSection.LAYOUT_GAME_LISTS.label, menuStyleLabel(gameListLayout().first)),
             SettingsRow(SettingsKind.LAYOUT_TITLE_HINTS, SettingsSection.LAYOUT_TITLE_HINTS.label, chrome),
             SettingsRow(SettingsKind.LAYOUT_SWITCHER, SettingsSection.LAYOUT_SWITCHER.label, s.switcherLayout.label),
-            SettingsRow(SettingsKind.EXTRA_INFO, "Extra info", if (s.menuExtraInfo) "Show" else "Hide"),
+            SettingsRow(SettingsKind.EXTRA_INFO, "Extra info", showHide(s.menuExtraInfo)),
             SettingsRow(SettingsKind.GAME_INFO, "Game info", gameInfoLabel(s.menuInfoAchievements)),
             SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
         )
@@ -4483,22 +4507,21 @@ class AppState(
      */
     private fun layoutTabRows(c: MenuCategory): List<SettingsRow> {
         val s = deps.settings
-        fun shown(on: Boolean) = if (on) "Show" else "Hide"
         val on = tabSetting(c)
         // The Games tab's layout is the game lists' (Layouts -> Game lists): its page has the one row.
-        if (c == MenuCategory.GAMES) return listOf(SettingsRow(SettingsKind.TAB_SHOWN, "Visible", shown(on), category = c))
+        if (c == MenuCategory.GAMES) return listOf(SettingsRow(SettingsKind.TAB_SHOWN, "Visible", showHide(on), category = c))
         val style = MenuStyles.styleOf(s.menuStyles, c)
         val home = c == MenuCategory.HOME
         val layout = SettingsRow(SettingsKind.MENU_STYLE, "Layout", menuStyleLabel(style), category = c).takeIf { on }
         return listOfNotNull(
-            SettingsRow(SettingsKind.TAB_SHOWN, "Visible", shown(on), category = c),
+            SettingsRow(SettingsKind.TAB_SHOWN, "Visible", showHide(on), category = c),
             layout.takeIf { !home },
             // Home's New and Not started shelves, Show / Hide, while the Home tab shows.
-            SettingsRow(SettingsKind.SHELF_SHOWN, "New shelf", shown(s.showNewShelf), shelf = HomeShelf.NEW).takeIf { on && c == MenuCategory.HOME },
-            SettingsRow(SettingsKind.SHELF_SHOWN, "Not started shelf", shown(s.showNotStartedShelf), shelf = HomeShelf.NOT_STARTED).takeIf { on && c == MenuCategory.HOME },
-            SettingsRow(SettingsKind.SHELF_SHOWN, "Most played shelf", shown(s.showMostPlayedShelf), shelf = HomeShelf.MOST_PLAYED).takeIf { on && c == MenuCategory.HOME },
+            SettingsRow(SettingsKind.SHELF_SHOWN, "New shelf", showHide(s.showNewShelf), shelf = HomeShelf.NEW).takeIf { on && c == MenuCategory.HOME },
+            SettingsRow(SettingsKind.SHELF_SHOWN, "Not started shelf", showHide(s.showNotStartedShelf), shelf = HomeShelf.NOT_STARTED).takeIf { on && c == MenuCategory.HOME },
+            SettingsRow(SettingsKind.SHELF_SHOWN, "Most played shelf", showHide(s.showMostPlayedShelf), shelf = HomeShelf.MOST_PLAYED).takeIf { on && c == MenuCategory.HOME },
             // Home's stats strip (its cards' info follows Extra info).
-            SettingsRow(SettingsKind.HOME_STATS, "Stats", shown(s.menuHomeStats)).takeIf { on && c == MenuCategory.HOME },
+            SettingsRow(SettingsKind.HOME_STATS, "Stats", showHide(s.menuHomeStats)).takeIf { on && c == MenuCategory.HOME },
             SettingsRow(SettingsKind.MENU_ORIENTATION, "Orientation", orientationLabel(MenuStyles.orientationOf(s.menuOrientations, c)), category = c)
                 .takeIf { on && c != MenuCategory.HOME && style == MenuStyle.CAROUSEL },
             SettingsRow(SettingsKind.CONTROLLER_ART, "Background", s.consoleArt.label, category = c)
@@ -4513,15 +4536,14 @@ class AppState(
      */
     private fun layoutGameListRows(): List<SettingsRow> {
         val s = deps.settings
-        fun shown(on: Boolean) = if (on) "Show" else "Hide"
         val (list, orientation) = gameListLayout()
         return listOfNotNull(
             SettingsRow(SettingsKind.LIST_ART, "List art", s.gameListArt.label).takeIf { list == MenuStyle.LIST },
             // Every layout: it also picks the game panel's header and the Game Switcher's box.
             SettingsRow(SettingsKind.BACKDROP_ART, "Backdrop art", s.backdropArt.label),
             // A game list's Layout icon (hidden: Layouts only), and its trophy icon and X hint (hidden: X and the game's menu).
-            SettingsRow(SettingsKind.LAYOUT_OPTIONS, "Layout options", shown(s.gameListLayoutOptions)),
-            SettingsRow(SettingsKind.ACHIEVEMENTS_PANEL, "Achievements panel", shown(s.gameListAchievementsPanel)).takeIf { deps.achievements != null },
+            SettingsRow(SettingsKind.LAYOUT_OPTIONS, "Layout options", showHide(s.gameListLayoutOptions)),
+            SettingsRow(SettingsKind.ACHIEVEMENTS_PANEL, "Achievements panel", showHide(s.gameListAchievementsPanel)).takeIf { deps.achievements != null },
             // A vertical list's alignment: with the layout rows, just above them.
             SettingsRow(SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT, "Alignment", verticalAlignmentLabel(s.gameListVerticalAlignment))
                 .takeIf { MenuStyles.effectiveOrientation(list, orientation) == MenuOrientation.VERTICAL },
@@ -4533,12 +4555,11 @@ class AppState(
     /** The page title's and hints' group: the two, and each hint on its own while the bar shows. */
     private fun layoutTitleHintRows(): List<SettingsRow> {
         val s = deps.settings
-        fun shown(on: Boolean) = if (on) "Show" else "Hide"
         return listOfNotNull(
-            SettingsRow(SettingsKind.PAGE_TITLE, "Page title", shown(s.menuPageTitle)),
-            SettingsRow(SettingsKind.BUTTON_HINTS, "Button hints", shown(s.menuButtonHints)),
+            SettingsRow(SettingsKind.PAGE_TITLE, "Page title", showHide(s.menuPageTitle)),
+            SettingsRow(SettingsKind.BUTTON_HINTS, "Button hints", showHide(s.menuButtonHints)),
             // Each hint on its own, while the bar shows (hidden: Netplay in the context menu, Recent and Search as icons).
-            SettingsRow(SettingsKind.HINT_SHOWN, "Netplay hint", shown(s.showNetplayHint), hint = NxButton.Y).takeIf { s.menuButtonHints && netplay != null },
+            SettingsRow(SettingsKind.HINT_SHOWN, "Netplay hint", showHide(s.showNetplayHint), hint = NxButton.Y).takeIf { s.menuButtonHints && netplay != null },
         )
     }
 
@@ -4558,9 +4579,7 @@ class AppState(
         section.tab?.let { c ->
             if (!tabSetting(c)) return null
             if (c == MenuCategory.GAMES) return gameListsShot()   // follows Layouts -> Game lists, never menuStyles
-            val style = MenuStyles.styleOf(s.menuStyles, c)
-            val vertical = style == MenuStyle.CAROUSEL && c != MenuCategory.HOME && MenuStyles.orientationOf(s.menuOrientations, c) == MenuOrientation.VERTICAL
-            return LayoutShot.Tab(c, style, stats = c != MenuCategory.HOME || s.menuHomeStats, vertical = vertical, art = consoleShotArt(c))
+            return tabShot(c)
         }
         return when (section) {
             SettingsSection.LAYOUT_GAME_LISTS -> gameListsShot()
@@ -4652,7 +4671,7 @@ class AppState(
                 null -> Unit
                 is PackageCheck.Rejected -> _error.value = result.reason
                 is PackageCheck.Ok -> {
-                    if ((_screen.value as? Screen.Settings)?.section == SettingsSection.GPU_DRIVER) settingsUi.refreshSettings()
+                    refreshSettingsOn(SettingsSection.GPU_DRIVER)
                     showNotice("Added ${result.driver.name}")
                 }
             }
@@ -4671,7 +4690,7 @@ class AppState(
         (_screen.value as? Screen.Settings)?.let { _screen.value = it.copy(confirmDriver = null) }
         scope.launch {
             withContext(deps.compute) { tryQuietly { store.remove(driver.id) } }
-            if ((_screen.value as? Screen.Settings)?.section == SettingsSection.GPU_DRIVER) settingsUi.refreshSettings()   // its row goes
+            refreshSettingsOn(SettingsSection.GPU_DRIVER)   // its row goes
         }
     }
 
@@ -5001,7 +5020,7 @@ class AppState(
             val entries = entriesFor(source.parent)
             if (_screen.value !== here) return@launch
             if (entries.isEmpty()) { leaveList(source.parent); return@launch }
-            val at = picked?.let { p -> entries.indexOfFirst { it.game.path == p } }?.takeIf { it >= 0 } ?: listSearchFrom
+            val at = entries.indexOfPath(picked) ?: listSearchFrom
             showList(freshSource(source.parent), entries, at)
         }
     }
@@ -5072,7 +5091,7 @@ class AppState(
                 val entries = entriesFor(s.source)
                 if (_screen.value !== s) return   // the user navigated while the source was read
                 if (entries.isEmpty()) { leaveList(s.source); return }
-                val index = select?.let { p -> entries.indexOfFirst { it.game.path == p } }?.takeIf { it >= 0 } ?: _selection.value.index
+                val index = entries.indexOfPath(select) ?: _selection.value.index
                 // A background refresh (a browsing art fetch landing) must not close what the user has open: actions
                 // that change the list close their menu before refreshing, so whatever is still open here stays.
                 _screen.value = Screen.Games(
@@ -5101,7 +5120,7 @@ class AppState(
         val m = menuScreen(s.menuTab ?: menuCategory)
         if (m !is Screen.Games) { showMenu(m); return }
         val kept = if (s.menu != null) m.copy(menu = keptMenu(s.menu, m.entries)) else m
-        val at = select?.let { p -> m.entries.indexOfFirst { it.game.path == p } }?.takeIf { it >= 0 } ?: keptRow(s, m)
+        val at = m.entries.indexOfPath(select) ?: keptRow(s, m)
         showMenu(kept, at)
         rememberMenuSelection()
     }
@@ -5301,11 +5320,7 @@ class AppState(
                 _selection.value = ListSelection(0, cheatDbRows(c.state.value).size)
             }
             ToolKind.DEVICE_SYNC -> {
-                val c = deps.deviceSync ?: return
-                c.open()   // Ready on the cable, or the live page of a sync still running
-                _screen.value = Screen.DeviceSync
-                // Sync ROMs first where it is offered (the option above the links), as setup's sync step.
-                publishSyncSetup(if ((c.page.value as? DeviceSyncPage.Ready)?.romsAvailable == true) SyncFocus.ROMS else SyncFocus.LINK)
+                showDeviceSync(deps.deviceSync ?: return)
             }
             ToolKind.SETTINGS -> openSettingsMenu()
             ToolKind.APPS -> openToolApps(AppPick.TOOLS)
@@ -5729,7 +5744,7 @@ class AppState(
         artCheck = scope.launch {
             running?.join()
             val from = libraryIndex.snapshot ?: return@launch
-            val art = try { scanner.readArt(from, reuse) } catch (e: CancellationException) { throw e } catch (e: Throwable) { return@launch }
+            val art = tryOrAny({ return@launch }) { scanner.readArt(from, reuse) }
             mutateIndex(IndexRefresh(rows = true, openList = true, ui = true)) { current -> current?.takeIf { it === from }?.withArt(art) } ?: return@launch
             withContext(uiContext) { artworkScreens?.libraryChanged() }
         }
@@ -5938,12 +5953,8 @@ class AppState(
         if (s.source != ListSource.Hidden) return
         val entry = s.entries.getOrNull(_selection.value.index) ?: return
         val job = scope.launch {
-            try {
+            tryOrAny({ e -> _error.value = "Something went wrong: ${e.message ?: e::class.simpleName}" }) {
                 applyHidden(entry, hidden = false, closeMenu = false)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                _error.value = "Something went wrong: ${e.message ?: e::class.simpleName}"
             }
         }
         hideJob = job
@@ -6509,8 +6520,7 @@ class AppState(
      */
     fun onLauncherChanged() {
         kidsUi.kidsHomeCheck()   // the role dialog's answer: Kids Mode on once home
-        val section = (_screen.value as? Screen.Settings)?.section
-        if (section == SettingsSection.SYSTEM || section == SettingsSection.LIBRARY || section == SettingsSection.KIDS) settingsUi.refreshSettings()
+        refreshSettingsOn(SettingsSection.SYSTEM, SettingsSection.LIBRARY, SettingsSection.KIDS)
     }
 
     /**
@@ -6835,7 +6845,7 @@ internal fun folderSummaryRows(s: Screen.FolderSummary): List<SummaryRow> = buil
     if (s.progress != null) return@buildList
     val movable = s.extraId == Recents.HOME && (s.summary.outside > 0 || s.summary.split > 0)
     if (s.result == null && movable) {
-        add(SummaryRow(SummaryRowKind.MOVE, NxRow("Move them into ${s.home}/Roms", secondary = if (s.move) "On" else "Off", cycleable = true)))
+        add(SummaryRow(SummaryRowKind.MOVE, NxRow("Move them into ${s.home}/Roms", secondary = onOff(s.move), cycleable = true)))
     }
     add(SummaryRow(SummaryRowKind.CONTINUE, NxRow("Continue")))
 }

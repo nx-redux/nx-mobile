@@ -25,7 +25,7 @@ class RaPrefetchTest {
         IndexedSystem("P8", "Pico-8", games = listOf(game("cart.p8"))),
     ))
     private val waits = ArrayList<Long>()
-    private val src = FakeRomsSource(mapOf("home" to listOf("Roms"), "home/Roms" to listOf("x (GBA)"), "home/Roms/x (GBA)" to emptyList()))
+    private val src = raHomeSource("x (GBA)")
     private val tree = RaHomeTree(src) { ContentRef("home") }
     private val badgeDir = RaBadgeFolders.segments("x (GBA)", 42)!!
     private fun setup(): Triple<RaPrefetch, FakeRaStore, FakeRaHttp> {
@@ -237,7 +237,7 @@ class RaPrefetchTest {
     }
 
     // Fingerprints: the shared per-folder hashes.json; a game whose file is unchanged is not hashed (nor unpacked) again.
-    private fun parts() = Triple(FakeRaStore(), FakeRaHttp(), RaHomeTree(FakeRomsSource(mapOf("home" to listOf("Roms"), "home/Roms" to listOf("x (GBA)"), "home/Roms/x (GBA)" to emptyList()))) { ContentRef("home") })
+    private fun parts() = Triple(FakeRaStore(), FakeRaHttp(), RaHomeTree(raHomeSource("x (GBA)")) { ContentRef("home") })
     @Test fun a_game_with_an_unchanged_file_is_not_hashed_again_and_unknown_games_are_remembered() = runTest {
         val (store, http, tree) = parts(); http.on("gameid", body = """{"Success":true,"GameID":0}""")
         val hasher = FakeRaHasher().apply {

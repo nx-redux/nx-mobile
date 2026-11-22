@@ -308,7 +308,7 @@ class ScrapeEngine(
      */
     private inner class InfoFiles : GameInfoFiles {
         private fun target(ref: LibraryGameRef): ArtTarget? =
-            if (ref.android) null else guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) }
+            if (ref.android) null else ArtPaths.targetOrNull(ref)
 
         override fun path(ref: LibraryGameRef): String? = target(ref)?.infoPath
 
@@ -340,7 +340,7 @@ class ScrapeEngine(
      * Reset's before pass, whose refs are only compared).
      */
     suspend fun artOnDisk(ref: LibraryGameRef, heroes: Boolean = true): ArtRefs =
-        guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) }?.let { artOnDisk(it, Listings(), heroes) } ?: ArtRefs()
+        ArtPaths.targetOrNull(ref)?.let { artOnDisk(it, Listings(), heroes) } ?: ArtRefs()
 
     /**
      * Held by a run's write into a pick slot (with its pick check right before it) and its index update, and by a
@@ -495,7 +495,7 @@ class ScrapeEngine(
             info?.let(onInfo)
             return hits
         }
-        val target = guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) }
+        val target = ArtPaths.targetOrNull(ref)
             ?: return ItemStatus.ERROR to "No place for its art"
         val ex = extras()
         /** The engine's folder before this game's writes ([indexArt] tells the mirror's files from an extra's own). */
@@ -776,7 +776,7 @@ class ScrapeEngine(
     suspend fun writePick(ref: LibraryGameRef, slot: ArtSlot, image: ByteArray, option: ArtOption): ArtRefs? {
         if (option.slot.fileSlot != slot) return null
         if (ref.android) return writeAndroidPick(ref, slot, image, option)
-        val target = guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) } ?: return null
+        val target = ArtPaths.targetOrNull(ref) ?: return null
         val fitted = fitFor(option.slot, image) ?: return null
         return pickWrites.withLock {
             val ls = Listings()

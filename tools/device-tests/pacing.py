@@ -21,7 +21,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from fold import Fold, q  # noqa: E402
+from fold import NS, PKG, Fold, q  # noqa: E402
 
 PREFS = "shared_prefs/nx-mobile.xml"
 
@@ -91,7 +91,7 @@ class Pacing:
         self.dev.require_present()
         self.saved_cfg = self.sh("cat %s 2>/dev/null" % q(self.cfg)) or None
         if self.a.work:
-            self.sh("am force-stop com.nxredux.mobile.dev")
+            self.sh("am force-stop %s" % PKG)
             self.saved_prefs = self.dev.run_as("cat %s" % PREFS)
             prefs = self.saved_prefs
             if 'name="debug_log"' in prefs:
@@ -122,7 +122,7 @@ class Pacing:
         self.sh("rm -f %s" % tmp)
 
     def restore(self):
-        self.sh("am force-stop com.nxredux.mobile.dev")
+        self.sh("am force-stop %s" % PKG)
         self.sh("; ".join("rm -f %s; if [ -e %s ]; then mv %s %s; fi" % (q(f), q(f + ".nxpacing"), q(f + ".nxpacing"), q(f))
                           for f in self.auto_files()))
         if self.saved_cfg is None:
@@ -155,12 +155,12 @@ class Pacing:
             self.sh("rm -f %s" % q(self.cfg))
         if prop:
             self.sh("setprop %s %s" % prop)
-        self.sh("am force-stop com.nxredux.mobile.dev; input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; "
-                "settings put global stay_on_while_plugged_in 3")
+        self.sh("am force-stop %s; input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; "
+                "settings put global stay_on_while_plugged_in 3" % PKG)
         if self.a.open_first:
             # Android 11 holds a broadcast to a force-stopped app: open it so the GAME hook is heard.
             self.sh("input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; "
-                    "am start -n com.nxredux.mobile.dev/com.nxredux.mobile.LaunchActivity")
+                    "am start -n %s/%s.LaunchActivity" % (PKG, NS))
             time.sleep(self.a.open_first)
         try:
             self.dev.game(self.a.rom, self.a.tag, slot=self.a.slot if self.a.state else None, timeout=90)
@@ -179,7 +179,7 @@ class Pacing:
                 quit_ok = None
             if not quit_ok:
                 print("the game did not quit: force-stopped", flush=True)
-            self.sh("am force-stop com.nxredux.mobile.dev; settings put global stay_on_while_plugged_in 0")
+            self.sh("am force-stop %s; settings put global stay_on_while_plugged_in 0" % PKG)
         frame_ms = 1000.0 / self.a.content_fps
         result = parse_timestats(stats, frame_ms) or {"frames": None, "uneven": None, "held33": None}
         result.update(work_from_log(log) or {})
