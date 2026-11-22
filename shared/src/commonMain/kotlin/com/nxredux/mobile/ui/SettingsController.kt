@@ -24,9 +24,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * What Settings' pages need from [AppState]: each page's rows and values ([settingsRows], [settingValue]: they read and
- * write state all over the app), the menu row to come back to, leaving a page, and what a reset touches beyond
- * the settings.
+ * What Settings' pages need from [AppState]: the menu row to come back to, leaving a page, and what a reset touches
+ * beyond the settings.
  */
 internal interface SettingsHost {
     fun kidsToolsAllowed(): Boolean
@@ -40,11 +39,6 @@ internal interface SettingsHost {
     fun back(): Boolean
     fun rememberMenuSelection()
     fun refreshInstalled()
-    fun settingsRows(section: SettingsSection): List<SettingsRow>
-    fun settingValue(row: SettingsRow): SettingValue<*>?
-    fun settingsDetails(section: SettingsSection): List<String>
-    fun layoutShot(section: SettingsSection): LayoutShot?
-    fun settingsBanner(section: SettingsSection): String?
     /** The art layout the screens draw follows the settings again. */
     fun syncArtLayout()
     fun rebuildHomeTab()
@@ -52,11 +46,10 @@ internal interface SettingsHost {
     fun clearShortcuts()
     /** System buttons' Reset: the connected pad model's SELECT / START / MENU back to its defaults. */
     fun resetSystemButtons()
-    fun resetButtonLayoutConsole()
 }
 
 /**
- * Settings' pages as screens: the section menu and each page (built from [SettingsHost.settingsRows]), the row each
+ * Settings' pages as screens: the section menu and each page (built from [SettingsRows.settingsRows]), the row each
  * remembers, a sub-page and back, a refresh keeping the highlight on its row, the two-pane taps and the row edit, the
  * value chooser and a row's info popup, and Reset to defaults.
  */
@@ -68,6 +61,8 @@ internal class SettingsController(
     private val deps: AppDeps,
     /** Kids Mode can run here: its category shows. */
     private val kidsAvailable: Boolean,
+    /** Every page's rows and values. */
+    private val content: SettingsRows,
     private val host: SettingsHost,
 ) {
     private val sectionSelections = HashMap<SettingsSection, ListSelection>()   // each section's row, remembered across visits
@@ -141,7 +136,7 @@ internal class SettingsController(
             deps.launcher?.takeIf { (index == 1) != it.isHome() }?.let { it.setHome(index == 1); refreshSettings() }
             return
         }
-        host.settingValue(r)?.changeTo(index)
+        content.settingValue(r)?.changeTo(index)
     }
 
     /** Settings row [row]'s picker ([ValueChooser]): every value, the current one under the cursor; a pick sets it ([chooseSetting]). */
@@ -325,15 +320,15 @@ internal class SettingsController(
 
     /** [section]'s page as it stands now; [confirm]: the remove dialog over it. */
     fun settingsPage(section: SettingsSection, confirm: ExtraFolder? = null): Screen.Settings {
-        val rows = host.settingsRows(section)
-        return Screen.Settings(section, rows, confirm, host.settingsDetails(section), host.layoutShot(section), host.settingsBanner(section), rows.map(::settingChoices))
+        val rows = content.settingsRows(section)
+        return Screen.Settings(section, rows, confirm, content.settingsDetails(section), content.layoutShot(section), content.settingsBanner(section), rows.map(::settingChoices))
     }
 
     /** [row]'s values for its touch control: its [settingValue]'s labels and current one; Use as home screen's and All files access's Off / On. */
     fun settingChoices(row: SettingsRow): SettingChoices? {
         if (row.kind == SettingsKind.HOME_SCREEN) return deps.launcher?.let { SettingChoices(ON_OFF, if (it.isHome()) 1 else 0) }
         if (row.kind == SettingsKind.ALL_FILES || row.kind == SettingsKind.MIC_ACCESS) return SettingChoices(ON_OFF, if (row.secondary == "On") 1 else 0)   // as granted when the row was built
-        val v = host.settingValue(row) ?: return null
+        val v = content.settingValue(row) ?: return null
         return v.labels?.let { SettingChoices(it, v.index) }
     }
 
@@ -441,7 +436,7 @@ internal class SettingsController(
     fun runSettingsReset(page: Screen.Settings) {
         when (page.rows.getOrNull(selection.value.index)?.kind) {
             SettingsKind.RESET_DEFAULTS -> resetToDefaults(page.section)
-            SettingsKind.BUTTON_LAYOUT_RESET -> host.resetButtonLayoutConsole()
+            SettingsKind.BUTTON_LAYOUT_RESET -> content.resetButtonLayoutConsole()
             else -> Unit
         }
     }

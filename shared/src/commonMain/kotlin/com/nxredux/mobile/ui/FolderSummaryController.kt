@@ -13,6 +13,7 @@ import com.nxredux.mobile.library.folderSummary
 import com.nxredux.mobile.library.homeSummary
 import com.nxredux.mobile.library.rewriteLines
 import com.nxredux.mobile.library.splitFolders
+import com.nxredux.mobile.library.unassignedHint
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.Recents
 import com.nxredux.mobile.tryOr
@@ -28,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import com.nxredux.mobile.ui.nx.NxRow
 
 /** What first setup's folder summaries need from [AppState]: the home, a scan, the ROMs folder offer and the steps' end. */
 internal interface FolderSummaryHost {
@@ -228,3 +230,65 @@ internal class FolderSummaryController(
 
 /** How often a home move rewrites the lines of the games it moved so far. */
 private const val LINES_FLUSH_MS = 3_000L
+
+/** A summary page row: the Move choice or Continue. */
+internal enum class SummaryRowKind { MOVE, CONTINUE }
+
+internal data class SummaryRow(val kind: SummaryRowKind, val row: NxRow)
+
+/**
+ * The summary page's rows: the home's Move choice (only when it has games to tidy and nothing ran yet) and Continue. None
+ * while a move runs. An extra folder has Continue alone: it is only read, never changed.
+ */
+internal fun folderSummaryRows(s: Screen.FolderSummary): List<SummaryRow> = buildList {
+    if (s.progress != null) return@buildList
+    val movable = s.extraId == Recents.HOME && (s.summary.outside > 0 || s.summary.split > 0)
+    if (s.result == null && movable) {
+        add(SummaryRow(SummaryRowKind.MOVE, NxRow("Move them into ${s.home}/Roms", secondary = onOff(s.move), cycleable = true)))
+    }
+    add(SummaryRow(SummaryRowKind.CONTINUE, NxRow("Continue")))
+}
+
+/**
+ * The move's confirmation for [s] (title, text), or null when Continue moves nothing: Move off, already run, nothing to
+ * move, or an extra folder (only read, never moved from). The home's games outside Roms move in and a console's extra
+ * folders merge into one.
+ */
+internal fun folderMoveAsk(s: Screen.FolderSummary): Pair<String, String>? {
+    if (!s.move || s.result != null || s.progress != null || s.extraId != Recents.HOME) return null
+    val sum = s.summary
+    fun games(n: Int) = if (n == 1) "1 game" else "$n games"
+    if (sum.outside == 0 && sum.split == 0) return null
+    val parts = listOfNotNull(
+        if (sum.outside > 0) "${games(sum.outside)} outside Roms will be moved into ${s.home}/Roms" else null,
+        if (sum.split > 0) (if (sum.split == 1) "1 console's folders will be merged into one" else "${sum.split} consoles' folders will be merged into one") else null,
+    )
+    return "Move games?" to (parts.joinToString(", and ") + ". Folders left empty are removed.")
+}
+
+/** The summary page's headline and lines: what was found, per console, where the unassigned are; the move's progress or result. */
+internal fun folderSummaryDetails(s: Screen.FolderSummary): List<String> = buildList {
+    val sum = s.summary
+    add(if (sum.games == 0) "No games found in ${s.name}" else if (sum.games == 1) "Found 1 game in ${s.name}" else "Found ${sum.games} games in ${s.name}")
+    sum.byConsole.forEach { (name, n) -> add("$name ($n)") }   // a line each, largest first
+    val after = ArrayList<String>()
+    val progress = s.progress
+    if (progress != null) after += if (progress.second == 0) "Moving…" else "Moving ${progress.first} of ${progress.second}…"
+    else s.result?.let { r ->
+        after += (listOfNotNull(
+            "Moved ${r.moved} into ${s.home}/Roms",
+            if (r.clashed > 0) "${r.clashed} left in place (same name already in Roms)" else null,
+            if (r.failed > 0) "${r.failed} could not be moved" else null,
+            if (r.cancelled) "Stopped" else null,
+        ).joinToString(" · "))
+    }
+    if (progress == null) unassignedHint(sum.unassigned)?.let { after += it }
+    // The home: how many lie outside its Roms (moved in by the Move row).
+    if (progress == null && s.result == null && sum.outside > 0) after += if (sum.outside == 1) "1 of them is outside Roms." else "${sum.outside} of them are outside Roms."
+    if (progress == null && s.result == null && sum.split > 0) {
+        after += if (sum.split == 1) "1 console has more than one folder; they are merged into one."
+        else "${sum.split} consoles have more than one folder; they are merged into one."
+    }
+    if (after.isNotEmpty() && sum.byConsole.isNotEmpty()) add("")   // a blank line between the console list and what follows
+    addAll(after)
+}

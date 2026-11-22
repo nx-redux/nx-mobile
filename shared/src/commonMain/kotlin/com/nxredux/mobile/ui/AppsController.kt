@@ -10,6 +10,11 @@ import com.nxredux.mobile.ui.nx.gridStep
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import com.nxredux.mobile.library.GameEntry
+import com.nxredux.mobile.library.SystemFolder
+import com.nxredux.mobile.runner.ContentRef
+import com.nxredux.mobile.scraper.AndroidArtStore
+import com.nxredux.mobile.scraper.ArtSlot
 
 /**
  * What the Android apps picker and app launches need from [AppState]: the installed list and the Android games console
@@ -170,4 +175,76 @@ internal class AppsController(
         val ids = settings.androidConsoleApps
         if (on) { if (id !in ids) settings.androidConsoleApps = ids + id } else settings.androidConsoleApps = ids - id
     }
+}
+
+/** The Android games console's tag: no folder, core or registry console has it. */
+const val ANDROID_TAG = com.nxredux.mobile.scraper.ANDROID_CONSOLE_TAG
+
+/** Which apps grid this is: the app drawer (its marks: the apps in Tools), or the Android games console's picker. */
+enum class AppPick { TOOLS, GAMES }
+
+/**
+ * The Android games console's apps: the [installed] apps whose ids are in [ids] (the user's list, [AppSettings.androidConsoleApps];
+ * one not installed is skipped), by label, case-insensitive. Detection never adds one.
+ */
+internal fun androidConsoleMembers(installed: List<InstalledApp>, ids: List<String>): List<InstalledApp> {
+    val members = ids.toSet()
+    return installed.filter { it.id in members }.sortedBy { it.label.lowercase() }
+}
+
+/** The games picker's order: the detected games, then every other app, each group by label, case-insensitive. */
+internal fun androidGamesPickOrder(installed: List<InstalledApp>): List<InstalledApp> {
+    val (games, rest) = installed.sortedBy { it.label.lowercase() }.partition { it.game }
+    return games + rest
+}
+
+/**
+ * The "Add N Android games to Consoles?" question (first setup's step, or a dialog over the main menu): the detected
+ * games' [ids] and their [labels], listed under it. Yes adds them all; either answer means it is never asked again.
+ * At most [MAX_LINES] lines list them (the last one "and N more" when they do not all fit), so neither page overflows.
+ */
+data class AndroidGamesAsk(val ids: List<String>, val labels: List<String>) {
+    companion object { const val MAX_LINES = 6 }
+
+    val title: String get() = "Android games"
+    val question: String get() = "Add ${ids.size} Android game${if (ids.size == 1) "" else "s"} to Consoles?"
+    /** The labels, at most [max] lines: past it the last line says how many more. */
+    fun shown(max: Int = MAX_LINES): List<String> = if (labels.size <= max) labels else labels.take(max - 1) + "and ${labels.size - (max - 1)} more"
+    val text: String get() = "$question\n\n" + shown().joinToString("\n")
+}
+
+/** The question for [installed]'s detected games, by label; null when none is detected (nothing is asked). */
+internal fun androidGamesAskFor(installed: List<InstalledApp>): AndroidGamesAsk? {
+    val games = installed.filter { it.game }.sortedBy { it.label.lowercase() }.ifEmpty { return null }
+    return AndroidGamesAsk(games.map { it.id }, games.map { it.label })
+}
+
+/** The Android games console's game entries' source id: no ROM tree has it (their paths are never written anywhere). */
+internal const val ANDROID_SOURCE = "android"
+
+/**
+ * The Android games console for [apps] (the console's members, [androidConsoleMembers]): a synthetic [SystemFolder] with no core,
+ * each app a [GameEntry] whose file name is the app id and whose shown name is its label, its screenshot, 2D box,
+ * wheel and app-built mix from [store] ([AndroidArtStore.art]; a hero screenshot marked); no 3D box. Null with no app: the console is
+ * hidden.
+ */
+internal fun androidConsoleOf(apps: List<InstalledApp>, store: AndroidArtStore?): SystemFolder? {
+    if (apps.isEmpty()) return null
+    val games = apps.map { a ->
+        GameEntry(
+            ref = ContentRef("app:${a.id}"), fileName = a.id, shownName = a.label,
+            screenshotRef = store?.art(a.id, ArtSlot.SCREENSHOT), box2dRef = store?.art(a.id, ArtSlot.BOX_2D),
+            wheelRef = store?.art(a.id, ArtSlot.WHEEL), mixRef = store?.art(a.id, ArtSlot.MIX), heroShot = store?.heroShot(a.id) == true,
+            folder = ContentRef("app:"), sourceId = ANDROID_SOURCE, relativeDir = "",
+        )
+    }
+    return SystemFolder("Android", ANDROID_TAG, null, games, android = true)
+}
+
+/** The Consoles rows with [console] (the Android one) placed among them by display name, ignoring case; [rows] as they are without it. */
+internal fun withAndroidConsole(rows: List<MainRow.System>, console: SystemFolder?): List<MainRow.System> {
+    if (console == null || console.games.isEmpty()) return rows
+    val name = console.displayName.lowercase()
+    val at = rows.indexOfFirst { it.system.displayName.lowercase() > name }.takeIf { it >= 0 } ?: rows.size
+    return rows.toMutableList().apply { add(at, MainRow.System(console)) }
 }
