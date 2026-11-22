@@ -604,7 +604,7 @@ class WizardTest {
             com.nxredux.mobile.netplay.NetplayRole.CLIENT, "10.0.0.1", "mgba", "gpsp", overUsb = true, mixed = true, peerWl = "rfu",
         )
         assertEquals(mapOf("mgba_link_mode" to "auto_cable"), com.nxredux.mobile.netplay.NetplayLinkOptions.forSession(session, "cable"))
-        // Without a shared Wi-Fi mode the same switch is today's same-core session.
+        // Without a shared Wi-Fi mode the same switch is a same-core session.
         val (h2, c2) = PipeChannel.pair()
         val job2 = async { Wizard.client(c2, joinGba.copy(wl = "none"), FakeSaveSink()) }
         h2.readLine(1000)
@@ -623,7 +623,7 @@ class WizardTest {
         assertEquals("START 2", c.readLine(1000))
         c.writeLine("START")
         assertEquals(HostOutcome.Started("gpsp", "10.0.0.2", emptySaves = false, mixed = true, peerWl = "rfu"), hostJob.await())
-        // Over the cable a poke game is not a mixed pair: today's same-core rules.
+        // Over the cable a poke game is not a mixed pair: the same-core rules.
         val (h2, c2) = PipeChannel.pair()
         val hostJob2 = async { Wizard.host(h2, hostAutoUsb.copy(wl = "poke"), saves = { error("a link session copies no saves") }) }
         c2.writeLine("HELLO 2 $rubyEsc client caps=core=mgba,tag=MGBA,wl=poke,auto=1")

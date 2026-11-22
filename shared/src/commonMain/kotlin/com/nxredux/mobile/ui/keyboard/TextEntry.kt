@@ -83,7 +83,7 @@ private fun TextEntry.next(): EntryStep = if (!twoFields) none() else EntryStep(
 private fun TextEntry.cursorBy(d: Int) = copy(cursor = (cursor + d).coerceIn(0, text.length))
 
 /**
- * A pad press: the keyboard's mapping (spec), the d-pad moving the highlight on the keys or in the field. A held
+ * A pad press: the keyboard's mapping, the d-pad moving the highlight on the keys or in the field. A held
  * direction's [repeat] moves within where the highlight is, never across between the keys and the fields.
  */
 fun TextEntry.press(button: NxButton, repeat: Boolean = false): EntryStep {

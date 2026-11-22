@@ -315,7 +315,7 @@ fun MainMenuScreen(
                             hideHints = chrome.emptyBarRoom, toBoxBottom = true, layoutKey = layoutKey, leaving = minimalOpening != null, onSwipeSelect = onSwipeSelect,
                         )
                     }
-                    // List: the info band on the hint bar; the rows fade where more scrolls in.
+                    // List: the rows fade where more scrolls in.
                     MenuStyle.LIST -> {
                         val listRows = remember(rows, shared) {
                             rows.map { r ->

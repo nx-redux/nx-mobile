@@ -439,7 +439,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         broadcasts = runCatching { wifi?.createMulticastLock("nx-3ds-wireless")?.apply { setReferenceCounted(false); acquire() } }.getOrNull()
     }
     companion object {
-        /** Cores that send a video view map (melonds-ds#335, azahar#2718 in our patches). */
+        /** Cores that send a video view map (our core patches add it). */
         private val VIDEO_VIEW_CORES = setOf("melondsds", "azahar")
         private const val KEY_FCEUMM_TURBO_SINCE = "fceumm_turbo_since"
         private const val SIMULATE_VULKAN_FAIL = "simulate_vulkan_fail"   // debug builds only: see attachView
@@ -592,7 +592,6 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             ndsRenderMode = resolved.values[NdsRenderer.RENDER_MODE]
             input.n3dsCoreValues(resolved.values)
             val savedCheats = CheatSet.savedFrom(resolved.values, resolved.source)
-            // The file Dolphin loads, once known: an archive's unpacked disc names its built-in cheats (completed below).
             val dolphinContent = CompletableDeferred<String>()
             // Off the critical path: the menu shows the set once it lands, the first-frame apply waits for it.
             val loadCheats = { lifecycleScope.launch {
@@ -805,7 +804,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         if (alt != null) "Pick ${CoreRegistry.handheldTag(alt)} from the game's Emulator menu." else "Move it to the folder of the console it belongs to.",
                 )
             }
-            // minarch names saves after the unpacked file when Use extracted file name is on (ma_game.c:75-76): known only now.
+            // minarch names saves after the unpacked file when Use extracted file name is on (ma_game.c): known only now.
             paths = paths.withInner(inner?.let { unpackedEntry })
             saves.open(if (cfg.np == null) SaveStates(dataRoot, paths) else null)   // netplay: no save states, no auto-resume
             if (!settings.saveOnQuit) saves.unlinkAuto()
@@ -907,7 +906,6 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             // A NAOMI/Atomiswave set's BIOS archive (flycast opens <system>/dc/<bios>.zip or .7z); an unknown set is not checked.
             if (archiveAsIs) naomiSets.missingBios(cfg.romFileName, biosPresent)?.let { return refuse(NaomiSets.biosMessage(cfg.title, it)) }
-            // A missing arcade BIOS set (systemSets, read above) is refused here.
             if (systemSets.isNotEmpty()) {
                 val fbneoFiles = withContext(Dispatchers.IO) { File(systemDir, "fbneo").list()?.toSet() ?: emptySet() }
                 ArcadeCompanions.missing(systemSets, present, fbneoFiles)?.let { set ->
@@ -1069,7 +1067,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                                 copyToCache(cfg.content, fileName).absolutePath
                             }
                         } else {
-                            // With more than one virtual file the runner serves the core through its VFS (libretrodroid.cpp:391),
+                            // With more than one virtual file the runner serves the core through its VFS (libretrodroid.cpp),
                             // so the core opens /rom/<track>.bin by the name its cue gives. The first file is the one loaded.
                             val files = vfsFiles(cfg, fileName)
                             val opened = ArrayList<VirtualFile>(files.size)
@@ -1436,7 +1434,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     // ended link session's relaunch ([GameNetplay.local]) is a plain launch, which relaunches as any other.
                     val netplaySession = host.activity.intent.hasExtra(GameActivity.EXTRA_NETPLAY_ROLE) && !host.gameNetplay.local
                     // A custom driver failed (to load, to create its device, or to share its frames): the system driver
-                    // next, unless that failed here already; the system driver failed: OpenGL ES, as before.
+                    // next, unless that failed here already; the system driver failed: OpenGL ES.
                     val driver = host.launchedDriver
                     val next = GpuDriverChoice.afterStartFailure(host.launchedOnVulkan, driver?.id, host.gameCoreId in host.settings.vulkanFailedCores, netplaySession)
                     when (next) {

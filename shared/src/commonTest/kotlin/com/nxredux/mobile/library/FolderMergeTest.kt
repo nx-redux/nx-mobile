@@ -137,8 +137,8 @@ class FolderMergeTest {
         ))),
     )
 
-    // C1/I2: a cue moves with its bin whatever the listing order; a file that is no game stays; a disc folder moves whole.
-    // I3: a folder that names no console of its own (Misc) is no part of the split.
+    // A cue moves with its bin whatever the listing order; a file that is no game stays; a disc folder moves whole.
+    // A folder that names no console of its own (Misc) is no part of the split.
     @Test fun sets_move_whole_non_games_stay_and_a_consoleless_folder_is_not_merged() = runTest {
         val src = psSource()
         assertEquals(listOf(SplitFolders("PS", "Sony PlayStation (PS)", listOf("Sony PlayStation (SWANSTATION)"))), splitFolders(psIndex))
@@ -151,7 +151,7 @@ class FolderMergeTest {
         assertEquals(setOf("/Roms/Sony PlayStation (SWANSTATION)/G.cue", "/Roms/Sony PlayStation (SWANSTATION)/FF7/FF7.m3u"), moved.keys)
     }
 
-    // M1: a disc folder whose name main already has is a clash, not merged into it.
+    // A disc folder whose name main already has is a clash, not merged into it.
     @Test fun a_disc_folder_named_like_one_in_main_stays() = runTest {
         val src = psSource()
         kotlinx.coroutines.runBlocking { src.createDirectory(ContentRef(ps), "FF7"); src.writeText(ContentRef("$ps/FF7"), "FF7.cue", "x") }
@@ -168,7 +168,7 @@ class FolderMergeTest {
         assertEquals(emptyList(), splitFolders(only))
     }
 
-    // I1: what moved before a failure is still handed to the caller, so its lines follow.
+    // What moved before a failure is still handed to the caller, so its lines follow.
     @Test fun moves_made_before_a_failure_are_still_reported() = runTest {
         val src = source()
         val moved = LinkedHashMap<String, String>()

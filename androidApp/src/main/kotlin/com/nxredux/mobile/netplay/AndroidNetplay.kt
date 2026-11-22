@@ -304,7 +304,7 @@ class AndroidNetplay(context: Context, private val sdRoot: () -> File) : Netplay
     }
 
     override suspend fun gbaLinkMode(romFileName: String, content: ContentRef): String {
-        // The runner unpacks an archive; the probe reads only a bare ROM, so an archived game links as it did before.
+        // The runner unpacks an archive; the probe reads only a bare ROM, so an archived game has no link mode.
         if (Names.isArchive(romFileName)) return GbaWifiLink.NONE
         // A SAF document reads through its descriptor's /proc path, which the native probe opens like a file.
         return withContext(Dispatchers.IO) {

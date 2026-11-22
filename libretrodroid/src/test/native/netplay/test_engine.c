@@ -1241,7 +1241,7 @@ static int wire_tail(int fd, capture* c) {
 	return 0;
 }
 
-/* Pair mode off: a 300-frame host session puts exactly the bytes the engine sent before pair mode existed. */
+/* Pair mode off: a 300-frame host session puts exactly the golden bytes, nothing of pair mode among them. */
 static int case_pair_off_wire_unchanged_host(void) {
 	uint16_t port = next_port++;
 	fake_set(1000000);

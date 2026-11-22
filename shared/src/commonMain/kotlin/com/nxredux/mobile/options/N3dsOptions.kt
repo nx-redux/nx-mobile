@@ -231,7 +231,7 @@ object N3dsOptions {
         return when (appLayoutFor(values, landscape, controllerMode, screen)) {
             "large" -> if (landscape || space == null) "2" else proportionText(fillProportion(space.width, space.height))
             // Stacked too short for the full-width top over even a half-size touch screen: two equal screens fitted to
-            // the height, as Stacked always was, never Large's half size
+            // the height, never Large's half size
             "stacked" -> if (landscape || space == null || !fullWidthFits(space.width, space.height)) "1"
                 else proportionText(fillProportion(space.width, space.height))
             else -> "1"

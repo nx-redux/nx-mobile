@@ -1318,7 +1318,7 @@ class ArtworkScreensTest {
     }
 
     @Test fun detailsLeaveAccountStatusToAccount() {
-        // Sign-in, quota and keys are on the Account page; no counts, no source credit: an idle page has no lines.
+        // Sign-in, quota and keys are on the Settings page; no counts, no source credit: an idle page has no lines.
         val state = com.nxredux.mobile.scraper.ScrapeState(quota = com.nxredux.mobile.scraper.SsQuota(1234, 20000), tgdbLeft = 1820)
         assertEquals(emptyList(), artworkDetails(true, state))
         assertEquals(listOf("Artwork fetching isn't available in this build."), artworkDetails(false, state))

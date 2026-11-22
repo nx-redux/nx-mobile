@@ -97,7 +97,7 @@ object ShaderOptions {
     fun preset(values: Map<String, String>): String? = values[PRESET]?.takeIf { it.isNotEmpty() && it != NONE }?.let(::current)
 
     /**
-     * The bundled GLSL presets that now ship as their slang versions only, each with the preset that took its place: a
+     * The bundled GLSL presets that ship as their slang versions only, each with the preset that took its place: a
      * game or console saved with one keeps its shader.
      */
     val REPLACED: Map<String, String> = mapOf(

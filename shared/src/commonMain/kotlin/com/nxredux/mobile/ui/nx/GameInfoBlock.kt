@@ -63,12 +63,6 @@ import org.jetbrains.compose.resources.painterResource
 import kotlin.math.pow
 
 /**
- * The selected item's info on one line (gameInfoLines' segments in order: the time, the achievements with the trophy,
- * the next goal), in grey, joined by [INFO_SEPARATOR], with a shadow so it reads over art (the band's fade,
- * [GameInfoBand], sits behind). One text, the trophy inline, so the whole line ellipsizes at its end: never wraps and no
- * segment overflows another. [alignEnd]: right-aligned (beside a band's arrows).
- */
-/**
  * A game list's achievements panel toggle ([com.nxredux.mobile.ui.GameListFrame]'s trophy action): a tap on the selected
  * game's caption (its name and info, [captionTap]) opens or closes the panel too. Null elsewhere: no tap target.
  */
@@ -81,6 +75,12 @@ internal fun Modifier.captionTap(): Modifier {
     return clickable(remember { MutableInteractionSource() }, indication = null, onClick = tap)
 }
 
+/**
+ * The selected item's info on one line (gameInfoLines' segments in order: the time, the achievements with the trophy,
+ * the next goal), in grey, joined by [INFO_SEPARATOR], with a shadow so it reads over art (the band's fade,
+ * [GameInfoBand], sits behind). One text, the trophy inline, so the whole line ellipsizes at its end: never wraps and no
+ * segment overflows another. [alignEnd]: right-aligned (beside a band's arrows).
+ */
 @Composable
 private fun GameInfoBlock(lines: List<InfoLine>, alignEnd: Boolean, modifier: Modifier = Modifier, scale: Float = 1f) {
     if (lines.isEmpty()) return
@@ -271,7 +271,7 @@ internal fun fitCaptionRows(
 
 /**
  * A game caption's info [rows], centred or as [style] aligns them, in grey with
- * the trophy inline and the next goal in white ([infoText]), [fitCaptionRows]-fitted to [avail] (the caption's width):
+ * the trophy inline ([infoText]), [fitCaptionRows]-fitted to [avail] (the caption's width):
  * a trophy row too long for it puts "Next: <name>" on a line of its own, using only the [spare] height left under the
  * caption's reserve, so the row above never moves; [alwaysSplitNext]: whether it fits or not ([fitCaptionRows]).
  * Measured once per row text, width and style.

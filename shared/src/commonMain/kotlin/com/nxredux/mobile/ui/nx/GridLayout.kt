@@ -9,7 +9,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** A game list's Grid tile, width over height (182.6 × 116.7, the Flip's former tall portrait tile), on every screen. */
+/** A game list's Grid tile, width over height (182.6 × 116.7), on every screen. */
 internal const val GRID_GAME_TILE_AR = 182.6f / 116.7f
 
 /**

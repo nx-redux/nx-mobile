@@ -109,7 +109,7 @@ data class CoreDescriptor(
     /** How the core switches API under Display → Graphics API; null = no Vulkan path, the console has no row. */
     val vulkan: VulkanSwitch? = null,
     /**
-     * Whether the core can rewind (libretro docs feature table, checked 2026-10-24). False for azahar, flycast, ppsspp and
+     * Whether the core can rewind (libretro docs feature table). False for azahar, flycast, ppsspp and
      * prboom, which don't support it, and Dolphin, whose states are too large to snapshot every frame on a phone.
      */
     val rewind: Boolean = true,

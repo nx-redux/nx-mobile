@@ -9,7 +9,7 @@ import java.io.File
 
 /**
  * Debug builds only: the adb test hooks' results, one JSON file per hook under filesDir/nxtest/ (read with
- * `adb shell run-as com.nxredux.mobile cat files/nxtest/<name>.json`). The hooks' receiver lives in the debug source set;
+ * `adb shell run-as com.nxredux.mobile.dev cat files/nxtest/<name>.json`). The hooks' receiver lives in the debug source set;
  * this writer is in main because GameActivity reports through it. A release build writes nothing.
  */
 object NxTestResults {

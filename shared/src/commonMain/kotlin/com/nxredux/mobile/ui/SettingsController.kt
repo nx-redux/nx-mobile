@@ -362,14 +362,10 @@ internal class SettingsController(
         sel.step(delta) { rows.getOrNull(it)?.selectable != false }
 
     /**
-     * Appearance's, Layouts' or Controls' "Reset to defaults" (NX Redux settings.c): the page's own options back to their
-     * defaults. Appearance: Pad theme, Pad buttons, Accent, Secondary accent, Text size, Button layout. Layouts: every
-     * tab's style and orientation unset (so [MenuStyles.styleOf] and [MenuStyles.orientationOf] give theirs), the game lists', the tabs', shelves'
-     * and hints' Show/Hide, Consoles background, List art, Backdrop art, Page title, Button hints, Extra info, Home stats,
-     * Layout options, Achievements panel and Game Switcher layout. Controls: Pad vibration, Game rumble and every pad
-     * layout. At once, no confirm, as NX Redux. Through the settings' own setters, then the page is republished like any
-     * cycled row's (App re-reads the theme, accent and scale with it), the highlight kept on the reset row, which the
-     * orientation rows coming or going may have moved.
+     * A page's "Reset to defaults" (Shortcuts' Clear all, System buttons' Reset), once confirmed: the page's own options
+     * back to their defaults. Layouts' tab styles and orientations are unset, so [MenuStyles.styleOf] and
+     * [MenuStyles.orientationOf] give theirs. The page is republished like any cycled row's, the highlight kept on the
+     * reset row, which the orientation rows coming or going may have moved.
      */
     private fun resetToDefaults(section: SettingsSection) {
         val s = deps.settings

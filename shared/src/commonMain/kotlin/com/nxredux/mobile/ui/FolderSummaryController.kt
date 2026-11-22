@@ -47,7 +47,7 @@ internal interface FolderSummaryHost {
 
 /**
  * First setup's folder summaries: the home page after the home pick (what the home holds in `Roms/` and outside it, and
- * the move that tidies it), and an added ROMs folder's summary with its move into the home. A move's progress shows on the
+ * the move that tidies it), and an added ROMs folder's summary (only read: no move). A move's progress shows on the
  * page; B stops it after the current game ([moveCancelled]).
  */
 internal class FolderSummaryController(

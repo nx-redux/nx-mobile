@@ -77,8 +77,10 @@ sealed interface MainRow {
         override var shot: String? = null; private set
         constructor(entry: Listed, shot: String?) : this(entry) { this.shot = shot }
     }
-    /** Home on the large face: a game on a discovery shelf ([HomeShelf]); A launches it, as a pin. */
-    /** A shelf's game; [tag] its own badge (Most played: its play time), else the shelf's reason where it has one ([homeShelfBadge]). */
+    /**
+     * Home on the large face: a game on a discovery shelf ([HomeShelf]); A launches it, as a pin. [tag]: its own badge
+     * (Most played: its play time), else the shelf's reason where it has one ([homeShelfBadge]).
+     */
     data class Shelf(val entry: Listed, val shelf: HomeShelf, val tag: String? = null) : MainRow, HomeShot {
         override var shot: String? = null; private set
         constructor(entry: Listed, shelf: HomeShelf, tag: String?, shot: String?) : this(entry, shelf, tag) { this.shot = shot }

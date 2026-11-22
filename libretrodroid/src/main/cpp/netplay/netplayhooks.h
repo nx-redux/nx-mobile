@@ -22,8 +22,8 @@
 
 namespace libretrodroid { class Core; class Input; }
 
-// The run loop's side of the lockstep engine (np_engine.h): P1/P2 joypad words and sticks. preFrame, postFrame and inputState run on the frame (GL)
-// thread; active and shutdown from any thread.
+// The run loop's side of the lockstep engine (np_engine.h): P1/P2 joypad words and sticks. preFrame, postFrame and
+// inputState run on the frame (GL) thread; active and shutdown from any thread.
 namespace libretrodroid::netplay {
     bool active();                                // a session is started and not yet over
     bool preFrame(Core& core, Input& input);      // true: run one frame on the session's inputs; false: redraw only

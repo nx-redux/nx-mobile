@@ -123,7 +123,7 @@ fun HandheldShell(
     val ydpi = rememberDisplayYdpi()
     val posture = LocalPosture.current
     var topInWindow by remember { mutableStateOf<Int?>(null) }   // the shell's top in window px, for the hinge
-    // The screen and pad move between the branches below rather than being rebuilt: a rotation or a fold keeps their
+    // The screen moves between the branches below rather than being rebuilt: a rotation or a fold keeps its
     // lazy states, glides, animations and focus. The latest lambdas are read through, so the movable content stays one.
     val currentScreen by rememberUpdatedState(screen)
     val movableScreen = remember { movableContentOf { m: Modifier -> currentScreen(m) } }

@@ -12,7 +12,7 @@ class ArtFitTest {
     private val grid = ArtCaps.of(ArtSlot.GRID)
     private val box3d = ArtCaps.of(ArtSlot.BOX_3D)
     private val box2d = ArtCaps.of(ArtSlot.BOX_2D)
-    /** A photographic cap (PNG only for a PNG source or alpha): no slot uses it since the 2D box went full-colour PNG. */
+    /** A photographic cap (PNG only for a PNG source or alpha): no slot uses one. */
     private val photo = ArtCap(900, 900, photo = true)
 
     @Test fun capsPerSlot() {

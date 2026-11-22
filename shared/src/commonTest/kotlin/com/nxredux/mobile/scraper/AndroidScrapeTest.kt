@@ -84,10 +84,10 @@ class AndroidScrapeTest {
         assertTrue(call.contains("romnom=Pok%C3%A9mon+GO.apk&systemeid=63&"), call)
         assertEquals(listOf("https://m/pgo-ss.png"), rig.http.calls.filter { it.startsWith("https://m/") })
         assertContentEquals(OK_PNG.body, rig.files[pgo.fileName])
-        assertTrue(rig.hasher.asked.isEmpty())                                // never hashed
+        assertTrue(rig.hasher.asked.isEmpty())
         assertTrue(rig.arts.isEmpty() && rig.written.isEmpty())               // not the index or the home tree
         assertEquals(1, rig.refreshed)
-        assertEquals(listOf(ArtCaps.of(ArtSlot.SCREENSHOT)), rig.fitter.caps)   // fitted to the screenshot cap
+        assertEquals(listOf(ArtCaps.of(ArtSlot.SCREENSHOT)), rig.fitter.caps)
     }
 
     @Test fun notFoundByNameThenAnExactSearchHitOnAndroid() = runTest {

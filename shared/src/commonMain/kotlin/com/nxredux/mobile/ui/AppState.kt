@@ -344,7 +344,6 @@ data class SkinEditRequest(val consoleId: String, val landscape: Boolean, val wi
 interface SkinEditorLauncher { fun open(request: SkinEditRequest, title: String) }
 
 sealed interface Screen {
-    /** First setup's first step, before the home pick, where All files access is declared and not granted. */
     /**
      * First setup's Permissions page, before the home pick: each permission this device uses, as granted (true), not yet
      * (false) or not used here (null). A row asks for its permission; Continue goes on.
@@ -465,8 +464,8 @@ sealed interface Screen {
     /**
      * [confirmRemove]: the "remove this ROM folder?" dialog is open for that extra. [details]: the lines above the rows
      * (Library: games and consoles, last scan; Default emulators: its explanation); empty elsewhere.
+     * [shot]: a Layouts group's picture of its values (null: none, as a hidden tab's). [banner]: a note under the title, above the rows.
      */
-    /** [shot]: a Layouts group's picture of its values (null: none, as a hidden tab's). [banner]: a note under the title, above the rows. */
     data class Settings(
         val section: SettingsSection, val rows: List<SettingsRow>, val confirmRemove: ExtraFolder? = null, val details: List<String> = emptyList(),
         val shot: LayoutShot? = null, val banner: String? = null,
@@ -523,9 +522,8 @@ sealed interface Screen {
     data class EmulatorConsoles(val coreId: String, val emulator: String, val tags: List<String>) : Screen
     /**
      * One tag's emulator settings page, or a game's (Game Settings, [game] set). [category]: the open category (null =
-     * top level).
+     * top level). [confirmReset]: Reset to defaults asks first ([EmulatorRow.ResetDefaults]): A resets, B keeps.
      */
-    /** [confirmReset]: Reset to defaults asks first ([EmulatorRow.ResetDefaults]): A resets, B keeps. */
     data class EmulatorOptions(
         val page: EmulatorPage, val rows: List<EmulatorRow>, val category: String? = null, val game: Listed? = null,
         val confirmReset: Boolean = false,
@@ -589,7 +587,7 @@ internal val Screen.menuPushed: Boolean
         else -> false
     }
 
-/** Kids Mode's first switch-on, in order (the spec's): PIN, allowed apps, play times, then the two permissions and home. */
+/** Kids Mode's first switch-on, in order: PIN, allowed apps, play times, then the two permissions and home. */
 enum class KidsSetupStep { PIN, APPS, TIMES, USAGE, ALARMS, HOME }
 
 enum class SettingsKind { PLAYER_NAME, HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, GAME_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_SEGA_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, SAVE_ON_QUIT, A_RESUMES, GPU_DRIVER, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, IMPORT_BIOS, IMPORT_BIOS_FOLDER, IMPORT_BIOS_FILES, IMPORT_BIOS_ZIP, IMPORT_BIOS_RETROARCH, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
@@ -686,11 +684,11 @@ internal const val MIC_ROW_NOTE = "DS / 3DS only"
 /** A Shortcuts bind row's value while it waits for a press. */
 internal const val SHORTCUT_PROMPT = "Press a button…"
 
-/** Both Shortcuts pages' line in place of the bind rows while no controller is connected (the on-screen pad binds nothing). */
 /** Controls → System buttons without a pad connected. */
 internal const val SYSTEM_BUTTONS_NO_CONTROLLER = "Connect a controller to set its SELECT, START and MENU buttons."
 /** A System buttons row waiting for its press. */
 internal const val SYSTEM_BUTTON_PROMPT = "Press a button…"
+/** Both Shortcuts pages' line in place of the bind rows while no controller is connected (the on-screen pad binds nothing). */
 internal const val SHORTCUTS_NO_CONTROLLER = "Connect a controller to bind buttons. On the on-screen pad, use Touch button 1 and 2 instead."
 
 /** How long a notice stays before it clears itself. */
@@ -848,7 +846,6 @@ internal fun verticalAlignmentLabel(a: VerticalListAlignment): String = when (a)
     VerticalListAlignment.RIGHT -> "Right"
 }
 
-/** [enabled] false: dimmed and A does nothing (a default emulator of a one-tag console). [category]: a MENU_STYLE row's tab. */
 /**
  * A touch value row's picker ([AppState.chooser], the in-game menu's look): the row's [title], every value's [labels],
  * the d-pad cursor [selected] and the value set [current] (-1: none).
@@ -865,6 +862,7 @@ data class SettingChoices(val labels: List<String>, val index: Int)
 data class SettingInfoPopup(val title: String, val text: String, val scrollSeq: Int = 0, val scrollDir: Int = 0)
 
 /**
+ * [enabled] false: dimmed and A does nothing (a default emulator of a one-tag console). [category]: a MENU_STYLE row's tab.
  * [warning]: its secondary is a problem (a folder not available), drawn in the warning colour. [shortcut] / [touchSlot]:
  * the action or touch button of a Shortcuts row; [note] on a bind row: it is waiting for a press, and what to do.
  */
@@ -1451,7 +1449,6 @@ class AppState(
     private var foregroundJob: Job? = null            // onForeground's check (and the scan it starts)
     private var homeCheck: Job? = null                // the index start's home probe in flight (shared, see afterIndexStart)
     private var homeCheckFor: ContentRef? = null
-    /** The library changed since the last [load] (folders added or removed, games hidden, unhidden or reassigned): leaving Library reloads. */
     /** Settings' pages, the chooser, a row's info popup and the row edit. */
     private val settingsUi: SettingsController = SettingsController(
         _screen, _selection, _rowEdit, deps, kidsAvailable = kids != null,
@@ -1497,6 +1494,7 @@ class AppState(
     fun settingsCategoryTap(index: Int) = settingsUi.settingsCategoryTap(index)
     fun settingsPreviewTap(row: Int) = settingsUi.settingsPreviewTap(row)
 
+    /** The library changed since the last [load] (folders added or removed, games hidden, unhidden or reassigned): leaving Library reloads. */
     private var libraryDirty = false
 
     /** The app's settings, exposed for the UI (deps stays private). */
@@ -1621,8 +1619,6 @@ class AppState(
             // Files arrived (saves, states, their pictures): Continue's resume point and slot picture are read again. Game
             // info files may be among them: a cached absence would have the top screen fetch one and write over it.
             scope.launch { c.received.collect { gameInfoStore?.forgetCached(); _gameMeta.value = emptyMap(); metaFor = null; refreshMainRows() } }
-            // ROM files arrived: the main menu with nothing over it (the Games tab too) rescans at once; anywhere else (the
-            // tool itself) waits until it is left.
             // Collections changed (merged by this phone's writer, or pushed by a peer phone into its home `Collections/`): a
             // store copy takes in a daemon-written home file, then the tab is listed again and those counts redone.
             scope.launch {
@@ -1633,6 +1629,8 @@ class AppState(
                     refreshMainRows()
                 }
             }
+            // ROM files arrived: the main menu with nothing over it (the Games tab too) rescans at once; anywhere else (the
+            // tool itself) waits until it is left.
             scope.launch { c.romsArrived.collect { if (menuFree(_screen.value)) rescan() else { romsPending = true; libraryDirty = true } } }
             // Pending ROMs scan as soon as the main menu shows again with nothing over it, however the user got there: B on the tool,
             // Home, Back from a list the sync ended under, the end of a Loading the sync ended during. B on the tool and
@@ -2441,14 +2439,6 @@ class AppState(
     fun onboardingDraftKey(text: String) { (_screen.value as? Screen.Onboarding)?.takeIf { it.artKey != null }?.let { _screen.value = it.copy(draftKey = text) } }
 
     /**
-     * A value page's row [row] stepped by [by] (-1: the one before; A steps forward), in place: SAVE_FORMATS' save
-     * format, state format and extracted name; TEXT_SIZE's size; ACCENT's accent and secondary accent; TITLE's page
-     * title and button hints (Show / Hide); PAD's pad (shown / hidden), theme and Black's buttons ([ONBOARDING_VALUE_KINDS]). The same
-     * settings Settings steps ([settingValue]), applied at once and the page republished on that row, so the real pad
-     * (or the preview picture, or the colours, or the text size) changes and the step count follows ([App] reads them
-     * per screen). A row past the page's values, or another [step], does nothing.
-     */
-    /**
      * [rows] of a step as Settings' touch rows: a value row as its Settings row (name, one-line description, control; no
      * fuller text, as setup has no info popup), a choice as a plain row. WELCOME draws its own page: null.
      */
@@ -2499,6 +2489,11 @@ class AppState(
         }
     }
 
+    /**
+     * A value page's row [row] ([ONBOARDING_VALUE_KINDS]) stepped by [by] in place: the same settings Settings steps
+     * ([settingValue]), applied at once and the page republished on that row ([App] reads them per screen). A row past
+     * the page's values, or another [step], does nothing.
+     */
     private fun stepOnboardingValue(step: OnboardingStep?, row: Int, by: Int) {
         val kind = ONBOARDING_VALUE_KINDS[step]?.getOrNull(row) ?: return
         settingValue(SettingsRow(kind, ""))?.step(by)   // a bare row: none of these needs a tab, console or hint
@@ -3613,12 +3608,11 @@ class AppState(
     /** The list-style picker; null without [AppDeps.localFiles]. */
     private val filePicker = deps.localFiles?.let { FilePickerController(scope, _screen, _selection, _error, it) }
 
-    /** All files access is on and the list-style picker is there: every pick goes through it. */
-    /** Whether a folder pick goes to the app's own picker (All files access), not Android's. */
+    /** All files access is on and the list-style picker is there: every folder pick goes through it, not Android's. */
     fun filePickerOn(): Boolean = filePicker != null && deps.allFilesAccess?.granted() == true
 
     /**
-     * The home pick: the list-style picker with All files access. Without it no picker home is saved any more (the
+     * The home pick: the list-style picker with All files access. Without it no picker home is saved (the
      * home is the media one): All files access is asked for instead, and the row picks once it is on. Only a platform
      * without a media home or that permission keeps Android's picker ([FolderPicker.pickHome]).
      */
@@ -3960,7 +3954,7 @@ class AppState(
 
     /**
      * A raw key from the platform, before it maps to an [NxButton]: true when press to bind took it, so the platform
-     * drops it. Waiting, every key is the capture's (MENU opens nothing, L23); after it ends, the keys still held stay
+     * drops it. Waiting, every key is the capture's (MENU opens nothing); after it ends, the keys still held stay
      * its until released ([ShortcutCapture.takes]). Auto-repeats are the platform's to drop.
      */
     fun captureKey(keyCode: Int, down: Boolean): Boolean {
@@ -4003,7 +3997,7 @@ class AppState(
 
     /**
      * The Shortcuts page closes (any screen but it, [_screen]; the app backgrounded): a capture ends, and the draft is
-     * written once (L25: not per change).
+     * written once, not per change.
      */
     private fun closeShortcuts() {
         capture.cancel()
@@ -4106,10 +4100,6 @@ class AppState(
     }
 
     /**
-     * Settings -> System: its options as one group under the page's title (Player name, Pause when unfocused, Screen care, Use as home screen with
-     * a launcher, Debug log), then the About and Licenses groups.
-     */
-    /**
      * The Cable Link rows on mGBA's Emulator Settings page ([EmulatorRows.hostsCableLink]): the input delay, for trying a
      * game at a fixed one, its overlay, and the received-ROM cache. Only where Cable Link exists (the platform with a link
      * ROM cache).
@@ -4122,6 +4112,10 @@ class AppState(
         )
     }.orEmpty()
 
+    /**
+     * Settings -> System: its options as one group under the page's title (Player name, Pause when unfocused, Screen care, Use as home screen with
+     * a launcher, Keyboard, Debug log), then the About and Licenses groups.
+     */
     private fun systemRows(): List<SettingsRow> = buildList {
         add(SettingsRow(SettingsKind.PLAYER_NAME, "Player name", PlayerName.resolve(deps.settings.playerName, deps.deviceName())))
         add(SettingsRow(SettingsKind.PAUSE_UNFOCUSED, "Pause when unfocused", if (deps.settings.pauseWhenUnfocused) "On" else "Off"))
@@ -4471,14 +4465,6 @@ class AppState(
         }
     }
 
-    /**
-     * Layouts' rows in the handheld's order (settings.c): each tab's Show/Hide row, then while it shows its layout, Home's
-     * shelves and stats, its orientation (Carousel only; Home has none) and Consoles' controller (List only); then the
-     * game lists' layout, orientation (Carousel, Backdrop), alignment (vertical), List art (List), Backdrop art
-     * (Backdrop), Layout options and Achievements panel; then Game Switcher layout, Extra info, Page title, Button hints,
-     * the hints' Show/Hide (while Button hints shows) and Reset. A row that comes or goes is always below the row that
-     * changes it, so [refreshSettings]' clamp keeps the highlight on the changed row.
-     */
     /**
      * Layouts: a row per group (its page: a tab's, the game lists', the page title's and hints', the Game Switcher's), each
      * with what it is now (a shown tab its layout, a hidden one Hidden), then Extra info and Reset to defaults.
@@ -5561,7 +5547,7 @@ class AppState(
                     SettingsKind.KIDS_ALARMS -> kids?.openExactAlarms()
                     SettingsKind.KIDS_HOME -> deps.launcher?.setHome(true)   // the row goes once home ([onLauncherChanged])
                     SettingsKind.KIDS_FORGOT -> showSettingInfo(_selection.value.index)   // where the flag is, and what deleting it does
-                    else -> Unit   // a value row with nothing to step ([settingValue] null): as before, nothing
+                    else -> Unit   // a value row with nothing to step ([settingValue] null)
                 }
             }
             Screen.PickFolder, is Screen.PermissionsStep -> setupStepRow(_selection.value.index)

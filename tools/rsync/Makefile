@@ -23,7 +23,7 @@ BIN = $(OUT)/librsync_exec.so
 LICENSE = $(OUT)/licenses/rsync.txt
 JNILIBS_DIR ?= ../../androidApp/src/main/jniLibs/arm64-v8a
 
-# The spec's flags, plus what the NDK sysroot needs: popt and zlib bundled (no popt in the NDK), no iconv (bionic has it only
+# Unused features off, plus what the NDK sysroot needs: popt and zlib bundled (no popt in the NDK), no iconv (bionic has it only
 # from API 28), no ACLs or xattrs (a one-file pull never uses them). The AC_RUN_IFELSE checks cannot run when cross-compiling;
 # bionic has a working socketpair, a C99 vsnprintf, a secure mkstemp and gettimeofday's tz argument.
 CONFIGURE_FLAGS = --host=aarch64-linux-android --disable-openssl --disable-xxhash --disable-zstd --disable-lz4 --disable-md2man \

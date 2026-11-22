@@ -299,8 +299,7 @@ unsigned Video::sampledTextureUnits() const {
     // The built-in shaders and immersive mode sample units 0 and 1.
     unsigned units = 2;
     // The chain is (re)built inside this draw, after the guard; it will sample what chainTextureUnits counts. A held
-    // picture keeps it pending and the current chains
-    // alive (the second surface still draws with them), so both count.
+    // picture keeps it pending and the current chains alive (the second surface still draws with them), so both count.
     if (presetDirty && requestedPreset) units = std::max(units, chainTextureUnits(*requestedPreset));
     // The second surface's chain, when not built yet, is built from the main one's preset: the same units.
     if (presetRenderer) units = std::max(units, presetRenderer->textureUnits());
@@ -309,7 +308,6 @@ unsigned Video::sampledTextureUnits() const {
 }
 
 void Video::renderFrame(bool force) {
-    // Same for the paused redraw.
     CoreGlStateGuard guard(hasCoreGlState(), sampledTextureUnits());
     drawFrame(force);
 }
@@ -460,8 +458,8 @@ void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layou
             drawPlain(quad, screenW, screenH);
         } else if (preset) {
             // One chain serves every shaded region in turn, each under its own slot (a slang chain keeps every
-            // region's past frames apart). A region that is part of the
-            // frame (one DS / 3DS screen) is copied into its own texture first: presets place their effect from
+            // region's past frames apart). A region that is part of the frame (one DS / 3DS screen) is copied into its
+            // own texture first: presets place their effect from
             // texture coordinate 0 (crt-geom's curvature, a mask's edges) and later passes sample Original whole, so
             // each screen gets the effect as if it were the frame.
             auto frameW = (unsigned) std::lround(quad.srcWidth * (float) texW);
@@ -492,7 +490,7 @@ void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layou
                 frameFilter.invalidate();   // its first pass sets the filter of the texture it samples
             }
         } else {
-            // Built-in shaders: single-pass ones (the app only uses SHADER_DEFAULT) draw each region exactly; the
+            // Built-in shaders: single-pass ones (all the app uses) draw each region exactly; the
             // multi-pass upscalers are not region-aware.
             // A downscaled region samples linearly whatever the sharpness; put back after, as drawPlain does.
             bool down = regionDownscales(quad, (float) texW, (float) texH, (float) screenW, (float) screenH);

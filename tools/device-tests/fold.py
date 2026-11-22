@@ -195,7 +195,7 @@ class Fold:
         return "GameActivity" in out
 
     def sync(self, link="wifi", roms=False, timeout=600, confirm=True):
-        """SYNC hook; waits for a terminal sync.json and returns it (state 'timeout' added on our side).
+        """SYNC hook; waits for a terminal sync.json and returns it (state 'harness-timeout' when none came).
         confirm: the hook presses A on the confirm page (the other device still needs its own A)."""
         self.rm_result("sync")
         self.broadcast("SYNC", "--es link %s --ez roms %s --ez confirm %s"

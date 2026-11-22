@@ -87,11 +87,6 @@ class GLRetroView(
     }
 
     /**
-     * Audio resampling quality: 0 Low (zero-order hold), 1 Medium (linear), 2 High (fast sinc), 3 Max (best sinc).
-     * Audible fast forward plays at Medium at most. Main thread; pushed straight to native, kept across games and
-     * re-applied after create().
-     */
-    /**
      * Frame Skip: true (Auto) runs two frames in a step when the phone can't keep up, holding the
      * game's speed; false shows every frame and lets the game slow down. Applied live.
      */
@@ -115,6 +110,11 @@ class GLRetroView(
             LibretroDroid.setFillAudioGaps(value)
         }
 
+    /**
+     * Audio resampling quality: 0 Low (zero-order hold), 1 Medium (linear), 2 High (fast sinc), 3 Max (best sinc).
+     * Audible fast forward plays at Medium at most. Main thread; pushed straight to native, kept across games and
+     * re-applied after create().
+     */
     var resamplingQuality: Int by Delegates.observable(2) { _, old, value ->
         if (old != value) pushResamplingQuality()
     }
@@ -222,11 +222,6 @@ class GLRetroView(
     }
 
     /**
-     * Parts of the core frame drawn at places in the view (a DS screen each); empty = the single picture. While set,
-     * [scaleMode] and [screenOffset] don't apply; dst is relative to [viewport]. Touches map through the topmost region
-     * ([ScreenRegions.mapTouch]). Main thread; applied on the GL thread, and re-applied after create().
-     */
-    /**
      * A frame composed from the core's ([FrameComposition]) that replaces the core frame for every draw and for
      * touch (mapped back through its parts); null = the core frame as it is. Re-applied after create().
      */
@@ -250,6 +245,11 @@ class GLRetroView(
 
     data class ShaderSourceScale(val scale: Int = 1, val frameHeight: Int = 0)
 
+    /**
+     * Parts of the core frame drawn at places in the view (a DS screen each); empty = the single picture. While set,
+     * [scaleMode] and [screenOffset] don't apply; dst is relative to [viewport]. Touches map through the topmost region
+     * ([ScreenRegions.mapTouch]). Main thread; applied on the GL thread, and re-applied after create().
+     */
     var screenRegions: List<ScreenRegion> by Delegates.observable(emptyList()) { _, old, value ->
         if (old == value) return@observable
         val packed = ScreenRegions.pack(value)

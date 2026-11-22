@@ -5,7 +5,7 @@ $(error GNU make >= 3.82 required; on macOS run gmake (brew install make))
 endif
 
 # ---- tools -----------------------------------------------------------------
-# NDK r29, the one libretro's buildbot builds its Android cores with (libretro-build-android, since 2026-07-19), and
+# NDK r29, the one libretro's buildbot builds its Android cores with (libretro-build-android), and
 # flycast's and ARMSX2's own CI. r26's libc++ std::ranges::binary_search compared against the first element (Dolphin
 # flushed on most draws, ~600 glFlush a frame in Super Mario Galaxy 2).
 NDK_VERSION ?= 29.0.14206865
@@ -39,7 +39,6 @@ PATCH = git apply
 # needs a game: PROBE_ROM_<core>=<path> passes one to options-<core> (from your own card copy; never committed).
 # options-fbneo requires it (an arcade set zip); FBNEO_PROBE_ROM is the older name for PROBE_ROM_fbneo.
 # Keep PROBE_ROM_fbneo a Neo Geo set: the table's neogeo section (Neo-Geo mode, memory card) comes from it.
-# See docs/superpowers/specs/2026-09-29-emulator-settings-design.md, section 1.
 ADB ?= $(SDK)/platform-tools/adb
 ADB_SERIAL ?=
 FBNEO_PROBE_ROM ?=
@@ -109,7 +108,7 @@ fceumm_BUILD_PATH = .
 # jni/Android.mk defines LOCAL_MODULE := retro -> libs/arm64-v8a/libretro.so
 fceumm_ARTIFACT = libs/$(ABI)/libretro.so
 # patches/fceumm.patch: the FDS disk in one L press (eject, then the next side in a second later; L with the drive empty
-# puts the next side in), its pending flip kept in save states. The VFS path hunk it once carried is upstream (#660).
+# puts the next side in), its pending flip kept in save states.
 
 # patches/snes9x/0001 (nx-redux's): retro_cheat_set copies the code to the heap; database codes overflowed its 256-byte
 # stack buffer.
@@ -145,7 +144,7 @@ mgba_LICENSE = LICENSE
 mgba_KIND = cmake
 mgba_BUILD_PATH = .
 mgba_CMAKE_TARGET = mgba_libretro
-# Link (netplay stage 2c): patches/mgba/001-sio-lockstep.patch is nx-redux main's (2f25643b), the real link cable with a
+# Link: patches/mgba/001-sio-lockstep.patch is nx-redux's, the real link cable with a
 # CMakeLists.txt hunk that compiles cores/sio_lockstep in (NX_SIOLS_DIR). The core is then GPL-2.0-or-later (NOTICE.txt).
 # patches/mgba/003-wifi-link.patch adds gpSP's Wireless Adapter and cable protocols (cores/gba_wifi_link, NX_GWL_DIR).
 # patches/mgba/004-pair-cable.patch (phone only) adds pair mode: two GBAs on mGBA's own link cable in one core, for Cable
@@ -210,7 +209,7 @@ ppsspp_ARTIFACT = ppsspp_libretro_android.so
 # --depth 1 init; they are all required, so no _SUBMODULES override is set.
 ppsspp_FLAGS = -DLIBRETRO=ON -DANDROID=ON -DUSING_GLES2=ON -DUSE_SYSTEM_FFMPEG=OFF -DUSE_DISCORD=OFF -DUSE_SYSTEM_LIBZIP=OFF
 
-# melonDS DS (JesseTG), replacing libretro/melonDS on 2026-09-27. CMake kind like ppsspp. The libretro target is a
+# melonDS DS (JesseTG). CMake kind like ppsspp. The libretro target is a
 # MODULE library, so the 16 KB page flag goes in CMAKE_MODULE_LINKER_FLAGS (the template only sets the SHARED one).
 # OpenGL is on via GLES3: upstream refuses GLES, so patches/melondsds.patch lifts that and ports its compositor, and
 # patches/melonds.patch (below, on the melonDS dependency) carries melonDS-android-lib's GLES port of the renderer,
@@ -229,8 +228,8 @@ MELONDSDS_DEPS_DIR = $(abspath $(SRC_ROOT))/melondsds-deps
 melondsds_FLAGS = -DENABLE_JIT=ON -DENABLE_OPENGL=ON -DENABLE_OGLRENDERER=ON -DOPENGL_PROFILE=OpenGLES3 -DBUILD_TESTING=OFF \
   "-DCMAKE_MODULE_LINKER_FLAGS=$(PAGE_LDFLAGS)" \
   -DFETCHCONTENT_BASE_DIR=$(MELONDSDS_DEPS_DIR) -DFETCHCONTENT_FULLY_DISCONNECTED=ON
-# <FetchContent name, lowercased>@<repo>@<full SHA>, from cmake/FetchDependencies.cmake at the pin (resolved 2026-11-06;
-# fmt 12.2.0, date v3.0.5 and zlib v1.3.2 are tags there; melonDS is JesseTG's jtg/fix-uninitialized-opengl branch).
+# <FetchContent name, lowercased>@<repo>@<full SHA>, from cmake/FetchDependencies.cmake at the pin
+# (fmt 12.2.0, date v3.0.5 and zlib v1.3.2 are tags there; melonDS is JesseTG's jtg/fix-uninitialized-opengl branch).
 MELONDSDS_DEPS = \
   melonds@https://github.com/JesseTG/melonDS@16f127dbb587a73371827ce79689c5d237c4b59b \
   libretro-common@https://github.com/libretro/libretro-common@fa8a1b572a444fcb552007019f8caf68281108aa \
@@ -245,7 +244,7 @@ MELONDSDS_DEPS = \
   date@https://github.com/HowardHinnant/date@179a6b921ccd6179b5b04dce812a89f71a51b4df
 MELONDSDS_DEPS_STAMP := $(shell printf %s '$(MELONDSDS_DEPS)' | shasum | cut -c1-12)
 
-# ---- cores expansion (2026-09-25): nx-redux pins (workspace/tg5040/cores/Makefile), so states cross with the Brick.
+# ---- nx-redux pins (workspace/tg5040/cores/Makefile), so states cross with the Brick.
 # Most build unpatched from jni/Android.mk at the repo root (LOCAL_MODULE := retro -> libs/arm64-v8a/libretro.so); the
 # exceptions (a patch, build flags or a different module/artifact name) are commented on their own entries.
 # patches/race.patch: c7810dd7 appends the real-time clock to its save state and retro_unserialize rejects anything
@@ -327,7 +326,7 @@ mednafen_supafaust_ARTIFACT = libs/$(ABI)/libretro.so
 mednafen_supafaust_FLAGS = APP_CPPFLAGS=-Wno-register
 
 # patches/pokemini.patch: nx-redux's resume-audio fix, its libretro.c part (the first state load waits 40 frames so audio
-# resumes); its "AUD-" state-chunk fix in source/PokeMini.c is upstream since 2025-03-28.
+# resumes).
 pokemini_REPO = https://github.com/libretro/PokeMini
 pokemini_HASH = 132111b76343559860532a1ccc094f93f1ed5650
 pokemini_LICENSE = LICENSE
@@ -351,8 +350,8 @@ prboom_KIND = ndkbuild
 prboom_BUILD_PATH = .
 prboom_ARTIFACT = libs/$(ABI)/libretro.so
 
-# Dynarec cores: both map RWX memory at runtime, so verify.sh's static check is not enough; see the 16 KB smoke
-# test in the cores expansion plan (a 16 KB-page arm64 image: load, 60 s, save state, relaunch, load it, 10 s).
+# Dynarec cores: both map RWX memory at runtime, so verify.sh's static check is not enough; smoke-test them on a
+# 16 KB-page arm64 image (load, 60 s, save state, relaunch, load it, 10 s).
 # patches/gpsp.patch: the recompiler cache (10.5 MB, within +/-128 MB of the core's code) is a block in the core's own
 # .bss on Android arm64, made RWX at runtime (a busy address space can leave no gap near the code to mmap), set up once
 # and kept across sessions, since the runner keeps gpsp loaded between games (CoreDescriptor.keepLoaded); without it the
@@ -364,7 +363,7 @@ gpsp_LICENSE = COPYING
 gpsp_KIND = ndkbuild
 gpsp_BUILD_PATH = .
 gpsp_ARTIFACT = libs/$(ABI)/libretro.so
-# Link (netplay stage 2c): patches/gpsp/ holds nx-redux's 001 (RFU disconnect), 002 (RFU queue), 004 (real link
+# Link: patches/gpsp/ holds nx-redux's 001 (RFU disconnect), 002 (RFU queue), 004 (real link
 # cable, gpsp_serial "lockstep"/"auto_cable") and 007 (rfu_net_receive bounds-checks a peer's broadcast and client
 # packets); its 003 (JIT cache) is left out, patches/gpsp.patch covers it. 004 compiles in cores/sio_lockstep through
 # NX_SIOLS_DIR (its Makefile.common default is nx-redux's layout).
@@ -433,7 +432,7 @@ fbneo_KIND = ndkbuild
 fbneo_BUILD_PATH = src/burner/libretro
 fbneo_ARTIFACT = libs/$(ABI)/libretro.so
 
-# flycast (Dreamcast). master 7adbf3ca (2026-10-31, 93 commits past v2.7; no release since). CMake kind like
+# flycast (Dreamcast). master 7adbf3ca (93 commits past v2.7; no release since). CMake kind like
 # mgba/ppsspp: the top-level CMakeLists.txt builds the SHARED target flycast_libretro (empty prefix, build root) when
 # LIBRETRO=ON. Flags follow flycast's own libretro Android CI recipe (.gitlab-ci.yml .core-defs-android: LIBRETRO=ON,
 # USE_OPENMP=OFF, Vulkan left at its default ON). USE_GLES=ON is a no-op next to ANDROID (the LIBRETRO+ANDROID branch
@@ -442,8 +441,7 @@ fbneo_ARTIFACT = libs/$(ABI)/libretro.so
 # DetectArchitecture then adds the x86 recompiler (xbyak). No FetchContent: the dependencies are git submodules pinned
 # by the pinned commit's gitlinks. Only the six the Android libretro build uses are initialised, recursively for tinygettext's
 # external/tinycmmc; SDL, breakpad, oboe, freetype, libjuice, gamesdk and the rest are standalone-app only. Licence
-# notices: LICENSES/flycast.txt (ships in the APK as licenses/flycast.txt). patches/flycast.patch has five hunks
-# (upstream now links libandroid into the libretro target and reads 64 KB of awbios, so those two are gone):
+# notices: LICENSES/flycast.txt (ships in the APK as licenses/flycast.txt). patches/flycast.patch has five hunks:
 # - core/hw/maple/maple_devs.cpp flushes the VMU file after every write (block write and full save). flycast writes it
 #   through stdio and only flushed on close, so a process killed without unloading (crash, watchdog, force-stop) lost
 #   the last writes: a save listed in the directory whose FAT chain never landed, which games report as bad game data.
@@ -452,9 +450,9 @@ fbneo_ARTIFACT = libs/$(ABI)/libretro.so
 #   rewritten as <content>.A1.bin and deleted by flycast (maple_devs.cpp OnSetup). The shared VMUs (every port with
 #   per_content_vmus Disabled, the ports but A1 with "VMU A1") move from the system folder (<system>/dc/) to the save
 #   directory too, still vmu_save_<port>.bin, so Device Sync carries every memory card as a save; dc_nvmem/flash and
-#   arcade flash stay in <system>/dc/. No migration: a card left in <system>/dc/ is not read (the app is
-#   unreleased, and its defaults plug no shared card in).
-# - core/rend/gles/gles.h GlVertexArray::term no longer deletes vertex array name 0 (the post-processor's, never created
+#   arcade flash stay in <system>/dc/. No migration: a card left in <system>/dc/ is not read (the app's
+#   defaults plug no shared card in).
+# - core/rend/gles/gles.h GlVertexArray::term never deletes vertex array name 0 (the post-processor's, never created
 #   on the blit path, on every render-size change). The spec ignores it, but the Android emulator's GLES stack then drops
 #   the default vertex array's client state and the frontend's presentation quad draws nothing (black screen).
 # - core/hw/naomi/naomi_roms.cpp (from nx-redux 959dbfb7): awbios also accepts the modern MAME dump bios.ic23_l (64 KB,
@@ -499,12 +497,7 @@ azahar_NINJA = $(SDK)/cmake/3.30.3/bin/ninja
 azahar_PLATFORM = android-21
 azahar_FLAGS = -DENABLE_LIBRETRO=ON -DENABLE_VULKAN=ON -DENABLE_OPENGL=ON -DENABLE_TESTS=OFF -DANDROID_STL=c++_static
 
-# Dolphin (Wii, GameCube): libretro/dolphin at the 2026-11-04 head, which has nx-mobile's merged PRs #528-#534 (graphics
-# hacks on the base config layer, option defaults, Synchronize GPU Thread, a failed load without a hardware context,
-# sensors re-asked per port, the Wii Menu closing the game, the Wiimote HID source guard) and #527 (region-free titles in
-# their game ID's region); before it (2026-10-29: its d3ca3028 fixed a GPU-loop stop the CPU thread sent
-# before retro_run entered RunGpuLoop: lost, it hung retro_run with the CPU paused, a Wii game frozen ~10 s in; its 3d6c2881
-# shows every Aspect Ratio mode unsqueezed and hands Vulkan's whole swapchain image over, not the EFB's 640x528). CMake like azahar, needing >= 3.25 (3.30.3 below). The
+# Dolphin (Wii, GameCube): libretro/dolphin. CMake like azahar, needing >= 3.25 (3.30.3 below). The
 # libretro target is Source/Core/DolphinLibretro's SHARED dolphin_libretro, suffix "_android.so", built in the build root.
 # Flags follow upstream's Android CI (.gitlab-ci.yml .core-defs: -DLIBRETRO=ON -DENABLE_LTO=ON, API 24). The core asks
 # GET_PREFERRED_HW_RENDER: the runner answers GLES3, or Vulkan when Console Settings → Graphics API picks it. 34 submodules, recursive (template default). Licences
@@ -513,7 +506,7 @@ azahar_FLAGS = -DENABLE_LIBRETRO=ON -DENABLE_VULKAN=ON -DENABLE_OPENGL=ON -DENAB
 # (nxsharedgl.h; upstream's own EGL ones after it), raw-disc reader exports for RetroAchievements hashing (NxDisc.cpp;
 # nx_disc_open_fd reads the frontend's SAF descriptor through DirectIOFile::FromFd, past the VFS, and a CreateBlobReader
 # overload taking an open file); retro_cheat_set adds codes not in the game INIs.
-# patches/dolphin/0002-arm64-texture-decoder.patch: upstream PR #14928 (merged 2026-10-31) backported, AArch64 SIMD texture
+# patches/dolphin/0002-arm64-texture-decoder.patch: upstream PR #14928 backported, AArch64 SIMD texture
 # decoders for every format but XFB (AArch64 used the generic ones); drop it once the pin includes it.
 # patches/dolphin/0003: an Internal Resolution change mid-game sticks (the config layer gets it too) and, on Vulkan,
 # resizes the libretro swapchain (it kept the launch size). Sys/ is staged to system/dolphin-emu/Sys, where the core looks, minus Themes/ (Qt GUI icons, useless to

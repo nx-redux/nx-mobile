@@ -1576,7 +1576,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
     }
 
-    // ------------------------------------------------------------------ Nintendo 3DS controls
+    // ------------------------------------------------------------------ core options, cheats, quit
 
     /**
      * Sets core options on the emulation (GL) thread, where the core reads them; queued, so a later
@@ -1649,7 +1649,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         ach?.detach()
         achievements = null
         if (view == null || !gameReady) { ach?.stop(); finish(); return }   // not running yet: no save to write
-        // Save on quit off: the quit keeps the resume point as is (no hidden state), its battery save still written.
+        // No auto state (Quit without resume, the Kids Mode lock): the resume point stays, the battery save is written.
         if (!autoState) { saves.writeOnQuit(view, chosen, false, release = { live -> ach?.stop(native = live) }, finish = ::finish); return }
         // The refresh is a blocking call into the menu's process: run apart, so the timeout can stop waiting for it.
         // Not cancellable: onPause skipped its battery save for this quit, so the quit's write must not be lost to a destroy.
@@ -2009,7 +2009,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /**
      * The Reset dialog's Reset: retro_reset on the emulation thread (the engine clears the rewind buffer and the frame
-     * timer with it, L18/L19), waited for off main as a disc change is. A toggled rewind would only run back to the reset
+     * timer with it), waited for off main as a disc change is. A toggled rewind would only run back to the reset
      * point: it ends first; a toggled FF stays.
      */
     override fun resetGame() {

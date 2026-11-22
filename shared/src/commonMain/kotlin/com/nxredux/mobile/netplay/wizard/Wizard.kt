@@ -13,7 +13,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * The handheld's control-channel exchange (nx-redux wizard_net.c at 8f5a760b), both roles: HELLO 2 with caps,
+ * The handheld's control-channel exchange (nx-redux wizard_net.c), both roles: HELLO 2 with caps,
  * the gates (version, game, role, core; gpSP with mGBA passes only for the same Wi-Fi mode, and mGBA off the cable only
  * with a peer that sent `wl=`, WizCaps_linkMismatch),
  * `REJECT core-<core>.<tag>` (`link-<core>.<wl>.<wl>` when both games are in Wi-Fi modes that can't link), SYNC-READY + `FILE <name>` with an rsync pull,

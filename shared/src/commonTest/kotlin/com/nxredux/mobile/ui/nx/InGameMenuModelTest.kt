@@ -37,8 +37,8 @@ import kotlin.test.assertTrue
 
 class InGameMenuModelTest {
     /**
-     * A console whose Console Settings page is empty: every tag has the shared Controller Layout and speed rows, so they
-     * are locked here (a locked row is hidden, and a page with none left is not offered).
+     * A console with no rows of its own: the Controller Layout, speed and audio rows every tag has are locked here (a
+     * locked row is hidden, and a group with none left is not offered).
      */
     private val plainTag = "GBA"   // a console with the Controller Layout row only (N64 has Graphics API too)
     private val plainLocked = setOf(PadOptions.LAYOUT) + (SpeedOptions.table + AudioOptions.rows).map { it.key }
@@ -66,7 +66,7 @@ class InGameMenuModelTest {
         repeat(4) { press(NxButton.DOWN) }   // Options
         press(NxButton.A)                                                  // -> Options page
         select(optionsRow("Emulator"))
-        assertEquals(MenuEffect.OpenCoreOptions, press(NxButton.A))        // Core Options (host loads)
+        assertEquals(MenuEffect.OpenCoreOptions, press(NxButton.A))        // Emulator (the host loads)
         showCoreOptions(listOf(palette, speed, hidden), locked = emptySet())
         return this
     }
@@ -369,7 +369,7 @@ class InGameMenuModelTest {
     }
 
     private fun InGameMenuModel.toCoreOptionsRow(): InGameMenuModel {
-        select(4); activate(4); select(optionsRow("Emulator"))   // Options page, Core Options selected
+        select(4); activate(4); select(optionsRow("Emulator"))   // Options page, Emulator selected
         return this
     }
 
@@ -575,7 +575,7 @@ class InGameMenuModelTest {
         val m = model().openFrontend()
         m.select(4); m.press(NxButton.A)                     // adjust Offset screen Y
         m.press(NxButton.DOWN)
-        assertEquals(PageKind.Adjust(FrontendOptions.SCALING), m.state.page.kind)   // Pad Opacity and Debug HUD skipped, wrapped
+        assertEquals(PageKind.Adjust(FrontendOptions.SCALING), m.state.page.kind)   // Debug HUD skipped, wrapped
         m.press(NxButton.UP)
         assertEquals(PageKind.Adjust(FrontendOptions.OFFSET_Y), m.state.page.kind)
         m.press(NxButton.UP)
@@ -1505,7 +1505,7 @@ class InGameMenuModelTest {
     @Test fun a_second_display_offers_display_where_every_other_row_is_locked() {
         val m = model()
         m.setFrontend(FrontendOptions.defaults(plainTag), emptyList(), pictureLocked, plainTag)
-        m.select(4); m.activate(4)                                         // Options (no Second screen row on the root)
+        m.select(4); m.activate(4)                                         // Options
         assertEquals(NO_DISPLAY_OPTIONS, m.state.page.rows.map { it.label })
         m.setSecondScreen(connected = true)
         assertEquals(PLAIN_OPTIONS, m.state.page.rows.map { it.label })
@@ -1686,7 +1686,7 @@ class InGameMenuModelTest {
         m.select(m.state.page.rows.indexOfFirst { it.label == "Layout (landscape)" })
         m.press(NxButton.A)
         assertTrue(m.state.page.kind is PageKind.Adjust)
-        // Turned to portrait: the landscape row is no longer listed, so its strip closes back onto Console Settings.
+        // Turned to portrait: the landscape row is no longer listed, so its strip closes back onto the Display page.
         m.ndsView = NdsView(landscape = false, controllerMode = false)
         assertEquals(DISPLAY, m.state.page.kind)
     }
@@ -1805,7 +1805,7 @@ class InGameMenuModelTest {
     }
 
     @Test fun x_shows_the_full_text_of_a_compact_visual_row() {
-        // NDS Console Settings: Layout (portrait) is visual (A would Adjust) and compact, its text behind the info icon.
+        // The DS's Display page: Layout (portrait) is visual (A would Adjust) and compact, its text behind the info icon.
         val m = model().openConsoleSettings()
         m.select(0)
         assertTrue(m.optionRow(0).visual)
@@ -2126,7 +2126,7 @@ class InGameMenuModelTest {
         assertEquals("Leave netplay?", m.state.page.title)
         assertEquals(listOf("Continue", "Leave"), m.state.page.rows.map { it.label })
         assertEquals("Leaving ends the netplay session.", m.state.page.footer)
-        assertEquals(listOf(GamePanelTab.SHORTCUTS), m.panelState().tabs)   // no Players tab in netplay, as no Players row before
+        assertEquals(listOf(GamePanelTab.SHORTCUTS), m.panelState().tabs)   // no Players tab in netplay
         m.press(NxButton.DOWN)
         assertEquals(MenuEffect.LeaveNetplay, m.press(NxButton.A))
         m.press(NxButton.UP)

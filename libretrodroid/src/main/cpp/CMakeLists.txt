@@ -1,11 +1,9 @@
 cmake_minimum_required(VERSION 3.22.1)
 
-# now build app's shared lib
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall")
 
 add_definitions("-DVFS_FRONTEND -DHAVE_STRL")
 
-# Let's include oboe
 set (OBOE_DIR oboe)
 add_subdirectory (${OBOE_DIR} oboe)
 include_directories (${OBOE_DIR}/include)
@@ -258,8 +256,8 @@ add_library(libretrodroid SHARED
         lz4/lz4.c
 )
 
-# Support 16k pages for Android 15
 target_include_directories(libretrodroid PRIVATE ${GWL_DIR})
+# 16 KB pages (Android 15+)
 target_link_options(libretrodroid PRIVATE "-Wl,-z,max-page-size=16384")
 if (${CMAKE_ANDROID_ARCH_ABI} STREQUAL arm64-v8a)
     add_dependencies(libretrodroid hook_impl main_hook file_redirect_hook gsl_alloc_hook)
@@ -270,7 +268,7 @@ endif()
 # of this library's exports, the linker drops what nothing reaches (about 1 MB of the stripped library).
 target_link_options(libretrodroid PRIVATE "-Wl,--gc-sections" "-Wl,--exclude-libs,ALL")
 
-# add lib dependencies. No libvulkan: every Vulkan call goes through VulkanDispatch (dlopen'd system loader or
+# No libvulkan: every Vulkan call goes through VulkanDispatch (dlopen'd system loader or
 # libadrenotools' custom one), so a direct vk* call fails to link instead of silently bypassing a custom driver.
 target_link_libraries(libretrodroid
                       android

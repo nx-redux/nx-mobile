@@ -96,7 +96,7 @@ class FakeSource(
     }
 }
 
-/** An engine with ScreenScraper as its first source (then [more]); the old engine's argument order. */
+/** An engine with ScreenScraper as its first source (then [more]). */
 fun ssEngine(
     http: ScraperHttp, fitter: ImageFitter, hasher: RomHasher, source: RomsSource, home: ContentRef,
     auth: () -> ScraperAuth, now: () -> Long, sleep: suspend (Long) -> Unit,

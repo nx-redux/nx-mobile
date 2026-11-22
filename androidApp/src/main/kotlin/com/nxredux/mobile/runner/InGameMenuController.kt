@@ -372,8 +372,7 @@ internal class InGameMenuController(
         refreshSlots()
         input.releaseAllGameInput()
         host.pauseForMenu()   // the core, its sound, rumble and motion hold; the battery save is written
-        // The accents cannot change while a game runs; read on every open all the same, so a change made since launch shows the next time it opens.
-        // The in-game menu is on the accent and the Secondary accent, as the Settings pages.
+        // The accent and the Secondary accent, as the Settings pages; read on every open, so a change made since launch shows.
         val colors = AndroidAppSettings(activity).let { nxColorsFor(it.accent, it.secondaryAccent) }
         menuContent = { onSecond, windowOverride ->
             val config = LocalConfiguration.current

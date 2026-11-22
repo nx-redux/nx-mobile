@@ -29,7 +29,7 @@ interface UpdatePlatform {
     fun discard(file: UpdateFile)
     /**
      * Why the app can't be replaced now (a game as [UpdateController.GAME_REASON], Device Sync, artwork, achievements,
-     * Cheats & Patches), in the Global Constraints order; null when free.
+     * Cheats & Patches), the game first; null when free.
      */
     fun busyReason(): String?
     /** Whether the app may install packages (`canRequestPackageInstalls()`). */
@@ -312,7 +312,7 @@ class UpdateController(
     }
 
     /**
-     * The Global Constraints order: the platform's game reason, then the host's (Netplay), then the platform's others; off
+     * What holds the install: the platform's game reason, then the host's (Netplay), then the platform's others; off
      * the main menu with nothing else running, "Ready to install".
      */
     private fun waitReason(): String? {

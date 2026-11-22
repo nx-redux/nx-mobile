@@ -62,7 +62,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(161 + 88 + N3DS_LAYOUTS + GRIP_COLUMNS, pack.layouts.size)   // the menu half-folded on a phone (flex_menu); 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's, the Atari 5200's, Doom's, the Sega pad's two (6- and 3-button) and the Saturn's in every family; the small-pad consoles' eleven (sms, gg, a7800, ngp, pce, a2600, lynx, pkm, coleco, vb, ws: 7 each and a tablet twin) in every family; a tablet twin of each game fold board without one (17: the clusters centred on the bottom screen, user)
+        assertEquals(161 + 88 + N3DS_LAYOUTS + GRIP_COLUMNS, pack.layouts.size)   // 161: the menu's and the other consoles' layouts in each family; 88: the eleven small-pad consoles' 7 and a tablet twin each
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -915,7 +915,7 @@ class NxCarbonPackTest {
             val row2 = listOf("MIC", "MENU", "SELECT", "START", "SWAP").filter { id -> spec.controls.any { it.id == id } }
                 .maxBy { ref(it) }
             assertTrue(placed(row1) - placed(pad) > (ref(row1) - ref(pad)) * p.k + 20f, "$v ${p.spec.id}: pads to the first row")
-            // (the 3DS's caps in one row each side, the height short of two; the DS's START / SELECT where the menu's are: user)
+            // (the 3DS's caps in one row each side, the height short of two; the DS's START / SELECT where the menu's are)
             if (v == SkinVariant.DS) {
                 val menu = assertNotNull(SkinChoice.placeMenu(pack, 2400, 1080, 420)).controls.associateBy { it.spec.id }
                 for (id in listOf("START", "SELECT")) assertEquals(menu.getValue(id).y, placed(id), 1f, "$v ${p.spec.id}: $id as the menu's")
@@ -1021,7 +1021,7 @@ class NxCarbonPackTest {
             fun at(v: SkinVariant) = assertNotNull(SkinChoice.place(pack, w, h, dpi, dpi == 280, true, null, null, foldable = dpi == 420, variant = v), "$v $w")
             val np = at(SkinVariant.N3DS)
             val n = np.controls.associateBy { it.spec.id }; val r = at(SkinVariant.N3DS_REGULAR).controls.associateBy { it.spec.id }
-            // the screen centred between the side groups (the rows under their rings, not widening a side: user)
+            // the screen centred between the side groups (the rows under their rings, not widening a side)
             val g = np.glasses.first().rect
             assertEquals(w / 2f, g.x + g.width / 2f, 12f, "$w screen centred: $g")
             // the regular 3DS's buttons; ZL / ZR beside L / R; a full C-stick under the face, in line, as the d-pad under the stick
@@ -1562,7 +1562,7 @@ class NxCarbonPackTest {
             val ds = assertNotNull(place("fold_inner_$suffix", 1848, 2448, tablet = true, hinge = hinge, foldable = true))
             assertEquals("flex_ds_fold", ds.spec.id.removeSuffix("_tab"))
             assertHalfFolded(ds, 1224f)
-            assertEquals(3.5f, ds.glass(GlassScreen.TOUCH)!!.scale, 0.01f)   // as the old tablet render: touch 3.5x
+            assertEquals(3.5f, ds.glass(GlassScreen.TOUCH)!!.scale, 0.01f)   // touch 3.5x
             // the top screen: the frame filling the half above the hinge (the DS top screen centred in it), as the menu's,
             // with shell round it as a clamshell's: clear of the hinge (its top ~62 px above the fold) by the shell
             val top = ds.glass(GlassScreen.TOP)!!.rect
@@ -1602,7 +1602,6 @@ class NxCarbonPackTest {
         assertHalfFolded(assertNotNull(place("flip_flex_gba", 1080, 2520, ds = false, picture = 240f to 160f, hinge = 1200f)), 1200f)
     }
 
-    /** Half-folded: the screen frame above the fold (a DS's top screen), the touch screen, the strip and the pad below it. */
     /**
      * Flat ([SkinPlacement.slab]) the top screen's frame runs past the middle down to 16 dp above the frame under it (its
      * glass's border apart: the glasses at least that far apart, no more than a frame's borders more).
@@ -1612,6 +1611,7 @@ class NxCarbonPackTest {
         assertTrue(gap >= 16f * dpi / 160f && gap < 16f * dpi / 160f + 200f, "${p.spec.id} glasses $gap apart: $above over $under")
     }
 
+    /** Half-folded: the screen frame above the fold (a DS's top screen), the touch screen, the strip and the pad below it. */
     private fun assertHalfFolded(p: SkinPlacement, hinge: Float) {
         val ds = p.glass(GlassScreen.TOP) != null
         assertEquals(if (ds) "flex_ds" else "flex_single", p.spec.id.removeSuffix("_wide").removeSuffix("_fold"))

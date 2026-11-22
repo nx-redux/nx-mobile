@@ -1,7 +1,7 @@
 package com.nxredux.mobile.netplay
 
 /**
- * netplay: the rsync command lines and daemon config, exactly the handheld's (nx-redux wizard_sync.c at 8f5a760b),
+ * netplay: the rsync command lines and daemon config, exactly the handheld's (nx-redux wizard_sync.c),
  * minus its `uid = 0`/`gid = 0` and `log file` lines, plus `reverse lookup = no`. Pure, so they are unit-tested. Every
  * value that reaches a config line or a URL is checked: a newline would start a directive the caller never wrote.
  */

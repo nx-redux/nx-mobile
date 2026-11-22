@@ -123,7 +123,7 @@ internal fun isCleanTap(heldMs: Long, movedPx: Float, consumed: Boolean, timeout
 
 /**
  * A tap that only taps: one finger, lifted within the long-press time and the touch slop of where it went down. A drag
- * or a second finger is not one, and nothing is consumed, so a swipe over it does what it did before.
+ * or a second finger is not one, and nothing is consumed, so a swipe over it still reaches what is under it.
  */
 internal fun Modifier.cleanTap(onTap: () -> Unit): Modifier = composed {
     val action = rememberUpdatedState(onTap)

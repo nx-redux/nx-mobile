@@ -83,7 +83,7 @@ object CoreConfig {
      * The game file after one [key] changed outside the menu (a DS hotkey): [game] updated in place, or, for a game
      * without one, a copy of [console] with the key. Reading uses the game file instead of the console file whole, so a
      * game file holding only the key would drop every console value. A locked line keeps its value. The old key [key]
-     * replaced ([FrontendOptions.SUPERSEDED_KEYS]) goes: the new one now holds the pick (and its lock).
+     * replaced ([FrontendOptions.SUPERSEDED_KEYS]) goes: the new one holds the pick (and its lock).
      */
     fun withKey(console: ConfigFile?, game: ConfigFile?, key: String, value: String): String =
         render(

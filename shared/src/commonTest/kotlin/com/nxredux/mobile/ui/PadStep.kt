@@ -19,7 +19,7 @@ internal fun AppState.selectedTouchRow(): NxSettingRow? {
 }
 
 /**
- * LEFT or RIGHT ([side]) on the selected value row the way a pad changes it now that the sides need A first: segments
+ * LEFT or RIGHT ([side]) on the selected value row the way a pad changes it (the sides need A first): segments
  * or a stepped value A, then [side], then B; a switch A (it flips); a picker A, the next or previous choice, A. Any
  * other row hears [side] itself.
  */

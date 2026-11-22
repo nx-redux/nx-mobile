@@ -21,8 +21,6 @@ class N3dsHotkeysTest {
     private val forward = N3dsDecision(true)
     private val keep = N3dsDecision(false)
 
-    // ---- SELECT, held back for chords
-
     // ---- under a pad skin: the touch screen is under the finger and the skin places the screens
 
     @Test fun under_a_skin_select_l_does_nothing() {
@@ -63,6 +61,8 @@ class N3dsHotkeysTest {
         h.up(NxButton.L1); h.up(NxButton.SELECT)
         assertEquals(listOf(press(N3dsKey.L3), release(N3dsKey.L3)), h.takeKeys())
     }
+
+    // ---- SELECT, held back for chords
 
     @Test fun a_select_tap_reaches_the_core_as_a_short_tap_on_release() {
         val h = N3dsHotkeys()

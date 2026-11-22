@@ -817,7 +817,7 @@ internal class DualScreenController(
     /**
      * The game panel, live on [dualPanel], touch-only; [gamePill]: the DS/3DS Game pill; [onSecond]: on the second
      * display's window. Where the in-game menu opens in its place ([MenuHost.PANEL]), on the menu's page inset, with the
-     * window, orientation and skin the menu reads ([menuFrame]); else (one screen's skin glass) as it always was.
+     * window, orientation and skin the menu reads ([menuFrame]); else (one screen's skin glass) without them.
      */
     private fun panelContent(gamePill: Boolean, onSecond: Boolean): @Composable () -> Unit {
         val menuPage = menuHost() == MenuHost.PANEL
@@ -946,7 +946,6 @@ internal class DualScreenController(
         if (quitting) return
         when (e) {
             GamePanelEvent.SwapDisc -> swapDisc()
-            // Hidden in netplay; a stale press there does nothing, a release always lands.
             is GamePanelEvent.SelectSlot -> { panelSlot = e.slot; refreshDualPanel() }
             is GamePanelEvent.SetVolume -> {
                 val audio = activity.getSystemService(AudioManager::class.java)
@@ -961,6 +960,7 @@ internal class DualScreenController(
             }
             GamePanelEvent.OpenOptions -> owner.openOptions()
             GamePanelEvent.OpenShaders -> owner.openShaderPicker()
+            // Hidden in a session; a stale press there does nothing, a release always lands.
             is GamePanelEvent.Touch -> if (!sessionLocked || !e.down) {
                 owner.onPanelTouch(e.action, e.down, panelSlotNow())
                 // A held action runs the game: a panel flipped up over the DS/3DS screen gives the screen back, as for FF.

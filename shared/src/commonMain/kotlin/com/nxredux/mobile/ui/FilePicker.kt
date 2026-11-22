@@ -55,14 +55,9 @@ sealed interface PickerRow {
 private val byName: Comparator<String> = compareBy<String> { it.lowercase() }.thenBy { it }
 
 /**
- * A folder's rows for [mode]: the action row and New folder (neither in [FilePickMode.ImportZip]), "..", the folders
- * A–Z ignoring case, then the files A–Z (in ImportZip only the `.zip` files, which pick; elsewhere every file, shown but
- * not picked); dot entries hidden; "Nothing here" when no folder or file is left.
- */
-/**
  * What a folder is as a home, for the home picker: empty (hidden names aside); an NX Redux folder (its `Roms`, with at
- * most `Bios`, `Saves`, `Collections` and hidden names beside it); else one holding other files, whose games setup will
- * sort into Roms.
+ * most `Bios`, `Saves`, `Collections`, `Cheats` and hidden names beside it); else one holding other files, whose games
+ * setup will sort into Roms.
  */
 internal fun homeFolderStatus(entries: List<LocalEntry>): String {
     val shown = entries.filter { !it.name.startsWith(".") }
@@ -82,7 +77,12 @@ internal fun pickActionLabel(mode: FilePickMode, folder: String): String? = when
     FilePickMode.ImportZip -> null
 }
 
-/** [folder]: the shown folder's name, as the action says it. [canPick] false: no action (the phone's storage root for a home or an extra folder; New folder stays). */
+/**
+ * A folder's rows for [mode]: "..", the folders A–Z ignoring case, then the files A–Z (in ImportZip only the `.zip`
+ * files, which pick; elsewhere every file, shown but not picked), dot entries hidden, "Nothing here" when none is left;
+ * last the action row and New folder (neither in [FilePickMode.ImportZip]). [folder]: the shown folder's name, as the
+ * action says it. [canPick] false: no action (the phone's storage root for a home or an extra folder; New folder stays).
+ */
 internal fun pickerRows(mode: FilePickMode, entries: List<LocalEntry>, folder: String, canPick: Boolean = true): List<PickerRow> {
     val action = pickActionLabel(mode, folder)?.let { PickerRow.Action(it) }
     val shown = entries.filter { !it.name.startsWith(".") }
@@ -238,7 +238,6 @@ internal class FilePickerController(
         finish(FileRefs.of(target))
     }
 
-    /** B: up one level; at a volume's root the volume list (with one storage, cancel); at the volume list, cancel. */
     /** The entry the highlight left for the actions ([sideways]), where the next sideways press takes it back. */
     private var entryBeforeActions = -1
 
@@ -277,6 +276,7 @@ internal class FilePickerController(
         }
     }
 
+    /** B: up one level; at a volume's root the volume list (with one storage, cancel); at the volume list, cancel. */
     private fun up(p: Screen.FilePicker) {
         val dir = p.dir ?: return finish(null)
         val volume = volumeOf(dir)

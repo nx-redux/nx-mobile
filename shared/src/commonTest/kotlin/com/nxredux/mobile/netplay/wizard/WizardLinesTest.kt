@@ -7,7 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** Fixtures from nx-redux workspace/all/common/tests/test_wiz_caps.c and wizard_net.c at 8f5a760b. */
+/** Fixtures from nx-redux workspace/all/common/tests/test_wiz_caps.c and wizard_net.c. */
 class WizardLinesTest {
     private val esc = "\u001f"
     private val kart = "Super${esc}Mario${esc}Kart${esc}(USA)"

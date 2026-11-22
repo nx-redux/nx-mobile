@@ -525,10 +525,8 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
         val orientation = state.orientationOf(s)   // likewise its orientation
         // A Grid reports its columns only while its page is the one showing (a page sliding out never overwrites the count).
         // Equal, not the same object: a main menu tab's page laid out beside the one showing (its swipe's neighbour) holds an
-        // equal copy of the screen, and keeps it once it shows (an equal screen recomposes nothing), so an identity check
-        // would drop its reports for good (a rotation then left Grid Home on its old width).
-        // New reporters, too, when the page starts showing ([live]): one laid out beside it (a swipe's neighbour) had its
-        // reports dropped, and the page then sends them again ([HomeScreen], [NxTileGrid]).
+        // equal copy of the screen, and keeps it once it shows, so an identity check would drop its reports for good.
+        // Keyed on [live] too: the page sends its reports again when it starts showing ([HomeScreen], [NxTileGrid]).
         val shows = live.value
         val onGridLayout: (Int) -> Unit = remember(s, shows) { { columns -> if (state.screen.value == s) state.onGridLayout(columns) } }
         val onHomeLayout: (HomeFrame) -> Unit = remember(s, shows) { { f -> if (state.screen.value == s) state.onHomeLayout(f) } }   // likewise Home's body frame
@@ -776,7 +774,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
 /**
  * Settings on a narrow window (a phone held upright, a landscape window too narrow for the stage), one level at a time:
  * the root is the section block alone; a page below it is the rows block ([settingsNarrowBlock]), "Settings / <title>" its
- * first line; B (or the back gesture) goes back. A Layouts group and the Android games picker draw whole, as before.
+ * first line; B (or the back gesture) goes back. A Layouts group and the Android games picker draw whole.
  */
 @Composable
 private fun NarrowSettingsPage(state: AppState, s: Screen, selection: State<ListSelection>) {

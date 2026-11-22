@@ -59,7 +59,7 @@ class SettingsSplitTest {
         assertFalse(gameSettingsModal(Screen.Settings(SettingsSection.APPEARANCE, emptyList())))
         val wide = DpSize(933.dp, 704.dp)
         assertFalse(settingsSplitView(wide, gameSettings))                     // drawn the same on every window
-        assertTrue(settingsSplitView(wide, consoleWide))                       // Settings -> Library's page: the right pane
+        assertTrue(settingsSplitView(wide, consoleWide))                       // an emulator's own page: the right pane
         assertTrue(settingsSplitView(wide, Screen.SettingsMenu(SettingsSection.entries)))
         assertFalse(settingsSplitView(DpSize(704.dp, 933.dp), consoleWide))    // portrait: one page
         assertFalse(settingsSplitView(wide, Screen.Systems(emptyList())))

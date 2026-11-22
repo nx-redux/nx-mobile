@@ -36,7 +36,7 @@ import java.net.URL
 import java.security.MessageDigest
 
 /**
- * Why the app can't be replaced now, in the Global Constraints order (the host's Netplay reason comes before all but the
+ * Why the app can't be replaced now, the first that holds (the host's Netplay reason comes before all but the
  * game, from [UpdateController.hostBusy]); null when nothing would be lost. Last, [foreground] false waits as "Ready to
  * install": Android blocks a hidden app's confirm screen silently, so the install starts once the user is back. Pure, for the test.
  */

@@ -492,7 +492,7 @@ private fun homeBands(
 /**
  * The portrait type's pin rows are this many times their 4:3 half shape tall (tw · 3 / 4 of the 4-column grid): the same
  * width and per-row count, a taller tile, the art cropped to it; the rows scroll. On the Fold cover that is
- * 215.5 × 114.47 dp, close to the cover's landscape pins (225 × 119.5); twice as tall was too large on the device.
+ * 215.5 × 114.47 dp, close to the cover's landscape pins (225 × 119.5).
  */
 internal const val HOME_PORTRAIT_PIN_TALL = 1.5f
 

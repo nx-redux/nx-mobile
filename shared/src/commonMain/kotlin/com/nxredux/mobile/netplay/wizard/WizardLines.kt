@@ -8,7 +8,7 @@ import com.nxredux.mobile.netplay.RejectReason
 import com.nxredux.mobile.runner.CoreRegistry
 
 /**
- * The handheld's capability token (nx-redux wiz_caps.c at 8f5a760b): the HELLO field `caps=<token>` after the four fixed
+ * The handheld's capability token (nx-redux wiz_caps.c): the HELLO field `caps=<token>` after the four fixed
  * fields, `[A-Za-z0-9._=,-]`, 1..63 chars, comma-separated `key=value` elements. This device always sends
  * `core=<core id>,tag=<TAG>`; gpSP and mGBA add the game's link mode `,wl=<token>` (netplay-prelaunch.sh), a joiner on
  * Auto adds `,auto=1`. A Cable Link over Wi-Fi offer sends `core=mgba,tag=<TAG>,cl=1` instead (no `wl` or `auto`: that

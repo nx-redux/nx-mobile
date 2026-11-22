@@ -59,7 +59,7 @@ class CoreRegistryTest {
         assertEquals(30, ids.size)
     }
     @Test fun the_bricks_pak_defaults_are_carried() {
-        // The second memory card stays out, as the Brick's pin had it (upstream's default since 2026 is a shared card).
+        // The second memory card stays out, as on the Brick (upstream's default is a shared card).
         // Enhanced Resolution is the app's (Res3dConsole.PCSX): off until the launch sends the 3D Resolution.
         assertEquals(
             mapOf("pcsx_rearmed_dithering" to "enabled", "pcsx_rearmed_memcard2" to "none", "pcsx_rearmed_neon_enhancement_enable" to "disabled"),
@@ -256,7 +256,7 @@ class CoreRegistryTest {
         assertEquals("gba", CoreRegistry.consoleByAlias("mgba")!!.id)
         assertEquals("nds", CoreRegistry.consoleByAlias("DS")!!.id)
         assertEquals("psp", CoreRegistry.consoleByAlias("PPSSPP")!!.id)
-        assertEquals("sgb", CoreRegistry.consoleByAlias("Super Game Boy")!!.id)    // moved from gb
+        assertEquals("sgb", CoreRegistry.consoleByAlias("Super Game Boy")!!.id)
         assertEquals("segacd", CoreRegistry.consoleByAlias("Mega CD")!!.id)
         assertEquals("pce", CoreRegistry.consoleByAlias("PC Engine")!!.id)
         assertEquals("wsc", CoreRegistry.consoleByAlias("WonderSwan")!!.id)
@@ -307,7 +307,7 @@ class CoreRegistryTest {
         assertNull(CoreRegistry.consoleForFolderName("My GBA"))          // "my" is not a stop word
         assertNull(CoreRegistry.consoleForFolderName("Games"))
         assertNull(CoreRegistry.consoleForFolderName("Roms Games"))
-        assertEquals("sfc", CoreRegistry.consoleForFolderName("My SNES Games")!!.id)   // long alias: unchanged
+        assertEquals("sfc", CoreRegistry.consoleForFolderName("My SNES Games")!!.id)   // long alias
     }
     @Test fun playstation_has_a_core_and_every_console_has_one_on_every_tag() {
         val ps = CoreRegistry.consoleOf("PS")!!

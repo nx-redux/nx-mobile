@@ -555,8 +555,8 @@ class LibraryScanner(
     /**
      * Only the typed folders: an untyped `.media/<name>.png` (NX Redux's old mix) is not a game's art. The 2D box is
      * `boxart2d/`, else the legacy `box2d/` per name. An extra folder's own `.media` ([heroDir] null) is only read, never
-     * moved to the new names ([com.nxredux.mobile.scraper.LegacyArtMove]): its legacy `grid/` reads as the 2D box and
-     * `hero/` as the screenshot, each under the new folder's file of the same name.
+     * moved to the typed names ([com.nxredux.mobile.scraper.LegacyArtMove]): its legacy `grid/` reads as the 2D box and
+     * `hero/` as the screenshot, each under the typed folder's file of the same name.
      */
     private suspend fun mediaLookup(
         media: List<Entry>, names: Map<String, String>, reuse: Boolean = false, heroes: HeroShots, heroDir: List<String>?,

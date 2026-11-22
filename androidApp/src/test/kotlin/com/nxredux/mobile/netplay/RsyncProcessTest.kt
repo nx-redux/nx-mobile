@@ -29,8 +29,7 @@ class RsyncProcessTest {
     private fun alive(pid: Int) = ProcessBuilder("kill", "-0", "$pid").redirectErrorStream(true).start().waitFor() == 0
 
     // The waits below are generous deadlines, not expected durations: a loaded machine (the whole suite, a CI runner) is
-    // slow to start a process, and a test that cancelled after a fixed few hundred ms could cancel the script before it
-    // ran ("no pid in daemon.pid" only in full runs).
+    // slow to start a process, and a cancel after a fixed few hundred ms could land before the script ran.
     private fun pidIn(f: File): Int {
         val deadline = System.currentTimeMillis() + 10_000
         while (System.currentTimeMillis() < deadline) {
