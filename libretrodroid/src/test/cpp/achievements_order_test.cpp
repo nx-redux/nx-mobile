@@ -7,7 +7,7 @@
 //   clang++ -std=c++17 -fsanitize=address -DRC_DISABLE_LUA -DRC_CLIENT_SUPPORTS_HASH -Ilibretrodroid/src/test/cpp/shim \
 //     -I$c -I$c/rcheevos/include -I$r -I$c/libretro/libretro-common/include \
 //     libretrodroid/src/test/cpp/achievements_order_test.cpp $c/achievements/achievements.cpp \
-//     $c/achievements/memoryregiontable.cpp "$d"/*.o -o "$d/achievements_order_test" && "$d/achievements_order_test"
+//     $c/achievements/memoryregiontable.cpp $c/logflag.cpp "$d"/*.o -o "$d/achievements_order_test" && "$d/achievements_order_test"
 #include "achievements/achievements.h"
 #include "achievements/achievementshash.h"
 #include "rc_consoles.h"
