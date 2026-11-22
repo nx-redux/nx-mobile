@@ -28,6 +28,7 @@ import kotlin.test.assertTrue
 class NetplayUsbControllerTest {
     private val kart = netplayEntry("SFC", "Super Mario Kart (USA).sfc")
     private val title = "Super Mario Kart (USA)"
+    private val starting = NetplayPage.Progress(title, NetplayText.USB_CONNECT + "\n\n" + NetplayText.USB_STARTING)
     private val hostUp = UsbLinkState.Up(UsbHello.HOST_IP, UsbHello.DEVICE_IP)
     private val deviceUp = UsbLinkState.Up(UsbHello.DEVICE_IP, UsbHello.HOST_IP)
 
@@ -184,7 +185,7 @@ class NetplayUsbControllerTest {
         val p = usbPlatform(up = null)
         val c = netplayController(p)
         c.open(kart); c.press(NxButton.A); runCurrent()
-        assertEquals(NetplayPage.Progress(title, NetplayText.USB_CONNECT + "\n\n" + NetplayText.USB_STARTING), c.page.value)
+        assertEquals(starting, c.page.value)
         advanceTimeBy(NetplayController.USB_LINK_MS + 1); runCurrent()
         assertEquals(NetplayText.USB_NO_LINK, assertIs<NetplayPage.Error>(c.page.value).text)
         assertEquals(1, p.usbCable!!.stops)
@@ -231,7 +232,7 @@ class NetplayUsbControllerTest {
         advanceTimeBy(60_000); runCurrent()
         assertEquals(NetplayPage.Progress(title, NetplayText.USB_VPN_NOTE), c.page.value)
         p.usbCable!!.state.value = UsbLinkState.Starting(handheld = false); runCurrent()
-        assertEquals(NetplayPage.Progress(title, NetplayText.USB_CONNECT + "\n\n" + NetplayText.USB_STARTING), c.page.value)
+        assertEquals(starting, c.page.value)
         p.usbCable!!.state.value = hostUp; runCurrent()
         assertIs<NetplayPage.Hosting>(c.page.value)
     }
@@ -239,7 +240,6 @@ class NetplayUsbControllerTest {
     @Test fun usb_permission_pauses_the_10_s_wait_and_restarts_it() = runTest {
         val p = usbPlatform(up = null)
         val c = netplayController(p)
-        val starting = NetplayPage.Progress(title, NetplayText.USB_CONNECT + "\n\n" + NetplayText.USB_STARTING)
         c.open(kart); c.press(NxButton.A); runCurrent()
         assertEquals(starting, c.page.value)
         p.usbCable!!.state.value = UsbLinkState.Permission; runCurrent()

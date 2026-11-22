@@ -14,6 +14,7 @@ import com.nxredux.mobile.BuildConfig
 import com.nxredux.mobile.DebugLogFile
 import com.nxredux.mobile.R
 import com.nxredux.mobile.lowLatencyWifiLock
+import com.nxredux.mobile.cheats.CheatFolders
 import com.nxredux.mobile.cheats.CheatSet
 import com.nxredux.mobile.cheats.DolphinCheats
 import com.nxredux.mobile.gametime.GameTimeRecorder
@@ -98,6 +99,7 @@ import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.GLRetroViewData
 import com.swordfish.libretrodroid.LibretroDroid
+import com.swordfish.libretrodroid.LibretroNetplay
 import com.swordfish.libretrodroid.NxLog
 import com.swordfish.libretrodroid.Variable
 import com.swordfish.libretrodroid.VirtualFile
@@ -265,7 +267,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             private var current: Network? = null
             override fun onAvailable(network: Network) {
                 current = network
-                com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(network.networkHandle)
+                LibretroNetplay.dsSetNetwork(network.networkHandle)
                 pspAddressChanged(cm, network)
             }
             override fun onLinkPropertiesChanged(network: Network, linkProperties: android.net.LinkProperties) {
@@ -274,7 +276,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             override fun onLost(network: Network) {
                 if (network != current) return
                 current = null
-                com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(0L)
+                LibretroNetplay.dsSetNetwork(0L)
             }
         }
         // The request's default NOT_VPN keeps the USB cable's VPN (it carries the Wi-Fi transport too) out of it.
@@ -504,9 +506,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         attachView(cfg, prepared, data)
     }
 
-    private fun refuse(message: String): Nothing? { host.fail(message); return null }
-
-    private fun refuse(message: String, title: String): Nothing? { host.fail(message, title); return null }
+    private fun refuse(message: String, title: String = GameActivity.START_FAILED): Nothing? { host.fail(message, title); return null }
 
     private suspend fun resolveConfig(): LaunchConfig? {
         with(host) {
@@ -547,7 +547,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             } ?: return refuse("The game's storage could not be reached. Try again.")
             privateRoot = DataRoot.private(activity)
             shaderRoots = Shaders.Roots.of(privateRoot, dataRoot)
-            cheatsFolder = Cheats.folder(tag, romFileName)
+            cheatsFolder = CheatFolders.primary(tag, romFileName)
             // The battery-save, clock and state names follow the handheld's save settings. The save setup waits
             // for the unpack (after the inner-file check below), since Use extracted file name names them after the
             // archive's inner file; the config and marker names never depend on the settings.
@@ -573,7 +573,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             descriptorDefaults = optionExtras(activity.intent.getStringArrayExtra(EXTRA_OPTIONS) ?: emptyArray())
             // melonDS DS: GPU where the device has GLES 3.2, as a lowest-priority default; a stored value wins, none is written.
             if (coreId == NdsRenderer.CORE_ID_MELONDSDS) {
-                val gles = (activity.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).deviceConfigurationInfo.reqGlEsVersion
+                val gles = (activity.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).deviceConfigurationInfo.reqGlEsVersion
                 descriptorDefaults = NdsRenderer.defaults(gles) + descriptorDefaults
             }
             // Before the frontend values are read: a core that follows the GPU has defaults that do too (Res3dConsole.defaultCap),
@@ -690,7 +690,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // itself while the console's Local Wireless option is on ([N3dsOptions.LOCAL_WIRELESS]); the link's variables
             // go either way, so the option can be switched in the game.
             val isPsp = coreId == "ppsspp"
-            if (coreId == "azahar" || coreId == "melondsds" || isPsp) playerName = PlayerName.resolve(AndroidAppSettings(activity).playerName, AndroidDeviceInfo.deviceName(activity))
+            if (coreId == "azahar" || coreId == "melondsds" || isPsp) playerName = PlayerName.resolve(settings.playerName, AndroidDeviceInfo.deviceName(activity))
             val n3dsRoomName = if (coreId != "azahar" && coreId != "melondsds") null else NetplayLinkOptions.n3dsRoomName(playerName, kotlin.random.Random.nextInt(10000))
             dsLinkCore = coreId.takeIf { n3dsRoomName != null }
             dsLocalWireless = n3dsRoomName != null &&
@@ -701,7 +701,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             if (linkKind == NetplayLinkKind.N3DSLINK || linkKind == NetplayLinkKind.NDSLINK || linkKind == NetplayLinkKind.PSPLINK) holdBroadcasts()
             val n3dsBroadcast = n3dsRoomName?.let { wifiBroadcast() }
             // A DS room runs under its own MAC (a seed kept per install) so rooms tell its members apart.
-            val ndsMac = if (coreId == "melondsds" && (np == null || linkKind == NetplayLinkKind.NDSLINK)) NetplayLinkOptions.ndsMac(AndroidAppSettings(activity).ndsMacSeed) else null
+            val ndsMac = if (coreId == "melondsds" && (np == null || linkKind == NetplayLinkKind.NDSLINK)) NetplayLinkOptions.ndsMac(settings.ndsMacSeed) else null
             // PSP: the ad hoc link runs in a sheet session, or outside one while Local Wireless is on and the Wi-Fi has an address
             // ([NetplayLinkOptions.forPsp]); WLAN is never on without the link variables.
             val pspWifi = if (isPsp) WifiNetworks.address(activity.getSystemService(ConnectivityManager::class.java)) else null
@@ -710,7 +710,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val pspOptions = if (!isPsp) emptyMap() else NetplayLinkOptions.forPsp(
                 sessionOptions = np?.takeIf { linkKind == NetplayLinkKind.PSPLINK }?.let { NetplayLinkOptions.forSession(it, null) },
                 localWireless = np == null && PspOptions.localWireless(frontendValues),
-                self = pspSelf, broadcast = pspBroadcast, macSeed = AndroidAppSettings(activity).ndsMacSeed,
+                self = pspSelf, broadcast = pspBroadcast, macSeed = settings.ndsMacSeed,
             )
             if (isPsp) pspLocalWireless = PspOptions.localWireless(frontendValues)
             val pspLinked = NetplayLinkOptions.PSP_MODE in pspOptions
@@ -721,14 +721,14 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             dsLinked = ndsMac != null || (coreId == "azahar" && (np == null || linkKind == NetplayLinkKind.N3DSLINK)) || pspLinked
             if (dsLinked) {
-                com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(WifiNetworks.network(activity.getSystemService(ConnectivityManager::class.java))?.networkHandle ?: 0L)
+                LibretroNetplay.dsSetNetwork(WifiNetworks.network(activity.getSystemService(ConnectivityManager::class.java))?.networkHandle ?: 0L)
                 watchWifi()
                 // A sheet session on the USB cable has no cable watcher of its own (the sheet brought the cable up): the
                 // link is told here, so its sockets leave the Wi-Fi for the cable's addresses.
-                if (np != null && NetplayCores.cableAuto(coreId)) com.swordfish.libretrodroid.LibretroNetplay.dsSetCable(if (np.overUsb) 2 else 0)
+                if (np != null && dsCableCore) LibretroNetplay.dsSetCable(if (np.overUsb) 2 else 0)
             }
             dsAutoRoute = dsLinked && np == null
-            dsCableAuto = dsAutoRoute && NetplayCores.cableAuto(coreId)
+            dsCableAuto = dsAutoRoute && dsCableCore
             val linkOptions: Map<String, String> = (if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsRoomName, n3dsBroadcast, ndsMac, dsLocalWireless) else when (linkKind) {
                 null -> NetplayLinkOptions.forPair(np)
                 NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)
@@ -948,8 +948,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     // Auto is Vulkan for a core that follows the GPU on a Mali phone; the driver rows below then apply as on Vulkan.
                     val gamePath = activity.intent.getStringExtra(EXTRA_GAME_PATH)
                     // No library path, no crash record to keep: such a launch stays on the system driver.
-                    val driversAvailable = gamePath != null && cfg.descriptor?.id !in GpuDriverOptions.EXCLUDED_CORES &&
-                        AndroidGpuDrivers.unavailableReason(Build.VERSION.SDK_INT) == null
+                    val driversAvailable = gamePath != null && AndroidGpuDrivers.unavailableReason(Build.VERSION.SDK_INT) == null
                     // A core whose Auto wants Vulkan on Mali only with a custom driver (Dolphin) asks which one the game would load.
                     val customDriver = driversAvailable && cfg.descriptor?.vulkan?.maliNeedsCustomDriver == true &&
                         GpuDriverChoice.resolve(

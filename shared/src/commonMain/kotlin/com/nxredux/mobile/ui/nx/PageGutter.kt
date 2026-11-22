@@ -55,13 +55,13 @@ internal data class PageInset(val start: Dp, val end: Dp) {
 @Composable
 internal fun nxPageInset(): PageInset {
     val window = LocalWindowSize.current
-    val inset = if (LocalInSkin.current) PAGE_INSET_SKIN else pageInset(LocalPortrait.current, tablet = minOf(window.width, window.height) >= 600.dp)
+    val inSkin = LocalInSkin.current
+    val inset = if (inSkin) PAGE_INSET_SKIN else pageInset(LocalPortrait.current, tablet = minOf(window.width, window.height) >= 600.dp)
     val density = LocalDensity.current
     val dir = LocalLayoutDirection.current
     val cutout = WindowInsets.displayCutout
     val bars = restingSystemBars()
     // in a skin's glass a side cutout is under the shell beside it, never the page
-    val inSkin = LocalInSkin.current
     val left = if (inSkin) 0f else with(density) { (cutout.getLeft(this, dir) - bars.getLeft(this, dir)).coerceAtLeast(0).toDp().value }
     val right = if (inSkin) 0f else with(density) { (cutout.getRight(this, dir) - bars.getRight(this, dir)).coerceAtLeast(0).toDp().value }
     val (start, end) = if (dir == LayoutDirection.Ltr) left to right else right to left

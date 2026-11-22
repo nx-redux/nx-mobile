@@ -79,7 +79,7 @@ object SyncCommands {
         filesFromFile: String?, excludeFile: String?, filterFile: String? = null, homeBios: String? = null,
     ): List<String> {
         requireIpv4(peerIp)
-        require(listOf(run.from, run.to).all { noBreak(endPath(it)) }) { "a path with a line break" }
+        require(listOf(run.from, run.to).all { noBreak(it.path) }) { "a path with a line break" }
         fun resolve(e: RomEnd): String = when (e) {
             is RomEnd.Home -> dir(homeRoms.trimEnd('/'), e.path)
             is RomEnd.Extra -> dir((extraRoots[e.extra] ?: error("no extra folder ${e.extra}")).trimEnd('/'), e.path)
@@ -134,12 +134,6 @@ object SyncCommands {
         return dirs.toList() + rules + "- *"
     }
 
-    private fun endPath(e: RomEnd): String = when (e) {
-        is RomEnd.Home -> e.path
-        is RomEnd.Extra -> e.path
-        is RomEnd.Peer -> e.path
-        is RomEnd.Bios -> e.path
-    }
 
     private fun noBreak(s: String) = '\n' !in s && '\r' !in s
 

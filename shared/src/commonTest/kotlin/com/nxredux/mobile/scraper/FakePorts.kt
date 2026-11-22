@@ -60,7 +60,7 @@ class FakePixels(var failEncode: Boolean = false, var undecodable: (ByteArray) -
     }
     override suspend fun encodePng(image: ArgbImage): ByteArray? {
         encoded += image
-        return if (failEncode) null else byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47) + "MIX".encodeToByteArray()
+        return if (failEncode) null else MIX_PNG
     }
     companion object { val MIX_PNG = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47) + "MIX".encodeToByteArray() }
 }

@@ -7,17 +7,19 @@ import com.nxredux.mobile.runner.CoreRegistry
 
 /** One side of a ROM run: where a path is rooted. */
 sealed interface RomEnd {
+    val path: String
+
     /** Below this phone's home `Roms/`. */
-    data class Home(val path: String) : RomEnd
+    data class Home(override val path: String) : RomEnd
 
     /** Below this phone's extra folder [extra]. */
-    data class Extra(val extra: Int, val path: String) : RomEnd
+    data class Extra(val extra: Int, override val path: String) : RomEnd
 
     /** Below the peer daemon's [module]. */
-    data class Peer(val module: String, val path: String) : RomEnd
+    data class Peer(val module: String, override val path: String) : RomEnd
 
     /** Below this phone's home `Bios/`. */
-    data class Bios(val path: String) : RomEnd
+    data class Bios(override val path: String) : RomEnd
 }
 
 /**
@@ -330,7 +332,7 @@ object SyncRoms {
             for (r in there) pullPairs += target to r
         }
         val bare = biosPlan(mine.filter { CoreRegistry.consoleOf(it) == null }, theirs.filter { CoreRegistry.consoleOf(it) == null })
-            .filter { it.step == SyncStep.SEND_BIOS }.map { it.console to (it.to as RomEnd.Peer).path }
+            .filter { it.step == SyncStep.SEND_BIOS }.map { it.console to it.to.path }
         pairs += bare; pullPairs += bare
         return pairs.map { (l, r) -> RomRun(SyncStep.SEND_BIOS, l, RomEnd.Bios(l), RomEnd.Peer("bios", r), ignoreExisting = true, pair = "$l\u0000$r") } +
             pullPairs.map { (l, r) -> RomRun(SyncStep.RECEIVE_BIOS, l, RomEnd.Peer("bios", r), RomEnd.Bios(l), ignoreExisting = true, pair = "$l\u0000$r") }

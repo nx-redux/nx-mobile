@@ -133,7 +133,6 @@ import com.nxredux.mobile.runner.ScreenCare
 import com.nxredux.mobile.runner.SecondScreens
 import com.nxredux.mobile.ui.nx.AxisDirections
 import com.nxredux.mobile.ui.nx.InputRouter
-import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.PadEvent
 import com.swordfish.libretrodroid.NxLog
 import com.nxredux.mobile.kids.AndroidKids
@@ -183,12 +182,10 @@ class MainActivity : ComponentActivity(), FolderPicker {
     private val inputDeviceListener = object : InputManager.InputDeviceListener {
         override fun onInputDeviceAdded(deviceId: Int) {}
         override fun onInputDeviceChanged(deviceId: Int) {}
-        // A controller unplugged mid-hold can never send its own Up, so release the hat.
-        override fun onInputDeviceRemoved(deviceId: Int) { releaseHat() }
+        // A controller unplugged mid-hold can never send its own Up, so release the hat: Ups for whatever the hat or
+        // stick holds, its direction forgotten.
+        override fun onInputDeviceRemoved(deviceId: Int) { axes.release() }
     }
-
-    // Emit Ups for whatever the hat or stick currently holds and forget its direction.
-    private fun releaseHat() = axes.release()
 
     private val pickHomeTree = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
         if (uri != null) {
@@ -852,7 +849,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         syncSecondScreen()   // takes the second screen's button and the menu's screen away
         secondScreens.stop()
         inputManager?.unregisterInputDeviceListener(inputDeviceListener)   // a no-op when onStart handed over before registering
-        if (::router.isInitialized) { releaseHat(); router.releaseAll() }
+        if (::router.isInitialized) { axes.release(); router.releaseAll() }
         frameRateBoost.reset()
         if (::state.isInitialized) state.onBackground()   // fetched art still waiting to be written goes out now
         super.onStop()
@@ -920,8 +917,6 @@ class MainActivity : ComponentActivity(), FolderPicker {
         runCatching { contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
     }
 
-    private fun keyToButton(keyCode: Int): NxButton? = PadKeymap.buttonFor(keyCode)
-
     /**
      * Mapped pad keys reach the router before the view hierarchy: Compose's focus navigation would otherwise take a
      * keyboard-source DPAD (a BT keyboard, a pad in keyboard mode) and move its own focus instead of the NX selection.
@@ -935,7 +930,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         if (::state.isInitialized && captureKey(event)) return true
         // The NX keyboard types: a physical keyboard's characters, Backspace, Enter and Tab go to it; the pad's keys go to
         // the pad as when no prompt is open (no text field needs them first).
-        if (::state.isInitialized && state.textEntry.value != null && keyToButton(event.keyCode) == null) {
+        if (::state.isInitialized && state.textEntry.value != null && PadKeymap.buttonFor(event.keyCode) == null) {
             when (val a = keyboardKeyAction(event.keyCode, event.unicodeChar, chord = event.isCtrlPressed || event.isAltPressed || event.isMetaPressed)) {
                 KeyboardKeyAction.Pass -> Unit
                 else -> {
@@ -950,7 +945,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 }
             }
         }
-        if (::state.isInitialized && (!state.textEntryOpen || state.textEntry.value != null) && keyToButton(event.keyCode) != null) {
+        if (::state.isInitialized && (!state.textEntryOpen || state.textEntry.value != null) && PadKeymap.buttonFor(event.keyCode) != null) {
             when (event.action) {
                 KeyEvent.ACTION_DOWN -> { onUserInteraction(); return onKeyDown(event.keyCode, event) }
                 KeyEvent.ACTION_UP -> { onUserInteraction(); return onKeyUp(event.keyCode, event) }
@@ -959,29 +954,28 @@ class MainActivity : ComponentActivity(), FolderPicker {
         return super.dispatchKeyEvent(event)
     }
 
+    /** A press (true) or a release (false); null for any other action. */
+    private fun KeyEvent.pressOrNull(): Boolean? = when (action) {
+        KeyEvent.ACTION_DOWN -> true
+        KeyEvent.ACTION_UP -> false
+        else -> null
+    }
+
     /** A press or release for Controls → System buttons' wait; true when it used it. */
     private fun systemButtonKey(event: KeyEvent): Boolean {
-        val down = when (event.action) {
-            KeyEvent.ACTION_DOWN -> true
-            KeyEvent.ACTION_UP -> false
-            else -> return false
-        }
+        val down = event.pressOrNull() ?: return false
         if (!state.systemButtonKey(SystemButtonKeys.model(event.device), SystemButtonKeys.source(event), event.keyCode, event.scanCode, down, event.repeatCount > 0)) return false
         onUserInteraction()
         return true
     }
 
     /**
-     * Controls -> Shortcuts' press to bind: the raw key code goes to [AppState.captureKey] before [keyToButton], so a
+     * Controls -> Shortcuts' press to bind: the raw key code goes to [AppState.captureKey] before [PadKeymap.buttonFor], so a
      * code no NxButton names (an extra paddle's BUTTON_1..16) binds, and MENU opens nothing while it waits. An
      * auto-repeat is dropped while it waits: the A held from starting it must not bind itself.
      */
     private fun captureKey(event: KeyEvent): Boolean {
-        val down = when (event.action) {
-            KeyEvent.ACTION_DOWN -> true
-            KeyEvent.ACTION_UP -> false
-            else -> return false
-        }
+        val down = event.pressOrNull() ?: return false
         if (down && event.repeatCount > 0) return state.capturingShortcut.value != null
         if (!state.captureKey(event.keyCode, down)) return false
         onUserInteraction()
@@ -989,14 +983,14 @@ class MainActivity : ComponentActivity(), FolderPicker {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        val button = keyToButton(keyCode) ?: return super.onKeyDown(keyCode, event)
+        val button = PadKeymap.buttonFor(keyCode) ?: return super.onKeyDown(keyCode, event)
         // Ignore auto-repeats: the InputRouter runs its own repeat rules for held directions.
         if ((event?.repeatCount ?: 0) == 0) pad(PadEvent.Down(button))
         return true
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-        val button = keyToButton(keyCode) ?: return super.onKeyUp(keyCode, event)
+        val button = PadKeymap.buttonFor(keyCode) ?: return super.onKeyUp(keyCode, event)
         pad(PadEvent.Up(button))
         return true
     }

@@ -489,7 +489,7 @@ bool Environment::callback_set_rumble_state(unsigned port, enum retro_rumble_eff
 
 bool Environment::handle_callback_set_rumble_state(unsigned port, enum retro_rumble_effect effect, uint16_t strength) {
     LOGV("Setting rumble strength for port %i to %i", port, strength);
-    if (port < 0 || port > 3) return false;
+    if (port > 3) return false;
 
     if (effect == RETRO_RUMBLE_STRONG) {
         rumbleStates[port].strengthStrong = strength;
@@ -678,7 +678,7 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             auto message = static_cast<const struct retro_message*>(data);
             if (message && message->msg) {
                 LOGI("Core message: %s", message->msg);
-                Environment::getInstance().pushCoreMessage(message->msg);
+                pushCoreMessage(message->msg);
             }
             return true;
         }
@@ -687,7 +687,7 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             auto message = static_cast<const struct retro_message_ext*>(data);
             if (message && message->msg) {
                 LOGI("Core message: %s", message->msg);
-                Environment::getInstance().pushCoreMessage(message->msg);
+                pushCoreMessage(message->msg);
             }
             return true;
         }

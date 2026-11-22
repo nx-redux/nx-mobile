@@ -8,9 +8,6 @@ import java.io.File
 
 /** Cheat files under [com.nxredux.mobile.tools.CheatsRoot] (RetroArch `.cht` files in `Cheats/<TAG>/`, where the Cheats & Patches tool unpacks too). */
 object Cheats {
-    /** The folder the Cheats page names for [romFileName] under [tag] ([CheatFolders.primary]). */
-    fun folder(tag: String, romFileName: String) = CheatFolders.primary(tag, romFileName)
-
     /**
      * The cheat set for [romFileName] shown as [title], from the first of its folders ([CheatFolders.tagsFor]) that yields
      * any; [serial] is the game's PSP serial when it was read ([PspSerialReader]). Blocking I/O (a listing plus a few

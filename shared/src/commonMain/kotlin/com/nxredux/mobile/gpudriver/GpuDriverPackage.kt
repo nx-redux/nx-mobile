@@ -1,5 +1,6 @@
 package com.nxredux.mobile.gpudriver
 
+import com.nxredux.mobile.storage.Bytes
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
@@ -90,5 +91,5 @@ object GpuDriverPackage {
         head.size >= 20 &&
             head[0] == 0x7F.toByte() && head[1] == 0x45.toByte() && head[2] == 0x4C.toByte() && head[3] == 0x46.toByte() &&
             head[4] == 2.toByte() &&
-            (head[18].toInt() and 0xFF) or ((head[19].toInt() and 0xFF) shl 8) == EM_AARCH64
+            Bytes.le16(head, 18) == EM_AARCH64
 }

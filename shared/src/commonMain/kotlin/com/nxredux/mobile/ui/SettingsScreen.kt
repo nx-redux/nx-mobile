@@ -74,8 +74,8 @@ fun SettingsScreen(
         if (screen.section.layoutGroup) {
             // A Layouts group: its values above a picture of them (B goes back).
             LayoutPreviewPage(
-                screen.section.label, emptyList(), rows, screen.shot?.let(::layoutShotPicture), LAYOUT_PICTURE_AR, selectedIndex,
-                shownHints, onSelect, onOpen, onHint ?: {}, landscapeWidth = 1f, titleAction = false,   // the rows across the page, as the other Settings pages'
+                screen.section.label, rows, screen.shot?.let(::layoutShotPicture), LAYOUT_PICTURE_AR, selectedIndex,
+                shownHints, onSelect, onOpen, onHint ?: {},
             )
         } else if (screen.section.detailed) {
             NxDetailListBody(
@@ -113,7 +113,6 @@ private fun SettingsTouchPage(
     val rows = remember(screen, editing) {
         screen.rows.mapIndexed { i, r -> settingsTouchRow(r, screen.choices.getOrNull(i), screen.section).let { if (i == editing) it.copy(editing = true) else it } }
     }
-    val report = onTruncated
     val selected = rows.getOrNull(selectedIndex)
     val infoShown = selected != null && nxShowsInfo(selected, truncated)
     val shownHints = hints ?: if (editing >= 0) NX_EDIT_HINTS else settingsHints(screen.rows, selectedIndex, selected, infoShown)
@@ -122,16 +121,16 @@ private fun SettingsTouchPage(
     Box(modifier.fillMaxSize()) {
         if (screen.section.layoutGroup) {
             LayoutPreviewPage(
-                screen.section.label, emptyList(), emptyList(), screen.shot?.let(::layoutShotPicture), LAYOUT_PICTURE_AR, selectedIndex,
-                shownHints, onSelect, onOpen, onHint ?: {}, landscapeWidth = 1f, titleAction = false,
-                touchRows = { m, footer -> NxSettingsList(rows, selectedIndex, onSelect, onOpen, events, m, report, preview, footer) },
+                screen.section.label, emptyList(), screen.shot?.let(::layoutShotPicture), LAYOUT_PICTURE_AR, selectedIndex,
+                shownHints, onSelect, onOpen, onHint ?: {},
+                touchRows = { m, footer -> NxSettingsList(rows, selectedIndex, onSelect, onOpen, events, m, onTruncated, preview, footer) },
             )
         } else {
             // Shortcuts' binding keeps its bar: A Bind, X Clear and B Cancel are no console menu's, and a wrong press rebinds.
             CompositionLocalProvider(LocalNxHintBarHidden provides (LocalNxHintBarHidden.current && screen.section != SettingsSection.SHORTCUTS)) {
                 NxSettingsPage(
                     screen.section.label, rows, selectedIndex, shownHints, onSelect, onOpen, events,
-                    onTruncated = report, onHint = onHint, preview = preview,
+                    onTruncated = onTruncated, onHint = onHint, preview = preview,
                     header = when {
                         screen.banner != null -> ({ NxBanner(screen.banner) })
                         screen.details.isNotEmpty() -> ({ SettingsDetailLines(screen.details) })

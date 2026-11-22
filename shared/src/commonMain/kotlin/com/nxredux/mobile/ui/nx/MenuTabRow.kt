@@ -137,7 +137,6 @@ fun MenuTabRow(
     }
     val gap = if (portrait) 14.dp else 20.dp
     val inset = nxPageInset().let { if (gutter == null) it else it.copy(start = gutter, end = gutter) }   // the first word on it, the row's end too
-    val size = labelSize   // Appearance → Text size
     var rowPx by remember { mutableIntStateOf(0) }   // the row's width inside its padding, for [hints]' room
     Row(
         // The gutter less the pill's side room, which the words' box takes back inside (so the pill is never clipped).
@@ -158,7 +157,7 @@ fun MenuTabRow(
                     val lit = focused && i == selected
                     Text(
                         label, color = when { lit -> colors.onAccent; i == selected || overArt -> colors.main; else -> colors.inkDim },
-                        fontFamily = LocalNxFont.current, fontSize = size, maxLines = 1,
+                        fontFamily = LocalNxFont.current, fontSize = labelSize, maxLines = 1,
                         style = if (shadow == null || lit) LocalTextStyle.current else LocalTextStyle.current.copy(shadow = shadow),
                         // role: an unselected word over art, brighter than inkDim; the alpha fades its shadow with it
                         modifier = Modifier.alpha(if (i != selected && overArt) 0.62f else 1f)

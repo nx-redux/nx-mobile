@@ -718,7 +718,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     val titleFor: (() -> String)? = if (s.isTab) remember(s.entries, selection) { { gamesTabTitle(s.entries, selection.value.index) } } else null
     CompositionLocalProvider(LocalLauncherChrome provides chrome) {
         GameListScreen(
-            listTitle(s.source), s.entries, index,
+            s.source.title, s.entries, index,
             canResume = { resume.value.canResume }, menuAvailable = s.source != ListSource.Hidden,
             canOpen = { current().let { it != null && (s.source == ListSource.Hidden || it.system.core != null || it.system.android) } },
             canNetplay = { state.canNetplay(current()) },
@@ -756,7 +756,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
         )
     }
     // The Games tab's is START's global search (the main menu's prompt); any other list's is its own search.
-    s.search?.let { NxTextPrompt(if (s.isTab) "Search" else "Search ${listTitle(s.source.base)}", it, state::searchDraft, onConfirm = { state.onButton(NxButton.A) }, onCancel = { state.onButton(NxButton.B) }) }
+    s.search?.let { NxTextPrompt(if (s.isTab) "Search" else "Search ${s.source.base.title}", it, state::searchDraft, onConfirm = { state.onButton(NxButton.A) }, onCancel = { state.onButton(NxButton.B) }) }
     s.menu?.let { MenuOverlay(state, it) }
 }
 

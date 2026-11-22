@@ -263,6 +263,12 @@ class EmulatorSettingsControllerTest {
         state.onButton(NxButton.A)
     }
 
+    /** [openCore], waited until its options page shows. */
+    private fun TestScope.openOptions(state: AppState, coreId: String) {
+        openCore(state, coreId)
+        await { state.screen.value is Screen.EmulatorOptions }
+    }
+
     private fun options(state: AppState) = assertIs<Screen.EmulatorOptions>(state.screen.value)
     private fun selected(state: AppState) = options(state).rows[state.selection.value.index]
     private fun coreValue(state: AppState, key: String) = options(state).page.core!!.first { it.key == key }.value
@@ -290,8 +296,7 @@ class EmulatorSettingsControllerTest {
     @Test fun right_on_a_core_row_writes_the_console_file_and_shows_the_value() = runTest {
         val configs = MemoryConfigs()
         val state = TestState(configs)
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         assertTrue(selected(state) !is EmulatorRow.Header)   // the first selectable row
         selectOptA(state)
         state.padStep(NxButton.RIGHT)
@@ -306,8 +311,7 @@ class EmulatorSettingsControllerTest {
     @Test fun a_change_goes_on_across_the_rebuilt_page() = runTest {
         val configs = MemoryConfigs()
         val state = TestState(configs)
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         selectOptA(state)
         state.onButton(NxButton.A)
         state.onButton(NxButton.RIGHT)
@@ -324,8 +328,7 @@ class EmulatorSettingsControllerTest {
         val configs = MemoryConfigs()
         val state = TestState(configs)
         state.onFooterMode(FooterMode.BUTTONS)
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         selectOptA(state)
         state.settingEvent(NxSettingEvent.OpenPicker(state.selection.value.index))
         val chooser = state.chooser.value ?: error("no chooser")
@@ -341,8 +344,7 @@ class EmulatorSettingsControllerTest {
     @Test fun a_failed_write_says_so_and_the_page_shows_the_disk() = runTest {
         val configs = MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "opt_a = z\n"))
         val state = TestState(configs)
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         selectOptA(state)
         configs.failWrites = true
         state.onButton(NxButton.A); state.onButton(NxButton.RIGHT)   // the change: its error stays up
@@ -353,8 +355,7 @@ class EmulatorSettingsControllerTest {
 
     @Test fun a_category_opens_and_b_returns_to_its_row() = runTest {
         val state = TestState(MemoryConfigs())
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         repeat(options(state).rows.size) { if (selected(state) !is EmulatorRow.Category) state.onButton(NxButton.DOWN) }
         state.onButton(NxButton.A)
         assertEquals("video", options(state).category)
@@ -366,8 +367,7 @@ class EmulatorSettingsControllerTest {
 
     @Test fun b_from_a_one_tag_core_page_returns_to_the_list_and_then_to_emulators_settings() = runTest {
         val state = TestState(MemoryConfigs())
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         state.onButton(NxButton.B)
         val list = assertIs<Screen.EmulatorList>(state.screen.value)
         assertEquals("gpsp", list.rows[state.selection.value.index].coreId)
@@ -422,8 +422,7 @@ class EmulatorSettingsControllerTest {
         val state = TestState(MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "-${PadOptions.LAYOUT} = ${PadOptions.AUTO}\n" +
             (SpeedOptions.table + AudioOptions.rows).joinToString("") { "-${it.key} = ${it.default}\n" })), tables = noOptions)
         state.onSecondScreenChanged(true)
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         assertEquals(listOf(BottomScreenOptions.KEY), options(state).rows.filterIsInstance<EmulatorRow.Console>().map { it.row.option.key })
         state.onSecondScreenChanged(false)
         await { state.screen.value is Screen.EmulatorList }   // back to the core list, as B goes
@@ -471,8 +470,7 @@ class EmulatorSettingsControllerTest {
     @Test fun reset_to_defaults_asks_then_deletes_the_console_file_and_keeps_game_files() = runTest {
         val configs = MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "opt_a = z\n", "GBA-gpsp/Mario.cfg" to "opt_a = y\n"))
         val state = TestState(configs)
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         assertEquals("z", coreValue(state, "opt_a"))
         repeat(options(state).rows.size) { if (selected(state) != EmulatorRow.ResetDefaults) state.onButton(NxButton.DOWN) }
         assertEquals(EmulatorRow.ResetDefaults, selected(state))
@@ -533,8 +531,7 @@ class EmulatorSettingsControllerTest {
 
     @Test fun closing_does_nothing_on_the_console_wide_page() = runTest {
         val state = TestState(MemoryConfigs())
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         val page = state.screen.value
         assertFalse(gameSettingsModal(page))
         state.closeGameSettings()
@@ -625,8 +622,7 @@ class EmulatorSettingsControllerTest {
 
     @Test fun mgbas_page_ends_with_cable_link_where_cable_link_exists() = runTest {
         val state = mgbaState(cacheOf())
-        openCore(state, "mgba")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "mgba")
         assertEquals("MGBA" to "mgba", options(state).page.tag to options(state).page.coreId)
         val rows = options(state).rows
         assertEquals(cableKinds, rows.takeLast(3).map { (it as EmulatorRow.App).row.kind })
@@ -638,16 +634,14 @@ class EmulatorSettingsControllerTest {
 
     @Test fun mgbas_page_has_no_cable_link_without_a_link_rom_cache() = runTest {
         val state = mgbaState(null)
-        openCore(state, "mgba")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "mgba")
         assertEquals(emptyList(), appRows(state))
         assertFalse(EmulatorRow.Header("Cable Link") in options(state).rows)
     }
 
     @Test fun gpsps_page_has_no_cable_link() = runTest {
         val state = mgbaState(cacheOf(), mgba = false)
-        openCore(state, "gpsp")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "gpsp")
         assertEquals("gpsp", options(state).page.coreId)
         assertEquals(emptyList(), appRows(state))
     }
@@ -655,8 +649,7 @@ class EmulatorSettingsControllerTest {
     // Each row changes its setting as a Settings row does, and the page stays, its selection on the row.
     @Test fun the_cable_link_rows_change_their_settings_on_the_page() = runTest {
         val state = mgbaState(cacheOf())
-        openCore(state, "mgba")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "mgba")
         selectApp(state, SettingsKind.CABLE_LINK_DELAY)
         state.padStep(NxButton.RIGHT)
         assertEquals("2 frames", appRow(state, SettingsKind.CABLE_LINK_DELAY).row.secondary)
@@ -673,8 +666,7 @@ class EmulatorSettingsControllerTest {
 
     @Test fun input_delay_opens_its_picker_and_a_pick_sets_it() = runTest {
         val state = mgbaState(cacheOf())
-        openCore(state, "mgba")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "mgba")
         selectApp(state, SettingsKind.CABLE_LINK_DELAY)
         state.settingEvent(NxSettingEvent.OpenPicker(state.selection.value.index))
         val chooser = state.chooser.value ?: error("no chooser")
@@ -689,8 +681,7 @@ class EmulatorSettingsControllerTest {
     @Test fun clear_link_rom_cache_empties_it_and_shows_the_new_size() = runTest {
         val cache = cacheOf(2048)
         val state = mgbaState(cache)
-        openCore(state, "mgba")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "mgba")
         assertEquals("2.0 KB", appRow(state, SettingsKind.CLEAR_LINK_ROMS).row.secondary)
         selectApp(state, SettingsKind.CLEAR_LINK_ROMS)
         state.onButton(NxButton.A)
@@ -702,8 +693,7 @@ class EmulatorSettingsControllerTest {
     // The rows draw and explain themselves as on Settings: the same touch row, the same help text behind X.
     @Test fun the_cable_link_rows_draw_and_explain_as_on_settings() = runTest {
         val state = mgbaState(cacheOf())
-        openCore(state, "mgba")
-        await { state.screen.value is Screen.EmulatorOptions }
+        openOptions(state, "mgba")
         for (r in appRows(state)) assertEquals(settingsTouchRow(r.row, r.choices, SettingsSection.EMULATORS), emulatorTouchRow(r))
         assertEquals("Clear", emulatorTouchRow(appRow(state, SettingsKind.CLEAR_LINK_ROMS)).action)
         selectApp(state, SettingsKind.CABLE_LINK_DELAY)

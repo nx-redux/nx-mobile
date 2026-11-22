@@ -37,6 +37,7 @@ import kotlin.concurrent.thread
  * and the screen's ways out (the failure dialog, Quit, the local game a link session's end leaves).
  */
 internal interface GameNetplayHost : GameScreenHost {
+    val settings: AndroidAppSettings
     val menuOpen: Boolean
     val focusPaused: Boolean
     val cheatsSupported: Boolean
@@ -240,7 +241,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
         holdWifi(np)
         return when (np.linkKind) {
             null -> {
-                val settings = AndroidAppSettings(host.activity)
+                val settings = host.settings
                 val overlay = np.cableLink && settings.cableLinkDelayOverlay
                 NetplayGame(
                     np, host.lifecycleScope, SystemClock::elapsedRealtime, ::onNotice,

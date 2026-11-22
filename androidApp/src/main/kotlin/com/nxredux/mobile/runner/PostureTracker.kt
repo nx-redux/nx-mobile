@@ -88,7 +88,7 @@ class PostureTracker(
                 try {
                     WindowInfoTracker.getOrCreate(activity).windowLayoutInfo(activity).collect { info ->
                         fold = info.displayFeatures.filterIsInstance<FoldingFeature>().firstOrNull()
-                        fold?.let { NxLog.i(TAG, "fold: state=${it.state} orientation=${it.orientation} bounds=${it.bounds}") }
+                        fold?.let { NxLog.i(TAG_LOG, "fold: state=${it.state} orientation=${it.orientation} bounds=${it.bounds}") }
                         listen(fold != null)
                         update()
                     }
@@ -158,7 +158,6 @@ class PostureTracker(
     }
 
     companion object {
-        private const val TAG = "NXAPP"
         const val DEBOUNCE_MS = 200L
     }
 }

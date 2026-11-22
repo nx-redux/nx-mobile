@@ -97,13 +97,6 @@ int16_t LibretroDroid::callback_set_input_state(
     return LibretroDroid::getInstance().handleSetInputState(port, device, index, id);
 }
 
-void LibretroDroid::updateAudioSampleRateMultiplier() {
-    if (audio) {
-        audio->setPlaybackSpeed(frameSpeed.load());
-        audio->setFastForwardSpeed(fastForwardPlaybackSpeed.load());
-    }
-}
-
 void LibretroDroid::updateFastForwardAudioSpeed() {
     // Audible FF plays at the game's achieved speed. Audio combines it with the pause speed, so a pause (0) still wins
     // over an FF speed computed before it.
@@ -122,35 +115,34 @@ void LibretroDroid::resetGlobalVariables() {
 }
 
 int LibretroDroid::availableDisks() {
-    return Environment::getInstance().getRetroDiskControlCallback() != nullptr
-           ? Environment::getInstance().getRetroDiskControlCallback()->get_num_images()
-           : 0;
+    auto* disk = Environment::getInstance().getRetroDiskControlCallback();
+    return disk != nullptr ? disk->get_num_images() : 0;
 }
 
 int LibretroDroid::currentDisk() {
-    return Environment::getInstance().getRetroDiskControlCallback() != nullptr
-           ? Environment::getInstance().getRetroDiskControlCallback()->get_image_index()
-           : 0;
+    auto* disk = Environment::getInstance().getRetroDiskControlCallback();
+    return disk != nullptr ? disk->get_image_index() : 0;
 }
 
 void LibretroDroid::changeDisk(unsigned int index) {
     // The rewind history is cleared with the swap; the lock keeps that off a running step's capture.
     std::lock_guard<std::mutex> lock(coreLock);
 
-    if (Environment::getInstance().getRetroDiskControlCallback() == nullptr) {
+    auto* disk = Environment::getInstance().getRetroDiskControlCallback();
+    if (disk == nullptr) {
         LOGE("Cannot swap disk. This platform does not support it.");
         return;
     }
 
-    if (index >= Environment::getInstance().getRetroDiskControlCallback()->get_num_images()) {
+    if (index >= disk->get_num_images()) {
         LOGE("Requested image index is not valid.");
         return;
     }
 
-    if (Environment::getInstance().getRetroDiskControlCallback()->get_image_index() != index) {
-        Environment::getInstance().getRetroDiskControlCallback()->set_eject_state(true);
-        Environment::getInstance().getRetroDiskControlCallback()->set_image_index((unsigned) index);
-        Environment::getInstance().getRetroDiskControlCallback()->set_eject_state(false);
+    if (disk->get_image_index() != index) {
+        disk->set_eject_state(true);
+        disk->set_image_index((unsigned) index);
+        disk->set_eject_state(false);
         // Rewinding past the swap would restore states that expect the other disc.
         rewind.clear();
     }
@@ -871,7 +863,7 @@ void LibretroDroid::step() {
             // Paused, or an FF step with no frame due: the core doesn't run, so redraw its last frame with the current
             // shader and layout. GL cores otherwise draw only inside their video callback, leaving the picture stale.
             // An FF step that ran frames shows its last one like any step.
-            video->renderPausedFrame();
+            video->renderFrame();
             // A hw core's second surface is drawn from inside its frame (frameDrawnHook); the paused redraw is that
             // frame here, so a shader picked from the menu shows on the second display at once.
             if (video->rendersInVideoCallback() && frameDrawnHook) frameDrawnHook();
@@ -880,7 +872,7 @@ void LibretroDroid::step() {
         } else if (videoCallbacks == videoCallbacksBefore) {
             // The core ran without a video callback at all, not even a duplicate (Dolphin on Vulkan between a 30 fps
             // game's frames): redraw its last frame, or the swap shows a buffer that doesn't hold it (flicker).
-            video->renderPausedFrame();
+            video->renderFrame();
             if (Environment::getInstance().isUseVulkan()) VulkanBridge::get().afterGlDraw();
         }
     }
@@ -1420,8 +1412,8 @@ void LibretroDroid::afterGameLoad() {
         audioBufferMs.load()
     );
     audio->setResamplingQuality(resamplingQuality.load());
-
-    updateAudioSampleRateMultiplier();
+    audio->setPlaybackSpeed(frameSpeed.load());
+    updateFastForwardAudioSpeed();
 
     defaultAspectRatio = findDefaultAspectRatio(system_av_info);
     geometryWidth = (float) system_av_info.geometry.base_width;
@@ -1545,12 +1537,7 @@ void LibretroDroid::renderSecondaryInFrame(unsigned width, unsigned height) {
 
 void LibretroDroid::renderSecondary(unsigned width, unsigned height) {
     std::lock_guard<std::mutex> lock(coreLock);
-    if (!video) return;
-    try {
-        video->renderSecondary(width, height);
-    } catch (const std::exception& e) {
-        LOGE("Error rendering the second screen: %s", e.what());
-    }
+    renderSecondaryInFrame(width, height);
 }
 
 std::vector<VideoView> LibretroDroid::getVideoViews() {

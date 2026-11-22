@@ -4,6 +4,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.OptionGroup
+import com.nxredux.mobile.ui.settingsSplit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -27,10 +28,10 @@ class InGameMenuSplitTest {
 
     // The window, as Settings decides, not the overlay's band-reduced area: portrait never splits.
     @Test fun theMenuSplitsOnTheWindowByTheSettingsRule() {
-        assertTrue(inGameMenuSplit(DpSize(933.dp, 704.dp)))    // the unfolded Fold in landscape
-        assertTrue(inGameMenuSplit(DpSize(800.dp, 360.dp)))    // a phone in landscape
-        assertFalse(inGameMenuSplit(DpSize(412.dp, 915.dp)))   // a phone in portrait
-        assertFalse(inGameMenuSplit(DpSize(673.dp, 841.dp)))   // the unfolded Fold in portrait
+        assertTrue(settingsSplit(DpSize(933.dp, 704.dp)))    // the unfolded Fold in landscape
+        assertTrue(settingsSplit(DpSize(800.dp, 360.dp)))    // a phone in landscape
+        assertFalse(settingsSplit(DpSize(412.dp, 915.dp)))   // a phone in portrait
+        assertFalse(settingsSplit(DpSize(673.dp, 841.dp)))   // the unfolded Fold in portrait
     }
 
     @Test fun theRootSitsBesideTheGamePanelTheSlotCardOrTheOptionsPreview() {

@@ -1,5 +1,6 @@
 package com.nxredux.mobile.library
 
+import com.nxredux.mobile.library.disc.ps1BinBytes
 import com.nxredux.mobile.runner.ContentRef
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -187,7 +188,7 @@ class RomMoverTest {
         val src = FakeRomsSource(
             mapOf("H" to listOf("Roms", "Stuff"), "H/Roms" to emptyList(), "H/Stuff" to listOf("P.cue") + bins),
             texts = mapOf("H/Stuff/P.cue" to legacyCueUtf8),
-            bytes = mapOf("H/Stuff/P.cue" to legacyCueBytes, "H/Stuff/${bins[0]}" to ps1Bin(), "H/Stuff/${bins[1]}" to ByteArray(20)),
+            bytes = mapOf("H/Stuff/P.cue" to legacyCueBytes, "H/Stuff/${bins[0]}" to ps1BinBytes(), "H/Stuff/${bins[1]}" to ByteArray(20)),
         )
         val files = LibraryScanner(src).scanOutsideRoms(ContentRef("H"), emptyMap())
         val mover = RomMover(src, ContentRef("H"))
@@ -195,6 +196,4 @@ class RomMoverTest {
         assertEquals(listOf("P.cue") + bins, items.single().files)
         assertEquals(MoveResult(moved = 1), mover.run(items, { _, _ -> }) { false })
     }
-
-    private fun ps1Bin(): ByteArray = com.nxredux.mobile.library.disc.DiscProbeTest().ps1BinBytes()
 }

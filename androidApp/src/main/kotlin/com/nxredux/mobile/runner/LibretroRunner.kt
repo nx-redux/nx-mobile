@@ -40,7 +40,7 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
         val app = context.applicationContext
         val decision = withContext(Dispatchers.IO) {
             runCatching { GameProcessControl.of(app).prepare(session) }
-                .onFailure { NxLog.e(TAG, "could not check the game process", it) }
+                .onFailure { NxLog.e(TAG_LOG, "could not check the game process", it) }
                 .getOrDefault(GameProcessControl.Decision.START)
                 .also { d ->
                     // Brought back: the running game's launch now ends on the switcher, or not, as this pick says.
@@ -115,10 +115,6 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
      */
     private fun gameOpenAnimation(): android.os.Bundle? =
         if (ownTask()) null else ActivityOptions.makeCustomAnimation(context, android.R.anim.fade_in, android.R.anim.fade_out).toBundle()
-
-    private companion object {
-        const val TAG = "NXAPP"
-    }
 }
 
 /**

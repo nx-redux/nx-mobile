@@ -41,7 +41,7 @@ class RomMover(private val source: RomsSource, private val home: ContentRef) {
         for (f in files) {
             val tag = f.tag ?: continue
             val console = CoreRegistry.consoleOf(tag) ?: continue
-            val target = folders[CoreRegistry.consoleTag(tag)] ?: "${console.displayName} (${console.tags.first()})"
+            val target = folders[CoreRegistry.consoleTag(tag)] ?: Names.systemFolderName(console, console.defaultTag)
             if (f.lookupFolder != f.folder) {
                 val all = source.listChildren(f.folder).filter { !it.isDirectory }.map { it.name }
                 items += MoveItem(f.folder, all, target, subdir = f.relativeDir.substringAfterLast('/'), fromParent = f.lookupFolder, relativeDir = f.relativeDir)

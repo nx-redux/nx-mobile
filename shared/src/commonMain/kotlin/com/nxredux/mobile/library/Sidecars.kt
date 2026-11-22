@@ -3,7 +3,7 @@ package com.nxredux.mobile.library
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.Recents
 import com.nxredux.mobile.storage.SidecarStore
-import kotlinx.coroutines.CancellationException
+import com.nxredux.mobile.tryOrAny
 
 /**
  * A folder's `systems.txt` and `map.txt`. The app writes only inside the home tree: a home folder keeps its
@@ -22,10 +22,10 @@ class Sidecars(private val source: RomsSource, private val store: SidecarStore, 
      * the file is there but gave no text (SAF reports a failed read as null). A write never replaces a file it could not
      * read, as [Collections.readOrNull]: a rewrite from such a file would keep only the one line set.
      */
-    private suspend fun textToRewrite(dir: ContentRef?, name: String): String? = try {
+    private suspend fun textToRewrite(dir: ContentRef?, name: String): String? = tryOrAny({ null }) {
         val f = dir?.let { source.child(it, name) }?.takeIf { !it.isDirectory }
         if (f == null) "" else source.readText(f.ref)
-    } catch (e: CancellationException) { throw e } catch (e: Throwable) { null }
+    }
 
     /** `.sources/<id>/<relativeDir segments>` below the home's `Roms`. */
     private fun copyPath(sourceId: String, relativeDir: String): List<String> =
@@ -134,7 +134,7 @@ class Sidecars(private val source: RomsSource, private val store: SidecarStore, 
     }
 
     /** A home that is read-only, gone or fails mid-way is a silent false: the caller falls back to the store. */
-    private suspend fun writeHomeCopy(sourceId: String, relativeDir: String, file: String, text: String): Boolean = try {
+    private suspend fun writeHomeCopy(sourceId: String, relativeDir: String, file: String, text: String): Boolean = tryOrAny({ false }) {
         val h = home()
         if (h == null || !source.canWrite(h)) {
             false
@@ -142,10 +142,6 @@ class Sidecars(private val source: RomsSource, private val store: SidecarStore, 
             val dir = homeRoms()?.let { source.ensureDirs(it, copyPath(sourceId, relativeDir)) }
             dir != null && source.writeText(dir, file, text)
         }
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Throwable) {
-        false
     }
 
     companion object {

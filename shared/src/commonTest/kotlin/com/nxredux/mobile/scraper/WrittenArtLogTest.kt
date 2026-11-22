@@ -1,6 +1,5 @@
 package com.nxredux.mobile.scraper
 
-import com.nxredux.mobile.library.ArtRefs
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -50,20 +49,13 @@ class WrittenArtLogTest {
     }
 
     @Test fun anUnreadableLogIsNeverSavedOver() = runTest {
-        val files = mutableMapOf("log" to "Roms/GB/.media/box2d/Zelda.png\n")
-        var unreadable = true
-        val host = object : ArtworkHost {
-            override suspend fun libraryGames() = emptyList<LibraryGameRef>()
-            override suspend fun allLibraryGames() = emptyList<LibraryGameRef>()
-            override suspend fun applyArt(gamePath: String, art: ArtRefs) {}
-            override suspend fun readPrivate(name: String): String? = if (unreadable) error("read failed") else files[name]
-            override suspend fun writePrivate(name: String, text: String) { files[name] = text }
-        }
+        val host = FakeHost(emptyList()).apply { files["log"] = "Roms/GB/.media/box2d/Zelda.png\n"; failRead = true }
+        val files = host.files
         val store = ArtLogStore(host, "log")
         val tetris = "Roms/GB/.media/box2d/Tetris.png"
         assertFailsWith<IllegalStateException> { store.add(listOf(tetris to null)) }
         assertEquals("Roms/GB/.media/box2d/Zelda.png\n", files["log"])   // not replaced by a log of Tetris alone
-        unreadable = false   // the failed read was not kept: the next call reads the real log
+        host.failRead = false   // the failed read was not kept: the next call reads the real log
         store.add(listOf(tetris to null))
         assertEquals(setOf("Roms/GB/.media/box2d/Zelda.png", tetris), WrittenArtLog.decode(files["log"]).entries)
         // An absent file is an empty log.

@@ -502,7 +502,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var dolphinBuiltInPath: String? = null     // named after the ROM-cache copy Dolphin loads
     override var cheatsLoad: Job? = null               // done once cheatSet holds the resolved (and saved-state-applied) set
         private set
-    override var cheatsFolder = ""                     // the folder the empty Cheats tab names (Cheats.folder), set at start
+    override var cheatsFolder = ""                     // the folder the empty Cheats tab names (CheatFolders.primary), set at start
         private set
 
     // ---- netplay (Wi-Fi lockstep, see the "netplay" block) ----

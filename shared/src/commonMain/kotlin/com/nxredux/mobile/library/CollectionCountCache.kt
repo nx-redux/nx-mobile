@@ -2,7 +2,7 @@ package com.nxredux.mobile.library
 
 import com.nxredux.mobile.storage.GameRef
 import com.nxredux.mobile.storage.PrivateFiles
-import kotlinx.coroutines.CancellationException
+import com.nxredux.mobile.tryOrAny
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -111,7 +111,7 @@ class CollectionCountCache(
         if (loaded) return
         loadLock.withLock {
             if (loaded) return
-            val text = try { files.read(FILE) } catch (e: CancellationException) { throw e } catch (e: Throwable) { null }
+            val text = tryOrAny({ null }) { files.read(FILE) }
             entries.putAll(CollectionCountCodec.decode(text))
             written = text   // a corrupt or old file differs from any encoding, so the next save rewrites it
             loaded = true
@@ -141,12 +141,12 @@ class CollectionCountCache(
                 delay(coalesceMillis)
                 dirty = false
                 val snapshot = entries.values.toList()
-                try {
+                tryOrAny({}) {
                     withContext(io) {
                         val text = CollectionCountCodec.encode(snapshot)
                         if (text != written) { files.write(FILE, text); written = text }
                     }
-                } catch (e: CancellationException) { throw e } catch (e: Throwable) { Unit }
+                }
             }
         }
     }

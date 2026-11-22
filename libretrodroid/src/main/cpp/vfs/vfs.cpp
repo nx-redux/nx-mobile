@@ -280,8 +280,6 @@ void VFS::deinitialize() {
 }
 
 struct retro_vfs_file_handle* VFS::virtualOpen(const char *path, unsigned int mode, unsigned int hints) {
-    LOGV("VFS Calling open: %s %i", path, mode);
-
     if (path == nullptr) {
         return nullptr;
     }
@@ -317,20 +315,12 @@ struct retro_vfs_file_handle* VFS::virtualOpen(const char *path, unsigned int mo
         return nullptr;
     }
 
-    // fdopen transfers ownership of duplicateFD to the FILE* below, and buffered
-    // I/O goes through stream->fp. Leave stream->fd at 0 so retro_vfs_file_close_impl
-    // closes the fd once via fclose(stream->fp) and skips its raw close(stream->fd),
-    // which would otherwise close an fd owned by the FILE* (fatal under fdsan).
-    stream->fd = 0;
+    // fdopen gave duplicateFD to the FILE*. stream->fd stays 0 so retro_vfs_file_close_impl closes it once, through
+    // fclose(stream->fp), and skips its raw close(stream->fd) of an fd the FILE* owns (fatal under fdsan).
     stream->hints = hints;
     stream->size = size;
-    stream->buf = nullptr;
     stream->fp = file;
     stream->orig_path = strdup(virtualFile->getFileName().data());
-    stream->mappos = 0;
-    stream->mapsize = 0;
-    stream->mapped = nullptr;
-    stream->scheme = VFS_SCHEME_NONE;
 
     {
         std::lock_guard<std::mutex> lock(virtualOffsetsMutex);

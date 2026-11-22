@@ -288,7 +288,7 @@ class StackLayoutTest {
         val stack = mainMenuStackGeometry(BackdropSlot.LOGO, 411f, 423f, portrait = true, gutter = 16f)
         assertEquals(flip.itemW to flip.itemH, stack.slotW to stack.slotH)
         val r = StackReach(30f, 30f)
-        assertEquals(rowPadBox(flip.itemH).w to rowPadBox(flip.itemH).h, stackPadBox(stack.slotW, stack.slotH, r).let { it.w to it.h })
+        assertEquals(rowPadBox(flip.itemH).w to rowPadBox(flip.itemH).h, stackPadBox(stack.slotH, r).let { it.w to it.h })
     }
 
     // Every console's footprint is its slot plus its count (8 dp under the slot and the count's line, both as drawn), and

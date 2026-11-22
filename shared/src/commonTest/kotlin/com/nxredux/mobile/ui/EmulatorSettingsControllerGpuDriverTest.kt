@@ -30,6 +30,7 @@ class EmulatorSettingsControllerGpuDriverTest {
     private val turnip = GpuDriver("turnip", "Turnip 24.1", "24.1", "a", "d", "libvulkan_freedreno.so", 28)
     private val n64 = CoreRegistry.forTag("N64")!!
     private val vulkan = "nx_graphics_api = vulkan\n"
+    private fun configs(text: String) = MemoryConfigs(mapOf("N64-${n64.id}/minarch.cfg" to text))
 
     private object NoTables : CoreOptionSource { override fun table(coreId: String): CoreOptionTable? = null }
     private object Host : EmulatorSettingsHost {
@@ -90,13 +91,13 @@ class EmulatorSettingsControllerGpuDriverTest {
     }
 
     @Test fun aGameWriteClearsTheCrashRecordAndAConsoleWriteDoesNot() = runTest {
-        val game = harness(MemoryConfigs(mapOf("N64-${n64.id}/minarch.cfg" to vulkan)))
+        val game = harness(configs(vulkan))
         openGame(game)
         stepGpu(game)
         assertEquals(listOf(entry.path), game.cleared)
         assertEquals("system", game.gpuRow().row.value)
 
-        val console = harness(MemoryConfigs(mapOf("N64-${n64.id}/minarch.cfg" to vulkan)))
+        val console = harness(configs(vulkan))
         openConsole(console)
         stepGpu(console)
         assertEquals("system", console.gpuRow().row.value)
@@ -104,7 +105,7 @@ class EmulatorSettingsControllerGpuDriverTest {
     }
 
     @Test fun aCrashedDriverShowsTheNoteAndTheRowStaysChangeable() = runTest {
-        val h = harness(MemoryConfigs(mapOf("N64-${n64.id}/minarch.cfg" to vulkan)), crashed = setOf("turnip"), appWide = "turnip")
+        val h = harness(configs(vulkan), crashed = setOf("turnip"), appWide = "turnip")
         openGame(h)
         val note = GpuDriverOptions.CRASH_NOTE.replace("%s", "Turnip 24.1")
         assertEquals(note, h.gpuRow().row.option.brief)
@@ -115,7 +116,7 @@ class EmulatorSettingsControllerGpuDriverTest {
     }
 
     @Test fun noCrashNoteWhenTheDriverDidNotCrash() = runTest {
-        val h = harness(MemoryConfigs(mapOf("N64-${n64.id}/minarch.cfg" to vulkan)), appWide = "turnip")
+        val h = harness(configs(vulkan), appWide = "turnip")
         openGame(h)
         assertEquals(GpuDriverOptions.row(listOf(turnip)).brief, h.gpuRow().row.option.brief)
     }
@@ -124,7 +125,6 @@ class EmulatorSettingsControllerGpuDriverTest {
         (h.screen.value as Screen.EmulatorOptions).page.console.single { it.option.key == GraphicsApiOptions.KEY }.option.info
 
     @Test fun theVulkanFailedNoteIsHiddenOnlyOnVulkanWithAResolvedDriver() = runTest {
-        fun configs(text: String) = MemoryConfigs(mapOf("N64-${n64.id}/minarch.cfg" to text))
         val resolved = harness(configs(vulkan), vulkanFailed = true, appWide = "turnip")
         openConsole(resolved)
         assertEquals(GraphicsApiOptions.row.info, graphicsInfo(resolved))

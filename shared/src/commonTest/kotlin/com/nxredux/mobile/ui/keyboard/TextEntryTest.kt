@@ -99,14 +99,14 @@ class TextEntryTest {
     }
 
     @Test fun pasteStripsLineBreaksAndTabs() {
-        val step = one("xy", cursor = 0).paste("ab\n\tc\r")
+        val step = one("xy", cursor = 0).insert("ab\n\tc\r")
         assertEquals(EntryOutcome.Edit(0, "abcxy"), step.outcome)
         assertEquals(3, step.entry.cursor)
     }
 
-    @Test fun pasteEmptyDoesNothing() = assertEquals(EntryOutcome.None, one("xy").paste("").outcome)
+    @Test fun pasteEmptyDoesNothing() = assertEquals(EntryOutcome.None, one("xy").insert("").outcome)
 
-    @Test fun typeInsertsAtCursor() = assertEquals(EntryOutcome.Edit(0, "aXb"), one("ab", cursor = 1).type("X").outcome)
+    @Test fun typeInsertsAtCursor() = assertEquals(EntryOutcome.Edit(0, "aXb"), one("ab", cursor = 1).insert("X").outcome)
 
     @Test fun passwordNeverPrinted() {
         val e = signIn.copy(fields = listOf(EntryField("Username", "me"), EntryField("Password", "hunter2", password = true)))

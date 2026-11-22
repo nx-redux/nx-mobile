@@ -75,7 +75,8 @@ internal fun HomeListScreen(
     // Home; with no strip the rows run up beside the Recent and Search icons ([homeListTopRoom]).
     val statLines = if (shownStrip != null) stripLines else 0
     val header = if (!chrome.tabRow && statLines > 0) homeStatsHeader(frame.copy(titleHidden = true), statLines) else null
-    val topRoom = homeListTopRoom(chrome.tabRow, header?.height?.dp, pickAGame = rows == listOf(MainRow.PickAGame))
+    val pick = rows == listOf(MainRow.PickAGame)
+    val topRoom = homeListTopRoom(chrome.tabRow, header?.height?.dp, pickAGame = pick)
     val pageStrip = shownStrip?.takeIf { header == null }   // the strip in the page, under the tab row
     val (capTop, inkH) = homeStripInk(frame, stripLines)
     val above = homeUnderlineAbove(frame)
@@ -85,8 +86,8 @@ internal fun HomeListScreen(
         Column(Modifier.fillMaxSize()) {
             if (topRoom > 0.dp) Spacer(Modifier.height(topRoom))
             // The Pick a game card (its own 12 dp padding above it) the least gap under the strip's text.
-            if (pageStrip != null && rows == listOf(MainRow.PickAGame)) Spacer(Modifier.height((2 * HOME_LIST_STRIP_MIN_GAP + inkH - above - 12f).coerceAtLeast(0f).dp))
-            if (rows == listOf(MainRow.PickAGame)) {
+            if (pageStrip != null && pick) Spacer(Modifier.height((2 * HOME_LIST_STRIP_MIN_GAP + inkH - above - 12f).coerceAtLeast(0f).dp))
+            if (pick) {
                 // Nothing played yet: the Pick a game card fills the body (the selection is always on it).
                 NxScreenScaffold(
                     rows = emptyList(), selectedIndex = 0, hints = emptyList(), onSelect = onSelect, onOpen = onOpen,

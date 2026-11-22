@@ -13,6 +13,9 @@ import kotlin.test.assertTrue
  * hand to record live ones). No key values anywhere.
  */
 object TgdbFixtures {
+    /** The API's answer to a made-up key. */
+    const val unknownKey = """{"remaining_monthly_allowance":0,"allowance_refresh_timer":0}"""
+
     fun byName(left: Int = 249, extra: Int = 0) = """
     {"code":200,"status":"Success","remaining_monthly_allowance":$left,"extra_allowance":$extra,"allowance_refresh_timer":2592000,
      "data":{"count":3,"games":[
@@ -350,10 +353,9 @@ class TheGamesDbTest {
     }
 
     @Test fun validateKeyResults() = runTest {
-        val unknownKey = """{"remaining_monthly_allowance":0,"allowance_refresh_timer":0}"""   // the API's answer to a made-up key
         val spent = """{"remaining_monthly_allowance":0,"extra_allowance":0,"allowance_refresh_timer":86400}"""
         for ((answer, result) in listOf(
-            Scrape.json(TgdbFixtures.limit()) to KeyResult.OK, Scrape.json(spent) to KeyResult.OK, Scrape.json(unknownKey) to KeyResult.BAD_KEY,
+            Scrape.json(TgdbFixtures.limit()) to KeyResult.OK, Scrape.json(spent) to KeyResult.OK, Scrape.json(TgdbFixtures.unknownKey) to KeyResult.BAD_KEY,
             Scrape.json("<html>") to KeyResult.UNAVAILABLE, HttpResult(401, null) to KeyResult.BAD_KEY, HttpResult(403, null) to KeyResult.BAD_KEY,
             HttpResult(-1, null) to KeyResult.OFFLINE, HttpResult(500, null) to KeyResult.UNAVAILABLE, HttpResult(429, null) to KeyResult.UNAVAILABLE,
         )) {
@@ -363,7 +365,7 @@ class TheGamesDbTest {
             assertEquals(listOf("https://api.thegamesdb.net/v1/API/Limit?apikey=NEW"), r.http.calls)
         }
         assertEquals(true, Tgdb.keyAccepted(TgdbFixtures.limit()))
-        assertEquals(false, Tgdb.keyAccepted(unknownKey))
+        assertEquals(false, Tgdb.keyAccepted(TgdbFixtures.unknownKey))
         assertEquals(null, Tgdb.keyAccepted("{}"))
     }
 

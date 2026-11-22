@@ -4,7 +4,7 @@ import com.nxredux.mobile.netplay.NetplayChannel
 import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.netplay.cablelink.LinkRomHashMismatch
 import com.nxredux.mobile.netplay.cablelink.RomHash
-import kotlinx.coroutines.CancellationException
+import com.nxredux.mobile.tryOr
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
@@ -59,13 +59,11 @@ internal object CableLinkExchange {
 
     suspend fun run(ch: NetplayChannel, offer: CableLinkOffer, host: Boolean, onProgress: (CableLinkProgress) -> Unit): Result {
         val step = Step()
-        return try {
-            Result.Done(exchange(ch, offer, host, onProgress, step))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {   // Fail, NetplayIoException, or the platform's file I/O
+        return tryOr({ e ->   // Fail, NetplayIoException, or the platform's file I/O
             offer.files.log("Cable Link exchange failed (${if (host) "host" else "guest"}, ${if (step.saves) "saves" else "game"}): ${e::class.simpleName}: ${e.message}")
             Result.Failed((e as? Fail)?.text ?: NetplayText.CABLE_LINK_COPY_FAILED, beforeSaves = !step.saves)
+        }) {
+            Result.Done(exchange(ch, offer, host, onProgress, step))
         }
     }
 

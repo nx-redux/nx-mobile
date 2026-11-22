@@ -2,6 +2,7 @@ package com.nxredux.mobile.scraper
 
 import com.nxredux.mobile.runner.ContentRef
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -12,8 +13,11 @@ import java.io.File
 import java.nio.file.Files
 
 class AndroidArtOptionCacheTest {
-    private val dir = File(Files.createTempDirectory("opts").toFile(), "art-options")
+    private val tmp = Files.createTempDirectory("opts").toFile()
+    private val dir = File(tmp, "art-options")
     private val cache = AndroidArtOptionCache(dir)
+
+    @After fun cleanUp() { tmp.deleteRecursively() }
 
     @Test fun write_read_size_remove_clear() = runBlocking {
         assertNull(cache.ref("k1"))

@@ -7,17 +7,15 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
+internal fun ps1BinBytes(): ByteArray = ByteArray(17 * 2352).also { b ->
+    val at = 16 * 2352 + 24
+    b[at] = 1; "CD001".encodeToByteArray().copyInto(b, at + 1); "PLAYSTATION".encodeToByteArray().copyInto(b, at + 8)
+    b[0] = 0; for (i in 1..10) b[i] = 0xFF.toByte(); b[15] = 2
+}
+
 class DiscProbeTest {
-    private fun ps1Bin(): ByteArray = ByteArray(17 * 2352).also { b ->
-        val at = 16 * 2352 + 24
-        b[at] = 1; "CD001".encodeToByteArray().copyInto(b, at + 1); "PLAYSTATION".encodeToByteArray().copyInto(b, at + 8)
-        b[0] = 0; for (i in 1..10) b[i] = 0xFF.toByte(); b[15] = 2
-    }
-
-    internal fun ps1BinBytes() = ps1Bin()
-
     @Test fun a_ps1_bin_and_its_cue() = runTest {
-        val src = FakeRomsSource(mapOf("d" to listOf("G.bin", "G.cue")), texts = mapOf("d/G.cue" to "FILE \"G.bin\" BINARY\n TRACK 01 MODE2/2352\n  INDEX 01 00:00:00\n"), bytes = mapOf("d/G.bin" to ps1Bin()))
+        val src = FakeRomsSource(mapOf("d" to listOf("G.bin", "G.cue")), texts = mapOf("d/G.cue" to "FILE \"G.bin\" BINARY\n TRACK 01 MODE2/2352\n  INDEX 01 00:00:00\n"), bytes = mapOf("d/G.bin" to ps1BinBytes()))
         val dir = src.listChildren(ContentRef("d"))
         val probe = DiscProbe(src)
         assertEquals("ps", probe.probe(dir.first { it.name == "G.bin" }, dir).console)
@@ -46,7 +44,7 @@ class DiscProbeTest {
     // A cue a Windows editor saved with a UTF-8 byte order mark: its first line is still its FILE.
     @Test fun a_cue_with_a_bom_finds_its_bin() = runTest {
         val cue = "\uFEFFFILE \"G.bin\" BINARY\n TRACK 01 MODE2/2352\n  INDEX 01 00:00:00\n"
-        val src = FakeRomsSource(mapOf("d" to listOf("G.bin", "G.cue")), bytes = mapOf("d/G.cue" to cue.encodeToByteArray(), "d/G.bin" to ps1Bin()))
+        val src = FakeRomsSource(mapOf("d" to listOf("G.bin", "G.cue")), bytes = mapOf("d/G.cue" to cue.encodeToByteArray(), "d/G.bin" to ps1BinBytes()))
         val dir = src.listChildren(ContentRef("d"))
         assertEquals("ps", DiscProbe(src).probe(dir.first { it.name == "G.cue" }, dir).console)
     }
@@ -57,7 +55,7 @@ class DiscProbeTest {
         val src = FakeRomsSource(
             mapOf("d" to listOf("Pok\u00e9mon.bin", "P.cue")),
             texts = mapOf("d/P.cue" to cue.replace('\u00e9', '\uFFFD')),
-            bytes = mapOf("d/P.cue" to ByteArray(cue.length) { cue[it].code.toByte() }, "d/Pok\u00e9mon.bin" to ps1Bin()),
+            bytes = mapOf("d/P.cue" to ByteArray(cue.length) { cue[it].code.toByte() }, "d/Pok\u00e9mon.bin" to ps1BinBytes()),
         )
         val dir = src.listChildren(ContentRef("d"))
         val r = DiscProbe(src).probe(dir.first { it.name == "P.cue" }, dir)

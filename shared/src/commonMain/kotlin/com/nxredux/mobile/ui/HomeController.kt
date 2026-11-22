@@ -151,9 +151,6 @@ internal class HomeController(
     private fun homeBoardFor(stripLines: Int, tools: Int, games: Int, frame: HomeFrame = homeFrameNow(), shelves: List<Pair<HomeShelf, Int>> = emptyList()) =
         homeBoard(frame, stripLines, tools, games, shelves)
 
-    /** The strip's lines: two, or one with no Most played ([homeStripLines]). */
-    private fun homeLinesFor(strip: HomeStrip?) = homeStripLines(strip)
-
     /**
      * Home from its [inputs], its slots from the board they make on the frame ([homeBoardFor]: the tool tiles that fit
      * the face, [com.nxredux.mobile.ui.nx.HomeBoard.slots]), with Home's shelves
@@ -165,30 +162,32 @@ internal class HomeController(
         val picked = host.shelvesFor(inputs)
         // List, Minimal and Carousel: up to [HOME_SHELF_LIST_MAX] a shelf; Grid: what its board shows ([homeShelfCap]).
         val shelves = picked.map { (shelf, games) -> shelf to games.take(HOME_SHELF_LIST_MAX) }
+        fun build(slots: Int, shown: List<Pair<HomeShelf, List<Listed>>>, inline: Int = 0) =
+            buildHome(last, games, tools, homeStats, slots, shown, inline, tag = host::shelfTag, shot = { inputs.shots[it.game.path] })
         when (host.homeStyle()) {
             // List and Minimal: every tool is a row. Carousel: the dock's squares, "+N" for the rest.
-            MenuStyle.LIST, MenuStyle.MINIMAL -> return buildHome(last, games, tools, homeStats, Int.MAX_VALUE, shelves, tag = host::shelfTag, shot = { inputs.shots[it.game.path] })
+            MenuStyle.LIST, MenuStyle.MINIMAL -> return build(Int.MAX_VALUE, shelves)
             MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> {
                 // The dock's squares on this frame ([homeDockSide]).
                 val f = homeFrameNow()
-                val side = homeDockSide(f, homeLinesFor(strip))
-                return buildHome(last, games, tools, homeStats, homeDockFit(f, side), shelves, tag = host::shelfTag, shot = { inputs.shots[it.game.path] })
+                val side = homeDockSide(f, homeStripLines(strip))
+                return build(homeDockFit(f, side), shelves)
             }
             MenuStyle.GRID -> Unit
         }
         val gamesLeft = games.count { it.game.path != last?.entry?.game?.path }
-        val lines = homeLinesFor(strip)
+        val lines = homeStripLines(strip)
         // The board caps each shelf to what its face shows ([homeShelfCap]); its sizes follow the non-empty shelves in order.
         val b = homeBoardFor(lines, tools.size, gamesLeft, shelves = picked.map { (shelf, games) -> shelf to games.size })
         var k = 0
         val gridShelves = picked.map { (shelf, games) -> shelf to if (games.isEmpty()) games else games.take(b.shelfSizes.getOrElse(k++) { 0 }) }
-        return buildHome(last, games, tools, homeStats, b.slots, gridShelves, b.inlineGames, tag = host::shelfTag, shot = { inputs.shots[it.game.path] })
+        return build(b.slots, gridShelves, b.inlineGames)
     }
 
     /** [built] is the Home tab now: its view shows once the screen shows its rows ([publishHomeView]). */
     fun noteHomeBuilt(built: Home) {
         val rows = homeTabRows(built, host.homeStyle())
-        val lines = homeLinesFor(built.strip)
+        val lines = homeStripLines(built.strip)
         // The view carries the frame and lines the rows were built for: HomeScreen places them on that board.
         homeBuilds.addFirst(HomeBuild(rows, homeView(built, rows).copy(frame = homeFrame, lines = lines), homeFrameNow(), lines))
         while (homeBuilds.size > HOME_BUILDS_KEPT) homeBuilds.removeLast()
@@ -256,7 +255,7 @@ internal class HomeController(
     private fun homeShapeOf(rows: List<MainRow>): HomeShape {
         val build = homeBuilds.firstOrNull { it.rows == rows }
         val tools = rows.count { it is MainRow.PinnedTool } + (rows.firstNotNullOfOrNull { it as? MainRow.MoreTools }?.count ?: 0)
-        val lines = build?.lines ?: homeLinesFor(homeBuilds.firstOrNull()?.view?.strip ?: _homeView.value.strip)
+        val lines = build?.lines ?: homeStripLines(homeBuilds.firstOrNull()?.view?.strip ?: _homeView.value.strip)
         return homeShape(homeBoardFor(lines, tools, rows.count { it is MainRow.Pin }, build?.frame ?: homeFrameNow(), shelfBands(rows)))
     }
 

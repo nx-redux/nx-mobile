@@ -150,10 +150,9 @@ internal class SettingsController(
         if (s.rows.getOrNull(row)?.enabled != true) return
         val c = s.choices.getOrNull(row)?.takeIf { it.labels.size >= 2 } ?: return
         host.select(row)
-        _chooser.value = ValueChooser(s.rows[row].label, c.labels, c.index.coerceAtLeast(0), current = c.index)
         val label = s.rows[row].label
         // By its label: a refresh while the picker is open can move the rows (a dependent row shown or hidden).
-        chooserApply = { i ->
+        openPicker(label, c.labels, c.index) { i ->
             ((screen.value as? Screen.Settings)?.rows?.let { rows -> row.takeIf { rows.getOrNull(it)?.label == label } ?: rows.indexOfFirst { it.label == label } })
                 ?.takeIf { it >= 0 }?.let { chooseSetting(it, i) }
         }
@@ -279,9 +278,6 @@ internal class SettingsController(
      */
     fun onSettingsSplit(split: Boolean) { settingsSplit = split }
 
-    /** [section]'s page as the unfocused right pane shows it while its category is highlighted on the left. */
-    fun settingsPreview(section: SettingsSection): Screen.Settings = settingsPage(section)
-
     /**
      * A tap on the section list's [index]: one tap opens that section. From a right-pane page the pane's own back stack
      * unwinds as B would (each page keeping its row; a Library reload or rescan lands on the root by itself), then the
@@ -289,7 +285,7 @@ internal class SettingsController(
      */
     fun settingsCategoryTap(index: Int) {
         if (host.loaderActive()) return
-        if ((screen.value as? Screen.Settings)?.let { it.confirmRemove != null || it.confirmReset || it.nameDraft != null || it.confirmDriver != null } == true) return   // a dialog answers first
+        if ((screen.value as? Screen.Settings)?.let(::rowEditBlocked) == true) return   // a dialog answers first
         // One tap opens the section, from the root or from another section's page.
         if (screen.value is Screen.SettingsMenu) {
             host.select(index)

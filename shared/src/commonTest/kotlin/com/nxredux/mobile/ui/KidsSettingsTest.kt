@@ -154,6 +154,13 @@ class KidsSettingsTest {
     /** Setup's Apps step: Alpha on the kid's list (Continue needs one). */
     private fun AppState.pickAlpha() = pressSetup { it is KidsSetupRow.App && it.app.id == "a/A" }
 
+    /** The Kids page's Enable, then the setup walked through: the PIN twice, Alpha picked, Next, Next. */
+    private fun AppState.runSetup() {
+        openSettings(SettingsSection.KIDS)
+        pressRow(SettingsKind.KIDS_ENABLE)
+        typePin("123456"); typePin("123456"); pickAlpha(); next(); next()
+    }
+
     @Test fun firstEnableRunsSetupInOrder() = runTest {
         val t = setup(usage = false, alarms = false, home = true)
         val st = t.st
@@ -199,9 +206,7 @@ class KidsSettingsTest {
     @Test fun homeIsSetupsLastStep() = runTest {
         val t = setup(home = false)
         val st = t.st
-        st.openSettings(SettingsSection.KIDS)
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.runSetup()
         assertEquals(KidsSetupStep.HOME, st.setupStep())
         assertEquals(listOf(KidsSetupRow.UseHome, KidsSetupRow.Cancel), kidsSetupRows(assertIs(st.screen.value)))
         st.pressSetup { it == KidsSetupRow.UseHome }
@@ -228,9 +233,7 @@ class KidsSettingsTest {
     @Test fun homeDeclinedLeavesItOff() = runTest {
         val t = setup(home = false)
         val st = t.st
-        st.openSettings(SettingsSection.KIDS)
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.runSetup()
         st.pressSetup { it == KidsSetupRow.UseHome }
         st.onHomeRoleRefused()                                             // declined
         assertFalse(t.settings.kidsEnabled)
@@ -244,9 +247,7 @@ class KidsSettingsTest {
     @Test fun homeStepCancelKeepsItOff() = runTest {
         val t = setup(home = false)
         val st = t.st
-        st.openSettings(SettingsSection.KIDS)
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.runSetup()
         st.pressSetup { it == KidsSetupRow.Cancel }
         assertFalse(t.settings.kidsEnabled)
         assertNull(t.settings.pin)                                         // nothing stored: a cancelled setup
@@ -348,9 +349,7 @@ class KidsSettingsTest {
     @Test fun turnOffDeletesFlag() = runTest {
         val t = setup()
         val st = t.st
-        st.openSettings(SettingsSection.KIDS)
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.runSetup()
         assertTrue(t.settings.kidsEnabled)
         assertEquals(FlagSeen.PRESENT, t.platform.flag.seen)
         t.parentAgain()
@@ -455,9 +454,7 @@ class KidsSettingsTest {
     @Test fun changePinAsksTwiceAndStores() = runTest {
         val t = setup()
         val st = t.st
-        st.openSettings(SettingsSection.KIDS)
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.runSetup()
         t.parentAgain()
         st.pressRow(SettingsKind.KIDS_PIN)
         assertEquals(PinPurpose.CHANGE, assertIs<Screen.KidsPin>(st.screen.value).purpose)
@@ -511,9 +508,7 @@ class KidsSettingsTest {
     @Test fun changePinPadGoesWhenParentIdlesIntoLocked() = runTest {
         val t = setup()
         val st = t.st
-        st.openSettings(SettingsSection.KIDS)
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.runSetup()
         t.parentAgain()
         assertEquals(KidsMode.Parent, t.kids.mode.value)
         st.pressRow(SettingsKind.KIDS_PIN)
@@ -546,9 +541,7 @@ class KidsSettingsTest {
     @Test fun setupNeverEndsWithoutAPin() = runTest {
         val t = setup(usage = false)
         val st = t.st
-        st.openSettings(SettingsSection.KIDS)
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.runSetup()
         assertEquals(KidsSetupStep.USAGE, st.setupStep())
         st.kidsNewPin = null                                               // the PIN lost before the end
         st.skip()                                                          // the last step: setup would end here
@@ -632,9 +625,7 @@ class KidsSettingsTest {
         val t = setup()
         t.platform.flag.writes = false
         val st = t.st
-        st.openSettings(SettingsSection.KIDS)
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.runSetup()
         assertTrue(t.settings.kidsEnabled)
         t.parentAgain()
         assertEquals(KIDS_FLAG_FAILED, st.page().rows.first { it.kind == SettingsKind.KIDS_FORGOT }.secondary)

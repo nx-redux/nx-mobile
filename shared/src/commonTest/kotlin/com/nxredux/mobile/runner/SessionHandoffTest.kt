@@ -83,7 +83,7 @@ class SessionHandoffTest {
 }
 
 class SessionHandoffWatchdogTest {
-    private class Setup(val h: SessionHandoff, val first: SessionHandoff.Token, val second: SessionHandoff.Claim)
+    private data class Setup(val h: SessionHandoff, val first: SessionHandoff.Token, val second: SessionHandoff.Claim)
 
     private fun handoffWithHolder(): Setup {
         val h = SessionHandoff()
@@ -92,7 +92,7 @@ class SessionHandoffWatchdogTest {
     }
 
     @Test fun a_quick_handoff_shows_nothing() = runTest {
-        val (h, first, second) = handoffWithHolder().let { Triple(it.h, it.first, it.second) }
+        val (h, first, second) = handoffWithHolder()
         var slow = 0; var stuck = 0
         val waiting = async { second.awaitWithWatchdog(onSlow = { slow++ }, onStuck = { stuck++ }) }
         testScheduler.advanceTimeBy(1_000); testScheduler.runCurrent()
@@ -103,7 +103,7 @@ class SessionHandoffWatchdogTest {
     }
 
     @Test fun a_slow_handoff_shows_the_hint_once_and_still_starts() = runTest {
-        val (h, first, second) = handoffWithHolder().let { Triple(it.h, it.first, it.second) }
+        val (h, first, second) = handoffWithHolder()
         var slow = 0; var stuck = 0
         val waiting = async { second.awaitWithWatchdog(onSlow = { slow++ }, onStuck = { stuck++ }) }
         testScheduler.advanceTimeBy(SessionHandoff.SLOW_AFTER_MS + 1); testScheduler.runCurrent()
@@ -115,7 +115,7 @@ class SessionHandoffWatchdogTest {
     }
 
     @Test fun a_stuck_handoff_reports_stuck_and_never_returns_before_the_release() = runTest {
-        val (h, first, second) = handoffWithHolder().let { Triple(it.h, it.first, it.second) }
+        val (h, first, second) = handoffWithHolder()
         var slow = 0; var stuck = 0
         val waiting = async { second.awaitWithWatchdog(onSlow = { slow++ }, onStuck = { stuck++ }) }
         testScheduler.advanceTimeBy(SessionHandoff.STUCK_AFTER_MS + 1); testScheduler.runCurrent()

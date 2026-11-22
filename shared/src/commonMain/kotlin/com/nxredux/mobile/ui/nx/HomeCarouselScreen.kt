@@ -53,8 +53,7 @@ private const val HOME_CAROUSEL_CARD_GAP = 16f
  * ring each side, [homeCarouselMaxH]).
  */
 private const val HOME_CAROUSEL_BOX_ROOM = (GRID_RING_ROOM + NX_TILE_RING) / 2
-private const val HOME_CAROUSEL_STRIP_GAP = HOME_CAROUSEL_CARD_GAP - HOME_CAROUSEL_BOX_ROOM
-private const val HOME_CAROUSEL_GROUP_GAP = HOME_CAROUSEL_CARD_GAP - HOME_CAROUSEL_BOX_ROOM
+private const val HOME_CAROUSEL_BOX_GAP = HOME_CAROUSEL_CARD_GAP - HOME_CAROUSEL_BOX_ROOM
 
 /**
  * The carousel's box at its card's full size on a body [widthDp] wide ([carouselRowPlace]: the size cap and the width
@@ -79,12 +78,12 @@ internal data class HomeCarouselPlace(val stripInkTop: Float, val boxTop: Float,
 internal fun homeCarouselPlace(bodyH: Float, above: Float, stripInkH: Float, dockH: Float, fill: Boolean = false, maxBoxH: Float = homeCarouselMaxH(null)): HomeCarouselPlace {
     val span = bodyH + above
     if (!fill) {
-        val stripPart = if (stripInkH > 0f) stripInkH + HOME_CAROUSEL_STRIP_GAP else 0f
-        val dockPart = if (dockH > 0f) HOME_CAROUSEL_GROUP_GAP + dockH else 0f
+        val stripPart = if (stripInkH > 0f) stripInkH + HOME_CAROUSEL_BOX_GAP else 0f
+        val dockPart = if (dockH > 0f) HOME_CAROUSEL_BOX_GAP + dockH else 0f
         val boxH = min(maxBoxH, (span - stripPart - dockPart - 2 * HOME_CAROUSEL_MIN_GAP).coerceAtLeast(0f))
         val top = (span - stripPart - boxH - dockPart) / 2 - above
         val boxTop = top + stripPart
-        return HomeCarouselPlace(top, boxTop, boxH, boxTop + boxH + (if (dockH > 0f) HOME_CAROUSEL_GROUP_GAP else 0f))
+        return HomeCarouselPlace(top, boxTop, boxH, boxTop + boxH + (if (dockH > 0f) HOME_CAROUSEL_BOX_GAP else 0f))
     }
     val gaps = 2 + (if (stripInkH > 0f) 1 else 0) + (if (dockH > 0f) 1 else 0)
     val room = (span - stripInkH - dockH - gaps * HOME_CAROUSEL_MIN_GAP).coerceAtLeast(0f)

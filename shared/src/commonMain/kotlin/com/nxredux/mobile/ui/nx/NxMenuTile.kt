@@ -482,11 +482,10 @@ private fun TileText(
     align: TextAlign = TextAlign.Center, modifier: Modifier = Modifier, balanced: Boolean = false,
     inlineContent: Map<String, InlineTextContent> = emptyMap(), lineHeight: Float = LINE_HEIGHT, shadow: Shadow? = null,
 ) {
-    val scaled = size
     Text(
         text, modifier, color = color, maxLines = maxLines, overflow = TextOverflow.Ellipsis, inlineContent = inlineContent,
         style = TextStyle(
-            fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = scaled, lineHeight = scaled * lineHeight,
+            fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = size, lineHeight = size * lineHeight,
             textAlign = align, lineBreak = if (balanced) LineBreak.Heading else LineBreak.Unspecified, shadow = shadow,
         ),
     )
