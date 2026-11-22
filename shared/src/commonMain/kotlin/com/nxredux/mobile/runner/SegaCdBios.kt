@@ -110,6 +110,13 @@ object SegaCdBios {
         else -> emptyList()
     }
 
+    /** The `.bin` names a dump of [region]'s Sega CD BIOS goes by, either core's: any of their listed dumps boots that region's discs. */
+    fun dumpNames(region: DiscRegion): List<String> = PICODRIVE.getValue(region).map { "$it.bin" }
+
+    /** The region a Sega CD BIOS file name stands for ([dumpNames], ignoring case); null for any other name. */
+    fun regionOfName(name: String): DiscRegion? =
+        DiscRegion.entries.firstOrNull { r -> dumpNames(r).any { it.equals(name, ignoreCase = true) } }
+
     /** The file to ask for when none of [coreId]'s names for [region] is in [present]; null when one is (or the core is neither). */
     fun missing(coreId: String, region: DiscRegion, present: Set<String>): String? {
         val names = accepted(coreId, region)
