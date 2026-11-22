@@ -890,8 +890,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val msuMd = inner == null && msuMdSheet(cfg) != null && cfg.descriptor?.id == SegaPadType.GPGX
             val biosExtension = if (msuMd) "cue" else contentExtension
             // A Sega CD disc boots with its own region's BIOS only (an MSU-MD cartridge with its own region's): when its
-            // header is read, that file is checked (under any name the core takes) in place of "any of the three".
-            val discRegion = if (msuMd) msuMdRegion(cfg, biosPresent) else segaCdRegion(cfg, inner, contentExtension, biosPresent)
+            // header is read, that file is checked (under any name the core takes) in place of "any of the three". It is
+            // read with every region's BIOS there too: the checksum check below judges only the region's file.
+            val discRegion = if (msuMd) msuMdRegion(cfg) else segaCdRegion(cfg, inner, contentExtension)
             val needs = requiredBios.filterNot { discRegion != null && SegaCdBios.isSegaCdNeed(it) }
             BiosCheck.missing(needs, biosExtension, biosPresent).firstOrNull()?.let {
                 return refuse(BiosCheck.message(cfg.tag, it))
@@ -902,6 +903,13 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     val folders = withContext(Dispatchers.IO) { biosFolderOf(cfg) }
                     return refuse(SegaCdBios.message(cfg.tag, core, region, file, biosPresent, folders::get, cartridge = msuMd))
                 }
+            }
+            // A BIOS that is there but no known good dump: refused when the core cannot run with it, else said and launched.
+            biosChecksumProblem(cfg, requiredBios, biosExtension, biosPresent, biosDir, discRegion)?.let { problem ->
+                val folders = withContext(Dispatchers.IO) { biosFolderOf(cfg) }
+                val message = BiosChecksum.message(problem, "Bios/${folders[problem.file.name] ?: CoreRegistry.consoleTag(cfg.tag)}/")
+                NxLog.w(TAG_LOG, "BIOS checksum: $message")
+                if (problem.refuses) return refuse(message) else toast(message)
             }
             // A NAOMI/Atomiswave set's BIOS archive (flycast opens <system>/dc/<bios>.zip or .7z); an unknown set is not checked.
             if (archiveAsIs) naomiSets.missingBios(cfg.romFileName, biosPresent)?.let { return refuse(NaomiSets.biosMessage(cfg.title, it)) }
@@ -1104,14 +1112,12 @@ internal class LaunchPipeline(private val host: LaunchHost) {
      * region ([SegaCdBios.GPGX_REGION_KEY]), else the disc's header ([SegaCdBios.regionOf], read from its first data
      * sector through the launch's files: the unpacked [inner] disc, or the content and the tracks it was handed). The
      * header is read first, so a Mega Drive cartridge named `.bin` is never taken for a disc. Null for any other game, a
-     * header that cannot be read (the generic check then stands), or when [present] holds every region's BIOS (the
-     * answer could not refuse the launch, so nothing is read).
+     * header that cannot be read (the generic check then stands).
      */
-    private suspend fun segaCdRegion(cfg: LaunchConfig, inner: File?, contentExtension: String, present: Set<String>): DiscRegion? {
+    private suspend fun segaCdRegion(cfg: LaunchConfig, inner: File?, contentExtension: String): DiscRegion? {
         val core = cfg.descriptor?.id ?: return null
         if (core != SegaPadType.PICODRIVE && core != SegaPadType.GPGX) return null
         if (CoreRegistry.consoleOf(cfg.tag)?.id !in SEGA_CD_CONSOLES || contentExtension !in SegaCdBios.DISC_EXTENSIONS) return null
-        if (DiscRegion.entries.all { SegaCdBios.missing(core, it, present) == null }) return null
         val disc = withContext(Dispatchers.IO) {
             val (file, dir) = if (inner != null) {
                 val files = inner.parentFile?.listFiles().orEmpty().filter { it.isFile }.map { Entry(FileRefs.of(it.absolutePath), it.name, false, it.length()) }
@@ -1128,12 +1134,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
 
     /**
      * The region whose Sega CD BIOS Genesis Plus GX loads for [cfg]'s MSU-MD cartridge: its forced region, else the
-     * cartridge header's ([SegaCdBios.cartridgeRegion]). Null when the header cannot be read, or when [present] holds
-     * every region's BIOS (nothing to refuse, so nothing is read).
+     * cartridge header's ([SegaCdBios.cartridgeRegion]). Null when the header cannot be read.
      */
-    private suspend fun msuMdRegion(cfg: LaunchConfig, present: Set<String>): DiscRegion? {
-        val core = SegaPadType.GPGX
-        if (DiscRegion.entries.all { SegaCdBios.missing(core, it, present) == null }) return null
+    private suspend fun msuMdRegion(cfg: LaunchConfig): DiscRegion? {
         SegaCdBios.gpgxForced(cfg.option(SegaCdBios.GPGX_REGION_KEY))?.let { return it }
         val refs = host.refs
         return withContext(Dispatchers.IO) {
@@ -1162,6 +1165,27 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         throw e
     } catch (e: Exception) {
         emptyMap()
+    }
+
+    /**
+     * The checksum problem of the required BIOS in [biosDir] that [needs] asks for ([BiosChecksum]), hashed off the main
+     * thread and cached ([BiosHashes]); null when every file the core may load is a good dump or one the table does not know.
+     */
+    private suspend fun biosChecksumProblem(
+        cfg: LaunchConfig, needs: List<BiosNeed>, ext: String, present: Set<String>, biosDir: File, region: DiscRegion?,
+    ): BiosProblem? {
+        val pick = if (Ps2Options.appliesTo(cfg.tag)) host.frontendValues[Ps2Options.BIOS] else null
+        return withContext(Dispatchers.IO) { checksumProblem(cfg, needs, ext, present, biosDir, region, pick) }
+    }
+
+    private fun checksumProblem(
+        cfg: LaunchConfig, needs: List<BiosNeed>, ext: String, present: Set<String>, biosDir: File, region: DiscRegion?, pick: String?,
+    ): BiosProblem? {
+        val known = KnownBiosAsset.get(host.activity)
+        val groups = BiosChecksum.toCheck(known, cfg.tag, needs, ext, present, cfg.descriptor?.id.orEmpty(), region, pick)
+        if (groups.isEmpty()) return null
+        val files = BiosHashes.files(host.activity, biosDir, groups.flatten().mapTo(LinkedHashSet()) { it.name })
+        return BiosChecksum.problem(known, groups, files::get)
     }
 
     /** The cue of [cfg]'s MSU-MD set, under the name it was handed to the core by; null when the game is none. */

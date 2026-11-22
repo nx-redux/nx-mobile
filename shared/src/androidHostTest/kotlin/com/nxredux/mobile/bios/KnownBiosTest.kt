@@ -1,6 +1,8 @@
 package com.nxredux.mobile.bios
 
+import com.nxredux.mobile.runner.BiosChecksum
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.runner.DiscRegion
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -68,5 +70,23 @@ class KnownBiosTest {
     fun assetMarksBootChangers() {
         assertTrue(asset.byName("gb_bios.bin").all { it.bootChange })
         assertTrue(asset.byName("gba_bios.bin").none { it.bootChange })
+    }
+
+    @Test
+    fun assetJudgesEveryRequiredBiosName() {
+        // The launch's checksum check: each required name has listed dumps and sizes to hold a file to.
+        val names = CoreRegistry.tags.flatMap { t -> CoreRegistry.requiredBios(t).flatMap { it.anyOf } }.distinct()
+        val unjudged = names.filter { n -> BiosChecksum.forName(asset, n).let { it == null || it.md5s.isEmpty() || it.sizes.isEmpty() } }
+        assertEquals(emptyList(), unjudged)
+    }
+
+    @Test
+    fun assetSegaCdRegionsTakeEveryDumpOfTheirRegion() {
+        val us = BiosChecksum.segaCd(asset, DiscRegion.US)!!
+        for (n in listOf("bios_CD_U.bin", "us_scd1_9210.bin", "us_scd2_9306.bin", "SegaCDBIOS9303.bin")) {
+            assertTrue(asset.byName(n).flatMap { it.md5s }.all { it in us.md5s }, n)
+        }
+        val eu = BiosChecksum.segaCd(asset, DiscRegion.EU)!!
+        assertTrue(us.md5s.none { it in eu.md5s })
     }
 }
