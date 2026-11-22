@@ -170,8 +170,6 @@ void AhbRenderer::rebuildPasses() {
     framebuffers->clear();
     if (textureWidth == 0 || textureHeight == 0) return;
     framebuffers = ES3Utils::buildShaderPasses(textureWidth, textureHeight, shaders);
-    passWidth = textureWidth;
-    passHeight = textureHeight;
 }
 
 void AhbRenderer::setShaders(ShaderManager::Chain value) {

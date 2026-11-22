@@ -207,7 +207,6 @@ class FrontendOptionsTest {
     }
 
     @Test fun the_table_has_no_effect_row() {
-        assertNull(FrontendOptions.option(FrontendOptions.EFFECT))
         assertEquals(listOf(FrontendOptions.SCALING, FrontendOptions.SHARPNESS, FrontendOptions.OVERLAY, FrontendOptions.OFFSET_X, FrontendOptions.OFFSET_Y, FrontendOptions.PAD_LANDSCAPE_OPACITY, FrontendOptions.DEBUG_HUD), FrontendOptions.table.map { it.key })
     }
 

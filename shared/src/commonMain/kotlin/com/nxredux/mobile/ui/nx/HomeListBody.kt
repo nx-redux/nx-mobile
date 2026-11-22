@@ -42,7 +42,6 @@ import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.SpanStyle
@@ -53,7 +52,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import com.nxredux.mobile.ui.INFO_SEPARATOR
 import com.nxredux.mobile.ui.InfoKind
-import com.nxredux.mobile.ui.ownRow
 import com.nxredux.mobile.ui.firstGenre
 import com.nxredux.mobile.ui.genreParts
 
@@ -334,18 +332,5 @@ internal fun HomeFactsLine(lines: List<InfoLine>, size: TextUnit, modifier: Modi
                 maxLines = 1, overflow = TextOverflow.Ellipsis, inlineContent = info.inlineContent,
             )
         }
-    }
-}
-
-/**
- * The selected game's facts under a game list's title ([HomeFactsLine]'s look) in [rows] lines of [line] dp each: one
- * line, or with two (a phone upright, where the icons leave the line little room)
- * its next goal ("Next: …") on the second. The room never changes with the selection, so the list under it never moves.
- */
-@Composable
-internal fun GameFactsLines(lines: List<InfoLine>, size: TextUnit, line: Dp, rows: Int, modifier: Modifier) {
-    Column(modifier.height(line * rows).fillMaxWidth()) {
-        HomeFactsLine(if (rows > 1) lines.filter { !it.ownRow } else lines, size, Modifier.fillMaxWidth().height(line))
-        if (rows > 1) HomeFactsLine(lines.filter { it.ownRow }, size, Modifier.fillMaxWidth().height(line))
     }
 }

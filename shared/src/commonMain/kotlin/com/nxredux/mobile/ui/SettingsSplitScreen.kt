@@ -60,7 +60,7 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
                     SettingsScreen(
                         preview, -1,
                         onSelect = state::settingsPreviewTap, onOpen = state::settingsPreviewTap,
-                        titled = true, hints = emptyList(),
+                        hints = emptyList(),
                     )
                 }
             }

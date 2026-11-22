@@ -23,7 +23,7 @@ CORE_PROFILES["melondsds"] = "melonds_ds"
 
 # The console a profile entry without a `system` belongs to.
 CORE_DEFAULT = {
-    "a5200": "A5200", "armsx2": "PS2", "azahar": "3DS", "dolphin": "GC", "fake08": "P8", "fbneo": "FBN",
+    "a5200": "A5200", "armsx2": "PS2", "azahar": "3DS", "fake08": "P8", "fbneo": "FBN",
     "fceumm": "FC", "flycast": "DC", "gambatte": "GB", "gearcoleco": "COLECO", "genesis_plus_gx": "MD", "gpsp": "GBA",
     "handy": "LYNX", "mednafen_pce_fast": "PCE", "mednafen_supafaust": "SFC", "mednafen_vb": "VB",
     "mednafen_wswan": "WSC", "mgba": "GBA", "mupen64plus_next": "N64", "pcsx_rearmed": "PS", "picodrive": "MD",
@@ -129,7 +129,8 @@ def build(root, cores=None):
         db = json.load(f)
     files, by_name = db["files"], db["indexes"]["by_name"]
     rows = {}
-    for core in cores or sorted(set(CORE_PROFILES.values())):
+    chosen = cores or sorted(set(CORE_PROFILES.values()))
+    for core in chosen:
         path = os.path.join(root, "emulators", core + ".yml")
         if not os.path.exists(path):
             raise ValueError("no retrobios profile " + path)
@@ -170,7 +171,6 @@ def build(root, cores=None):
                         continue
                     row.md5s.add(v["md5"].lower())
                     row.sizes.add(int(v["size"]))
-    chosen = cores or sorted(set(CORE_PROFILES.values()))
     for core, console, folder, size, ext, skip in DB_FOLDERS:
         if core not in chosen:
             continue
@@ -188,7 +188,7 @@ def build(root, cores=None):
 
 def to_tsv(rows):
     out = ["# name\taliases\tconsole\tsizes\tmd5s\trequired\tboot_change (from retrobios metadata, MIT)"]
-    for r in sorted(rows, key=lambda r: (r.console, r.name.lower())):
+    for r in rows:
         # Set archives differ in size between romset versions: no size, so a name match is not refused for it.
         sizes = "" if ext_of(r.name) in ARCHIVES else ",".join(str(s) for s in sorted(r.sizes))
         out.append("\t".join([r.name, ",".join(r.aliases), r.console, sizes,

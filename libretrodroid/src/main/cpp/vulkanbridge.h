@@ -43,7 +43,6 @@
 #include "vulkanreader.h"
 
 struct AImageReader;
-struct ANativeWindow;
 
 namespace libretrodroid {
 
@@ -151,7 +150,7 @@ private:
         GLsync glFence = nullptr;
     };
 
-    static constexpr unsigned SYNC_COUNT = 2;
+    static constexpr unsigned SYNC_COUNT = ReaderChain::SYNC_COUNT;
 
     bool createInstance();
     bool bindInstance();   // the instance-level table for [instance]; false when a required entry point is missing
@@ -191,7 +190,6 @@ private:
     std::vector<std::string> enabledDeviceExtensions;   // what the device was created with (core's + ours)
 
     AImageReader* imageReader = nullptr;
-    ANativeWindow* window = nullptr;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     unsigned surfaceWidth = 0;
     unsigned surfaceHeight = 0;

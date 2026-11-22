@@ -113,11 +113,9 @@ fun ssEngine(
 
 /** The written-art log as a set of paths; [origins]: each path's origin ([LoggedArt.origin]), a rig's writes recorded there. */
 class FakeLoggedArt(private val paths: MutableSet<String>, val origins: MutableMap<String, ArtOrigin> = mutableMapOf()) : LoggedArt {
-    /** Each removal call's paths, in order. */
-    val removals = mutableListOf<List<String>>()
     override suspend fun contains(path: String) = path in paths
     override suspend fun remove(path: String) = remove(listOf(path))
-    override suspend fun remove(paths: Collection<String>) { removals += paths.toList(); this.paths -= paths.toSet(); origins -= paths.toSet() }
+    override suspend fun remove(paths: Collection<String>) { this.paths -= paths.toSet(); origins -= paths.toSet() }
     override suspend fun origin(path: String): ArtOrigin? = origins[path]
     /** Records [written] origins (an engine's onWritten), as the app's log does before each write. */
     fun record(written: List<Pair<String, ArtOrigin?>>) { for ((p, o) in written) if (o != null) origins[p] = o }

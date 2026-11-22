@@ -50,16 +50,6 @@ data class ArtworkSettingRow(val kind: ArtworkSettingKind, val label: String, va
 /** What Reset artwork deletes: every logged file ([tags] null) or a console's. */
 data class ResetScope(val label: String, val tags: Set<String>?)
 
-/**
- * Which art sources this build and the user's keys turn on, for Artwork → Settings: [ss] the build's
- * credentials, [tgdb] TheGamesDB has the user's key and [tgdbBuilt] the engine has the source, [sgdb] the
- * build has SteamGridDB and [sgdbKey] the user's key is set.
- */
-data class ArtSources(
-    val ss: Boolean = false, val tgdb: Boolean = false, val sgdb: Boolean = false, val sgdbKey: Boolean = false,
-    val tgdbBuilt: Boolean = false,
-)
-
 /** The Artwork page's status lines: the job and stopped sources' notes (none while idle), or why the build can't fetch. */
 internal fun artworkDetails(available: Boolean, state: ScrapeState): List<String> = buildList {
     if (!available) { add("Artwork fetching isn't available in this build."); return@buildList }
@@ -153,8 +143,8 @@ internal fun signInText(r: SignInResult): String = when (r) {
     SignInResult.BUILD_REFUSED -> ScreenScraperSource.BUILD_REFUSED
 }
 
-/** The notice (OK) or error after a [key] check (SteamGridDB by default); the key is saved only on OK. */
-internal fun keyResultText(r: KeyResult, key: ArtKeyFor = ArtKeyFor.SGDB): String = when (r) {
+/** The notice (OK) or error after a [key] check; the key is saved only on OK. */
+internal fun keyResultText(r: KeyResult, key: ArtKeyFor): String = when (r) {
     KeyResult.OK -> "${key.label} key saved"
     KeyResult.BAD_KEY -> "${key.label} rejected this key"
     KeyResult.OFFLINE -> "No connection · key not saved"

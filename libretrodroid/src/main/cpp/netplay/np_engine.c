@@ -115,8 +115,6 @@
 #include <unistd.h>
 
 // Constants kept from netplay.h (wire-relevant ones must not change)
-#define NETPLAY_DEFAULT_PORT 55435
-#define NETPLAY_PROTOCOL_VERSION 3
 #define NP_INPUT_SIZE 10		// u16 buttons + i16 LX, LY, RX, RY (protocol 3)
 #define NP_INPUT_SIZE_LEGACY 2	// u16 buttons only (protocol 2 peers): sticks centred
 
@@ -213,7 +211,6 @@ static pthread_mutex_t np_mutex = PTHREAD_MUTEX_INITIALIZER;
 static struct {
 	bool started;
 	bool stop;
-	bool thread_started;
 	pthread_t thread;
 
 	np_role role;
@@ -990,7 +987,6 @@ int np_start(np_role role, const char* peer_ip, uint16_t port, np_clock_fn clock
 	}
 	np.phase = NP_CONNECTING;
 	np.started = true;
-	np.thread_started = true;
 	// Consumed: a later session is in pair mode only when asked again (the hash belongs to this session's core).
 	np_pair_wanted = false;
 	np_hash_wanted = NULL;
@@ -1434,12 +1430,10 @@ void np_shutdown(void) {
 	end_session(NP_ENDED, NP_REASON_NONE, true);
 	np.stop = true;
 	wake_thread();
-	bool join = np.thread_started;
 	pthread_t thread = np.thread;
 	pthread_mutex_unlock(&np_mutex);
 
-	if (join)
-		pthread_join(thread, NULL);
+	pthread_join(thread, NULL);
 
 	pthread_mutex_lock(&np_mutex);
 	np_tcp_release(&np.sock, &np.listen_fd, &np.wake, &np.out);

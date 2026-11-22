@@ -34,14 +34,4 @@ class MenuSkinShownTest {
         assertEquals(false, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = false, canTwo = false, tabletop = true, phoneUpright = false))
         assertEquals(false, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = true, canTwo = false, tabletop = true, phoneUpright = true))
     }
-
-    // The same pad flips with the controller, both ways.
-    @Test fun connecting_and_disconnecting_switches_it_both_ways() {
-        assertEquals(true, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = false, canTwo = false, tabletop = false))
-        assertEquals(false, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = true, canTwo = false, tabletop = false))
-        assertEquals(true, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = false, canTwo = false, tabletop = false))
-        // the Fold half-open on its two-screen layout too
-        assertEquals(true, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = false, canTwo = true, tabletop = true))
-        assertEquals(false, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = true, canTwo = true, tabletop = true))
-    }
 }

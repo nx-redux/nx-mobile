@@ -62,7 +62,7 @@ class Fold:
         if self.verbose:
             print("[fold] " + msg, flush=True)
 
-    def _adb(self, args, timeout=60, check=True, binary=False):
+    def _adb(self, args, timeout=60, check=True):
         cmd = ["adb", "-s", self.serial] + list(args)
         try:
             p = subprocess.run(cmd, capture_output=True, timeout=timeout)
@@ -208,26 +208,6 @@ class Fold:
         """True while GameActivity is the resumed activity."""
         out = self.sh("dumpsys activity activities | grep -E 'ResumedActivity'")
         return "GameActivity" in out
-
-    def sync(self, link="wifi", roms=False, timeout=600, confirm=True):
-        """SYNC hook; waits for a terminal sync.json and returns it (state 'harness-timeout' when none came).
-        confirm: the hook presses A on the confirm page (the other device still needs its own A)."""
-        self.rm_result("sync")
-        self.broadcast("SYNC", "--es link %s --ez roms %s --ez confirm %s"
-                       % (link, "true" if roms else "false", "true" if confirm else "false"))
-        t0 = time.time()
-        last = None
-        while time.time() - t0 < timeout:
-            j = self.read_json("sync")
-            if j and j.get("state") in TERMINAL_SYNC:
-                j["elapsed"] = round(time.time() - t0, 1)
-                return j
-            if j != last:
-                last = j
-            time.sleep(2)
-        self.log("sync: no terminal state after %d s, SYNC_STOP" % timeout)
-        self.sync_stop()
-        return {"state": "harness-timeout", "elapsed": round(time.time() - t0, 1)}
 
     def sync_stop(self):
         self.broadcast("SYNC_STOP")

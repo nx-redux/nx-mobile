@@ -308,17 +308,6 @@ std::vector<AchievementInfo> Achievements::list() {
     return out;
 }
 
-AchievementSummary Achievements::summary() {
-    AchievementSummary s;
-    if (!client || !rc_client_is_game_loaded(client)) return s;
-    rc_client_user_game_summary_t summary {};
-    rc_client_get_user_game_summary(client, &summary);
-    s.unlocked = summary.num_unlocked_achievements;
-    s.total = summary.num_core_achievements;
-    s.points = summary.points_unlocked;
-    return s;
-}
-
 bool Achievements::buildAwardRequest(const std::string& user, const std::string& token, uint32_t achievementId,
                                      const std::string& hash, uint32_t secondsSinceUnlock, std::string& url, std::string& post) {
     rc_api_award_achievement_request_t params {};

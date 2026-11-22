@@ -16,6 +16,7 @@ usage: sync_test.py [--fold SERIAL] [--brick SERIAL] [--out FILE] [--skip-roms |
 """
 
 import argparse
+import hashlib
 import os
 import sys
 import tempfile
@@ -59,7 +60,6 @@ def write_local(tmp, name, data):
 
 
 def md5_bytes(data):
-    import hashlib
     return hashlib.md5(data).hexdigest()
 
 
@@ -164,9 +164,7 @@ class Runner:
         return md5_bytes(data)
 
 
-def run(args, res):
-    f = Fold(args.fold)
-    b = Brick(args.brick)
+def run(args, res, f, b):
     f.require_present()
     b.require_present()
     if f.game_running():
@@ -188,7 +186,6 @@ def run(args, res):
         res.add("5. ROMs on", False, ["skipped (--skip-roms)"])
     else:
         roms_scenario(r, f, b, res)
-    return f, b
 
 
 def saves_scenarios(r, f, b, res, tmp):
@@ -379,7 +376,7 @@ def main():
     res = Results()
     f, b = Fold(args.fold), Brick(args.brick)
     try:
-        run(args, res)
+        run(args, res, f, b)
     except BrickGone as e:
         res.notes.append("STOP: %s" % e)
         print("STOP: %s" % e)

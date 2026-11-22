@@ -143,8 +143,7 @@ class AndroidGpuDriversTest {
     }
 
     @Test fun availability() {
-        assertNull(AndroidGpuDrivers.unavailableReason(true, 34))
-        assertEquals("Custom drivers need Android 9 or later", AndroidGpuDrivers.unavailableReason(true, 27))
-        assertEquals("", AndroidGpuDrivers.unavailableReason(false, 34))
+        assertNull(AndroidGpuDrivers.unavailableReason(34))
+        assertEquals("Custom drivers need Android 9 or later", AndroidGpuDrivers.unavailableReason(27))
     }
 }

@@ -17,13 +17,6 @@ captures/
 .kotlin/
 .DS_Store
 
-# Xcode (iosApp, later)
-iosApp/build/
-iosApp/Pods/
-xcuserdata/
-*.xcworkspace/xcuserdata/
-DerivedData/
-
 # Local
 /.local/
 .superpowers/

@@ -7,7 +7,6 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -190,11 +189,6 @@ class ArtExtrasTest {
         assertEquals(ItemStatus.DONE, rig2.run(listOf(tetris.copy(have = ArtHave(box = true)))).items.single().status)
         assertEquals(listOf("https://t/ss", "https://t/logo"), rig2.http.calls)
         assertEquals("Roms/GB/.media/wheel/Tetris.png" to ArtOrigin("tgdb", "Tetris.gb", "https://t/logo"), rig2.written.last())
-    }
-
-    @Test fun mixDoesNotForceTheWheel() {
-        assertFalse(ArtExtras(mix = true).wantWheel)
-        assertTrue(ArtExtras(wheel = true).wantWheel)
     }
 
     @Test fun aGameLackingItsMixAndWheelAsksForBothThenBuildsTheMixWhenNoneCame() = runTest {

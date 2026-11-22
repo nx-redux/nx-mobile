@@ -39,7 +39,6 @@
 extern "C" {
 #endif
 
-#define NL_PORT 55437
 #define NL_HDR_SIZE 5
 #define NL_MAX_PAYLOAD 2048
 #define NL_MODE_MAX 31

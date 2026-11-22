@@ -183,9 +183,9 @@ static void linger_then_stop(void) {
     int64_t t = 5000;
     psl_active(&s, 0, 0, t);
     psl_choice c = psl_step(&s, t + 9999);
-    assert(c.serve == 1 && c.announce == 1);
+    assert(c.serve == 1);
     c = psl_step(&s, t + 10000);
-    assert(c.serve == 0 && c.announce == 0);
+    assert(c.serve == 0);
 }
 
 static void host_and_join_fixed(void) {
@@ -196,9 +196,9 @@ static void host_and_join_fixed(void) {
     hear(&j, ip4(10, 0, 0, 3), 1, PSL_F_SERVING | PSL_F_SESSION, 0);
     for (int64_t t = 0; t < 20000; t += 5000) {
         psl_choice c = psl_step(&h, t);
-        assert(c.serve == 1 && c.settled == 1 && c.announce == 1 && c.server_ip == ip4(10, 0, 0, 1));
+        assert(c.serve == 1 && c.settled == 1 && c.server_ip == ip4(10, 0, 0, 1));
         c = psl_step(&j, t);
-        assert(c.serve == 0 && c.settled == 1 && c.announce == 0 && c.server_ip == ip4(10, 0, 0, 9));
+        assert(c.serve == 0 && c.settled == 1 && c.server_ip == ip4(10, 0, 0, 9));
     }
 }
 
@@ -211,18 +211,18 @@ static void host_and_join_parked(void) {
     psl_park(&h, 1);
     psl_park(&j, 1);
     psl_choice c = psl_step(&h, 1000);
-    assert(c.serve == 0 && c.settled == 0 && c.announce == 0);
+    assert(c.serve == 0 && c.settled == 0);
     assert(psl_pack(&h, pkt) == 0);
     c = psl_step(&j, 1000);
-    assert(c.serve == 0 && c.settled == 0 && c.announce == 0);
+    assert(c.serve == 0 && c.settled == 0);
     assert(psl_pack(&j, pkt) == 0);
     psl_park(&h, 0);
     psl_park(&j, 0);
     c = psl_step(&h, 2000);
-    assert(c.serve == 1 && c.settled == 1 && c.announce == 1 && c.server_ip == ip4(10, 0, 0, 1));
+    assert(c.serve == 1 && c.settled == 1 && c.server_ip == ip4(10, 0, 0, 1));
     assert(psl_pack(&h, pkt) == PSL_PACKET);
     c = psl_step(&j, 2000);
-    assert(c.serve == 0 && c.settled == 1 && c.announce == 0 && c.server_ip == ip4(10, 0, 0, 9));
+    assert(c.serve == 0 && c.settled == 1 && c.server_ip == ip4(10, 0, 0, 9));
 }
 
 static void parked_is_silent(void) {
@@ -233,7 +233,7 @@ static void parked_is_silent(void) {
     assert(psl_pack(&s, pkt) == PSL_PACKET);
     psl_park(&s, 1);
     psl_choice c = psl_step(&s, 2000);
-    assert(c.serve == 0 && c.announce == 0 && c.settled == 0);
+    assert(c.serve == 0 && c.settled == 0);
     assert(psl_pack(&s, pkt) == 0);
     psl_park(&s, 0);
     psl_active(&s, 1, 0, 5000);
@@ -251,7 +251,7 @@ static void inactive_is_silent(void) {
     hear(&s, ip4(10, 0, 0, 2), 1, PSL_F_SERVING, 0);
     assert(psl_pack(&s, pkt) == 0);
     psl_choice c = psl_step(&s, 5000);
-    assert(c.serve == 0 && c.settled == 0 && c.announce == 0);
+    assert(c.serve == 0 && c.settled == 0);
 }
 
 /* A server that other devices are logged in to keeps them: it does not yield to a better ranked server. */
@@ -275,16 +275,16 @@ static void linger_holds_while_users(void) {
     int64_t t = 5000;
     psl_active(&s, 0, 1, t);
     psl_choice c = psl_step(&s, t + 10000);
-    assert(c.serve == 1 && c.announce == 1);
+    assert(c.serve == 1);
     assert(psl_pack(&s, pkt) == PSL_PACKET && (pkt[5] & PSL_F_SERVING));
     c = psl_step(&s, t + 60000);
-    assert(c.serve == 1 && c.announce == 1);
+    assert(c.serve == 1);
     assert(psl_pack(&s, pkt) == PSL_PACKET && (pkt[5] & PSL_F_SERVING));
     psl_active(&s, 0, 0, t + 60000);
     c = psl_step(&s, t + 60000 + PSL_LINGER_MS - 1);
     assert(c.serve == 1);
     c = psl_step(&s, t + 60000 + PSL_LINGER_MS);
-    assert(c.serve == 0 && c.announce == 0);
+    assert(c.serve == 0);
 }
 
 /* Three devices that come into ad hoc together, each hearing the others every tick, end with one server. */

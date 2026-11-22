@@ -2,7 +2,6 @@ package com.nxredux.mobile.ui
 
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.BoxWithConstraints
 import com.nxredux.mobile.ui.nx.PageInset
 import com.nxredux.mobile.ui.nx.LocalInSkin
 import com.nxredux.mobile.ui.nx.nxPageInset
@@ -47,7 +46,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -273,10 +271,6 @@ private fun settingsWordStyle(base: TextUnit = SETTINGS_SECTION_SIZE): TextStyle
     )
 }
 
-/** One line of [style] (a section word's pitch) in dp. */
-@Composable
-private fun settingsWordPitch(style: TextStyle): Dp = with(LocalDensity.current) { style.lineHeight.toDp() }
-
 /** One word of the block on its own line box, tappable without a ripple. */
 @Composable
 private fun SettingsWord(text: String, color: Color, style: TextStyle, modifier: Modifier = Modifier, onTap: () -> Unit) {
@@ -495,9 +489,9 @@ fun SettingsRowsBlock(
 /** An unselected word-list row's tag against the row's own inkDim (ink-38 × 0.6); the selected row's tag is inkDim. */
 const val SETTINGS_TAG_OF_ROW = 0.6f
 
-/** A list's edge fade: in the rows block its fixed [SETTINGS_ROWS_FADE] (whatever its [row] pitch), else the list's own [default]. */
+/** A list's edge fade: in the rows block its fixed [SETTINGS_ROWS_FADE] (whatever its row pitch), else the list's own [default]. */
 @Composable
-fun settingsRowsFade(row: Dp, default: Dp): Dp = if (LocalSettingsBlock.current != null) SETTINGS_ROWS_FADE else default
+fun settingsRowsFade(default: Dp): Dp = if (LocalSettingsBlock.current != null) SETTINGS_ROWS_FADE else default
 
 
 /**

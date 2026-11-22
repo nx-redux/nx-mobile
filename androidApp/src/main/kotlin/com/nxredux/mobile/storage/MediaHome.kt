@@ -2,7 +2,6 @@ package com.nxredux.mobile.storage
 
 import android.content.Context
 import android.os.Environment
-import com.nxredux.mobile.runner.ContentRef
 import com.swordfish.libretrodroid.NxLog
 import java.io.File
 
@@ -22,8 +21,6 @@ object MediaHome {
     fun dir(context: Context): File =
         context.externalMediaDirs.firstOrNull()
             ?: File(Environment.getExternalStorageDirectory(), "Android/media/${context.packageName}")
-
-    fun ref(context: Context): ContentRef = FileRefs.of(dir(context).path)
 
     /** [dir], looked up once per process (the media dirs are a system call): the path never changes while the app runs. */
     @Volatile private var cached: File? = null

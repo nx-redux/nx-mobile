@@ -757,16 +757,6 @@ private fun RowsBody(
 }
 
 /**
- * A rows-page row as an options row: an option shows its value (`< value >` while selected); a submenu and an action a
- * `>` (NX Redux ma_menu.c), so they take the two-layer bar too.
- */
-internal fun menuOptionRow(row: MenuRow): NxRow = when (row) {
-    is MenuRow.Option -> NxRow(row.label, secondary = row.valueLabel, cycleable = true)
-    is MenuRow.Submenu, is MenuRow.Action -> NxRow(row.label, secondary = ">")
-    is MenuRow.Slot -> NxRow(row.label)
-}
-
-/**
  * Whether root [row] takes two taps, a tap to highlight and a tap on the highlighted one to act ([LocalNxTapOpens]):
  * Save and Load, whose slot is chosen first, and the plain Quit after netplay, which quits with nothing to confirm.
  * Quit itself opens its dialog on one tap (the dialog is the second step).

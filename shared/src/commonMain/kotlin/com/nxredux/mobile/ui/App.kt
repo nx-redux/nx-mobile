@@ -49,7 +49,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
@@ -84,7 +83,6 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.foundation.layout.offset
@@ -564,17 +562,9 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             // layoutKey: the tab or list laid out, not the Screen: a republish of the same page (a context menu opening or
             // closing, another tab rebuilt) must not snap a carousel or backdrop mid-glide; its own tiles changing still do.
             is Screen.Systems -> {
-                val listBand = mainMenuListBand(s.category)   // Consoles, Collections and Tools: no List band (no shade, no "N games")
                 MainMenuScreen(
                     s, index, state::select, { state.openSelected() }, state::selectTab,
                     onSwipeSelect = state::select, onTabSwipe = state::swipeTab, onHint = state::onButton, onLongPress = { state.openContextMenu(it) },
-                    info = {
-                        if (!listBand.info) emptyList() else when (val row = s.rows.getOrNull(selection.value.index)) {
-                            is MainRow.System -> consoleInfoLines(row)
-                            is MainRow.Collection -> collectionInfoLines(row)
-                            else -> gameInfoFor(gameInfo, now, row.game(), full = true, meta)   // Grid shows none (its tiles have tileInfo)
-                        }
-                    },
                     rowInfo = { i -> gameInfoFor(gameInfo, now, s.rows.getOrNull(i).game(), full = true, meta) },   // Carousel Home's caption, any row
                     style = style, orientation = orientation, onGridLayout = onGridLayout,
                     tileInfo = remember(s.rows, gameInfo, now) { rowTileInfo(s.rows, gameInfo, now) }, layoutKey = s.category,
@@ -584,7 +574,6 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     raSignedIn = state.settings.raToken != null,
                     controllerArt = state.settings.consoleArt == ConsoleArt.CONTROLLER,
                     minimalOpening = minimalOpening.value?.takeIf { s.category != null && it.page == s.category },
-                    bandShade = listBand.shade, bandInfo = listBand.info,
                     canSearch = state.canSearch,
                     onKidsLock = state::kidsParentPressed.takeIf { state.kidsModeState.collectAsState().value is KidsMode.Open },
                     onTopScreen = state.takeTopScreen.takeIf { state.appOnTop.collectAsState().value },
@@ -630,7 +619,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.RetroAchievements -> state.achievements?.let { c ->
                 SettingsHintBar {
                     RaPageWithProfile(state, c, split = settingsSplit(splitWindow())) {
-                        WithIndex(selection) { RetroAchievementsScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton) }
+                        WithIndex(selection) { RetroAchievementsScreen(c, it, state::select, { state.openSelected() }, onHint = state::onButton) }
                     }
                 }
             } ?: Box(Modifier.fillMaxSize())
@@ -668,7 +657,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
         (page as? Screen.EmulatorOptions)?.takeIf(::gameSettingsModal)?.let { modal ->
             val rowEditModal by state.rowEdit.collectAsState()   // the row the pad is changing
             WithIndex(pageSelection) {
-                GameSettingsModal(modal, it, state::select, { state.openSelected() }, onHint = state::onButton, onClose = state::closeGameSettings, onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated, editing = rowEditIndex(modal, rowEditModal, it))
+                GameSettingsModal(modal, it, state::select, { state.openSelected() }, onClose = state::closeGameSettings, onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated, editing = rowEditIndex(modal, rowEditModal, it))
             }
         }
     }
@@ -827,7 +816,7 @@ private fun SettingsPage(state: AppState, s: Screen, selection: State<ListSelect
     val rowEdit by state.rowEdit.collectAsState()   // the row the pad is changing
     when (s) {
         is Screen.Settings -> WithIndex(selection) {
-            SettingsScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, titled = titled, dialog = !titled, onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated, truncated = settingTruncated, editing = rowEditIndex(s, rowEdit, it))
+            SettingsScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, dialog = !titled, onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated, truncated = settingTruncated, editing = rowEditIndex(s, rowEdit, it))
         }
         is Screen.EmulatorList -> WithIndex(selection) { EmulatorListScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, split = titled || LocalSettingsBlock.current != null) }
         is Screen.EmulatorConsoles -> WithIndex(selection) { EmulatorConsolesScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton) }

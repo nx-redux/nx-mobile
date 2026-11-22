@@ -527,6 +527,7 @@ bool VulkanBridge::createSurface(unsigned width, unsigned height) {
         LOGE("Vulkan bridge: AImageReader_newWithUsage failed: %d", (int) status);
         return false;
     }
+    ANativeWindow* window = nullptr;
     status = AImageReader_getWindow(imageReader, &window);
     if (status != AMEDIA_OK || window == nullptr) {
         LOGE("Vulkan bridge: AImageReader_getWindow failed: %d", (int) status);
@@ -1185,7 +1186,6 @@ void VulkanBridge::destroy() {
     instance = VK_NULL_HANDLE;
     if (imageReader != nullptr) AImageReader_delete(imageReader);   // also releases its window
     imageReader = nullptr;
-    window = nullptr;
 
     negotiation = nullptr;
     {

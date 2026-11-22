@@ -16,9 +16,6 @@ object VulkanFallback {
     /** Put before the Graphics API row's info while the core's failure is recorded. */
     const val NOTE = "Vulkan didn't work on this phone; using OpenGL ES."
 
-    /** Only a launch that asked for Vulkan relaunches; one forced to OpenGL ES that fails shows its error (no loop). */
-    fun relaunchOnGles(launchedOnVulkan: Boolean): Boolean = launchedOnVulkan
-
     /** The cores recorded in [stored] for [appVersion]; a record from another version counts for nothing. */
     fun failedCores(stored: String?, appVersion: String): Set<String> {
         val lines = stored?.lines().orEmpty()

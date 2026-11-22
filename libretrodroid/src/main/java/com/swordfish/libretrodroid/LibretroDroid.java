@@ -31,51 +31,13 @@ public class LibretroDroid {
     public static final int MOTION_SOURCE_POINTER = 3;
 
     public static final int SHADER_DEFAULT = 0;
-    public static final int SHADER_CRT = 1;
-    public static final int SHADER_LCD = 2;
     public static final int SHADER_SHARP = 3;
-    public static final int SHADER_UPSCALE_CUT = 4;
-    public static final int SHADER_UPSCALE_CUT2 = 5;
-    public static final int SHADER_UPSCALE_CUT3 = 6;
 
     public static final String SHADER_DEFAULT_PARAM_LINEAR = "LINEAR";
 
     public static final int SCALE_MODE_FIT = 0;
     public static final int SCALE_MODE_INTEGER = 1;
     public static final int SCALE_MODE_STRETCH = 2;
-
-    public static final String SHADER_UPSCALE_CUT_PARAM_USE_DYNAMIC_BLEND = "USE_DYNAMIC_BLEND";
-    public static final String SHADER_UPSCALE_CUT_PARAM_BLEND_MIN_CONTRAST_EDGE = "BLEND_MIN_CONTRAST_EDGE";
-    public static final String SHADER_UPSCALE_CUT_PARAM_BLEND_MAX_CONTRAST_EDGE = "BLEND_MAX_CONTRAST_EDGE";
-    public static final String SHADER_UPSCALE_CUT_PARAM_BLEND_MIN_SHARPNESS = "BLEND_MIN_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT_PARAM_BLEND_MAX_SHARPNESS = "BLEND_MAX_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT_PARAM_STATIC_BLEND_SHARPNESS = "STATIC_BLEND_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT_PARAM_EDGE_USE_FAST_LUMA = "EDGE_USE_FAST_LUMA";
-    public static final String SHADER_UPSCALE_CUT_PARAM_EDGE_MIN_VALUE = "EDGE_MIN_VALUE";
-    public static final String SHADER_UPSCALE_CUT_PARAM_EDGE_MIN_CONTRAST = "EDGE_MIN_CONTRAST";
-
-    public static final String SHADER_UPSCALE_CUT2_PARAM_USE_DYNAMIC_BLEND = "USE_DYNAMIC_BLEND";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_BLEND_MIN_CONTRAST_EDGE = "BLEND_MIN_CONTRAST_EDGE";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_BLEND_MAX_CONTRAST_EDGE = "BLEND_MAX_CONTRAST_EDGE";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_BLEND_MIN_SHARPNESS = "BLEND_MIN_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_BLEND_MAX_SHARPNESS = "BLEND_MAX_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_STATIC_BLEND_SHARPNESS = "STATIC_BLEND_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_EDGE_USE_FAST_LUMA = "EDGE_USE_FAST_LUMA";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_SOFT_EDGES_SHARPENING = "SOFT_EDGES_SHARPENING";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_SOFT_EDGES_SHARPENING_AMOUNT = "SOFT_EDGES_SHARPENING_AMOUNT";
-    public static final String SHADER_UPSCALE_CUT2_PARAM_HARD_EDGES_SEARCH_MAX_ERROR = "HARD_EDGES_SEARCH_MAX_ERROR";
-
-    public static final String SHADER_UPSCALE_CUT3_PARAM_USE_DYNAMIC_BLEND = "USE_DYNAMIC_BLEND";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_BLEND_MIN_CONTRAST_EDGE = "BLEND_MIN_CONTRAST_EDGE";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_BLEND_MAX_CONTRAST_EDGE = "BLEND_MAX_CONTRAST_EDGE";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_BLEND_MIN_SHARPNESS = "BLEND_MIN_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_BLEND_MAX_SHARPNESS = "BLEND_MAX_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_STATIC_BLEND_SHARPNESS = "STATIC_BLEND_SHARPNESS";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_EDGE_USE_FAST_LUMA = "EDGE_USE_FAST_LUMA";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_SOFT_EDGES_SHARPENING = "SOFT_EDGES_SHARPENING";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_SOFT_EDGES_SHARPENING_AMOUNT = "SOFT_EDGES_SHARPENING_AMOUNT";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_HARD_EDGES_SEARCH_MAX_ERROR = "HARD_EDGES_SEARCH_MAX_ERROR";
-    public static final String SHADER_UPSCALE_CUT3_PARAM_HARD_EDGES_SEARCH_MAX_DISTANCE = "HARD_EDGES_SEARCH_MAX_DISTANCE";
 
     public static final int ERROR_LOAD_LIBRARY = 0;
     public static final int ERROR_LOAD_GAME = 1;
@@ -85,18 +47,14 @@ public class LibretroDroid {
     public static final int ERROR_GENERIC = -1;
 
     public static native void create(
-        int GLESVersion,
         String coreFilePath,
         String systemDir,
         String savesDir,
         Variable[] variables,
         GLRetroShader shaderConfig,
         float refreshRate,
-        boolean preferLowLatencyAudio,
         boolean enableVirtualFileSystem,
         boolean enableMicrophone,
-        boolean skipDuplicateFrames,
-        ImmersiveMode immersiveMode,
         String language
     );
 
@@ -205,7 +163,6 @@ public class LibretroDroid {
     public static native int rewindStatus();
     public static native void setShaderConfig(GLRetroShader shader);
     public static native void setViewport(float x, float y, float width, float height);
-    public static native void setViewportAlignment(int viewportAlignment);
     public static native void setScaleMode(int scaleMode);
     public static native void setScreenOffset(float x, float y);
     /** While held the view draws black, no picture. GL thread. */
@@ -288,7 +245,6 @@ public class LibretroDroid {
 
     public static native void refreshAspectRatio();
 
-    public static native Controller[][] getControllers();
     public static native void setControllerType(int port, int type);
     public static native void setStickyPointer(int port, boolean sticky);
     public static native void setPointerVelocity(int port, float vx, float vy);
@@ -322,7 +278,6 @@ public class LibretroDroid {
     public static native void achievementsUnloadGame();
     public static native void achievementsServerResponse(int requestId, int httpStatus, String body);
     public static native AchievementInfo[] achievementsList();
-    public static native int[] achievementsSummary();
     /** {url, postData} for a softcore award of [achievementId], signed by rcheevos; null when the parameters are rejected. */
     public static native String[] achievementsBuildAwardRequest(String user, String token, int achievementId, String gameHash, int secondsSinceUnlock);
     /** md5 of the game for RetroAchievements, or null. [files] as loadGameFromVirtualFiles; the fds are closed by the call. */

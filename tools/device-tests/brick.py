@@ -14,6 +14,7 @@ Stdlib only. Every recipe follows nx-redux/.dev/TESTING.md:
 Test files are always named nxtest-*; cleanup_nxtest() removes them.
 """
 
+import hashlib
 import os
 import shlex
 import struct
@@ -218,9 +219,7 @@ class Brick:
         end = time.time() + timeout
         while True:
             v = fn()
-            if v:
-                return v
-            if time.time() >= end:
+            if v or time.time() >= end:
                 return v
             time.sleep(interval)
 
@@ -246,7 +245,6 @@ class Brick:
             for fn in sorted(os.listdir(local)):
                 self.push(os.path.join(local, fn), EV_DIR + "/" + fn)
             self.sh("chmod 755 %s/press.sh" % EV_DIR)
-            import hashlib
             want = hashlib.md5(files["A"][0]).hexdigest()
         if self.md5(EV_DIR + "/A.down") != want:
             raise BrickError("event files did not land in %s" % EV_DIR)

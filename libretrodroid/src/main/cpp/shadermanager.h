@@ -45,12 +45,7 @@ public:
 
     enum class Type {
         SHADER_DEFAULT = 0,
-        SHADER_CRT = 1,
-        SHADER_LCD = 2,
         SHADER_SHARP = 3,
-        SHADER_UPSCALE_CUT = 4,
-        SHADER_UPSCALE_CUT2 = 5,
-        SHADER_UPSCALE_CUT3 = 6,
     };
 
     struct Config {
@@ -67,32 +62,6 @@ private:
 
     static const std::string defaultShaderFragment;
     static const std::string defaultSharpFragment;
-    static const std::string crtShaderFragment;
-    static const std::string lcdShaderFragment;
-
-    static const std::unordered_map<std::string, std::string> cutUpscaleParams;
-    static const std::string cutUpscaleVertex;
-    static const std::string cutUpscaleFragment;
-
-    static const std::unordered_map<std::string, std::string> cut2UpscaleParams;
-    static const std::string cut2UpscalePass0Vertex;
-    static const std::string cut2UpscalePass0Fragment;
-    static const std::string cut2UpscalePass1Vertex;
-    static const std::string cut2UpscalePass1Fragment;
-
-    static const std::unordered_map<std::string, std::string> cut3UpscaleParams;
-    static const std::string cut3UpscalePass0Vertex;
-    static const std::string cut3UpscalePass0Fragment;
-    static const std::string cut3UpscalePass1Vertex;
-    static const std::string cut3UpscalePass1Fragment;
-    static const std::string cut3UpscalePass2Vertex;
-    static const std::string cut3UpscalePass2Fragment;
-
-private:
-    static std::string buildDefines(
-        std::unordered_map<std::string, std::string> baseParams,
-        std::unordered_map<std::string, std::string> customParams
-    );
 
 public:
     static Chain getShader(const Config& config);

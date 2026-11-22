@@ -144,12 +144,6 @@ enum class Res3dConsole(
 
 /** The internal resolution (whole scale of 256x192) the melonDS GL renderer draws the 3D at, from the layout and the display. */
 object Nds3dResolution {
-    /** The most the core's resolution option offers. */
-    const val CORE_MAX = 8
-
-    /** The Max Scale an unset game starts with. */
-    const val DEFAULT_CAP = 4
-
     /** The Scale an unset game's Performance draws at. */
     const val DEFAULT_PERFORMANCE_SCALE = 2
 

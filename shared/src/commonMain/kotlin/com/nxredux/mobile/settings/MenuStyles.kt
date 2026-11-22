@@ -73,10 +73,6 @@ object MenuStyles {
         else -> style to orientation
     }
 
-    /** The game list styles Layouts offers: [GAME_LIST_STYLES], on two screens too (only the vertical forms go: [dualGameListLayout]). */
-    @Suppress("UNUSED_PARAMETER")
-    fun gameListStyles(dual: Boolean): List<MenuStyle> = GAME_LIST_STYLES
-
     /** The other orientation: LEFT, RIGHT and A all flip, there being two. */
     fun flip(o: MenuOrientation): MenuOrientation =
         if (o == MenuOrientation.HORIZONTAL) MenuOrientation.VERTICAL else MenuOrientation.HORIZONTAL

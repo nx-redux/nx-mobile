@@ -32,7 +32,8 @@ class FakeFold:
 
 def args(**kw):
     a = dict(serial="x", rom=ROM, tag="N64", core="mupen64plus_next", home="/sdcard/NXRedux", state=None, slot=0,
-             warmup=0, seconds=0, runs=1, opt=[], ab=None, ab_prop=None, content_fps=60.0, work=False, verbose=False)
+             warmup=0, seconds=0, runs=1, opt=[], ab=None, ab_prop=None, content_fps=60.0, work=False, verbose=False,
+             open_first=0)
     a.update(kw)
     return argparse.Namespace(**a)
 

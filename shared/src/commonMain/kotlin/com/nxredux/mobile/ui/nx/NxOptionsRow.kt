@@ -103,11 +103,6 @@ fun nxOptionsFitHeight(rows: List<NxRow>, rowHeight: Dp): Dp = with(LocalDensity
     nxOptionsListHeightPx(rows, rowHeight.roundToPx(), (rowHeight * NX_OPTIONS_GAP).roundToPx()).toDp()
 }
 
-/** A scrolling options list's arrow strip, one above and one below the rows: the arrow (a quarter of its width high) with
- * 2 dp of air each side; the row's own padding adds the rest. Smaller than the pill list's half-row gutter, so the strips
- * don't cost an options row. */
-val NxOptionsArrowStrip: Dp = NxScrollArrowWidth / 4 + 4.dp
-
 /** NX Redux SETTINGS_ROW_PADDING (8), at the list's 1.25: the label and value inset inside the row. */
 val NxOptionsInnerPad: Dp = 10.dp
 
@@ -194,9 +189,9 @@ fun NxOptionsRow(
 
 /**
  * A scrolling list of [NxOptionsRow]s at [rowHeight], sized from the pill list's [listText] (the label and value take
- * NX Redux's proportions of it). Selection, taps and long presses behave as [NxList]'s ([nxTap]). [sidePad] is the row's margin on each side.
- * [scrollFade]: the rows fade at the edge they scroll on ([nxScrollFade]), the selection kept a row clear of the fades
- * (while the list shows three rows or more).
+ * NX Redux's proportions of it). Selection, taps and long presses behave as [NxList]'s ([nxTap]). The rows fade at the
+ * edge they scroll on ([nxScrollFade]), the selection kept a row clear of the fades (while the list shows three rows or
+ * more).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -206,8 +201,6 @@ fun NxOptionsList(
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
     onLongPress: ((Int) -> Unit)? = null,
-    sidePad: Dp = NxOptionsSidePad,
-    scrollFade: Boolean = false,
 ) {
     val innerPad = NxOptionsInnerPad
     val labelSize = nxOptionsLabelSize(listText)   // [listText] carries Text size (the list's scaled pitch)
@@ -225,14 +218,14 @@ fun NxOptionsList(
         val geometry = remember(spacers, rowPx, gapPx, viewportPx) { NxOptionsGeometry.of(spacers, rowPx, gapPx, viewportPx) }
         // Clear of the fade: a row.
         val block = LocalSettingsBlock.current != null
-        val margin = if (scrollFade && viewportPx >= rowPx * 3) rowPx else 0
+        val margin = if (viewportPx >= rowPx * 3) rowPx else 0
         NxOptionsKeepSelectedInView(listState, selectedIndex, geometry, margin)
         LazyColumn(
             state = listState,
             // Elsewhere a resting list draws down to its last whole row; in the Settings rows block it fills its room, the
             // next row peeking under the block's thin fade ([SETTINGS_ROWS_FADE]).
             modifier = Modifier.fillMaxSize().then(if (block) Modifier else Modifier.nxOptionsWholeRows(listState, geometry))
-                .then(if (!scrollFade) Modifier else Modifier.nxScrollFade(listState, height = if (block) SETTINGS_ROWS_FADE else rowDp / 2, strong = true)),
+                .nxScrollFade(listState, height = if (block) SETTINGS_ROWS_FADE else rowDp / 2, strong = true),
             // its end rest's pad, and in the Settings rows block its bottom inset ([com.nxredux.mobile.ui.LocalSettingsRowsBottom])
             contentPadding = PaddingValues(bottom = with(density) { geometry.endPadPx.toDp() } + com.nxredux.mobile.ui.LocalSettingsRowsBottom.current),
             flingBehavior = rememberNxOptionsSnapFling(listState, geometry),
@@ -245,7 +238,7 @@ fun NxOptionsList(
                     Modifier.combinedClickable(
                         onClick = { nxTap(i, selected, tapOpens(i), onSelect, onOpen) },
                         onLongClick = onLongPress?.let { lp -> { lp(i) } },
-                    ).padding(horizontal = sidePad),
+                    ).padding(horizontal = NxOptionsSidePad),
                 )
             }
         }

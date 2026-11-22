@@ -274,7 +274,7 @@ internal class RaScreenController(
     /** The RetroAchievements page on the row last used there. */
     fun showRetroAchievements() {
         val c = achievements ?: run { host.showTools(); return }
-        screen.value = Screen.RetroAchievements()
+        screen.value = Screen.RetroAchievements
         selection.value = raSelection.clampedTo(raRows(c.state.value, c.download.value).size)
         refreshRaProfile()   // reads the games' snapshot too, so Achievements opens from it at once
     }
@@ -486,7 +486,7 @@ internal class RaScreenController(
      * for any other screen.
      */
     fun raParent(screen: Screen): RaParent? = when (screen) {
-        is Screen.RaSettings, is Screen.RaConsoles, Screen.RaProfile -> RaParent(Screen.RetroAchievements(), raPageRow(screen) ?: 0)
+        is Screen.RaSettings, is Screen.RaConsoles, Screen.RaProfile -> RaParent(Screen.RetroAchievements, raPageRow(screen) ?: 0)
         is Screen.RaGames -> raConsolesScreen?.let { RaParent(it, raConsolesSelection.index) }
         is Screen.RaGame -> raGamesScreen?.let { RaParent(it, raGamesSelection.index) }
         is Screen.RaAchievement -> RaParent(raGameScreen ?: Screen.RaGame(screen.game, listOf(screen.achievement), badges = screen.badges), raGameSelection.index)
@@ -771,20 +771,9 @@ internal class RaScreenController(
         }
     }
 
-    /** UP/DOWN move over the action rows; A runs the highlighted one; B cancels a running job, closes the confirm, or goes back. */
-    fun onRaButton(s: Screen.RetroAchievements, button: NxButton) {
+    /** UP/DOWN move over the action rows; A runs the highlighted one; B cancels a running job or goes back. */
+    fun onRaButton(button: NxButton) {
         val c = achievements ?: run { host.showTools(); return }
-        if (s.confirm != null) {
-            when (button) {
-                NxButton.A -> {
-                    screen.value = Screen.RetroAchievements()
-                    forgetRaGames(); when (s.confirm) { RaConfirm.SIGN_OUT -> c.signOut(); RaConfirm.RESET_ACCOUNT -> c.resetAccount(); RaConfirm.ERASE_ALL -> c.eraseAll() }
-                }
-                NxButton.B -> screen.value = Screen.RetroAchievements()
-                else -> Unit
-            }
-            return
-        }
         when (button) {
             NxButton.UP -> selection.value = selection.value.up()
             NxButton.DOWN -> selection.value = selection.value.down()
@@ -854,7 +843,7 @@ internal class RaScreenController(
             is Screen.RaGames -> returnToRaConsoles()
             is Screen.RaConsoles, Screen.RaProfile -> showRetroAchievements()
             is Screen.RaSettings -> onRaSettingsButton(s, NxButton.B)
-            is Screen.RetroAchievements -> onRaButton(s, NxButton.B)
+            Screen.RetroAchievements -> onRaButton(NxButton.B)
             else -> Unit
         }
     }

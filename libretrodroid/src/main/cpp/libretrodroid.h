@@ -54,7 +54,6 @@
 #include "environment.h"
 #include "vfs/vfsfile.h"
 #include "renderers/es3/framebufferrenderer.h"
-#include "renderers/es2/imagerendereres2.h"
 #include "renderers/es3/imagerendereres3.h"
 #include "utils/rect.h"
 #include "achievements/achievements.h"
@@ -115,18 +114,14 @@ public:
     void onSurfaceChanged(unsigned int width, unsigned int height);
 
     void create(
-        unsigned int GLESVersion,
         const std::string& soFilePath,
         const std::string& systemDir,
         const std::string& savesDir,
         std::vector<Variable> variables,
         const ShaderManager::Config& shaderConfig,
         float refreshRate,
-        bool lowLatencyAudio,
         bool enableVirtualFileSystem,
         bool enableMicrophone,
-        bool duplicateFrames,
-        std::optional<ImmersiveMode::Config> immersiveModeConfig,
         const std::string& language
     );
     // resume() and pause() run on the UI thread while the GL thread is paused, though its queued events still run:
@@ -162,7 +157,6 @@ public:
     std::vector<Variable> getVariables();
     void updateVariable(const Variable& variable);
 
-    std::vector<std::vector<struct Controller>> getControllers();
     void setControllerType(unsigned int port, unsigned int type);
 
     // Wii: GL thread (queued), like the other input setters.
@@ -247,7 +241,6 @@ public:
     void achievementsLoadGame(const std::string& hash, uint32_t consoleId);
     void achievementsUnloadGame();
     std::vector<AchievementInfo> achievementsList();
-    AchievementSummary achievementsSummary();
 
     void setAudioEnabled(bool enabled);
 
@@ -259,8 +252,6 @@ public:
     void setPresetParameter(const std::string& id, float value);
     // The last chain build error, cleared on read. GL thread only.
     std::optional<std::string> takePresetError();
-
-    void setViewportAlignment(unsigned int viewportAlignment);
 
     void setScaleMode(unsigned int scaleMode);
 
@@ -366,7 +357,6 @@ private:
     unsigned dsLinkVariablesSeen = 0;   // GL thread: the variables generation the DS link last read
     // UI thread writes it; a threaded core's audio callback reads it.
     std::atomic<bool> audioEnabled { true };
-    bool preferLowLatencyAudio = false;
     bool rumbleEnabled = false;
     bool preferVulkan = false;
     bool vulkanSwapchainFrames = false;
@@ -384,7 +374,6 @@ private:
     std::optional<std::string> presetError;
 
     Rect viewportRect = Rect(0.0F, 0.0F, 1.0F, 1.0F);
-    unsigned int viewportAlignment = V_ALIGN_CENTER;
 
     // Remembered so values set before the Video exists apply once it is created.
     unsigned int scaleMode = SCALE_MODE_FIT;
@@ -415,10 +404,6 @@ private:
     std::function<void()> frameDrawnHook;   // GL thread, for one step
     int64_t frameDeadlineNanos = 0;          // GL thread
     bool presentStamped = false;             // GL thread
-    int openglESVersion = 2;
-    bool skipDuplicateFrames = false;
-    bool immersiveModeEnabled = false;
-    ImmersiveMode::Config immersiveModeConfig {};
 
     float defaultAspectRatio = 1.0;
     bool dirtyVideo = false;

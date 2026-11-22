@@ -26,13 +26,13 @@ enum class Shortcut(val label: String) {
 }
 
 /**
- * One shortcut tile: [enabled] false is drawn dimmed and does nothing; [value] is the display text under the label
+ * One shortcut tile: [value] is the display text under the label
  * ("2/3" for discs, "Slot 2" for a save state); [on] makes it a toggle (fast forward, rewind, the mic; null for the
  * action shortcuts), drawn as a quick-settings tile: filled while on, outlined while off, with no On/Off words.
  * [action]: a [Shortcut.TOUCH] tile's, run as its touch button runs it (held while pressed).
  */
 data class ShortcutState(
-    val shortcut: Shortcut, val label: String, val enabled: Boolean, val value: String? = null, val on: Boolean? = null,
+    val shortcut: Shortcut, val label: String, val value: String? = null, val on: Boolean? = null,
     val action: ShortcutAction? = null,
 )
 
@@ -211,7 +211,7 @@ object GamePanelModel {
             else -> action.label
         }
         val state = action == ShortcutAction.SAVE_STATE || action == ShortcutAction.LOAD_STATE
-        return ShortcutState(Shortcut.TOUCH, label, true, value = slot?.takeIf { state }?.let { "Slot $it" }, action = action)
+        return ShortcutState(Shortcut.TOUCH, label, value = slot?.takeIf { state }?.let { "Slot $it" }, action = action)
     }
 
     /**
@@ -226,19 +226,19 @@ object GamePanelModel {
         touch: List<ShortcutAction> = emptyList(), slot: Int? = null, ffSpeed: Int? = null,
     ): List<ShortcutState> = buildList {
         if (!netplay) touch.forEach { add(touchTile(it, slot)) }
-        if (discCount > 1 && !netplay) add(ShortcutState(Shortcut.SWAP_DISC, Shortcut.SWAP_DISC.label, true, "${discIndex + 1}/$discCount"))
+        if (discCount > 1 && !netplay) add(ShortcutState(Shortcut.SWAP_DISC, Shortcut.SWAP_DISC.label, "${discIndex + 1}/$discCount"))
         if (netplay) return@buildList
-        add(ShortcutState(Shortcut.FAST_FORWARD, Shortcut.FAST_FORWARD.label, true, value = ffSpeed?.let { "${it}x" }, on = ff))
-        if (rewind != null) add(ShortcutState(Shortcut.REWIND, Shortcut.REWIND.label, true, on = rewind))
-        if (mic != null) add(ShortcutState(Shortcut.MIC, Shortcut.MIC.label, true, value = if (mic) "Shown" else "Hidden", on = mic))
-        add(ShortcutState(Shortcut.RESET, Shortcut.RESET.label, true))
+        add(ShortcutState(Shortcut.FAST_FORWARD, Shortcut.FAST_FORWARD.label, value = ffSpeed?.let { "${it}x" }, on = ff))
+        if (rewind != null) add(ShortcutState(Shortcut.REWIND, Shortcut.REWIND.label, on = rewind))
+        if (mic != null) add(ShortcutState(Shortcut.MIC, Shortcut.MIC.label, value = if (mic) "Shown" else "Hidden", on = mic))
+        add(ShortcutState(Shortcut.RESET, Shortcut.RESET.label))
     }
 
     /**
-     * What activating [s] asks for: nothing while disabled; Swap disc, a toggle flipped (from its live [ShortcutState.on]),
+     * What activating [s] asks for: Swap disc, a toggle flipped (from its live [ShortcutState.on]),
      * or Reset. A touch button's tile asks on its press and release instead ([GamePanelEvent.Touch]).
      */
-    fun eventFor(s: ShortcutState): GamePanelEvent? = if (!s.enabled) null else when (s.shortcut) {
+    fun eventFor(s: ShortcutState): GamePanelEvent? = when (s.shortcut) {
         Shortcut.TOUCH -> null
         Shortcut.SWAP_DISC -> GamePanelEvent.SwapDisc
         Shortcut.FAST_FORWARD -> s.on?.let { GamePanelEvent.SetFastForward(on = !it) }

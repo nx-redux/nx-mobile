@@ -15,13 +15,6 @@ class TextSizesTest {
         assertEquals(NxTextSizes.listLabel(32.5.dp).value, nxListLabelSize().value)
     }
 
-    // A list's rows stretch to fill its height; its label stays the target pitch's, so a pill grows with the row, not the text.
-    @Test fun aStretchedRowKeepsTheTargetPitchsLabel() {
-        val label = NxTextSizes.listLabel(NxListPitch).value
-        assertEquals(45f * (1f - 2 * NX_PILL_PAD) - label * NX_FONT_LINE, nxPillGap(45f, 1f), 1e-4f)
-        assertEquals(60f * (1f - 2 * NX_PILL_PAD) - label * NX_FONT_LINE, nxPillGap(60f, 1f), 1e-4f)
-    }
-
     @Test fun headlineSecondaryAndCaptionStepFromTheLabel() {
         assertEquals(18.4f, NxTextSizes.headline(label).value, 1e-4f)
         assertEquals(12.8f, NxTextSizes.secondary(label).value, 1e-4f)
@@ -61,8 +54,7 @@ class TextSizesTest {
         assertEquals(0.85f, nxFontScale(0.5f))
     }
 
-    @Test fun noticesAndPadLabelsAreFixed() {
+    @Test fun noticesAreFixed() {
         assertEquals(15f, NxTextSizes.notice.value, 1e-4f)
-        assertEquals(12f, NxTextSizes.padLabel.value, 1e-4f)
     }
 }

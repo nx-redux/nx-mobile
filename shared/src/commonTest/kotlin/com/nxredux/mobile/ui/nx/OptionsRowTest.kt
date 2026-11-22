@@ -40,16 +40,7 @@ class OptionsRowTest {
         assertEquals("12 games", nxOptionsValueText("12 games", selected = false, cycleable = false))
     }
 
-    @Test fun inGameRowsMapToOptionRows() {
-        assertEquals(NxRow("Scaling", secondary = "Aspect", cycleable = true), menuOptionRow(MenuRow.Option("Scaling", "scaling", "Aspect")))
-        assertEquals(NxRow("Shaders", secondary = ">"), menuOptionRow(MenuRow.Submenu("Shaders", PageKind.Shaders)))
-        // NX Redux (ma_menu.c): a sub-page's action row shows a ">" (no arrows) and takes the two-layer bar.
-        assertEquals(NxRow("Save for game", secondary = ">"), menuOptionRow(MenuRow.Action("Save for game", MenuAction.SAVE_FOR_GAME)))
-    }
-
-    @Test fun pillListSizesAreUnchanged() {
-        assertEquals(32.5f, NxListPitch.value)
-        assertEquals(20.15f, nxListLabelSize().value, 0.001f)
+    @Test fun aPlainListRowIsNotCycleable() {
         assertEquals(false, NxRow("Zelda").cycleable)
     }
 }

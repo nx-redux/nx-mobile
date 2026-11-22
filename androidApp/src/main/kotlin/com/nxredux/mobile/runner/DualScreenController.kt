@@ -993,7 +993,7 @@ internal class DualScreenController(
         val next = GamePanelModel.nextDisc(current, count)
         discs = next to count
         lifecycleScope.launch(Dispatchers.IO) {
-            runCatching { view.changeDisk(next) }.onFailure { NxLog.w("GameActivity", "disc change failed", it) }
+            runCatching { view.changeDisk(next) }.onFailure { NxLog.w(TAG_LOG, "disc change failed", it) }
         }
         discToast(next, count)
         owner.withMenu { it.setDiscs(next, count) }
@@ -1018,7 +1018,7 @@ internal class DualScreenController(
         lifecycleScope.launch {
             val (count, current) = withContext(Dispatchers.IO) {
                 runCatching { view.getAvailableDisks() to view.getCurrentDisk() }
-                    .onFailure { NxLog.w("GameActivity", "disc query failed", it) }.getOrNull()
+                    .onFailure { NxLog.w(TAG_LOG, "disc query failed", it) }.getOrNull()
             } ?: return@launch
             discs = current to count
             owner.withMenu { it.setDiscs(current, count) }
@@ -1039,7 +1039,7 @@ internal class DualScreenController(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                NxLog.w("GameActivity", "could not read play time", e)
+                NxLog.w(TAG_LOG, "could not read play time", e)
                 return@launch
             }
             playTotalMs = total

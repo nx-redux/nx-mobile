@@ -3,7 +3,6 @@ package com.nxredux.mobile.ui
 import com.nxredux.mobile.library.Collections
 import com.nxredux.mobile.library.FolderMerge
 import com.nxredux.mobile.library.FolderSummary
-import com.nxredux.mobile.library.LibraryIndex
 import com.nxredux.mobile.library.LibraryScanner
 import com.nxredux.mobile.library.LooseFile
 import com.nxredux.mobile.library.MoveItem
@@ -108,50 +107,48 @@ internal class FolderSummaryController(
      * other folders merged into its main one, every line naming a merged game rewritten (Recents, pins, hidden games,
      * collections), then a rescan and the result.
      */
-    private fun moveHomeOutside(s: Screen.FolderSummary) = launchMove(s) { home, index, mover ->
-        // Each merged game's old line → new, filled as it moves: whatever ends the move (a stop, an error, the app
-        // closing), every line naming a game that did move is rewritten to it.
-        val moved = LinkedHashMap<String, String>()
-        // The lines of the games moved so far, rewritten every few seconds too: a process killed mid-merge leaves
-        // only the last few seconds' games at their old paths, not all of them.
-        val rewritten = HashSet<String>()
-        suspend fun flushLines() {
-            val fresh = moved.filterKeys { it !in rewritten }
-            if (fresh.isEmpty()) return
-            runCatching { rewriteHomeLines(fresh) }.onSuccess { rewritten += fresh.keys }
-        }
-        val flusher = launch { while (true) { delay(LINES_FLUSH_MS); withContext(NonCancellable) { flushLines() } } }
-        var outside = MoveResult()
-        val result = try {
-            val items = mover.planLoose(homeOutside, index)
-            val movedItems = HashSet<MoveItem>()
-            outside = mover.run(items, ::moveProgress, onMoved = { movedItems += it }) { moveCancelled }
-            // Folders where a game (or a file nothing placed) stayed are never tried: a wrong empty listing must not delete them.
-            val keep = homeOutside.filter { f -> movedItems.none { it.relativeDir == f.relativeDir && (it.subdir != null || f.entry.name in it.files) } }
-            mover.pruneEmpty(home, homeOutside.map { it.relativeDir }, keep = keep.map { it.relativeDir })
-            val merged = if (outside.cancelled) MoveResult() else FolderMerge(deps.source, home).merge(index, splitFolders(index), moved, ::moveProgress) { moveCancelled }.first
-            MoveResult(outside.moved + merged.moved, outside.clashed + merged.clashed, outside.failed + merged.failed, outside.cancelled || merged.cancelled)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // What moved is counted; the rest (outside and merge) stays where it was.
-            outside.copy(moved = outside.moved + moved.size, failed = outside.failed + 1)
-        } finally {
-            flusher.cancel()
-            withContext(NonCancellable) { flushLines() }
-        }
-        homeOutside = emptyList()
-        host.scanNow(home, then = { showHomeSummary(s.summary, result) })
-    }
-
-    /** A move from [s]: its progress on the page from 0, then [move] with the home, the library and a mover into the home. */
-    private fun launchMove(s: Screen.FolderSummary, move: suspend CoroutineScope.(home: ContentRef, index: LibraryIndex, mover: RomMover) -> Unit) {
+    private fun moveHomeOutside(s: Screen.FolderSummary) {
         val home = host.home() ?: return
         val index = library.snapshot ?: return
         moveCancelled = false
         screen.value = s.copy(progress = 0 to 0)
         selection.value = ListSelection(0, 0)
-        scope.launch { move(home, index, RomMover(deps.source, home)) }
+        scope.launch {
+            val mover = RomMover(deps.source, home)
+            // Each merged game's old line → new, filled as it moves: whatever ends the move (a stop, an error, the app
+            // closing), every line naming a game that did move is rewritten to it.
+            val moved = LinkedHashMap<String, String>()
+            // The lines of the games moved so far, rewritten every few seconds too: a process killed mid-merge leaves
+            // only the last few seconds' games at their old paths, not all of them.
+            val rewritten = HashSet<String>()
+            suspend fun flushLines() {
+                val fresh = moved.filterKeys { it !in rewritten }
+                if (fresh.isEmpty()) return
+                runCatching { rewriteHomeLines(fresh) }.onSuccess { rewritten += fresh.keys }
+            }
+            val flusher = launch { while (true) { delay(LINES_FLUSH_MS); withContext(NonCancellable) { flushLines() } } }
+            var outside = MoveResult()
+            val result = try {
+                val items = mover.planLoose(homeOutside, index)
+                val movedItems = HashSet<MoveItem>()
+                outside = mover.run(items, ::moveProgress, onMoved = { movedItems += it }) { moveCancelled }
+                // Folders where a game (or a file nothing placed) stayed are never tried: a wrong empty listing must not delete them.
+                val keep = homeOutside.filter { f -> movedItems.none { it.relativeDir == f.relativeDir && (it.subdir != null || f.entry.name in it.files) } }
+                mover.pruneEmpty(home, homeOutside.map { it.relativeDir }, keep = keep.map { it.relativeDir })
+                val merged = if (outside.cancelled) MoveResult() else FolderMerge(deps.source, home).merge(index, splitFolders(index), moved, ::moveProgress) { moveCancelled }.first
+                MoveResult(outside.moved + merged.moved, outside.clashed + merged.clashed, outside.failed + merged.failed, outside.cancelled || merged.cancelled)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // What moved is counted; the rest (outside and merge) stays where it was.
+                outside.copy(moved = outside.moved + moved.size, failed = outside.failed + 1)
+            } finally {
+                flusher.cancel()
+                withContext(NonCancellable) { flushLines() }
+            }
+            homeOutside = emptyList()
+            host.scanNow(home, then = { showHomeSummary(s.summary, result) })
+        }
     }
 
     /** A move's progress, on the summary page while it shows. */

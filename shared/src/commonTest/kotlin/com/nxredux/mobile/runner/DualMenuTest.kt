@@ -15,8 +15,8 @@ class DualMenuTest {
     }
 
     @Test fun panel_modes_put_the_menu_in_the_panel() {
-        for (mode in listOf(DualMode.PANEL, DualMode.PANEL_UP)) for (picture in PictureOn.entries) {
-            assertEquals(MenuHost.PANEL, DualMenu.menuHost(mode, panelShown = true), "$mode $picture")
+        for (mode in listOf(DualMode.PANEL, DualMode.PANEL_UP)) {
+            assertEquals(MenuHost.PANEL, DualMenu.menuHost(mode, panelShown = true), "$mode")
         }
     }
 
@@ -25,7 +25,7 @@ class DualMenuTest {
     }
 
     @Test fun ds_split_keeps_the_menu_over_the_picture() {
-        for (picture in PictureOn.entries) assertEquals(MenuHost.PICTURE, DualMenu.menuHost(DualMode.SPLIT, panelShown = false))
+        assertEquals(MenuHost.PICTURE, DualMenu.menuHost(DualMode.SPLIT, panelShown = false))
     }
 
     @Test fun a_new_second_window_is_a_new_placement() {

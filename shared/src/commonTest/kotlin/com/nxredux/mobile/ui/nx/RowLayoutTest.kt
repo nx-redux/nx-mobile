@@ -265,9 +265,6 @@ class RowLayoutTest {
         assertEquals(stackCaptionRows(details), carouselCaptionRows("Name", details, gameList = true))
         assertEquals(emptyList(), carouselCaptionRows(null, details, gameList = true))
         assertEquals(emptyList(), carouselCaptionRows("Name", emptyList(), gameList = true))
-        // Any other Carousel's (the main menu's, its stats under the name): the time and count, then the next goal.
-        val info = listOf(InfoLine(InfoKind.TIME, "Today - 1h"), InfoLine(InfoKind.ACHIEVEMENTS, "3 of 10"), InfoLine(InfoKind.NEXT, "Next: First"))
-        assertEquals(listOf(info.take(2), info.drop(2)), carouselCaptionRows("Name", info))
     }
 
     // A game list's horizontal Carousel: the time and achievements in the picture, the game's details under its name.

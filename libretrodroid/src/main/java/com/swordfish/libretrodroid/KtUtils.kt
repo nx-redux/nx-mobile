@@ -31,25 +31,16 @@ object KtUtils {
         }
     }
 
-    private fun isUIThread(): Boolean {
-        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            Looper.getMainLooper().isCurrentThread
-        } else {
-            Thread.currentThread() == Looper.getMainLooper().thread
-        }
-    }
+    private fun isUIThread(): Boolean = Looper.getMainLooper().isCurrentThread
 
     fun CountDownLatch.awaitUninterruptibly() {
-        try {
-            while (true) {
-                try {
-                    await()
-                    return
-                } catch (e: InterruptedException) {
+        while (true) {
+            try {
+                await()
+                return
+            } catch (e: InterruptedException) {
 
-                }
             }
-        } finally {
         }
     }
 

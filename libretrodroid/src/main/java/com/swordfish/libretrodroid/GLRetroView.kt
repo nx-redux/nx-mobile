@@ -17,7 +17,6 @@
 
 package com.swordfish.libretrodroid
 
-import android.app.ActivityManager
 import android.content.Context
 import android.graphics.PointF
 import android.graphics.RectF
@@ -181,11 +180,6 @@ class GLRetroView(
         val width = value.width()
         val height = value.height()
         queueEvent { LibretroDroid.setViewport(left, top, width, height) }
-    }
-
-    /** Applied on the emulation thread, which owns the native Video. */
-    var viewportAlignment: ViewportAlignment by Delegates.observable(ViewportAlignment.CENTER) { _, _, value ->
-        queueEvent { LibretroDroid.setViewportAlignment(value.value) }
     }
 
     /** Applied on the emulation thread; takes effect on the next rendered (or paused-redrawn) frame. */
@@ -352,8 +346,6 @@ class GLRetroView(
     @Volatile
     var afterStep: (() -> Unit)? = null
 
-    private val openGLESVersion: Int
-
     private var isGameLoaded = false
     private var isEmulationReady = false
     private var isAborted = false
@@ -397,11 +389,10 @@ class GLRetroView(
     private var lifecycle: Lifecycle? = null
 
     init {
-        openGLESVersion = getGLESVersion(context)
         // debug.nx.keepcontext=0 gives the context up at every pause: a lost context on demand, for checking that the
         // picture comes back (a phone otherwise keeps it through Home, screen off and a memory trim).
         preserveEGLContextOnPause = LibretroDroid.keepsContextOnPause()
-        setEGLContextClientVersion(openGLESVersion)
+        setEGLContextClientVersion(3)
         setRenderer(Renderer())
         // No keepScreenOn here: the host's window decides (nx-mobile's GameActivity holds the screen on while the game
         // runs, not under its in-game menu). A view's own flag would hold it whatever the window says.
@@ -425,23 +416,17 @@ class GLRetroView(
         LibretroDroid.setKeepCoreLoaded(data.keepCoreLoaded)
         LibretroDroid.setUsername(data.username)
         LibretroDroid.create(
-            openGLESVersion,
             data.coreFilePath,
             data.systemDirectory,
             data.savesDirectory,
             data.variables,
             buildShader(shader),
             getDefaultRefreshRate(),
-            data.preferLowLatencyAudio,
             data.gameVirtualFiles.isNotEmpty() || data.extraVirtualFiles.isNotEmpty(),
             data.enableMicrophone,
-            data.skipDuplicateFrames,
-            data.immersiveMode,
             getDeviceLanguage()
         )
         LibretroDroid.setRumbleEnabled(data.rumbleEventsEnabled)
-        val alignment = data.viewportAlignment.value
-        queueEvent { LibretroDroid.setViewportAlignment(alignment) }
         reapplyDisplaySettings()
         pushFastForward()
         pushRewind()
@@ -836,10 +821,6 @@ class GLRetroView(
      */
     fun getAchievementServerCalls(): Flow<AchievementServerCall> = achievementServerCalls.receiveAsFlow()
 
-    fun getControllers(): Array<Array<Controller>> {
-        return LibretroDroid.getControllers()
-    }
-
     fun setControllerType(port: Int, type: Int) {
         LibretroDroid.setControllerType(port, type)
     }
@@ -886,15 +867,6 @@ class GLRetroView(
 
     fun changeDisk(index: Int, useEmulationThread: Boolean = true) {
         runOnEmulationThread(useEmulationThread) { LibretroDroid.changeDisk(index) }
-    }
-
-    private fun getGLESVersion(context: Context): Int {
-        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        return if (activityManager.deviceConfigurationInfo.reqGlEsVersion >= 0x30000) {
-            3
-        } else {
-            2
-        }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
@@ -1118,79 +1090,8 @@ class GLRetroView(
                 LibretroDroid.SHADER_DEFAULT,
                 if (config.linear) emptyMap() else mapOf(LibretroDroid.SHADER_DEFAULT_PARAM_LINEAR to "0"),
             )
-            is ShaderConfig.CRT -> GLRetroShader(LibretroDroid.SHADER_CRT)
-            is ShaderConfig.LCD -> GLRetroShader(LibretroDroid.SHADER_LCD)
             is ShaderConfig.Sharp -> GLRetroShader(LibretroDroid.SHADER_SHARP)
-            is ShaderConfig.CUT -> GLRetroShader(
-                LibretroDroid.SHADER_UPSCALE_CUT,
-                buildParams(
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_USE_DYNAMIC_BLEND to toParam(config.useDynamicBlend),
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_BLEND_MIN_CONTRAST_EDGE to toParam(config.blendMinContrastEdge),
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_BLEND_MAX_CONTRAST_EDGE to toParam(config.blendMaxContrastEdge),
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_BLEND_MIN_SHARPNESS to toParam(config.blendMinSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_BLEND_MAX_SHARPNESS to toParam(config.blendMaxSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_STATIC_BLEND_SHARPNESS to toParam(config.staticSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_EDGE_USE_FAST_LUMA to toParam(config.edgeUseFastLuma),
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_EDGE_MIN_VALUE to toParam(config.edgeMinValue),
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_EDGE_MIN_CONTRAST to toParam(config.edgeMinContrast),
-                )
-            )
-
-            is ShaderConfig.CUT2 -> GLRetroShader(
-                LibretroDroid.SHADER_UPSCALE_CUT2,
-                buildParams(
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_USE_DYNAMIC_BLEND to toParam(config.useDynamicBlend),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_BLEND_MIN_CONTRAST_EDGE to toParam(config.blendMinContrastEdge),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_BLEND_MAX_CONTRAST_EDGE to toParam(config.blendMaxContrastEdge),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_BLEND_MIN_SHARPNESS to toParam(config.blendMinSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_BLEND_MAX_SHARPNESS to toParam(config.blendMaxSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_STATIC_BLEND_SHARPNESS to toParam(config.staticSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_EDGE_USE_FAST_LUMA to toParam(config.edgeUseFastLuma),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_SOFT_EDGES_SHARPENING to toParam(config.softEdgesSharpening),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_SOFT_EDGES_SHARPENING_AMOUNT to toParam(config.softEdgesSharpeningAmount),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_HARD_EDGES_SEARCH_MAX_ERROR to toParam(config.hardEdgesSearchMaxError),
-                )
-            )
-
-            is ShaderConfig.CUT3 -> GLRetroShader(
-                LibretroDroid.SHADER_UPSCALE_CUT3,
-                buildParams(
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_USE_DYNAMIC_BLEND to toParam(config.useDynamicBlend),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_BLEND_MIN_CONTRAST_EDGE to toParam(config.blendMinContrastEdge),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_BLEND_MAX_CONTRAST_EDGE to toParam(config.blendMaxContrastEdge),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_BLEND_MIN_SHARPNESS to toParam(config.blendMinSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_BLEND_MAX_SHARPNESS to toParam(config.blendMaxSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_STATIC_BLEND_SHARPNESS to toParam(config.staticSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_EDGE_USE_FAST_LUMA to toParam(config.edgeUseFastLuma),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_SOFT_EDGES_SHARPENING to toParam(config.softEdgesSharpening),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_SOFT_EDGES_SHARPENING_AMOUNT to toParam(config.softEdgesSharpeningAmount),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_HARD_EDGES_SEARCH_MAX_ERROR to toParam(config.hardEdgesSearchMaxError),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_HARD_EDGES_SEARCH_MAX_DISTANCE to toParam(config.hardEdgesSearchMaxDistance),
-                )
-            )
         }
-    }
-
-    private fun toParam(param: Float): String {
-        return param.toString()
-    }
-
-    private fun toParam(param: Boolean): String {
-        return if (param) {
-            "1"
-        } else {
-            "0"
-        }
-    }
-
-    private fun toParam(param: Int): String {
-        return param.toString()
-    }
-
-    private fun buildParams(vararg pairs: Pair<String, String?>): Map<String, String> {
-        return pairs
-            .filter { (key, value) -> value != null }
-            .associate { (key, value) -> key to value!! }
     }
 
     /** This function gets called from the jni side.*/

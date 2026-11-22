@@ -54,8 +54,6 @@ object NxTextSizes {
     val hint: TextUnit = (HINT_GLYPH_SIZE.value * HINT_OF_GLYPH).sp
     /** A pad label drawn as a badge on a disc [disc] across. */
     fun badge(disc: Dp): TextUnit = (disc.value * BADGE_OF_DISC).sp
-    /** A pad button's small label (SELECT, START, the shoulders), the same on every screen, in the menu and in game. */
-    val padLabel: TextUnit = 12.sp
     /** The game info line (the List's band, the Game Switcher's). */
     val gameInfo: TextUnit = 14.sp
     /** A modal's body text: a text field, a popup list's rows, the Game Settings title. */
@@ -72,9 +70,6 @@ object NxTextSizes {
     /** The in-game options page's info area and its line height. */
     val menuInfo: TextUnit = 13.sp
     val menuInfoLine: TextUnit = 17.sp
-    /** The same in portrait, smaller so another row fits above the on-screen pad. */
-    val menuInfoPortrait: TextUnit = 11.sp
-    val menuInfoLinePortrait: TextUnit = 14.sp
 
     /** The in-game notices (toasts, the progress pill). */
     val notice: TextUnit = 15.sp

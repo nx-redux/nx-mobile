@@ -110,7 +110,7 @@ internal class AppsController(
      * stopping at the first and last tile. The drawer: A opens the selected app, MENU its menu, B back to Tools. The
      * games picker: A puts the app in the console or takes it out, B back to Library on its row.
      */
-    fun onToolAppsButton(s: Screen.ToolApps, button: NxButton) {
+    fun onToolAppsButton(button: NxButton) {
         when (button) {
             NxButton.UP, NxButton.DOWN, NxButton.LEFT, NxButton.RIGHT -> {
                 val sel = selection.value

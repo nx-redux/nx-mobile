@@ -9,7 +9,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -79,7 +78,7 @@ internal fun Modifier.captionTap(): Modifier {
  * The selected item's info on one line (gameInfoLines' segments in order: the time, the achievements with the trophy,
  * the next goal), in grey, joined by [INFO_SEPARATOR], with a shadow so it reads over art (the band's fade,
  * [GameInfoBand], sits behind). One text, the trophy inline, so the whole line ellipsizes at its end: never wraps and no
- * segment overflows another. [alignEnd]: right-aligned (beside a band's arrows).
+ * segment overflows another. [alignEnd]: right-aligned (a List band's).
  */
 @Composable
 private fun GameInfoBlock(lines: List<InfoLine>, alignEnd: Boolean, modifier: Modifier = Modifier, scale: Float = 1f) {
@@ -416,9 +415,8 @@ internal fun Modifier.nxTopBandFade(ground: Color): Modifier = nxEasedFade(groun
 
 internal const val TOP_BAND_POWER = 3.5f
 
-/** The room a band keeps for the scroll arrow pair, so the text never moves: two arrows and the 1 dp between them. */
-private val ARROW_SLOT = NxScrollArrowWidth * 2 + 1.dp
-private val ARROW_GAP = 12.dp   // between the arrows' room and the text
+/** The room a List band keeps clear at the row labels' start: its text ellipsizes before it. */
+private val BAND_LEAD = 69.dp
 
 /**
  * The info line's height: the info style's text (merged into LocalTextStyle, as Text does), or the trophy when taller.
@@ -452,15 +450,14 @@ fun GameInfoBand(lines: List<InfoLine>, modifier: Modifier = Modifier, edgeAlpha
  * The List's info band ([InfoBand] [band], fixed just above the hints, its bottom [InfoBand.overlap] inside the bar):
  * the selected item's [lines], one line centred in it ([BAND_PAD] above and below). Its fill is the background, fading
  * linearly in from nothing at the band's top to [NX_HINT_BAR_ALPHA], held solid over the last [BAND_SOLID] down to the
- * bar's edge, and nothing over the bar itself (its own fill shows). [arrows] (the list's scroll arrow pair): centred on
- * the line, packed flush left at [arrowStart] (where row labels start: [nxListInset], or the main menu's gutter), in a
- * fixed room so the text never moves. The text is right-aligned at the screen gutter (16 dp portrait, 24 dp landscape)
- * and may use all the width back to the arrows, ellipsizing only there. "N games" stays the info grey.
+ * bar's edge, and nothing over the bar itself (its own fill shows). The text is right-aligned at the screen gutter
+ * (16 dp portrait, 24 dp landscape) and may use all the width back to [BAND_LEAD] past [textStart] (where row labels
+ * start: [nxListInset], or the main menu's gutter), ellipsizing only there. "N games" stays the info grey.
  * [shade] false (the main menu's Consoles List) draws no fill at all, neither the fade nor the solid one of
- * [BandGround.NONE]: the arrows (and any [lines]) sit on the page as it is. The band's height is unchanged, so rows never move.
+ * [BandGround.NONE]: any [lines] sit on the page as it is. The band's height is unchanged, so rows never move.
  */
 @Composable
-private fun ListInfoBand(lines: List<InfoLine>, band: InfoBand, arrows: @Composable () -> Unit, arrowStart: Dp, ground: BandGround, shade: Boolean) {
+private fun ListInfoBand(lines: List<InfoLine>, band: InfoBand, textStart: Dp, ground: BandGround, shade: Boolean) {
     val colors = LocalNxColors.current
     val inset = nxPageInset()
     Box(Modifier.fillMaxWidth().height(band.height.dp)) {
@@ -470,12 +467,10 @@ private fun ListInfoBand(lines: List<InfoLine>, band: InfoBand, arrows: @Composa
         else if (ground == BandGround.NONE) Box(Modifier.fillMaxSize().nxVerticalFade(colors.background, NX_HINT_BAR_ALPHA, hold = band.height.dp - BAND_PAD))
         else Box(Modifier.fillMaxWidth().height((band.height - band.overlap).dp).nxVerticalFade(colors.background, NX_HINT_BAR_ALPHA, hold = BAND_SOLID))
         Row(
-            Modifier.fillMaxSize().padding(start = arrowStart, end = inset.end, top = BAND_PAD, bottom = BAND_PAD),
+            Modifier.fillMaxSize().padding(start = textStart + BAND_LEAD, end = inset.end, top = BAND_PAD, bottom = BAND_PAD),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.width(ARROW_SLOT), contentAlignment = Alignment.CenterStart) { arrows() }   // a lone arrow takes the first place
-            Spacer(Modifier.width(ARROW_GAP))
-            // The info on its own line in the bar's row instead ([BarInfoLine]): the band keeps the arrows alone.
+            // The info on its own line in the bar's row instead ([BarInfoLine]): the band stays empty.
             if (ground != BandGround.SHADE_WITH_INFO) Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { GameInfoBlock(lines, alignEnd = true) }
         }
     }
@@ -511,14 +506,14 @@ internal fun SwitcherBarInfoLine(lines: List<InfoLine>, modifier: Modifier) {
 
 /**
  * Places the selected item's [info] around a List-style [scaffold] (an NxScreenScaffold), on a one-line band
- * ([nxInfoBandGeometry]) fixed just above the hints, reaching into the bar's empty top and holding the list's scroll
- * arrows (the [NxHintsBand] handed to [scaffold]). The band has one height everywhere, so the list's rows never move;
+ * ([nxInfoBandGeometry]) fixed just above the hints, reaching into the bar's empty top (the [NxHintsBand] handed to
+ * [scaffold]). The band has one height everywhere, so the list's rows never move;
  * the list ends at the band's [InfoBand.reserve] in both orientations. [info] is read only inside the band, so a new
- * selection's info recomposes the band alone. [textStart]: where the list's row labels start (the band's arrows start
- * there too). [ground]: what is under the band's bottom ([BandGround]); with [BandGround.SHADE_WITH_INFO] the info goes
+ * selection's info recomposes the band alone. [textStart]: where the list's row labels start. [ground]: what is under
+ * the band's bottom ([BandGround]); with [BandGround.SHADE_WITH_INFO] the info goes
  * to the band's [NxHintsBand.barInfo], drawn in the bar's row.
  * [shade] false (the main menu's Consoles List, decided by its caller) leaves the band unfilled; its
- * geometry and reserve stay the same, so the list's rows and the arrows keep their places.
+ * geometry and reserve stay the same, so the list's rows keep their places.
  */
 @Composable
 internal fun GameInfoPlacement(
@@ -528,8 +523,8 @@ internal fun GameInfoPlacement(
     // Touch only, the band reaches into no bar, unless the bar's row is kept for the info ([BandGround.SHADE_WITH_INFO]).
     val geometry = nxInfoBandGeometry(infoLineHeight().value, NxHintInkTop.value, touch = touchOnly() && ground != BandGround.SHADE_WITH_INFO)
     val barInfo: (@Composable () -> Unit)? = if (ground == BandGround.SHADE_WITH_INFO) { { BarInfoLine(info(), textStart) } } else null
-    val band = NxHintsBand(reserve = geometry.reserve.dp, overlap = geometry.overlap.dp, barInfo = barInfo) { arrows ->
-        ListInfoBand(info(), geometry, arrows, arrowStart = textStart, ground = ground, shade = shade)
+    val band = NxHintsBand(reserve = geometry.reserve.dp, overlap = geometry.overlap.dp, barInfo = barInfo) {
+        ListInfoBand(info(), geometry, textStart, ground = ground, shade = shade)
     }
     scaffold(modifier, band)
 }

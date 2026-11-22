@@ -24,7 +24,6 @@ namespace discfile {
 
 /** Registers the reader (null clears it). The pointee must outlive its use. */
 void setApi(const DiscApi* api);
-bool available();
 
 /** The disc behind [fd] (the caller keeps and closes it), through open_fd; an older core gets /proc/self/fd/<fd>. */
 void* open(int fd);

@@ -1,7 +1,7 @@
 # Device tests: Brick driver
 
-Mac-side Python 3 (stdlib only) driver for a TrimUI Brick (tg5040) on NX Redux, over adb. Design:
-`docs/superpowers/specs/2026-10-16-device-test-automation-design.md`. Safety rules: nx-redux `.dev/TESTING.md`.
+Mac-side Python 3 (stdlib only) driver for a TrimUI Brick (tg5040) on NX Redux, over adb. Safety rules:
+nx-redux `.dev/TESTING.md`.
 
 - `brick.py`: the `Brick(serial)` class.
 - `state_roundtrip_smoke.py`: Brick-only proof of the state recipes (`--serial`, `--out DIR` for screenshots + log).

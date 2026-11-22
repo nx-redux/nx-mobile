@@ -56,9 +56,6 @@ public:
     bool empty() const { return count_ == 0; }
     size_t count() const { return count_; }
 
-    /** The newest entry; the ring must not be empty. */
-    Entry newest() const;
-
     /** The k-th entry counting from the oldest (0 = oldest, count() - 1 = newest); k must be in range. */
     Entry at(int k) const;
 

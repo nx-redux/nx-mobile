@@ -99,7 +99,6 @@ endif()
 set(GWL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../cores/gba_wifi_link)
 
 add_library(libretrodroid SHARED
-        libretrodroidjni.h
         libretrodroidjni.cpp
         libretrodroid.h
         libretrodroid.cpp
@@ -114,8 +113,6 @@ add_library(libretrodroid SHARED
         gldebug.cpp
         logflag.h
         logflag.cpp
-        immersivemode.h
-        immersivemode.cpp
         videolayout.h
         videolayout.cpp
         screenregion.h
@@ -155,8 +152,6 @@ add_library(libretrodroid SHARED
         renderers/es3/framebufferrenderer.cpp
         renderers/es3/ahbrenderer.h
         renderers/es3/ahbrenderer.cpp
-        renderers/es2/imagerendereres2.h
-        renderers/es2/imagerendereres2.cpp
         renderers/es3/imagerendereres3.h
         renderers/es3/imagerendereres3.cpp
         audio.h

@@ -30,7 +30,6 @@
 #include "renderers/renderer.h"
 #include "shadermanager.h"
 #include "utils/rect.h"
-#include "immersivemode.h"
 #include "videolayout.h"
 #include "presetchain.h"
 #include "filtercache.h"
@@ -46,7 +45,6 @@ public:
         unsigned int height;
         bool useDepth;
         bool useStencil;
-        int openglESVersion;
         int pixelFormat;
         bool vulkanBridge = false;   // frames arrive as AHardwareBuffers (AhbRenderer)
     };
@@ -66,11 +64,7 @@ public:
         ShaderManager::Config shaderConfig,
         bool bottomLeftOrigin,
         float rotation,
-        bool skipDuplicateFrames,
-        bool immersiveMode,
-        Rect viewportRect,
-        ImmersiveMode::Config immersiveModeConfig,
-        unsigned int viewportAlignment
+        Rect viewportRect
     );
 
     // Deletes the GL objects when the context that made them is current; otherwise (no context, or a new one after
@@ -84,7 +78,6 @@ public:
     void updateAspectRatio(float aspectRatio);
     void updateScreenSize(unsigned screenWidth, unsigned screenHeight);
     void updateViewportSize(Rect viewportRect);
-    void updateViewportAlignment(unsigned int viewportAlignment);
     void updateRendererSize(unsigned width, unsigned height);
     void updateRotation(float rotation);
     void updateShaderType(ShaderManager::Config shaderConfig);
@@ -112,12 +105,11 @@ public:
     void updateSecondaryRegions(std::vector<ScreenRegion> regions);
 
     // Draws the last frame's secondary regions into the bound default framebuffer, width x height, shielding a GL core's
-    // state as renderFrame does. Never runs the core nor touches the main output's state (dirty flag, frame count,
-    // layout, preset FBOs). Black when there are no secondary regions or no frame yet.
+    // state as renderFrame does. Never runs the core nor touches the main output's state (frame count, layout,
+    // preset FBOs). Black when there are no secondary regions or no frame yet.
     void renderSecondary(unsigned width, unsigned height);
 
-    // force: draw even when skipDuplicateFrames would skip an unchanged frame.
-    void renderFrame(bool force = false);
+    void renderFrame();
 
     // Redraws the last frame while the core is paused, shielding the core's GL state it doesn't expect changed.
     void renderPausedFrame();
@@ -152,7 +144,7 @@ public:
     void updatePresetRenderer();
 
 private:
-    void drawFrame(bool force);
+    void drawFrame();
     void updateProgram();
 
     float getScreenDensity(float screenWidth, float screenHeight);
@@ -205,14 +197,11 @@ private:
     };
     std::optional<ShaderManager::Config> loadedShaderType = std::nullopt;
 
-    bool isDirty = false;
     bool pictureHeld = false;
-    bool skipDuplicateFrames = false;
     bool linearTexture = true;
 
     std::vector<ShaderChainEntry> shadersChain;
 
-    bool presetSupported = true;
     std::optional<PresetChain> requestedPreset;
     bool presetDirty = false;
     std::unique_ptr<ChainRenderer> presetRenderer;
@@ -246,8 +235,6 @@ private:
     void composeFrame();
     void releaseComposition();
 
-    bool immersiveModeEnabled = false;
-    ImmersiveMode immersiveMode;
     VideoLayout videoLayout;
 
     // The second surface: its own layout (viewport = the whole surface) and its own preset chain instance, so its

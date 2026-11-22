@@ -16,7 +16,6 @@ import com.nxredux.mobile.ui.nx.valueHints
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.NxSettingsPage
-import com.nxredux.mobile.ui.nx.control
 
 private val LIST_HINTS = listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Select"))
 
@@ -136,18 +135,6 @@ internal val EMULATOR_RESET_ASK = SettingsResetAsk(
 /** Use emulator settings' line (what A does) and its fuller text. */
 internal const val USE_EMULATOR_SETTINGS_INFO = "Deletes this game's own settings"
 internal const val USE_EMULATOR_SETTINGS_DETAIL = "Delete this game's settings, so it follows the emulator's again"
-
-internal fun emulatorNxRow(row: EmulatorRow): NxRow = when (row) {
-    is EmulatorRow.Header -> NxRow(row.label, section = true)   // a group's label: grey, never selected
-    EmulatorRow.UseEmulatorSettings -> NxRow("Use emulator settings")
-    EmulatorRow.ResetDefaults -> NxRow(RESET_DEFAULTS_LABEL)
-    is EmulatorRow.Console -> NxRow(row.row.option.label, enabled = row.row.disabledNote == null, secondary = row.row.disabledNote ?: row.row.option.labelOf(row.row.value), cycleable = row.row.disabledNote == null)
-    is EmulatorRow.Core -> NxRow(CoreOptionFilter.rowLabel(row.option, row.inCategory), secondary = CoreOptionFilter.valueLabel(row.option), cycleable = true)
-    is EmulatorRow.Category -> NxRow(row.label, secondary = "›")
-    is EmulatorRow.Notice -> NxRow(row.text)
-    EmulatorRow.Gap -> NxRow("", spacer = true)
-    is EmulatorRow.App -> settingsNxRow(row.row)
-}
 
 /** "<emulator> — <console> (<TAG>)", or the game's name for Game Settings; an open category is appended. */
 internal fun emulatorOptionsTitle(s: Screen.EmulatorOptions): String {

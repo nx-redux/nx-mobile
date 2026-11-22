@@ -46,7 +46,6 @@
 #include "environment.h"
 #include "corelog.h"
 #include "renderers/es3/framebufferrenderer.h"
-#include "renderers/es2/imagerendereres2.h"
 #include "renderers/es3/imagerendereres3.h"
 #include "utils/utils.h"
 #include "utils/rect.h"
@@ -163,10 +162,6 @@ void LibretroDroid::updateVariable(const Variable& variable) {
 
 std::vector<Variable> LibretroDroid::getVariables() {
     return Environment::getInstance().getVariables();
-}
-
-std::vector<std::vector<struct Controller>> LibretroDroid::getControllers() {
-    return Environment::getInstance().getControllers();
 }
 
 void LibretroDroid::setControllerType(unsigned int port, unsigned int type) {
@@ -301,7 +296,6 @@ void LibretroDroid::onSurfaceCreated() {
         system_av_info.geometry.base_height,
         Environment::getInstance().isUseDepth(),
         Environment::getInstance().isUseStencil(),
-        openglESVersion,
         Environment::getInstance().getPixelFormat(),
         vulkan
     };
@@ -312,11 +306,7 @@ void LibretroDroid::onSurfaceCreated() {
         fragmentShaderConfig,
         Environment::getInstance().isBottomLeftOrigin(),
         Environment::getInstance().getScreenRotation(),
-        skipDuplicateFrames,
-        immersiveModeEnabled,
-        viewportRect,
-        immersiveModeConfig,
-        viewportAlignment
+        viewportRect
     );
 
     video = std::unique_ptr<Video>(newVideo);
@@ -395,18 +385,14 @@ void LibretroDroid::onKeyEvent(unsigned int port, int action, int keyCode) {
 }
 
 void LibretroDroid::create(
-    unsigned int GLESVersion,
     const std::string& soFilePath,
     const std::string& systemDir,
     const std::string& savesDir,
     std::vector<Variable> variables,
     const ShaderManager::Config& shaderConfig,
     float refreshRate,
-    bool lowLatencyAudio,
     bool enableVirtualFileSystem,
     bool enableMicrophone,
-    bool duplicateFrames,
-    std::optional<ImmersiveMode::Config> immersiveModeConfig,
     const std::string& language
 ) {
     LOGD("Performing libretrodroid create");
@@ -462,11 +448,7 @@ void LibretroDroid::create(
     vulkanDriverTmpDir.clear();
     Environment::getInstance().setPreferVulkan(offerVulkan);
 
-    openglESVersion = GLESVersion;
     screenRefreshRate = refreshRate;
-    skipDuplicateFrames = duplicateFrames;
-    immersiveModeEnabled = GLESVersion >= 3 && immersiveModeConfig.has_value();
-    this->immersiveModeConfig = immersiveModeConfig.value_or(ImmersiveMode::Config{});
     audioEnabled = true;
     frameSpeed = 1;
     // A new view starts without FF; GLRetroView re-applies its own value right after create().
@@ -519,12 +501,6 @@ void LibretroDroid::create(
     core->retro_init();
     coreInitialized = true;
     lock.unlock();
-
-    preferLowLatencyAudio = lowLatencyAudio;
-
-    if (Environment::getInstance().isUseHwAcceleration() && openglESVersion < 3) {
-        throw LibretroDroidError("OpenGL ES 3 is required for this Core", ERROR_GL_NOT_COMPATIBLE);
-    }
 
     fragmentShaderConfig = shaderConfig;
 
@@ -1441,7 +1417,6 @@ void LibretroDroid::afterGameLoad() {
     audio = std::make_unique<Audio>(
         (int32_t) std::lround(inputSampleRate),
         fps,
-        preferLowLatencyAudio,
         audioBufferMs.load()
     );
     audio->setResamplingQuality(resamplingQuality.load());
@@ -1481,11 +1456,6 @@ std::vector<AchievementInfo> LibretroDroid::achievementsList() {
     return Achievements::getInstance().list();
 }
 
-AchievementSummary LibretroDroid::achievementsSummary() {
-    std::lock_guard<std::mutex> lock(coreLock);
-    return Achievements::getInstance().summary();
-}
-
 float LibretroDroid::findDefaultAspectRatio(const retro_system_av_info& system_av_info) {
     float result = system_av_info.geometry.aspect_ratio;
     // libretro: an aspect_ratio <= 0 means base_width / base_height (gearcoleco's default "1:1 PAR" reports 0).
@@ -1507,14 +1477,6 @@ void LibretroDroid::setViewport(Rect viewportRect) {
 
     if (video != nullptr) {
         video->updateViewportSize(viewportRect);
-    }
-}
-
-void LibretroDroid::setViewportAlignment(unsigned int viewportAlignment) {
-    this-> viewportAlignment = viewportAlignment;
-
-    if (video) {
-        this->video->updateViewportAlignment(viewportAlignment);
     }
 }
 

@@ -29,9 +29,6 @@ class FakeRomsSource(
 
     private fun refuses(path: String) = !writable || readOnly.any { path == it || path.startsWith("$it/") }
 
-    /** The folder listings as they are now, to build another source over the same tree. */
-    fun snapshotDirs(): Map<String, List<String>> = dirs.mapValues { it.value.toList() }
-
     /** A file's reported size, by path (default 1), so a test can change a file without changing its bytes. */
     val sizes = HashMap<String, Long>()
 

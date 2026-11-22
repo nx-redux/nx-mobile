@@ -341,7 +341,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
             else -> emptyList()
         }
         if (off.isNotEmpty()) host.retroView?.let { view ->
-            view.queueEvent { runCatching { view.updateVariables(*off.toTypedArray()) }.onFailure { NxLog.w("GameActivity", "ending the link failed", it) } }
+            view.queueEvent { runCatching { view.updateVariables(*off.toTypedArray()) }.onFailure { NxLog.w(TAG_LOG, "ending the link failed", it) } }
         }
         linkEnded()
     }

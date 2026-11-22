@@ -17,7 +17,6 @@
 
 #include "videolayout.h"
 #include "log.h"
-#include "presetchain.h"
 
 #include <algorithm>
 #include <cmath>
@@ -26,19 +25,16 @@
 
 namespace libretrodroid {
 
-VideoLayout::VideoLayout(bool bottomLeftOrigin, float rotation, Rect viewportRect, unsigned int viewportAlignment) :
+VideoLayout::VideoLayout(bool bottomLeftOrigin, float rotation, Rect viewportRect) :
     bottomLeftOrigin(bottomLeftOrigin),
     rotation(rotation),
-    viewportRect(viewportRect),
-    viewportAlignment(viewportAlignment)
+    viewportRect(viewportRect)
 {
     updateBuffers();
 }
 
 void VideoLayout::updateBuffers() {
     updateForegroundVertices();
-    updateBackgroundVertices();
-    updateRelativeForegroundBounds();
     updateRegionQuads();
 }
 
@@ -85,18 +81,6 @@ void VideoLayout::updateForegroundVertices() {
 
     float viewportXOffset = (viewportRect.getX() * 2.0f) - (1.0F - viewportRect.getWidth());
     float viewportYOffset = (viewportRect.getY() * 2.0f) - (1.0F - viewportRect.getHeight());
-
-    float emptyVerticalSpace = viewportRect.getHeight() - scaleY;
-    switch (viewportAlignment) {
-        case V_ALIGN_TOP:
-            viewportYOffset -= emptyVerticalSpace;
-            break;
-        case V_ALIGN_BOTTOM:
-            viewportYOffset += emptyVerticalSpace;
-            break;
-        case V_ALIGN_CENTER:
-            break;
-    }
 
     // Screen offset in pixels (positive = right / down), applied after scaling: the picture may leave the viewport.
     float offsetX = screenWidth > 0 ? 2.0F * screenOffsetX / (float) screenWidth : 0.0F;
@@ -149,45 +133,6 @@ void VideoLayout::updateForegroundVertices() {
     foregroundVertices[11] = rotatedQuad[3][1];
 }
 
-void VideoLayout::updateBackgroundVertices() {
-    float cosTheta = cos(-rotation);
-    float sinTheta = sin(-rotation);
-
-    float uv[4][2] = {
-        { -1.0F, bottomLeftOrigin ? -1.0F : +1.0F },
-        { -1.0F, bottomLeftOrigin ? +1.0F : -1.0F },
-        { +1.0F, bottomLeftOrigin ? -1.0F : +1.0F },
-        { +1.0F, bottomLeftOrigin ? +1.0F : -1.0F }
-    };
-
-    float rotatedQuad[4][2];
-    for (int i = 0; i < 4; i++) {
-        float u = uv[i][0];
-        float v = uv[i][1];
-
-        rotatedQuad[i][0] = u * cosTheta - v * sinTheta;
-        rotatedQuad[i][1] = u * sinTheta + v * cosTheta;
-    }
-
-    backgroundVertices[0] = rotatedQuad[0][0];
-    backgroundVertices[1] = rotatedQuad[0][1];
-
-    backgroundVertices[2] = rotatedQuad[1][0];
-    backgroundVertices[3] = rotatedQuad[1][1];
-
-    backgroundVertices[4] = rotatedQuad[2][0];
-    backgroundVertices[5] = rotatedQuad[2][1];
-
-    backgroundVertices[6] = rotatedQuad[2][0];
-    backgroundVertices[7] = rotatedQuad[2][1];
-
-    backgroundVertices[8] = rotatedQuad[1][0];
-    backgroundVertices[9] = rotatedQuad[1][1];
-
-    backgroundVertices[10] = rotatedQuad[3][0];
-    backgroundVertices[11] = rotatedQuad[3][1];
-}
-
 void libretrodroid::VideoLayout::updateAspectRatio(float aspectRatio) {
     LOGD("Updated aspect ratio to : %f", aspectRatio);
 
@@ -213,13 +158,6 @@ void libretrodroid::VideoLayout::updateViewportSize(Rect viewport) {
     );
 
     this->viewportRect = viewport;
-    updateBuffers();
-}
-
-void VideoLayout::updateViewportAlignment(unsigned int viewportAlignment) {
-    LOGD("Updated viewport alignment to : %d", viewportAlignment);
-
-    this->viewportAlignment = viewportAlignment;
     updateBuffers();
 }
 
@@ -278,37 +216,6 @@ std::pair<float, float> VideoLayout::getRelativePosition(float touchX, float tou
     LOGD("Computed relative touch position: %.2f, %.2f", relativeX, relativeY);
 
     return {relativeX, relativeY};
-}
-
-std::array<int, 4> VideoLayout::getForegroundRectPixels() {
-    return foregroundRect(foregroundVertices, (int) screenWidth, (int) screenHeight);
-}
-
-void VideoLayout::updateRelativeForegroundBounds() {
-    float xMin = std::numeric_limits<float>::max();
-    float xMax = std::numeric_limits<float>::lowest();
-    float yMin = std::numeric_limits<float>::max();
-    float yMax = std::numeric_limits<float>::lowest();
-
-    for (size_t i = 2; i < foregroundVertices.size(); i += 2) {
-        xMin = std::min(xMin, foregroundVertices[i]);
-        xMax = std::max(xMax, foregroundVertices[i]);
-        yMin = std::min(yMin, (bottomLeftOrigin ? 1.0F : -1.0F) * foregroundVertices[i + 1]);
-        yMax = std::max(yMax, (bottomLeftOrigin ? 1.0F : -1.0F) * foregroundVertices[i + 1]);
-    }
-
-    relativeForegroundBounds[0] = (xMin + 1.0F) / 2.0F;
-    relativeForegroundBounds[1] = (yMin + 1.0F) / 2.0F;
-    relativeForegroundBounds[2] = (xMax + 1.0F) / 2.0F;
-    relativeForegroundBounds[3] = (yMax + 1.0F) / 2.0F;
-
-    LOGD(
-        "Computed relative foreground bounds: (%.2f, %.2f, %.2f, %.2f)",
-        relativeForegroundBounds[0],
-        relativeForegroundBounds[1],
-        relativeForegroundBounds[2],
-        relativeForegroundBounds[3]
-    );
 }
 
 void VideoLayout::updateScreenRegions(std::vector<ScreenRegion> regions) {

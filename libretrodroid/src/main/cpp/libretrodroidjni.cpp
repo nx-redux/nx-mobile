@@ -48,7 +48,6 @@
 #include "errorcodes.h"
 #include "environment.h"
 #include "renderers/es3/framebufferrenderer.h"
-#include "renderers/es2/imagerendereres2.h"
 #include "renderers/es3/imagerendereres3.h"
 #include "utils/jnistring.h"
 #include "vulkanbridge.h"
@@ -356,38 +355,6 @@ JNIEXPORT jobjectArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_ge
     return result;
 }
 
-JNIEXPORT jobjectArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getControllers(
-    JNIEnv* env,
-    jclass obj
-) {
-    jclass arrayClass = env->FindClass("[Lcom/swordfish/libretrodroid/Controller;");
-    jclass controllerClass = env->FindClass("com/swordfish/libretrodroid/Controller");
-    jmethodID controllerConstructor = env->GetMethodID(controllerClass, "<init>", "()V");
-    jfieldID jIdField = env->GetFieldID(controllerClass, "id", "I");
-    jfieldID jDescriptionField = env->GetFieldID(controllerClass, "description", "Ljava/lang/String;");
-
-    auto controllers = Environment::getInstance().getControllers();
-    jobjectArray result = env->NewObjectArray(controllers.size(), arrayClass, nullptr);
-
-    for (int i = 0; i < controllers.size(); i++) {
-        jobjectArray controllerArray = env->NewObjectArray(controllers[i].size(), controllerClass, nullptr);
-
-        for (int j = 0; j < controllers[i].size(); j++) {
-            jobject jController = env->NewObject(controllerClass, controllerConstructor);
-            env->SetIntField(jController, jIdField, (int) controllers[i][j].id);
-            setStringField(env, jController, jDescriptionField, controllers[i][j].description);
-            env->SetObjectArrayElement(controllerArray, j, jController);
-            env->DeleteLocalRef(jController);
-        }
-
-        env->SetObjectArrayElement(result, i, controllerArray);
-        env->DeleteLocalRef(controllerArray);
-    }
-    env->DeleteLocalRef(controllerClass);
-    env->DeleteLocalRef(arrayClass);
-    return result;
-}
-
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setControllerType(
     JNIEnv* env,
     jclass obj,
@@ -514,17 +481,6 @@ JNIEXPORT jobjectArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_ac
         env->DeleteLocalRef(item); env->DeleteLocalRef(title); env->DeleteLocalRef(desc); env->DeleteLocalRef(badge); env->DeleteLocalRef(progress);
     }
     env->DeleteLocalRef(cls);
-    return out;
-}
-
-JNIEXPORT jintArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_achievementsSummary(
-    JNIEnv* env,
-    jclass obj
-) {
-    auto s = LibretroDroid::getInstance().achievementsSummary();
-    jint values[3] = { (jint) s.unlocked, (jint) s.total, (jint) s.points };
-    jintArray out = env->NewIntArray(3);
-    env->SetIntArrayRegion(out, 0, 3, values);
     return out;
 }
 
@@ -839,18 +795,14 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_onKeyEvent
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_create(
     JNIEnv* env,
     jclass obj,
-    jint GLESVersion,
     jstring soFilePath,
     jstring systemDir,
     jstring savesDir,
     jobjectArray jVariables,
     jobject shaderConfig,
     jfloat refreshRate,
-    jboolean preferLowLatencyAudio,
     jboolean enableVirtualFileSystem,
     jboolean enableMicrophone,
-    jboolean skipDuplicateFrames,
-    jobject immersiveMode,
     jstring language
 ) {
     try {
@@ -867,39 +819,15 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_create(
             env->DeleteLocalRef(jVariable);
         }
 
-        std::optional<ImmersiveMode::Config> parsedConfig = std::nullopt;
-        if (immersiveMode != nullptr) {
-            jclass configClass = env->GetObjectClass(immersiveMode);
-            jfieldID downscaledWidthField = env->GetFieldID(configClass, "downscaledWidth", "I");
-            jfieldID downscaledHeightField = env->GetFieldID(configClass, "downscaledHeight", "I");
-            jfieldID blurMaskSizeField = env->GetFieldID(configClass, "blurMaskSize", "I");
-            jfieldID blurBrightnessField = env->GetFieldID(configClass, "blurBrightness", "F");
-            jfieldID blurSkipUpdateField = env->GetFieldID(configClass, "blurSkipUpdate", "I");
-            jfieldID blendFactorField = env->GetFieldID(configClass, "blendFactor", "F");
-
-            ImmersiveMode::Config config {};
-            config.downscaledWidth = env->GetIntField(immersiveMode, downscaledWidthField);
-            config.downscaledHeight = env->GetIntField(immersiveMode, downscaledHeightField);
-            config.blurMaskSize = env->GetIntField(immersiveMode, blurMaskSizeField);
-            config.blurBrightness = env->GetFloatField(immersiveMode, blurBrightnessField);
-            config.blurSkipUpdate = env->GetIntField(immersiveMode, blurSkipUpdateField);
-            config.blendFactor = env->GetFloatField(immersiveMode, blendFactorField);
-            parsedConfig = config;
-        }
-
         LibretroDroid::getInstance().create(
-            GLESVersion,
             corePath.stdString(),
             systemDirectory.stdString(),
             savesDirectory.stdString(),
             variables,
             JavaUtils::shaderFromJava(env, shaderConfig),
             refreshRate,
-            preferLowLatencyAudio,
             enableVirtualFileSystem,
             enableMicrophone,
-            skipDuplicateFrames,
-            parsedConfig,
             deviceLanguage.stdString()
         );
 
@@ -1394,14 +1322,6 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setViewpor
     jfloat height
 ) {
     LibretroDroid::getInstance().setViewport(Rect(x, y, width, height));
-}
-
-JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setViewportAlignment(
-        JNIEnv* env,
-        jclass obj,
-        jint viewportAlignment
-) {
-    LibretroDroid::getInstance().setViewportAlignment(viewportAlignment);
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_refreshAspectRatio(

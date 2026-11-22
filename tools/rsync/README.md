@@ -13,7 +13,7 @@ The name ends in `.so` because Android extracts only `lib*.so` from an APK, and 
 at install (since Android 10 it cannot execute a file it wrote). androidApp therefore sets
 `packaging.jniLibs.useLegacyPackaging = true`, so every native library is compressed in the APK and extracted on install.
 
-Configure flags: the spec's `--disable-openssl --disable-xxhash --disable-zstd --disable-lz4 --disable-md2man`, plus
+Configure flags: `--disable-openssl --disable-xxhash --disable-zstd --disable-lz4 --disable-md2man`, plus
 `--with-included-popt --with-included-zlib --disable-iconv --disable-acl-support --disable-xattr-support` for the NDK
 sysroot, and cache answers for four run-time checks a cross build cannot run. Build time on an M-series Mac: about 21 s.
 

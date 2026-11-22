@@ -24,10 +24,6 @@
 #include "utils/rect.h"
 #include "screenregion.h"
 
-#define V_ALIGN_CENTER  0
-#define V_ALIGN_TOP     1
-#define V_ALIGN_BOTTOM  2
-
 #define SCALE_MODE_FIT      0
 #define SCALE_MODE_INTEGER  1
 #define SCALE_MODE_STRETCH  2
@@ -36,15 +32,13 @@ namespace libretrodroid {
 
 class VideoLayout {
 public:
-    VideoLayout(bool bottomLeftOrigin, float rotation, Rect viewportRect, unsigned int viewportAlignment);
+    VideoLayout(bool bottomLeftOrigin, float rotation, Rect viewportRect);
 
     void updateAspectRatio(float aspectRatio);
 
     void updateScreenSize(unsigned screenWidth, unsigned screenHeight);
 
     void updateViewportSize(Rect viewportRect);
-
-    void updateViewportAlignment(unsigned int viewportAlignment);
 
     void updateRotation(float rotation);
 
@@ -55,13 +49,8 @@ public:
     void updateContentSize(unsigned width, unsigned height);
 
     std::array<float, 12>& getForegroundVertices() { return foregroundVertices; }
-    std::array<float, 12>& getBackgroundVertices() { return backgroundVertices; }
     std::array<float, 12>& getFramebufferVertices() { return framebufferVertices; }
     std::array<float, 12>& getTextureCoordinates() { return textureCoordinates; }
-    std::array<float, 4>& getRelativeForegroundBounds() { return relativeForegroundBounds; }
-
-    // The foreground quad in window pixels (x, y from the bottom-left, w, h), for viewport-scaled shader passes.
-    std::array<int, 4> getForegroundRectPixels();
 
     int getScreenWidth() { return screenWidth; }
 
@@ -79,10 +68,6 @@ private:
     void updateBuffers();
 
     void updateForegroundVertices();
-
-    void updateBackgroundVertices();
-
-    void updateRelativeForegroundBounds();
 
     void updateRegionQuads();
 
@@ -127,26 +112,6 @@ private:
         1.0F,
     };
 
-    std::array<float, 12> backgroundVertices = {
-        -1.0F,
-        -1.0F,
-
-        -1.0F,
-        +1.0F,
-
-        +1.0F,
-        -1.0F,
-
-        +1.0F,
-        -1.0F,
-
-        -1.0F,
-        +1.0F,
-
-        +1.0F,
-        +1.0F,
-    };
-
     std::array<float, 12> framebufferVertices = {
         -1.0F,
         -1.0F,
@@ -167,13 +132,6 @@ private:
         +1.0F,
     };
 
-    std::array<float, 4> relativeForegroundBounds = {
-        +0.0F,
-        +0.0F,
-        +1.0F,
-        +1.0F,
-    };
-
     bool bottomLeftOrigin = false;
     float rotation = 0.0F;
     float aspectRatio = 1;
@@ -182,7 +140,6 @@ private:
     unsigned screenWidth = 0;
     unsigned screenHeight = 0;
 
-    unsigned viewportAlignment = V_ALIGN_CENTER;
     unsigned scaleMode = SCALE_MODE_FIT;
     float screenOffsetX = 0.0F;
     float screenOffsetY = 0.0F;

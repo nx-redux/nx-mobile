@@ -37,12 +37,11 @@ PATCH = git apply
 # soSha256 is that file's. Recommended target:
 # the nx16k AVD (arm64, 16 KB pages). A core that declares its options in retro_load_game (FBNeo, FCEUmm, melonDS DS)
 # needs a game: PROBE_ROM_<core>=<path> passes one to options-<core> (from your own card copy; never committed).
-# options-fbneo requires it (an arcade set zip); FBNEO_PROBE_ROM is the older name for PROBE_ROM_fbneo.
+# options-fbneo requires it (an arcade set zip).
 # Keep PROBE_ROM_fbneo a Neo Geo set: the table's neogeo section (Neo-Geo mode, memory card) comes from it.
 ADB ?= $(SDK)/platform-tools/adb
 ADB_SERIAL ?=
-FBNEO_PROBE_ROM ?=
-PROBE_ROM_fbneo ?= $(FBNEO_PROBE_ROM)
+PROBE_ROM_fbneo ?=
 # PPSSPP declares its table in retro_set_environment, and its retro_init probes Vulkan, which crashes a shell process
 # (the vendor linker namespace is an app's): its probe skips retro_init. nxprobe ignores the skip when a game is given
 # (PROBE_ROM_<core>): a game needs an initialised core.
@@ -55,7 +54,7 @@ endif
 endif
 ifneq (,$(filter options-fbneo,$(MAKECMDGOALS)))
 ifeq (,$(strip $(PROBE_ROM_fbneo)))
-$(error set PROBE_ROM_fbneo (or FBNEO_PROBE_ROM) to an arcade set zip)
+$(error set PROBE_ROM_fbneo to an arcade set zip)
 endif
 endif
 
@@ -700,7 +699,6 @@ $1_OPTIONS_ID ?= $(1)
 $1_CMAKE ?= $(CMAKE)
 $1_NINJA ?= $(NINJA)
 $1_PLATFORM ?= $(PLATFORM)
-$1_NDK ?= $(NDK)
 
 ifneq (40,$$(strip $$(shell printf %s '$$($1_HASH)' | grep -cE '^[0-9a-f]{40}$$$$' >/dev/null && echo 40)))
 $(1):
@@ -737,7 +735,7 @@ else
 $(OUTPUT_ROOT)/$$($1_CORE): $(SRC_ROOT)/$(1)/.patched
 	mkdir -p $(OUTPUT_ROOT) $(BUILD_ROOT)/$(1)
 	$$($1_CMAKE) -S $(SRC_ROOT)/$(1)/$$($1_BUILD_PATH) -B $(BUILD_ROOT)/$(1) -G Ninja -DCMAKE_MAKE_PROGRAM=$$($1_NINJA) \
-	  -DCMAKE_TOOLCHAIN_FILE=$$($1_NDK)/build/cmake/android.toolchain.cmake -DANDROID_ABI=$(ABI) -DANDROID_PLATFORM=$$($1_PLATFORM) \
+	  -DCMAKE_TOOLCHAIN_FILE=$(NDK)/build/cmake/android.toolchain.cmake -DANDROID_ABI=$(ABI) -DANDROID_PLATFORM=$$($1_PLATFORM) \
 	  -DCMAKE_BUILD_TYPE=Release "-DCMAKE_SHARED_LINKER_FLAGS=$(PAGE_LDFLAGS)" $$($1_FLAGS)
 	$$($1_CMAKE) --build $(BUILD_ROOT)/$(1) --target $$($1_CMAKE_TARGET) $(PROCS)
 	$(STRIP) --strip-unneeded -o $(OUTPUT_ROOT)/$$($1_CORE) $(BUILD_ROOT)/$(1)/$$($1_ARTIFACT)
@@ -826,7 +824,7 @@ $(OUTPUT_ROOT)/nxprobe: probe/nxprobe.c probe/opts_json.c probe/opts_json.h prob
 nxprobe: $(OUTPUT_ROOT)/nxprobe
 
 # Not part of all: needs a device. Probes every core in turn, one make per core so a failure (or fbneo without
-# FBNEO_PROBE_ROM) moves on to the next; exits non-zero at the end naming the cores that failed.
+# PROBE_ROM_fbneo) moves on to the next; exits non-zero at the end naming the cores that failed.
 options:
 	@failed=; for core in $(CORES); do \
 	  $(MAKE) -k --no-print-directory options-$$core || failed="$$failed $$core"; \

@@ -27,13 +27,6 @@ class PadOptionsTest {
         assertEquals(NdsOptions.table + NdsOptions.shaderScreensRow + NdsOptions.localWirelessRow + BottomScreenOptions.row + PadOptions.layoutRow + (SpeedOptions.table + AudioOptions.rows), ConsoleSettings.tableFor("NDS"))
     }
 
-    // No Portrait Pad row: portrait always lays the see-through overlay over the full-screen game (no band to hide).
-    @Test fun no_console_offers_portrait_pad() {
-        for (tag in listOf("NDS", "3DS", "FBN", "WSC", "LYNX", "GBA", "MD", ""))
-            assertFalse(ConsoleSettings.tableFor(tag).any { it.key == "nx_portrait_pad" }, tag)
-        assertNull(FrontendOptions.option("nx_portrait_pad"))
-    }
-
     @Test fun keys_are_unique_and_findable() {
         val keys = ConsoleSettings.all.map { it.key }
         assertEquals(keys.toSet().size, keys.size)

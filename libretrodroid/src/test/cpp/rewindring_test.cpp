@@ -97,25 +97,25 @@ int main() {
         put(r, 10, 1);
         put(r, 20, 2);
         put(r, 30, 3);
-        CHECK(r.newest().len == 30 && r.newest().data[0] == 3, "newest is the last write");
+        CHECK(r.at((int) r.count() - 1).len == 30 && r.at((int) r.count() - 1).data[0] == 3, "newest is the last write");
         r.popNewest();
-        CHECK(r.count() == 2 && r.newest().len == 20 && r.newest().data[0] == 2, "pop newest: previous becomes newest");
+        CHECK(r.count() == 2 && r.at((int) r.count() - 1).len == 20 && r.at((int) r.count() - 1).data[0] == 2, "pop newest: previous becomes newest");
         r.popNewest();
         r.popNewest();
         CHECK(r.empty(), "popping the last entry empties the ring");
         r.popNewest();
         CHECK(r.empty(), "pop on empty is a no-op");
-        CHECK(put(r, 10, 7) == RewindRing::Write::STORED && r.count() == 1 && r.newest().data[0] == 7,
+        CHECK(put(r, 10, 7) == RewindRing::Write::STORED && r.count() == 1 && r.at((int) r.count() - 1).data[0] == 7,
               "write after popping all works");
         r.clear();
         CHECK(r.empty(), "clear empties the ring");
-        CHECK(put(r, 10, 8) == RewindRing::Write::STORED && r.newest().data[0] == 8, "write after clear works");
+        CHECK(put(r, 10, 8) == RewindRing::Write::STORED && r.at((int) r.count() - 1).data[0] == 8, "write after clear works");
     }
     {
         // newest index wraps at the table start
         RewindRing r(1000, 4);
         for (int i = 1; i <= 5; i++) put(r, 10, (uint8_t)i);
-        CHECK(r.newest().data[0] == 5 && contents(r).size() == 4, "newest at slot 0 after the table wrapped");
+        CHECK(r.at((int) r.count() - 1).data[0] == 5 && contents(r).size() == 4, "newest at slot 0 after the table wrapped");
     }
     {
         // popNewestReclaimsBytes: popping frees the bytes, so as many writes fit again

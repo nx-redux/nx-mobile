@@ -86,7 +86,6 @@ class GamePanelModelTest {
         assertTrue(shortcuts(discCount = 0).none { it.shortcut == Shortcut.SWAP_DISC })
         assertTrue(shortcuts(discCount = 3, netplay = true).none { it.shortcut == Shortcut.SWAP_DISC })
         val swap = shortcuts(discCount = 3, discIndex = 1).single { it.shortcut == Shortcut.SWAP_DISC }
-        assertTrue(swap.enabled)
         assertEquals("2/3", swap.value)
         assertEquals("Swap disc", swap.label)
     }
@@ -108,7 +107,7 @@ class GamePanelModelTest {
         val list = shortcuts(discCount = 2, touch = listOf(ShortcutAction.SAVE_STATE, ShortcutAction.LOAD_STATE, ShortcutAction.HOLD_FF), slot = 2)
         assertEquals(listOf("Save", "Load", "Hold fast forward", "Swap disc", "Fast forward", "Rewind", "Reset"), list.map { it.label })
         assertEquals(listOf("Slot 2", "Slot 2", null), list.take(3).map { it.value })
-        assertTrue(list.take(3).all { it.shortcut == Shortcut.TOUCH && it.on == null && it.enabled })
+        assertTrue(list.take(3).all { it.shortcut == Shortcut.TOUCH && it.on == null })
         assertEquals(ShortcutAction.HOLD_FF, list[2].action)
         assertNull(shortcuts(touch = listOf(ShortcutAction.SAVE_STATE)).first().value)   // the slot not read yet
         assertNull(GamePanelModel.eventFor(list.first()))   // its press and release are the tile's own
@@ -119,7 +118,6 @@ class GamePanelModelTest {
         for (list in listOf(shortcuts(), shortcuts(discCount = 2))) {
             val tiles = list.filter { it.shortcut in speedTiles }
             assertEquals(speedTiles, tiles.map { it.shortcut })
-            assertTrue(tiles.all { it.enabled })
             assertEquals(listOf(false, false, null), tiles.map { it.on })   // FF and Rewind toggles; Reset an action
         }
         // Display order: the touch buttons, Swap disc, then Fast forward, Rewind, Mic and Reset.
@@ -151,10 +149,6 @@ class GamePanelModelTest {
         assertEquals("easy", GamePanelModel.quickFileLabel("User/crt/easy.glslp"))
         assertEquals("None", GamePanelModel.quickFileLabel("None"))
         assertEquals("scan lines", GamePanelModel.quickFileLabel("scan lines.png"))
-    }
-
-    @Test fun noScreenshot() {
-        assertTrue(Shortcut.entries.none { it.name == "SCREENSHOT" })
     }
 
     @Test fun rewindHiddenWithoutRewind() {
@@ -200,12 +194,11 @@ class GamePanelModelTest {
         assertEquals(GamePanelEvent.Reset, GamePanelModel.eventFor(shortcuts().single { it.shortcut == Shortcut.RESET }))
     }
 
-    @Test fun disabled_shortcut_has_no_event() {
+    @Test fun the_event_follows_the_typed_state() {
         val list = shortcuts(discCount = 2)
-        for (s in list) assertNull(GamePanelModel.eventFor(s.copy(enabled = false)))
         assertEquals(GamePanelEvent.SwapDisc, GamePanelModel.eventFor(list.single { it.shortcut == Shortcut.SWAP_DISC }))
         // The event follows the typed state, not the display text.
-        val typed = ShortcutState(Shortcut.FAST_FORWARD, "Fast forward", enabled = true, value = "whatever", on = true)
+        val typed = ShortcutState(Shortcut.FAST_FORWARD, "Fast forward", value = "whatever", on = true)
         assertEquals(GamePanelEvent.SetFastForward(false), GamePanelModel.eventFor(typed))
     }
 

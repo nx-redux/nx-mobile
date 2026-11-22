@@ -28,7 +28,7 @@ object DeviceSyncs {
      */
     @Volatile var screenOn: (Boolean) -> Unit = {}
     /** A save or BIOS import (from any MainActivity) writes the folders a sync copies: the sync waits for both. */
-    @Volatile var importing: () -> Boolean = { AndroidSaveTransfer.anyImporting || com.nxredux.mobile.bios.AndroidBiosIntake.anyRunning }
+    private fun importing() = AndroidSaveTransfer.anyImporting || com.nxredux.mobile.bios.AndroidBiosIntake.anyRunning
     /** MainActivity's POST_NOTIFICATIONS request, asked once when the first sync starts (the sync runs either way). */
     @Volatile var onNeedNotificationPermission: (() -> Unit)? = null
     @Volatile private var askedPermission = false

@@ -108,14 +108,14 @@ class IconPaletteTest {
         val id = "com.example.alpha/com.example.alpha.MainActivity"
         val url = abstractAppArtUrl(id)
         assertEquals("nxabstract://app/$id", url)
-        assertEquals(id, abstractAppIdOf(url))
+        assertEquals(id, abstractAppArtOf(url)?.appId)
         assertNull(abstractSeedOf(url))                           // never read as a ROM's
         assertEquals(abstractSeed(abstractArtKey(ANDROID_TAG, id)), abstractAppSeed(id))   // the same seed as its Android-tag key
         val rom = abstractArtUrl("MD", "Gunstar Heroes (USA).md")
         assertEquals("nxabstract://d973b800", rom)
-        assertNull(abstractAppIdOf(rom))
-        assertNull(abstractAppIdOf("nxabstract://app/"))
-        assertNull(abstractAppIdOf("file:///x.png"))
+        assertNull(abstractAppArtOf(rom)?.appId)
+        assertNull(abstractAppArtOf("nxabstract://app/")?.appId)
+        assertNull(abstractAppArtOf("file:///x.png")?.appId)
         assertNotEquals(abstractAppSeed("a/A"), abstractAppSeed("b/B"))
     }
 
@@ -127,7 +127,7 @@ class IconPaletteTest {
         assertNotEquals(iconed, bare)                            // its own memory-cache key
         assertEquals(AbstractAppArt(id, icon = true), abstractAppArtOf(iconed))
         assertEquals(AbstractAppArt(id, icon = false), abstractAppArtOf(bare))
-        assertEquals(id, abstractAppIdOf(bare))
+        assertEquals(id, abstractAppArtOf(bare)?.appId)
         assertNull(abstractSeedOf(bare))
         assertNull(abstractAppArtOf("nxabstract://app/?icon=0"))
         assertNull(abstractAppArtOf("nxabstract://app/a/A?x=1"))

@@ -44,6 +44,3 @@ fun visibleTouchShortcuts(
         TouchShortcut(a, on)
     }
 }
-
-/** The editor's placeholder label for [slot]'s piece. */
-internal fun touchSlotPlaceholder(slot: TouchSlot): String = "Shortcut ${slot.ordinal + 1}"

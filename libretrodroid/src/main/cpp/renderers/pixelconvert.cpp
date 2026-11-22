@@ -36,22 +36,4 @@ const uint16_t* convert0RGB1555ToRGB565(
     return out.data();
 }
 
-const uint32_t* convertXRGB8888ToRGBA(
-    const void* data, unsigned width, unsigned height, size_t pitch, std::vector<uint32_t>& out
-) {
-    out.resize((size_t) width * height);
-    auto bytes = static_cast<const uint8_t*>(data);
-    for (unsigned y = 0; y < height; ++y) {
-        const uint8_t* row = bytes + pitch * y;
-        auto target = reinterpret_cast<uint8_t*>(out.data() + (size_t) width * y);
-        for (unsigned x = 0; x < width; ++x) {
-            target[4 * x + 0] = row[4 * x + 2];
-            target[4 * x + 1] = row[4 * x + 1];
-            target[4 * x + 2] = row[4 * x + 0];
-            target[4 * x + 3] = row[4 * x + 3];
-        }
-    }
-    return out.data();
-}
-
 }

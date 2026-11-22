@@ -56,7 +56,6 @@ import kotlin.math.roundToInt
  */
 internal interface PadLayoutHost {
     val activity: ComponentActivity
-    val gameTag: String
     val inputManager: android.hardware.input.InputManager?
     val menuOpen: Boolean
     /** The second display's use: a DS / 3DS keeps its Dual screen layouts in any mode but [DualMode.OFF]. */
@@ -64,7 +63,6 @@ internal interface PadLayoutHost {
     val isWii: Boolean
     val wiiPad: WiiPad?
     val frontendValues: Map<String, String>
-    val lockedOptions: Set<String>
     /** The in-game menu's view while it is open, and the notifications' (both are laid out with the pads). */
     val menuView: ComposeView?
     val notificationsView: ComposeView?
@@ -83,7 +81,6 @@ internal interface PadLayoutHost {
     /** A pad skin's SAVE / LOAD (the last-used slot), REWIND (held) or FAST (toggled) button: press ([down]) or release. */
     fun onSkinShortcut(action: SkinAction, down: Boolean)
     fun isLandscape(orientation: Int): Boolean
-    fun isLandscape(): Boolean
     fun syncN3dsCore()
     /** The controllers the layout goes by changed: with a second display, which one is the bottom screen may too. */
     fun onLayoutControllersChanged()
@@ -91,15 +88,12 @@ internal interface PadLayoutHost {
     val dcArcadeSet: Boolean
     /** The game panel fills the whole window (it hides the pad; the menu opens over it). */
     fun mainPanelCoversWindow(): Boolean
-    fun placeMainPanelHost()
     /** The skin was placed anew, or dropped: the game panel follows its glass ([DualScreenController.syncPanel]). */
     fun onSkinPlaced()
     fun menuLayoutParams(orientation: Int, overPanel: Boolean = false, glass: Boolean = false): FrameLayout.LayoutParams
     fun relayoutFrontend()
-    fun applyFrontend(values: Map<String, String>)
     /** Saves [key] = [value] for the console (off the main thread, in order with the other config writes); [failure] toasts. */
     fun persistConsoleKey(key: String, value: String, failure: String)
-    fun toast(msg: String): android.widget.Toast
 }
 
 /**
@@ -118,10 +112,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private val isWii get() = host.isWii
     private val wiiPad get() = host.wiiPad
     private val frontendValues get() = host.frontendValues
-    private val lockedOptions get() = host.lockedOptions
     private val menuView get() = host.menuView
     private val notificationsView get() = host.notificationsView
-    private val gameTag get() = host.gameTag
     private fun layoutTag() = host.layoutTag()
     private fun padProfile() = host.padProfile()
     private fun padMotion() = host.padMotion()
@@ -129,11 +121,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private fun isLandscape(orientation: Int) = host.isLandscape(orientation)
     private fun syncN3dsCore() = host.syncN3dsCore()
     private fun mainPanelShown() = host.mainPanelCoversWindow()
-    private fun placeMainPanelHost() = host.placeMainPanelHost()
     private fun menuLayoutParams(orientation: Int, overPanel: Boolean = false, glass: Boolean = false) = host.menuLayoutParams(orientation, overPanel, glass)
     private fun relayoutFrontend() = host.relayoutFrontend()
-    private fun applyFrontend(values: Map<String, String>) = host.applyFrontend(values)
-    private fun toast(msg: String) = host.toast(msg)
 
     /** The controller names of the last [applyLayout] (logged once per change, to confirm hardware names). */
     private var loggedControllers: List<String>? = null

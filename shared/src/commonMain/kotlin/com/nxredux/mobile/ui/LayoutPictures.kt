@@ -1,19 +1,7 @@
 package com.nxredux.mobile.ui
 
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.foundation.gestures.snapping.SnapPosition
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -27,19 +15,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -98,10 +81,8 @@ import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxFont
 import com.nxredux.mobile.ui.nx.LocalPortrait
-import com.nxredux.mobile.ui.nx.NX_TILE_RING
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxHintBar
-import com.nxredux.mobile.ui.nx.NxList
 import com.nxredux.mobile.ui.nx.NxListFooter
 import com.nxredux.mobile.ui.nx.NxOptionsSidePad
 import com.nxredux.mobile.ui.nx.NxRow
@@ -114,9 +95,7 @@ import com.nxredux.mobile.ui.nx.NxListPitch
 import com.nxredux.mobile.ui.nx.NxPageTitle
 import com.nxredux.mobile.ui.nx.NxTitleActions
 import com.nxredux.mobile.ui.nx.NxTextSizes
-import com.nxredux.mobile.ui.nx.nxHighlight
 import com.nxredux.mobile.ui.nx.nxListInset
-import kotlinx.coroutines.flow.drop
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import androidx.compose.ui.graphics.Color
@@ -226,9 +205,6 @@ internal fun chromePicture(title: Boolean, hints: Boolean): DrawableResource = w
     else -> Res.drawable.onboarding_chrome_none
 }
 
-/** The page title and button hints picture's width over height. */
-internal const val CHROME_PICTURE_AR = 624f / 472f
-
 
 /** [picture] ([aspect] its width over height) [width] wide in its black mat and grey ring. */
 @Composable
@@ -291,7 +267,7 @@ internal fun LayoutPreviewPage(
         if (touchRows != null) touchRows(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = rowsMax), footer)
         else NxOptionsList(
             values, selected.takeIf { it < values.size } ?: -1, onSelect, onRow, rowHeight = optionPitch, listText = NxTextSizes.listLabel(optionPitch),
-            modifier = Modifier.fillMaxWidth().weight(1f, fill = false).height(nxOptionsFitHeight(values, optionPitch)), scrollFade = true,
+            modifier = Modifier.fillMaxWidth().weight(1f, fill = false).height(nxOptionsFitHeight(values, optionPitch)),
         )
     } }
     // Too little room left (a short page of many rows): no picture rather than a thumbnail.
@@ -325,7 +301,7 @@ internal fun LayoutPreviewPage(
                     val optionPitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)   // Appearance → Text size
                     NxOptionsList(
                         values, selected.takeIf { it < values.size } ?: -1, onSelect, onRow, rowHeight = optionPitch, listText = NxTextSizes.listLabel(optionPitch),
-                        modifier = Modifier.fillMaxWidth().weight(1f, fill = false).height(nxOptionsFitHeight(values, optionPitch)), scrollFade = true,
+                        modifier = Modifier.fillMaxWidth().weight(1f, fill = false).height(nxOptionsFitHeight(values, optionPitch)),
                     )
                     BoxWithConstraints(Modifier.fillMaxWidth()) {
                         if (maxWidth >= PREVIEW_MIN_WIDTH) footerOf(0.dp to 0.dp)?.content?.invoke(maxWidth)
@@ -407,7 +383,7 @@ sealed interface LayoutShot {
 /**
  * [shot]'s picture: the tab, game list or Game Switcher capture of its layout, or the title and hints one.
  */
-internal fun layoutShotPicture(shot: LayoutShot): DrawableResource? = when (shot) {
+internal fun layoutShotPicture(shot: LayoutShot): DrawableResource = when (shot) {
     is LayoutShot.Tab -> tabPicture(shot.category, shot.style, shot.stats, shot.vertical, shot.art)
     is LayoutShot.Games -> gamesPicture(shot.style, shot.vertical, shot.right)
     is LayoutShot.Chrome -> chromePicture(shot.title, shot.hints)
