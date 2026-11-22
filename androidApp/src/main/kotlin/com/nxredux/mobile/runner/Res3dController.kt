@@ -15,6 +15,8 @@ internal interface Res3dHost : GameScreenHost {
     /** melonds_render_mode this game started with, and whether OpenGL fell back to software. */
     val ndsRenderMode: String?
     val ndsFellBack: Boolean
+    /** The second display's size (px, width to height) while the whole picture goes there; null otherwise. */
+    val secondPictureDisplay: Pair<Int, Int>?
     /** A shader preset is on: Auto then draws at 1x ([Nds3dResolution.value]). */
     val shaderOn: Boolean
     fun applyOptions(vars: List<Variable>)
@@ -114,7 +116,11 @@ internal class Res3dController(private val host: Res3dHost, private val renderer
     fun launchOption(): Map<String, String> {
         val console = console ?: return emptyMap()
         val shape = host.activity.windowShape()
-        val max = console.displayMaxOf(shape.widthPx to shape.heightPx, shape.screenClass)
+        // With the whole picture on a second display, the first layout reads its scale there: the launch reads it too, so
+        // no change follows right after a resume's load (Dolphin on OpenGL ES corrupts the game's memory on one).
+        val second = host.secondPictureDisplay?.takeIf { console != Res3dConsole.DS && console != Res3dConsole.N3DS }
+            ?.let { console.displayMaxOf(it, shape.screenClass) }
+        val max = listOfNotNull(console.displayMaxOf(shape.widthPx to shape.heightPx, shape.screenClass), second).maxOrNull()
         if (max == null) {
             if (console == Res3dConsole.N3DS) CoreRegistry.forId(console.coreId)?.defaultOptions?.get(console.coreKey)?.toIntOrNull()?.let(renderer::startN3dsFactor)
             return emptyMap()

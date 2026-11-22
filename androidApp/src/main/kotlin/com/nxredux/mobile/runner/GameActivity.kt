@@ -471,6 +471,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private set
     override var ndsFellBack = false                        // OpenGL was asked for, the core draws in software ([NdsRenderer.showFallbackNotice])
         private set
+    override val secondPictureDisplay: Pair<Int, Int>? get() = dual.secondPictureDisplay()
 
     // ---- DS / 3DS 3D resolution (Nds3dResolution, N3ds3dResolution): melonDS's GL scale, Azahar's factor follow the layout ----
     private val res3d = Res3dController(this, renderer)
