@@ -97,6 +97,7 @@ class NxPaths(
         const val GAME_TIME_DB = ".userdata/shared/game_time.db"
         const val SHORTCUTS = ".userdata/shared/.minui/shortcuts.txt"
         const val HIDDEN = ".userdata/$PLATFORM/hidden.txt"
+        const val BADGES = ".userdata/$PLATFORM/badges.txt"
     }
 }
 

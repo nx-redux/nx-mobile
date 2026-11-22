@@ -67,7 +67,9 @@ data class GameEntry(
     val subtitle: String? = null,          // Unassigned list: where the file is
     val firstSeen: Long? = null,          // Home's New shelf ([IndexedGame.firstSeen])
     val hiddenCopies: List<GameRef> = emptyList(),   // extra copies hidden behind this home game ([IndexedGame.hiddenCopies])
-    val badge: String? = null,            // a pill by its name ([IndexedGame.badge])
+    val badge: String? = null,            // the pill by its name ([IndexedGame.shownBadge])
+    val msuSet: String? = null,           // its MSU set's kind, whose files go where it goes ([IndexedGame.badge])
+    val badgeChoice: String? = null,      // its own badge choice; null is Auto ([IndexedGame.badgeChoice])
 )
 
 /** The game's line in recent.txt, shortcuts.txt, hidden.txt and collection files. */
@@ -105,6 +107,8 @@ class LibraryScanner(
      * such a path is [ArtRefs.heroShot]. Read at most once per [scan] and [readArt] (again after a [legacyMove] changed a folder).
      */
     private val heroShots: suspend () -> Set<String> = { emptySet() },
+    /** The games' own badge choices (`badges.txt`, [GameBadges.parse]) by game path, read once per [scan]. */
+    private val badgeChoices: suspend () -> Map<String, String> = { emptyMap() },
     /**
      * The one-time `grid/` and `hero/` move, run on each `.media` listing the scan and [readArt] read (the home tree's,
      * the mirrors' and an extra folder's own) before it is mapped. A function, so the app can hand over a mover built
@@ -220,6 +224,7 @@ class LibraryScanner(
         val lookups = HashMap<ContentRef, FolderLookup>()
         val sets = ScanSets()
         val picked = pickedGames()
+        val badges = tryOrAny({ emptyMap() }) { badgeChoices() }
         val heroes = HeroShots()
         val extraNames = scanned.associate { it.id to source.displayName(it.ref) }
         val systems = ArrayList<IndexedSystem>()
@@ -231,10 +236,10 @@ class LibraryScanner(
                 folderName = hf?.folderName ?: "",
                 art = hf?.artRef?.value,
                 bg = hf?.bgRef?.value,
-                games = indexGames(reads, files, lookups, tag, sets, extraNames, picked, heroes),
+                games = indexGames(reads, files, lookups, tag, sets, extraNames, picked, badges, heroes),
             )
         }
-        if (unassigned.isNotEmpty()) systems += IndexedSystem(tag = "", displayName = UNASSIGNED, unassigned = true, games = indexGames(reads, unassigned, lookups, null, sets, extraNames, picked, heroes))
+        if (unassigned.isNotEmpty()) systems += IndexedSystem(tag = "", displayName = UNASSIGNED, unassigned = true, games = indexGames(reads, unassigned, lookups, null, sets, extraNames, picked, badges, heroes))
         LibraryIndex(
             LibraryIndex.VERSION, home.value, scanned.map { IndexedExtra(it.id, it.ref.value) }, defaultTags, systems.inLibraryOrder(), offline, lateMount,
             probes = probes.used, heads = heads.used,
@@ -382,18 +387,18 @@ class LibraryScanner(
      */
     private suspend fun indexGames(
         reads: ScanReads, files: List<IndexedFile>, lookups: MutableMap<ContentRef, FolderLookup>, tag: String?, scanSets: ScanSets, extraNames: Map<String, String>,
-        picked: Map<String, Set<ArtSlot>>, heroes: HeroShots,
+        picked: Map<String, Set<ArtSlot>>, badges: Map<String, String>, heroes: HeroShots,
     ): List<IndexedGame> {
         for (f in files) if (f.lookupFolder !in lookups) lookups[f.lookupFolder] = lookup(reads, f, heroes)
         val core = tag?.let { CoreRegistry.forTag(it)?.id }
         val sets = if (core == ARCADE_CORE && files.isNotEmpty()) scanSets.get() else ArcadeSets.EMPTY
         val naomi = if (core == NAOMI_CORE && files.any { Names.isArchive(it.entry.name) }) scanSets.naomi() else NaomiSets.EMPTY
-        return buildGames(files, lookups, tag, core, sets, naomi, extraNames, picked)
+        return buildGames(files, lookups, tag, core, sets, naomi, extraNames, picked, badges)
     }
 
     private fun buildGames(
         files: List<IndexedFile>, lookups: Map<ContentRef, FolderLookup>, tag: String?, core: String?, sets: ArcadeSets, naomi: NaomiSets, extraNames: Map<String, String>,
-        picked: Map<String, Set<ArtSlot>>,
+        picked: Map<String, Set<ArtSlot>>, badges: Map<String, String>,
     ): List<IndexedGame> {
         val out = ArrayList<IndexedGame>()
         val plain = ArrayList<Boolean>()   // per out entry: named by a rule, not an alias
@@ -418,6 +423,7 @@ class LibraryScanner(
                 lookupDir = f.lookupDir,
                 firstSeen = f.entry.lastModified,   // the file's date; withFirstSeen keeps a known game's
                 badge = f.badge,
+                badgeChoice = GameBadges.choiceOf(badges[GamePath.of(GameRef(f.sourceId, f.relativeDir, name))]),
             ).withArt(look.artFor(key, base, picked = pickedSlots(picked, f.sourceId, f.relativeDir, name)))
             plain += alias == null
         }
@@ -458,12 +464,12 @@ class LibraryScanner(
      * disc folder counts as the folder around it). When the name is shared across folders ([byFolder]; not Unassigned,
      * whose rows always show their dir, and where the whole list is one folder), a copy alone in its folder keeps its clean
      * name, and every copy in an extra folder shows that folder's last name as [IndexedGame.subtitle] ([folderLabel]); a
-     * home copy shows none. Games with different badges ([IndexedGame.badge]: an MSU pack beside its plain ROM) never share
-     * a name: the badge tells them apart.
+     * home copy shows none. Games with different badges ([IndexedGame.shownBadge]: an MSU pack beside its plain ROM, a
+     * hack beside its original) never share a name: the badge tells them apart.
      */
     private fun disambiguated(games: List<IndexedGame>, plain: List<Boolean>, byFolder: Boolean, extraNames: Map<String, String>): List<IndexedGame> {
         fun folder(g: IndexedGame) = if (byFolder) g.source to g.lookupDir else "" to ""
-        fun shown(g: IndexedGame) = g.name to g.badge
+        fun shown(g: IndexedGame) = g.name to g.shownBadge
         val folders = HashMap<Pair<String, String?>, MutableSet<Pair<String, String>>>()
         val counts = HashMap<Pair<Pair<String, String?>, Pair<String, String>>, Int>()
         games.forEachIndexed { i, g ->

@@ -139,7 +139,7 @@ internal class LaunchController(
             // A .cue/.m3u/.ccd/.toc loads the files it names from the same folder; all must be there before the core starts.
             val lookup = companionsOrNull { DiscSheet.companions(deps.source, game.folder, game.fileName) }
             // An MSU-1 or MSU-MD ROM's music (and an MSU-MD cue's tracks) lies beside it, under names the core derives from the ROM's.
-            val msu = companionsOrNull { MsuSets.companions(deps.source, game.folder, game.fileName, game.badge) }
+            val msu = companionsOrNull { MsuSets.companions(deps.source, game.folder, game.fileName, game.msuSet) }
             val companions = when {
                 lookup == null || msu == null -> { launchError(gone); return@launch }
                 lookup is CompanionLookup.Missing -> { launchError("Missing ${lookup.name} next to ${lookup.sheet}"); return@launch }

@@ -36,7 +36,7 @@ class EmulatorSettingsControllerGpuDriverTest {
     private object Host : EmulatorSettingsHost {
         override fun showEmulatorsSettings() {}
         override fun restore(screen: Screen, selection: ListSelection) {}
-        override fun appSection(page: EmulatorPage): EmulatorAppSection? = null
+        override fun appSection(page: EmulatorPage, game: Listed?): EmulatorAppSection? = null
         override fun stepAppRow(row: SettingsRow, delta: Int) {}
         override fun chooseAppRow(row: SettingsRow, index: Int) {}
         override fun runAppRow(row: SettingsRow) {}

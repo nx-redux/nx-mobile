@@ -283,6 +283,13 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "at 2 and rises when the network stalls; a number holds it there, for trying a game at a fixed delay. It " +
             "applies from the next session.",
     )
+    SettingsKind.GAME_BADGE -> quiet(
+        "The word shown by this game's name",
+        "The word shown by this game's name in the lists. Auto takes it from the file name: (Hack) or [h1] shows Hack, " +
+            "(Translated) or [T+Eng] Translated, (Proto) Proto, (Beta) Beta, (Demo) or (Sample) Demo, (Homebrew) or (PD) " +
+            "Homebrew, and a game with its MSU set beside it shows MSU-1 or MSU-MD. None shows no word; any other choice " +
+            "shows that word whatever the file name says.",
+    )
     SettingsKind.CABLE_LINK_DELAY_OVERLAY -> quiet("Show the current input delay in a Cable Link over Wi-Fi session")
     SettingsKind.DEBUG_LOG -> quiet(
         "Saves detailed logs to Logs in your home folder, for a bug report",

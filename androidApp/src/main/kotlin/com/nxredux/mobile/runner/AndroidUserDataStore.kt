@@ -1,6 +1,7 @@
 package com.nxredux.mobile.runner
 
 import android.content.Context
+import com.nxredux.mobile.library.GameBadges
 import com.nxredux.mobile.storage.DataRoot
 import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.storage.NxPaths
@@ -17,7 +18,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * nx-redux user data under the data root (recent.txt, shortcuts.txt, hidden.txt, `.minui` slot markers and screenshots):
+ * nx-redux user data under the data root (recent.txt, shortcuts.txt, hidden.txt, badges.txt, `.minui` slot markers and screenshots):
  * [DataRoot.of], read per call (on the IO dispatcher), so a move or a home change is followed.
  */
 class AndroidUserDataStore(context: Context) : UserDataStore {
@@ -37,6 +38,13 @@ class AndroidUserDataStore(context: Context) : UserDataStore {
     override suspend fun readHidden(): List<String> = readList(NxPaths.HIDDEN, PathLines::parse)
 
     override suspend fun writeHidden(list: List<String>): Boolean = writeText(NxPaths.HIDDEN, "hidden") { PathLines.render(list) }
+
+    /** A file that is there but cannot be read throws, so a rewrite never drops the other games' lines. */
+    override suspend fun readBadges(): Map<String, String> = withContext(Dispatchers.IO) {
+        File(root, NxPaths.BADGES).takeIf { it.exists() }?.readText()?.let(GameBadges::parse) ?: emptyMap()
+    }
+
+    override suspend fun writeBadges(choices: Map<String, String>): Boolean = writeText(NxPaths.BADGES, "badges") { GameBadges.render(choices) }
 
     private suspend fun <T> readList(path: String, parse: (String) -> List<T>): List<T> = withContext(Dispatchers.IO) {
         runCatching { File(root, path).takeIf { it.exists() }?.readText()?.let(parse) }.getOrNull() ?: emptyList()
