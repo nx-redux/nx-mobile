@@ -189,6 +189,27 @@ class SyncSavesRsyncTest {
         assertEquals(listOf("GBA/Emerald.srm"), files.listSaves().map { it.path })
     }
 
+    @Test fun per_device_files_neither_reach_the_handheld_nor_fold_back() {
+        val s = serve()
+        write(s.saves, "PSP/SYSTEM/ppsspp.ini", "HANDHELD", t3)
+        write(s.saves, "PSP/SAVEDATA/ULUS10160DATA00/DATA.BIN", "HANDHELD SAVE", t3)
+        val phone = tmp.newFolder("phone")
+        val saves = File(phone, "Saves")
+        write(saves, "PSP/SYSTEM/ppsspp.ini", "PHONE", t1)
+        write(saves, "PSP/SYSTEM/CACHE/x.cache", "PHONE", t1)
+        write(saves, "PSP/SAVEDATA/ULUS10469DATA00/DATA.BIN", "PHONE SAVE", t1)
+        val send = File(phone, "send")
+        val recv = File(phone, "recv")
+        val files = SyncSaveFiles(saves, send, recv)
+        assertEquals(listOf("PSP/SAVEDATA/ULUS10469DATA00/DATA.BIN"), files.listSaves().map { it.path })
+        sync(s, files, saves, send, recv, mapOf("PlayStation Portable (PSP)" to emptySet()))
+        assertEquals("HANDHELD", File(s.saves, "PSP/SYSTEM/ppsspp.ini").readText())
+        assertFalse(File(s.saves, "PSP/SYSTEM/CACHE/x.cache").exists())
+        assertEquals("PHONE SAVE", File(s.saves, "PSP/SAVEDATA/ULUS10469DATA00/DATA.BIN").readText())
+        assertEquals("PHONE", File(saves, "PSP/SYSTEM/ppsspp.ini").readText())
+        assertEquals("HANDHELD SAVE", File(saves, "PSP/SAVEDATA/ULUS10160DATA00/DATA.BIN").readText())
+    }
+
     @Test fun a_plan_path_outside_its_root_is_refused_before_any_write() {
         val phone = tmp.newFolder("phone")
         val saves = File(phone, "Saves")
