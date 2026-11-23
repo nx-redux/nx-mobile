@@ -26,7 +26,6 @@ on the top screen; all 50 bundled slang presets and the 21 replaced GLSL names o
 correctly but at about 36 fps there. Still owed:
 
 - [ ] Mega Bezel STD / SMOOTH-ADV speed: find whether the 36 fps on the Nova is the preset's own cost or ours.
-- [ ] Heat over a long session with crt-guest-advanced.
 - [ ] A pad skin with a slang preset (the Nova's built-in controller hides the skin). DS screens on the second display with a feedback preset passed (Nova 2026-11-22: response-time, top shaded with trails, touch screen plain).
 - [ ] The Fold: crt-guest-advanced and a float-framebuffer preset draw; a preset that cannot build toasts and falls back. Mali passed (AYANEO 2026-11-22: crt-guest-advanced ~42 fps, float-framebuffer presets draw, a broken preset toasts and falls back).
 - [ ] Shader picker on the Fold inner screen; Personal with a whole `shaders_slang` folder (about 2,600 presets) opens quickly. The Nova two-pane passed (2026-11-22: groups with descriptions, preview strip within its group, B back with the tick moved).
@@ -86,7 +85,6 @@ Two devices:
 
 Any device:
 - [ ] Art: Replace (or a picked image) over a hand-placed `Name.PNG` on the SD card keeps the new image and shows it (Nova 2026-11-22: not run, home is internal and extras are read-only)
-- [ ] Cheats: Remove the cheat database deletes only `Cheats/<TAG>/` files; saves and other folders untouched (Nova 2026-11-22: a cancelled install's clean-up kept Cheats/ root and Saves; a full install then Remove still owed)
 - [ ] Setup move / the home summary's "Move them into <home>/Roms" with a PS disc game whose `.cue` names its `.bin` in another letter case (or with
   accented names): the game moves with all its files (Nova 2026-11-22: not run, needs a home move with real disc games)
 - [ ] RetroAchievements: Sync now from the menu while a game earns an unlock (dual-screen menu): the unlock is kept (RA not signed in on the dev app)
@@ -100,7 +98,6 @@ Already passed on the Nova:
 - GBA battery save: three menus and a Home leave an unchanged `.srm` alone; quit and relaunch load it.
 
 Art fetch (real library, a few hundred games):
-- [ ] A console with no `.media` folder gets its folders and art on the first fetch (Nova 2026-11-22: every console there has one)
 - [ ] Change art pick for a game the running job hasn't reached yet is kept (not run 2026-11-22: ScreenScraper quota)
 - [ ] Untagged ROMs still get libretro-thumbnails art through its name list
 - [ ] TheGamesDB: a multi-region or multi-disc set uses fewer requests (allowance before/after)
@@ -108,20 +105,14 @@ Art fetch (real library, a few hundred games):
 - [ ] Fetch all art with Replace existing art: the written-art log only grows by appends; Reset artwork afterwards deletes exactly the app's files (not run 2026-11-22: Reset artwork would delete the user's art)
 
 Game and video:
-- [ ] DS (melonDS) with a multi-pass shader preset: Screen Sharpness and screen swap; Large layout with a translucent
-  inset needs another device (unavailable on the Nova's split). Top shaded, bottom plain passed (Nova 2026-11-22)
 - [ ] Adjust buttons backdrop sharp. Thumbnails for Home, slot save and Quit look sharp, incl. a DS top-screen crop
-  (Nova 2026-11-22)
-- [ ] Home then force-stop the game process: relaunch resumes from slot 9 and the switcher thumbnail matches (Nova
-  2026-11-22: God of War II resumes slot 9; Doom with the pointer on manual slot 1 resumed slot 1 with its picture,
-  check whether a Home should move the pointer)
+  (Nova 2026-11-22) Thumbnails passed (AYANEO 2026-11-23); the backdrop needs a phone without a built-in controller.
 - [ ] Two controllers on a 2-player core: P2 claims with a stick/trigger push, rumble per pad, replug keeps the slot (needs two pads)
 - [ ] A System buttons binding works in game, also after changing it in Settings and returning to the running game
 
 Menu:
 - [ ] Menu pad shows/hides right on onboarding's Pad step, with a tool on top in two-screen skin mode, and after
   toggling Appearance → Pad skin (the Nova's built-in controller hides the menu pad; needs the Fold)
-- [ ] Game Tracker shows box art right after a fetch (Nova 2026-11-22: no fetched game had play sessions)
 - [ ] Dual screen: moving through large merged consoles feels smooth (Nova 2026-11-22: no merged consoles there)
 
 Kids Mode:
@@ -143,7 +134,7 @@ survive Home and return, quit, and load their auto state again (slot 9).
   hat and analog triggers; DS R2 and 3DS A keys reach the cores, Nova 2026-11-22)
 - [ ] RetroAchievements hashing and unlock toasts (RA not signed in on the dev app); rumble. Multi-disc m3u, CUE+BIN and
   core messages passed (Nova 2026-11-22)
-- [ ] A collection file or map.txt starting with a byte-order mark (from Windows): its first entry still works
+- [ ] A collection file or map.txt starting with a byte-order mark (from Windows): its first entry still works Collection passed (Nova 2026-11-23); map.txt needs a writable ROM folder.
 
 ## Security fixes (Device Sync confirm, update check): device checks still owed
 
@@ -155,10 +146,6 @@ Needs two devices. No protocol change: an older build on the other side still sy
 - [ ] An old build on the other side still syncs, in both roles (old server: A here, then it runs; old client: A here
   within its 30 s wait for READY)
 - [ ] Unattended `sync_test.py` against the Brick presses A on the Brick's confirm screen and finishes
-- [ ] In-app update with the dev build's local feed (`-PnxUpdateFeed=http://localhost:<port>/latest.json` + adb
-  reverse): offer, download and install; no `digest` → "Update not verified: GitHub sent no checksum"; a LAN or other
-  host → "Update not verified: not a GitHub download"; `"draft": true` or a `-rc` tag → up to date; a 302 to another
-  host → "Update failed"
 
 ## AppState and GameActivity splits: device checks still owed
 
@@ -173,12 +160,12 @@ Game side (GameActivity split):
 - [ ] Launches: a zipped game from the menu (unpack toast), N64 with a hi-res pack. PS1 .cue/.chd, an arcade set with a
   missing BIOS (refusal and Back), Genesis passed (Nova 2026-11-22)
 - [ ] Quit: the Save & Quit shortcut, Back before the first frame. Quit from the menu and a quit during a manual save
-  passed (Nova 2026-11-22)
+  passed (Nova 2026-11-22) Save & Quit shortcut passed (AYANEO 2026-11-23); Back before the first frame on PS2: see the teardown crash below.
 - [ ] Wii: Motion recentre, a second pad claiming a port. Controller change, Motion toggle, HOME then Wii Menu, GameCube
   under the WII tag passed (Nova 2026-11-22)
 - [ ] DS 3D resolution: Auto follows rotation/fold (needs the Fold), the software-fallback notice. A fixed pick passed
   (Nova 2026-11-22)
-- [ ] Touch shortcuts: FF and rewind (hold and toggle), Adjust buttons backdrop. The strip slots passed (Nova 2026-11-22)
+- [ ] Touch shortcuts: FF and rewind (hold and toggle), Adjust buttons backdrop. The strip slots passed (Nova 2026-11-22) FF and rewind hold/toggle passed (AYANEO 2026-11-23); the backdrop needs a phone without a built-in controller.
 - [ ] A SAF cue/bin with a missing track still refuses with the error (the Nova has no SAF home or folder)
 - [ ] 3DS then Wii in a row (and back): motion works in the second game; the 3DS tilt stops after quitting (needs phone motion)
 - [ ] Mic button and touch shortcut buttons in a netplay game (speed shortcuts hidden in netplay). DS/3DS passed (Nova 2026-11-22)
@@ -227,7 +214,6 @@ Device checks still owed (the areas core patches 0002–0006 touch):
 
 - [ ] Memory cards: save in game, quit, relaunch → the save is there; a card from the old pin still loads. (Nova 2026-11-22: card unchanged across quits and a kill; an in-game save needs play to a save point.)
 - [ ] Two players: second controller claims port 2 and plays.
-- [ ] Cheats & Patches: a cheat from Cheats/PS2 and a patch from Cheats/PS2/Patches apply. (No PS2 cheats or patches in the Nova's dev home.)
 - [ ] 16 KB pages (nx16k): a PS2 game starts and runs on the new pin.
 - [ ] OpenGL ES at 2x on the AYANEO with the optimised build, measured cool (the first passes heat-throttled). (AYANEO 2026-11-22: never under 37.7 °C on USB power; the Budokai Tenkaichi 3 ROM is gone, only its states.)
 - [ ] Custom GPU driver on a build with the slang merge (#144): one launch on the Nova with a Turnip package. (Nova 2026-11-22: no driver installed in the dev app.)
@@ -241,9 +227,16 @@ Left on the devices (2026-11-16):
 
 Checked on the emulator only (GBA game starts, draws, quits; first setup up to Permissions). On real devices:
 
-- [ ] Custom GPU driver: add a package from a zip on Android 9–12 (the AYANEO) and on the Nova. (AYANEO 2026-11-22: no driver zip at hand.)
+- [ ] Custom GPU driver: add a package from a zip on Android 9–12 (the AYANEO) and on the Nova. (AYANEO 2026-11-22: no driver zip at hand.) Nova passed with Turnip v26.0.0 R8 (2026-11-23).
 - [ ] First setup end to end on a fresh install (text size → permissions → folders → Device Sync step → artwork and
       RetroAchievements sign-in → Done); kill the app mid-setup and reopen. (Needs a fresh install.)
 - [ ] Netplay: host advertises over Wi-Fi and over the cable; a second device finds it. Wi-Fi passed (AYANEO found "Mario Kart 64 (192.168.1.13)", 2026-11-22); cable owed.
-- [ ] Settings survive the update: second screen, pause when unfocused, screen care, tool apps, tips hidden.
+
+## Found 2026-11-23: open
+
+- [ ] PS2: quitting God of War II 3–6 s after its first frame crashed the game process in teardown (2 of 3, AYANEO): SIGSEGV in the IOP thread at a JIT address after "Releasing host memory for virtual systems" / "Vulkan bridge: device destroyed"; game.json stays "running". Quits after 25–80 s were fine.
+- [ ] DS Large layout with a translucent inset (Pad skin off): a dark rectangle ~40 px bigger than the inset darkens the big screen around it, also at 100% opacity (AYANEO). Check whether intended.
+- [ ] DS Layout row reads "Unavailable — The pad skin places the screens" on the AYANEO, whose built-in controller hides the skin.
+- [ ] Update row: after "Update failed" (a redirect), A retries the same release; checking again needs an app restart (Nova, local feed). Check whether intended.
+- [ ] Settings → System → Player name: A on the row didn't open the prompt on the Nova; a tap on Edit did.
 
