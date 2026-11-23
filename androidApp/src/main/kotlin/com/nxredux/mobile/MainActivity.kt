@@ -535,6 +535,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
             // This window's root gets the insets unconsumed: the pages may pad for the bars at rest ([LocalRestingBars]).
             CompositionLocalProvider(LocalPosture provides posture.value, LocalRestingBars provides true, LocalSkinPacks provides ::menuSkinPack) { if (menuOnSecond.value) MenuTopScreen(state) else App(state, ::pad, keyboard = true) }
         }
+        keepKeyFocus()
         mainCare = CareLayer(findViewById(android.R.id.content))
         collectPosture()
         // Dual mode: apps open on the top screen; one there takes our window on that display down until it leaves.
@@ -943,6 +944,20 @@ class MainActivity : ComponentActivity(), FolderPicker {
      * ([captureKey]) sees every key before either. Before all of them, Controls → System buttons' wait sees the raw
      * key ([AppState.systemButtonKey]), then a bound button becomes its role's code ([SystemButtonKeys]).
      */
+    /**
+     * Keys are this activity's ([dispatchKeyEvent]), but Android hands a window's first d-pad press after a touch to
+     * whatever view it can focus as it leaves touch mode, and drops that press. The content view keeps the focus through
+     * touches (and gets it back when a closed text field leaves none), so that first press reaches the menu.
+     */
+    private fun keepKeyFocus() {
+        val root = findViewById<android.view.ViewGroup>(android.R.id.content).getChildAt(0) ?: return
+        root.isFocusableInTouchMode = true
+        root.requestFocus()
+        root.viewTreeObserver.addOnGlobalFocusChangeListener { _, now ->
+            if (now == null) root.post { if (window.decorView.findFocus() == null) root.requestFocus() }
+        }
+    }
+
     override fun dispatchKeyEvent(raw: KeyEvent): Boolean {
         if (::state.isInitialized && systemButtonKey(raw)) return true
         val event = SystemButtonKeys.translate(this, raw)
