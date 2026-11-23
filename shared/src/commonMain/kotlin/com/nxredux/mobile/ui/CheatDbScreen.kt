@@ -30,8 +30,8 @@ fun CheatDbScreen(
     Box(modifier.fillMaxSize()) {
         val line = cheatDbProgressLine(state)
         if (line != null) {
-            // Removing can't be cancelled (the controller ignores it), so it offers no B hint.
-            val hints = if (state is CheatDbState.Removing) emptyList() else listOf(Hint(NxButton.B, "Cancel"))
+            // Removing and an unwinding cancel can't be cancelled (the controller ignores it), so they offer no B hint.
+            val hints = if (state is CheatDbState.Removing || state is CheatDbState.Cancelling) emptyList() else listOf(Hint(NxButton.B, "Cancel"))
             NxProgressBody(ToolKind.CHEAT_DB.toolName!!, line, cheatDbProgressFraction(state), hints = hints, onHint = onHint)
         } else {
             // The install state as the head's headline, its size or counts and last update the description.

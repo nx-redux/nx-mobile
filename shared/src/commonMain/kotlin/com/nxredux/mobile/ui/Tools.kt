@@ -90,6 +90,7 @@ fun cheatDbStatus(state: CheatDbState?): String = when (state) {
     is CheatDbState.Installing -> "Installing…"
     is CheatDbState.Checking -> "Checking…"
     is CheatDbState.Removing -> "Removing…"
+    is CheatDbState.Cancelling -> "Cancelling…"
 }
 
 /** The details block on the Cheats & Patches page: first line is the headline, the rest are dim. [systems] = consoles the download covers. */
@@ -108,14 +109,21 @@ fun cheatDbProgressLine(state: CheatDbState): String? = when (state) {
     }
     is CheatDbState.Installing -> "Installing ${state.tag} (${state.index}/${state.count})"
     is CheatDbState.Checking -> "Checking for updates…"
-    is CheatDbState.Removing -> "Removing…"
+    is CheatDbState.Removing -> "Removing…" + filesLeft(state.done, state.total)
+    is CheatDbState.Cancelling -> "Cancelling…" + filesLeft(state.done, state.total)
     else -> null
 }
+
+/** " 120 / 16000 files" while files are deleted one by one; empty before the count is known. */
+private fun filesLeft(done: Int, total: Int): String = if (total > 0) " $done / $total files" else ""
+
 
 /** 0..1 for the bar, null when the total is unknown or the phase has no measure. */
 fun cheatDbProgressFraction(state: CheatDbState): Float? = when (state) {
     is CheatDbState.Downloading -> if (state.total > 0) (state.done.toFloat() / state.total).coerceIn(0f, 1f) else null
     is CheatDbState.Installing -> if (state.count > 0) state.index.toFloat() / state.count else null
+    is CheatDbState.Removing -> if (state.total > 0) state.done.toFloat() / state.total else null
+    is CheatDbState.Cancelling -> if (state.total > 0) state.done.toFloat() / state.total else null
     else -> null
 }
 
