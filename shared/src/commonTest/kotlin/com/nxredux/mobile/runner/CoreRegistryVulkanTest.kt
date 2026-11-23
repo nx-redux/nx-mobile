@@ -38,7 +38,7 @@ class CoreRegistryVulkanTest {
 
     @Test fun azahar_always_sets_its_graphics_api() {
         val d = CoreRegistry.forTag("3DS")!!
-        assertEquals(VulkanSwitch(gles = mapOf("citra_graphics_api" to "OpenGL"), vulkan = mapOf("citra_graphics_api" to "Vulkan"), autoOnXclipse = true), d.vulkan)
+        assertEquals(VulkanSwitch(gles = mapOf("citra_graphics_api" to "OpenGL"), vulkan = mapOf("citra_graphics_api" to "Vulkan"), autoOnMali = true, autoOnXclipse = true), d.vulkan)
         assertTrue("citra_graphics_api" in d.lockedOptions)
         assertEquals("OpenGL", d.defaultOptions["citra_graphics_api"])
     }
