@@ -247,6 +247,3 @@ Checked on the emulator only (GBA game starts, draws, quits; first setup up to P
 - [ ] Netplay: host advertises over Wi-Fi and over the cable; a second device finds it. Wi-Fi passed (AYANEO found "Mario Kart 64 (192.168.1.13)", 2026-11-22); cable owed.
 - [ ] Settings survive the update: second screen, pause when unfocused, screen care, tool apps, tips hidden.
 
-## Found 2026-11-22: open
-
-- [ ] Slow slang presets on Mali-G76 (correct picture): aa-shader-4.0 ~5 fps, authentic_gbc ~6, crt-lottes ~7, crt-mattias ~21.
