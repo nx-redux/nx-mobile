@@ -146,7 +146,8 @@ class GraphicsApiOptionsTest {
         }
         val n3ds = CoreRegistry.forTag("3DS")!!.vulkan
         for (v in listOf(GraphicsApiOptions.AUTO, null)) {
-            assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(v, n3ds) { "Mali-G76 MC4" }, "$v")
+            assertEquals(v, GraphicsApiOptions.effective(v, n3ds) { "Mali-G76 MC4" }, "$v")
+            assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(v, n3ds, customDriver = true) { "Mali-G76 MC4" }, "$v")
             assertEquals(v, GraphicsApiOptions.effective(v, n3ds) { "Adreno (TM) 740" }, "$v")
         }
         assertEquals(GraphicsApiOptions.GLES, GraphicsApiOptions.effective(GraphicsApiOptions.GLES, n3ds) { error("asked") })
@@ -154,15 +155,16 @@ class GraphicsApiOptionsTest {
 
     @Test fun only_ps2_dolphin_psp_and_3ds_follow_the_mali_gpu_on_auto() {
         assertEquals(setOf("armsx2", "dolphin", "ppsspp", "azahar"), CoreRegistry.all.filter { it.vulkan?.autoOnMali == true }.map { it.id }.toSet())
-        // Dolphin follows the Mali GPU only with a custom driver (the stock driver tints some games); PS2 and PSP always.
+        // Dolphin and the 3DS follow the Mali GPU only with a custom driver (the stock driver tints or loses the device); PS2 and PSP always.
         val wii = CoreRegistry.forTag("WII")!!.vulkan
         assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, wii) { "Mali-G76 MC4" })
         assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, wii, customDriver = true) { "Mali-G76 MC4" })
         assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("GC")!!.vulkan, customDriver = true) { "Adreno (TM) 740" })
         assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("PS2")!!.vulkan) { "Mali-G76 MC4" })
         assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("PSP")!!.vulkan) { "Mali-G76 MC4" })
-        assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("3DS")!!.vulkan) { "Mali-G76 MC4" })
-        assertEquals(setOf("dolphin"), CoreRegistry.all.filter { it.vulkan?.maliNeedsCustomDriver == true }.map { it.id }.toSet())
+        assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("3DS")!!.vulkan) { "Mali-G76 MC4" })
+        assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("3DS")!!.vulkan, customDriver = true) { "Mali-G76 MC4" })
+        assertEquals(setOf("azahar", "dolphin"), CoreRegistry.all.filter { it.vulkan?.maliNeedsCustomDriver == true }.map { it.id }.toSet())
         assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("GC")!!.vulkan) { "Adreno (TM) 740" })
         assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, n64) { error("asked") })
         assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, null) { error("asked") })
