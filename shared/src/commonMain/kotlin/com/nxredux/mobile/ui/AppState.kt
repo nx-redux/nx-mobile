@@ -226,6 +226,11 @@ class AppDeps(
     val windowPx: () -> Pair<Int, Int>? = { null },
     /** The ".bin" names in Bios/PS2/ (Emulator Settings' PS2 BIOS row); blocking, called off the main thread. */
     val ps2BiosFiles: () -> List<String> = { emptyList() },
+    /**
+     * The device turns its screen for an app that asks (Android's auto-rotate on). Off, Button layout offers only the
+     * window's current orientation: a display that keeps its rotation leaves the other one's editor with nothing drawn.
+     */
+    val screenRotates: () -> Boolean = { true },
     /** Opens the skin's button layout editor (Android: its own activity); it saves to the settings and ends with [AppState.onSkinLayoutEdited]. Null: no editor. */
     val skinEditor: SkinEditorLauncher? = null,
     /** Settings → Library → Saves: Export and Import (null: rows do nothing). */
@@ -2959,6 +2964,7 @@ class AppState(
         checkArt(reuse = true)   // art deleted or added while away (only changed art folders are listed)
         if (!launches.minimalPending) launches.clearMinimalOpening()
         onLauncherChanged()   // back from Android's home settings or the role dialog: System re-reads its state
+        onRotationChanged()   // auto-rotate may have been switched meanwhile
         refreshInstalled()    // apps may have been installed or removed meanwhile
         refreshGameInfo()   // back from a game (or another app): its time and unlocks may have moved
         homeTab.refreshStatsIfAsked()   // Home's stats too (before the menu's first show, that show computes them)
@@ -4323,6 +4329,9 @@ class AppState(
      * The platform's home state or apps may have changed (the role dialog, Android's home settings, a new listing): System's
      * Use as home screen and Library's Android games re-read them.
      */
+    /** Auto-rotate or the window's shape changed: Button layout's orientation rows follow. */
+    fun onRotationChanged() = refreshSettingsOn(SettingsSection.BUTTON_LAYOUT)
+
     fun onLauncherChanged() {
         kidsUi.kidsHomeCheck()   // the role dialog's answer: Kids Mode on once home
         refreshSettingsOn(SettingsSection.SYSTEM, SettingsSection.LIBRARY, SettingsSection.KIDS)

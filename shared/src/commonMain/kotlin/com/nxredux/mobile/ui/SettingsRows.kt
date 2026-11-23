@@ -478,8 +478,9 @@ internal class SettingsRows(
             if (console.id == WII_CONSOLE) SettingsRow(SettingsKind.BUTTON_LAYOUT_WII_PAD, "Controller", wiiPadLabel(buttonLayoutWiiPad)) else null,
             if (console.id == N3DS_CONSOLE) SettingsRow(SettingsKind.BUTTON_LAYOUT_N3DS_PAD, "Controller", n3dsPadLabel(buttonLayoutN3dsNew)) else null,
             if (console.id in SEGA_PAD_CONSOLES) SettingsRow(SettingsKind.BUTTON_LAYOUT_SEGA_PAD, "Controller", segaPadLabel(buttonLayoutSegaThree)) else null,
-            SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Portrait", landscape = false),
-            SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Landscape", landscape = true),
+            *buttonLayoutOrientations(deps.screenRotates(), deps.windowPx()).map { landscape ->
+                SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, if (landscape) "Landscape" else "Portrait", landscape = landscape)
+            }.toTypedArray(),
             SettingsRow(SettingsKind.BUTTON_LAYOUT_RESET, "Reset console"),
         )
     }
@@ -748,6 +749,13 @@ internal class SettingsRows(
     }
 
 }
+
+/**
+ * Button layout's editors, as landscape flags: both while the screen turns, else only the one [windowPx] (width to
+ * height) is in now, since the other's editor would ask for a rotation the device never makes. Both when the window is unknown.
+ */
+internal fun buttonLayoutOrientations(screenRotates: Boolean, windowPx: Pair<Int, Int>?): List<Boolean> =
+    if (screenRotates || windowPx == null) listOf(false, true) else listOf(windowPx.first > windowPx.second)
 
 /** The Wii's and the 3DS's console ids: Button layout's Controller row is theirs. */
 private const val WII_CONSOLE = "wii"
