@@ -152,15 +152,23 @@ object GamePanelModel {
     /**
      * Shortcuts always; Settings on the second-screen panel ([settings]); Achievements only with a RetroAchievements
      * set; Cheats while the core takes them ([cheats], even with none for the game: the tab says how to add some);
-     * Players only with more than one player slot.
+     * Players as [playersShown] says.
      */
-    fun tabs(raAvailable: Boolean, playerSlots: Int, cheats: Boolean = false, settings: Boolean = false): List<GamePanelTab> = buildList {
+    fun tabs(raAvailable: Boolean, players: Boolean, cheats: Boolean = false, settings: Boolean = false): List<GamePanelTab> = buildList {
         add(GamePanelTab.SHORTCUTS)
         if (settings) add(GamePanelTab.SETTINGS)
         if (raAvailable) add(GamePanelTab.ACHIEVEMENTS)
         if (cheats) add(GamePanelTab.CHEATS)
-        if (playerSlots > 1) add(GamePanelTab.PLAYERS)
+        if (players) add(GamePanelTab.PLAYERS)
     }
+
+    /**
+     * The Players tab shows for a game with more than one slot while more than one controller is connected ([pads]: a
+     * handheld's built-in controls count as one): with a single pad there is no one to hand a slot to. A benched pad
+     * keeps it shown, or a pad benched before the others left could never be put back in play.
+     */
+    fun playersShown(slots: List<PlayerSlotRow>, pads: List<PlayerPadRow>): Boolean =
+        slots.size > 1 && (pads.size > 1 || pads.any { it.benched })
 
     /**
      * A Settings tab option: [values] with the one in use ([current]) marked; side by side while there are at most

@@ -836,7 +836,8 @@ internal class DualScreenController(
         val list = if (b != null && summary != null) b.list().sortedBy(owner.settings.raSortOrder) else emptyList()
         val players = input.playerRows()
         val tabs = GamePanelModel.tabs(
-            raAvailable = list.isNotEmpty(), playerSlots = if (owner.sessionLocked) 0 else players?.first?.size ?: 0,
+            raAvailable = list.isNotEmpty(),
+            players = !owner.sessionLocked && players != null && GamePanelModel.playersShown(players.first, players.second),
             cheats = owner.cheatsSupported && !owner.sessionLocked, settings = !owner.kidsSettingsHidden,
         )
         val cheats = owner.cheatSet
@@ -845,7 +846,8 @@ internal class DualScreenController(
         return GamePanelState(
             header = panelHeader().copy(ra = summary.takeIf { GamePanelTab.ACHIEVEMENTS in tabs }),
             tabs = tabs,
-            tab = GamePanelModel.resolveTab(dualPanelTab, tabs),
+            // A tab that went away (Players, with the second pad gone) leaves Shortcuts shown when it comes back.
+            tab = GamePanelModel.resolveTab(dualPanelTab, tabs).also { dualPanelTab = it },
             shortcuts = GamePanelModel.shortcuts(
                 count, disc, owner.netplayNow != null, ff, rewind, owner.micTile(),
                 touch = owner.panelTouchActions(), slot = panelSlotNow(), ffSpeed = owner.ffSpeed(),

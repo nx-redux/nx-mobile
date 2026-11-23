@@ -140,10 +140,10 @@ sealed interface OptionEvent {
 data class PlayerSlotRow(val key: String?, val name: String, val connected: Boolean)
 
 /**
- * A connected physical pad, one a player slot can be set to (benched ones included: choosing one puts it back in play);
+ * A connected physical pad, one a player slot can be set to ([benched] ones included: choosing one puts it back in play);
  * [name] already numbered when two share one ([com.nxredux.mobile.runner.PadNames]).
  */
-data class PlayerPadRow(val key: String, val name: String)
+data class PlayerPadRow(val key: String, val name: String, val benched: Boolean = false)
 
 /** One menu screen. [footer] is the page's static text (status line, or the message of a Message page). */
 data class MenuPage(
@@ -302,7 +302,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var micTile: Boolean? = null
     /** The Reset dialog up was opened with the menu for it ([openResetDialog]): Cancel and B resume the game. */
     private var resetClosesOnCancel = false
-    /** From [setPlayers]; the panel shows its Players tab when there is more than one slot. */
+    /** From [setPlayers]; the panel shows its Players tab as [GamePanelModel.playersShown] says. */
     private var playerSlots: List<PlayerSlotRow> = emptyList()
     private var playerPads: List<PlayerPadRow> = emptyList()
     /** From [setPanelHeader]; until then the panel's header is the game's title alone. */
@@ -1249,10 +1249,11 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /**
      * Achievements with a set; Cheats for a core that takes them (none for the game: the tab says how to add some); Players
-     * with more than one slot. Never Cheats or Players in netplay (the root has no Options or Players row there).
+     * as [GamePanelModel.playersShown] says. Never Cheats or Players in netplay (the root has no Options or Players row there).
      */
     private fun panelTabs(): List<GamePanelTab> = GamePanelModel.tabs(
-        raAvailable = achievementsAvailable && !achievements.isNullOrEmpty(), playerSlots = if (sessionLocked) 0 else playerSlots.size,
+        raAvailable = achievementsAvailable && !achievements.isNullOrEmpty(),
+        players = !sessionLocked && GamePanelModel.playersShown(playerSlots, playerPads),
         cheats = cheatsAvailable && !sessionLocked,
     )
 

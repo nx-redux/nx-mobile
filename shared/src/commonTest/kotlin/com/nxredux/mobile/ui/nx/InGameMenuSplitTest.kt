@@ -190,7 +190,7 @@ class InGameMenuSplitTest {
 
     @Test fun aTapOnTheRootsHighlightedRowBesideAPanelPageComesBackToTheRoot() {
         val m = model()
-        m.setPlayers(listOf(PlayerSlotRow("a", "Pad A", connected = true), PlayerSlotRow(null, "", connected = false)), listOf(PlayerPadRow("a", "Pad A")))
+        m.setPlayers(listOf(PlayerSlotRow("a", "Pad A", connected = true), PlayerSlotRow(null, "", connected = false)), listOf(PlayerPadRow("a", "Pad A"), PlayerPadRow("b", "Pad B")))
         val continueRow = m.state.page.rows.indexOfFirst { it.label == "Continue" }
         m.select(continueRow)
         m.panelEvent(GamePanelEvent.SelectTab(GamePanelTab.PLAYERS))
