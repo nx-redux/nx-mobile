@@ -8,6 +8,7 @@ import com.nxredux.mobile.achievements.RaLaunchFingerprint
 import com.nxredux.mobile.achievements.RaLaunchHash
 import com.nxredux.mobile.achievements.RaLibraryView
 import com.nxredux.mobile.achievements.RaRequestKind
+import com.nxredux.mobile.achievements.RaRequests
 import com.nxredux.mobile.achievements.RaResponse
 import com.nxredux.mobile.achievements.RaSession
 import com.nxredux.mobile.achievements.RaSessionMode
@@ -151,6 +152,8 @@ class AchievementsBridge(private val controller: RaController, private val setti
     fun startSession() {
         val user = settings.raUsername
         val token = settings.raToken ?: return
+        // The core is created by the first frame; RA asks every request of a game to name it.
+        LibretroDroid.getCoreIdentity()?.takeIf { it.size == 2 }?.let { transport.core = RaRequests.coreToken(it[0] ?: "", it[1] ?: "") }
         safeLaunch {
             val h = hashJob?.await()
             NxLog.i(TAG, "hash ${h ?: "unidentified"} (console $consoleId)")

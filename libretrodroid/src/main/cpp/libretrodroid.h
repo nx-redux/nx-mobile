@@ -305,6 +305,9 @@ public:
     // before any frame and while frames are software. Any thread.
     bool isHardwareRendered() const;
 
+    // The running core's retro_system_info library_name and library_version, empty before the first create(). Any thread.
+    std::pair<std::string, std::string> getCoreIdentity();
+
     void resetGlobalVariables();
 
     void handleVideoRefresh(const void *data, unsigned width, unsigned height, size_t pitch);
@@ -503,6 +506,10 @@ private:
     std::atomic<bool> aspectRatioPending { false };
     // context_reset was called and context_destroy not yet. GL thread.
     bool hwContextLive = false;
+
+    std::mutex coreIdentityLock;
+    std::string coreName;
+    std::string coreVersion;
 
     // What the loaded game's retro_game_info points at, kept until retro_unload_game.
     std::string gamePath;
