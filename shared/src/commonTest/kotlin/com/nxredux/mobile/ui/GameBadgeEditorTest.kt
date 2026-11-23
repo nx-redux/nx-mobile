@@ -55,6 +55,18 @@ class GameBadgeEditorTest {
         assertEquals(GameBadges.NONE, store.text[path])
     }
 
+    @Test fun picking_auto_takes_the_choice_off_again() = runTest {
+        val store = Badges()
+        val e = editor(store, ArrayList(), ArrayList())
+        e.choose(game, GameBadges.CHOICES.indexOf(GameBadges.NONE))
+        advanceUntilIdle()
+        assertEquals(mapOf(path to GameBadges.NONE), store.text)
+        e.choose(game, 0)
+        assertEquals(null, e.choiceOf(game))
+        advanceUntilIdle()
+        assertEquals(emptyMap(), store.text)
+    }
+
     @Test fun a_failed_write_puts_the_row_back_on_the_last_saved_choice() = runTest {
         val store = Badges()
         val failed = ArrayList<Unit>()

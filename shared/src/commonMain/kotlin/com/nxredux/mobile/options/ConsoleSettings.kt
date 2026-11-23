@@ -2,6 +2,7 @@ package com.nxredux.mobile.options
 
 import com.nxredux.mobile.gpudriver.GpuDriver
 import com.nxredux.mobile.layout.ScreenClass
+import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.Res3dConsole
 
 /**
@@ -49,7 +50,11 @@ object ConsoleSettings {
     private fun graphicsRows(tag: String, gpuDrivers: List<GpuDriver>?, autoVulkan: Boolean, mali: Boolean): List<FrontendOption> {
         if (!GraphicsApiOptions.appliesTo(tag)) return emptyList()
         val drivers = GpuDriverOptions.appliesTo(tag, gpuDrivers != null)
-        return listOf(GraphicsApiOptions.rowFor(autoVulkan, mali, drivers)) + (if (drivers) listOf(GpuDriverOptions.row(gpuDrivers.orEmpty(), autoVulkan)) else emptyList())
+        // On a Mali GPU the driver picked here decides what Auto is for some cores: the row stays on Auto, or picking the
+        // system driver would hide the row needed to pick a custom one again.
+        val driverDecidesAuto = mali && CoreRegistry.forTag(tag)?.vulkan?.let { it.autoOnMali && it.maliNeedsCustomDriver } == true
+        return listOf(GraphicsApiOptions.rowFor(autoVulkan, mali, drivers)) +
+            (if (drivers) listOf(GpuDriverOptions.row(gpuDrivers.orEmpty(), autoVulkan || driverDecidesAuto)) else emptyList())
     }
 
     /** Every console's rows (keys are unique across them); built when read, as [NdsOptions.table]. */
