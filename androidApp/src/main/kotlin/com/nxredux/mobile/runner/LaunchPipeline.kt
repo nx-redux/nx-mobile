@@ -42,6 +42,7 @@ import com.nxredux.mobile.options.GraphicsApiOptions
 import com.nxredux.mobile.options.GpuDriverOptions
 import com.nxredux.mobile.gpudriver.AndroidGpuDrivers
 import com.nxredux.mobile.gpudriver.GpuDriver
+import com.nxredux.mobile.gpudriver.GameCrashNotice
 import com.nxredux.mobile.gpudriver.GpuDriverChoice
 import com.nxredux.mobile.gpudriver.GpuDriverCrash
 import com.nxredux.mobile.gpudriver.GpuDriverCrashSettle
@@ -1006,6 +1007,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     launchedOnVulkan = graphics.preferVulkan
                     launchedDriver = driver
                     val launchGpu = if (graphics.preferVulkan) AndroidDeviceInfo.gpu() else null
+                    // Overwritten by every launch: a crash's notice then speaks of the game that ended.
+                    settings.lastLaunchMaliSystemVulkan = GameCrashNotice.onMaliSystemVulkan(graphics.preferVulkan, driver != null, launchGpu)
                     launchEnv = GraphicsApiOptions.envFor(graphics, cfg.descriptor?.vulkan, customDriver = driver != null, gpu = launchGpu)
                     // ParaLLEl-RDP's upscaling follows the driver just picked (Auto stays native on the Adreno's own one).
                     val res3dAlso = res3d.launchAlsoSet(customDriver = driver != null, gpu = launchGpu ?: DeviceTraits.gpu)

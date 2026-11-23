@@ -570,6 +570,13 @@ interface AppSettings {
     var gpuDriverMarker: String?
         get() = null
         set(@Suppress("UNUSED_PARAMETER") value) {}
+    /**
+     * The last launch ran on a Mali's system Vulkan driver ([com.nxredux.mobile.gpudriver.GameCrashNotice.onMaliSystemVulkan]);
+     * written by every launch, read for the notice of a crash. Defaulted, like [debugLog].
+     */
+    var lastLaunchMaliSystemVulkan: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
     /** The games a custom driver crashed in, one `gamePath<TAB>driverId` per line; null: none. Defaulted, like [debugLog]. */
     var gpuDriverCrashes: String?
         get() = null

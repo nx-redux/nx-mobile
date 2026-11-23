@@ -40,6 +40,22 @@ object GraphicsApiOptions {
         brief = "Applies next launch. Auto is Vulkan",
     )
 
+    /** On a Mali GPU, after the row's info: the system driver is what loses the device, so the fix is another driver. */
+    const val MALI_NOTE = "On a Mali GPU the system Vulkan driver can crash\nsome games: a custom GPU driver (the GPU driver\nrow) usually fixes it."
+
+    /** Where custom drivers are unavailable, so the way out is OpenGL ES. */
+    const val MALI_NOTE_NO_DRIVERS = "On a Mali GPU the system Vulkan driver can crash\nsome games: set OpenGL ES for them."
+
+    /**
+     * [row], or [rowAutoVulkan] where [autoVulkan]; on a [mali] GPU with [MALI_NOTE] after its info ([MALI_NOTE_NO_DRIVERS]
+     * without [drivers], custom GPU drivers being unavailable).
+     */
+    fun rowFor(autoVulkan: Boolean, mali: Boolean, drivers: Boolean): FrontendOption {
+        val base = if (autoVulkan) rowAutoVulkan else row
+        if (!mali) return base
+        return base.copy(info = base.info + "\n" + if (drivers) MALI_NOTE else MALI_NOTE_NO_DRIVERS)
+    }
+
     /** The row shows for a console whose core can render with Vulkan ([com.nxredux.mobile.runner.CoreDescriptor.vulkan]). */
     fun appliesTo(tag: String): Boolean = CoreRegistry.forTag(tag)?.vulkan != null
 

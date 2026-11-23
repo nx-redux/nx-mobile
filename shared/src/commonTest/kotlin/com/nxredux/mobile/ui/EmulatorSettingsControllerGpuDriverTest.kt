@@ -53,6 +53,7 @@ class EmulatorSettingsControllerGpuDriverTest {
 
     private fun TestScope.harness(
         configs: MemoryConfigs, crashed: Set<String> = emptySet(), vulkanFailed: Boolean = false, appWide: String? = null,
+        gpu: String? = null,
     ): Harness {
         val screen = MutableStateFlow<Screen>(Screen.EmulatorList(emptyList()))
         val selection = MutableStateFlow(ListSelection(0, 0))
@@ -62,6 +63,7 @@ class EmulatorSettingsControllerGpuDriverTest {
             CoroutineScope(dispatcher), screen, selection, MutableStateFlow(null), NoTables, configs, { emptyMap() }, Host, dispatcher,
             vulkanFailed = { vulkanFailed },
             gpuDrivers = { listOf(turnip) }, gpuDriverAppWide = { appWide }, gpuDriverCrashed = { crashed }, clearGpuDriverCrash = { cleared += it },
+            gpuName = { gpu },
         )
         return Harness(controller, screen, selection, cleared)
     }
@@ -123,6 +125,16 @@ class EmulatorSettingsControllerGpuDriverTest {
 
     private fun graphicsInfo(h: Harness) =
         (h.screen.value as Screen.EmulatorOptions).page.console.single { it.option.key == GraphicsApiOptions.KEY }.option.info
+
+    @Test fun aMaliGpuAddsTheSystemDriverNoteToTheGraphicsApiRow() = runTest {
+        val mali = harness(configs(vulkan), gpu = "Mali-G76 MC4")
+        openConsole(mali)
+        assertEquals(GraphicsApiOptions.row.info + "\n" + GraphicsApiOptions.MALI_NOTE, graphicsInfo(mali))
+
+        val adreno = harness(configs(vulkan), gpu = "Adreno (TM) 740")
+        openConsole(adreno)
+        assertEquals(GraphicsApiOptions.row.info, graphicsInfo(adreno))
+    }
 
     @Test fun theVulkanFailedNoteIsHiddenOnlyOnVulkanWithAResolvedDriver() = runTest {
         val resolved = harness(configs(vulkan), vulkanFailed = true, appWide = "turnip")
