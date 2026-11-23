@@ -623,7 +623,14 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     }
                 }
             } ?: Box(Modifier.fillMaxSize())
-            is Screen.RaDownload -> state.achievements?.let { c -> WithIndex(selection) { RaDownloadScreen(s, c, it, state::select, {}, onHint = state::onButton) } } ?: Box(Modifier.fillMaxSize())
+            // On Settings' insets like Game Tracker: the title and list on the hint bar's edge, as the other tool pages.
+            is Screen.RaDownload -> state.achievements?.let { c ->
+                Box(Modifier.fillMaxSize().padding(start = settingsPlateStart(), end = settingsPlateEnd())) {
+                    CompositionLocalProvider(LocalNxHintBarStart provides nxListInset()) {
+                        WithIndex(selection) { RaDownloadScreen(s, c, it, state::select, {}, onHint = state::onButton) }
+                    }
+                }
+            } ?: Box(Modifier.fillMaxSize())
             // The page on Settings' insets: the plates' edges on both sides (the title and the list's thumbnails then sit on the
             // words' edge, [nxListInset] in), the hint bar on that same edge, as the RetroAchievements split's right page.
             is Screen.GameTime -> Box(Modifier.fillMaxSize().padding(start = settingsPlateStart(), end = settingsPlateEnd())) {
