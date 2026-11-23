@@ -41,7 +41,7 @@ class EmulatorSettingsTest {
         val n64 = com.nxredux.mobile.runner.CoreRegistry.forTag("N64")!!
         fun info(failed: Boolean) = EmulatorSettings.page("N64", n64, null, n64.defaultOptions, null, null, forGame = false, vulkanFailed = failed)
             .console.single { it.option.key == GraphicsApiOptions.KEY }.option.info
-        assertEquals(GraphicsApiOptions.row.info, info(false))
+        assertEquals(GraphicsApiOptions.rowFor(autoVulkan = false, mali = false, drivers = false, n64 = true).info, info(false))
         assertTrue(info(true).startsWith(VulkanFallback.NOTE))
     }
 

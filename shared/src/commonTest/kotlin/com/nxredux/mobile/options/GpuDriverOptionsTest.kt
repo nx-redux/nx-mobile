@@ -56,7 +56,7 @@ class GpuDriverOptionsTest {
     @Test fun vulkanFailedNoteHiddenWhenDriverResolves() {
         fun info(resolved: Boolean) = page(failed = true, resolved = resolved).console.single { it.option.key == GraphicsApiOptions.KEY }.option.info
         assertTrue(info(false).startsWith(VulkanFallback.NOTE))
-        assertEquals(GraphicsApiOptions.row.info, info(true))
+        assertEquals(GraphicsApiOptions.rowFor(autoVulkan = false, mali = false, drivers = false, n64 = true).info, info(true))
     }
 
     @Test fun crashNoteOnGamePage() {

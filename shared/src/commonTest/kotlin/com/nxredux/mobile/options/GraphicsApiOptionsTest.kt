@@ -207,4 +207,13 @@ class GraphicsApiOptionsTest {
         assertTrue("GPU driver" in GraphicsApiOptions.MALI_NOTE)
         assertFalse("GPU driver" in GraphicsApiOptions.MALI_NOTE_NO_DRIVERS)
     }
+
+    @Test fun the_parallel_rdp_line_shows_on_n64_only() {
+        val n64 = ConsoleSettings.tableFor("N64").single { it.key == GraphicsApiOptions.KEY }
+        assertTrue(GraphicsApiOptions.N64_NOTE in n64.info)
+        for (tag in listOf("3DS", "PSP", "GC", "PS2", "DC")) {
+            assertTrue(GraphicsApiOptions.N64_NOTE !in ConsoleSettings.tableFor(tag).single { it.key == GraphicsApiOptions.KEY }.info, tag)
+        }
+        assertTrue("ParaLLEl" !in GraphicsApiOptions.row.info)
+    }
 }

@@ -244,6 +244,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private const val HUNG_FINISH_GRACE_MS = 500L
         /** [endProcess]: at most this long for the netplay engine's shutdown before the process goes anyway. */
         private const val PROCESS_END_WAIT_S = 5L
+        /** How long the process waits for its last log lines to reach the Debug log file before it ends. */
+        private const val LOG_DRAIN_MS = 1_000L
         /** A quit's save of a large state (Wii, PS2) on a slow phone; past it the process ends without it. */
         private const val QUIT_WRITE_WAIT_MS = 60_000L
 
@@ -1129,6 +1131,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         runCatching { PairSaveFiles.writer.submit {}.get(PROCESS_END_WAIT_S, TimeUnit.SECONDS) }   // a Cable Link save's commit
         ProviderPreferences.awaitSends(TimeUnit.SECONDS.toMillis(PROCESS_END_WAIT_S))   // settings applied in the game's last moments
         NxLog.i(TAG_LOG, "the game has ended: ending its process")
+        com.nxredux.mobile.DebugLogFile.drain(LOG_DRAIN_MS)
         Process.killProcess(Process.myPid())
     }
 

@@ -53,7 +53,7 @@ object ConsoleSettings {
         // On a Mali GPU the driver picked here decides what Auto is for some cores: the row stays on Auto, or picking the
         // system driver would hide the row needed to pick a custom one again.
         val driverDecidesAuto = mali && CoreRegistry.forTag(tag)?.vulkan?.let { it.autoOnMali && it.maliNeedsCustomDriver } == true
-        return listOf(GraphicsApiOptions.rowFor(autoVulkan, mali, drivers)) +
+        return listOf(GraphicsApiOptions.rowFor(autoVulkan, mali, drivers, n64 = CoreRegistry.consoleOf(tag)?.id == "n64")) +
             (if (drivers) listOf(GpuDriverOptions.row(gpuDrivers.orEmpty(), autoVulkan || driverDecidesAuto)) else emptyList())
     }
 
