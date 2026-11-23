@@ -347,7 +347,7 @@ class GLRetroView(
     var afterStep: (() -> Unit)? = null
 
     private var isGameLoaded = false
-    private var isEmulationReady = false
+    @Volatile private var isEmulationReady = false   // set on the lifecycle thread, read on the GL thread
     private var isAborted = false
 
     // Mirrors the GLThread's lifetime: GLSurfaceView exits it on detach and recreates it on re-attach.
@@ -564,6 +564,58 @@ class GLRetroView(
                 if (!nativeDestroyed.get()) runCatching(block).onFailure { NxLog.e(TAG_LOG, "queued work before destroy failed", it) }
             }
         }.isSuccess
+    }
+
+    // A frame read waiting for the next draw ([readFrame]) and what it asked for; GL thread only.
+    private var frameReadDone: ((ByteArray?) -> Unit)? = null
+    private var frameReadArgs: FloatArray? = null
+
+    /**
+     * The core's own frame, [src] (0..1 of it, y down) drawn at [width] x [height]: RGBA rows, top row first, with no
+     * shader, layout or overlay, whichever display shows the picture and also while the view is paused. [done] runs once
+     * on the GL thread, with null when there is no frame. False when it could not be queued (the GL thread is gone).
+     * A newer read replaces one still waiting (that one gets null).
+     */
+    fun readFrame(src: ScreenRect, width: Int, height: Int, done: (ByteArray?) -> Unit): Boolean {
+        if (emulationThreadGone || nativeDestroyed.get() || width <= 0 || height <= 0) return false
+        val args = floatArrayOf(src.left, src.top, src.right, src.bottom, width.toFloat(), height.toFloat())
+        return runCatching {
+            queueEvent {
+                frameReadDone?.let { frameReadDone = null; it(null) }
+                // A GL core's framebuffer is whole only right after its draw while it runs: read then ([takeFrameRead]).
+                val afterDraw = isEmulationReady && LibretroDroid.rendersInVideoCallback()
+                val bytes = readFrameNow(args, afterDraw)
+                if (afterDraw && bytes == null) {
+                    frameReadDone = done
+                    frameReadArgs = args
+                } else {
+                    done(bytes?.takeIf { it.isNotEmpty() })
+                }
+            }
+        }.isSuccess
+    }
+
+    private fun readFrameNow(args: FloatArray, afterDraw: Boolean): ByteArray? =
+        if (nativeDestroyed.get()) ByteArray(0)
+        else runCatching { LibretroDroid.readFrame(args[0], args[1], args[2], args[3], args[4].toInt(), args[5].toInt(), afterDraw) }
+            .onFailure { NxLog.e(TAG_LOG, "frame read failed", it) }.getOrDefault(ByteArray(0))
+
+    /** GL thread, after a step: hands a read waiting for that draw its pixels. */
+    private fun deliverFrameRead() {
+        val done = frameReadDone ?: return
+        val bytes = runCatching { LibretroDroid.takeFrameRead() }.getOrDefault(ByteArray(0)) ?: return
+        frameReadDone = null
+        frameReadArgs = null
+        done(bytes.takeIf { it.isNotEmpty() })
+    }
+
+    /** GL thread, the view paused: no draw comes, and the core no longer runs, so a waiting read is done now. */
+    private fun finishFrameReadPaused() {
+        val done = frameReadDone ?: return
+        val args = frameReadArgs ?: return
+        frameReadDone = null
+        frameReadArgs = null
+        done(readFrameNow(args, afterDraw = false)?.takeIf { it.isNotEmpty() })
     }
 
     private fun destroyNative() {
@@ -935,6 +987,7 @@ class GLRetroView(
             LibretroNetplay.linkUnblock()   // a held GBA link cable must not block the GL thread this pause waits on
             onPause()
             LibretroDroid.pause()
+            runCatching { queueEvent { finishFrameReadPaused() } }
         }
     }
 
@@ -944,6 +997,7 @@ class GLRetroView(
                 stepStartedAt = SystemClock.uptimeMillis()
                 try { LibretroDroid.step(this@GLRetroView) } finally { stepStartedAt = 0L }
                 afterStep?.invoke()
+                deliverFrameRead()
                 if (++framesSinceRateCheck >= RATE_CHECK_FRAMES) {
                     framesSinceRateCheck = 0
                     val fps = LibretroDroid.getContentFps()

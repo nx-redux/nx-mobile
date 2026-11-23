@@ -22,6 +22,8 @@ data class ScreenMap(
         if (n3ds) N3dsSwap.factorFromTopHeight(topSizePx.second) else (topSizePx.second / DS_TOP_HEIGHT).coerceAtLeast(1)
 
     companion object {
+        /** Azahar's unswapped Default stack at 1x (400 x 480, the bottom screen centred): the frame a 3DS starts with. */
+        val N3DS_START = ScreenMap(FrameRect(0f, 0f, 1f, 0.5f), FrameRect(0.1f, 0.5f, 0.9f, 1f), 400 to 240, 320 to 240)
         private const val EYE_RIGHT = 2
         private const val DS_TOP_HEIGHT = 192
 

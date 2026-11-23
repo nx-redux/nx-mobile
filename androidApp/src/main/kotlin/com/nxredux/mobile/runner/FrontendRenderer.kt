@@ -140,6 +140,9 @@ internal class FrontendRenderer(
 
     companion object {
         private const val NDS_INSET_MARGIN_DP = 8f   // the PiP inset's margin inside the big screen
+        // The frames a DS / 3DS core starts with: width, height, aspect, rotation as the view's geometry gives them.
+        private val DS_START_FRAME = floatArrayOf(256f, 384f, 256f / 384f, 0f)
+        private val N3DS_START_FRAME = floatArrayOf(400f, 480f, 400f / 480f, 0f)
     }
 
     private val activity get() = host.activity
@@ -198,8 +201,8 @@ internal class FrontendRenderer(
     /** The app's 3DS swap under views ([N3dsSwap]). */
     var n3dsSwapped = false
 
-    private fun n3dsComposition(): FrameComposition? {
-        val map = screenMap ?: return null
+    private fun n3dsComposition(frameMap: ScreenMap? = screenMap): FrameComposition? {
+        val map = frameMap ?: return null
         if (!host.isN3ds || !n3dsViews || host.dualMode == DualMode.SPLIT || padLayout.skinShown) return null
         val (layout, swapped) = if (host.dualMode == DualMode.PANEL_UP) DualScreen.n3dsPanelUp(host.n3dsPicture) else n3dsComposeLayout to n3dsSwapped
         val factor = N3dsSwap.factorFromTopHeight(map.topSizePx.second)
@@ -256,20 +259,40 @@ internal class FrontendRenderer(
     val pictureBox = androidx.compose.runtime.mutableStateOf<android.graphics.Rect?>(null)
     /** The single picture as last laid out (game-area px, offsets included); null while the DS screens are split. */
     private var shownPicture: PxRect? = null
+    /** The DS / 3DS screens inside the single picture (a composed or mapped frame holding both); empty otherwise. */
+    private var shownScreens: List<PictureScreen> = emptyList()
 
-    /** What a save state's picture keeps (game-area px): the one picture, or the DS / 3DS top screen ([thumbnailPicture]). */
-    fun thumbnailPicture(): PxRect? = if (ndsRegions.isNotEmpty()) ndsRegions.thumbnailPicture() else shownPicture
+    /** The screens drawn on main as last laid out (game-area px): its DS regions, else the screens in its one picture. */
+    private fun mainThumbScreens(): List<NdsRegion> =
+        ndsRegions.ifEmpty { shownPicture?.let { shownScreens.placedIn(it) }.orEmpty() }
 
-    // The second surface's screens and whole frame as last laid out (px of it), for a save state's picture copied there.
+    /** The launch has set what the DS / 3DS screens are laid out by (the options, the 3DS video views). */
+    var layoutOptionsKnown = false
+
+    /** The last layout placed the picture for a known frame (not the guess before the first one). */
+    private var pictureKnown = false
+
+    /**
+     * What a save state's picture keeps on main (game-area px): the one picture, or one DS / 3DS screen
+     * ([thumbnailRegion]). Before the first frame a DS / 3DS gets where that screen will be ([expectedThumbnailPicture]),
+     * null when that can't be known.
+     */
+    fun thumbnailPicture(): PxRect? {
+        if (!pictureKnown && (NdsOptions.appliesTo(host.gameTag) || host.isN3ds)) return expectedThumbnailPicture()
+        return mainThumbScreens().thumbnailPicture() ?: shownPicture
+    }
+
+    // The second surface's screens and whole frame as last laid out (px of it), for a save state's picture kept there.
     private var secondThumbScreens: List<NdsRegion>? = emptyList()
     private var secondThumbWhole: PxRect? = null
 
-    /**
-     * Where a save state's picture is copied from ([thumbnailSource]): main's surface, or the second display's while it
-     * draws the picture ([secondDrawing]: the surface is there and the GL thread draws on it).
-     */
-    fun thumbnailSource(secondDrawing: Boolean): ThumbnailSource =
-        thumbnailSource(ndsRegions, shownPicture, secondThumbScreens, secondThumbWhole, host.mainShowsNoPicture(), secondDrawing)
+    /** What a save state's picture keeps ([thumbnailSource]): the game on the display showing the picture. */
+    fun thumbnailSource(): ThumbnailSource {
+        val whole = secondThumbWhole
+        val second = secondThumbScreens ?: whole?.let { shownScreens.placedIn(it) }?.takeIf { it.isNotEmpty() }
+        val pictureOnSecond = host.dualMode != DualMode.OFF && host.pictureOn == PictureOn.SECOND
+        return thumbnailSource(mainThumbScreens(), shownPicture, second, whole, pictureOnSecond)
+    }
 
     /** Called after each relayout: [thumbnailPicture] may have moved (the resume cover follows it). */
     var onPictureLaidOut: (() -> Unit)? = null
@@ -663,6 +686,7 @@ internal class FrontendRenderer(
         secondThumbWhole = if (secondDs == null) host.secondWholeFrame(g) else null
         if (host.isNds) reportNds3d(w, h, screen, halfFolded = skinDs != null)
         if (host.isN3ds && nds != null) reportN3ds3d(w, h, screen, halfFolded = skinDs != null, g, flat = null, secondDs)
+        shownScreens = pictureScreens(composition, map)
         input.positionPen()   // on whichever display shows the bottom screen
         setNdsSplit(nds != null)
         view.secondaryRegions = host.secondRegions(g, secondDs)
@@ -673,6 +697,7 @@ internal class FrontendRenderer(
                 view.viewport = whole
             }
             view.screenOffset = PointF(0f, 0f)
+            pictureKnown = true
             val shown = nds.shownRect()
             // Under a skin the speed indicator goes on the top glass's screen.
             pictureBox.value = windowRect(origin, skinDs?.top ?: shown)
@@ -691,41 +716,16 @@ internal class FrontendRenderer(
         }
         if (view.screenRegions.isNotEmpty()) view.screenRegions = emptyList()
         val overlayAspect = overlayFile?.aspect
-        val box: PxRect
-        val shown: PxRect
-        val offset: PointF
         val skinGlass = if (padLayout.skinShown) padLayout.skinPlacement()?.glass(GlassScreen.PICTURE)?.rect else null
         if (host.isN3ds) {
             val auto = s.scaling == ScreenScaling.AUTO && frame != null
             n3dsPictureSpace = space.takeIf { auto && (host.dualMode == DualMode.OFF || host.pictureOn == PictureOn.MAIN) }
         }
-        if (skinGlass != null) {
-            // A pad skin: the picture fills its glass at its shape (Auto, Aspect; drawn sharp bilinear, [shaderFor]),
-            // at the biggest whole multiple that fits (Native), or stretched over it (Fullscreen).
-            box = when (s.scaling) {
-                ScreenScaling.NATIVE -> wholeMultiple(skinGlass, fitAspect(skinGlass, g[2]), g)
-                ScreenScaling.FULLSCREEN -> skinGlass
-                else -> fitAspect(skinGlass, g[2])
-            }
-            offset = PointF(0f, 0f)
-            shown = box
-        } else if (s.scaling == ScreenScaling.AUTO && frame != null) {
-            val placed = placedFor(room, picture(space, frame, overlayAspect), h, overlayH)
-            // The offsets as Native / Aspect / Fullscreen scale them: to the overlay's box, else the game area.
-            val unit = (if (overlayAspect != null && overlayAspect > 0f) placed.height else h) / BRICK_HEIGHT
-            box = placed
-            offset = PointF(s.offsetX * unit, s.offsetY * unit)
-            shown = placed.copy(x = placed.x + offset.x, y = placed.y + offset.y)
-        } else {
-            // The overrides (Native, Aspect, Fullscreen); Auto too before the first frame, which has nothing to place yet.
-            val layout = frontendLayout(w, h, g[0].toInt(), g[1].toInt(), g[2], s.scaling, s.offsetX, s.offsetY, overlayAspect)
-            box = layout.box
-            offset = PointF(layout.offsetX, layout.offsetY)
-            shown = layout.content
-        }
+        val (box, offset, shown) = placePicture(w, h, g, frame, s, space, room, overlayH, overlayAspect, skinGlass)
         val viewport = RectF(box.x / w, box.y / h, (box.x + box.width) / w, (box.y + box.height) / h)
         pictureBox.value = windowRect(origin, if (s.scaling == ScreenScaling.AUTO) shown else box)
         shownPicture = shown
+        pictureKnown = frame != null
         if (host.isN3ds) {
             reportN3ds3d(w, h, screen, halfFolded = false, g, flat = shown, secondDs)
             host.onN3dsPictureSpace()   // after the report: it read this frame against the proportion it was drawn at
@@ -863,6 +863,82 @@ internal class FrontendRenderer(
         // After the viewport and regions above: queued on the GL thread in order, so the first picture drawn is placed.
         // A fold's 3DS switch keeps it held until the core's new frame size is laid out ([watchGeometry]).
         host.retroView?.let { if (!geometryHold.held && !PictureHold.held(frameKnown, host.gameReady)) it.pictureHeld = false }
+    }
+
+    /**
+     * The one picture's place for a [g] frame ([frame]: null before the first one) in the [w] x [h] area: its GL box, the
+     * screen offset, and where it shows (the box moved by the offset).
+     */
+    private fun placePicture(
+        w: Float, h: Float, g: FloatArray, frame: CoreFrame?, s: FrontendSettings, space: PxRect, room: PadRoom,
+        overlayH: Float, overlayAspect: Float?, skinGlass: PxRect?,
+    ): Triple<PxRect, PointF, PxRect> {
+        if (skinGlass != null) {
+            // A pad skin: the picture fills its glass at its shape (Auto, Aspect; drawn sharp bilinear, [shaderFor]),
+            // at the biggest whole multiple that fits (Native), or stretched over it (Fullscreen).
+            val box = when (s.scaling) {
+                ScreenScaling.NATIVE -> wholeMultiple(skinGlass, fitAspect(skinGlass, g[2]), g)
+                ScreenScaling.FULLSCREEN -> skinGlass
+                else -> fitAspect(skinGlass, g[2])
+            }
+            return Triple(box, PointF(0f, 0f), box)
+        }
+        if (s.scaling == ScreenScaling.AUTO && frame != null) {
+            val placed = placedFor(room, picture(space, frame, overlayAspect), h, overlayH)
+            // The offsets as Native / Aspect / Fullscreen scale them: to the overlay's box, else the game area.
+            val unit = (if (overlayAspect != null && overlayAspect > 0f) placed.height else h) / BRICK_HEIGHT
+            val offset = PointF(s.offsetX * unit, s.offsetY * unit)
+            return Triple(placed, offset, placed.copy(x = placed.x + offset.x, y = placed.y + offset.y))
+        }
+        // The overrides (Native, Aspect, Fullscreen); Auto too before the first frame, which has nothing to place yet.
+        val layout = frontendLayout(w, h, g[0].toInt(), g[1].toInt(), g[2], s.scaling, s.offsetX, s.offsetY, overlayAspect)
+        return Triple(layout.box, PointF(layout.offsetX, layout.offsetY), layout.content)
+    }
+
+    /**
+     * Where a DS / 3DS save state's picture will be drawn (game-area px) before the core's first frame: its screens laid
+     * out as they will be for the frame the core starts with (the plain DS stack; Azahar's unswapped Default stack, which
+     * the app composes the player's layout from). Null for another console, or a frame not known ahead (a 3DS drawing its
+     * own layout without video views).
+     */
+    private fun expectedThumbnailPicture(): PxRect? {
+        val isDs = NdsOptions.appliesTo(host.gameTag)
+        if (!layoutOptionsKnown || (!isDs && !host.isN3ds)) return null
+        val game = findViewById<FrameLayout>(R.id.gameContainer)
+        val w = game.width.toFloat()
+        val h = game.height.toFloat()
+        if (w <= 0f || h <= 0f) return null
+        val s = FrontendSettings.parse(host.frontendValues)
+        val room = padLayout.padRoom()
+        val overlayH = padLayout.hiddenOverlayHeightPx()
+        val space = pictureSpace(room, w, h, overlayH, hiddenBandReach(true))
+        val start = if (isDs) DS_START_FRAME else N3DS_START_FRAME
+        val filled = ndsFilled   // the real layout's; this one is only a guess
+        val regions = try {
+            skinDsLayout(start)?.regions ?: ndsLayout(w, h, start, space, room, overlayH, activity.windowShape().screenClass, s.scaling)
+                ?: n3dsSplitLayout(w, h)
+        } finally { ndsFilled = filled }
+        if (regions != null) return regions.thumbnailPicture()
+        if (!host.isN3ds || padLayout.skinShown) return null
+        val composition = n3dsComposition(ScreenMap.N3DS_START) ?: return null
+        val g = floatArrayOf(composition.width.toFloat(), composition.height.toFloat(), composition.width / composition.height.toFloat(), 0f)
+        val (_, _, shown) = placePicture(w, h, g, coreFrame(g), s, space, room, overlayH, overlayFile?.aspect, null)
+        return pictureScreens(composition, null).placedIn(shown).thumbnailPicture()
+    }
+
+    /**
+     * The DS / 3DS screens in the frame drawn as one picture: the parts of the app's composed 3DS frame, else where the
+     * core's video view [map] puts them in its own frame; none for any other frame.
+     */
+    private fun pictureScreens(composition: FrameComposition?, map: ScreenMap?): List<PictureScreen> {
+        if (composition != null) return composition.parts.map {
+            PictureScreen(
+                if (it.touch) NdsScreen.BOTTOM else NdsScreen.TOP,
+                FrameRect(it.src.left, it.src.top, it.src.right, it.src.bottom),
+                FrameRect(it.dst.left, it.dst.top, it.dst.right, it.dst.bottom),
+            )
+        }
+        return map?.pictureScreens().orEmpty()
     }
 
     /** The core's frame from [g] (the view's geometry), or null before it is known (0x0 until the first frame). */

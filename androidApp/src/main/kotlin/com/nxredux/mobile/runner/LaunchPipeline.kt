@@ -552,7 +552,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // for the unpack (after the inner-file check below), since Use extracted file name names them after the
             // archive's inner file; the config and marker names never depend on the settings.
             paths = NxPaths(tag, coreId, romFileName, settings.saveNaming)
-            showResumeCover()   // the screenshot's name depends on the tag and ROM name only: up long before the core loads
+            showResumeCover(tag)   // the screenshot's name depends on the tag and ROM name only: up long before the core loads
             val home = AndroidHomeLocator(activity).current()   // a SAF tree or a file ref (the media home without access): BiosImport picks the tree
             // netplay: a session on a copy never touches the real saves: its session folder is its own.
             val sessionDir = if (np?.onCopy == true) NetplaySessionDir.dir(activity.filesDir) else null
@@ -681,6 +681,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 renderer.n3dsProportion = n3dsProportion()
                 renderer.n3dsComposeLayout = N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsSkinStack())
             }
+            // The options the DS / 3DS screens are laid out by are known: the resume cover can go where its screen will be.
+            renderer.layoutOptionsKnown = true
+            resumeCover?.place()
             // netplay link: gambatte and Azahar get their link options; a GBA link engine starts now, before the core loads, so
             // a joiner learns the host's gpsp_serial or mgba_link_mode from its READY and runs with it (the handheld reloads instead).
             // Outside a session mGBA gets the real cable (NetplayLinkOptions.forSolo). Cable Link: the pair core's variables
@@ -1371,7 +1374,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
      * boots, until the resumed state's frame ([dropResumeCover]), as minarch shows it from its window's first moment.
      * Decoded off the main thread; nothing when the slot has none, or the resume already landed.
      */
-    private fun showResumeCover() {
+    private fun showResumeCover(tag: String) {
         val saves = host.saves
         val slot = saves.resumeSlot?.takeIf { saves.resumePending && it != 8 } ?: return   // slot 8 has no screenshot in minarch's scheme
         val file = File(host.dataRoot, host.paths.thumb(slot))
@@ -1381,7 +1384,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // Where the picture is drawn: as last laid out, else (before the game view, or a DS / 3DS before its first
             // frame) the pad skin's glass for the picture the screenshot holds.
             val picture = { host.renderer.thumbnailPicture() ?: host.padLayout.takeIf { it.skinShown }?.skinPlacement()?.let(::coverGlass) }
-            resumeCover = ResumeCover(host.activity, host.activity.findViewById(R.id.gameContainer), picture).also { cover ->
+            val twoScreens = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
+            resumeCover = ResumeCover(host.activity, host.activity.findViewById(R.id.gameContainer), twoScreens, picture).also { cover ->
                 host.renderer.onPictureLaidOut = { resumeCover?.place() }
                 cover.show(bmp)
                 host.retroView?.let(cover::follow)   // the game view came first

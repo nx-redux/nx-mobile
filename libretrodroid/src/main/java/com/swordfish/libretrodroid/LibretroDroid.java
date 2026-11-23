@@ -167,6 +167,13 @@ public class LibretroDroid {
     public static native void setScreenOffset(float x, float y);
     /** While held the view draws black, no picture. GL thread. */
     public static native void setPictureHeld(boolean held);
+    /**
+     * Part of the core's own frame (l, t, r, b: 0..1 of it, y down) drawn at width x height: RGBA rows, top row first;
+     * empty without a frame. With afterDraw null: it is read after the next draw, for takeFrameRead. GL thread.
+     */
+    public static native byte[] readFrame(float left, float top, float right, float bottom, int width, int height, boolean afterDraw);
+    /** The afterDraw read once done (empty: it failed), else null. GL thread. */
+    public static native byte[] takeFrameRead();
     /** 11 floats per region: src l,t,r,b (0..1 of the frame), dst l,t,r,b (0..1 of the viewport), shaded, touch (0/1), alpha (0..1). */
     public static native void setScreenRegions(float[] packed);
     /** Compose a width x height frame from the core's (parts packed like setScreenRegions); width 0 clears it. GL thread. */
