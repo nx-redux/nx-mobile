@@ -249,7 +249,6 @@ Checked on the emulator only (GBA game starts, draws, quits; first setup up to P
 
 ## Found 2026-11-22: open
 
-- [ ] Players tab with two real controllers (#210): the tab appears, the built-in controls show as Player 1, a pad joining refreshes the rows.
 - [ ] Pad skin Off portrait overlay showed the landscape grip layout letterboxed (AYANEO, forced rotation; may be the rotation).
 - [ ] Slow slang presets on Mali-G76 (correct picture): aa-shader-4.0 ~5 fps, authentic_gbc ~6, crt-lottes ~7, crt-mattias ~21.
 - [ ] N64 netplay input from the joining side: adb keys don't reach the N64 game; press START on the guest's pad and watch it act on the host.
