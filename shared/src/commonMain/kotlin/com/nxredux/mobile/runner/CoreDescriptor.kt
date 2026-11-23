@@ -24,7 +24,8 @@ data class VulkanSwitch(
     /**
      * [autoOnMali] only with a custom GPU driver in use. Dolphin on the stock Mali driver draws some games (Mario Kart:
      * Double Dash!!) under a dark blue tint: Mali has no dual-source blending and the stock driver no framebuffer fetch,
-     * and Dolphin's Vulkan backend has no other way to blend them. malisx2 offers it; OpenGL ES is right on either.
+     * and Dolphin's Vulkan backend has no other way to blend them. Azahar on the stock driver loses the device in some
+     * games (Mario Kart 7, `DeviceLost` at any scale on a Mali-G76). malisx2 runs both; OpenGL ES is right on either.
      */
     val maliNeedsCustomDriver: Boolean = false,
     /**
