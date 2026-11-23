@@ -182,4 +182,18 @@ class GraphicsApiOptionsTest {
         assertTrue(mali.shownFor(emptyMap()).any { it.key == GpuDriverOptions.KEY })
         assertTrue(mali.shownFor(mapOf(GraphicsApiOptions.KEY to GraphicsApiOptions.GLES)).none { it.key == GpuDriverOptions.KEY })
     }
+
+    @Test fun on_a_mali_gpu_the_info_says_the_system_driver_can_crash_and_names_the_fix() {
+        val drivers = listOf(com.nxredux.mobile.gpudriver.GpuDriver("d", "Driver", "1", "a", "d", "libvulkan_d.so", 28))
+        fun api(tag: String, mali: Boolean, autoVulkan: Boolean = false, gpuDrivers: List<com.nxredux.mobile.gpudriver.GpuDriver>? = drivers) =
+            ConsoleSettings.tableFor(tag, gpuDrivers = gpuDrivers, autoVulkan = autoVulkan, mali = mali).single { it.key == GraphicsApiOptions.KEY }
+        assertEquals(GraphicsApiOptions.row, api("3DS", mali = false))
+        assertEquals(GraphicsApiOptions.row.info + "\n" + GraphicsApiOptions.MALI_NOTE, api("3DS", mali = true).info)
+        assertEquals(GraphicsApiOptions.row.brief, api("3DS", mali = true).brief)
+        assertEquals(GraphicsApiOptions.rowAutoVulkan.info + "\n" + GraphicsApiOptions.MALI_NOTE, api("PS2", mali = true, autoVulkan = true).info)
+        // No custom drivers on this phone: no GPU driver row to point at, so OpenGL ES is the way out.
+        assertEquals(GraphicsApiOptions.row.info + "\n" + GraphicsApiOptions.MALI_NOTE_NO_DRIVERS, api("3DS", mali = true, gpuDrivers = null).info)
+        assertTrue("GPU driver" in GraphicsApiOptions.MALI_NOTE)
+        assertFalse("GPU driver" in GraphicsApiOptions.MALI_NOTE_NO_DRIVERS)
+    }
 }

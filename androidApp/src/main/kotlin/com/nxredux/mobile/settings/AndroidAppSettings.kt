@@ -306,6 +306,8 @@ class AndroidAppSettings(context: Context) : AppSettings {
 
     override var gpuDriverCrashes: String? by nullableString(KEY_GPU_DRIVER_CRASHES)
 
+    override var lastLaunchMaliSystemVulkan: Boolean by bool(KEY_LAST_LAUNCH_MALI_SYSTEM_VULKAN, false)
+
     /** The cores Vulkan failed on for this phone ([VulkanFallback]), kept per build (its version name and commit). */
     override val vulkanFailedCores: Set<String>
         get() = VulkanFallback.failedCores(prefs.getString(KEY_VULKAN_FAILURES, null), APP_VERSION)
@@ -423,6 +425,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_GPU_DRIVER = "gpu_driver"
         private const val KEY_GPU_DRIVER_MARKER = "gpu_driver_marker"
         private const val KEY_GPU_DRIVER_CRASHES = "gpu_driver_crashes"
+        private const val KEY_LAST_LAUNCH_MALI_SYSTEM_VULKAN = "last_launch_mali_system_vulkan"
         /** The build a Vulkan failure is recorded for: a new release, or a new debug build, tries Vulkan again. */
         private const val APP_VERSION = BuildConfig.VERSION_NAME + "-" + BuildConfig.GIT_COMMIT
         private const val KEY_MENU_ACCENT = "menu_accent"

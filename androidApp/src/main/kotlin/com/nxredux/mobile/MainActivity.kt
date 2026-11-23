@@ -753,7 +753,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 }
                 if (closed) state.playTimeChanged()
                 // A custom GPU driver's crash (onResume) names the cause: the generic notice never replaces it.
-                GameExitCheck.notice(exit)?.takeIf { !gpuDriverNoticeShown }?.let(state::showError)
+                GameExitCheck.notice(exit, settings)?.takeIf { !gpuDriverNoticeShown }?.let(state::showError)
             }
             state.refreshResume()
             state.onForeground()   // a card inserted while in the background: its games come back

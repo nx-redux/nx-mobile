@@ -222,7 +222,7 @@ internal class EmulatorSettingsController(
     private val gpuDriverCrashed: (gamePath: String) -> Set<String> = { emptySet() },
     /** Forgets the driver crashes recorded for the game at this library path. */
     private val clearGpuDriverCrash: (gamePath: String) -> Unit = {},
-    /** The phone's GPU name (GL_RENDERER; null: unknown), asked once and only for a core whose Graphics API Auto follows it. */
+    /** The phone's GPU name (GL_RENDERER; null: unknown), asked once, for a core with a Vulkan path. */
     private val gpuName: suspend () -> String? = { null },
 ) {
     private var gpu: String? = null   // [gpuName] once it answered
@@ -362,6 +362,7 @@ internal class EmulatorSettingsController(
             biosFiles = if (Ps2Options.appliesTo(tag)) ps2BiosFiles() else emptyList(),
             gpuDrivers = drivers, gpuDriverResolved = resolved, gpuDriverCrashNote = crashNote,
             autoVulkan = GraphicsApiOptions.autoIsVulkan(d.vulkan, gpu, customDriver(d, game, files, drivers)),
+            mali = DeviceTraits.isMali(gpu),
         )
         val first = page()
         // The GPU driver row shows only on Vulkan, so its presence says the page's Graphics API is Vulkan and what it shows is what the launch reads.
@@ -384,7 +385,8 @@ internal class EmulatorSettingsController(
     }
 
     private suspend fun readPage(tag: String, d: CoreDescriptor, game: Listed?): EmulatorPage {
-        if (d.vulkan?.followsGpu == true && gpu == null) gpu = gpuName()?.also { DeviceTraits.gpu = it }
+        // Every Vulkan core asks: Auto follows it on some, and a Mali's Graphics API row says more on all.
+        if (d.vulkan != null && gpu == null) gpu = gpuName()?.also { DeviceTraits.gpu = it }
         return build(tag, d, game, configs.read(tag, d.id, game?.game?.fileName))
     }
 

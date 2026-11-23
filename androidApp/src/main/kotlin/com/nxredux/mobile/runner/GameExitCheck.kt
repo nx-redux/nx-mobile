@@ -5,6 +5,9 @@ import android.app.ApplicationExitInfo
 import android.content.Context
 import android.os.Build
 import com.nxredux.mobile.AppProcess
+import com.nxredux.mobile.gpudriver.AndroidGpuDrivers
+import com.nxredux.mobile.gpudriver.GameCrashNotice
+import com.nxredux.mobile.settings.AppSettings
 import com.nxredux.mobile.settings.Prefs
 
 /** How the game process last ended, as far as the menu should say: [CRASH] and [HANG] get a notice, [NONE] stays silent. */
@@ -17,10 +20,16 @@ enum class GameExit { NONE, CRASH, HANG }
 object GameExitCheck {
     private const val PREFS = "game-exit"
     private const val KEY_SEEN = "lastSeen"
-    private const val CRASH_NOTICE = "The game stopped unexpectedly. It will continue from its last auto-save."
 
-    /** The notice for [exit], null when there is nothing to say (a hang is worded by [CoreHangNotice]). */
-    fun notice(exit: GameExit): String? = if (exit == GameExit.CRASH) CRASH_NOTICE else null
+    /**
+     * The notice for [exit], null when there is nothing to say (a hang is worded by [CoreHangNotice]); a crash on a Mali's
+     * system Vulkan driver ([AppSettings.lastLaunchMaliSystemVulkan]) names the fix ([GameCrashNotice]).
+     */
+    fun notice(exit: GameExit, settings: AppSettings): String? = GameCrashNotice.notice(
+        crashed = exit == GameExit.CRASH,
+        onMaliSystemVulkan = settings.lastLaunchMaliSystemVulkan,
+        driversAvailable = AndroidGpuDrivers.unavailableReason(Build.VERSION.SDK_INT) == null,
+    )
 
     fun classify(reason: Int): GameExit = when (reason) {
         ApplicationExitInfo.REASON_CRASH, ApplicationExitInfo.REASON_CRASH_NATIVE, ApplicationExitInfo.REASON_ANR -> GameExit.CRASH
