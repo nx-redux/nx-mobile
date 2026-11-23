@@ -469,6 +469,8 @@ dolphin_FLAGS = -DLIBRETRO=ON -DENABLE_LTO=ON -DANDROID_STL=c++_static
 # thread against its own clock, so more retro_run calls alone left the game at normal speed.
 # patches/armsx2/0010: the CPU thread's exit shuts down a VM left in Stopping (retro_unload_game's state, which
 # HasValidVM does not count); skipped, the IOP thread ran on in the memory CPUThreadShutdown releases (SIGSEGV on a quit).
+# patches/armsx2/0011: the EE's 32 MB main RAM as RETRO_MEMORY_SYSTEM_RAM, which RetroAchievements reads (upstream returned
+# none, so no PS2 achievement could ever trigger).
 # ARMSX2_EMBED_PATCHES=OFF: upstream fetches a patches.zip at configure time and compiles it in; that collection has no
 # licence, so it stays out of the .so. The app's Cheats & Patches tool downloads PCSX2's patches.zip at runtime and
 # extracts it into Cheats/PS2/Patches/, which patches/armsx2/0005 points the core at (cheats from Cheats/PS2/).

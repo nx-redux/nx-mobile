@@ -92,7 +92,11 @@ class AndroidRaStore internal constructor(private val privateRoot: () -> File, p
         io("delete $dir/") { file(dir).deleteRecursively() }
     }
 
-    override suspend fun list(dir: String): List<String> = io("list $dir") { file(dir).list()?.toList() ?: emptyList() }
+    override suspend fun list(dir: String): List<String> = io("list $dir") {
+        val f = file(dir)
+        // An absent folder is empty; one there that can't be listed (access revoked) is a read failure, as read's.
+        f.list()?.toList() ?: if (f.exists()) throw IOException("cannot list $dir") else emptyList()
+    }
 
     override suspend fun exists(path: String): Boolean = io("exists $path") { file(path).exists() }
 

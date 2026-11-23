@@ -46,7 +46,6 @@ Device checks still owed:
 
 Device checks still owed:
 
-- [ ] Nova: a game with achievements; no RetroAchievements chip on a played homebrew without a set (RA not signed in on the dev app). Fast scrolling, save states, an Android game and a never-played console passed (Nova 2026-11-22).
 - [ ] Fold cover display and the menu skin's two glasses (small top): details and stats fit without clipping; the stats shelf hides cleanly when too short. (AYANEO 2026-11-22: not offered, the built-in controller hides the menu skin; needs the Fold.)
 - [ ] Thor / Duo (both screens touch): top-screen taps act once, never move focus.
 
@@ -88,7 +87,6 @@ Any device:
 - [ ] Setup move / the home summary's "Move them into <home>/Roms" with a PS disc game whose `.cue` names its `.bin` in another letter case (or with
   accented names): the game moves with all its files (Nova 2026-11-22: not run, needs a home move with real disc games)
 - [ ] RetroAchievements: Sync now from the menu while a game earns an unlock (dual-screen menu): the unlock is kept (RA not signed in on the dev app)
-- [ ] RetroAchievements page with the RA folder unreadable (All files access revoked): shows an error, no crash (RA not signed in on the dev app)
 
 ## Review performance fixes (PR #103): device checks still owed
 
@@ -133,7 +131,7 @@ survive Home and return, quit, and load their auto state again (slot 9).
 - [ ] DS/3DS hat d-pad and L2/R2 as axes; GC and DC analog triggers; DS/3DS face and L2/R2 keys (axes need a pad with a
   hat and analog triggers; DS R2 and 3DS A keys reach the cores, Nova 2026-11-22)
 - [ ] RetroAchievements hashing and unlock toasts (RA not signed in on the dev app); rumble. Multi-disc m3u, CUE+BIN and
-  core messages passed (Nova 2026-11-22)
+  core messages passed (Nova 2026-11-22) Hashing passed on GB/GBA/NES/SNES/N64/NDS/PS1/PSP/GC (Nova 2026-11-23); toasts need an unlock.
 - [ ] A collection file or map.txt starting with a byte-order mark (from Windows): its first entry still works Collection passed (Nova 2026-11-23); map.txt needs a writable ROM folder.
 
 ## Security fixes (Device Sync confirm, update check): device checks still owed
@@ -191,7 +189,7 @@ menu, survive Home and return, quit and reload slot 9 (8/8); save then quit at o
 - [ ] Kids Mode: lock / unlock / lock quickly — at most one bounce a second (Nova 2026-11-22: no bounce storm, but only
   tried during a timed unlock; fast Locked ↔ unlocked cycling not reached)
 - [ ] RA hashing (RA not signed in on the dev app). Save / load states on PS2 and Wii (large), PPSSPP; SRAM / RTC; multi-file
-  VFS launches passed (Nova 2026-11-22)
+  VFS launches passed (Nova 2026-11-22) Passed on PSP, GC, PS1 chd + cue/bin, PS2 (Okami, with core patch 0011) (Nova 2026-11-23); PS1 .pbp unsupported; WBFS without its update partition cannot match RA's Redump hashes (use ISO/RVZ).
 
 ## MSU-1 / MSU-MD (PR #147)
 
