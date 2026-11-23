@@ -338,12 +338,37 @@ internal class DualScreenController(
         val dsFrame = owner.isNds && (map != null || NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt()))
         return when {
             // Not the plain DS stack (no frame yet, or another layout): main draws it whole, so nothing is cut for here.
-            dualMode == DualMode.SPLIT && owner.isNds -> if (!dsFrame) emptyList() else DualScreen.ndsScreen(sw, sh, DualScreen.splitMain(NdsSettings.parse(owner.frontendValues).big, pictureOn).other).withMap(map)
-            dualMode == DualMode.SPLIT && owner.isN3ds -> DualScreen.n3dsScreen(sw, sh, DualScreen.splitMain(n3dsPicture, pictureOn).other).withMap(map)
+            dualMode == DualMode.SPLIT && owner.isNds -> if (!dsFrame) emptyList() else splitScreen(sw, sh).withMap(map)
+            dualMode == DualMode.SPLIT && owner.isN3ds -> splitScreen(sw, sh).withMap(map)
             dualMode == DualMode.PANEL_UP && dsFrame -> DualScreen.ndsPanelUp(sw, sh, NdsSettings.parse(owner.frontendValues)).withMap(map)
             else -> null
         }
     }
+
+    /** Split: the DS / 3DS screen not on main, placed on a [sw] x [sh] second surface (sources of the plain stack). */
+    private fun splitScreen(sw: Float, sh: Float): List<NdsRegion> =
+        if (owner.isNds) DualScreen.ndsScreen(sw, sh, DualScreen.splitMain(NdsSettings.parse(owner.frontendValues).big, pictureOn).other)
+        else DualScreen.n3dsScreen(sw, sh, DualScreen.splitMain(n3dsPicture, pictureOn).other)
+
+    /**
+     * Split with the picture on the second display, the DS / 3DS screen drawn there (px of its surface), the frame taken
+     * as the plain stack a game starts with: known before any frame, for the resume cover. Null otherwise, or before the
+     * surface is there.
+     */
+    fun splitPictureScreens(): List<NdsRegion>? {
+        if (dualMode != DualMode.SPLIT || pictureOn != PictureOn.SECOND || presentation == null || (!owner.isNds && !owner.isN3ds)) return null
+        val surface = secondSurface?.takeIf { it.width > 0 && it.height > 0 } ?: return null
+        return splitScreen(surface.width.toFloat(), surface.height.toFloat())
+    }
+
+    /** The second display's mode is not the one [dualModeNow] wants yet (its window or display still coming or going). */
+    fun dualSettling(): Boolean = dualModeNow() != dualMode
+
+    /** The second display's layer for a resume's screenshot, over its surface ([SecondScreenPresentation.coverLayer]). */
+    fun coverLayer(): FrameLayout? = presentation?.coverLayer
+
+    /** Called once the second display's window, surface, mode or picture screen may have changed (the resume cover follows). */
+    var onSecondChanged: (() -> Unit)? = null
 
     /**
      * What the second display draws (dst 0..1 of its surface): the DS/3DS screens cut for it ([ds], from [secondDsRegions]),
@@ -456,6 +481,7 @@ internal class DualScreenController(
         if (changed) padLayout.applyLayout(activity.resources.configuration.orientation)
         renderer.relayoutFrontend(geometry)
         owner.placeMenu()
+        onSecondChanged?.invoke()
     }
 
     /**
@@ -499,6 +525,7 @@ internal class DualScreenController(
             secondSurface = surface?.let { SecondSurface(it, width, height) }
             pushSecondSurface(force = true)   // a null waits for the GL thread to drop its EGL surface, before the Surface goes
             renderer.relayoutFrontend()
+            onSecondChanged?.invoke()
             if (surface != null) findViewById<View>(R.id.root).post { recheckPictureOn() }   // the display may have turned or resized
         }
         p.theme = panelTheme()
@@ -573,6 +600,7 @@ internal class DualScreenController(
         dropSecondSurface()
         p.releaseTouch()
         owner.placeMenu()   // a menu that was on that display comes back here
+        onSecondChanged?.invoke()
     }
 
     /** The app's theme (accent, option text size) for the panel, on either display. */

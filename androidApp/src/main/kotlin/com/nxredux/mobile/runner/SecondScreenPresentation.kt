@@ -39,7 +39,8 @@ import com.nxredux.mobile.ui.nx.PanelPill
 
 /**
  * The game's window on the second display: a black [FrameLayout] with a [SurfaceView] the GL thread draws part of the
- * frame on ([onSurface]), the DS stylus cursor over it ([showPen]), and a [ComposeView] above them for the game panel
+ * frame on ([onSurface]), a layer the size of that surface for a resume's screenshot ([coverLayer]), the DS stylus
+ * cursor over it ([showPen]), and a [ComposeView] above them for the game panel
  * ([showPanel]) or the Panel pill ([showPanelPill]).
  * Compose runs on the [activity]'s lifecycle.
  */
@@ -69,6 +70,10 @@ class SecondScreenPresentation(private val activity: ComponentActivity, display:
 
     private var pointerId = MotionEvent.INVALID_POINTER_ID
     private var pen: PenDot? = null   // in a layer the size of the surface, between it and the Compose view
+
+    /** A layer the size of the surface, just over it (px of the surface): the resume cover goes here; null until created. */
+    var coverLayer: FrameLayout? = null
+        private set
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -119,6 +124,7 @@ class SecondScreenPresentation(private val activity: ComponentActivity, display:
                 }
             }
         }
+        val covers = FrameLayout(context).also { coverLayer = it }
         val penLayer = FrameLayout(context)
         pen = PenDot(penLayer)
         val root = FrameLayout(context).apply {
@@ -126,6 +132,7 @@ class SecondScreenPresentation(private val activity: ComponentActivity, display:
             // Keys are the activity's ([dispatchKeyEvent]): a focused view here would only eat the first d-pad press after a tap.
             descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
             addView(surfaceView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            addView(covers, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             addView(penLayer, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             addView(composeView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         }

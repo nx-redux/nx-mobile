@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import com.nxredux.mobile.options.PxRect
@@ -16,21 +17,24 @@ import kotlin.math.roundToInt
  * A resume's screenshot over the game view until the resumed game's own frame replaces it (NX Redux's minarch shows
  * the state's screenshot from its window's first moment): no black while the core loads, and no flash of the fresh
  * boot that runs before the state loads. The screenshot is the picture alone ([FrontendRenderer.thumbnailPicture]), so
- * the cover sits where the picture is drawn ([picture], container px: under a pad skin, its screen glass, not the view's
- * middle); until that is known it takes the game view's bounds, and before the game view exists the container's. With
- * [waitForPicture] (a DS / 3DS screenshot is one screen of a layout: the view's bounds would be the wrong spot) it stays
- * hidden until [picture] is known instead. Main thread only.
+ * the cover sits where the picture is drawn ([spot]: under a pad skin, its screen glass, not the view's middle); until
+ * that is known it takes the game view's bounds, and before the game view exists the container's. With [waitForPicture]
+ * (a DS / 3DS screenshot is one screen of a layout: the view's bounds would be the wrong spot) it stays hidden until the
+ * spot is known instead. A spot on the second display puts it in that display's [secondLayer] (px of its surface) and
+ * nothing over main. Main thread only.
  */
 internal class ResumeCover(
     context: Context,
     private val container: FrameLayout,
     private val waitForPicture: Boolean,
-    private val picture: () -> PxRect?,
+    private val spot: () -> CoverSpot?,
+    private val secondLayer: () -> FrameLayout?,
 ) {
-    private val image = ImageView(context).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
+    private val image = coverImage(context)
     private val follow = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> place() }
     private var bitmap: Bitmap? = null
     private var game: View? = null   // the game view once it exists: the cover takes its bounds; before, the container's
+    private var second: ImageView? = null   // the cover in the second display's window while its spot is there
 
     /** Shows [bmp] over [container] (no game view yet: the cover fills it). */
     fun show(bmp: Bitmap) {
@@ -59,23 +63,32 @@ internal class ResumeCover(
      */
     fun fadeOut() {
         if (bitmap == null) return
+        second?.animate()?.alpha(0f)?.setDuration(FADE_MS)?.start()
         image.animate().alpha(0f).setDuration(FADE_MS).withEndAction { remove() }.start()
     }
 
-    /** Takes the cover away (the resumed frame is up, or the resume failed); safe to call twice. */
+    /** Takes the cover away (the resumed frame is up, the resume failed, or the game is closing); safe to call twice. */
     fun remove() {
         image.animate().cancel()
         container.removeOnLayoutChangeListener(follow)
         game?.removeOnLayoutChangeListener(follow)
         container.removeView(image)
         image.setImageDrawable(null)
+        dropSecond()
         bitmap = null
     }
 
-    /** Re-places the cover: the picture was laid out again ([picture] may have moved). */
+    /** Re-places the cover: the picture was laid out again, or the second display changed ([spot] may have moved). */
     fun place() {
         val bmp = bitmap ?: return
-        val p = picture()?.takeIf { it.width >= 1f && it.height >= 1f }
+        val at = spot()
+        if (at?.display == ThumbnailDisplay.SECOND) {
+            image.visibility = View.INVISIBLE
+            placeOnSecond(bmp, at.picture)
+            return
+        }
+        dropSecond()
+        val p = at?.picture?.takeIf { it.width >= 1f && it.height >= 1f }
         image.visibility = if (p == null && waitForPicture) View.INVISIBLE else View.VISIBLE
         if (p == null && waitForPicture) return
         val g = game?.takeIf { it.width > 0 && it.height > 0 }   // laid out; before, the cover keeps the container's size
@@ -91,9 +104,48 @@ internal class ResumeCover(
                 image.layoutParams = lp
             }
         }
+        fit(image, bmp, w, h)
+    }
+
+    /** The cover over [picture] in the second display's layer; nowhere until both are there (never over the wrong screen). */
+    private fun placeOnSecond(bmp: Bitmap, picture: PxRect?) {
+        val layer = secondLayer()
+        val p = picture?.takeIf { it.width >= 1f && it.height >= 1f }
+        if (layer == null || p == null) { dropSecond(); return }
+        val x = p.x.roundToInt()
+        val y = p.y.roundToInt()
+        val w = p.width.roundToInt()
+        val h = p.height.roundToInt()
+        val view = second?.takeIf { it.parent === layer } ?: run {
+            dropSecond()   // a window that went: its replacement takes a new view
+            coverImage(layer.context).also {
+                it.setImageBitmap(bmp)
+                it.alpha = image.alpha
+                layer.addView(it, FrameLayout.LayoutParams(w, h).apply { leftMargin = x; topMargin = y })
+                second = it
+            }
+        }
+        (view.layoutParams as? FrameLayout.LayoutParams)?.let { lp ->
+            if (lp.width != w || lp.height != h || lp.leftMargin != x || lp.topMargin != y) {
+                lp.width = w; lp.height = h; lp.leftMargin = x; lp.topMargin = y
+                view.layoutParams = lp
+            }
+        }
+        fit(view, bmp, w, h)
+    }
+
+    private fun dropSecond() {
+        val view = second ?: return
+        second = null
+        view.animate().cancel()
+        (view.parent as? ViewGroup)?.removeView(view)
+        view.setImageDrawable(null)
+    }
+
+    private fun fit(view: ImageView, bmp: Bitmap, w: Int, h: Int) {
         val fills = fillsView(bmp.width, bmp.height, w, h)
-        image.scaleType = if (fills) ImageView.ScaleType.FIT_XY else ImageView.ScaleType.FIT_CENTER
-        image.setBackgroundColor(if (fills) Color.TRANSPARENT else Color.BLACK)
+        view.scaleType = if (fills) ImageView.ScaleType.FIT_XY else ImageView.ScaleType.FIT_CENTER
+        view.setBackgroundColor(if (fills) Color.TRANSPARENT else Color.BLACK)
     }
 
     companion object {
@@ -111,6 +163,8 @@ internal class ResumeCover(
             val v = viewW.toFloat() / viewH
             return abs(a - v) / v <= ASPECT_SLACK
         }
+
+        private fun coverImage(context: Context) = ImageView(context).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
 
         /** [file] decoded, or null when it is missing or not an image. Blocking I/O. */
         fun decode(file: File): Bitmap? = if (file.isFile) runCatching { BitmapFactory.decodeFile(file.absolutePath) }.getOrNull() else null
