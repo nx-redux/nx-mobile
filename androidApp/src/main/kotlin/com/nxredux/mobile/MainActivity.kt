@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.database.ContentObserver
 import android.hardware.input.InputManager
 import android.net.Uri
 import android.os.Build
@@ -15,6 +16,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Process
 import android.provider.DocumentsContract
+import android.provider.Settings
 import android.view.Display
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -179,6 +181,10 @@ class MainActivity : ComponentActivity(), FolderPicker {
     }
 
     private val inputManager: InputManager? by lazy { getSystemService(InputManager::class.java) }
+    /** Auto-rotate switched (the quick settings tile leaves the menu in front): Button layout's rows follow at once. */
+    private val rotationObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) { if (::state.isInitialized) state.onRotationChanged() }
+    }
     private val inputDeviceListener = object : InputManager.InputDeviceListener {
         override fun onInputDeviceAdded(deviceId: Int) {}
         override fun onInputDeviceChanged(deviceId: Int) {}
@@ -470,6 +476,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 },
                 screenClass = { windowScreenClass },
                 windowPx = { windowPx },
+                screenRotates = { Settings.System.getInt(contentResolver, Settings.System.ACCELEROMETER_ROTATION, 1) != 0 },
                 ps2BiosFiles = { BiosImport.binFiles(applicationContext, settings.treeRef, "PS2") },
                 saveTransfer = saveTransfer,
                 biosIntake = biosIntake,
@@ -729,6 +736,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         super.onConfigurationChanged(newConfig)
         readWindow()
         syncMenuScreen()
+        if (::state.isInitialized) state.onRotationChanged()
     }
 
     override fun onStart() {
@@ -737,6 +745,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         AppUpdates.onAppOpened(this)   // the "updated" notice, if a self-update left one
         if (handOverToHome()) return   // made home (role dialog, Android's settings) while this drawer instance ran
         inputManager?.registerInputDeviceListener(inputDeviceListener, null)
+        contentResolver.registerContentObserver(Settings.System.getUriFor(Settings.System.ACCELEROMETER_ROTATION), false, rotationObserver)
         // API 26-28: back from Android's home settings without picking this app, the HOME alias goes off again.
         if (::launcher.isInitialized && launcher.dropAliasIfNotHome() && ::state.isInitialized) state.onLauncherChanged()
         if (::state.isInitialized) {
@@ -856,6 +865,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         syncSecondScreen()   // takes the second screen's button and the menu's screen away
         secondScreens.stop()
         inputManager?.unregisterInputDeviceListener(inputDeviceListener)   // a no-op when onStart handed over before registering
+        contentResolver.unregisterContentObserver(rotationObserver)
         if (::router.isInitialized) { axes.release(); router.releaseAll() }
         frameRateBoost.reset()
         if (::state.isInitialized) state.onBackground()   // fetched art still waiting to be written goes out now
