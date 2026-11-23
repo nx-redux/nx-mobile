@@ -1,0 +1,23 @@
+# licence: modifies Azahar (https://github.com/azahar-emu/azahar), GPL-2.0 or later (its source files; license.txt is
+# the GPLv2 text; see LICENSES/azahar.txt); this patch is distributed under the same licence.
+OpenGL stream buffers without persistent mapping map only the range about to be written, not the rest of the buffer:
+Mali's driver flushes the CPU caches over the whole mapped range on every unmap, which cost ~32 ms a frame on a
+Mali-G76 (3DS on OpenGL ES at ~22 fps).
+
+diff --git a/src/video_core/renderer_opengl/gl_stream_buffer.cpp b/src/video_core/renderer_opengl/gl_stream_buffer.cpp
+index b2c781f24..0667c4a73 100644
+--- a/src/video_core/renderer_opengl/gl_stream_buffer.cpp
++++ b/src/video_core/renderer_opengl/gl_stream_buffer.cpp
+@@ -77,8 +77,10 @@ std::tuple<u8*, GLintptr, bool> OGLStreamBuffer::Map(GLsizeiptr size, GLintptr a
+         GLbitfield flags = GL_MAP_WRITE_BIT | (persistent ? GL_MAP_PERSISTENT_BIT : 0) |
+                            (coherent ? GL_MAP_COHERENT_BIT : GL_MAP_FLUSH_EXPLICIT_BIT) |
+                            (invalidate ? GL_MAP_INVALIDATE_BUFFER_BIT : GL_MAP_UNSYNCHRONIZED_BIT);
+-        mapped_ptr = static_cast<u8*>(
+-            glMapBufferRange(gl_target, buffer_pos, buffer_size - buffer_pos, flags));
++        // Without persistent mapping only the range about to be written is mapped: Mali's driver flushes the CPU caches over
++        // the whole mapped range on every unmap, so mapping the rest of a 16 MiB buffer for each draw cost most of a frame.
++        mapped_ptr = static_cast<u8*>(glMapBufferRange(
++            gl_target, buffer_pos, persistent ? buffer_size - buffer_pos : size, flags));
+         mapped_offset = buffer_pos;
+     }
+ 

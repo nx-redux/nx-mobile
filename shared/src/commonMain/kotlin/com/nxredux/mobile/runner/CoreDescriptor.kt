@@ -17,8 +17,8 @@ data class VulkanSwitch(
     val adrenoSystemDriverEnv: Map<String, String> = emptyMap(),
     /**
      * Graphics API "Auto" is Vulkan on an Arm Mali GPU, for a core its OpenGL ES driver runs slower than its Vulkan one
-     * (measured on a Mali-G76: PS2 far slower, Wii short of full speed, 3DS about 22 fps against 60 at any scale). Not for
-     * a core that is as fast on either (N64, PSP, PS1, Dreamcast).
+     * (measured on a Mali-G76: PS2 far slower, Wii short of full speed). Not for a core that is as fast on either (N64,
+     * PSP, PS1, Dreamcast). The 3DS holds full speed on either there too; it takes Vulkan only with a custom driver.
      */
     val autoOnMali: Boolean = false,
     /**
