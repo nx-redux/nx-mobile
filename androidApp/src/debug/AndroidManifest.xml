@@ -11,9 +11,11 @@
             android:name="com.nxredux.mobile.test.NxGameStopReceiver"
             android:process=":game"
             android:exported="false" />
-        <!-- The same hooks as activity starts, for devices that drop adb broadcasts (NxTestActivity). -->
+        <!-- The same hooks as activity starts, for devices that drop adb broadcasts (NxTestActivity). Its own task: in the
+             menu's task a start would bring the menu over a running game. -->
         <activity
             android:name="com.nxredux.mobile.test.NxTestActivity"
+            android:taskAffinity="${applicationId}.test"
             android:exported="true"
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.NoDisplay" />
