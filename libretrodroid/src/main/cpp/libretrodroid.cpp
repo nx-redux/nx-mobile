@@ -1535,6 +1535,30 @@ void LibretroDroid::renderSecondaryInFrame(unsigned width, unsigned height) {
     }
 }
 
+std::optional<std::vector<uint8_t>> LibretroDroid::readFrame(float left, float top, float right, float bottom,
+                                                             unsigned width, unsigned height, bool afterDraw) {
+    std::lock_guard<std::mutex> lock(coreLock);
+    if (!video) return std::vector<uint8_t>();
+    if (afterDraw) {
+        video->readFrameAfterDraw(left, top, right, bottom, width, height);
+        return std::nullopt;
+    }
+    TeardownContext context;
+    if (!context.isCurrent()) return std::vector<uint8_t>();
+    try {
+        return video->readFrame(left, top, right, bottom, width, height);
+    } catch (const std::exception& e) {
+        LOGE("Frame read failed: %s", e.what());
+        return std::vector<uint8_t>();
+    }
+}
+
+std::optional<std::vector<uint8_t>> LibretroDroid::takeFrameRead() {
+    std::lock_guard<std::mutex> lock(coreLock);
+    if (!video) return std::vector<uint8_t>();
+    return video->takeFrameRead();
+}
+
 void LibretroDroid::renderSecondary(unsigned width, unsigned height) {
     std::lock_guard<std::mutex> lock(coreLock);
     renderSecondaryInFrame(width, height);

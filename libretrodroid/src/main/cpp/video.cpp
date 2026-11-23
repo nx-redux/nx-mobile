@@ -303,6 +303,122 @@ unsigned Video::sampledTextureUnits() const {
 void Video::renderFrame() {
     CoreGlStateGuard guard(hasCoreGlState(), sampledTextureUnits());
     drawFrame();
+    if (pendingFrameRead) {
+        const auto r = *pendingFrameRead;
+        pendingFrameRead.reset();
+        frameReadResult = readFrame(r.left, r.top, r.right, r.bottom, r.width, r.height);
+    }
+}
+
+void Video::readFrameAfterDraw(float srcLeft, float srcTop, float srcRight, float srcBottom, unsigned width, unsigned height) {
+    frameReadResult.reset();
+    pendingFrameRead = FrameReadRequest { srcLeft, srcTop, srcRight, srcBottom, width, height };
+}
+
+std::optional<std::vector<uint8_t>> Video::takeFrameRead() {
+    auto result = std::move(frameReadResult);
+    frameReadResult.reset();
+    return result;
+}
+
+std::vector<uint8_t> Video::readFrame(float srcLeft, float srcTop, float srcRight, float srcBottom, unsigned width,
+                                      unsigned height) {
+    // A newer read replaces one still waiting for its draw.
+    pendingFrameRead.reset();
+    const auto texture = (GLuint) renderer->getTexture();
+    const auto [storageW, storageH] = renderer->getTextureSize();
+    const auto [frameW, frameH] = renderer->lastFrameSize;
+    if (texture == 0 || storageW <= 0 || storageH <= 0 || frameW <= 0 || frameH <= 0 || width == 0 || height == 0) return {};
+    if (srcRight <= srcLeft || srcBottom <= srcTop) return {};
+
+    CoreGlStateGuard guard(hasCoreGlState(), 1);
+    // A GL core may leave a pixel pack buffer bound (glReadPixels would write into it) or its own pack layout.
+    GLint packBuffer = 0, rowLength = 0, skipRows = 0, skipPixels = 0, alignment = 4;
+    glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &packBuffer);
+    glGetIntegerv(GL_PACK_ROW_LENGTH, &rowLength);
+    glGetIntegerv(GL_PACK_SKIP_ROWS, &skipRows);
+    glGetIntegerv(GL_PACK_SKIP_PIXELS, &skipPixels);
+    glGetIntegerv(GL_PACK_ALIGNMENT, &alignment);
+
+    GLuint target = 0, framebuffer = 0;
+    glGenTextures(1, &target);
+    glBindTexture(GL_TEXTURE_2D, target);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei) width, (GLsizei) height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glGenFramebuffers(1, &framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target, 0);
+
+    std::vector<uint8_t> pixels;
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE) {
+        // The frame sits in the bottom-left lastFrameSize texels of its storage; a GL core's rows run bottom up.
+        const float scaleX = std::min(1.0F, (float) frameW / (float) storageW);
+        const float scaleY = std::min(1.0F, (float) frameH / (float) storageH);
+        const bool bottomLeft = videoLayout.isBottomLeftOrigin();
+        auto texV = [&](float y) { return (bottomLeft ? 1.0F - y : y) * scaleY; };
+        const float u0 = srcLeft * scaleX, u1 = srcRight * scaleX, vTop = texV(srcTop), vBottom = texV(srcBottom);
+        // The picture's top row at clip y -1: glReadPixels starts at the bottom row, so the rows come out top first.
+        const std::array<float, 12> vertices = { -1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1 };
+        const std::array<float, 12> coordinates = { u0, vTop, u1, vTop, u0, vBottom, u0, vBottom, u1, vTop, u1, vBottom };
+
+        // Shrunk: bilinear; enlarged: sharp bilinear, even pixels at a fractional scale; same size: texel for texel.
+        const float texelsW = (srcRight - srcLeft) * (float) frameW;
+        const float texelsH = (srcBottom - srcTop) * (float) frameH;
+        const bool shrinks = texelsW > (float) width + 0.5F || texelsH > (float) height + 0.5F;
+        const bool grows = !shrinks && ((float) width > texelsW + 0.5F || (float) height > texelsH + 0.5F);
+        const auto& s = grows ? ensurePlainSharpShader() : ensurePlainShader();
+
+        glDisable(GL_DEPTH_TEST);
+        glViewport(0, 0, (GLsizei) width, (GLsizei) height);
+        glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
+        glClear(GL_COLOR_BUFFER_BIT);
+        // Alpha stays the clear's 1: a frame's padding byte (XRGB8888) is no transparency.
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
+        glUseProgram(s.gProgram);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        const GLint filter = shrinks || grows ? GL_LINEAR : GL_NEAREST;
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+        glUniform1i(s.gTextureHandle, 0);
+        glUniform2f(s.gTextureSizeHandle, (float) storageW, (float) storageH);
+        glUniform1f(s.gScreenDensityHandle, std::min((float) width / texelsW, (float) height / texelsH));
+        glVertexAttribPointer(s.gvPositionHandle, 2, GL_FLOAT, GL_FALSE, 0, vertices.data());
+        glEnableVertexAttribArray(s.gvPositionHandle);
+        glVertexAttribPointer(s.gvCoordinateHandle, 2, GL_FLOAT, GL_FALSE, 0, coordinates.data());
+        glEnableVertexAttribArray(s.gvCoordinateHandle);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glDisableVertexAttribArray(s.gvPositionHandle);
+        glDisableVertexAttribArray(s.gvCoordinateHandle);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+        glPixelStorei(GL_PACK_SKIP_ROWS, 0);
+        glPixelStorei(GL_PACK_SKIP_PIXELS, 0);
+        glPixelStorei(GL_PACK_ALIGNMENT, 4);
+        pixels.resize((size_t) width * height * 4);
+        // Only this read's own error counts, not one a core left unread.
+        for (int i = 0; i < 16 && glGetError() != GL_NO_ERROR; ++i) {}
+        glReadPixels(0, 0, (GLsizei) width, (GLsizei) height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+        if (glGetError() != GL_NO_ERROR) pixels.clear();
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, (GLuint) packBuffer);
+        glPixelStorei(GL_PACK_ROW_LENGTH, rowLength);
+        glPixelStorei(GL_PACK_SKIP_ROWS, skipRows);
+        glPixelStorei(GL_PACK_SKIP_PIXELS, skipPixels);
+        glPixelStorei(GL_PACK_ALIGNMENT, alignment);
+    } else {
+        LOGE("Frame read: framebuffer %d x %d incomplete", width, height);
+    }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glUseProgram(0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDeleteFramebuffers(1, &framebuffer);
+    glDeleteTextures(1, &target);
+    glViewport(0, 0, videoLayout.getScreenWidth(), videoLayout.getScreenHeight());
+    // The frame texture's filter was set here: the next draw sets its own again.
+    frameFilter.invalidate();
+    return pixels;
 }
 
 void Video::drawFrame() {

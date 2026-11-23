@@ -17,10 +17,16 @@ import kotlin.math.roundToInt
  * the state's screenshot from its window's first moment): no black while the core loads, and no flash of the fresh
  * boot that runs before the state loads. The screenshot is the picture alone ([FrontendRenderer.thumbnailPicture]), so
  * the cover sits where the picture is drawn ([picture], container px: under a pad skin, its screen glass, not the view's
- * middle); until that is known it takes the game view's bounds, and before the game view exists the container's.
- * Main thread only.
+ * middle); until that is known it takes the game view's bounds, and before the game view exists the container's. With
+ * [waitForPicture] (a DS / 3DS screenshot is one screen of a layout: the view's bounds would be the wrong spot) it stays
+ * hidden until [picture] is known instead. Main thread only.
  */
-internal class ResumeCover(context: Context, private val container: FrameLayout, private val picture: () -> PxRect?) {
+internal class ResumeCover(
+    context: Context,
+    private val container: FrameLayout,
+    private val waitForPicture: Boolean,
+    private val picture: () -> PxRect?,
+) {
     private val image = ImageView(context).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
     private val follow = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> place() }
     private var bitmap: Bitmap? = null
@@ -70,6 +76,8 @@ internal class ResumeCover(context: Context, private val container: FrameLayout,
     fun place() {
         val bmp = bitmap ?: return
         val p = picture()?.takeIf { it.width >= 1f && it.height >= 1f }
+        image.visibility = if (p == null && waitForPicture) View.INVISIBLE else View.VISIBLE
+        if (p == null && waitForPicture) return
         val g = game?.takeIf { it.width > 0 && it.height > 0 }   // laid out; before, the cover keeps the container's size
         val box = when {
             p != null -> intArrayOf(p.x.roundToInt(), p.y.roundToInt(), p.width.roundToInt(), p.height.roundToInt())

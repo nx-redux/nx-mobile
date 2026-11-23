@@ -1286,6 +1286,36 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setScreenO
     LibretroDroid::getInstance().setScreenOffset(x, y);
 }
 
+static jbyteArray frameReadArray(JNIEnv* env, const std::optional<std::vector<uint8_t>>& pixels) {
+    if (!pixels) return nullptr;
+    jbyteArray result = env->NewByteArray((jsize) pixels->size());
+    if (result == nullptr) return nullptr;
+    if (!pixels->empty()) env->SetByteArrayRegion(result, 0, (jsize) pixels->size(), reinterpret_cast<const jbyte*>(pixels->data()));
+    return result;
+}
+
+JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_readFrame(
+    JNIEnv* env,
+    jclass obj,
+    jfloat left,
+    jfloat top,
+    jfloat right,
+    jfloat bottom,
+    jint width,
+    jint height,
+    jboolean afterDraw
+) {
+    if (width <= 0 || height <= 0) return env->NewByteArray(0);
+    return frameReadArray(env, LibretroDroid::getInstance().readFrame(left, top, right, bottom, (unsigned) width, (unsigned) height, afterDraw));
+}
+
+JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_takeFrameRead(
+    JNIEnv* env,
+    jclass obj
+) {
+    return frameReadArray(env, LibretroDroid::getInstance().takeFrameRead());
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setPictureHeld(
     JNIEnv* env,
     jclass obj,
