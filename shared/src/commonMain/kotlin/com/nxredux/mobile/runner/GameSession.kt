@@ -39,4 +39,9 @@ data class GameSession(
      * suspended is replaced, not brought back where it was ([canBringBack]).
      */
     val fresh: Boolean = false,
+    /**
+     * Continues the game from its last save (A on a game, Continue, the Game Switcher): [resumeSlot] is wherever its resume
+     * pointer is, a manual slot too, and the game this process still runs is newer than it, so it is brought back.
+     */
+    val continuing: Boolean = false,
 )

@@ -746,7 +746,7 @@ class AppState(
             override fun kidsLocked(): Boolean = kidsUi.kidsLocked
             override fun navStep(motion: NavMotion) = this@AppState.navStep(motion)
             override fun resolveOne(path: String): Listed? = this@AppState.resolveOne(path)
-            override fun launch(entry: Listed, resumeSlot: Int?, fromSwitcher: Boolean, fresh: Boolean): Job? = launches.launch(entry, resumeSlot, fromSwitcher = fromSwitcher, fresh = fresh)
+            override fun launch(entry: Listed, resumeSlot: Int?, fromSwitcher: Boolean, fresh: Boolean): Job? = launches.launch(entry, resumeSlot, fromSwitcher = fromSwitcher, fresh = fresh, continuing = !fresh)
             override fun menuWithItsRow(): Pair<Screen, ListSelection> =
                 menuScreen().let { m -> m to menuRowOf(m) }
             override fun publishHomeView() = homeTab.publishHomeView()
