@@ -234,7 +234,6 @@ Checked on the emulator only (GBA game starts, draws, quits; first setup up to P
 
 ## Found 2026-11-23: open
 
-- [ ] PS2: quitting God of War II 3–6 s after its first frame crashed the game process in teardown (2 of 3, AYANEO): SIGSEGV in the IOP thread at a JIT address after "Releasing host memory for virtual systems" / "Vulkan bridge: device destroyed"; game.json stays "running". Quits after 25–80 s were fine.
 - [ ] DS Large layout with a translucent inset (Pad skin off): a dark rectangle ~40 px bigger than the inset darkens the big screen around it, also at 100% opacity (AYANEO). Check whether intended.
 - [ ] DS Layout row reads "Unavailable — The pad skin places the screens" on the AYANEO, whose built-in controller hides the skin.
 - [ ] Update row: after "Update failed" (a redirect), A retries the same release; checking again needs an app restart (Nova, local feed). Check whether intended.
