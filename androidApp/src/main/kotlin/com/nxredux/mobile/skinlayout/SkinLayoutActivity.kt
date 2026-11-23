@@ -7,6 +7,7 @@ import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.view.KeyEvent
 import android.widget.Toast
+import kotlinx.coroutines.delay
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -78,8 +79,13 @@ class SkinLayoutActivity : ComponentActivity() {
                 BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
                     val w = constraints.maxWidth
                     val h = constraints.maxHeight
-                    // until the window has turned to the asked orientation, nothing to place
-                    if (w <= 0 || h <= 0 || (w > h) != landscape) return@BoxWithConstraints
+                    if (w <= 0 || h <= 0) return@BoxWithConstraints
+                    // until the window has turned to the asked orientation, nothing to place; a screen that never
+                    // turns (a landscape-only handheld asked for portrait) and doesn't letterbox closes with the message
+                    if ((w > h) != landscape) {
+                        LaunchedEffect(Unit) { delay(TURN_WAIT_MS); turnFailed(landscape) }
+                        return@BoxWithConstraints
+                    }
                     // a display held in the other orientation (a forced rotation) letterboxes this window instead of
                     // turning: a layout edited there is not the one a game on this screen draws
                     val refused = remember(w, h) {
@@ -173,6 +179,8 @@ class SkinLayoutActivity : ComponentActivity() {
     companion object {
         private const val EXTRA_CONSOLE = "console"
         private const val EXTRA_LANDSCAPE = "landscape"
+        /** Long enough for a slow device to turn its screen; a window still the other shape then never turns. */
+        private const val TURN_WAIT_MS = 2_500L
         private const val EXTRA_WII_PAD = "wii_pad"
         private const val EXTRA_N3DS_NEW = "n3ds_new"
         private const val EXTRA_SEGA_THREE = "sega_three"
