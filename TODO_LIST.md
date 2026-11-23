@@ -17,14 +17,6 @@ checked on the AYANEO (2026-11-16) and the Nova with the reader forced (2026-11-
 Device checks still owed:
 
 - [ ] Other Mali devices and malisx2 versions.
-- [ ] 3DS on Vulkan on the AYANEO: Mario Kart 7 from boot reached 60 fps, then the core aborted at the first 3D scene
-  (`vk::DeviceLostError` in `waitForFences`), stock driver and malisx2 alike, 23 MB free at the abort. Cause: Azahar's
-  fixed 512 MiB Vulkan upload buffer is resident GPU memory on Mali. Fixed in #194 (sized
-  RAM/32, 64–512 MiB): Pokemon Ultra Sun on the AYANEO, GPU mapping 788 → about 280 MB, swap never empty, no lmkd kills
-  during play, 60 fps (2026-11-22). Saving a state also got the game killed at any resolution (the whole state uncompressed in memory, then copied): #194
-  streams states through ZSTD both ways; Ultra Sun saves, quits and resumes on the AYANEO. Still owed: Mario Kart 7 again;
-  a 3DS Max Scale for modest GPUs (Auto starts at 3x on Mali).
-
 ## Slang shader presets
 
 Nova, 2026-11-14 (`tools/device-tests/slang_shaders.py`, 33 runs, no errors, screenshots looked at): SNES with crt-geom,
@@ -223,8 +215,7 @@ Device checks still owed:
 
 Follow-ups, after #147:
 
-- [ ] BIOS checksums: check each BIOS file against the known good dumps, so a bad or misnamed dump gets its own message. Merged #195; phone check owed (PS1 BIOS as disksys.rom, European BIOS as bios_CD_U.bin, PS2 rehash).
-- [ ] More badges ([IndexedGame.badge] is general): from bracketed file-name tags ((Hack), [h], (Homebrew), (Translated), (Beta)/(Proto)) via a small table, a per-game choice in Options (wins over detected ones), or a DAT/ScreenScraper match. One badge per game today. Tag table + per-game Badge merged #196; DAT/ScreenScraper source, arcade titles and phone check owed.
+- [ ] More badges ([IndexedGame.badge] is general): from bracketed file-name tags ((Hack), [h], (Homebrew), (Translated), (Beta)/(Proto)) via a small table, a per-game choice in Options (wins over detected ones), or a DAT/ScreenScraper match. One badge per game today. Tag table + per-game Badge merged #196 (phone-checked on the AYANEO 2026-11-23); DAT/ScreenScraper source and arcade titles owed.
 
 ## PS2: ARMSX2 nightly-20261114 with LTO and upstream's profile (PR #152)
 
@@ -258,18 +249,14 @@ Checked on the emulator only (GBA game starts, draws, quits; first setup up to P
 
 ## Found 2026-11-22: open
 
-- [ ] Second screen Settings tab Shader row: the picker list dims the top picture (only the preset strip lifts it), as the menu's own path; decide whether the list should leave the picture undimmed.
-- [ ] In-game menu: a deeper page's dimmed parent column keeps a fixed share, so long words overflow and the selected one scrolls ("Shader Parameters ›"); decide whether it should size to its words.
-- [ ] AYANEO: Button layout editor Portrait is black (the firmware keeps landscape); Back does nothing there.
+- [ ] Players tab with two real controllers (#210): the tab appears, the built-in controls show as Player 1, a pad joining refreshes the rows.
 - [ ] Pad skin Off portrait overlay showed the landscape grip layout letterboxed (AYANEO, forced rotation; may be the rotation).
-- [ ] A slot-9 thumbnail was all black after a Home with Bottom screen = Second screen (Nova, 1942; once).
-- [ ] Players tab shows Player 1–4 Empty while the built-in controller plays as P1 (Nova, Sunshine).
 - [ ] In launcher mode a Game Switcher return relaunched the live game instead of resuming it (Nova, Doom; check whether expected).
-- [ ] After a tap on the bottom panel, d-pad keys stopped moving the in-game menu (Nova; B and touch still worked).
-- [ ] Pokemon Ultra Sun benchmark state (nx-benchmark states/3DS-azahar) is the first battle, not "the first walk outside"; on the AYANEO its Pokémon models draw striped (GLES and Vulkan).
 - [ ] GAME test hook loads a custom GPU driver only with --es game_path (pacing/slang runs without it measured the system driver).
 - [ ] Slow slang presets on Mali-G76 (correct picture): aa-shader-4.0 ~5 fps, authentic_gbc ~6, crt-lottes ~7, crt-mattias ~21.
-- [ ] Cheats & Patches: a cancelled cheat database install shows "Not installed" while about 20k files are still being deleted (about 2.5 min).
 - [ ] Test hooks: GAME_FF brings the menu task over the running game on Android 11; GAME's `game_path` must be the library path (`/Extra/Roms-…/…`), a file path records play time under a separate game.
-- [ ] Device Sync carries device-specific emulator config: Dolphin's `GFX.ini`, `Dolphin.ini`, `WiimoteNew.ini` and Azahar's `mac.txt` crossed Nova ↔ AYANEO; decide which stay per device.
+- [ ] Graphics API info on a 3DS (or other non-N64) page mentions "Vulkan on N64 switches to the ParaLLEl-RDP renderer"; show that line on N64 only.
+- [ ] The BIOS checksum warning reaches logcat but not that run's game log file (`Logs/…-game-<TAG>-<core>.log`).
+- [ ] The first refused FDS launch (bad BIOS) took about 10 s to show its dialog (AYANEO).
+- [ ] Dual screen, DS/3DS split with the picture on the second display: the resume cover goes over main's (bottom) screen.
 - [ ] N64 netplay input from the joining side: adb keys don't reach the N64 game; press START on the guest's pad and watch it act on the host.
