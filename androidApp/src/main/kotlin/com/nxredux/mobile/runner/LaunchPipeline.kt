@@ -1385,8 +1385,19 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // frame) the pad skin's glass for the picture the screenshot holds.
             val picture = { host.renderer.thumbnailPicture() ?: host.padLayout.takeIf { it.skinShown }?.skinPlacement()?.let(::coverGlass) }
             val twoScreens = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
-            resumeCover = ResumeCover(host.activity, host.activity.findViewById(R.id.gameContainer), twoScreens, picture).also { cover ->
+            val dual = host.dual
+            // A DS / 3DS split with the picture on the second display: the screenshot's screen is drawn there.
+            val spot: () -> CoverSpot? = if (!twoScreens) { { CoverSpot(ThumbnailDisplay.MAIN, picture()) } } else { {
+                twoScreenCoverSpot(
+                    pending = dual.dualSettling(),
+                    onSecond = dual.dualMode == DualMode.SPLIT && dual.pictureOn == PictureOn.SECOND,
+                    second = dual.splitPictureScreens(),
+                    main = picture(),
+                )
+            } }
+            resumeCover = ResumeCover(host.activity, host.activity.findViewById(R.id.gameContainer), twoScreens, spot, dual::coverLayer).also { cover ->
                 host.renderer.onPictureLaidOut = { resumeCover?.place() }
+                dual.onSecondChanged = { resumeCover?.place() }
                 cover.show(bmp)
                 host.retroView?.let(cover::follow)   // the game view came first
             }
@@ -1464,6 +1475,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
 
     /** onDestroy: the RomCache holds this game took go, and one taken later (an unpack or copy that outlived the screen) at once. */
     fun onDestroy() {
+        resumeCover?.remove()   // a quit before the resumed frame: nothing of it stays on either display
+        resumeCover = null
         unwatchWifi()
         dropBroadcasts()
         dsWifi?.let { runCatching { if (it.isHeld) it.release() } }

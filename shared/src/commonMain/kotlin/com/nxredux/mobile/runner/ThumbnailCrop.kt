@@ -123,3 +123,19 @@ fun frameRead(source: ThumbnailSource, rotation: Float, size: (Int, Int) -> Pair
     val src = source.src ?: WHOLE_FRAME
     return if (turns % 2 == 1) FrameRead(src, th, tw, turns) else FrameRead(src, tw, th, turns)
 }
+
+/** Where a resume's screenshot is shown: on [display], over [picture] (px of that display's game area or surface; null: not placed yet). */
+data class CoverSpot(val display: ThumbnailDisplay, val picture: PxRect?)
+
+/**
+ * Where a DS / 3DS resume screenshot is shown: over the screen it holds ([thumbnailRegion]). Split with the picture on
+ * the second display ([onSecond]) that screen is drawn there ([second]: the screens split puts on its surface, null
+ * until the surface is known); otherwise on main at [main]. Null, shown on neither, while the second display's mode is
+ * still being settled ([pending]) or its screen is not known yet: a cover over the wrong screen would be a wrong picture.
+ */
+fun twoScreenCoverSpot(pending: Boolean, onSecond: Boolean, second: List<NdsRegion>?, main: PxRect?): CoverSpot? {
+    if (pending) return null
+    if (!onSecond) return CoverSpot(ThumbnailDisplay.MAIN, main)
+    val screen = second?.thumbnailRegion() ?: return null
+    return CoverSpot(ThumbnailDisplay.SECOND, screen.dst)
+}

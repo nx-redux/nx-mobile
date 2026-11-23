@@ -182,4 +182,29 @@ class ThumbnailCropTest {
         assertNull(frameRead(ThumbnailSource(ThumbnailDisplay.MAIN, null), 0f, ::size))
         assertNull(frameRead(ThumbnailSource(ThumbnailDisplay.MAIN, PxRect(0f, 0f, 0f, 10f)), 0f, ::size))
     }
+    // The Nova: the DS top screen split onto the 1920 x 1080 second display, the bottom one on main's 1240 x 1080.
+    private val novaTop = DualScreen.ndsScreen(1920f, 1080f, NdsScreen.TOP)
+    private val mainBottom = PxRect(300f, 315f, 640f, 480f)
+
+    @Test fun aCoverOfTheSecondDisplaysScreenGoesThere() {
+        val spot = twoScreenCoverSpot(pending = false, onSecond = true, second = novaTop, main = mainBottom)
+        assertEquals(CoverSpot(ThumbnailDisplay.SECOND, novaTop.single().dst), spot)
+        // where a save state's picture is read from in the same layout: the cover is that picture, over it
+        val source = thumbnailSource(listOf(region(NdsScreen.BOTTOM, mainBottom)), null, novaTop, null, pictureOnSecond = true)
+        assertEquals(source.display, spot?.display)
+        assertEquals(source.picture, spot?.picture)
+    }
+
+    @Test fun aCoverWaitsForTheSecondDisplay() {
+        // its surface not there yet: nowhere, not over main's screen
+        assertNull(twoScreenCoverSpot(pending = false, onSecond = true, second = null, main = mainBottom))
+        assertNull(twoScreenCoverSpot(pending = false, onSecond = true, second = emptyList(), main = mainBottom))
+        // the second display found but its mode not settled yet: main's layout is about to change
+        assertNull(twoScreenCoverSpot(pending = true, onSecond = false, second = null, main = mainBottom))
+    }
+
+    @Test fun aCoverWithThePictureOnMainStaysThere() {   // one display, or split with the picture on main
+        assertEquals(CoverSpot(ThumbnailDisplay.MAIN, mainBottom), twoScreenCoverSpot(pending = false, onSecond = false, second = novaTop, main = mainBottom))
+        assertEquals(CoverSpot(ThumbnailDisplay.MAIN, null), twoScreenCoverSpot(pending = false, onSecond = false, second = null, main = null))
+    }
 }
