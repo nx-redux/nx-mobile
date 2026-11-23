@@ -129,17 +129,17 @@ class EmulatorSettingsControllerGpuDriverTest {
     @Test fun aMaliGpuAddsTheSystemDriverNoteToTheGraphicsApiRow() = runTest {
         val mali = harness(configs(vulkan), gpu = "Mali-G76 MC4")
         openConsole(mali)
-        assertEquals(GraphicsApiOptions.row.info + "\n" + GraphicsApiOptions.MALI_NOTE, graphicsInfo(mali))
+        assertEquals(GraphicsApiOptions.row.info + "\n" + GraphicsApiOptions.N64_NOTE + "\n" + GraphicsApiOptions.MALI_NOTE, graphicsInfo(mali))
 
         val adreno = harness(configs(vulkan), gpu = "Adreno (TM) 740")
         openConsole(adreno)
-        assertEquals(GraphicsApiOptions.row.info, graphicsInfo(adreno))
+        assertEquals(GraphicsApiOptions.rowFor(autoVulkan = false, mali = false, drivers = false, n64 = true).info, graphicsInfo(adreno))
     }
 
     @Test fun theVulkanFailedNoteIsHiddenOnlyOnVulkanWithAResolvedDriver() = runTest {
         val resolved = harness(configs(vulkan), vulkanFailed = true, appWide = "turnip")
         openConsole(resolved)
-        assertEquals(GraphicsApiOptions.row.info, graphicsInfo(resolved))
+        assertEquals(GraphicsApiOptions.rowFor(autoVulkan = false, mali = false, drivers = false, n64 = true).info, graphicsInfo(resolved))
 
         val noDriver = harness(configs(vulkan), vulkanFailed = true)   // default follows the app-wide pick, which is the system driver
         openConsole(noDriver)
