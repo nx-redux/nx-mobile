@@ -36,7 +36,7 @@ object AchievementsService {
         val app = context.applicationContext
         val homes = AndroidHomeLocator(app)
         return RaPlatform(
-            AndroidRaStore(app), AndroidRaHttp(RaRequests.userAgent(BuildConfig.VERSION_NAME, "Android ${android.os.Build.VERSION.RELEASE}")),
+            AndroidRaStore(app), AndroidRaHttp(BuildConfig.VERSION_NAME, "Android ${android.os.Build.VERSION.RELEASE}"),
             AndroidRaHasher(app, AndroidRomsSources.of(app)), AndroidRaSigner, AndroidConnectivity(app),
             RaHomeTree(AndroidRomsSources.of(app)) { homes.current() },   // storage: an unmounted card is not available()
         )

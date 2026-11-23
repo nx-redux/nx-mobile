@@ -477,6 +477,9 @@ void LibretroDroid::create(
         struct retro_system_info info {};
         core->retro_get_system_info(&info);
         Environment::setCoreWarningsLogged(info.library_name == nullptr || strcmp(info.library_name, "melonDS DS") != 0);
+        std::lock_guard<std::mutex> lock(coreIdentityLock);
+        coreName = info.library_name ? info.library_name : "";
+        coreVersion = info.library_version ? info.library_version : "";
     }
 
     core->retro_set_video_refresh(&callback_hw_video_refresh);
@@ -1575,6 +1578,11 @@ std::array<float, 4> LibretroDroid::getGameGeometry() const {
 
 bool LibretroDroid::isHardwareRendered() const {
     return hardwareFrame.load();
+}
+
+std::pair<std::string, std::string> LibretroDroid::getCoreIdentity() {
+    std::lock_guard<std::mutex> lock(coreIdentityLock);
+    return { coreName, coreVersion };
 }
 
 } //namespace libretrodroid

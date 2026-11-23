@@ -24,6 +24,8 @@ class RaTransport(
     private val now: () -> Long,
 ) {
     @Volatile var mode: RaSessionMode = RaSessionMode.DISABLED   // written by RaSession, read on IO threads
+    /** The running core's [RaRequests.coreToken], named in every request's user agent once known. */
+    @Volatile var core: String? = null
 
     suspend fun call(url: String, post: String): RaResponse {
         val kind = RaRequestKind.of(post)
@@ -36,7 +38,7 @@ class RaTransport(
 
     private suspend fun online(url: String, post: String, kind: RaRequestKind): RaResponse {
         if (kind.r == "awardachievement") return onlineAward(url, post, kind)
-        val response = try { http.post(url, post, RaRequests.CONTENT_TYPE) } catch (e: RaHttpException) { null }
+        val response = try { http.post(url, post, RaRequests.CONTENT_TYPE, core) } catch (e: RaHttpException) { null }
         if (response != null && definitive(response)) {
             if (response.status == 200 && RaJson.isSuccess(response.body)) cache(kind, response.body)
             return response
@@ -55,7 +57,7 @@ class RaTransport(
         // An unwritable journal (a full disk) must not keep the award from the server: it is only a failure unanswered.
         var unwritten: RaStoreException? = null
         val added = try { journal.append(entry) } catch (e: RaStoreException) { unwritten = e; false }
-        val response = try { http.post(url, post, RaRequests.CONTENT_TYPE) } catch (e: RaHttpException) { null }
+        val response = try { http.post(url, post, RaRequests.CONTENT_TYPE, core) } catch (e: RaHttpException) { null }
         if (response != null && definitive(response)) {
             // Only this call's entry: an equal older one (an offline unlock) stays for the sync. A failed rewrite only
             // costs a harmless second submission. A refusal of the login or account says nothing about this unlock (a

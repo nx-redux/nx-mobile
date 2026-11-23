@@ -1673,6 +1673,18 @@ JNIEXPORT jstring JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_takeSha
     return error ? newSafeJString(env, *error) : nullptr;   // may quote a preset's file names and lines
 }
 
+JNIEXPORT jobjectArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getCoreIdentity(
+    JNIEnv* env,
+    jclass obj
+) {
+    auto identity = LibretroDroid::getInstance().getCoreIdentity();
+    jobjectArray result = env->NewObjectArray(2, env->FindClass("java/lang/String"), nullptr);
+    if (result == nullptr) return nullptr;
+    env->SetObjectArrayElement(result, 0, newSafeJString(env, identity.first));   // a core's text: never straight to NewStringUTF
+    env->SetObjectArrayElement(result, 1, newSafeJString(env, identity.second));
+    return result;
+}
+
 JNIEXPORT jfloatArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getGameGeometry(
     JNIEnv* env,
     jclass obj

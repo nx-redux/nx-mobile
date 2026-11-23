@@ -197,6 +197,9 @@ public class LibretroDroid {
 
     public static native boolean isHardwareRendered();
 
+    /** The running core's {library_name, library_version}, both empty before a core was created. */
+    public static native String[] getCoreIdentity();
+
     /** The core's recent warning and error log lines since the core was created, oldest first, as "E text" or "W text". */
     public static native String[] getRecentCoreErrors();
 

@@ -8,11 +8,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** HttpURLConnection transport with AndroidCheatDb's timeouts. Only transport failures throw; an HTTP status is returned. */
-class AndroidRaHttp(private val userAgent: String) : RaHttp {
-    override suspend fun post(url: String, body: String, contentType: String): RaResponse = withContext(Dispatchers.IO) {
+class AndroidRaHttp(private val version: String, private val os: String) : RaHttp {
+    override suspend fun post(url: String, body: String, contentType: String, core: String?): RaResponse = withContext(Dispatchers.IO) {
         var c: HttpURLConnection? = null
         try {
-            c = open(url, "POST"); c.doOutput = true; c.setRequestProperty("Content-Type", contentType)
+            c = open(url, "POST", core); c.doOutput = true; c.setRequestProperty("Content-Type", contentType)
             c.outputStream.use { it.write(body.encodeToByteArray()) }
             val status = c.responseCode
             RaResponse(status, bodyOf(c, status).decodeToString())
@@ -42,9 +42,9 @@ class AndroidRaHttp(private val userAgent: String) : RaHttp {
         return stream.use { BoundedBody.read(it, MAX_BODY_BYTES) } ?: throw IOException("body over $MAX_BODY_BYTES bytes")
     }
 
-    private fun open(url: String, method: String) = (URL(url).openConnection() as HttpURLConnection).apply {
+    private fun open(url: String, method: String, core: String? = null) = (URL(url).openConnection() as HttpURLConnection).apply {
         requestMethod = method; connectTimeout = 15_000; readTimeout = 30_000; instanceFollowRedirects = true
-        setRequestProperty("User-Agent", userAgent)   // RA asks clients to identify themselves ([RaRequests.userAgent])
+        setRequestProperty("User-Agent", RaRequests.userAgent(version, os, core))
     }
 
     private companion object {
