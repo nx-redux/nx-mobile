@@ -123,6 +123,8 @@ class SecondScreenPresentation(private val activity: ComponentActivity, display:
         pen = PenDot(penLayer)
         val root = FrameLayout(context).apply {
             setBackgroundColor(Color.BLACK)
+            // Keys are the activity's ([dispatchKeyEvent]): a focused view here would only eat the first d-pad press after a tap.
+            descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
             addView(surfaceView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             addView(penLayer, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             addView(composeView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))

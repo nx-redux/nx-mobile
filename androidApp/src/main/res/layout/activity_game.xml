@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- No view here takes key focus: every key goes to GameActivity's input routing. A focused view would be given the
+     d-pad when the window leaves touch mode (a tap, then a d-pad press) and keep it from the in-game menu. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/root"
+    android:descendantFocusability="blocksDescendants"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@android:color/black">
