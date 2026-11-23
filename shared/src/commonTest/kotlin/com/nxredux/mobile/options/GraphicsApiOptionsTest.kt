@@ -183,6 +183,17 @@ class GraphicsApiOptionsTest {
         assertTrue(mali.shownFor(mapOf(GraphicsApiOptions.KEY to GraphicsApiOptions.GLES)).none { it.key == GpuDriverOptions.KEY })
     }
 
+    @Test fun on_mali_the_gpu_driver_row_stays_on_auto_where_the_driver_decides_auto() {
+        val drivers = listOf(com.nxredux.mobile.gpudriver.GpuDriver("d", "Driver", "1", "a", "d", "libvulkan_d.so", 28))
+        val auto = emptyMap<String, String>()
+        for (tag in listOf("3DS", "GC", "WII")) {
+            // The system driver picked: Auto is OpenGL ES, yet the row stays so a custom driver can be picked again.
+            assertTrue(ConsoleSettings.tableFor(tag, gpuDrivers = drivers, mali = true).shownFor(auto).any { it.key == GpuDriverOptions.KEY }, tag)
+            assertTrue(ConsoleSettings.tableFor(tag, gpuDrivers = drivers).shownFor(auto).none { it.key == GpuDriverOptions.KEY }, tag)
+        }
+        assertTrue(ConsoleSettings.tableFor("N64", gpuDrivers = drivers, mali = true).shownFor(auto).none { it.key == GpuDriverOptions.KEY })
+    }
+
     @Test fun on_a_mali_gpu_the_info_says_the_system_driver_can_crash_and_names_the_fix() {
         val drivers = listOf(com.nxredux.mobile.gpudriver.GpuDriver("d", "Driver", "1", "a", "d", "libvulkan_d.so", 28))
         fun api(tag: String, mali: Boolean, autoVulkan: Boolean = false, gpuDrivers: List<com.nxredux.mobile.gpudriver.GpuDriver>? = drivers) =

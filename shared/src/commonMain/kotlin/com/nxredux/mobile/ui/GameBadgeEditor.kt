@@ -52,7 +52,8 @@ internal class GameBadgeEditor(
 
     /** A touch pick of choice [index]. */
     fun choose(game: GameEntry, index: Int) {
-        GameBadges.CHOICES.getOrNull(index)?.let { set(game, it) }
+        // Auto is the null choice, so the index is checked rather than the value.
+        if (index in GameBadges.CHOICES.indices) set(game, GameBadges.CHOICES[index])
     }
 
     private fun set(game: GameEntry, choice: String?) {
