@@ -357,6 +357,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun onInputDevicesChanged() {
         relayoutPad()
+        onPlayersChanged()
+    }
+
+    override fun onPlayersChanged() {
         if (menuOpen) menu.menuModel?.let(menu::publishPlayers)
         dual.refreshDualPanel()
     }

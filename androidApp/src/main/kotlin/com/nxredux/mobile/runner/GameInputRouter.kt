@@ -82,6 +82,8 @@ internal interface GameInputHost : LifecycleOwner {
     fun onN3dsSwapPressed(down: Boolean): Boolean
     fun connectDolphinPorts()
     fun onInputDevicesChanged()
+    /** A pad took or came back to a player slot: the Players rows shown (the open menu's, the second-screen panel's) are stale. */
+    fun onPlayersChanged()
     fun applyFrontend(values: Map<String, String>)
     fun persistGameKey(key: String, value: String, failure: String)
     fun syncN3dsCore()
@@ -923,6 +925,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private fun onPlayerJoined(port: Int, device: InputDevice) {
         host.notifications.push("Player ${port + 1}: ${device.name}", null, PLAYER_NOTICE_MS, SystemClock.elapsedRealtime())
         host.publishNotifications()
+        host.onPlayersChanged()
     }
 
     /** The Players page's rows: each slot (Empty, a live pad, a held one) and each connected pad, names numbered; null without slots. */
@@ -943,7 +946,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
                 is SlotView.Playing -> PlayerSlotRow(v.key.value, name(v.key), connected = true)
                 is SlotView.Held -> PlayerSlotRow(v.key.value, name(v.key), connected = false)
             }
-        } to keys.map { k -> PlayerPadRow(k.value, name(k)) }
+        } to s.outOfPlay.let { benched -> keys.map { k -> PlayerPadRow(k.value, name(k), benched = k in benched) } }
     }
 
     /** The connected physical pads, one per descriptor (a pad may show as several input devices). */

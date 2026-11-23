@@ -7,6 +7,7 @@ import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.shortcuts.TouchSlot
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -26,23 +27,35 @@ class GamePanelModelTest {
     }
 
     @Test fun tabs_shortcuts_only() {
-        assertEquals(listOf(GamePanelTab.SHORTCUTS), GamePanelModel.tabs(raAvailable = false, playerSlots = 1))
-        assertEquals(listOf(GamePanelTab.SHORTCUTS), GamePanelModel.tabs(raAvailable = false, playerSlots = 0))
+        assertEquals(listOf(GamePanelTab.SHORTCUTS), GamePanelModel.tabs(raAvailable = false, players = false))
+        assertEquals(listOf(GamePanelTab.SHORTCUTS), GamePanelModel.tabs(raAvailable = false, players = false))
     }
 
     @Test fun tabs_with_ra_and_players() {
-        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS, GamePanelTab.PLAYERS), GamePanelModel.tabs(raAvailable = true, playerSlots = 2))
-        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS), GamePanelModel.tabs(raAvailable = true, playerSlots = 1))
-        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.PLAYERS), GamePanelModel.tabs(raAvailable = false, playerSlots = 4))
+        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS, GamePanelTab.PLAYERS), GamePanelModel.tabs(raAvailable = true, players = true))
+        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS), GamePanelModel.tabs(raAvailable = true, players = false))
+        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.PLAYERS), GamePanelModel.tabs(raAvailable = false, players = true))
+    }
+
+    @Test fun players_show_with_more_than_one_controller() {
+        val two = listOf(PlayerSlotRow("a", "Pad A", true), PlayerSlotRow(null, "", false))
+        val padA = PlayerPadRow("a", "Pad A")
+        val padB = PlayerPadRow("b", "Pad B")
+        assertFalse(GamePanelModel.playersShown(two, emptyList()))
+        assertFalse(GamePanelModel.playersShown(two, listOf(padA)))             // the built-in controls alone
+        assertTrue(GamePanelModel.playersShown(two, listOf(padA, padB)))
+        assertFalse(GamePanelModel.playersShown(two.take(1), listOf(padA, padB)))   // a one-player core
+        // The only pad left is benched: the tab stays so it can be put back in play.
+        assertTrue(GamePanelModel.playersShown(listOf(PlayerSlotRow(null, "", false), PlayerSlotRow(null, "", false)), listOf(padA.copy(benched = true))))
     }
 
     @Test fun tabs_with_cheats_sit_before_players() {
-        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.CHEATS), GamePanelModel.tabs(raAvailable = false, playerSlots = 1, cheats = true))
+        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.CHEATS), GamePanelModel.tabs(raAvailable = false, players = false, cheats = true))
         assertEquals(
             listOf(GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS, GamePanelTab.CHEATS, GamePanelTab.PLAYERS),
-            GamePanelModel.tabs(raAvailable = true, playerSlots = 2, cheats = true),
+            GamePanelModel.tabs(raAvailable = true, players = true, cheats = true),
         )
-        assertEquals(GamePanelTab.SHORTCUTS, GamePanelModel.resolveTab(GamePanelTab.CHEATS, GamePanelModel.tabs(raAvailable = true, playerSlots = 2)))
+        assertEquals(GamePanelTab.SHORTCUTS, GamePanelModel.resolveTab(GamePanelTab.CHEATS, GamePanelModel.tabs(raAvailable = true, players = true)))
     }
 
     @Test fun cheat_rows_take_the_source_from_the_info() {
@@ -73,10 +86,10 @@ class GamePanelModelTest {
     }
 
     @Test fun resolve_tab_falls_back_when_gone() {
-        val shortcutsOnly = GamePanelModel.tabs(raAvailable = false, playerSlots = 1)
+        val shortcutsOnly = GamePanelModel.tabs(raAvailable = false, players = false)
         assertEquals(GamePanelTab.SHORTCUTS, GamePanelModel.resolveTab(GamePanelTab.ACHIEVEMENTS, shortcutsOnly))
         assertEquals(GamePanelTab.SHORTCUTS, GamePanelModel.resolveTab(GamePanelTab.PLAYERS, shortcutsOnly))
-        val all = GamePanelModel.tabs(raAvailable = true, playerSlots = 2)
+        val all = GamePanelModel.tabs(raAvailable = true, players = true)
         assertEquals(GamePanelTab.PLAYERS, GamePanelModel.resolveTab(GamePanelTab.PLAYERS, all))
         assertEquals(GamePanelTab.ACHIEVEMENTS, GamePanelModel.resolveTab(GamePanelTab.ACHIEVEMENTS, all))
     }
@@ -129,8 +142,8 @@ class GamePanelModelTest {
 
     // The Settings tab is the second-screen panel's: after Shortcuts, only where asked for.
     @Test fun settings_tab_sits_after_shortcuts() {
-        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.SETTINGS, GamePanelTab.ACHIEVEMENTS), GamePanelModel.tabs(raAvailable = true, playerSlots = 1, settings = true))
-        assertTrue(GamePanelTab.SETTINGS !in GamePanelModel.tabs(raAvailable = true, playerSlots = 2, cheats = true))
+        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.SETTINGS, GamePanelTab.ACHIEVEMENTS), GamePanelModel.tabs(raAvailable = true, players = false, settings = true))
+        assertTrue(GamePanelTab.SETTINGS !in GamePanelModel.tabs(raAvailable = true, players = true, cheats = true))
     }
 
     // A Settings option: up to four values sit side by side, more step between two arrows (wrapping); a value not among
