@@ -18,6 +18,7 @@ import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.file.Files
 import java.util.zip.ZipException
 import java.util.zip.ZipFile
 import kotlin.coroutines.cancellation.CancellationException
@@ -121,8 +122,8 @@ class AndroidCheatDb(context: Context) : CheatDbPlatform {
         }
     }
 
-    override suspend fun install(installs: List<CheatDbInstall>, onProgress: (String, Int, Int) -> Unit): CheatDbInstallResult = withContext(Dispatchers.IO) {
-        CheatDbFiles.install(CheatsRoot.settled(app), installs, onProgress)   // one root for every file: a move must not split the install
+    override suspend fun install(installs: List<CheatDbInstall>, onUndo: (Int, Int) -> Unit, onProgress: (String, Int, Int) -> Unit): CheatDbInstallResult = withContext(Dispatchers.IO) {
+        CheatDbFiles.install(CheatsRoot.settled(app), installs, onUndo, onProgress)   // one root for every file: a move must not split the install
     }
 
     override suspend fun discard(archive: CheatDbArchive) = withContext(Dispatchers.IO) { File(archive.path).delete(); Unit }
@@ -135,13 +136,16 @@ class AndroidCheatDb(context: Context) : CheatDbPlatform {
         try { File(sdRoot, CheatDbManifest.PATH).writeAtomically(text.encodeToByteArray()) } catch (e: IOException) { throw CheatDbException(CheatDbException.Kind.STORAGE, e) }
     }
 
-    override suspend fun deleteInstalled(files: List<String>) = withContext(Dispatchers.IO) {
-        deleteFiles(files)
-        File(sdRoot, CheatDbManifest.PATH).delete()
+    override suspend fun deleteInstalled(files: List<String>, onProgress: (Int, Int) -> Unit) = withContext(Dispatchers.IO) {
+        val root = sdRoot
+        CheatDbFiles.remove(root, files, onProgress)
+        File(root, CheatDbManifest.PATH).delete()
         Unit
     }
 
     override suspend fun deleteFiles(files: List<String>) = withContext(Dispatchers.IO) { CheatDbFiles.delete(sdRoot, files) }
+
+    override suspend fun emptyTrash() = withContext(Dispatchers.IO) { CheatDbFiles.emptyTrash(sdRoot) }
 
     /** GitHub's release link answers with a redirect to its asset host (https to https, followed); buildbot answers directly. */
     private fun open(method: String, source: CheatDbSource): HttpURLConnection = (URL(source.url).openConnection() as HttpURLConnection).apply {
@@ -174,8 +178,18 @@ internal object CheatDbFiles {
         return CheatDbCommit(sha.groupValues[1].lowercase(), date)
     }
 
+    /**
+     * Where taken-back files wait for [emptyTrash]: under the same root as `Cheats/` (one volume, so a folder moves in
+     * one rename), in `.userdata/android/` (not synced) and without a dash (a dashed folder there moves with the home).
+     */
+    const val TRASH = ".userdata/android/cheatdb_trash"
+    /** Files deleted one by one between progress reports: each report is a main-thread state update. */
+    private const val UNDO_STEP = 200
+
     /** [CheatDbPlatform.install] into [sdRoot]. */
-    suspend fun install(sdRoot: File, installs: List<CheatDbInstall>, onProgress: (String, Int, Int) -> Unit): CheatDbInstallResult {
+    suspend fun install(
+        sdRoot: File, installs: List<CheatDbInstall>, onUndo: (Int, Int) -> Unit = { _, _ -> }, onProgress: (String, Int, Int) -> Unit,
+    ): CheatDbInstallResult {
         val written = ArrayList<String>()
         // Targets that did not exist before this attempt wrote them: the only files a failure may take back.
         val created = ArrayList<File>()
@@ -196,7 +210,7 @@ internal object CheatDbFiles {
                     // Best effort: take back this archive's new files only; the others' stay and the call goes on.
                     NxLog.w(TAG, "optional ${install.archive.source} install failed", e)
                     val mine = created.subList(createdBefore, created.size)
-                    rollBack(mine.toList(), sdRoot)
+                    takeBack(sdRoot, mine.toList(), onUndo)
                     mine.clear()
                     written.subList(writtenBefore, written.size).clear()
                     failed += install.archive.source
@@ -205,7 +219,7 @@ internal object CheatDbFiles {
             }
         } catch (e: Throwable) {
             // Cancellation included. Pre-existing files (a previous install, or same-named user files) stay.
-            rollBack(created, sdRoot)
+            takeBack(sdRoot, created, onUndo)
             throw e
         }
         return CheatDbInstallResult(written, failed)
@@ -262,25 +276,98 @@ internal object CheatDbFiles {
      * file on shared storage.
      */
     fun delete(sdRoot: File, files: List<String>) {
-        val cheats = File(sdRoot, "Cheats").canonicalFile
-        val targets = ArrayList<File>()
-        for (rel in files) {
-            val f = File(sdRoot, rel)
-            val inside = CheatDbManifest.isInstalledPath(rel) && runCatching { f.canonicalFile.path.startsWith(cheats.path + File.separator) }.getOrDefault(false)
-            if (!inside) { NxLog.w(TAG, "refused to delete $rel"); continue }
-            targets += f
-            if (f.exists() && !f.delete()) NxLog.w(TAG, "could not delete $rel")
+        val targets = listed(sdRoot, files)
+        for (f in targets) {
+            if (f.exists() && !f.delete()) NxLog.w(TAG, "could not delete ${f.path}")
         }
         pruneFolders(targets, sdRoot)
     }
 
-    /** Best-effort delete of [files], then the folders under `Cheats/` they emptied. */
-    private fun rollBack(files: List<File>, sdRoot: File) {
-        for (f in files) {
-            if (f.exists() && !f.delete()) NxLog.w(TAG, "rollback could not delete ${f.path}")
+    /** [delete] for a whole install: the manifest's [files] are taken out of `Cheats/` by [takeBack]. */
+    fun remove(sdRoot: File, files: List<String>, onProgress: (Int, Int) -> Unit) = takeBack(sdRoot, listed(sdRoot, files), onProgress)
+
+    /** The manifest's [files] that are paths the tool writes and resolve inside `Cheats/`; the rest are refused. */
+    private fun listed(sdRoot: File, files: List<String>): List<File> {
+        val cheats = File(sdRoot, "Cheats").canonicalFile
+        return files.mapNotNull { rel ->
+            val f = File(sdRoot, rel)
+            val inside = CheatDbManifest.isInstalledPath(rel) && runCatching { f.canonicalFile.path.startsWith(cheats.path + File.separator) }.getOrDefault(false)
+            if (!inside) NxLog.w(TAG, "refused to delete $rel")
+            f.takeIf { inside }
         }
-        pruneFolders(files, sdRoot)
     }
+
+    /**
+     * Takes [files] out of `Cheats/` under [sdRoot] at once where it can: a folder below `Cheats/` that holds only
+     * these files (no other file, no link) is renamed into [TRASH] whole, so a fresh install's ~16k files leave in a
+     * few renames. What is left (folders shared with the user's files or a previous install's, or a rename the
+     * storage refused) is deleted one by one, with [onProgress] (done, total). Emptied folders are pruned. Every other
+     * file stays: the user's own sit beside these.
+     */
+    fun takeBack(sdRoot: File, files: Collection<File>, onProgress: (Int, Int) -> Unit) {
+        val root = sdRoot.absoluteFile.normalize()
+        val cheats = File(root, "Cheats")
+        val left = files.mapTo(LinkedHashSet()) { it.absoluteFile.normalize() }
+        val all = left.toList()
+        val total = left.size
+        if (total == 0) return
+        var done = 0
+        val cheatsReal = runCatching { cheats.canonicalPath }.getOrNull()
+        val batch = File(root, "$TRASH/${Random.nextInt().toUInt().toString(16)}")
+        val moved = ArrayList<File>()
+        // Shallowest first: Cheats/<TAG>/ whole before its Patches/.
+        val dirs = left.flatMap { f -> generateSequence(f.parentFile) { it.parentFile }.takeWhile { it.path.startsWith(cheats.path + File.separator) }.toList() }
+            .distinct().sortedBy { it.path.length }
+        for (dir in dirs) {
+            if (moved.any { dir.path.startsWith(it.path + File.separator) }) continue
+            if (cheatsReal == null || isLink(dir) || !dir.isDirectory) continue
+            if (runCatching { !dir.canonicalPath.startsWith(cheatsReal + File.separator) }.getOrDefault(true)) continue
+            val inside = onlyTheseFiles(dir, left) ?: continue
+            if (inside.isEmpty()) continue
+            val to = File(batch, dir.relativeTo(root).path)
+            to.parentFile?.mkdirs()
+            if (!dir.renameTo(to)) { NxLog.w(TAG, "could not move ${dir.path} to the trash"); continue }
+            moved += dir
+            left.removeAll(inside.toSet())
+            done += inside.size
+            onProgress(done, total)
+        }
+        var step = 0
+        for (f in left) {
+            if (f.exists() && !f.delete()) NxLog.w(TAG, "could not delete ${f.path}")
+            done++
+            if (++step >= UNDO_STEP) { step = 0; onProgress(done, total) }
+        }
+        if (step > 0) onProgress(done, total)
+        pruneFolders(all, root)
+    }
+
+    /** The files under [dir] when every one is in [these] and nothing under it is a link; else null. */
+    private fun onlyTheseFiles(dir: File, these: Set<File>): List<File>? {
+        val found = ArrayList<File>()
+        for (child in dir.listFiles() ?: return null) {
+            when {
+                isLink(child) -> return null
+                child.isDirectory -> found += onlyTheseFiles(child, these) ?: return null
+                child in these -> found += child
+                else -> return null
+            }
+        }
+        return found
+    }
+
+    /** Deletes everything in [TRASH] under [sdRoot]; a link inside is deleted, never followed. */
+    fun emptyTrash(sdRoot: File) {
+        val trash = File(sdRoot, TRASH)
+        if (trash.exists()) deleteTree(trash)
+    }
+
+    private fun deleteTree(f: File) {
+        if (!isLink(f) && f.isDirectory) f.listFiles()?.forEach(::deleteTree)
+        f.delete()
+    }
+
+    private fun isLink(f: File): Boolean = runCatching { Files.isSymbolicLink(f.toPath()) }.getOrDefault(false)
 
     /**
      * Removes the folders of [files] that are empty now, and their emptied parents up to (not including) `Cheats/`:

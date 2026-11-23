@@ -9,7 +9,10 @@ import java.io.File
 import java.nio.file.Files
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -128,5 +131,76 @@ class CheatDbFilesTest {
         assertTrue(save.exists())
         assertTrue(outside.exists())
     }
-}
 
+    private fun file(rel: String, text: String = "x") = File(sd, rel).apply { parentFile!!.mkdirs(); writeText(text) }
+
+    @Test fun takeBackMovesAFolderOfOnlyTheseFilesToTheTrashInOneGo() {
+        val ours = (1..50).map { file("Cheats/GBA/g$it.cht") } + file("Cheats/PS2/Patches/A.pnach")
+        val progress = ArrayList<Pair<Int, Int>>()
+        CheatDbFiles.takeBack(sd, ours) { d, t -> progress += d to t }
+        assertFalse(File(sd, "Cheats/GBA").exists())
+        assertFalse(File(sd, "Cheats/PS2").exists())
+        assertTrue(File(sd, "Cheats").isDirectory)
+        assertEquals(51, File(sd, CheatDbFiles.TRASH).walkTopDown().count { it.isFile })   // waiting for the sweep
+        assertEquals(51 to 51, progress.last())
+        CheatDbFiles.emptyTrash(sd)
+        assertFalse(File(sd, CheatDbFiles.TRASH).exists())
+    }
+
+    @Test fun takeBackLeavesTheUsersFilesAndDeletesOursBesideThemOneByOne() {
+        val mine = file("Cheats/GBA/mine.cht", "user")
+        val minePatch = file("Cheats/PS2/Patches/MINE.pnach", "user")
+        val ours = (1..450).map { file("Cheats/GBA/g$it.cht") } + file("Cheats/PS2/Patches/A.pnach") + file("Cheats/FC/f.cht")
+        val progress = ArrayList<Pair<Int, Int>>()
+        CheatDbFiles.takeBack(sd, ours) { d, t -> progress += d to t }
+        assertEquals("user", mine.readText())
+        assertEquals("user", minePatch.readText())
+        assertTrue(ours.none { it.exists() })
+        assertFalse(File(sd, "Cheats/FC").exists())   // FC held only ours: moved whole
+        assertEquals(452 to 452, progress.last())
+        assertTrue(progress.size >= 3)   // reported along the way, not only at the end
+    }
+
+    @Test fun takeBackNeverMovesAFolderHoldingALink() {
+        val outside = File(base, "outside").apply { mkdirs() }
+        File(outside, "keep.cht").writeText("keep")
+        val ours = file("Cheats/GBA/g.cht")
+        Files.createSymbolicLink(File(sd, "Cheats/GBA/linked").toPath(), outside.toPath())
+        CheatDbFiles.takeBack(sd, listOf(ours)) { _, _ -> }
+        CheatDbFiles.emptyTrash(sd)
+        assertFalse(ours.exists())
+        assertTrue(File(sd, "Cheats/GBA/linked").exists())
+        assertEquals("keep", File(outside, "keep.cht").readText())
+    }
+
+    @Test fun emptyTrashDeletesALinkNotWhatItPointsTo() {
+        val outside = File(base, "outside").apply { mkdirs() }
+        File(outside, "keep.cht").writeText("keep")
+        val trash = File(sd, "${CheatDbFiles.TRASH}/x").apply { mkdirs() }
+        Files.createSymbolicLink(File(trash, "link").toPath(), outside.toPath())
+        CheatDbFiles.emptyTrash(sd)
+        assertFalse(File(sd, CheatDbFiles.TRASH).exists())
+        assertEquals("keep", File(outside, "keep.cht").readText())
+    }
+
+    @Test fun removeTakesOutOnlyTheListedFiles() {
+        val mine = file("Cheats/GB/mine.cht", "user")
+        file("Cheats/GB/x.cht"); file("Cheats/GBA/a.cht"); file("Saves/GBA/game.srm", "s")
+        CheatDbFiles.remove(sd, listOf("Cheats/GB/x.cht", "Cheats/GBA/a.cht", "Saves/GBA/game.srm")) { _, _ -> }
+        assertEquals("user", mine.readText())
+        assertFalse(File(sd, "Cheats/GB/x.cht").exists())
+        assertFalse(File(sd, "Cheats/GBA").exists())
+        assertTrue(File(sd, "Saves/GBA/game.srm").exists())
+    }
+
+    @Test fun aCancelledInstallLeavesOnlyTheUsersFilesInCheats() = runBlocking {
+        val mine = file("Cheats/PS2/Patches/MINE.pnach", "user")
+        val stop = Job()
+        // Cancelled once the cheats are written and the patches start.
+        val result = runCatching { withContext(stop) { CheatDbFiles.install(sd, installs()) { tag, _, _ -> if (tag == "PS2") stop.cancel() } } }
+        assertTrue(result.exceptionOrNull() is CancellationException)
+        assertEquals("user", mine.readText())
+        assertEquals(listOf("MINE.pnach"), File(sd, "Cheats").walkTopDown().filter { it.isFile }.map { it.name }.toList())
+        assertTrue(File(sd, CheatDbFiles.TRASH).walkTopDown().any { it.name == "Advance Wars (USA).cht" })   // moved, not deleted inline
+    }
+}

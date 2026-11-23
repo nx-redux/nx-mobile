@@ -42,18 +42,28 @@ interface CheatDbPlatform {
      * each tag's folders to [CheatDbSource.target] (`Cheats/<TAG>/`, `Cheats/<TAG>/Patches/`), calling [onProgress]
      * (tag, 1-based index, count over all installs) per tag. When two of a tag's folders hold the same file name, the
      * first folder's file is kept. Returns the written paths relative to the sd root.
-     * On failure or cancellation, files this call created (in any of the archives) are deleted again; files that
-     * existed before are left as they are. A failed [CheatDbInstall.optional] archive takes back only its own new files
-     * and is listed in [CheatDbInstallResult.failed]; the call goes on with the next.
+     * On failure or cancellation, files this call created (in any of the archives) are taken back before it returns:
+     * moved to the trash ([emptyTrash]) where that is one rename, else deleted one by one with [onUndo] (done, total).
+     * Files that existed before are left as they are. A failed [CheatDbInstall.optional] archive takes back only its
+     * own new files and is listed in [CheatDbInstallResult.failed]; the call goes on with the next.
      */
-    suspend fun install(installs: List<CheatDbInstall>, onProgress: (tag: String, index: Int, count: Int) -> Unit): CheatDbInstallResult
+    suspend fun install(
+        installs: List<CheatDbInstall>,
+        onUndo: (done: Int, total: Int) -> Unit,
+        onProgress: (tag: String, index: Int, count: Int) -> Unit,
+    ): CheatDbInstallResult
     /** Deletes the archive (and any partial download). */
     suspend fun discard(archive: CheatDbArchive)
     /** The manifest text at [CheatDbManifest.PATH], or null when absent. */
     suspend fun readManifest(): String?
     suspend fun writeManifest(text: String)
-    /** Deletes [files] (relative paths), prunes the `Cheats/<TAG>/` folders they emptied, and removes the manifest. */
-    suspend fun deleteInstalled(files: List<String>)
+    /**
+     * Takes [files] (relative paths) out of `Cheats/` as [install] takes back its own (trash or one by one, [onProgress]
+     * as its onUndo), prunes the `Cheats/<TAG>/` folders they emptied, and removes the manifest.
+     */
+    suspend fun deleteInstalled(files: List<String>, onProgress: (done: Int, total: Int) -> Unit)
     /** Deletes [files] (relative paths) and prunes the `Cheats/<TAG>/` folders they emptied; the manifest stays. Best effort. */
     suspend fun deleteFiles(files: List<String>)
+    /** Deletes what [install] and [deleteInstalled] moved to the trash. Slow for a whole install, but nothing reads the trash. */
+    suspend fun emptyTrash()
 }
