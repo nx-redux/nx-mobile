@@ -30,6 +30,8 @@ data class ExternalEmulator(
     val extraKey: String? = null,
     val extras: Map<String, String> = emptyMap(),
     val clearTask: Boolean = false,
+    val action: String = "android.intent.action.VIEW",
+    val categories: List<String> = emptyList(),
     val tags: Set<String>,
     val sets: SetRule = SetRule.ALL,
     val readsZip: Boolean = false,
@@ -54,6 +56,8 @@ object ExternalEmulators {
             activity = "org.dolphinemu.dolphinemu.ui.main.TvMainActivity",
             pass = GamePass.URI_EXTRA,
             extraKey = "AutoStartFile",
+            action = "android.intent.action.MAIN",
+            categories = listOf("android.intent.category.LEANBACK_LAUNCHER"),
             tags = setOf("GC", "WII"),
         ),
         ExternalEmulator(
@@ -62,6 +66,7 @@ object ExternalEmulators {
             packages = listOf("dev.eden.eden_emulator", "dev.legacy.eden_emulator"),
             activity = "org.yuzu.yuzu_emu.activities.EmulationActivity",
             pass = GamePass.VIEW_DATA,
+            action = "android.nfc.action.TECH_DISCOVERED",
             tags = setOf("SWITCH"),
         ),
         // Flycast runs Naomi sets from the same app; a separate entry keeps them off the other FBN games.
@@ -92,8 +97,7 @@ object ExternalEmulators {
     fun byId(id: String): ExternalEmulator? = all.firstOrNull { it.id == id }
 
     /** Whether [e] can open this game: path-only apps need a real file outside any zip, and set rules need the matching arcade set. */
-    @Suppress("UNUSED_PARAMETER")
-    fun offered(e: ExternalEmulator, fileName: String, isRealFile: Boolean, insideZip: Boolean, isNaomiSet: Boolean, isModel3Set: Boolean): Boolean {
+    fun offered(e: ExternalEmulator, isRealFile: Boolean, insideZip: Boolean, isNaomiSet: Boolean, isModel3Set: Boolean): Boolean {
         if (e.pass == GamePass.PATH_EXTRA && (!isRealFile || (insideZip && !e.readsZip))) return false
         return when (e.sets) {
             SetRule.ALL -> true

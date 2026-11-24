@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 
 class ExternalEmulatorsTest {
     private fun offered(e: ExternalEmulator, real: Boolean = true, zip: Boolean = false, naomi: Boolean = false, model3: Boolean = false) =
-        ExternalEmulators.offered(e, "game.bin", real, zip, naomi, model3)
+        ExternalEmulators.offered(e, real, zip, naomi, model3)
 
     private fun recipe(pass: GamePass, sets: SetRule = SetRule.ALL, readsZip: Boolean = false) = ExternalEmulator(
         id = "x", name = "X", packages = listOf("a.b"), activity = "a.b.Main", pass = pass,
@@ -87,6 +87,22 @@ class ExternalEmulatorsTest {
         assertEquals(ExternalEmulators.byId("flycast-dc")!!.packages, arcade.packages)
         assertFalse(offered(arcade))
         assertTrue(offered(arcade, naomi = true))
+    }
+
+    @Test
+    fun launchActionAndCategories() {
+        val dolphin = ExternalEmulators.byId("dolphin")!!
+        assertEquals("android.intent.action.MAIN", dolphin.action)
+        assertEquals(listOf("android.intent.category.LEANBACK_LAUNCHER"), dolphin.categories)
+        assertEquals("android.nfc.action.TECH_DISCOVERED", ExternalEmulators.byId("eden")!!.action)
+        assertEquals("android.intent.action.VIEW", ExternalEmulators.byId("flycast-dc")!!.action)
+    }
+
+    @Test
+    fun actionDefaultsToView() {
+        val r = recipe(GamePass.VIEW_DATA)
+        assertEquals("android.intent.action.VIEW", r.action)
+        assertTrue(r.categories.isEmpty())
     }
 
     @Test
