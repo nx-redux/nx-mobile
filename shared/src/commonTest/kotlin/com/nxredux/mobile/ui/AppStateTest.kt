@@ -4863,15 +4863,20 @@ class AppStateTest {
         assertEquals(MenuCategory.HOME, state.category())
     }
 
-    @Test fun carousel_home_down_reaches_the_dock_and_a_on_more_opens_tools() = runTest {
+    @Test fun carousel_home_starts_on_continue_and_left_reaches_pinned_tools() = runTest {
         val state = homeFixture(MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + (MenuCategory.HOME to MenuStyle.CAROUSEL) })
-        state.onHomeLayout(HomeFrame(16f * 2 + 40f, 600f, portrait = true))   // room for one dock square
         val rows = assertIs<Screen.Systems>(state.screen.value).rows
-        assertIs<MainRow.MoreTools>(rows.last())
+        assertTrue(rows.none { it is MainRow.MoreTools })
+        val contIdx = rows.indexOfFirst { it is MainRow.Continue }
+        assertTrue(contIdx > 0, "expected pinned tools left of Continue: $rows")
+        assertEquals(contIdx, state.selection.value.index)
+        state.onButton(NxButton.LEFT)
+        assertEquals(contIdx - 1, state.selection.value.index)
+        assertIs<MainRow.PinnedTool>(rows[state.selection.value.index])
+        // DOWN stays in the single carousel row.
+        val at = state.selection.value.index
         state.onButton(NxButton.DOWN)
-        assertEquals(rows.lastIndex, state.selection.value.index)
-        state.onButton(NxButton.A)
-        assertEquals(MenuCategory.TOOLS, state.category())
+        assertEquals(at, state.selection.value.index)
     }
 
     @Test fun list_and_carousel_home_taps_select_then_open_a_pinned_game() = runTest {
@@ -4898,30 +4903,18 @@ class AppStateTest {
 
     private fun carouselHome() = MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + (MenuCategory.HOME to MenuStyle.CAROUSEL) }
 
-    /** The row item the Carousel Home's carousel shows now ([homeCarouselShownRow] on AppState's row memory). */
-    private fun AppState.carouselShown(): Int {
-        val rows = assertIs<Screen.Systems>(screen.value).rows
-        return homeCarouselShownRow(selection.value.index, homeCarouselRowCount(rows), homeCarouselRowLast.value)
-    }
-
-    @Test fun carousel_home_shows_the_tapped_row_item_above_the_dock_after_home_comes_back() = runTest {
+    @Test fun carousel_home_remembers_pinned_tool_selection_across_tab_switches() = runTest {
         val state = homeFixture(carouselHome())
         val rows = assertIs<Screen.Systems>(state.screen.value).rows
-        val pin = rows.indexOfFirst { it is MainRow.Pin }
-        val dock = homeCarouselRowCount(rows)
-        assertIs<MainRow.PinnedTool>(rows[dock])
-        state.select(pin)                                                // a tap on Mario's card
-        state.select(dock)                                               // a tap on a dock square
-        assertEquals(pin, state.carouselShown())
+        val tool = rows.indexOfFirst { it is MainRow.PinnedTool }
+        assertTrue(tool >= 0)
+        state.select(tool)
         state.onButton(NxButton.R1); state.onButton(NxButton.L1)         // Home left and back
         assertEquals(MenuCategory.HOME, state.category())
-        assertEquals(dock, state.selection.value.index)                  // still on the dock square
-        assertEquals(pin, state.carouselShown())                         // the carousel still shows Mario
-        state.onButton(NxButton.UP)                                      // and UP lands on it
-        assertEquals(pin, state.selection.value.index)
+        assertEquals(tool, state.selection.value.index)                  // still on the pinned tool card
     }
 
-    @Test fun carousel_home_taps_and_a_tab_entry_update_the_row_memory() = runTest {
+    @Test fun carousel_home_switching_from_grid_follows_selected_row() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = homeFixture(settings)                                // Grid
         val pin = assertIs<Screen.Systems>(state.screen.value).rows.indexOfFirst { it is MainRow.Pin }
@@ -4930,15 +4923,12 @@ class AppStateTest {
         state.onButton(NxButton.R1); state.onButton(NxButton.L1)         // Home entered as Carousel, on Mario
         val rows = assertIs<Screen.Systems>(state.screen.value).rows
         assertIs<MainRow.Pin>(rows[state.selection.value.index])
-        assertEquals(state.selection.value.index, state.homeCarouselRowLast.value)   // the tab entry noted it
-        state.select(0)                                                  // a tap on Continue
-        assertEquals(0, state.homeCarouselRowLast.value)
-        state.select(homeCarouselRowCount(rows))                         // a tap on the dock: the row memory stays
-        assertEquals(0, state.homeCarouselRowLast.value)
-        assertEquals(0, state.carouselShown())
+        val contIdx = rows.indexOfFirst { it is MainRow.Continue }
+        state.select(contIdx)
+        assertEquals(contIdx, state.selection.value.index)
     }
 
-    @Test fun carousel_home_unpinning_the_last_row_card_keeps_the_focus_in_the_row() = runTest {
+    @Test fun carousel_home_unpinning_the_last_row_card_clamps_to_the_card_before_it() = runTest {
         // Every library game played (no Not started shelf) and two pinned: no shelf after the last pinned card.
         val boulder = "/Roms/Commodore 64 (C64)/Boulder Dash 2.chd"
         val data = FakeUserData(recents = listOf(Recent(tetris), Recent(mario), Recent(mk), Recent(boulder)), pins = listOf(Shortcut(mario, "Mario"), Shortcut(mk, "Mario Kart")))
@@ -4946,14 +4936,13 @@ class AppStateTest {
         advanceUntilIdle()
         val rows = assertIs<Screen.Systems>(state.screen.value).rows
         assertTrue(rows.none { it is MainRow.Shelf }, "$rows")
-        val last = homeCarouselRowCount(rows) - 1
+        val last = rows.lastIndex
         assertEquals(mk, assertIs<MainRow.Pin>(rows[last]).entry.game.path)
         state.select(last)
         choose(state, ContextKind.UNPIN); advanceUntilIdle()
         val now = assertIs<Screen.Systems>(state.screen.value).rows
         assertTrue(now.none { it is MainRow.Pin && it.entry.game.path == mk })
-        assertTrue(state.selection.value.index < homeCarouselRowCount(now), "focus in the dock: ${now[state.selection.value.index]}")
-        assertEquals(homeCarouselRowCount(now) - 1, state.selection.value.index)   // the card before it
+        assertEquals(now.lastIndex, state.selection.value.index)   // the card before it
     }
 
     @Test fun list_and_carousel_home_pinning_a_shelf_game_follows_it_to_its_pin() = runTest {

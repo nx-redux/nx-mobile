@@ -1462,7 +1462,7 @@ class AppState(
      * since it was remembered.
      */
     private fun rememberedRow(category: MenuCategory, rows: List<MainRow>): ListSelection {
-        val r = tabSelections[category] ?: return ListSelection(0, 0)
+        val r = tabSelections[category] ?: return ListSelection(if (category == MenuCategory.HOME) homeInitialIndex(rows) else 0, rows.size)
         if (category != MenuCategory.HOME) return r
         return homeTab.rememberedRow(r, rows)
     }
@@ -1486,7 +1486,8 @@ class AppState(
      */
     private fun menuRowOf(m: Screen): ListSelection = when (m) {
         is Screen.Games -> rememberedGame(m.entries).clampedTo(m.entries.size)
-        is Screen.Systems -> (m.category?.let(tabSelections::get) ?: ListSelection(0, 0)).clampedTo(m.rows.size)
+        is Screen.Systems -> (m.category?.let(tabSelections::get)
+            ?: ListSelection(if (m.category == MenuCategory.HOME) homeInitialIndex(m.rows) else 0, m.rows.size)).clampedTo(m.rows.size)
         else -> ListSelection(0, 0)
     }
 

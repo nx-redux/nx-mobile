@@ -34,15 +34,24 @@ internal fun buildMenuTabs(
 
 /**
  * The Home tab's rows in [style]. Grid: the top section, then the row games ([buildHome] already left Continue's game
- * out), then the large face's shelves. List and Carousel: Continue (or Pick a game), every pinned game, the shelves,
- * then the pinned tools (the Carousel's dock, "+N" last): the order they are drawn in.
+ * out), then the large face's shelves. List and Minimal: Continue (or Pick a game), every pinned game, the shelves,
+ * then the pinned tools. Carousel: the pinned tools first (to the left of Continue), then Continue (or Pick a game),
+ * every pinned game, and the shelves; initial focus starts on Continue / Pick a game ([homeInitialIndex]).
  */
 internal fun homeTabRows(home: Home, style: MenuStyle = MenuStyle.GRID): List<MainRow> {
     if (style == MenuStyle.GRID) return home.top + home.pins + home.shelves
     val rest = home.top.drop(1)
-    return home.top.take(1) + rest.filterIsInstance<MainRow.Pin>() + home.pins + home.shelves +
-        rest.filter { it is MainRow.PinnedTool || it is MainRow.MoreTools }
+    val tools = rest.filter { it is MainRow.PinnedTool || it is MainRow.MoreTools }
+    val games = home.top.take(1) + rest.filterIsInstance<MainRow.Pin>() + home.pins + home.shelves
+    return if (style == MenuStyle.CAROUSEL || style == MenuStyle.BACKDROP) tools + games else games + tools
 }
+
+/**
+ * The Home tab's initial focused row: the first non-tool row (Continue or Pick a game), so Carousel Home opens on
+ * Continue / Pick a game with pinned tools immediately to its left. Zero when empty or every row is a tool.
+ */
+internal fun homeInitialIndex(rows: List<MainRow>): Int =
+    rows.indexOfFirst { it !is MainRow.PinnedTool && it !is MainRow.MoreTools }.coerceAtLeast(0)
 
 /**
  * The tabs the main menu shows: [tabs] ([buildMenuTabs]: Home and Tools always, Consoles and Collections when they have

@@ -174,8 +174,8 @@ internal fun NxMenuTile(
         )
     } else Modifier
     Box(modifier.then(ringMod)) {
-        // Drained: no ring, so a game's subtle edge, over everything, keeps its rounded shape off a dark picture's ground.
-        val edge = if (drained && tile is GridTile.Game) Modifier.border(NX_DRAIN_EDGE, LocalNxColors.current.inkEdge, RoundedCornerShape(NX_TILE_CORNER.dp)) else Modifier
+        // Drained: no ring, so a picture card's subtle edge, over everything, keeps its rounded shape off a dark ground.
+        val edge = if (drained && (tile is GridTile.Game || tile is GridTile.Tool && tile.backgroundUrl != null)) Modifier.border(NX_DRAIN_EDGE, LocalNxColors.current.inkEdge, RoundedCornerShape(NX_TILE_CORNER.dp)) else Modifier
         Box(Modifier.fillMaxSize().clip(RoundedCornerShape(NX_TILE_CORNER.dp)).then(edge)) {
             TileContent(tile, lit, caption, info, logoInset, portrait, toolSize, titleSize, titleLines, homeCaption, gameFade, subtitle, statsOnly, statsSize, captionAlways, drained, heroName)
         }
@@ -208,13 +208,28 @@ private fun TileContent(
         is GridTile.Collection -> Box(Modifier.fillMaxSize().then(plate), contentAlignment = Alignment.Center) {
             TileTitle(tile.name, content, 17.sp, maxLines = 3)
         }
-        is GridTile.Tool -> Column(
+        is GridTile.Tool -> if (tile.backgroundUrl != null) {
+            val litness = nxLitness(lit)
+            Box(Modifier.fillMaxSize().background(colors.background), contentAlignment = Alignment.Center) {
+                AsyncImage(
+                    model = tile.backgroundUrl, contentDescription = null, contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().then(if (drained) Modifier.nxDrain(litness) else Modifier),
+                )
+                ToolIcon(
+                    tile.icon, tile.appId, colors.main,
+                    Modifier.fillMaxSize(APP_ICON_SHARE).then(if (drained) Modifier.graphicsLayer { alpha = nxDimInk(litness()) } else Modifier),
+                )
+            }
+        } else Column(
             Modifier.fillMaxSize().then(plate).padding(horizontal = 8.dp),
             verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            ToolIcon(tile.icon, tile.appId, content, Modifier.size(toolSize.iconDp.dp))
-            Spacer(Modifier.height(toolSize.gapDp.dp))
-            TileText(tile.lines.joinToString("\n"), content, toolSize.nameSp.sp, maxLines = 2)
+            val iconMod = if (tile.lines.isEmpty()) Modifier.fillMaxSize(APP_ICON_SHARE) else Modifier.size(toolSize.iconDp.dp)
+            ToolIcon(tile.icon, tile.appId, content, iconMod)
+            if (tile.lines.isNotEmpty()) {
+                Spacer(Modifier.height(toolSize.gapDp.dp))
+                TileText(tile.lines.joinToString("\n"), content, toolSize.nameSp.sp, maxLines = 2)
+            }
         }
         is GridTile.Game -> GameTile(tile, lit, caption, info, titleSize, titleLines, homeCaption, gameFade, subtitle, statsOnly, statsSize, captionAlways, drained, heroName)
     }

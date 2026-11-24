@@ -38,17 +38,21 @@ class HomeLayoutsModelTest {
         assertEquals(home.top + home.pins + home.shelves, homeTabRows(home, MenuStyle.GRID))
         assertEquals(homeTabRows(home), homeTabRows(home, MenuStyle.GRID))
     }
-    @Test fun carousel_dock_overflow_ends_in_more() {
-        val home = buildHome(cont, emptyList(), listOf(t1, t2, t3), stats, slots = 2)
+    @Test fun carousel_places_pinned_tools_left_of_continue_and_starts_on_continue() {
+        val home = buildHome(cont, listOf(a, b), listOf(t1, t2, t3), stats, slots = Int.MAX_VALUE, shelves = listOf(HomeShelf.NEW to listOf(c)))
         val rows = homeTabRows(home, MenuStyle.CAROUSEL)
-        assertEquals(listOf(t1), rows.filterIsInstance<MainRow.PinnedTool>().map { it.row })
-        assertEquals(2, rows.filterIsInstance<MainRow.MoreTools>().single().count)
-        assertIs<MainRow.MoreTools>(rows.last())
+        assertEquals(listOf(t1, t2, t3), rows.take(3).map { (it as MainRow.PinnedTool).row })
+        assertIs<MainRow.Continue>(rows[3])
+        assertEquals(listOf(a, b), rows.subList(4, 6).map { (it as MainRow.Pin).entry })
+        assertEquals(c, (rows[6] as MainRow.Shelf).entry)
+        assertEquals(3, homeInitialIndex(rows))
     }
-    @Test fun fresh_install_with_tools_starts_on_pick_a_game() {
-        val home = buildHome(null, emptyList(), listOf(t1), stats, slots = 4)
+    @Test fun fresh_install_with_tools_places_tools_left_of_pick_a_game_and_starts_on_pick_a_game() {
+        val home = buildHome(null, emptyList(), listOf(t1), stats, slots = Int.MAX_VALUE)
         val rows = homeTabRows(home, MenuStyle.CAROUSEL)
-        assertEquals(MainRow.PickAGame, rows[0]); assertEquals(1, homeCarouselRowCount(rows))
+        assertEquals(t1, (rows[0] as MainRow.PinnedTool).row)
+        assertEquals(MainRow.PickAGame, rows[1])
+        assertEquals(1, homeInitialIndex(rows))
     }
     @Test fun dock_fit_follows_the_width() {
         assertEquals(5, homeDockFit(HomeFrame(30f * 2 + 5 * 56f + 4 * 12f, 600f, portrait = true), side = 56f))
