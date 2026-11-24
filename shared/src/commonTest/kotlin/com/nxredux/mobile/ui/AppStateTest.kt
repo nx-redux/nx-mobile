@@ -5855,7 +5855,7 @@ class AppStateTest {
                 SettingsRow(SettingsKind.SECONDARY_ACCENT, "Secondary accent", "Auto"),
                 SettingsRow(SettingsKind.TEXT_SIZE, "Text size", "Large"),
                 SettingsRow(SettingsKind.BUTTON_LAYOUT, "Button layout", "Default"),
-                SettingsRow(SettingsKind.RESET_DEFAULTS, "Reset to defaults"),
+                SettingsRow(SettingsKind.RESET_DEFAULTS, "Reset to defaults", note = appearanceResetScope(padShown = true)),
             ),
             assertIs<Screen.Settings>(state.screen.value).rows,
         )
@@ -5909,6 +5909,25 @@ class AppStateTest {
         state.select(rows().indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }); state.onButton(NxButton.A); state.onButton(NxButton.A)   /* asks, then Reset */
         assertEquals(true, settings.padSkin)
         assertEquals(SettingsKind.PAD_THEME, rows()[1].kind)
+    }
+
+    // A controller hides the pad's rows: Reset to defaults names only what shows and leaves the pad's settings alone.
+    @Test fun appearance_reset_with_a_controller_leaves_the_hidden_pad_settings() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings)
+        state.load()
+        state.onControllerConnected(true)
+        state.openSettings(SettingsSection.APPEARANCE)
+        settings.padSkin = false
+        settings.skinTweaks = "kept"
+        settings.optionTextSize = com.nxredux.mobile.settings.OptionTextSize.entries.first { it != com.nxredux.mobile.settings.OptionTextSize.DEFAULT }
+        fun page() = assertIs<Screen.Settings>(state.screen.value)
+        val reset = page().rows.indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }
+        assertEquals("Accent, Secondary accent and Text size go back to their defaults.", settingsResetAsk(page(), reset)?.text)
+        state.select(reset); state.onButton(NxButton.A); state.onButton(NxButton.A)   /* asks, then Reset */
+        assertEquals(false, settings.padSkin)
+        assertEquals("kept", settings.skinTweaks)
+        assertEquals(com.nxredux.mobile.settings.OptionTextSize.DEFAULT, settings.optionTextSize)
     }
 
     @Test fun layouts_rows_follow_the_handheld_order() = runTest {
@@ -11348,7 +11367,8 @@ class AppStateTest {
         for (section in listOf(SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU)) {
             state.openSettings(section)
             val rows = assertIs<Screen.Settings>(state.screen.value).rows
-            assertEquals(SettingsRow(SettingsKind.RESET_DEFAULTS, "Reset to defaults"), rows.last(), section.name)
+            assertEquals(SettingsKind.RESET_DEFAULTS, rows.last().kind, section.name)
+            assertEquals("Reset to defaults", rows.last().label, section.name)
             assertEquals(1, rows.count { it.kind == SettingsKind.RESET_DEFAULTS }, section.name)
             assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Select")), settingsHints(rows, rows.lastIndex))
         }

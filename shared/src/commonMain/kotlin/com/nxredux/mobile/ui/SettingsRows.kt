@@ -170,7 +170,7 @@ internal class SettingsRows(
             SettingsRow(SettingsKind.TEXT_SIZE, "Text size", deps.settings.optionTextSize.label),
             // the skin's buttons moved and resized per console (the bare overlay's too), its own page
             if (!controllerConnected) SettingsRow(SettingsKind.BUTTON_LAYOUT, "Button layout", if (buttonLayoutCustom()) "Custom" else "Default") else null,
-            SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
+            SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL, note = appearanceResetScope(padShown = !controllerConnected)),
         ).filterNotNull()
         SettingsSection.MAIN_MENU -> layoutsRows()
         SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_GAMES_TAB, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS ->
