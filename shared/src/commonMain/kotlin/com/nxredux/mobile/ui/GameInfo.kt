@@ -183,11 +183,11 @@ internal fun gameInfoApart(gameInfo: Map<String, GameInfo>, now: Long, game: Gam
 
 /**
  * A game list's selected [game]'s info in [style] and [orientation]: where its stats and details have places of their
- * own (a horizontal Carousel: the picture and under the name; a Grid: the line under the title and the selected tile,
- * [gridHeaderInfo]) both, whatever Layouts → Game info says ([gameInfoApart]); elsewhere as it says ([gameInfoFor]).
+ * own (a Grid: the line under the title and the selected tile, [gridHeaderInfo]) both, whatever Layouts → Game info
+ * says ([gameInfoApart]); elsewhere (including Carousel) as Game info says ([gameInfoFor]).
  */
 internal fun gameListInfo(style: MenuStyle, orientation: MenuOrientation, gameInfo: Map<String, GameInfo>, now: Long, game: GameEntry?, meta: GameMeta): List<InfoLine> =
-    if (style == MenuStyle.GRID || style == MenuStyle.CAROUSEL && orientation == MenuOrientation.HORIZONTAL) gameInfoApart(gameInfo, now, game, meta)
+    if (style == MenuStyle.GRID) gameInfoApart(gameInfo, now, game, meta)
     else gameInfoFor(gameInfo, now, game, full = true, meta)
 
 /**
