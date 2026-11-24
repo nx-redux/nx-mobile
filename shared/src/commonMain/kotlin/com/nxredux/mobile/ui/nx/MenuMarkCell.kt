@@ -122,30 +122,42 @@ internal fun MenuMarkCell(tile: GridTile, lit: Boolean, cellW: Float, cellH: Flo
  * top over [name]'s two reserved lines, in the mark tiles' faint edge; the ink eases to the accent as it is [lit]. The
  * Tools grid's tools and Grid Home's pinned tools and "+N" ([HomeMoreTile]).
  */
+/** Horizontal padding for a tool tile's name, tighter than [MARK_NAME_INSET] so narrow grid tiles fit longer names cleanly. */
+private val TOOL_TILE_NAME_INSET = 6.dp
+
 @Composable
 internal fun ToolTileCell(name: String, lit: Boolean, cellW: Float, modifier: Modifier = Modifier, mark: @Composable (Modifier, Color) -> Unit) {
     val colors = LocalNxColors.current
     val litness = nxLitness(lit)
     val ink = lerp(colors.main.copy(alpha = CONSOLE_DIM_ALPHA), colors.accent, litness())   // role: an unselected tool tile's mark
     val edge = colors.main.copy(alpha = MARK_EDGE_ALPHA)   // role: a Grid mark tile's edge
+    val nameStyle = TextStyle(
+        fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = TOOL_TILE_NAME_SP.sp,
+        lineHeight = (TOOL_TILE_NAME_SP * TOOL_TILE_LINE).sp, textAlign = TextAlign.Center,
+    )
+    val measurer = rememberTextMeasurer()
     // The icon at a fixed spot from the top, two lines kept for the name whatever it needs, so every tool's icon lines
-    // up across a row.
+    // up across a row. Each line draws on its own single-line Text so a long word after a line break never collapses.
     Column(
         modifier.fillMaxSize().border(1.dp, edge, RoundedCornerShape(NX_TILE_CORNER.dp))
-            .padding(horizontal = MARK_NAME_INSET, vertical = TOOL_TILE_PAD_V.dp),
+            .padding(horizontal = TOOL_TILE_NAME_INSET, vertical = TOOL_TILE_PAD_V.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // Weighted, so the name's two lines are measured first: a tile short of its height shrinks the icon, never the name.
         val icon = min(cellW * TOOL_APPS_ICON_SHARE, TOOL_APPS_ICON_MAX).dp
         mark(Modifier.weight(1f, fill = false).sizeIn(maxWidth = icon, maxHeight = icon).aspectRatio(1f, matchHeightConstraintsFirst = true), ink)
         Spacer(Modifier.height(TOOL_TILE_NAME_GAP.dp))
-        Text(
-            name, color = ink, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis,
-            style = TextStyle(
-                fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = TOOL_TILE_NAME_SP.sp,
-                lineHeight = (TOOL_TILE_NAME_SP * TOOL_TILE_LINE).sp, textAlign = TextAlign.Center,
-            ),
-        )
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val width = constraints.maxWidth
+            val lines = remember(name, width, nameStyle) {
+                if ('\n' in name) name.split('\n').take(2)
+                else markNameLines(name, 2) { measurer.measure(it, nameStyle, softWrap = false, maxLines = 1).size.width <= width }
+            }
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                lines.forEach { Text(it, color = ink, style = nameStyle, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) }
+                repeat((2 - lines.size).coerceAtLeast(0)) { Text("", color = ink, style = nameStyle, maxLines = 1) }
+            }
+        }
     }
 }
 

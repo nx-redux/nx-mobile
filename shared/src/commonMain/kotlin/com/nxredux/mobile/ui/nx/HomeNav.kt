@@ -26,10 +26,12 @@ data class HomeShape(
 data class HomeMemory(val lastTop: Int = 0, val prevTop: Int = -1, val lastPin: Int = -1)
 
 internal fun homeShape(b: HomeBoard): HomeShape {
-    val tiles = List(b.rowGames + b.shelfTiles.size) { homeBoardTile(b, it) }
+    val count = b.rowGames + b.toolTiles.size + b.shelfTiles.size
+    val tiles = List(count) { homeBoardTile(b, it) }
     val bands = buildList {
         if (b.rowGames > 0) add(HomeBand(0, b.rowGames, b.perRow))
         var at = b.rowGames
+        if (b.toolTiles.isNotEmpty()) { add(HomeBand(at, b.toolTiles.size, b.perRow)); at += b.toolTiles.size }
         for ((i, n) in b.shelfSizes.withIndex()) { add(HomeBand(at, n, b.shelfCols.getOrElse(i) { HOME_SHELF_COLS })); at += n }
     }
     return HomeShape(b.top.map { it.rect }, tiles, b.perRow, bands)

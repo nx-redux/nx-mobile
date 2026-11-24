@@ -27,32 +27,37 @@ class HomeModelTest {
     private val t5 = ToolRow(ToolKind.ARTWORK, "Artwork", null)
     private fun contOf(g: Listed) = MainRow.Continue(g, ResumeInfo.NONE)
 
-    // Every pinned game is a row game; the top section is Continue and the squares, "+N" last for the tools past them.
+    // Every pinned game is a row game; the top section is Continue, and the pinned tools live in [Home.tools] ("+N" last past slots).
     @Test fun squaresComeFirstAndEveryGameIsARowGame() {
         val h = buildHome(cont, listOf(g1, g2, g3), listOf(t1, t2, t3, t4, t5), stats, slots = 4)
-        assertEquals(listOf(cont, MainRow.PinnedTool(t1), MainRow.PinnedTool(t2), MainRow.PinnedTool(t3), MainRow.MoreTools(2)), h.top)
+        assertEquals(listOf<MainRow>(cont), h.top)
         assertEquals(listOf(MainRow.Pin(g1), MainRow.Pin(g2), MainRow.Pin(g3)), h.pins)
+        assertEquals(listOf(MainRow.PinnedTool(t1), MainRow.PinnedTool(t2), MainRow.PinnedTool(t3), MainRow.MoreTools(2)), h.tools)
     }
-    // The large faces' block grows to 6 slots past their base: 5 tools all show; 8 show 5 and "+3".
+    // Tool slots cap [Home.tools]: 5 tools in 6 slots all show; 8 show 5 and "+3".
     @Test fun sixSlotsShowFiveToolsOrFiveAndMore() {
         val five = buildHome(cont, listOf(g1), listOf(t1, t2, t3, t4, t5), stats, slots = 6)
-        assertEquals(listOf(cont) + listOf(t1, t2, t3, t4, t5).map { MainRow.PinnedTool(it) }, five.top)
+        assertEquals(listOf<MainRow>(cont), five.top)
+        assertEquals(listOf(t1, t2, t3, t4, t5).map { MainRow.PinnedTool(it) }, five.tools)
         val eight = listOf(t1, t2, t3, t4, t5, t1.copy(label = "A"), t1.copy(label = "B"), t1.copy(label = "C"))
         val h = buildHome(cont, listOf(g1), eight, stats, slots = 6)
-        assertEquals(listOf(cont) + eight.take(5).map { MainRow.PinnedTool(it) } + MainRow.MoreTools(3), h.top)
+        assertEquals(eight.take(5).map { MainRow.PinnedTool(it) } + MainRow.MoreTools(3), h.tools)
     }
-    // The wide face's inline games: the first [inline] row games (Continue's left out) follow Continue in the top.
+    // The wide face's inline games: the first [inline] row games (Continue's left out) follow Continue in the top; tools stay in [Home.tools].
     @Test fun inlineGamesJoinTheTopAfterContinue() {
         val h = buildHome(contOf(g1), listOf(g1, g2, g3), listOf(t1, t2), stats, slots = 6, inline = 2)
-        assertEquals(listOf(contOf(g1), MainRow.Pin(g2), MainRow.Pin(g3), MainRow.PinnedTool(t1), MainRow.PinnedTool(t2)), h.top)
+        assertEquals(listOf(contOf(g1), MainRow.Pin(g2), MainRow.Pin(g3)), h.top)
         assertEquals(emptyList(), h.pins)
-        assertEquals(HomeView(homeStrip(stats), topCount = 5, tools = 2, games = 2), homeView(h, homeTabRows(h)))
+        assertEquals(listOf(MainRow.PinnedTool(t1), MainRow.PinnedTool(t2)), h.tools)
+        assertEquals(HomeView(homeStrip(stats), topCount = 3, tools = 2, games = 2), homeView(h, homeTabRows(h)))
         val one = buildHome(cont, listOf(g1, g2), listOf(t1), stats, slots = 6, inline = 1)
-        assertEquals(listOf(cont, MainRow.Pin(g1), MainRow.PinnedTool(t1)), one.top); assertEquals(listOf(MainRow.Pin(g2)), one.pins)
+        assertEquals(listOf(cont, MainRow.Pin(g1)), one.top); assertEquals(listOf(MainRow.Pin(g2)), one.pins)
+        assertEquals(listOf(MainRow.PinnedTool(t1)), one.tools)
     }
     @Test fun toolsWithinSlotsAllShow() {
         val h = buildHome(cont, listOf(g1), listOf(t1, t2, t3), stats, slots = 3)
-        assertEquals(listOf(cont, MainRow.PinnedTool(t1), MainRow.PinnedTool(t2), MainRow.PinnedTool(t3)), h.top)
+        assertEquals(listOf<MainRow>(cont), h.top)
+        assertEquals(listOf(MainRow.PinnedTool(t1), MainRow.PinnedTool(t2), MainRow.PinnedTool(t3)), h.tools)
         assertEquals(listOf(MainRow.Pin(g1)), h.pins)
     }
     @Test fun continueGameIsNotARowGame() {
@@ -66,13 +71,14 @@ class HomeModelTest {
     }
     @Test fun viewCounts() {
         val h = buildHome(cont, listOf(g1, g2, g3), listOf(t1, t2, t3, t4, t5), stats, slots = 4)
-        assertEquals(HomeView(homeStrip(stats), topCount = 5, tools = 5, games = 3), homeView(h, homeTabRows(h)))
+        assertEquals(HomeView(homeStrip(stats), topCount = 1, tools = 5, games = 3), homeView(h, homeTabRows(h)))
     }
 
     @Test fun normal() {
         val home = buildHome(cont, listOf(listed("Zelda")), listOf(t1), stats, slots = 3)
         assertFalse(home.freshInstall)
-        assertEquals(listOf(cont, MainRow.PinnedTool(t1)), home.top)
+        assertEquals(listOf<MainRow>(cont), home.top)
+        assertEquals(listOf(MainRow.PinnedTool(t1)), home.tools)
         assertEquals(homeStrip(stats), home.strip)
         assertEquals(listOf(MainRow.Pin(listed("Zelda"))), home.pins)
     }
@@ -107,7 +113,8 @@ class HomeModelTest {
     @Test fun pinsWithOnlyToolsAreNotAFreshInstall() {
         val home = buildHome(null, emptyList(), listOf(t2, t1), HomeStats(playedMs = 0, unlocks = 0, signedIn = true, top = null, computed = true), slots = 3)
         assertFalse(home.freshInstall)
-        assertEquals(listOf(MainRow.PickAGame, MainRow.PinnedTool(t2), MainRow.PinnedTool(t1)), home.top)   // Pick a game, then the squares
+        assertEquals(listOf<MainRow>(MainRow.PickAGame), home.top)
+        assertEquals(listOf(MainRow.PinnedTool(t2), MainRow.PinnedTool(t1)), home.tools)
         assertEquals(emptyList(), home.pins)
     }
 
@@ -120,7 +127,8 @@ class HomeModelTest {
 
     @Test fun gamesAndToolsKeepTheirOwnOrder() {
         val home = buildHome(cont, listOf(listed("B"), listed("A")), listOf(t1, t2), stats, slots = 3)
-        assertEquals(listOf(cont, MainRow.PinnedTool(t1), MainRow.PinnedTool(t2)), home.top)
+        assertEquals(listOf<MainRow>(cont), home.top)
+        assertEquals(listOf(MainRow.PinnedTool(t1), MainRow.PinnedTool(t2)), home.tools)
         assertEquals(listOf(MainRow.Pin(listed("B")), MainRow.Pin(listed("A"))), home.pins)
     }
 

@@ -33,9 +33,9 @@ class HomeLayoutsModelTest {
         assertEquals(listOf(t1, t2), rows.drop(4).map { (it as MainRow.PinnedTool).row })
         assertEquals(4, homeCarouselRowCount(rows))
     }
-    @Test fun grid_order_is_unchanged() {
-        val home = buildHome(cont, listOf(a), listOf(t1), stats, slots = 4)
-        assertEquals(home.top + home.pins + home.shelves, homeTabRows(home, MenuStyle.GRID))
+    @Test fun grid_order_places_tools_after_pins_and_before_shelves() {
+        val home = buildHome(cont, listOf(a), listOf(t1), stats, slots = 4, shelves = listOf(HomeShelf.NEW to listOf(c)))
+        assertEquals(home.top + home.pins + home.tools + home.shelves, homeTabRows(home, MenuStyle.GRID))
         assertEquals(homeTabRows(home), homeTabRows(home, MenuStyle.GRID))
     }
     @Test fun carousel_places_pinned_tools_left_of_continue_and_starts_on_continue() {

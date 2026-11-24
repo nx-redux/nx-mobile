@@ -1258,14 +1258,15 @@ class AppState(
             tools = tools,
             homeStyle = homeStyle(),
         )
-        homeTab.noteHomeBuilt(built)
+        homeTab.noteHomeBuilt(built, allMenuTabs.first { it.category == MenuCategory.HOME }.rows)
     }
 
     /** Rebuilds the Home tab alone from what it was last built from, with the stats, game info and frame as they are now (no I/O). */
     private fun rebuildHomeTab() {
         val built = homeTab.homeFor(kidsUi.kidsHomeInputs(homeTab.homeInputs ?: return))   // the shelves too: the frame may have changed
-        allMenuTabs = allMenuTabs.map { if (it.category == MenuCategory.HOME) MenuTab(MenuCategory.HOME, homeTabRows(built, homeStyle())) else it }
-        homeTab.noteHomeBuilt(built)
+        val rows = homeTabRows(built, homeStyle())
+        allMenuTabs = allMenuTabs.map { if (it.category == MenuCategory.HOME) MenuTab(MenuCategory.HOME, rows) else it }
+        homeTab.noteHomeBuilt(built, rows)
         swapMainRows()
     }
 
@@ -1290,7 +1291,7 @@ class AppState(
      * ([swapMainRows] waits while one is open); closing the menu does that too ([ContextMenuHost.menuClosed]).
      */
     fun onHomeLayout(frame: HomeFrame) {
-        if (frame == homeTab.homeFrame) { val s = _screen.value as? Screen.Systems ?: return; if (s.menu == null && s.tabs != menuTabs) swapMainRows(); return }
+        if (frame == homeTab.homeFrame) { val s = _screen.value as? Screen.Systems ?: return; if (s.menu == null && menuStale(s)) swapMainRows(); return }
         homeTab.homeFrame = frame
         rebuildHomeTab()
     }
@@ -1391,7 +1392,7 @@ class AppState(
             if (screen is Screen.Games) pageRows = 0
         }
         _screen.value = screen
-        homeTab.publishHomeView()   // the Home rows on screen may be the ones last built now
+        homeTab.publishHomeView(screen)   // the Home rows on screen may be the ones last built now
         if (!screen.menuPushed) category?.let { menuCategory = it }
         val count = (screen as? Screen.Games)?.entries?.size ?: (screen as Screen.Systems).rows.size
         _selection.value = if (at >= 0) ListSelection(at, count).clampedTo(count)
@@ -1525,7 +1526,7 @@ class AppState(
 
     /** [s] is the main menu showing tabs other than the ones last built (a swap was held back while a menu was open). */
     private fun menuStale(s: Screen): Boolean = when (s) {
-        is Screen.Systems -> s.tabs != menuTabs
+        is Screen.Systems -> s.tabs != menuTabs || s.tabs.firstOrNull { it.category == MenuCategory.HOME }?.rows !== menuTabs.firstOrNull { it.category == MenuCategory.HOME }?.rows
         is Screen.Games -> s.tabBar != null && menuTabs.let { tabs ->
             s.tabBar.categories != tabs.map { it.category } || tabs.firstOrNull { it.category == MenuCategory.GAMES }?.games !== s.entries
         }

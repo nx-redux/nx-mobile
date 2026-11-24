@@ -5,8 +5,6 @@ import androidx.compose.ui.graphics.Color
 import com.nxredux.mobile.ui.InfoKind
 import com.nxredux.mobile.ui.InfoLine
 import com.nxredux.mobile.ui.HOME_SHELF_MAX
-import com.nxredux.mobile.ui.TOOL_APPS_GAP
-import com.nxredux.mobile.ui.TOOL_APPS_MIN_TILE
 import com.nxredux.mobile.ui.homeShelfMax
 import kotlin.math.floor
 import kotlin.math.max
@@ -140,11 +138,12 @@ enum class HomeTopKind { CONTINUE, GAME, TOOL, MORE }
 data class HomeTopTile(val kind: HomeTopKind, val rect: HomeRect)
 
 /**
- * Every rectangle on Home's page ([homeBoard]). [top] is in focus order: Continue, the inline games, then the tool tiles
- * in reading order (MORE last). [toolW] × [toolH]: one tool tile's size (0 × 0 with no tools), the Tools page's tile
- * ([toolTileHeight]). [inlineGames]: the pinned games drawn in the top section rather than the rows (up to 2, on every
- * landscape face but UNDER). [shelfCols]: each shelf's tiles a row, matching [shelfSizes] (the pins' [perRow]: 4 on the
- * large face). The shelves have no headers: their games wear their reason on the tile.
+ * Every rectangle on Home's page ([homeBoard]). [top] is in focus order: Continue and the inline games.
+ * [toolTiles]: the pinned tools' tiles, placed in their own band after the row pinned games and before the shelves,
+ * [perRow] a row at [pinW] × [pinH] ([toolW] × [toolH]: 0 × 0 with no tools).
+ * [inlineGames]: the pinned games drawn in the top section rather than the rows (up to 2, on every landscape face
+ * but UNDER). [shelfCols]: each shelf's tiles a row, matching [shelfSizes] (the pins' [perRow]: 4 on the large face).
+ * The shelves have no headers: their games wear their reason on the tile.
  */
 data class HomeBoard(
     val mode: HomeToolMode, val stripLines: Int, val topY: Float, val topH: Float,
@@ -153,6 +152,7 @@ data class HomeBoard(
     val tilesY: Float, val rowGames: Int, val pageH: Float, val toolW: Float, val toolH: Float, val stripY: Float = HOME_STRIP_TOP,
     val shelfTiles: List<HomeRect> = emptyList(), val shelfSizes: List<Int> = emptyList(),
     val inlineGames: Int = 0, val shelfCols: List<Int> = emptyList(),
+    val toolTiles: List<HomeRect> = emptyList(),
 )
 
 private const val HOME_STRIP_TOP = 2f        // the strip's room under the tab row in topY (its own offset is [homeStripTop])
@@ -305,68 +305,18 @@ internal fun homeShelfCap(portrait: Boolean, perRow: Int): Int =
     if (portrait || perRow >= HOME_SHELF_MAX) HOME_SHELF_MAX else HOME_SHELF_MAX - HOME_SHELF_MAX % perRow.coerceAtLeast(1)
 
 /**
- * A block of pinned tool tiles ([homeToolRows]): its tiles' [rects] relative to the top section, its [slots] and the
- * tools past them ([more]: the last tile is "+N" then), each tile [tileW] × [tileH], the block [height] tall (0 with
- * no tools).
- */
-private class HomeToolBlock(
-    val rects: List<HomeRect>, val slots: Int, val more: Int, val tileW: Float, val tileH: Float, val height: Float,
-)
-
-/** The tool tiles shown for [tools] in [slots]: all of them, else the first slots − 1 and "+N" for the rest (its N in [HomeToolBlock.more]). */
-private fun homeToolsShown(tools: Int, slots: Int): Pair<Int, Int> =
-    min(tools.coerceAtLeast(0), slots) to if (tools > slots) tools - slots + 1 else 0
-
-/**
- * The tool tiles in rows across the page [w] wide, from [top] down: the Tools page's grid ([gridFixedTools]: as many
- * columns as fit at [TOOL_APPS_MIN_TILE], [TOOL_APPS_GAP] apart, stretched to fill; the tile's fixed height at
- * [fontScale]), at most [maxRows] rows, in reading order.
- */
-private fun homeToolRows(tools: Int, w: Float, top: Float, maxRows: Int, fontScale: Float): HomeToolBlock {
-    val g = gridFixedTools(w, 0f, 0f, 0f, fontScale)
-    val slots = maxRows * g.columns
-    val (shown, more) = homeToolsShown(tools, slots)
-    if (shown == 0) return HomeToolBlock(emptyList(), slots, 0, g.tileW, g.tileH, 0f)
-    val rows = (shown + g.columns - 1) / g.columns
-    val rects = List(shown) { HomeRect((it % g.columns) * (g.tileW + g.gap), top + (it / g.columns) * (g.tileH + g.gap), g.tileW, g.tileH) }
-    return HomeToolBlock(rects, slots, more, g.tileW, g.tileH, rows * g.tileH + (rows - 1) * g.gap)
-}
-
-/**
- * A landscape face's pinned tools: one row across the page [w] ([homeToolRows], "+N" past its slots) a [gap] under
- * Continue and the inline games, which keep the whole [bodyH] (the first screen); the row is a scroll away, before the
- * row games, and the top section ([topH]) grows by it. [inside] (UNDER, whose cap counts the row): the row is the
- * section's bottom instead, and Continue keeps the height above it ([contH]). With no tools Continue keeps it all.
- */
-private class HomeToolsUnder(val block: HomeToolBlock, val contH: Float, val topH: Float)
-
-private fun homeToolsUnder(tools: Int, w: Float, bodyH: Float, gap: Float, fontScale: Float, inside: Boolean = false): HomeToolsUnder {
-    val row = homeToolRows(tools, w, 0f, 1, fontScale)
-    if (row.rects.isEmpty()) return HomeToolsUnder(row, bodyH, bodyH)
-    val contH = if (inside) max(0f, bodyH - gap - row.tileH) else bodyH
-    val block = HomeToolBlock(row.rects.map { it.copy(y = contH + gap) }, row.slots, row.more, row.tileW, row.tileH, row.height)
-    return HomeToolsUnder(block, contH, contH + gap + row.tileH)
-}
-
-/**
  * Home's page for [f] with the strip's [stripLines], [tools] pinned tools and [games] pinned games (Continue's own game
  * left out), then the [shelves] under the pins ([homeBands]). The large and wide faces are [homeBoardLarge] and
  * [homeBoardWide]; this lays out the split faces. In landscape (SPS3, a halves COLUMN) the first 1–2 pinned games sit
- * inline between Continue and the tools ([homeInlineColumn]), as on the wide and large faces, the rest are row games;
- * in portrait and on UNDER every pinned game is a row game.
+ * inline beside Continue ([homeInlineColumn]), as on the wide and large faces, the rest are row games; in portrait and
+ * on UNDER every pinned game is a row game.
  *
  * The pins sit on a column grid (6 columns landscape, 4 halves, dropping one while a column is under 90 dp), a game two
- * columns wide. On every face the top section is the body (to its cap) and the row games start below it, a scroll away. The
- * portrait type is always COLUMN: its top section is the body, at most the Fold cover's ([homePortraitTopCap]), never
- * squeezed for a pin row; its pin rows are [HOME_PORTRAIT_PIN_TALL] times their 4:3 shape and scroll.
- *
- * Every pinned tool is the Tools page's tile, an icon over a two-line name ([toolTileHeight]). On the portrait type
- * Continue runs across the page and the tools sit in rows under it, a gap below, the Tools page's grid across the page
- * ([homeToolRows]), at most [HOME_PORTRAIT_TOOL_ROWS] rows: Continue gives the rows its height, down to the portrait
- * minimum ([homeMinTop]); past that the top section grows and the page scrolls. Every landscape-type face (COLUMN in
- * landscape, SPS3, and the large and wide faces) puts one such row a gap under Continue and the inline games
- * ([homeToolsUnder]), which keep the page's width and the first screen: the row is a scroll away, before the row
- * games, and the top section ends under it. UNDER's row is its top section's bottom, Continue shorter over it.
+ * columns wide. On every face the top section is the body (to its cap) and the bands below start a gap under it: first
+ * the row pinned games, then the pinned tools band (matching [HomeBoard.pinW] × [HomeBoard.pinH] across
+ * [HomeBoard.perRow] columns), then the discovery shelves. The portrait type is always COLUMN: its top section is the
+ * body, at most the Fold cover's ([homePortraitTopCap]), never squeezed for a pin row; its pin rows are
+ * [HOME_PORTRAIT_PIN_TALL] times their 4:3 shape and scroll.
  *
  * With the tab row hidden ([HomeFrame.titleHidden]) its 44 dp go to the top section (the caps too): Continue grows, and the
  * pin rows keep the shape they have with the tab row shown. With Home
@@ -399,75 +349,63 @@ internal fun homeBoard(
     val inline = if (!f.portrait && mode != HomeToolMode.UNDER) min(games.coerceAtLeast(0), HOME_INLINE_MAX) else 0
     val rowGames = games.coerceAtLeast(0) - inline
     val pinH = if (f.portrait) shapeH * HOME_PORTRAIT_PIN_TALL else shapeH
-    // UNDER's row: its tile height is in the cap, so Continue above it keeps its shape.
-    val underRow = if (mode == HomeToolMode.UNDER) homeToolRows(tools, w, 0f, 1, f.textScale) else null   // only for its cap
-    // Every face's top section is the body (to its cap): row games start below it, on the next screen.
-    val cap = (if (underRow != null) w / 1.5f + gap + underRow.tileH else (w - gap) / 2 / HOME_HALF_SHAPE) + homeTitleRoom(f) + freed
-    val topFull = when {
+    // Every face's top section is the body (to its cap): row games, pinned tools and shelves start below it, on the next screen.
+    val cap = (if (mode == HomeToolMode.UNDER) w / 1.5f else (w - gap) / 2 / HOME_HALF_SHAPE) + homeTitleRoom(f) + freed
+    val topH = when {
         f.portrait -> max(homeMinTop(true), homePortraitTop(body, homePortraitTopCap(f) + freed, pinH))
         halves -> max(homeMinTop(false), min(body, cap))
         else -> max(0f, body)
     }
-    val block: HomeToolBlock
-    val contH: Float
-    val topH: Float
-    when {
-        // Continue across the page, the tool rows a gap under it: together they are the top section, Continue down to
-        // the portrait minimum, past which the top section grows and the page scrolls.
-        f.portrait -> {
-            val rows = homeToolRows(tools, w, 0f, HOME_PORTRAIT_TOOL_ROWS, f.textScale)
-            contH = if (rows.rects.isEmpty()) topFull else max(homeMinTop(true), topFull - gap - rows.height)
-            block = HomeToolBlock(rows.rects.map { it.copy(y = it.y + contH + gap) }, rows.slots, rows.more, rows.tileW, rows.tileH, rows.height)
-            topH = if (rows.rects.isEmpty()) topFull else contH + gap + rows.height
-        }
-        // Every landscape-type face: Continue and the inline games, then one row of tools under them.
-        else -> {
-            val under = homeToolsUnder(tools, w, topFull, gap, f.textScale, inside = mode == HomeToolMode.UNDER)
-            block = under.block
-            contH = under.contH
-            topH = under.topH
-        }
-    }
-    val col = homeInlineColumn(inline, contH, w, gap)   // no inline games: Continue across the page
-    val top = homeTopTiles(gutter, topY, HomeRect(0f, 0f, col.contW, contH), col, block)
-    // The shelves under the pin rows ([homeBands]), each in the pins' grid: perRow a row at the pins' size.
-    val bands = homeBands(topY + topH, gutter, gap, rowGames, perRow, pinH, shelves) { shelf ->
+    val col = homeInlineColumn(inline, topH, w, gap)   // no inline games: Continue across the page
+    val top = homeTopTiles(gutter, topY, HomeRect(0f, 0f, col.contW, topH), col)
+    val toolCount = tools.coerceAtLeast(0)
+    val toolW = max(0f, pinW)
+    val toolH = max(0f, pinH)
+    // The row games, then pinned tools, then shelves under the top section ([homeBands]), each on the pins' column grid.
+    val bands = homeBands(topY + topH, gutter, gap, rowGames, perRow, toolW, pinH, toolCount, toolH, shelves) { shelf ->
         HomeShelfShape(perRow, pinW, pinH, min(homeShelfMax(shelf), homeShelfCap(f.portrait, perRow)))
     }
     return HomeBoard(
-        mode, lines, topY, topH, top, block.slots, block.more, gutter, gap, perRow, pinW, pinH, bands.tilesY, rowGames, bands.pageH,
-        block.toolW(), block.toolH(), homeStripTop(f, lines), bands.tiles, bands.sizes, inlineGames = inline, shelfCols = bands.cols,
+        mode, lines, topY, topH, top, Int.MAX_VALUE, 0, gutter, gap, perRow, pinW, pinH, bands.tilesY, rowGames, bands.pageH,
+        if (bands.tools.isEmpty()) 0f else toolW, if (bands.tools.isEmpty()) 0f else toolH, homeStripTop(f, lines),
+        bands.tiles, bands.sizes, inlineGames = inline, shelfCols = bands.cols, toolTiles = bands.tools,
     )
 }
-
-/** The block's tile size for [HomeBoard.toolW] / [HomeBoard.toolH]: 0 with no tools drawn. */
-private fun HomeToolBlock.toolW(): Float = if (rects.isEmpty()) 0f else tileW
-private fun HomeToolBlock.toolH(): Float = if (rects.isEmpty()) 0f else tileH
 
 /** One shelf's tiles in [homeBands]: [cols] a row, each [w] × [h], at most [max] of them. */
 private class HomeShelfShape(val cols: Int, val w: Float, val h: Float, val max: Int)
 
-/** The bands under Home's top section ([homeBands]): the pins' top, the shelves' tiles, sizes and columns, the page's end. */
+/** The bands under Home's top section ([homeBands]): the pins' top, the pinned tools' tiles, the shelves' tiles, sizes and columns, the page's end. */
 private class HomeBands(
-    val tilesY: Float, val tiles: List<HomeRect>, val sizes: List<Int>, val cols: List<Int>, val pageH: Float,
+    val tilesY: Float, val tools: List<HomeRect>, val tiles: List<HomeRect>, val sizes: List<Int>, val cols: List<Int>, val pageH: Float,
 )
 
 /**
- * The bands under a top section ending at [above]: the [rowGames] pins ([perRow] a row, [pinH] tall, a gap apart), then
- * each of [shelves] a gap under them, in its [shape] (an empty shelf is dropped); no headers. The page ends under the
- * last tile (its ring room and the margin), else under the top section.
+ * The bands under a top section ending at [above]: the [rowGames] pins ([perRow] a row, [pinH] tall, a gap apart),
+ * then the [tools] pinned tool banners ([perRow] a row, [pinW] × [toolH], a gap apart), then each of [shelves] a gap
+ * under them, in its [shape] (an empty shelf is dropped); no headers. The page ends under the last tile (its ring room
+ * and the margin), else under the top section.
  */
 private fun homeBands(
-    above: Float, gutter: Float, gap: Float, rowGames: Int, perRow: Int, pinH: Float,
+    above: Float, gutter: Float, gap: Float, rowGames: Int, perRow: Int, pinW: Float, pinH: Float,
+    tools: Int, toolH: Float,
     shelves: List<Pair<HomeShelf, Int>>, shape: (HomeShelf) -> HomeShelfShape,
 ): HomeBands {
     var y = above   // the bottom of what is above
-    fun band(): Float = y + gap   // a shelf a gap under what is above it (no header: its games wear their reason, [HomeBadge])
-    var tilesY = y + gap
+    fun band(): Float = y + gap   // each band a gap under what is above it (no header)
+    val tilesY = y + gap
     var any = false
     if (rowGames > 0) {
         val rows = (rowGames + perRow - 1) / perRow
         y = tilesY + rows * pinH + (rows - 1) * gap
+        any = true
+    }
+    val toolTiles = ArrayList<HomeRect>()
+    if (tools > 0) {
+        val ty = band()
+        repeat(tools) { toolTiles += HomeRect(gutter + (it % perRow) * (pinW + gap), ty + (it / perRow) * (toolH + gap), pinW, toolH) }
+        val rows = (tools + perRow - 1) / perRow
+        y = ty + rows * toolH + (rows - 1) * gap
         any = true
     }
     val tiles = ArrayList<HomeRect>()
@@ -486,7 +424,7 @@ private fun homeBands(
         any = true
     }
     val pageH = if (any) y + RING_ROOM + HOME_PAGE_MARGIN else above + HOME_PAGE_MARGIN
-    return HomeBands(tilesY, tiles, sizes, cols, pageH)
+    return HomeBands(tilesY, toolTiles, tiles, sizes, cols, pageH)
 }
 
 /**
@@ -524,9 +462,9 @@ private fun homeInlineColumn(inline: Int, topH: Float, w: Float, gap: Float): Ho
 
 /**
  * Home on the wide face (the Flip, 20:9 phones in landscape). Continue and beside it the first 1–2 [games] inline
- * ([homeInlineColumn], two stacked) are the whole body; a scroll away, one row of the Tools page's tiles across the
- * page ([homeToolsUnder]; past the slots the last tile is "+N"), then the rest of the games on [homeBoard]'s landscape
- * grid. [freed] is the hidden strip's room ([homeStatsRoom]): the top section starts at the margin and takes it.
+ * ([homeInlineColumn], two stacked) are the whole body; a scroll away, the remaining row games, then the pinned tools
+ * band, then the shelves on [homeBoard]'s landscape grid. [freed] is the hidden strip's room ([homeStatsRoom]): the top
+ * section starts at the margin and takes it.
  */
 private fun homeBoardWide(f: HomeFrame, stripLines: Int, freed: Float, tools: Int, games: Int, shelves: List<Pair<HomeShelf, Int>>): HomeBoard {
     val gutter = homeInsetStart(f)
@@ -538,35 +476,30 @@ private fun homeBoardWide(f: HomeFrame, stripLines: Int, freed: Float, tools: In
     // The rows as on the landscape split: 6 columns (fewer while one is under 90 dp), a game two wide, the same row shape.
     val (tw, perRow, pinW) = homeColumnGrid(w, gap, 6)
     val shapeH = min(tw, max(tw * 3 / 4, (homeShownH(f) - pageFixed(gap)) * LAND_ROW_SHARE))
-    val bodyH = max(0f, f.h - topY - HOME_PAGE_MARGIN)   // Continue's: the whole body, the tools and row games below it, on the next screen
+    val topH = max(0f, f.h - topY - HOME_PAGE_MARGIN)   // Continue's: the whole body, the row games, tools and shelves below it
     val pinH = shapeH
-    val under = homeToolsUnder(tools, w, bodyH, gap, f.textScale)
-    val block = under.block
-    val topH = under.topH
-    val col = homeInlineColumn(inline, under.contH, w, gap)
-    val top = homeTopTiles(gutter, topY, HomeRect(0f, 0f, col.contW, under.contH), col, block)
-    // The shelves under the row games, in their grid, as [homeBoard]'s.
-    val bands = homeBands(topY + topH, gutter, gap, rowGames, perRow, pinH, shelves) { shelf ->
+    val col = homeInlineColumn(inline, topH, w, gap)
+    val top = homeTopTiles(gutter, topY, HomeRect(0f, 0f, col.contW, topH), col)
+    val toolCount = tools.coerceAtLeast(0)
+    val toolW = max(0f, pinW)
+    val toolH = max(0f, pinH)
+    // The row games, then pinned tools, then shelves, on the same column grid, as [homeBoard]'s.
+    val bands = homeBands(topY + topH, gutter, gap, rowGames, perRow, toolW, pinH, toolCount, toolH, shelves) { shelf ->
         HomeShelfShape(perRow, pinW, pinH, min(homeShelfMax(shelf), homeShelfCap(false, perRow)))
     }
     return HomeBoard(
-        HomeToolMode.WIDE, stripLines, topY, topH, top, block.slots, block.more, gutter, gap, perRow, pinW, pinH, bands.tilesY, rowGames,
-        bands.pageH, block.toolW(), block.toolH(), homeStripTop(f, stripLines), bands.tiles, bands.sizes, inline, bands.cols,
+        HomeToolMode.WIDE, stripLines, topY, topH, top, Int.MAX_VALUE, 0, gutter, gap, perRow, pinW, pinH, bands.tilesY, rowGames,
+        bands.pageH, if (bands.tools.isEmpty()) 0f else toolW, if (bands.tools.isEmpty()) 0f else toolH, homeStripTop(f, stripLines),
+        bands.tiles, bands.sizes, inline, bands.cols, toolTiles = bands.tools,
     )
 }
 
-/**
- * A top section in the page: Continue at [cont], [col]'s inline cards, then [block]'s tool tiles in reading order, the
- * last one "+N" when it has [HomeToolBlock.more].
- */
-private fun homeTopTiles(gutter: Float, topY: Float, cont: HomeRect, col: HomeInlineColumn, block: HomeToolBlock): List<HomeTopTile> {
+/** A top section in the page: Continue at [cont], then [col]'s inline cards. */
+private fun homeTopTiles(gutter: Float, topY: Float, cont: HomeRect, col: HomeInlineColumn): List<HomeTopTile> {
     fun page(r: HomeRect) = HomeRect(gutter + r.x, topY + r.y, r.w, r.h)
     return buildList {
         add(HomeTopTile(HomeTopKind.CONTINUE, page(cont)))
         col.cards.forEach { add(HomeTopTile(HomeTopKind.GAME, page(it))) }
-        block.rects.forEachIndexed { i, r ->
-            add(HomeTopTile(if (block.more > 0 && i == block.rects.lastIndex) HomeTopKind.MORE else HomeTopKind.TOOL, page(r)))
-        }
     }
 }
 
@@ -587,11 +520,11 @@ internal fun homeBoardPin(b: HomeBoard, i: Int): HomeRect =
 
 /**
  * Home on the large face. Continue and beside it the first 1–2 [games] inline ([homeInlineColumn], two stacked, as on
- * the wide face) are 2 · S + gap / 2 tall whatever the tools, with S = (w / 2 − 3 · gap) / 3; a gap under them, one
- * row of the Tools page's tiles across the page ([homeToolsUnder]). Under it the [homeBands]: the rest of the pins, 4 a row at (w − 3 · gap) / 4 wide and 16:9, then each
- * shelf at the pins' size, up to 4 tiles ([homeShelfCap]). With the tab row hidden the top section is 44 dp taller, and
- * [freed] (the hidden strip's room, [homeStatsRoom]) makes it that much taller again from the margin, so the bands below
- * stay put.
+ * the wide face) are 2 · S + gap / 2 tall, with S = (w / 2 − 3 · gap) / 3. Under it the [homeBands]: the rest of the
+ * pins, 4 a row at (w − 3 · gap) / 4 wide and 16:9, then the pinned tools band (4 a row, [homeToolBandHeight] tall),
+ * then each shelf at the pins' size, up to 4 tiles ([homeShelfCap]). With the tab row hidden the top section is 44 dp
+ * taller, and [freed] (the hidden strip's room, [homeStatsRoom]) makes it that much taller again from the margin, so
+ * the bands below stay put.
  */
 private fun homeBoardLarge(f: HomeFrame, stripLines: Int, freed: Float, tools: Int, games: Int, shelves: List<Pair<HomeShelf, Int>>): HomeBoard {
     val gutter = homeInsetStart(f)
@@ -599,28 +532,33 @@ private fun homeBoardLarge(f: HomeFrame, stripLines: Int, freed: Float, tools: I
     val w = f.w - gutter - homeInsetEnd(f)
     val topY = homeTopY(f, stripLines)
     val big = max(0f, (w / 2 - 3 * gap) / 3)
-    val under = homeToolsUnder(tools, w, 2 * big + gap / 2 + homeTitleRoom(f) + freed, gap, f.textScale)
-    val block = under.block
-    val topH = under.topH
+    val topH = 2 * big + gap / 2 + homeTitleRoom(f) + freed
     val inline = min(games.coerceAtLeast(0), HOME_INLINE_MAX)   // the first 2 inline, the rest row games
-    val col = homeInlineColumn(inline, under.contH, w, gap)
-    val top = homeTopTiles(gutter, topY, HomeRect(0f, 0f, col.contW, under.contH), col, block)
+    val col = homeInlineColumn(inline, topH, w, gap)
+    val top = homeTopTiles(gutter, topY, HomeRect(0f, 0f, col.contW, topH), col)
     val pinW = (w - (HOME_LARGE_PIN_COLS - 1) * gap) / HOME_LARGE_PIN_COLS
     val pinH = pinW * 9 / 16
     val rowGames = games.coerceAtLeast(0) - inline
-    // Each shelf up to 4 tiles ([homeShelfCap]) at the pins' size, 4 to a row: one row.
-    val bands = homeBands(topY + topH, gutter, gap, rowGames, HOME_LARGE_PIN_COLS, pinH, shelves) { shelf ->
+    val toolCount = tools.coerceAtLeast(0)
+    val toolW = max(0f, pinW)
+    val toolH = max(0f, pinH)
+    // Row games, pinned tools, then each shelf up to 4 tiles ([homeShelfCap]) at the pins' size, 4 to a row: one row.
+    val bands = homeBands(topY + topH, gutter, gap, rowGames, HOME_LARGE_PIN_COLS, toolW, pinH, toolCount, toolH, shelves) { shelf ->
         HomeShelfShape(HOME_LARGE_PIN_COLS, pinW, pinH, min(homeShelfMax(shelf), homeShelfCap(false, HOME_LARGE_PIN_COLS)))
     }
     return HomeBoard(
-        HomeToolMode.LARGE, stripLines, topY, topH, top, block.slots, block.more, gutter, gap, HOME_LARGE_PIN_COLS, pinW, pinH,
-        bands.tilesY, rowGames, bands.pageH, block.toolW(), block.toolH(), homeStripTop(f, stripLines), bands.tiles, bands.sizes, inline, bands.cols,
+        HomeToolMode.LARGE, stripLines, topY, topH, top, Int.MAX_VALUE, 0, gutter, gap, HOME_LARGE_PIN_COLS, pinW, pinH,
+        bands.tilesY, rowGames, bands.pageH, if (bands.tools.isEmpty()) 0f else toolW, if (bands.tools.isEmpty()) 0f else toolH,
+        homeStripTop(f, stripLines), bands.tiles, bands.sizes, inline, bands.cols, toolTiles = bands.tools,
     )
 }
 
-/** Row tile [k] (a pinned game, then the shelves' tiles in order), in the page. */
-internal fun homeBoardTile(b: HomeBoard, k: Int): HomeRect =
-    if (k < b.rowGames) homeBoardPin(b, k) else b.shelfTiles[k - b.rowGames]
+/** Row tile [k] (a pinned game, then a pinned tool, then the shelves' tiles in order), in the page. */
+internal fun homeBoardTile(b: HomeBoard, k: Int): HomeRect = when {
+    k < b.rowGames -> homeBoardPin(b, k)
+    k < b.rowGames + b.toolTiles.size -> b.toolTiles[k - b.rowGames]
+    else -> b.shelfTiles[k - b.rowGames - b.toolTiles.size]
+}
 
 
 /**

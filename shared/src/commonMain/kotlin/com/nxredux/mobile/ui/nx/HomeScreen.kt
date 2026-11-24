@@ -55,6 +55,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -80,11 +81,14 @@ import com.nxredux.mobile.ui.HomeStripMost
 import com.nxredux.mobile.ui.HomeView
 import com.nxredux.mobile.ui.InfoLine
 import com.nxredux.mobile.ui.MainRow
+import com.nxredux.mobile.ui.ToolRow
 import com.nxredux.mobile.ui.abstractAccentArtUrl
 import com.nxredux.mobile.ui.continueFrame
 import com.nxredux.mobile.ui.continuePictures
 import com.nxredux.mobile.ui.gridTiles
 import com.nxredux.mobile.ui.homeStripLines
+import com.nxredux.mobile.ui.pinKey
+import com.nxredux.mobile.ui.toolAbstractArtUrl
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import kotlin.math.max
@@ -152,10 +156,10 @@ internal fun HomeScreen(
         val b = remember(built, view) { homeBoard(built, view.lines ?: homeStripLines(view.strip), view.tools, view.games, view.shelves) }
         val topCount = view.topCount.coerceIn(0, rows.size)
         val pins = remember(rows, topCount) { rows.drop(topCount) }
-        val pinTiles = remember(pins) { gridTiles(pins) }
-        // The top section's tools and inline games, as their tiles (null: Continue, Pick a game, "+N").
+        val pinTiles = remember(pins) { pins.map { if (it is MainRow.Pin || it is MainRow.Shelf) gridTiles(listOf(it)).single() else null } }
+        // The top section's inline games, as their tiles (null: Continue, Pick a game).
         val topTiles = remember(rows, topCount) {
-            rows.take(topCount).map { if (it is MainRow.PinnedTool || it is MainRow.Pin) gridTiles(listOf(it)).single() else null }
+            rows.take(topCount).map { if (it is MainRow.Pin) gridTiles(listOf(it)).single() else null }
         }
         // Continue's info, kept as one list while it is equal, so a focus move elsewhere lets the card skip.
         val contInfo = remember(continueInfo, signedIn) { timeOnly(homeInfo(continueInfo, signedIn)) }
@@ -175,7 +179,7 @@ internal fun HomeScreen(
         // selection eases it as little as keeps the selected tile in view ([homeBoardTile]),
         // from where it is (a drag included); a new board snaps; a rows swap on the same board (stats, recents) keeps
         // it ([homeScrollStep]).
-        val tiles = b.rowGames + b.shelfTiles.size   // the row tiles the board has rects for: pins, then the shelves'
+        val tiles = b.rowGames + b.toolTiles.size + b.shelfTiles.size   // the row tiles the board has rects for: pins, tools, then shelves
         val pageH = b.pageH
         val scroll = remember { Animatable(0f) }
         val last = remember { arrayOfNulls<Any>(2) }   // the board and the selected rect the scroll last answered
@@ -230,22 +234,35 @@ internal fun HomeScreen(
                         else -> Unit
                     }
                 }
-                // The row tiles under the top section: the pins, then the shelves' games (a shelf's title on 2 lines; a
+                // The bands under the top section: row pinned games, pinned tools, then shelves (a shelf's title on 2 lines; a
                 // New, Not started or Most played game's caption always shows, its console under its name; a pinned game's too).
                 pins.forEachIndexed { k, row ->
                     if (k >= tiles) return@forEachIndexed
                     val i = topCount + k
-                    val lines = if (k >= b.rowGames) 2 else null
-                    val console = (row as? MainRow.Shelf)?.takeIf { homeShelfCaptioned(it.shelf) }?.entry?.system?.displayName
-                    // A shelf game wears its badge top-left on its picture ([HomeBadge], [homeShelfBadge]), as Continue does:
-                    // New's and Not started's reason, Most played's play time.
-                    val reason = (row as? MainRow.Shelf)?.let(::homeShelfBadge)
-                    pinTiles.getOrNull(k)?.let { t ->
-                        val m = Modifier.at(homeBoardTile(b, k)).taps(i, menu = true)
-                        HomeLit(i, selection) { lit ->
-                            Box(m) {
-                                HomePinTile(t, lit, { pinInfo(i) }, signedIn, portrait, Modifier.fillMaxSize(), lines, console, always = row is MainRow.Pin)
-                                reason?.let { HomeBadge(it, portrait, Modifier.align(Alignment.TopStart), lit = lit) }
+                    val rect = homeBoardTile(b, k)
+                    when (row) {
+                        is MainRow.PinnedTool -> {
+                            val m = Modifier.at(rect).taps(i, menu = true)
+                            HomeLit(i, selection) { lit -> HomeToolTile(row.row, lit, rect.h, m) }
+                        }
+                        is MainRow.MoreTools -> {
+                            val m = Modifier.at(rect).taps(i, menu = tabMenu)
+                            HomeLit(i, selection) { lit -> HomeMoreTile(row.count, lit, rect.w, m) }
+                        }
+                        else -> {
+                            val lines = if (row is MainRow.Shelf) 2 else null
+                            val console = (row as? MainRow.Shelf)?.takeIf { homeShelfCaptioned(it.shelf) }?.entry?.system?.displayName
+                            // A shelf game wears its badge top-left on its picture ([HomeBadge], [homeShelfBadge]), as Continue does:
+                            // New's and Not started's reason, Most played's play time.
+                            val reason = (row as? MainRow.Shelf)?.let(::homeShelfBadge)
+                            pinTiles.getOrNull(k)?.let { t ->
+                                val m = Modifier.at(rect).taps(i, menu = true)
+                                HomeLit(i, selection) { lit ->
+                                    Box(m) {
+                                        HomePinTile(t, lit, { pinInfo(i) }, signedIn, portrait, Modifier.fillMaxSize(), lines, console, always = row is MainRow.Pin)
+                                        reason?.let { HomeBadge(it, portrait, Modifier.align(Alignment.TopStart), lit = lit) }
+                                    }
+                                }
                             }
                         }
                     }
@@ -380,6 +397,50 @@ private fun HomePinTile(
         modifier = modifier, titleSize = 12.sp * nxTextScale(), titleLines = titleLines ?: if (portrait) 4 else 3, homeCaption = true,
         subtitle = console, captionAlways = always, drained = true,   // no ring: the selection in colour, the rest grey
     )
+
+/**
+ * A Grid Home pinned tool card (same [HomeBoard.pinW] × [HomeBoard.pinH] size as game tiles): deterministic abstract
+ * art ([toolAbstractArtUrl]) drained to greyscale when unfocused and easing to full colour on focus ([nxDrain]), a
+ * centred icon above the caption fade, and the tool's full name bottom-left over [homeCaptionFade] (easing to the
+ * accent on focus, matching [HomePinTile]).
+ */
+@Composable
+private fun HomeToolTile(tool: ToolRow, lit: Boolean, cardH: Float, modifier: Modifier) {
+    val colors = LocalNxColors.current
+    val litness = nxLitness(lit)
+    val url = remember(tool.pinKey, tool.appId) { toolAbstractArtUrl(tool) }
+    val titleSp = (HOME_TILE_NAME * nxTextScale()).value
+    val captionRoom = (titleSp * 1.15f + 16f).dp
+    val iconSize = ((cardH - captionRoom.value) * 0.62f).coerceIn(28f, 52f).dp
+    val nameColor = lerp(colors.listText.copy(alpha = DRAIN_NAME_ALPHA), colors.accent, litness())   // role: an unselected Grid tile's name
+    val iconTint = lerp(colors.listText.copy(alpha = DRAIN_NAME_ALPHA), colors.listText, litness())   // role: an unselected Grid tile's name
+    Box(modifier.homeCardFrame(colors)) {
+        AsyncImage(
+            model = url, contentDescription = null, contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().nxDrain(litness),
+        )
+        Box(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(HOME_CAPTION_SHARE)
+                .homeCaptionFade(colors.background),
+        )
+        Box(
+            Modifier.fillMaxSize().padding(top = 6.dp, bottom = captionRoom),
+            contentAlignment = Alignment.Center,
+        ) {
+            val iconMod = if (tool.appId != null) {
+                Modifier.size(iconSize).nxSaturation(alpha = { nxDimInk(litness()) }, saturation = litness)
+            } else {
+                Modifier.size(iconSize)
+            }
+            ToolIcon(toolIcon(tool.kind), tool.appId, iconTint, iconMod)
+        }
+        HomeText(
+            tool.label, nameColor, titleSp, titleSp * 1.15f, maxLines = 1,
+            modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 8.dp),
+            shadow = titleShadow(),
+        )
+    }
+}
 
 /**
  * "+N" as a tool tile ([ToolTileCell], the pinned tools' size [w]): the count large in the icon's place, over "More".
