@@ -30,6 +30,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -126,29 +127,7 @@ class EmulatorMenuExternalTest {
         val settings = Settings()
         val switched = ArrayList<String>()
         val screen = MutableStateFlow<Screen>(Screen.Games(ListSource.Console(ps), listOf(entry)))
-        val host = object : ContextMenuHost {
-            override val pins: List<Shortcut> = emptyList()
-            override val toolPins: List<String> = emptyList()
-            override suspend fun writeToolPins(keys: List<String>) = true
-            override fun select(index: Int) {}
-            override fun showNotice(text: String) {}
-            override suspend fun rebuildMainRows() {}
-            override fun collectionChanged(name: String) {}
-            override fun selectCollection(name: String) {}
-            override fun menuClosed() {}
-            override suspend fun refreshOpenList(select: String?) {}
-            override fun rescan() {}
-            override suspend fun applyHidden(entry: Listed, hidden: Boolean, closeMenu: Boolean) {}
-            override suspend fun renameInIndex(game: GameEntry, name: String) = true
-            override fun openGameSettings(entry: Listed) {}
-            override fun finishSwitch(game: GameEntry, from: SystemFolder, tag: String) { switched += tag }
-            override suspend fun externalApps(entry: Listed) = installedExternal(entry.system.tag, Apps(setOf(duckstation)), ::everyOffered, table)
-        }
-        val home = { ContentRef("Home") as ContentRef? }
-        val menus = ContextMenuController(
-            CoroutineScope(UnconfinedTestDispatcher(testScheduler)), screen, MutableStateFlow(ListSelection(0, 1)), MutableStateFlow(null),
-            NoUserData, settings, Sidecars(source, sidecarStore, home), Collections(source, sidecarStore, home), Mutex(), host,
-        )
+        val menus = controller(screen, settings, source, sidecarStore, switched) { installedExternal(it.system.tag, Apps(setOf(duckstation)), ::everyOffered, table) }
         fun pick(value: String) {
             menus.openContextMenu(0); advanceUntilIdle()
             val m = assertNotNull(screen.value.contextMenu)
@@ -175,6 +154,50 @@ class EmulatorMenuExternalTest {
         pick("PS")
         assertEquals(emptyMap(), settings.externalPicks)
         assertEquals(listOf("PSX"), switched)
+    }
+
+    /** The menu controller over [screen] with a host that records [switched] tags and answers [externalApps] with [lookup]. */
+    private fun TestScope.controller(
+        screen: MutableStateFlow<Screen>, settings: Settings, source: FakeRomsSource, sidecarStore: MemorySidecarStore,
+        switched: MutableList<String>, lookup: (Listed) -> List<Pair<ExternalEmulator, String>>,
+    ): ContextMenuController {
+        val host = object : ContextMenuHost {
+            override val pins: List<Shortcut> = emptyList()
+            override val toolPins: List<String> = emptyList()
+            override suspend fun writeToolPins(keys: List<String>) = true
+            override fun select(index: Int) {}
+            override fun showNotice(text: String) {}
+            override suspend fun rebuildMainRows() {}
+            override fun collectionChanged(name: String) {}
+            override fun selectCollection(name: String) {}
+            override fun menuClosed() {}
+            override suspend fun refreshOpenList(select: String?) {}
+            override fun rescan() {}
+            override suspend fun applyHidden(entry: Listed, hidden: Boolean, closeMenu: Boolean) {}
+            override suspend fun renameInIndex(game: GameEntry, name: String) = true
+            override fun openGameSettings(entry: Listed) {}
+            override fun finishSwitch(game: GameEntry, from: SystemFolder, tag: String) { switched += tag }
+            override suspend fun externalApps(entry: Listed) = lookup(entry)
+        }
+        val home = { ContentRef("Home") as ContentRef? }
+        return ContextMenuController(
+            CoroutineScope(UnconfinedTestDispatcher(testScheduler)), screen, MutableStateFlow(ListSelection(0, 1)), MutableStateFlow(null),
+            NoUserData, settings, Sidecars(source, sidecarStore, home), Collections(source, sidecarStore, home), Mutex(), host,
+        )
+    }
+
+    @Test fun aFailedAppLookupStillOpensOurCores() = runTest {
+        val crash = game("Crash.cue")
+        val ps = system("PS", listOf(crash))
+        val source = FakeRomsSource(dirs = mapOf("Home" to listOf("Roms"), "Home/Roms" to listOf("PS"), "Home/Roms/PS" to listOf("Crash.cue")))
+        val screen = MutableStateFlow<Screen>(Screen.Games(ListSource.Console(ps), listOf(Listed(ps, crash))))
+        val menus = controller(screen, Settings(), source, MemorySidecarStore(), ArrayList()) { throw IllegalStateException("package manager died") }
+        menus.openContextMenu(0); advanceUntilIdle()
+        val m = assertNotNull(screen.value.contextMenu)                  // the game menu opens without the apps
+        menus.menuSelect(m.items.indexOfFirst { it.kind == ContextKind.EMULATOR }); menus.menuOpen(); advanceUntilIdle()
+        val open = assertNotNull(screen.value.contextMenu)
+        assertEquals(false, open.busy)
+        assertEquals(listOf("PS", "PSX"), assertNotNull(open.sub).values)
     }
 
     @Test fun stalePickFallsBack() = runTest {

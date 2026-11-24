@@ -198,7 +198,8 @@ internal class ContextMenuController(
                     // The save is read off the main thread, so the menu opens when it is known (the list must not have moved on).
                     scope.launch {
                         val resume = host.canResume(e)
-                        val external = host.externalApps(e).isNotEmpty()
+                        // A failed app lookup (the scope has no handler) still opens the menu, without the apps.
+                        val external = tryOrAny({ false }) { host.externalApps(e).isNotEmpty() }
                         if (_screen.value !== s || s.menu != null) return@launch
                         gameMenu(s, e, canResume = resume, externalApps = external)
                     }
@@ -615,7 +616,7 @@ internal class ContextMenuController(
         val system = consoleOf(m) ?: return closeContextMenu()
         setMenu(m.copy(busy = true))
         scope.launch {
-            val apps = host.externalApps(m.game)
+            val apps = tryOrAny({ emptyList() }) { host.externalApps(m.game) }   // a failed lookup leaves our cores, never a stuck busy menu
             if (_screen.value.contextMenu?.entry != m.entry) return@launch   // the menu closed or moved on meanwhile
             val sub = ContextMenus.emulatorMenu(system, apps, settings.externalPicks[m.game.game.path]) ?: return@launch closeContextMenu()
             setMenu(m.copy(sub = sub))
