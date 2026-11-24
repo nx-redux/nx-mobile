@@ -6,7 +6,6 @@ import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.settings.AppSettings
-import com.nxredux.mobile.storage.FileRefs
 
 /** The platform's side of opening games in standalone emulators: which are installed, and the hand-off. */
 interface ExternalApps {
@@ -39,9 +38,12 @@ object NoExternalApps : ExternalApps {
     override suspend fun launch(request: ExternalLaunch) = ExternalLaunchResult.NOT_INSTALLED
 }
 
-/** Which apps can open [game] ([ExternalEmulators.offered]); [naomiSets] is read only for an entry limited to NAOMI sets. */
-fun offeredFor(game: GameEntry, naomiSets: NaomiSets): (ExternalEmulator) -> Boolean {
-    val realFile = FileRefs.isFile(game.ref)
+/**
+ * Which apps can open [game] ([ExternalEmulators.offered]); [naomiSets] is read only for an entry limited to NAOMI sets.
+ * [realPath]: the game's path a path-only app may be given ([ExternalLaunch.realPath]); null offers none of them.
+ */
+fun offeredFor(game: GameEntry, naomiSets: NaomiSets, realPath: String?): (ExternalEmulator) -> Boolean {
+    val realFile = realPath != null
     val zipped = Names.isArchive(game.fileName)
     val naomi by lazy { naomiSets.title(Names.stripExtension(game.fileName)) != null }
     return { e -> ExternalEmulators.offered(e, realFile, zipped, isNaomiSet = e.sets == SetRule.NAOMI && naomi, isModel3Set = false) }

@@ -53,15 +53,31 @@ class GameTimeStore(
         closeStale()
         val id = newId()
         db.transaction {
-            val gameId = q.gameByPath(romPath).executeAsOneOrNull()?.id?.also { q.refreshGame(name, tag, it) } ?: run {
-                q.insertGame(romPath, name, tag)
-                q.lastInsertRowId().executeAsOne()
-            }
             val t = now()
-            q.insertSession(id, gameId, deviceId, tag, t, t, play ?: id)
+            q.insertSession(id, gameIdFor(romPath, tag, name), deviceId, tag, t, t, play ?: id)
         }
         return id
     }
+
+    /**
+     * A whole play of [romPath]'s game from [startMs] to [endMs], written closed: another app's play, which never
+     * touches an open session (the stale close would end one at its start). Kept only if plausible, as [end]'s.
+     */
+    fun recordPlay(romPath: String, tag: String, name: String, startMs: Long, endMs: Long) {
+        val id = newId()
+        db.transaction {
+            q.insertSession(id, gameIdFor(romPath, tag, name), deviceId, tag, startMs, endMs, id)
+            q.closeSession(endMs, id)
+            q.deleteImplausible(MIN_MS, MAX_MS)
+        }
+    }
+
+    /** [romPath]'s game row (its name and tag refreshed), created on first play. Inside a transaction. */
+    private fun gameIdFor(romPath: String, tag: String, name: String): Long =
+        q.gameByPath(romPath).executeAsOneOrNull()?.id?.also { q.refreshGame(name, tag, it) } ?: run {
+            q.insertGame(romPath, name, tag)
+            q.lastInsertRowId().executeAsOne()
+        }
 
     /**
      * Moves games to new rom paths ([map]: old to new) in one transaction; sessions and merges follow, as they point at

@@ -15467,4 +15467,5 @@ private object NoGameTime : GameTimeData {
     override suspend fun window(sinceMs: Long, nowMs: Long): WindowTotals = WindowTotals(0L, null)
     override suspend fun playedPaths(sinceMs: Long, nowMs: Long): Set<String> = emptySet()
     override suspend fun renamePaths(map: Map<String, String>): Unit = error("unused")
+    override suspend fun recordPlay(romPath: String, tag: String, name: String, startMs: Long, endMs: Long): Unit = error("unused")
 }

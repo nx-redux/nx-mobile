@@ -1,6 +1,12 @@
 package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.tryOrAny
+import com.nxredux.mobile.tryQuietly
+import com.nxredux.mobile.external.ExternalEmulator
+import com.nxredux.mobile.external.ExternalEmulators
+import com.nxredux.mobile.external.ExternalLaunch
+import com.nxredux.mobile.external.ExternalLaunchResult
+import com.nxredux.mobile.external.externalPickFor
 import com.nxredux.mobile.library.ArcadeCompanions
 import com.nxredux.mobile.library.CompanionLookup
 import com.nxredux.mobile.library.DiscSheet
@@ -33,6 +39,8 @@ import kotlinx.coroutines.withContext
 /** What launches need from [AppState]: Kids Mode's lock, the menu's push and rows, an app's start, and the index. */
 internal interface LaunchHost {
     fun kidsLocked(): Boolean
+    /** Kids Mode is on, in any state: no game goes to another emulator. */
+    fun kidsOn(): Boolean
     /** A launch happens: a hidden tab pushed over the menu is dropped (the menu is its own tab after a game). */
     fun dropPushedTab()
     /** An Android game's app started ([AppsController.launchApp]). */
@@ -43,6 +51,13 @@ internal interface LaunchHost {
     suspend fun moveInIndex(game: GameEntry, from: SystemFolder, toTag: String): Boolean
     suspend fun refreshOpenList(select: String?)
     fun openMainRow(s: Screen.Systems, index: Int, forward: NavMotion = NavMotion.FORWARD): Job?
+    /** Which of the other emulators for [entry]'s console can open its game ([com.nxredux.mobile.external.offeredFor]). */
+    suspend fun externalOffered(entry: Listed): (ExternalEmulator) -> Boolean
+    /** [game]'s path a path-only emulator may be given; null when it has none to give ([ExternalLaunch.realPath]). */
+    fun realPathOf(game: GameEntry): String?
+    fun recordRecent(recent: Recent)
+    /** Play time was written outside the menu's reads: the screens read it again. */
+    fun playTimeChanged()
 }
 
 /**
@@ -59,6 +74,7 @@ internal class LaunchController(
     private val sidecars: Sidecars,
     private val switcher: LaunchSwitcher,
     private val host: LaunchHost,
+    private val externalTable: List<ExternalEmulator> = ExternalEmulators.all,
 ) {
     private val _minimalOpening = MutableStateFlow<MinimalOpening?>(null)
 
@@ -76,6 +92,7 @@ internal class LaunchController(
     val resumeInfo: StateFlow<ResumeInfo> = _resumeInfo.asStateFlow()
     private var resumeJob: Job? = null     // highlighted game's resume-marker read
     private var launchJob: Job? = null     // pre-launch checks + runner launch in flight
+    private var externalPlay: ExternalPlay? = null   // a game handed to another emulator, timed until the app is back
 
     private fun listed(game: GameEntry): Listed? = (screen.value as? Screen.Games)?.entries?.firstOrNull { it.game == game }
 
@@ -124,7 +141,10 @@ internal class LaunchController(
         // happens (an app's start, or the runner's call), so a coreless, in-flight, vanished or unreadable game leaves the
         // push for B to return to.
         if (listed.android) { host.dropPushedTab(); host.launchApp(entry); return null }
-        if (coreOverride == null && listed.core == null) return null
+        // A netplay launch is always ours; any other may go to the game's pick, or to a console without a core's app.
+        val externalOnly = !listed.unassigned && CoreRegistry.consoleOf(listed.tag)?.externalOnly == true
+        val mayGoExternal = coreOverride == null && !listed.unassigned && (externalOnly || ExternalEmulators.forTag(listed.tag, externalTable).isNotEmpty())
+        if (coreOverride == null && listed.core == null && !externalOnly) return null
         if (launchJob?.isActive == true) return null   // a launch is already in flight
         switcher.cancelLoad()   // a switcher still loading must not open over the launched game
         val job = scope.launch {
@@ -132,6 +152,15 @@ internal class LaunchController(
             if (!stillThere(game)) {   // the index can be older than the tree: no recents entry, no runner call
                 launchError(gone)
                 return@launch
+            }
+            if (mayGoExternal) {
+                val app = externalPickFor(game.path, listed.tag, deps.settings, deps.externalApps, host.externalOffered(entry), externalTable)
+                if (app != null) { handOff(entry, app, externalOnly); return@launch }
+                if (externalOnly) {
+                    val console = CoreRegistry.consoleOf(listed.tag)?.displayName ?: listed.displayName
+                    host.showNotice("No emulator for $console is installed. Install one that can open these games, then try again.")
+                    return@launch
+                }
             }
             // A netplay launch keeps the agreed core.
             val sys = (if (coreOverride == null) classicNesSystem(entry) else null) ?: listed
@@ -185,6 +214,45 @@ internal class LaunchController(
         launchJob = job
         job.invokeOnCompletion { if (launchJob === job) launchJob = null }
         return job
+    }
+
+    /**
+     * Opens [entry]'s game in [app]. Started: the game is recent, as one our core loaded, and timed until the app is in
+     * front again ([onForeground]), except on a console without a core (no play time there). Kids Mode refuses it.
+     */
+    private suspend fun handOff(entry: Listed, app: ExternalEmulator, externalOnly: Boolean) {
+        if (host.kidsOn()) { host.showNotice("Games in other emulators are off in Kids Mode."); return }
+        val game = entry.game
+        val pkg = deps.externalApps.installedPackage(app)
+        val label = pkg?.let(deps.externalApps::label) ?: app.name
+        val result = if (pkg == null) ExternalLaunchResult.NOT_INSTALLED else deps.externalApps.launch(
+            ExternalLaunch(app, pkg, entry.system.tag, game.ref, game.folder, game.fileName, host.realPathOf(game)),
+        )
+        when (result) {
+            ExternalLaunchResult.STARTED -> {
+                host.dropPushedTab()
+                host.recordRecent(Recent(game.path, game.shownName))
+                externalPlay = if (externalOnly) null else deps.now?.invoke()?.let { ExternalPlay(game.path, entry.system.tag, game.shownName, it) }
+            }
+            ExternalLaunchResult.NO_ACCESS -> host.showNotice("This emulator can't open games from this folder.")
+            ExternalLaunchResult.NOT_INSTALLED, ExternalLaunchResult.FAILED -> host.showNotice("Could not open $label.")
+        }
+    }
+
+    /**
+     * The app is in front again: a game handed to another emulator ends its play now, at most [EXTERNAL_SESSION_CAP_MS]
+     * long (the player may have left it running, or gone elsewhere, long before coming back).
+     */
+    fun onForeground() {
+        val play = externalPlay ?: return
+        externalPlay = null
+        val gameTime = deps.gameTime ?: return
+        val now = deps.now?.invoke() ?: return
+        val end = minOf(now, play.startMs + EXTERNAL_SESSION_CAP_MS)
+        scope.launch {
+            tryQuietly { gameTime.recordPlay(play.romPath, play.tag, play.name, play.startMs, end) }
+            host.playTimeChanged()
+        }
     }
 
     /** [load]'s companion lookup, or null when it fails: any failure, an Error too, is a game not found. */
@@ -317,6 +385,12 @@ internal class LaunchController(
     /** A Minimal folder open that has landed is cleared now (the next press, or a return to the app). */
     fun clearMinimalOpening() { _minimalOpening.value?.let { minimalJob?.cancel(); _minimalOpening.value = null } }
 }
+
+/** A game handed to another emulator ([LaunchController.onForeground]): its path, tag and name, from [startMs]. */
+private class ExternalPlay(val romPath: String, val tag: String, val name: String, val startMs: Long)
+
+/** The longest play an external session records: past it the player most likely left the app running. */
+internal const val EXTERNAL_SESSION_CAP_MS = 12 * 3_600_000L
 
 /** A Minimal folder open clears this long after its list opened ([MINIMAL_LEAVE_MS]). */
 private const val MINIMAL_CLEAR_MS = 1_000L

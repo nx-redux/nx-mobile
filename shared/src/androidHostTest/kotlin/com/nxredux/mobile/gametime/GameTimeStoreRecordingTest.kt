@@ -20,6 +20,17 @@ class GameTimeStoreRecordingTest {
         assertEquals(90_000L, s.duration)
     }
 
+    // Another app's play: written whole on return, never open meanwhile (a stale close would end it at its start).
+    @Test fun recordedPlayIsClosedWithItsLength() {
+        store.recordPlay("/Roms/PS/Crash.cue", "PS", "Crash", startMs = 500_000L, endMs = 2_300_000L)
+        clock += 3_600_000
+        store.closeStale()
+        assertEquals(listOf(1_800_000L), store.totals().map { it.totalMs })
+        assertEquals(1L, store.totals().single().plays)
+        store.recordPlay("/Roms/PS/Crash.cue", "PS", "Crash", startMs = 3_000_000L, endMs = 3_000_500L)   // under a second
+        assertEquals(listOf(1_800_000L), store.totals().map { it.totalMs })
+    }
+
     @Test fun samePathReusesTheGameNewPathCreatesOne() {
         val a = store.start("/Roms/GB/Tetris.gb", "GB", "Tetris"); clock += 5_000; store.end(a)
         val b = store.start("/Roms/GB/Tetris.gb", "GB", "Tetris"); clock += 5_000; store.end(b)

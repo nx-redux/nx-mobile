@@ -783,6 +783,11 @@ class AppState(
             override suspend fun moveInIndex(game: GameEntry, from: SystemFolder, toTag: String): Boolean = this@AppState.moveInIndex(game, from, toTag)
             override suspend fun refreshOpenList(select: String?) = this@AppState.refreshOpenList(select)
             override fun openMainRow(s: Screen.Systems, index: Int, forward: NavMotion): Job? = this@AppState.openMainRow(s, index, forward)
+            override fun kidsOn(): Boolean = kidsUi.kidsMode != KidsMode.Off
+            override suspend fun externalOffered(entry: Listed): (ExternalEmulator) -> Boolean = this@AppState.externalOffered(entry)
+            override fun realPathOf(game: GameEntry): String? = this@AppState.realPathOf(game)
+            override fun recordRecent(recent: Recent) = recents.record(recent)
+            override fun playTimeChanged() = this@AppState.playTimeChanged()
         },
     )
     /** A Minimal page's folder being opened ([LaunchController.openMinimal]); null otherwise. */
@@ -3020,6 +3025,7 @@ class AppState(
         kidsUi.kidsReturned()   // back from Usage access or Alarms & reminders: a setup step moves on once granted
         kidsUi.kidsHomeCheck()  // back from setup's home question: on once home
         val switcherBack = switcher.onForeground()
+        launches.onForeground()   // back from another emulator: its play ends now
         checkArt(reuse = true)   // art deleted or added while away (only changed art folders are listed)
         if (!launches.minimalPending) launches.clearMinimalOpening()
         onLauncherChanged()   // back from Android's home settings or the role dialog: System re-reads its state
@@ -3532,14 +3538,26 @@ class AppState(
         )
     }
 
-    /** The installed apps that can open [entry]'s game; the NAOMI table is read (off this thread) only for an installed app limited to its sets. */
+    /** The installed apps that can open [entry]'s game. */
     private suspend fun externalAppsFor(entry: Listed): List<Pair<ExternalEmulator, String>> {
-        val candidates = ExternalEmulators.forTag(entry.system.tag)
-        if (candidates.isEmpty()) return emptyList()
-        val naomiApp = candidates.any { it.sets == SetRule.NAOMI && deps.externalApps.installedPackage(it) != null }
-        val naomi = if (naomiApp) withContext(deps.compute) { deps.naomiSets() } else NaomiSets.EMPTY
-        return installedExternal(entry.system.tag, deps.externalApps, offeredFor(entry.game, naomi))
+        if (ExternalEmulators.forTag(entry.system.tag).isEmpty()) return emptyList()
+        return installedExternal(entry.system.tag, deps.externalApps, externalOffered(entry))
     }
+
+    /** Which apps can open [entry]'s game; the NAOMI table is read (off this thread) only for an installed app limited to its sets. */
+    private suspend fun externalOffered(entry: Listed): (ExternalEmulator) -> Boolean {
+        val naomiApp = ExternalEmulators.forTag(entry.system.tag).any { it.sets == SetRule.NAOMI && deps.externalApps.installedPackage(it) != null }
+        val naomi = if (naomiApp) withContext(deps.compute) { deps.naomiSets() } else NaomiSets.EMPTY
+        return offeredFor(entry.game, naomi, realPathOf(entry.game))
+    }
+
+    /**
+     * [game]'s file path for an app that takes only a path: with All files access granted (never on the Play build) and
+     * the file outside the app's own media home, so the other app can read it too; null for a SAF document.
+     */
+    private fun realPathOf(game: GameEntry): String? = game.ref.takeIf {
+        FileRefs.isFile(it) && deps.allFilesAccess?.takeIf { a -> a.declared }?.granted() == true && !inMediaHome(it)
+    }?.let(FileRefs::path)
 
     /**
      * The scraper's games with each arcade set's raw DAT title (fbneo's table; flycast's for a DC zip/7z): libretro names

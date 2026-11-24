@@ -23,6 +23,8 @@ interface GameTimeData {
     suspend fun playedPaths(sinceMs: Long, nowMs: Long): Set<String>
     /** Moves games to new rom paths ([map]: old to new), as [GameTimeStore.renamePaths]. */
     suspend fun renamePaths(map: Map<String, String>)
+    /** A whole play another app ran, as [GameTimeStore.recordPlay]. */
+    suspend fun recordPlay(romPath: String, tag: String, name: String, startMs: Long, endMs: Long)
 }
 
 /**
@@ -44,6 +46,8 @@ class StoreGameTimeData(private val store: GameTimeStore, private val io: Corout
     override suspend fun playedPaths(sinceMs: Long, nowMs: Long) = withContext(io) { store.playedPaths(sinceMs, nowMs) }
     override suspend fun byPath() = withContext(io) { closeLeft(); store.byPath() }
     override suspend fun renamePaths(map: Map<String, String>) = withContext(io) { store.renamePaths(map) }
+    override suspend fun recordPlay(romPath: String, tag: String, name: String, startMs: Long, endMs: Long) =
+        withContext(io) { store.recordPlay(romPath, tag, name, startMs, endMs) }
 }
 
 /**
@@ -64,4 +68,6 @@ class LazyGameTimeData(private val open: suspend () -> GameTimeData?) : GameTime
     override suspend fun renamePaths(map: Map<String, String>) = d().renamePaths(map)
     override suspend fun window(sinceMs: Long, nowMs: Long) = d().window(sinceMs, nowMs)
     override suspend fun playedPaths(sinceMs: Long, nowMs: Long) = d().playedPaths(sinceMs, nowMs)
+    override suspend fun recordPlay(romPath: String, tag: String, name: String, startMs: Long, endMs: Long) =
+        d().recordPlay(romPath, tag, name, startMs, endMs)
 }

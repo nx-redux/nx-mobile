@@ -221,9 +221,19 @@ class EmulatorMenuExternalTest {
         val zipped = game("Crash.zip", FileRefs.of("/storage/emulated/0/Roms/PS/Crash.zip"))
         val apps = Apps(setOf(pathOnly))
         val settings = Settings().apply { externalPicks = mapOf(saf.path to "pathonly") }
-        assertNull(externalPickFor(saf.path, "PS", settings, apps, offeredFor(saf, NaomiSets.EMPTY), table))
-        assertEquals(pathOnly, externalPickFor(saf.path, "PS", settings, apps, offeredFor(real, NaomiSets.EMPTY), table))
-        assertNull(externalPickFor(saf.path, "PS", settings, apps, offeredFor(zipped, NaomiSets.EMPTY), table))
-        assertTrue(installedExternal("PS", apps, offeredFor(saf, NaomiSets.EMPTY), table).isEmpty())
+        assertNull(externalPickFor(saf.path, "PS", settings, apps, offeredFor(saf, NaomiSets.EMPTY, realPath = null), table))
+        assertEquals(pathOnly, externalPickFor(saf.path, "PS", settings, apps, offeredFor(real, NaomiSets.EMPTY, realPath = FileRefs.path(real.ref)), table))
+        assertNull(externalPickFor(saf.path, "PS", settings, apps, offeredFor(zipped, NaomiSets.EMPTY, realPath = FileRefs.path(zipped.ref)), table))
+        assertTrue(installedExternal("PS", apps, offeredFor(saf, NaomiSets.EMPTY, realPath = null), table).isEmpty())
+    }
+
+    // The Play build (no All files access) and a file in the app's own storage: a real file, but no path to give.
+    @Test fun pathOnlyPickNeedsAPathToGive() = runTest {
+        val real = game("Crash.cue", FileRefs.of("/storage/emulated/0/Roms/PS/Crash.cue"))
+        val apps = Apps(setOf(pathOnly, duckstation))
+        val settings = Settings().apply { externalPicks = mapOf(real.path to "pathonly") }
+        val noPath = offeredFor(real, NaomiSets.EMPTY, realPath = null)
+        assertNull(externalPickFor(real.path, "PS", settings, apps, noPath, table))
+        assertEquals(listOf(duckstation), installedExternal("PS", apps, noPath, table).map { it.first })
     }
 }
