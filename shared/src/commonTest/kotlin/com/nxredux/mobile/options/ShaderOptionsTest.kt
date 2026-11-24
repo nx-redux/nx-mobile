@@ -103,7 +103,7 @@ class ShaderOptionsTest {
 
     @Test fun a_replaced_bundled_preset_reads_as_its_slang_version() {
         assertEquals("slang/crt/crt-geom.slangp", ShaderOptions.fromConfig(mapOf("nx_shader" to "crt/crt-geom.glslp"))["nx_shader"])
-        assertEquals("slang/handheld/lcd3x.slangp", ShaderOptions.preset(mapOf("nx_shader" to "glsl/lcd3x.glsl")))
+        assertEquals("slang/handheld/lcd3x-classic.slangp", ShaderOptions.preset(mapOf("nx_shader" to "glsl/lcd3x.glsl")))
         assertEquals("User/crt/crt-geom.glslp", ShaderOptions.preset(mapOf("nx_shader" to "User/crt/crt-geom.glslp")))
         assertEquals("nx/line.glslp", ShaderOptions.current("nx/line.glslp"))
         assertEquals(null, ShaderOptions.preset(mapOf("nx_shader" to "None")))

@@ -810,6 +810,37 @@ class InGameMenuModelTest {
         assertEquals(listOf("CRT Geom", "CRT Pie  $IN_USE_MARK", "CRT Royale", "Line"), m.state.page.rows.map { it.label })
     }
 
+    @Test fun b_from_a_preview_highlights_the_preset_stepped_to() {
+        val m = pickerModel()
+        m.select(1); m.press(NxButton.A)   // CRT
+        m.select(2); m.press(NxButton.A)   // CRT Royale, its preview
+        m.press(NxButton.RIGHT)            // Line
+        m.press(NxButton.B)
+        assertEquals(listOf("CRT Geom", "CRT Pie", "CRT Royale", "Line  $IN_USE_MARK"), m.state.page.rows.map { it.label })
+        assertEquals(3, m.state.page.selected)
+    }
+
+    @Test fun a_level_without_the_preset_in_use_keeps_its_highlight() {
+        val m = pickerModel()
+        m.select(1); m.press(NxButton.A)   // CRT
+        m.select(2); m.press(NxButton.A); m.press(NxButton.B)
+        m.press(NxButton.B)                // back on the groups: CRT stays highlighted
+        assertEquals(PageKind.ShaderBrowse(""), m.state.page.kind)
+        assertEquals(1, m.state.page.selected)
+    }
+
+    @Test fun a_preset_row_is_used_and_a_folder_row_opened() {
+        val m = pickerModel()
+        m.select(1); m.press(NxButton.A)   // CRT
+        val preset = m.state.page.rows[0] as MenuRow.Submenu
+        assertTrue(preset.usesPreset)
+        assertEquals(listOf(Hint(NxButton.A, "Use"), Hint(NxButton.B, "Back")), hintsFor(m.state.page, preset))
+        m.press(NxButton.B)
+        val folder = m.state.page.rows[1] as MenuRow.Submenu
+        assertFalse(folder.usesPreset)
+        assertEquals(listOf(Hint(NxButton.A, "Open"), Hint(NxButton.B, "Back")), hintsFor(m.state.page, folder))
+    }
+
     @Test fun a_on_the_preset_in_use_only_shows_its_preview() {
         val m = pickerModel()
         m.select(1); m.press(NxButton.A)

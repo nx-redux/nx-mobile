@@ -122,7 +122,7 @@ def run_case(args, tag, core, folder, game, presets, out_dir):
                 p.sh("screencap -p %s" % remote, timeout=60)
                 p.dev._adb(["pull", remote, os.path.join(out_dir, shot_name(tag, preset))], timeout=120, check=False)
                 p.sh("rm -f %s" % remote)
-                log = p.sh("logcat -d 2>/dev/null | grep -E 'NXAPP|libretrodroid|NXHITCH|FATAL|Fatal signal'", timeout=60)
+                log = p.sh("logcat -d adbd:S 2>/dev/null | grep -E 'NXAPP|libretrodroid|NXHITCH|FATAL|Fatal signal'", timeout=60)
                 row.update(parse_timestats(stats, 1000.0 / 60.0) or {})
                 row.update(work_from_log(log) or {})
                 ready = READY.search(log)
