@@ -67,6 +67,7 @@ import com.nxredux.mobile.R
 import com.nxredux.mobile.achievements.AchievementsService
 import com.nxredux.mobile.achievements.AndroidRaHasher
 import com.nxredux.mobile.achievements.RaAchievement
+import com.nxredux.mobile.achievements.RaNotices
 import com.nxredux.mobile.achievements.RaBadgeFolders
 import com.nxredux.mobile.achievements.RaConsoles
 import com.nxredux.mobile.achievements.RaFingerprintKeys
@@ -1830,7 +1831,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             RaEvent.Disconnected -> if (shown) notice("RetroAchievements: connection lost")
             RaEvent.Reconnected -> if (shown) notice("RetroAchievements: reconnected")
             is RaEvent.GameLoaded -> notice("${e.title} · ${e.unlocked}/${e.total} achievements")
-            RaEvent.GameUnknown -> notice("No achievements for this game")
+            is RaEvent.GameUnknown -> notice(RaNotices.unknownGame(intent.getStringExtra(EXTRA_FILE_NAME), e.hashUnknown))
             is RaEvent.LoginFailed -> notice("RetroAchievements sign-in failed")
             RaEvent.SessionOffline -> notice("RetroAchievements: offline")
             RaEvent.SessionDisabled -> notice("RetroAchievements needs a network connection for first-time setup")
@@ -1839,7 +1840,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         // The session changed what the menu shows (row, summary, the set): refresh it if it is open.
         when (e) {
-            is RaEvent.GameLoaded, RaEvent.GameUnknown, is RaEvent.LoginFailed, RaEvent.SessionDisabled, RaEvent.SessionOffline,
+            is RaEvent.GameLoaded, is RaEvent.GameUnknown, is RaEvent.LoginFailed, RaEvent.SessionDisabled, RaEvent.SessionOffline,
             is RaEvent.Unlocked, is RaEvent.Synced, RaEvent.BadgesReady -> refreshMenuAchievements()
             else -> Unit
         }
