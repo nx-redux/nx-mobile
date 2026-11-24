@@ -59,6 +59,7 @@ object NetplayText {
     }
     const val CABLE_LINK_ARCHIVE = "Cable Link over Wi-Fi needs the\ngame unzipped.\n\nExtract the .gba file and try again."
     const val CABLE_LINK_READ_FAILED = "Could not read the game\nfor Cable Link over Wi-Fi."
+    const val CABLE_LINK_OPEN_FAILED = "Couldn't open the game file.\n\nIt may have been moved or deleted."
     /** In game, while the host's state replaces this phone's after the two games drifted apart. */
     const val SYNCING = "Syncing..."
     const val ENDED_DRIFT = "The two games drifted apart, so the session ended. Your progress up to a few seconds ago is saved."
