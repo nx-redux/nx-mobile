@@ -5,6 +5,7 @@ import com.nxredux.mobile.external.ExternalEmulator
 import com.nxredux.mobile.external.ExternalLaunch
 import com.nxredux.mobile.external.ExternalLaunchResult
 import com.nxredux.mobile.external.GamePass
+import com.nxredux.mobile.external.SetRule
 import com.nxredux.mobile.external.externalPickFor
 import com.nxredux.mobile.external.installedExternal
 import com.nxredux.mobile.external.offeredFor
@@ -36,6 +37,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -228,6 +230,17 @@ class EmulatorMenuExternalTest {
         assertEquals(pathOnly, externalPickFor(saf.path, "PS", settings, apps, offeredFor(real, NaomiSets.EMPTY, realPath = FileRefs.path(real.ref)), table))
         assertNull(externalPickFor(saf.path, "PS", settings, apps, offeredFor(zipped, NaomiSets.EMPTY, realPath = FileRefs.path(zipped.ref)), table))
         assertTrue(installedExternal("PS", apps, offeredFor(saf, NaomiSets.EMPTY, realPath = null), table).isEmpty())
+    }
+
+    @Test fun model3AppOfferedOnlyForModel3Sets() {
+        val super3 = ExternalEmulator(
+            id = "super3", name = "SUPER3", packages = listOf("test.super3"), activity = "test.super3.Main",
+            pass = GamePass.VIEW_DATA, tags = setOf("FBN"), sets = SetRule.MODEL3,
+        )
+        assertTrue(offeredFor(game("scud.zip"), NaomiSets.EMPTY, realPath = null)(super3))
+        assertTrue(offeredFor(game("Vf3.7z"), NaomiSets.EMPTY, realPath = null)(super3))
+        assertFalse(offeredFor(game("sf2.zip"), NaomiSets.EMPTY, realPath = null)(super3))
+        assertTrue(offeredFor(game("sf2.zip"), NaomiSets.EMPTY, realPath = null)(app("all", "All", setOf("FBN"))))
     }
 
     // The Play build (no All files access) and a file in the app's own storage: a real file, but no path to give.

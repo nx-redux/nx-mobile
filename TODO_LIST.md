@@ -212,3 +212,72 @@ Checked on the emulator only (GBA game starts, draws, quits; first setup up to P
 - [ ] DS Layout row with a controller (built-in or plugged in, so no skin): it applies, not "Unavailable — The pad skin places the screens". Fixed; AYANEO check owed. Under a shown skin the DS rows stay hidden (Fold cover 2026-11-24).
 - [ ] Update row: after "Update failed" (a redirect), A retries the same release; checking again needs an app restart (Nova, local feed). Check whether intended.
 
+## Other emulators: recipes not yet checked on a device
+
+Launch contracts come from each app's source where public, else ES-DE's data. On a device: the app is found, a game opens straight into play.
+
+- [ ] Eden (`eden`): SWITCH
+- [ ] Eden Nightly (`eden-nightly`): SWITCH
+- [ ] Kenji-NX (`kenji-nx`): SWITCH
+- [ ] Cemu (`cemu`): WIIU
+- [ ] aPS3e (`aps3e`): PS3
+- [ ] ARMSX3 (`armsx3`): PS3
+- [ ] EmuCoreC (`emucorec`): PS3
+- [ ] Yaba Sanshiro 2 (`yaba-sanshiro`): SATURN
+- [ ] Saturn.emu (`saturn-emu`): SATURN
+- [ ] X1 BOX (`x1-box`): XBOX
+- [ ] hakuX (`hakux`): XBOX
+- [ ] aX360e (`ax360e`): XBOX360
+- [ ] XenDroid (`xendroid`): XBOX360
+- [ ] M64Plus FZ (`m64plus-fz`): N64, N64DD
+- [ ] Mupen64Plus AE (`mupen64plus-ae`): N64, N64DD
+- [ ] PCE.emu (`pce-emu`): PCE, SGX
+- [ ] melonDS (`melonds`): NDS
+- [ ] melonDS Nightly (`melonds-nightly`): NDS
+- [ ] GBC.emu (`gbc-emu`): GB, GBC
+- [ ] My OldBoy! (`my-oldboy`): GB, GBC
+- [ ] GBA.emu (`gba-emu`): GBA, MGBA
+- [ ] My Boy! (`my-boy`): GBA, MGBA
+- [ ] Linkboy (`linkboy`): GB, GBC, GBA, MGBA
+- [ ] Pizza Boy C (`pizza-boy-c`): GB, GBC
+- [ ] Pizza Boy C Pro (`pizza-boy-c-pro`): GB, GBC
+- [ ] Pizza Boy A (`pizza-boy-a`): GBA, MGBA
+- [ ] Pizza Boy A Pro (`pizza-boy-a-pro`): GBA, MGBA
+- [ ] NooDS (`noods`): NDS, GBA, MGBA
+- [ ] SkyEmu (`skyemu`): NDS, GB, GBC, GBA, MGBA
+- [ ] WatermelonDS (`watermelonds`): NDS
+- [ ] SeedlessDS (`seedlessds`): NDS
+- [ ] Azahar (`azahar`): 3DS
+- [ ] AzaharPlus (`azaharplus`): 3DS
+- [ ] Panda3DS (`panda3ds`): 3DS
+- [ ] Dolphin (`dolphin`): GC, WII
+- [ ] NES.emu (`nes-emu`): FC, FDS
+- [ ] iNES (`ines`): FC, FDS
+- [ ] Snes9x EX+ (`snes9x-explus`): SFC, SUPA
+- [ ] DuckStation (`duckstation`): PS, PSX
+- [ ] ARMSX1 (`armsx1`): PS, PSX
+- [ ] ePSXe (`epsxe`): PS, PSX
+- [ ] ARMSX2 (`armsx2`): PS2
+- [ ] EmuCoreX (`emucorex`): PS2
+- [ ] Play! (`play`): PS2
+- [ ] PPSSPP (`ppsspp`): PSP
+- [ ] Flycast (`flycast-dc`): DC
+- [ ] Redream (`redream`): DC
+- [ ] MD.emu (`md-emu`): MD, GPGX, SEGACD, GPGX_SEGACD, SMS, GPGX_SMS
+- [ ] Pizza Boy SC (`pizza-boy-sc`): MD, GPGX, SEGACD, GPGX_SEGACD, SMS, GPGX_SMS, GG, GPGX_GG
+- [ ] Pizza Boy SC Pro (`pizza-boy-sc-pro`): MD, GPGX, SEGACD, GPGX_SEGACD, SMS, GPGX_SMS, GG, GPGX_GG
+- [ ] MasterGear (`mastergear`): SMS, GPGX_SMS, GG, GPGX_GG, SG1000, GPGX_SG1000
+- [ ] NGP.emu (`ngp-emu`): NGP, NGPC
+- [ ] Swan.emu (`swan-emu`): WSC
+- [ ] Lynx.emu (`lynx-emu`): LYNX
+- [ ] 2600.emu (`a2600-emu`): A2600
+- [ ] ColEm (`colem`): COLECO
+- [ ] MSX.emu (`msx-emu`): COLECO
+- [ ] MAME4droid Current (`mame4droid`): FBN
+- [ ] NEO.emu (`neo-emu`): FBN
+- [ ] Flycast (`flycast-arcade`): FBN
+- [ ] SUPER3 (`super3`): FBN
+- [ ] Pixl8 (`pixl8`): P8
+- [ ] Infinity (`infinity`): P8
+- [ ] PICO-8 (`pico8-android`): P8
+- [ ] idTech4A++ (`idtech4a`): PRBOOM

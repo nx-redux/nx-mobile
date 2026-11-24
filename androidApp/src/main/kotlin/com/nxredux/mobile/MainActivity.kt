@@ -467,7 +467,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 artwork = { host -> artworkHost = host; ArtworkService.controller(this, host) },
                 privateFiles = AndroidPrivateFiles(this),
                 launcher = launcher,
-                externalApps = AndroidExternalApps(this) { currentDisplayId() },
+                externalApps = AndroidExternalApps(this, AndroidRomsSources.of(this)) { currentDisplayId() },
                 androidArtStore = AndroidArtFiles(this),
                 rumblePreview = { playRumblePreview(applicationContext, it) },
                 netplay = AndroidNetplay(this) { DataRoot.of(this) }.also { np ->

@@ -10,15 +10,20 @@ import android.net.Uri
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import com.nxredux.mobile.library.Names
+import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.FileRefs
 import java.io.File
 
 /**
- * Hands games to standalone emulators. [displayIdOfMain]: the display the menu is on, so the app opens where the player
- * is looking (dual screen); null launches as usual.
+ * Hands games to standalone emulators. [source] reads a recipe's sidecar beside the game; [displayIdOfMain]: the display
+ * the menu is on, so the app opens where the player is looking (dual screen); null launches as usual.
  */
-class AndroidExternalApps(private val context: Context, private val displayIdOfMain: () -> Int?) : ExternalApps {
+class AndroidExternalApps(
+    private val context: Context,
+    private val source: RomsSource,
+    private val displayIdOfMain: () -> Int?,
+) : ExternalApps {
     private val pm get() = context.packageManager
 
     // Called while the menu opens: one lookup per package, and a failing one only means "not installed".
@@ -30,16 +35,21 @@ class AndroidExternalApps(private val context: Context, private val displayIdOfM
 
     override suspend fun launch(request: ExternalLaunch): ExternalLaunchResult {
         if (!installed(request.packageId)) return ExternalLaunchResult.NOT_INSTALLED
-        // A sidecar recipe needs its file written and named in the intent; without that the app would open with no game.
-        if (request.emulator.commandsSidecar) return ExternalLaunchResult.FAILED
-        val uri = if (request.emulator.takesUri) uriOf(request.ref) else null
-        val spec = buildIntent(request, uri?.toString(), displayIdOfMain()) ?: return ExternalLaunchResult.NO_ACCESS
+        val e = request.emulator
+        val uri = if (e.takesUri && !e.commandsSidecar) uriOf(request.ref) else null
+        val commands = if (e.commandsSidecar) commandsBeside(request) else null
+        val spec = buildIntent(request, uri?.toString(), displayIdOfMain(), commands) ?: return ExternalLaunchResult.NO_ACCESS
         val options = spec.displayId?.let { ActivityOptions.makeBasic().setLaunchDisplayId(it).toBundle() }
         return try {
             context.startActivity(spec.toIntent(), options)
             ExternalLaunchResult.STARTED
         } catch (e: ActivityNotFoundException) { ExternalLaunchResult.FAILED } catch (e: SecurityException) { ExternalLaunchResult.FAILED }
     }
+
+    // Optional: without one the app starts with its own last command line.
+    private suspend fun commandsBeside(l: ExternalLaunch): String? = runCatching {
+        source.child(l.folder, commandsFileName(l.fileName))?.takeIf { !it.isDirectory }?.let { source.readText(it.ref) }
+    }.getOrNull()
 
     private fun installed(packageId: String) = runCatching { pm.getLaunchIntentForPackage(packageId) != null }.getOrDefault(false)
 
@@ -70,28 +80,37 @@ internal data class ExternalIntent(
     val displayId: Int?,
 )
 
-/** [l]'s intent, given the game's [uri] (null when it has none) and the display to open on; null when the app cannot be given the game. */
-internal fun buildIntent(l: ExternalLaunch, uri: String?, displayId: Int?): ExternalIntent? {
+/** The sidecar a [ExternalEmulator.commandsSidecar] recipe reads beside [fileName]: its base name plus `.commands`. */
+internal fun commandsFileName(fileName: String): String = Names.stripExtension(fileName) + ".commands"
+
+/**
+ * [l]'s intent, given the game's [uri] (null when it has none) and the display to open on; null when the app cannot be
+ * given the game. A sidecar recipe passes no game: its [commands] (the sidecar's text, null when there is none) name it.
+ */
+internal fun buildIntent(l: ExternalLaunch, uri: String?, displayId: Int?, commands: String? = null): ExternalIntent? {
     val e = l.emulator
-    val passed = when (e.pass) {
+    val passed = if (e.commandsSidecar) null else when (e.pass) {
         GamePass.VIEW_DATA, GamePass.URI_EXTRA -> uri
         GamePass.PATH_EXTRA -> l.realPath
     } ?: return null
     val extras = buildMap {
         putAll(e.extras)
-        if (e.pass != GamePass.VIEW_DATA) e.extraKey?.let { put(it, passed) }
+        if (passed != null && e.pass != GamePass.VIEW_DATA) e.extraKey?.let { put(it, passed) }
+        if (e.commandsSidecar && commands != null) put(COMMAND_EXTRA, commands)
     }
-    val grantUri = uri.takeIf { e.takesUri }
+    val grantUri = uri.takeIf { e.takesUri && passed != null }
     var flags = Intent.FLAG_ACTIVITY_NEW_TASK
     if (e.clearTask) flags = flags or Intent.FLAG_ACTIVITY_CLEAR_TASK
     if (grantUri != null) flags = flags or Intent.FLAG_GRANT_READ_URI_PERMISSION
     return ExternalIntent(
         action = e.action, categories = e.categories, packageId = l.packageId, activity = e.activity,
         data = passed.takeIf { e.pass == GamePass.VIEW_DATA },
-        extension = Names.extensionOf(l.fileName).takeIf { e.pass == GamePass.VIEW_DATA },
+        extension = Names.extensionOf(l.fileName).takeIf { passed != null && e.pass == GamePass.VIEW_DATA },
         extras = extras, flags = flags, grantUri = grantUri, displayId = displayId,
     )
 }
+
+private const val COMMAND_EXTRA = "command"
 
 internal fun ExternalIntent.toIntent(): Intent {
     val i = Intent(action)

@@ -45,8 +45,15 @@ object NoExternalApps : ExternalApps {
 fun offeredFor(game: GameEntry, naomiSets: NaomiSets, realPath: String?): (ExternalEmulator) -> Boolean {
     val realFile = realPath != null
     val zipped = Names.isArchive(game.fileName)
-    val naomi by lazy { naomiSets.title(Names.stripExtension(game.fileName)) != null }
-    return { e -> ExternalEmulators.offered(e, realFile, zipped, isNaomiSet = e.sets == SetRule.NAOMI && naomi, isModel3Set = false) }
+    val set = Names.stripExtension(game.fileName)
+    val naomi by lazy { naomiSets.title(set) != null }
+    return { e ->
+        ExternalEmulators.offered(
+            e, realFile, zipped,
+            isNaomiSet = e.sets == SetRule.NAOMI && naomi,
+            isModel3Set = e.sets == SetRule.MODEL3 && ExternalEmulators.isModel3Set(set),
+        )
+    }
 }
 
 /** [tag]'s apps that are installed and can open the game, in [table] order, each with its package's own label. */

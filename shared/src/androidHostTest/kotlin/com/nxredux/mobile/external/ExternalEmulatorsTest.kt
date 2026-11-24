@@ -1,5 +1,6 @@
 package com.nxredux.mobile.external
 
+import com.nxredux.mobile.runner.CoreRegistry
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -74,15 +75,104 @@ class ExternalEmulatorsTest {
     fun forTagMatchesBaseTagInTableOrder() {
         assertEquals(listOf("dolphin"), ExternalEmulators.forTag("gc").map { it.id })
         assertEquals(listOf("dolphin"), ExternalEmulators.forTag("WII").map { it.id })
-        assertEquals(listOf("eden"), ExternalEmulators.forTag("SWITCH").map { it.id })
-        assertTrue(ExternalEmulators.forTag("GBA").isEmpty())
+        assertEquals(listOf("md-emu", "pizza-boy-sc", "pizza-boy-sc-pro", "mastergear"), ExternalEmulators.forTag("GPGX_SMS").map { it.id })
+        assertTrue(ExternalEmulators.forTag("VB").isEmpty())
+    }
+
+    @Test
+    fun everySpecAppIsListed() {
+        val spec = setOf(
+            // New consoles
+            "eden", "eden-nightly", "kenji-nx", "cemu", "aps3e", "armsx3", "emucorec", "yaba-sanshiro", "saturn-emu",
+            "x1-box", "hakux", "ax360e", "xendroid", "mame4droid", "m64plus-fz", "mupen64plus-ae", "pce-emu",
+            // Optional emulators; Pizza Boy's paid builds use other activity classes, so they are entries of their own
+            "melonds", "melonds-nightly", "noods", "skyemu", "watermelonds", "seedlessds",
+            "azahar", "azaharplus", "panda3ds", "dolphin",
+            "gbc-emu", "my-oldboy", "linkboy", "pizza-boy-c", "pizza-boy-c-pro",
+            "gba-emu", "my-boy", "pizza-boy-a", "pizza-boy-a-pro",
+            "nes-emu", "ines", "snes9x-explus", "duckstation", "armsx1", "epsxe", "armsx2", "emucorex", "play", "ppsspp",
+            "flycast-dc", "redream", "md-emu", "pizza-boy-sc", "pizza-boy-sc-pro", "mastergear", "ngp-emu", "swan-emu",
+            "lynx-emu", "a2600-emu", "colem", "msx-emu", "neo-emu", "flycast-arcade", "super3",
+            "pixl8", "infinity", "pico8-android", "idtech4a",
+        )
+        assertEquals(spec, ExternalEmulators.all.map { it.id }.toSet())
+    }
+
+    @Test
+    fun newConsoleDefaultOrder() {
+        assertEquals(listOf("eden", "eden-nightly", "kenji-nx"), ExternalEmulators.forTag("SWITCH").map { it.id })
+        assertEquals(listOf("yaba-sanshiro", "saturn-emu"), ExternalEmulators.forTag("SATURN").map { it.id })
+        assertEquals(listOf("aps3e", "armsx3", "emucorec"), ExternalEmulators.forTag("PS3").map { it.id })
+        assertEquals(listOf("m64plus-fz", "mupen64plus-ae"), ExternalEmulators.forTag("N64DD").map { it.id })
+        assertEquals(listOf("pce-emu"), ExternalEmulators.forTag("SGX").map { it.id })
+    }
+
+    @Test
+    fun optionalAppsInTheSpecsOrderPerConsole() {
+        fun ids(tag: String) = ExternalEmulators.forTag(tag).map { it.id }
+        assertEquals(listOf("melonds", "melonds-nightly", "noods", "skyemu", "watermelonds", "seedlessds"), ids("NDS"))
+        assertEquals(listOf("gbc-emu", "my-oldboy", "linkboy", "pizza-boy-c", "pizza-boy-c-pro", "skyemu"), ids("GB"))
+        assertEquals(listOf("gba-emu", "my-boy", "linkboy", "pizza-boy-a", "pizza-boy-a-pro", "noods", "skyemu"), ids("MGBA"))
+        assertEquals(listOf("azahar", "azaharplus", "panda3ds"), ids("3DS"))
+        assertEquals(listOf("duckstation", "armsx1", "epsxe"), ids("PSX"))
+        assertEquals(listOf("armsx2", "emucorex", "play"), ids("PS2"))
+        assertEquals(listOf("flycast-dc", "redream"), ids("DC"))
+        assertEquals(listOf("md-emu", "pizza-boy-sc", "pizza-boy-sc-pro"), ids("GPGX_SEGACD"))
+        assertEquals(listOf("pizza-boy-sc", "pizza-boy-sc-pro", "mastergear"), ids("GG"))
+        assertEquals(listOf("mastergear"), ids("SG1000"))
+        assertEquals(listOf("mame4droid", "neo-emu", "flycast-arcade", "super3"), ids("FBN"))
+        assertEquals(listOf("pixl8", "infinity", "pico8-android"), ids("P8"))
+        assertEquals(listOf("idtech4a"), ids("PRBOOM"))
+    }
+
+    @Test
+    fun anAppCoveringAConsoleListsEveryTagOfIt() {
+        ExternalEmulators.all.forEach { e ->
+            e.tags.forEach { tag ->
+                val console = assertNotNull(CoreRegistry.consoleOf(tag), "${e.id}: $tag")
+                assertTrue(e.tags.containsAll(console.tags), "${e.id} lists $tag but not all of ${console.tags}")
+            }
+        }
+        assertEquals(setOf("PS", "PSX"), ExternalEmulators.byId("duckstation")!!.tags)
+    }
+
+    @Test
+    fun currentPackageIdsFreeFirst() {
+        assertEquals(listOf("io.github.lime3ds.android", "org.azahar_emu.azahar"), ExternalEmulators.byId("azahar")!!.packages)
+        assertEquals(listOf("com.PceEmu"), ExternalEmulators.byId("pce-emu")!!.packages)
+        assertEquals(listOf("org.ppsspp.ppsspp", "org.ppsspp.ppssppgold"), ExternalEmulators.byId("ppsspp")!!.packages)
+        assertEquals(listOf("aenu.ax360e.free", "aenu.ax360e"), ExternalEmulators.byId("ax360e")!!.packages)
+        assertEquals(listOf("it.dbtecno.pizzaboy"), ExternalEmulators.byId("pizza-boy-c")!!.packages)
+        assertEquals(listOf("it.dbtecno.pizzaboypro"), ExternalEmulators.byId("pizza-boy-c-pro")!!.packages)
+    }
+
+    @Test
+    fun arcadeSetRules() {
+        assertEquals(SetRule.ALL, ExternalEmulators.byId("mame4droid")!!.sets)
+        assertEquals(SetRule.ALL, ExternalEmulators.byId("neo-emu")!!.sets)
+        assertEquals(SetRule.MODEL3, ExternalEmulators.byId("super3")!!.sets)
+        assertTrue(ExternalEmulators.isModel3Set("scud"))
+        assertTrue(ExternalEmulators.isModel3Set("VF3"))
+        assertFalse(ExternalEmulators.isModel3Set("daytona"))
+        assertFalse(ExternalEmulators.isModel3Set("sf2"))
+    }
+
+    @Test
+    fun onlyIdTechReadsACommandsSidecar() {
+        assertEquals(listOf("idtech4a"), ExternalEmulators.all.filter { it.commandsSidecar }.map { it.id })
+        assertEquals(mapOf("game" to "zdoom"), ExternalEmulators.byId("idtech4a")!!.extras)
+    }
+
+    @Test
+    fun nothingIsCheckedOnADeviceYet() {
+        ExternalEmulators.all.forEach { assertFalse(it.checked, it.id) }
     }
 
     @Test
     fun flycastArcadeIsASeparateNaomiOnlyEntry() {
-        assertEquals(listOf("flycast-dc"), ExternalEmulators.forTag("DC").map { it.id })
-        val arcade = ExternalEmulators.forTag("FBN").single()
-        assertEquals("flycast-arcade", arcade.id)
+        assertEquals(listOf("flycast-dc", "redream"), ExternalEmulators.forTag("DC").map { it.id })
+        val arcade = ExternalEmulators.byId("flycast-arcade")!!
+        assertEquals(setOf("FBN"), arcade.tags)
         assertEquals(SetRule.NAOMI, arcade.sets)
         assertEquals(ExternalEmulators.byId("flycast-dc")!!.packages, arcade.packages)
         assertFalse(offered(arcade))

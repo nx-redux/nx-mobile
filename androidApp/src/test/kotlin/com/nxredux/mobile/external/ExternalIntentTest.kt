@@ -79,6 +79,29 @@ class ExternalIntentTest {
         assertNull(buildIntent(launch(emulator(GamePass.VIEW_DATA)), uri, null)!!.displayId)
     }
 
+    private val idTech = ExternalEmulator(
+        id = "idtech", name = "idTech", packages = listOf("org.app"), activity = "org.app.Main", pass = GamePass.VIEW_DATA,
+        extras = mapOf("game" to "zdoom"), commandsSidecar = true, tags = setOf("PRBOOM"),
+    )
+
+    @Test fun sidecarTextGoesInTheCommandExtraBesideTheRecipesGame() {
+        val i = buildIntent(launch(idTech), null, null, commands = "game.arm -iwad /Roms/Doom/doom.wad")!!
+        assertEquals(mapOf("game" to "zdoom", "command" to "game.arm -iwad /Roms/Doom/doom.wad"), i.extras)
+        assertNull(i.data)
+        assertNull(i.grantUri)
+        assertEquals(0, i.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+
+    @Test fun noSidecarStillLaunchesWithoutACommand() {
+        val i = buildIntent(launch(idTech), null, null, commands = null)!!
+        assertEquals(mapOf("game" to "zdoom"), i.extras)
+    }
+
+    @Test fun commandsFileIsTheGamesBaseNameBesideIt() {
+        assertEquals("Doom II.commands", commandsFileName("Doom II.wad"))
+        assertEquals("freedoom.commands", commandsFileName("freedoom"))
+    }
+
     @Test fun noUriForAUriRecipeOrNoPathForAPathRecipeIsNoIntent() {
         assertNull(buildIntent(launch(emulator(GamePass.VIEW_DATA)), null, null))
         assertNull(buildIntent(launch(emulator(GamePass.URI_EXTRA, "AutoStartFile")), null, null))

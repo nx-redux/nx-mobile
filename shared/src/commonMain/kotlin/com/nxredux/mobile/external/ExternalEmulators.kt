@@ -45,49 +45,11 @@ object ExternalEmulators {
     /** Package ids other frontends list for forks to trick vendor performance modes; never listed or detected. */
     val SPOOFED: Set<String> = setOf("com.miHoYo.Yuanshen", "com.miHoYo.Yuanshen.nightly", "com.antutu.ABenchMark")
 
-    private val flycastPackages = listOf("com.flycast.emulator")
+    /** Every recipe, in each console's default menu order ([externalEmulatorTable]). */
+    val all: List<ExternalEmulator> = externalEmulatorTable
 
-    // Order is the default menu order for a console with several apps.
-    val all: List<ExternalEmulator> = listOf(
-        ExternalEmulator(
-            id = "dolphin",
-            name = "Dolphin",
-            packages = listOf("org.dolphinemu.dolphinemu"),
-            activity = "org.dolphinemu.dolphinemu.ui.main.TvMainActivity",
-            pass = GamePass.URI_EXTRA,
-            extraKey = "AutoStartFile",
-            action = "android.intent.action.MAIN",
-            categories = listOf("android.intent.category.LEANBACK_LAUNCHER"),
-            tags = setOf("GC", "WII"),
-        ),
-        ExternalEmulator(
-            id = "eden",
-            name = "Eden",
-            packages = listOf("dev.eden.eden_emulator", "dev.legacy.eden_emulator"),
-            activity = "org.yuzu.yuzu_emu.activities.EmulationActivity",
-            pass = GamePass.VIEW_DATA,
-            action = "android.nfc.action.TECH_DISCOVERED",
-            tags = setOf("SWITCH"),
-        ),
-        // Flycast runs Naomi sets from the same app; a separate entry keeps them off the other FBN games.
-        ExternalEmulator(
-            id = "flycast-dc",
-            name = "Flycast",
-            packages = flycastPackages,
-            activity = "com.flycast.emulator.MainActivity",
-            pass = GamePass.VIEW_DATA,
-            tags = setOf("DC"),
-        ),
-        ExternalEmulator(
-            id = "flycast-arcade",
-            name = "Flycast",
-            packages = flycastPackages,
-            activity = "com.flycast.emulator.MainActivity",
-            pass = GamePass.VIEW_DATA,
-            tags = setOf("FBN"),
-            sets = SetRule.NAOMI,
-        ),
-    )
+    /** Whether [set] (an arcade zip's base name) is a Sega Model 3 game. */
+    fun isModel3Set(set: String): Boolean = set.lowercase() in model3Sets
 
     fun forTag(tag: String, table: List<ExternalEmulator> = all): List<ExternalEmulator> {
         val base = CoreRegistry.baseTag(tag)
