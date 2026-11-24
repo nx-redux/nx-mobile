@@ -19,9 +19,11 @@ import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.storage.LinkRomCaches
 import com.nxredux.mobile.storage.NxPaths
 import com.swordfish.libretrodroid.NxLog
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
 
@@ -39,12 +41,27 @@ internal object AndroidCableLink {
         context: Context, sdRoot: File, tag: String, romFileName: String, content: ContentRef,
         findLibraryRom: suspend (hash: String, sizeBytes: Long) -> String?,
     ): CableLinkOffer = withContext(Dispatchers.IO) {
+        try {
+            readOffer(context, sdRoot, tag, romFileName, content, findLibraryRom)
+        } catch (c: CancellationException) {
+            throw c
+        } catch (x: Exception) {
+            // The sheet shows only a sentence: the cause goes to the Debug log.
+            NxLog.w(TAG, "Cable Link offer for $romFileName failed", x)
+            throw x
+        }
+    }
+
+    private suspend fun readOffer(
+        context: Context, sdRoot: File, tag: String, romFileName: String, content: ContentRef,
+        findLibraryRom: suspend (hash: String, sizeBytes: Long) -> String?,
+    ): CableLinkOffer {
         // The core takes the other GBA's ROM by path, and the library lookup skips archives: a bare ROM only.
         if (Names.isArchive(romFileName)) throw CableLinkRefused(NetplayText.CABLE_LINK_ARCHIVE)
         val refs = AndroidRefs(context.contentResolver)
         val sha = Sha1()
         var size = 0L
-        (refs.openInput(content) ?: throw IOException("cannot open $romFileName")).use { input ->
+        openRom(romFileName) { refs.openInput(content) }.use { input ->
             input.forEachChunk { buf, n ->
                 size += n
                 if (size > ROM_MAX) throw CableLinkRefused(NetplayText.CABLE_LINK_READ_FAILED)
@@ -53,7 +70,22 @@ internal object AndroidCableLink {
         }
         if (size == 0L) throw CableLinkRefused(NetplayText.CABLE_LINK_READ_FAILED)
         val files = AndroidCableLinkFiles(context, sdRoot, tag, romFileName, content, findLibraryRom)
-        CableLinkOffer(sha.hex(), size, biosHash(context, tag), files, clock = { System.currentTimeMillis() / 1000 })
+        return CableLinkOffer(sha.hex(), size, biosHash(context, tag), files, clock = { System.currentTimeMillis() / 1000 })
+    }
+
+    /**
+     * The game's ROM opened by [open]; a file that is gone or no longer readable (moved, deleted, its folder's access
+     * dropped) is refused with its own sentence, not taken for a read error.
+     */
+    internal fun openRom(romFileName: String, open: () -> InputStream?): InputStream {
+        val input = try {
+            open()
+        } catch (x: FileNotFoundException) {
+            throw CableLinkRefused(NetplayText.CABLE_LINK_OPEN_FAILED).apply { initCause(x) }
+        } catch (x: SecurityException) {
+            throw CableLinkRefused(NetplayText.CABLE_LINK_OPEN_FAILED).apply { initCause(x) }
+        }
+        return input ?: throw CableLinkRefused(NetplayText.CABLE_LINK_OPEN_FAILED).apply { initCause(IOException("cannot open $romFileName")) }
     }
 
     /**
