@@ -6,12 +6,13 @@ import com.nxredux.mobile.netplay.NetplayLinkKind
 import com.nxredux.mobile.netplay.NetplayWire
 import com.nxredux.mobile.netplay.RejectReason
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.settings.PlayerName
 
 /**
  * The handheld's capability token (nx-redux wiz_caps.c): the HELLO field `caps=<token>` after the four fixed
  * fields, `[A-Za-z0-9._=,-]`, 1..63 chars, comma-separated `key=value` elements. This device always sends
  * `core=<core id>,tag=<TAG>`; gpSP and mGBA add the game's link mode `,wl=<token>` (netplay-prelaunch.sh), a joiner on
- * Auto adds `,auto=1`. A Cable Link over Wi-Fi offer sends `core=mgba,tag=<TAG>,cl=1` instead (no `wl` or `auto`: that
+ * Auto adds `,auto=1`, and a side that trades names (the NAME line after START, [NameLine]) `,nm=1`. A Cable Link over Wi-Fi offer sends `core=mgba,tag=<TAG>,cl=1` instead (no `wl` or `auto`: that
  * session always runs mGBA's own cable inside each phone). Its ROM and BIOS hashes would not fit in [MAX] chars, so
  * they follow the HELLO in a `CABLE` line ([CableLinkExchange]).
  */
@@ -55,7 +56,14 @@ object Caps {
      * The `auto` element, then `wl`, is dropped when it would not fit. The handheld reads caps by key (wiz_caps.c
      * WizCaps_value), so elements it does not know are safe there.
      */
-    fun of(core: String, tag: String, auto: Boolean = false, wl: String? = null, cableLink: Boolean = false): String {
+    fun of(core: String, tag: String, auto: Boolean = false, wl: String? = null, cableLink: Boolean = false, names: Boolean = false): String {
+        val token = gates(core, tag, auto, wl, cableLink)
+        // Names are a nicety: the first thing left out when the token would not fit.
+        if (names && token.isNotEmpty()) "$token,nm=1".takeIf { isValid(it) }?.let { return it }
+        return token
+    }
+
+    private fun gates(core: String, tag: String, auto: Boolean, wl: String?, cableLink: Boolean): String {
         val base = "core=$core,tag=${CoreRegistry.handheldTag(tag)}"
         if (cableLink) return "$base,cl=1".takeIf { isValid(it) } ?: ""
         val withWl = if (wl != null && NetplayCores.link(core) == NetplayLinkKind.NETPACKET) "$base,wl=$wl" else base
@@ -90,6 +98,9 @@ data class Hello(
 
     /** A phone that picked Cable Link over Wi-Fi (`cl=1`); older builds and the handheld never send it. */
     val cableLink: Boolean get() = Caps.value(caps, "cl") == "1"
+
+    /** A phone that trades names after START (`nm=1`, [NameLine]); older builds and the handheld never send it. */
+    val names: Boolean get() = Caps.value(caps, "nm") == "1"
 
     companion object {
         const val CLIENT = "client"
@@ -194,5 +205,20 @@ data class Reject(
             }
             return Reject(RejectReason.entries.firstOrNull { it.wire.isNotEmpty() && it.wire == token } ?: RejectReason.OTHER)
         }
+    }
+}
+
+/**
+ * `NAME <escaped name>`: each side's player name, traded after START only when both HELLOs carried `nm=1`, so older
+ * builds and the handheld never see it. The name read is cleaned as a Player name ([PlayerName.clean]); a missing or
+ * malformed line is no name, never a failed session.
+ */
+object NameLine {
+    fun format(name: String): String = "NAME ${NetplayWire.escape(PlayerName.clean(name))}"
+
+    fun parse(line: String?): String? {
+        val f = line?.substringBefore('\n')?.substringBefore('\r')?.split(' ')?.filter { it.isNotEmpty() } ?: return null
+        if (f.size != 2 || f[0] != "NAME") return null
+        return PlayerName.clean(NetplayWire.unescape(f[1])).ifEmpty { null }
     }
 }

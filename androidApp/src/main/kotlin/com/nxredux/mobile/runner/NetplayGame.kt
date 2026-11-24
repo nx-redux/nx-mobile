@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.settings.PlayerName
 import com.nxredux.mobile.netplay.NetplayAddress
 import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.netplay.NetplayRole
@@ -85,12 +86,12 @@ internal fun netplayNotice(state: Int, secondsLeft: Int, reason: Int, onCopy: Bo
  */
 internal fun netplaySessionFrom(
     role: String?, peer: String?, coreId: String, folderCoreId: String?, emptySaves: Boolean = false, overUsb: Boolean = false,
-    mixed: Boolean = false, peerWl: String? = null, cableLink: CableLinkSetup? = null,
+    mixed: Boolean = false, peerWl: String? = null, cableLink: CableLinkSetup? = null, peerName: String? = null,
 ): NetplaySession? {
     val r = NetplayRole.entries.firstOrNull { it.name == role } ?: return null
     if (folderCoreId.isNullOrEmpty()) return null
     val ip = NetplayAddress.ipv4(peer) ?: return null
-    val session = NetplaySession(r, ip, coreId, folderCoreId, emptySaves, overUsb, mixed, peerWl)
+    val session = NetplaySession(r, ip, coreId, folderCoreId, emptySaves, overUsb, mixed, peerWl, peerName = PlayerName.clean(peerName).ifEmpty { null })
     if (cableLink == null) return session
     if (cableLink.otherRomPath.isEmpty() || cableLink.localSlot !in 1..2) return null
     if (cableLink.biosMode != CableLinkSetup.BIOS_REAL && cableLink.biosMode != CableLinkSetup.BIOS_HLE) return null

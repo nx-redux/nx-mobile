@@ -3768,7 +3768,7 @@ class AppState(
     // --- Netplay: the sheet over a game list or the main menu (context menu's Netplay, or Y on a game) ---
 
     /** The Netplay sheet; null on a platform without netplay. While its page is set it takes every pad press and Back. */
-    val netplay: NetplayController? = deps.netplay?.let { NetplayController(scope, it, ::launchNetplay, work = deps.compute, findLibraryRom = ::findLocalRom) }   // handshakes and save files off the main thread
+    val netplay: NetplayController? = deps.netplay?.let { NetplayController(scope, it, ::launchNetplay, work = deps.compute, findLibraryRom = ::findLocalRom, playerName = { PlayerName.resolve(deps.settings.playerName, deps.deviceName()) }) }   // handshakes and save files off the main thread
 
     /** [entry] can be played over netplay here: the platform has it, the game's tag has netplay cores, and it can launch. */
     fun canNetplay(entry: Listed?): Boolean =

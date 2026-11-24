@@ -275,7 +275,11 @@ object GamePanelModel {
             GamePanelSession(
                 title = if (netplay.cableLink) NetplayText.CABLE_LINK_TAB else NetplayText.TITLE,
                 // A link's players each run their own game: no player numbers to tell apart.
-                detail = listOf(if (link) role else "${NetplayText.player(netplay.localSlot)} · $role", if (netplay.overUsb) NetplayText.USB_CABLE else NetplayText.WIFI),
+                detail = listOfNotNull(
+                    if (link) role else "${NetplayText.player(netplay.localSlot)} · $role",
+                    netplay.peerName?.let(NetplayText::playingWith),
+                    if (netplay.overUsb) NetplayText.USB_CABLE else NetplayText.WIFI,
+                ),
                 note = if (link) NetplayText.LINK_LOCKED_NOTE else NetplayText.SYNC_LOCKED_NOTE,
                 hint = if (link) NetplayText.MENU_TO_DISCONNECT else NetplayText.MENU_TO_LEAVE,
             )

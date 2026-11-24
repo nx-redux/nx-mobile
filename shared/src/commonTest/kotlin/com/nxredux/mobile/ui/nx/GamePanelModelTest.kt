@@ -209,6 +209,11 @@ class GamePanelModelTest {
         assertEquals(listOf("Player 2 · Guest", "USB Cable"), guest.detail)
     }
 
+    @Test fun sessionCardNamesTheOtherPlayer() {
+        val named = GamePanelModel.session(np().copy(peerName = "Nova"), ended = false, dsWireless = false, wirelessNow = null)!!
+        assertEquals(listOf("Player 1 · Host", "Playing with Nova", "Wi-Fi"), named.detail)
+    }
+
     @Test fun sessionCardLink() {
         val ds = GamePanelModel.session(np(NetplayRole.CLIENT, core = "melondsds"), ended = false, dsWireless = false, wirelessNow = null)!!
         assertEquals(listOf("Guest", "Wi-Fi"), ds.detail)

@@ -113,6 +113,7 @@ object NetplayText {
     const val ROLE_HOST = "Host"
     const val ROLE_GUEST = "Guest"
     fun player(n: Int) = "Player $n"
+    fun playingWith(name: String) = "Playing with $name"
     const val SYNC_LOCKED_NOTE = "Save states, rewind, fast forward and reset are off so both games stay in sync."
     const val LINK_LOCKED_NOTE = "Save states, rewind, fast forward and reset are off while linked."
     const val ENDED_DETAIL = "The other player left or the connection was lost."

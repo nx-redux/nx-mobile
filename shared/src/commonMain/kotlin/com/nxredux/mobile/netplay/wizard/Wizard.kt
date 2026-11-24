@@ -29,6 +29,8 @@ object Wizard {
     const val FILE_PULL_MS = 15_000L
     const val TOTAL_PULL_MS = 23_000L
     const val MAX_FILES = 32
+    /** The other side's NAME line after START: short, as a late one only costs the name. */
+    const val NAME_MS = 2_000L
 
     /** The handheld's `%255s` game field. */
     const val GAME_TOKEN_MAX = 255
@@ -57,7 +59,7 @@ object Wizard {
                 ch.writeLine(Reject(RejectReason.CABLE_LINK).format())
                 return HostOutcome.Turned(RejectReason.CABLE_LINK.wire)
             }
-            offer.cableLink?.let { return hostCableLink(ch, offer, it, onTransfer) }
+            offer.cableLink?.let { return hostCableLink(ch, offer, it, hello, onTransfer) }
             val picked = NetplayCores.hostRun(
                 offer.tag, offer.core, offer.pick, hello.core, hello.tag, hello.auto, offer.usb, offer.wl, hello.wl,
             )
@@ -70,7 +72,7 @@ object Wizard {
             }
             val run = picked
             val mixed = mixedCaps(run, hello.core, offer.wl, hello.wl, offer.usb)
-            ch.writeLine(HelloCodec.format(Hello.host(wireGame(offer.game), 2, Caps.of(run, offer.tag, wl = offer.wl))))
+            ch.writeLine(HelloCodec.format(Hello.host(wireGame(offer.game), 2, Caps.of(run, offer.tag, wl = offer.wl, names = offer.name != null))))
             // A link session (GB/GBC/GBA) copies no saves: each player keeps their own, which a trade needs (the
             // handheld's NETPLAY_SYNC_SAVES=0). START follows the HELLO at once.
             val emptySaves = if (NetplayCores.isLink(run)) false else {
@@ -98,7 +100,7 @@ object Wizard {
             }
             ch.writeLine("START 2")
             if (ch.readLine(RECV_MS) != "START") return HostOutcome.Turned(null)
-            return HostOutcome.Started(run, ch.remoteAddress, emptySaves, mixed, hello.wl)
+            return HostOutcome.Started(run, ch.remoteAddress, emptySaves, mixed, hello.wl, peerName = tradeNames(ch, offer.name, hello))
         } catch (e: NetplayIoException) {
             return HostOutcome.Turned(null)
         }
@@ -106,16 +108,16 @@ object Wizard {
 
     /** The host's side once both HELLOs carried `cl=1`: its HELLO, the exchange, then `START 2` / `START`. */
     private suspend fun hostCableLink(
-        ch: NetplayChannel, offer: HostOffer, cl: CableLinkOffer, onTransfer: (CableLinkProgress) -> Unit,
+        ch: NetplayChannel, offer: HostOffer, cl: CableLinkOffer, hello: Hello, onTransfer: (CableLinkProgress) -> Unit,
     ): HostOutcome {
-        ch.writeLine(HelloCodec.format(Hello.host(wireGame(offer.game), 2, Caps.of(NetplayCores.CABLE_LINK_CORE, offer.tag, cableLink = true))))
+        ch.writeLine(HelloCodec.format(Hello.host(wireGame(offer.game), 2, Caps.of(NetplayCores.CABLE_LINK_CORE, offer.tag, cableLink = true, names = offer.name != null))))
         val setup = when (val r = CableLinkExchange.run(ch, cl, host = true, onTransfer)) {
             is CableLinkExchange.Result.Done -> r.setup
             is CableLinkExchange.Result.Failed -> return HostOutcome.Turned(if (r.beforeSaves) GAME_COPY_FAILED else RejectReason.SYNC.wire)
         }
         ch.writeLine("START 2")
         if (ch.readLine(RECV_MS) != "START") return HostOutcome.Turned(null)
-        return HostOutcome.Started(NetplayCores.CABLE_LINK_CORE, ch.remoteAddress, emptySaves = false, cableLink = setup)
+        return HostOutcome.Started(NetplayCores.CABLE_LINK_CORE, ch.remoteAddress, emptySaves = false, cableLink = setup, peerName = tradeNames(ch, offer.name, hello))
     }
 
     /**
@@ -135,7 +137,7 @@ object Wizard {
         val reply = try {
             // Auto with a choice: the joiner switches to the host's core, so a phone host on Auto keeps its own (never a host's caps).
             val auto = offer.pick == null && NetplayCores.offered(offer.tag, offer.usb, offer.wl).size > 1
-            ch.writeLine(HelloCodec.format(Hello.client(wireGame(offer.game), offer.any, Caps.of(offer.core, offer.tag, auto, offer.wl))))
+            ch.writeLine(HelloCodec.format(Hello.client(wireGame(offer.game), offer.any, Caps.of(offer.core, offer.tag, auto, offer.wl, names = offer.name != null))))
             ch.readLine(RECV_MS)
         } catch (e: NetplayIoException) {
             return ClientOutcome.Refused(NetplayText.NO_ANSWER)
@@ -221,7 +223,7 @@ object Wizard {
             }
             if (line != "START" && !line.startsWith("START ")) return ClientOutcome.Refused(NetplayText.UNEXPECTED)
             ch.writeLine("START")
-            return ClientOutcome.Started(core, h.player, emptySaves = false, mixed = mixed, peerWl = h.wl)
+            return ClientOutcome.Started(core, h.player, emptySaves = false, mixed = mixed, peerWl = h.wl, peerName = tradeNames(ch, offer.name, h))
         } catch (e: CancellationException) {
             if (syncing) sink.abort()
             throw e
@@ -245,7 +247,7 @@ object Wizard {
         ch: NetplayChannel, offer: ClientOffer, cl: CableLinkOffer, onWaiting: (Int) -> Unit, onTransfer: (CableLinkProgress) -> Unit,
     ): ClientOutcome {
         try {
-            ch.writeLine(HelloCodec.format(Hello.client(wireGame(offer.game), offer.any, Caps.of(NetplayCores.CABLE_LINK_CORE, offer.tag, cableLink = true))))
+            ch.writeLine(HelloCodec.format(Hello.client(wireGame(offer.game), offer.any, Caps.of(NetplayCores.CABLE_LINK_CORE, offer.tag, cableLink = true, names = offer.name != null))))
             val reply = ch.readLine(RECV_MS)
             // A host that knows Cable Link checks `cl=1` right after version, game and role, so any other refusal here
             // (an older phone's or the handheld's core or link-mode gate) means the host is not on Cable Link.
@@ -268,7 +270,7 @@ object Wizard {
             Reject.parse(line)?.let { return ClientOutcome.Refused(rejectText(it, offer)) }
             if (line != "START" && !line.startsWith("START ")) return ClientOutcome.Refused(NetplayText.UNEXPECTED)
             ch.writeLine("START")
-            return ClientOutcome.Started(NetplayCores.CABLE_LINK_CORE, h.player, emptySaves = false, cableLink = setup)
+            return ClientOutcome.Started(NetplayCores.CABLE_LINK_CORE, h.player, emptySaves = false, cableLink = setup, peerName = tradeNames(ch, offer.name, h))
         } catch (e: NetplayIoException) {
             return ClientOutcome.Refused(NetplayText.NO_ANSWER)
         }
@@ -340,6 +342,21 @@ object Wizard {
         val f = line.split(' ').filter { it.isNotEmpty() }
         if (f.size < 2 || f[0] != "SYNC-READY") return null
         return LEADING_INT.find(f[1])?.value?.toIntOrNull()
+    }
+
+    /**
+     * After START, both sides at once: this side's [own] name out, the other's in, when both HELLOs carried `nm=1` (this
+     * side sent it exactly when it has a name). Each side writes before it reads, so neither waits on the other. The
+     * session is already agreed: a dead channel or a late or bad line only costs the name.
+     */
+    private suspend fun tradeNames(ch: NetplayChannel, own: String?, peer: Hello): String? {
+        if (own == null || !peer.names) return null
+        return try {
+            ch.writeLine(NameLine.format(own))
+            NameLine.parse(ch.readLine(NAME_MS))
+        } catch (e: NetplayIoException) {
+            null
+        }
     }
 
     /** Best effort: the outcome is decided, a dead channel changes nothing. */
