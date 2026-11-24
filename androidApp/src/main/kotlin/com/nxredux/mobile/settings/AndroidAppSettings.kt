@@ -106,6 +106,10 @@ class AndroidAppSettings(context: Context) : AppSettings {
 
     override var androidPins: List<String> by lines(KEY_ANDROID_PINS)
 
+    override var externalPicks: Map<String, String>
+        get() = ExternalPicksCodec.decode(prefs.getString(KEY_EXTERNAL_PICKS, null))
+        set(value) = prefs.edit { putString(KEY_EXTERNAL_PICKS, ExternalPicksCodec.encode(value)) }
+
     override var raEnabled: Boolean by bool(KEY_RA_ENABLED, false)
 
     override var raUsername: String
@@ -353,6 +357,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_ONBOARDING_DONE = "onboarding_done"
         private const val KEY_ONBOARDING_STEP = "onboarding_step"
         private const val KEY_ANDROID_PINS = "android_pins"
+        private const val KEY_EXTERNAL_PICKS = "external_picks"
         private const val KEY_RA_ENABLED = "ra_enabled"
         private const val KEY_RA_USERNAME = "ra_username"
         private const val KEY_RA_TOKEN = "ra_token"

@@ -45,6 +45,13 @@ import com.nxredux.mobile.library.LibraryScanner
 import com.nxredux.mobile.library.ListingUnavailable
 import com.nxredux.mobile.library.MergedLabels
 import com.nxredux.mobile.library.NaomiSets
+import com.nxredux.mobile.external.ExternalApps
+import com.nxredux.mobile.external.ExternalEmulator
+import com.nxredux.mobile.external.ExternalEmulators
+import com.nxredux.mobile.external.NoExternalApps
+import com.nxredux.mobile.external.SetRule
+import com.nxredux.mobile.external.installedExternal
+import com.nxredux.mobile.external.offeredFor
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.library.Sidecars
@@ -283,6 +290,8 @@ class AppDeps(
     val log: (String) -> Unit = {},
     /** Settings → Emulation → GPU driver and the consoles' GPU driver rows; null: a platform without custom drivers (no row). */
     val gpuDrivers: GpuDriverStore? = null,
+    /** Standalone emulators installed on the device, and the hand-off to them; [NoExternalApps]: none. */
+    val externalApps: ExternalApps = NoExternalApps,
 )
 
 /**
@@ -3523,6 +3532,15 @@ class AppState(
         )
     }
 
+    /** The installed apps that can open [entry]'s game; the NAOMI table is read (off this thread) only for an installed app limited to its sets. */
+    private suspend fun externalAppsFor(entry: Listed): List<Pair<ExternalEmulator, String>> {
+        val candidates = ExternalEmulators.forTag(entry.system.tag)
+        if (candidates.isEmpty()) return emptyList()
+        val naomiApp = candidates.any { it.sets == SetRule.NAOMI && deps.externalApps.installedPackage(it) != null }
+        val naomi = if (naomiApp) withContext(deps.compute) { deps.naomiSets() } else NaomiSets.EMPTY
+        return installedExternal(entry.system.tag, deps.externalApps, offeredFor(entry.game, naomi))
+    }
+
     /**
      * The scraper's games with each arcade set's raw DAT title (fbneo's table; flycast's for a DC zip/7z): libretro names
      * arcade art by it. Each table is read at most once per call, off the calling thread, and only when a system uses it.
@@ -3755,6 +3773,7 @@ class AppState(
             override val achievementsInMenu: Boolean get() = hasAchievements && !deps.settings.gameListAchievementsPanel
             override fun openAchievements() = ra.openRaPanel()
             override suspend fun canResume(entry: Listed): Boolean = deps.userData.resumeInfo(entry.system.tag, entry.game.fileName).canResume
+            override suspend fun externalApps(entry: Listed): List<Pair<ExternalEmulator, String>> = externalAppsFor(entry)
             override fun playFromStart(entry: Listed) = launches.playFromStart(entry)
             override val aResumes: Boolean get() = deps.settings.aResumes
             override fun resumeGame(entry: Listed) { launches.resumeGame(entry) }

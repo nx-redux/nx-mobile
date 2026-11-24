@@ -6,6 +6,9 @@ import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.SaveFormat
 import com.nxredux.mobile.storage.SaveNaming
 import com.nxredux.mobile.storage.StateFormat
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * The value [by] places from [current] in this list, wrapping (LEFT -1, RIGHT and A +1): every cycled setting steps
@@ -185,6 +188,18 @@ enum class SwitcherLayout(val label: String) {
 /** An extra ROM folder: [id] is `Sources.idFor` of it (stable across remove and re-add) and names it in recents, the sidecar store, the index and `Roms/.sources/`. */
 data class ExtraFolder(val id: String, val ref: ContentRef)
 
+/** [AppSettings.externalPicks] as one stored string: a JSON object, since a game path may hold any character a line format would split on. */
+object ExternalPicksCodec {
+    fun encode(picks: Map<String, String>): String = JsonObject(picks.mapValues { JsonPrimitive(it.value) }).toString()
+
+    /** Unreadable or missing text reads as no picks. */
+    fun decode(text: String?): Map<String, String> {
+        if (text.isNullOrEmpty()) return emptyMap()
+        val obj = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull() ?: return emptyMap()
+        return obj.mapNotNull { (k, v) -> (v as? JsonPrimitive)?.takeIf { it.isString }?.let { k to it.content } }.toMap()
+    }
+}
+
 interface AppSettings {
     /** The home folder (holds Roms/, Bios/, Saves/), or null before the user picked one. */
     var treeRef: ContentRef?
@@ -235,6 +250,11 @@ interface AppSettings {
     var androidGamesAsked: Boolean
     /** Android games pinned on Home ([com.nxredux.mobile.launcher.InstalledApp.id]), in the order pinned (never shortcuts.txt). */
     var androidPins: List<String>
+    /**
+     * Games picked to open in another emulator (Emulator menu): game path to [com.nxredux.mobile.external.ExternalEmulator.id].
+     * App-private and per device, never synced: the apps installed differ from device to device, and the handheld has none.
+     */
+    var externalPicks: Map<String, String>
 
     // RetroAchievements (Tools → RetroAchievements → Settings). The token is the only credential kept.
     var raEnabled: Boolean

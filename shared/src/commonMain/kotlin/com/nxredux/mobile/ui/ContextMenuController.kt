@@ -2,6 +2,7 @@ package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.tryOr
 import com.nxredux.mobile.tryOrAny
+import com.nxredux.mobile.external.ExternalEmulator
 import com.nxredux.mobile.library.CollectionRename
 import com.nxredux.mobile.library.CollectionWrite
 import com.nxredux.mobile.library.Collections
@@ -118,6 +119,9 @@ internal interface ContextMenuHost {
     /** [entry] has a save state to resume (what A does on it); read off the main thread. */
     suspend fun canResume(entry: Listed): Boolean = false
 
+    /** The other emulators installed here that can open [entry], with their labels ([com.nxredux.mobile.external.installedExternal]); none by default. */
+    suspend fun externalApps(entry: Listed): List<Pair<ExternalEmulator, String>> = emptyList()
+
     /** The menu's Play from start: launches [entry] without its save state. */
     fun playFromStart(entry: Listed) {}
 
@@ -194,8 +198,9 @@ internal class ContextMenuController(
                     // The save is read off the main thread, so the menu opens when it is known (the list must not have moved on).
                     scope.launch {
                         val resume = host.canResume(e)
+                        val external = host.externalApps(e).isNotEmpty()
                         if (_screen.value !== s || s.menu != null) return@launch
-                        gameMenu(s, e, canResume = resume)
+                        gameMenu(s, e, canResume = resume, externalApps = external)
                     }
                 } else {
                     gameMenu(s, e, canResume = false)
@@ -275,11 +280,11 @@ internal class ContextMenuController(
         if (host.kidsRestricted && (m.sub != null || m.prompt != null)) closeContextMenu()
     }
 
-    /** Opens [s]'s menu on [e]; [canResume]: it has a save state, so Play from start leads. */
-    private fun gameMenu(s: Screen.Games, e: Listed, canResume: Boolean) {
+    /** Opens [s]'s menu on [e]; [canResume]: it has a save state, so Play from start leads; [externalApps]: another app can open it. */
+    private fun gameMenu(s: Screen.Games, e: Listed, canResume: Boolean, externalApps: Boolean = false) {
         val items = ContextMenus.itemsFor(
             s.source, e, pinned = pinned(e), art = host.artMenu(e), netplay = host.netplayOffered(e),
-            canResume = canResume, netplayLeads = host.netplayInMenu, aResumes = host.aResumes,
+            canResume = canResume, netplayLeads = host.netplayInMenu, aResumes = host.aResumes, externalApps = externalApps,
         )
         // The achievements panel, last, while Layouts hides its icon and hint.
         val own = (if (host.achievementsInMenu) items + ContextItem(ContextKind.ACHIEVEMENTS, "Achievements") else items)
@@ -408,7 +413,7 @@ internal class ContextMenuController(
         when (kind) {
             ContextKind.PIN_TOOL, ContextKind.UNPIN_TOOL, ContextKind.ADD_TO_TOOLS, ContextKind.REMOVE_FROM_TOOLS,
             ContextKind.RENAME_COLLECTION, ContextKind.DELETE_COLLECTION, ContextKind.OPEN_GAMES, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS, ContextKind.ACHIEVEMENTS, ContextKind.USE_TOP_SCREEN -> Unit   // handled above
-            ContextKind.EMULATOR -> consoleOf(m)?.let { ContextMenus.emulatorMenu(it) }?.let { setMenu(m.copy(sub = it)) } ?: closeContextMenu()
+            ContextKind.EMULATOR -> openEmulatorMenu(m)
             ContextKind.CONSOLE -> ContextMenus.consoleMenu(m.game.game.fileName)?.let { setMenu(m.copy(sub = it)) } ?: run {
                 closeContextMenu()
                 _error.value = "No bundled emulator runs .${m.game.game.fileName.substringAfterLast('.', "").lowercase()} files"
@@ -561,7 +566,7 @@ internal class ContextMenuController(
     private fun chooseSub(m: ContextMenu, sub: SubMenu) {
         val value = sub.values.getOrNull(sub.index) ?: return
         when (m.items[m.index].kind) {
-            ContextKind.EMULATOR -> { val from = consoleOf(m) ?: return closeContextMenu(); if (value == from.tag) closeContextMenu() else applyTag(m, value) }
+            ContextKind.EMULATOR -> applyTag(m, value)
             ContextKind.CONSOLE -> CoreRegistry.consoles.firstOrNull { it.id == value }?.let { c -> applyTag(m, c.defaultTagFor(settings.defaultTags[c.id])) }
             ContextKind.ADD_TO_COLLECTION -> if (value.isEmpty()) setMenu(m.copy(sub = null, prompt = MenuPrompt.NewCollection(), promptFocus = -1)) else addToCollection(m, value)
             ContextKind.PIN, ContextKind.UNPIN, ContextKind.HIDE, ContextKind.RENAME,
@@ -605,10 +610,34 @@ internal class ContextMenuController(
         done("Deleted $name")   // the last one gone drops the tab
     }
 
-    /** Writes the game's sidecar entry, then moves the game in the index and opens the new tag's list. */
+    /** Our tags, then the installed apps that can open the game (looked up off the menu's thread), the game's pick marked. */
+    private fun openEmulatorMenu(m: ContextMenu) {
+        val system = consoleOf(m) ?: return closeContextMenu()
+        setMenu(m.copy(busy = true))
+        scope.launch {
+            val apps = host.externalApps(m.game)
+            if (_screen.value.contextMenu?.entry != m.entry) return@launch   // the menu closed or moved on meanwhile
+            val sub = ContextMenus.emulatorMenu(system, apps, settings.externalPicks[m.game.game.path]) ?: return@launch closeContextMenu()
+            setMenu(m.copy(sub = sub))
+        }
+    }
+
+    /**
+     * An app ([ContextMenus.EXTERNAL_PREFIX]): kept as this device's pick, the sidecar shared with the handheld untouched.
+     * One of our tags drops any pick; another tag than the game's own writes the game's sidecar entry, then moves the game
+     * in the index and opens the new tag's list.
+     */
     private fun applyTag(m: ContextMenu, tag: String) {
         val from = consoleOf(m) ?: return closeContextMenu()
         val game = m.game.game
+        val picks = settings.externalPicks
+        if (tag.startsWith(ContextMenus.EXTERNAL_PREFIX)) {
+            settings.externalPicks = picks + (game.path to tag.removePrefix(ContextMenus.EXTERNAL_PREFIX))
+            closeContextMenu()
+            return
+        }
+        if (game.path in picks) settings.externalPicks = picks - game.path
+        if (tag == from.tag) { closeContextMenu(); return }
         setMenu(m.copy(busy = true))
         scope.launch {
             // A provider can throw here (a revoked grant on a non-external-storage provider); the scope has no handler.

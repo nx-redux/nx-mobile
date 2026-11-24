@@ -89,12 +89,12 @@ object ExternalEmulators {
         ),
     )
 
-    fun forTag(tag: String): List<ExternalEmulator> {
+    fun forTag(tag: String, table: List<ExternalEmulator> = all): List<ExternalEmulator> {
         val base = CoreRegistry.baseTag(tag)
-        return all.filter { base in it.tags }
+        return table.filter { base in it.tags }
     }
 
-    fun byId(id: String): ExternalEmulator? = all.firstOrNull { it.id == id }
+    fun byId(id: String, table: List<ExternalEmulator> = all): ExternalEmulator? = table.firstOrNull { it.id == id }
 
     /** Whether [e] can open this game: path-only apps need a real file outside any zip, and set rules need the matching arcade set. */
     fun offered(e: ExternalEmulator, isRealFile: Boolean, insideZip: Boolean, isNaomiSet: Boolean, isModel3Set: Boolean): Boolean {

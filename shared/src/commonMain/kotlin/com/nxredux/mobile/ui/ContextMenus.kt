@@ -2,6 +2,7 @@ package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.ui.nx.NxButton
 
+import com.nxredux.mobile.external.ExternalEmulator
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.netplay.NetplayCores
@@ -88,6 +89,7 @@ object ContextMenus {
      * the console items plus Remove from Collection. A search list: a collection's items without Remove from Collection.
      * Hidden: none (A unhides). The Android games console: Pin or Unpin, then the art item (Settings › Library › Android
      * games is the only way out of the console; [pinned]: in the Android pins).
+     * [externalApps]: an installed app can open the game, so a console list offers Emulator on a single-emulator console too.
      * [netplay]: the platform has Wi-Fi netplay, so Netplay follows Game Settings for a game whose tag has it.
      * [art]: an enabled art source knows the game, so Fetch art (no art yet) or Change art (it has art) follows them
      * (console, collection and search lists).
@@ -97,7 +99,7 @@ object ContextMenus {
      */
     fun itemsFor(
         source: ListSource, entry: Listed, pinned: Boolean, art: ArtMenuItem = ArtMenuItem.NONE, netplay: Boolean = false,
-        canResume: Boolean = false, netplayLeads: Boolean = false, aResumes: Boolean = true,
+        canResume: Boolean = false, netplayLeads: Boolean = false, aResumes: Boolean = true, externalApps: Boolean = false,
     ): List<ContextItem> {
         val lead = leadItems(entry, canResume, netplay && netplayLeads, aResumes)
         val below = netplay && !netplayLeads && hasNetplay(entry)
@@ -106,7 +108,7 @@ object ContextMenus {
             source.system.android -> listOfNotNull(if (pinned) unpin else pin, artItem(art))
             source.system.unassigned -> listOf(hide, rename, ContextItem(ContextKind.CONSOLE, "Console"))
             // The game's own tag (a merged console mixes them).
-            (CoreRegistry.consoleOf(entry.system.tag)?.tags?.size ?: 0) > 1 ->
+            externalApps || (CoreRegistry.consoleOf(entry.system.tag)?.tags?.size ?: 0) > 1 ->
                 libraryItems(lead, entry, pinned, below, art) + ContextItem(ContextKind.EMULATOR, "Emulator")
             else -> libraryItems(lead, entry, pinned, below, art)
         }
@@ -114,7 +116,7 @@ object ContextMenus {
         is ListSource.Collection ->
             libraryItems(lead, entry, pinned, below, art) + ContextItem(ContextKind.REMOVE_FROM_COLLECTION, "Remove from Collection")
         is ListSource.Search -> libraryItems(lead, entry, pinned, below, art)
-        is ListSource.Filtered -> itemsFor(source.parent, entry, pinned, art, netplay, canResume, netplayLeads, aResumes)   // its list's own
+        is ListSource.Filtered -> itemsFor(source.parent, entry, pinned, art, netplay, canResume, netplayLeads, aResumes, externalApps)   // its list's own
         // Every console's games: a ROM's items are a search's, an Android game's those of the Android console's list.
         ListSource.AllGames ->
             if (entry.system.android) listOfNotNull(if (pinned) unpin else pin, artItem(art))
@@ -229,15 +231,22 @@ object ContextMenus {
     /** The Add to Collection picker: the existing names, then "New Collection…" whose value is "". */
     fun collectionMenu(names: List<String>): SubMenu = SubMenu("Add to Collection", names + "New Collection…", names + "", 0)
 
+    /** An Emulator menu value naming another app ([ExternalEmulator.id] after it) rather than one of our tags. */
+    const val EXTERNAL_PREFIX = "app:"
+
     /**
      * The console's tags, "TAG (core id)" with the handheld's tag (GPGX_SMS shows as GPGX, [CoreRegistry.handheldTag]),
-     * [system]'s (the game's own) tag highlighted. Null for single-emulator consoles.
+     * then [apps] (installed ones that can open the game, with their labels) as "<label> (app)". Highlighted: [pick]
+     * (an app id) while it is listed, else [system]'s (the game's own) tag. Null with one emulator and no app.
      */
-    fun emulatorMenu(system: SystemFolder): SubMenu? {
-        val console = CoreRegistry.consoleOf(system.tag)?.takeIf { it.tags.size > 1 } ?: return null
-        val current = console.tags.indexOf(system.tag).coerceAtLeast(0)
-        val labels = console.tags.map { "${CoreRegistry.handheldTag(it)} (${CoreRegistry.forTag(it)?.id ?: "?"})" }
-        return SubMenu("Emulator", labels, console.tags, current, current)
+    fun emulatorMenu(system: SystemFolder, apps: List<Pair<ExternalEmulator, String>> = emptyList(), pick: String? = null): SubMenu? {
+        val console = CoreRegistry.consoleOf(system.tag) ?: return null
+        val ours = if (console.externalOnly) emptyList() else console.tags
+        if (ours.size <= 1 && apps.isEmpty()) return null
+        val labels = ours.map { "${CoreRegistry.handheldTag(it)} (${CoreRegistry.forTag(it)?.id ?: "?"})" } + apps.map { "${it.second} (app)" }
+        val values = ours + apps.map { EXTERNAL_PREFIX + it.first.id }
+        val current = pick?.let { values.indexOf(EXTERNAL_PREFIX + it) }?.takeIf { it >= 0 } ?: ours.indexOf(system.tag).coerceAtLeast(0)
+        return SubMenu("Emulator", labels, values, current, current)
     }
 
     /**

@@ -23,6 +23,7 @@ open class FakeAppSettings(
     override var toolApps: List<String> = emptyList()
     override var androidConsoleApps: List<String> = emptyList()
     override var androidPins: List<String> = emptyList()
+    override var externalPicks: Map<String, String> = emptyMap()
     override var raEnabled = false
     override var raUsername = ""
     override var raToken: String? = null
