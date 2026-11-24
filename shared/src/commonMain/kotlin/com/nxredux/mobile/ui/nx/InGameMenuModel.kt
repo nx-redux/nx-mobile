@@ -113,6 +113,9 @@ sealed interface MenuRow : NxDescribedRow {
     ) : MenuRow
 }
 
+/** A shader picker row that uses its preset (A), as opposed to a folder that opens the level below. */
+val MenuRow.Submenu.usesPreset: Boolean get() = target is PageKind.ShaderPick
+
 /** The control of [row] ([nxSettingControl] of its choices); a picker for a row with its own list page. */
 val MenuRow.Option.control: NxSettingControl get() = if (opensList) NxSettingControl.PICKER else nxSettingControl(choices)
 
@@ -1613,7 +1616,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 is PageKind.Settings -> rebuilt(p, groupPage(k.group))
                 PageKind.Shaders -> rebuilt(p, shadersPage())
                 PageKind.ShaderParams -> rebuilt(p, shaderParamsPage())
-                is PageKind.ShaderBrowse -> rebuilt(p, browsePage(k.path))
+                // The highlight follows the preset in use (stepped to in its preview strip) when this level lists it.
+                is PageKind.ShaderBrowse -> browsePage(k.path).let { fresh ->
+                    rebuilt(p, fresh).let { if (inUseOn(k.path) >= 0) it.copy(selected = fresh.selected) else it }
+                }
                 // A row its page no longer lists (a parameter the new preset lacks; a DS layout or inset row after a
                 // rotation or a controller): close its strip rather than adjust a row that is not shown.
                 // A preset's strip stands over the picker level it was picked from, which has no row of that key.
@@ -1817,8 +1823,13 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                     MenuRow.Submenu(if (ShaderBrowse.isCurrent(entry, current)) "${entry.label}  $IN_USE_MARK" else entry.label, PageKind.ShaderPick(entry.value))
             }
         }
-        val inUse = entries.indexOfFirst { it is ShaderBrowse.Preset && ShaderBrowse.isCurrent(it, current) }
-        return MenuPage(PageKind.ShaderBrowse(path), ShaderBrowse.title(path), rows, selected = inUse.coerceAtLeast(0), intro = ShaderBrowse.intro(path))
+        return MenuPage(PageKind.ShaderBrowse(path), ShaderBrowse.title(path), rows, selected = inUseOn(path).coerceAtLeast(0), intro = ShaderBrowse.intro(path))
+    }
+
+    /** The row of the preset in use on the picker's level at [path], or -1 when it is not there. */
+    private fun inUseOn(path: String): Int {
+        val current = shaders[ShaderOptions.PRESET] ?: ShaderOptions.NONE
+        return ShaderBrowse.entries(presets, path).indexOfFirst { it is ShaderBrowse.Preset && ShaderBrowse.isCurrent(it, current) }
     }
 
     /**

@@ -170,7 +170,7 @@ class Pacing:
             time.sleep(self.a.seconds)
             stats = self.sh("dumpsys SurfaceFlinger --timestats -dump; dumpsys SurfaceFlinger --timestats -disable",
                             timeout=60)
-            log = self.sh("logcat -d | grep -E 'NXHITCH summary|SET_HW_RENDER: Vulkan accepted'", timeout=60)
+            log = self.sh("logcat -d adbd:S | grep -E 'NXHITCH summary|SET_HW_RENDER: Vulkan accepted'", timeout=60)
             temp = self.sh("cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null").strip()
         finally:
             try:

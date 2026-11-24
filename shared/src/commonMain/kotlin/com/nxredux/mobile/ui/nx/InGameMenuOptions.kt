@@ -130,7 +130,8 @@ private fun OptionTouchRow(
     ) {
         when (row) {
             is MenuRow.Option -> NxEditArrows(editing, sizes.value) { OptionControlView(row, index, sizes.value, onOption) }
-            is MenuRow.Submenu -> NxValueText("›", sizes.label, LocalNxColors.current.listText)
+            // A preset in the shader picker is used by A, not opened: only folders carry the `›`.
+            is MenuRow.Submenu -> if (!row.usesPreset) NxValueText("›", sizes.label, LocalNxColors.current.listText)
             is MenuRow.Action -> Unit   // drawn as a word ([ActionWordRow])
             is MenuRow.Slot -> Unit
         }

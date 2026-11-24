@@ -35,7 +35,7 @@ def one_run(dev, a, n):
     closed = time.time() - t0
     alive = bool(dev.sh("pidof %s" % GAME_PROCESS).strip())
     anr = int(dev.sh("logcat -d -b events | grep -c am_anr").strip() or 0)
-    watchdog = int(dev.sh("logcat -d | grep -c -E 'stuck in one frame|stopped responding'").strip() or 0)
+    watchdog = int(dev.sh("logcat -d adbd:S | grep -c -E 'stuck in one frame|stopped responding'").strip() or 0)
     ok = running and not alive and anr == 0 and watchdog == 0
     return ("run %d: %s running=%s closed_after=%.1fs still_alive=%s anr=%d watchdog=%d"
             % (n, "ok  " if ok else "FAIL", running, closed, alive, anr, watchdog)), ok

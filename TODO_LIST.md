@@ -9,29 +9,6 @@
 - [ ] Controls editor: d-pad mode on DC/GC/N64, drag the d-pad toward the face buttons, save → lands where the editor showed (in game and from Settings). Needs a phone without a built-in controller (the AYANEO's hides the touch pad in game). Title "Pad skin"/"Overlay", Reset console and Appearance reset passed (AYANEO 2026-11-22).
 - [ ] Threaded cores across pause/resume (input lock): N64 netplay input still arrives (two devices); a game from a picked file still opens. Dolphin GC/Wii incl. Wii pointer, Azahar (GLES and Vulkan), ARMSX2 and PPSSPP passed (Nova 2026-11-22).
 
-## Vulkan frames through a swapchain on an image reader (malisx2)
-
-A custom driver that cannot import a shared buffer (malisx2 on Mali) runs through a swapchain on an image reader;
-checked on the AYANEO (2026-11-16) and the Nova with the reader forced (2026-11-20).
-
-Device checks still owed:
-
-- [ ] Other Mali devices and malisx2 versions.
-## Slang shader presets
-
-Nova, 2026-11-14 (`tools/device-tests/slang_shaders.py`, 33 runs, no errors, screenshots looked at): SNES with crt-geom,
-crt-guest-advanced, crt-royale, newpixie-crt, scalefx, motionblur/feedback and Mega Bezel POTATO at full speed; Game Boy
-(gameboy, lcd-grid-v2); a rotated arcade game; N64 and GameCube (GL cores), PSP, PS2 and 3DS; DS with a feedback preset
-on the top screen; all 50 bundled slang presets and the 21 replaced GLSL names on SNES. Mega Bezel STD and SMOOTH-ADV draw
-correctly but at about 36 fps there. Still owed:
-
-- [ ] Mega Bezel STD / SMOOTH-ADV speed: find whether the 36 fps on the Nova is the preset's own cost or ours.
-- [ ] A pad skin with a slang preset (the Nova's built-in controller hides the skin). DS screens on the second display with a feedback preset passed (Nova 2026-11-22: response-time, top shaded with trails, touch screen plain).
-- [ ] The Fold: crt-guest-advanced and a float-framebuffer preset draw; a preset that cannot build toasts and falls back. Mali passed (AYANEO 2026-11-22: crt-guest-advanced ~42 fps, float-framebuffer presets draw, a broken preset toasts and falls back).
-- [ ] Shader picker on the Fold inner screen; Personal with a whole `shaders_slang` folder (about 2,600 presets) opens quickly. The Nova two-pane passed (2026-11-22: groups with descriptions, preview strip within its group, B back with the tick moved).
-- [ ] Second screen: the Settings tab's Shader row opens the picker on the bottom screen while the picture on the top stays undimmed. (Nova 2026-11-22: the top picture pauses and dims, as from the in-game menu; B walks up the in-game menu, not back to the Settings tab.)
-- [ ] Compare the swapped single-file GLSL presets with the handheld's (needs the Brick). A game saved with a removed GLSL preset opens with its slang version and looks the same (Nova 2026-11-22: crt-geom and scanline, pixel diff 0).
-
 ## Game info from ScreenScraper
 
 Device checks still owed:
@@ -131,7 +108,7 @@ survive Home and return, quit, and load their auto state again (slot 9).
 - [ ] DS/3DS hat d-pad and L2/R2 as axes; GC and DC analog triggers; DS/3DS face and L2/R2 keys (axes need a pad with a
   hat and analog triggers; DS R2 and 3DS A keys reach the cores, Nova 2026-11-22)
 - [ ] RetroAchievements hashing and unlock toasts (RA not signed in on the dev app); rumble. Multi-disc m3u, CUE+BIN and
-  core messages passed (Nova 2026-11-22) Hashing passed on GB/GBA/NES/SNES/N64/NDS/PS1/PSP/GC (Nova 2026-11-23); toasts need an unlock.
+  core messages passed (Nova 2026-11-22) Hashing passed on GB/GBA/NES/SNES/N64/NDS/PS1/PSP/GC (Nova 2026-11-23), PS2 and Wii from RVZ (Nova 2026-11-24); toasts need an unlock.
 - [ ] A collection file or map.txt starting with a byte-order mark (from Windows): its first entry still works Collection passed (Nova 2026-11-23); map.txt needs a writable ROM folder.
 
 ## Security fixes (Device Sync confirm, update check): device checks still owed
@@ -188,7 +165,6 @@ menu, survive Home and return, quit and reload slot 9 (8/8); save then quit at o
   a game, kill the menu process, return: no stall; Second screen applies both ways (Nova 2026-11-22)
 - [ ] Kids Mode: lock / unlock / lock quickly — at most one bounce a second (Nova 2026-11-22: no bounce storm, but only
   tried during a timed unlock; fast Locked ↔ unlocked cycling not reached)
-- [ ] RA hashing (RA not signed in on the dev app). Save / load states on PS2 and Wii (large), PPSSPP; SRAM / RTC; multi-file
   VFS launches passed (Nova 2026-11-22) Passed on PSP, GC, PS1 chd + cue/bin, PS2 (Okami, with core patch 0011) (Nova 2026-11-23); PS1 .pbp unsupported; WBFS without its update partition cannot match RA's Redump hashes (use ISO/RVZ).
 
 ## MSU-1 / MSU-MD (PR #147)
@@ -218,8 +194,8 @@ Device checks still owed (the areas core patches 0002–0006 touch):
 
 Left on the devices (2026-11-16):
 
-- [ ] AYANEO: ARMSX2 Nightly installed (with the battle state and auto-load on); `/sdcard/NXReduxDev-perf-backup`; the battle state in slot 0 of Budokai Tenkaichi 3; malisx2 in the dev app's driver folder; Debug log on.
-- [ ] Nova: the temporary build with the PS2 4x override is still installed (install a current build); `/sdcard/NXRedux-gpu-test-backup-2`; Debug log on; `/sdcard/NXRedux/drivers` and 10 installed drivers from the GPU driver tests.
+- [ ] AYANEO: ARMSX2 Nightly installed (with the battle state and auto-load on); the battle state in slot 0 of Budokai Tenkaichi 3; malisx2 in the dev app's driver folder; Debug log on.
+- [ ] Nova: Debug log on; `/sdcard/NXRedux/drivers` and the installed drivers from the GPU driver tests.
 
 ## Codebase review (comments, stale code, repeated code, simplifications, AppState split): device checks owed
 

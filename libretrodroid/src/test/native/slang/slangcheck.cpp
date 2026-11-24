@@ -151,6 +151,36 @@ void fixedChecks() {
           "a block's size is a multiple of 16");
 }
 
+// GLSL ES 3.00 has no arrays of arrays: a table (crt-geom's masks), constant or built from variables, becomes one flat
+// array in row order, indexed row * width + column.
+void tableChecks() {
+    std::string fragment = std::string(HEADER) +
+        "layout(location = 0) in vec2 uv;\n"
+        "layout(location = 0) out vec4 FragColor;\n"
+        "void main() {\n"
+        "  const float fixedTable[2][3] = { { 1.0, 2.0, 3.0 }, { 4.0, 5.0, 6.0 } };\n"
+        "  float a = uv.x, b = uv.y;\n"
+        "  float built[2][2] = { { a, b }, { b * 2.0, a * 3.0 } };\n"
+        "  int w = int(uv.x * 2.0), z = int(uv.y * 2.0);\n"
+        "  FragColor = vec4(fixedTable[w][z], built[w][z], params.GLOW, 1.0);\n"
+        "}\n";
+    SlangProgram program;
+    std::string error;
+    bool ok = translateSlang(std::string(HEADER) + VERTEX, fragment, 300, program, error);
+    if (!ok) std::printf("  es 300: %s\n", error.c_str());
+    check(ok, "a pass with tables translates for ES 3.00");
+    if (!ok) return;
+    bool valid = compilesAsEs(program, 300, error);
+    if (!valid) std::printf("  es 300: %s\n%s\n", error.c_str(), program.fragment.glsl.c_str());
+    check(valid, "the flattened tables are valid GLSL ES 3.00");
+    auto& glsl = program.fragment.glsl;
+    check(glsl.find("float[](1.0, 2.0, 3.0, 4.0, 5.0, 6.0)") != std::string::npos, "a constant table is flat, in row order");
+    check(glsl.find("float[4](float[](a, b)[0], float[](a, b)[1], float[](b * 2.0, a * 3.0)[0]") != std::string::npos,
+          "a built table is flat, in row order");
+    check(glsl.find("[w * 3 + z]") != std::string::npos && glsl.find("built[w * 2 + z]") != std::string::npos,
+          "a table is indexed row * width + column");
+}
+
 void semanticChecks() {
     using Kind = SlangTextureKind;
     const std::vector<std::string> aliases = { "", "Blur", "", "Final" };
@@ -215,6 +245,7 @@ int main(int argc, char** argv) {
     glslang::InitializeProcess();
     if (argc >= 2) return checkDirectory(argv[1], argc >= 3 ? (unsigned) std::atoi(argv[2]) : 320);
     fixedChecks();
+    tableChecks();
     semanticChecks();
     if (failures) {
         std::printf("%d check(s) failed\n", failures);

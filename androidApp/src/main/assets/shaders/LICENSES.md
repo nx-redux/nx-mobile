@@ -41,6 +41,11 @@ Ports of LibretroDroid's built-in shaders (GPL-3.0, Filippo Scognamiglio; from t
 - `nx/line.glsl`, `nx/line.glslp`: the CRT shader ("Line")
 - `nx/grid.glsl`, `nx/grid.glslp`: the LCD shader ("Grid")
 
+A slang port of nx-redux's `glsl/lcd3x.glsl` (public domain, Gigaherz), its maths unchanged, with the two
+brightness constants as parameters:
+
+- `slang/handheld/lcd3x-classic.slangp`, `slang/handheld/shaders/lcd3x-classic.slang`
+
 ## libretro slang-shaders
 
 From https://github.com/libretro/slang-shaders (master, commit 2345ee91602a7404d3a1a6a5df6108d7305fdad4),

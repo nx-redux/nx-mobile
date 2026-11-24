@@ -114,7 +114,8 @@ object ShaderOptions {
         "glsl/bicubic.glsl" to "slang/interpolation/bicubic.slangp",
         "glsl/edge1pixel.glsl" to "slang/pixel-art-scaling/edge1pixel.slangp",
         "glsl/lcd1x.glsl" to "slang/handheld/lcd1x.slangp",
-        "glsl/lcd3x.glsl" to "slang/handheld/lcd3x.slangp",
+        // The handheld's single-file lcd3x is the older maths (strong scanlines, a faint stripe), not lcd3x.slang's.
+        "glsl/lcd3x.glsl" to "slang/handheld/lcd3x-classic.slangp",
         "glsl/pixellate.glsl" to "slang/pixel-art-scaling/pixellate.slangp",
         "glsl/res-independent-scanlines.glsl" to "slang/scanlines/res-independent-scanlines.slangp",
         "glsl/retro-v2.glsl" to "slang/handheld/retro-v2.slangp",
