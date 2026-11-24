@@ -52,8 +52,10 @@ class LaunchExternalTest {
 
     private class Apps(var installed: Set<ExternalEmulator>, var result: ExternalLaunchResult = ExternalLaunchResult.STARTED) : ExternalApps {
         val launched = ArrayList<ExternalLaunch>()
-        override fun installedPackage(e: ExternalEmulator): String? = e.packages.first().takeIf { e in installed }
-        override fun label(packageId: String): String? = installed.firstOrNull { it.packages.first() == packageId }?.name
+        /** Package manager calls: [installedPackage] and [label]. */
+        var lookups = 0
+        override fun installedPackage(e: ExternalEmulator): String? { lookups++; return e.packages.first().takeIf { e in installed } }
+        override fun label(packageId: String): String? { lookups++; return installed.firstOrNull { it.packages.first() == packageId }?.name }
         override suspend fun launch(request: ExternalLaunch): ExternalLaunchResult { launched += request; return result }
     }
 
@@ -94,7 +96,9 @@ class LaunchExternalTest {
         override suspend fun moveInIndex(game: GameEntry, from: SystemFolder, toTag: String) = false
         override suspend fun refreshOpenList(select: String?) {}
         override fun openMainRow(s: Screen.Systems, index: Int, forward: NavMotion): Job? = null
-        override suspend fun externalOffered(entry: Listed): (ExternalEmulator) -> Boolean = { true }
+        /** [externalOffered] calls: the app's own looks the apps up. */
+        var offers = 0
+        override suspend fun externalOffered(entry: Listed, installed: Collection<ExternalEmulator>): (ExternalEmulator) -> Boolean { offers++; return { true } }
         override fun realPathOf(game: GameEntry): String? = null
         override fun recordRecent(recent: Recent) { recents += recent }
         override fun playTimeChanged() { playTimeChanges++ }
@@ -219,6 +223,32 @@ class LaunchExternalTest {
         r.launches.launch(entry("PS", "Crash.cue"), resumeSlot = null); advanceUntilIdle()
         assertEquals(1, r.runner.launched.size)
         assertTrue(r.apps.launched.isEmpty())
+    }
+
+    // Each lookup is a package manager call: a game with no pick on a console with a core makes none.
+    @Test fun noPickOnACoredConsoleLooksUpNoApps() = runTest {
+        val r = rig(installed = setOf(duckstation))
+        r.launches.launch(entry("PS", "Crash.cue"), resumeSlot = null); advanceUntilIdle()
+        assertEquals(1, r.runner.launched.size)
+        assertEquals(0, r.apps.lookups)
+        assertEquals(0, r.host.offers)
+    }
+
+    @Test fun aPickedLaunchLooksUpEachAppOnce() = runTest {
+        val r = rig(installed = setOf(duckstation))
+        val crash = entry("PS", "Crash.cue")
+        r.settings.externalPicks = mapOf(crash.game.path to "duckstation")
+        r.launches.launch(crash, resumeSlot = null); advanceUntilIdle()
+        assertEquals(duckstation, r.apps.launched.single().emulator)
+        assertEquals(1, r.apps.lookups)
+    }
+
+    // The app went between the lookup and the hand-off: never the name of an app the player may not have.
+    @Test fun anAppGoneAtHandOffNamesNoApp() = runTest {
+        val r = rig(installed = setOf(eden))
+        r.apps.result = ExternalLaunchResult.NOT_INSTALLED
+        r.launches.launch(entry("SWITCH", "Zelda.nsp"), resumeSlot = null); advanceUntilIdle()
+        assertEquals(listOf("Could not open the emulator for this game."), r.host.notices)
     }
 
     @Test fun refusedHandOffsSayWhy() = runTest {

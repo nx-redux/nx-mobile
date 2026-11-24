@@ -10,6 +10,7 @@ import com.nxredux.mobile.external.SetRule
 import com.nxredux.mobile.external.externalPickFor
 import com.nxredux.mobile.external.hasCommandsSidecar
 import com.nxredux.mobile.external.installedExternal
+import com.nxredux.mobile.external.installedFor
 import com.nxredux.mobile.external.offeredFor
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.library.GameEntry
@@ -20,6 +21,7 @@ import com.nxredux.mobile.library.path
 import com.nxredux.mobile.library.Collections
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.settings.AppSettings
 import com.nxredux.mobile.settings.ExternalPicksCodec
 import com.nxredux.mobile.settings.FakeAppSettings
 import com.nxredux.mobile.storage.FileRefs
@@ -81,8 +83,14 @@ class EmulatorMenuExternalTest {
 
     private fun everyOffered(@Suppress("UNUSED_PARAMETER") e: ExternalEmulator) = true
 
+    private fun listedApps(tag: String, apps: ExternalApps, offered: (ExternalEmulator) -> Boolean) =
+        installedExternal(installedFor(tag, apps, table), apps, offered)
+
+    private fun pickFor(path: String, tag: String, settings: AppSettings, apps: ExternalApps, offered: (ExternalEmulator) -> Boolean) =
+        externalPickFor(path, tag, settings, installedFor(tag, apps, table), offered)
+
     @Test fun menuListsCoresThenInstalledApps() {
-        val apps = installedExternal("PS", Apps(setOf(duckstation)), ::everyOffered, table)
+        val apps = listedApps("PS", Apps(setOf(duckstation)), ::everyOffered)
         val m = assertNotNull(ContextMenus.emulatorMenu(system("PS"), apps, pick = null))
         assertEquals(listOf("PS (pcsx_rearmed)", "PSX (swanstation)", "DuckStation (app)"), m.labels)
         assertEquals(listOf("PS", "PSX", "app:duckstation"), m.values)
@@ -93,7 +101,7 @@ class EmulatorMenuExternalTest {
     }
 
     @Test fun uninstalledAppsNeverAppear() {
-        val apps = installedExternal("PS", Apps(setOf(duckstation)), ::everyOffered, table)
+        val apps = listedApps("PS", Apps(setOf(duckstation)), ::everyOffered)
         assertEquals(listOf(duckstation), apps.map { it.first })
         val labels = ContextMenus.emulatorMenu(system("PS"), apps, pick = null)!!.labels
         assertTrue(labels.none { "ePSXe" in it }, "$labels")
@@ -102,15 +110,15 @@ class EmulatorMenuExternalTest {
     }
 
     @Test fun singleCoreConsoleGetsMenuWhenAnAppIsInstalled() {
-        val apps = installedExternal("PSP", Apps(setOf(ppsspp)), ::everyOffered, table)
+        val apps = listedApps("PSP", Apps(setOf(ppsspp)), ::everyOffered)
         val m = assertNotNull(ContextMenus.emulatorMenu(system("PSP"), apps, pick = null))
         assertEquals(listOf("PSP (ppsspp)", "PPSSPP (app)"), m.labels)
-        assertNull(ContextMenus.emulatorMenu(system("PSP"), installedExternal("PSP", Apps(emptySet()), ::everyOffered, table), pick = null))
+        assertNull(ContextMenus.emulatorMenu(system("PSP"), listedApps("PSP", Apps(emptySet()), ::everyOffered), pick = null))
         val psp = Listed(system("PSP"), game("Daxter.iso"))
         assertTrue(ContextKind.EMULATOR in ContextMenus.itemsFor(ListSource.Console(psp.system), psp, false, externalApps = true).map { it.kind })
         assertTrue(ContextKind.EMULATOR !in ContextMenus.itemsFor(ListSource.Console(psp.system), psp, false).map { it.kind })
         // A console without a core lists only its apps; the first is the one that opens the game without a pick.
-        val saturn = assertNotNull(ContextMenus.emulatorMenu(system("SATURN"), installedExternal("SATURN", Apps(setOf(saturnA, saturnB)), ::everyOffered, table), pick = null))
+        val saturn = assertNotNull(ContextMenus.emulatorMenu(system("SATURN"), listedApps("SATURN", Apps(setOf(saturnA, saturnB)), ::everyOffered), pick = null))
         assertEquals(listOf("Saturn A (app)", "Saturn B (app)"), saturn.labels)
         assertEquals(0, saturn.current)
     }
@@ -131,7 +139,7 @@ class EmulatorMenuExternalTest {
         val settings = Settings()
         val switched = ArrayList<String>()
         val screen = MutableStateFlow<Screen>(Screen.Games(ListSource.Console(ps), listOf(entry)))
-        val menus = controller(screen, settings, source, sidecarStore, switched) { installedExternal(it.system.tag, Apps(setOf(duckstation)), ::everyOffered, table) }
+        val menus = controller(screen, settings, source, sidecarStore, switched) { listedApps(it.system.tag, Apps(setOf(duckstation)), ::everyOffered) }
         fun pick(value: String) {
             menus.openContextMenu(0); advanceUntilIdle()
             val m = assertNotNull(screen.value.contextMenu)
@@ -212,14 +220,14 @@ class EmulatorMenuExternalTest {
         val settings = Settings().apply { externalPicks = mapOf(crash.path to "epsxe", "Home/Roms/SATURN/Nights.cue" to "saturn-a") }
         val apps = Apps(setOf(duckstation))
         // A cored console: our core again.
-        assertNull(externalPickFor(crash.path, "PS", settings, apps, ::everyOffered, table))
+        assertNull(pickFor(crash.path, "PS", settings, apps, ::everyOffered))
         apps.installed = setOf(epsxe)
-        assertEquals(epsxe, externalPickFor(crash.path, "PS", settings, apps, ::everyOffered, table))
+        assertEquals(epsxe, pickFor(crash.path, "PS", settings, apps, ::everyOffered))
         // A console with no core: the next installed app in the table's order.
         apps.installed = setOf(saturnB)
-        assertEquals(saturnB, externalPickFor("Home/Roms/SATURN/Nights.cue", "SATURN", settings, apps, ::everyOffered, table))
+        assertEquals(saturnB, pickFor("Home/Roms/SATURN/Nights.cue", "SATURN", settings, apps, ::everyOffered))
         apps.installed = emptySet()
-        assertNull(externalPickFor("Home/Roms/SATURN/Nights.cue", "SATURN", settings, apps, ::everyOffered, table))
+        assertNull(pickFor("Home/Roms/SATURN/Nights.cue", "SATURN", settings, apps, ::everyOffered))
     }
 
     @Test fun pathOnlyPickIgnoredWithoutRealFile() = runTest {
@@ -228,10 +236,10 @@ class EmulatorMenuExternalTest {
         val zipped = game("Crash.zip", FileRefs.of("/storage/emulated/0/Roms/PS/Crash.zip"))
         val apps = Apps(setOf(pathOnly))
         val settings = Settings().apply { externalPicks = mapOf(saf.path to "pathonly") }
-        assertNull(externalPickFor(saf.path, "PS", settings, apps, offeredFor(saf, NaomiSets.EMPTY, realPath = null), table))
-        assertEquals(pathOnly, externalPickFor(saf.path, "PS", settings, apps, offeredFor(real, NaomiSets.EMPTY, realPath = FileRefs.path(real.ref)), table))
-        assertNull(externalPickFor(saf.path, "PS", settings, apps, offeredFor(zipped, NaomiSets.EMPTY, realPath = FileRefs.path(zipped.ref)), table))
-        assertTrue(installedExternal("PS", apps, offeredFor(saf, NaomiSets.EMPTY, realPath = null), table).isEmpty())
+        assertNull(pickFor(saf.path, "PS", settings, apps, offeredFor(saf, NaomiSets.EMPTY, realPath = null)))
+        assertEquals(pathOnly, pickFor(saf.path, "PS", settings, apps, offeredFor(real, NaomiSets.EMPTY, realPath = FileRefs.path(real.ref))))
+        assertNull(pickFor(saf.path, "PS", settings, apps, offeredFor(zipped, NaomiSets.EMPTY, realPath = FileRefs.path(zipped.ref))))
+        assertTrue(listedApps("PS", apps, offeredFor(saf, NaomiSets.EMPTY, realPath = null)).isEmpty())
     }
 
     @Test fun model3AppOfferedOnlyForModel3Sets() {
@@ -285,8 +293,8 @@ class EmulatorMenuExternalTest {
         val apps = Apps(setOf(pathOnly, duckstation))
         val settings = Settings().apply { externalPicks = mapOf(real.path to "pathonly") }
         val noPath = offeredFor(real, NaomiSets.EMPTY, realPath = null)
-        assertNull(externalPickFor(real.path, "PS", settings, apps, noPath, table))
-        assertEquals(listOf(duckstation), installedExternal("PS", apps, noPath, table).map { it.first })
+        assertNull(pickFor(real.path, "PS", settings, apps, noPath))
+        assertEquals(listOf(duckstation), listedApps("PS", apps, noPath).map { it.first })
     }
 
     // Our save state is never what the other app opens: no Play from start for a game picked to open there.

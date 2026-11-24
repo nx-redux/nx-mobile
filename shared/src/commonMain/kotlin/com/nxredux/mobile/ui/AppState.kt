@@ -51,6 +51,7 @@ import com.nxredux.mobile.external.ExternalEmulators
 import com.nxredux.mobile.external.NoExternalApps
 import com.nxredux.mobile.external.SetRule
 import com.nxredux.mobile.external.installedExternal
+import com.nxredux.mobile.external.installedFor
 import com.nxredux.mobile.external.hasCommandsSidecar
 import com.nxredux.mobile.external.offeredFor
 import com.nxredux.mobile.library.Names
@@ -787,7 +788,8 @@ class AppState(
             override suspend fun refreshOpenList(select: String?) = this@AppState.refreshOpenList(select)
             override fun openMainRow(s: Screen.Systems, index: Int, forward: NavMotion): Job? = this@AppState.openMainRow(s, index, forward)
             override fun kidsOn(): Boolean = kidsUi.kidsMode != KidsMode.Off
-            override suspend fun externalOffered(entry: Listed): (ExternalEmulator) -> Boolean = this@AppState.externalOffered(entry)
+            override suspend fun externalOffered(entry: Listed, installed: Collection<ExternalEmulator>): (ExternalEmulator) -> Boolean =
+                this@AppState.externalOffered(entry, installed)
             override fun realPathOf(game: GameEntry): String? = this@AppState.realPathOf(game)
             override fun recordRecent(recent: Recent) = recents.record(recent)
             override fun playTimeChanged() = this@AppState.playTimeChanged()
@@ -3542,18 +3544,23 @@ class AppState(
         )
     }
 
-    /** The installed apps that can open [entry]'s game. */
+    /**
+     * The installed apps that can open [entry]'s game, looked up off the calling thread (MENU asks on every press): each
+     * is a package manager call, and a console with no app listed asks none.
+     */
     private suspend fun externalAppsFor(entry: Listed): List<Pair<ExternalEmulator, String>> {
         if (ExternalEmulators.forTag(entry.system.tag).isEmpty()) return emptyList()
-        return installedExternal(entry.system.tag, deps.externalApps, externalOffered(entry))
+        return withContext(deps.compute) {
+            val installed = installedFor(entry.system.tag, deps.externalApps)
+            if (installed.isEmpty()) emptyList() else installedExternal(installed, deps.externalApps, externalOffered(entry, installed.keys))
+        }
     }
 
     /**
-     * Which apps can open [entry]'s game. The NAOMI table and a commands sidecar are looked up (off this thread) only for
-     * an installed app that needs them.
+     * Which apps can open [entry]'s game, of the [installed] ones. The NAOMI table and a commands sidecar are looked up
+     * (off this thread) only for an installed app that needs them.
      */
-    private suspend fun externalOffered(entry: Listed): (ExternalEmulator) -> Boolean {
-        val installed = ExternalEmulators.forTag(entry.system.tag).filter { deps.externalApps.installedPackage(it) != null }
+    private suspend fun externalOffered(entry: Listed, installed: Collection<ExternalEmulator>): (ExternalEmulator) -> Boolean {
         val naomi = if (installed.any { it.sets == SetRule.NAOMI }) withContext(deps.compute) { deps.naomiSets() } else NaomiSets.EMPTY
         val commands = installed.any { it.commandsSidecar } && withContext(deps.compute) { hasCommandsSidecar(deps.source, entry.game) }
         return offeredFor(entry.game, naomi, realPathOf(entry.game), commands)

@@ -70,28 +70,28 @@ suspend fun hasCommandsSidecar(source: RomsSource, game: GameEntry): Boolean = r
     source.child(game.folder, commandsFileName(game.fileName))?.isDirectory == false
 }.getOrDefault(false)
 
-/** [tag]'s apps that are installed and can open the game, in [table] order, each with its package's own label. */
+/**
+ * [tag]'s apps installed here, each with its package, in [table] order. Each is a package manager call: callers look
+ * them up once, off the main thread, and pass the map along.
+ */
+fun installedFor(tag: String, apps: ExternalApps, table: List<ExternalEmulator> = ExternalEmulators.all): Map<ExternalEmulator, String> =
+    ExternalEmulators.forTag(tag, table).mapNotNull { e -> apps.installedPackage(e)?.let { e to it } }.toMap()
+
+/** The [installed] apps ([installedFor]) that can open the game, in order, each with its package's own label. */
 fun installedExternal(
-    tag: String, apps: ExternalApps, offeredFor: (ExternalEmulator) -> Boolean, table: List<ExternalEmulator> = ExternalEmulators.all,
-): List<Pair<ExternalEmulator, String>> = ExternalEmulators.forTag(tag, table).mapNotNull { e ->
-    val pkg = apps.installedPackage(e) ?: return@mapNotNull null
-    if (!offeredFor(e)) return@mapNotNull null
-    e to (apps.label(pkg) ?: e.name)
-}
+    installed: Map<ExternalEmulator, String>, apps: ExternalApps, offeredFor: (ExternalEmulator) -> Boolean,
+): List<Pair<ExternalEmulator, String>> = installed.mapNotNull { (e, pkg) -> if (offeredFor(e)) e to (apps.label(pkg) ?: e.name) else null }
 
 /**
- * The app [gamePath] opens in: its stored pick while that app is installed and can open it; for a console without a core,
- * the first such app in [table] order (a pick that went falls through to the next); else null (our core).
+ * The app [gamePath] opens in, of [tag]'s [installed] apps ([installedFor]): its stored pick while that app can open it;
+ * for a console without a core, the first that can (a pick that went falls through to the next); else null (our core).
  */
 fun externalPickFor(
-    gamePath: String, tag: String, settings: AppSettings, apps: ExternalApps, offeredFor: (ExternalEmulator) -> Boolean,
-    table: List<ExternalEmulator> = ExternalEmulators.all,
+    gamePath: String, tag: String, settings: AppSettings, installed: Map<ExternalEmulator, String>, offeredFor: (ExternalEmulator) -> Boolean,
 ): ExternalEmulator? {
-    val candidates = ExternalEmulators.forTag(tag, table)
-    fun usable(e: ExternalEmulator) = apps.installedPackage(e) != null && offeredFor(e)
-    settings.externalPicks[gamePath]?.let { id -> candidates.firstOrNull { it.id == id } }?.takeIf(::usable)?.let { return it }
+    settings.externalPicks[gamePath]?.let { id -> installed.keys.firstOrNull { it.id == id } }?.takeIf(offeredFor)?.let { return it }
     if (CoreRegistry.consoleOf(tag)?.externalOnly != true) return null
-    return candidates.firstOrNull(::usable)
+    return installed.keys.firstOrNull(offeredFor)
 }
 
 /** What a game's Options says when it opens in another app: [label], the installed app's own; null when none is installed. */
