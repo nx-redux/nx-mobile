@@ -329,17 +329,20 @@ internal class LaunchController(
     /**
      * The line a game's Options shows when [entry] opens in another app ([opensElsewhereNote]): its pick, or the first
      * installed app on a console without a core; null when our core runs it. Apps are looked up only for a game with a
-     * pick or on such a console.
+     * pick or on such a console, off the calling thread: each is a package manager call, and the highlight asks.
      */
     suspend fun opensElsewhere(entry: Listed): String? {
         if (entry.system.unassigned || entry.system.android) return null
         val tag = entry.system.tag
         val externalOnly = CoreRegistry.consoleOf(tag)?.externalOnly == true
         if (!externalOnly && entry.game.path !in deps.settings.externalPicks) return null
-        val app = externalPickFor(entry.game.path, tag, deps.settings, deps.externalApps, host.externalOffered(entry), externalTable)
-        if (app == null && !externalOnly) return null
-        val apps = deps.externalApps
-        return opensElsewhereNote(app?.let { a -> apps.installedPackage(a)?.let(apps::label) ?: a.name })
+        val offered = host.externalOffered(entry)
+        return withContext(deps.compute) {
+            val app = externalPickFor(entry.game.path, tag, deps.settings, deps.externalApps, offered, externalTable)
+            if (app == null && !externalOnly) return@withContext null
+            val apps = deps.externalApps
+            opensElsewhereNote(app?.let { a -> apps.installedPackage(a)?.let(apps::label) ?: a.name })
+        }
     }
 
     /**

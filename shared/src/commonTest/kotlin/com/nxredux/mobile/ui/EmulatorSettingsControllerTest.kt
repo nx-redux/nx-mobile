@@ -505,6 +505,19 @@ class EmulatorSettingsControllerTest {
         assertTrue(rows.none { it is EmulatorRow.Console || it is EmulatorRow.Core || it is EmulatorRow.Category || it == EmulatorRow.UseEmulatorSettings }, "$rows")
     }
 
+    // The page has no core of ours, but its Badge row is the library's and still changes.
+    @Test fun a_switch_game_s_badge_still_changes() = runTest {
+        val state = TestState(MemoryConfigs(), src = withSwitch, externalApps = InstalledApps(setOf("eden")))
+        openGame(state, "SWITCH")
+        selectApp(state, SettingsKind.GAME_BADGE)
+        val before = appRow(state, SettingsKind.GAME_BADGE).row.secondary
+        state.padStep(NxButton.RIGHT)
+        await { appRow(state, SettingsKind.GAME_BADGE).row.secondary != before }
+        state.padStep(NxButton.LEFT)
+        await { appRow(state, SettingsKind.GAME_BADGE).row.secondary == before }
+        assertEquals(EmulatorRow.Notice("Opens in Eden$opensTail"), options(state).rows.first())   // still the same page
+    }
+
     @Test fun a_switch_game_with_no_app_names_none() = runTest {
         val state = TestState(MemoryConfigs(), src = withSwitch)
         openGame(state, "SWITCH")
