@@ -1418,6 +1418,10 @@ class AppState(
             // On a choice the dropdown still lists ([applyDualMenu] closes it when the choices change, so this only guards).
             return menu.copy(layoutMenu = prev.layoutMenu.coerceIn(0, GameListLayouts.choices(_dualMenu.value).lastIndex))
         }
+        if (prev is Screen.Systems && prev.layoutMenu != null && menu is Screen.Systems && prev.category == menu.category) {
+            val choices = prev.category?.let(MenuTabLayouts::choices).orEmpty()
+            if (choices.isNotEmpty()) return menu.copy(layoutMenu = prev.layoutMenu.coerceIn(0, choices.lastIndex))
+        }
         val draft = when (prev) {
             is Screen.Systems -> prev.search
             is Screen.Games -> prev.search.takeIf { prev.isTab }
@@ -1435,7 +1439,7 @@ class AppState(
      * achievements panel or the art panel).
      */
     private fun menuFree(s: Screen): Boolean = s.isMainMenu && s.contextMenu == null && when (s) {
-        is Screen.Systems -> s.search == null
+        is Screen.Systems -> s.search == null && s.layoutMenu == null
         is Screen.Games -> s.search == null && s.layoutMenu == null && !_panelOpen.value
         else -> false
     }
@@ -1748,7 +1752,7 @@ class AppState(
      * dropdown); null on any other screen.
      */
     private fun tabRowOf(s: Screen): Pair<List<MenuCategory>, Int>? = when (s) {
-        is Screen.Systems -> if (s.menu != null || s.search != null) null else s.tabs.map { it.category } to s.tab
+        is Screen.Systems -> if (s.menu != null || s.search != null || s.layoutMenu != null) null else s.tabs.map { it.category } to s.tab
         is Screen.Games -> s.tabBar?.takeIf { s.menu == null && s.search == null && s.layoutMenu == null }?.let { it.categories to it.index }
         else -> null
     }
@@ -2756,7 +2760,7 @@ class AppState(
      */
     fun openSearch() {
         when (val s = _screen.value) {
-            is Screen.Systems -> if (s.menu == null && s.search == null && canSearch) _screen.value = s.copy(search = lastSearch)
+            is Screen.Systems -> if (s.menu == null && s.search == null && s.layoutMenu == null && canSearch) _screen.value = s.copy(search = lastSearch)
             is Screen.Games -> if (s.isTab && s.menu == null && s.search == null && s.layoutMenu == null && canSearch) _screen.value = s.copy(search = lastSearch)
             else -> Unit
         }
@@ -2856,13 +2860,26 @@ class AppState(
         (source as? ListSource.Console)?.let { c -> consoleGroup(c.system)?.let { ListSource.Console(it) } } ?: source
 
     /**
-     * The Layout icon: opens the dropdown on the layout in use, or closes it when open; on the Games tab too, whose
-     * layout is the game lists' (while it is open the tab's own keys are the dropdown's: [onPageButton], [tabRowOf]).
+     * The Layout icon: opens the dropdown on the layout in use, or closes it when open; on every main menu tab (whose
+     * layout is that tab's own, or the game lists' on Games) and every game list. While it is open the screen's own
+     * keys are the dropdown's ([onPageButton], [tabRowOf]).
      */
     fun toggleLayoutMenu() {
-        val s = _screen.value as? Screen.Games ?: return
-        if (s.menu != null || s.search != null || !deps.settings.gameListLayoutOptions) return
-        _screen.value = s.copy(layoutMenu = if (s.layoutMenu != null) null else GameListLayouts.indexOf(deps.settings.gameListStyle, deps.settings.gameListOrientation, deps.settings.gameListVerticalAlignment, _dualMenu.value))
+        if (!deps.settings.gameListLayoutOptions) return
+        when (val s = _screen.value) {
+            is Screen.Games -> {
+                if (s.menu != null || s.search != null) return
+                _screen.value = s.copy(layoutMenu = if (s.layoutMenu != null) null else GameListLayouts.indexOf(deps.settings.gameListStyle, deps.settings.gameListOrientation, deps.settings.gameListVerticalAlignment, _dualMenu.value))
+            }
+            is Screen.Systems -> {
+                val category = s.category ?: return
+                if (s.menu != null || s.search != null || MenuTabLayouts.choices(category).isEmpty()) return
+                val style = MenuStyles.styleOf(deps.settings.menuStyles, category)
+                val orientation = MenuStyles.orientationOf(deps.settings.menuOrientations, category)
+                _screen.value = s.copy(layoutMenu = if (s.layoutMenu != null) null else MenuTabLayouts.indexOf(category, style, orientation))
+            }
+            else -> Unit
+        }
     }
 
     /** The Layout dropdown has the buttons: UP / DOWN move, A picks, B closes. */
@@ -2876,18 +2893,46 @@ class AppState(
         }
     }
 
+    /** The main menu tab's Layout dropdown has the buttons: UP / DOWN move, A picks, B closes. */
+    private fun onLayoutMenuButton(s: Screen.Systems, at: Int, button: NxButton) {
+        val last = (s.category?.let(MenuTabLayouts::choices)?.lastIndex ?: -1).coerceAtLeast(0)
+        when (button) {
+            NxButton.UP -> _screen.value = s.copy(layoutMenu = (at - 1).coerceAtLeast(0))
+            NxButton.DOWN -> _screen.value = s.copy(layoutMenu = (at + 1).coerceAtMost(last))
+            NxButton.A -> pickLayout(at)
+            NxButton.B -> _screen.value = s.copy(layoutMenu = null)
+            else -> Unit
+        }
+    }
+
     /**
      * [index]'s layout for every game list (Layouts → Game lists layout, its orientation for Carousel and Backdrop, and a
-     * vertical one's alignment); the dropdown closes.
+     * vertical one's alignment) or for the current main menu tab (Layouts → that tab's layout and orientation); the
+     * dropdown closes.
      */
     fun pickLayout(index: Int) {
-        val s = _screen.value as? Screen.Games ?: return
-        val layout = GameListLayouts.choices(_dualMenu.value).getOrNull(index) ?: return
-        deps.settings.gameListStyle = layout.style
-        if (MenuStyles.hasOrientation(layout.style)) deps.settings.gameListOrientation = layout.orientation
-        layout.alignment?.let { deps.settings.gameListVerticalAlignment = it }
-        gridColumns = 0   // a Grid reports its own columns on its first layout
-        _screen.value = s.copy(layoutMenu = null)   // a new screen: the page redraws in the new style, on the same game
+        when (val s = _screen.value) {
+            is Screen.Games -> {
+                val layout = GameListLayouts.choices(_dualMenu.value).getOrNull(index) ?: return
+                deps.settings.gameListStyle = layout.style
+                if (MenuStyles.hasOrientation(layout.style)) deps.settings.gameListOrientation = layout.orientation
+                layout.alignment?.let { deps.settings.gameListVerticalAlignment = it }
+                gridColumns = 0   // a Grid reports its own columns on its first layout
+                _screen.value = s.copy(layoutMenu = null)   // a new screen: the page redraws in the new style, on the same game
+            }
+            is Screen.Systems -> {
+                val category = s.category ?: return
+                val layout = MenuTabLayouts.choices(category).getOrNull(index) ?: return
+                deps.settings.menuStyles = deps.settings.menuStyles + (category to layout.style)
+                if (category != MenuCategory.HOME && MenuStyles.hasOrientation(layout.style)) {
+                    deps.settings.menuOrientations = deps.settings.menuOrientations + (category to layout.orientation)
+                }
+                gridColumns = 0   // a Grid reports its own columns on its first layout
+                _screen.value = s.copy(layoutMenu = null)   // a new screen: the page redraws in the new style
+                if (category == MenuCategory.HOME) rebuildHomeTab()
+            }
+            else -> Unit
+        }
     }
 
     /**
@@ -4045,7 +4090,10 @@ class AppState(
         _screen.value.takeIf { it is Screen.Settings || it is Screen.SettingsMenu }?.let { onSettingsButton(it, button); return }
         (_screen.value as? Screen.ToolApps)?.takeIf { it.menu == null }?.let { androidApps.onToolAppsButton(button); return }
         _screen.value.contextMenu?.let { contextMenus.onMenuButton(it, button); return }
-        (_screen.value as? Screen.Systems)?.let { s -> s.search?.let { onSearchButton(s, it, button); return } }
+        (_screen.value as? Screen.Systems)?.let { s ->
+            s.search?.let { onSearchButton(s, it, button); return }
+            s.layoutMenu?.let { onLayoutMenuButton(s, it, button); return }
+        }
         (_screen.value as? Screen.Games)?.let { s ->
             s.search?.let { if (s.isTab) onSearchButton(s, it, button) else onListSearchButton(s, it, button); return }   // the tab's is START's
             s.layoutMenu?.let { onLayoutMenuButton(s, it, button); return }
@@ -4254,6 +4302,7 @@ class AppState(
                 true
             }
             is Screen.Systems -> if (s.search != null) { _screen.value = s.copy(search = null); true }
+                else if (s.layoutMenu != null) { _screen.value = s.copy(layoutMenu = null); true }
                 else if (s.menu != null) { if (!s.menu.busy) closeContextMenu(); true }
                 else if (s.pushed) { popHiddenTab(); true }
                 else false
@@ -4605,7 +4654,7 @@ class AppState(
         if (netplay?.page?.value != null) return
         val s = _screen.value
         val free = s.contextMenu == null && when (s) {
-            is Screen.Systems -> s.isMainMenu && s.search == null
+            is Screen.Systems -> s.isMainMenu && s.search == null && s.layoutMenu == null
             is Screen.Games -> s.search == null && s.layoutMenu == null && !_panelOpen.value
             else -> false
         }

@@ -53,7 +53,6 @@ import com.nxredux.mobile.ui.nx.MinimalSelected
 import androidx.compose.ui.zIndex
 import com.nxredux.mobile.ui.nx.LocalHasTouchscreen
 import com.nxredux.mobile.ui.nx.LocalNxColors
-import com.nxredux.mobile.ui.nx.HOME_HEADER_ICONS_ROOM
 import com.nxredux.mobile.ui.nx.GridTitleLines
 import com.nxredux.mobile.ui.nx.homeStripPitch
 import com.nxredux.mobile.ui.nx.homeStripLineH
@@ -120,6 +119,8 @@ fun MainMenuScreen(
     tabMenu: Boolean = false,             // a hidden tab can be opened from MENU: every row's MENU offers Options, every Home row takes a long press
     minimalOpening: MinimalOpening? = null,   // Minimal: this tab's selected folder being opened: the others fade
     dual: Boolean = false,                // the menu is on two screens: the top one shows a console's or collection's name and count
+    onLayout: (() -> Unit)? = null,       // the Layout icon (touchscreens), opening this tab's layout dropdown
+    layoutOpen: Boolean = false,          // the dropdown is open: its icon lit
 ) {
     val rows = screen.rows
     val home = screen.category == MenuCategory.HOME   // the Home tab: [HomeListScreen], [HomeScreen] (Grid), [HomeCarouselScreen] or [HomeMinimalScreen] by its own style
@@ -146,7 +147,7 @@ fun MainMenuScreen(
     val swipeable = style == MenuStyle.LIST || style == MenuStyle.MINIMAL || style == MenuStyle.GRID ||
         (style == MenuStyle.CAROUSEL && orientation == MenuOrientation.VERTICAL && !home)
     val tabRowPx = remember { mutableIntStateOf(0) }   // the tab row's height as laid out (0: hidden): List Home's art ends on its top
-    Box(modifier.fillMaxSize().tabSwipe(swipeable && screen.tabs.size > 1 && screen.menu == null && screen.search == null, onTabSwipe)) {
+    Box(modifier.fillMaxSize().tabSwipe(swipeable && screen.tabs.size > 1 && screen.menu == null && screen.search == null && screen.layoutMenu == null, onTabSwipe)) {
         // Behind the tab row, over the backdrop App draws: the switcher title's eased top band, so the dim labels read over
         // bright art. It reaches [NX_TOP_BAND_REACH] past the row, over the list's top (the rows draw on top of it).
         // List Home draws the selected game's picture behind the page (App's MenuBackground.Picture), as a game list does,
@@ -154,7 +155,9 @@ fun MainMenuScreen(
         // is scrolled ([HomeScreen]); Carousel Home has no picture. With the tab row hidden, the Recent and Search icons
         // still get the band: here, behind a List's rows as the tab row's is, so its reach never dims the first row; over
         // the other styles' pages (below).
-        val topIcons = if (chrome.tabRow) emptyList() else launcherTopActions(onHint, canSearch, onKidsLock = onKidsLock)
+        val layoutIcon = onLayout.takeIf { LocalHasTouchscreen.current }
+        val topIcons = if (chrome.tabRow) emptyList() else launcherTopActions(onHint, canSearch, onKidsLock = onKidsLock, onLayout = layoutIcon, layoutOpen = layoutOpen)
+        val iconsWidth = topIcons.size * MENU_TAB_ROW_HEIGHT.value
         val topCut = rememberNxListTopCut()
         val iconBand = topIcons.isNotEmpty() && !(home && style != MenuStyle.LIST)
         if (mainMenuTopBand(home, style, chrome.tabRow) || iconBand && style == MenuStyle.LIST) {
@@ -202,14 +205,14 @@ fun MainMenuScreen(
                         // Its rows level with Recent and Search (tab row hidden) stop short of them, as a List tab's.
                         MenuStyle.LIST -> HomeListScreen(
                             rows, selection, homeView.strip, onSelect, onOpen, onLongPress, onHint,
-                            Modifier.weight(1f), tabMenu = tabMenu, iconsRoom = topRoom.pad,
+                            Modifier.weight(1f), tabMenu = tabMenu, iconsRoom = topRoom.pad, iconsWidth = iconsWidth,
                         )
                         MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> {
                             val carousel = @Composable { m: Modifier ->
                                 HomeCarouselScreen(
                                     rows, selection, homeView.strip, captionInfo = rowInfo, onSelect = onSelect, onOpen = onOpen,
                                     onLongPress = onLongPress, onLayout = onHomeLayout, modifier = m, layoutKey = layoutKey,
-                                    rowLast = homeRowLast, known = homeView.frame != null, tabMenu = tabMenu,
+                                    rowLast = homeRowLast, known = homeView.frame != null, tabMenu = tabMenu, iconsWidth = iconsWidth,
                                 )
                             }
                             // No hint bar on the main pages and no room kept for one: the body runs down to the tab row.
@@ -222,12 +225,13 @@ fun MainMenuScreen(
                         MenuStyle.MINIMAL -> HomeMinimalScreen(
                             rows, selection, homeView.strip, onSelect, onOpen, onLongPress, onHint,
                             minimalSelected, modifier = Modifier.weight(1f).zIndex(-1f),   // its band ends on the tab row's top
-                            leaving = minimalOpening != null, iconsRoom = topRoom.pad,
+                            leaving = minimalOpening != null, iconsRoom = topRoom.pad, iconsWidth = iconsWidth,
                         )
                         MenuStyle.GRID -> slot { m ->
                             HomeScreen(
                                 rows, selection, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress, onLayout = onHomeLayout, view = homeView,
                                 continueInfo = continueInfo(), pinInfo = tileInfo, signedIn = raSignedIn, modifier = m, layoutKey = layoutKey, tabMenu = tabMenu,
+                                iconsWidth = iconsWidth,
                             )
                         }
                     }
@@ -259,7 +263,7 @@ fun MainMenuScreen(
                                 if (whole != null && header != null && title != null) {
                                     val inset = nxPageInset()
                                     GridTitleLines(
-                                        title.first, title.second, inset.start.value, header.stripTop, (maxWidth - inset.start - inset.end).value - HOME_HEADER_ICONS_ROOM,
+                                        title.first, title.second, inset.start.value, header.stripTop, (maxWidth - inset.start - inset.end).value - iconsWidth,
                                         homeStripLineH(whole), homeStripPitch(whole),
                                     )
                                 }

@@ -14959,6 +14959,48 @@ class AppStateTest {
         assertNull(assertIs<Screen.Games>(state.screen.value).layoutMenu)
     }
 
+    // The Layout dropdown works on every main menu tab (Home, Consoles, Collections, Tools) and respects Layout options.
+    @Test fun the_layout_dropdown_switches_every_main_menu_tabs_layout() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { menuStyles = emptyMap(); gameListLayoutOptions = true }
+        val state = searchState(settings)
+        // Home: default Minimal (index 3) -> Carousel (index 2) via d-pad, then List (index 0) via tap.
+        assertEquals(MenuCategory.HOME, assertIs<Screen.Systems>(state.screen.value).category)
+        state.toggleLayoutMenu()
+        assertEquals(3, assertIs<Screen.Systems>(state.screen.value).layoutMenu)
+        state.onButton(NxButton.R1)   // tab switching blocked while dropdown is open
+        assertEquals(MenuCategory.HOME, assertIs<Screen.Systems>(state.screen.value).category)
+        state.openSearch()            // search blocked while dropdown is open
+        assertNull(assertIs<Screen.Systems>(state.screen.value).search)
+        state.onButton(NxButton.UP)
+        assertEquals(2, assertIs<Screen.Systems>(state.screen.value).layoutMenu)
+        state.onButton(NxButton.A)    // Carousel
+        assertNull(assertIs<Screen.Systems>(state.screen.value).layoutMenu)
+        assertEquals(MenuStyle.CAROUSEL, settings.menuStyles[MenuCategory.HOME])
+        assertEquals(MenuStyle.CAROUSEL, state.currentStyle())
+        state.toggleLayoutMenu()
+        assertEquals(2, assertIs<Screen.Systems>(state.screen.value).layoutMenu)
+        state.pickLayout(0)           // List
+        assertEquals(MenuStyle.LIST, settings.menuStyles[MenuCategory.HOME])
+        // Consoles: Carousel -> Carousel, vertical (index 3), then B dismisses without changing.
+        val consolesIdx = assertIs<Screen.Systems>(state.screen.value).tabs.indexOfFirst { it.category == MenuCategory.CONSOLES }
+        state.selectTab(consolesIdx)
+        state.toggleLayoutMenu()
+        assertEquals(2, assertIs<Screen.Systems>(state.screen.value).layoutMenu)   // default Carousel horizontal
+        state.onButton(NxButton.DOWN)
+        assertEquals(3, assertIs<Screen.Systems>(state.screen.value).layoutMenu)   // Carousel, vertical
+        state.onButton(NxButton.A)
+        assertEquals(MenuStyle.CAROUSEL, settings.menuStyles[MenuCategory.CONSOLES])
+        assertEquals(MenuOrientation.VERTICAL, settings.menuOrientations[MenuCategory.CONSOLES])
+        assertEquals(MenuOrientation.VERTICAL, state.currentOrientation())
+        state.toggleLayoutMenu()
+        assertTrue(state.back())
+        assertNull(assertIs<Screen.Systems>(state.screen.value).layoutMenu)
+        // Layout options off: dropdown does not open on main tabs either.
+        settings.gameListLayoutOptions = false
+        state.toggleLayoutMenu()
+        assertNull(assertIs<Screen.Systems>(state.screen.value).layoutMenu)
+    }
+
     @Test fun search_lists_matches_across_consoles_and_a_launches() = runTest {
         val runner = RecordingRunner()
         val state = AppState(AppDeps(MemorySettings(ContentRef("Home")), searchSource(), runner, NoopPicker(), compute = UnconfinedTestDispatcher(testScheduler)), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))

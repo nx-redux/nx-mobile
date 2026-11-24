@@ -103,6 +103,7 @@ import com.nxredux.mobile.settings.GameListArt
 import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
+import com.nxredux.mobile.settings.MenuStyles
 import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.HandheldShell
@@ -562,6 +563,9 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             // layoutKey: the tab or list laid out, not the Screen: a republish of the same page (a context menu opening or
             // closing, another tab rebuilt) must not snap a carousel or backdrop mid-glide; its own tiles changing still do.
             is Screen.Systems -> {
+                val category = s.category
+                val layoutChoices = remember(category) { category?.let(MenuTabLayouts::choices).orEmpty() }
+                val canLayout = state.settings.gameListLayoutOptions && layoutChoices.isNotEmpty()
                 MainMenuScreen(
                     s, index, state::select, { state.openSelected() }, state::selectTab,
                     onSwipeSelect = state::select, onTabSwipe = state::swipeTab, onHint = state::onButton, onLongPress = { state.openContextMenu(it) },
@@ -584,7 +588,24 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     // stands in for a hidden hint.
                     tabMenu = s.hidden.isNotEmpty(),
                     dual = state.dualMenu.collectAsState().value,
+                    onLayout = state::toggleLayoutMenu.takeIf { canLayout },
+                    layoutOpen = s.layoutMenu != null,
                 )
+                s.layoutMenu?.let { at ->
+                    if (category != null && layoutChoices.isNotEmpty()) {
+                        GameListLayoutMenu(
+                            choices = layoutChoices,
+                            current = MenuTabLayouts.indexOf(
+                                category,
+                                MenuStyles.styleOf(state.settings.menuStyles, category),
+                                MenuStyles.orientationOf(state.settings.menuOrientations, category),
+                            ),
+                            highlighted = at,
+                            onPick = state::pickLayout,
+                            onDismiss = { state.onButton(NxButton.B) },
+                        )
+                    }
+                }
                 s.menu?.let { MenuOverlay(state, it) }
                 s.search?.let { NxTextPrompt("Search", it, state::searchDraft, onConfirm = { state.onButton(NxButton.A) }, onCancel = { state.onButton(NxButton.B) }) }
             }

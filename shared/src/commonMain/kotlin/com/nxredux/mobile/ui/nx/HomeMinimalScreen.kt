@@ -22,6 +22,7 @@ internal fun HomeMinimalScreen(
     rows: List<MainRow>, selection: () -> Int, strip: HomeStrip?,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?, onHint: ((NxButton) -> Unit)?,
     selected: MinimalSelected, modifier: Modifier = Modifier, leaving: Boolean = false, iconsRoom: Dp = 0.dp,
+    iconsWidth: Float = HOME_HEADER_ICONS_ROOM,
 ) {
     val chrome = LocalLauncherChrome.current
     val portrait = LocalPortrait.current
@@ -44,6 +45,6 @@ internal fun HomeMinimalScreen(
         names, selection, emptyList(), onSelect, onOpen, onLongPress, onHint, selected, modifier, top = top,
         hideHints = chrome.emptyBarRoom, toBoxBottom = true, leaving = leaving,
     ) {
-        HomeStripOverlay(shownStrip, pageStrip, header, stripLines, inkTop, capTop, frame, inset)
+        HomeStripOverlay(shownStrip, pageStrip, header, stripLines, inkTop, capTop, frame, inset, iconsWidth)
     }
 }

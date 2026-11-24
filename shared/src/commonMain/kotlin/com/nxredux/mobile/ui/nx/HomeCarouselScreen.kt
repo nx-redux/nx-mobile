@@ -185,6 +185,7 @@ internal fun HomeCarouselScreen(
     rowLast: () -> Int = { 0 },
     known: Boolean = true,
     tabMenu: Boolean = false,
+    iconsWidth: Float = HOME_HEADER_ICONS_ROOM,
 ) {
     val colors = LocalNxColors.current
     val portrait = LocalPortrait.current
@@ -231,7 +232,7 @@ internal fun HomeCarouselScreen(
             // In the header with the tab row hidden, else centred over the centred carousel, in either orientation.
             if (header != null) shownStrip?.let {
                 HomeStripLines(
-                    it, header.lines, inset.start.value, header.stripTop, width = width - (inset.start + inset.end).value - HOME_HEADER_ICONS_ROOM,
+                    it, header.lines, inset.start.value, header.stripTop, width = width - (inset.start + inset.end).value - iconsWidth,
                     lh = homeStripLineH(frame), pitch = homeStripPitch(frame),
                 )
             } else shownStrip?.let {
