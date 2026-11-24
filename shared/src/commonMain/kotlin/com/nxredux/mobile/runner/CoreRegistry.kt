@@ -636,7 +636,8 @@ object CoreRegistry {
         Console("ps3", "Sony PlayStation 3", listOf("PS3"), setOf("ps3", "playstation 3", "sony playstation 3"), setOf("iso"), rawSram = false, folderExtensions = setOf("pkg")),
         Console("psvita", "Sony PlayStation Vita", listOf("PSVITA"), setOf("psvita", "vita", "psv", "ps vita", "playstation vita", "sony playstation vita"), setOf("vpk", "psvita"), rawSram = false),
         Console("ps4", "Sony PlayStation 4", listOf("PS4"), setOf("ps4", "playstation 4", "sony playstation 4"), setOf("ps4"), rawSram = false, folderExtensions = setOf("pkg")),
-        Console("saturn", "Sega Saturn", listOf("SATURN"), setOf("saturn", "ss", "sega saturn"), setOf("cue", "chd", "ccd", "mds", "iso", "m3u"), rawSram = false),
+        // mds goes by folder: a loose one is more likely a PlayStation disc beside its mdf.
+        Console("saturn", "Sega Saturn", listOf("SATURN"), setOf("saturn", "ss", "sega saturn"), setOf("cue", "chd", "ccd", "iso", "m3u"), rawSram = false, folderExtensions = setOf("mds")),
         Console("xbox", "Microsoft Xbox", listOf("XBOX"), setOf("xbox", "microsoft xbox"), setOf("xiso", "iso"), rawSram = false),
         Console("xbox360", "Microsoft Xbox 360", listOf("XBOX360"), setOf("xbox360", "xbox 360", "x360", "microsoft xbox 360"), setOf("xex", "zar", "iso"), rawSram = false),
         // rom is too common to name a console: a Jaguar .rom goes by folder.
@@ -649,6 +650,9 @@ object CoreRegistry {
 
     /** Every extension some tag's core runs, console-owned or not (png, o, lmp, exe only by folder or sidecar). */
     val coreExtensions: Set<String> = byTag.values.flatMap { it.extensions }.toSet()
+
+    /** Every console's [Console.folderExtensions]: listed only where a console's folder or a sidecar places them. */
+    val folderExtensions: Set<String> = consoles.flatMap { it.folderExtensions }.toSet()
 
     private val consoleByTag: Map<String, Console> = consoles.flatMap { c -> c.tags.map { it to c } }.toMap()
     private val consoleByAlias: Map<String, Console> = consoles.flatMap { c -> c.aliases.map { it to c } }.toMap()

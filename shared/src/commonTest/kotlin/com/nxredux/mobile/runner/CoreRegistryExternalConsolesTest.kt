@@ -79,7 +79,8 @@ class CoreRegistryExternalConsolesTest {
         assertNull(Resolution.byFolder("readme.txt", null, saturn))
         assertEquals("PS4", Resolution.byFolder("Bloodborne.pkg", null, Resolution.FolderHints(listOf("PS4"))))
         assertEquals("JAGUAR", Resolution.byFolder("Tempest 2000.rom", null, Resolution.FolderHints(listOf("JAGUAR"))))
-        assertTrue(Resolution.isCandidate("Bloodborne.pkg"))
+        assertEquals("SATURN", Resolution.byFolder("Nights.mds", null, saturn))
+        assertFalse(Resolution.isCandidate("Bloodborne.pkg"))   // only a console's folder places a pkg
     }
 
     @Test fun saturnDiscPlacesInSaturn() {

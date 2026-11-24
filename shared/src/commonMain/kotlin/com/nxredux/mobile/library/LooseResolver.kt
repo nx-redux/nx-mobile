@@ -66,8 +66,10 @@ class LooseResolver internal constructor(
             }
             if (c.name.lowercase() in hidden) continue
             val candidate = Resolution.isCandidate(c.name)
-            // png, o, lmp, exe: a core runs them, but only a folder or a sidecar says which (a stray .png is not a game).
-            if (!candidate && Names.extensionOf(c.name) !in CoreRegistry.coreExtensions) continue
+            // png, o, lmp, exe: a core runs them, but only a folder or a sidecar says which (a stray .png is not a game);
+            // likewise a console's folder-only extensions (a Jaguar .rom, a PS4 .pkg).
+            val ext = Names.extensionOf(c.name)
+            if (!candidate && ext !in CoreRegistry.coreExtensions && ext !in CoreRegistry.folderExtensions) continue
             // Only a zip is peeked (its first local header names the entry), and only when the folder and sidecar place
             // nothing; a 7z is placed by folder or sidecar alone.
             val tag = Resolution.resolve(c.name, sidecar[c.name], folder, defaultTag) { heads.zipEntry(c) }

@@ -540,6 +540,16 @@ class LibraryScannerTest {
         assertEquals(listOf("PS4", "SATURN"), index.playableSystems().map { it.tag }.sorted())
     }
 
+    @Test fun a_console_folder_lists_its_folder_only_extensions() = runTest {
+        val index = scanHome(mapOf(
+            "H/Roms" to listOf("Sega Saturn (SATURN)", "Atari Jaguar (JAGUAR)"),
+            "H/Roms/Sega Saturn (SATURN)" to listOf("Nights.mds", "Nights.mdf"),
+            "H/Roms/Atari Jaguar (JAGUAR)" to listOf("Doom.rom", "Tempest.j64"),
+        ))
+        assertEquals(listOf("Nights.mds"), index.systems.first { it.tag == "SATURN" }.games.map { it.file })
+        assertEquals(setOf("Doom.rom", "Tempest.j64"), index.systems.first { it.tag == "JAGUAR" }.games.map { it.file }.toSet())
+    }
+
     @Test fun retroachievements_folder_stays_out_of_the_library() = runTest {
         val index = scanHome(mapOf(
             "H/Roms" to listOf("Game Boy (GB)"),

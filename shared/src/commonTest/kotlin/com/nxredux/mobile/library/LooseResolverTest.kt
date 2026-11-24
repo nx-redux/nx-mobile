@@ -52,6 +52,21 @@ class LooseResolverTest {
         assertTrue("|notes.txt" !in files); assertTrue("|Old.gb.disabled" !in files); assertTrue("|systems.txt" !in files)
         assertTrue(files.keys.none { it.startsWith(".media") })
     }
+    // .rom and .pkg are too common to name a console, and a PS1 mds/mdf pair is not a Saturn game: only a console's folder places them.
+    @Test fun folder_only_extensions_list_only_in_their_consoles_folder() = runTest {
+        val src = FakeRomsSource(dirs = mapOf(
+            "sd/Mixed" to listOf("x.rom", "x.pkg", "Crash.mds", "Crash.mdf", "Sega Saturn", "Atari Jaguar", "PS4"),
+            "sd/Mixed/Sega Saturn" to listOf("Nights.mds"),
+            "sd/Mixed/Atari Jaguar" to listOf("Doom.rom"),
+            "sd/Mixed/PS4" to listOf("Bloodborne.pkg"),
+        ))
+        val files = resolverOf(src, Sidecars(src, MemorySidecarStore()) { null }).scan(ContentRef("sd/Mixed"), "e6")
+            .associate { "${it.relativeDir}|${it.entry.name}" to it.tag }
+        assertEquals(
+            mapOf("|Crash.mdf" to "PS", "Sega Saturn|Nights.mds" to "SATURN", "Atari Jaguar|Doom.rom" to "JAGUAR", "PS4|Bloodborne.pkg" to "PS4"),
+            files,
+        )
+    }
     @Test fun unassigned_files_carry_a_null_tag() = runTest {
         val src = FakeRomsSource(dirs = mapOf("sd/Mixed" to listOf("a.chd", "b.zip")), bytes = mapOf("sd/Mixed/b.zip" to zipHead("readme.txt")))
         val files = resolverOf(src, Sidecars(src, MemorySidecarStore()) { null }).scan(ContentRef("sd/Mixed"), "e2")

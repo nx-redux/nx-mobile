@@ -16,8 +16,7 @@ object Resolution {
     fun isCandidate(fileName: String): Boolean {
         val ext = Names.extensionOf(fileName)
         if (ext.isEmpty()) return false
-        return ext in Names.ARCHIVE_EXTENSIONS || ext in CoreRegistry.GENERIC_EXTENSIONS ||
-            CoreRegistry.consoles.any { ext in it.extensions || ext in it.folderExtensions }
+        return ext in Names.ARCHIVE_EXTENSIONS || ext in CoreRegistry.GENERIC_EXTENSIONS || CoreRegistry.consoles.any { ext in it.extensions }
     }
 
     /**
