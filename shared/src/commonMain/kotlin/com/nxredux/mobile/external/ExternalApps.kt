@@ -50,12 +50,14 @@ fun offeredFor(game: GameEntry, naomiSets: NaomiSets, realPath: String?, hasComm
     val set = Names.stripExtension(game.fileName)
     val extension = Names.extensionOf(game.fileName)
     val naomi by lazy { naomiSets.title(set) != null }
+    // The folder is a prefix of the path: a path that is one word has a folder that is one too.
+    val pathIsWord = realPath?.let(::commandWord) != null
     return { e ->
         ExternalEmulators.offered(
             e, realFile, zipped,
             isNaomiSet = e.sets == SetRule.NAOMI && naomi,
             isModel3Set = e.sets == SetRule.MODEL3 && ExternalEmulators.isModel3Set(set),
-            extension = extension, hasCommands = hasCommands,
+            extension = extension, hasCommands = hasCommands, pathIsWord = pathIsWord,
         )
     }
 }

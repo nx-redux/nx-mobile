@@ -152,7 +152,8 @@ class ExternalEmulatorsTest {
     fun mameMachinesNameTheirMachineAndTheGamesPath() {
         val jaguar = ExternalEmulators.byId("mame4droid-jaguar")!!
         assertEquals("jaguar", jaguar.data)
-        assertEquals("-rompath '{dir}' -cart '{path}'", jaguar.extras["cli_params"])
+        assertEquals("-rompath {dir} -cart {path}", jaguar.extras["cli_params"])
+        assertTrue(jaguar.commandLine)
         assertTrue(jaguar.needsPath)
         assertFalse(offered(jaguar, real = false))
         assertEquals("neocdz", ExternalEmulators.byId("mame4droid-neocd")!!.data)
@@ -174,13 +175,26 @@ class ExternalEmulatorsTest {
     @Test
     fun tokensFillPathDirAndText() {
         val t = GameTokens(path = "/R/Jaguar/Doom.j64", dir = "/R/Jaguar", text = "PCSE00000")
-        assertEquals("-rompath '/R/Jaguar' -cart '/R/Jaguar/Doom.j64'", t.fill("-rompath '{dir}' -cart '{path}'"))
+        assertEquals("-rompath /R/Jaguar -cart /R/Jaguar/Doom.j64", t.fill("-rompath {dir} -cart {path}"))
         assertEquals("PCSE00000", t.fill("{text}"))
         assertEquals("plain", t.fill("plain"))
         assertEquals(null, GameTokens(path = null, dir = null, text = "x").fill("-cart '{path}'"))
         assertEquals(null, GameTokens(path = "/a", dir = "/", text = null).fill("{text}"))
         // A value is never read as a token.
         assertEquals("/a/{dir}", GameTokens(path = "/a/{dir}", dir = "/a", text = null).fill("{path}"))
+    }
+
+    // MAME4droid splits its command line at spaces; a word starting with a quote runs to the next quote, nothing escapes.
+    @Test
+    fun commandLineTokensAreSingleWords() {
+        val line = "-rompath {dir} -cdrm {path}"
+        fun fill(path: String) = GameTokens(path = path, dir = path.substringBeforeLast('/'), text = null).fill(line, commandLine = true)
+        assertEquals("-rompath /R/NEOCD -cdrm /R/NEOCD/Metal_Slug.chd", fill("/R/NEOCD/Metal_Slug.chd"))
+        assertEquals("-rompath '/R/Neo Geo CD' -cdrm '/R/Neo Geo CD/Metal Slug.chd'", fill("/R/Neo Geo CD/Metal Slug.chd"))
+        assertEquals("-rompath /R/NEOCD -cdrm /R/NEOCD/KOF'96.chd", fill("/R/NEOCD/KOF'96.chd"))
+        assertEquals(null, fill("/R/NEOCD/The King of Fighters '96 (Japan).chd"))   // a quote and a space: no word holds it
+        assertEquals(null, commandWord("'quoted"))
+        assertEquals("''", commandWord(""))
     }
 
     @Test

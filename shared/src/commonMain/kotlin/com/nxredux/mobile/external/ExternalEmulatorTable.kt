@@ -36,7 +36,8 @@ private const val MAME_ACTIVITY = "com.seleuco.mame4droid.MAME4droid"
 /** MAME4droid as [machine]; the game is found by [media] (its slot option) and its folder is the ROM path for BIOS sets. */
 private fun mameMachine(id: String, tag: String, machine: String, media: String) = ExternalEmulator(
     id = id, name = "MAME4droid Current", packages = listOf(MAME_PACKAGE), activity = MAME_ACTIVITY, pass = GamePass.VIEW_DATA,
-    data = machine, extras = mapOf("cli_params" to "-rompath '${GameTokens.DIR}' $media '${GameTokens.PATH}'"), tags = setOf(tag),
+    data = machine, extras = mapOf("cli_params" to "-rompath ${GameTokens.DIR} $media ${GameTokens.PATH}"), tags = setOf(tag),
+    commandLine = true,
 )
 
 // Order is the default menu order for a console with several apps.

@@ -43,6 +43,8 @@ data class ExternalEmulator(
     /** Only games with these extensions (lower case); null: any of the console's games. */
     val extensions: Set<String>? = null,
     val commandsSidecar: Boolean = false,
+    /** Token values go on the app's command line, each as one word ([commandWord]). */
+    val commandLine: Boolean = false,
     val checked: Boolean = false,
 ) {
     private val templates: List<String> get() = listOfNotNull(data) + extras.values + arrayExtras.values.flatten()
@@ -64,15 +66,19 @@ data class ExternalEmulator(
 
 /** A game's values for a recipe's tokens: `{path}` its real path, `{dir}` that path's folder, `{text}` the file's text. */
 data class GameTokens(val path: String?, val dir: String?, val text: String?) {
-    /** [template] with its tokens filled; null when it names one this game has no value for. */
-    fun fill(template: String): String? {
+    /**
+     * [template] with its tokens filled, each as one [commandWord] when [commandLine]; null when it names one this game has
+     * no value for, or one no word can hold.
+     */
+    fun fill(template: String, commandLine: Boolean = false): String? {
         var missing = false
         val out = TOKEN.replace(template) { m ->
-            when (m.value) {
+            val value = when (m.value) {
                 PATH -> path
                 DIR -> dir
                 else -> text
-            } ?: run { missing = true; "" }
+            }
+            (if (commandLine) value?.let(::commandWord) else value) ?: run { missing = true; "" }
         }
         return out.takeUnless { missing }
     }
@@ -86,6 +92,17 @@ data class GameTokens(val path: String?, val dir: String?, val text: String?) {
 
         fun mentionsAny(template: String): Boolean = TOKEN.containsMatchIn(template)
     }
+}
+
+/**
+ * [value] as one word of MAME4droid's command line, which splits at spaces and runs a word that starts with a single quote
+ * to the next one, with no escape: quoted when it has a space; null when it cannot be one word (a quote and a space, or a
+ * leading quote).
+ */
+fun commandWord(value: String): String? = when {
+    value.isNotEmpty() && ' ' !in value && !value.startsWith('\'') -> value
+    '\'' !in value -> "'$value'"
+    else -> null
 }
 
 /** A text-file game's id: its trimmed text, null when empty or not text (a binary such as a `.vpk` read by mistake). */
@@ -119,14 +136,16 @@ object ExternalEmulators {
 
     /**
      * Whether [e] can open this game ([extension] its file's, lower case): path-only apps need a real file outside any
-     * zip, a URI app no sheet or playlist, an extension filter a matching file, a sidecar app its sidecar
-     * ([hasCommands]), and set rules the matching arcade set.
+     * zip (a [ExternalEmulator.commandLine] app one whose path is one [commandWord]: [pathIsWord]), a URI app no sheet or
+     * playlist, an extension filter a matching file, a sidecar app its sidecar ([hasCommands]), and set rules the
+     * matching arcade set.
      */
     fun offered(
         e: ExternalEmulator, isRealFile: Boolean, insideZip: Boolean, isNaomiSet: Boolean, isModel3Set: Boolean,
-        extension: String, hasCommands: Boolean,
+        extension: String, hasCommands: Boolean, pathIsWord: Boolean = true,
     ): Boolean {
         if (e.needsPath && (!isRealFile || (insideZip && !e.readsZip))) return false
+        if (e.needsPath && e.commandLine && !pathIsWord) return false
         if (!e.needsPath && extension in SHEET_EXTENSIONS) return false
         if (e.extensions != null && extension !in e.extensions) return false
         if (e.commandsSidecar && !hasCommands) return false

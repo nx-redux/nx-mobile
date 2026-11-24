@@ -102,13 +102,13 @@ internal fun buildIntent(
         GamePass.VIEW_DATA, GamePass.URI_EXTRA -> uri
         GamePass.PATH_EXTRA -> l.realPath
     } ?: return null
-    val data = e.data?.let { tokens.fill(it) ?: return null } ?: passed.takeIf { e.pass == GamePass.VIEW_DATA }
+    val data = e.data?.let { tokens.fill(it, e.commandLine) ?: return null } ?: passed.takeIf { e.pass == GamePass.VIEW_DATA }
     val extras = buildMap {
-        for ((k, v) in e.extras) put(k, tokens.fill(v) ?: return null)
+        for ((k, v) in e.extras) put(k, tokens.fill(v, e.commandLine) ?: return null)
         if (passed != null && e.pass != GamePass.VIEW_DATA) e.extraKey?.let { put(it, passed) }
         if (e.commandsSidecar && commands != null) put(COMMAND_EXTRA, commands)
     }
-    val arrayExtras = e.arrayExtras.mapValues { (_, values) -> values.map { tokens.fill(it) ?: return null } }
+    val arrayExtras = e.arrayExtras.mapValues { (_, values) -> values.map { tokens.fill(it, e.commandLine) ?: return null } }
     val grantUri = uri.takeIf { e.takesUri }
     var flags = Intent.FLAG_ACTIVITY_NEW_TASK
     if (e.clearTask) flags = flags or Intent.FLAG_ACTIVITY_CLEAR_TASK

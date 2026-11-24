@@ -104,16 +104,21 @@ class ExternalIntentTest {
 
     private val mame = ExternalEmulator(
         id = "mame", name = "MAME", packages = listOf("org.app"), activity = "org.app.Main", pass = GamePass.VIEW_DATA,
-        data = "jaguar", extras = mapOf("cli_params" to "-rompath '{dir}' -cart '{path}'"), tags = setOf("JAGUAR"),
+        data = "jaguar", extras = mapOf("cli_params" to "-rompath {dir} -cart {path}"), tags = setOf("JAGUAR"), commandLine = true,
     )
 
     @Test fun recipeDataReplacesTheGameUriAndTokensAreFilled() {
-        val tokens = GameTokens(path = "/R/Jag/Doom.j64", dir = "/R/Jag", text = null)
+        val tokens = GameTokens(path = "/R/My Jag/Doom.j64", dir = "/R/My Jag", text = null)
         val i = buildIntent(launch(mame), null, null, tokens = tokens)!!
         assertEquals("jaguar", i.data)
         assertNull(i.extension)
         assertNull(i.grantUri)
-        assertEquals("-rompath '/R/Jag' -cart '/R/Jag/Doom.j64'", i.extras["cli_params"])
+        assertEquals("-rompath '/R/My Jag' -cart '/R/My Jag/Doom.j64'", i.extras["cli_params"])
+    }
+
+    @Test fun aPathTheCommandLineCannotHoldIsNoIntent() {
+        val tokens = GameTokens(path = "/R/Jag/Tempest '2000.j64", dir = "/R/Jag", text = null)
+        assertNull(buildIntent(launch(mame), null, null, tokens = tokens))
     }
 
     @Test fun arrayExtrasAreFilledToo() {

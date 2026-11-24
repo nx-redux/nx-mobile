@@ -270,6 +270,15 @@ class EmulatorMenuExternalTest {
         assertTrue(offeredFor(game("doom.wad"), NaomiSets.EMPTY, realPath = null, hasCommands = true)(idTech))
     }
 
+    // MAME4droid's command line cannot hold a path with both a quote and a space: never offered for one.
+    @Test fun commandLineAppNeedsAPathItsCommandLineHolds() {
+        val neocd = ExternalEmulators.byId("mame4droid-neocd")!!
+        val kof = "/storage/emulated/0/Roms/Neo Geo CD (NEOCD)/The King of Fighters '96 (Japan).chd"
+        val slug = "/storage/emulated/0/Roms/Neo Geo CD (NEOCD)/Metal Slug.chd"
+        assertFalse(offeredFor(game("The King of Fighters '96 (Japan).chd", FileRefs.of(kof)), NaomiSets.EMPTY, realPath = kof)(neocd))
+        assertTrue(offeredFor(game("Metal Slug.chd", FileRefs.of(slug)), NaomiSets.EMPTY, realPath = slug)(neocd))
+    }
+
     // The Play build (no All files access) and a file in the app's own storage: a real file, but no path to give.
     @Test fun pathOnlyPickNeedsAPathToGive() = runTest {
         val real = game("Crash.chd", FileRefs.of("/storage/emulated/0/Roms/PS/Crash.chd"))
