@@ -1,6 +1,5 @@
 package com.nxredux.mobile.runner
 
-import com.nxredux.mobile.settings.PlayerName
 import com.nxredux.mobile.netplay.NetplayAddress
 import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.netplay.NetplayRole
@@ -8,6 +7,7 @@ import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.netplay.NetplayWire
 import com.nxredux.mobile.netplay.wizard.CableLinkSetup
+import com.nxredux.mobile.settings.PlayerName
 import com.swordfish.libretrodroid.LibretroNetplay
 import com.swordfish.libretrodroid.NxLog
 import kotlinx.coroutines.CoroutineScope

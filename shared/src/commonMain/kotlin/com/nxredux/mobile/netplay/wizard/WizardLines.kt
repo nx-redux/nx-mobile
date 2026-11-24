@@ -12,8 +12,9 @@ import com.nxredux.mobile.settings.PlayerName
  * The handheld's capability token (nx-redux wiz_caps.c): the HELLO field `caps=<token>` after the four fixed
  * fields, `[A-Za-z0-9._=,-]`, 1..63 chars, comma-separated `key=value` elements. This device always sends
  * `core=<core id>,tag=<TAG>`; gpSP and mGBA add the game's link mode `,wl=<token>` (netplay-prelaunch.sh), a joiner on
- * Auto adds `,auto=1`, and a side that trades names (the NAME line after START, [NameLine]) `,nm=1`. A Cable Link over Wi-Fi offer sends `core=mgba,tag=<TAG>,cl=1` instead (no `wl` or `auto`: that
- * session always runs mGBA's own cable inside each phone). Its ROM and BIOS hashes would not fit in [MAX] chars, so
+ * Auto adds `,auto=1`, and a side that trades names (the NAME line after START, [NameLine]) `,nm=1`. A Cable Link
+ * over Wi-Fi offer sends `core=mgba,tag=<TAG>,cl=1` instead (no `wl` or `auto`: that session always runs mGBA's own
+ * cable inside each phone). Its ROM and BIOS hashes would not fit in [MAX] chars, so
  * they follow the HELLO in a `CABLE` line ([CableLinkExchange]).
  */
 object Caps {
