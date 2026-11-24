@@ -496,7 +496,7 @@ internal class DualScreenController(
         val h = if (root.height > 0) root.height else dm.heightPixels
         val real = android.graphics.Point().also { @Suppress("DEPRECATION") display.getRealSize(it) }
         val bottom = BottomScreen.resolve(owner.frontendValues[BottomScreenOptions.KEY], owner.settings.bottomScreen)
-        return DualScreen.pictureOn(maxOf(w, h), minOf(w, h), real.x, real.y, bottom, skin = padLayout.dualSkinWanted(mode))
+        return DualScreen.pictureOn(maxOf(w, h), minOf(w, h), real.x, real.y, bottom, skin = padLayout.dsSkinWanted(mode))
     }
 
     /**
