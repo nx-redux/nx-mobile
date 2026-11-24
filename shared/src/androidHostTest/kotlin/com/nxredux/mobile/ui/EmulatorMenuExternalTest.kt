@@ -12,9 +12,11 @@ import com.nxredux.mobile.external.hasCommandsSidecar
 import com.nxredux.mobile.external.installedExternal
 import com.nxredux.mobile.external.installedFor
 import com.nxredux.mobile.external.offeredFor
+import com.nxredux.mobile.library.Entry
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.NaomiSets
+import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.library.Sidecars
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.library.path
@@ -40,7 +42,9 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
@@ -257,6 +261,14 @@ class EmulatorMenuExternalTest {
         val source = FakeRomsSource(dirs = mapOf("Home/Roms/PS" to listOf("doom.wad", "doom.commands", "hexen.commands")))
         assertTrue(hasCommandsSidecar(source, game("doom.wad")))
         assertFalse(hasCommandsSidecar(source, game("heretic.wad")))
+    }
+
+    // A cancelled lookup stops its coroutine: never read as "no sidecar".
+    @Test fun aCancelledSidecarLookupStaysCancelled() = runTest {
+        val source = object : RomsSource by FakeRomsSource(dirs = emptyMap()) {
+            override suspend fun child(dir: ContentRef, name: String): Entry? = throw CancellationException("gone")
+        }
+        assertFailsWith<CancellationException> { hasCommandsSidecar(source, game("doom.wad")) }
     }
 
     @Test fun offeredForReadsTheGamesExtensionAndSidecar() {

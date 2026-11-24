@@ -7,6 +7,7 @@ import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.settings.AppSettings
+import com.nxredux.mobile.tryOr
 
 /** The platform's side of opening games in standalone emulators: which are installed, and the hand-off. */
 interface ExternalApps {
@@ -66,9 +67,9 @@ fun offeredFor(game: GameEntry, naomiSets: NaomiSets, realPath: String?, hasComm
 fun commandsFileName(fileName: String): String = Names.stripExtension(fileName) + ".commands"
 
 /** Whether [game]'s [commandsFileName] sidecar is a file beside it; an unlistable folder counts as none. */
-suspend fun hasCommandsSidecar(source: RomsSource, game: GameEntry): Boolean = runCatching {
+suspend fun hasCommandsSidecar(source: RomsSource, game: GameEntry): Boolean = tryOr({ false }) {
     source.child(game.folder, commandsFileName(game.fileName))?.isDirectory == false
-}.getOrDefault(false)
+}
 
 /**
  * [tag]'s apps installed here, each with its package, in [table] order. Each is a package manager call: callers look

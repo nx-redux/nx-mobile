@@ -13,6 +13,8 @@ import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.FileRefs
+import com.nxredux.mobile.tryOrNull
+import com.swordfish.libretrodroid.NxLog
 import java.io.File
 
 /**
@@ -38,20 +40,28 @@ class AndroidExternalApps(
         val e = request.emulator
         val uri = if (e.takesUri) uriOf(request.ref) else null
         val commands = if (e.commandsSidecar) commandsBeside(request) else null
-        val text = if (e.needsText) gameText(runCatching { source.readHead(request.ref, TEXT_GAME_MAX) }.getOrNull()) else null
+        val text = if (e.needsText) gameText(tryOrNull { source.readHead(request.ref, TEXT_GAME_MAX) }) else null
         val tokens = GameTokens(path = request.realPath, dir = dirOf(request.realPath), text = text)
-        val spec = buildIntent(request, uri?.toString(), displayIdOfMain(), commands, tokens) ?: return ExternalLaunchResult.NO_ACCESS
+        val spec = buildIntent(request, uri?.toString(), displayIdOfMain(), commands, tokens) ?: run {
+            NxLog.w(TAG, "${e.id}: no access (uri=${uri != null} path=${request.realPath != null} text=${text != null})")
+            return ExternalLaunchResult.NO_ACCESS
+        }
         val options = spec.displayId?.let { ActivityOptions.makeBasic().setLaunchDisplayId(it).toBundle() }
         return try {
             context.startActivity(spec.toIntent(), options)
             ExternalLaunchResult.STARTED
-        } catch (e: ActivityNotFoundException) { ExternalLaunchResult.FAILED } catch (e: SecurityException) { ExternalLaunchResult.FAILED }
+        } catch (x: ActivityNotFoundException) { failed(e, x) } catch (x: SecurityException) { failed(e, x) }
+    }
+
+    private fun failed(e: ExternalEmulator, x: Exception): ExternalLaunchResult {
+        NxLog.w(TAG, "${e.id}: ${x::class.java.simpleName}: ${x.message}")
+        return ExternalLaunchResult.FAILED
     }
 
     // Optional: without one the app starts with its own last command line.
-    private suspend fun commandsBeside(l: ExternalLaunch): String? = runCatching {
+    private suspend fun commandsBeside(l: ExternalLaunch): String? = tryOrNull {
         source.child(l.folder, commandsFileName(l.fileName))?.takeIf { !it.isDirectory }?.let { source.readText(it.ref) }
-    }.getOrNull()
+    }
 
     private fun installed(packageId: String) = runCatching { pm.getLaunchIntentForPackage(packageId) != null }.getOrDefault(false)
 
@@ -63,6 +73,7 @@ class AndroidExternalApps(
 
     private companion object {
         const val AUTHORITY_SUFFIX = ".games"
+        const val TAG = "NXEXT"
 
         // A title or game id file is a few bytes; the cap keeps a mistaken pick of a big image cheap.
         const val TEXT_GAME_MAX = 1024
