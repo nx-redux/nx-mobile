@@ -15,6 +15,9 @@ files (md5 checked first). Every adb call passes -s. The property is cleared at 
     python3 tools/device-tests/netplay_pads.py \\
         --host R5GL66XJS2F:"/sdcard/NXRedux/Roms/Sega Genesis (MD)" \\
         --client c2c658b2:"/storage/3933-6330/Roms/Sega Genesis" [--seconds 45] [--only pico-6,old-host]
+
+`--smoke TAG:core:game` (the Roms folders then hold that console's games): one session of another console, drift check
+only (any lockstep core, e.g. SFC:snes9x:Contra.sfc).
 """
 
 import argparse
@@ -98,8 +101,8 @@ class Side:
                 pass
         self.sh("am force-stop com.nxredux.mobile.dev")
 
-    def netplay(self, role, core, game, pad, peer=None, force_pad=None):
-        extras = "--es role %s --es path %s --es tag MD --es core %s --es pad %s" % (role, q(self.rom(game)), core, pad)
+    def netplay(self, role, core, game, pad, peer=None, force_pad=None, tag="MD"):
+        extras = "--es role %s --es path %s --es tag %s --es core %s --es pad %s" % (role, q(self.rom(game)), tag, core, pad)
         if peer:
             extras += " --es peer %s" % peer
         if force_pad:
@@ -154,14 +157,54 @@ def run_case(case, host, client, seconds):
     return name, not problems, detail
 
 
+def run_smoke(tag, core, game, host, client, seconds):
+    for s in (host, client):
+        s.stop_game()
+        for r in ("netplay", "game"):
+            s.phone.rm_result(r)
+        s.sh("logcat -c")
+    host.netplay("host", core, game, "none", tag=tag)
+    if not host.wait_json("netplay", lambda j: j.get("state") in ("listening", "refused"), 15):
+        return False, "host never listened"
+    client.netplay("client", core, game, "none", peer=host.ip(), tag=tag)
+    started = [s.wait_json("netplay", lambda j: j.get("state") in ("started", "refused"), 60) for s in (host, client)]
+    if not all(j and j.get("state") == "started" for j in started):
+        return False, "handshake: host %s, client %s" % tuple(started)
+    time.sleep(seconds)
+    logs = [s.engine_log() for s in (host, client)]
+    for s in (client, host):
+        s.stop_game()
+    differ = sum(log.count("pair: hashes differ") for log in logs)
+    verified = sum(log.count("pair: verified frame") for log in logs)
+    ended = [l for log in logs for l in log.splitlines() if "session ended" in l and "peer left" not in l and "none" not in l]
+    problems = (["drift: %d hash mismatch(es)" % differ] if differ else []) + \
+        ([] if verified else ["no verified frames"]) + (["ended early: " + ended[0].split("nx-netplay: ")[-1]] if ended else [])
+    return not problems, "; ".join(problems) or "%d verified checks, no drift" % verified
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", required=True, help="serial:Roms folder holding the MD games")
     ap.add_argument("--client", required=True, help="serial:Roms folder holding the MD games")
     ap.add_argument("--seconds", type=int, default=45, help="play time per case (default 45)")
     ap.add_argument("--only", help="comma-separated case names")
+    ap.add_argument("--smoke", help="TAG:core:game, one session of another console (drift check only)")
     args = ap.parse_args()
     host, client = Side(args.host, "host"), Side(args.client, "client")
+    if args.smoke:
+        tag, core, game = args.smoke.split(":", 2)
+        if host.md5(game) != client.md5(game):
+            raise SystemExit("%s differs between the phones" % game)
+        try:
+            for s in (host, client):
+                s.sh("setprop %s 1" % PROP)
+            ok, detail = run_smoke(tag, core, game, host, client, args.seconds)
+        finally:
+            for s in (host, client):
+                s.sh("setprop %s 0" % PROP)
+                s.stop_game()
+        print("%s %s  %s" % (tag, "PASS" if ok else "FAIL", detail))
+        sys.exit(0 if ok else 1)
     cases = [c for c in CASES if not args.only or c[0] in args.only.split(",")]
     for game in sorted({c[2] for c in cases}):
         if host.md5(game) != client.md5(game):
