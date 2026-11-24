@@ -49,6 +49,11 @@ interface NetplayPlatform {
      * platform's I/O threads.
      */
     suspend fun gbaLinkMode(romFileName: String, content: ContentRef): String
+    /**
+     * The game's Sega Controller Type for [tag] on [coreId] ([com.nxredux.mobile.runner.SegaPadType]): its per-game
+     * settings, else the console's, else Auto. Auto when they cannot be read.
+     */
+    suspend fun segaPadSetting(tag: String, coreId: String, romFileName: String): String
     /** Where a joiner's pulls land (a fresh session copy per join). */
     fun clientSink(romFileName: String): SaveSink
     fun keepScreenOn(on: Boolean)
@@ -79,7 +84,9 @@ class CableLinkRefused(val text: String) : Exception(text)
  * ([com.nxredux.mobile.netplay.wizard.CableLinkSetup]): [otherRomPath] the other player's ROM as a filesystem path,
  * [otherSavePath] its save in a session dir (null: none), [localSlot] 1 on the host and 2 on the guest, [biosMode]
  * `real` or `hle`, [rtcEpoch] the host's clock in epoch seconds. Unused outside Cable Link. [peerName]: the other
- * player's name, when both sides traded names (null: an older build, the handheld, or none came).
+ * player's name, when both sides traded names (null: an older build, the handheld, or none came). [segaPad]: the host's
+ * Sega Controller Type both sides play ([com.nxredux.mobile.runner.SegaPadType]); null: a side sent none, so both play
+ * [NetplayPads]' fixed pad.
  */
 data class NetplaySession(
     val role: NetplayRole,
@@ -97,6 +104,7 @@ data class NetplaySession(
     val biosMode: String = CableLinkSetup.BIOS_HLE,
     val rtcEpoch: Long = 0L,
     val peerName: String? = null,
+    val segaPad: String? = null,
 ) {
     /** This session with what a Cable Link handshake settled. */
     fun withCableLink(setup: CableLinkSetup): NetplaySession = copy(

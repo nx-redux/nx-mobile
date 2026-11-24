@@ -2,13 +2,15 @@ package com.nxredux.mobile.netplay
 
 import com.nxredux.mobile.runner.CoreDescriptor
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.runner.PadMap
 import com.nxredux.mobile.runner.SegaPad
 import com.nxredux.mobile.runner.SegaPadType
 
 /**
  * The controller a netplay session gives the core on ports 0-1, exactly what the handheld runs for the same tag and core,
  * so a game that probes the pad takes the same path on both devices (a 6-button probe against a 3-button pad desyncs).
- * Single player never reads this: it keeps Controls → Controller Type ([SegaPadType]).
+ * Single player never reads this: it keeps Controls → Controller Type ([SegaPadType]). Nor does a Mega Drive / Sega CD /
+ * 32X session whose two sides both sent their Controller Type: both play the host's through that same path ([forSession]).
  *
  * Sources, nx-redux `skeleton/SYSTEM/tg5040/paks/Emus/<TAG>.pak/default.cfg` and `launch.sh`:
  * - SMS.pak, GG.pak, SG1000.pak: `-picodrive_input1 = 3 button pad`, `-picodrive_input2 = 3 button pad`.
@@ -61,7 +63,12 @@ object NetplayPads {
 
     /**
      * The session's pad for [tag] run on [core]; null = nothing to force (the launch's own ports and options stand). A
-     * GPGX_<X> tag reads <X>'s row ([CoreRegistry.baseTag]), whose genesis_plus_gx entry is the GPGX pak's.
+     * GPGX_<X> tag reads <X>'s row ([CoreRegistry.baseTag]), whose genesis_plus_gx entry is the GPGX pak's. [hostPad]: the
+     * host's Controller Type both sides play on a Sega pad tag ([PadMap.isSegaPadTag]); the launch's Controller Type path
+     * then sets the ports, except genesis_plus_gx on Auto, which still gets the joypad on ports 0-1 here.
      */
-    fun forSession(tag: String, core: String?): Pad? = core?.let { table[CoreRegistry.baseTag(tag)]?.get(it) }
+    fun forSession(tag: String, core: String?, hostPad: String? = null): Pad? {
+        if (hostPad != null && PadMap.isSegaPadTag(tag)) return GPGX_AUTO.takeIf { core == SegaPadType.GPGX && hostPad == SegaPadType.AUTO }
+        return core?.let { table[CoreRegistry.baseTag(tag)]?.get(it) }
+    }
 }

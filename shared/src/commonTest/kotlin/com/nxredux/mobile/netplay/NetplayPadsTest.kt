@@ -31,6 +31,20 @@ class NetplayPadsTest {
         }
     }
 
+    @Test fun a_host_pad_hands_the_mega_drive_tags_to_the_controller_type_path() {
+        for (tag in listOf("MD", "SEGACD", "32X", "GPGX")) {
+            for (pad in listOf("3", "6", "auto")) assertNull(NetplayPads.forSession(tag, pico, pad), "$tag/$pad")
+            for (pad in listOf("3", "6")) assertNull(NetplayPads.forSession(tag, gpgx, pad), "$tag/$pad")
+        }
+        // genesis_plus_gx on Auto keeps the joypad on ports 0-1, as without a host pad
+        assertEquals(mapOf(0 to 1, 1 to 1), assertNotNull(NetplayPads.forSession("MD", gpgx, "auto")).ports)
+    }
+
+    @Test fun a_host_pad_does_not_touch_the_8_bit_tags_or_n64() {
+        for (tag in listOf("SMS", "GG", "SG1000")) assertEquals(threeButtons, assertNotNull(NetplayPads.forSession(tag, pico, "6")).ports, tag)
+        assertNotNull(NetplayPads.forSession("N64", "mupen64plus_next", "6"))
+    }
+
     @Test fun every_sega_netplay_pair_is_in_the_table() {
         for (tag in listOf("MD", "SEGACD", "32X", "SMS", "GG", "SG1000", "GPGX")) {
             NetplayCores.offered(tag).forEach { assertNotNull(NetplayPads.forSession(tag, it), "$tag/$it") }

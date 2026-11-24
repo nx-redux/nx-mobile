@@ -634,13 +634,14 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             renderer.ndsSplit = ndsAtStart
             // nx_* (and legacy minarch_*) keys are frontend settings: never passed to the core.
             frontendValues = FrontendOptions.fromConfig(resolved.values, tag)
-            // netplay: both devices run the console's default Sega pad (Auto), whatever this device's console or game setting;
-            // the core then gets the handheld pak's pad for this tag and core (NetplayPads).
-            if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to SegaPadType.AUTO)
+            // netplay: both devices run the host's Controller Type when both sides sent theirs (NetplaySession.segaPad), the
+            // single-player path then picks the pad; else Auto here and the handheld pak's fixed pad (NetplayPads).
+            val sessionPad = np?.segaPad?.takeIf { PadMap.isSegaPadTag(tag) }
+            if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to (sessionPad ?: SegaPadType.AUTO))
             canRewind = descriptor?.rewind == true
             speed.setSession(netplay = np != null)   // first: the touch buttons [ShortcutsMicController.launch] builds follow the session
             shortcuts.launch(microphone = descriptor?.microphone == true, netplay = np != null, tag, Shortcuts.fromConfig(resolved.values))
-            val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id) else null
+            val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id, sessionPad) else null
             renderer.shaderValues = ShaderOptions.fromConfig(resolved.values)
             renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(shaderRoots) }
             // 3DS with a second display: Azahar starts in the split's fixed layout, which replaces the rows' values below; launched

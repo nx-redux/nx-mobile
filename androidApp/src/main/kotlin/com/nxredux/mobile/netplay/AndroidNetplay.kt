@@ -16,10 +16,14 @@ import com.nxredux.mobile.netplay.usb.UsbCables
 import com.nxredux.mobile.netplay.wizard.CableLinkOffer
 import com.nxredux.mobile.netplay.wizard.HostSaves
 import com.nxredux.mobile.netplay.wizard.SaveSink
+import com.nxredux.mobile.options.CoreConfig
+import com.nxredux.mobile.options.PadOptions
+import com.nxredux.mobile.runner.AndroidEmulatorConfigStore
 import com.nxredux.mobile.runner.Archives
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.NaomiSetsAsset
+import com.nxredux.mobile.runner.SegaPadType
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.Prefs
 import com.nxredux.mobile.storage.AndroidRefs
@@ -297,6 +301,11 @@ class AndroidNetplay(context: Context, private val sdRoot: () -> File) : Netplay
                 AndroidRefs(context.contentResolver).openFd(content, "r")?.use { LibretroNetplay.gbaLinkMode("/proc/self/fd/${it.fd}") }
             }.onFailure { NxLog.w(TAG, "GBA link mode probe failed", it) }.getOrNull() ?: GbaWifiLink.NONE
         }
+    }
+
+    override suspend fun segaPadSetting(tag: String, coreId: String, romFileName: String): String {
+        val (console, game) = AndroidEmulatorConfigStore(sdRoot).read(tag, coreId, romFileName)
+        return CoreConfig.resolve(emptyMap(), console, game).values[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO
     }
 
     override fun clientSink(romFileName: String): SaveSink = NetplaySessionDir.sink(context.filesDir, romFileName, Rsync.find(context))

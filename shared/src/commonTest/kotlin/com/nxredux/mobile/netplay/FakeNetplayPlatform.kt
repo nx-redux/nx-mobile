@@ -91,6 +91,10 @@ class FakeNetplayPlatform(
         probes += romFileName
         return gbaMode
     }
+    /** [segaPadSetting]'s answer; throws when null (unreadable settings). */
+    var segaPad: String? = "auto"
+    override suspend fun segaPadSetting(tag: String, coreId: String, romFileName: String): String =
+        segaPad ?: throw IllegalStateException("unreadable")
     override fun clientSink(romFileName: String): SaveSink = sink
     override fun keepScreenOn(on: Boolean) { screenOn += on }
 

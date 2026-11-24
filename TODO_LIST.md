@@ -212,3 +212,9 @@ Checked on the emulator only (GBA game starts, draws, quits; first setup up to P
 - [ ] DS Layout row with a controller (built-in or plugged in, so no skin): it applies, not "Unavailable — The pad skin places the screens". Fixed; AYANEO check owed. Under a shown skin the DS rows stay hidden (Fold cover 2026-11-24).
 - [ ] Update row: after "Update failed" (a redirect), A retries the same release; checking again needs an app restart (Nova, local feed). Check whether intended.
 
+## Sega netplay: both players on the host's Controller Type
+- [ ] Phone ↔ phone, Mega Drive on PicoDrive, host Controller Type 6: both players' X/Y/Z/Mode work in a 6-button game (Rock n' Roll Racing, Street Fighter II), no desync over a few minutes.
+- [ ] The same on Genesis Plus GX, and with the host on 3: neither player gets the extra buttons.
+- [ ] Host on Auto: a 6-button game gets 6 on both, a 3-button game (Golden Axe II, Ms. Pac-Man) plays clean.
+- [ ] Phone ↔ Brick (no `pad=` yet): still starts, both on the old fixed pad, no desync.
+
