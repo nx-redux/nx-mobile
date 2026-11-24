@@ -76,16 +76,17 @@ internal val externalEmulatorTable: List<ExternalEmulator> = listOf(
     // PlayStation Vita and PlayStation 4 boot installed titles by id: the game is a small text file holding it.
     ExternalEmulator(
         id = "vita3k", name = "Vita3K", packages = listOf("org.vita3k.emulator"), activity = "org.vita3k.emulator.Emulator",
-        pass = GamePass.VIEW_DATA, extras = mapOf("title_id" to GameTokens.TEXT), tags = setOf("PSVITA"),
+        pass = GamePass.VIEW_DATA, extras = mapOf("title_id" to GameTokens.TEXT), extensions = setOf("psvita"), tags = setOf("PSVITA"),
     ),
     ExternalEmulator(
         id = "emucorev", name = "EmuCoreV", packages = listOf("com.sbro.emucorev"), activity = "com.sbro.emucorev.core.vita.Emulator",
-        pass = GamePass.VIEW_DATA, arrayExtras = mapOf("AppStartParameters" to listOf("-r", GameTokens.TEXT)), tags = setOf("PSVITA"),
+        pass = GamePass.VIEW_DATA, arrayExtras = mapOf("AppStartParameters" to listOf("-r", GameTokens.TEXT)),
+        extensions = setOf("psvita"), tags = setOf("PSVITA"),
     ),
     ExternalEmulator(
         id = "bachatas4", name = "BachataS4", packages = listOf("com.bachatas4.android", "com.bachatas4.android.github"),
         activity = "com.bachatas4.android.DirectLaunchActivity", pass = GamePass.VIEW_DATA,
-        extras = mapOf("game_id" to GameTokens.TEXT), tags = setOf("PS4"),
+        extras = mapOf("game_id" to GameTokens.TEXT), extensions = setOf("ps4"), tags = setOf("PS4"),
     ),
     // Sega Saturn
     ExternalEmulator(
@@ -181,11 +182,6 @@ internal val externalEmulatorTable: List<ExternalEmulator> = listOf(
     ExternalEmulator(
         id = "azaharplus", name = "AzaharPlus", packages = listOf("io.github.azaharplus.android"), activity = CITRA_ACTIVITY,
         pass = GamePass.VIEW_DATA, clearTask = true, tags = setOf("3DS"),
-    ),
-    // Its source opens games only from its own list (GameLauncher takes a pandroid-game id); the data may only open the app.
-    ExternalEmulator(
-        id = "panda3ds", name = "Panda3DS", packages = listOf("com.panda3ds.pandroid"), activity = "com.panda3ds.pandroid.app.MainActivity",
-        pass = GamePass.VIEW_DATA, tags = setOf("3DS"),
     ),
     // GameCube and Wii
     ExternalEmulator(

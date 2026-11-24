@@ -2,11 +2,13 @@ package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.external.ExternalApps
 import com.nxredux.mobile.external.ExternalEmulator
+import com.nxredux.mobile.external.ExternalEmulators
 import com.nxredux.mobile.external.ExternalLaunch
 import com.nxredux.mobile.external.ExternalLaunchResult
 import com.nxredux.mobile.external.GamePass
 import com.nxredux.mobile.external.SetRule
 import com.nxredux.mobile.external.externalPickFor
+import com.nxredux.mobile.external.hasCommandsSidecar
 import com.nxredux.mobile.external.installedExternal
 import com.nxredux.mobile.external.offeredFor
 import com.nxredux.mobile.library.FakeRomsSource
@@ -243,9 +245,34 @@ class EmulatorMenuExternalTest {
         assertTrue(offeredFor(game("sf2.zip"), NaomiSets.EMPTY, realPath = null)(app("all", "All", setOf("FBN"))))
     }
 
+    @Test fun commandsSidecarIsFoundBesideTheGame() = runTest {
+        val source = FakeRomsSource(dirs = mapOf("Home/Roms/PS" to listOf("doom.wad", "doom.commands", "hexen.commands")))
+        assertTrue(hasCommandsSidecar(source, game("doom.wad")))
+        assertFalse(hasCommandsSidecar(source, game("heretic.wad")))
+    }
+
+    @Test fun offeredForReadsTheGamesExtensionAndSidecar() {
+        val real = "/storage/emulated/0/Roms/PS/Crash.cue"
+        val cue = game("Crash.cue", FileRefs.of(real))
+        val chd = game("Crash.chd", FileRefs.of("/storage/emulated/0/Roms/PS/Crash.chd"))
+        assertTrue(offeredFor(cue, NaomiSets.EMPTY, realPath = real)(pathOnly))
+        assertFalse(offeredFor(cue, NaomiSets.EMPTY, realPath = real)(duckstation))
+        assertTrue(offeredFor(chd, NaomiSets.EMPTY, realPath = "/storage/emulated/0/Roms/PS/Crash.chd")(pathOnly))
+        assertTrue(offeredFor(chd, NaomiSets.EMPTY, realPath = "/storage/emulated/0/Roms/PS/Crash.chd")(duckstation))
+        val vita = ExternalEmulators.byId("vita3k")!!
+        assertFalse(offeredFor(game("Persona.vpk"), NaomiSets.EMPTY, realPath = null)(vita))
+        assertTrue(offeredFor(game("Persona.psvita"), NaomiSets.EMPTY, realPath = null)(vita))
+        val ps4 = ExternalEmulators.byId("bachatas4")!!
+        assertFalse(offeredFor(game("X.pkg"), NaomiSets.EMPTY, realPath = null)(ps4))
+        assertTrue(offeredFor(game("X.ps4"), NaomiSets.EMPTY, realPath = null)(ps4))
+        val idTech = ExternalEmulators.byId("idtech4a")!!
+        assertFalse(offeredFor(game("doom.wad"), NaomiSets.EMPTY, realPath = null)(idTech))
+        assertTrue(offeredFor(game("doom.wad"), NaomiSets.EMPTY, realPath = null, hasCommands = true)(idTech))
+    }
+
     // The Play build (no All files access) and a file in the app's own storage: a real file, but no path to give.
     @Test fun pathOnlyPickNeedsAPathToGive() = runTest {
-        val real = game("Crash.cue", FileRefs.of("/storage/emulated/0/Roms/PS/Crash.cue"))
+        val real = game("Crash.chd", FileRefs.of("/storage/emulated/0/Roms/PS/Crash.chd"))
         val apps = Apps(setOf(pathOnly, duckstation))
         val settings = Settings().apply { externalPicks = mapOf(real.path to "pathonly") }
         val noPath = offeredFor(real, NaomiSets.EMPTY, realPath = null)

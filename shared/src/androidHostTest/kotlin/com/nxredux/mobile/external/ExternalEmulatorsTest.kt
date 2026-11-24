@@ -8,8 +8,10 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class ExternalEmulatorsTest {
-    private fun offered(e: ExternalEmulator, real: Boolean = true, zip: Boolean = false, naomi: Boolean = false, model3: Boolean = false) =
-        ExternalEmulators.offered(e, real, zip, naomi, model3)
+    private fun offered(
+        e: ExternalEmulator, real: Boolean = true, zip: Boolean = false, naomi: Boolean = false, model3: Boolean = false,
+        ext: String = "iso", commands: Boolean = false,
+    ) = ExternalEmulators.offered(e, real, zip, naomi, model3, ext, commands)
 
     private fun recipe(pass: GamePass, sets: SetRule = SetRule.ALL, readsZip: Boolean = false) = ExternalEmulator(
         id = "x", name = "X", packages = listOf("a.b"), activity = "a.b.Main", pass = pass,
@@ -36,6 +38,37 @@ class ExternalEmulatorsTest {
     @Test
     fun extraStylesNeedAKey() {
         ExternalEmulators.all.filter { it.pass != GamePass.VIEW_DATA }.forEach { assertNotNull(it.extraKey, it.id) }
+    }
+
+    @Test
+    fun sheetsAndPlaylistsOnlyForPathApps() {
+        val uri = recipe(GamePass.URI_EXTRA)
+        val path = recipe(GamePass.PATH_EXTRA)
+        for (ext in listOf("cue", "m3u", "gdi", "ccd", "toc", "mds")) {
+            assertFalse(offered(uri, ext = ext), ext)
+            assertTrue(offered(path, ext = ext), ext)
+        }
+        assertTrue(offered(uri, ext = "chd"))
+        val mame = ExternalEmulators.byId("mame4droid-neocd")!!
+        assertTrue(offered(mame, ext = "cue"))
+    }
+
+    @Test
+    fun extensionFilterLimitsARecipe() {
+        val vita = ExternalEmulators.byId("vita3k")!!
+        assertTrue(offered(vita, real = false, ext = "psvita"))
+        assertFalse(offered(vita, ext = "vpk"))
+        assertFalse(offered(ExternalEmulators.byId("emucorev")!!, ext = "vpk"))
+        val ps4 = ExternalEmulators.byId("bachatas4")!!
+        assertTrue(offered(ps4, real = false, ext = "ps4"))
+        assertFalse(offered(ps4, ext = "pkg"))
+    }
+
+    @Test
+    fun aSidecarAppNeedsItsSidecar() {
+        val idTech = ExternalEmulators.byId("idtech4a")!!
+        assertFalse(offered(idTech, ext = "wad"))
+        assertTrue(offered(idTech, ext = "wad", commands = true))
     }
 
     @Test
@@ -89,7 +122,7 @@ class ExternalEmulatorsTest {
             "m64plus-fz", "mupen64plus-ae", "pce-emu",
             // Optional emulators; Pizza Boy's paid builds use other activity classes, so they are entries of their own
             "melonds", "melonds-nightly", "noods", "skyemu", "watermelonds", "seedlessds",
-            "azahar", "azaharplus", "panda3ds", "dolphin",
+            "azahar", "azaharplus", "dolphin",
             "gbc-emu", "my-oldboy", "linkboy", "pizza-boy-c", "pizza-boy-c-pro",
             "gba-emu", "my-boy", "pizza-boy-a", "pizza-boy-a-pro",
             "nes-emu", "ines", "snes9x-explus", "duckstation", "armsx1", "epsxe", "armsx2", "emucorex", "play", "ppsspp",
@@ -133,7 +166,7 @@ class ExternalEmulatorsTest {
         assertEquals(mapOf("title_id" to "{text}"), vita.extras)
         assertTrue(vita.needsText)
         assertFalse(vita.needsPath)
-        assertTrue(offered(vita, real = false))
+        assertTrue(offered(vita, real = false, ext = "psvita"))
         assertEquals(mapOf("AppStartParameters" to listOf("-r", "{text}")), ExternalEmulators.byId("emucorev")!!.arrayExtras)
         assertEquals(mapOf("game_id" to "{text}"), ExternalEmulators.byId("bachatas4")!!.extras)
     }
@@ -178,7 +211,7 @@ class ExternalEmulatorsTest {
         assertEquals(listOf("melonds", "melonds-nightly", "noods", "skyemu", "watermelonds", "seedlessds"), ids("NDS"))
         assertEquals(listOf("gbc-emu", "my-oldboy", "linkboy", "pizza-boy-c", "pizza-boy-c-pro", "skyemu"), ids("GB"))
         assertEquals(listOf("gba-emu", "my-boy", "linkboy", "pizza-boy-a", "pizza-boy-a-pro", "noods", "skyemu"), ids("MGBA"))
-        assertEquals(listOf("azahar", "azaharplus", "panda3ds"), ids("3DS"))
+        assertEquals(listOf("azahar", "azaharplus"), ids("3DS"))
         assertEquals(listOf("duckstation", "armsx1", "epsxe"), ids("PSX"))
         assertEquals(listOf("armsx2", "emucorex", "play"), ids("PS2"))
         assertEquals(listOf("flycast-dc", "redream"), ids("DC"))

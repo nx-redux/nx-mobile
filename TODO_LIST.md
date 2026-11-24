@@ -255,7 +255,6 @@ Launch contracts come from each app's source where public, else ES-DE's data. On
 - [ ] SeedlessDS (`seedlessds`): NDS
 - [ ] Azahar (`azahar`): 3DS
 - [ ] AzaharPlus (`azaharplus`): 3DS
-- [ ] Panda3DS (`panda3ds`): 3DS
 - [ ] Dolphin (`dolphin`): GC, WII
 - [ ] NES.emu (`nes-emu`): FC, FDS
 - [ ] iNES (`ines`): FC, FDS

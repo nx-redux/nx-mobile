@@ -51,6 +51,7 @@ import com.nxredux.mobile.external.ExternalEmulators
 import com.nxredux.mobile.external.NoExternalApps
 import com.nxredux.mobile.external.SetRule
 import com.nxredux.mobile.external.installedExternal
+import com.nxredux.mobile.external.hasCommandsSidecar
 import com.nxredux.mobile.external.offeredFor
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.RomsSource
@@ -3547,11 +3548,15 @@ class AppState(
         return installedExternal(entry.system.tag, deps.externalApps, externalOffered(entry))
     }
 
-    /** Which apps can open [entry]'s game; the NAOMI table is read (off this thread) only for an installed app limited to its sets. */
+    /**
+     * Which apps can open [entry]'s game. The NAOMI table and a commands sidecar are looked up (off this thread) only for
+     * an installed app that needs them.
+     */
     private suspend fun externalOffered(entry: Listed): (ExternalEmulator) -> Boolean {
-        val naomiApp = ExternalEmulators.forTag(entry.system.tag).any { it.sets == SetRule.NAOMI && deps.externalApps.installedPackage(it) != null }
-        val naomi = if (naomiApp) withContext(deps.compute) { deps.naomiSets() } else NaomiSets.EMPTY
-        return offeredFor(entry.game, naomi, realPathOf(entry.game))
+        val installed = ExternalEmulators.forTag(entry.system.tag).filter { deps.externalApps.installedPackage(it) != null }
+        val naomi = if (installed.any { it.sets == SetRule.NAOMI }) withContext(deps.compute) { deps.naomiSets() } else NaomiSets.EMPTY
+        val commands = installed.any { it.commandsSidecar } && withContext(deps.compute) { hasCommandsSidecar(deps.source, entry.game) }
+        return offeredFor(entry.game, naomi, realPathOf(entry.game), commands)
     }
 
     /**

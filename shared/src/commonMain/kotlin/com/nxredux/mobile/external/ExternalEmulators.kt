@@ -40,6 +40,8 @@ data class ExternalEmulator(
     val tags: Set<String>,
     val sets: SetRule = SetRule.ALL,
     val readsZip: Boolean = false,
+    /** Only games with these extensions (lower case); null: any of the console's games. */
+    val extensions: Set<String>? = null,
     val commandsSidecar: Boolean = false,
     val checked: Boolean = false,
 ) {
@@ -109,9 +111,25 @@ object ExternalEmulators {
 
     fun byId(id: String, table: List<ExternalEmulator> = all): ExternalEmulator? = table.firstOrNull { it.id == id }
 
-    /** Whether [e] can open this game: path-only apps need a real file outside any zip, and set rules need the matching arcade set. */
-    fun offered(e: ExternalEmulator, isRealFile: Boolean, insideZip: Boolean, isNaomiSet: Boolean, isModel3Set: Boolean): Boolean {
+    /**
+     * Sheets and playlists name sibling files; an app handed only the sheet's URI cannot open those, an app given the
+     * path can.
+     */
+    val SHEET_EXTENSIONS: Set<String> = setOf("cue", "m3u", "gdi", "ccd", "toc", "mds")
+
+    /**
+     * Whether [e] can open this game ([extension] its file's, lower case): path-only apps need a real file outside any
+     * zip, a URI app no sheet or playlist, an extension filter a matching file, a sidecar app its sidecar
+     * ([hasCommands]), and set rules the matching arcade set.
+     */
+    fun offered(
+        e: ExternalEmulator, isRealFile: Boolean, insideZip: Boolean, isNaomiSet: Boolean, isModel3Set: Boolean,
+        extension: String, hasCommands: Boolean,
+    ): Boolean {
         if (e.needsPath && (!isRealFile || (insideZip && !e.readsZip))) return false
+        if (!e.needsPath && extension in SHEET_EXTENSIONS) return false
+        if (e.extensions != null && extension !in e.extensions) return false
+        if (e.commandsSidecar && !hasCommands) return false
         return when (e.sets) {
             SetRule.ALL -> true
             SetRule.NAOMI -> isNaomiSet

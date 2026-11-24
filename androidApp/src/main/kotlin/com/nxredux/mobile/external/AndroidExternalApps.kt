@@ -86,9 +86,6 @@ internal data class ExternalIntent(
     val displayId: Int?,
 )
 
-/** The sidecar a [ExternalEmulator.commandsSidecar] recipe reads beside [fileName]: its base name plus `.commands`. */
-internal fun commandsFileName(fileName: String): String = Names.stripExtension(fileName) + ".commands"
-
 /** The folder of a real path, for a recipe's `{dir}`. */
 internal fun dirOf(path: String?): String? = path?.let { File(it).parent }
 
