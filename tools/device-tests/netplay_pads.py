@@ -69,6 +69,8 @@ class Side:
     def __init__(self, spec, label):
         serial, _, roms = spec.partition(":")
         self.phone = Fold(serial, verbose=False)
+        # Android 11 (the AYANEO) drops adb broadcasts to a force-stopped app: the hooks go as activity starts there.
+        self.phone.activity_hooks = int(self.phone.sh("getprop ro.build.version.sdk").strip() or 0) <= 30
         self.roms = roms.rstrip("/")
         self.label = label
 

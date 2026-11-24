@@ -213,10 +213,10 @@ Checked on the emulator only (GBA game starts, draws, quits; first setup up to P
 - [ ] Update row: after "Update failed" (a redirect), A retries the same release; checking again needs an app restart (Nova, local feed). Check whether intended.
 
 ## Sega netplay: both players on the host's Controller Type
-Automated: `tools/device-tests/netplay_pads.py` (Fold host, Nova client, 2026-11-25).
+Automated: `tools/device-tests/netplay_pads.py` (Fold host, Nova client, then AYANEO host, Nova client, 2026-11-25: all pass).
 - [x] PicoDrive: host on 6, 3, Auto (6-button and 3-button game) and 6 on a 3-button game: both phones play the host's pad, drift check clean.
 - [x] Old peer either side (no `pad=`): both on the old 3-button pad, drift check clean.
 - [x] The drift check catches a forced 6-vs-3 mismatch (the control case).
-- [ ] Genesis Plus GX: pads right on both phones, but one hash mismatch near frame 240 in every case, Auto (today's pad) too, then clean after the resync. Find out whether a plain session drifts there.
+- [x] Genesis Plus GX: host on 6, 3 and Auto, both phones on the host's pad, drift check clean. It drifted before this branch (Auto too): its state leaves out the 68k refresh phase and VDP FIFO timing; the host now loads back the state it sends. 60 s without resyncs stayed in step.
 - [ ] Phone ↔ Brick (no `pad=` yet): still starts, both on the old fixed pad, no desync.
 
