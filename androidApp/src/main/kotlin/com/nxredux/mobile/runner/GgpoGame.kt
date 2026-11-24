@@ -89,9 +89,9 @@ internal class GgpoGame(
             runCatching {
                 val to = InetAddress.getByName(session.peerIp)
                 val bytes = GgpoSession.BYE_MESSAGE.toByteArray(Charsets.US_ASCII)
-                val out = s ?: DatagramSocket()
-                repeat(GgpoSession.BYE_REPEATS) { out.send(DatagramPacket(bytes, bytes.size, to, GgpoSession.BYE_PORT)) }
-                out.close()
+                (s ?: DatagramSocket()).use { out ->
+                    repeat(GgpoSession.BYE_REPEATS) { out.send(DatagramPacket(bytes, bytes.size, to, GgpoSession.BYE_PORT)) }
+                }
             }.onFailure { NxLog.w(TAG, "goodbye failed", it) }
         }, "ggpo-bye").start()
     }

@@ -1327,9 +1327,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             observeErrors(view, cfg.coreFile) { lines ->
                 // A Dreamcast session's load waits for the other device: refused, it never came (or the two did not agree).
                 if (cfg.np?.ggpo == true && (lines.isEmpty() || lines.any { GGPO_LOG in it })) {
-                    host.fail(NetplayText.FAILED_CONNECT, NetplayText.FAILED)
-                    null
+                    NetplayText.FAILED_CONNECT to NetplayText.FAILED
                 } else LoadFailure.message(cfg.title, lines, cfg.romFileName.takeIf { prepared.archiveAsIs }, prepared.naomiBios, naomiParent)
+                    ?.let { it to GameActivity.START_FAILED }
             }
             // Debug builds: a file named simulate_vulkan_fail in the app's files dir makes a Vulkan launch take the fallback
             // as a failed bridge setup would (no phone at hand fails it): `adb shell run-as <package> touch files/simulate_vulkan_fail`.
@@ -1460,7 +1460,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         }
     }
 
-    private fun observeErrors(view: GLRetroView, coreFile: String, loadFailure: (List<String>) -> String?) {
+    private fun observeErrors(view: GLRetroView, coreFile: String, loadFailure: (List<String>) -> Pair<String, String>?) {
         host.lifecycleScope.launch {
             view.getGLRetroErrors().flowWithLifecycle(host.lifecycle, Lifecycle.State.STARTED).collect { code ->
                 if (code == GLRetroView.ERROR_LOAD_LIBRARY) {
@@ -1478,7 +1478,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 if (code == GLRetroView.ERROR_LOAD_GAME) {
                     val lines = runCatching { view.getRecentCoreErrors() }.getOrDefault(emptyList())
                     lines.forEach { NxLog.i(TAG_LOG, "core said: $it") }
-                    loadFailure(lines)?.let { host.fail(it); return@collect }
+                    loadFailure(lines)?.let { (message, title) -> host.fail(message, title); return@collect }
                 }
                 if (code == GLRetroView.ERROR_GL_NOT_COMPATIBLE) {
                     // netplay: a relaunch would start without the session (it is gone), so the dialog says what to do. An
