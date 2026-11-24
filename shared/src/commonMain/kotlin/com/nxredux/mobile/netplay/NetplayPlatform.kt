@@ -78,7 +78,8 @@ class CableLinkRefused(val text: String) : Exception(text)
  * [cableLink]: a Cable Link over Wi-Fi session (each phone runs both GBAs); the rest is what its handshake settled
  * ([com.nxredux.mobile.netplay.wizard.CableLinkSetup]): [otherRomPath] the other player's ROM as a filesystem path,
  * [otherSavePath] its save in a session dir (null: none), [localSlot] 1 on the host and 2 on the guest, [biosMode]
- * `real` or `hle`, [rtcEpoch] the host's clock in epoch seconds. Unused outside Cable Link.
+ * `real` or `hle`, [rtcEpoch] the host's clock in epoch seconds. Unused outside Cable Link. [peerName]: the other
+ * player's name, when both sides traded names (null: an older build, the handheld, or none came).
  */
 data class NetplaySession(
     val role: NetplayRole,
@@ -95,6 +96,7 @@ data class NetplaySession(
     val localSlot: Int = if (role == NetplayRole.HOST) 1 else 2,
     val biosMode: String = CableLinkSetup.BIOS_HLE,
     val rtcEpoch: Long = 0L,
+    val peerName: String? = null,
 ) {
     /** This session with what a Cable Link handshake settled. */
     fun withCableLink(setup: CableLinkSetup): NetplaySession = copy(
