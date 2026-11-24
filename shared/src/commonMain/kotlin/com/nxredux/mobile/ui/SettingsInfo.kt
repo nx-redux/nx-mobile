@@ -9,9 +9,16 @@ internal data class SettingText(val line: String, val detail: String = "")
 /** A compact row: no line, [text] (or a fuller [detail]) behind the info icon only. */
 internal fun quiet(text: String, detail: String = "") = SettingText("", detail.ifEmpty { text })
 
+/**
+ * What Appearance's Reset to defaults puts back: the pad's settings only while their rows show ([padShown]; a controller
+ * hides them, and a reset leaves them alone). The reset row carries it as its note.
+ */
+internal fun appearanceResetScope(padShown: Boolean): String =
+    if (padShown) "Pad theme, Pad buttons, Accent, Secondary accent, Text size and Button layout" else "Accent, Secondary accent and Text size"
+
 /** Reset to defaults' line on each page that has one, and the fuller text behind its info icon. */
-private fun resetText(section: SettingsSection?): SettingText = when (section) {
-    SettingsSection.APPEARANCE -> SettingText("Resets every setting on this page", "Put Pad theme, Pad buttons, Accent, Secondary accent, Text size and Button layout back")
+private fun resetText(section: SettingsSection?, scope: String?): SettingText = when (section) {
+    SettingsSection.APPEARANCE -> SettingText("Resets every setting on this page", "Put ${scope ?: appearanceResetScope(true)} back")
     SettingsSection.MAIN_MENU -> SettingText("Resets every setting on this page", "Put every Layouts group and Extra info back to their defaults")
     SettingsSection.CONTROLS -> SettingText("Resets every setting on this page", "Put Pad vibration and Game rumble back to their defaults")
     SettingsSection.SHORTCUTS -> SettingText("Sets every shortcut to None", "Unbind every action and take both touch buttons off the pad")
@@ -118,7 +125,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "tab names and the hint bar. Small is three quarters of Large, with more rows per screen. The text also " +
             "follows Android's own font size setting.",
     )
-    SettingsKind.RESET_DEFAULTS -> resetText(section)
+    SettingsKind.RESET_DEFAULTS -> resetText(section, row.note)
     // Layouts' group rows: no text on the row (their pages' rows say what each group holds).
     SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_GAMES_TAB, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER -> SettingText("")

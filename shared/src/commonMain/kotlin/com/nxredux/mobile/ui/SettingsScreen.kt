@@ -271,7 +271,7 @@ internal fun settingsResetAsk(page: Screen.Settings, selected: Int): SettingsRes
     SettingsKind.RESET_DEFAULTS -> when (page.section) {
         SettingsSection.SHORTCUTS -> SettingsResetAsk("Clear all shortcuts?", "Every action goes back to None and both touch buttons come off the pad.", "Clear all")
         SettingsSection.SYSTEM_BUTTONS -> SettingsResetAsk("Reset this controller's buttons?", "SELECT, START and MENU go back to the controller's own buttons.", "Reset")
-        SettingsSection.APPEARANCE -> SettingsResetAsk("Reset to defaults?", "Pad theme, Pad buttons, Accent, Secondary accent, Text size and Button layout go back to their defaults.", "Reset")
+        SettingsSection.APPEARANCE -> SettingsResetAsk("Reset to defaults?", "${page.rows[selected].note ?: appearanceResetScope(true)} go back to their defaults.", "Reset")
         SettingsSection.MAIN_MENU -> SettingsResetAsk("Reset to defaults?", "Every Layouts group and Extra info go back to their defaults.", "Reset")
         SettingsSection.CONTROLS -> SettingsResetAsk("Reset to defaults?", "Pad vibration and Game rumble go back to their defaults.", "Reset")
         else -> SettingsResetAsk("Reset to defaults?", "This page's settings go back to their defaults.", "Reset")
