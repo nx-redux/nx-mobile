@@ -6,6 +6,7 @@ import com.nxredux.mobile.tryQuietly
 import com.nxredux.mobile.netplay.Advert
 import com.nxredux.mobile.netplay.CableLinkRefused
 import com.nxredux.mobile.netplay.FoundHost
+import com.nxredux.mobile.netplay.DcNetplaySaves
 import com.nxredux.mobile.netplay.GbaWifiLink
 import com.nxredux.mobile.netplay.NetplayChannel
 import com.nxredux.mobile.netplay.NetplayCores
@@ -383,10 +384,12 @@ class NetplayController(
                     channel = ch
                     hostStatus(NetplayText.PLAYER_CONNECTED)
                     // A failed or cancelled wizard must still close the peer's socket (it would wait for its timeout).
+                    var dcBios: String? = null
                     val out = try {
                         withContext(work) {   // staging the saves and the rsync daemon: off the main thread
+                            dcBios = if (NetplayCores.ggpo(own)) platform.dcBios() else null
                             Wizard.host(
-                                ch, HostOffer(game, tag, own, pick, usb, wl, cl, name = playerName(), pad = segaPad(tag, own, rom)), saves = { platform.hostSaves(tag, rom, e.game.ref) },
+                                ch, HostOffer(game, tag, own, pick, usb, wl, cl, name = playerName(), dcBios = dcBios, pad = segaPad(tag, own, rom)), saves = { platform.hostSaves(tag, rom, e.game.ref) },
                                 onSync = { hostStatus(NetplayText.SENDING) },
                                 onTransfer = { t -> hostStatus(NetplayText.transfer(t.sending, t.done, t.total)) },
                             )
@@ -399,7 +402,10 @@ class NetplayController(
                         is HostOutcome.Started -> {
                             stopHosting()
                             _page.value = NetplayPage.Progress(NetplayText.TITLE, NetplayText.STARTING)
-                            val session = NetplaySession(NetplayRole.HOST, out.peer, out.core, folderCore, out.emptySaves, overUsb = link != null, mixed = out.mixed, peerWl = out.peerWl, peerName = out.peerName, segaPad = out.pad)
+                            val session = NetplaySession(
+                                NetplayRole.HOST, out.peer, out.core, folderCore, out.emptySaves, overUsb = link != null, mixed = out.mixed,
+                                peerWl = out.peerWl, peerName = out.peerName, dcHle = DcNetplaySaves.hle(dcBios, out.peerDcBios), segaPad = out.pad,
+                            )
                             finish(e, out.cableLink?.let(session::withCableLink) ?: session)
                             return@launch
                         }
@@ -553,10 +559,12 @@ class NetplayController(
                 return
             }
             channel = ch
+            var dcBios: String? = null
             val out = try {
                 withContext(work) {   // the save sink runs rsync and writes files: off the main thread
+                    dcBios = if (NetplayCores.ggpo(core)) platform.dcBios() else null
                     Wizard.client(
-                        ch, ClientOffer(game, any, tag, core, pick, usb, mayRetry && cl == null, wl, cl, name = playerName(), pad = segaPad(tag, core, rom)), platform.clientSink(rom),
+                        ch, ClientOffer(game, any, tag, core, pick, usb, mayRetry && cl == null, wl, cl, name = playerName(), dcBios = dcBios, pad = segaPad(tag, core, rom)), platform.clientSink(rom),
                         onSync = { joinProgress(NetplayText.RECEIVING) },
                         onWaiting = { n -> joinProgress(NetplayText.youArePlayer(n)) },
                         onTransfer = { t -> joinProgress(NetplayText.transfer(t.sending, t.done, t.total)) },
@@ -580,7 +588,10 @@ class NetplayController(
                     _page.value = NetplayPage.Progress(NetplayText.JOIN, NetplayText.STARTING)
                     // A joiner never declines offered saves (no rsync: the driver refuses with COPY_FAILED), so it
                     // always plays on the copy it received, empty when the host sent none; only a host has emptySaves.
-                    val session = NetplaySession(NetplayRole.CLIENT, host.ip, out.core, folderCore, overUsb = link == NetplayLink.USB, mixed = out.mixed, peerWl = out.peerWl, peerName = out.peerName, segaPad = out.pad)
+                    val session = NetplaySession(
+                        NetplayRole.CLIENT, host.ip, out.core, folderCore, overUsb = link == NetplayLink.USB, mixed = out.mixed,
+                        peerWl = out.peerWl, peerName = out.peerName, dcHle = DcNetplaySaves.hle(dcBios, out.peerDcBios), segaPad = out.pad,
+                    )
                     finish(e, out.cableLink?.let(session::withCableLink) ?: session)
                     return
                 }

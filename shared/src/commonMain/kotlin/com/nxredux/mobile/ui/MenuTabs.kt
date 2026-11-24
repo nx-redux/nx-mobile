@@ -33,17 +33,21 @@ internal fun buildMenuTabs(
 }
 
 /**
- * The Home tab's rows in [style]. Grid: the top section, then the row games ([buildHome] already left Continue's game
- * out), then the large face's shelves. List and Minimal: Continue (or Pick a game), every pinned game, the shelves,
- * then the pinned tools. Carousel: the pinned tools first (to the left of Continue), then Continue (or Pick a game),
- * every pinned game, and the shelves; initial focus starts on Continue / Pick a game ([homeInitialIndex]).
+ * The Home tab's rows in [style]. Grid: the top section (Continue or Pick a game, plus any inline pinned games), the
+ * remaining row pinned games ([buildHome] already left Continue's game out), the pinned tools band, then the shelves.
+ * List and Minimal: Continue (or Pick a game), every pinned game, the shelves, then the pinned tools. Carousel: the
+ * pinned tools first (to the left of Continue), then Continue (or Pick a game), every pinned game, and the shelves;
+ * initial focus starts on Continue / Pick a game ([homeInitialIndex]).
  */
 internal fun homeTabRows(home: Home, style: MenuStyle = MenuStyle.GRID): List<MainRow> {
-    if (style == MenuStyle.GRID) return home.top + home.pins + home.shelves
-    val rest = home.top.drop(1)
-    val tools = rest.filter { it is MainRow.PinnedTool || it is MainRow.MoreTools }
-    val games = home.top.take(1) + rest.filterIsInstance<MainRow.Pin>() + home.pins + home.shelves
-    return if (style == MenuStyle.CAROUSEL || style == MenuStyle.BACKDROP) tools + games else games + tools
+    val topTools = home.top.drop(1).filter { it is MainRow.PinnedTool || it is MainRow.MoreTools }
+    val top = home.top.filterNot { it is MainRow.PinnedTool || it is MainRow.MoreTools }
+    val tools = home.tools + topTools
+    return when (style) {
+        MenuStyle.GRID -> top + home.pins + tools + home.shelves
+        MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> tools + top + home.pins + home.shelves
+        MenuStyle.LIST, MenuStyle.MINIMAL -> top + home.pins + home.shelves + tools
+    }
 }
 
 /**

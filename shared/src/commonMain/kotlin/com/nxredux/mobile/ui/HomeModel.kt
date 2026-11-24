@@ -19,10 +19,13 @@ import com.nxredux.mobile.ui.nx.homeInsetStart
 data class HomeStats(val playedMs: Long?, val unlocks: Int?, val signedIn: Boolean, val top: GameTotal?, val computed: Boolean)
 
 /**
- * The Home tab: the top section (Continue or Pick a game, any inline games, the pinned tools), the row games, the
- * strip and the shelves' games.
+ * The Home tab: the top section (Continue or Pick a game, any inline games), the row games, the
+ * strip, the shelves' games and the pinned tools.
  */
-data class Home(val top: List<MainRow>, val pins: List<MainRow>, val strip: HomeStrip?, val freshInstall: Boolean, val shelves: List<MainRow.Shelf> = emptyList())
+data class Home(
+    val top: List<MainRow>, val pins: List<MainRow>, val strip: HomeStrip?, val freshInstall: Boolean,
+    val shelves: List<MainRow.Shelf> = emptyList(), val tools: List<MainRow> = emptyList(),
+)
 
 /**
  * What HomeScreen needs beside the rows: the [strip], how many rows are the top section, and the pinned counts. [frame]
@@ -85,12 +88,12 @@ internal fun buildHome(
     val tools = if (pinnedTools.size > slots) pinnedTools.take(slots - 1).map { MainRow.PinnedTool(it) } + MainRow.MoreTools(pinnedTools.size - (slots - 1))
         else pinnedTools.map { MainRow.PinnedTool(it) }
     val n = inline.coerceIn(0, games.size)
-    return Home(listOf(last ?: MainRow.PickAGame) + games.take(n) + tools, games.drop(n), homeStrip(stats), freshInstall = false, shelves = rows)
+    return Home(listOf(last ?: MainRow.PickAGame) + games.take(n), games.drop(n), homeStrip(stats), freshInstall = false, shelves = rows, tools = tools)
 }
 
-/** Every pinned tool is a tile (a dock square on Carousel Home) or hidden behind "+N"; [HomeView.games] counts every pinned game, inline ones too. */
+/** Every pinned tool is a tile or hidden behind "+N"; [HomeView.games] counts every pinned game, inline ones too. */
 internal fun homeView(home: Home, rows: List<MainRow>): HomeView = HomeView(
-    home.strip, home.top.size,
+    home.strip, home.top.count { it !is MainRow.PinnedTool && it !is MainRow.MoreTools },
     tools = rows.count { it is MainRow.PinnedTool } + (rows.firstNotNullOfOrNull { it as? MainRow.MoreTools }?.count ?: 0),
     games = rows.count { it is MainRow.Pin },
     shelves = shelfBands(rows),

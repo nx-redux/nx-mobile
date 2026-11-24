@@ -86,6 +86,7 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
                     it.peerWl?.let { wl -> putExtra(GameActivity.EXTRA_NETPLAY_PEER_WL, wl) }
                     it.peerName?.let { name -> putExtra(GameActivity.EXTRA_NETPLAY_PEER_NAME, name) }
                     it.segaPad?.let { pad -> putExtra(GameActivity.EXTRA_NETPLAY_SEGA_PAD, pad) }
+                    if (it.ggpo) putExtra(GameActivity.EXTRA_NETPLAY_DC_HLE, it.dcHle)
                     if (it.cableLink) {
                         putExtra(GameActivity.EXTRA_NETPLAY_CABLE_LINK, true)
                         putExtra(GameActivity.EXTRA_NETPLAY_OTHER_ROM, it.otherRomPath)

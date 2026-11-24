@@ -25,14 +25,12 @@ import com.nxredux.mobile.ui.HomeStrip
 import com.nxredux.mobile.ui.InfoLine
 import com.nxredux.mobile.ui.MainRow
 import com.nxredux.mobile.ui.abstractAccentArtUrl
-import com.nxredux.mobile.ui.abstractAppArtUrl
 import com.nxredux.mobile.ui.abstractArtFor
-import com.nxredux.mobile.ui.abstractArtUrl
 import com.nxredux.mobile.ui.continueFrame
 import com.nxredux.mobile.ui.continuePictures
 import com.nxredux.mobile.ui.game
 import com.nxredux.mobile.ui.gridTiles
-import com.nxredux.mobile.ui.pinKey
+import com.nxredux.mobile.ui.toolAbstractArtUrl
 import kotlin.math.max
 import kotlin.math.min
 
@@ -127,7 +125,7 @@ internal fun homeCarouselTiles(rows: List<MainRow>, accentRgb: Int): List<GridTi
         // Pinned tools show a large centred icon over deterministic abstract art; their title sits in the caption under the carousel.
         is MainRow.PinnedTool -> (gridTiles(listOf(r)).single() as GridTile.Tool).copy(
             lines = emptyList(),
-            backgroundUrl = r.row.appId?.let { abstractAppArtUrl(it, icon = false) } ?: abstractArtUrl("TOOL", r.row.pinKey),
+            backgroundUrl = toolAbstractArtUrl(r.row),
         )
         else -> null
     }

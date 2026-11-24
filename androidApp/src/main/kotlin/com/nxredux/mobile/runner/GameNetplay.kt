@@ -134,7 +134,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
             cableLinkFrom(intent),
             intent.getStringExtra(GameActivity.EXTRA_NETPLAY_PEER_NAME),
             intent.getStringExtra(GameActivity.EXTRA_NETPLAY_SEGA_PAD),
-        )
+        )?.copy(dcHle = intent.getBooleanExtra(GameActivity.EXTRA_NETPLAY_DC_HLE, true))
         // netplay link: recreated after a process kill once its session had ended: the local game it had become, as a
         // normal launch (its resume slot below), not a session.
         local = launchSession?.endsAsLocalGame == true && savedInstanceState?.getBoolean(KEY_NETPLAY_LOCAL) == true
@@ -243,6 +243,8 @@ internal class GameNetplay(private val host: GameNetplayHost) {
      */
     private suspend fun start(np: NetplaySession): Boolean {
         holdWifi(np)
+        // Dreamcast: flycast met the other device inside its load (GGPO); only the goodbye and the pause limit run here.
+        if (np.ggpo) return GgpoGame(np, host.lifecycleScope, onPeerLeft = { ggpoEnded() }, onGraceOver = ::leave).also { run = it }.start()
         return when (np.linkKind) {
             null -> {
                 val settings = host.settings
@@ -257,6 +259,23 @@ internal class GameNetplay(private val host: GameNetplayHost) {
             NetplayLinkKind.NETPACKET -> (run as? NetplayLinkGame)?.let { it.begin(); it.live } ?: false
             NetplayLinkKind.GBLINK, NetplayLinkKind.N3DSLINK, NetplayLinkKind.NDSLINK, NetplayLinkKind.PSPLINK -> true
         }
+    }
+
+    /**
+     * A Dreamcast session is over from the other side: its goodbye arrived, or flycast stopped itself once the other
+     * device went silent (the core's shutdown request). The game cannot play on (the core has stopped, and its state is
+     * the session's), so it ends behind a "Netplay ended" dialog, as the handheld quits to the list. True when this
+     * handled the end (false: no Dreamcast session, or it had ended already).
+     */
+    fun ggpoEnded(): Boolean {
+        if (session?.ggpo != true || ended || run?.live == false) return false   // not live: this side left (Leave)
+        ended = true
+        run?.detach()
+        releaseWifi()
+        host.retroView?.frameSpeed = 0
+        host.retroView?.audioEnabled = false
+        host.fail(NetplayText.ENDED_DETAIL, NetplayText.ENDED)
+        return true
     }
 
     /** netplay link: the GBA link engine, started before the core loads; the raw link mode the core runs with, or null. */

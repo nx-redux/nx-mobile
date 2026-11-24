@@ -56,6 +56,8 @@ interface NetplayPlatform {
     suspend fun segaPadSetting(tag: String, coreId: String, romFileName: String): String
     /** Where a joiner's pulls land (a fresh session copy per join). */
     fun clientSink(romFileName: String): SaveSink
+    /** A Dreamcast game's `dcbios=` fingerprint here ([DcNetplaySaves.fingerprint]): the BIOS its launch would boot. */
+    suspend fun dcBios(): String = DcNetplaySaves.NO_BIOS
     fun keepScreenOn(on: Boolean)
 
     /** Cable Link over Wi-Fi can run on this platform (the pair core and its files). */
@@ -86,7 +88,7 @@ class CableLinkRefused(val text: String) : Exception(text)
  * `real` or `hle`, [rtcEpoch] the host's clock in epoch seconds. Unused outside Cable Link. [peerName]: the other
  * player's name, when both sides traded names (null: an older build, the handheld, or none came). [segaPad]: the host's
  * Sega Controller Type both sides play ([com.nxredux.mobile.runner.SegaPadType]); null: a side sent none, so both play
- * [NetplayPads]' fixed pad.
+ * [NetplayPads]' fixed pad. [dcHle]: a Dreamcast session boots flycast's HLE BIOS on both sides ([DcNetplaySaves.hle]).
  */
 data class NetplaySession(
     val role: NetplayRole,
@@ -105,6 +107,7 @@ data class NetplaySession(
     val rtcEpoch: Long = 0L,
     val peerName: String? = null,
     val segaPad: String? = null,
+    val dcHle: Boolean = true,
 ) {
     /** This session with what a Cable Link handshake settled. */
     fun withCableLink(setup: CableLinkSetup): NetplaySession = copy(
@@ -121,6 +124,13 @@ data class NetplaySession(
      * phone, only inputs on the wire), although its core is mGBA.
      */
     val linkKind: NetplayLinkKind? get() = if (cableLink) null else NetplayCores.link(coreId)
+
+    /**
+     * A Dreamcast session: flycast's GGPO rollback runs inside the core ([NetplayCores.ggpo]), so the runner starts no
+     * engine. Saves are copied from the host as for lockstep; [dcHle]: both sides boot the HLE BIOS (their real ones
+     * differ, or one has none), from the two sides' `dcbios=` caps.
+     */
+    val ggpo: Boolean get() = !cableLink && NetplayCores.ggpo(coreId)
 
     /**
      * A link session (GB/GBC/GBA) never plays on a copy: each player keeps their own save, which a trade needs. Nor does

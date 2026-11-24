@@ -101,6 +101,7 @@ class ContextMenusTest {
         val gg = entry("GG", file = "Sonic.gg")
         val nds = entry("NDS", file = "Mario Kart DS.nds")
         val dc = entry("DC", file = "Daxter.cdi")
+        val vb = entry("VB", file = "Wario Land.vb")
         fun netplay(e: Listed, source: ListSource = ListSource.Console(e.system), on: Boolean = true) =
             ContextMenus.itemsFor(source, e, false, netplay = on).filter { it.kind == ContextKind.NETPLAY }
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(sfc))
@@ -110,7 +111,8 @@ class ContextMenusTest {
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(gba))   // GBA link
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(gg))   // GG lockstep, as the handheld's GG.pak
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(nds))   // DS local wireless
-        assertTrue(netplay(dc).isEmpty())
+        assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(dc))   // flycast's GGPO rollback
+        assertTrue(netplay(vb).isEmpty())
         assertTrue(netplay(sfc, on = false).isEmpty())   // a platform without netplay
         assertTrue(netplay(sfc, ListSource.Recent).isEmpty())
         val u = entry("SFC", unassigned = true, file = "thing.sfc")
@@ -233,8 +235,8 @@ class ContextMenusTest {
         assertEquals(listOf(ContextKind.PLAY_FROM_START, ContextKind.NETPLAY, ContextKind.PIN), lead(src, e).map { it.kind }.take(3))
         assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), lead(src, e, canResume = false).map { it.kind }.take(2))
         assertEquals(listOf(ContextKind.PLAY_FROM_START, ContextKind.PIN), lead(src, e, netplay = false).map { it.kind }.take(2))
-        val dc = entry("DC", file = "Daxter.cdi")   // a tag without netplay: never Netplay
-        assertTrue(ContextKind.NETPLAY !in lead(ListSource.Console(dc.system), dc).map { it.kind })
+        val vb = entry("VB", file = "Wario Land.vb")   // a tag without netplay: never Netplay
+        assertTrue(ContextKind.NETPLAY !in lead(ListSource.Console(vb.system), vb).map { it.kind })
     }
 
     @Test fun collection_and_search_menus_list_netplay_once() {

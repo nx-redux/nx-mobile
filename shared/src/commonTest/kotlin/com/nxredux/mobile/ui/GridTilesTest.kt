@@ -101,6 +101,13 @@ class GridTilesTest {
         assertEquals(listOf("Game Tracker"), toolDisplayLines("Game Tracker"))
     }
 
+    @Test fun toolAbstractArtUsesPinKeyOrIconlessAppArt() {
+        val builtIn = ToolRow(ToolKind.RETRO_ACHIEVEMENTS, "RetroAchievements", null)
+        val app = ToolRow(ToolKind.APP, "YouTube", null, appId = "com.google.android.youtube")
+        assertEquals(abstractArtUrl("TOOL", builtIn.pinKey), toolAbstractArtUrl(builtIn))
+        assertEquals(abstractAppArtUrl("com.google.android.youtube", icon = false), toolAbstractArtUrl(app))
+    }
+
     @Test fun backdropGamesTakeBoxartScreenshotAndShownTitle() {
         val games = backdropGames(listOf(listed("Zelda", shot = "s/zelda.png", box = "b/zelda.png", label = "Zelda (GBA)"), listed("Kirby")))
         assertEquals(BackdropGame("b/zelda.png", "s/zelda.png", "Zelda (GBA)", "GBA", abstractUrl = abstractArtUrl("GBA", "Zelda.gba")), games[0])

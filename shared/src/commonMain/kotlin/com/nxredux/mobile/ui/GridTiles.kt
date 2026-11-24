@@ -95,6 +95,10 @@ internal fun gameBackground(e: Listed, portrait: Boolean): String? =
 internal fun abstractBackgroundFor(e: Listed): String =
     e.appId?.let { abstractAppArtUrl(it, icon = false) } ?: abstractArtFor(e)
 
+/** A pinned tool's abstract background art: an Android app's icon-palette art without the icon, else seeded by its pin key. */
+internal fun toolAbstractArtUrl(row: ToolRow): String =
+    row.appId?.let { abstractAppArtUrl(it, icon = false) } ?: abstractArtUrl("TOOL", row.pinKey)
+
 /**
  * A merged console row (SFC + SUPA) takes the first logo any of its tags has, as [menuBackground] does, and counts the
  * games of all its systems ([consoleInfoLines]' number). [controllerArt]: a console also carries its controller
