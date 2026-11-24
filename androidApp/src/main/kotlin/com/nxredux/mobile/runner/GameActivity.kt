@@ -531,6 +531,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override val localWirelessNow: String? get() = if (!launchPipeline.dsAutoRoute || gameCoreId == "ppsspp") null else
         LocalWirelessText.now(dsRoom.current == DsPresence.ROOM, dsRoom.current == DsPresence.SEEKING, dsRoom.others)
     override fun showMenu() { if (!menuOpen) menu.toggleMenu() }
+    override fun sessionChanged() = dual.refreshDualPanel()
     override val netplayNow: NetplaySession? get() = gameNetplay.now
     override val sessionLocked: Boolean get() = netplayNow != null || dsWireless
 
@@ -688,6 +689,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** DS: a toast as devices join and leave the room (the 3DS core sends its own, with names). */
     private fun onDsOthersChanged(before: Int, now: Int) {
         if (launchPipeline.dsAutoRoute && gameCoreId == "melondsds") LocalWirelessText.change(before, now)?.let(dual::pictureToast)
+        dual.refreshDualPanel()   // the session card says how many are linked
         withMenu { it.setLocalWirelessNow(localWirelessNow) }
     }
 
