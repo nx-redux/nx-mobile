@@ -60,7 +60,7 @@ internal const val HOME_LIST_GAP_ROWS = 0.5f
 internal fun HomeListScreen(
     rows: List<MainRow>, selection: () -> Int, strip: HomeStrip?,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?, onHint: ((NxButton) -> Unit)?,
-    modifier: Modifier = Modifier, tabMenu: Boolean = false, iconsRoom: Dp = 0.dp,
+    modifier: Modifier = Modifier, tabMenu: Boolean = false, iconsRoom: Dp = 0.dp, iconsWidth: Float = HOME_HEADER_ICONS_ROOM,
 ) {
     val chrome = LocalLauncherChrome.current
     val portrait = LocalPortrait.current
@@ -108,19 +108,19 @@ internal fun HomeListScreen(
                 bottomRows = if (header != null) HOME_LIST_GAP_ROWS else 0f,   // the tab row hidden: the other half off the bottom edge
             )
         }
-        HomeStripOverlay(shownStrip, pageStrip, header?.takeIf { shownStrip != null }, statLines, inkTop, capTop, frame, inset)
+        HomeStripOverlay(shownStrip, pageStrip, header?.takeIf { shownStrip != null }, statLines, inkTop, capTop, frame, inset, iconsWidth)
     }
 }
 
 /**
  * List and Minimal Home's strip over their body, on the page [inset]: [pageStrip] in the page under
  * the tab row, its text's top at [inkTop] ([capTop] under its lines' top), or [strip] in the stats [header] (the tab row
- * hidden), short of the Recent and Search icons MainMenuScreen draws at its right.
+ * hidden), short of the top icons MainMenuScreen draws at its right ([iconsWidth]).
  */
 @Composable
 internal fun HomeStripOverlay(
     strip: HomeStrip?, pageStrip: HomeStrip?, header: HomeStatsHeader?, stripLines: Int, inkTop: Float, capTop: Float,
-    frame: HomeFrame, inset: PageInset,
+    frame: HomeFrame, inset: PageInset, iconsWidth: Float = HOME_HEADER_ICONS_ROOM,
 ) {
     // Still while the page slides between tabs, as the tab row and the icons are ([pageFixed]). The layer spans the
     // body: the strip's lines are offset down from the box's top, and one a line tall would cut the second (Most played).
@@ -136,7 +136,7 @@ internal fun HomeStripOverlay(
         BoxWithConstraints(Modifier.fillMaxSize().pageFixed()) {
             HomeStripLines(
                 strip, stripLines, inset.start.value, header.stripTop,
-                width = (maxWidth - inset.start - inset.end).value - HOME_HEADER_ICONS_ROOM, lh = homeStripLineH(frame), pitch = homeStripPitch(frame),
+                width = (maxWidth - inset.start - inset.end).value - iconsWidth, lh = homeStripLineH(frame), pitch = homeStripPitch(frame),
             )
         }
     }

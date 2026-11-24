@@ -173,8 +173,8 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "header and the Game Switcher's box.",
     )
     SettingsKind.LAYOUT_OPTIONS -> SettingText(
-        "The Layout icon in game list titles",
-        "The Layout icon opens a dropdown of every game list layout; picking one sets the game lists' rows here. Hidden, " +
+        "The Layout icon on menu tabs and game lists",
+        "The Layout icon opens a dropdown of every layout for the current tab or game list; picking one updates Settings → Layouts. Hidden, " +
             "change the layout here instead.",
     )
     SettingsKind.ACHIEVEMENTS_PANEL -> SettingText(

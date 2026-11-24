@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
 import com.nxredux.mobile.settings.MenuStyles
@@ -41,5 +42,40 @@ object GameListLayouts {
         val (st, stored) = if (dual) MenuStyles.dualGameListLayout(style, orientation) else style to orientation
         val o = MenuStyles.effectiveOrientation(st, stored)
         return choices(dual).indexOfFirst { it.style == st && it.orientation == o && (it.alignment == null || it.alignment == alignment) }.coerceAtLeast(0)
+    }
+}
+
+/**
+ * The Layout dropdown at a main menu tab's top right (touchscreens only): every style the tab offers
+ * ([MenuStyles.MAIN_MENU_STYLES]), with Carousel once per orientation on tabs that turn (Consoles, Collections, Tools;
+ * Home's Carousel is horizontal only). Picking one sets that tab's layout (and orientation for Carousel) in Settings → Layouts.
+ */
+object MenuTabLayouts {
+    private val home: List<GameListLayout> = listOf(
+        GameListLayout(MenuStyle.LIST, MenuOrientation.HORIZONTAL, "List"),
+        GameListLayout(MenuStyle.GRID, MenuOrientation.HORIZONTAL, "Grid"),
+        GameListLayout(MenuStyle.CAROUSEL, MenuOrientation.HORIZONTAL, "Carousel"),
+        GameListLayout(MenuStyle.MINIMAL, MenuOrientation.HORIZONTAL, "Minimal"),
+    )
+
+    private val turning: List<GameListLayout> = listOf(
+        GameListLayout(MenuStyle.LIST, MenuOrientation.HORIZONTAL, "List"),
+        GameListLayout(MenuStyle.GRID, MenuOrientation.HORIZONTAL, "Grid"),
+        GameListLayout(MenuStyle.CAROUSEL, MenuOrientation.HORIZONTAL, "Carousel"),
+        GameListLayout(MenuStyle.CAROUSEL, MenuOrientation.VERTICAL, "Carousel, vertical"),
+        GameListLayout(MenuStyle.MINIMAL, MenuOrientation.HORIZONTAL, "Minimal"),
+    )
+
+    /** The choices the dropdown lists for [category] (empty for Apps, which has a fixed grid, and Games, which uses [GameListLayouts]). */
+    fun choices(category: MenuCategory): List<GameListLayout> = when (category) {
+        MenuCategory.HOME -> home
+        MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS -> turning
+        MenuCategory.GAMES, MenuCategory.APPS -> emptyList()
+    }
+
+    /** The choice of [choices] that [category] in [style] and [orientation] is drawn as. */
+    fun indexOf(category: MenuCategory, style: MenuStyle, orientation: MenuOrientation): Int {
+        val o = if (category == MenuCategory.HOME) MenuOrientation.HORIZONTAL else MenuStyles.effectiveOrientation(style, orientation)
+        return choices(category).indexOfFirst { it.style == style && it.orientation == o }.coerceAtLeast(0)
     }
 }
