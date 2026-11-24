@@ -180,25 +180,31 @@ internal class HomeController(
     }
 
     /** [built] is the Home tab now: its view shows once the screen shows its rows ([publishHomeView]). */
-    fun noteHomeBuilt(built: Home) {
-        val rows = homeTabRows(built, host.homeStyle())
+    fun noteHomeBuilt(built: Home, rows: List<MainRow> = homeTabRows(built, host.homeStyle())) {
         val lines = homeStripLines(built.strip)
+        val view = homeView(built, rows).copy(frame = homeFrame, lines = lines)
+        // When the first real frame produces rows equal to the stand-in build's, MutableStateFlow keeps the stand-in
+        // screen instance; replacing the stand-in entry under its rows reference keeps snapshot restores matched.
+        val prev = homeBuilds.firstOrNull()
+        val key = if (prev != null && prev.view.frame == null && prev.rows == rows) {
+            homeBuilds.removeFirst(); prev.rows
+        } else rows
         // The view carries the frame and lines the rows were built for: HomeScreen places them on that board.
-        homeBuilds.addFirst(HomeBuild(rows, homeView(built, rows).copy(frame = homeFrame, lines = lines), homeFrameNow(), lines))
+        homeBuilds.addFirst(HomeBuild(key, view, homeFrameNow(), lines))
         while (homeBuilds.size > HOME_BUILDS_KEPT) homeBuilds.removeLast()
         publishHomeView()
     }
 
     /**
-     * Publishes the view of the Home rows on screen: the newest build's off the main menu, else the build of the rows
-     * the menu shows (older ones while a menu holds the swap back, or a restored snapshot: the switcher, Game Settings).
-     * HomeScreen splits the rows it draws with it, so the two always match. Call it after every assignment of a
+     * Publishes the view of the Home rows on [target] (defaults to the screen now): the newest build's off the main
+     * menu, else the build of the rows [target] shows (preferring the exact list instance, so a held-back or restored
+     * snapshot keeps its own view even when two frames produce equal rows). Call it after every assignment of a
      * [Screen.Systems].
      */
-    fun publishHomeView() {
+    fun publishHomeView(target: Screen = screen.value) {
         val newest = homeBuilds.firstOrNull() ?: return
-        val shown = (screen.value as? Screen.Systems)?.tabs?.firstOrNull { it.category == MenuCategory.HOME }?.rows
-        val build = if (shown == null) newest else homeBuilds.firstOrNull { it.rows == shown } ?: return
+        val shown = (target as? Screen.Systems)?.tabs?.firstOrNull { it.category == MenuCategory.HOME }?.rows
+        val build = if (shown == null) newest else homeBuilds.firstOrNull { it.rows === shown } ?: homeBuilds.firstOrNull { it.rows == shown } ?: return
         _homeView.value = build.view
     }
 

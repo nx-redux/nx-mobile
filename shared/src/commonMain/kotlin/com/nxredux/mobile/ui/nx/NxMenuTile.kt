@@ -514,7 +514,7 @@ internal const val NX_DRAIN_MS = 150
  * [DRAIN_NAME_ALPHA]), and an unselected art-less tile's ink.
  */
 private const val DRAIN_PICTURE_ALPHA = 0.45f   // role: Grid Home's unselected picture
-private const val DRAIN_NAME_ALPHA = 0.6f   // role: an unselected Grid tile's name, 4.5:1 or better on its picture
+internal const val DRAIN_NAME_ALPHA = 0.6f   // role: an unselected Grid tile's name, 4.5:1 or better on its picture
 private const val DRAIN_INK_ALPHA = 0.42f   // role: Grid Home's unselected icon or name
 
 /** A drained card's edge (no ring there): wide enough to show its rounded shape on a dark picture. */
@@ -571,7 +571,7 @@ private const val DRAIN_BADGE_ALPHA = 0.3f   // role: an unselected Grid Home ti
 internal fun nxDimBadge(litness: Float): Float = DRAIN_BADGE_ALPHA + (1f - DRAIN_BADGE_ALPHA) * litness
 
 /** A Grid Home tile's name at Large, under Text size: between its info line (14.4 sp) and the Carousel card's name (18 sp). */
-private val HOME_TILE_NAME = 16.sp
+internal val HOME_TILE_NAME = 16.sp
 
 /** An unselected Grid tile's lines under its name: ink at this, about 4.5:1 on its tile. */
 private const val DRAIN_SUB_ALPHA = 0.5f   // role: an unselected Grid tile's under-name lines
