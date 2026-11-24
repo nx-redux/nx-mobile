@@ -3,6 +3,9 @@ package com.nxredux.mobile.ui.nx
 import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.cheats.CheatEntry
 import com.nxredux.mobile.gametime.GameTimeFormat
+import com.nxredux.mobile.netplay.NetplayRole
+import com.nxredux.mobile.netplay.NetplaySession
+import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.shortcuts.TouchSlot
 
@@ -35,6 +38,14 @@ data class ShortcutState(
     val shortcut: Shortcut, val label: String, val value: String? = null, val on: Boolean? = null,
     val action: ShortcutAction? = null,
 )
+
+/**
+ * The Shortcuts tab's card while a netplay session or a DS game's wireless holds the game, in place of the tiles it
+ * hides: what the session is ([title]), how this device plays in it ([detail], a line each), why the tiles are gone
+ * ([note]) and where its way out is ([hint]). No button of its own: a resting thumb on the touch screen would open the
+ * menu, which pauses the other player or runs the DS room's idle count.
+ */
+data class GamePanelSession(val title: String, val detail: List<String>, val note: String, val hint: String)
 
 /**
  * The header on every tab: the game's [title], its box art ([artPath]; null draws the [consoleTag]'s logo), its total
@@ -112,6 +123,8 @@ data class GamePanelState(
     val slot: Int? = null,
     /** The Settings tab's rows. */
     val quick: List<QuickSetting> = emptyList(),
+    /** The Shortcuts tab's session card; null outside a session. */
+    val session: GamePanelSession? = null,
 )
 
 /** What a tap (or A) on the panel asks the game for. */
@@ -226,8 +239,9 @@ object GamePanelModel {
      * The Shortcuts tab: the touch buttons' tiles ([touch], [panelTouchActions]; Save and Load on the save-state [slot]),
      * Swap disc for a multi-disc game outside netplay (disc swaps aren't synced), then Fast forward ([ff]: running now),
      * Rewind ([rewind]: rewinding now; null where the game can't rewind, the core or its Rewind row off: hidden, never
-     * greyed), Mic ([mic]: the pad's mic button shown, "Shown" / "Hidden"; null off DS/3DS: no tile) and Reset. Fast forward shows its speed ([ffSpeed], "4x"). Netplay and link sessions keep only Swap disc's
-     * rule: the rest would desync the players. [discIndex] is 0-based.
+     * greyed), Mic ([mic]: the pad's mic button shown, "Shown" / "Hidden"; null off DS/3DS: no tile) and Reset. Fast forward shows its speed ([ffSpeed], "4x").
+     * A session ([netplay]) keeps only the Mic: DS and 3DS sessions are links, each player on their own game, and the
+     * rest would desync the players. [discIndex] is 0-based.
      */
     fun shortcuts(
         discCount: Int, discIndex: Int, netplay: Boolean, ff: Boolean, rewind: Boolean?, mic: Boolean? = null,
@@ -235,11 +249,42 @@ object GamePanelModel {
     ): List<ShortcutState> = buildList {
         if (!netplay) touch.forEach { add(touchTile(it, slot)) }
         if (discCount > 1 && !netplay) add(ShortcutState(Shortcut.SWAP_DISC, Shortcut.SWAP_DISC.label, "${discIndex + 1}/$discCount"))
-        if (netplay) return@buildList
+        if (netplay) { micTile(mic)?.let(::add); return@buildList }
         add(ShortcutState(Shortcut.FAST_FORWARD, Shortcut.FAST_FORWARD.label, value = ffSpeed?.let { "${it}x" }, on = ff))
         if (rewind != null) add(ShortcutState(Shortcut.REWIND, Shortcut.REWIND.label, on = rewind))
-        if (mic != null) add(ShortcutState(Shortcut.MIC, Shortcut.MIC.label, value = if (mic) "Shown" else "Hidden", on = mic))
+        micTile(mic)?.let(::add)
         add(ShortcutState(Shortcut.RESET, Shortcut.RESET.label))
+    }
+
+    private fun micTile(mic: Boolean?): ShortcutState? =
+        mic?.let { ShortcutState(Shortcut.MIC, Shortcut.MIC.label, value = if (it) "Shown" else "Hidden", on = it) }
+
+    /**
+     * The Shortcuts tab's session card: for [netplay] (the session this screen plays in; [ended] once it is over and the
+     * game plays on alone), else for a DS game's wireless ([dsWireless], [wirelessNow] where it stands; null for PSP's ad
+     * hoc, which says nothing). Null outside a session.
+     */
+    fun session(netplay: NetplaySession?, ended: Boolean, dsWireless: Boolean, wirelessNow: String?): GamePanelSession? = when {
+        netplay != null && ended -> GamePanelSession(
+            NetplayText.ENDED, emptyList(),
+            if (netplay.cableLink) NetplayText.CABLE_LINK_ENDED else NetplayText.ENDED_PLAYS_ON, NetplayText.MENU_TO_QUIT,
+        )
+        netplay != null -> {
+            val link = netplay.endsAsLocalGame
+            val role = if (netplay.role == NetplayRole.HOST) NetplayText.ROLE_HOST else NetplayText.ROLE_GUEST
+            GamePanelSession(
+                title = if (netplay.cableLink) NetplayText.CABLE_LINK_TAB else NetplayText.TITLE,
+                // A link's players each run their own game: no player numbers to tell apart.
+                detail = listOf(if (link) role else "${NetplayText.player(netplay.localSlot)} · $role", if (netplay.overUsb) NetplayText.USB_CABLE else NetplayText.WIFI),
+                note = if (link) NetplayText.LINK_LOCKED_NOTE else NetplayText.SYNC_LOCKED_NOTE,
+                hint = if (link) NetplayText.MENU_TO_DISCONNECT else NetplayText.MENU_TO_LEAVE,
+            )
+        }
+        dsWireless -> GamePanelSession(
+            NetplayText.LOCAL_WIRELESS, listOfNotNull(wirelessNow?.replaceFirstChar { it.uppercase() }),
+            NetplayText.LINK_LOCKED_NOTE, NetplayText.MENU_TO_DISCONNECT,
+        )
+        else -> null
     }
 
     /**

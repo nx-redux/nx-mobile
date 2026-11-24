@@ -107,6 +107,12 @@ internal interface DualScreenHost : GameScreenHost {
     val isNds: Boolean
     val isN3ds: Boolean
     val netplayNow: NetplaySession?
+    /** The netplay session ended and the game plays on alone (or, Cable Link, stopped on Quit). */
+    val netplayEnded: Boolean
+    /** A DS or 3DS game's wireless, or PSP's ad hoc, on the automatic route: played as a session. */
+    val dsWireless: Boolean
+    /** Where a DS or 3DS game's wireless stands ("linked with 1 device"); null where it says nothing. */
+    val localWirelessNow: String?
     /** A netplay session or a DS game's wireless: the panel hides what would break it (touch, speed, Reset, slots, Cheats, Players). */
     val sessionLocked: Boolean
     /** Kids Mode hides the game's settings from a kid: no Settings tab. */
@@ -855,7 +861,7 @@ internal class DualScreenController(
     /**
      * The dual-screen panel's state: the header ([panelHeader], with the achievement count while there is a set), the tabs
      * that apply, the Shortcuts (the touch buttons' tiles, Swap disc for a multi-disc game, Fast forward, Rewind and Reset, all outside netplay;
-     * the DS wireless keeps only Swap disc and the mic), this game's achievements in the menu's order, the cheats (the
+     * a session keeps the mic, the DS wireless Swap disc too, under the session's card), this game's achievements in the menu's order, the cheats (the
      * host's set: one owner, as the menu's), and the Players page's rows.
      */
     private fun panelState(): GamePanelState {
@@ -881,6 +887,7 @@ internal class DualScreenController(
                 touch = owner.panelTouchActions(), slot = panelSlotNow(), ffSpeed = owner.ffSpeed(),
             ).filter { !owner.sessionLocked || it.shortcut == Shortcut.SWAP_DISC || it.shortcut == Shortcut.MIC },   // the DS wireless keeps the mic
             slots = if (!owner.sessionLocked) owner.slotsUi.value else emptyList(),
+            session = GamePanelModel.session(owner.netplayNow, owner.netplayEnded, owner.dsWireless, owner.localWirelessNow),
             slot = panelSlotNow(),
             quick = quickSettings(),
             achievements = list,
@@ -993,7 +1000,7 @@ internal class DualScreenController(
                 // The game runs with it on: a panel flipped up over the DS/3DS screen gives the screen back.
                 flipPanelDown()
             }
-            is GamePanelEvent.SetMicButton -> if (owner.netplayNow == null && owner.micTile() != null) owner.handleMenuEffect(MenuEffect.SetMicButton(e.shown))
+            is GamePanelEvent.SetMicButton -> if (owner.micTile() != null) owner.handleMenuEffect(MenuEffect.SetMicButton(e.shown))
             GamePanelEvent.Reset -> if (!owner.sessionLocked) owner.askReset()
         }
     }
