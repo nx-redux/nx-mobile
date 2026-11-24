@@ -22,7 +22,7 @@ class DiscSignaturesTest {
         assertEquals(DiscKind.SEGACD, DiscSignatures.identify(DataSectors(sector(text = "SEGADISCSYSTEM  "), null, null)))
         assertEquals(DiscKind.DC, DiscSignatures.identify(DataSectors(sector(text = "SEGA SEGAKATANA "), null, null)))
         assertEquals(DiscKind.SATURN, DiscSignatures.identify(DataSectors(sector(text = "SEGA SEGASATURN "), null, null)))
-        assertNull(DiscKind.SATURN.consoleId)                                   // recognised, never placed
+        assertEquals("saturn", DiscKind.SATURN.consoleId)
     }
 
     @Test fun pc_engine_cd_by_sector_one() {

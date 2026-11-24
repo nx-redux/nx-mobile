@@ -22,11 +22,11 @@ class DiscProbeTest {
         assertEquals("ps", probe.probe(dir.first { it.name == "G.cue" }, dir).console)
     }
 
-    @Test fun saturn_and_unknowns_stay_unplaced() = runTest {
+    @Test fun saturn_places_in_saturn_and_unknowns_stay_unplaced() = runTest {
         val sat = ByteArray(2048 * 17).also { "SEGA SEGASATURN ".encodeToByteArray().copyInto(it, 0) }
         val src = FakeRomsSource(mapOf("d" to listOf("S.iso", "M.cue")), texts = mapOf("d/M.cue" to "FILE \"gone.bin\" BINARY\n TRACK 01 MODE1/2352\n"), bytes = mapOf("d/S.iso" to sat))
         val dir = src.listChildren(ContentRef("d"))
-        assertNull(DiscProbe(src).probe(dir.first { it.name == "S.iso" }, dir).console)
+        assertEquals("saturn", DiscProbe(src).probe(dir.first { it.name == "S.iso" }, dir).console)
         assertNull(DiscProbe(src).probe(dir.first { it.name == "M.cue" }, dir).console)      // its bin is missing
     }
 

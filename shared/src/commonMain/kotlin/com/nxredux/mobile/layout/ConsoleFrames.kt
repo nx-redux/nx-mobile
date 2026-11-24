@@ -41,4 +41,18 @@ internal val CONSOLE_FRAMES: Map<String, CoreFrame> = mapOf(
     "wii" to CoreFrame(640f, 480f, FOUR_THREE, false),
     "ps2" to CoreFrame(640f, 448f, FOUR_THREE, false),
     "psp" to CoreFrame(480f, 272f, 0f, false),
+    // Consoles whose games open in other emulators: their usual output, for menu art and skin checks only.
+    "saturn" to CoreFrame(320f, 224f, FOUR_THREE, false),
+    "jaguar" to CoreFrame(320f, 240f, FOUR_THREE, false),
+    "neocd" to CoreFrame(320f, 224f, FOUR_THREE, false),
+    "cdi" to CoreFrame(384f, 280f, FOUR_THREE, false),
+    "n64dd" to CoreFrame(320f, 240f, FOUR_THREE, false),
+    "sgx" to CoreFrame(256f, 240f, FOUR_THREE, false),
+    "xbox" to CoreFrame(640f, 480f, FOUR_THREE, false),
+    "switch" to CoreFrame(1280f, 720f, 0f, false),
+    "wiiu" to CoreFrame(1280f, 720f, 0f, false),
+    "ps3" to CoreFrame(1280f, 720f, 0f, false),
+    "ps4" to CoreFrame(1280f, 720f, 0f, false),
+    "xbox360" to CoreFrame(1280f, 720f, 0f, false),
+    "psvita" to CoreFrame(960f, 544f, 0f, false),
 )

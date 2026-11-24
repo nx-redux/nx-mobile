@@ -183,9 +183,12 @@ fun LibraryIndex.withFirstSeen(previous: LibraryIndex?, now: Long?): LibraryInde
     })
 }
 
-/** As the handheld: empty consoles (hidden games included) and coreless ones are hidden; Unassigned shows whenever the index has a visible game in it. */
+/**
+ * As the handheld: empty consoles (hidden games included) and coreless ones are hidden, except consoles whose games open in
+ * other emulators ([SystemFolder.opensGames]); Unassigned shows whenever the index has a visible game in it.
+ */
 fun LibraryIndex.playableSystems(hidden: Set<String> = emptySet()): List<SystemFolder> =
-    toSystems(hidden).filter { it.gameCount > 0 && (it.core != null || it.unassigned) }
+    toSystems(hidden).filter { it.gameCount > 0 && (it.opensGames || it.unassigned) }
 
 /** [game] shown as [name], its console re-sorted. Unchanged (same instance) when [game] is not in the index. Subtitles refresh on the next rescan. */
 fun LibraryIndex.rename(game: GameEntry, name: String): LibraryIndex {

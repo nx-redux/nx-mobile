@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 
 class ControllerArtTest {
     @Test fun everyConsoleHasAPad() {
-        val missing = CoreRegistry.consoles.map { it.id }.filter { it !in consolePadsById }
+        val missing = CoreRegistry.consoles.filter { !it.externalOnly }.map { it.id }.filter { it !in consolePadsById }
         assertTrue(missing.isEmpty(), "no controller art for $missing")
     }
 

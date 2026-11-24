@@ -446,8 +446,8 @@ internal class SettingsRows(
         }
     }
 
-    /** The Button layout page's consoles: every console, by name. */
-    private val buttonLayoutConsoles: List<Console> by lazy { CoreRegistry.consoles.sortedBy { it.displayName.lowercase() } }
+    /** The Button layout page's consoles: every console our game screen runs ([Console.externalOnly] left out), by name. */
+    private val buttonLayoutConsoles: List<Console> by lazy { CoreRegistry.consoles.filter { !it.externalOnly }.sortedBy { it.displayName.lowercase() } }
 
     /** The Button layout page's console (the last one picked, while the app runs) and, on the Wii and the 3DS, its controller. */
     private var buttonLayoutConsole: Console? = null

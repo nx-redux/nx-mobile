@@ -2623,7 +2623,7 @@ class AppState(
      * the index: no coroutine, no folder listing. [select]: put the row on that game path.
      */
     fun openSystem(system: SystemFolder, select: String? = null) {
-        if (system.core == null && !system.unassigned && !system.android) {
+        if (!system.opensGames && !system.unassigned && !system.android) {
             _error.value = "No core for ${system.displayName} (${system.tag}) yet."
             return
         }
@@ -2732,8 +2732,8 @@ class AppState(
         }
     }
 
-    /** What START searches: the playable consoles' games (no Unassigned, nothing without a core; Android apps are not in the cache). */
-    private fun searchCorpus(): List<SystemFolder> = systemsCache.filter { !it.unassigned && it.core != null }
+    /** What START searches: the playable consoles' games (no Unassigned, nothing no core or other emulator opens; Android apps are not in the cache). */
+    private fun searchCorpus(): List<SystemFolder> = systemsCache.filter { !it.unassigned && it.opensGames }
 
     /**
      * START's search confirmed on the main menu: [query]'s matches as a game list, even none ("No results"), B landing

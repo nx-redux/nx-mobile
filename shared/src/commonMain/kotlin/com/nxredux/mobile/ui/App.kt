@@ -749,7 +749,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
         GameListScreen(
             s.source.title, s.entries, index,
             canResume = { resume.value.canResume }, menuAvailable = s.source != ListSource.Hidden,
-            canOpen = { current().let { it != null && (s.source == ListSource.Hidden || it.system.core != null || it.system.android) } },
+            canOpen = { current().let { it != null && (s.source == ListSource.Hidden || it.system.opensGames || it.system.android) } },
             canNetplay = { state.canNetplay(current()) },
             openLabel = if (s.source == ListSource.Hidden) "Unhide" else "Open",
             onSelect = state::select, onOpen = { state.openSelected() }, onHint = state::onButton,

@@ -528,6 +528,18 @@ class LibraryScannerTest {
         assertEquals(listOf(IndexedSystem("GB", "Game Boy", "Game Boy (GB)", games = emptyList())), index.systems)
     }
 
+    @Test fun a_console_with_no_core_lists_only_its_own_files_and_disc_folders() = runTest {
+        val index = scanHome(mapOf(
+            "H/Roms" to listOf("Sega Saturn (SATURN)", "Sony PlayStation 4 (PS4)"),
+            "H/Roms/Sega Saturn (SATURN)" to listOf("Nights.chd", "Panzer Dragoon.zip", "readme.txt", "Grandia"),
+            "H/Roms/Sega Saturn (SATURN)/Grandia" to listOf("Grandia.m3u", "Grandia (Disc 1).chd", "Grandia (Disc 2).chd"),
+            "H/Roms/Sony PlayStation 4 (PS4)" to listOf("Bloodborne.pkg", "notes.txt"),
+        ))
+        assertEquals(setOf("Nights.chd", "Panzer Dragoon.zip", "Grandia.m3u"), index.systems.first { it.tag == "SATURN" }.games.map { it.file }.toSet())
+        assertEquals(listOf("Bloodborne.pkg"), index.systems.first { it.tag == "PS4" }.games.map { it.file })
+        assertEquals(listOf("PS4", "SATURN"), index.playableSystems().map { it.tag }.sorted())
+    }
+
     @Test fun retroachievements_folder_stays_out_of_the_library() = runTest {
         val index = scanHome(mapOf(
             "H/Roms" to listOf("Game Boy (GB)"),

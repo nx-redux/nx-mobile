@@ -629,6 +629,22 @@ object CoreRegistry {
         // iso, elf, dol, wad (Doom's) and m3u go by folder; a GameCube rvz or wia reaches GC by its folder too.
         Console("wii", "Nintendo Wii", listOf("WII"), setOf("wii", "nintendo wii"), setOf("wbfs", "wia", "rvz"), rawSram = false),
         Console("gc", "Nintendo GameCube", listOf("GC"), setOf("gc", "gamecube", "nintendo gamecube"), setOf("gcm", "gcz", "tgc", "ciso"), rawSram = false),
+        // No bundled core ([Console.externalOnly]): their games open in other emulators. Only files are listed, not the
+        // unpacked game folders some of their apps also take (PS3, PS4, Vita).
+        Console("switch", "Nintendo Switch", listOf("SWITCH"), setOf("switch", "ns", "nintendo switch"), setOf("nsp", "xci", "nca", "nro"), rawSram = false),
+        Console("wiiu", "Nintendo Wii U", listOf("WIIU"), setOf("wiiu", "wii u", "nintendo wii u"), setOf("wua", "wux", "wud", "rpx", "wuhb"), rawSram = false),
+        Console("ps3", "Sony PlayStation 3", listOf("PS3"), setOf("ps3", "playstation 3", "sony playstation 3"), setOf("iso"), rawSram = false, folderExtensions = setOf("pkg")),
+        Console("psvita", "Sony PlayStation Vita", listOf("PSVITA"), setOf("psvita", "vita", "psv", "ps vita", "playstation vita", "sony playstation vita"), setOf("vpk"), rawSram = false),
+        Console("ps4", "Sony PlayStation 4", listOf("PS4"), setOf("ps4", "playstation 4", "sony playstation 4"), emptySet(), rawSram = false, folderExtensions = setOf("pkg")),
+        Console("saturn", "Sega Saturn", listOf("SATURN"), setOf("saturn", "ss", "sega saturn"), setOf("cue", "chd", "ccd", "mds", "iso", "m3u"), rawSram = false),
+        Console("xbox", "Microsoft Xbox", listOf("XBOX"), setOf("xbox", "microsoft xbox"), setOf("xiso", "iso"), rawSram = false),
+        Console("xbox360", "Microsoft Xbox 360", listOf("XBOX360"), setOf("xbox360", "xbox 360", "x360", "microsoft xbox 360"), setOf("xex", "zar", "iso"), rawSram = false),
+        // rom is too common to name a console: a Jaguar .rom goes by folder.
+        Console("jaguar", "Atari Jaguar", listOf("JAGUAR"), setOf("jaguar", "jag", "atari jaguar"), setOf("j64", "jag", "abs", "cof"), rawSram = false, folderExtensions = setOf("rom")),
+        Console("neocd", "Neo Geo CD", listOf("NEOCD"), setOf("neocd", "ngcd", "neo geo cd", "neogeo cd"), setOf("cue", "chd", "iso"), rawSram = false),
+        Console("cdi", "Philips CD-i", listOf("CDI"), setOf("cdi", "cd-i", "philips cd-i"), setOf("chd", "cue", "iso"), rawSram = false),
+        Console("n64dd", "Nintendo 64DD", listOf("N64DD"), setOf("n64dd", "64dd", "nintendo 64dd"), setOf("ndd"), rawSram = false),
+        Console("sgx", "NEC SuperGrafx", listOf("SGX"), setOf("sgx", "supergrafx", "nec supergrafx", "pc engine supergrafx"), setOf("sgx"), rawSram = false),
     )
 
     /** Every extension some tag's core runs, console-owned or not (png, o, lmp, exe only by folder or sidecar). */

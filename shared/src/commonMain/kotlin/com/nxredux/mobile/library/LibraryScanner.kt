@@ -48,6 +48,9 @@ data class SystemFolder(
     val android: Boolean = false,    // the Android games console: installed apps, not ROMs (never in the index)
 ) {
     val gameCount: Int get() = games.size
+
+    /** Its games can be opened: a bundled core runs them, or its console has none and other emulators do ([Console.externalOnly]). */
+    val opensGames: Boolean get() = core != null || (!unassigned && !android && CoreRegistry.consoleOf(tag)?.externalOnly == true)
 }
 
 data class GameEntry(
@@ -313,7 +316,8 @@ class LibraryScanner(
             val sidecar = reads.sidecars.read(Recents.HOME, relativeDir, children)
             val files = children.filter { !it.isDirectory && !Names.isHidden(it.name) }
             val hidden = DiscSheet.hiddenNamed(files, heads::sheetNames) + MsuSets.hiddenSheets(files)
-            val discs = CoreRegistry.forTag(own)?.extensions?.let { "m3u" in it || "cue" in it || "gdi" in it } == true
+            val discs = (CoreRegistry.forTag(own)?.extensions ?: console?.takeIf { it.externalOnly }?.extensions)
+                ?.let { "m3u" in it || "cue" in it || "gdi" in it } == true
             val msu = console?.id in MsuSets.CONSOLES
             val sets = if (msu) MsuSets.Folder(files.map { it.name }) else null
             for (c in children) {
@@ -335,15 +339,16 @@ class LibraryScanner(
      * Default emulators picks for its folder's console (whichever of the console's tags names the folder). A folder of
      * no console takes any known sidecar tag. An archive keeps that tag: it is unpacked at launch, where its inner file
      * is checked against the core. A bare file that tag's core cannot run lists under the first tag of the same console
-     * whose core can (a `.gba` in "Game Boy (GB)"). A tag with no core keeps every file. Null: nothing there runs it,
-     * so it is not listed.
+     * whose core can (a `.gba` in "Game Boy (GB)"). A console with no core ([Console.externalOnly]) keeps what its folder
+     * lists ([Console.folderTakes]); a tag of no console keeps every file. Null: nothing there runs it, so it is not listed.
      */
     private fun homeTag(fileName: String, sidecarTag: String?, ownTag: String, console: Console?): String? {
         val side = sidecarTag?.takeIf { CoreRegistry.forTag(it) != null }
         val tag = (if (console == null) side else side?.let { CoreRegistry.tagOn(console, it) }) ?: ownTag
-        val core = CoreRegistry.forTag(tag) ?: return tag
-        if (Names.isArchive(fileName)) return tag
         val ext = Names.extensionOf(fileName)
+        val core = CoreRegistry.forTag(tag)
+            ?: return tag.takeIf { CoreRegistry.consoleOf(tag)?.takeIf { it.externalOnly }?.folderTakes(ext, Names.isArchive(fileName)) != false }
+        if (Names.isArchive(fileName)) return tag
         if (ext in core.extensions) return tag
         return CoreRegistry.consoleOf(tag)?.tags?.firstOrNull { t -> CoreRegistry.forTag(t)?.let { ext in it.extensions } == true }
     }

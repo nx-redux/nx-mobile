@@ -11514,8 +11514,9 @@ class AppStateTest {
         fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
         val seen = mutableListOf<String>()
         state.select(0)
-        repeat(CoreRegistry.consoles.size) { seen += rows()[0].secondary!!; state.padStep(NxButton.RIGHT) }
-        assertEquals(CoreRegistry.consoles.map { it.displayName }.sortedBy { it.lowercase() }, seen)
+        val ours = CoreRegistry.consoles.filter { !it.externalOnly }   // no game screen of ours, so no buttons to lay out
+        repeat(ours.size) { seen += rows()[0].secondary!!; state.padStep(NxButton.RIGHT) }
+        assertEquals(ours.map { it.displayName }.sortedBy { it.lowercase() }, seen)
         assertEquals(seen.first(), rows()[0].secondary)   // wraps
         state.buttonLayoutOn("Nintendo Wii")
         assertEquals(

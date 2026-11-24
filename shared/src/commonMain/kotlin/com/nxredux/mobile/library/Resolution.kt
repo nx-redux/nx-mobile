@@ -9,14 +9,15 @@ import com.nxredux.mobile.runner.CoreRegistry
  * then the one console owning the extension (a zip by its first entry's extension; a 7z has no cheap peek, so it is
  * placed only by the earlier steps). A candidate tag takes any archive (it is unpacked at launch, where the inner file
  * is checked against the core). A candidate whose core cannot run a bare file's extension falls back to the first tag
- * of the same console whose core can, else is skipped, so a `.gba` inside "Game Boy (GB)" still resolves to GBA. Null
- * means unassigned.
+ * of the same console whose core can, else is skipped, so a `.gba` inside "Game Boy (GB)" still resolves to GBA. A
+ * console with no core ([Console.externalOnly]) takes what its folder lists ([Console.folderTakes]). Null means unassigned.
  */
 object Resolution {
     fun isCandidate(fileName: String): Boolean {
         val ext = Names.extensionOf(fileName)
         if (ext.isEmpty()) return false
-        return ext in Names.ARCHIVE_EXTENSIONS || ext in CoreRegistry.GENERIC_EXTENSIONS || CoreRegistry.consoles.any { ext in it.extensions }
+        return ext in Names.ARCHIVE_EXTENSIONS || ext in CoreRegistry.GENERIC_EXTENSIONS ||
+            CoreRegistry.consoles.any { ext in it.extensions || ext in it.folderExtensions }
     }
 
     /**
@@ -78,7 +79,8 @@ object Resolution {
     }
 
     private fun accepts(tag: String, ext: String, archive: Boolean): String? {
-        val core = CoreRegistry.forTag(tag) ?: return null
+        val core = CoreRegistry.forTag(tag)
+            ?: return CoreRegistry.consoleOf(tag)?.takeIf { it.externalOnly && it.folderTakes(ext, archive) }?.let { tag.uppercase() }
         if (archive || ext in core.extensions) return tag.uppercase()
         // The tag's core cannot run the file: the first tag of the same console whose core can, as the home scan does.
         return CoreRegistry.consoleOf(tag)?.tags?.firstOrNull { t -> CoreRegistry.forTag(t)?.let { ext in it.extensions } == true }

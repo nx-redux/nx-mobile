@@ -224,6 +224,7 @@ class CoreRegistryTest {
                 "nds", "n64", "psp", "ps2", "ps", "gb", "gbc", "gba", "fc", "sfc", "md",
                 "sms", "gg", "sg1000", "segacd", "fds", "sgb", "ngp", "ngpc", "pce", "vb",
                 "lynx", "a2600", "a5200", "a7800", "pkm", "wsc", "p8", "prboom", "32x", "coleco", "fbn", "dc", "3ds", "wii", "gc",
+                "switch", "wiiu", "ps3", "psvita", "ps4", "saturn", "xbox", "xbox360", "jaguar", "neocd", "cdi", "n64dd", "sgx",
             ),
             CoreRegistry.consoles.map { it.id },
         )
@@ -248,6 +249,8 @@ class CoreRegistryTest {
                 "Sega SG-1000", "Sega CD", "Famicom Disk System", "Super Game Boy", "Neo Geo Pocket", "Neo Geo Pocket Color",
                 "TurboGrafx-16", "Virtual Boy", "Atari Lynx", "Atari 2600", "Atari 5200", "Atari 7800", "Pokémon mini",
                 "Wonderswan Color", "Pico-8", "Doom", "Sega 32X", "Colecovision", "Arcade", "Dreamcast", "Nintendo 3DS", "Nintendo Wii", "Nintendo GameCube",
+                "Nintendo Switch", "Nintendo Wii U", "Sony PlayStation 3", "Sony PlayStation Vita", "Sony PlayStation 4", "Sega Saturn",
+                "Microsoft Xbox", "Microsoft Xbox 360", "Atari Jaguar", "Neo Geo CD", "Philips CD-i", "Nintendo 64DD", "NEC SuperGrafx",
             ),
             CoreRegistry.consoles.map { it.displayName },
         )
@@ -321,7 +324,7 @@ class CoreRegistryTest {
         assertNull(CoreRegistry.consoleForFolderName("Roms Games"))
         assertEquals("sfc", CoreRegistry.consoleForFolderName("My SNES Games")!!.id)   // long alias
     }
-    @Test fun playstation_has_a_core_and_every_console_has_one_on_every_tag() {
+    @Test fun playstation_has_a_core_and_every_console_but_the_external_ones_has_one_on_every_tag() {
         val ps = CoreRegistry.consoleOf("PS")!!
         assertEquals("Sony PlayStation", ps.displayName)
         assertEquals(listOf("PS", "PSX"), ps.tags)
@@ -329,7 +332,7 @@ class CoreRegistryTest {
         assertEquals(setOf("bin", "cue", "img", "mdf", "toc", "cbn", "m3u", "chd", "iso"), ps.extensions)   // not pbp, exe
         assertFalse(ps.rawSram)
         assertEquals("pcsx_rearmed", CoreRegistry.forTag("PS")!!.id)
-        assertEquals(emptyList(), CoreRegistry.consoles.filter { c -> c.tags.any { CoreRegistry.forTag(it) == null } }.map { it.id })
+        assertEquals(emptyList(), CoreRegistry.consoles.filter { c -> !c.externalOnly && c.tags.any { CoreRegistry.forTag(it) == null } }.map { it.id })
     }
     @Test fun extensions_resolve_uniquely_or_not_at_all() {
         val unique = mapOf(

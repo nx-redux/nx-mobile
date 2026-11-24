@@ -154,14 +154,14 @@ val SettingsRow.selectable: Boolean get() = kind != SettingsKind.SECTION && kind
 
 /**
  * Settings -> Emulation -> Default emulators: every console with several tags (cycled, so one can be set before it has
- * games) and every other console [systems] hold games for (Unassigned left out), as a dimmed read-only row. The value
- * names the emulator behind the tag, "mGBA (MGBA)", so two tags on one core would still differ by tag. A stored pick
- * that is not one of the console's tags is ignored. Sorted by console name.
+ * games) and every other console [systems] hold games for (Unassigned and consoles with no core left out), as a dimmed
+ * read-only row. The value names the emulator behind the tag, "mGBA (MGBA)", so two tags on one core would still differ
+ * by tag. A stored pick that is not one of the console's tags is ignored. Sorted by console name.
  */
 internal fun defaultEmulatorRows(systems: List<SystemFolder>, defaultTags: Map<String, String>): List<SettingsRow> {
     val withGames = systems.filter { !it.unassigned && it.gameCount > 0 }.mapNotNullTo(HashSet()) { CoreRegistry.consoleOf(it.tag)?.id }
     // The consoles with a choice first (more than one emulator), then the single-emulator ones, each A to Z.
-    return CoreRegistry.consoles.filter { it.tags.size > 1 || it.id in withGames }
+    return CoreRegistry.consoles.filter { !it.externalOnly && (it.tags.size > 1 || it.id in withGames) }
         .sortedWith(compareBy({ it.tags.size <= 1 }, { it.displayName.lowercase() })).map { c ->
         val tag = c.defaultTagFor(defaultTags[c.id])
         SettingsRow(SettingsKind.DEFAULT_TAG, c.displayName, CoreRegistry.emulatorLabel(tag), consoleId = c.id, enabled = c.tags.size > 1)

@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 
 class MenuArtTest {
     @Test fun everyConsoleHasALogo() {
-        val missing = CoreRegistry.consoles.map { it.id }.filter { it !in consoleLogosById }
+        val missing = CoreRegistry.consoles.filter { !it.externalOnly }.map { it.id }.filter { it !in consoleLogosById }
         assertTrue(missing.isEmpty(), "no logo for $missing")
     }
 

@@ -105,12 +105,12 @@ sealed interface MainRow {
 internal val MainRow.System.backdrop: SystemFolder
     get() = systems.firstOrNull { CoreRegistry.consoleOf(it.tag)?.defaultTag == it.tag } ?: system
 
-/** [path]'s game in [systems] as a list opens it: the first system with a core that holds it; null when none does. */
+/** [path]'s game in [systems] as a list opens it: the first system holding it that opens games ([SystemFolder.opensGames]); null when none does. */
 internal fun resolveIn(systems: List<SystemFolder>, path: String): Listed? {
     val ref = GamePath.split(path) ?: return null
-    return systems.firstNotNullOfOrNull { s -> if (s.core == null) null else s.games.firstOrNull { it.matches(ref) }?.let { Listed(s, it) } }
+    return systems.firstNotNullOfOrNull { s -> if (!s.opensGames) null else s.games.firstOrNull { it.matches(ref) }?.let { Listed(s, it) } }
         // A line for an extra copy the scan hid behind a home game opens that game.
-        ?: systems.firstNotNullOfOrNull { s -> if (s.core == null) null else s.games.firstOrNull { ref in it.hiddenCopies }?.let { Listed(s, it) } }
+        ?: systems.firstNotNullOfOrNull { s -> if (!s.opensGames) null else s.games.firstOrNull { ref in it.hiddenCopies }?.let { Listed(s, it) } }
 }
 
 /**
@@ -122,9 +122,9 @@ internal fun resolveDistinct(systems: List<SystemFolder>, paths: List<String>): 
 
 /** Every game [resolveIn] can find in [systems], by its path's ref (the first system winning, as there): one pass, then lookups. */
 internal fun playableLookup(systems: List<SystemFolder>): Map<GameRef, Listed> = HashMap<GameRef, Listed>().also { map ->
-    systems.forEach { s -> if (s.core != null) s.games.forEach { g -> map.getOrPut(GameRef(g.sourceId, g.relativeDir, g.fileName)) { Listed(s, g) } } }
+    systems.forEach { s -> if (s.opensGames) s.games.forEach { g -> map.getOrPut(GameRef(g.sourceId, g.relativeDir, g.fileName)) { Listed(s, g) } } }
     // Then the hidden copies' refs ([resolveIn]'s fallback): a listed game's own ref always wins.
-    systems.forEach { s -> if (s.core != null) s.games.forEach { g -> g.hiddenCopies.forEach { r -> map.getOrPut(r) { Listed(s, g) } } } }
+    systems.forEach { s -> if (s.opensGames) s.games.forEach { g -> g.hiddenCopies.forEach { r -> map.getOrPut(r) { Listed(s, g) } } } }
 }
 
 /** [path]'s game in [lookup] ([playableLookup]): what [resolveIn] over the same systems gives, in one lookup. */
