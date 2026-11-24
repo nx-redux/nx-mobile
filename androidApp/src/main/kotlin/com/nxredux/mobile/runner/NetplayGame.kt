@@ -82,16 +82,18 @@ internal fun netplayNotice(state: Int, secondsLeft: Int, reason: Int, onCopy: Bo
  * [emptySaves]: no save copy happened although one was due ([NetplaySession.emptySaves]); [overUsb]: the session runs
  * over the USB cable ([NetplaySession.overUsb]); [mixed] and [peerWl]: [NetplaySession.mixed], [NetplaySession.peerWl].
  * [cableLink]: a Cable Link over Wi-Fi session's settled fields; one without the other GBA's ROM, with a slot other than 1
- * or 2, or an unknown BIOS mode makes no session.
+ * or 2, or an unknown BIOS mode makes no session. [segaPad]: [NetplaySession.segaPad]; an unknown value is none.
  */
 internal fun netplaySessionFrom(
     role: String?, peer: String?, coreId: String, folderCoreId: String?, emptySaves: Boolean = false, overUsb: Boolean = false,
     mixed: Boolean = false, peerWl: String? = null, cableLink: CableLinkSetup? = null, peerName: String? = null,
+    segaPad: String? = null,
 ): NetplaySession? {
     val r = NetplayRole.entries.firstOrNull { it.name == role } ?: return null
     if (folderCoreId.isNullOrEmpty()) return null
     val ip = NetplayAddress.ipv4(peer) ?: return null
-    val session = NetplaySession(r, ip, coreId, folderCoreId, emptySaves, overUsb, mixed, peerWl, peerName = PlayerName.clean(peerName).ifEmpty { null })
+    val session = NetplaySession(r, ip, coreId, folderCoreId, emptySaves, overUsb, mixed, peerWl, peerName = PlayerName.clean(peerName).ifEmpty { null },
+        segaPad = segaPad?.takeIf { it in SegaPadType.SETTINGS })
     if (cableLink == null) return session
     if (cableLink.otherRomPath.isEmpty() || cableLink.localSlot !in 1..2) return null
     if (cableLink.biosMode != CableLinkSetup.BIOS_REAL && cableLink.biosMode != CableLinkSetup.BIOS_HLE) return null

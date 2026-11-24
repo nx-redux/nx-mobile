@@ -1065,6 +1065,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         if (cfg.descriptor?.id == SegaPadType.GPGX) SegaPadType.gpgxPorts(launchSega, cfg.players)?.let { controllerPorts = it }
                         if (cfg.descriptor?.id == SegaPadType.PICODRIVE && launchSega != null) controllerPorts = SegaPadType.picodrivePorts(launchSega, launchSegaPad, cfg.players)
                         cfg.netplayPad?.ports?.takeIf { it.isNotEmpty() }?.let { controllerPorts = controllerPorts + it }   // netplay: the pak's ports 0-1
+                        if (BuildConfig.DEBUG && launchSega != null) NxTestResults.write(host.activity, "pad",
+                            "session" to cfg.np?.segaPad, "setting" to launchSega, "drawn" to launchSegaPad?.name,
+                            "port0" to controllerPorts[0], "port1" to controllerPorts[1])
                         if (prepared.inner != null) {
                             gameFilePath = prepared.inner.absolutePath
                         } else if (cfg.realPath) {

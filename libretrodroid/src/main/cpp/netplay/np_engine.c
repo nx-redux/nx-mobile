@@ -115,6 +115,7 @@
 #include <unistd.h>
 
 // Constants kept from netplay.h (wire-relevant ones must not change)
+#define NP_VERIFIED_LOG_FRAMES 1200
 #define NP_INPUT_SIZE 10		// u16 buttons + i16 LX, LY, RX, RY (protocol 3)
 #define NP_INPUT_SIZE_LEGACY 2	// u16 buttons only (protocol 2 peers): sticks centred
 
@@ -560,6 +561,8 @@ static void compare_hashes(uint64_t now) {
 	if (same) {
 		if ((int64_t)at > np.verified)
 			np.verified = at;
+		if (at % NP_VERIFIED_LOG_FRAMES == 0)
+			NP_LOG("pair: verified frame %u", at); // a device test tells checks that passed from none at all
 		return;
 	}
 	NP_LOG("pair: hashes differ at frame %u", at);

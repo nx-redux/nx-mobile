@@ -25,6 +25,11 @@ nx-redux `.dev/TESTING.md`.
   Debug log setting are put back.
 - `quit_loop.py`: boot a game, wait, GAME_STOP, check its :game process ends with no ANR or watchdog stop; repeat.
   GAME_STOP quits like Save & Quit, so the game's resume point moves.
+- `netplay_pads.py`: Sega netplay phone ↔ phone (`--host serial:romdir --client serial:romdir`, `--only`, `--seconds`):
+  per case a Wi-Fi session through the debug NETPLAY hook (the real handshake), then checks both phones' `pad.json`
+  (session pad, drawn pad, port devices) and the drift check (`debug.nx.netplay_pair=1`: both sides hash the work RAM
+  every 120 frames). The first case forces a pad mismatch and passes only if the drift check catches it. Needs Debug
+  log on both phones; report in `.local/device-tests/netplay-pads-<date>.md`.
 - `dolphin_sav.py`: wraps the libretro Dolphin core's state in standalone Dolphin's .sav headers, for comparing both
   apps from one moment.
 

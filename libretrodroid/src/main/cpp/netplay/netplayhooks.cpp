@@ -17,7 +17,10 @@
 
 #include "netplayhooks.h"
 
+#include <vector>
+
 #include "../core.h"
+#include "../debugprop.h"
 #include "../input.h"
 #include "../../libretro-common/include/libretro.h"
 
@@ -82,8 +85,37 @@ int16_t inputState(unsigned port, unsigned device, unsigned index, unsigned id) 
 
 void shutdown() { np_shutdown(); }
 
+// The core whose state stateHash reads. Frame thread only, like the hash itself.
+static Core* hashedCore = nullptr;
+
+// FNV-1a over the console's work RAM, where a game keeps its state and what it read from the pads; a save state also
+// holds bytes that differ between two in-sync devices (PicoDrive's do), so it is the fallback only for a core with no RAM.
+static uint64_t fnv(const uint8_t* data, size_t size) {
+    uint64_t h = 0xcbf29ce484222325ULL;
+    for (size_t i = 0; i < size; i++) h = (h ^ data[i]) * 0x100000001b3ULL;
+    return h;
+}
+
+static uint64_t stateHash() {
+    size_t ram = hashedCore->retro_get_memory_size(RETRO_MEMORY_SYSTEM_RAM);
+    auto* data = static_cast<const uint8_t*>(hashedCore->retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM));
+    if (ram > 0 && data != nullptr) return fnv(data, ram);
+    static std::vector<uint8_t> buffer;
+    size_t size = hashedCore->retro_serialize_size();
+    buffer.resize(size);
+    if (size == 0 || !hashedCore->retro_serialize(buffer.data(), size)) return 0;
+    return fnv(buffer.data(), size);
+}
+
 bool setPairMode(Core* core, bool on) {
     np_hash_fn hash = (on && core != nullptr) ? reinterpret_cast<np_hash_fn>(core->symbol("nx_pair_hash")) : nullptr;
+    // Device tests (adb shell setprop debug.nx.netplay_pair 1, on both phones): the drift check on any lockstep session,
+    // so a desync shows as "pair: hashes differ" in the log.
+    if (!on && core != nullptr && debugPropertyOn("debug.nx.netplay_pair")) {
+        hashedCore = core;
+        np_set_pair_mode(true, stateHash);
+        return true;
+    }
     np_set_pair_mode(hash != nullptr, hash);
     return !on || hash != nullptr;
 }

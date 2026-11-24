@@ -213,8 +213,10 @@ Checked on the emulator only (GBA game starts, draws, quits; first setup up to P
 - [ ] Update row: after "Update failed" (a redirect), A retries the same release; checking again needs an app restart (Nova, local feed). Check whether intended.
 
 ## Sega netplay: both players on the host's Controller Type
-- [x] Phone ↔ phone, Mega Drive on PicoDrive, host Controller Type 6: both players get the 6-button pad. Super Street Fighter II, Nova ↔ Fold, 2026-11-25.
-- [ ] The same on Genesis Plus GX, and with the host on 3: neither player gets the extra buttons.
-- [ ] Host on Auto: a 6-button game gets 6 on both, a 3-button game (Golden Axe II, Ms. Pac-Man) plays clean.
+Automated: `tools/device-tests/netplay_pads.py` (Fold host, Nova client, 2026-11-25).
+- [x] PicoDrive: host on 6, 3, Auto (6-button and 3-button game) and 6 on a 3-button game: both phones play the host's pad, drift check clean.
+- [x] Old peer either side (no `pad=`): both on the old 3-button pad, drift check clean.
+- [x] The drift check catches a forced 6-vs-3 mismatch (the control case).
+- [ ] Genesis Plus GX: pads right on both phones, but one hash mismatch near frame 240 in every case, Auto (today's pad) too, then clean after the resync. Find out whether a plain session drifts there.
 - [ ] Phone ↔ Brick (no `pad=` yet): still starts, both on the old fixed pad, no desync.
 

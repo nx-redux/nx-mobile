@@ -133,6 +133,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
             intent.getStringExtra(GameActivity.EXTRA_NETPLAY_PEER_WL),
             cableLinkFrom(intent),
             intent.getStringExtra(GameActivity.EXTRA_NETPLAY_PEER_NAME),
+            intent.getStringExtra(GameActivity.EXTRA_NETPLAY_SEGA_PAD),
         )
         // netplay link: recreated after a process kill once its session had ended: the local game it had become, as a
         // normal launch (its resume slot below), not a session.
