@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
@@ -57,7 +58,9 @@ fun NxEmptyState(
             // Touch only has no hint bar: the actions are buttons ([emptyStateButtons]).
             // NxHintBar fills its width after our modifier; IntrinsicSize.Max pins that width to the pills themselves.
             if (touchOnly()) NxTouchButtons(emptyStateButtons(hints), onHint)
-            else NxHintBar(hints, Modifier.width(IntrinsicSize.Max), onHint = onHint)
+            else CompositionLocalProvider(LocalNxHintBarAlignEnd provides false, LocalNxHintBarHeight provides null) {
+                NxHintBar(hints, Modifier.width(IntrinsicSize.Max), onHint = onHint)
+            }
         }
     }
 }

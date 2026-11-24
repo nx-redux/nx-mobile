@@ -16,6 +16,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.LocalNxColors
@@ -25,6 +26,7 @@ import com.nxredux.mobile.ui.nx.NxHintBar
 import com.nxredux.mobile.ui.nx.NxOptionsInnerPad
 import com.nxredux.mobile.ui.nx.LocalNxHintBarEnd
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
+import com.nxredux.mobile.ui.nx.nxPageInset
 
 /** An unfocused pane's opacity. */
 internal const val UNFOCUSED_ALPHA = 0.6f
@@ -95,6 +97,7 @@ internal fun SettingsStage(
     preview: @Composable () -> Unit, page: @Composable () -> Unit, over: @Composable () -> Unit = {},
 ) {
     val gutter = settingsPlateEnd()   // the right side's plate edge: the frame's and the picture's right edge
+    val hintEnd = nxPageInset().end   // hints end on the page inset, matching the main menu and the controls' right edge
     WithSettingsWordBlockSize(title, words) { block ->
         val sectionRight = settingsSectionStart() + block.width
         Box(Modifier.fillMaxSize()) {
@@ -110,17 +113,22 @@ internal fun SettingsStage(
                             // On a page it has the focus: the current word drops to the open grey, with its "›" ([openedLabel]).
                             WithCurrent(current) { SettingsRootScreen(title, words, lines, it, onWordTap, rowsFocused = !root, clearMark = false) }
                         }
-                        // The root shows its A/B hints here; a page shows its own on the right. Either way this bar keeps the room, so the baselines meet.
-                        NxHintBar(if (root) SETTINGS_ROOT_HINTS else emptyList(), onHint = onHint)
+                        // Keep the bar's room here so the word block shares the right pane's baseline; root hints draw full-width below.
+                        NxHintBar(emptyList(), onHint = onHint)
                     }
                     Box(Modifier.padding(start = left).fillMaxSize()) {
                         // A page's own hint bar on the right: from its rows' text edge (the left column already keeps the
                         // room between the panes, so no section-words inset on this side), the gutter on the screen's side.
                         CompositionLocalProvider(
                             LocalSettingsBlock provides wideBlock.takeIf { blockPage },
-                            LocalNxHintBarStart provides NxOptionsInnerPad, LocalNxHintBarEnd provides gutter,
+                            LocalNxHintBarStart provides NxOptionsInnerPad, LocalNxHintBarEnd provides hintEnd,
                         ) {
                             if (root) preview() else page()
+                        }
+                    }
+                    if (root) {
+                        CompositionLocalProvider(LocalNxHintBarStart provides settingsSectionStart(), LocalNxHintBarEnd provides hintEnd) {
+                            NxHintBar(SETTINGS_ROOT_HINTS, Modifier.align(Alignment.BottomStart), onHint = onHint)
                         }
                     }
                 }

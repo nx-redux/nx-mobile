@@ -6,6 +6,7 @@ import com.nxredux.mobile.ui.keyboard.PromptKeyboard
 import com.nxredux.mobile.ui.nx.LocalSkinPacks
 import com.nxredux.mobile.ui.nx.SkinPad
 import com.nxredux.mobile.ui.nx.nxPageInset
+import com.nxredux.mobile.ui.nx.LocalNxHintBarEnd
 import com.nxredux.mobile.ui.nx.LocalNxHintBarHidden
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
 import com.nxredux.mobile.ui.nx.nxListInset
@@ -633,14 +634,14 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             Screen.DeviceSync -> state.deviceSync?.let {
                 val setup by state.syncSetup.collectAsState()
                 // The Settings root's look: its hints start at the words' edge (shown always: Retry and the like are hints alone).
-                CompositionLocalProvider(LocalNxHintBarStart provides settingsSectionStart()) {
+                CompositionLocalProvider(LocalNxHintBarStart provides settingsSectionStart(), LocalNxHintBarEnd provides nxPageInset().end) {
                     DeviceSyncScreen(it, onHint = state::onButton, setup = setup, onSetupTap = state::syncSetupTap)
                 }
             } ?: Box(Modifier.fillMaxSize())
             is Screen.RetroAchievements -> state.achievements?.let { c ->
                 SettingsHintBar {
-                    RaPageWithProfile(state, c, split = settingsSplit(splitWindow())) {
-                        WithIndex(selection) { RetroAchievementsScreen(c, it, state::select, { state.openSelected() }, onHint = state::onButton) }
+                    RaPageWithProfile(state, c, split = settingsSplit(splitWindow())) { showHints ->
+                        WithIndex(selection) { RetroAchievementsScreen(c, it, state::select, { state.openSelected() }, onHint = state::onButton, showHints = showHints) }
                     }
                 }
             } ?: Box(Modifier.fillMaxSize())
@@ -1032,7 +1033,12 @@ private fun MenuOverlay(state: AppState, menu: ContextMenu) = ContextMenuOverlay
  */
 @Composable
 private fun SettingsHintBar(content: @Composable () -> Unit) =
-    CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart(), content = content)
+    CompositionLocalProvider(
+        LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints,
+        LocalNxHintBarStart provides settingsSectionStart(),
+        LocalNxHintBarEnd provides nxPageInset().end,
+        content = content,
+    )
 
 /** [onTouch] on every finger down anywhere inside, seen before the children and never consumed (Kids Mode's Parent idle). */
 internal fun Modifier.onAnyTouch(onTouch: () -> Unit): Modifier = pointerInput(onTouch) {

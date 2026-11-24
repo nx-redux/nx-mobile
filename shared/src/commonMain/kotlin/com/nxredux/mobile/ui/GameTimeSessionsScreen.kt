@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.ui.nx.nxListInset
+import com.nxredux.mobile.ui.nx.nxPageInset
+import com.nxredux.mobile.ui.nx.LocalNxHintBarEnd
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.padding
@@ -90,8 +92,8 @@ internal fun GameTimeSplitScreen(state: AppState, s: Screen.GameTimeSessions, se
                 )
             }
         },
-        // The sessions' hints start on their rows' words, not the page inset the left pane already holds.
-        right = { CompositionLocalProvider(LocalNxHintBarStart provides nxListInset()) { WithIndex(selection) { GameTimeSessionsScreen(s, it, state::select, onHint = state::onButton, split = true) } } },
+        // The sessions' hints start on their rows' words and end on the screen's page inset.
+        right = { CompositionLocalProvider(LocalNxHintBarStart provides nxListInset(), LocalNxHintBarEnd provides nxPageInset().end) { WithIndex(selection) { GameTimeSessionsScreen(s, it, state::select, onHint = state::onButton, split = true) } } },
         // The game titles on the left need the room more than the dated sessions on the right.
         leftShare = GAME_TIME_SPLIT_LEFT,
     )
