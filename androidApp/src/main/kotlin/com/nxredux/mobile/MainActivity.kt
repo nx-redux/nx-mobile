@@ -57,6 +57,7 @@ import com.nxredux.mobile.ui.nx.SkinPackSource
 import com.nxredux.mobile.runner.PadSkinPack
 import com.nxredux.mobile.ui.nx.LocalRestingBars
 import com.nxredux.mobile.achievements.AchievementsService
+import com.nxredux.mobile.external.AndroidExternalApps
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.gametime.LazyGameTimeData
 import com.nxredux.mobile.launcher.AndroidAppLauncher
@@ -466,6 +467,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 artwork = { host -> artworkHost = host; ArtworkService.controller(this, host) },
                 privateFiles = AndroidPrivateFiles(this),
                 launcher = launcher,
+                externalApps = AndroidExternalApps(this) { currentDisplayId() },
                 androidArtStore = AndroidArtFiles(this),
                 rumblePreview = { playRumblePreview(applicationContext, it) },
                 netplay = AndroidNetplay(this) { DataRoot.of(this) }.also { np ->

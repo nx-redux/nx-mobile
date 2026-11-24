@@ -56,6 +56,16 @@
             android:name=".settings.PrefsProvider"
             android:authorities="${applicationId}.prefs"
             android:exported="false" />
+        <!-- Real-file games handed to a standalone emulator, which cannot read our folders by path. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.games"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/game_share_paths" />
+        </provider>
         <!-- The app icon (and the artwork notification): brings the menu's task forward as it is, so a game open over
              the menu stays (MainActivity is singleTask: a launch of it would clear the game). Its own throwaway task. -->
         <activity

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Games handed to other emulators: a home or ROM folder can be on any volume (an SD card too), so the whole tree,
+     read only through our own All files access. -->
+<paths>
+    <root-path name="root" path="." />
+</paths>
