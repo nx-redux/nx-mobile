@@ -202,7 +202,7 @@ internal class ContextMenuController(
                 }
             }
             is Screen.Systems -> {
-                if (s.menu?.busy == true) return
+                if (s.menu?.busy == true || s.layoutMenu != null) return
                 val i = index ?: _selection.value.index
                 val row = s.rows.getOrNull(i)
                 // The hidden tabs after the item's own items; a row without a menu (a console, Pick a game, "+N", an empty
@@ -248,7 +248,7 @@ internal class ContextMenuController(
         val s = _screen.value
         if (s.contextMenu != null || s.menuPushed) return false
         when (s) {
-            is Screen.Systems -> if (s.search != null) return false
+            is Screen.Systems -> if (s.search != null || s.layoutMenu != null) return false
             is Screen.Games -> if (!s.isTab || s.search != null || s.layoutMenu != null) return false
             else -> return false
         }

@@ -9,12 +9,16 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import com.nxredux.mobile.achievements.RaController
 import com.nxredux.mobile.ui.nx.ListSelection
+import com.nxredux.mobile.ui.nx.LocalNxHintBarEnd
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
+import com.nxredux.mobile.ui.nx.NxHintBar
 import com.nxredux.mobile.ui.nx.nxListInset
+import com.nxredux.mobile.ui.nx.nxPageInset
 
 /**
  * The RetroAchievements column browser on a split window ([raSplitView]): the level the user is on ([page], drawn with
@@ -28,8 +32,8 @@ internal fun RaSplitScreen(state: AppState, s: Screen, page: @Composable () -> U
     val panes: @Composable (Float) -> Unit = { share ->
         SplitPanes(
             left = { parent?.let { RaParentPane(state, it) } },
-            // The page's hints start where its list does (the thumbnails' edge), not at the page inset the left pane holds.
-            right = { CompositionLocalProvider(LocalNxHintBarStart provides nxListInset()) { page() } },
+            // The page's hints start where its list does (the thumbnails' edge) and end on the screen's page inset.
+            right = { CompositionLocalProvider(LocalNxHintBarStart provides nxListInset(), LocalNxHintBarEnd provides nxPageInset().end) { page() } },
             over = { if (s is Screen.RaSettings) RaSettingsDialogs(s, state, state::onButton) },
             leftShare = share,
         )
@@ -44,13 +48,27 @@ internal fun RaSplitScreen(state: AppState, s: Screen, page: @Composable () -> U
  * is no summary (signed out, not read yet), on a narrow window, and while a sync, sign-in or reset fills it.
  */
 @Composable
-internal fun RaPageWithProfile(state: AppState, c: RaController, split: Boolean, page: @Composable () -> Unit) {
+internal fun RaPageWithProfile(state: AppState, c: RaController, split: Boolean, page: @Composable (showHints: Boolean) -> Unit) {
     val profile by state.raProfile.collectAsState()
     val ra by c.state.collectAsState()
     val p = profile
-    if (!split || p == null || raProgressLine(ra) != null) return page()
+    if (!split || p == null || raProgressLine(ra) != null) return page(true)
     // Beside the page the summary is a preview of its Profile word (A opens it, where a long one scrolls).
-    RaPageShare(c) { share -> SplitPanes(left = page, right = { RaProfilePane(p) }, leftShare = share, divider = false) }
+    RaPageShare(c) { share ->
+        SplitPanes(
+            left = { page(false) },
+            right = { RaProfilePane(p) },
+            over = {
+                Box(Modifier.fillMaxSize()) {
+                    CompositionLocalProvider(LocalNxHintBarStart provides settingsSectionStart(), LocalNxHintBarEnd provides nxPageInset().end) {
+                        NxHintBar(SETTINGS_ROOT_HINTS, Modifier.align(Alignment.BottomStart), onHint = state::onButton)
+                    }
+                }
+            },
+            leftShare = share,
+            divider = false,
+        )
+    }
 }
 
 /** [panes] with the left pane's share wide enough for the page's word block, head included ([raSplitLeftWidth]). */

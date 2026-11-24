@@ -2,6 +2,7 @@ package com.nxredux.mobile.options
 
 import com.nxredux.mobile.gpudriver.GpuDriver
 import com.nxredux.mobile.layout.ScreenClass
+import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.Res3dConsole
 
 /**
@@ -15,19 +16,20 @@ object ConsoleSettings {
      * [tag]'s rows; [screen] (null: unknown) shapes the DS and 3DS layout rows, [displayMax] (null: unknown) the DS and 3DS
      * 3D Resolution scales, [biosFiles] (the ".bin" names in the PS2 BIOS folder) the PS2 BIOS row's choices, [gpuDrivers] (null: the feature is unavailable, no row) the GPU driver row's choices.
      * [autoVulkan]: Graphics API's Auto is Vulkan for this console on this phone ([GraphicsApiOptions.autoIsVulkan]).
+     * [mali]: the phone's GPU is a Mali, which the Graphics API row's info speaks to ([GraphicsApiOptions.rowFor]).
      */
-    fun tableFor(tag: String, screen: ScreenClass? = null, displayMax: Int? = null, biosFiles: List<String> = emptyList(), gpuDrivers: List<GpuDriver>? = null, autoVulkan: Boolean = false): List<FrontendOption> = when {
+    fun tableFor(tag: String, screen: ScreenClass? = null, displayMax: Int? = null, biosFiles: List<String> = emptyList(), gpuDrivers: List<GpuDriver>? = null, autoVulkan: Boolean = false, mali: Boolean = false): List<FrontendOption> = when {
         NdsOptions.appliesTo(tag) -> NdsOptions.tableFor(screen, displayMax = displayMax) + NdsOptions.shaderScreensRow + NdsOptions.localWirelessRow
         N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRowsFor(screen) + N3dsOptions.resolutionRows(displayMax) + NdsOptions.shaderScreensRow + N3dsOptions.newControlsRow + N3dsOptions.localWirelessRow
         PspOptions.appliesTo(tag) -> PspOptions.resolutionRows(displayMax) + PspOptions.localWirelessRow
-        WiiOptions.appliesTo(tag) -> WiiOptions.table + DolphinOptions.resolutionRows(displayMax)
+        WiiOptions.appliesTo(tag) -> WiiOptions.table + DolphinOptions.wiiResolutionRows(displayMax)
         DolphinOptions.appliesTo(tag) -> DolphinOptions.resolutionRows(displayMax)
         Ps1Options.appliesTo(tag) -> Ps1Options.resolutionRows(tag, displayMax)
         DcOptions.appliesTo(tag) -> DcOptions.resolutionRows(displayMax)
         N64Options.appliesTo(tag) -> N64Options.resolutionRows(displayMax)
         Ps2Options.appliesTo(tag) -> Ps2Options.rowsFor(biosFiles) + Ps2Options.resolutionRows(displayMax)
         else -> emptyList()
-    } + graphicsRows(tag, gpuDrivers, autoVulkan) + BottomScreenOptions.row + PadOptions.tableFor(tag) + SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.rowsFor(tag)
+    } + graphicsRows(tag, gpuDrivers, autoVulkan, mali) + BottomScreenOptions.row + PadOptions.tableFor(tag) + SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.rowsFor(tag)
 
     /**
      * The row and the value it shows for [value] (stored, else the row default). Only the 3D Resolution scales differ: a
@@ -45,8 +47,15 @@ object ConsoleSettings {
     private val MODE_KEYS = Res3dConsole.entries.map { it.modeKey }.toSet()
     private val SCALE_KEYS = Res3dConsole.entries.flatMap { listOf(it.maxScaleKey, it.scaleKey) }.toSet()
 
-    private fun graphicsRows(tag: String, gpuDrivers: List<GpuDriver>?, autoVulkan: Boolean): List<FrontendOption> =
-        if (GraphicsApiOptions.appliesTo(tag)) listOf(if (autoVulkan) GraphicsApiOptions.rowAutoVulkan else GraphicsApiOptions.row) + (if (GpuDriverOptions.appliesTo(tag, gpuDrivers != null)) listOf(GpuDriverOptions.row(gpuDrivers.orEmpty(), autoVulkan)) else emptyList()) else emptyList()
+    private fun graphicsRows(tag: String, gpuDrivers: List<GpuDriver>?, autoVulkan: Boolean, mali: Boolean): List<FrontendOption> {
+        if (!GraphicsApiOptions.appliesTo(tag)) return emptyList()
+        val drivers = GpuDriverOptions.appliesTo(tag, gpuDrivers != null)
+        // On a Mali GPU the driver picked here decides what Auto is for some cores: the row stays on Auto, or picking the
+        // system driver would hide the row needed to pick a custom one again.
+        val driverDecidesAuto = mali && CoreRegistry.forTag(tag)?.vulkan?.let { it.autoOnMali && it.maliNeedsCustomDriver } == true
+        return listOf(GraphicsApiOptions.rowFor(autoVulkan, mali, drivers, n64 = CoreRegistry.consoleOf(tag)?.id == "n64")) +
+            (if (drivers) listOf(GpuDriverOptions.row(gpuDrivers.orEmpty(), autoVulkan || driverDecidesAuto)) else emptyList())
+    }
 
     /** Every console's rows (keys are unique across them); built when read, as [NdsOptions.table]. */
     val all: List<FrontendOption> get() =

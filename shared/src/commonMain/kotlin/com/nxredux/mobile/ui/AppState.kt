@@ -55,6 +55,7 @@ import com.nxredux.mobile.library.move
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.library.withArt
 import com.nxredux.mobile.library.rename
+import com.nxredux.mobile.library.setBadgeChoice
 import com.nxredux.mobile.library.playableSystems
 import com.nxredux.mobile.library.withFirstSeen
 import com.nxredux.mobile.options.CoreOptionSource
@@ -230,6 +231,11 @@ class AppDeps(
     val ps2BiosFiles: () -> List<String> = { emptyList() },
     /** The ".bin" names in Bios/NDS/ (whether DS Download Play can boot the DS menu); blocking, called off the main thread. */
     val ndsBiosFiles: () -> List<String> = { emptyList() },
+    /**
+     * The device turns its screen for an app that asks (Android's auto-rotate on). Off, Button layout offers only the
+     * window's current orientation: a display that keeps its rotation leaves the other one's editor with nothing drawn.
+     */
+    val screenRotates: () -> Boolean = { true },
     /** Opens the skin's button layout editor (Android: its own activity); it saves to the settings and ends with [AppState.onSkinLayoutEdited]. Null: no editor. */
     val skinEditor: SkinEditorLauncher? = null,
     /** Settings → Library → Saves: Export and Import (null: rows do nothing). */
@@ -384,6 +390,7 @@ class AppState(
         deps.source, sidecars, deps.arcadeSets, deps.naomiSets, compute = deps.compute, chdSectors = deps.chdSectors,
         picks = { artworkController?.picks().orEmpty() },               // a picked extra game slot keeps its mirror file
         heroShots = { artworkController?.heroShots().orEmpty() },       // a SteamGridDB hero screenshot keeps hero drawing
+        badgeChoices = { deps.userData.readBadges() },                   // a game's own badge choice wins over its tags
         legacyMove = { legacyArtMove },                                  // old grid/ and hero/ files move once
     )
 
@@ -405,7 +412,12 @@ class AppState(
     fun systemButtonKey(model: PadModel?, source: String?, keyCode: Int, scanCode: Int, down: Boolean, repeat: Boolean): Boolean =
         controlBindings.systemButtonKey(model, source, keyCode, scanCode, down, repeat)
     /** The UI reports whether a controller is connected. */
-    fun onControllerConnected(connected: Boolean) = controlBindings.onControllerConnected(connected)
+    fun onControllerConnected(connected: Boolean) {
+        controlBindings.onControllerConnected(connected)
+        if (settingsContent.controllerConnected == connected) return
+        settingsContent.controllerConnected = connected
+        refreshSettingsOn(SettingsSection.APPEARANCE)
+    }
 
     private val _rowEdit = MutableStateFlow<RowEdit?>(null)
     /** The row the pad is changing ([NxPadA.EDIT], [onRowEditButton]); another page drops it. */
@@ -744,7 +756,7 @@ class AppState(
             override fun kidsLocked(): Boolean = kidsUi.kidsLocked
             override fun navStep(motion: NavMotion) = this@AppState.navStep(motion)
             override fun resolveOne(path: String): Listed? = this@AppState.resolveOne(path)
-            override fun launch(entry: Listed, resumeSlot: Int?, fromSwitcher: Boolean, fresh: Boolean): Job? = launches.launch(entry, resumeSlot, fromSwitcher = fromSwitcher, fresh = fresh)
+            override fun launch(entry: Listed, resumeSlot: Int?, fromSwitcher: Boolean, fresh: Boolean): Job? = launches.launch(entry, resumeSlot, fromSwitcher = fromSwitcher, fresh = fresh, continuing = !fresh)
             override fun menuWithItsRow(): Pair<Screen, ListSelection> =
                 menuScreen().let { m -> m to menuRowOf(m) }
             override fun publishHomeView() = homeTab.publishHomeView()
@@ -1411,6 +1423,10 @@ class AppState(
             // On a choice the dropdown still lists ([applyDualMenu] closes it when the choices change, so this only guards).
             return menu.copy(layoutMenu = prev.layoutMenu.coerceIn(0, GameListLayouts.choices(_dualMenu.value).lastIndex))
         }
+        if (prev is Screen.Systems && prev.layoutMenu != null && menu is Screen.Systems && prev.category == menu.category) {
+            val choices = prev.category?.let(MenuTabLayouts::choices).orEmpty()
+            if (choices.isNotEmpty()) return menu.copy(layoutMenu = prev.layoutMenu.coerceIn(0, choices.lastIndex))
+        }
         val draft = when (prev) {
             is Screen.Systems -> prev.search
             is Screen.Games -> prev.search.takeIf { prev.isTab }
@@ -1428,7 +1444,7 @@ class AppState(
      * achievements panel or the art panel).
      */
     private fun menuFree(s: Screen): Boolean = s.isMainMenu && s.contextMenu == null && when (s) {
-        is Screen.Systems -> s.search == null
+        is Screen.Systems -> s.search == null && s.layoutMenu == null
         is Screen.Games -> s.search == null && s.layoutMenu == null && !_panelOpen.value
         else -> false
     }
@@ -1451,7 +1467,7 @@ class AppState(
      * since it was remembered.
      */
     private fun rememberedRow(category: MenuCategory, rows: List<MainRow>): ListSelection {
-        val r = tabSelections[category] ?: return ListSelection(0, 0)
+        val r = tabSelections[category] ?: return ListSelection(if (category == MenuCategory.HOME) homeInitialIndex(rows) else 0, rows.size)
         if (category != MenuCategory.HOME) return r
         return homeTab.rememberedRow(r, rows)
     }
@@ -1475,7 +1491,8 @@ class AppState(
      */
     private fun menuRowOf(m: Screen): ListSelection = when (m) {
         is Screen.Games -> rememberedGame(m.entries).clampedTo(m.entries.size)
-        is Screen.Systems -> (m.category?.let(tabSelections::get) ?: ListSelection(0, 0)).clampedTo(m.rows.size)
+        is Screen.Systems -> (m.category?.let(tabSelections::get)
+            ?: ListSelection(if (m.category == MenuCategory.HOME) homeInitialIndex(m.rows) else 0, m.rows.size)).clampedTo(m.rows.size)
         else -> ListSelection(0, 0)
     }
 
@@ -1743,7 +1760,7 @@ class AppState(
      * dropdown); null on any other screen.
      */
     private fun tabRowOf(s: Screen): Pair<List<MenuCategory>, Int>? = when (s) {
-        is Screen.Systems -> if (s.menu != null || s.search != null) null else s.tabs.map { it.category } to s.tab
+        is Screen.Systems -> if (s.menu != null || s.search != null || s.layoutMenu != null) null else s.tabs.map { it.category } to s.tab
         is Screen.Games -> s.tabBar?.takeIf { s.menu == null && s.search == null && s.layoutMenu == null }?.let { it.categories to it.index }
         else -> null
     }
@@ -2756,7 +2773,7 @@ class AppState(
      */
     fun openSearch() {
         when (val s = _screen.value) {
-            is Screen.Systems -> if (s.menu == null && s.search == null && canSearch) _screen.value = s.copy(search = lastSearch)
+            is Screen.Systems -> if (s.menu == null && s.search == null && s.layoutMenu == null && canSearch) _screen.value = s.copy(search = lastSearch)
             is Screen.Games -> if (s.isTab && s.menu == null && s.search == null && s.layoutMenu == null && canSearch) _screen.value = s.copy(search = lastSearch)
             else -> Unit
         }
@@ -2856,13 +2873,26 @@ class AppState(
         (source as? ListSource.Console)?.let { c -> consoleGroup(c.system)?.let { ListSource.Console(it) } } ?: source
 
     /**
-     * The Layout icon: opens the dropdown on the layout in use, or closes it when open; on the Games tab too, whose
-     * layout is the game lists' (while it is open the tab's own keys are the dropdown's: [onPageButton], [tabRowOf]).
+     * The Layout icon: opens the dropdown on the layout in use, or closes it when open; on every main menu tab (whose
+     * layout is that tab's own, or the game lists' on Games) and every game list. While it is open the screen's own
+     * keys are the dropdown's ([onPageButton], [tabRowOf]).
      */
     fun toggleLayoutMenu() {
-        val s = _screen.value as? Screen.Games ?: return
-        if (s.menu != null || s.search != null || !deps.settings.gameListLayoutOptions) return
-        _screen.value = s.copy(layoutMenu = if (s.layoutMenu != null) null else GameListLayouts.indexOf(deps.settings.gameListStyle, deps.settings.gameListOrientation, deps.settings.gameListVerticalAlignment, _dualMenu.value))
+        if (!deps.settings.gameListLayoutOptions) return
+        when (val s = _screen.value) {
+            is Screen.Games -> {
+                if (s.menu != null || s.search != null) return
+                _screen.value = s.copy(layoutMenu = if (s.layoutMenu != null) null else GameListLayouts.indexOf(deps.settings.gameListStyle, deps.settings.gameListOrientation, deps.settings.gameListVerticalAlignment, _dualMenu.value))
+            }
+            is Screen.Systems -> {
+                val category = s.category ?: return
+                if (s.menu != null || s.search != null || MenuTabLayouts.choices(category).isEmpty()) return
+                val style = MenuStyles.styleOf(deps.settings.menuStyles, category)
+                val orientation = MenuStyles.orientationOf(deps.settings.menuOrientations, category)
+                _screen.value = s.copy(layoutMenu = if (s.layoutMenu != null) null else MenuTabLayouts.indexOf(category, style, orientation))
+            }
+            else -> Unit
+        }
     }
 
     /** The Layout dropdown has the buttons: UP / DOWN move, A picks, B closes. */
@@ -2876,18 +2906,46 @@ class AppState(
         }
     }
 
+    /** The main menu tab's Layout dropdown has the buttons: UP / DOWN move, A picks, B closes. */
+    private fun onLayoutMenuButton(s: Screen.Systems, at: Int, button: NxButton) {
+        val last = (s.category?.let(MenuTabLayouts::choices)?.lastIndex ?: -1).coerceAtLeast(0)
+        when (button) {
+            NxButton.UP -> _screen.value = s.copy(layoutMenu = (at - 1).coerceAtLeast(0))
+            NxButton.DOWN -> _screen.value = s.copy(layoutMenu = (at + 1).coerceAtMost(last))
+            NxButton.A -> pickLayout(at)
+            NxButton.B -> _screen.value = s.copy(layoutMenu = null)
+            else -> Unit
+        }
+    }
+
     /**
      * [index]'s layout for every game list (Layouts → Game lists layout, its orientation for Carousel and Backdrop, and a
-     * vertical one's alignment); the dropdown closes.
+     * vertical one's alignment) or for the current main menu tab (Layouts → that tab's layout and orientation); the
+     * dropdown closes.
      */
     fun pickLayout(index: Int) {
-        val s = _screen.value as? Screen.Games ?: return
-        val layout = GameListLayouts.choices(_dualMenu.value).getOrNull(index) ?: return
-        deps.settings.gameListStyle = layout.style
-        if (MenuStyles.hasOrientation(layout.style)) deps.settings.gameListOrientation = layout.orientation
-        layout.alignment?.let { deps.settings.gameListVerticalAlignment = it }
-        gridColumns = 0   // a Grid reports its own columns on its first layout
-        _screen.value = s.copy(layoutMenu = null)   // a new screen: the page redraws in the new style, on the same game
+        when (val s = _screen.value) {
+            is Screen.Games -> {
+                val layout = GameListLayouts.choices(_dualMenu.value).getOrNull(index) ?: return
+                deps.settings.gameListStyle = layout.style
+                if (MenuStyles.hasOrientation(layout.style)) deps.settings.gameListOrientation = layout.orientation
+                layout.alignment?.let { deps.settings.gameListVerticalAlignment = it }
+                gridColumns = 0   // a Grid reports its own columns on its first layout
+                _screen.value = s.copy(layoutMenu = null)   // a new screen: the page redraws in the new style, on the same game
+            }
+            is Screen.Systems -> {
+                val category = s.category ?: return
+                val layout = MenuTabLayouts.choices(category).getOrNull(index) ?: return
+                deps.settings.menuStyles = deps.settings.menuStyles + (category to layout.style)
+                if (category != MenuCategory.HOME && MenuStyles.hasOrientation(layout.style)) {
+                    deps.settings.menuOrientations = deps.settings.menuOrientations + (category to layout.orientation)
+                }
+                gridColumns = 0   // a Grid reports its own columns on its first layout
+                _screen.value = s.copy(layoutMenu = null)   // a new screen: the page redraws in the new style
+                if (category == MenuCategory.HOME) rebuildHomeTab()
+            }
+            else -> Unit
+        }
     }
 
     /**
@@ -2959,6 +3017,9 @@ class AppState(
      * nothing came back. Home's stats are recomputed and its rows rebuilt (Continue's save may be new); that
      * rebuild uses app-private reads only (recents, pins, resume markers, tool pins, the in-memory index), never the tree.
      */
+    /** Play time moved outside the menu's own reads (a killed game's session closed): the screens read it again. */
+    fun playTimeChanged() = refreshGameInfo()
+
     fun onForeground() {
         kidsUi.kidsReturned()   // back from Usage access or Alarms & reminders: a setup step moves on once granted
         kidsUi.kidsHomeCheck()  // back from setup's home question: on once home
@@ -2966,6 +3027,7 @@ class AppState(
         checkArt(reuse = true)   // art deleted or added while away (only changed art folders are listed)
         if (!launches.minimalPending) launches.clearMinimalOpening()
         onLauncherChanged()   // back from Android's home settings or the role dialog: System re-reads its state
+        onRotationChanged()   // auto-rotate may have been switched meanwhile
         refreshInstalled()    // apps may have been installed or removed meanwhile
         refreshGameInfo()   // back from a game (or another app): its time and unlocks may have moved
         homeTab.refreshStatsIfAsked()   // Home's stats too (before the menu's first show, that show computes them)
@@ -3390,17 +3452,34 @@ class AppState(
 
     // --- Emulator Settings (Settings -> Emulation -> Default settings) and Game Settings ---
 
-    internal val emulatorSettings = EmulatorSettingsController(
+    /** Game Settings' Badge row: a saved choice goes into the index, and the lists and Home show it. */
+    private val gameBadges = GameBadgeEditor(
+        scope, deps.userData, deps.compute,
+        saved = { game, choice -> mutateIndex(IndexRefresh(rows = true, openList = true, ui = true)) { current -> current?.setBadgeChoice(game, choice) } },
+        failed = { _error.value = "Could not save the badge"; emulatorSettings.refreshOpenPage() },
+    )
+
+    /** The game whose Game Settings page is open, for its Badge row. */
+    private fun badgeGame(): GameEntry? = (_screen.value as? Screen.EmulatorOptions)?.game?.game
+
+    internal val emulatorSettings: EmulatorSettingsController = EmulatorSettingsController(
         scope, _screen, _selection, _error, deps.coreOptions, deps.emulatorConfigs, deps.coreDefaults,
         host = object : EmulatorSettingsHost {
             override fun showEmulatorsSettings() = settingsUi.showSettingsOn(SettingsSection.EMULATORS, SettingsKind.EMULATORS)
             override fun followRowEdit(key: Any?, from: Int, to: Int?) = settingsUi.followRowEdit(key, from, to)
-            override fun appSection(page: EmulatorPage): EmulatorAppSection? =
-                if (!EmulatorRows.hostsCableLink(page)) null
-                else EmulatorAppSection(EmulatorRows.CABLE_LINK_LABEL, settingsContent.cableLinkRows().map { EmulatorRow.App(it, settingsUi.settingChoices(it)) })
+            override fun appSection(page: EmulatorPage, game: Listed?): EmulatorAppSection? = when {
+                page.forGame -> game?.let { gameBadges.section(it.game) }
+                EmulatorRows.hostsCableLink(page) ->
+                    EmulatorAppSection(EmulatorRows.CABLE_LINK_LABEL, settingsContent.cableLinkRows().map { EmulatorRow.App(it, settingsUi.settingChoices(it)) })
+                else -> null
+            }
             // Without the value's `after`: it republishes a Settings page, which would leave this one (the controller shows the rows).
-            override fun stepAppRow(row: SettingsRow, delta: Int) { settingsContent.settingValue(row)?.step(delta) }
-            override fun chooseAppRow(row: SettingsRow, index: Int) { settingsContent.settingValue(row)?.setTo(index) }
+            override fun stepAppRow(row: SettingsRow, delta: Int) {
+                if (row.kind == SettingsKind.GAME_BADGE) badgeGame()?.let { gameBadges.step(it, delta) } else settingsContent.settingValue(row)?.step(delta)
+            }
+            override fun chooseAppRow(row: SettingsRow, index: Int) {
+                if (row.kind == SettingsKind.GAME_BADGE) badgeGame()?.let { gameBadges.choose(it, index) } else settingsContent.settingValue(row)?.setTo(index)
+            }
             override fun runAppRow(row: SettingsRow) { if (row.kind == SettingsKind.CLEAR_LINK_ROMS) deps.linkRomCache?.clear() }
             override fun restore(screen: Screen, selection: ListSelection) {
                 _screen.value = screen
@@ -3702,7 +3781,7 @@ class AppState(
     // --- Netplay: the sheet over a game list or the main menu (context menu's Netplay, or Y on a game) ---
 
     /** The Netplay sheet; null on a platform without netplay. While its page is set it takes every pad press and Back. */
-    val netplay: NetplayController? = deps.netplay?.let { NetplayController(scope, it, ::launchNetplay, work = deps.compute, findLibraryRom = ::findLocalRom) }   // handshakes and save files off the main thread
+    val netplay: NetplayController? = deps.netplay?.let { NetplayController(scope, it, ::launchNetplay, work = deps.compute, findLibraryRom = ::findLocalRom, playerName = { PlayerName.resolve(deps.settings.playerName, deps.deviceName()) }) }   // handshakes and save files off the main thread
 
     /** [entry] can be played over netplay here: the platform has it, the game's tag has netplay cores, and it can launch. */
     fun canNetplay(entry: Listed?): Boolean =
@@ -4024,7 +4103,10 @@ class AppState(
         _screen.value.takeIf { it is Screen.Settings || it is Screen.SettingsMenu }?.let { onSettingsButton(it, button); return }
         (_screen.value as? Screen.ToolApps)?.takeIf { it.menu == null }?.let { androidApps.onToolAppsButton(button); return }
         _screen.value.contextMenu?.let { contextMenus.onMenuButton(it, button); return }
-        (_screen.value as? Screen.Systems)?.let { s -> s.search?.let { onSearchButton(s, it, button); return } }
+        (_screen.value as? Screen.Systems)?.let { s ->
+            s.search?.let { onSearchButton(s, it, button); return }
+            s.layoutMenu?.let { onLayoutMenuButton(s, it, button); return }
+        }
         (_screen.value as? Screen.Games)?.let { s ->
             s.search?.let { if (s.isTab) onSearchButton(s, it, button) else onListSearchButton(s, it, button); return }   // the tab's is START's
             s.layoutMenu?.let { onLayoutMenuButton(s, it, button); return }
@@ -4233,6 +4315,7 @@ class AppState(
                 true
             }
             is Screen.Systems -> if (s.search != null) { _screen.value = s.copy(search = null); true }
+                else if (s.layoutMenu != null) { _screen.value = s.copy(layoutMenu = null); true }
                 else if (s.menu != null) { if (!s.menu.busy) closeContextMenu(); true }
                 else if (s.pushed) { popHiddenTab(); true }
                 else false
@@ -4313,6 +4396,9 @@ class AppState(
      * The platform's home state or apps may have changed (the role dialog, Android's home settings, a new listing): System's
      * Use as home screen and Library's Android games re-read them.
      */
+    /** Auto-rotate or the window's shape changed: Button layout's orientation rows follow. */
+    fun onRotationChanged() = refreshSettingsOn(SettingsSection.BUTTON_LAYOUT)
+
     fun onLauncherChanged() {
         kidsUi.kidsHomeCheck()   // the role dialog's answer: Kids Mode on once home
         refreshSettingsOn(SettingsSection.SYSTEM, SettingsSection.LIBRARY, SettingsSection.KIDS)
@@ -4581,7 +4667,7 @@ class AppState(
         if (netplay?.page?.value != null) return
         val s = _screen.value
         val free = s.contextMenu == null && when (s) {
-            is Screen.Systems -> s.isMainMenu && s.search == null
+            is Screen.Systems -> s.isMainMenu && s.search == null && s.layoutMenu == null
             is Screen.Games -> s.search == null && s.layoutMenu == null && !_panelOpen.value
             else -> false
         }

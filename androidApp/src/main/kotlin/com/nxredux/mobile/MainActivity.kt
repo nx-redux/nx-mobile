@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.database.ContentObserver
 import android.hardware.input.InputManager
 import android.net.Uri
 import android.os.Build
@@ -15,6 +16,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Process
 import android.provider.DocumentsContract
+import android.provider.Settings
 import android.view.Display
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -179,6 +181,10 @@ class MainActivity : ComponentActivity(), FolderPicker {
     }
 
     private val inputManager: InputManager? by lazy { getSystemService(InputManager::class.java) }
+    /** Auto-rotate switched (the quick settings tile leaves the menu in front): Button layout's rows follow at once. */
+    private val rotationObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) { if (::state.isInitialized) state.onRotationChanged() }
+    }
     private val inputDeviceListener = object : InputManager.InputDeviceListener {
         override fun onInputDeviceAdded(deviceId: Int) {}
         override fun onInputDeviceChanged(deviceId: Int) {}
@@ -470,6 +476,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 },
                 screenClass = { windowScreenClass },
                 windowPx = { windowPx },
+                screenRotates = { Settings.System.getInt(contentResolver, Settings.System.ACCELEROMETER_ROTATION, 1) != 0 },
                 ps2BiosFiles = { BiosImport.binFiles(applicationContext, settings.treeRef, "PS2") },
                 ndsBiosFiles = { BiosImport.binFiles(applicationContext, settings.treeRef, "NDS") },
                 saveTransfer = saveTransfer,
@@ -529,6 +536,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
             // This window's root gets the insets unconsumed: the pages may pad for the bars at rest ([LocalRestingBars]).
             CompositionLocalProvider(LocalPosture provides posture.value, LocalRestingBars provides true, LocalSkinPacks provides ::menuSkinPack) { if (menuOnSecond.value) MenuTopScreen(state) else App(state, ::pad, keyboard = true) }
         }
+        keepKeyFocus()
         mainCare = CareLayer(findViewById(android.R.id.content))
         collectPosture()
         // Dual mode: apps open on the top screen; one there takes our window on that display down until it leaves.
@@ -730,6 +738,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         super.onConfigurationChanged(newConfig)
         readWindow()
         syncMenuScreen()
+        if (::state.isInitialized) state.onRotationChanged()
     }
 
     override fun onStart() {
@@ -738,6 +747,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         AppUpdates.onAppOpened(this)   // the "updated" notice, if a self-update left one
         if (handOverToHome()) return   // made home (role dialog, Android's settings) while this drawer instance ran
         inputManager?.registerInputDeviceListener(inputDeviceListener, null)
+        contentResolver.registerContentObserver(Settings.System.getUriFor(Settings.System.ACCELEROMETER_ROTATION), false, rotationObserver)
         // API 26-28: back from Android's home settings without picking this app, the HOME alias goes off again.
         if (::launcher.isInitialized && launcher.dropAliasIfNotHome() && ::state.isInitialized) state.onLauncherChanged()
         if (::state.isInitialized) {
@@ -746,8 +756,15 @@ class MainActivity : ComponentActivity(), FolderPicker {
             gpuDriverNoticeShown = false
             scope.launch {   // the game process ending on its own (a crash); a hang already said it, so it wins
                 val exit = withContext(Dispatchers.IO) { GameExitCheck.check(applicationContext, hangShown = hang != null) }
+                // A game killed mid-play (swiped away, the system) leaves its session open until it reads as stale: with no
+                // game process alive it closes now, so Home and Game Time agree at once.
+                val closed = withContext(Dispatchers.IO) {
+                    val app = applicationContext
+                    !LiveGameStore.alive(app) && runCatching { GameTimeService.closeDead(app, System.currentTimeMillis() - DEAD_SESSION_GRACE_MS) }.getOrDefault(false)
+                }
+                if (closed) state.playTimeChanged()
                 // A custom GPU driver's crash (onResume) names the cause: the generic notice never replaces it.
-                GameExitCheck.notice(exit)?.takeIf { !gpuDriverNoticeShown }?.let(state::showError)
+                GameExitCheck.notice(exit, settings)?.takeIf { !gpuDriverNoticeShown }?.let(state::showError)
             }
             state.refreshResume()
             state.onForeground()   // a card inserted while in the background: its games come back
@@ -850,6 +867,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         syncSecondScreen()   // takes the second screen's button and the menu's screen away
         secondScreens.stop()
         inputManager?.unregisterInputDeviceListener(inputDeviceListener)   // a no-op when onStart handed over before registering
+        contentResolver.unregisterContentObserver(rotationObserver)
         if (::router.isInitialized) { axes.release(); router.releaseAll() }
         frameRateBoost.reset()
         if (::state.isInitialized) state.onBackground()   // fetched art still waiting to be written goes out now
@@ -886,6 +904,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
     companion object {
         /** How often Parent mode's idle time is looked at while the menu is resumed. */
         private const val KIDS_TICK_MS = 5_000L
+        /** A session touched this recently may belong to a game still starting up (its live record not written yet): left open. */
+        private const val DEAD_SESSION_GRACE_MS = 10_000L
         // Process-lifetime, unlike [scope]: a game reports its start from GameActivity, maybe after this activity was
         // destroyed ("Don't keep activities", OEM reaping during a long unpack), and its recent must still be written.
         private val processScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -925,6 +945,20 @@ class MainActivity : ComponentActivity(), FolderPicker {
      * ([captureKey]) sees every key before either. Before all of them, Controls → System buttons' wait sees the raw
      * key ([AppState.systemButtonKey]), then a bound button becomes its role's code ([SystemButtonKeys]).
      */
+    /**
+     * Keys are this activity's ([dispatchKeyEvent]), but Android hands a window's first d-pad press after a touch to
+     * whatever view it can focus as it leaves touch mode, and drops that press. The content view keeps the focus through
+     * touches (and gets it back when a closed text field leaves none), so that first press reaches the menu.
+     */
+    private fun keepKeyFocus() {
+        val root = findViewById<android.view.ViewGroup>(android.R.id.content).getChildAt(0) ?: return
+        root.isFocusableInTouchMode = true
+        root.requestFocus()
+        root.viewTreeObserver.addOnGlobalFocusChangeListener { _, now ->
+            if (now == null) root.post { if (window.decorView.findFocus() == null) root.requestFocus() }
+        }
+    }
+
     override fun dispatchKeyEvent(raw: KeyEvent): Boolean {
         if (::state.isInitialized && systemButtonKey(raw)) return true
         val event = SystemButtonKeys.translate(this, raw)

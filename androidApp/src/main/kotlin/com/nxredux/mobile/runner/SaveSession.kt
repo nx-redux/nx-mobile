@@ -1,6 +1,7 @@
 package com.nxredux.mobile.runner
 
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
@@ -18,13 +19,18 @@ import com.nxredux.mobile.test.NxTestResults
 import com.nxredux.mobile.ui.nx.SlotUi
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.NxLog
+import com.swordfish.libretrodroid.ScreenRect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
+import java.nio.ByteBuffer
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -79,6 +85,8 @@ internal class SaveSession(
 
         /** [writeAutoStateOnStop]: at most this long for the GL thread to start the serialize, and again to finish it. */
         private const val AUTO_SERIALIZE_WAIT_MS = 10_000L
+        /** [captureThumbnail]: a frame read waits behind the GL thread's queue (a save state's serialize) and one draw. */
+        private const val FRAME_READ_WAIT_MS = 1_500L
         // Process-wide, single thread: the Home auto state and its thumbnail are written off the main thread
         // in submission order, and outlive the activity (a stopped one may be destroyed before they finish).
         private val autoWriter = Executors.newSingleThreadExecutor { Thread(it, "nx-auto-state") }
@@ -124,6 +132,7 @@ internal class SaveSession(
     // the slot-9 thumb once onStop has queued the auto state. [homeThumbGen] drops callbacks from an older pause.
     private var homeThumb: Bitmap? = null
     private var homeThumbGen = 0
+    private var homeThumbStarted = false   // the leave hint started this stop's screenshot
     private var autoWriteOk: AtomicBoolean? = null   // this stop's queued auto-state write succeeded (set on autoWriter)
     private var autoWriteFailed: AtomicBoolean? = null   // this stop's queued auto-state write threw (set on autoWriter)
     // The last stop's serialize gave no state (a core that has none): the next stop's bundle keeps the previous resume
@@ -164,6 +173,7 @@ internal class SaveSession(
         if (!host.quitting && host.gameReady && !resumePending) {
             val gen = ++homeThumbGen
             homeThumb = null
+            homeThumbStarted = true
             captureThumbnail { bmp -> if (gen == homeThumbGen && bmp != null) onHomeThumb(bmp) }
         }
     }
@@ -173,6 +183,7 @@ internal class SaveSession(
         autoWriteOk = null
         autoWriteFailed = null
         homeThumb = null
+        homeThumbStarted = false
         homeThumbGen++   // a capture still in flight belongs to the previous stop
         pendingOutState = null
     }
@@ -287,6 +298,13 @@ internal class SaveSession(
         }
         homeThumb?.let { queueHomeThumb(it) }
         homeThumb = null
+        // Stopped without the leave hint (the screen off, another screen on top): the paused core's frame still matches
+        // the state just queued, read behind its serialize on the GL thread.
+        if (!homeThumbStarted) {
+            homeThumbStarted = true
+            val gen = ++homeThumbGen
+            captureThumbnail(readWaitMs = 2 * AUTO_SERIALIZE_WAIT_MS) { bmp -> if (gen == homeThumbGen && bmp != null) onHomeThumb(bmp) }
+        }
     }
 
     /**
@@ -372,7 +390,9 @@ internal class SaveSession(
         // While a resume is still loading, the running state is the fresh boot: keep the resume point as is. Without
         // [autoState] (the core asked to end) the running state is not worth resuming: keep it as is too.
         if (ss == null || resumePending || !autoState) {
-            host.lifecycleScope.launch {
+            // Not cancellable: the system may destroy the screen during the quit (stopped, low memory), and the battery
+            // save must still be written; only the finish after it is then moot.
+            host.lifecycleScope.launch(NonCancellable) {
                 // A manual Save/Load or a Wii HOME write still running reads the core off the main thread: it must end
                 // before the destroy, which waits only for the auto writes.
                 joinSlotJobs(slotJobs)
@@ -381,11 +401,11 @@ internal class SaveSession(
                     if (!live) release(false)
                 }
                 finish()
-            }
+            }.invokeOnCompletion { quitWritten.countDown() }
             return
         }
         captureThumbnail { bmp ->
-            host.lifecycleScope.launch {
+            host.lifecycleScope.launch(NonCancellable) {   // as above: a destroy mid-quit must not drop the resume point
                 // A manual Save/Load still running must finish before the state is serialized.
                 joinSlotJobs(slotJobs)
                 // true = written, null = skipped (the core can't save states), false = failed.
@@ -421,9 +441,17 @@ internal class SaveSession(
                 }
                 if (ok == false) host.toast("Could not save resume point")
                 finish()
-            }
+            }.invokeOnCompletion { quitWritten.countDown() }
         }
     }
+
+    /**
+     * Counted down once the quit's write ([writeOnQuit]) has ended, also when the screen was destroyed under it.
+     */
+    private val quitWritten = CountDownLatch(1)
+
+    /** Off the main thread: waits up to [timeoutMs] for the quit's write; false when it has not ended by then. */
+    fun awaitQuitWrite(timeoutMs: Long): Boolean = quitWritten.await(timeoutMs, TimeUnit.MILLISECONDS)
 
     /**
      * Runs [block] (off-main native calls) unless the core is destroyed; null when it is. Holding [coreLock] keeps the
@@ -559,16 +587,57 @@ internal class SaveSession(
     }
 
     /**
-     * PixelCopy the current (paused) game frame, cut to the game's own picture ([thumbnailCrop]: no bars or anything drawn
-     * around it; a DS / 3DS game's top screen). Only that rect is copied, straight into a bitmap of the size the save
-     * state's thumbnail is stored at ([SaveStates.thumbSize]), so a large panel never needs a full-window bitmap; with
-     * [fullSize] (a backdrop drawn over the picture) it keeps the picture's own pixel size. With the picture on the second
-     * display ([FrontendRenderer.thumbnailSource]) it is copied from that display's surface: main draws black under the panel.
+     * The game's picture for a save state: one picture of the game alone, the screen the picture is on ([FrontendRenderer.thumbnailSource]:
+     * with a second display the picture display's; a DS / 3DS game one screen of the layout). Read from the core's own
+     * frame ([GLRetroView.readFrame]), so it never depends on what a display shows at that moment (main draws black under
+     * the panel, a surface may be gone or paused at a stop), at the size the save state's thumbnail is stored at
+     * ([SaveStates.thumbSize]). Without a frame read (none in [readWaitMs], or no picture size yet) it is copied from the
+     * display instead ([copyThumbnail]). [fullSize] (a backdrop drawn over the picture, an unlock's screenshot) always
+     * copies what the display shows, at the picture's own pixel size. [cb] runs on the main thread.
      */
-    fun captureThumbnail(fullSize: Boolean = false, cb: (Bitmap?) -> Unit) {
+    fun captureThumbnail(fullSize: Boolean = false, readWaitMs: Long = FRAME_READ_WAIT_MS, cb: (Bitmap?) -> Unit) {
         val view = host.retroView ?: return cb(null)
+        val source = renderer.thumbnailSource()   // taken now: the layout the picture was drawn in
+        if (fullSize) return copyThumbnail(view, source, fullSize = true, cb)
+        val read = frameRead(source, view.getGameGeometry()[3]) { w, h -> SaveStates.thumbSize(w, h) }
+            ?: return copyThumbnail(view, source, fullSize = false, cb)
+        val main = Handler(Looper.getMainLooper())
+        val answered = AtomicBoolean(false)
+        val fallback = Runnable { if (answered.compareAndSet(false, true)) copyThumbnail(view, source, fullSize = false, cb) }
+        val src = ScreenRect(read.src.left, read.src.top, read.src.right, read.src.bottom)
+        val queued = view.readFrame(src, read.width, read.height) { rgba ->
+            main.post {
+                if (!answered.compareAndSet(false, true)) return@post
+                main.removeCallbacks(fallback)
+                val bmp = rgba?.let { frameBitmap(it, read) }
+                if (bmp != null) cb(bmp) else copyThumbnail(view, source, fullSize = false, cb)
+            }
+        }
+        if (!queued) return fallback.run()
+        main.postDelayed(fallback, readWaitMs)
+    }
+
+    /** A frame read's RGBA rows as a bitmap, turned to stand as the picture is shown; null when the size is off. */
+    private fun frameBitmap(rgba: ByteArray, read: FrameRead): Bitmap? {
+        if (rgba.size != read.width * read.height * 4) return null
+        val bmp = Bitmap.createBitmap(read.width, read.height, Bitmap.Config.ARGB_8888)
+        bmp.copyPixelsFromBuffer(ByteBuffer.wrap(rgba))
+        if (read.quarterTurns == 0) return bmp
+        // Counterclockwise as the core asks; Android turns clockwise for a positive angle.
+        val turned = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, Matrix().apply { postRotate(-90f * read.quarterTurns) }, false)
+        if (turned !== bmp) bmp.recycle()
+        return turned
+    }
+
+    /**
+     * PixelCopy of what the display with the picture shows ([source]), cut to the game's own picture ([thumbnailCrop]: no
+     * bars or anything drawn around it). Only that rect is copied, straight into a bitmap of the thumbnail's size, or with
+     * [fullSize] the picture's own pixel size. Null rather than a copy of a display that does not show the picture now
+     * ([ThumbnailSource.copyable]): main under the panel is black, the second display's surface may be gone.
+     */
+    private fun copyThumbnail(view: GLRetroView, source: ThumbnailSource, fullSize: Boolean, cb: (Bitmap?) -> Unit) {
         val second = dual.drawnSecondSurface()
-        val source = renderer.thumbnailSource(secondDrawing = second != null)   // taken now: the layout it was copied from
+        if (!source.copyable(mainBlack = dual.mainShowsNoPicture(), secondDrawing = second != null)) return cb(null)
         val onSecond = second?.takeIf { source.display == ThumbnailDisplay.SECOND }
         val w = onSecond?.width ?: view.width
         val h = onSecond?.height ?: view.height

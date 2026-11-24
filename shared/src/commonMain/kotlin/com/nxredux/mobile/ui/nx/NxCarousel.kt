@@ -151,23 +151,20 @@ fun NxCarousel(
         val bandH = nbTop + g.itemH - bandTop
 
         val hasLongPress = onLongPress != null
-        // A game list's lines split by kind ([carouselGameLines]): the card's stats, the caption's details.
-        val stats = if (gameList) remember(captionInfo) { { carouselGameLines(captionInfo()).picture } } else null
-        val details = if (gameList) remember(captionInfo) { { carouselGameLines(captionInfo()).underTitle } } else captionInfo
         val logoInset = remember(g) { rowLogoInset(g) }
         val toolSize = carouselToolSize(g)
 
         // The window spans the target too, and the selection is lit while [lit] says so.
         NxRow(count, selectedIndex, pos, g, bandTop, bandH, onSelect, onOpen, onLongPress, litSelection = lit) { i, isLit, at, taps ->
-            CarouselItem(tiles[i], i, isLit, at, g, nbTop, bandTop, selTop, logoInset, toolSize, portrait, taps, hasLongPress, badge(i), cardInfo, stats, drained)
+            CarouselItem(tiles[i], i, isLit, at, g, nbTop, bandTop, selTop, logoInset, toolSize, portrait, taps, hasLongPress, badge(i), cardInfo, stats = null, drained)
         }
 
-        // A game list's details under the name as the stack's lines (a row each, [STACK_CAPTION_GAP] apart), only the
-        // whole rows that fit under the tile at its highest ([carouselCaptionMax]): the caption never reaches the bottom row.
+        // The selected item's name and info under the card (following Layouts → Game info: details or achievements),
+        // capped on game lists so the caption never reaches the bottom row.
         if (cardInfo == null) RowCaption(
-            captionTitle, details, glide, nameStyle, 2, infoStyle, inset, avail, availPx, spare,
+            captionTitle, captionInfo, glide, nameStyle, 2, infoStyle, inset, avail, availPx, spare,
             selTop, g.itemH + CAPTION_GAP, colors.accent,   // the selected game's name in the accent, as Home's cards
-            stackRows = gameList, rowGap = if (gameList) STACK_CAPTION_GAP else 0.dp,
+            stackRows = false, rowGap = if (gameList) STACK_CAPTION_GAP else 0.dp,
             maxDrawn = if (gameList) captionMax else Float.POSITIVE_INFINITY, captionBadge = captionBadge,
         )
     }
@@ -207,8 +204,9 @@ private fun BoxScope.CarouselItem(
         )
         badge?.let { HomeBadge(it, portrait, Modifier.align(Alignment.TopStart), lit = lit || !drained) }
         // The neighbour's black layer, on the tile's own rounded shape (the ring outside stays bright). Drained, the
-        // greyscale dims the neighbours already.
-        if (!drained) Box(
+        // greyscale dims picture neighbours (games and abstract-art tools) already; plain tiles still take the dim layer.
+        val hasArt = tile is GridTile.Game || tile is GridTile.Tool && tile.backgroundUrl != null
+        if (!drained || !hasArt) Box(
             Modifier.fillMaxSize().clip(RoundedCornerShape(NX_TILE_CORNER.dp))
                 .graphicsLayer { alpha = rowItem(RowStyle.CAROUSEL, i - at(), g).dim }
                 .background(colors.background),

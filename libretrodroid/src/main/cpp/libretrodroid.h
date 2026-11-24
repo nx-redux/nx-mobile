@@ -278,6 +278,12 @@ public:
     // The second surface drawn from inside the core's frame (hw cores): the view's hook runs right
     // after the main draw in handleVideoRefresh, while the frame is whole and the step holds the core lock, so no lock.
     void renderSecondaryInFrame(unsigned width, unsigned height);
+    // Part of the core's own frame as RGBA rows, top row first (Video::readFrame); empty without a frame. With
+    // [afterDraw] it is read after the next draw instead (a GL core while it runs) and nullopt comes back: takeFrameRead
+    // hands it over. GL thread; also while the view is paused (its context is made current for it).
+    std::optional<std::vector<uint8_t>> readFrame(float left, float top, float right, float bottom, unsigned width,
+                                                  unsigned height, bool afterDraw);
+    std::optional<std::vector<uint8_t>> takeFrameRead();
     // Set by the step's JNI call for its duration: runs after a hw core's frame is drawn (the view draws its second
     // surface then). Cleared after the step.
     void setFrameDrawnHook(std::function<void()> hook) { frameDrawnHook = std::move(hook); }
@@ -299,6 +305,9 @@ public:
     // True once the running core delivered a frame as RETRO_HW_FRAME_BUFFER_VALID (its own GL framebuffer); false
     // before any frame and while frames are software. Any thread.
     bool isHardwareRendered() const;
+
+    // The running core's retro_system_info library_name and library_version, empty before the first create(). Any thread.
+    std::pair<std::string, std::string> getCoreIdentity();
 
     void resetGlobalVariables();
 
@@ -498,6 +507,10 @@ private:
     std::atomic<bool> aspectRatioPending { false };
     // context_reset was called and context_destroy not yet. GL thread.
     bool hwContextLive = false;
+
+    std::mutex coreIdentityLock;
+    std::string coreName;
+    std::string coreVersion;
 
     // What the loaded game's retro_game_info points at, kept until retro_unload_game.
     std::string gamePath;

@@ -477,6 +477,9 @@ void LibretroDroid::create(
         struct retro_system_info info {};
         core->retro_get_system_info(&info);
         Environment::setCoreWarningsLogged(info.library_name == nullptr || strcmp(info.library_name, "melonDS DS") != 0);
+        std::lock_guard<std::mutex> lock(coreIdentityLock);
+        coreName = info.library_name ? info.library_name : "";
+        coreVersion = info.library_version ? info.library_version : "";
     }
 
     core->retro_set_video_refresh(&callback_hw_video_refresh);
@@ -1541,6 +1544,30 @@ void LibretroDroid::renderSecondaryInFrame(unsigned width, unsigned height) {
     }
 }
 
+std::optional<std::vector<uint8_t>> LibretroDroid::readFrame(float left, float top, float right, float bottom,
+                                                             unsigned width, unsigned height, bool afterDraw) {
+    std::lock_guard<std::mutex> lock(coreLock);
+    if (!video) return std::vector<uint8_t>();
+    if (afterDraw) {
+        video->readFrameAfterDraw(left, top, right, bottom, width, height);
+        return std::nullopt;
+    }
+    TeardownContext context;
+    if (!context.isCurrent()) return std::vector<uint8_t>();
+    try {
+        return video->readFrame(left, top, right, bottom, width, height);
+    } catch (const std::exception& e) {
+        LOGE("Frame read failed: %s", e.what());
+        return std::vector<uint8_t>();
+    }
+}
+
+std::optional<std::vector<uint8_t>> LibretroDroid::takeFrameRead() {
+    std::lock_guard<std::mutex> lock(coreLock);
+    if (!video) return std::vector<uint8_t>();
+    return video->takeFrameRead();
+}
+
 void LibretroDroid::renderSecondary(unsigned width, unsigned height) {
     std::lock_guard<std::mutex> lock(coreLock);
     renderSecondaryInFrame(width, height);
@@ -1557,6 +1584,11 @@ std::array<float, 4> LibretroDroid::getGameGeometry() const {
 
 bool LibretroDroid::isHardwareRendered() const {
     return hardwareFrame.load();
+}
+
+std::pair<std::string, std::string> LibretroDroid::getCoreIdentity() {
+    std::lock_guard<std::mutex> lock(coreIdentityLock);
+    return { coreName, coreVersion };
 }
 
 } //namespace libretrodroid

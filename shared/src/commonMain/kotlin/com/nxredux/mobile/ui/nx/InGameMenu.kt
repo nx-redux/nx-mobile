@@ -986,7 +986,7 @@ private fun pageHints(page: MenuPage, row: MenuRow?, infoTruncated: Boolean, pan
     // Options: A opens its page (previewed on the right).
     page.kind == PageKind.Root && row is MenuRow.Submenu -> listOf(Hint(NxButton.A, "Open"), Hint(NxButton.B, "Resume"))
     row is MenuRow.Submenu -> buildList {
-        add(Hint(NxButton.A, "Open"))
+        add(Hint(NxButton.A, if (row.usesPreset) "Use" else "Open"))
         if (infoTruncated) add(Hint(NxButton.X, "Info"))
         add(Hint(NxButton.B, "Back"))
     }

@@ -396,6 +396,9 @@ flycast_FLAGS = -DLIBRETRO=ON -DUSE_GLES=ON -DUSE_OPENMP=OFF -DCMAKE_OSX_ARCHITE
 # never copies an unfinished frame; the Large screen layout puts its small screen top-right (upstream: bottom-right).
 # It also starts Azahar's multiplayer room for local wireless between devices and names the console after the player
 # (README, Azahar).
+# patches/azahar/0001: the Vulkan upload buffer is sized from the device's RAM (64 MiB on 2 GB) instead of a fixed 512 MiB the
+# driver keeps resident. patches/azahar/0002: save states stream through ZSTD both ways, never whole and uncompressed in memory.
+# patches/azahar/0003: OpenGL stream buffers map only the range a draw writes (Mali flushes the whole mapped range on unmap).
 # The top-level CMakeLists needs CMake >= 3.25, above the SDK's 3.22.1 every other core uses: sdkmanager "cmake;3.30.3"
 # (upstream CI's version) and azahar_CMAKE / azahar_NINJA below. No FetchContent: ~35 git submodules, all initialised
 # recursively by the template's default. Built-in AES keyblob and open-source shared font: no BIOS. Decrypted games only.
@@ -464,6 +467,10 @@ dolphin_FLAGS = -DLIBRETRO=ON -DENABLE_LTO=ON -DANDROID_STL=c++_static
 # during the BIOS boot could unmap pages a new entry had just mapped (the game then ran off into the disc boot).
 # patches/armsx2/0009: while the frontend fast-forwards, the VM's own speed limiter is lifted; the VM runs on its own
 # thread against its own clock, so more retro_run calls alone left the game at normal speed.
+# patches/armsx2/0010: the CPU thread's exit shuts down a VM left in Stopping (retro_unload_game's state, which
+# HasValidVM does not count); skipped, the IOP thread ran on in the memory CPUThreadShutdown releases (SIGSEGV on a quit).
+# patches/armsx2/0011: the EE's 32 MB main RAM as RETRO_MEMORY_SYSTEM_RAM, which RetroAchievements reads (upstream returned
+# none, so no PS2 achievement could ever trigger).
 # ARMSX2_EMBED_PATCHES=OFF: upstream fetches a patches.zip at configure time and compiles it in; that collection has no
 # licence, so it stays out of the .so. The app's Cheats & Patches tool downloads PCSX2's patches.zip at runtime and
 # extracts it into Cheats/PS2/Patches/, which patches/armsx2/0005 points the core at (cheats from Cheats/PS2/).

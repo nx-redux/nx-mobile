@@ -18,13 +18,14 @@ data class VulkanSwitch(
     /**
      * Graphics API "Auto" is Vulkan on an Arm Mali GPU, for a core its OpenGL ES driver runs slower than its Vulkan one
      * (measured on a Mali-G76: PS2 far slower, Wii short of full speed). Not for a core that is as fast on either (N64,
-     * PSP, PS1, Dreamcast) or whose Vulkan renderer needs more memory than a 2 GB phone has (3DS).
+     * PSP, PS1, Dreamcast). The 3DS holds full speed on either there too; it takes Vulkan only with a custom driver.
      */
     val autoOnMali: Boolean = false,
     /**
      * [autoOnMali] only with a custom GPU driver in use. Dolphin on the stock Mali driver draws some games (Mario Kart:
      * Double Dash!!) under a dark blue tint: Mali has no dual-source blending and the stock driver no framebuffer fetch,
-     * and Dolphin's Vulkan backend has no other way to blend them. malisx2 offers it; OpenGL ES is right on either.
+     * and Dolphin's Vulkan backend has no other way to blend them. Azahar on the stock driver loses the device in some
+     * games (Mario Kart 7, `DeviceLost` at any scale on a Mali-G76). malisx2 runs both; OpenGL ES is right on either.
      */
     val maliNeedsCustomDriver: Boolean = false,
     /**
@@ -75,7 +76,7 @@ data class CoreDescriptor(
     /**
      * Single values the app never offers, per option key: skipped when cycling the in-game Core Options page, and a stored
      * one in a `.cfg` is ignored ([com.nxredux.mobile.options.CoreConfig.resolve]'s `hidden`). Values are the core's exact strings.
-     * Every key needs a [defaultOptions] entry with a value that is not hidden, so the core's own default never slips through.
+     * A key needs a [defaultOptions] entry with a value that is not hidden, unless the core's own default is the one wanted.
      */
     val hiddenValues: Map<String, Set<String>> = emptyMap(),
     /**

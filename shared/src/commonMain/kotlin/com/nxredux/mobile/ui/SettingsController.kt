@@ -365,13 +365,15 @@ internal class SettingsController(
         } else if (section == SettingsSection.SYSTEM_BUTTONS) {
             host.resetSystemButtons()
         } else if (section == SettingsSection.APPEARANCE) {
-            s.padSkin = true
-            s.padTheme = PadTheme.DEFAULT
+            if (!content.controllerConnected) {   // the pad's rows hidden: a reset leaves what the page doesn't show
+                s.padSkin = true
+                s.padTheme = PadTheme.DEFAULT
+                s.skinTweaks = ""
+                s.overlayTweaks = ""
+            }
             s.accent = AccentPreset.DEFAULT
             s.secondaryAccent = SecondaryAccent.DEFAULT
             s.optionTextSize = OptionTextSize.DEFAULT
-            s.skinTweaks = ""
-            s.overlayTweaks = ""
         } else if (section == SettingsSection.MAIN_MENU) {
             s.menuStyles = emptyMap()
             s.menuOrientations = emptyMap()

@@ -1,0 +1,44 @@
+# licence: modifies Azahar (https://github.com/azahar-emu/azahar), GPL-2.0 or later (its source files; license.txt is
+# the GPLv2 text; see LICENSES/azahar.txt); this patch is distributed under the same licence.
+Vulkan texture-upload buffer sized from the device's RAM (1/32, 64 MiB to 512 MiB) instead of a fixed 512 MiB: on a
+phone the driver keeps it resident, and on a 2 GB device it starved the game into the low-memory killer.
+
+diff --git a/src/video_core/renderer_vulkan/vk_texture_runtime.cpp b/src/video_core/renderer_vulkan/vk_texture_runtime.cpp
+index de747c2f0..6a7a32774 100644
+--- a/src/video_core/renderer_vulkan/vk_texture_runtime.cpp
++++ b/src/video_core/renderer_vulkan/vk_texture_runtime.cpp
+@@ -4,7 +4,9 @@
+ 
+ #include "video_core/renderer_vulkan/vk_texture_runtime.h"
+ 
++#include <algorithm>
+ #include <limits>
++#include <unistd.h>
+ #include <span>
+ #include <string>
+ #include <boost/container/small_vector.hpp>
+@@ -158,7 +160,14 @@ vk::ImageSubresourceRange MakeSubresourceRange(vk::ImageAspectFlags aspect, u32
+     };
+ }
+ 
+-constexpr u64 UPLOAD_BUFFER_SIZE = 512_MiB;
++// A ring that waits on its fences when it wraps: one upload only needs to fit. The memory is shared with the CPU on a phone
++// and the driver keeps it resident (never swapped), so the size follows the device's RAM: 1/32 of it, 64 MiB to 512 MiB.
++u64 UploadBufferSize() {
++    const long pages = sysconf(_SC_PHYS_PAGES);
++    const long page = sysconf(_SC_PAGE_SIZE);
++    const u64 ram = pages > 0 && page > 0 ? static_cast<u64>(pages) * static_cast<u64>(page) : 0;
++    return std::clamp<u64>(ram / 32, 64_MiB, 512_MiB);
++}
+ constexpr u64 DOWNLOAD_BUFFER_SIZE = 16_MiB;
+ 
+ } // Anonymous namespace
+@@ -286,7 +295,7 @@ TextureRuntime::TextureRuntime(const Instance& instance, Scheduler& scheduler,
+                                u32 num_swapchain_images_)
+     : instance{instance}, scheduler{scheduler}, renderpass_cache{renderpass_cache},
+       blit_helper{instance, scheduler, renderpass_cache, update_queue},
+-      upload_buffer{instance, scheduler, vk::BufferUsageFlagBits::eTransferSrc, UPLOAD_BUFFER_SIZE,
++      upload_buffer{instance, scheduler, vk::BufferUsageFlagBits::eTransferSrc, UploadBufferSize(),
+                     BufferType::Upload},
+       download_buffer{instance, scheduler,
+                       vk::BufferUsageFlagBits::eTransferDst |

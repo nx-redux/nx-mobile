@@ -9,10 +9,22 @@ object RaRequests {
     const val RCHEEVOS_VERSION = "12.2.1"
 
     /**
-     * How every request names this client to RetroAchievements, in the form its server reads: the client and its
-     * [version], the [os] ("Android 14"), then the rcheevos the requests are built to.
+     * How every request names this client to RetroAchievements, in the form its hardcore rules ask for: the client and
+     * its [version], the [os] ("Android 14"), then the running [core] ([coreToken]) when there is one.
      */
-    fun userAgent(version: String, os: String) = "NXRedux/$version ($os) rcheevos/$RCHEEVOS_VERSION"
+    fun userAgent(version: String, os: String, core: String? = null) = "NXRedux/$version ($os)" + (core?.let { " $it" } ?: "")
+
+    /**
+     * A core's retro_system_info as one user-agent token: "melonDS DS" + "1.4.0" -> "melonDS_DS/1.4.0". Only the
+     * version's first word is kept ("v2.5 4cbc7d4" -> "v2.5"); a core without a version is its name alone, one without a
+     * name is null.
+     */
+    fun coreToken(name: String, version: String): String? {
+        val n = name.trim().replace(Regex("[^A-Za-z0-9._+-]+"), "_").trim('_')
+        if (n.isEmpty()) return null
+        val v = version.trim().substringBefore(' ').replace(Regex("[^A-Za-z0-9._+-]"), "")
+        return if (v.isEmpty()) n else "$n/$v"
+    }
 
     fun login2(user: String, token: String) = "r=login2&u=${encode(user)}&t=${encode(token)}"
     fun loginWithPassword(user: String, password: String) = "r=login2&u=${encode(user)}&p=${encode(password)}"

@@ -7,6 +7,7 @@ import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.view.KeyEvent
 import android.widget.Toast
+import kotlinx.coroutines.delay
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -20,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.window.layout.WindowMetricsCalculator
 import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
@@ -77,8 +79,20 @@ class SkinLayoutActivity : ComponentActivity() {
                 BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
                     val w = constraints.maxWidth
                     val h = constraints.maxHeight
-                    // until the window has turned to the asked orientation, nothing to place
-                    if (w <= 0 || h <= 0 || (w > h) != landscape) return@BoxWithConstraints
+                    if (w <= 0 || h <= 0) return@BoxWithConstraints
+                    // until the window has turned to the asked orientation, nothing to place; a screen that never
+                    // turns (a landscape-only handheld asked for portrait) and doesn't letterbox closes with the message
+                    if ((w > h) != landscape) {
+                        LaunchedEffect(Unit) { delay(TURN_WAIT_MS); turnFailed(landscape) }
+                        return@BoxWithConstraints
+                    }
+                    // a display held in the other orientation (a forced rotation) letterboxes this window instead of
+                    // turning: a layout edited there is not the one a game on this screen draws
+                    val refused = remember(w, h) {
+                        val max = WindowMetricsCalculator.getOrCreate().computeMaximumWindowMetrics(this@SkinLayoutActivity).bounds
+                        turnRefused(landscape, max.width(), max.height())
+                    }
+                    if (refused) { LaunchedEffect(Unit) { turnFailed(landscape) }; return@BoxWithConstraints }
                     // a new window size (folded, unfolded) is another layout: start again on it
                     val made = remember(w, h) { place(pack, console, tag, wiiPad, n3dsNew, segaThree, w, h, settings) }
                     if (made == null) { LaunchedEffect(Unit) { noLayout() }; return@BoxWithConstraints }
@@ -141,6 +155,12 @@ class SkinLayoutActivity : ComponentActivity() {
         finish()
     }
 
+    /** The screen kept the other orientation: say so and leave. */
+    private fun turnFailed(landscape: Boolean) {
+        Toast.makeText(this, "The screen won't turn to ${if (landscape) "landscape" else "portrait"}", Toast.LENGTH_SHORT).show()
+        finish()
+    }
+
     /** While the "Discard changes?" prompt shows, Back / B keep editing; only the prompt's Discard leaves. */
     private fun back() {
         val e = editor ?: return finish()
@@ -159,6 +179,8 @@ class SkinLayoutActivity : ComponentActivity() {
     companion object {
         private const val EXTRA_CONSOLE = "console"
         private const val EXTRA_LANDSCAPE = "landscape"
+        /** Long enough for a slow device to turn its screen; a window still the other shape then never turns. */
+        private const val TURN_WAIT_MS = 2_500L
         private const val EXTRA_WII_PAD = "wii_pad"
         private const val EXTRA_N3DS_NEW = "n3ds_new"
         private const val EXTRA_SEGA_THREE = "sega_three"
@@ -173,3 +195,10 @@ class SkinLayoutActivity : ComponentActivity() {
             .putExtra(EXTRA_TITLE, title)
     }
 }
+
+/**
+ * The editor asked for [landscape] but the screen's whole area ([maxW] x [maxH], window px) is the other shape: the
+ * display kept its rotation and the window is letterboxed inside it. A square area refuses neither.
+ */
+internal fun turnRefused(landscape: Boolean, maxW: Int, maxH: Int): Boolean =
+    maxW > 0 && maxH > 0 && maxW != maxH && (maxW > maxH) != landscape

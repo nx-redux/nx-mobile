@@ -18,7 +18,7 @@ interface RaStore {
     suspend fun delete(path: String)
     /** Deletes [dir] recursively; never the store root. */
     suspend fun deleteTree(dir: String)
-    /** Immediate child names of [dir] (files and directories), empty when absent. */
+    /** Immediate child names of [dir] (files and directories), empty when absent; throws [RaStoreException] when unreadable. */
     suspend fun list(dir: String): List<String>
     suspend fun exists(path: String): Boolean
     /**

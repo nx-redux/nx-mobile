@@ -111,6 +111,15 @@ public:
 
     void renderFrame();
 
+    // A part of the core's own frame for a picture of it: [srcLeft]..[srcBottom] (0..1 of the frame, y down) drawn at
+    // width x height, as RGBA rows top row first. No shader, layout, composition or hold: the frame as the core made
+    // it. Empty without a frame. GL thread, with this Video's context current.
+    std::vector<uint8_t> readFrame(float srcLeft, float srcTop, float srcRight, float srcBottom, unsigned width, unsigned height);
+    // readFrame done right after the next draw instead: a GL core's framebuffer is whole only then (it may start its
+    // next frame before its step returns). takeFrameRead hands it over once, nullopt until then.
+    void readFrameAfterDraw(float srcLeft, float srcTop, float srcRight, float srcBottom, unsigned width, unsigned height);
+    std::optional<std::vector<uint8_t>> takeFrameRead();
+
     void onNewFrame(const void *data, unsigned width, unsigned height, size_t pitch);
 
     // The next frame's buffer, for a Video created with vulkanBridge. Owns [syncFd]. [liveBuffers]: how many buffers the
@@ -234,6 +243,9 @@ private:
     bool composing() const { return compositionWidth > 0 && compositionHeight > 0 && !compositionParts.empty(); }
     GLuint frameTexture();
     void composeFrame();
+    struct FrameReadRequest { float left, top, right, bottom; unsigned width, height; };
+    std::optional<FrameReadRequest> pendingFrameRead;
+    std::optional<std::vector<uint8_t>> frameReadResult;
     void releaseComposition();
 
     VideoLayout videoLayout;

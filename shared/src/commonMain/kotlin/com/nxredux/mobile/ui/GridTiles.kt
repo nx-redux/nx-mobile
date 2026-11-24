@@ -21,7 +21,7 @@ sealed interface GridTile {
         val resumeFrame: Boolean = false,   // the picture is Continue's resume frame: trimmed of its letterbox and zoomed, as Grid Home's card
         val badge: String? = null,   // a pill on its own row over the name ([GameEntry.badge])
     ) : GridTile
-    data class Tool(val icon: DrawableResource, val lines: List<String>, val appId: String? = null) : GridTile   // appId: an Android app's, drawn with its own icon
+    data class Tool(val icon: DrawableResource, val lines: List<String>, val appId: String? = null, val backgroundUrl: String? = null) : GridTile   // appId: an Android app's, drawn with its own icon; backgroundUrl: abstract art ground (Carousel Home)
     data class Collection(val name: String, val count: Int? = null) : GridTile   // count: its games; null when unknown
 }
 

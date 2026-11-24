@@ -42,6 +42,12 @@ class HintTouchTest {
         assertEquals(listOf("Recent"), launcherTopActions({}, canSearch = false).map { it.description })
         assertEquals(listOf("Search"), launcherTopActions({}, canSearch = true, recent = false).map { it.description })
         assertEquals(emptyList(), launcherTopActions(null, canSearch = true))
+        var layout = 0
+        val withLayout = launcherTopActions({}, canSearch = true, onKidsLock = {}, onLayout = { layout++ }, layoutOpen = true)
+        assertEquals(listOf("Recent", "Search", "Layout", "Parent"), withLayout.map { it.description })
+        assertEquals(listOf(false, false, true, false), withLayout.map { it.lit })
+        withLayout[2].onClick()
+        assertEquals(1, layout)
     }
 
     // Onboarding and empty pages: every hint but Back becomes a button, A filled (Back is Android's back).

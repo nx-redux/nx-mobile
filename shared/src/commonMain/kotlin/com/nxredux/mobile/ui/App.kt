@@ -6,6 +6,7 @@ import com.nxredux.mobile.ui.keyboard.PromptKeyboard
 import com.nxredux.mobile.ui.nx.LocalSkinPacks
 import com.nxredux.mobile.ui.nx.SkinPad
 import com.nxredux.mobile.ui.nx.nxPageInset
+import com.nxredux.mobile.ui.nx.LocalNxHintBarEnd
 import com.nxredux.mobile.ui.nx.LocalNxHintBarHidden
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
 import com.nxredux.mobile.ui.nx.nxListInset
@@ -103,6 +104,7 @@ import com.nxredux.mobile.settings.GameListArt
 import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
+import com.nxredux.mobile.settings.MenuStyles
 import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.HandheldShell
@@ -562,6 +564,9 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             // layoutKey: the tab or list laid out, not the Screen: a republish of the same page (a context menu opening or
             // closing, another tab rebuilt) must not snap a carousel or backdrop mid-glide; its own tiles changing still do.
             is Screen.Systems -> {
+                val category = s.category
+                val layoutChoices = remember(category) { category?.let(MenuTabLayouts::choices).orEmpty() }
+                val canLayout = state.settings.gameListLayoutOptions && layoutChoices.isNotEmpty()
                 MainMenuScreen(
                     s, index, state::select, { state.openSelected() }, state::selectTab,
                     onSwipeSelect = state::select, onTabSwipe = state::swipeTab, onHint = state::onButton, onLongPress = { state.openContextMenu(it) },
@@ -569,7 +574,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     style = style, orientation = orientation, onGridLayout = onGridLayout,
                     tileInfo = remember(s.rows, gameInfo, now) { rowTileInfo(s.rows, gameInfo, now) }, layoutKey = s.category,
                     onHomeLayout = onHomeLayout, homeView = homeView.value, homeRowLast = { homeRowLast.value },
-                    continueInfo = { gameInfoFor(gameInfo, now, (s.rows.firstOrNull() as? MainRow.Continue)?.entry?.game, full = true) },
+                    continueInfo = { gameInfoFor(gameInfo, now, (s.rows.firstOrNull { it is MainRow.Continue } as? MainRow.Continue)?.entry?.game, full = true) },
                     canNetplay = { state.canNetplay(s.rows.getOrNull(selection.value.index).listed()) },
                     raSignedIn = state.settings.raToken != null,
                     controllerArt = state.settings.consoleArt == ConsoleArt.CONTROLLER,
@@ -584,7 +589,24 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     // stands in for a hidden hint.
                     tabMenu = s.hidden.isNotEmpty(),
                     dual = state.dualMenu.collectAsState().value,
+                    onLayout = state::toggleLayoutMenu.takeIf { canLayout },
+                    layoutOpen = s.layoutMenu != null,
                 )
+                s.layoutMenu?.let { at ->
+                    if (category != null && layoutChoices.isNotEmpty()) {
+                        GameListLayoutMenu(
+                            choices = layoutChoices,
+                            current = MenuTabLayouts.indexOf(
+                                category,
+                                MenuStyles.styleOf(state.settings.menuStyles, category),
+                                MenuStyles.orientationOf(state.settings.menuOrientations, category),
+                            ),
+                            highlighted = at,
+                            onPick = state::pickLayout,
+                            onDismiss = { state.onButton(NxButton.B) },
+                        )
+                    }
+                }
                 s.menu?.let { MenuOverlay(state, it) }
                 s.search?.let { NxTextPrompt("Search", it, state::searchDraft, onConfirm = { state.onButton(NxButton.A) }, onCancel = { state.onButton(NxButton.B) }) }
             }
@@ -612,18 +634,25 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             Screen.DeviceSync -> state.deviceSync?.let {
                 val setup by state.syncSetup.collectAsState()
                 // The Settings root's look: its hints start at the words' edge (shown always: Retry and the like are hints alone).
-                CompositionLocalProvider(LocalNxHintBarStart provides settingsSectionStart()) {
+                CompositionLocalProvider(LocalNxHintBarStart provides settingsSectionStart(), LocalNxHintBarEnd provides nxPageInset().end) {
                     DeviceSyncScreen(it, onHint = state::onButton, setup = setup, onSetupTap = state::syncSetupTap)
                 }
             } ?: Box(Modifier.fillMaxSize())
             is Screen.RetroAchievements -> state.achievements?.let { c ->
                 SettingsHintBar {
-                    RaPageWithProfile(state, c, split = settingsSplit(splitWindow())) {
-                        WithIndex(selection) { RetroAchievementsScreen(c, it, state::select, { state.openSelected() }, onHint = state::onButton) }
+                    RaPageWithProfile(state, c, split = settingsSplit(splitWindow())) { showHints ->
+                        WithIndex(selection) { RetroAchievementsScreen(c, it, state::select, { state.openSelected() }, onHint = state::onButton, showHints = showHints) }
                     }
                 }
             } ?: Box(Modifier.fillMaxSize())
-            is Screen.RaDownload -> state.achievements?.let { c -> WithIndex(selection) { RaDownloadScreen(s, c, it, state::select, {}, onHint = state::onButton) } } ?: Box(Modifier.fillMaxSize())
+            // On Settings' insets like Game Tracker: the title and list on the hint bar's edge, as the other tool pages.
+            is Screen.RaDownload -> state.achievements?.let { c ->
+                Box(Modifier.fillMaxSize().padding(start = settingsPlateStart(), end = settingsPlateEnd())) {
+                    CompositionLocalProvider(LocalNxHintBarStart provides nxListInset()) {
+                        WithIndex(selection) { RaDownloadScreen(s, c, it, state::select, {}, onHint = state::onButton) }
+                    }
+                }
+            } ?: Box(Modifier.fillMaxSize())
             // The page on Settings' insets: the plates' edges on both sides (the title and the list's thumbnails then sit on the
             // words' edge, [nxListInset] in), the hint bar on that same edge, as the RetroAchievements split's right page.
             is Screen.GameTime -> Box(Modifier.fillMaxSize().padding(start = settingsPlateStart(), end = settingsPlateEnd())) {
@@ -1004,7 +1033,12 @@ private fun MenuOverlay(state: AppState, menu: ContextMenu) = ContextMenuOverlay
  */
 @Composable
 private fun SettingsHintBar(content: @Composable () -> Unit) =
-    CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart(), content = content)
+    CompositionLocalProvider(
+        LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints,
+        LocalNxHintBarStart provides settingsSectionStart(),
+        LocalNxHintBarEnd provides nxPageInset().end,
+        content = content,
+    )
 
 /** [onTouch] on every finger down anywhere inside, seen before the children and never consumed (Kids Mode's Parent idle). */
 internal fun Modifier.onAnyTouch(onTouch: () -> Unit): Modifier = pointerInput(onTouch) {

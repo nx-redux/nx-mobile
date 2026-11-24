@@ -125,7 +125,7 @@ fun GamePanel(
             )
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (tab) {
-                    GamePanelTab.SHORTCUTS -> ShortcutsTab(state.shortcuts, state.slots, state.slot, focused, bottom, onEvent)
+                    GamePanelTab.SHORTCUTS -> ShortcutsTab(state.shortcuts, state.slots, state.slot, state.session, focused, bottom, onEvent)
                     GamePanelTab.SETTINGS -> SettingsTab(state.quick, bottom, onEvent)
                     GamePanelTab.ACHIEVEMENTS -> AchievementsTab(state.achievements, state.badges, focused, bottom)
                     GamePanelTab.CHEATS -> CheatsTab(state.cheats, state.noCheatsText, focused, bottom, onEvent)
@@ -222,10 +222,12 @@ internal fun quickSegmentsFit(width: Dp, widest: Dp, count: Int, label: Dp = qui
 /**
  * The shortcut tiles, 4 to a row, or 2 or 1 where a label's longest word would not fit ([rememberGamePanelColumns]); a
  * short last row keeps the cell width. Under them the save-state [slots]' strip ([SlotStrip]) where the game has any.
+ * In a session its card ([SessionCard]) comes first, over the few tiles it leaves.
  */
 @Composable
 private fun ShortcutsTab(
-    shortcuts: List<ShortcutState>, slots: List<SlotUi>, slot: Int?, focused: Int?, bottom: Dp, onEvent: (GamePanelEvent) -> Unit,
+    shortcuts: List<ShortcutState>, slots: List<SlotUi>, slot: Int?, session: GamePanelSession?, focused: Int?, bottom: Dp,
+    onEvent: (GamePanelEvent) -> Unit,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val columns = rememberGamePanelColumns(maxWidth, shortcuts)
@@ -235,6 +237,7 @@ private fun ShortcutsTab(
                 .padding(top = 10.dp, bottom = bottom),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            if (session != null) SessionCard(session)
             shortcuts.chunked(columns).forEachIndexed { r, row ->
                 Row(Modifier.fillMaxWidth().padding(horizontal = GP_GUTTER), horizontalArrangement = Arrangement.spacedBy(GP_CELL_GAP)) {
                     row.forEachIndexed { c, s ->
@@ -245,6 +248,21 @@ private fun ShortcutsTab(
             }
             if (slots.isNotEmpty()) SlotStrip(slots, slot) { onEvent(GamePanelEvent.SelectSlot(it)) }
         }
+    }
+}
+
+/** A session's card on the Shortcuts tab: its title, how this device plays in it, why the tiles are gone, and where its way out is. */
+@Composable
+private fun SessionCard(session: GamePanelSession) {
+    val colors = LocalNxColors.current
+    val font = LocalNxFont.current
+    Column(Modifier.fillMaxWidth().padding(horizontal = GP_GUTTER), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(session.title, color = colors.listText, fontFamily = font, fontSize = GP_TITLE_SIZE, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        session.detail.forEach {
+            Text(it, color = colors.listText, fontFamily = font, fontSize = GP_LABEL_SIZE, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Text(session.note, color = colors.hint, fontFamily = font, fontSize = GP_SMALL_SIZE, modifier = Modifier.padding(top = 4.dp))
+        Text(session.hint, color = colors.listText, fontFamily = font, fontSize = GP_SMALL_SIZE, modifier = Modifier.padding(top = 6.dp))
     }
 }
 

@@ -56,6 +56,10 @@ object CoreRegistry {
             "melonds_firmware_nds_path", "melonds_firmware_dsi_path", "melonds_dsi_nand_path",
             "melonds_direct_network_interface",
         ),
+        // "/notfound" is the core's "None found..." placeholder: saved from a game run before the files were added, it
+        // would keep the built-in firmware afterwards. Unset, the core picks the files it finds.
+        hiddenValues = listOf("melonds_firmware_nds_path", "melonds_firmware_dsi_path", "melonds_dsi_nand_path")
+            .associateWith { setOf("/notfound") },
         name = "melonDS DS",
         microphone = true,
     )
@@ -464,7 +468,8 @@ object CoreRegistry {
         hiddenValues = mapOf("citra_graphics_api" to setOf("Software")),
         // With Vulkan compiled in, Azahar's Android "Auto" picks Vulkan without asking the frontend
         // (GET_PREFERRED_HW_RENDER), so the API is always set explicitly: OpenGL, or Vulkan through Graphics API.
-        vulkan = VulkanSwitch(gles = mapOf("citra_graphics_api" to "OpenGL"), vulkan = mapOf("citra_graphics_api" to "Vulkan"), autoOnXclipse = true),
+        vulkan = VulkanSwitch(gles = mapOf("citra_graphics_api" to "OpenGL"), vulkan = mapOf("citra_graphics_api" to "Vulkan"), autoOnMali = true, maliNeedsCustomDriver = true,
+            autoOnXclipse = true),
         cheats = false,   // retro_cheat_set is empty
         name = "Azahar",
         rewind = false,

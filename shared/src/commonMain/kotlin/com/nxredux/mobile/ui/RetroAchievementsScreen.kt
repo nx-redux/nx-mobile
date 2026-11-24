@@ -27,6 +27,7 @@ fun RetroAchievementsScreen(
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, modifier: Modifier = Modifier,
     onHint: ((NxButton) -> Unit)? = null,
     focused: Boolean = true,
+    showHints: Boolean = true,
 ) {
     val state by controller.state.collectAsState()
     val download by controller.download.collectAsState()
@@ -42,7 +43,7 @@ fun RetroAchievementsScreen(
                 // Unfocused is the split's left pane: its open row points at the page beside it, as Settings' section.
                 onTap = { onSelect(it); onOpen(it) }, rowsFocused = !focused, hintBar = true, onHint = onHint,
                 headline = raHeadline(state), description = raDetails(state),
-                hints = if (focused) SETTINGS_ROOT_HINTS else emptyList(),
+                hints = if (focused && showHints) SETTINGS_ROOT_HINTS else emptyList(),
             )
         }
     }

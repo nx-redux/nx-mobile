@@ -85,6 +85,7 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
                     putExtra(GameActivity.EXTRA_NETPLAY_USB, it.overUsb)
                     putExtra(GameActivity.EXTRA_NETPLAY_MIXED, it.mixed)
                     it.peerWl?.let { wl -> putExtra(GameActivity.EXTRA_NETPLAY_PEER_WL, wl) }
+                    it.peerName?.let { name -> putExtra(GameActivity.EXTRA_NETPLAY_PEER_NAME, name) }
                     if (it.cableLink) {
                         putExtra(GameActivity.EXTRA_NETPLAY_CABLE_LINK, true)
                         putExtra(GameActivity.EXTRA_NETPLAY_OTHER_ROM, it.otherRomPath)

@@ -52,6 +52,8 @@ internal interface GameNetplayHost : GameScreenHost {
     fun leaveLinkSession(kind: NetplayLinkKind): Map<String, String>
     /** Opens the in-game menu (nothing when it is open). */
     fun showMenu()
+    /** The session's state changed: the dual-screen panel's session card redraws. */
+    fun sessionChanged()
 }
 
 /**
@@ -130,6 +132,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
             intent.getBooleanExtra(GameActivity.EXTRA_NETPLAY_MIXED, false),
             intent.getStringExtra(GameActivity.EXTRA_NETPLAY_PEER_WL),
             cableLinkFrom(intent),
+            intent.getStringExtra(GameActivity.EXTRA_NETPLAY_PEER_NAME),
         )
         // netplay link: recreated after a process kill once its session had ended: the local game it had become, as a
         // normal launch (its resume slot below), not a session.
@@ -300,6 +303,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
                     if (host.menuOpen || host.focusPaused) host.retroView?.frameSpeed = 0
                     ended = true
                     host.withMenu { it.endNetplay(local = false) }
+                    host.sessionChanged()
                 }
             }
             is NetplayNotice.Failed -> {
@@ -374,6 +378,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
         host.retroView?.audioEnabled = false
         host.showMenu()
         host.withMenu { it.endNetplay(local = false, quitOnly = true) }
+        host.sessionChanged()
     }
 
     /** Cable Link's session ended: the game stays stopped and the menu stays open on Quit alone. */

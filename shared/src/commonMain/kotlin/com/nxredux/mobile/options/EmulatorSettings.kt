@@ -29,14 +29,14 @@ object EmulatorSettings {
      * unknown), which shapes the 3D Resolution scales. [biosFiles]: the ".bin" names in the PS2 BIOS folder, the PS2 BIOS row's choices.
      * [gpuDrivers]: the installed custom GPU drivers (null: the feature is unavailable, no GPU driver row). [gpuDriverResolved]:
      * a custom driver will load for this page, so the Vulkan-failed note (about the system driver) is left off the Graphics API
-     * row. [autoVulkan]: Graphics API's Auto is Vulkan for this core on this phone. [gpuDriverCrashNote]: put on the GPU driver row (its line and before its info, still editable), for a game whose driver crashed.
+     * row. [autoVulkan]: Graphics API's Auto is Vulkan for this core on this phone; [mali]: its GPU is a Mali. [gpuDriverCrashNote]: put on the GPU driver row (its line and before its info, still editable), for a game whose driver crashed.
      */
     fun page(
         tag: String, descriptor: CoreDescriptor, table: CoreOptionTable?, defaults: Map<String, String>,
         console: ConfigFile?, game: ConfigFile?, forGame: Boolean, vulkanFailed: Boolean = false,
         secondScreen: Boolean = true, screen: ScreenClass? = null, displayMax: Int? = null,
         biosFiles: List<String> = emptyList(), gpuDrivers: List<GpuDriver>? = null, gpuDriverResolved: Boolean = false,
-        gpuDriverCrashNote: String? = null, autoVulkan: Boolean = false,
+        gpuDriverCrashNote: String? = null, autoVulkan: Boolean = false, mali: Boolean = false,
     ): EmulatorPage {
         val tableDefaults = table?.options.orEmpty().associate { it.key to it.defaultValue }
         val frontendDefaults = FrontendOptions.defaults(tag)
@@ -45,7 +45,7 @@ object EmulatorSettings {
             forced = descriptor.lockedOptions, hidden = descriptor.hiddenValues,
         )
         val software = resolved.values[NdsRenderer.RENDER_MODE] == NdsRenderer.SOFTWARE
-        val consoleRows = ConsoleSettings.tableFor(tag, screen, displayMax, biosFiles, gpuDrivers, autoVulkan).filter { it.key !in resolved.locked && (descriptor.rewind || it.key !in SpeedOptions.REWIND_KEYS) && (secondScreen || it.key != BottomScreenOptions.KEY) }
+        val consoleRows = ConsoleSettings.tableFor(tag, screen, displayMax, biosFiles, gpuDrivers, autoVulkan, mali).filter { it.key !in resolved.locked && (descriptor.rewind || it.key !in SpeedOptions.REWIND_KEYS) && (secondScreen || it.key != BottomScreenOptions.KEY) }
             .shownFor(resolved.values)
             .map {
                 // The DS and 3DS layout rows read their old keys too, as the game does (no pick: the row default).

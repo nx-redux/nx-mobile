@@ -2287,8 +2287,8 @@ class AppStateTest {
         assertEquals(2, runner.launched.size)
     }
 
-    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, skinEditor: SkinEditorLauncher? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }, ownKeyboard: Boolean = false, onSecond: () -> Boolean = { false }, topFacts: TopFactsPlatform? = null, linkRomCache: com.nxredux.mobile.netplay.cablelink.LinkRomCache? = null, gpuDrivers: GpuDriverStore? = null, biosIntake: com.nxredux.mobile.bios.BiosIntake? = null) =
-        AppState(AppDeps(settings, src, runner, picker, data, gpuDrivers = gpuDrivers, topFacts = topFacts, ownKeyboard = ownKeyboard, promptOnSecondDisplay = onSecond, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, skinEditor = skinEditor, saveTransfer = saveTransfer, biosIntake = biosIntake, allFilesAccess = allFiles, micAccess = mic, linkRomCache = linkRomCache, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, skinEditor: SkinEditorLauncher? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }, ownKeyboard: Boolean = false, onSecond: () -> Boolean = { false }, topFacts: TopFactsPlatform? = null, linkRomCache: com.nxredux.mobile.netplay.cablelink.LinkRomCache? = null, gpuDrivers: GpuDriverStore? = null, biosIntake: com.nxredux.mobile.bios.BiosIntake? = null, screenRotates: () -> Boolean = { true }, windowPx: () -> Pair<Int, Int>? = { null }) =
+        AppState(AppDeps(settings, src, runner, picker, data, gpuDrivers = gpuDrivers, topFacts = topFacts, ownKeyboard = ownKeyboard, promptOnSecondDisplay = onSecond, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, skinEditor = skinEditor, saveTransfer = saveTransfer, biosIntake = biosIntake, allFilesAccess = allFiles, micAccess = mic, linkRomCache = linkRomCache, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond, screenRotates = screenRotates, windowPx = windowPx), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
 
     /** What a scan of [src] for [settings] stores, built without an AppState (so without the skeleton). */
     private suspend fun scannedIndex(settings: MemorySettings, src: RomsSource = source): LibraryIndex =
@@ -4863,15 +4863,20 @@ class AppStateTest {
         assertEquals(MenuCategory.HOME, state.category())
     }
 
-    @Test fun carousel_home_down_reaches_the_dock_and_a_on_more_opens_tools() = runTest {
+    @Test fun carousel_home_starts_on_continue_and_left_reaches_pinned_tools() = runTest {
         val state = homeFixture(MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + (MenuCategory.HOME to MenuStyle.CAROUSEL) })
-        state.onHomeLayout(HomeFrame(16f * 2 + 40f, 600f, portrait = true))   // room for one dock square
         val rows = assertIs<Screen.Systems>(state.screen.value).rows
-        assertIs<MainRow.MoreTools>(rows.last())
+        assertTrue(rows.none { it is MainRow.MoreTools })
+        val contIdx = rows.indexOfFirst { it is MainRow.Continue }
+        assertTrue(contIdx > 0, "expected pinned tools left of Continue: $rows")
+        assertEquals(contIdx, state.selection.value.index)
+        state.onButton(NxButton.LEFT)
+        assertEquals(contIdx - 1, state.selection.value.index)
+        assertIs<MainRow.PinnedTool>(rows[state.selection.value.index])
+        // DOWN stays in the single carousel row.
+        val at = state.selection.value.index
         state.onButton(NxButton.DOWN)
-        assertEquals(rows.lastIndex, state.selection.value.index)
-        state.onButton(NxButton.A)
-        assertEquals(MenuCategory.TOOLS, state.category())
+        assertEquals(at, state.selection.value.index)
     }
 
     @Test fun list_and_carousel_home_taps_select_then_open_a_pinned_game() = runTest {
@@ -4898,30 +4903,18 @@ class AppStateTest {
 
     private fun carouselHome() = MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + (MenuCategory.HOME to MenuStyle.CAROUSEL) }
 
-    /** The row item the Carousel Home's carousel shows now ([homeCarouselShownRow] on AppState's row memory). */
-    private fun AppState.carouselShown(): Int {
-        val rows = assertIs<Screen.Systems>(screen.value).rows
-        return homeCarouselShownRow(selection.value.index, homeCarouselRowCount(rows), homeCarouselRowLast.value)
-    }
-
-    @Test fun carousel_home_shows_the_tapped_row_item_above_the_dock_after_home_comes_back() = runTest {
+    @Test fun carousel_home_remembers_pinned_tool_selection_across_tab_switches() = runTest {
         val state = homeFixture(carouselHome())
         val rows = assertIs<Screen.Systems>(state.screen.value).rows
-        val pin = rows.indexOfFirst { it is MainRow.Pin }
-        val dock = homeCarouselRowCount(rows)
-        assertIs<MainRow.PinnedTool>(rows[dock])
-        state.select(pin)                                                // a tap on Mario's card
-        state.select(dock)                                               // a tap on a dock square
-        assertEquals(pin, state.carouselShown())
+        val tool = rows.indexOfFirst { it is MainRow.PinnedTool }
+        assertTrue(tool >= 0)
+        state.select(tool)
         state.onButton(NxButton.R1); state.onButton(NxButton.L1)         // Home left and back
         assertEquals(MenuCategory.HOME, state.category())
-        assertEquals(dock, state.selection.value.index)                  // still on the dock square
-        assertEquals(pin, state.carouselShown())                         // the carousel still shows Mario
-        state.onButton(NxButton.UP)                                      // and UP lands on it
-        assertEquals(pin, state.selection.value.index)
+        assertEquals(tool, state.selection.value.index)                  // still on the pinned tool card
     }
 
-    @Test fun carousel_home_taps_and_a_tab_entry_update_the_row_memory() = runTest {
+    @Test fun carousel_home_switching_from_grid_follows_selected_row() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = homeFixture(settings)                                // Grid
         val pin = assertIs<Screen.Systems>(state.screen.value).rows.indexOfFirst { it is MainRow.Pin }
@@ -4930,15 +4923,12 @@ class AppStateTest {
         state.onButton(NxButton.R1); state.onButton(NxButton.L1)         // Home entered as Carousel, on Mario
         val rows = assertIs<Screen.Systems>(state.screen.value).rows
         assertIs<MainRow.Pin>(rows[state.selection.value.index])
-        assertEquals(state.selection.value.index, state.homeCarouselRowLast.value)   // the tab entry noted it
-        state.select(0)                                                  // a tap on Continue
-        assertEquals(0, state.homeCarouselRowLast.value)
-        state.select(homeCarouselRowCount(rows))                         // a tap on the dock: the row memory stays
-        assertEquals(0, state.homeCarouselRowLast.value)
-        assertEquals(0, state.carouselShown())
+        val contIdx = rows.indexOfFirst { it is MainRow.Continue }
+        state.select(contIdx)
+        assertEquals(contIdx, state.selection.value.index)
     }
 
-    @Test fun carousel_home_unpinning_the_last_row_card_keeps_the_focus_in_the_row() = runTest {
+    @Test fun carousel_home_unpinning_the_last_row_card_clamps_to_the_card_before_it() = runTest {
         // Every library game played (no Not started shelf) and two pinned: no shelf after the last pinned card.
         val boulder = "/Roms/Commodore 64 (C64)/Boulder Dash 2.chd"
         val data = FakeUserData(recents = listOf(Recent(tetris), Recent(mario), Recent(mk), Recent(boulder)), pins = listOf(Shortcut(mario, "Mario"), Shortcut(mk, "Mario Kart")))
@@ -4946,14 +4936,13 @@ class AppStateTest {
         advanceUntilIdle()
         val rows = assertIs<Screen.Systems>(state.screen.value).rows
         assertTrue(rows.none { it is MainRow.Shelf }, "$rows")
-        val last = homeCarouselRowCount(rows) - 1
+        val last = rows.lastIndex
         assertEquals(mk, assertIs<MainRow.Pin>(rows[last]).entry.game.path)
         state.select(last)
         choose(state, ContextKind.UNPIN); advanceUntilIdle()
         val now = assertIs<Screen.Systems>(state.screen.value).rows
         assertTrue(now.none { it is MainRow.Pin && it.entry.game.path == mk })
-        assertTrue(state.selection.value.index < homeCarouselRowCount(now), "focus in the dock: ${now[state.selection.value.index]}")
-        assertEquals(homeCarouselRowCount(now) - 1, state.selection.value.index)   // the card before it
+        assertEquals(now.lastIndex, state.selection.value.index)   // the card before it
     }
 
     @Test fun list_and_carousel_home_pinning_a_shelf_game_follows_it_to_its_pin() = runTest {
@@ -5855,7 +5844,7 @@ class AppStateTest {
                 SettingsRow(SettingsKind.SECONDARY_ACCENT, "Secondary accent", "Auto"),
                 SettingsRow(SettingsKind.TEXT_SIZE, "Text size", "Large"),
                 SettingsRow(SettingsKind.BUTTON_LAYOUT, "Button layout", "Default"),
-                SettingsRow(SettingsKind.RESET_DEFAULTS, "Reset to defaults"),
+                SettingsRow(SettingsKind.RESET_DEFAULTS, "Reset to defaults", note = appearanceResetScope(padShown = true)),
             ),
             assertIs<Screen.Settings>(state.screen.value).rows,
         )
@@ -5909,6 +5898,25 @@ class AppStateTest {
         state.select(rows().indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }); state.onButton(NxButton.A); state.onButton(NxButton.A)   /* asks, then Reset */
         assertEquals(true, settings.padSkin)
         assertEquals(SettingsKind.PAD_THEME, rows()[1].kind)
+    }
+
+    // A controller hides the pad's rows: Reset to defaults names only what shows and leaves the pad's settings alone.
+    @Test fun appearance_reset_with_a_controller_leaves_the_hidden_pad_settings() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings)
+        state.load()
+        state.onControllerConnected(true)
+        state.openSettings(SettingsSection.APPEARANCE)
+        settings.padSkin = false
+        settings.skinTweaks = "kept"
+        settings.optionTextSize = com.nxredux.mobile.settings.OptionTextSize.entries.first { it != com.nxredux.mobile.settings.OptionTextSize.DEFAULT }
+        fun page() = assertIs<Screen.Settings>(state.screen.value)
+        val reset = page().rows.indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }
+        assertEquals("Accent, Secondary accent and Text size go back to their defaults.", settingsResetAsk(page(), reset)?.text)
+        state.select(reset); state.onButton(NxButton.A); state.onButton(NxButton.A)   /* asks, then Reset */
+        assertEquals(false, settings.padSkin)
+        assertEquals("kept", settings.skinTweaks)
+        assertEquals(com.nxredux.mobile.settings.OptionTextSize.DEFAULT, settings.optionTextSize)
     }
 
     @Test fun layouts_rows_follow_the_handheld_order() = runTest {
@@ -11348,7 +11356,8 @@ class AppStateTest {
         for (section in listOf(SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU)) {
             state.openSettings(section)
             val rows = assertIs<Screen.Settings>(state.screen.value).rows
-            assertEquals(SettingsRow(SettingsKind.RESET_DEFAULTS, "Reset to defaults"), rows.last(), section.name)
+            assertEquals(SettingsKind.RESET_DEFAULTS, rows.last().kind, section.name)
+            assertEquals("Reset to defaults", rows.last().label, section.name)
             assertEquals(1, rows.count { it.kind == SettingsKind.RESET_DEFAULTS }, section.name)
             assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Select")), settingsHints(rows, rows.lastIndex))
         }
@@ -11458,6 +11467,31 @@ class AppStateTest {
         val back = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsSection.APPEARANCE, back.section)
         assertEquals(SettingsKind.BUTTON_LAYOUT, back.rows[state.selection.value.index].kind)
+    }
+
+    // Auto-rotate off: only the window's own orientation is offered (the other's editor would get no rotation); switching
+    // it back on brings both again once the page re-reads it.
+    @Test fun button_layout_offers_only_the_current_orientation_while_rotation_is_locked() = runTest {
+        var rotates = false
+        var window = 1280 to 960
+        val state = state(freshSettings(), screenRotates = { rotates }, windowPx = { window })
+        state.load()
+        state.buttonLayoutOn("Game Boy Advance")
+        fun orientations() = assertIs<Screen.Settings>(state.screen.value).rows.filter { it.kind == SettingsKind.BUTTON_LAYOUT_ORIENTATION }
+        assertEquals(listOf(SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Landscape", landscape = true)), orientations())
+        window = 960 to 1280
+        state.onRotationChanged()
+        assertEquals(listOf(SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Portrait", landscape = false)), orientations())
+        rotates = true
+        state.onForeground()
+        assertEquals(listOf(false, true), orientations().map { it.landscape })
+    }
+
+    @Test fun button_layout_orientations_follow_the_rotation_setting() {
+        assertEquals(listOf(false, true), buttonLayoutOrientations(screenRotates = true, windowPx = 1280 to 960))
+        assertEquals(listOf(true), buttonLayoutOrientations(screenRotates = false, windowPx = 1280 to 960))
+        assertEquals(listOf(false), buttonLayoutOrientations(screenRotates = false, windowPx = 960 to 1280))
+        assertEquals(listOf(false, true), buttonLayoutOrientations(screenRotates = false, windowPx = null))
     }
 
     // Every console, by name; the Wii adds its Controller row, which cycles Classic, Nunchuk, Sideways, Upright.
@@ -14932,6 +14966,48 @@ class AppStateTest {
         assertNull(assertIs<Screen.Games>(state.screen.value).layoutMenu)
         state.toggleLayoutMenu(); state.toggleLayoutMenu()   // the icon again closes it
         assertNull(assertIs<Screen.Games>(state.screen.value).layoutMenu)
+    }
+
+    // The Layout dropdown works on every main menu tab (Home, Consoles, Collections, Tools) and respects Layout options.
+    @Test fun the_layout_dropdown_switches_every_main_menu_tabs_layout() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { menuStyles = emptyMap(); gameListLayoutOptions = true }
+        val state = searchState(settings)
+        // Home: default Minimal (index 3) -> Carousel (index 2) via d-pad, then List (index 0) via tap.
+        assertEquals(MenuCategory.HOME, assertIs<Screen.Systems>(state.screen.value).category)
+        state.toggleLayoutMenu()
+        assertEquals(3, assertIs<Screen.Systems>(state.screen.value).layoutMenu)
+        state.onButton(NxButton.R1)   // tab switching blocked while dropdown is open
+        assertEquals(MenuCategory.HOME, assertIs<Screen.Systems>(state.screen.value).category)
+        state.openSearch()            // search blocked while dropdown is open
+        assertNull(assertIs<Screen.Systems>(state.screen.value).search)
+        state.onButton(NxButton.UP)
+        assertEquals(2, assertIs<Screen.Systems>(state.screen.value).layoutMenu)
+        state.onButton(NxButton.A)    // Carousel
+        assertNull(assertIs<Screen.Systems>(state.screen.value).layoutMenu)
+        assertEquals(MenuStyle.CAROUSEL, settings.menuStyles[MenuCategory.HOME])
+        assertEquals(MenuStyle.CAROUSEL, state.currentStyle())
+        state.toggleLayoutMenu()
+        assertEquals(2, assertIs<Screen.Systems>(state.screen.value).layoutMenu)
+        state.pickLayout(0)           // List
+        assertEquals(MenuStyle.LIST, settings.menuStyles[MenuCategory.HOME])
+        // Consoles: Carousel -> Carousel, vertical (index 3), then B dismisses without changing.
+        val consolesIdx = assertIs<Screen.Systems>(state.screen.value).tabs.indexOfFirst { it.category == MenuCategory.CONSOLES }
+        state.selectTab(consolesIdx)
+        state.toggleLayoutMenu()
+        assertEquals(2, assertIs<Screen.Systems>(state.screen.value).layoutMenu)   // default Carousel horizontal
+        state.onButton(NxButton.DOWN)
+        assertEquals(3, assertIs<Screen.Systems>(state.screen.value).layoutMenu)   // Carousel, vertical
+        state.onButton(NxButton.A)
+        assertEquals(MenuStyle.CAROUSEL, settings.menuStyles[MenuCategory.CONSOLES])
+        assertEquals(MenuOrientation.VERTICAL, settings.menuOrientations[MenuCategory.CONSOLES])
+        assertEquals(MenuOrientation.VERTICAL, state.currentOrientation())
+        state.toggleLayoutMenu()
+        assertTrue(state.back())
+        assertNull(assertIs<Screen.Systems>(state.screen.value).layoutMenu)
+        // Layout options off: dropdown does not open on main tabs either.
+        settings.gameListLayoutOptions = false
+        state.toggleLayoutMenu()
+        assertNull(assertIs<Screen.Systems>(state.screen.value).layoutMenu)
     }
 
     @Test fun search_lists_matches_across_consoles_and_a_launches() = runTest {

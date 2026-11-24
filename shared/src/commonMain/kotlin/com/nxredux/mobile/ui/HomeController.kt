@@ -74,8 +74,9 @@ internal fun homeRowIn(row: MainRow?, rows: List<MainRow>, pinnedTools: List<Too
 internal fun homeLaunchedPin(was: MainRow?, rows: List<MainRow>): Int? {
     val entry = (was as? MainRow.Pin)?.entry ?: (was as? MainRow.Shelf)?.entry ?: return null
     if (was in rows) return null
-    val cont = rows.firstOrNull() as? MainRow.Continue ?: return null
-    return 0.takeIf { cont.entry.game.path == entry.game.path }
+    val at = rows.indexOfFirst { it is MainRow.Continue }.takeIf { it >= 0 } ?: return null
+    val cont = rows[at] as MainRow.Continue
+    return at.takeIf { cont.entry.game.path == entry.game.path }
 }
 
 /** What Home needs from [AppState]: its layout, the clock, the library and the main menu's tab moves. */
@@ -165,14 +166,8 @@ internal class HomeController(
         fun build(slots: Int, shown: List<Pair<HomeShelf, List<Listed>>>, inline: Int = 0) =
             buildHome(last, games, tools, homeStats, slots, shown, inline, tag = host::shelfTag, shot = { inputs.shots[it.game.path] })
         when (host.homeStyle()) {
-            // List and Minimal: every tool is a row. Carousel: the dock's squares, "+N" for the rest.
-            MenuStyle.LIST, MenuStyle.MINIMAL -> return build(Int.MAX_VALUE, shelves)
-            MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> {
-                // The dock's squares on this frame ([homeDockSide]).
-                val f = homeFrameNow()
-                val side = homeDockSide(f, homeStripLines(strip))
-                return build(homeDockFit(f, side), shelves)
-            }
+            // List, Minimal and Carousel: every pinned tool is shown (Carousel places them to the left of Continue).
+            MenuStyle.LIST, MenuStyle.MINIMAL, MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> return build(Int.MAX_VALUE, shelves)
             MenuStyle.GRID -> Unit
         }
         val gamesLeft = games.count { it.game.path != last?.entry?.game?.path }
@@ -279,9 +274,8 @@ internal class HomeController(
 
     /** The Carousel Home's focus is on [index] in [rows]: the row's item or the dock square last used (reset when the row count changed). */
     private fun noteCarouselFocus(index: Int, rows: List<MainRow>) {
-        val rowCount = homeCarouselRowCount(rows)
-        if (rowCount != homeCarouselRows) { homeCarouselRows = rowCount; homeRowLast = 0; homeDockLast = null }
-        if (index < rowCount) homeRowLast = index else homeDockLast = index
+        if (rows.size != homeCarouselRows) { homeCarouselRows = rows.size; homeDockLast = null }
+        homeRowLast = index
     }
 
     /**
@@ -318,6 +312,7 @@ internal class HomeController(
     fun rememberedRow(r: ListSelection, rows: List<MainRow>): ListSelection {
         homeFind(homeSelRow, rows)?.let { return ListSelection(it, rows.size) }
         homeLaunchedPin(homeSelRow, rows)?.let { return ListSelection(it, rows.size) }
+        if (homeSelRow is MainRow.Continue || homeSelRow == MainRow.PickAGame) return ListSelection(homeInitialIndex(rows), rows.size)
         if (host.homeStyle() != MenuStyle.GRID) return r
         val old = homeSelShape ?: return r
         val new = homeShapeOf(rows)
@@ -331,13 +326,14 @@ internal class HomeController(
      * never on the dock's first square).
      */
     fun keptIndex(from: Screen.Systems, to: Screen.Systems): Int {
-        (from.rows.getOrNull(selection.value.index) as? MainRow.Shelf)?.let { homeFind(it, to.rows) }?.let { return it }
+        val prev = from.rows.getOrNull(selection.value.index)
+        (prev as? MainRow.Shelf)?.let { homeFind(it, to.rows) }?.let { return it }
         when (host.homeStyle()) {
             MenuStyle.LIST, MenuStyle.MINIMAL -> return selection.value.index
             MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> {
-                val i = selection.value.index
-                val rowCount = homeCarouselRowCount(to.rows)
-                return if (i < homeCarouselRowCount(from.rows) && rowCount > 0) i.coerceAtMost(rowCount - 1) else i
+                // When Continue changes game or Pick a game is replaced after scan, stay anchored on Continue / Pick a game.
+                if (prev is MainRow.Continue || prev == MainRow.PickAGame) return homeInitialIndex(to.rows)
+                return selection.value.index.coerceIn(0, (to.rows.size - 1).coerceAtLeast(0))
             }
             MenuStyle.GRID -> Unit
         }
@@ -419,8 +415,8 @@ internal class HomeController(
 
     private fun homeCarouselMove(s: Screen.Systems, button: NxButton, repeat: Boolean): Boolean {
         val sel = selection.value
-        val rowCount = homeCarouselRowCount(s.rows)
-        when (val m = homeCarouselStep(sel.index, rowCount, s.rows.size, button, homeRowLast, homeDockLast)) {
+        val n = s.rows.size
+        when (val m = homeCarouselStep(sel.index, n, n, button, homeRowLast, homeDockLast)) {
             is HomeCarouselMove.To -> if (m.index != sel.index) { selection.value = sel.copy(index = m.index); noteHomeFocus(m.index, s.rows); host.refreshResume() }
             is HomeCarouselMove.SwitchTab -> if (!repeat) host.switchTab(m.step)
             HomeCarouselMove.Stay -> Unit

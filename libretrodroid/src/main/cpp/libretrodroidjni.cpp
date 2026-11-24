@@ -1298,6 +1298,36 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setScreenO
     LibretroDroid::getInstance().setScreenOffset(x, y);
 }
 
+static jbyteArray frameReadArray(JNIEnv* env, const std::optional<std::vector<uint8_t>>& pixels) {
+    if (!pixels) return nullptr;
+    jbyteArray result = env->NewByteArray((jsize) pixels->size());
+    if (result == nullptr) return nullptr;
+    if (!pixels->empty()) env->SetByteArrayRegion(result, 0, (jsize) pixels->size(), reinterpret_cast<const jbyte*>(pixels->data()));
+    return result;
+}
+
+JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_readFrame(
+    JNIEnv* env,
+    jclass obj,
+    jfloat left,
+    jfloat top,
+    jfloat right,
+    jfloat bottom,
+    jint width,
+    jint height,
+    jboolean afterDraw
+) {
+    if (width <= 0 || height <= 0) return env->NewByteArray(0);
+    return frameReadArray(env, LibretroDroid::getInstance().readFrame(left, top, right, bottom, (unsigned) width, (unsigned) height, afterDraw));
+}
+
+JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_takeFrameRead(
+    JNIEnv* env,
+    jclass obj
+) {
+    return frameReadArray(env, LibretroDroid::getInstance().takeFrameRead());
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setPictureHeld(
     JNIEnv* env,
     jclass obj,
@@ -1653,6 +1683,18 @@ JNIEXPORT jstring JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_takeSha
 ) {
     auto error = LibretroDroid::getInstance().takePresetError();
     return error ? newSafeJString(env, *error) : nullptr;   // may quote a preset's file names and lines
+}
+
+JNIEXPORT jobjectArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getCoreIdentity(
+    JNIEnv* env,
+    jclass obj
+) {
+    auto identity = LibretroDroid::getInstance().getCoreIdentity();
+    jobjectArray result = env->NewObjectArray(2, env->FindClass("java/lang/String"), nullptr);
+    if (result == nullptr) return nullptr;
+    env->SetObjectArrayElement(result, 0, newSafeJString(env, identity.first));   // a core's text: never straight to NewStringUTF
+    env->SetObjectArrayElement(result, 1, newSafeJString(env, identity.second));
+    return result;
 }
 
 JNIEXPORT jfloatArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getGameGeometry(

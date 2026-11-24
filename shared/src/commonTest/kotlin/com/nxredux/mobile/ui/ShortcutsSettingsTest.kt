@@ -305,6 +305,20 @@ class ShortcutsSettingsTest {
         assertEquals("R1", s.row("Toggle FF").secondary)
     }
 
+    // A controller hides the on-screen pad: Appearance drops the pad's rows while one is connected, live.
+    @Test fun aControllerHidesThePadRowsInAppearance() = runTest {
+        val s = state(Settings().apply { padSkin = true })
+        val padRows = listOf("Pad skin", "Pad theme", "Button layout")
+        s.onControllerConnected(false)
+        s.openSettings(SettingsSection.APPEARANCE)
+        assertTrue(s.page().rows.map { it.label }.containsAll(padRows))
+        s.onControllerConnected(true)
+        assertTrue(s.page().rows.none { it.label in padRows })
+        assertEquals("Accent", s.page().rows[s.selection.value.index].label)
+        s.onControllerConnected(false)
+        assertTrue(s.page().rows.map { it.label }.containsAll(padRows))
+    }
+
     @Test fun losingTheControllerEndsACapture() = runTest {
         val s = state()
         s.openShortcuts()

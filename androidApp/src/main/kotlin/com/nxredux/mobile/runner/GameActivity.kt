@@ -67,6 +67,7 @@ import com.nxredux.mobile.R
 import com.nxredux.mobile.achievements.AchievementsService
 import com.nxredux.mobile.achievements.AndroidRaHasher
 import com.nxredux.mobile.achievements.RaAchievement
+import com.nxredux.mobile.achievements.RaNotices
 import com.nxredux.mobile.achievements.RaBadgeFolders
 import com.nxredux.mobile.achievements.RaConsoles
 import com.nxredux.mobile.achievements.RaFingerprintKeys
@@ -228,6 +229,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_NETPLAY_USB = "netplay_usb"              // Boolean: the session runs over the USB cable
         const val EXTRA_NETPLAY_MIXED = "netplay_mixed"          // Boolean: a GBA link with the other side on the other core
         const val EXTRA_NETPLAY_PEER_WL = "netplay_peer_wl"      // the other side's GBA link mode token; absent: it sent none
+        const val EXTRA_NETPLAY_PEER_NAME = "netplay_peer_name"  // the other player's name; absent: none traded
         const val EXTRA_NETPLAY_USB_TOKEN = "netplay_usb_token"  // Long: the menu's cable start this session runs on (UsbCables.token)
         // Cable Link over Wi-Fi (NetplaySession.cableLink and what its handshake settled)
         const val EXTRA_NETPLAY_CABLE_LINK = "netplay_cable_link"        // Boolean
@@ -244,6 +246,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private const val HUNG_FINISH_GRACE_MS = 500L
         /** [endProcess]: at most this long for the netplay engine's shutdown before the process goes anyway. */
         private const val PROCESS_END_WAIT_S = 5L
+        /** How long the process waits for its last log lines to reach the Debug log file before it ends. */
+        private const val LOG_DRAIN_MS = 1_000L
+        /** A quit's save of a large state (Wii, PS2) on a slow phone; past it the process ends without it. */
+        private const val QUIT_WRITE_WAIT_MS = 60_000L
 
         /** Debug builds only: the latest game screen, for the adb GAME_STOP hook ([debugQuit]). Main thread. */
         private var debugGame: java.lang.ref.WeakReference<GameActivity>? = null
@@ -355,6 +361,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun onInputDevicesChanged() {
         relayoutPad()
+        onPlayersChanged()
+    }
+
+    override fun onPlayersChanged() {
         if (menuOpen) menu.menuModel?.let(menu::publishPlayers)
         dual.refreshDualPanel()
     }
@@ -472,6 +482,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private set
     override var ndsFellBack = false                        // OpenGL was asked for, the core draws in software ([NdsRenderer.showFallbackNotice])
         private set
+    override val secondPictureDisplay: Pair<Int, Int>? get() = dual.secondPictureDisplay()
 
     // ---- DS / 3DS 3D resolution (Nds3dResolution, N3ds3dResolution): melonDS's GL scale, Azahar's factor follow the layout ----
     private val res3d = Res3dController(this, renderer)
@@ -522,6 +533,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override val localWirelessNow: String? get() = if (!launchPipeline.dsAutoRoute || gameCoreId == "ppsspp") null else
         LocalWirelessText.now(dsRoom.current == DsPresence.ROOM, dsRoom.current == DsPresence.SEEKING, dsRoom.others)
     override fun showMenu() { if (!menuOpen) menu.toggleMenu() }
+    override fun sessionChanged() = dual.refreshDualPanel()
     override val netplayNow: NetplaySession? get() = gameNetplay.now
     override val sessionLocked: Boolean get() = netplayNow != null || dsWireless
 
@@ -682,6 +694,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** DS: a toast as devices join and leave the room (the 3DS core sends its own, with names). */
     private fun onDsOthersChanged(before: Int, now: Int) {
         if (launchPipeline.dsAutoRoute && gameCoreId == "melondsds") LocalWirelessText.change(before, now)?.let(dual::pictureToast)
+        dual.refreshDualPanel()   // the session card says how many are linked
         withMenu { it.setLocalWirelessNow(localWirelessNow) }
     }
 
@@ -1074,7 +1087,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         driverMarkerClear = null
         val clearMarker = driverMarker.abandon()
         if (isFinishing) launchRecords.drop(launchId)   // quit before the first frame: the launch never started
-        if (BuildConfig.DEBUG && isFinishing) debugReportStopped()
+        // A quit the system destroyed the screen under (stopped, low memory) before its own finish: the game is over all the same.
+        val quitCut = quitting && !isFinishing
+        val over = isFinishing || quitting
+        if (BuildConfig.DEBUG && over) debugReportStopped()
         input.gcClearTriggers()   // a latched soft press never outlives the game
         stopAchievements()
         inputManager?.unregisterInputDeviceListener(input.inputDeviceListener)
@@ -1089,7 +1105,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         screens--
         if (latest?.get() === this) latest = null
         // The game process ends with its last screen's finish (not a recreation: the GLES relaunch, a config change).
-        val endsProcess = isFinishing && screens == 0 && AppProcess.isGame()
+        val endsProcess = over && screens == 0 && AppProcess.isGame()
         // Ending the process, the record stays until the process is gone: the menu waits for that before it starts another
         // game, which must never land in this dying process. It reads as stale then (its pid is gone).
         if (!endsProcess) liveGameStore.clear(Process.myPid(), launchId)
@@ -1102,7 +1118,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             // First: it may wait for a marker commit in flight, and its clear must be queued before endProcess waits for the sends.
             if (clearMarker) driverMarker.clear()
             if (endUse) runCatching { DataRoot.useEnd(app) }.onFailure { NxLog.w(TAG_LOG, "could not end the data use", it) }
-            if (endsProcess) endProcess()
+            if (endsProcess) {
+                // The quit's write is still running (the finish it would end with never comes): the process waits for it.
+                if (quitCut && !saves.awaitQuitWrite(QUIT_WRITE_WAIT_MS)) NxLog.w(TAG_LOG, "the quit's save did not end in time")
+                endProcess()
+            }
         }
         coreWatchdog?.stop()   // last: a hung core also hangs the native destroy above, which it must still catch
         coreWatchdog = null
@@ -1120,6 +1140,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         runCatching { PairSaveFiles.writer.submit {}.get(PROCESS_END_WAIT_S, TimeUnit.SECONDS) }   // a Cable Link save's commit
         ProviderPreferences.awaitSends(TimeUnit.SECONDS.toMillis(PROCESS_END_WAIT_S))   // settings applied in the game's last moments
         NxLog.i(TAG_LOG, "the game has ended: ending its process")
+        com.nxredux.mobile.DebugLogFile.drain(LOG_DRAIN_MS)
         Process.killProcess(Process.myPid())
     }
 
@@ -1818,7 +1839,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             RaEvent.Disconnected -> if (shown) notice("RetroAchievements: connection lost")
             RaEvent.Reconnected -> if (shown) notice("RetroAchievements: reconnected")
             is RaEvent.GameLoaded -> notice("${e.title} · ${e.unlocked}/${e.total} achievements")
-            RaEvent.GameUnknown -> notice("No achievements for this game")
+            is RaEvent.GameUnknown -> notice(RaNotices.unknownGame(intent.getStringExtra(EXTRA_FILE_NAME), e.hashUnknown))
             is RaEvent.LoginFailed -> notice("RetroAchievements sign-in failed")
             RaEvent.SessionOffline -> notice("RetroAchievements: offline")
             RaEvent.SessionDisabled -> notice("RetroAchievements needs a network connection for first-time setup")
@@ -1827,7 +1848,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         // The session changed what the menu shows (row, summary, the set): refresh it if it is open.
         when (e) {
-            is RaEvent.GameLoaded, RaEvent.GameUnknown, is RaEvent.LoginFailed, RaEvent.SessionDisabled, RaEvent.SessionOffline,
+            is RaEvent.GameLoaded, is RaEvent.GameUnknown, is RaEvent.LoginFailed, RaEvent.SessionDisabled, RaEvent.SessionOffline,
             is RaEvent.Unlocked, is RaEvent.Synced, RaEvent.BadgesReady -> refreshMenuAchievements()
             else -> Unit
         }

@@ -296,6 +296,7 @@ internal fun GameListFrame(
                 // [onAchievements]) a third line is kept for the next goal ("Next: …"), whatever is selected, so the list
                 // never moves; without, the header is two lines and the list has that room. A game with no lines to show:
                 // the title alone, on the icons' centre line, in the same header.
+                var headerExtraTop = 0f
                 if (chrome.listTitle && topStats) {
                     val k = nxTextScale()
                     val frame = HomeFrame(0f, 0f, LocalPortrait.current, textScale = LocalDensity.current.fontScale, stripScale = k)
@@ -304,6 +305,7 @@ internal fun GameListFrame(
                     val next = onAchievements != null
                     val block = (if (next) 2 else 1) * pitch + lh
                     val height = maxOf(MENU_TAB_ROW_HEIGHT.value, block + 2 * HOME_GRID_HEADER_PAD)
+                    headerExtraTop = height - MENU_TAB_ROW_HEIGHT.value
                     val size = (HOME_STRIP_TYPE.sp * k).sp
                     val titleStyle = TextStyle(fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = size, lineHeight = (HOME_STRIP_TYPE.lineH * k).sp, color = LocalNxColors.current.listText)
                     val iconsRoom = MENU_TAB_ROW_HEIGHT * titleIcons.size - TOP_ICON_INSET
@@ -406,6 +408,7 @@ internal fun GameListFrame(
                             Modifier.weight(1f).zIndex(-1f), hideHints = noBar, toBoxBottom = noBar,
                             layoutKey = layoutKey, leaving = minimalOpening != null, tapOpens = LocalNxTapOpens.current,
                             onPageRows = onPageRows,
+                            anchorTop = if (headerExtraTop > 0f) -headerExtraTop else null,
                         )
                     }
                     // List: the rows fade where more scrolls in (no band, no arrows), between a main menu List's gaps.

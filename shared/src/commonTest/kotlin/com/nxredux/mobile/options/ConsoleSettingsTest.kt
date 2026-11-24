@@ -35,7 +35,7 @@ class ConsoleSettingsTest {
     @Test fun other_consoles_have_the_layout_row_only_and_n64_adds_3d_resolution_and_graphics_api() {
         assertEquals(listOf(BottomScreenOptions.row, PadOptions.layoutRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("GBA"))
         assertEquals(listOf(BottomScreenOptions.row, PadOptions.layoutRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor(""))
-        assertEquals(N64Options.resolutionRows(null) + listOf(GraphicsApiOptions.row, BottomScreenOptions.row, PadOptions.layoutRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("N64"))
+        assertEquals(N64Options.resolutionRows(null) + listOf(GraphicsApiOptions.rowFor(autoVulkan = false, mali = false, drivers = false, n64 = true), BottomScreenOptions.row, PadOptions.layoutRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("N64"))
         assertEquals(listOf(BottomScreenOptions.row, PadOptions.segaPadRow, PadOptions.layoutRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("MD"))
     }
 

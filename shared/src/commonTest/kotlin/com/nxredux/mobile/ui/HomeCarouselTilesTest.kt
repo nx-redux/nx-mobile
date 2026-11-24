@@ -9,6 +9,7 @@ import com.nxredux.mobile.ui.nx.homeCarouselBadge
 import com.nxredux.mobile.ui.nx.homeCarouselMenu
 import com.nxredux.mobile.ui.nx.homeCarouselShownRow
 import com.nxredux.mobile.ui.nx.homeCarouselTiles
+import com.nxredux.mobile.ui.nx.homeCarouselTitle
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -35,17 +36,27 @@ class HomeCarouselTilesTest {
     }
 
     // Continue shows its resume frame (Grid Home's first picture) under its name; Pick a game the accent's picture;
-    // the dock's items are not the carousel's.
+    // pinned tools use their Grid tool tile while MoreTools is omitted.
     @Test fun continue_shows_its_resume_frame_and_pick_a_game_the_accent_picture() {
         val c = MainRow.Continue(a, ResumeInfo(1, previewPath = "file:///s.png"))
         val tile = homeCarouselTiles(listOf(c), 0x112233).single() as GridTile.Game
         assertEquals("file:///s.png", tile.screenshotUrl)
         assertEquals(a.game.shownName, tile.title)
         assertEquals(abstractArtFor(a), tile.abstractUrl)
-        val p = homeCarouselTiles(listOf(MainRow.PickAGame, MainRow.PinnedTool(t1), MainRow.MoreTools(2)), 0x112233)
-        assertEquals(1, p.size)
-        assertEquals(abstractAccentArtUrl(0x112233), (p.single() as GridTile.Game).screenshotUrl)
-        assertEquals("Pick a game", (p.single() as GridTile.Game).title)
+        val p = homeCarouselTiles(listOf(MainRow.PinnedTool(t1), MainRow.PickAGame, MainRow.MoreTools(2)), 0x112233)
+        assertEquals(2, p.size)
+        assertEquals(
+            (gridTiles(listOf(MainRow.PinnedTool(t1))).single() as GridTile.Tool).copy(
+                lines = emptyList(),
+                backgroundUrl = abstractArtUrl("TOOL", t1.pinKey),
+            ),
+            p[0],
+        )
+        assertEquals(abstractAccentArtUrl(0x112233), (p[1] as GridTile.Game).screenshotUrl)
+        assertEquals("Pick a game", (p[1] as GridTile.Game).title)
+        assertEquals("Settings", homeCarouselTitle(MainRow.PinnedTool(t1)))
+        assertEquals(a.game.shownName, homeCarouselTitle(c))
+        assertEquals("Pick a game", homeCarouselTitle(MainRow.PickAGame))
     }
 
     // A pin or a shelf game is its Grid tile.

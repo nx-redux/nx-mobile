@@ -20,10 +20,13 @@ class SyncSaveFiles(
     private val saves: File, private val send: File, private val recv: File,
     private val setTime: (File, Long) -> Boolean = File::setLastModified,
 ) {
-    /** Every file below [saves] (relative, `/`-separated), with its time; [SyncAreas.isJunk] ones left out. */
+    /**
+     * Every file below [saves] (relative, `/`-separated), with its time; [SyncAreas.isJunk] and [SyncAreas.isPerDevice]
+     * ones left out, so neither is staged for a handheld nor counted against what one sends back.
+     */
     fun listSaves(): List<SaveFile> = list(saves)
 
-    /** Every file below the receive tree. */
+    /** Every file below the receive tree, the same ones left out: a handheld's own settings never fold into this phone. */
     fun listReceived(): List<SaveFile> = list(recv)
 
     /**
@@ -117,7 +120,7 @@ class SyncSaveFiles(
         val base = root.canonicalFile
         return base.walkTopDown().filter { it.isFile }.map { f ->
             SaveFile(f.relativeTo(base).invariantSeparatorsPath, f.lastModified())
-        }.filterNot { SyncAreas.isJunk(it.path) }.toList()
+        }.filterNot { SyncAreas.isJunk(it.path) || SyncAreas.isPerDevice(it.path) }.toList()
     }
 
     companion object {

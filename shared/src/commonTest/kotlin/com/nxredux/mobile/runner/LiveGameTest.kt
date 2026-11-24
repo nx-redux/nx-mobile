@@ -24,6 +24,10 @@ class LiveGameTest {
 
     @Test fun slotPickCannotBringBack() = assertFalse(live.canBringBack(session(slot = 3)))
 
+    @Test fun continueFromAManualSlotBringsBack() = assertTrue(live.canBringBack(session(slot = 1).copy(continuing = true)))
+
+    @Test fun freshStartWinsOverContinuing() = assertFalse(live.canBringBack(session(slot = 1).copy(continuing = true, fresh = true)))
+
     @Test fun otherGameCannot() {
         assertFalse(live.canBringBack(session(path = "Roms/GBA/Other.gba")))
         assertFalse(live.canBringBack(session(core = "gpsp")))

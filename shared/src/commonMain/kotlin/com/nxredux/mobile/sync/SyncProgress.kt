@@ -16,12 +16,17 @@ object SyncProgress {
 
     /**
      * A daemon log line that opens (`[pid] connect from …`) or closes (its exit: `[pid] sent N bytes  received …`, or
-     * `[pid] rsync error: …`) one connection: its pid and true for an open; else null.
+     * `[pid] rsync error: …`) one connection: its pid and true for an open; else null. A connection from this device
+     * itself is not the peer's: the check that the daemon is listening opens one and logs no end to it.
      */
     fun daemonSession(line: String): Pair<String, Boolean>? {
         val m = SESSION.find(line) ?: return null
-        return m.groupValues[1] to (m.groupValues[2] == "connect from ")
+        val open = m.groupValues[2] == "connect from "
+        if (open && LOOPBACK.containsMatchIn(line)) return null
+        return m.groupValues[1] to open
     }
+
+    private val LOOPBACK = Regex("""\((127\.\d+\.\d+\.\d+|::1|::ffff:127\.\d+\.\d+\.\d+)\)""")
 
     /** A `--info=progress2` line with `to-chk=`, else null. */
     fun progress(line: String): StepProgress? {

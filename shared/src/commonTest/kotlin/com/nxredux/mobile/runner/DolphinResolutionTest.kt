@@ -62,9 +62,10 @@ class DolphinResolutionTest {
                 return FrontendOptions.fromConfig(resolved.values, tag)[dolphin.maxScaleKey]
             }
             assertEquals("4", maxScale("dolphin_efb_scale = 4\n"), tag)
-            assertEquals("3", maxScale("dolphin_efb_scale = 1\n"), tag)
+            val unset = if (tag == "WII") "2" else "3"
+            assertEquals(unset, maxScale("dolphin_efb_scale = 1\n"), tag)
             assertEquals("2", maxScale("dolphin_efb_scale = 4\n${dolphin.maxScaleKey} = 2\n"), tag)
-            assertEquals("3", maxScale(""), tag)
+            assertEquals(unset, maxScale(""), tag)
         }
     }
 

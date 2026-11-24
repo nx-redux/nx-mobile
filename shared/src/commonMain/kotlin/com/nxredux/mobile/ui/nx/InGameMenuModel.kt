@@ -113,6 +113,9 @@ sealed interface MenuRow : NxDescribedRow {
     ) : MenuRow
 }
 
+/** A shader picker row that uses its preset (A), as opposed to a folder that opens the level below. */
+val MenuRow.Submenu.usesPreset: Boolean get() = target is PageKind.ShaderPick
+
 /** The control of [row] ([nxSettingControl] of its choices); a picker for a row with its own list page. */
 val MenuRow.Option.control: NxSettingControl get() = if (opensList) NxSettingControl.PICKER else nxSettingControl(choices)
 
@@ -140,10 +143,10 @@ sealed interface OptionEvent {
 data class PlayerSlotRow(val key: String?, val name: String, val connected: Boolean)
 
 /**
- * A connected physical pad, one a player slot can be set to (benched ones included: choosing one puts it back in play);
+ * A connected physical pad, one a player slot can be set to ([benched] ones included: choosing one puts it back in play);
  * [name] already numbered when two share one ([com.nxredux.mobile.runner.PadNames]).
  */
-data class PlayerPadRow(val key: String, val name: String)
+data class PlayerPadRow(val key: String, val name: String, val benched: Boolean = false)
 
 /** One menu screen. [footer] is the page's static text (status line, or the message of a Message page). */
 data class MenuPage(
@@ -302,7 +305,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var micTile: Boolean? = null
     /** The Reset dialog up was opened with the menu for it ([openResetDialog]): Cancel and B resume the game. */
     private var resetClosesOnCancel = false
-    /** From [setPlayers]; the panel shows its Players tab when there is more than one slot. */
+    /** From [setPlayers]; the panel shows its Players tab as [GamePanelModel.playersShown] says. */
     private var playerSlots: List<PlayerSlotRow> = emptyList()
     private var playerPads: List<PlayerPadRow> = emptyList()
     /** From [setPanelHeader]; until then the panel's header is the game's title alone. */
@@ -1249,10 +1252,11 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /**
      * Achievements with a set; Cheats for a core that takes them (none for the game: the tab says how to add some); Players
-     * with more than one slot. Never Cheats or Players in netplay (the root has no Options or Players row there).
+     * as [GamePanelModel.playersShown] says. Never Cheats or Players in netplay (the root has no Options or Players row there).
      */
     private fun panelTabs(): List<GamePanelTab> = GamePanelModel.tabs(
-        raAvailable = achievementsAvailable && !achievements.isNullOrEmpty(), playerSlots = if (sessionLocked) 0 else playerSlots.size,
+        raAvailable = achievementsAvailable && !achievements.isNullOrEmpty(),
+        players = !sessionLocked && GamePanelModel.playersShown(playerSlots, playerPads),
         cheats = cheatsAvailable && !sessionLocked,
     )
 
@@ -1612,7 +1616,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 is PageKind.Settings -> rebuilt(p, groupPage(k.group))
                 PageKind.Shaders -> rebuilt(p, shadersPage())
                 PageKind.ShaderParams -> rebuilt(p, shaderParamsPage())
-                is PageKind.ShaderBrowse -> rebuilt(p, browsePage(k.path))
+                // The highlight follows the preset in use (stepped to in its preview strip) when this level lists it.
+                is PageKind.ShaderBrowse -> browsePage(k.path).let { fresh ->
+                    rebuilt(p, fresh).let { if (inUseOn(k.path) >= 0) it.copy(selected = fresh.selected) else it }
+                }
                 // A row its page no longer lists (a parameter the new preset lacks; a DS layout or inset row after a
                 // rotation or a controller): close its strip rather than adjust a row that is not shown.
                 // A preset's strip stands over the picker level it was picked from, which has no row of that key.
@@ -1816,8 +1823,13 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                     MenuRow.Submenu(if (ShaderBrowse.isCurrent(entry, current)) "${entry.label}  $IN_USE_MARK" else entry.label, PageKind.ShaderPick(entry.value))
             }
         }
-        val inUse = entries.indexOfFirst { it is ShaderBrowse.Preset && ShaderBrowse.isCurrent(it, current) }
-        return MenuPage(PageKind.ShaderBrowse(path), ShaderBrowse.title(path), rows, selected = inUse.coerceAtLeast(0), intro = ShaderBrowse.intro(path))
+        return MenuPage(PageKind.ShaderBrowse(path), ShaderBrowse.title(path), rows, selected = inUseOn(path).coerceAtLeast(0), intro = ShaderBrowse.intro(path))
+    }
+
+    /** The row of the preset in use on the picker's level at [path], or -1 when it is not there. */
+    private fun inUseOn(path: String): Int {
+        val current = shaders[ShaderOptions.PRESET] ?: ShaderOptions.NONE
+        return ShaderBrowse.entries(presets, path).indexOfFirst { it is ShaderBrowse.Preset && ShaderBrowse.isCurrent(it, current) }
     }
 
     /**

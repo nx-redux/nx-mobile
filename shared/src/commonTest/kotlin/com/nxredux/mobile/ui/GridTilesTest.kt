@@ -345,10 +345,9 @@ class GridTilesTest {
             assertEquals(emptyList(), gridTileInfo(topStats, entryTileInfo(games, emptyMap(), now, GameMeta.NONE))(2))
             assertEquals(emptyList(), gridHeaderInfo(topStats, gameListInfo(MenuStyle.GRID, MenuOrientation.HORIZONTAL, emptyMap(), now, both.game, GameMeta.NONE)))
         }
-        // Every other style: a horizontal Carousel both apart, the rest as Game info says.
+        // Every non-Grid style follows Layouts → Game info (both horizontal and vertical Carousel included).
         val meta = GameMeta(stored, always = true, shown = true)
-        assertEquals(gameInfoApart(info, now, both.game, meta), gameListInfo(MenuStyle.CAROUSEL, MenuOrientation.HORIZONTAL, info, now, both.game, meta))
-        for (style in listOf(MenuStyle.LIST, MenuStyle.MINIMAL, MenuStyle.BACKDROP)) {
+        for (style in listOf(MenuStyle.CAROUSEL, MenuStyle.LIST, MenuStyle.MINIMAL, MenuStyle.BACKDROP)) {
             assertEquals(gameInfoFor(info, now, both.game, full = true, meta), gameListInfo(style, MenuOrientation.HORIZONTAL, info, now, both.game, meta))
         }
         assertEquals(gameInfoFor(info, now, both.game, full = true, meta), gameListInfo(MenuStyle.CAROUSEL, MenuOrientation.VERTICAL, info, now, both.game, meta))

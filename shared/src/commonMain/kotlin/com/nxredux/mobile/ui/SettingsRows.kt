@@ -116,6 +116,9 @@ internal class SettingsRows(
     /** The last finished import's summary, which the Import results page lists. */
     var importResult: ImportSummary? = null
 
+    /** A controller is connected (the UI reports it): it hides the on-screen pad, so Appearance drops the pad's rows. */
+    var controllerConnected = false
+
     fun settingsRows(section: SettingsSection): List<SettingsRow> = when (section) {
         SettingsSection.LIBRARY -> libraryRows()
         SettingsSection.EMULATORS -> buildList {
@@ -158,16 +161,16 @@ internal class SettingsRows(
         SettingsSection.SHORTCUTS -> host.shortcutRows()
         SettingsSection.SYSTEM_BUTTONS -> host.systemButtonRows()
         SettingsSection.APPEARANCE -> listOf<SettingsRow?>(
-            SettingsRow(SettingsKind.PAD_SKIN, "Pad skin", onOff(deps.settings.padSkin)),
+            if (!controllerConnected) SettingsRow(SettingsKind.PAD_SKIN, "Pad skin", onOff(deps.settings.padSkin)) else null,
             // the skin's look: none to pick while the skin is Off (the full-screen overlay pad)
-            if (deps.settings.padSkin) SettingsRow(SettingsKind.PAD_THEME, "Pad theme", padThemeLabel(deps.settings.padTheme)) else null,
+            if (!controllerConnected && deps.settings.padSkin) SettingsRow(SettingsKind.PAD_THEME, "Pad theme", padThemeLabel(deps.settings.padTheme)) else null,
             SettingsRow(SettingsKind.ACCENT, "Accent", deps.settings.accent.label),
             SettingsRow(SettingsKind.SECONDARY_ACCENT, "Secondary accent", deps.settings.secondaryAccent.label),
             // The options lists' text (Settings, Game Settings, the in-game menu): Large or Small.
             SettingsRow(SettingsKind.TEXT_SIZE, "Text size", deps.settings.optionTextSize.label),
             // the skin's buttons moved and resized per console (the bare overlay's too), its own page
-            SettingsRow(SettingsKind.BUTTON_LAYOUT, "Button layout", if (buttonLayoutCustom()) "Custom" else "Default"),
-            SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
+            if (!controllerConnected) SettingsRow(SettingsKind.BUTTON_LAYOUT, "Button layout", if (buttonLayoutCustom()) "Custom" else "Default") else null,
+            SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL, note = appearanceResetScope(padShown = !controllerConnected)),
         ).filterNotNull()
         SettingsSection.MAIN_MENU -> layoutsRows()
         SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_GAMES_TAB, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS ->
@@ -478,8 +481,9 @@ internal class SettingsRows(
             if (console.id == WII_CONSOLE) SettingsRow(SettingsKind.BUTTON_LAYOUT_WII_PAD, "Controller", wiiPadLabel(buttonLayoutWiiPad)) else null,
             if (console.id == N3DS_CONSOLE) SettingsRow(SettingsKind.BUTTON_LAYOUT_N3DS_PAD, "Controller", n3dsPadLabel(buttonLayoutN3dsNew)) else null,
             if (console.id in SEGA_PAD_CONSOLES) SettingsRow(SettingsKind.BUTTON_LAYOUT_SEGA_PAD, "Controller", segaPadLabel(buttonLayoutSegaThree)) else null,
-            SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Portrait", landscape = false),
-            SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Landscape", landscape = true),
+            *buttonLayoutOrientations(deps.screenRotates(), deps.windowPx()).map { landscape ->
+                SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, if (landscape) "Landscape" else "Portrait", landscape = landscape)
+            }.toTypedArray(),
             SettingsRow(SettingsKind.BUTTON_LAYOUT_RESET, "Reset console"),
         )
     }
@@ -748,6 +752,13 @@ internal class SettingsRows(
     }
 
 }
+
+/**
+ * Button layout's editors, as landscape flags: both while the screen turns, else only the one [windowPx] (width to
+ * height) is in now, since the other's editor would ask for a rotation the device never makes. Both when the window is unknown.
+ */
+internal fun buttonLayoutOrientations(screenRotates: Boolean, windowPx: Pair<Int, Int>?): List<Boolean> =
+    if (screenRotates || windowPx == null) listOf(false, true) else listOf(windowPx.first > windowPx.second)
 
 /** The Wii's and the 3DS's console ids: Button layout's Controller row is theirs. */
 private const val WII_CONSOLE = "wii"

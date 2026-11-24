@@ -126,6 +126,7 @@ internal fun HomeScreen(
     modifier: Modifier = Modifier,
     layoutKey: Any? = null,
     tabMenu: Boolean = false,
+    iconsWidth: Float = HOME_HEADER_ICONS_ROOM,
 ) {
     val colors = LocalNxColors.current
     val portrait = homeGridPortrait()
@@ -285,7 +286,7 @@ internal fun HomeScreen(
         header?.let { hd ->
             Box(Modifier.fillMaxWidth().height(hd.height.dp + NX_TOP_BAND_REACH).graphicsLayer { alpha = band.value }.nxTopBandFade(colors.background))
             if (hd.lines > 0) view.strip?.let {
-                HomeStripLines(it, hd.lines, b.gutter, hd.stripTop, w - b.gutter - homeInsetEnd(whole) - HOME_HEADER_ICONS_ROOM, homeStripLineH(whole), homeStripPitch(whole))
+                HomeStripLines(it, hd.lines, b.gutter, hd.stripTop, w - b.gutter - homeInsetEnd(whole) - iconsWidth, homeStripLineH(whole), homeStripPitch(whole))
             }
         }
     }

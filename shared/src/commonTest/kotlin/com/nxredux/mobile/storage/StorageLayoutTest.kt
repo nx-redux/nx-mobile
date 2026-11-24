@@ -13,6 +13,7 @@ class StorageLayoutTest {
     @Test fun savesAndSharedMove() {
         assertEquals(MOVE, kind("Saves/GBA/Pokemon.srm")); assertEquals(MOVE, kind(".userdata/shared/MGBA-mgba/Pokemon.st0"))
         assertEquals(MOVE, kind(".userdata/shared/game_time.db")); assertEquals(MOVE, kind(".userdata/android/hidden.txt"))
+        assertEquals(MOVE, kind(".userdata/android/badges.txt"))
         assertEquals(MOVE, kind(".userdata/android/GBA-mgba/minarch.cfg"))
     }
 

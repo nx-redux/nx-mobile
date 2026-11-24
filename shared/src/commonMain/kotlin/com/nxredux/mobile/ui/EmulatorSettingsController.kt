@@ -163,8 +163,11 @@ internal interface EmulatorSettingsHost {
     /** Back to the game list Game Settings was opened from ([screen] as it was), then rebuilt from its source on the same game. */
     fun restore(screen: Screen, selection: ListSelection)
 
-    /** The app-wide rows [page] shows last ([EmulatorRow.App]), as they stand now; null for a page without (all but mGBA's, with Cable Link). */
-    fun appSection(page: EmulatorPage): EmulatorAppSection?
+    /**
+     * The app's rows [page] shows last ([EmulatorRow.App]), as they stand now: mGBA's Cable Link, or [game]'s Badge on
+     * its Game Settings; null for a page without.
+     */
+    fun appSection(page: EmulatorPage, game: Listed?): EmulatorAppSection?
 
     /** Hosted row [row]'s setting stepped [delta] places, wrapping, as LEFT / RIGHT on its Settings page; the page is not left. */
     fun stepAppRow(row: SettingsRow, delta: Int)
@@ -219,7 +222,7 @@ internal class EmulatorSettingsController(
     private val gpuDriverCrashed: (gamePath: String) -> Set<String> = { emptySet() },
     /** Forgets the driver crashes recorded for the game at this library path. */
     private val clearGpuDriverCrash: (gamePath: String) -> Unit = {},
-    /** The phone's GPU name (GL_RENDERER; null: unknown), asked once and only for a core whose Graphics API Auto follows it. */
+    /** The phone's GPU name (GL_RENDERER; null: unknown), asked once, for a core with a Vulkan path. */
     private val gpuName: suspend () -> String? = { null },
 ) {
     private var gpu: String? = null   // [gpuName] once it answered
@@ -309,7 +312,7 @@ internal class EmulatorSettingsController(
             is Screen.EmulatorOptions -> when {
                 s.confirmReset -> screen.value = s.copy(confirmReset = false)   // B on the question keeps everything
                 s.category != null -> {
-                    val rows = rows(s.page, null)
+                    val rows = rows(s.page, null, s.game)
                     screen.value = s.copy(rows = rows, category = null)
                     selection.value = ListSelection(rows.indexOf(rows.firstOrNull { it is EmulatorRow.Category && it.key == s.category }).coerceAtLeast(0), rows.size)
                 }
@@ -347,8 +350,8 @@ internal class EmulatorSettingsController(
     private fun defaults(d: CoreDescriptor) = coreDefaults(d.id) + d.defaultOptions
 
     /** [page]'s rows ([EmulatorRows.build]), the app's own rows ([EmulatorSettingsHost.appSection]) last at the top level. */
-    private fun rows(page: EmulatorPage, category: String?): List<EmulatorRow> =
-        EmulatorRows.build(page, category, if (category == null) host.appSection(page) else null)
+    private fun rows(page: EmulatorPage, category: String?, game: Listed?): List<EmulatorRow> =
+        EmulatorRows.build(page, category, if (category == null) host.appSection(page, game) else null)
 
     private fun build(tag: String, d: CoreDescriptor, game: Listed?, files: Pair<ConfigFile?, ConfigFile?>): EmulatorPage {
         val screen = screenClass()
@@ -359,6 +362,7 @@ internal class EmulatorSettingsController(
             biosFiles = if (Ps2Options.appliesTo(tag)) ps2BiosFiles() else emptyList(),
             gpuDrivers = drivers, gpuDriverResolved = resolved, gpuDriverCrashNote = crashNote,
             autoVulkan = GraphicsApiOptions.autoIsVulkan(d.vulkan, gpu, customDriver(d, game, files, drivers)),
+            mali = DeviceTraits.isMali(gpu),
         )
         val first = page()
         // The GPU driver row shows only on Vulkan, so its presence says the page's Graphics API is Vulkan and what it shows is what the launch reads.
@@ -381,7 +385,8 @@ internal class EmulatorSettingsController(
     }
 
     private suspend fun readPage(tag: String, d: CoreDescriptor, game: Listed?): EmulatorPage {
-        if (d.vulkan?.followsGpu == true && gpu == null) gpu = gpuName()?.also { DeviceTraits.gpu = it }
+        // Every Vulkan core asks: Auto follows it on some, and a Mali's Graphics API row says more on all.
+        if (d.vulkan != null && gpu == null) gpu = gpuName()?.also { DeviceTraits.gpu = it }
         return build(tag, d, game, configs.read(tag, d.id, game?.game?.fileName))
     }
 
@@ -396,7 +401,7 @@ internal class EmulatorSettingsController(
             } ?: return@launch
             if (!still()) return@launch
             opened()
-            val rows = rows(page, null)
+            val rows = rows(page, null, game)
             screen.value = Screen.EmulatorOptions(page, rows, null, game)
             selection.value = ListSelection(EmulatorRows.firstSelectable(rows), rows.size)
         }
@@ -522,7 +527,7 @@ internal class EmulatorSettingsController(
             lock.withLock {
                 val page = withContext(work) { tryOrNull { readPage(s.page.tag, d, s.game) } } ?: return@withLock
                 val cur = screen.value as? Screen.EmulatorOptions
-                if (cur != null && samePage(cur, s) && rows(page, null).isEmpty()) back(cur.copy(category = null))
+                if (cur != null && samePage(cur, s) && rows(page, null, s.game).isEmpty()) back(cur.copy(category = null))
                 else show(s, page)
             }
         }
@@ -588,7 +593,7 @@ internal class EmulatorSettingsController(
         if (!samePage(cur, was)) return
         val from = selection.value.index
         val previous = cur.rows.getOrNull(from)
-        val rows = rows(page, cur.category)
+        val rows = rows(page, cur.category, cur.game)
         val next = cur.copy(page = page, rows = rows)
         screen.value = next
         val same = EmulatorRows.indexOfSame(rows, previous)

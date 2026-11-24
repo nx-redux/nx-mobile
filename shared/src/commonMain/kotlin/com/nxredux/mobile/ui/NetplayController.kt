@@ -105,6 +105,8 @@ class NetplayController(
     private val work: CoroutineContext = Dispatchers.Default,
     /** The library ROM (a ref value) with this SHA-1, size and folder tag, for Cable Link ([AppState.findLocalRom]). */
     private val findLibraryRom: suspend (hash: String, sizeBytes: Long, tag: String) -> String? = { _, _, _ -> null },
+    /** This player's name, traded with a side that trades names too; null offers none. */
+    private val playerName: () -> String? = { null },
 ) {
     private val _page = MutableStateFlow<NetplayPage?>(null)
     val page: StateFlow<NetplayPage?> = _page.asStateFlow()
@@ -382,7 +384,7 @@ class NetplayController(
                     val out = try {
                         withContext(work) {   // staging the saves and the rsync daemon: off the main thread
                             Wizard.host(
-                                ch, HostOffer(game, tag, own, pick, usb, wl, cl), saves = { platform.hostSaves(tag, rom, e.game.ref) },
+                                ch, HostOffer(game, tag, own, pick, usb, wl, cl, name = playerName()), saves = { platform.hostSaves(tag, rom, e.game.ref) },
                                 onSync = { hostStatus(NetplayText.SENDING) },
                                 onTransfer = { t -> hostStatus(NetplayText.transfer(t.sending, t.done, t.total)) },
                             )
@@ -395,7 +397,7 @@ class NetplayController(
                         is HostOutcome.Started -> {
                             stopHosting()
                             _page.value = NetplayPage.Progress(NetplayText.TITLE, NetplayText.STARTING)
-                            val session = NetplaySession(NetplayRole.HOST, out.peer, out.core, folderCore, out.emptySaves, overUsb = link != null, mixed = out.mixed, peerWl = out.peerWl)
+                            val session = NetplaySession(NetplayRole.HOST, out.peer, out.core, folderCore, out.emptySaves, overUsb = link != null, mixed = out.mixed, peerWl = out.peerWl, peerName = out.peerName)
                             finish(e, out.cableLink?.let(session::withCableLink) ?: session)
                             return@launch
                         }
@@ -552,7 +554,7 @@ class NetplayController(
             val out = try {
                 withContext(work) {   // the save sink runs rsync and writes files: off the main thread
                     Wizard.client(
-                        ch, ClientOffer(game, any, tag, core, pick, usb, mayRetry && cl == null, wl, cl), platform.clientSink(rom),
+                        ch, ClientOffer(game, any, tag, core, pick, usb, mayRetry && cl == null, wl, cl, name = playerName()), platform.clientSink(rom),
                         onSync = { joinProgress(NetplayText.RECEIVING) },
                         onWaiting = { n -> joinProgress(NetplayText.youArePlayer(n)) },
                         onTransfer = { t -> joinProgress(NetplayText.transfer(t.sending, t.done, t.total)) },
@@ -576,7 +578,7 @@ class NetplayController(
                     _page.value = NetplayPage.Progress(NetplayText.JOIN, NetplayText.STARTING)
                     // A joiner never declines offered saves (no rsync: the driver refuses with COPY_FAILED), so it
                     // always plays on the copy it received, empty when the host sent none; only a host has emptySaves.
-                    val session = NetplaySession(NetplayRole.CLIENT, host.ip, out.core, folderCore, overUsb = link == NetplayLink.USB, mixed = out.mixed, peerWl = out.peerWl)
+                    val session = NetplaySession(NetplayRole.CLIENT, host.ip, out.core, folderCore, overUsb = link == NetplayLink.USB, mixed = out.mixed, peerWl = out.peerWl, peerName = out.peerName)
                     finish(e, out.cableLink?.let(session::withCableLink) ?: session)
                     return
                 }

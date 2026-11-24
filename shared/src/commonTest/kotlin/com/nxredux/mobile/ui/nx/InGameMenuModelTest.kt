@@ -810,6 +810,37 @@ class InGameMenuModelTest {
         assertEquals(listOf("CRT Geom", "CRT Pie  $IN_USE_MARK", "CRT Royale", "Line"), m.state.page.rows.map { it.label })
     }
 
+    @Test fun b_from_a_preview_highlights_the_preset_stepped_to() {
+        val m = pickerModel()
+        m.select(1); m.press(NxButton.A)   // CRT
+        m.select(2); m.press(NxButton.A)   // CRT Royale, its preview
+        m.press(NxButton.RIGHT)            // Line
+        m.press(NxButton.B)
+        assertEquals(listOf("CRT Geom", "CRT Pie", "CRT Royale", "Line  $IN_USE_MARK"), m.state.page.rows.map { it.label })
+        assertEquals(3, m.state.page.selected)
+    }
+
+    @Test fun a_level_without_the_preset_in_use_keeps_its_highlight() {
+        val m = pickerModel()
+        m.select(1); m.press(NxButton.A)   // CRT
+        m.select(2); m.press(NxButton.A); m.press(NxButton.B)
+        m.press(NxButton.B)                // back on the groups: CRT stays highlighted
+        assertEquals(PageKind.ShaderBrowse(""), m.state.page.kind)
+        assertEquals(1, m.state.page.selected)
+    }
+
+    @Test fun a_preset_row_is_used_and_a_folder_row_opened() {
+        val m = pickerModel()
+        m.select(1); m.press(NxButton.A)   // CRT
+        val preset = m.state.page.rows[0] as MenuRow.Submenu
+        assertTrue(preset.usesPreset)
+        assertEquals(listOf(Hint(NxButton.A, "Use"), Hint(NxButton.B, "Back")), hintsFor(m.state.page, preset))
+        m.press(NxButton.B)
+        val folder = m.state.page.rows[1] as MenuRow.Submenu
+        assertFalse(folder.usesPreset)
+        assertEquals(listOf(Hint(NxButton.A, "Open"), Hint(NxButton.B, "Back")), hintsFor(m.state.page, folder))
+    }
+
     @Test fun a_on_the_preset_in_use_only_shows_its_preview() {
         val m = pickerModel()
         m.select(1); m.press(NxButton.A)
@@ -890,7 +921,7 @@ class InGameMenuModelTest {
     @Test fun cheats_tab_sits_after_achievements_and_before_players() {
         val m = model().also { it.cheatsAvailable = true }
         m.setAchievements(listOf(ach(1, RaAchievementState.UNLOCKED)), 1 to 1, RaSortOrder.DEFAULT, emptySet(), BADGES)
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS, GamePanelTab.CHEATS, GamePanelTab.PLAYERS), m.panelState().tabs)
     }
 
@@ -1013,13 +1044,13 @@ class InGameMenuModelTest {
     @Test fun root_has_no_second_screen_or_players_row() {
         val m = model()
         m.setSecondScreen(connected = true)
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         assertEquals(listOf("Continue", "Save", "Load", "Reset", "Options", "Quit"), m.labels())
     }
 
     @Test fun the_tab_row_steps_tabs_sideways_and_goes_down_into_the_tab() {
         val m = model()
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         m.press(NxButton.UP)                                 // the tab row
         m.press(NxButton.RIGHT); assertEquals(GamePanelTab.PLAYERS, m.state.panelTab)
         assertEquals(PanelFocus.Tabs, m.state.panelFocus)
@@ -1034,7 +1065,7 @@ class InGameMenuModelTest {
 
     @Test fun b_on_another_tab_comes_back_to_the_menu_words() {
         val m = model()
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         m.panelEvent(GamePanelEvent.SelectTab(GamePanelTab.PLAYERS))   // a tap: no focus
         assertNull(m.state.panelFocus)
         m.press(NxButton.DOWN); assertEquals(PanelFocus.Item(0), m.state.panelFocus)   // no focus there reads as the tab row
@@ -1063,7 +1094,7 @@ class InGameMenuModelTest {
     @Test fun l1_r1_switch_tabs() {
         val m = model()
         m.setAchievements(listOf(ach(1, RaAchievementState.UNLOCKED)), 1 to 1, RaSortOrder.DEFAULT, emptySet(), BADGES)
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS, GamePanelTab.PLAYERS), m.panelState().tabs)
         // From the words too: another tab hides them, so the focus goes to the tab row.
         m.press(NxButton.R1); assertEquals(GamePanelTab.ACHIEVEMENTS, m.state.panelTab)
@@ -1281,7 +1312,7 @@ class InGameMenuModelTest {
 
     @Test fun the_panel_state_is_reused_until_an_input_changes() {
         val m = model()
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         val first = m.panelState()
         assertTrue(first === m.panelState())
         m.setPlayers(listOf(p1, PlayerSlotRow("k2", "Xbox Wireless Controller", connected = true)), listOf(padA, padB))
@@ -1294,7 +1325,7 @@ class InGameMenuModelTest {
         // The host publishes the state after each change; an equal value would not redraw the panel.
         val m = model()
         var before = m.state
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         assertTrue(before != m.state); before = m.state
         m.setSecondScreen(connected = true)
         assertTrue(before != m.state); before = m.state
@@ -1309,7 +1340,7 @@ class InGameMenuModelTest {
 
     @Test fun a_tab_tap_selects_it() {
         val m = model()
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         assertNull(m.panelEvent(GamePanelEvent.SelectTab(GamePanelTab.PLAYERS)))
         assertEquals(GamePanelTab.PLAYERS, m.state.panelTab)
         m.panelEvent(GamePanelEvent.SelectTab(GamePanelTab.ACHIEVEMENTS))   // no set: not shown, so ignored
@@ -1318,7 +1349,7 @@ class InGameMenuModelTest {
 
     @Test fun panel_hints_name_tabs_select_and_back() {
         val m = model()
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         m.press(NxButton.UP)                                 // the tab row
         assertEquals(listOf(Hint(NxButton.L1, "Tab"), Hint(NxButton.B, "Back"), Hint(NxButton.R1, "Tab")),
             hintsFor(m.state.page, m.state.page.rows[0], panelFocus = m.state.panelFocus, panelTab = m.state.panelTab))
@@ -2021,10 +2052,31 @@ class InGameMenuModelTest {
     @Test fun players_tab_shows_only_for_a_multiplayer_core() {
         val m = model()
         assertEquals(listOf(GamePanelTab.SHORTCUTS), m.panelState().tabs)
-        m.setPlayers(listOf(p1), listOf(padA))   // one slot: a one-player core
+        m.setPlayers(listOf(p1), listOf(padA, padB))   // one slot: a one-player core
         assertEquals(listOf(GamePanelTab.SHORTCUTS), m.panelState().tabs)
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.PLAYERS), m.panelState().tabs)
+    }
+
+    @Test fun players_tab_needs_a_second_controller() {
+        val m = model()
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))   // the built-in controls alone
+        assertEquals(listOf(GamePanelTab.SHORTCUTS), m.panelState().tabs)
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
+        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.PLAYERS), m.panelState().tabs)
+    }
+
+    @Test fun the_players_tab_going_away_falls_back_to_shortcuts() {
+        val m = model()
+        m.setPlayers(listOf(p1, PlayerSlotRow("k2", "Xbox Wireless Controller", connected = true)), listOf(padA, padB))
+        m.press(NxButton.UP); m.toTab(GamePanelTab.PLAYERS); m.press(NxButton.DOWN)
+        assertEquals(PanelFocus.Item(0), m.state.panelFocus)
+        m.setPlayers(listOf(p1, PlayerSlotRow("k2", "Xbox Wireless Controller", connected = false)), listOf(padA))   // the second pad left
+        assertEquals(GamePanelTab.SHORTCUTS, m.state.panelTab)
+        assertEquals(GamePanelTab.SHORTCUTS, m.panelState().tab)
+        assertEquals(PanelFocus.Tabs, m.state.panelFocus)
+        m.setPlayers(listOf(p1, PlayerSlotRow("k2", "Xbox Wireless Controller", connected = true)), listOf(padA, padB))
+        assertEquals(GamePanelTab.SHORTCUTS, m.state.panelTab)   // back, but not shown again by itself
     }
 
     @Test fun a_on_a_player_row_in_the_panel_cycles_its_pad() {
@@ -2069,7 +2121,7 @@ class InGameMenuModelTest {
 
     @Test fun a_held_slot_cycles_from_empty() {
         val m = model()
-        m.setPlayers(listOf(PlayerSlotRow("k9", "DualSense", connected = false), PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(PlayerSlotRow("k9", "DualSense", connected = false), PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         m.openPlayers()
         assertNull(m.press(NxButton.A))                                         // A opens its picker
         assertIs<MenuPopup.Picker>(m.state.popup)

@@ -116,9 +116,10 @@ sealed interface Screen {
      * The main menu: [tabs] (see [buildMenuTabs]) on [tab]. [menu]: a game's or a tool's menu is open over its row.
      * [search]: START's search prompt is open with this text as typed. [pushed]: a tab Layouts hides, opened over the
      * menu from MENU ([AppState.openHiddenTab]): [tabs] holds that one tab, titled with its label; B returns. [hidden]: the
-     * tabs Layouts hides that have content (MENU's and the long press's items); none while [pushed].
+     * tabs Layouts hides that have content (MENU's and the long press's items); none while [pushed]. [layoutMenu]: the
+     * Layout dropdown is open, on that choice of [MenuTabLayouts.choices].
      */
-    data class Systems(val tabs: List<MenuTab>, val tab: Int = 0, val menu: ContextMenu? = null, val search: String? = null, val pushed: Boolean = false, val hidden: List<MenuCategory> = emptyList()) : Screen {
+    data class Systems(val tabs: List<MenuTab>, val tab: Int = 0, val menu: ContextMenu? = null, val search: String? = null, val pushed: Boolean = false, val hidden: List<MenuCategory> = emptyList(), val layoutMenu: Int? = null) : Screen {
         /** The current tab's items: what the selection indexes. */
         val rows: List<MainRow> get() = tabs.getOrNull(tab)?.rows.orEmpty()
         val category: MenuCategory? get() = tabs.getOrNull(tab)?.category

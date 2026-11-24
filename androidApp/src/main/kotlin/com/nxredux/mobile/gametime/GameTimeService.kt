@@ -87,6 +87,9 @@ object GameTimeService {
         runBlocking { withTimeoutOrNull(timeoutMs) { serial.launch {}.join() } }
     }
 
+    /** [GameTimeStore.closeDead] with no game process alive; false without the database. Blocks: off the main thread. */
+    fun closeDead(context: Context, seenBefore: Long): Boolean = store(context)?.closeDead(seenBefore) ?: false
+
     fun data(context: Context): GameTimeData? = store(context)?.let { StoreGameTimeData(it, Dispatchers.IO) }
 
     /**

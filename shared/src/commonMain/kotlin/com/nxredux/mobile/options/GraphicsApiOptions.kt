@@ -27,8 +27,7 @@ object GraphicsApiOptions {
 
     val row = FrontendOption(
         KEY, "Graphics API", listOf(AUTO, GLES, VULKAN), AUTO,
-        "How the console is drawn. Auto uses OpenGL ES.\nVulkan on N64 switches to the ParaLLEl-RDP renderer\n" +
-            "(more accurate, heavier). Phones without Vulkan\nstay on OpenGL ES. Takes effect the next time the game starts.",
+        "How the console is drawn. Auto uses OpenGL ES.\nPhones without Vulkan stay on OpenGL ES. Takes effect\nthe next time the game starts.",
         brief = "Applies next launch. Auto is OpenGL ES",
         visual = false, valueLabels = listOf("Auto", "OpenGL ES", "Vulkan"), atLaunch = true,
     )
@@ -39,6 +38,25 @@ object GraphicsApiOptions {
             "Phones without Vulkan stay on OpenGL ES. Takes effect\nthe next time the game starts.",
         brief = "Applies next launch. Auto is Vulkan",
     )
+
+    /** On N64 only, after the row's info: Vulkan there is another renderer, not the same picture faster. */
+    const val N64_NOTE = "Vulkan on N64 switches to the ParaLLEl-RDP renderer\n(more accurate, heavier)."
+
+    /** On a Mali GPU, after the row's info: the system driver is what loses the device, so the fix is another driver. */
+    const val MALI_NOTE = "On a Mali GPU the system Vulkan driver can crash\nsome games: a custom GPU driver (the GPU driver\nrow) usually fixes it."
+
+    /** Where custom drivers are unavailable, so the way out is OpenGL ES. */
+    const val MALI_NOTE_NO_DRIVERS = "On a Mali GPU the system Vulkan driver can crash\nsome games: set OpenGL ES for them."
+
+    /**
+     * [row], or [rowAutoVulkan] where [autoVulkan]; on [n64] with [N64_NOTE] after its info; on a [mali] GPU with
+     * [MALI_NOTE] last ([MALI_NOTE_NO_DRIVERS] without [drivers], custom GPU drivers being unavailable).
+     */
+    fun rowFor(autoVulkan: Boolean, mali: Boolean, drivers: Boolean, n64: Boolean = false): FrontendOption {
+        val base = if (autoVulkan) rowAutoVulkan else row
+        val notes = listOfNotNull(N64_NOTE.takeIf { n64 }, (if (drivers) MALI_NOTE else MALI_NOTE_NO_DRIVERS).takeIf { mali })
+        return if (notes.isEmpty()) base else base.copy(info = (listOf(base.info) + notes).joinToString("\n"))
+    }
 
     /** The row shows for a console whose core can render with Vulkan ([com.nxredux.mobile.runner.CoreDescriptor.vulkan]). */
     fun appliesTo(tag: String): Boolean = CoreRegistry.forTag(tag)?.vulkan != null

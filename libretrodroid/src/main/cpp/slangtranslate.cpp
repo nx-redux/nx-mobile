@@ -96,8 +96,98 @@ std::vector<SlangMember> blockMembers(spirv_cross::CompilerGLSL& compiler, const
     return members;
 }
 
+// GLSL ES 3.00 has no arrays of arrays, so SPIRV-Cross flattens them (`a[3][4]` becomes `a[12]`, `a[w][z]` becomes
+// `a[w * 4 + z]`) but refuses to build one from its rows (crt-geom's `vec3 mask[3][4] = { {...}, ... }`). Built here
+// instead: the rows' elements in order, as one flat array.
+class EsCompiler : public spirv_cross::CompilerGLSL {
+public:
+    using CompilerGLSL::CompilerGLSL;
+
+    // A constant table (`const vec3 mask[2][4] = ...`) becomes a one-dimensional constant of all its elements, which
+    // the flattened variable it initialises takes as it is.
+    void flattenConstantTables() {
+        std::vector<spirv_cross::SPIRConstant*> tables;
+        ir.for_each_typed_id<spirv_cross::SPIRConstant>([&](uint32_t, spirv_cross::SPIRConstant& c) {
+            if (!c.specialization && !c.replicated && get<spirv_cross::SPIRType>(c.constant_type).array.size() > 1) {
+                tables.push_back(&c);
+            }
+        });
+        for (auto* table : tables) {
+            std::vector<uint32_t> elements;
+            if (!leaves(table->self, elements)) continue;
+            auto& type = get<spirv_cross::SPIRType>(table->constant_type);
+            uint32_t elementType = type.parent_type;
+            while (!get<spirv_cross::SPIRType>(elementType).array.empty()) {
+                elementType = get<spirv_cross::SPIRType>(elementType).parent_type;
+            }
+            auto flat = type;
+            flat.array = { (uint32_t) elements.size() };
+            flat.array_size_literal = { true };
+            flat.parent_type = elementType;
+            uint32_t flatId = ir.increase_bound_by(1);
+            set<spirv_cross::SPIRType>(flatId, flat);
+            // increase_bound_by may grow the id table, so the constant is looked up again.
+            auto& constant = get<spirv_cross::SPIRConstant>(table->self);
+            constant.constant_type = flatId;
+            constant.subconstants.clear();
+            for (auto e : elements) constant.subconstants.push_back(e);
+        }
+    }
+
+protected:
+    void emit_instruction(const spirv_cross::Instruction& instruction) override {
+        if (options.flatten_multidimensional_arrays && instruction.op == spv::OpCompositeConstruct && instruction.length > 2) {
+            const uint32_t* ops = stream(instruction);
+            auto& type = get<spirv_cross::SPIRType>(ops[0]);
+            if (type.array.size() > 1) {
+                emitFlatConstruct(ops[0], ops[1], ops + 2, instruction.length - 2, type);
+                return;
+            }
+        }
+        CompilerGLSL::emit_instruction(instruction);
+    }
+
+private:
+    // The non-array constants under a table, in order; false when one is not a plain constant.
+    bool leaves(uint32_t id, std::vector<uint32_t>& out) {
+        auto* c = maybe_get<spirv_cross::SPIRConstant>(id);
+        if (!c || c->specialization || c->replicated) return false;
+        if (get<spirv_cross::SPIRType>(c->constant_type).array.empty()) {
+            out.push_back(id);
+            return true;
+        }
+        for (auto sub : c->subconstants) {
+            if (!leaves(sub, out)) return false;
+        }
+        return true;
+    }
+
+    void emitFlatConstruct(uint32_t resultType, uint32_t id, const uint32_t* rows, uint32_t count,
+                           const spirv_cross::SPIRType& type) {
+        // type.array runs innermost first; the last entry is the row count, the rest make up one row.
+        uint32_t perRow = 1;
+        for (size_t i = 0; i + 1 < type.array.size(); ++i) perRow *= to_array_size_literal(type, (uint32_t) i);
+        if (perRow == 0 || count != to_array_size_literal(type, (uint32_t) type.array.size() - 1)) {
+            throw std::runtime_error("array of arrays with an unsized dimension");
+        }
+        bool forward = true;
+        std::string args;
+        for (uint32_t r = 0; r < count; ++r) {
+            forward = forward && should_forward(rows[r]);
+            auto row = to_enclosed_expression(rows[r]);
+            for (uint32_t k = 0; k < perRow; ++k) {
+                if (!args.empty()) args += ", ";
+                args += row + "[" + std::to_string(k) + "]";
+            }
+        }
+        // type_to_glsl names the element type; the array sizes are written separately.
+        emit_op(resultType, id, type_to_glsl(type) + "[" + std::to_string(perRow * count) + "](" + args + ")", forward);
+        for (uint32_t r = 0; r < count; ++r) inherit_expression_dependencies(id, rows[r]);
+    }
+};
+
 void toGlslEs(std::vector<uint32_t> spirv, bool vertex, unsigned esVersion, SlangStage& out) {
-    spirv_cross::CompilerGLSL compiler(std::move(spirv));
+    EsCompiler compiler(std::move(spirv));
     auto resources = compiler.get_shader_resources();
 
     // The two stages name a varying independently and match it by location, which GLSL ES 3.00 cannot express: one
@@ -145,6 +235,7 @@ void toGlslEs(std::vector<uint32_t> spirv, bool vertex, unsigned esVersion, Slan
     options.fragment.default_float_precision = spirv_cross::CompilerGLSL::Options::Highp;
     options.fragment.default_int_precision = spirv_cross::CompilerGLSL::Options::Highp;
     compiler.set_common_options(options);
+    if (options.flatten_multidimensional_arrays) compiler.flattenConstantTables();
     out.glsl = compiler.compile();
 }
 
