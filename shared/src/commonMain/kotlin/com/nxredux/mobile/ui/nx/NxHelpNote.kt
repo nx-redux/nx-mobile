@@ -165,7 +165,11 @@ fun NxSettingInfoPopup(note: NxHelpText?, onClose: () -> Unit) {
                     if (LocalFooterMode.current == FooterMode.HINTS && scroll.maxValue > 0) {
                         val hints = listOf(Hint(NxButton.DOWN, "Scroll"))
                         // On the card's text edge ([HelpCardPadding] in from the card), not the page inset.
-                        CompositionLocalProvider(LocalNxHintBarStart provides HelpCardPadding, LocalNxHintBarEnd provides HelpCardPadding) {
+                        CompositionLocalProvider(
+                            LocalNxHintBarStart provides HelpCardPadding,
+                            LocalNxHintBarEnd provides HelpCardPadding,
+                            LocalNxHintBarHeight provides null,
+                        ) {
                             NxHintBar(
                                 hints, Modifier.padding(top = 4.dp), scrim = Color.Transparent, always = true,
                                 onHint = { b -> if (b == NxButton.DOWN) steps.onScrollHint() else onClose() },

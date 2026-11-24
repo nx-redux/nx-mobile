@@ -166,7 +166,7 @@ private fun NxArtGlyph(art: DrawableResource, description: String, size: Dp, mod
  * white pill of the disc's height that widens to fit it, at the same text size. The text is in the dark of the bar behind.
  */
 @Composable
-fun NxBadgeGlyph(text: String, size: Dp, modifier: Modifier = Modifier) {
+fun NxBadgeGlyph(text: String, size: Dp, modifier: Modifier = Modifier, tint: Color = LocalNxColors.current.main) {
     val disc = size * 0.75f
     val fontSize = NxTextSizes.badge(disc).pinned()   // ~60% of the disc, whatever the label's length or the font scale
     val label = @Composable {
@@ -175,12 +175,12 @@ fun NxBadgeGlyph(text: String, size: Dp, modifier: Modifier = Modifier) {
     }
     if (text.length <= 1) {
         Box(modifier.size(size), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(disc).background(LocalNxColors.current.main, CircleShape), contentAlignment = Alignment.Center) { label() }
+            Box(Modifier.size(disc).background(tint, CircleShape), contentAlignment = Alignment.Center) { label() }
         }
     } else {
         // The same margin round the pill as round the disc, so the spacing in the bar matches.
         Box(modifier.height(size).padding(horizontal = (size - disc) / 2), contentAlignment = Alignment.Center) {
-            Box(Modifier.height(disc).widthIn(min = disc).background(LocalNxColors.current.main, RoundedCornerShape(50)).padding(horizontal = disc * 0.3f),
+            Box(Modifier.height(disc).widthIn(min = disc).background(tint, RoundedCornerShape(50)).padding(horizontal = disc * 0.3f),
                 contentAlignment = Alignment.Center) { label() }
         }
     }
@@ -213,13 +213,24 @@ val LocalNxHintBarStart = staticCompositionLocalOf<Dp?> { null }
 val LocalNxHintBarEnd = staticCompositionLocalOf<Dp?> { null }
 
 /**
- * The hint bars below's least height, their hints centred in it: a game list's, the main menu's tab row's
- * ([MENU_TAB_ROW_HEIGHT]), so its words sit where the tab words do. Null: as tall as a glyph and its padding.
+ * The hint bars below's least height, their hints centred in it: defaults to the main menu's tab row's
+ * ([MENU_TAB_ROW_HEIGHT]), so every screen's hints sit at the same baseline. Null: as tall as a glyph and its padding
+ * (used by compact embedded bars like [NxEmptyState] and [NxHelpNote]).
  */
-val LocalNxHintBarHeight = staticCompositionLocalOf<Dp?> { null }
+val LocalNxHintBarHeight = staticCompositionLocalOf<Dp?> { MENU_TAB_ROW_HEIGHT }
 
 /** Hint bars below keep their height when empty ([NxHintBar]'s keepHeight): provided by the two-pane Settings only. */
 val LocalNxHintBarKeepHeight = staticCompositionLocalOf { false }
+
+/**
+ * Hint bars below right-align their hints (matching the main menu's bottom row). Default true app-wide; centred empty
+ * states opt out.
+ */
+val LocalNxHintBarAlignEnd = staticCompositionLocalOf { true }
+
+/** The hints shown in a bar: B Back is omitted (universal on a handheld), remaining hints in pad order. */
+internal fun visibleBarHints(hints: List<Hint>): List<Hint> =
+    hints.filterNot { it.button == NxButton.B && it.label.equals("Back", ignoreCase = true) }.inPadOrder()
 
 /** The Game Switcher's bar's share of the ground ([NxColors.scrimSwitcher]'s alpha), its info band's edge too. */
 val NX_SWITCHER_BAR_ALPHA: Float = NxDefaults.colors.scrimSwitcher.alpha
@@ -254,13 +265,14 @@ fun NxHintBar(
     // The hints in pad order, each whole or not at all. Too many for the bar (a phone's portrait width with five hints):
     // A Select and B Back go first ([plainHint]), then those that would still run past the right edge, rightmost first.
     // The bar's height is a glyph's whatever is left out.
-    val ordered = hints.inPadOrder()
+    val ordered = visibleBarHints(hints)
+    val alignEnd = LocalNxHintBarAlignEnd.current
     Layout(
         content = {
             ordered.map { it to glyphs.glyphFor(it.button) }.forEachIndexed { i, (hint, glyph) ->
                 val clickable = if (onHint != null) Modifier.clickable { onHint(hint.button) } else Modifier
-                // The first glyph is pulled back by the art's transparent margin, so its disc sits on the text edge above.
-                val item = if (i == 0 && glyph != HintGlyph.TextOnly) Modifier.offset(x = -(glyphSize * NAV_ART_MARGIN)).then(clickable) else clickable
+                // When left-aligned, the first glyph is pulled back by the art's transparent margin so its disc sits on the text edge.
+                val item = if (!alignEnd && i == 0 && glyph != HintGlyph.TextOnly) Modifier.offset(x = -(glyphSize * NAV_ART_MARGIN)).then(clickable) else clickable
                 NxHintItem(hint, glyph, glyphSize, labelSize, item)
             }
         },
@@ -285,23 +297,28 @@ fun NxHintBar(
             end = x + p.width
         }
         val h = maxOf(shown.maxOfOrNull { it.first.height } ?: 0, c.minHeight)
-        layout(hintBarWidth(c.hasBoundedWidth, c.maxWidth, end), h) { shown.forEach { (p, x) -> p.place(x, (h - p.height) / 2) } }
+        val startX = if (alignEnd && c.hasBoundedWidth) (c.maxWidth - end).coerceAtLeast(0) else 0
+        layout(hintBarWidth(c.hasBoundedWidth, c.maxWidth, end), h) {
+            shown.forEach { (p, x) -> p.place(startX + x, (h - p.height) / 2) }
+        }
     }
 }
 
 /** One hint as a bar draws it: its [glyph] at [glyphSize] (none text-only), then its label in capitals at [labelSize]. */
 @Composable
 internal fun NxHintItem(hint: Hint, glyph: HintGlyph, glyphSize: Dp, labelSize: TextUnit, modifier: Modifier = Modifier) {
+    val colors = LocalNxColors.current
+    val glyphTint = colors.inkDim
     // At least a glyph's height, so a text-only hint's tap target is as tall as the others.
     Row(modifier.heightIn(min = glyphSize), verticalAlignment = Alignment.CenterVertically) {
         when (glyph) {
-            is HintGlyph.Art -> NxButtonGlyph(glyph.button, size = glyphSize)
-            is HintGlyph.Badge -> NxBadgeGlyph(glyph.text, size = glyphSize)
-            is HintGlyph.Icon -> NxArtGlyph(glyph.icon.navDrawable(), glyph.icon.label, size = glyphSize)
+            is HintGlyph.Art -> NxButtonGlyph(glyph.button, size = glyphSize, tint = glyphTint)
+            is HintGlyph.Badge -> NxBadgeGlyph(glyph.text, size = glyphSize, tint = glyphTint)
+            is HintGlyph.Icon -> NxArtGlyph(glyph.icon.navDrawable(), glyph.icon.label, size = glyphSize, tint = glyphTint)
             HintGlyph.TextOnly -> Unit
         }
         if (glyph != HintGlyph.TextOnly) Spacer(Modifier.width(3.dp))
-        Text(hint.label.uppercase(), color = LocalNxColors.current.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = labelSize, lineHeight = labelSize, maxLines = 1, softWrap = false)
+        Text(hint.label.uppercase(), color = colors.inkOpen, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = labelSize, lineHeight = labelSize, maxLines = 1, softWrap = false)
     }
 }
 
