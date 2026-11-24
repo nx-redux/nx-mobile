@@ -152,7 +152,7 @@ internal interface DualScreenHost : GameScreenHost {
     fun speedTiles(): Pair<Boolean, Boolean?>
     /** The fast-forward speed (its Max fast forward option), shown on the Fast forward tile. */
     fun ffSpeed(): Int
-    /** The Mic tile's state (the pad's mic button shown): null where this isn't a mic console or a session is on. */
+    /** The Mic tile's state (the pad's mic button shown): null where this isn't a mic console. */
     fun micTile(): Boolean?
     /** The Reset tile: reset always asks first, so the in-game menu opens on its Reset dialog. */
     fun askReset()
@@ -861,7 +861,7 @@ internal class DualScreenController(
     /**
      * The dual-screen panel's state: the header ([panelHeader], with the achievement count while there is a set), the tabs
      * that apply, the Shortcuts (the touch buttons' tiles, Swap disc for a multi-disc game, Fast forward, Rewind and Reset, all outside netplay;
-     * a session keeps the mic, the DS wireless Swap disc too, under the session's card), this game's achievements in the menu's order, the cheats (the
+     * in a session the session's card, then only the Mic, and Swap disc on the DS wireless), this game's achievements in the menu's order, the cheats (the
      * host's set: one owner, as the menu's), and the Players page's rows.
      */
     private fun panelState(): GamePanelState {

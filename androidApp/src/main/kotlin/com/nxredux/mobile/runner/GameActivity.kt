@@ -684,7 +684,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (menuOpen && !quitting) holdCore()
         syncDsMenuCap()
         withMenu { it.setLocalWirelessNow(localWirelessNow) }
-        dual.refreshDualPanel()
     }
 
     /** DS: a toast as devices join and leave the room (the 3DS core sends its own, with names). */
