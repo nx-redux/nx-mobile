@@ -24,7 +24,7 @@ object Libretro {
     private val DOOM_TAGS = setOf("PRBOOM", "DOOM")
 
     /** ScreenScraper ids libretro-thumbnails has no system for (not asked). */
-    val NONE: Set<Int> = setOf(90, 234)
+    val NONE: Set<Int> = setOf(90, 234, 225)
 
     /** By refined ScreenScraper id; names as the server's index lists them. */
     private val bySystem: Map<Int, List<String>> = mapOf(
@@ -49,6 +49,9 @@ object Libretro {
         123 to listOf("ScummVM"), 135 to listOf("DOS"), 142 to listOf("SNK - Neo Geo", FBNEO),
         6 to ARCADE, 7 to ARCADE, 8 to ARCADE, 75 to ARCADE,
         207 to listOf("Watara - Supervision"), 211 to listOf("Nintendo - Pokemon Mini"), 222 to listOf("TIC-80"),
+        18 to listOf("Nintendo - Wii U"), 32 to listOf("Microsoft - Xbox"), 33 to listOf("Microsoft - Xbox 360"),
+        59 to listOf("Sony - PlayStation 3"), 60 to listOf("Sony - PlayStation 4"), 62 to listOf("Sony - PlayStation Vita"),
+        122 to listOf("Nintendo - Nintendo 64DD"), 133 to listOf("Philips - CD-i"),
         240 to listOf("Commodore - PET"), 263 to listOf("Arduboy Inc - Arduboy"),
     )
 

@@ -31,7 +31,12 @@ class ScraperSystemsTest {
     }
     // Every console the app registers can be scraped (the Android games console aside, which has its own system).
     @Test fun everyRegisteredConsoleTagHasASystem() {
-        for (console in com.nxredux.mobile.runner.CoreRegistry.consoles.filter { !it.externalOnly }) for (tag in console.tags) {
+        for (console in com.nxredux.mobile.runner.CoreRegistry.consoles) for (tag in console.tags) {
+            assertEquals(true, ScraperSystems.baseIdFor(tag) != null, "tag $tag has no scraper system")
+        }
+    }
+    @Test fun newConsolesHaveScreenScraperIds() {
+        for (tag in listOf("SWITCH", "WIIU", "PS3", "PSVITA", "PS4", "SATURN", "XBOX", "XBOX360", "JAGUAR", "NEOCD", "CDI", "N64DD", "SGX")) {
             assertEquals(true, ScraperSystems.baseIdFor(tag) != null, "tag $tag has no scraper system")
         }
     }

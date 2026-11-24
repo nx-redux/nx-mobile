@@ -33,7 +33,7 @@ object Tgdb {
     const val DEFAULT_THUMB = "https://cdn.thegamesdb.net/images/thumb/"
 
     /** ScreenScraper ids TheGamesDB has no platform for (not asked). */
-    val NONE: Set<Int> = setOf(222, 234, 263)
+    val NONE: Set<Int> = setOf(222, 234, 263, 122)
 
     /** By refined ScreenScraper id; ids from thegamesdb.net's platform list. */
     private val byId: Map<Int, String> = mapOf(
@@ -43,6 +43,7 @@ object Tgdb {
         72 to "4930", 40 to "26", 41 to "27", 42 to "4937", 43 to "4943", 45 to "4925", 46 to "4926", 48 to "31", 52 to "4950",
         57 to "10", 58 to "11", 61 to "13", 64 to "4911", 65 to "4914", 66 to "40", 70 to "4956", 73 to "4945", 76 to "4913", 79 to "4931",
         80 to "4928", 90 to "4948", 99 to "5007", 102 to "4939", 104 to "4927", 106 to "4936", 109 to "4949", 113 to "4929",
+        18 to "38", 32 to "14", 33 to "15", 59 to "12", 60 to "4919", 62 to "39", 133 to "4917", 225 to "4971",
         116 to "4929", 115 to "32", 123 to "1", 135 to "1", 142 to "24", 207 to "4959", 211 to "4957", 240 to "5008",
     )
 

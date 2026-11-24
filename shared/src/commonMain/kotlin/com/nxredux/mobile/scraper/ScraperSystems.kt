@@ -36,6 +36,8 @@ object ScraperSystems {
         "SUPERVISION" to 207, "SV" to 207, "VECTREX" to 102, "CHANNELF" to 80, "ARDUBOY" to 263, "PICO8" to 234,
         "P8" to 234, "PICO" to 234, "TIC80" to 222, "SCUMMVM" to 123, "SCUMM" to 123, "DOS" to 135, "PRBOOM" to 135,
         "DOOM" to 135,
+        "SWITCH" to 225, "WIIU" to 18, "PS3" to 59, "PSVITA" to 62, "PS4" to 60, "XBOX" to 32, "XBOX360" to 33,
+        "CDI" to 133, "N64DD" to 122,
     )
 
     fun baseIdFor(tag: String): Int? = ids[CoreRegistry.baseTag(tag)]
