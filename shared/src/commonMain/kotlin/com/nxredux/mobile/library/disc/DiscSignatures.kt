@@ -15,8 +15,8 @@ class DataSectors(val s0: ByteArray?, val s1: ByteArray?, val s16: ByteArray?)
  */
 object DiscSignatures {
     /**
-     * Goes up when a disc that answered nothing may now place (Saturn, once its console was added): a stored
-     * nothing-recognised answer from an older version is probed again, without the full rescan a new index version costs.
+     * Goes up whenever a disc that answered nothing may now place: a stored nothing-recognised answer from an older
+     * version is probed again, without the full rescan a new index version costs.
      */
     const val VERSION = 1
 
