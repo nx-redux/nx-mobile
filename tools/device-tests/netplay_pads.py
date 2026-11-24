@@ -84,11 +84,19 @@ class Side:
         return self.roms + "/" + game
 
     def ip(self):
-        out = self.sh("ip -4 addr show wlan0")
-        m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", out)
-        if not m:
-            raise SystemExit("%s: no Wi-Fi address" % self.label)
-        return m.group(1)
+        m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", self.sh("ip -4 addr show wlan0"))
+        return m.group(1) if m else None
+
+    def ensure_wifi(self, timeout=60):
+        """The AYANEO drops Wi-Fi while its screen sleeps: wake it, swipe the lock screen up and wait for an address."""
+        if self.ip():
+            return
+        w, h = (int(v) for v in re.search(r"(\d+)x(\d+)", self.sh("wm size")).groups())
+        self.sh("input keyevent KEYCODE_WAKEUP")
+        time.sleep(1)
+        self.sh("input swipe %d %d %d %d 300" % (w // 2, h * 9 // 10, w // 2, h // 5))
+        if not Fold.wait_for(self.ip, timeout, interval=2):
+            raise SystemExit("%s: no Wi-Fi address after waking it" % self.label)
 
     def md5(self, game):
         return self.sh("md5sum %s" % q(self.rom(game))).split()[0]
@@ -118,6 +126,8 @@ class Side:
 
 def run_case(case, host, client, seconds):
     name, core, game, host_pad, client_pad = case
+    for s in (host, client):
+        s.ensure_wifi()
     control = name == "control-mismatch"
     want = expected(core, game, host_pad, client_pad)
     for s in (host, client):
@@ -158,6 +168,8 @@ def run_case(case, host, client, seconds):
 
 
 def run_smoke(tag, core, game, host, client, seconds):
+    for s in (host, client):
+        s.ensure_wifi()
     for s in (host, client):
         s.stop_game()
         for r in ("netplay", "game"):

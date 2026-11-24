@@ -219,6 +219,7 @@ Automated: `tools/device-tests/netplay_pads.py` (Fold host, Nova client, then AY
 - [x] The drift check catches a forced 6-vs-3 mismatch (the control case).
 - [x] Genesis Plus GX: host on 6, 3 and Auto, both phones on the host's pad, drift check clean. It drifted before this branch (Auto too): its state leaves out the 68k refresh phase and VDP FIFO timing; the host now loads back the state it sends. 60 s without resyncs stayed in step.
 - [x] Other consoles with the reload (`--smoke`, AYANEO ↔ Nova): SNES (Snes9x, Contra III) no drift.
-- [ ] N64 (Mario Kart 64) and PS1 (PCSX ReARMed, SF EX Plus Alpha): the RAM hash differs at every check, with and without the reload (not this branch). Find out whether those sessions really drift or the RAM holds per-device bytes.
+- [x] PS1: PCSX ReARMed drifted (its dynarec compiles on a second thread, so interrupts landed at other instructions per device); sessions now force `pcsx_rearmed_drc_thread` off. PCSX ReARMed and SwanStation, SF EX Plus Alpha: no drift.
+- [x] N64 (Mario Kart 64): in step. Every RAM difference is in the framebuffer area (0x310000-0x38FFFF, drawn by each GPU); the rest of RDRAM matched at every check for 48 s, so the RAM hash can't pass for N64.
 - [ ] Phone ↔ Brick (no `pad=` yet): still starts, both on the old fixed pad, no desync.
 

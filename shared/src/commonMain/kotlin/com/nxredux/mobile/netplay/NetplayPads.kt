@@ -22,7 +22,7 @@ import com.nxredux.mobile.runner.SegaPadType
  * - A picodrive session on GPGX (the joiner's alternative core) gets picodrive's default, `3 button pad`.
  * - SFC, SUPA, FC, FDS, FBN: no pad-type option in the paks or the cores' option lists (snes9x, supafaust, fceumm, fbneo):
  *   null, the launch is unchanged. PS: `minarch_gamepad_type = 1` (DualShock, 517 on both ports), already the
- *   descriptor's `controllerPortsFor(2)`: null here.
+ *   descriptor's `controllerPortsFor(2)`; pcsx_rearmed (PS and PSX) gets [PCSX_LOCKSTEP], its dynarec compiled in step.
  * - N64: minarch forces its own option set for a session (`Config_forceNetplayN64`): [N64_LOCKSTEP].
  */
 object NetplayPads {
@@ -49,6 +49,13 @@ object NetplayPads {
         "mupen64plus-ThreadedRenderer" to "False",
     ), mapOf(0 to CoreDescriptor.JOYPAD, 1 to CoreDescriptor.JOYPAD), null)
 
+    /**
+     * pcsx_rearmed compiles its dynarec blocks on a second thread by default (`drc_thread` Auto), running other code while
+     * a block compiles: how long that takes differs per device, so interrupts land at other instructions on each side and
+     * the session drifts. Compiled on the frame thread, both run the same cycles. Its ports stay the descriptor's.
+     */
+    private val PCSX_LOCKSTEP = Pad(mapOf("pcsx_rearmed_drc_thread" to "disabled"), emptyMap(), null)
+
     /** tag -> core -> pad. */
     private val table: Map<String, Map<String, Pad>> = mapOf(
         "MD" to mapOf(SegaPadType.PICODRIVE to PICODRIVE_3B, SegaPadType.GPGX to GPGX_AUTO),        // core default
@@ -59,6 +66,8 @@ object NetplayPads {
         "SG1000" to mapOf(SegaPadType.PICODRIVE to PICODRIVE_3B, SegaPadType.GPGX to GPGX_AUTO),    // pak: 3 button pad
         "GPGX" to mapOf(SegaPadType.GPGX to GPGX_AUTO, SegaPadType.PICODRIVE to PICODRIVE_3B),      // minarch JOYPAD
         "N64" to mapOf("mupen64plus_next" to N64_LOCKSTEP),
+        "PS" to mapOf("pcsx_rearmed" to PCSX_LOCKSTEP),
+        "PSX" to mapOf("pcsx_rearmed" to PCSX_LOCKSTEP),
     )
 
     /**

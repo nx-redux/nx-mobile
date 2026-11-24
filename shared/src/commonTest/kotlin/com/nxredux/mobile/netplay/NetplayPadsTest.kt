@@ -51,10 +51,21 @@ class NetplayPadsTest {
         }
     }
 
+    @Test fun pcsx_rearmed_compiles_its_dynarec_on_the_frame_thread_in_a_session() {
+        for (tag in listOf("PS", "PSX")) {
+            val pad = assertNotNull(NetplayPads.forSession(tag, "pcsx_rearmed"), tag)
+            assertEquals(mapOf("pcsx_rearmed_drc_thread" to "disabled"), pad.options, tag)
+            assertTrue(pad.ports.isEmpty(), tag)   // the descriptor's DualShock stands
+            assertNull(pad.pad, tag)
+        }
+    }
+
     @Test fun tags_without_a_pad_option_force_nothing() {
-        for (tag in listOf("SFC", "SUPA", "FC", "FDS", "FBN", "PS", "PSX")) {
+        for (tag in listOf("SFC", "SUPA", "FC", "FDS", "FBN")) {
             NetplayCores.offered(tag).forEach { assertNull(NetplayPads.forSession(tag, it), "$tag/$it") }
         }
+        assertNull(NetplayPads.forSession("PS", "swanstation"))
+        assertNull(NetplayPads.forSession("PSX", "swanstation"))
         assertNull(NetplayPads.forSession("32X", gpgx))   // not a netplay pair
         assertNull(NetplayPads.forSession("MD", null))
     }
