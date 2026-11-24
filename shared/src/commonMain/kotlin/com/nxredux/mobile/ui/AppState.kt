@@ -407,7 +407,12 @@ class AppState(
     fun systemButtonKey(model: PadModel?, source: String?, keyCode: Int, scanCode: Int, down: Boolean, repeat: Boolean): Boolean =
         controlBindings.systemButtonKey(model, source, keyCode, scanCode, down, repeat)
     /** The UI reports whether a controller is connected. */
-    fun onControllerConnected(connected: Boolean) = controlBindings.onControllerConnected(connected)
+    fun onControllerConnected(connected: Boolean) {
+        controlBindings.onControllerConnected(connected)
+        if (settingsContent.controllerConnected == connected) return
+        settingsContent.controllerConnected = connected
+        refreshSettingsOn(SettingsSection.APPEARANCE)
+    }
 
     private val _rowEdit = MutableStateFlow<RowEdit?>(null)
     /** The row the pad is changing ([NxPadA.EDIT], [onRowEditButton]); another page drops it. */

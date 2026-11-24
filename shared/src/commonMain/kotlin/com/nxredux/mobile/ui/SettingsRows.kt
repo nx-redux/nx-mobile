@@ -116,6 +116,9 @@ internal class SettingsRows(
     /** The last finished import's summary, which the Import results page lists. */
     var importResult: ImportSummary? = null
 
+    /** A controller is connected (the UI reports it): it hides the on-screen pad, so Appearance drops the pad's rows. */
+    var controllerConnected = false
+
     fun settingsRows(section: SettingsSection): List<SettingsRow> = when (section) {
         SettingsSection.LIBRARY -> libraryRows()
         SettingsSection.EMULATORS -> buildList {
@@ -158,15 +161,15 @@ internal class SettingsRows(
         SettingsSection.SHORTCUTS -> host.shortcutRows()
         SettingsSection.SYSTEM_BUTTONS -> host.systemButtonRows()
         SettingsSection.APPEARANCE -> listOf<SettingsRow?>(
-            SettingsRow(SettingsKind.PAD_SKIN, "Pad skin", onOff(deps.settings.padSkin)),
+            if (!controllerConnected) SettingsRow(SettingsKind.PAD_SKIN, "Pad skin", onOff(deps.settings.padSkin)) else null,
             // the skin's look: none to pick while the skin is Off (the full-screen overlay pad)
-            if (deps.settings.padSkin) SettingsRow(SettingsKind.PAD_THEME, "Pad theme", padThemeLabel(deps.settings.padTheme)) else null,
+            if (!controllerConnected && deps.settings.padSkin) SettingsRow(SettingsKind.PAD_THEME, "Pad theme", padThemeLabel(deps.settings.padTheme)) else null,
             SettingsRow(SettingsKind.ACCENT, "Accent", deps.settings.accent.label),
             SettingsRow(SettingsKind.SECONDARY_ACCENT, "Secondary accent", deps.settings.secondaryAccent.label),
             // The options lists' text (Settings, Game Settings, the in-game menu): Large or Small.
             SettingsRow(SettingsKind.TEXT_SIZE, "Text size", deps.settings.optionTextSize.label),
             // the skin's buttons moved and resized per console (the bare overlay's too), its own page
-            SettingsRow(SettingsKind.BUTTON_LAYOUT, "Button layout", if (buttonLayoutCustom()) "Custom" else "Default"),
+            if (!controllerConnected) SettingsRow(SettingsKind.BUTTON_LAYOUT, "Button layout", if (buttonLayoutCustom()) "Custom" else "Default") else null,
             SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
         ).filterNotNull()
         SettingsSection.MAIN_MENU -> layoutsRows()

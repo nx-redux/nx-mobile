@@ -638,11 +638,12 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private var lastLayoutNames: List<String>? = null
 
     /**
-     * A DS or 3DS game whose pad skin will show with a second display: a pack picked, no controller in the layout, the
-     * Dual screen mode allowing it and a layout set for the console. No window measure (decided before the turn to
-     * landscape): the Bottom screen's Auto then means the phone ([DualScreen.pictureOn]'s skin).
+     * A DS or 3DS game whose pad skin will show: a pack picked, no controller in the layout (a built-in one hides it
+     * too), the Dual screen mode allowing it and a layout set for the console. No window measure, so it holds for
+     * either orientation (decided before the turn to landscape): the Bottom screen's Auto then means the phone
+     * ([DualScreen.pictureOn]'s skin).
      */
-    fun dualSkinWanted(mode: DualMode = host.dualMode): Boolean {
+    fun dsSkinWanted(mode: DualMode = host.dualMode): Boolean {
         if (!padSkinOn) return false
         skinPack ?: return false
         val tag = host.layoutTag()
