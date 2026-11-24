@@ -7,6 +7,7 @@ import com.nxredux.mobile.external.ExternalEmulators
 import com.nxredux.mobile.external.ExternalLaunch
 import com.nxredux.mobile.external.ExternalLaunchResult
 import com.nxredux.mobile.external.externalPickFor
+import com.nxredux.mobile.external.opensElsewhereNote
 import com.nxredux.mobile.library.ArcadeCompanions
 import com.nxredux.mobile.library.CompanionLookup
 import com.nxredux.mobile.library.DiscSheet
@@ -314,10 +315,31 @@ internal class LaunchController(
             else -> null
         }?.takeIf { !it.system.unassigned && !it.system.android } ?: run { _resumeInfo.value = ResumeInfo.NONE; return }
         resumeJob = scope.launch {
+            // The other app never opens our save state, so a game that opens there shows none.
+            if (tryOrAny({ false }) { opensElsewhere(e) != null }) {
+                if (screen.value === s && selection.value.index == index) _resumeInfo.value = ResumeInfo.NONE
+                return@launch
+            }
             val read = deps.userData.resumeInfo(e.system.tag, e.game.fileName)
             val info = if (deps.settings.aResumes) read else read.copy(slot = null)   // A starts fresh: its hint says so; the picture stays
             if (screen.value === s && selection.value.index == index) _resumeInfo.value = info   // drop stale reads
         }
+    }
+
+    /**
+     * The line a game's Options shows when [entry] opens in another app ([opensElsewhereNote]): its pick, or the first
+     * installed app on a console without a core; null when our core runs it. Apps are looked up only for a game with a
+     * pick or on such a console.
+     */
+    suspend fun opensElsewhere(entry: Listed): String? {
+        if (entry.system.unassigned || entry.system.android) return null
+        val tag = entry.system.tag
+        val externalOnly = CoreRegistry.consoleOf(tag)?.externalOnly == true
+        if (!externalOnly && entry.game.path !in deps.settings.externalPicks) return null
+        val app = externalPickFor(entry.game.path, tag, deps.settings, deps.externalApps, host.externalOffered(entry), externalTable)
+        if (app == null && !externalOnly) return null
+        val apps = deps.externalApps
+        return opensElsewhereNote(app?.let { a -> apps.installedPackage(a)?.let(apps::label) ?: a.name })
     }
 
     /**

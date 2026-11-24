@@ -1,5 +1,11 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.external.ExternalApps
+import com.nxredux.mobile.external.ExternalEmulator
+import com.nxredux.mobile.external.ExternalEmulators
+import com.nxredux.mobile.external.ExternalLaunch
+import com.nxredux.mobile.external.ExternalLaunchResult
+import com.nxredux.mobile.external.NoExternalApps
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.SystemFolder
@@ -234,9 +240,12 @@ class EmulatorSettingsControllerTest {
      */
     private fun TestScope.TestState(
         configs: MemoryConfigs, src: FakeRomsSource = source, tables: CoreOptionSource = Tables(), linkRomCache: LinkRomCache? = null,
-        settings: MemorySettings = MemorySettings(ContentRef("Home")),
+        settings: MemorySettings = MemorySettings(ContentRef("Home")), externalApps: ExternalApps = NoExternalApps,
     ) = AppState(
-        AppDeps(settings, src, NoopRunner, NoopFolderPicker, coreOptions = tables, emulatorConfigs = configs, compute = UnconfinedTestDispatcher(testScheduler), linkRomCache = linkRomCache),
+        AppDeps(
+            settings, src, NoopRunner, NoopFolderPicker, coreOptions = tables, emulatorConfigs = configs,
+            compute = UnconfinedTestDispatcher(testScheduler), linkRomCache = linkRomCache, externalApps = externalApps,
+        ),
         CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
     )
 
@@ -393,11 +402,11 @@ class EmulatorSettingsControllerTest {
         assertIs<Screen.EmulatorList>(state.screen.value)
     }
 
-    private fun TestScope.openGame(state: AppState): Screen.Games {
+    private fun TestScope.openGame(state: AppState, tag: String = "GBA"): Screen.Games {
         state.load()
         await { state.screen.value is Screen.Systems }
         val systems = assertIs<Screen.Systems>(state.screen.value)
-        state.openSystem(systems.tabs.flatMap { it.rows }.filterIsInstance<MainRow.System>().first { it.system.tag == "GBA" }.system)
+        state.openSystem(systems.tabs.flatMap { it.rows }.filterIsInstance<MainRow.System>().first { it.system.tag == tag }.system)
         val games = assertIs<Screen.Games>(state.screen.value)
         state.emulatorSettings.openGame(games.entries[0])
         await { state.screen.value is Screen.EmulatorOptions }
@@ -457,6 +466,56 @@ class EmulatorSettingsControllerTest {
         await { EmulatorRow.UseEmulatorSettings !in options(state).rows && selected(state) != EmulatorRow.UseEmulatorSettings }
         assertNull(configs.files["GBA-gpsp/Mario.cfg"])
         assertEquals("z", coreValue(state, "opt_a"))
+    }
+
+    // --- A game that opens in another app ---
+
+    private val opensTail = ". Save states, the in-game menu and achievement unlocks are not available there."
+
+    /** The device has [ids]'s apps from the shipped table, each labelled by its entry's name. */
+    private class InstalledApps(private val ids: Set<String>) : ExternalApps {
+        override fun installedPackage(e: ExternalEmulator): String? = e.packages.first().takeIf { e.id in ids }
+        override fun label(packageId: String): String? = ExternalEmulators.all.firstOrNull { it.packages.first() == packageId }?.name
+        override suspend fun launch(request: ExternalLaunch) = ExternalLaunchResult.FAILED
+    }
+
+    private val withSwitch = FakeRomsSource(
+        dirs = mapOf(
+            "Home" to listOf("Roms"),
+            "Home/Roms" to listOf("Game Boy Advance (GBA)", "Nintendo Switch (SWITCH)"),
+            "Home/Roms/Game Boy Advance (GBA)" to listOf("Mario.gba"),
+            "Home/Roms/Nintendo Switch (SWITCH)" to listOf("Zelda.nsp"),
+        ),
+    )
+
+    @Test fun a_page_that_opens_elsewhere_says_so_and_has_none_of_our_rows() {
+        val app = EmulatorAppSection("Library", listOf(EmulatorRow.App(SettingsRow(SettingsKind.GAME_BADGE, "Badge", "Auto"), null)))
+        val elsewhere = page(forGame = true, gameFile = true).copy(opensElsewhere = "Opens in Eden$opensTail")
+        assertEquals(
+            listOf(EmulatorRow.Notice("Opens in Eden$opensTail"), EmulatorRow.Gap, EmulatorRow.Header("Library")) + app.rows,
+            EmulatorRows.build(elsewhere, null, app),
+        )
+    }
+
+    @Test fun a_switch_game_with_eden_installed_says_where_it_opens() = runTest {
+        val state = TestState(MemoryConfigs(), src = withSwitch, externalApps = InstalledApps(setOf("eden")))
+        openGame(state, "SWITCH")
+        val rows = options(state).rows
+        assertEquals(EmulatorRow.Notice("Opens in Eden$opensTail"), rows.first())
+        assertTrue(rows.none { it is EmulatorRow.Console || it is EmulatorRow.Core || it is EmulatorRow.Category || it == EmulatorRow.UseEmulatorSettings }, "$rows")
+    }
+
+    @Test fun a_switch_game_with_no_app_names_none() = runTest {
+        val state = TestState(MemoryConfigs(), src = withSwitch)
+        openGame(state, "SWITCH")
+        assertEquals(EmulatorRow.Notice("Opens in another emulator$opensTail"), options(state).rows.first())
+    }
+
+    @Test fun a_game_without_a_pick_keeps_its_page() = runTest {
+        val state = TestState(MemoryConfigs(), src = withSwitch, externalApps = InstalledApps(setOf("eden")))
+        openGame(state)
+        assertTrue(options(state).rows.none { it is EmulatorRow.Notice })   // no pick: the page as ever
+        assertTrue(options(state).rows.any { it is EmulatorRow.Core })
     }
 
     @Test fun the_emulator_page_ends_with_reset_to_defaults_and_a_game_page_never_has_it() {

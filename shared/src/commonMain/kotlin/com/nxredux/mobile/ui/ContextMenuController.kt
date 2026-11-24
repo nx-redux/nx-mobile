@@ -119,6 +119,9 @@ internal interface ContextMenuHost {
     /** [entry] has a save state to resume (what A does on it); read off the main thread. */
     suspend fun canResume(entry: Listed): Boolean = false
 
+    /** [entry] opens in another app, which never opens our save state ([LaunchController.opensElsewhere]). */
+    suspend fun opensElsewhere(entry: Listed): Boolean = false
+
     /** The other emulators installed here that can open [entry], with their labels ([com.nxredux.mobile.external.installedExternal]); none by default. */
     suspend fun externalApps(entry: Listed): List<Pair<ExternalEmulator, String>> = emptyList()
 
@@ -197,7 +200,7 @@ internal class ContextMenuController(
                 if (!e.system.unassigned && !e.system.android) {
                     // The save is read off the main thread, so the menu opens when it is known (the list must not have moved on).
                     scope.launch {
-                        val resume = host.canResume(e)
+                        val resume = canResume(e)
                         // A failed app lookup (the scope has no handler) still opens the menu, without the apps.
                         val external = tryOrAny({ false }) { host.externalApps(e).isNotEmpty() }
                         if (_screen.value !== s || s.menu != null) return@launch
@@ -228,7 +231,7 @@ internal class ContextMenuController(
                 val game = row.listed()?.takeIf { !it.system.unassigned && !it.system.android }
                 if (game == null) show(fromStart = false)
                 else scope.launch {
-                    val resume = host.canResume(game)
+                    val resume = canResume(game)
                     if (_screen.value !== s) return@launch   // the main menu moved on (or a menu opened) meanwhile
                     show(resume)
                 }
@@ -280,6 +283,9 @@ internal class ContextMenuController(
         val m = _screen.value.contextMenu ?: return
         if (host.kidsRestricted && (m.sub != null || m.prompt != null)) closeContextMenu()
     }
+
+    /** [e] has a save state its start resumes: never for a game that opens in another app (a failed lookup counts as ours). */
+    private suspend fun canResume(e: Listed): Boolean = !tryOrAny({ false }) { host.opensElsewhere(e) } && host.canResume(e)
 
     /** Opens [s]'s menu on [e]; [canResume]: it has a save state, so Play from start leads; [externalApps]: another app can open it. */
     private fun gameMenu(s: Screen.Games, e: Listed, canResume: Boolean, externalApps: Boolean = false) {

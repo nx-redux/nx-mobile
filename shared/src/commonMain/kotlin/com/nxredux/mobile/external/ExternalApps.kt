@@ -72,3 +72,7 @@ fun externalPickFor(
     if (CoreRegistry.consoleOf(tag)?.externalOnly != true) return null
     return candidates.firstOrNull(::usable)
 }
+
+/** What a game's Options says when it opens in another app: [label], the installed app's own; null when none is installed. */
+fun opensElsewhereNote(label: String?): String =
+    "Opens in ${label ?: "another emulator"}. Save states, the in-game menu and achievement unlocks are not available there."

@@ -15,6 +15,8 @@ data class EmulatorPage(
     /** Null when the core has no bundled table; empty when it has one with nothing to show. */
     val core: List<CoreOption>?,
     val forGame: Boolean, val gameFileExists: Boolean,
+    /** A game that opens in another app: the line its page shows in place of our rows ([com.nxredux.mobile.external.opensElsewhereNote]). */
+    val opensElsewhere: String? = null,
 )
 
 object EmulatorSettings {

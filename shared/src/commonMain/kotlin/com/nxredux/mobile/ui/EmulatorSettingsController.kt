@@ -85,11 +85,18 @@ object EmulatorRows {
 
     /**
      * [page]'s rows at the top level ([category] null) or inside that category; at the top level, [app]'s rows last
-     * (after a gap, under their header).
+     * (after a gap, under their header). A game that opens in another app ([EmulatorPage.opensElsewhere]) has its line
+     * and [app]'s rows only: ours act only inside our game screen.
      */
     fun build(page: EmulatorPage, category: String?, app: EmulatorAppSection? = null): List<EmulatorRow> {
         val core = page.core
         if (category != null) return core.orEmpty().let { CoreOptionFilter.inCategory(it, category) }.map { EmulatorRow.Core(it, inCategory = true) }
+        page.opensElsewhere?.let { line ->
+            return buildList {
+                add(EmulatorRow.Notice(line))
+                if (app != null && app.rows.isNotEmpty()) { add(EmulatorRow.Gap); add(EmulatorRow.Header(app.label)); addAll(app.rows) }
+            }
+        }
         return buildList {
             // The app's settings by what they are for, a header per group (Display, Controls, Gameplay, Multiplayer, Audio), a gap between.
             OptionGroup.grouped(page.console) { it.option.key }.forEachIndexed { i, (group, rows) ->
@@ -224,6 +231,8 @@ internal class EmulatorSettingsController(
     private val clearGpuDriverCrash: (gamePath: String) -> Unit = {},
     /** The phone's GPU name (GL_RENDERER; null: unknown), asked once, for a core with a Vulkan path. */
     private val gpuName: suspend () -> String? = { null },
+    /** The line a game's page shows when it opens in another app ([LaunchController.opensElsewhere]); null for our core. */
+    private val opensElsewhere: suspend (Listed) -> String? = { null },
 ) {
     private var gpu: String? = null   // [gpuName] once it answered
     private val lock = Mutex()
@@ -258,10 +267,14 @@ internal class EmulatorSettingsController(
         }
     }
 
-    /** Game Settings: [entry]'s own tag and core, writing its `<rom>.cfg`; B returns to the list it came from. */
+    /**
+     * Game Settings: [entry]'s own tag and core, writing its `<rom>.cfg`; B returns to the list it came from. A game that
+     * opens in another app ([opensElsewhere]) gets the page that says so, also on a console without a core.
+     */
     fun openGame(entry: Listed) {
         if (entry.system.unassigned) return
-        val descriptor = entry.system.core ?: CoreRegistry.forTag(entry.system.tag) ?: return
+        val descriptor = entry.system.core ?: CoreRegistry.forTag(entry.system.tag)
+        if (descriptor == null && CoreRegistry.consoleOf(entry.system.tag)?.externalOnly != true) return
         val from = screen.value
         val back = (from as? Screen.Games)?.copy(menu = null) ?: from
         val at = selection.value
@@ -390,10 +403,18 @@ internal class EmulatorSettingsController(
         return build(tag, d, game, configs.read(tag, d.id, game?.game?.fileName))
     }
 
-    /** Reads and shows [tag]'s page when [still] holds (the user has not moved on meanwhile); [opened] runs just before it shows. */
-    private fun openPage(tag: String, d: CoreDescriptor, game: Listed?, still: () -> Boolean, opened: () -> Unit) {
+    /**
+     * Reads and shows [tag]'s page when [still] holds (the user has not moved on meanwhile); [opened] runs just before it
+     * shows. [d] null: a game on a console without a core, whose page only says where it opens.
+     */
+    private fun openPage(tag: String, d: CoreDescriptor?, game: Listed?, still: () -> Boolean, opened: () -> Unit) {
         scope.launch {
-            val page = lock.withLock {
+            // A failed app lookup shows our page, as the launch's own lookup would then run our core.
+            val elsewhere = game?.let { g -> tryOrAny({ null }) { opensElsewhere(g) } }
+            val page = if (elsewhere != null) {
+                EmulatorPage(tag, d?.id.orEmpty(), d?.name.orEmpty(), emptyList(), emptyList(), forGame = true, gameFileExists = false, opensElsewhere = elsewhere)
+            } else lock.withLock {
+                if (d == null) return@launch
                 tryOrAny({
                     error.value = "Could not read the settings"
                     null
@@ -522,6 +543,7 @@ internal class EmulatorSettingsController(
      */
     fun refreshOpenPage() {
         val s = screen.value as? Screen.EmulatorOptions ?: return
+        if (s.page.opensElsewhere != null) return   // none of its rows follows the second screen
         val d = descriptorOf(s) ?: return
         scope.launch {
             lock.withLock {

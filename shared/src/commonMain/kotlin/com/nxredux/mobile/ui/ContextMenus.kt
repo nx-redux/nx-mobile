@@ -84,8 +84,8 @@ object ContextMenus {
 
     /**
      * The handheld's table. Console lists: Pin/Unpin (launchable games only), Hide, Rename, Add to Collection, Game
-     * Settings (a game with a core), then Emulator (multi-emulator consoles) or Console (Unassigned: no pin, no collection,
-     * no Game Settings, since the game cannot launch). Recently Played: Remove only, after the lead items. A collection:
+     * Settings (a game with a core, or on a console only other apps run), then Emulator (multi-emulator consoles) or
+     * Console (Unassigned: no pin, no collection, no Game Settings, since the game cannot launch). Recently Played: Remove only, after the lead items. A collection:
      * the console items plus Remove from Collection. A search list: a collection's items without Remove from Collection.
      * Hidden: none (A unhides). The Android games console: Pin or Unpin, then the art item (Settings › Library › Android
      * games is the only way out of the console; [pinned]: in the Android pins).
@@ -131,7 +131,7 @@ object ContextMenus {
     ): List<ContextItem> = buildList {
         addAll(lead)
         add(if (pinned) unpin else pin); add(hide); add(rename); add(addToCollection)
-        if (hasCore(entry)) add(gameSettings)
+        if (hasGameSettings(entry)) add(gameSettings)
         if (below) add(netplayItem)
         artItem(art)?.let(::add)
     }
@@ -190,6 +190,10 @@ object ContextMenus {
 
     /** Game Settings needs the core whose options it edits. */
     private fun hasCore(entry: Listed) = !entry.system.unassigned && (entry.system.core ?: CoreRegistry.forTag(entry.system.tag)) != null
+
+    /** Game Settings: a game with a core, or on a console only other apps run, whose page says where the game opens. */
+    private fun hasGameSettings(entry: Listed) =
+        hasCore(entry) || (!entry.system.unassigned && CoreRegistry.consoleOf(entry.system.tag)?.externalOnly == true)
 
     /** Netplay (the context menu item, Y on a game list): the game's own tag has netplay cores and the game can launch. */
     fun hasNetplay(entry: Listed): Boolean = hasCore(entry) && !entry.system.android && NetplayCores.supported(entry.system.tag)

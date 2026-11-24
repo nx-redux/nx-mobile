@@ -21,7 +21,10 @@ import com.nxredux.mobile.runner.GameSession
 import com.nxredux.mobile.settings.FakeAppSettings
 import com.nxredux.mobile.storage.MemorySidecarStore
 import com.nxredux.mobile.storage.Recent
+import com.nxredux.mobile.storage.NoUserData
 import com.nxredux.mobile.storage.Recents
+import com.nxredux.mobile.storage.ResumeInfo
+import com.nxredux.mobile.storage.UserDataStore
 import com.nxredux.mobile.ui.nx.ListSelection
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -33,6 +36,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** A launch that opens in a standalone emulator: the routing, its notices, Recently Played, play time and Kids Mode. */
@@ -109,7 +113,15 @@ class LaunchExternalTest {
         return Listed(SystemFolder(tag, tag, CoreRegistry.forTag(tag), listOf(g)), g)
     }
 
-    private class Rig(val launches: LaunchController, val apps: Apps, val runner: Runner, val host: Host, val plays: Plays, val settings: FakeAppSettings, val clock: LongArray)
+    private class Rig(
+        val launches: LaunchController, val apps: Apps, val runner: Runner, val host: Host, val plays: Plays, val settings: FakeAppSettings,
+        val clock: LongArray, val screen: MutableStateFlow<Screen>,
+    )
+
+    /** Every game has a save state in slot 0. */
+    private object Saved : UserDataStore by NoUserData {
+        override suspend fun resumeInfo(tag: String, fileName: String) = ResumeInfo(0)
+    }
 
     private fun TestScope.rig(installed: Set<ExternalEmulator>): Rig {
         val source = FakeRomsSource(dirs = mapOf(
@@ -123,16 +135,17 @@ class LaunchExternalTest {
         val clock = longArrayOf(1_000_000L)
         val deps = AppDeps(
             settings, source, runner, NoopFolderPicker, compute = UnconfinedTestDispatcher(testScheduler),
-            gameTime = plays, now = { clock[0] }, externalApps = apps,
+            gameTime = plays, now = { clock[0] }, externalApps = apps, userData = Saved,
         )
         val host = Host()
         val home = { ContentRef("Home") as ContentRef? }
+        val screen = MutableStateFlow<Screen>(Screen.Loading)
         val launches = LaunchController(
-            CoroutineScope(UnconfinedTestDispatcher(testScheduler)), MutableStateFlow<Screen>(Screen.Loading),
+            CoroutineScope(UnconfinedTestDispatcher(testScheduler)), screen,
             MutableStateFlow(ListSelection(0, 1)), MutableStateFlow(null), deps, Sidecars(source, MemorySidecarStore(), home),
             Switcher(), host, externalTable = table,
         )
-        return Rig(launches, apps, runner, host, plays, settings, clock)
+        return Rig(launches, apps, runner, host, plays, settings, clock, screen)
     }
 
     @Test fun newConsoleWithoutAppShowsNoticeAndNoRecent() = runTest {
@@ -217,5 +230,30 @@ class LaunchExternalTest {
         r.launches.launch(zelda, resumeSlot = null); advanceUntilIdle()
         assertEquals(listOf("This emulator can't open games from this folder.", "Could not open Eden."), r.host.notices)
         assertTrue(r.host.recents.isEmpty())
+    }
+
+    @Test fun opensElsewhereNamesTheInstalledAppOrNone() = runTest {
+        val tail = ". Save states, the in-game menu and achievement unlocks are not available there."
+        val r = rig(installed = setOf(eden, duckstation))
+        assertEquals("Opens in Eden$tail", r.launches.opensElsewhere(entry("SWITCH", "Zelda.nsp")))
+        val crash = entry("PS", "Crash.cue")
+        assertNull(r.launches.opensElsewhere(crash))                       // no pick: our core
+        r.settings.externalPicks = mapOf(crash.game.path to "duckstation")
+        assertEquals("Opens in DuckStation$tail", r.launches.opensElsewhere(crash))
+        // No app installed: never a name the player doesn't have.
+        r.apps.installed = emptySet()
+        assertEquals("Opens in another emulator$tail", r.launches.opensElsewhere(entry("SWITCH", "Zelda.nsp")))
+        assertNull(r.launches.opensElsewhere(crash))                       // the pick went with its app
+    }
+
+    @Test fun noResumeMarkerForAGameThatOpensElsewhere() = runTest {
+        val r = rig(installed = setOf(duckstation))
+        val crash = entry("PS", "Crash.cue")
+        r.screen.value = Screen.Games(ListSource.Console(crash.system), listOf(crash))
+        r.launches.refreshResume(); advanceUntilIdle()
+        assertEquals(ResumeInfo(0), r.launches.resumeInfo.value)
+        r.settings.externalPicks = mapOf(crash.game.path to "duckstation")
+        r.launches.refreshResume(); advanceUntilIdle()
+        assertEquals(ResumeInfo.NONE, r.launches.resumeInfo.value)
     }
 }

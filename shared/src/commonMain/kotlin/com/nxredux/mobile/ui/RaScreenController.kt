@@ -1,6 +1,7 @@
 package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.tryOr
+import com.nxredux.mobile.tryOrAny
 import com.nxredux.mobile.tryOrNull
 import com.nxredux.mobile.achievements.RaAchievementState
 import com.nxredux.mobile.achievements.RaConsoleGroups
@@ -54,6 +55,8 @@ internal interface RaScreenHost {
     fun libraryIndex(): LibraryIndex?
     /** A value row's picker popup titled [title]: [labels], [current] under the cursor; [apply] takes the picked index. */
     fun openPicker(title: String, labels: List<String>, current: Int, apply: (Int) -> Unit)
+    /** The library game cached under [hash] opens in another app ([LaunchController.opensElsewhere]). */
+    suspend fun opensElsewhere(hash: String): Boolean = false
 }
 
 /**
@@ -759,6 +762,7 @@ internal class RaScreenController(
         loader.start {
             val list = try { c.achievements(game.hash) } catch (e: RaStoreException) { error.value = RA_READ_FAILED; return@start }
             val badges = try { c.badgeListing(game.hash) } catch (e: RaStoreException) { emptyMap() }
+            val picked = tryOrAny({ false }) { host.opensElsewhere(game.hash) }   // a failed app lookup: no note
             // A refresh may have replaced the list meanwhile: still there, and the game's row is found in the new one.
             val now = screen.value
             val refreshed = (now as? Screen.RaGames)?.takeIf { here is Screen.RaGames && it.console == here.console }
@@ -766,7 +770,7 @@ internal class RaScreenController(
             val from = refreshed ?: raGamesScreen?.takeIf { it.console == games.console && here !is Screen.RaGames } ?: games
             raGamesScreen = from
             raGamesSelection = from.games.indexOfFirst { it.hash == game.hash }.takeIf { it >= 0 }?.let { ListSelection(it, from.games.size) } ?: row
-            screen.value = Screen.RaGame(game, list.sortedBy(settings.raSortOrder), badges = badges)
+            screen.value = Screen.RaGame(game, list.sortedBy(settings.raSortOrder), badges = badges, pickedExternal = picked)
             selection.value = ListSelection(0, list.size)
         }
     }

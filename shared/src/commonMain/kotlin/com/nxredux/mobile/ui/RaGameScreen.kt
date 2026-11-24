@@ -40,9 +40,9 @@ fun RaGameScreen(
     // Built once per list, not per d-pad move (the selection recomposes this screen).
     val visible = remember(screen.achievements, screen.lockedOnly) { visibleAchievements(screen) }
     val filter = raGameFilterHint(screen.lockedOnly)
-    // A game on a console only external emulators run has its achievements shown, never unlocked here.
+    // A game that opens in another app (its console has no core, or it is picked there) has its achievements shown, never unlocked here.
     val note = RaConsoles.unlocksNote(
-        externalOnly = screen.game.consoleTag?.let { CoreRegistry.consoleOf(it)?.externalOnly } == true, pickedExternal = false,
+        externalOnly = screen.game.consoleTag?.let { CoreRegistry.consoleOf(it)?.externalOnly } == true, pickedExternal = screen.pickedExternal,
     )
     Column(modifier.fillMaxSize()) {
         NxRichListBody(

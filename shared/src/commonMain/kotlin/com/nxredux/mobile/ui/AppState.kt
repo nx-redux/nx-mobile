@@ -711,7 +711,7 @@ class AppState(
 
     private var gameInfoJob: Job? = null
     /** The RetroAchievements panel and screens; it reaches back into this state only through [RaScreenHost]. */
-    private val ra = RaScreenController(
+    private val ra: RaScreenController = RaScreenController(
         scope, _screen, _selection, _error, deps.settings, loader, deps.achievements,
         RaGamesCache(deps.privateFiles, scope, deps.compute), deps.log,
         host = object : RaScreenHost {
@@ -724,6 +724,8 @@ class AppState(
             override fun libraryIndex(): LibraryIndex? = this@AppState.libraryIndex.snapshot
             override fun openPicker(title: String, labels: List<String>, current: Int, apply: (Int) -> Unit) =
                 settingsUi.openPicker(title, labels, current, apply)
+            override suspend fun opensElsewhere(hash: String): Boolean =
+                ra.raHashes.filterValues { it == hash }.keys.any { path -> resolveOne(path)?.let { launches.opensElsewhere(it) } != null }
         },
     )
     /** The achievements panel over a game list; null while closed. */
@@ -3506,6 +3508,7 @@ class AppState(
         gpuDriverCrashed = { path -> GpuDriverCrash.crashed(deps.settings.gpuDriverCrashes, path) },
         clearGpuDriverCrash = { path -> deps.settings.gpuDriverCrashes = GpuDriverCrash.clearGame(deps.settings.gpuDriverCrashes, path).takeIf { it.isNotEmpty() } },
         alwaysListed = { if (deps.linkRomCache != null) listOf(EmulatorRows.CABLE_LINK_TAG) else emptyList() },
+        opensElsewhere = { launches.opensElsewhere(it) },
     )
 
     // --- Tools -> Artwork: AppState hosts the controller (index writes stay here); the pages live in ArtworkScreenController ---
@@ -3792,6 +3795,7 @@ class AppState(
             override fun openAchievements() = ra.openRaPanel()
             override suspend fun canResume(entry: Listed): Boolean = deps.userData.resumeInfo(entry.system.tag, entry.game.fileName).canResume
             override suspend fun externalApps(entry: Listed): List<Pair<ExternalEmulator, String>> = externalAppsFor(entry)
+            override suspend fun opensElsewhere(entry: Listed): Boolean = launches.opensElsewhere(entry) != null
             override fun playFromStart(entry: Listed) = launches.playFromStart(entry)
             override val aResumes: Boolean get() = deps.settings.aResumes
             override fun resumeGame(entry: Listed) { launches.resumeGame(entry) }

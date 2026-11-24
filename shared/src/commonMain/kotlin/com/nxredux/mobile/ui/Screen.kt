@@ -176,8 +176,14 @@ sealed interface Screen {
     data class RaConsoles(val consoles: List<com.nxredux.mobile.achievements.RaConsoleView>) : Screen
     /** A console's cached games, opened from [RaConsoles]; [console] is its name (the page's title). */
     data class RaGames(val console: String, val games: List<RaGameView>) : Screen
-    /** One game's achievements, in the chosen sort order; [lockedOnly] hides unlocked and pending ones. */
-    data class RaGame(val game: RaGameView, val achievements: List<com.nxredux.mobile.achievements.RaAchievement>, val lockedOnly: Boolean = false, val badges: Map<String, String> = emptyMap()) : Screen
+    /**
+     * One game's achievements, in the chosen sort order; [lockedOnly] hides unlocked and pending ones. [pickedExternal]:
+     * the game opens in another app, so nothing is unlocked through NX Redux.
+     */
+    data class RaGame(
+        val game: RaGameView, val achievements: List<com.nxredux.mobile.achievements.RaAchievement>, val lockedOnly: Boolean = false,
+        val badges: Map<String, String> = emptyMap(), val pickedExternal: Boolean = false,
+    ) : Screen
     data class RaAchievement(val game: RaGameView, val achievement: com.nxredux.mobile.achievements.RaAchievement, val badges: Map<String, String> = emptyMap()) : Screen
     /**
      * The RetroAchievements settings page; [signingIn]: the sign-in modal is open with [draftUser] / [draftPassword] as typed,

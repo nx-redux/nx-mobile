@@ -159,7 +159,8 @@ class EmulatorMenuExternalTest {
     /** The menu controller over [screen] with a host that records [switched] tags and answers [externalApps] with [lookup]. */
     private fun TestScope.controller(
         screen: MutableStateFlow<Screen>, settings: Settings, source: FakeRomsSource, sidecarStore: MemorySidecarStore,
-        switched: MutableList<String>, lookup: (Listed) -> List<Pair<ExternalEmulator, String>>,
+        switched: MutableList<String>, saved: Boolean = false, elsewhere: (Listed) -> Boolean = { false },
+        lookup: (Listed) -> List<Pair<ExternalEmulator, String>>,
     ): ContextMenuController {
         val host = object : ContextMenuHost {
             override val pins: List<Shortcut> = emptyList()
@@ -178,6 +179,8 @@ class EmulatorMenuExternalTest {
             override fun openGameSettings(entry: Listed) {}
             override fun finishSwitch(game: GameEntry, from: SystemFolder, tag: String) { switched += tag }
             override suspend fun externalApps(entry: Listed) = lookup(entry)
+            override suspend fun canResume(entry: Listed) = saved
+            override suspend fun opensElsewhere(entry: Listed) = elsewhere(entry)
         }
         val home = { ContentRef("Home") as ContentRef? }
         return ContextMenuController(
@@ -235,5 +238,31 @@ class EmulatorMenuExternalTest {
         val noPath = offeredFor(real, NaomiSets.EMPTY, realPath = null)
         assertNull(externalPickFor(real.path, "PS", settings, apps, noPath, table))
         assertEquals(listOf(duckstation), installedExternal("PS", apps, noPath, table).map { it.first })
+    }
+
+    // Our save state is never what the other app opens: no Play from start for a game picked to open there.
+    @Test fun aGameThatOpensElsewhereHasNoSaveStateItems() = runTest {
+        val crash = game("Crash.cue")
+        val ps = system("PS", listOf(crash))
+        val source = FakeRomsSource(dirs = mapOf("Home" to listOf("Roms"), "Home/Roms" to listOf("PS"), "Home/Roms/PS" to listOf("Crash.cue")))
+        var elsewhere = false
+        val screen = MutableStateFlow<Screen>(Screen.Games(ListSource.Console(ps), listOf(Listed(ps, crash))))
+        val menus = controller(screen, Settings(), source, MemorySidecarStore(), ArrayList(), saved = true, elsewhere = { elsewhere }) { emptyList() }
+        fun kinds(): List<ContextKind> {
+            menus.closeContextMenu()
+            menus.openContextMenu(0)
+            return assertNotNull(screen.value.contextMenu).items.map { it.kind }
+        }
+        assertEquals(ContextKind.PLAY_FROM_START, kinds().first())
+        elsewhere = true
+        val kinds = kinds()
+        assertTrue(ContextKind.PLAY_FROM_START !in kinds && ContextKind.RESUME !in kinds, "$kinds")
+        assertTrue(listOf(ContextKind.PIN, ContextKind.HIDE, ContextKind.RENAME, ContextKind.ADD_TO_COLLECTION).all { it in kinds }, "$kinds")
+    }
+
+    // A console only other apps run still has Game Settings: the page that says where the game opens.
+    @Test fun aConsoleWithoutACoreOffersGameSettings() {
+        val zelda = Listed(system("SWITCH"), game("Zelda.nsp"))
+        assertTrue(ContextKind.GAME_SETTINGS in ContextMenus.itemsFor(ListSource.Console(zelda.system), zelda, false).map { it.kind })
     }
 }
