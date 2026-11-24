@@ -8,7 +8,8 @@ import com.nxredux.mobile.runner.CoreRegistry
  * GPGX: genesis_plus_gx). GB, GBC, GBA, MGBA and 3DS are link sessions: no input lockstep, each player on their own save.
  * GBA and MGBA run either core (gpSP and mGBA keep the same raw flash save, so either reads the other folder's); mGBA
  * leaves the USB cable only for a game with a Wi-Fi link mode ([wifiOk]). Core versions are never compared (not on the
- * wire). The `wl` arguments are the games' link mode tokens ([GbaWifiLink]); null when unknown or not sent.
+ * wire). The `wl` arguments are the games' link mode tokens ([GbaWifiLink]); null when unknown or not sent. DC runs
+ * flycast's own GGPO rollback session ([ggpo]): saves are copied from the host as for lockstep, then the core plays.
  */
 object NetplayCores {
     private val PICODRIVE_FIRST = listOf("picodrive", "genesis_plus_gx")
@@ -27,7 +28,12 @@ object NetplayCores {
         "3DS" to listOf("azahar"),   // 3DS link: local wireless through Azahar's own room (UDP 24872), phone to phone
         "PSP" to listOf("ppsspp"),   // PSP ad hoc over Wi-Fi: the runner's ad hoc server on the host's phone, phone to phone
         "NDS" to listOf("melondsds"),   // DS link: local wireless through melonDS DS's own room (UDP 24874), phone to phone
+        "DC" to listOf(GGPO_CORE),   // flycast's GGPO rollback inside the core (UDP), phones and handhelds alike
     )
+
+    /** The core whose session is flycast's GGPO rollback: the runner starts no engine, the core plays the peer itself. */
+    const val GGPO_CORE = "flycast"
+    fun ggpo(core: String): Boolean = core == GGPO_CORE
 
     fun supported(tag: String): Boolean = CoreRegistry.handheldTag(tag) in table
 

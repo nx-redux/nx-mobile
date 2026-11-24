@@ -195,6 +195,29 @@
      "default": "enabled"
     },
     {
+     "key": "reicast_netplay_delay",
+     "label": "Netplay Input Delay",
+     "labelCategorized": "",
+     "info": "Frames of delay added to your own input in a netplay session. Higher values mean fewer corrections (rollbacks) on a slow connection, but more input lag. Each player sets their own.",
+     "values": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5"
+     ],
+     "labels": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "default": "1"
+    },
+    {
      "key": "reicast_dcnet",
      "label": "Use DCNet",
      "labelCategorized": "",
@@ -2263,6 +2286,6 @@
    ]
   }
  ],
- "soSha256": "8171df20da83569a5965b74c7e60a1b556941c6a69599da3143b61aafb5ad156",
- "probedAt": "2026-11-07"
+ "soSha256": "5a7ef7ce6516bd46bc4229541961cc745f1e580673fa4f4110a5228ed58f4a8d",
+ "probedAt": "2026-11-21"
 }

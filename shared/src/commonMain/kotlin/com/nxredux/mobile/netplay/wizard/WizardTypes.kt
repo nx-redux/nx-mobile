@@ -7,11 +7,11 @@ import com.nxredux.mobile.netplay.cablelink.LinkRomCache
  * pick (null = Auto); [usb]: over the USB cable (the sheet's Connection), which cable-only cores need; [wl]: the GBA
  * game's link mode token ([com.nxredux.mobile.netplay.GbaWifiLink]), null for other games; [cableLink]: this side picked
  * Cable Link over Wi-Fi (null for every other connection); [name]: this player's name, traded after START with a side that
- * trades names too (null: none offered).
+ * trades names too (null: none offered); [dcBios]: a Dreamcast game's BIOS fingerprint (`dcbios=`).
  */
 data class HostOffer(
     val game: String, val tag: String, val core: String, val pick: String?, val usb: Boolean, val wl: String? = null,
-    val cableLink: CableLinkOffer? = null, val name: String? = null,
+    val cableLink: CableLinkOffer? = null, val name: String? = null, val dcBios: String? = null,
 )
 
 /**
@@ -21,6 +21,7 @@ data class HostOffer(
 data class ClientOffer(
     val game: String, val any: Boolean, val tag: String, val core: String, val pick: String?, val usb: Boolean,
     val mayRetry: Boolean = true, val wl: String? = null, val cableLink: CableLinkOffer? = null, val name: String? = null,
+    val dcBios: String? = null,
 )
 
 /** How a host handshake ended. */
@@ -33,7 +34,7 @@ sealed interface HostOutcome {
      */
     data class Started(
         val core: String, val peer: String, val emptySaves: Boolean, val mixed: Boolean = false, val peerWl: String? = null,
-        val cableLink: CableLinkSetup? = null, val peerName: String? = null,
+        val cableLink: CableLinkSetup? = null, val peerName: String? = null, val peerDcBios: String? = null,
     ) : HostOutcome
 
     /**
@@ -61,7 +62,7 @@ sealed interface ClientOutcome {
      */
     data class Started(
         val core: String, val player: Int, val emptySaves: Boolean, val mixed: Boolean = false, val peerWl: String? = null,
-        val cableLink: CableLinkSetup? = null, val peerName: String? = null,
+        val cableLink: CableLinkSetup? = null, val peerName: String? = null, val peerDcBios: String? = null,
     ) : ClientOutcome
 
     /** The join failed; [message] is the user-facing text. */

@@ -21,13 +21,13 @@ class NetplayCoresTest {
             "FBN" to listOf("fbneo"),
             "N64" to listOf("mupen64plus_next"),
             "GB" to listOf("gambatte"), "GBC" to listOf("gambatte"), "GBA" to listOf("gpsp", "mgba"), "MGBA" to listOf("mgba", "gpsp"),
-            "3DS" to listOf("azahar"), "NDS" to listOf("melondsds"), "PSP" to listOf("ppsspp"),
+            "3DS" to listOf("azahar"), "NDS" to listOf("melondsds"), "PSP" to listOf("ppsspp"), "DC" to listOf("flycast"),
         )
         want.forEach { (tag, cores) ->
             assertEquals(cores, NetplayCores.offered(tag), tag)
             assertEquals(cores.first(), NetplayCores.defaultCore(tag), tag)
         }
-        for (tag in listOf("SGB", "DC")) assertFalse(NetplayCores.supported(tag), tag)
+        for (tag in listOf("SGB", "VB")) assertFalse(NetplayCores.supported(tag), tag)
         assertTrue(NetplayCores.supported("sfc"))
         assertNull(NetplayCores.defaultCore("SGB"))
     }
