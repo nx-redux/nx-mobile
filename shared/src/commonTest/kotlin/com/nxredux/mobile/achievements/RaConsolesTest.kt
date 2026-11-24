@@ -20,6 +20,26 @@ class RaConsolesTest {
         assertNull(RaConsoles.consoleId("nope", "x.bin"))
     }
 
+    @Test fun external_only_consoles_are_shown_with_their_ids() {
+        assertEquals(39, RaConsoles.consoleId("SATURN", "Nights.cue"))
+        assertEquals(17, RaConsoles.consoleId("JAGUAR", "Tempest.j64"))
+        assertEquals(56, RaConsoles.consoleId("NEOCD", "Metal Slug.chd"))
+        assertEquals(8, RaConsoles.consoleId("SGX", "Ghouls.sgx"))
+        assertEquals("SATURN", RaConsoles.tagOf(39))
+    }
+
+    // rcheevos has no hasher for CD-i or for these consoles' files.
+    @Test fun cdi_and_modern_external_consoles_have_no_rcheevos_hasher() {
+        for (tag in listOf("CDI", "SWITCH", "WIIU", "PS3", "PSVITA", "PS4", "XBOX", "XBOX360", "N64DD"))
+            assertNull(RaConsoles.consoleId(tag, "game.iso"), tag)
+    }
+
+    @Test fun unlocks_note_shows_for_external_only_or_a_pick() {
+        assertEquals(RaConsoles.UNLOCKS_ONLY_HERE, RaConsoles.unlocksNote(externalOnly = true, pickedExternal = false))
+        assertEquals(RaConsoles.UNLOCKS_ONLY_HERE, RaConsoles.unlocksNote(externalOnly = false, pickedExternal = true))
+        assertNull(RaConsoles.unlocksNote(externalOnly = false, pickedExternal = false))
+    }
+
     @Test fun mega_drive_tags_refine_by_extension() {
         assertEquals(11, RaConsoles.consoleId("MD", "Sonic.sms"))
         assertEquals(15, RaConsoles.consoleId("GPGX", "Sonic.GG"))

@@ -10,7 +10,7 @@ object RaConsoles {
     const val LYNX = 13; const val NEOGEO_POCKET = 14; const val GAME_GEAR = 15; const val NDS = 18; const val POKEMON_MINI = 24
     const val ATARI_2600 = 25; const val ARCADE = 27; const val VIRTUAL_BOY = 28; const val SG1000 = 33; const val PSP = 41
     const val ATARI_5200 = 50; const val ATARI_7800 = 51; const val WONDERSWAN = 53; const val PC_ENGINE_CD = 76; const val FDS = 81
-    const val SEGA_32X = 10; const val COLECOVISION = 44; const val DREAMCAST = 40; const val PLAYSTATION_2 = 21
+    const val SATURN = 39; const val ATARI_JAGUAR = 17; const val NEOGEO_CD = 56; const val SEGA_32X = 10; const val COLECOVISION = 44; const val DREAMCAST = 40; const val PLAYSTATION_2 = 21
     /** One tag per core can hold either disc: the native hasher picks 16 vs 19 from the disc magic. */
     const val GAMECUBE = 16; const val WII = 19
 
@@ -22,13 +22,23 @@ object RaConsoles {
         "A2600" to ATARI_2600, "A5200" to ATARI_5200, "A7800" to ATARI_7800, "PKM" to POKEMON_MINI, "WSC" to WONDERSWAN,
         "32X" to SEGA_32X, "COLECO" to COLECOVISION, "FBN" to ARCADE, "DC" to DREAMCAST,
         "WII" to WII, "GC" to GAMECUBE,
+        // Games opened in another app: shown from RetroAchievements, never unlocked by us. rcheevos hashes none of the
+        // CD-i, Switch, Wii U, PS3, Vita, PS4, Xbox, Xbox 360 or 64DD kinds, so those stay unmapped.
+        "SATURN" to SATURN, "JAGUAR" to ATARI_JAGUAR, "NEOCD" to NEOGEO_CD, "SGX" to PC_ENGINE,
     )
     /**
      * The tag of RetroAchievements console [consoleId]: the first tag that maps to it, or the tag whose discs it is (PC
-     * Engine CD); null for a console the app has no core for.
+     * Engine CD); null for a console RetroAchievements has no hashable files for. A console only opened in another app counts: its
+     * achievements are shown, never unlocked here.
      */
     fun tagOf(consoleId: Int): String? =
         if (consoleId == PC_ENGINE_CD) "PCE" else byTag.entries.firstOrNull { it.value == consoleId }?.key
+
+    /** [UNLOCKS_ONLY_HERE] for a game that runs in another app, else null. */
+    fun unlocksNote(externalOnly: Boolean, pickedExternal: Boolean): String? =
+        UNLOCKS_ONLY_HERE.takeIf { externalOnly || pickedExternal }
+
+    const val UNLOCKS_ONLY_HERE = "Achievements unlock only when the game runs in NX Redux's own emulators."
 
     private val discExtensions = setOf("cue", "chd", "iso", "m3u", "ccd", "toc")
     /**
