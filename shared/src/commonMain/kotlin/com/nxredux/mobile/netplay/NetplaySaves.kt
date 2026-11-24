@@ -31,6 +31,13 @@ object NetplaySaves {
         return (ArchiveEntries.pick(names, extensions) as? ArchiveEntries.Pick.Single)?.fileName
     }
 
+    /** A name a joiner running [core] takes from the host: a Dreamcast session's files ([DcNetplaySaves]), else [WIRE_NAMES]. */
+    fun isWireName(core: String, name: String): Boolean =
+        if (NetplayCores.ggpo(core)) name in DcNetplaySaves.WIRE_NAMES else name in WIRE_NAMES
+
+    /** Every name any session moves (the rsync module's filter). */
+    val ALL_WIRE_NAMES: Set<String> get() = WIRE_NAMES + DcNetplaySaves.WIRE_NAMES
+
     /** `<stem>.<ext>` → `nxsave.<ext>` for a battery-save extension; anything else is not sent. */
     fun wireName(fileName: String, stem: String): String? {
         if (!fileName.startsWith("$stem.")) return null

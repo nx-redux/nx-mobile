@@ -72,7 +72,7 @@ object Wizard {
             }
             val run = picked
             val mixed = mixedCaps(run, hello.core, offer.wl, hello.wl, offer.usb)
-            ch.writeLine(HelloCodec.format(Hello.host(wireGame(offer.game), 2, Caps.of(run, offer.tag, wl = offer.wl, names = offer.name != null))))
+            ch.writeLine(HelloCodec.format(Hello.host(wireGame(offer.game), 2, Caps.of(run, offer.tag, wl = offer.wl, names = offer.name != null, dcBios = offer.dcBios))))
             // A link session (GB/GBC/GBA) copies no saves: each player keeps their own, which a trade needs (the
             // handheld's NETPLAY_SYNC_SAVES=0). START follows the HELLO at once.
             val emptySaves = if (NetplayCores.isLink(run)) false else {
@@ -100,7 +100,7 @@ object Wizard {
             }
             ch.writeLine("START 2")
             if (ch.readLine(RECV_MS) != "START") return HostOutcome.Turned(null)
-            return HostOutcome.Started(run, ch.remoteAddress, emptySaves, mixed, hello.wl, peerName = tradeNames(ch, offer.name, hello))
+            return HostOutcome.Started(run, ch.remoteAddress, emptySaves, mixed, hello.wl, peerName = tradeNames(ch, offer.name, hello), peerDcBios = hello.dcBios)
         } catch (e: NetplayIoException) {
             return HostOutcome.Turned(null)
         }
@@ -137,7 +137,7 @@ object Wizard {
         val reply = try {
             // Auto with a choice: the joiner switches to the host's core, so a phone host on Auto keeps its own (never a host's caps).
             val auto = offer.pick == null && NetplayCores.offered(offer.tag, offer.usb, offer.wl).size > 1
-            ch.writeLine(HelloCodec.format(Hello.client(wireGame(offer.game), offer.any, Caps.of(offer.core, offer.tag, auto, offer.wl, names = offer.name != null))))
+            ch.writeLine(HelloCodec.format(Hello.client(wireGame(offer.game), offer.any, Caps.of(offer.core, offer.tag, auto, offer.wl, names = offer.name != null, dcBios = offer.dcBios))))
             ch.readLine(RECV_MS)
         } catch (e: NetplayIoException) {
             return ClientOutcome.Refused(NetplayText.NO_ANSWER)
@@ -193,7 +193,7 @@ object Wizard {
                         return ClientOutcome.Refused(NetplayText.UNEXPECTED)
                     }
                     val name = NetplayWire.unescape(parts[1])
-                    if (name !in NetplaySaves.WIRE_NAMES) {
+                    if (!NetplaySaves.isWireName(core, name)) {
                         sendQuietly(ch, "SYNC-FAIL")
                         return ClientOutcome.Refused(NetplayText.UNEXPECTED_FILE)
                     }
@@ -223,7 +223,7 @@ object Wizard {
             }
             if (line != "START" && !line.startsWith("START ")) return ClientOutcome.Refused(NetplayText.UNEXPECTED)
             ch.writeLine("START")
-            return ClientOutcome.Started(core, h.player, emptySaves = false, mixed = mixed, peerWl = h.wl, peerName = tradeNames(ch, offer.name, h))
+            return ClientOutcome.Started(core, h.player, emptySaves = false, mixed = mixed, peerWl = h.wl, peerName = tradeNames(ch, offer.name, h), peerDcBios = h.dcBios)
         } catch (e: CancellationException) {
             if (syncing) sink.abort()
             throw e

@@ -377,13 +377,16 @@ fbneo_BUILD_PATH = src/burner/libretro
 #   finds by CRC or name.
 # - core/rend/vulkan/vk_context_lr.cpp VkCreateDevice also enables the frontend's required device extensions (its
 #   AHardwareBuffer bridge needs them; see CoreRegistry's flycast entry).
+# patches/flycast/0001-ggpo-in-libretro.patch (nx-redux 0006, the same pin on the Brick) compiles flycast's GGPO rollback
+# netplay into the libretro core behind -DNX_LIBRETRO_GGPO=ON; the session comes in NX_GGPO_* environment variables
+# read at load. Phones and handhelds play each other, so both sides need the same pin and patch.
 flycast_REPO = https://github.com/flyinghead/flycast
 flycast_HASH = 7adbf3caef251b153e348df3f469a0f35878339d
 flycast_KIND = cmake
 flycast_ARTIFACT = flycast_libretro.so
 flycast_SUBMODULES = --recursive core/deps/libchdr core/deps/tinygettext core/deps/asio \
   core/deps/glslang core/deps/Vulkan-Headers core/deps/VulkanMemoryAllocator
-flycast_FLAGS = -DLIBRETRO=ON -DUSE_GLES=ON -DUSE_OPENMP=OFF -DCMAKE_OSX_ARCHITECTURES=arm64
+flycast_FLAGS = -DLIBRETRO=ON -DUSE_GLES=ON -DUSE_OPENMP=OFF -DCMAKE_OSX_ARCHITECTURES=arm64 -DNX_LIBRETRO_GGPO=ON
 
 # Azahar (Nintendo 3DS), 2126.2 (a lightweight tag on 219d743a1e698101fe1ab8bef43e6563126c3c27). The libretro core is
 # src/citra_libretro, the SHARED target citra_libretro (OUTPUT_NAME azahar_libretro, empty prefix) gated on
