@@ -96,7 +96,7 @@ class DcNetplayTest {
         assertEquals(
             mapOf(
                 "NX_GGPO" to "1", "NX_GGPO_HOST" to "1", "NX_GGPO_SERVER" to "192.168.1.7", "NX_GGPO_HLE" to "0",
-                "NX_GGPO_DISCONNECT_MS" to "25000", "NX_GGPO_TIMEOUT" to "60",
+                "NX_GGPO_DISCONNECT_MS" to "35000", "NX_GGPO_TIMEOUT" to "60",
             ),
             GgpoSession.env("flycast", host),
         )

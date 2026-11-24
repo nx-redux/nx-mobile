@@ -6,11 +6,17 @@ package com.nxredux.mobile.netplay
  * frontend only keeps the rules of a netplay game (no states, fast-forward, rewind, reset or cheats) and the goodbye.
  */
 object GgpoSession {
-    /** How long a player may stay paused (menu open, app in the background) before leaving; the other game waits meanwhile. */
-    const val LEAVE_GRACE_MS = 20_000L
+    /**
+     * How long a player may stay paused (menu open, app in the background) before leaving; the other game waits meanwhile.
+     * The lockstep sessions' 30 s pause limit (np_link.h, np_engine.h), so every netplay console waits the same.
+     */
+    const val LEAVE_GRACE_MS = 30_000L
 
-    /** Peer silence after which the core ends the session; longer than [LEAVE_GRACE_MS], so the pause ends first. */
-    const val DISCONNECT_MS = 25_000
+    /**
+     * Peer silence after which the core ends the session; longer than [LEAVE_GRACE_MS], so the pause ends first. A paused
+     * core sends nothing, so a handheld peer (its own 25 s) drops a phone paused past that with a lost connection.
+     */
+    const val DISCONNECT_MS = 35_000
 
     /** How long the core's load waits for the other device. */
     const val CONNECT_TIMEOUT_S = 60
