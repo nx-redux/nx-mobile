@@ -36,9 +36,11 @@ class AndroidExternalApps(
     override suspend fun launch(request: ExternalLaunch): ExternalLaunchResult {
         if (!installed(request.packageId)) return ExternalLaunchResult.NOT_INSTALLED
         val e = request.emulator
-        val uri = if (e.takesUri && !e.commandsSidecar) uriOf(request.ref) else null
+        val uri = if (e.takesUri) uriOf(request.ref) else null
         val commands = if (e.commandsSidecar) commandsBeside(request) else null
-        val spec = buildIntent(request, uri?.toString(), displayIdOfMain(), commands) ?: return ExternalLaunchResult.NO_ACCESS
+        val text = if (e.needsText) gameText(runCatching { source.readHead(request.ref, TEXT_GAME_MAX) }.getOrNull()) else null
+        val tokens = GameTokens(path = request.realPath, dir = dirOf(request.realPath), text = text)
+        val spec = buildIntent(request, uri?.toString(), displayIdOfMain(), commands, tokens) ?: return ExternalLaunchResult.NO_ACCESS
         val options = spec.displayId?.let { ActivityOptions.makeBasic().setLaunchDisplayId(it).toBundle() }
         return try {
             context.startActivity(spec.toIntent(), options)
@@ -61,6 +63,9 @@ class AndroidExternalApps(
 
     private companion object {
         const val AUTHORITY_SUFFIX = ".games"
+
+        // A title or game id file is a few bytes; the cap keeps a mistaken pick of a big image cheap.
+        const val TEXT_GAME_MAX = 1024
     }
 }
 
@@ -74,6 +79,7 @@ internal data class ExternalIntent(
     /** The game's extension, for the data's MIME type. */
     val extension: String?,
     val extras: Map<String, String>,
+    val arrayExtras: Map<String, List<String>>,
     val flags: Int,
     /** The URI the app is granted, also when it travels in an extra (a grant covers only data and clip data). */
     val grantUri: String?,
@@ -83,30 +89,38 @@ internal data class ExternalIntent(
 /** The sidecar a [ExternalEmulator.commandsSidecar] recipe reads beside [fileName]: its base name plus `.commands`. */
 internal fun commandsFileName(fileName: String): String = Names.stripExtension(fileName) + ".commands"
 
+/** The folder of a real path, for a recipe's `{dir}`. */
+internal fun dirOf(path: String?): String? = path?.let { File(it).parent }
+
 /**
- * [l]'s intent, given the game's [uri] (null when it has none) and the display to open on; null when the app cannot be
- * given the game. A sidecar recipe passes no game: its [commands] (the sidecar's text, null when there is none) name it.
+ * [l]'s intent, given the game's [uri] (null when it has none), the values for the recipe's [tokens] and the display to
+ * open on; null when the app cannot be given the game (no URI or path, or a token the game has no value for). A sidecar
+ * recipe passes no game: its [commands] (the sidecar's text, null when there is none) name it.
  */
-internal fun buildIntent(l: ExternalLaunch, uri: String?, displayId: Int?, commands: String? = null): ExternalIntent? {
+internal fun buildIntent(
+    l: ExternalLaunch, uri: String?, displayId: Int?, commands: String? = null, tokens: GameTokens = GameTokens.NONE,
+): ExternalIntent? {
     val e = l.emulator
-    val passed = if (e.commandsSidecar) null else when (e.pass) {
+    val passed = if (!e.passesGame) null else when (e.pass) {
         GamePass.VIEW_DATA, GamePass.URI_EXTRA -> uri
         GamePass.PATH_EXTRA -> l.realPath
     } ?: return null
+    val data = e.data?.let { tokens.fill(it) ?: return null } ?: passed.takeIf { e.pass == GamePass.VIEW_DATA }
     val extras = buildMap {
-        putAll(e.extras)
+        for ((k, v) in e.extras) put(k, tokens.fill(v) ?: return null)
         if (passed != null && e.pass != GamePass.VIEW_DATA) e.extraKey?.let { put(it, passed) }
         if (e.commandsSidecar && commands != null) put(COMMAND_EXTRA, commands)
     }
-    val grantUri = uri.takeIf { e.takesUri && passed != null }
+    val arrayExtras = e.arrayExtras.mapValues { (_, values) -> values.map { tokens.fill(it) ?: return null } }
+    val grantUri = uri.takeIf { e.takesUri }
     var flags = Intent.FLAG_ACTIVITY_NEW_TASK
     if (e.clearTask) flags = flags or Intent.FLAG_ACTIVITY_CLEAR_TASK
     if (grantUri != null) flags = flags or Intent.FLAG_GRANT_READ_URI_PERMISSION
     return ExternalIntent(
         action = e.action, categories = e.categories, packageId = l.packageId, activity = e.activity,
-        data = passed.takeIf { e.pass == GamePass.VIEW_DATA },
+        data = data,
         extension = Names.extensionOf(l.fileName).takeIf { passed != null && e.pass == GamePass.VIEW_DATA },
-        extras = extras, flags = flags, grantUri = grantUri, displayId = displayId,
+        extras = extras, arrayExtras = arrayExtras, flags = flags, grantUri = grantUri, displayId = displayId,
     )
 }
 
@@ -118,6 +132,7 @@ internal fun ExternalIntent.toIntent(): Intent {
     i.component = ComponentName(packageId, activity)
     data?.let { i.setDataAndType(Uri.parse(it), extension?.let(MimeTypeMap.getSingleton()::getMimeTypeFromExtension) ?: "*/*") }
     extras.forEach { (k, v) -> i.putExtra(k, v) }
+    arrayExtras.forEach { (k, v) -> i.putExtra(k, v.toTypedArray()) }
     grantUri?.let { i.clipData = ClipData.newRawUri("", Uri.parse(it)) }
     return i.addFlags(flags)
 }

@@ -102,6 +102,38 @@ class ExternalIntentTest {
         assertEquals("freedoom.commands", commandsFileName("freedoom"))
     }
 
+    private val mame = ExternalEmulator(
+        id = "mame", name = "MAME", packages = listOf("org.app"), activity = "org.app.Main", pass = GamePass.VIEW_DATA,
+        data = "jaguar", extras = mapOf("cli_params" to "-rompath '{dir}' -cart '{path}'"), tags = setOf("JAGUAR"),
+    )
+
+    @Test fun recipeDataReplacesTheGameUriAndTokensAreFilled() {
+        val tokens = GameTokens(path = "/R/Jag/Doom.j64", dir = "/R/Jag", text = null)
+        val i = buildIntent(launch(mame), null, null, tokens = tokens)!!
+        assertEquals("jaguar", i.data)
+        assertNull(i.extension)
+        assertNull(i.grantUri)
+        assertEquals("-rompath '/R/Jag' -cart '/R/Jag/Doom.j64'", i.extras["cli_params"])
+    }
+
+    @Test fun arrayExtrasAreFilledToo() {
+        val e = emulator(GamePass.VIEW_DATA).copy(arrayExtras = mapOf("AppStartParameters" to listOf("-r", "{text}")))
+        val i = buildIntent(launch(e), null, null, tokens = GameTokens(path = null, dir = null, text = "PCSE00000"))!!
+        assertEquals(mapOf("AppStartParameters" to listOf("-r", "PCSE00000")), i.arrayExtras)
+        assertNull(i.data)
+    }
+
+    @Test fun aTokenWithNoValueIsNoIntent() {
+        assertNull(buildIntent(launch(mame), uri, null, tokens = GameTokens(path = null, dir = null, text = null)))
+        val text = emulator(GamePass.VIEW_DATA).copy(extras = mapOf("title_id" to "{text}"))
+        assertNull(buildIntent(launch(text), uri, null, tokens = GameTokens(path = "/a", dir = "/", text = null)))
+    }
+
+    @Test fun dirIsThePathsFolder() {
+        assertEquals("/storage/emulated/0/Roms/Jaguar", dirOf("/storage/emulated/0/Roms/Jaguar/Doom.j64"))
+        assertNull(dirOf(null))
+    }
+
     @Test fun noUriForAUriRecipeOrNoPathForAPathRecipeIsNoIntent() {
         assertNull(buildIntent(launch(emulator(GamePass.VIEW_DATA)), null, null))
         assertNull(buildIntent(launch(emulator(GamePass.URI_EXTRA, "AutoStartFile")), null, null))

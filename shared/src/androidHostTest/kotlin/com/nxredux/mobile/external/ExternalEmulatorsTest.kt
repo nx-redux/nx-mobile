@@ -84,7 +84,9 @@ class ExternalEmulatorsTest {
         val spec = setOf(
             // New consoles
             "eden", "eden-nightly", "kenji-nx", "cemu", "aps3e", "armsx3", "emucorec", "yaba-sanshiro", "saturn-emu",
-            "x1-box", "hakux", "ax360e", "xendroid", "mame4droid", "m64plus-fz", "mupen64plus-ae", "pce-emu",
+            "vita3k", "emucorev", "bachatas4", "x1-box", "hakux", "ax360e", "xendroid",
+            "mame4droid-jaguar", "mame4droid-neocd", "mame4droid-cdi", "mame4droid", "mame4droid-a7800",
+            "m64plus-fz", "mupen64plus-ae", "pce-emu",
             // Optional emulators; Pizza Boy's paid builds use other activity classes, so they are entries of their own
             "melonds", "melonds-nightly", "noods", "skyemu", "watermelonds", "seedlessds",
             "azahar", "azaharplus", "panda3ds", "dolphin",
@@ -105,6 +107,69 @@ class ExternalEmulatorsTest {
         assertEquals(listOf("aps3e", "armsx3", "emucorec"), ExternalEmulators.forTag("PS3").map { it.id })
         assertEquals(listOf("m64plus-fz", "mupen64plus-ae"), ExternalEmulators.forTag("N64DD").map { it.id })
         assertEquals(listOf("pce-emu"), ExternalEmulators.forTag("SGX").map { it.id })
+        assertEquals(listOf("vita3k", "emucorev"), ExternalEmulators.forTag("PSVITA").map { it.id })
+        assertEquals(listOf("bachatas4"), ExternalEmulators.forTag("PS4").map { it.id })
+        assertEquals(listOf("mame4droid-jaguar"), ExternalEmulators.forTag("JAGUAR").map { it.id })
+        assertEquals(listOf("mame4droid-neocd"), ExternalEmulators.forTag("NEOCD").map { it.id })
+        assertEquals(listOf("mame4droid-cdi"), ExternalEmulators.forTag("CDI").map { it.id })
+        assertEquals(listOf("mame4droid-a7800"), ExternalEmulators.forTag("A7800").map { it.id })
+    }
+
+    @Test
+    fun mameMachinesNameTheirMachineAndTheGamesPath() {
+        val jaguar = ExternalEmulators.byId("mame4droid-jaguar")!!
+        assertEquals("jaguar", jaguar.data)
+        assertEquals("-rompath '{dir}' -cart '{path}'", jaguar.extras["cli_params"])
+        assertTrue(jaguar.needsPath)
+        assertFalse(offered(jaguar, real = false))
+        assertEquals("neocdz", ExternalEmulators.byId("mame4droid-neocd")!!.data)
+        assertEquals("cdimono1", ExternalEmulators.byId("mame4droid-cdi")!!.data)
+        assertEquals("a7800", ExternalEmulators.byId("mame4droid-a7800")!!.data)
+    }
+
+    @Test
+    fun textGamesSendTheirIdAndAreNotPathOnly() {
+        val vita = ExternalEmulators.byId("vita3k")!!
+        assertEquals(mapOf("title_id" to "{text}"), vita.extras)
+        assertTrue(vita.needsText)
+        assertFalse(vita.needsPath)
+        assertTrue(offered(vita, real = false))
+        assertEquals(mapOf("AppStartParameters" to listOf("-r", "{text}")), ExternalEmulators.byId("emucorev")!!.arrayExtras)
+        assertEquals(mapOf("game_id" to "{text}"), ExternalEmulators.byId("bachatas4")!!.extras)
+    }
+
+    @Test
+    fun tokensFillPathDirAndText() {
+        val t = GameTokens(path = "/R/Jaguar/Doom.j64", dir = "/R/Jaguar", text = "PCSE00000")
+        assertEquals("-rompath '/R/Jaguar' -cart '/R/Jaguar/Doom.j64'", t.fill("-rompath '{dir}' -cart '{path}'"))
+        assertEquals("PCSE00000", t.fill("{text}"))
+        assertEquals("plain", t.fill("plain"))
+        assertEquals(null, GameTokens(path = null, dir = null, text = "x").fill("-cart '{path}'"))
+        assertEquals(null, GameTokens(path = "/a", dir = "/", text = null).fill("{text}"))
+        // A value is never read as a token.
+        assertEquals("/a/{dir}", GameTokens(path = "/a/{dir}", dir = "/a", text = null).fill("{path}"))
+    }
+
+    @Test
+    fun pathTokensMakeARecipePathOnly() {
+        val tokenised = recipe(GamePass.VIEW_DATA).copy(data = "jaguar", extras = mapOf("cli" to "-cart '{path}'"))
+        assertTrue(tokenised.needsPath)
+        assertFalse(tokenised.takesUri)
+        assertFalse(offered(tokenised, real = false))
+        assertFalse(offered(tokenised, zip = true))
+        assertTrue(offered(tokenised))
+        val dirInArray = recipe(GamePass.VIEW_DATA).copy(arrayExtras = mapOf("a" to listOf("{dir}")))
+        assertTrue(dirInArray.needsPath)
+        assertFalse(recipe(GamePass.VIEW_DATA).copy(extras = mapOf("id" to "{text}")).needsPath)
+        assertFalse(recipe(GamePass.VIEW_DATA).copy(extras = mapOf("id" to "{text}")).takesUri)
+    }
+
+    @Test
+    fun gameTextIsTheFilesTrimmedTextOrNothing() {
+        assertEquals("PCSE00000", gameText(" PCSE00000\n".encodeToByteArray()))
+        assertEquals(null, gameText("  \n".encodeToByteArray()))
+        assertEquals(null, gameText(null))
+        assertEquals(null, gameText(byteArrayOf(0x50, 0x4B, 0x03, 0x04, 0x00, 0x14)))   // a vpk (zip) is not an id
     }
 
     @Test

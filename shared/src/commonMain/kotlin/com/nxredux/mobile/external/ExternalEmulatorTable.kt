@@ -30,6 +30,15 @@ private fun pizzaBoy(id: String, name: String, pkg: String, activity: String, ta
     clearTask = true, tags = tags,
 )
 
+private const val MAME_PACKAGE = "com.seleuco.mame4d2024"
+private const val MAME_ACTIVITY = "com.seleuco.mame4droid.MAME4droid"
+
+/** MAME4droid as [machine]; the game is found by [media] (its slot option) and its folder is the ROM path for BIOS sets. */
+private fun mameMachine(id: String, tag: String, machine: String, media: String) = ExternalEmulator(
+    id = id, name = "MAME4droid Current", packages = listOf(MAME_PACKAGE), activity = MAME_ACTIVITY, pass = GamePass.VIEW_DATA,
+    data = machine, extras = mapOf("cli_params" to "-rompath '${GameTokens.DIR}' $media '${GameTokens.PATH}'"), tags = setOf(tag),
+)
+
 // Order is the default menu order for a console with several apps.
 internal val externalEmulatorTable: List<ExternalEmulator> = listOf(
     // Nintendo Switch
@@ -64,6 +73,20 @@ internal val externalEmulatorTable: List<ExternalEmulator> = listOf(
         id = "emucorec", name = "EmuCoreC", packages = listOf("com.sbro.emucorec"), activity = "com.sbro.emucorec.core.ps3.Emulator",
         pass = GamePass.PATH_EXTRA, extraKey = "gamePath", tags = setOf("PS3"),
     ),
+    // PlayStation Vita and PlayStation 4 boot installed titles by id: the game is a small text file holding it.
+    ExternalEmulator(
+        id = "vita3k", name = "Vita3K", packages = listOf("org.vita3k.emulator"), activity = "org.vita3k.emulator.Emulator",
+        pass = GamePass.VIEW_DATA, extras = mapOf("title_id" to GameTokens.TEXT), tags = setOf("PSVITA"),
+    ),
+    ExternalEmulator(
+        id = "emucorev", name = "EmuCoreV", packages = listOf("com.sbro.emucorev"), activity = "com.sbro.emucorev.core.vita.Emulator",
+        pass = GamePass.VIEW_DATA, arrayExtras = mapOf("AppStartParameters" to listOf("-r", GameTokens.TEXT)), tags = setOf("PSVITA"),
+    ),
+    ExternalEmulator(
+        id = "bachatas4", name = "BachataS4", packages = listOf("com.bachatas4.android", "com.bachatas4.android.github"),
+        activity = "com.bachatas4.android.DirectLaunchActivity", pass = GamePass.VIEW_DATA,
+        extras = mapOf("game_id" to GameTokens.TEXT), tags = setOf("PS4"),
+    ),
     // Sega Saturn
     ExternalEmulator(
         id = "yaba-sanshiro", name = "Yaba Sanshiro 2",
@@ -88,6 +111,10 @@ internal val externalEmulatorTable: List<ExternalEmulator> = listOf(
         id = "xendroid", name = "XenDroid", packages = listOf("xendroid.compose"), activity = "xendroid.compose.EmulatorHostActivity",
         pass = GamePass.VIEW_DATA, tags = setOf("XBOX360"),
     ),
+    // MAME4droid runs a console as a machine named in the data, with the game's path on its command line.
+    mameMachine("mame4droid-jaguar", "JAGUAR", "jaguar", "-cart"),
+    mameMachine("mame4droid-neocd", "NEOCD", "neocdz", "-cdrm"),
+    mameMachine("mame4droid-cdi", "CDI", "cdimono1", "-cdrom"),
     // Nintendo 64 and 64DD
     ExternalEmulator(
         id = "m64plus-fz", name = "M64Plus FZ",
@@ -233,10 +260,11 @@ internal val externalEmulatorTable: List<ExternalEmulator> = listOf(
     // Arcade. MAME4droid copies a content URI into its own roms folder and runs the set by file name, so a parent or
     // BIOS set has to be in that folder too.
     ExternalEmulator(
-        id = "mame4droid", name = "MAME4droid Current", packages = listOf("com.seleuco.mame4d2024"),
-        activity = "com.seleuco.mame4droid.MAME4droid", pass = GamePass.VIEW_DATA, tags = setOf("FBN"),
+        id = "mame4droid", name = "MAME4droid Current", packages = listOf(MAME_PACKAGE),
+        activity = MAME_ACTIVITY, pass = GamePass.VIEW_DATA, tags = setOf("FBN"),
     ),
     explus("neo-emu", "NEO.emu", "com.explusalpha.NeoEmu", setOf("FBN")),
+    mameMachine("mame4droid-a7800", "A7800", "a7800", "-cart"),
     // Flycast runs Naomi sets from the same app; a separate entry keeps it off the other FBN games.
     ExternalEmulator(
         id = "flycast-arcade", name = "Flycast", packages = flycastPackages, activity = FLYCAST_ACTIVITY, pass = GamePass.VIEW_DATA,

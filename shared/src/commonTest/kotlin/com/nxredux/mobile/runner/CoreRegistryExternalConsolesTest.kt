@@ -64,6 +64,14 @@ class CoreRegistryExternalConsolesTest {
         assertNull(Resolution.byExtension("Game.rom", null) { it.defaultTag })   // Jaguar's, by folder only
     }
 
+    // A small text file holding the title or game id, as other frontends keep them.
+    @Test fun vitaAndPs4TakeTextFileGames() {
+        assertEquals(listOf("psvita"), CoreRegistry.consolesForExtension("psvita").map { it.id })
+        assertEquals(listOf("ps4"), CoreRegistry.consolesForExtension("ps4").map { it.id })
+        assertEquals("PSVITA", Resolution.byExtension("Persona 4 Golden.psvita", null) { it.defaultTag })
+        assertEquals("PS4", Resolution.byExtension("Bloodborne.ps4", null) { it.defaultTag })
+    }
+
     @Test fun newConsolesTakeTheirGamesByFolder() {
         val saturn = Resolution.FolderHints(listOf("SATURN"))
         assertEquals("SATURN", Resolution.byFolder("Nights.cue", null, saturn))

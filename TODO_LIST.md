@@ -223,12 +223,18 @@ Launch contracts come from each app's source where public, else ES-DE's data. On
 - [ ] aPS3e (`aps3e`): PS3
 - [ ] ARMSX3 (`armsx3`): PS3
 - [ ] EmuCoreC (`emucorec`): PS3
+- [ ] Vita3K (`vita3k`): PSVITA
+- [ ] EmuCoreV (`emucorev`): PSVITA
+- [ ] BachataS4 (`bachatas4`): PS4
 - [ ] Yaba Sanshiro 2 (`yaba-sanshiro`): SATURN
 - [ ] Saturn.emu (`saturn-emu`): SATURN
 - [ ] X1 BOX (`x1-box`): XBOX
 - [ ] hakuX (`hakux`): XBOX
 - [ ] aX360e (`ax360e`): XBOX360
 - [ ] XenDroid (`xendroid`): XBOX360
+- [ ] MAME4droid Current (`mame4droid-jaguar`): JAGUAR
+- [ ] MAME4droid Current (`mame4droid-neocd`): NEOCD
+- [ ] MAME4droid Current (`mame4droid-cdi`): CDI
 - [ ] M64Plus FZ (`m64plus-fz`): N64, N64DD
 - [ ] Mupen64Plus AE (`mupen64plus-ae`): N64, N64DD
 - [ ] PCE.emu (`pce-emu`): PCE, SGX
@@ -275,6 +281,7 @@ Launch contracts come from each app's source where public, else ES-DE's data. On
 - [ ] MSX.emu (`msx-emu`): COLECO
 - [ ] MAME4droid Current (`mame4droid`): FBN
 - [ ] NEO.emu (`neo-emu`): FBN
+- [ ] MAME4droid Current (`mame4droid-a7800`): A7800
 - [ ] Flycast (`flycast-arcade`): FBN
 - [ ] SUPER3 (`super3`): FBN
 - [ ] Pixl8 (`pixl8`): P8
