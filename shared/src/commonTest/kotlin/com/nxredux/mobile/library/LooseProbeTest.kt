@@ -32,7 +32,7 @@ class LooseProbeTest {
         assertEquals(listOf("G"), second.systems.first { it.tag == "PS" }.games.map { it.name })
     }
 
-    // Saturn, or a bin with no disc signature, stays unassigned (and is not read again either).
+    // A bin with no disc signature stays unassigned (and is not read again either).
     @Test fun an_unrecognised_disc_stays_unassigned() = runTest {
         val src = FakeRomsSource(
             mapOf("H" to listOf("Roms"), "H/Roms" to emptyList(), "x" to listOf("N.bin")),
@@ -42,6 +42,23 @@ class LooseProbeTest {
             .scan(ContentRef("H"), listOf(ExtraFolder("x-1", ContentRef("x"))), emptyMap())
         assertEquals(listOf("N"), index.systems.single { it.unassigned }.games.map { it.name })
         assertEquals(listOf(null), index.probes.map { it.console })
+    }
+
+    // A nothing-recognised answer kept under older signatures is probed again (a Saturn disc now places); a current one is reused.
+    @Test fun an_unrecognised_answer_from_older_signatures_is_probed_again() = runTest {
+        val sat = ByteArray(2048 * 17).also { "SEGA SEGASATURN ".encodeToByteArray().copyInto(it, 0) }
+        val fake = FakeRomsSource(mapOf("x" to listOf("S.iso")), bytes = mapOf("x/S.iso" to sat)).apply { stamps["x/S.iso"] = 1_000L }
+        val src = CountingRomsSource(fake)
+        val dir = fake.listChildren(ContentRef("x"))
+        val s = dir.single()
+        val old = listOf(IndexedProbe(s.ref.value, s.sizeBytes, 1_000L, null))
+        val probes = DiscProbes(com.nxredux.mobile.library.disc.DiscProbe(src), old)
+        assertEquals("saturn", probes.consoleOf(s, dir))
+        assertEquals(listOf("saturn"), probes.used.map { it.console })
+        src.calls.clear()
+        val current = listOf(IndexedProbe(s.ref.value, s.sizeBytes, 1_000L, null, signatures = com.nxredux.mobile.library.disc.DiscSignatures.VERSION))
+        assertEquals(null, DiscProbes(com.nxredux.mobile.library.disc.DiscProbe(src), current).consoleOf(s, dir))
+        assertTrue(src.calls.none { it.startsWith("readRange:") }, "${src.calls}")
     }
 
     // A cue's answer depends on its bin: a changed bin is probed again; a missing bin (or a failed read) is not kept.

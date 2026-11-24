@@ -14,6 +14,12 @@ class DataSectors(val s0: ByteArray?, val s1: ByteArray?, val s16: ByteArray?)
  * GameCube and Wii by their header magic.
  */
 object DiscSignatures {
+    /**
+     * Goes up when a disc that answered nothing may now place (Saturn, once its console was added): a stored
+     * nothing-recognised answer from an older version is probed again, without the full rescan a new index version costs.
+     */
+    const val VERSION = 1
+
     fun identify(d: DataSectors): DiscKind? {
         d.s0?.let { s ->
             when {
