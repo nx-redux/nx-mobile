@@ -43,6 +43,7 @@ internal fun HomeMinimalScreen(
     }
     MinimalScreen(
         names, selection, emptyList(), onSelect, onOpen, onLongPress, onHint, selected, modifier, top = top,
+        anchorTop = if (header != null && iconsRoom.value > 0f && top > iconsRoom.value) iconsRoom.value else null,
         hideHints = chrome.emptyBarRoom, toBoxBottom = true, leaving = leaving,
     ) {
         HomeStripOverlay(shownStrip, pageStrip, header, stripLines, inkTop, capTop, frame, inset, iconsWidth)
