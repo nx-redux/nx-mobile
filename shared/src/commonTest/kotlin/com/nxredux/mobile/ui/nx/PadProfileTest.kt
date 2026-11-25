@@ -146,4 +146,25 @@ class PadProfileTest {
         assertEquals("R3", ps2.label(NxButton.R3))
         for (b in NxButton.entries) assertFalse(ps2.isHidden(b), b.name)
     }
+
+    @Test fun wiiuLabelsTheGamePad() {
+        val u = PadProfile.forTag("WIIU")
+        assertEquals("ZL", u.label(NxButton.L2))
+        assertEquals("ZR", u.label(NxButton.R2))
+        assertEquals("\u2212", u.label(NxButton.SELECT))
+        assertEquals("+", u.label(NxButton.START))
+        assertEquals("L", u.label(NxButton.L1))
+        assertEquals("R", u.label(NxButton.R1))
+        for (b in listOf(NxButton.A, NxButton.B, NxButton.X, NxButton.Y)) {
+            assertEquals(b.glyph(), u.label(b), b.name)
+            assertEquals(b, u.menuButton(b), b.name)
+        }
+    }
+
+    @Test fun wiiuHidesNothingTheGamePadHas() {
+        val u = PadProfile.forTag("WIIU")
+        for (b in NxButton.entries) assertFalse(u.isHidden(b), b.name)
+        assertFalse(u.cStick)
+        assertFalse(u.motionButton)
+    }
 }
