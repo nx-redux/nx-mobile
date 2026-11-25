@@ -109,6 +109,11 @@ data class CoreDescriptor(
      */
     val keepLoaded: Boolean = false,
     /**
+     * How long one frame may run before the runner treats the core as hung and closes the game; null = the runner's
+     * default. For a core whose game start is one long frame that grows with play.
+     */
+    val hangLimitMillis: Long? = null,
+    /**
      * Options whose probed values describe the probe machine, not the core (melonDS DS's firmware and NAND paths, its
      * network interface): never shown or written outside a game ([com.nxredux.mobile.options.EmulatorSettings.page]).
      */

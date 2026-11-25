@@ -138,6 +138,10 @@ class CoreRegistryTest {
         assertEquals(setOf("cemu"), CoreRegistry.all.filterNot { it.saveStates }.map { it.id }.toSet())
         assertFalse(CoreRegistry.forTag("WIIU")!!.saveStates)
     }
+    @Test fun only_cemu_waits_two_minutes_before_its_frame_counts_as_hung() {
+        assertEquals(mapOf("cemu" to 120_000L), CoreRegistry.all.mapNotNull { d -> d.hangLimitMillis?.let { d.id to it } }.toMap())
+        assertEquals(120_000L, CoreRegistry.forTag("WIIU")!!.hangLimitMillis)
+    }
     @Test fun mupen_hides_startup_only_options_but_not_live_ones() {
         val hidden = CoreRegistry.forTag("N64")!!.restartOnlyOptions
         assertTrue("mupen64plus-aspect" in hidden)

@@ -1145,9 +1145,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /**
-     * The core has been stuck in one frame past [CoreWatchdog.LIMIT_MILLIS]; on the watchdog's thread, since the main
-     * thread may be blocked on the core's lock. Nothing in this process can stop the core or take that lock, so the game
-     * goes with the process: finished first (a binder call, whatever the main thread is doing) so Android does not
+     * The core has been stuck in one frame past its limit ([CoreWatchdog.limitFor]); on the watchdog's thread, since the
+     * main thread may be blocked on the core's lock. Nothing in this process can stop the core or take that lock, so the
+     * game goes with the process: finished first (a binder call, whatever the main thread is doing) so Android does not
      * recreate it, then the game process ends; the menu (in its own process) comes back to the front and tells the user
      * ([CoreHangNotice]). The battery save was written when the menu last opened and with the last auto state; play time
      * keeps its last minute ([startGameTimeTicker]).
@@ -2317,8 +2317,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
         override fun onViewCreated(view: GLRetroView) { game.retroView = view }
         override fun onGameReady() { game.gameReady = true }
-        override fun startCoreWatchdog(stalledMillis: () -> Long) {
-            game.coreWatchdog = CoreWatchdog(stalledMillis, onHung = { onCoreHung(it) }).also { it.start() }
+        override fun startCoreWatchdog(limitMillis: Long, stalledMillis: () -> Long) {
+            game.coreWatchdog = CoreWatchdog(stalledMillis, limitMillis, onHung = { onCoreHung(it) }).also { it.start() }
         }
         override fun startGameTime(rec: GameTimeRecorder) {
             game.gameTime = rec

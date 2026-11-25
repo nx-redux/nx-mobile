@@ -39,6 +39,9 @@ internal class CoreWatchdog(
     }
 
     companion object {
+        /** The limit for a game on [core]: its own ([CoreDescriptor.hangLimitMillis]) or [LIMIT_MILLIS]. */
+        fun limitFor(core: CoreDescriptor?): Long = core?.hangLimitMillis ?: LIMIT_MILLIS
+
         // Far above any real frame (a synchronous shader compile, a large state load on the GL thread), and well below
         // the minute a broadcast-driven quit waits before Android calls the app not responding.
         const val LIMIT_MILLIS = 20_000L

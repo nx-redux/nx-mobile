@@ -37,4 +37,13 @@ class CoreWatchdogTest {
         dog.stop()
         assertFalse(fired.await(150, TimeUnit.MILLISECONDS))
     }
+
+    @Test fun aCoreWithItsOwnLimitIsWatchedWithIt() {
+        assertEquals(120_000L, CoreWatchdog.limitFor(CoreRegistry.forTag("WIIU")))
+    }
+
+    @Test fun everyOtherCoreAndNoCoreGetTheDefault() {
+        assertEquals(CoreWatchdog.LIMIT_MILLIS, CoreWatchdog.limitFor(CoreRegistry.forTag("GBA")))
+        assertEquals(CoreWatchdog.LIMIT_MILLIS, CoreWatchdog.limitFor(null))
+    }
 }
