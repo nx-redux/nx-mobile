@@ -34,8 +34,8 @@ import java.io.File
  * NETPLAY (`--es role host|client --es path <rom> --es tag <TAG> --es core <core> [--es peer <host ip>] [--es pad
  * auto|3|6|none] [--es force_pad 3|6]`): one Wi-Fi session through the real handshake ([Wizard] over [AndroidNetplay]: caps, save copy, START)
  * with the Emulator pinned to [core], then the game as the netplay sheet launches it. No discovery: the host listens, the
- * client connects to `peer` (retried for 30 s). `pad`: the Controller Type this side offers; absent, the game's own
- * setting; `none`, no `pad=` at all (an older phone or the handheld). `force_pad`: this side plays that pad whatever the
+ * client connects to `peer` (retried for 30 s). `pad`: the Controller Type this side offers, settled as the app does
+ * ([AndroidNetplay.settledSegaPad]); absent, the game's own setting; `none`, no `pad=` at all (an older phone or the handheld). `force_pad`: this side plays that pad whatever the
  * handshake agreed, so a test can make the two sides disagree on purpose (the drift check must then fire). netplay.json: state `listening` (host),
  * `started` (with core and pad) or `refused` (with the reason).
  */
@@ -64,8 +64,8 @@ internal object NxNetplayHook {
             val game = NetplayWire.gameName(rom)
             val offered = when {
                 !PadMap.isSegaPadTag(tag) || pad == "none" -> null
-                pad != null -> pad
-                else -> runCatching { np.segaPadSetting(tag, core, rom) }.getOrDefault(SegaPadType.AUTO)
+                pad != null -> np.settledSegaPad(pad, core, rom, FileRefs.of(path))
+                else -> runCatching { np.segaPadSetting(tag, core, rom, FileRefs.of(path)) }.getOrDefault(SegaPadType.AUTO)
             }
             NxLog.i(TAG, "NETPLAY $role $rom on $core, pad ${offered ?: "none"}")
             val agreed = try {

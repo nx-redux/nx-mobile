@@ -389,7 +389,8 @@ class NetplayController(
                         withContext(work) {   // staging the saves and the rsync daemon: off the main thread
                             dcBios = if (NetplayCores.ggpo(own)) platform.dcBios() else null
                             Wizard.host(
-                                ch, HostOffer(game, tag, own, pick, usb, wl, cl, name = playerName(), dcBios = dcBios, pad = segaPad(tag, own, rom)), saves = { platform.hostSaves(tag, rom, e.game.ref) },
+                                ch, HostOffer(game, tag, own, pick, usb, wl, cl, name = playerName(), dcBios = dcBios), saves = { platform.hostSaves(tag, rom, e.game.ref) },
+                                padFor = { run -> segaPad(tag, run, rom, e) },
                                 onSync = { hostStatus(NetplayText.SENDING) },
                                 onTransfer = { t -> hostStatus(NetplayText.transfer(t.sending, t.done, t.total)) },
                             )
@@ -564,7 +565,7 @@ class NetplayController(
                 withContext(work) {   // the save sink runs rsync and writes files: off the main thread
                     dcBios = if (NetplayCores.ggpo(core)) platform.dcBios() else null
                     Wizard.client(
-                        ch, ClientOffer(game, any, tag, core, pick, usb, mayRetry && cl == null, wl, cl, name = playerName(), dcBios = dcBios, pad = segaPad(tag, core, rom)), platform.clientSink(rom),
+                        ch, ClientOffer(game, any, tag, core, pick, usb, mayRetry && cl == null, wl, cl, name = playerName(), dcBios = dcBios, pad = segaPad(tag, core, rom, e)), platform.clientSink(rom),
                         onSync = { joinProgress(NetplayText.RECEIVING) },
                         onWaiting = { n -> joinProgress(NetplayText.youArePlayer(n)) },
                         onTransfer = { t -> joinProgress(NetplayText.transfer(t.sending, t.done, t.total)) },
@@ -600,13 +601,13 @@ class NetplayController(
     }
 
     /**
-     * The game's Sega Controller Type for the handshake ([HostOffer.pad]): null outside the Sega pad tags, Auto when the
-     * settings cannot be read.
+     * The game's Sega Controller Type for the handshake on [core] ([NetplayPlatform.segaPadSetting]): null outside the Sega
+     * pad tags, Auto when the settings cannot be read.
      */
-    private suspend fun segaPad(tag: String, core: String, rom: String): String? {
+    private suspend fun segaPad(tag: String, core: String, rom: String, e: Listed): String? {
         if (!PadMap.isSegaPadTag(tag)) return null
         return try {
-            platform.segaPadSetting(tag, core, rom).takeIf { it in SegaPadType.SETTINGS } ?: SegaPadType.AUTO
+            withContext(work) { platform.segaPadSetting(tag, core, rom, e.game.ref) }.takeIf { it in SegaPadType.SETTINGS } ?: SegaPadType.AUTO
         } catch (c: CancellationException) {
             throw c
         } catch (x: Exception) {

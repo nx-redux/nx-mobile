@@ -386,6 +386,17 @@ class WizardTest {
         assertEquals(HostOutcome.Started("picodrive", "10.0.0.2", emptySaves = false, pad = "auto"), hostJob.await())
     }
 
+    @Test fun the_host_offers_the_pad_set_for_the_core_it_runs() = runTest {
+        val (h, c) = PipeChannel.pair()
+        val pads = mapOf("picodrive" to "6", "genesis_plus_gx" to "3")
+        val hostJob = async { Wizard.host(h, hostMd, saves = { FakeHostSaves() }, padFor = { pads[it] }) }
+        c.writeLine("HELLO 2 $sonicEsc client caps=core=genesis_plus_gx,tag=GPGX,pad=auto")   // an Auto host adopts this core
+        assertEquals("HELLO 2 $sonicEsc host 2 caps=core=genesis_plus_gx,tag=MD,pad=3", c.readLine(1000))
+        assertEquals("START 2", c.readLine(1000))
+        c.writeLine("START")
+        assertEquals(HostOutcome.Started("genesis_plus_gx", "10.0.0.2", emptySaves = false, pad = "3"), hostJob.await())
+    }
+
     @Test fun a_joiner_without_pad_gets_no_pad_from_the_host_and_both_keep_the_old_one() = runTest {
         val (h, c) = PipeChannel.pair()
         val hostJob = async { Wizard.host(h, hostMd.copy(pad = "6"), saves = { FakeHostSaves() }) }

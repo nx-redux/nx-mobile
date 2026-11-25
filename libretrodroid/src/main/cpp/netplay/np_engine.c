@@ -1077,9 +1077,13 @@ static uint8_t* serialize_unlocked(np_size_fn size, np_ser_fn ser, np_unser_fn u
 	pthread_mutex_unlock(&np_mutex);
 	size_t n = size ? size() : 0;
 	uint8_t* buf = NULL;
-	bool ok = ser && n > 0 && n <= NP_MAX_STATE_SIZE && (buf = (uint8_t*)malloc(n)) != NULL && ser(buf, n) &&
-		(!unser || unser(buf, n));
+	bool ok = ser && n > 0 && n <= NP_MAX_STATE_SIZE && (buf = (uint8_t*)malloc(n)) != NULL && ser(buf, n);
+	bool reloaded = !ok || !unser || unser(buf, n);
 	pthread_mutex_lock(&np_mutex);
+	if (!reloaded) {
+		NP_LOG("reloading the sent state failed (size %zu)", n); // the session ends; the caller's own line follows
+		ok = false;
+	}
 	*out_n = n;
 	if (!ok) {
 		free(buf);

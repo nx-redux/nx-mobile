@@ -20,7 +20,9 @@
 #include <vector>
 
 #include "../core.h"
+#ifndef NDEBUG
 #include "../debugprop.h"
+#endif
 #include "../input.h"
 #include "../../libretro-common/include/libretro.h"
 
@@ -85,6 +87,7 @@ int16_t inputState(unsigned port, unsigned device, unsigned index, unsigned id) 
 
 void shutdown() { np_shutdown(); }
 
+#ifndef NDEBUG
 // The core whose state stateHash reads. Frame thread only, like the hash itself.
 static Core* hashedCore = nullptr;
 
@@ -106,16 +109,19 @@ static uint64_t stateHash() {
     if (size == 0 || !hashedCore->retro_serialize(buffer.data(), size)) return 0;
     return fnv(buffer.data(), size);
 }
+#endif
 
 bool setPairMode(Core* core, bool on) {
     np_hash_fn hash = (on && core != nullptr) ? reinterpret_cast<np_hash_fn>(core->symbol("nx_pair_hash")) : nullptr;
-    // Device tests (adb shell setprop debug.nx.netplay_pair 1, on both phones): the drift check on any lockstep session,
-    // so a desync shows as "pair: hashes differ" in the log.
+#ifndef NDEBUG
+    // Debug builds, device tests (adb shell setprop debug.nx.netplay_pair 1, on both phones): the drift check on any
+    // lockstep session, so a desync shows as "pair: hashes differ" in the log.
     if (!on && core != nullptr && debugPropertyOn("debug.nx.netplay_pair")) {
         hashedCore = core;
         np_set_pair_mode(true, stateHash);
         return true;
     }
+#endif
     np_set_pair_mode(hash != nullptr, hash);
     return !on || hash != nullptr;
 }

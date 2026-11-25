@@ -51,9 +51,11 @@ interface NetplayPlatform {
     suspend fun gbaLinkMode(romFileName: String, content: ContentRef): String
     /**
      * The game's Sega Controller Type for [tag] on [coreId] ([com.nxredux.mobile.runner.SegaPadType]): its per-game
-     * settings, else the console's, else Auto. Auto when they cannot be read.
+     * settings, else the console's, else Auto. picodrive has no Auto of its own (the frontend picks its pad from the cart
+     * header), so Auto comes back settled into 3 or 6 from [content]'s header, the 6-button pad when there is none: the
+     * host's read is then the session's, never one per device.
      */
-    suspend fun segaPadSetting(tag: String, coreId: String, romFileName: String): String
+    suspend fun segaPadSetting(tag: String, coreId: String, romFileName: String, content: ContentRef): String
     /** Where a joiner's pulls land (a fresh session copy per join). */
     fun clientSink(romFileName: String): SaveSink
     /** A Dreamcast game's `dcbios=` fingerprint here ([DcNetplaySaves.fingerprint]): the BIOS its launch would boot. */

@@ -1471,7 +1471,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Multiplayer → Local Wireless (the menu, live).
         if (localWirelessKey?.let { values[it] } != oldLocalWireless) switchLocalWireless(values)
         val segaSetting = values[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO
-        if (segaSetting != oldSegaSetting && PadMap.isSegaPadTag(gameTag)) applySegaPad(segaSetting)
+        // In a session the pad is the session's (both phones agreed it): a Controller Type change waits for the next launch.
+        if (segaSetting != oldSegaSetting && PadMap.isSegaPadTag(gameTag) && netplayNow == null) applySegaPad(segaSetting)
         if (isN3ds) {
             applyN3dsNewControls(values[N3dsOptions.NEW_CONTROLS])
             syncN3dsCore()   // a layout row changed in the menu, or the hotkey's

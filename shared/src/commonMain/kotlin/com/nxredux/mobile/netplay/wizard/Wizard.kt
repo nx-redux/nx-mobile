@@ -40,12 +40,14 @@ object Wizard {
 
     /**
      * Answers one joiner. [saves] is asked once the HELLO is answered, never for a link session (when it throws, the
-     * joiner gets `REJECT sync`). [onTransfer] follows a Cable Link ROM transfer.
+     * joiner gets `REJECT sync`). [onTransfer] follows a Cable Link ROM transfer. [padFor]: the Controller Type to offer
+     * for the core the session runs (settings are per core), asked once it is picked; null offers [HostOffer.pad].
      */
     suspend fun host(
         ch: NetplayChannel,
         offer: HostOffer,
         saves: suspend () -> HostSaves,
+        padFor: (suspend (String) -> String?)? = null,
         onSync: () -> Unit = {},
         onTransfer: (CableLinkProgress) -> Unit = {},
     ): HostOutcome {
@@ -74,7 +76,7 @@ object Wizard {
             val mixed = mixedCaps(run, hello.core, offer.wl, hello.wl, offer.usb)
             // The joiner follows the host's Controller Type only when it said it would (`pad=`); else neither side sends one.
             // What went out counts: an element that did not fit is not sent.
-            val caps = Caps.of(run, offer.tag, wl = offer.wl, names = offer.name != null, dcBios = offer.dcBios, pad = offer.pad?.takeIf { hello.pad != null })
+            val caps = Caps.of(run, offer.tag, wl = offer.wl, names = offer.name != null, dcBios = offer.dcBios, pad = (if (padFor != null) padFor(run) else offer.pad)?.takeIf { hello.pad != null })
             val pad = Caps.value(caps, "pad")
             ch.writeLine(HelloCodec.format(Hello.host(wireGame(offer.game), 2, caps)))
             // A link session (GB/GBC/GBA) copies no saves: each player keeps their own, which a trade needs (the

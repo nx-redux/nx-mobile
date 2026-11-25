@@ -25,8 +25,11 @@ import com.nxredux.mobile.runner.BiosImport
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.NaomiSetsAsset
+import com.nxredux.mobile.runner.SegaHeader
+import com.nxredux.mobile.runner.SegaPad
 import com.nxredux.mobile.runner.SegaPadType
 import com.nxredux.mobile.runner.SystemFiles
+import com.nxredux.mobile.runner.readUpTo
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.Prefs
 import com.nxredux.mobile.storage.AndroidHomeLocator
@@ -344,9 +347,26 @@ class AndroidNetplay(context: Context, private val sdRoot: () -> File) : Netplay
         }
     }
 
-    override suspend fun segaPadSetting(tag: String, coreId: String, romFileName: String): String {
+    override suspend fun segaPadSetting(tag: String, coreId: String, romFileName: String, content: ContentRef): String {
         val (console, game) = AndroidEmulatorConfigStore(sdRoot).read(tag, coreId, romFileName)
-        return CoreConfig.resolve(emptyMap(), console, game).values[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO
+        return settledSegaPad(CoreConfig.resolve(emptyMap(), console, game).values[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO, coreId, romFileName, content)
+    }
+
+    /** [setting] as [segaPadSetting] hands it to the handshake: picodrive's Auto settled from [content]'s header. */
+    suspend fun settledSegaPad(setting: String, coreId: String, romFileName: String, content: ContentRef): String {
+        if (setting != SegaPadType.AUTO || coreId != SegaPadType.PICODRIVE) return setting
+        val head = withContext(Dispatchers.IO) {
+            runCatching {
+                when {
+                    Names.isArchive(romFileName) -> Archives.head(context, content, romFileName,
+                        CoreRegistry.forId(coreId)?.extensions.orEmpty(), SegaHeader.READ_LENGTH)
+                    SegaHeader.readable(romFileName) -> AndroidRefs(context.contentResolver).openInput(content)?.use { it.readUpTo(SegaHeader.READ_LENGTH) }
+                    else -> null
+                }
+            }.onFailure { NxLog.w(TAG, "Sega header read failed", it) }.getOrNull()
+        }
+        // picodrive's own Auto (SegaPadType.picodrivePorts): no header is the 6-button pad.
+        return if (SegaPadType.resolve(setting, head?.let(SegaHeader::padType)) == SegaPad.THREE) SegaPadType.THREE else SegaPadType.SIX
     }
 
     override fun clientSink(romFileName: String): SaveSink = NetplaySessionDir.sink(context.filesDir, romFileName, Rsync.find(context))

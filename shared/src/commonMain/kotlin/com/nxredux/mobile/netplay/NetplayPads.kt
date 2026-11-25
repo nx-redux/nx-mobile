@@ -9,7 +9,9 @@ import com.nxredux.mobile.runner.SegaPadType
 /**
  * The controller a netplay session gives the core on ports 0-1, exactly what the handheld runs for the same tag and core,
  * so a game that probes the pad takes the same path on both devices (a 6-button probe against a 3-button pad desyncs).
- * Single player never reads this: it keeps Controls → Controller Type ([SegaPadType]). Nor does a Mega Drive / Sega CD /
+ * Exceptions, phones only: [PCSX_LOCKSTEP] (its compile thread drifts any session; the handheld's PS pak does not set it,
+ * so a phone ↔ handheld PS session still runs the two differently). Single player never reads this: it keeps Controls →
+ * Controller Type ([SegaPadType]). Nor does a Mega Drive / Sega CD /
  * 32X session whose two sides both sent their Controller Type: both play the host's through that same path ([forSession]).
  *
  * Sources, nx-redux `skeleton/SYSTEM/tg5040/paks/Emus/<TAG>.pak/default.cfg` and `launch.sh`:

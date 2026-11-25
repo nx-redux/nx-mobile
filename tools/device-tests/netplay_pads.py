@@ -60,6 +60,8 @@ CASES = [
 def expected(core, game, host_pad, client_pad):
     """(session pad, drawn pad, port device) both phones should report."""
     session = host_pad if host_pad != "none" and client_pad != "none" else None
+    if session == "auto" and core == PICO:   # the host settles picodrive's Auto from its own header before it sends it
+        session = "6" if HEADER[game] == "SIX" else "3"
     if session is None:   # the old fixed pad: picodrive's 3-button pad, genesis_plus_gx's header-picked joypad
         return (None, "THREE", DEVICE["THREE"]) if core == PICO else (None, HEADER[game], JOYPAD)
     if session in ("3", "6"):
