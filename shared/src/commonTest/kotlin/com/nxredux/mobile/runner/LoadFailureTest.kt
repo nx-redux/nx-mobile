@@ -130,4 +130,29 @@ class LoadFailureTest {
         assertNull(LoadFailure.message("Foo", listOf("W [NAOMI] Parent not found: bar")))
         assertNull(LoadFailure.message("Foo", listOf("garbage without a level", "E ")))
     }
+
+    // Cemu's "No disc key" refusal (libretro_disc_key_available) reaches the runner as an error line.
+    private val noDiscKey = listOf("E No disc key for Mario Kart 8.wux. Put it beside the image as Mario Kart 8.key, or add it to /data/system/Cemu/keys.txt")
+
+    @Test fun wiiuLoadFailureNamesKeys() {
+        for (ext in listOf("wud", "wux", "WUX")) {
+            assertEquals(
+                "Mario Kart 8 needs its disc key: add it to keys.txt in Bios/WIIU/, or put a .key file with the same name beside the image",
+                LoadFailure.message("Mario Kart 8", noDiscKey, tag = "WIIU", ext = ext),
+                ext,
+            )
+        }
+    }
+
+    @Test fun wiiu_failures_that_are_not_a_missing_key_are_shown_as_the_core_wrote_them() {
+        assertEquals(
+            "The core couldn't load Foo: Could not find base title ID",
+            LoadFailure.message("Foo", listOf("E Could not find base title ID"), tag = "WIIU", ext = "wux"),
+        )
+        // A .wua carries its keys: the key line never applies to it.
+        assertEquals(
+            "The core couldn't load Foo: No disc key for Foo.wua. Put it beside",
+            LoadFailure.message("Foo", listOf("E No disc key for Foo.wua. Put it beside"), tag = "WIIU", ext = "wua"),
+        )
+    }
 }

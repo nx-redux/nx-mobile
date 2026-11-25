@@ -557,10 +557,24 @@ object CoreRegistry {
         // The app's (3D Resolution rows, Res3dConsole.CEMU); native until the launch sends the scale.
         "cemu_internal_resolution" to "native",
     ) + cemuLogKeys.associateWith { "disabled" }
+    // Actions and screen setups the app has no page for: game installs and the WUA conversion (the games are loaded in
+    // place), the toy peripherals, the extra layouts and the button and position that cycle them (the app's own
+    // layouts replace them). Each keeps the core's default.
+    private val cemuHiddenKeys = setOf(
+        "cemu_install_game", "cemu_uninstall_game", "cemu_install_titles", "cemu_uninstall_titles", "cemu_install_remove_source",
+        "cemu_convert_to_wua", "cemu_wua_output_dir",
+        "cemu_emulate_skylander_portal", "cemu_emulate_infinity_base", "cemu_emulate_dimensions_toypad",
+        "cemu_next_screen_layout_button", "cemu_drc_position",
+        "cemu_screen_layout2", "cemu_screen_layout3", "cemu_screen_layout4", "cemu_screen_layout5",
+    )
     private val cemu = CoreDescriptor(
         "cemu", "libcemu_libretro_android.so", setOf("wua", "wux", "wud", "rpx"),
         defaultOptions = cemuOptions,
-        lockedOptions = cemuOptions.keys,
+        lockedOptions = cemuOptions.keys + cemuHiddenKeys,
+        // keys.txt (disc keys for .wud/.wux) lands in system/Cemu/, where Cemu reads it; optional, since .wua and
+        // installed titles need none.
+        biosSubdir = "Cemu",
+        biosFiles = listOf("keys.txt"),
         players = 1,
         cheats = false,
         name = "Cemu",

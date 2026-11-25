@@ -4,7 +4,8 @@ package com.nxredux.mobile.runner
  * Why a core refused a game, from its last warning and error log lines (the runner keeps them, each prefixed with its
  * level: "E " or "W "). flycast's NAOMI/Atomiswave failures (core/hw/naomi/naomi_cart.cpp at the pinned commit) become a
  * sentence saying which file is missing where, gpsp's missing recompiler cache a plain one; any other error line is shown
- * as the core wrote it.
+ * as the core wrote it. Cemu's refusal of an encrypted Wii U disc image (.wud, .wux) with no disc key becomes one naming
+ * where the key goes.
  */
 object LoadFailure {
     private val levelPrefix = Regex("""^([EW]) (.*)$""")
@@ -15,7 +16,10 @@ object LoadFailure {
     private val cannotLoadBios = Regex("""^Error: cannot load BIOS (\S+)$""")
     private val biosFileMissing = Regex("""^(\S+): Cannot open (\S+)$""")
     private val romMissing = Regex("""^Cannot find (\S+)$""")
+    private val noDiscKey = Regex("""^No disc key for .*""")
     private val romTruncated = Regex("""^Invalid ROM: truncated (\S+)$""")
+
+    private val WIIU_ENCRYPTED_DISCS = setOf("wud", "wux")
 
     private const val MAX_FILES = 3
     private const val MAX_LINE = 200
@@ -27,7 +31,7 @@ object LoadFailure {
      * The message for [title]'s failed load given the core's [lines] (oldest first), or null when they say nothing (keep
      * the generic text). [setFile] is the archive the core was given (mslug6.zip), [biosArchive] the BIOS archive it
      * needs without extension (from the set table; a BIOS name such as naomi-jp-d lives in naomi.zip), [parent] its
-     * parent set when it is a clone.
+     * parent set when it is a clone. [tag] and [ext] (the game's console tag and file extension) pick the Wii U wording.
      */
     fun message(
         title: String,
@@ -35,11 +39,16 @@ object LoadFailure {
         setFile: String? = null,
         biosArchive: String? = null,
         parent: String? = null,
+        tag: String? = null,
+        ext: String? = null,
     ): String? {
         val parsed = lines.mapNotNull(::parse)
         val errors = parsed.filter { it.error }
         val last = errors.lastOrNull() ?: return null
         // The MAME set wording only for flycast's arcade loader: a set loaded as is, or a line under its log types.
+        if (tag.equals("WIIU", ignoreCase = true) && ext?.lowercase() in WIIU_ENCRYPTED_DISCS && errors.any { noDiscKey.matches(it.text) }) {
+            return "$title needs its disc key: add it to keys.txt in Bios/WIIU/, or put a .key file with the same name beside the image"
+        }
         val arcade = errors.filter { setFile != null || it.flycast }
 
         arcade.asReversed().firstNotNullOfOrNull { cannotLoadBios.matchEntire(it.text) }?.let { m ->

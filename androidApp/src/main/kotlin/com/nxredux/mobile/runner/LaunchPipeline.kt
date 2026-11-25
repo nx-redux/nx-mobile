@@ -1350,7 +1350,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 // A Dreamcast session's load waits for the other device: refused, it never came (or the two did not agree).
                 if (cfg.np?.ggpo == true && (lines.isEmpty() || lines.any { GGPO_LOG in it })) {
                     NetplayText.FAILED_CONNECT to NetplayText.FAILED
-                } else LoadFailure.message(cfg.title, lines, cfg.romFileName.takeIf { prepared.archiveAsIs }, prepared.naomiBios, naomiParent)
+                } else LoadFailure.message(cfg.title, lines, cfg.romFileName.takeIf { prepared.archiveAsIs }, prepared.naomiBios, naomiParent, cfg.tag, Names.extensionOf(cfg.romFileName))
                     ?.let { it to GameActivity.START_FAILED }
             }
             // Debug builds: a file named simulate_vulkan_fail in the app's files dir makes a Vulkan launch take the fallback

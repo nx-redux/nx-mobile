@@ -1,0 +1,856 @@
+{
+ "core": "cemu",
+ "emulator": "Cemu",
+ "sections": [
+  {
+   "key": "",
+   "label": "",
+   "info": "",
+   "items": [
+    {
+     "key": "cemu_emulate_skylander_portal",
+     "label": "Emulate Skylanders Portal of Power (Restart)",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "cemu_emulate_infinity_base",
+     "label": "Emulate Infinity Base (Restart)",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "cemu_emulate_dimensions_toypad",
+     "label": "Emulate Dimensions Toy Pad (Restart)",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    }
+   ]
+  },
+  {
+   "key": "system",
+   "label": "System",
+   "info": "CPU, language, audio channels and accounts.",
+   "items": [
+    {
+     "key": "cemu_cpu_mode",
+     "label": "CPU Mode (Restart)",
+     "labelCategorized": "",
+     "info": "How the Wii U's PowerPC cores are emulated. Auto: the game profile's mode where it has one, as standalone; else the multicore recompiler on a CPU with four or more physical cores and the single-core one otherwise. The interpreters are far slower and are meant for debugging.",
+     "values": [
+      "auto",
+      "singlecore_interpreter",
+      "singlecore_recompiler",
+      "multicore_recompiler",
+      "multicore_interpreter"
+     ],
+     "labels": [
+      "Auto",
+      "Singlecore Interpreter",
+      "Singlecore Recompiler",
+      "Multicore Recompiler",
+      "Multicore Interpreter"
+     ],
+     "default": "auto"
+    },
+    {
+     "key": "cemu_thread_quantum",
+     "label": "Thread Quantum",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "20000",
+      "45000",
+      "60000",
+      "80000",
+      "100000"
+     ],
+     "labels": [
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "default": "45000"
+    },
+    {
+     "key": "cemu_console_language",
+     "label": "Console Language (Restart)",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "English",
+      "Japanese",
+      "French",
+      "German",
+      "Italian",
+      "Spanish",
+      "Chinese",
+      "Korean",
+      "Dutch",
+      "Portuguese",
+      "Russian",
+      "Taiwanese"
+     ],
+     "labels": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "default": "English"
+    },
+    {
+     "key": "cemu_audio_channels",
+     "label": "Audio Channels (Restart)",
+     "labelCategorized": "",
+     "info": "The TV the console reports to games, as standalone's TV channels setting: games that support it mix for that many speakers. Surround 5.1 goes to RetroArch as six channels when it has multi-channel audio output, else mixed down to stereo.",
+     "values": [
+      "mono",
+      "stereo",
+      "surround"
+     ],
+     "labels": [
+      "Mono",
+      "Stereo",
+      "Surround 5.1"
+     ],
+     "default": "stereo"
+    }
+   ]
+  },
+  {
+   "key": "graphics",
+   "label": "Graphics (Restart)",
+   "info": "Graphics API and shaders. They apply once the game is started again, unless the option says otherwise.",
+   "items": [
+    {
+     "key": "cemu_precompiled_shaders",
+     "label": "Precompiled Shaders (OpenGL)",
+     "labelCategorized": "",
+     "info": "A cache of compiled shader programs. Auto: the game profile's setting where it has one, as standalone; else off on Nvidia, whose driver keeps its own cache, and on elsewhere.",
+     "values": [
+      "auto",
+      "enabled",
+      "disabled"
+     ],
+     "labels": [
+      "Auto",
+      "",
+      ""
+     ],
+     "default": "auto"
+    },
+    {
+     "key": "cemu_async_shader_compile",
+     "label": "Async Shader Compile (Vulkan)",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "enabled",
+      "disabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "enabled"
+    },
+    {
+     "key": "cemu_accurate_shader_mul",
+     "label": "Accurate Shader Multiplication",
+     "labelCategorized": "",
+     "info": "Emulates the GPU's multiplication exactly, as most games need. Auto: the game profile's setting where it has one, as standalone (Super Mario 3D World, Captain Toad and Xenoblade Chronicles X run with it off); else on.",
+     "values": [
+      "auto",
+      "enabled",
+      "disabled"
+     ],
+     "labels": [
+      "Auto",
+      "",
+      ""
+     ],
+     "default": "auto"
+    },
+    {
+     "key": "cemu_gx2drawdone_sync",
+     "label": "GX2DrawDone Sync",
+     "labelCategorized": "",
+     "info": "Makes the game wait until the GPU has finished all its work whenever it calls GX2DrawDone, as standalone's Full sync at GX2DrawDone. Some games need it to show correctly; off can be faster. Can be toggled during gameplay.",
+     "values": [
+      "enabled",
+      "disabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "enabled"
+    },
+    {
+     "key": "cemu_vk_accurate_barriers",
+     "label": "Accurate Barriers (Vulkan)",
+     "labelCategorized": "",
+     "info": "Keeps the synchronization between draws that some games need to render correctly, as standalone's option of that name. Off can be faster, with glitches in those games. Can be toggled during gameplay.",
+     "values": [
+      "enabled",
+      "disabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "enabled"
+    }
+   ]
+  },
+  {
+   "key": "controller",
+   "label": "Controller",
+   "info": "Rumble, motion and which Wii U screen is shown, and how.",
+   "items": [
+    {
+     "key": "cemu_rumble_strength",
+     "label": "Rumble Strength",
+     "labelCategorized": "",
+     "info": "How strongly the controller vibrates when the game asks for it: the GamePad's motor, and the Wii Remote's or Pro Controller's. Off sends the frontend no rumble at all.",
+     "values": [
+      "0",
+      "10",
+      "20",
+      "30",
+      "40",
+      "50",
+      "60",
+      "70",
+      "80",
+      "90",
+      "100"
+     ],
+     "labels": [
+      "Off",
+      "10%",
+      "20%",
+      "30%",
+      "40%",
+      "50%",
+      "60%",
+      "70%",
+      "80%",
+      "90%",
+      "100%"
+     ],
+     "default": "100"
+    },
+    {
+     "key": "cemu_stick_deadzone_p1",
+     "label": "Stick Dead Zone (Player 1)",
+     "labelCategorized": "",
+     "info": "How far player 1's (the GamePad's, or the controller on port 1) sticks have to move before the game sees them, as a share of their full travel; beyond it the rest of the travel is stretched to cover the whole range. 25% is standalone Cemu's default. A lower one suits sticks that rest at the centre (Hall effect, TMR); raise it if the game moves on its own.",
+     "values": [
+      "0",
+      "5",
+      "10",
+      "15",
+      "20",
+      "25",
+      "30",
+      "35",
+      "40",
+      "45",
+      "50"
+     ],
+     "labels": [
+      "Off",
+      "5%",
+      "10%",
+      "15%",
+      "20%",
+      "25%",
+      "30%",
+      "35%",
+      "40%",
+      "45%",
+      "50%"
+     ],
+     "default": "25"
+    },
+    {
+     "key": "cemu_stick_deadzone_p2",
+     "label": "Stick Dead Zone (Players 2-4)",
+     "labelCategorized": "",
+     "info": "How far the Wii Remotes', Pro and Classic Controllers' on ports 2 to 4 sticks have to move before the game sees them, as a share of their full travel; beyond it the rest of the travel is stretched to cover the whole range. 25% is standalone Cemu's default. A lower one suits sticks that rest at the centre (Hall effect, TMR); raise it if the game moves on its own.",
+     "values": [
+      "0",
+      "5",
+      "10",
+      "15",
+      "20",
+      "25",
+      "30",
+      "35",
+      "40",
+      "45",
+      "50"
+     ],
+     "labels": [
+      "Off",
+      "5%",
+      "10%",
+      "15%",
+      "20%",
+      "25%",
+      "30%",
+      "35%",
+      "40%",
+      "45%",
+      "50%"
+     ],
+     "default": "25"
+    },
+    {
+     "key": "cemu_gamepad_motion",
+     "label": "GamePad Motion",
+     "labelCategorized": "",
+     "info": "The GamePad's gyroscope and accelerometer from the sensors RetroArch reads on port 1: a phone's or tablet's own, or a controller's where RetroArch's input driver gives them (DualShock 4, DualSense and others). Games aiming or steering by tilting the GamePad need it. Off: the GamePad lies still, as with standalone's motion turned off.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "Disabled",
+      "Enabled"
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "cemu_number_of_screen_layouts",
+     "label": "# of Screen Layouts",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5"
+     ],
+     "labels": [
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "default": "2"
+    },
+    {
+     "key": "cemu_screen_layout1",
+     "label": "Layout 1",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "Default Screen",
+      "GamePad Screen",
+      "Side by Side",
+      "Top Bottom",
+      "Picture in Picture",
+      "Stacked"
+     ],
+     "labels": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "default": "Default Screen"
+    },
+    {
+     "key": "cemu_screen_layout2",
+     "label": "Layout 2",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "Default Screen",
+      "GamePad Screen",
+      "Side by Side",
+      "Top Bottom",
+      "Picture in Picture",
+      "Stacked"
+     ],
+     "labels": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "default": "GamePad Screen"
+    },
+    {
+     "key": "cemu_screen_layout3",
+     "label": "Layout 3",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "Default Screen",
+      "GamePad Screen",
+      "Side by Side",
+      "Top Bottom",
+      "Picture in Picture",
+      "Stacked"
+     ],
+     "labels": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "default": "Side by Side"
+    },
+    {
+     "key": "cemu_screen_layout4",
+     "label": "Layout 4",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "Default Screen",
+      "GamePad Screen",
+      "Side by Side",
+      "Top Bottom",
+      "Picture in Picture",
+      "Stacked"
+     ],
+     "labels": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "default": "Top Bottom"
+    },
+    {
+     "key": "cemu_screen_layout5",
+     "label": "Layout 5",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "Default Screen",
+      "GamePad Screen",
+      "Side by Side",
+      "Top Bottom",
+      "Picture in Picture",
+      "Stacked"
+     ],
+     "labels": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "default": "Picture in Picture"
+    },
+    {
+     "key": "cemu_next_screen_layout_button",
+     "label": "Next Screen Layout",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "Disabled",
+      "L + R + L2 + R2 + L3 + R3",
+      "Select + L3",
+      "Select + R3",
+      "Tab"
+     ],
+     "labels": [
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "default": "L + R + L2 + R2 + L3 + R3"
+    },
+    {
+     "key": "cemu_drc_position",
+     "label": "GamePad Position",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "normal",
+      "swapped"
+     ],
+     "labels": [
+      "Normal",
+      "Swapped"
+     ],
+     "default": "normal"
+    }
+   ]
+  },
+  {
+   "key": "title_manager",
+   "label": "Title Manager",
+   "info": "Install and uninstall games, title updates and DLC in saves/Cemu/mlc01, the emulated console's storage, and convert the loaded title to a .wua.",
+   "items": [
+    {
+     "key": "cemu_install_game",
+     "label": "Install Games",
+     "labelCategorized": "",
+     "info": "Installs every game from the source directory (system/Cemu/titles), subfolders included, into the emulated Wii U's installed game directory (saves/Cemu/mlc01/usr/title/00050000), as the console installs a game from its disc. A game is a disc image (.wud, .wux, .iso) or a .wua; the title update and DLC a .wua holds are installed with it. An encrypted disc image (.wud, .wux) needs its disc key: in a file beside it with the same name and the extension .key (game.wux, game.key), or in system/Cemu/keys.txt. A game already installed in the same or a newer version is left alone.\n\nWhen this is ON, installing begins immediately, with its progress shown as a notification, and it turns OFF again when all games are installed and this menu is exited or another option is changed. An installed game is started by loading the .rpx in its code folder in the installed game directory; its disc image is not needed any more.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "cemu_uninstall_game",
+     "label": "Uninstall Game",
+     "labelCategorized": "",
+     "info": "Uninstalls the running game and all associated title updates and DLC from the installed directory (saves/Cemu/mlc01/usr/title) once the game is closed or reset; the option stays ON until then. Saves for the game's title ID (saves/Cemu/mlc01/usr/save/<title id>) are not removed.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "cemu_install_titles",
+     "label": "Install Content",
+     "labelCategorized": "",
+     "info": "Installs every title update and DLC from the source directory (system/Cemu/titles), subfolders included, into the installed directory (saves/Cemu/mlc01/usr/title). Each one goes in a folder of its own in the source directory; a NUS download (.app files) needs its title.tmd and its title.tik, the decryption key, next to them. A version already installed that is the same or newer is left alone.\n\nWhen this is ON, installing begins immediately, with its progress shown as a notification, and it turns OFF again when all content is installed and this menu is exited or another option is changed. The game uses the installed content once it is restarted.\n\nContent from other locations can be installed with RetroArch's Main Menu > Load Content, by selecting the corresponding title.tmd, with its title.tik beside it.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "cemu_uninstall_titles",
+     "label": "Uninstall Content",
+     "labelCategorized": "",
+     "info": "Uninstalls the running game's title update and DLC from the installed directory (saves/Cemu/mlc01/usr/title) once the game is closed or reset; the option stays ON until then. Copies in the source directory (system/Cemu/titles) are left alone.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "cemu_install_remove_source",
+     "label": "Remove Files After Installing",
+     "labelCategorized": "",
+     "info": "Removes what Install Games and Install Content have installed from the source directory (system/Cemu/titles): a title update's or DLC's folder once it is installed, and a disc image (with its .key file) or .wua once everything it holds is installed. Files the running game uses are removed when it is closed or reset.\n\nWARNING: this permanently removes files from the source directory. That directory is for the core to manage; keep game data you want to archive elsewhere.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    }
+   ]
+  },
+  {
+   "key": "core",
+   "label": "Core",
+   "info": "Options of this core that standalone Cemu does not have.",
+   "items": [
+    {
+     "key": "cemu_internal_resolution",
+     "label": "Internal Resolution (Restart)",
+     "labelCategorized": "",
+     "info": "A generic fallback for games without a resolution graphic pack: resizes every screen-shaped render target, which some games use for things that break when resized. A multiple of the game's own resolution: for a 720p game 0.5x is 640x360, a quarter of the pixels, and 2x is 2560x1440; for a 1080p game 0.5x is 960x540. When a resolution pack is enabled for the loaded game (Graphic Packs), the pack sets the resolution.",
+     "values": [
+      "0.25x",
+      "0.5x",
+      "0.75x",
+      "native",
+      "1.5x",
+      "2x",
+      "3x"
+     ],
+     "labels": [
+      "0.25x (320x180 at 720p)",
+      "0.5x (640x360 at 720p)",
+      "0.75x (960x540 at 720p)",
+      "Native",
+      "1.5x (1920x1080 at 720p)",
+      "2x (2560x1440 at 720p)",
+      "3x (3840x2160 at 720p)"
+     ],
+     "default": "native"
+    },
+    {
+     "key": "cemu_render_ahead",
+     "label": "Render Ahead One Frame",
+     "labelCategorized": "",
+     "info": "Lets Cemu start drawing the next frame while RetroArch shows the last one, as standalone Cemu does. Smoother where frames take most of the frame time to draw, with one frame more input latency.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "cemu_audio_thread",
+     "label": "Audio Thread (Restart)",
+     "labelCategorized": "",
+     "info": "On: RetroArch takes the audio on its own thread, and the Wii U's audio runs by the clock as in standalone Cemu, so it does not break up while a frame is late (loading, shader compilation). RetroArch's Audio Sync then no longer paces the frames; Vertical Sync does, and RetroArch's audio statistics stay empty. Off: the audio is handed over with each frame.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "cemu_bc1_16bit",
+     "label": "Reduce BC1 Texture Memory (Restart)",
+     "labelCategorized": "",
+     "info": "Halves what BC1 textures cost on a GPU that cannot sample BC, at the price of one bit of green. No effect where BC is supported.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "cemu_show_game_fps",
+     "label": "Show Game FPS",
+     "labelCategorized": "",
+     "info": "Shows the frame rate the game renders at on RetroArch's on-screen display, once a second.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    }
+   ]
+  },
+  {
+   "key": "logging",
+   "label": "Logging",
+   "info": "Extra log output, for diagnosing problems.",
+   "items": [
+    {
+     "key": "cemu_log_to_file",
+     "label": "Write Cemu Log to log.txt",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "enabled",
+      "disabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "enabled"
+    },
+    {
+     "key": "cemu_log_filesystem",
+     "label": "Log File Access (debugging)",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "cemu_log_thread_sync",
+     "label": "Log Thread Synchronisation (debugging)",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "cemu_log_system_api",
+     "label": "Log System API Calls (debugging)",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "cemu_log_texture_memory",
+     "label": "Log Texture Memory (debugging)",
+     "labelCategorized": "",
+     "info": "Reports how much of the texture memory is BC that had to be decompressed because this GPU cannot sample it.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "cemu_log_input_api",
+     "label": "Log Controller API Calls (debugging)",
+     "labelCategorized": "",
+     "info": "Logs every controller call a title makes - which pads it probed for and what it was told. Noisy; for a few seconds at a time.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "cemu_log_audio",
+     "label": "Log Audio and Frame Pacing (debugging)",
+     "labelCategorized": "",
+     "info": "Once a second, how many samples AX produced, how many the ring had to drop, and how many the frontend took; and how many times the frontend ran the core, how many frames the title finished, and where the time went (waiting for the GPU thread, presenting, audio). For working out whether a slow game is held up by the emulated CPU, the GPU or the frontend.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "cemu_log_thread_time",
+     "label": "Log Thread CPU Time (debugging)",
+     "labelCategorized": "",
+     "info": "Once a second, how busy each emulated PowerPC core's thread, the GPU thread and the frontend's thread were, as a share of one host core. A thread near 100% is the one a slow game is waiting on.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "cemu_dump_shaders",
+     "label": "Dump Shaders (debugging)",
+     "labelCategorized": "",
+     "info": "Writes the source of every shader the game uses to system/Cemu/dump/shaders, named by its hashes as they appear in log.txt. For reporting a shader that fails or draws wrongly on a particular GPU. Slows shader compilation down and fills the folder quickly, so turn it off again afterwards.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    }
+   ]
+  }
+ ],
+ "soSha256": "dd2c974e018603209172061518c1d4ed0795e0303cceb645b239eaca1b95a7ed",
+ "probedAt": "2026-11-25"
+}
