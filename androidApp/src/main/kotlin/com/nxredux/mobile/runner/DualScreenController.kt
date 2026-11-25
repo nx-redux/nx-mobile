@@ -46,6 +46,7 @@ import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsSettings
 import com.nxredux.mobile.options.PxRect
+import com.nxredux.mobile.options.WiiuOptions
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_ART_PATH
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_GAME_PATH
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_TITLE
@@ -342,19 +343,33 @@ internal class DualScreenController(
         val sw = surface.width.toFloat()
         val sh = surface.height.toFloat()
         val dsFrame = owner.isNds && (map != null || NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt()))
+        val wiiuFrame = isWiiu && WiiuLayout.isWiiuFrame(g[0].roundToInt(), g[1].roundToInt())
         return when {
             // Not the plain DS stack (no frame yet, or another layout): main draws it whole, so nothing is cut for here.
             dualMode == DualMode.SPLIT && owner.isNds -> if (!dsFrame) emptyList() else splitScreen(sw, sh).withMap(map)
             dualMode == DualMode.SPLIT && owner.isN3ds -> splitScreen(sw, sh).withMap(map)
+            dualMode == DualMode.SPLIT && isWiiu -> if (!wiiuFrame) emptyList() else splitScreen(sw, sh)
+            dualMode == DualMode.PANEL_UP && wiiuFrame -> DualScreen.wiiuScreen(sw, sh, WiiuOptions.settings(owner.frontendValues).big)
             dualMode == DualMode.PANEL_UP && dsFrame -> DualScreen.ndsPanelUp(sw, sh, NdsSettings.parse(owner.frontendValues)).withMap(map)
             else -> null
         }
     }
 
-    /** Split: the DS / 3DS screen not on main, placed on a [sw] x [sh] second surface (sources of the plain stack). */
-    private fun splitScreen(sw: Float, sh: Float): List<NdsRegion> =
-        if (owner.isNds) DualScreen.ndsScreen(sw, sh, DualScreen.splitMain(NdsSettings.parse(owner.frontendValues).big, pictureOn).other)
-        else DualScreen.n3dsScreen(sw, sh, DualScreen.splitMain(n3dsPicture, pictureOn).other)
+    private val isWiiu: Boolean get() = WiiuOptions.appliesTo(owner.layoutTag())
+
+    /** Split: the screen the picture display shows (the DS's or Wii U's big screen, the 3DS's picture screen). */
+    private fun splitPicture(): NdsScreen = when {
+        owner.isN3ds -> n3dsPicture
+        isWiiu -> WiiuOptions.settings(owner.frontendValues).big
+        else -> NdsSettings.parse(owner.frontendValues).big
+    }
+
+    /** Split: the DS / 3DS / Wii U screen not on main, placed on a [sw] x [sh] second surface (sources of the plain stack). */
+    private fun splitScreen(sw: Float, sh: Float): List<NdsRegion> = when {
+        owner.isNds -> DualScreen.ndsScreen(sw, sh, DualScreen.splitMain(splitPicture(), pictureOn).other)
+        isWiiu -> DualScreen.wiiuScreen(sw, sh, DualScreen.splitMain(splitPicture(), pictureOn).other)
+        else -> DualScreen.n3dsScreen(sw, sh, DualScreen.splitMain(splitPicture(), pictureOn).other)
+    }
 
     /**
      * Split with the picture on the second display, the DS / 3DS screen drawn there (px of its surface), the frame taken
@@ -362,7 +377,7 @@ internal class DualScreenController(
      * surface is there.
      */
     fun splitPictureScreens(): List<NdsRegion>? {
-        if (dualMode != DualMode.SPLIT || pictureOn != PictureOn.SECOND || presentation == null || (!owner.isNds && !owner.isN3ds)) return null
+        if (dualMode != DualMode.SPLIT || pictureOn != PictureOn.SECOND || presentation == null || !DualScreenConsole.appliesTo(owner.layoutTag())) return null
         val surface = secondSurface?.takeIf { it.width > 0 && it.height > 0 } ?: return null
         return splitScreen(surface.width.toFloat(), surface.height.toFloat())
     }
@@ -443,7 +458,7 @@ internal class DualScreenController(
         val tag = owner.layoutTag()
         return DualScreen.mode(
             secondScreens.current.value != null, owner.settings.secondScreen,
-            NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag), panelUp,
+            DualScreenConsole.appliesTo(tag), panelUp,
         )
     }
 
@@ -733,7 +748,7 @@ internal class DualScreenController(
         val host = mainPanelHost ?: return
         if (mainPanel.value != null || !mainPanelPill.value) return
         val root = findViewById<View>(R.id.root)
-        val main = DualScreen.splitMain(if (owner.isN3ds) n3dsPicture else NdsSettings.parse(owner.frontendValues).big, pictureOn)
+        val main = DualScreen.splitMain(splitPicture(), pictureOn)
         val g = SkinDual.splitGlass(padLayout.skinPlacement()?.takeIf { padLayout.skinShown }, main)
         host.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END).apply {
             if (g != null && root.width > 0) {

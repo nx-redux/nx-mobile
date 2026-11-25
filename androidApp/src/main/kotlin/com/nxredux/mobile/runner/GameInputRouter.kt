@@ -14,6 +14,7 @@ import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.N3dsOptions
+import com.nxredux.mobile.options.WiiuOptions
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.ui.nx.AxisDirections
@@ -366,6 +367,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
             }
         }
     }
+
+    /** The Wii U's SWAP: the other screen big (split: on the picture display), saved to the game's config as the DS's is. */
+    fun swapWiiuScreens() = setNdsKey(WiiuOptions.swapBigScreen(host.frontendValues))
 
     /**
      * A hotkey's layout change: applied now, shown as [label] (the new value's by default), and saved to the game's config.

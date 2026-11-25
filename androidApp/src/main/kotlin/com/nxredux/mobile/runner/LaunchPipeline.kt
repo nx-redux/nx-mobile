@@ -51,6 +51,7 @@ import com.nxredux.mobile.gpudriver.GpuDriverCrashSettle
 import android.os.Build
 import android.os.Process
 import com.nxredux.mobile.options.N3dsOptions
+import com.nxredux.mobile.options.WiiuOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.OverlayResolver
 import com.nxredux.mobile.options.PadOptions
@@ -636,10 +637,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             if (np?.endsAsLocalGame == true) gameNetplay.localCheats = { cheatsSupported = cheatsOk; loadCheats() }
             // Resolved and decoded before the view exists, so the first frame already has its overlay (the configured one;
             // with none stored the default is None).
-            // A DS game starts split (every DS layout draws its screens as regions), which shows no overlay: none is
+            // A DS or Wii U game starts split (every layout draws its screens as regions), which shows no overlay: none is
             // preloaded, and it counts as split until its first frame says otherwise, so the configured one never flashes.
             val landscape = activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-            val ndsAtStart = NdsOptions.appliesTo(tag)
+            val ndsAtStart = NdsOptions.appliesTo(tag) || WiiuOptions.appliesTo(tag)
             val (sets, preloaded) = withContext(Dispatchers.IO) {
                 val found = Overlays.sets(privateRoot, tag)
                 val overlay = FrontendSettings.parse(FrontendOptions.fromConfig(resolved.values)).overlay
@@ -1438,7 +1439,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // Where the picture is drawn: as last laid out, else (before the game view, or a DS / 3DS before its first
             // frame) the pad skin's glass for the picture the screenshot holds.
             val picture = { host.renderer.thumbnailPicture() ?: host.padLayout.takeIf { it.skinShown }?.skinPlacement()?.let(::coverGlass) }
-            val twoScreens = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
+            val twoScreens = DualScreenConsole.appliesTo(tag)
             val dual = host.dual
             // A DS / 3DS split with the picture on the second display: the screenshot's screen is drawn there.
             val spot: () -> CoverSpot? = if (!twoScreens) { { CoverSpot(ThumbnailDisplay.MAIN, picture()) } } else { {

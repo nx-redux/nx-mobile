@@ -491,7 +491,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     // ---- DS / 3DS 3D resolution (Nds3dResolution, N3ds3dResolution): melonDS's GL scale, Azahar's factor follow the layout ----
     private val res3d = Res3dController(this, renderer)
     override val ndsView: com.nxredux.mobile.options.NdsView?
-        get() = if (isNds || isN3ds) com.nxredux.mobile.options.NdsView(isLandscape(), renderer.ndsControllerMode()) else null
+        get() = if (DualScreenConsole.appliesTo(gameTag)) com.nxredux.mobile.options.NdsView(isLandscape(), renderer.ndsControllerMode()) else null
     override val nds3dDisplayMax: Int? get() = res3d.displayMax
     override val configWrites = Mutex()           // hotkey saves land in press order
     override val isNds: Boolean get() = NdsOptions.appliesTo(gameTag)

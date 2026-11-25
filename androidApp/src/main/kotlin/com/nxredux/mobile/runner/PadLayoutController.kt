@@ -29,6 +29,7 @@ import com.nxredux.mobile.skin.overlayMode
 import com.nxredux.mobile.layout.PadRoom
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.N3dsOptions
+import com.nxredux.mobile.options.WiiuOptions
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsLayoutChoice
@@ -605,8 +606,12 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         action.slot?.let { host.onPadShortcut(it, down); return }   // a strip slot: the player's action
         when (action) {
             SkinAction.MIC -> if (down) host.padMic()?.onTap?.invoke()
-            // the 3DS's swap (held as long as the cap); the DS's on press
-            SkinAction.SWAP -> if (N3dsOptions.appliesTo(host.layoutTag())) input.onN3dsSwap(down) else if (down) input.applyNdsAction(NdsAction.SwapScreens)
+            // the 3DS's swap (held as long as the cap); the DS's and Wii U's on press
+            SkinAction.SWAP -> when {
+                N3dsOptions.appliesTo(host.layoutTag()) -> input.onN3dsSwap(down)
+                WiiuOptions.appliesTo(host.layoutTag()) -> if (down) input.swapWiiuScreens()
+                down -> input.applyNdsAction(NdsAction.SwapScreens)
+            }
             // the stick or the d-pad on a tight Dreamcast layout: the player's choice flipped (nothing held may stick;
             // the new placement lets go of the skin's own touches)
             SkinAction.STICK_SWAP -> if (down) {
@@ -779,6 +784,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 setOf(NdsLayoutChoice.LARGE, NdsLayoutChoice.STACKED)
             N3dsOptions.appliesTo(tag) -> N3dsOptions.appLayoutFor(host.frontendValues, landscape = false, controllerMode = false, screen) in
                 setOf("large", "stacked")
+            WiiuOptions.appliesTo(tag) -> WiiuOptions.layoutShown(host.frontendValues, landscape = false, controllerMode = false) in
+                setOf(NdsLayoutChoice.LARGE, NdsLayoutChoice.STACKED)
             else -> false
         }
     }
