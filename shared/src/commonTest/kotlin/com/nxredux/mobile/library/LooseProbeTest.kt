@@ -45,16 +45,17 @@ class LooseProbeTest {
     }
 
     // A nothing-recognised answer kept under older signatures is probed again (a Saturn disc now places); a current one is reused.
-    @Test fun an_unrecognised_answer_from_older_signatures_is_probed_again() = runTest {
+    @Test fun saturn_disc_probed_again_after_version_bump() = runTest {
         val sat = ByteArray(2048 * 17).also { "SEGA SEGASATURN ".encodeToByteArray().copyInto(it, 0) }
         val fake = FakeRomsSource(mapOf("x" to listOf("S.iso")), bytes = mapOf("x/S.iso" to sat)).apply { stamps["x/S.iso"] = 1_000L }
         val src = CountingRomsSource(fake)
         val dir = fake.listChildren(ContentRef("x"))
         val s = dir.single()
-        val old = listOf(IndexedProbe(s.ref.value, s.sizeBytes, 1_000L, null))
+        val old = listOf(IndexedProbe(s.ref.value, s.sizeBytes, 1_000L, null, signatures = 1))
         val probes = DiscProbes(com.nxredux.mobile.library.disc.DiscProbe(src), old)
         assertEquals("saturn", probes.consoleOf(s, dir))
         assertEquals(listOf("saturn"), probes.used.map { it.console })
+        assertEquals(com.nxredux.mobile.library.disc.DiscSignatures.VERSION, probes.used.single().signatures)
         src.calls.clear()
         val current = listOf(IndexedProbe(s.ref.value, s.sizeBytes, 1_000L, null, signatures = com.nxredux.mobile.library.disc.DiscSignatures.VERSION))
         assertEquals(null, DiscProbes(com.nxredux.mobile.library.disc.DiscProbe(src), current).consoleOf(s, dir))

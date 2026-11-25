@@ -23,7 +23,7 @@ data class ProbeResult(val console: String?, val read: Boolean, val data: Entry?
 
 /**
  * Which console a disc image is, by its own bytes ([DiscSignatures]): a console id, or null when nothing is recognised
- * (or it is a Saturn disc, which no console here runs). Reads a few sectors through [RomsSource.readRange]; a CD CHD
+ * (or a disc kind no console here runs). Reads a few sectors through [RomsSource.readRange]; a CD CHD
  * needs [chd] (without it only a GD or DVD CHD is placed, by its metadata). Never throws.
  */
 class DiscProbe(private val source: RomsSource, private val chd: ChdSectors? = null) {
