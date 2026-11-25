@@ -549,11 +549,13 @@ object CoreRegistry {
     // single screen, and its logging and FPS overlay are off.
     private val cemuLogKeys = listOf(
         "cemu_log_to_file", "cemu_log_filesystem", "cemu_log_thread_sync", "cemu_log_system_api",
-        "cemu_log_texture_memory", "cemu_log_input_api", "cemu_log_audio",
+        "cemu_log_texture_memory", "cemu_log_input_api", "cemu_log_audio", "cemu_log_thread_time",
     )
     private val cemuOptions = mapOf(
         "cemu_gpu_api" to "Vulkan", "cemu_screen_layout1" to "Stacked", "cemu_number_of_screen_layouts" to "1",
         "cemu_show_game_fps" to "disabled",
+        // A debug feature that writes files.
+        "cemu_dump_shaders" to "disabled",
         // The app's (3D Resolution rows, Res3dConsole.CEMU); native until the launch sends the scale.
         "cemu_internal_resolution" to "native",
     ) + cemuLogKeys.associateWith { "disabled" }
