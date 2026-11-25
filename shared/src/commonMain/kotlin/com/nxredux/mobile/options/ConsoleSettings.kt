@@ -49,11 +49,12 @@ object ConsoleSettings {
     private val SCALE_KEYS = Res3dConsole.entries.flatMap { listOf(it.maxScaleKey, it.scaleKey) }.toSet()
 
     private fun graphicsRows(tag: String, gpuDrivers: List<GpuDriver>?, autoVulkan: Boolean, mali: Boolean): List<FrontendOption> {
-        if (!GraphicsApiOptions.appliesTo(tag)) return emptyList()
+        val switch = CoreRegistry.forTag(tag)?.vulkan ?: return emptyList()
         val drivers = GpuDriverOptions.appliesTo(tag, gpuDrivers != null)
+        if (switch.vulkanOnly) return if (drivers) listOf(GpuDriverOptions.row(gpuDrivers.orEmpty(), vulkanOnly = true)) else emptyList()
         // On a Mali GPU the driver picked here decides what Auto is for some cores: the row stays on Auto, or picking the
         // system driver would hide the row needed to pick a custom one again.
-        val driverDecidesAuto = mali && CoreRegistry.forTag(tag)?.vulkan?.let { it.autoOnMali && it.maliNeedsCustomDriver } == true
+        val driverDecidesAuto = mali && switch.autoOnMali && switch.maliNeedsCustomDriver
         return listOf(GraphicsApiOptions.rowFor(autoVulkan, mali, drivers, n64 = CoreRegistry.consoleOf(tag)?.id == "n64")) +
             (if (drivers) listOf(GpuDriverOptions.row(gpuDrivers.orEmpty(), autoVulkan || driverDecidesAuto)) else emptyList())
     }

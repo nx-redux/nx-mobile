@@ -83,4 +83,23 @@ class GpuDriverOptionsTest {
         assertEquals(keys.size, keys.toSet().size)
         assertTrue(GpuDriverOptions.KEY in keys)
     }
+    // Wii U is Vulkan only: no Graphics API row to show the driver row under, so it is always shown, per console and per game.
+    @Test fun vulkanOnlyShowsTheDriverRowWithoutTheGraphicsApiRow() {
+        assertTrue(GpuDriverOptions.appliesTo("WIIU", available = true))
+        assertTrue(!GpuDriverOptions.appliesTo("WIIU", available = false))
+        val rows = ConsoleSettings.tableFor("WIIU", gpuDrivers = listOf(turnip))
+        assertTrue(rows.none { it.key == GraphicsApiOptions.KEY })
+        val row = rows.single { it.key == GpuDriverOptions.KEY }
+        assertNull(row.shownWhen)
+        assertNotNull(rows.shownFor(emptyMap()).firstOrNull { it.key == GpuDriverOptions.KEY })
+        assertNotNull(rows.shownFor(mapOf(GraphicsApiOptions.KEY to GraphicsApiOptions.GLES)).firstOrNull { it.key == GpuDriverOptions.KEY })
+        val wiiu = CoreRegistry.forTag("WIIU")!!
+        for (forGame in listOf(false, true)) {
+            val p = EmulatorSettings.page("WIIU", wiiu, null, wiiu.defaultOptions, null, null, forGame = forGame, gpuDrivers = listOf(turnip))
+            assertNotNull(p.console.singleOrNull { it.option.key == GpuDriverOptions.KEY }, "forGame $forGame")
+            assertTrue(p.console.none { it.option.key == GraphicsApiOptions.KEY })
+        }
+        assertTrue(ConsoleSettings.tableFor("WIIU").none { it.key == GpuDriverOptions.KEY })
+        assertEquals(GraphicsApiOptions.KEY to setOf(GraphicsApiOptions.VULKAN), ConsoleSettings.tableFor("WII", gpuDrivers = listOf(turnip)).single { it.key == GpuDriverOptions.KEY }.shownWhen)
+    }
 }
