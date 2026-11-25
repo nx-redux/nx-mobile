@@ -588,7 +588,8 @@ object CoreRegistry {
         keepLoaded = true,
         // A game starts inside one frame, and that frame loads the game's shader and pipeline caches, which grow with
         // play: Mario Kart 8 with 4149 shaders and 3300 pipelines took 20 s on the emulator, past the default limit.
-        // The cost is a Quit during a very long start waiting for the start to end.
+        // The cost: a Quit during a very long start waits for the start to end, and past a minute Android may report the
+        // app as not responding before the runner gives up on the core. From the first frame on, the default applies.
         hangLimitMillis = 120_000L,
         // Cemu presents its own image through set_image and announces every larger frame through its geometry, so its
         // frames stay bounded by the max geometry, not the surface (swapchainFrames).

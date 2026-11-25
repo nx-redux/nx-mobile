@@ -2317,8 +2317,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
         override fun onViewCreated(view: GLRetroView) { game.retroView = view }
         override fun onGameReady() { game.gameReady = true }
-        override fun startCoreWatchdog(limitMillis: Long, stalledMillis: () -> Long) {
-            game.coreWatchdog = CoreWatchdog(stalledMillis, limitMillis, onHung = { onCoreHung(it) }).also { it.start() }
+        override fun startCoreWatchdog(core: CoreDescriptor?, stalledMillis: () -> Long) {
+            val limit = { CoreWatchdog.limitFor(core, game.gameReady) }
+            game.coreWatchdog = CoreWatchdog(stalledMillis, limit, onHung = { onCoreHung(it) }).also { it.start() }
         }
         override fun startGameTime(rec: GameTimeRecorder) {
             game.gameTime = rec

@@ -109,8 +109,10 @@ data class CoreDescriptor(
      */
     val keepLoaded: Boolean = false,
     /**
-     * How long one frame may run before the runner treats the core as hung and closes the game; null = the runner's
-     * default. For a core whose game start is one long frame that grows with play.
+     * How long one frame may run, until the game's first frame has rendered, before the runner treats the core as hung
+     * and closes the game; null = the runner's default, which also applies from the first frame on. For a core whose
+     * game start is one long frame that grows with play. Above a minute, a Quit blocked on a start that long may be
+     * reported as not responding by Android before the runner closes the game.
      */
     val hangLimitMillis: Long? = null,
     /**

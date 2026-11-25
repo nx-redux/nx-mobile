@@ -197,8 +197,8 @@ internal interface LaunchHost : GameScreenHost {
     fun onViewCreated(view: GLRetroView)
     /** The first frame rendered: the battery save and the auto state may be written from here. */
     fun onGameReady()
-    /** The core's stall watch, from the view's creation to the end of onDestroy. */
-    fun startCoreWatchdog(limitMillis: Long, stalledMillis: () -> Long)
+    /** The core's stall watch, from the view's creation to the end of onDestroy, at [core]'s limits. */
+    fun startCoreWatchdog(core: CoreDescriptor?, stalledMillis: () -> Long)
     /** Game time's session for this launch, as onStart and onStop keep it from here. */
     fun startGameTime(rec: GameTimeRecorder)
 
@@ -1271,7 +1271,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             shortcuts.pushMicSource()   // a Mic toggle tapped before the view existed
             // Not in netplay: a link cable's step may wait out the peer's hold (sio_lockstep: up to 30 s), and the session
             // has its own timeouts.
-            startCoreWatchdog(CoreWatchdog.limitFor(cfg.descriptor)) { if (netplay == null) view.stepStalledMillis() else 0L }
+            startCoreWatchdog(cfg.descriptor) { if (netplay == null) view.stepStalledMillis() else 0L }
             if (focusPaused) { view.frameSpeed = 0; view.audioEnabled = false }   // focus went to another app while loading
             // Collected before the view is added (its ON_CREATE) and long before the first frame: the runner reports a
             // change only, from an unbuffered flow, so a missed event would leave the motor wrong until the next one.
