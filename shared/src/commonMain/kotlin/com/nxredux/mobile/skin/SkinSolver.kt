@@ -594,9 +594,15 @@ object SkinSolver {
             val at = spot(p)
             // the screen between the side groups: its frame (not its picture's height) as wide as they leave room for
             val wide = if (p === between) widenLeft + widenRight else 0f
-            val px = at[0] - (if (p === between) widenLeft else 0f); val gx = at[2] + wide / p.scale
+            val wideX = at[0] - (if (p === between) widenLeft else 0f); val wideGx = at[2] + wide / p.scale
             // the screen between the side groups grows up under a capped frame (its bottom kept by the row under it)
-            val gy = at[3] + (if (p === between) (tallen + raise + screenRise) / p.scale else 0f)
+            val grown = at[3] + (if (p === between) (tallen + raise + screenRise) / p.scale else 0f)
+            // the GamePad's frame hugs its 16:9 picture (no bars round it): no taller than the picture at the frame's
+            // width, its top kept; no wider than the picture at that height, centred where the frame would be
+            val pad = p.glass?.takeIf { p === between && spec.variant == SkinVariant.WIIU && it.screen == GlassScreen.TOUCH }
+            val gy = pad?.let { pg -> minOf(grown, (pg.w + wideGx) * 9f / 16f - pg.h) } ?: grown
+            val gx = pad?.let { pg -> minOf(wideGx, (pg.h + gy) * 16f / 9f - pg.w) } ?: wideGx
+            val px = wideX + (wideGx - gx) * p.scale / 2f
             val shapeW = at[2]   // the glass's own growth, its picture's shape kept
             // after its growth, which reaches up from where the piece is drawn for the window, not where it moves to
             val py = at[1] - (if (p === between) raise else 0f) - (if (p.glass != null) screenRise else if (p.anchor == PieceAnchor.CENTRE) 0f else controlRise)

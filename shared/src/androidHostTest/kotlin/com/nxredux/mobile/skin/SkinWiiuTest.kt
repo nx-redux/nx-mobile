@@ -98,4 +98,95 @@ class SkinWiiuTest {
             }
         }
     }
+
+    private fun union(rs: List<PxRect>): PxRect? = if (rs.isEmpty()) null else {
+        val x0 = rs.minOf { it.x }; val y0 = rs.minOf { it.y }
+        PxRect(x0, y0, rs.maxOf { it.x + it.width } - x0, rs.maxOf { it.y + it.height } - y0)
+    }
+
+    /** The drawn frame round the top (or stack) glass, and the touch piece round the touch glass, window px. */
+    private fun frames(p: SkinPlacement): Pair<PxRect?, PxRect?> {
+        val ti = p.spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
+        return union(p.pieces.filter { it.piece == -1 && !it.strip && it.fill < 0f }.map { it.dst }) to
+            (if (ti >= 0) union(p.pieces.filter { it.piece == ti && it.fill < 0f }.map { it.dst }) else null)
+    }
+
+    /** Border widths (left, top, right, bottom) of [frame] round [glass]. */
+    private fun borders(frame: PxRect, glass: PxRect) = listOf(glass.x - frame.x, glass.y - frame.y,
+        frame.x + frame.width - glass.x - glass.width, frame.y + frame.height - glass.y - glass.height)
+
+    /**
+     * No touch shortcut strip (the Wii U offers none), and every screen's frame as thick under its glass as over it and
+     * as thick right as left: no black band under the picture.
+     */
+    @Test
+    fun the_frames_hug_their_glasses_with_no_shortcut_strip() {
+        for (id in packs) {
+            val pack = skinPack(id)
+            for (d in GOLDEN_DEVICES) {
+                val label = "$id ${d.name}"
+                val p = assertNotNull(place(pack, d), label)
+                assertTrue(p.controls.none { it.spec.id.startsWith("TOUCH_") }, "$label: a touch shortcut slot")
+                assertTrue(p.spec.frame?.strip == null && p.spec.pieces.none { it.strip != null }, "$label: a strip")
+                val (frame, touchFrame) = frames(p)
+                val top = assertNotNull(p.glass(GlassScreen.TOP) ?: p.glass(GlassScreen.STACK), label).rect
+                p.glass(GlassScreen.TOUCH)?.rect?.let { assertEquals(16f / 9f, aspect(it), 0.01f, "$label GamePad glass ${it}") }
+                for ((f, g) in listOf(frame to top, touchFrame to p.glass(GlassScreen.TOUCH)?.rect)) {
+                    if (f == null || g == null) continue
+                    val (l, t, r, b) = borders(f, g)
+                    assertEquals(l, r, 1f, "$label left / right $l $r")
+                    assertEquals(t, b, 1f, "$label top / bottom $t $b")
+                }
+            }
+        }
+    }
+
+    /**
+     * The touch screen's frame as far under the top screen's as the 3DS's on the same window; half-folded, the fold sets
+     * it (the top screen's frame ends above the fold, no taller than its picture needs): its top where the 3DS's is.
+     * Not on the Ultra sideways: there the 3DS's boxes keep its taller 4:3 touch frame lower than the board's frame gap,
+     * which the GamePad keeps as on every other fold board.
+     */
+    @Test
+    fun the_screens_are_as_far_apart_as_the_3ds_screens() {
+        for (id in packs) {
+            val pack = skinPack(id)
+            for (d in GOLDEN_DEVICES.filter { it.name != "ultra_land" }) {
+                val label = "$id ${d.name}"
+                val p = assertNotNull(place(pack, d), label)
+                val n3ds = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, hingeY = d.hingeY, foldable = d.foldable, variant = SkinVariant.N3DS), label)
+                val (wf, wt) = frames(p); val (nf, nt) = frames(n3ds)
+                if (wf == null || wt == null || nf == null || nt == null) continue
+                if (d.hingeY != null) assertEquals(nt.y, wt.y, 1f, "$label: touch frame top ${p.spec.id} vs ${n3ds.spec.id}")
+                else assertEquals(nt.y - nf.y - nf.height, wt.y - wf.y - wf.height, 1f, "$label: gap ${p.spec.id} vs ${n3ds.spec.id}")
+            }
+        }
+    }
+
+    /**
+     * The roomy landscape shell (the unfolded Fold sideways): the right stick the left's size, level with it; the face
+     * level with the d-pad under it; L3 at the left stick's lower right and R3 at the right stick's lower left.
+     */
+    @Test
+    fun the_unfolded_fold_sideways_mirrors_the_sticks() {
+        for (id in packs) {
+            val pack = skinPack(id)
+            for (name in listOf("inner_land", "inner_land_half", "tablet_land")) {
+                val d = GOLDEN_DEVICES.single { it.name == name }
+                val label = "$id $name"
+                val p = assertNotNull(place(pack, d), label)
+                assertEquals("grip_wiiugp_tall", p.spec.id, label)
+                val c = p.controls.associateBy { it.spec.id }
+                val st = c.getValue("STICK"); val cs = c.getValue("CSTICK"); val dp = c.getValue("DPAD")
+                assertEquals(st.spec.r, cs.spec.r, 0.5f, "$label stick sizes")
+                assertEquals(st.y, cs.y, 1f, "$label stick heights")
+                val face = listOf("X", "Y", "A", "B").map { c.getValue(it) }
+                assertEquals(dp.y, face.map { it.y }.average().toFloat(), 1f, "$label face height")
+                val l3 = c.getValue("L3"); val r3 = c.getValue("R3")
+                assertTrue(l3.x > st.x && l3.y > st.y, "$label L3 at ${l3.x},${l3.y}")
+                assertTrue(r3.x < cs.x && r3.y > cs.y, "$label R3 at ${r3.x},${r3.y}")
+                assertEquals(l3.y, r3.y, 1f, "$label L3 / R3 level")
+            }
+        }
+    }
 }
