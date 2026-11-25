@@ -112,4 +112,19 @@ class BiosCheckTest {
     @Test fun plan_without_hle_still_refuses() =
         assertEquals(BiosPlan.Refuse(BiosCheck.message("FDS", BiosNeed(listOf("disksys.rom")))),
             BiosCheck.plan("FDS", CoreRegistry.requiredBios("FDS"), "fds", emptySet(), false))
+
+    @Test fun hle_notice_names_the_console_and_folder_from_the_registry() =
+        assertEquals("Running without a Sega CD BIOS: some games may not work. Put x.bin in Bios/SEGACD/.",
+            BiosCheck.hleNotice("SEGACD", BiosNeed(listOf("x.bin"), hle = HleFallback("k", "v"))))
+    @Test fun hle_notice_for_a_suffix_need_has_no_first_name_to_read() =
+        assertEquals("Running without a Sony PlayStation 2 BIOS: some games may not work. Put a .bin file in Bios/PS2/.",
+            BiosCheck.hleNotice("PS2", BiosNeed(emptyList(), anySuffix = ".bin", hle = HleFallback("k", "v"))))
+
+    @Test fun notice_due_once_per_console() {
+        val hle = BiosCheck.plan("DC", CoreRegistry.requiredBios("DC"), "gdi", emptySet(), netplay = false)
+        val notice = (hle as BiosPlan.Hle).notice
+        assertEquals(notice, BiosCheck.noticeDue(hle, "DC", emptySet()))
+        assertEquals(null, BiosCheck.noticeDue(hle, "DC", setOf("DC")))
+        assertEquals(null, BiosCheck.noticeDue(BiosPlan.Ok, "DC", emptySet()))
+    }
 }

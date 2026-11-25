@@ -496,6 +496,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         val archiveAsIs: Boolean,
         val naomiSets: NaomiSets,
         val naomiBios: String?,
+        /** Core options that make a core without its BIOS run its built-in one; empty when the BIOS is there. */
+        val hleOptions: Map<String, String>,
+        /** The notice for an HLE launch that has not been told yet, toasted once the launch is read. */
+        val hleNotice: String?,
     )
 
     // RomCache entries this game uses (its extraction, or its real-path copies): held so no sweep deletes them; released in onDestroy.
@@ -903,9 +907,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // read with every region's BIOS there too: the checksum check below judges only the region's file.
             val discRegion = if (msuMd) msuMdRegion(cfg) else segaCdRegion(cfg, inner, contentExtension)
             val needs = requiredBios.filterNot { discRegion != null && SegaCdBios.isSegaCdNeed(it) }
-            BiosCheck.missing(needs, biosExtension, biosPresent).firstOrNull()?.let {
-                return refuse(BiosCheck.message(cfg.tag, it))
-            }
+            val biosPlan = BiosCheck.plan(cfg.tag, needs, biosExtension, biosPresent, netplay = cfg.np != null)
+            if (biosPlan is BiosPlan.Refuse) return refuse(biosPlan.message)
+            if (biosPlan is BiosPlan.Hle) NxLog.i(TAG_LOG, "BIOS missing: HLE")
             discRegion?.let { region ->
                 val core = cfg.descriptor?.id.orEmpty()
                 SegaCdBios.missing(core, region, biosPresent)?.let { file ->
@@ -936,7 +940,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             } else systemDir
             // netplay: a link session's game is the player's own, so it gets achievements as a normal launch; lockstep has none.
             if (cfg.np == null || cfg.np.allowsAchievements) prepareAchievements(cfg.tag, cfg.romFileName, cfg.content, inner)
-            return PreparedContent(inner, launchSystemDir, savesDir, sram, rtc, segaSetting, biosPresent, archiveAsIs, naomiSets, naomiBios)
+            return PreparedContent(inner, launchSystemDir, savesDir, sram, rtc, segaSetting, biosPresent, archiveAsIs, naomiSets, naomiBios,
+                (biosPlan as? BiosPlan.Hle)?.options.orEmpty(), BiosCheck.noticeDue(biosPlan, cfg.tag, settings.hleBiosNoticeShown))
         }
     }
 
@@ -1057,7 +1062,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                             NxLog.i(TAG_LOG, "N64 hi-res VRAM limit: $limit MB (device ${total / (1024 * 1024)} MB)")
                             mapOf(N64HiresPack.VRAM_KEY to limit)
                         } else emptyMap()
-                        val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + nds3dLaunch + res3dAlso + ps2BiosOption + n64Vram + graphics.forcedOptions
+                        val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + nds3dLaunch + res3dAlso + ps2BiosOption + n64Vram + prepared.hleOptions + graphics.forcedOptions
                         variables = withForced(cfg.options, forced).toTypedArray()
                         rumbleEventsEnabled = gameRumble != GameRumble.OFF   // Game rumble Off: the runner does not even read the core's state
                         // DS / 3DS: the frontend feeds the core's mic ([ShortcutsMicController.applyMic] picks silence, the phone mic or noise).
@@ -1139,6 +1144,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             driverCrashNotice?.let { toast(it) }
             preflightNotice?.let { toast(it) }
+            prepared.hleNotice?.let {
+                toast(it)
+                settings.hleBiosNoticeShown = settings.hleBiosNoticeShown + CoreRegistry.consoleTag(cfg.tag.trim().uppercase())
+            }
             return data
         }
     }

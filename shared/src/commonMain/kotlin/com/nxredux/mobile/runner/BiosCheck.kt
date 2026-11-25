@@ -43,13 +43,19 @@ object BiosCheck {
     fun plan(tag: String, needs: List<BiosNeed>, ext: String, present: Set<String>, netplay: Boolean): BiosPlan {
         val need = missing(needs, ext, present).firstOrNull() ?: return BiosPlan.Ok
         val hle = need.hle ?: return BiosPlan.Refuse(message(tag, need))
-        if (netplay) return BiosPlan.Refuse("${consoleName(tag)} netplay needs a BIOS: put ${need.anyOf.first()} in Bios/${CoreRegistry.consoleTag(tag.trim().uppercase())}/")
+        if (netplay) return BiosPlan.Refuse("${consoleName(tag)} netplay needs a BIOS: put ${biosWording(need)} in Bios/${CoreRegistry.consoleTag(tag.trim().uppercase())}/")
         return BiosPlan.Hle(mapOf(hle.optionKey to hle.optionValue), hleNotice(tag, need))
     }
 
     /** "Running without a Dreamcast BIOS: some games may not work. Put dc_boot.bin in Bios/DC/." */
     fun hleNotice(tag: String, need: BiosNeed): String =
-        "Running without a ${consoleName(tag)} BIOS: some games may not work. Put ${need.anyOf.first()} in Bios/${CoreRegistry.consoleTag(tag.trim().uppercase())}/."
+        "Running without a ${consoleName(tag)} BIOS: some games may not work. Put ${biosWording(need)} in Bios/${CoreRegistry.consoleTag(tag.trim().uppercase())}/."
+
+    /** The notice to show for [plan] on [tag], or null when it is no HLE launch or [shown] (console tags) already had it. */
+    fun noticeDue(plan: BiosPlan, tag: String, shown: Set<String>): String? =
+        (plan as? BiosPlan.Hle)?.notice?.takeIf { CoreRegistry.consoleTag(tag.trim().uppercase()) !in shown }
+
+    private fun biosWording(need: BiosNeed): String = need.anyOf.firstOrNull() ?: "a ${need.anySuffix} file"
 
     private fun consoleName(tag: String): String {
         val t = tag.trim().uppercase()
@@ -59,10 +65,10 @@ object BiosCheck {
     /** "Sega CD needs a BIOS: put bios_CD_U.bin (or bios_CD_E.bin, bios_CD_J.bin) in Bios/SEGACD/" for the launched [tag]. */
     fun message(tag: String, need: BiosNeed): String {
         val t = tag.trim().uppercase()
-        val console = CoreRegistry.consoleOf(t)?.displayName ?: t
+        val console = consoleName(t)
         if (need.anySuffix != null) return "$console needs a BIOS: put a ${need.anySuffix} file in Bios/${CoreRegistry.consoleTag(t)}/"
         val rest = need.anyOf.drop(1)
-        val names = if (rest.isEmpty()) need.anyOf.first() else "${need.anyOf.first()} (or ${rest.joinToString(", ")})"
+        val names = if (rest.isEmpty()) biosWording(need) else "${need.anyOf.first()} (or ${rest.joinToString(", ")})"
         return "$console needs a BIOS: put $names in Bios/${CoreRegistry.consoleTag(t)}/"
     }
 }
