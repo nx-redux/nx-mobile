@@ -82,4 +82,20 @@ class SkinWiiuTest {
         val pack = skinPack().let { it.copy(layouts = it.layouts.filter { l -> l.variant != SkinVariant.WIIU }) }
         for (d in GOLDEN_DEVICES) assertNull(place(pack, d), d.name)
     }
+
+    /** The Button layout editor places the GamePad as the game does, so a tweak saved there lands on the drawn layout. */
+    @Test
+    fun the_layout_editor_picks_the_layout_the_game_draws() {
+        val tag = "WIIU"
+        val ds = com.nxredux.mobile.ui.skinlayout.SkinLayoutEdit.twoScreens(tag)
+        val editorPicture = if (ds) null else (4f / 3f * 240f) to 240f
+        for (id in packs) {
+            val pack = skinPack(id)
+            for (d in GOLDEN_DEVICES.filter { it.hingeY == null }) {
+                val editor = SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds, editorPicture, foldable = d.foldable, variant = SkinVariant.WIIU)
+                val game = SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, foldable = d.foldable, variant = SkinVariant.WIIU)
+                assertEquals(game?.spec?.id, editor?.spec?.id, "$id ${d.name}")
+            }
+        }
+    }
 }
