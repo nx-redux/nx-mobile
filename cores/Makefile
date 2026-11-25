@@ -524,7 +524,7 @@ armsx2_FLAGS = -DCMAKE_PREFIX_PATH=$(ARMSX2_DEPS)/prefix -DCMAKE_FIND_ROOT_PATH=
 # with the wrong compiler, so cemu_ENV sets the one and drops the other. Finished packages go to a binary cache beside
 # the build tree, which clean-cemu and distclean-cemu keep, so a rebuild does not recompile the dependency set.
 # Vulkan only on Android (the OpenGL backend is desktop GL). The library lands in the source tree's bin/ (the target's
-# LIBRARY_OUTPUT_DIRECTORY), hence the artifact path relative to build/cemu.
+# LIBRARY_OUTPUT_DIRECTORY), so cemu_ARTIFACT_PATH names it there rather than under the build tree.
 # patches/cemu/0001: a Stacked screen layout, the TV picture over the GamePad picture at the same width (output W x 2H,
 # aspect 8:9), which the app cuts into its two screens. patches/cemu/0002: no mouse cursor over the GamePad picture; on
 # a touchscreen the finger is the pointer.
@@ -535,7 +535,7 @@ armsx2_FLAGS = -DCMAKE_PREFIX_PATH=$(ARMSX2_DEPS)/prefix -DCMAKE_FIND_ROOT_PATH=
 cemu_REPO = https://github.com/WizzardSK/cemu-libretro
 cemu_HASH = dbf18093970bd3091e201a0a893eacd0256f9c26
 cemu_KIND = cmake
-cemu_ARTIFACT = ../../$(SRC_ROOT)/cemu/bin/cemu_libretro.so
+cemu_ARTIFACT_PATH = $(SRC_ROOT)/cemu/bin/cemu_libretro.so
 cemu_CMAKE = $(CMAKE_330)/cmake
 cemu_NINJA = $(CMAKE_330)/ninja
 cemu_PLATFORM = android-28
@@ -657,6 +657,7 @@ $1_CORE ?= $(1)_libretro_android.so
 $1_KIND ?= ndkbuild
 $1_BUILD_PATH ?= .
 $1_ARTIFACT ?= libs/$(ABI)/libretro.so
+$1_ARTIFACT_PATH ?= $(BUILD_ROOT)/$(1)/$$($1_ARTIFACT)
 $1_CMAKE_TARGET ?= $(1)_libretro
 $1_OPTIONS_ID ?= $(1)
 $1_CMAKE ?= $(CMAKE)
@@ -701,7 +702,7 @@ $(OUTPUT_ROOT)/$$($1_CORE): $(SRC_ROOT)/$(1)/.patched
 	  -DCMAKE_TOOLCHAIN_FILE=$(NDK)/build/cmake/android.toolchain.cmake -DANDROID_ABI=$(ABI) -DANDROID_PLATFORM=$$($1_PLATFORM) \
 	  -DCMAKE_BUILD_TYPE=Release "-DCMAKE_SHARED_LINKER_FLAGS=$(PAGE_LDFLAGS)" $$($1_FLAGS)
 	$$($1_ENV) $$($1_CMAKE) --build $(BUILD_ROOT)/$(1) --target $$($1_CMAKE_TARGET) $(PROCS)
-	$(STRIP) --strip-unneeded -o $(OUTPUT_ROOT)/$$($1_CORE) $(BUILD_ROOT)/$(1)/$$($1_ARTIFACT)
+	$(STRIP) --strip-unneeded -o $(OUTPUT_ROOT)/$$($1_CORE) $$($1_ARTIFACT_PATH)
 endif
 
 clone-$(1): $(SRC_ROOT)/$(1)/.checkout-$$($1_HASH)
