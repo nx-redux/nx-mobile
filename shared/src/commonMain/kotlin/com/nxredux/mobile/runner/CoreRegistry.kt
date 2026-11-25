@@ -558,6 +558,8 @@ object CoreRegistry {
         "cemu_dump_shaders" to "disabled",
         // The app's (3D Resolution rows, Res3dConsole.CEMU); native until the launch sends the scale.
         "cemu_internal_resolution" to "native",
+        // The app's (Motion Controls, WiiuOptions.motionOption): the launch sends the resolved row.
+        "cemu_gamepad_motion" to "disabled",
     ) + cemuLogKeys.associateWith { "disabled" }
     // Actions and screen setups the app has no page for: game installs and the WUA conversion (the games are loaded in
     // place), the toy peripherals, the extra layouts and the button and position that cycle them (the app's own

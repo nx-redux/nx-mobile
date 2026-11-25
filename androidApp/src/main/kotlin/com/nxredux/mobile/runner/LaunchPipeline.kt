@@ -133,6 +133,7 @@ internal interface LaunchHost : GameScreenHost {
     val shortcuts: ShortcutsMicController
     val saves: SaveSession
     val wii: WiiDolphinController
+    val wiiuMotion: WiiuMotionController
     val res3d: Res3dController
     val gameNetplay: GameNetplay
     val speed: SpeedController
@@ -903,6 +904,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 inner?.let(WiiDiscIdReader::read) ?: WiiDiscIdReader.read(refs, cfg.content, cfg.romFileName)
             }
             wii.resolveAtLaunch(cfg.tag, wiiDisc)
+            wiiuMotion.resolveAtLaunch(cfg.tag)
             padMap = if (isDc) PadMap.IDENTITY else PadMap.forTag(cfg.tag, segaPad)
             // Only 3-button draws differently from the six the pad was composed with in onCreate: recompose it.
             if (segaPad == SegaPad.THREE) relayoutPad()
@@ -1075,7 +1077,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                             NxLog.i(TAG_LOG, "N64 hi-res VRAM limit: $limit MB (device ${total / (1024 * 1024)} MB)")
                             mapOf(N64HiresPack.VRAM_KEY to limit)
                         } else emptyMap()
-                        val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + nds3dLaunch + res3dAlso + ps2BiosOption + n64Vram + graphics.forcedOptions
+                        val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + wiiuMotion.launchOption() + nds3dLaunch + res3dAlso + ps2BiosOption + n64Vram + graphics.forcedOptions
                         variables = withForced(cfg.options, forced).toTypedArray()
                         rumbleEventsEnabled = gameRumble != GameRumble.OFF   // Game rumble Off: the runner does not even read the core's state
                         // DS / 3DS: the frontend feeds the core's mic ([ShortcutsMicController.applyMic] picks silence, the phone mic or noise).
@@ -1264,6 +1266,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     .onFailure { NxLog.w(TAG_LOG, "could not set $k", it) }
             }
             if (isN3ds) wii.offerN3dsMotion()
+            wiiuMotion.offerBeforeLoad()
             val view = GLRetroView(activity, data)
             view.pictureHeld = true   // black until the first frame's layout places the picture ([PictureHold])
             onViewCreated(view)
@@ -1382,6 +1385,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             clearDriverMarkerLater()   // a custom driver that keeps presenting is not blamed for a later crash
             wii.onFirstFrame(view)
+            wiiuMotion.onFirstFrame()
             dual.pushSecondSurface()   // a presentation shown before the view ran
             if (dual.panelShown()) dual.refreshDiscs()   // a panel up before the game ran asked too early
             // A core may change its geometry later (SET_GEOMETRY), as Azahar does a frame or so after a layout switch: the

@@ -43,6 +43,8 @@ class CoreRegistryWiiuTest {
             "cemu_log_filesystem" to "disabled", "cemu_log_thread_sync" to "disabled", "cemu_log_system_api" to "disabled",
             "cemu_log_texture_memory" to "disabled", "cemu_log_input_api" to "disabled", "cemu_log_audio" to "disabled",
             "cemu_log_thread_time" to "disabled", "cemu_dump_shaders" to "disabled",
+            // The app's (Motion Controls, WiiuOptions.motionOption); off until the launch sends the resolved row.
+            "cemu_gamepad_motion" to "disabled",
         )
         for ((key, value) in expected) {
             assertEquals(value, wiiu.defaultOptions[key], key)

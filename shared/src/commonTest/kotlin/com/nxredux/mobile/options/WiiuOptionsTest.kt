@@ -29,6 +29,45 @@ class WiiuOptionsTest {
         assertTrue(WiiuOptions.table.all { it.visual && it.valueLabels.size == it.values.size })
     }
 
+    @Test fun motion_controls_is_on_off_and_on_by_default() {
+        assertEquals("nx_wiiu_motion", WiiuOptions.MOTION)
+        val row = WiiuOptions.motionRow
+        assertEquals(WiiuOptions.MOTION, row.key)
+        assertEquals("Motion Controls", row.label)
+        assertEquals(listOf("on", "off"), row.values)
+        assertEquals(listOf("On", "Off"), row.valueLabels)
+        assertEquals("on", row.default)
+        assertFalse(row.visual)
+        assertEquals(OptionGroup.CONTROLS, OptionGroup.of(WiiuOptions.MOTION))
+        assertFalse(WiiuOptions.MOTION in WiiuOptions.table.map { it.key })   // not a screen row
+    }
+
+    @Test fun motion_controls_is_listed_for_the_wiiu_only() {
+        assertTrue(WiiuOptions.MOTION in ConsoleSettings.tableFor("WIIU").map { it.key })
+        assertTrue(WiiuOptions.MOTION in ConsoleSettings.all.map { it.key })
+        assertFalse(WiiuOptions.MOTION in ConsoleSettings.tableFor("WII").map { it.key })
+        assertEquals("on", FrontendOptions.option(WiiuOptions.MOTION)?.default)
+    }
+
+    @Test fun motion_controls_is_hidden_without_both_sensors() {
+        assertEquals(emptySet(), WiiuOptions.hiddenMotionRows(hasSensors = true))
+        assertEquals(setOf(WiiuOptions.MOTION), WiiuOptions.hiddenMotionRows(hasSensors = false))
+    }
+
+    @Test fun motion_is_on_unless_turned_off_and_only_with_both_sensors() {
+        assertTrue(WiiuOptions.motionOn(null, hasSensors = true))   // the row's default
+        assertTrue(WiiuOptions.motionOn("on", hasSensors = true))
+        assertFalse(WiiuOptions.motionOn("off", hasSensors = true))
+        assertFalse(WiiuOptions.motionOn("on", hasSensors = false))
+        assertFalse(WiiuOptions.motionOn(null, hasSensors = false))
+    }
+
+    @Test fun cemus_gamepad_motion_follows_the_resolved_row() {
+        assertEquals(mapOf("cemu_gamepad_motion" to "enabled"), WiiuOptions.motionOption(true))
+        assertEquals(mapOf("cemu_gamepad_motion" to "disabled"), WiiuOptions.motionOption(false))
+        assertEquals(mapOf("cemu_gamepad_motion" to "disabled"), WiiuOptions.motionOption(WiiuOptions.motionOn("on", hasSensors = false)))
+    }
+
     @Test fun applies_to_the_wiiu_only() {
         assertTrue(WiiuOptions.appliesTo("WIIU"))
         assertTrue(WiiuOptions.appliesTo(" wiiu"))

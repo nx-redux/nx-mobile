@@ -1,9 +1,7 @@
 package com.nxredux.mobile.runner
 
 import android.content.res.Configuration
-import android.os.Build
 import android.view.KeyEvent
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.options.WiiOptions
 import com.nxredux.mobile.options.WiiScreen
@@ -47,13 +45,14 @@ internal interface WiiDolphinHost : GameScreenHost {
 
 /**
  * Dolphin's Wii and GameCube side of the game screen: the disc's controls (GameTDB), the resolved Wii controller and
- * Motion Controls, the devices Dolphin's ports get, the Wii Screen shape and its pointer geometry, the Wii's HOME, and the
- * phone's motion sensors (which a 3DS game on Azahar uses too). Main thread.
+ * Motion Controls, the devices Dolphin's ports get, the Wii Screen shape and its pointer geometry, the Wii's HOME, and
+ * what the phone's motion sensors ([motion]) feed for a Wii or a 3DS game on Azahar. Main thread.
  */
 internal class WiiDolphinController(
     private val host: WiiDolphinHost,
     private val input: GameInputRouter,
     private val saves: SaveSession,
+    private val motion: PhoneMotion,
 ) {
     companion object {
         /** The Dolphin core's descriptor id (Wii and GameCube tags). */
@@ -76,10 +75,6 @@ internal class WiiDolphinController(
         private set
     /** Motion Controls resolved ([WiiMotion.resolve]): the phone's sensors drive port 0's Wiimote. */
     private var motionOn = false
-    /** The phone's accelerometer and gyroscope, created for a Wii or 3DS game only. */
-    private var motionSensors: MotionSensors? = null
-    /** The display rotation the motion level was last captured in: a change mid-game recentres ([onConfigurationChanged]). */
-    private var lastRotation = -1
     /**
      * The disc read under the WII tag is a GameCube disc ([WiiDisc.gameCube]): it keeps the plain pad and the descriptor's
      * ports, with no Wiimote, pointer, motion or Wii menu rows.
@@ -103,7 +98,7 @@ internal class WiiDolphinController(
     private var shapeNoted = false
 
     /** Both of the phone's motion sensors are there (Motion Controls can be offered). */
-    val hasSensors: Boolean get() = motionSensors?.hasSensors == true
+    val hasSensors: Boolean get() = motion.hasSensors
 
     /**
      * Launch, once the content is known: Wii Controller and Motion Controls (Console Settings), whose Auto looks the disc
@@ -121,11 +116,8 @@ internal class WiiDolphinController(
         if (WiiOptions.appliesTo(tag) && !gameCube) {
             val id = wiiDisc?.id
             controls = withContext(Dispatchers.IO) { WiiControlsAsset.get(host.activity).lookup(id) }
-            val sensors = sensors()
-            LibretroDroid.setSensorAvailable(sensors.hasAccel, sensors.hasGyro)
-            // The rotation the level starts in: only a real rotation recentres, not the first unrelated configuration
-            // change (a pad attached, a fold posture).
-            lastRotation = displayRotation()
+            val sensors = motion.offer()
+            motion.captureRotation()
             // The current values: the menu may have changed them while the image was read.
             val pad = WiiController.resolve(host.frontendValues[WiiOptions.CONTROLLER], controls)
             this.pad = pad
@@ -154,11 +146,11 @@ internal class WiiDolphinController(
             // Always, not only on a change made during load: a previous game's core unload (its onDestroy can run
             // after this screen's onCreate) resets the native sensor state, and resending the device makes Dolphin
             // ask for the sensors again (cores/patches/dolphin.patch).
-            motionSensors?.let { LibretroDroid.setSensorAvailable(it.hasAccel, it.hasGyro) }
+            motion.reoffer()
             LibretroDroid.setSensorEnabled(0, motionOn)
             sendDevice()
             syncMotionSensors()
-            if (controls?.motionPlus == true && motionSensors?.hasSensors != true) {
+            if (controls?.motionPlus == true && !motion.hasSensors) {
                 host.toast("Motion actions in this game need a phone with a gyroscope")
             }
         }
@@ -168,14 +160,9 @@ internal class WiiDolphinController(
         }
     }
 
-    /** The motion level is captured in the display's frame: a new rotation takes the phone's attitude as level again. */
+    /** The Wiimote's level is captured in the display's frame: a new rotation takes the phone's attitude as level again. */
     fun onConfigurationChanged() {
-        if (host.isWii) displayRotation().let { r -> if (r != lastRotation) { lastRotation = r; motionSensors?.recenter() } }
-    }
-
-    fun onDestroy() {
-        // Created only by the Wii and 3DS paths, which both enable sensor 0; a next game sets its own on its first frame.
-        motionSensors?.let { it.stop(); LibretroDroid.setSensorEnabled(0, false) }
+        if (host.isWii) motion.onRotationChanged()
     }
 
     /**
@@ -187,8 +174,8 @@ internal class WiiDolphinController(
     fun apply(values: Map<String, String>) {
         if (!host.isWii || pad == null) return
         val pad = WiiController.resolve(values[WiiOptions.CONTROLLER], controls)
-        val motion = WiiMotion.resolve(values[WiiOptions.MOTION], pad, controls, motionSensors?.hasSensors == true)
-        if (pad == this.pad && motion == motionOn) return
+        val on = WiiMotion.resolve(values[WiiOptions.MOTION], pad, controls, hasSensors)
+        if (pad == this.pad && on == motionOn) return
         if (pad != this.pad) {
             // Only a pad change lets go of everything: a motion toggle (the pad's MOTION, tapped with one thumb) must
             // not drop the stick the other thumb holds.
@@ -204,8 +191,8 @@ internal class WiiDolphinController(
             }
         }
         this.pad = pad
-        motionOn = motion
-        LibretroDroid.setSensorEnabled(0, motion)
+        motionOn = on
+        LibretroDroid.setSensorEnabled(0, on)
         host.dropPadProfile()
         // Before the first frame the core may not be loaded: the first-frame block sends the device then, whatever it is.
         if (host.gameReady) { sendDevice(); syncMotionSensors() }
@@ -243,20 +230,14 @@ internal class WiiDolphinController(
         if (host.isDolphin && host.gameReady) sendDevice()
     }
 
-    /**
-     * The sensors listen only while motion is on and the game runs (not paused, menu closed, in front). [foreground]:
-     * onResume and onPause pass it, as the lifecycle state there does not say yet which side of the pause this is.
-     */
-    fun syncMotionSensors(foreground: Boolean = host.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-        val sensors = motionSensors ?: return
-        val n3ds = host.isN3ds && sensors.hasAccel
-        val run = ((host.isWii && motionOn) || n3ds) && host.gameReady && !host.menuOpen && !host.quitting && foreground
-        when {
-            !run -> sensors.stop()
-            n3ds -> sensors.startN3ds(::displayRotation)
-            else -> sensors.start(::displayRotation, { pad ?: WiiPad.SIDEWAYS })
-        }
+    /** What the phone's sensors feed for this game: the Wiimote while Motion Controls is on, a 3DS with an accelerometer. */
+    fun motionFeed(): PhoneMotion.Feed? = when {
+        host.isN3ds && motion.sensors?.hasAccel == true -> PhoneMotion.Feed.N3ds
+        host.isWii && motionOn -> PhoneMotion.Feed.Wiimote { pad ?: WiiPad.SIDEWAYS }
+        else -> null
     }
+
+    private fun syncMotionSensors() = motion.sync(motionFeed())
 
     /**
      * 3DS motion: the phone's sensors offered to the core. Before the load, as Azahar asks for them once, when its HID
@@ -264,20 +245,8 @@ internal class WiiDolphinController(
      * the tilt still comes through and the gyro reads still; without an accelerometer the console reads as a 3DS at rest.
      */
     fun offerN3dsMotion() {
-        val sensors = sensors()
-        LibretroDroid.setSensorAvailable(sensors.hasAccel, sensors.hasGyro)
-        LibretroDroid.setSensorEnabled(0, sensors.hasAccel)
+        LibretroDroid.setSensorEnabled(0, motion.offer().hasAccel)
     }
-
-    /** The phone's sensors feeding port 0, made on first use. */
-    private fun sensors(): MotionSensors = motionSensors ?: MotionSensors(host.activity) { a, g ->
-        LibretroDroid.setSensorValues(0, a.x, a.y, a.z, g.x, g.y, g.z)
-    }.also { motionSensors = it }
-
-    /** The display's rotation (Surface.ROTATION_*), which [MotionSensors] turns the phone's axes by. */
-    @Suppress("DEPRECATION")
-    private fun displayRotation(): Int =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) host.activity.display?.rotation ?: 0 else host.activity.windowManager.defaultDisplay.rotation
 
     /** The pad's motion button: tap toggles Motion Controls (saved for this game), long press recentres. */
     private fun toggleMotion() {
@@ -288,11 +257,11 @@ internal class WiiDolphinController(
     }
 
     /** Takes the phone's attitude at the next reading as the Wiimote's level. */
-    fun recenterMotion() { motionSensors?.recenter() }
+    fun recenterMotion() { motion.recenter() }
 
     /** The pad's motion button ([PadMotion]): Wiimote types on a phone with both sensors; none without them. */
     fun padMotion(): com.nxredux.mobile.ui.nx.PadMotion? =
-        if (host.isWii && host.padProfile().motionButton && motionSensors?.hasSensors == true) com.nxredux.mobile.ui.nx.PadMotion(motionOn, ::toggleMotion, ::recenterMotion) else null
+        if (host.isWii && host.padProfile().motionButton && hasSensors) com.nxredux.mobile.ui.nx.PadMotion(motionOn, ::toggleMotion, ::recenterMotion) else null
 
     /**
      * Display → Wii Screen for a Wii game: Dolphin's widescreen system setting, chosen from the orientation the

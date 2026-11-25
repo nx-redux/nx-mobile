@@ -384,7 +384,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override var focusPaused = false
         private set
     private val saves = SaveSession(this, renderer, menu, dual)
-    private val wii = WiiDolphinController(this, input, saves)
+    /** The phone's motion sensors, which a Wii, 3DS or Wii U game's controller feeds from. */
+    private val motion = PhoneMotion(this)
+    private val wii = WiiDolphinController(this, input, saves, motion)
+    private val wiiuMotion = WiiuMotionController(this, motion)
     private val launchPipeline = LaunchPipeline(LaunchState())
     private val dsRoom = DsRoomWatcher(lifecycleScope, { DsPresence.of(LibretroNetplay.dsPresence()) }, ::onDsPresenceChanged,
         readOthers = { LibretroNetplay.dsOthers() }, onOthers = ::onDsOthersChanged)
@@ -819,7 +822,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // A quit writes the battery save once itself, off the main thread (quitWithAutoState), so nothing here then.
         if (!quitting) saves.writeBatterySaveOnPause()
         gameNetplay.run?.pause()   // netplay: backgrounded: no input goes out; the other side stalls, 30 s ends the session
-        wii.syncMotionSensors(foreground = false)
+        syncMotionSensors(foreground = false)
         // Closes the phone mic at once (the paused core stops reading it); the toggle stays as it is for onResume.
         retroView?.microphoneSource = MicSource.SILENCE.native
         super.onPause()
@@ -833,7 +836,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             if (!quitting) rumbles.forEach { it.resume() }
             gameNetplay.run?.resume()   // netplay: input flows again; with the menu open it stays paused until Continue
         }
-        wii.syncMotionSensors(foreground = true)
+        syncMotionSensors(foreground = true)
         shortcuts.onResume()
         dual.syncDual()   // Settings → Second screen may have changed meanwhile
         refreshKidsSettings()
@@ -918,7 +921,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun pauseForMenu() {
         dsRoom.check()   // the menu opened on the watcher's last poll: a presence changed since reaches the open menu now
         syncKeepScreenOn()
-        wii.syncMotionSensors()   // no motion while paused
+        syncMotionSensors()   // no motion while paused
         holdCore()   // the phone mic closes under the menu too
         syncDsMenuCap()
         lifecycleScope.launch(Dispatchers.IO) { saves.writeBatterySave(notify = true) }
@@ -931,8 +934,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         closeSkinEdit()
         syncKeepScreenOn()
         syncDsMenuCap()
-        if (focusPaused) { wii.syncMotionSensors(); shortcuts.pushMicSource(); return }   // another app has the focus: focusResume plays on later
-        wii.syncMotionSensors()
+        if (focusPaused) { syncMotionSensors(); shortcuts.pushMicSource(); return }   // another app has the focus: focusResume plays on later
+        syncMotionSensors()
         releaseCore()
     }
 
@@ -1080,7 +1083,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         renderer.cancelGeometryWatch()
         res3d.cancelTick()
         rumbles.forEach { it.release() }
-        wii.onDestroy()
+        motion.onDestroy()
         if (isFinishing || relaunching) endGameTime()   // Back/finish without Quit (quit already ended it), or the GLES relaunch
         // A normal exit or a recreation: this launch did not die on its driver. Abandoned first, so a launch still writing
         // its marker (Back while loading) writes none, or the clear below waits for that write and undoes it.
@@ -1510,6 +1513,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             syncN3dsCore()   // a layout row changed in the menu, or the hotkey's
         }
         wii.apply(values)
+        wiiuMotion.apply(values)
         speed.configure(SpeedSettings.parse(values, canRewind), canRewind)   // applied once the view exists, and on every row change
         val s = FrontendSettings.parse(values)
         padLayout.padLandscapeAlpha.value = s.padLandscapeAlpha
@@ -1573,10 +1577,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun padMotion(): PadMotion? = wii.padMotion()
 
+    /** The phone's sensors listen for the game's feed (Wii, 3DS or Wii U) only while it runs ([PhoneMotion.sync]). */
+    private fun syncMotionSensors(foreground: Boolean = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) =
+        motion.sync(wii.motionFeed() ?: wiiuMotion.motionFeed(), foreground)
+
     override fun padMic(): PadMic? = shortcuts.padMic()
 
     /**
-     * The keys the menu leaves out: the .cfg's locks, Motion Controls on a Wii game without both sensors, both Wii rows
+     * The keys the menu leaves out: the .cfg's locks, Motion Controls on a Wii or Wii U game without both sensors, both Wii rows
      * for a GameCube disc under the WII tag, and the Rewind rows unless the core can rewind ([canRewind]: an unknown core
      * can't, as the shortcuts have it).
      */
@@ -1587,6 +1595,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         return noRewind + skinned + when {
             wii.gameCube -> lockedOptions + WiiOptions.table.map { it.key }
             isWii && !wii.hasSensors -> lockedOptions + WiiOptions.MOTION
+            WiiuOptions.appliesTo(gameTag) -> lockedOptions + WiiuOptions.hiddenMotionRows(wiiuMotion.hasSensors)
             else -> lockedOptions
         }
     }
@@ -2256,6 +2265,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         override val shortcuts get() = game.shortcuts
         override val saves get() = game.saves
         override val wii get() = game.wii
+        override val wiiuMotion get() = game.wiiuMotion
         override val res3d get() = game.res3d
         override val gameNetplay get() = game.gameNetplay
         override val speed get() = game.speed

@@ -4,14 +4,20 @@ import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.settings.stepFrom
 
 /**
- * The Wii U's screen settings: frontend `nx_` keys, per game with a console default. Cemu always draws the TV over the
- * GamePad in one frame; the app places the two screens by the layout row in use, with the DS's layouts.
+ * The Wii U's settings: frontend `nx_` keys, per game with a console default. Cemu always draws the TV over the
+ * GamePad in one frame; the app places the two screens by the layout row in use, with the DS's layouts. Motion Controls
+ * turns the phone's sensors into the GamePad's.
  */
 object WiiuOptions {
     const val LAYOUT_PORTRAIT = "nx_wiiu_layout_portrait"
     const val LAYOUT_PORTRAIT_CONTROLLER = "nx_wiiu_layout_portrait_controller"
     const val LAYOUT_LANDSCAPE = "nx_wiiu_layout_landscape"
     const val BIG_SCREEN = "nx_wiiu_big_screen"
+    const val MOTION = "nx_wiiu_motion"
+    const val MOTION_ON = "on"
+    const val MOTION_OFF = "off"
+    /** Cemu's GamePad Motion: the core asks for the sensors when it turns on (and turns them off when it turns off). */
+    const val CORE_MOTION = "cemu_gamepad_motion"
 
     val LAYOUT_KEYS: Set<String> = setOf(LAYOUT_PORTRAIT, LAYOUT_PORTRAIT_CONTROLLER, LAYOUT_LANDSCAPE)
 
@@ -47,6 +53,20 @@ object WiiuOptions {
             visual = true, valueLabels = screenLabels,
         ),
     )
+
+    val motionRow = FrontendOption(
+        MOTION, "Motion Controls", listOf(MOTION_ON, MOTION_OFF), MOTION_ON,
+        "Tilt and turn the phone to move the GamePad,\nfor games that steer or aim with its gyroscope.",
+        visual = false, valueLabels = listOf("On", "Off"),
+    )
+
+    /** The menu leaves Motion Controls out on a phone without both an accelerometer and a gyroscope. */
+    fun hiddenMotionRows(hasSensors: Boolean): Set<String> = if (hasSensors) emptySet() else setOf(MOTION)
+
+    /** The GamePad moves with the phone: both sensors there and the row not turned off (unset is the row's On). */
+    fun motionOn(value: String?, hasSensors: Boolean): Boolean = hasSensors && value != MOTION_OFF
+
+    fun motionOption(on: Boolean): Map<String, String> = mapOf(CORE_MOTION to if (on) "enabled" else "disabled")
 
     /** The Wii U's screen settings as the DS layouts read them: the layout picks and the big screen, the inset as default. */
     fun settings(values: Map<String, String>): NdsSettings = NdsSettings(
