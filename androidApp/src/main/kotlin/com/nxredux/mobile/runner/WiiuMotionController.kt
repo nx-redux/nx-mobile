@@ -7,9 +7,10 @@ import com.swordfish.libretrodroid.Variable
 
 /**
  * Motion Controls for a Wii U game: the phone's sensors ([motion]) as the GamePad's, through Cemu's GamePad Motion
- * ([WiiuOptions.CORE_MOTION]). Cemu asks for both sensors when that option turns on, which it reads on its first run and
- * on every change after, and libretrodroid grants them only while they are offered and port 0 is enabled: so both are
- * set before the core loads, and again on the first frame. Main thread.
+ * ([WiiuOptions.CORE_MOTION]). Cemu asks for both sensors only when that option changes to on, and libretrodroid grants
+ * them only while they are offered and port 0 is enabled. A previous core's unload can reset that native state while
+ * this game loads, so the core starts with the option off ([CoreRegistry]'s default) and the first frame offers the
+ * sensors, then turns it on: the ask comes strictly after the offer. Main thread.
  */
 internal class WiiuMotionController(private val host: WiiDolphinHost, private val motion: PhoneMotion) {
     /** Motion Controls resolved ([WiiuOptions.motionOn]); null until the launch resolves it, and outside the Wii U. */
@@ -26,24 +27,13 @@ internal class WiiuMotionController(private val host: WiiDolphinHost, private va
         host.publishMenuFrontend()   // a menu opened during the launch: its Motion Controls row, left out until now
     }
 
-    /** Cemu's GamePad Motion for the launch; empty outside the Wii U. */
-    fun launchOption(): Map<String, String> = motionOn?.let(WiiuOptions::motionOption).orEmpty()
-
-    /** Right before the core loads: the sensors offered, port 0 on as the row resolved, for Cemu's ask on its first run. */
-    fun offerBeforeLoad() {
-        val on = motionOn ?: return
-        motion.offer()
-        LibretroDroid.setSensorEnabled(0, on)
-    }
-
     /**
-     * The first frame: offered and enabled again (a previous game's core unload, its onDestroy running after this
-     * screen's onCreate, resets the native sensor state, and without it the core reads the sensors as still), the row as
-     * it is now (a change made while the game loaded), and the sensors listening.
+     * The first frame: the sensors offered and port 0 set, then Cemu's GamePad Motion from the row as it is now (for On
+     * a change from the launch's off, so Cemu asks on its next options read), and the sensors listening.
      */
     fun onFirstFrame() {
         val on = motionOn ?: return
-        motion.reoffer()
+        motion.offer()
         LibretroDroid.setSensorEnabled(0, on)
         host.applyOptions(WiiuOptions.motionOption(on).map { (k, v) -> Variable(k, v) })
         motion.sync(motionFeed())

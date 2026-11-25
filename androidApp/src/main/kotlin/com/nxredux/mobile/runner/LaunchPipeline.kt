@@ -1077,7 +1077,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                             NxLog.i(TAG_LOG, "N64 hi-res VRAM limit: $limit MB (device ${total / (1024 * 1024)} MB)")
                             mapOf(N64HiresPack.VRAM_KEY to limit)
                         } else emptyMap()
-                        val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + wiiuMotion.launchOption() + nds3dLaunch + res3dAlso + ps2BiosOption + n64Vram + graphics.forcedOptions
+                        val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + nds3dLaunch + res3dAlso + ps2BiosOption + n64Vram + graphics.forcedOptions
                         variables = withForced(cfg.options, forced).toTypedArray()
                         rumbleEventsEnabled = gameRumble != GameRumble.OFF   // Game rumble Off: the runner does not even read the core's state
                         // DS / 3DS: the frontend feeds the core's mic ([ShortcutsMicController.applyMic] picks silence, the phone mic or noise).
@@ -1266,7 +1266,6 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     .onFailure { NxLog.w(TAG_LOG, "could not set $k", it) }
             }
             if (isN3ds) wii.offerN3dsMotion()
-            wiiuMotion.offerBeforeLoad()
             val view = GLRetroView(activity, data)
             view.pictureHeld = true   // black until the first frame's layout places the picture ([PictureHold])
             onViewCreated(view)

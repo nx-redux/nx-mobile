@@ -68,6 +68,13 @@ class WiiuOptionsTest {
         assertEquals(mapOf("cemu_gamepad_motion" to "disabled"), WiiuOptions.motionOption(WiiuOptions.motionOn("on", hasSensors = false)))
     }
 
+    @Test fun cemu_starts_with_gamepad_motion_off_so_the_first_frames_on_is_a_change() {
+        val launch = com.nxredux.mobile.runner.CoreRegistry.forTag("WIIU")!!.defaultOptions[WiiuOptions.CORE_MOTION]
+        assertEquals("disabled", launch)
+        assertEquals(launch, WiiuOptions.motionOption(false)[WiiuOptions.CORE_MOTION])
+        assertTrue(WiiuOptions.motionOption(WiiuOptions.motionOn(null, hasSensors = true))[WiiuOptions.CORE_MOTION] != launch)
+    }
+
     @Test fun applies_to_the_wiiu_only() {
         assertTrue(WiiuOptions.appliesTo("WIIU"))
         assertTrue(WiiuOptions.appliesTo(" wiiu"))
