@@ -1,5 +1,7 @@
 package com.nxredux.mobile.skin
 
+import com.nxredux.mobile.options.PxRect
+
 /**
  * Which of a pack's layouts a window gets, and that layout assembled to it.
  *
@@ -359,6 +361,27 @@ object SkinChoice {
         )
     }
 
+    /** The Wii U's one screen frame's shape: the TV over the GamePad, both 16:9. */
+    const val WIIU_STACK_ASPECT = 16f / 18f
+
+    /**
+     * The Wii U's one screen frame (its stack glass) cut to the screens' [aspect] (no bars round them), centred in the
+     * room it filled, its border as drawn. As it is for any other layout.
+     */
+    private fun SkinPlacement.wiiuStackTo(aspect: Float): SkinPlacement {
+        val frame = spec.frame ?: return this
+        val g = glass(GlassScreen.STACK) ?: return this
+        if (spec.variant != SkinVariant.WIIU || aspect <= 0f) return this
+        val fg = frame.glass
+        val bl = fg.x * k; val bt = fg.y * k; val br = (frame.w - fg.x - fg.w) * k; val bb = (frame.h - fg.y - fg.h) * k
+        val w = minOf(g.rect.width, g.rect.height * aspect); val h = w / aspect
+        val cut = PxRect(g.rect.x + (g.rect.width - w) / 2f, g.rect.y + (g.rect.height - h) / 2f, w, h)
+        val slices = SkinSolver.frameSlices(frame, cut.x - bl, cut.y - bt, w + bl + br, h + bt + bb, k) { x, y, w_, h_ -> PxRect(x, y, w_, h_) }
+        val first = pieces.indexOfFirst { it.piece == -1 && !it.strip }.coerceAtLeast(0)
+        val rest = pieces.filterNot { it.piece == -1 && !it.strip }
+        return copy(pieces = rest.take(first) + slices + rest.drop(first), glasses = glasses.map { if (it === g) it.copy(rect = cut) else it })
+    }
+
     /** Sideways: window px between the menu's landscape shell's screen and the window's bottom (null upright). */
     private fun menuFlatEnd(pack: SkinPackManifest, windowW: Int, windowH: Int, k: Float, topInset: Int, densityDpi: Int): Float? =
         if (windowW <= windowH) null else shell(tunedFor(windowW, windowH, densityDpi, null), pack, SkinFamily.GRIP, SkinVariant.MENU, windowW, windowH, k, densityDpi, null, topInset, rowSpacing(densityDpi, k))
@@ -383,16 +406,18 @@ object SkinChoice {
      * [windowW] x [windowH] px at [densityDpi]; [tablet]: a tablet-class window; [ds]: a DS game (else one screen of
      * [picture] game px); [hingeY]: the fold's middle in window px while half-folded, else null; [topInset]: window px at
      * the top the screen frame keeps clear of (the camera cutout; [SkinSolver.placePieces]); [foldable]: a device that
-     * half-folds; [variant]: the console's layout set ([variantFor]; null: the DS's or the shared one-screen one by [ds]).
+     * half-folds; [variant]: the console's layout set ([variantFor]; null: the DS's or the shared one-screen one by [ds]);
+     * [stackAspect]: the Wii U's one screen frame cut to that shape (the TV over the GamePad; the player's layout where it
+     * applies, [com.nxredux.mobile.runner.WiiuLayout.skinAspect]).
      */
     fun place(
         pack: SkinPackManifest, windowW: Int, windowH: Int, densityDpi: Int, tablet: Boolean, ds: Boolean,
         picture: Pair<Float, Float>? = null, hingeY: Float? = null, topInset: Int = 0, foldable: Boolean = false,
-        variant: SkinVariant? = null,
+        variant: SkinVariant? = null, stackAspect: Float = WIIU_STACK_ASPECT,
     ): SkinPlacement? {
         if (windowW <= 0 || windowH <= 0 || densityDpi <= 0) return null
         val v = variant ?: if (ds) SkinVariant.DS else SkinVariant.SINGLE
-        val own = placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, v)
+        val own = placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, v)?.wiiuStackTo(stackAspect)
         // a console's own set the pack lacks for this screen (an older pack, or a player's partly made one): the shared
         // one-screen set, decided per screen, so a missing landscape layout never leaves the game without a skin
         // (never for the Dreamcast, the 3DS, the GameCube, the Wii pads, the Wii U, the PlayStations or the PSP: the shared
@@ -408,15 +433,15 @@ object SkinChoice {
     fun placeClosest(
         pack: SkinPackManifest, windowW: Int, windowH: Int, densityDpi: Int, tablet: Boolean, ds: Boolean,
         picture: Pair<Float, Float>? = null, hingeY: Float? = null, topInset: Int = 0, foldable: Boolean = false,
-        variant: SkinVariant? = null,
+        variant: SkinVariant? = null, stackAspect: Float = WIIU_STACK_ASPECT,
     ): SkinPlacement? {
-        place(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, variant)?.let { return it }
+        place(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, variant, stackAspect)?.let { return it }
         var dpi = densityDpi.toDouble()
         while (true) {
             dpi *= 0.9
             val d = Math.round(dpi).toInt()
             if (d < densityDpi / 2.0 || d <= 0) return null
-            place(pack, windowW, windowH, d, tablet, ds, picture, hingeY, topInset, foldable, variant)?.let { return it }
+            place(pack, windowW, windowH, d, tablet, ds, picture, hingeY, topInset, foldable, variant, stackAspect)?.let { return it }
         }
     }
 

@@ -74,6 +74,18 @@ object WiiuLayout {
         return dsScreenRegions(first, second, DsKind.WIIU, settings.big)
     }
 
+    /**
+     * The shape [layout]'s screens fill in a pad skin's one glass, so the skin's frame is cut to them: Stacked the TV over
+     * the GamePad, Side by side the two abreast, Large the GamePad at half size beside the TV (a regular phone sideways,
+     * where the player's layout applies), the others one screen.
+     */
+    fun skinAspect(layout: NdsLayoutChoice): Float = when (layout) {
+        NdsLayoutChoice.STACKED -> FRAME_ASPECT
+        NdsLayoutChoice.SIDE_BY_SIDE -> 2f * ASPECT
+        NdsLayoutChoice.LARGE -> (1f + LARGE_OTHER) * ASPECT
+        NdsLayoutChoice.SINGLE, NdsLayoutChoice.PIP -> ASPECT
+    }
+
     private fun centredFit(r: PxRect, aspect: Float): PxRect {
         val w = min(r.width, r.height * aspect)
         val h = w / aspect

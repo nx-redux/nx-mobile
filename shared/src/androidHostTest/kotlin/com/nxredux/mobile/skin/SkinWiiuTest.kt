@@ -116,8 +116,9 @@ class SkinWiiuTest {
         frame.x + frame.width - glass.x - glass.width, frame.y + frame.height - glass.y - glass.height)
 
     /**
-     * No touch shortcut strip (the Wii U offers none), and every screen's frame as thick under its glass as over it and
-     * as thick right as left: no black band under the picture.
+     * No touch shortcut strip (the Wii U offers none); every screen's frame as thick under its glass as over it and as
+     * thick right as left; and each glass the pictures' own shape (the GamePad's 16:9, one stack glass the TV over the
+     * GamePad, 16:18), the pictures filling it: no black band round them.
      */
     @Test
     fun the_frames_hug_their_glasses_with_no_shortcut_strip() {
@@ -131,6 +132,10 @@ class SkinWiiuTest {
                 val (frame, touchFrame) = frames(p)
                 val top = assertNotNull(p.glass(GlassScreen.TOP) ?: p.glass(GlassScreen.STACK), label).rect
                 p.glass(GlassScreen.TOUCH)?.rect?.let { assertEquals(16f / 9f, aspect(it), 0.01f, "$label GamePad glass ${it}") }
+                p.glass(GlassScreen.STACK)?.rect?.let { g ->
+                    assertEquals(g.height * 16f / 18f, g.width, 1f, "$label stack glass $g")
+                    assertFills(g, assertNotNull(WiiuLayout.skinRegions(g, null, null, NdsSettings()), label).map { it.dst }, label)
+                }
                 for ((f, g) in listOf(frame to top, touchFrame to p.glass(GlassScreen.TOUCH)?.rect)) {
                     if (f == null || g == null) continue
                     val (l, t, r, b) = borders(f, g)
@@ -187,6 +192,32 @@ class SkinWiiuTest {
                 assertTrue(r3.x < cs.x && r3.y > cs.y, "$label R3 at ${r3.x},${r3.y}")
                 assertEquals(l3.y, r3.y, 1f, "$label L3 / R3 level")
             }
+        }
+    }
+
+    private fun assertFills(glass: PxRect, screens: List<PxRect>, label: String, px: Float = 1f) {
+        val u = assertNotNull(union(screens), label)
+        for ((a, b) in listOf(u.x to glass.x, u.y to glass.y, u.width to glass.width, u.height to glass.height)) assertEquals(b, a, px, "$label: $u in $glass")
+    }
+
+    /**
+     * On a regular phone sideways the player's layout goes in the one glass: cut to that layout's shape, it fills it
+     * (Large the GamePad beside the TV, Side by side the two abreast, Stacked the one over the other, one screen alone).
+     */
+    @Test
+    fun the_stack_glass_takes_the_players_layout_shape() {
+        val d = GOLDEN_DEVICES.single { it.name == "phone_land" }
+        for (id in packs) for (layout in com.nxredux.mobile.options.NdsLayoutChoice.entries) {
+            val label = "$id $layout"
+            val p = assertNotNull(SkinChoice.place(skinPack(id), d.w, d.h, d.dpi, d.tablet, ds = true, foldable = d.foldable, variant = SkinVariant.WIIU,
+                stackAspect = WiiuLayout.skinAspect(layout)), label)
+            val g = assertNotNull(p.glass(GlassScreen.STACK), label).rect
+            assertEquals(WiiuLayout.skinAspect(layout), aspect(g), 0.01f, label)
+            val screens = assertNotNull(WiiuLayout.skinRegions(g, null, null, NdsSettings(), layout), label).filter { !it.inset }.map { it.dst }
+            assertFills(g, screens, label, px = 4f)   // (the player's layouts size their screens to whole pixels)
+            val (frame, _) = frames(p)
+            val (l, t, r, b) = borders(assertNotNull(frame, label), g)
+            assertEquals(l, r, 1f, "$label left / right"); assertEquals(t, b, 1f, "$label top / bottom")
         }
     }
 }

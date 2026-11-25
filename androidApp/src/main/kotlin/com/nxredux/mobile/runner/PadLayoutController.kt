@@ -200,6 +200,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private data class SkinKey(
         val w: Int, val h: Int, val dpi: Int, val tablet: Boolean, val tag: String, val aspect: Float?, val hinge: Float?,
         val variant: com.nxredux.mobile.skin.SkinVariant, val tweaks: String, val overlayTweaks: String, val micHidden: Boolean = false,
+        val stackAspect: Float = SkinChoice.WIIU_STACK_ASPECT,
     )
     // the pack without the mic button, made once a pack ([placeUntweaked])
     private var noMic: Pair<PadSkinPack, com.nxredux.mobile.skin.SkinPackManifest>? = null
@@ -435,7 +436,10 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val aspect = if (ds) null else frame?.aspect?.takeIf { it > 0f } ?: (4f / 3f)
         val variant = SkinChoice.variantFor(CoreRegistry.baseTag(tag), NdsOptions.appliesTo(tag), host.dcArcadeSet, host.padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC, host.wiiPad, host.padProfile().cStick, host.padProfile().segaThree)
         val settings = host.settings
-        return SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, variant, settings.skinTweaks, settings.overlayTweaks, micHidden = ds && !settings.micButtonShown)
+        // the Wii U's frame cut to what it shows: the player's layout on a regular phone sideways, else the TV over the GamePad
+        val stackAspect = WiiuOptions.skinLayout(host.frontendValues, host.isLandscape(resources.configuration.orientation), controllerMode = false, activity.windowShape().screenClass)
+            ?.takeIf { WiiuOptions.appliesTo(tag) }?.let { WiiuLayout.skinAspect(it) } ?: SkinChoice.WIIU_STACK_ASPECT
+        return SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, variant, settings.skinTweaks, settings.overlayTweaks, micHidden = ds && !settings.micButtonShown, stackAspect = stackAspect)
     }
 
     /** [pack]'s layout for [key] before any tweak ([SkinChoice.place], or [SkinChoice.placeClosest] when [closest]; [ds]: a DS, 3DS or Wii U). */
@@ -445,8 +449,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val manifest = if (!key.micHidden) pack.manifest
             else noMic?.takeIf { it.first === pack }?.second ?: pack.manifest.withoutControl("MIC").also { noMic = pack to it }
         // no top inset: the skin and its screen run under the top camera cutout too (the frame keeps its own margin)
-        return if (closest) SkinChoice.placeClosest(manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, foldable = DeviceTraits.canHalfFold, variant = variant)
-            else SkinChoice.place(manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, foldable = DeviceTraits.canHalfFold, variant = variant)
+        return if (closest) SkinChoice.placeClosest(manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, foldable = DeviceTraits.canHalfFold, variant = variant, stackAspect = key.stackAspect)
+            else SkinChoice.place(manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, foldable = DeviceTraits.canHalfFold, variant = variant, stackAspect = key.stackAspect)
     }
 
     /** The smallest a control's touch area may be shrunk to here, window px. */
