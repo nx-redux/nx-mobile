@@ -823,7 +823,11 @@ internal class GameInputRouter(private val host: GameInputHost) {
     fun onPad(event: PadEvent) {
         // The menus follow the letter the on-screen pad shows (Dreamcast draws "A" on NxButton.B); the game gets the raw button.
         host.rumbles.firstOrNull()?.useDevice(null)   // the on-screen pad: the phone in the player's hands takes the rumble
-        if (host.menuOpen) { host.menuRouter.onEvent(event.map(host.padProfile()::menuButton)); return }
+        if (host.menuOpen) {
+            val wiiu = WiiuOptions.appliesTo(host.gameTag)
+            host.menuRouter.onEvent(event.map { host.padProfile().menuButton(openMenuButton(it, wiiu)) })
+            return
+        }
         val btn = event.button
         val down = event is PadEvent.Down
         // MENU opens the pause menu (not forwarded to the core).
@@ -1165,6 +1169,10 @@ internal class N3dsSwapKey {
         return claimed
     }
 }
+
+/** What the open pause menu gets for an on-screen [button]: the Wii U's HOME opened it ([wiiu]), so it closes it as MENU. */
+internal fun openMenuButton(button: NxButton, wiiu: Boolean): NxButton =
+    if (wiiu && button == NxButton.HOME) NxButton.MENU else button
 
 /** Where a physical stick click goes ([thumbKeyRoute]). */
 internal enum class ThumbKeyRoute { WII_RECENTER, WII_HOME, N3DS_SWAP, CORE }

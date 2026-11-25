@@ -34,4 +34,11 @@ class GameInputRouterWiiuTest {
             GameInputRouter.STICK_CORES,
         )
     }
+
+    // the skin's HOME opens the pause menu, so it closes it too, as MENU does
+    @Test fun homeIsMenuWhileTheMenuIsOpen() {
+        assertEquals(NxButton.MENU, openMenuButton(NxButton.HOME, wiiu = true))
+        assertEquals(NxButton.HOME, openMenuButton(NxButton.HOME, wiiu = false))   // the Wii's HOME is the core's
+        assertEquals(NxButton.B, openMenuButton(NxButton.B, wiiu = true))
+    }
 }
