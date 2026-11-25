@@ -112,7 +112,8 @@ enum class Res3dConsole(
 
     /**
      * The core option's value for scale [n]: ARMSX2 reads "2x", PPSSPP, Flycast and GLideN64 the size ("960x544", "1280x960"),
-     * PCSX-ReARMed whether Enhanced Resolution is on, YabaSanshiro its mode (no 3x: it rounds up to 4x), the others a bare number.
+     * PCSX-ReARMed whether Enhanced Resolution is on, YabaSanshiro its mode (no 3x: down to 2x, never above what the display
+     * reaches), the others a bare number.
      */
     fun coreValue(n: Int): String = when (this) {
         PS2 -> "${n}x"
@@ -120,7 +121,7 @@ enum class Res3dConsole(
         PCSX -> if (n >= 2) "enabled" else "disabled"
         DC -> "${DcResolution.NATIVE_W * n}x${DcResolution.NATIVE_H * n}"
         N64 -> "${N64Resolution.NATIVE_W * n}x${N64Resolution.NATIVE_H * n}"
-        SATURN -> when { n <= 1 -> "original"; n == 2 -> "2x"; else -> "4x" }
+        SATURN -> when { n >= 4 -> "4x"; n >= 2 -> "2x"; else -> "original" }
         else -> "$n"
     }
 

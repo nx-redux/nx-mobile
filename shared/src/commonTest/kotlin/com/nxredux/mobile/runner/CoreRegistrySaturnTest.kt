@@ -26,6 +26,7 @@ class CoreRegistrySaturnTest {
         assertEquals("enabled", ss.defaultOptions["yabasanshiro_frameskip"])
         assertEquals("english", ss.defaultOptions["yabasanshiro_system_language"])
         assertEquals("disabled", ss.defaultOptions["yabasanshiro_force_hle_bios"])
+        assertEquals("original", ss.defaultOptions["yabasanshiro_resolution_mode"])
         assertTrue("yabasanshiro_force_hle_bios" in ss.lockedOptions)
         assertTrue("yabasanshiro_resolution_mode" in ss.lockedOptions)
         assertEquals(2, ss.players)

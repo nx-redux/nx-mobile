@@ -108,9 +108,10 @@ private val DISC_EXTENSIONS = setOf("iso", "bin", "img", "cue", "gdi", "chd", "m
 
 /**
  * A scan's disc probes, each file's answer reused from [previous] while its size and modified time (and a sheet's data
- * file's) are unchanged, and, for a nothing-recognised answer, while [DiscSignatures.VERSION] is too; every readable answer this scan used is in [used], for the next index. An answer from a failed
- * read (or a sheet whose data file is missing) is not kept, so the next scan asks again; neither is one for a file (or
- * data file) whose provider reports no modified time, as in [HeadReads].
+ * file's) are unchanged, and, for a nothing-recognised answer, while [DiscSignatures.VERSION] is too; every readable
+ * answer this scan used is in [used], for the next index. An answer from a failed read (or a sheet whose data file is
+ * missing) is not kept, so the next scan asks again; neither is one for a file (or data file) whose provider reports no
+ * modified time, as in [HeadReads].
  */
 internal class DiscProbes(private val probe: com.nxredux.mobile.library.disc.DiscProbe, previous: List<IndexedProbe>) {
     private val before = previous.associateBy { it.ref }

@@ -152,6 +152,8 @@ class PadMapTest {
                 assertEquals(retro, m.sends(onScreen), "$tag $letter")
             }
             assertTrue(m.segaCluster, tag)
+            assertTrue(m.isHidden(SELECT), tag)   // the Saturn pad has none; a physical SELECT + START still opens the menu
+            assertFalse(m.segaThree, tag)
             assertFalse(PadMap.isSegaPadTag(tag), tag)   // no 3/6-button choice: the Saturn pad is always the six
             assertEquals(START, m.sends(START), tag)
         }
