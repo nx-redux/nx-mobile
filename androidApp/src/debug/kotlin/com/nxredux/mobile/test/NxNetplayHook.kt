@@ -1,6 +1,8 @@
 package com.nxredux.mobile.test
 
 import android.content.Context
+import com.nxredux.mobile.library.CompanionLookup
+import com.nxredux.mobile.library.DiscSheet
 import com.nxredux.mobile.netplay.AndroidNetplay
 import com.nxredux.mobile.netplay.NetplayChannel
 import com.nxredux.mobile.netplay.NetplayRole
@@ -18,6 +20,7 @@ import com.nxredux.mobile.runner.PadMap
 import com.nxredux.mobile.runner.SegaPadType
 import com.nxredux.mobile.storage.DataRoot
 import com.nxredux.mobile.storage.FileRefs
+import com.nxredux.mobile.storage.FileRomsSource
 import com.nxredux.mobile.storage.Recent
 import com.swordfish.libretrodroid.NxLog
 import kotlinx.coroutines.CoroutineScope
@@ -88,9 +91,16 @@ internal object NxNetplayHook {
             val session = forcePad?.let { agreed.copy(segaPad = it) } ?: agreed
             NxTestResults.write(app, "netplay", "state" to "started", "core" to session.coreId, "pad" to session.segaPad)
             val runCore = CoreRegistry.forId(session.coreId) ?: descriptor   // the agreed core, as LaunchController.launchNetplay
+            val folder = FileRefs.of(file.parent ?: "/")
+            // A .cue/.m3u names the files beside it that the core loads too, as the launcher passes them.
+            val companions = when (val found = runCatching { DiscSheet.companions(FileRomsSource({ true }, { true }), folder, rom) }
+                .getOrElse { CompanionLookup.Missing(it.message ?: "companions", rom) }) {
+                is CompanionLookup.Found -> found.companions
+                is CompanionLookup.Missing -> { refuse("missing ${found.name}"); return@launch }
+            }
             NxTestResults.markShowWhenLocked(app)
             LibretroRunner(app) { true }.apply { recordLaunches = false }.launch(
-                GameSession(tag.uppercase(), file.nameWithoutExtension, runCore, FileRefs.of(path), FileRefs.of(file.parent ?: "/"), rom, netplay = session),
+                GameSession(tag.uppercase(), file.nameWithoutExtension, runCore, FileRefs.of(path), folder, rom, companions = companions, netplay = session),
                 Recent(path),
             )
         }
