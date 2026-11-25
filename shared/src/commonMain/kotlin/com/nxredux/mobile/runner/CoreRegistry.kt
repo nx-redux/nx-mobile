@@ -554,6 +554,8 @@ object CoreRegistry {
     private val cemuOptions = mapOf(
         "cemu_gpu_api" to "Vulkan", "cemu_screen_layout1" to "Stacked", "cemu_number_of_screen_layouts" to "1",
         "cemu_show_game_fps" to "disabled",
+        // The app's (3D Resolution rows, Res3dConsole.CEMU); native until the launch sends the scale.
+        "cemu_internal_resolution" to "native",
     ) + cemuLogKeys.associateWith { "disabled" }
     private val cemu = CoreDescriptor(
         "cemu", "libcemu_libretro_android.so", setOf("wua", "wux", "wud", "rpx"),

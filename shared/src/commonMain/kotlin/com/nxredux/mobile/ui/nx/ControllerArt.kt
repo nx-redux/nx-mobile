@@ -43,6 +43,7 @@ internal val consolePadsById: Map<String, ConsolePad> = run {
         "coleco" to ConsolePad(Res.drawable.menu_pad_coleco, 2.00f), "dc" to ConsolePad(Res.drawable.menu_pad_dc, 0.64f),
         "fbn" to ConsolePad(Res.drawable.menu_pad_fbn, 0.80f), "prboom" to vic20, "p8" to vic20,
         "gc" to ConsolePad(Res.drawable.menu_pad_gc, 1.21f), "wii" to ConsolePad(Res.drawable.menu_pad_wii, 2.00f),
+        "wiiu" to ConsolePad(Res.drawable.menu_pad_wiiu, 1.13f),
     )
 }
 

@@ -247,4 +247,18 @@ class Nds3dResolutionTest {
         assertEquals(2, Nds3dResolution.value(Nds3dMode.PERFORMANCE, 4, 2, 6, 9, shaded = true))
         assertEquals(1, Nds3dResolution.valueFor(emptyMap(), 3, 9, Res3dConsole.N3DS, shaded = true))
     }
+
+    @Test fun wiiUDrawsTheWholePictureOnCemuAtItsNamedScales() {
+        val cemu = Res3dConsole.CEMU
+        assertEquals(cemu, Res3dConsole.forTag("WIIU"))
+        assertEquals("cemu", cemu.coreId)
+        assertEquals("cemu_internal_resolution", cemu.coreKey)
+        assertEquals(listOf("native", "2x", "3x"), (1..3).map { cemu.coreValue(it) })
+        assertTrue(cemu.wholePicture)
+        // the Stacked frame is two 1280 x 720 screens: 1x needs 1280 x 1440 px, so a phone reaches 1x at most
+        assertEquals(1, cemu.displayMaxOf(1080 to 2400, null))
+        assertEquals(2, cemu.displayMaxOf(2560 to 2880, null))
+        assertTrue("cemu_internal_resolution" in CoreRegistry.forTag("WIIU")!!.lockedOptions)
+        assertEquals("native", CoreRegistry.forTag("WIIU")!!.defaultOptions["cemu_internal_resolution"])
+    }
 }

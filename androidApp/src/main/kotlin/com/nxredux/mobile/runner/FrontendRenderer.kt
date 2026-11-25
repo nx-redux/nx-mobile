@@ -154,6 +154,7 @@ internal class FrontendRenderer(
     private val isPsp get() = Res3dConsole.forTag(host.gameTag) == Res3dConsole.PSP
     private val isDolphin get() = Res3dConsole.forTag(host.gameTag) == Res3dConsole.DOLPHIN
     private val isDc get() = Res3dConsole.forTag(host.gameTag) == Res3dConsole.DC
+    private val isCemu get() = Res3dConsole.forTag(host.gameTag) == Res3dConsole.CEMU
     private val isN64 get() = Res3dConsole.forTag(host.gameTag) == Res3dConsole.N64
     private fun secondDsRegions(g: FloatArray) = host.secondDsRegions(g, screenMap)
 
@@ -641,6 +642,7 @@ internal class FrontendRenderer(
             map != null -> GLRetroView.ShaderSourceScale(map.topScale(n3ds = host.isN3ds))
             isPsp -> GLRetroView.ShaderSourceScale(PspResolution.frameScale(frameHeight), frameHeight)
             isDolphin -> GLRetroView.ShaderSourceScale(DolphinResolution.frameScale(frameHeight), frameHeight)
+            isCemu -> GLRetroView.ShaderSourceScale(CemuResolution.frameScale(frameHeight), frameHeight)
             // Flycast reports 640 x 480 whatever it draws at: 480 lines are 1x, each frame's own height gives its scale.
             isDc -> GLRetroView.ShaderSourceScale(1, DcResolution.NATIVE_H)
             // Both N64 renderers hand over 240 lines a scale.
@@ -741,6 +743,7 @@ internal class FrontendRenderer(
                 reportFlat3d(w, h, screen, shown, g, Ps1Resolution::shownScales, Ps1Resolution::displayMax)
             Res3dConsole.DC -> reportFlat3d(w, h, screen, shown, g, DcResolution::shownScales, DcResolution::displayMax)
             Res3dConsole.N64 -> reportFlat3d(w, h, screen, shown, g, N64Resolution::shownScales, N64Resolution::displayMax)
+            Res3dConsole.CEMU -> reportFlat3d(w, h, screen, shown, g, CemuResolution::shownScales, CemuResolution::displayMax)
             else -> Unit
         }
         if (viewport != lastViewport) {

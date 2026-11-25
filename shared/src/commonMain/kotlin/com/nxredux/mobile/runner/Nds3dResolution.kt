@@ -61,10 +61,13 @@ enum class Res3dConsole(
      * Nintendo 64 on Mupen64Plus-Next: GLideN64 draws the whole picture at its window size, a multiple of 320 x 240
      * (patches/mupen64plus_next/0014 applies it mid-game); ParaLLEl-RDP, on Vulkan, at its own upscaling ([alsoSet]).
      */
-    N64("mupen64plus_next", "mupen64plus-43screensize", 8, 4, "nx_n64_3d_resolution", "nx_n64_3d_max_scale", "nx_n64_3d_scale");
+    N64("mupen64plus_next", "mupen64plus-43screensize", 8, 4, "nx_n64_3d_resolution", "nx_n64_3d_max_scale", "nx_n64_3d_scale"),
 
-    /** The core draws its whole picture at the scale (PS1, PS2, PSP, Dolphin, Dreamcast), not only the 3D: the rows say "the game". */
-    val wholePicture: Boolean get() = this == PS1 || this == PCSX || this == PS2 || this == PSP || this == DOLPHIN || this == DC || this == N64
+    /** Wii U on Cemu: its Internal Resolution draws the whole picture (both screens, Stacked) at a multiple of 1280 x 720 each. */
+    CEMU("cemu", "cemu_internal_resolution", 3, 2, "nx_wiiu_3d_resolution", "nx_wiiu_3d_max_scale", "nx_wiiu_3d_scale");
+
+    /** The core draws its whole picture at the scale (PS1, PS2, PSP, Dolphin, Dreamcast, Wii U), not only the 3D: the rows say "the game". */
+    val wholePicture: Boolean get() = this == PS1 || this == PCSX || this == PS2 || this == PSP || this == DOLPHIN || this == DC || this == N64 || this == CEMU
 
     /** Performance draws at native size: no Scale row (the PS2 runs slowly above it; PCSX-ReARMed has only 1x and 2x). */
     val nativePerformance: Boolean get() = this == PS2 || this == PCSX
@@ -101,6 +104,7 @@ enum class Res3dConsole(
         PS1, PCSX -> window?.let { Ps1Resolution.displayMax(it.first, it.second) }
         DC -> window?.let { DcResolution.displayMax(it.first, it.second) }
         N64 -> window?.let { N64Resolution.displayMax(it.first, it.second) }
+        CEMU -> window?.let { CemuResolution.displayMax(it.first, it.second) }
     }
 
     /**
@@ -113,6 +117,7 @@ enum class Res3dConsole(
         PCSX -> if (n >= 2) "enabled" else "disabled"
         DC -> "${DcResolution.NATIVE_W * n}x${DcResolution.NATIVE_H * n}"
         N64 -> "${N64Resolution.NATIVE_W * n}x${N64Resolution.NATIVE_H * n}"
+        CEMU -> if (n == 1) "native" else "${n}x"
         else -> "$n"
     }
 
@@ -137,6 +142,7 @@ enum class Res3dConsole(
             "PS" -> PCSX
             "DC" -> DC
             "N64" -> N64
+            "WIIU" -> CEMU
             else -> null
         }
     }
@@ -460,6 +466,32 @@ object DolphinResolution {
     fun currentScale(pictureHeightPx: Int): Int = scales.currentScale(pictureHeightPx)
 
     /** The scale a frame [heightPx] rows tall was drawn at: the nearest whole (a PAL frame is 576 a scale). */
+    fun frameScale(heightPx: Int): Int = scales.frameScale(heightPx)
+
+    /** The shown scale and the second display's reach, as [Ps2Resolution.shownScales]. */
+    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> =
+        shownScalesBy(mainHeightPx, secondHeightPx, ::currentScale)
+}
+
+/**
+ * Cemu's internal resolution (cemu_internal_resolution): a whole multiple of the Wii U's 1280 x 720 screen. The Stacked
+ * layout puts the TV and the GamePad one above the other, so the frame is 1280 x 1440 a scale.
+ */
+object CemuResolution {
+    const val NATIVE_W = 1280
+    const val NATIVE_H = 1440
+
+    private const val MAX = 3
+
+    private val scales = WholeScale(NATIVE_W, NATIVE_H, MAX)
+
+    /** The scale the picture reaches fitted in a [w] x [h] px window, either way up, rounded up (1 to 3). */
+    fun displayMax(w: Int, h: Int): Int = scales.displayMax(w, h)
+
+    /** The scale a picture [pictureHeightPx] px tall shows at, rounded up (1 to 3). */
+    fun currentScale(pictureHeightPx: Int): Int = scales.currentScale(pictureHeightPx)
+
+    /** The scale a frame [heightPx] rows tall was drawn at: the nearest whole. */
     fun frameScale(heightPx: Int): Int = scales.frameScale(heightPx)
 
     /** The shown scale and the second display's reach, as [Ps2Resolution.shownScales]. */

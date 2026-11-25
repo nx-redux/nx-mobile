@@ -368,6 +368,7 @@ fun resolutionRows(console: Res3dConsole, displayMax: Int?, cap: Int = console.d
         Res3dConsole.PS1, Res3dConsole.PCSX -> "PS1"
         Res3dConsole.DC -> "Dreamcast"
         Res3dConsole.N64 -> "N64"
+        Res3dConsole.CEMU -> "console"
     }
     // what the scale draws: the PS2 and PSP cores draw the whole picture at it, the DS and 3DS ones only the 3D
     val drawn = if (console.wholePicture) "the game" else "3D"
