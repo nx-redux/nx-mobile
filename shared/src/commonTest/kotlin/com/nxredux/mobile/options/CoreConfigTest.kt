@@ -204,4 +204,13 @@ class CoreConfigTest {
         val running = listOf(renderer to "Auto", "a" to "1")
         assertEquals(running, CoreConfig.valuesToSave(running, mapOf(renderer to "Software"), emptySet()))
     }
+
+    @Test fun a_launch_forced_hle_bios_is_never_saved() {
+        val running = listOf("reicast_hle_bios" to "enabled", "a" to "1")
+        assertEquals(listOf("a" to "1"), CoreConfig.valuesToSave(running, emptyMap(), setOf("reicast_hle_bios")))
+        assertEquals(
+            listOf("reicast_hle_bios" to "disabled", "a" to "1"),
+            CoreConfig.valuesToSave(running, mapOf("reicast_hle_bios" to "disabled"), setOf("reicast_hle_bios")),
+        )
+    }
 }

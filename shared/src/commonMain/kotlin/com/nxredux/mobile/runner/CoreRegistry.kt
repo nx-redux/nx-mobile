@@ -807,7 +807,7 @@ object CoreRegistry {
         "MD" to listOf(segaCdDiscs),
         "PCE" to listOf(pceCdCard),
         "COLECO" to listOf(BiosNeed(listOf("colecovision.rom", "coleco.rom"))),
-        "DC" to listOf(BiosNeed(listOf("dc_boot.bin"), setOf("chd", "cdi", "gdi", "cue", "m3u"))),   // arcade sets bring their own BIOS
+        "DC" to listOf(BiosNeed(listOf("dc_boot.bin"), setOf("chd", "cdi", "gdi", "cue", "m3u"), hle = HleFallback("reicast_hle_bios", "enabled"))),   // arcade sets bring their own BIOS
         "PS2" to listOf(BiosNeed(emptyList(), anySuffix = ".bin")),   // the core's scan takes ".bin" only: .nvm / .mec do not count
     )
 
