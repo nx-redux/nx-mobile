@@ -3,10 +3,10 @@
 The presentation image keeps its picture from frame to frame instead of being wiped at the first blit of each Cemu
 frame. A frame that scans out only one screen, or is handed to the frontend between the two blits, left the other
 screen's half blank, which blinked the TV half of the Stacked layout (Breath of the Wild). The image is cleared only
-when it is created or a screen moves. A log line every five seconds counts the frames that carried only one screen.
+when it is created or a screen moves.
 
 diff --git a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
-index cbee7b2..6370a37 100644
+index cbee7b2..1fd68ee 100644
 --- a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
 +++ b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
 @@ -1120,6 +1120,8 @@ void VulkanRenderer::CreatePresentationImage(uint32 width, uint32 height)
@@ -18,60 +18,7 @@ index cbee7b2..6370a37 100644
  	cemuLog_log(LogType::Force, "[Vulkan-LR] Created presentation image {}x{} ({})", width, height,
  		m_presentImageIsSRGB ? "sRGB, blits encode into it" : "UNORM, blits go in as they are");
  }
-@@ -3919,6 +3921,52 @@ void VulkanRenderer::ClearColorImage(LatteTextureVk* vkTexture, uint32 sliceInde
- 	vkTexture->SetImageLayout(subresourceRange, outputLayout);
- }
- 
-+// How often a Cemu frame carried only one of the two screens, logged every
-+// five seconds while it happens (and once at the start either way), in the
-+// layouts that show both. A screen missing from a frame keeps its last
-+// picture; this says how often that is what the frontend shows.
-+void VulkanRenderer::CountPresentedScreens(bool padView)
-+{
-+	const uint8 screen = padView ? 2 : 1;
-+	const uint32 currentFrame = LatteGPUState.frameCounter;
-+	if (currentFrame == m_presentLastFrameCounter)
-+	{
-+		m_presentFrameScreens |= screen;
-+		return;
-+	}
-+
-+	const bool bothShown =
-+		g_libretroScreenLayout == LibretroScreenLayout::SideBySide ||
-+		g_libretroScreenLayout == LibretroScreenLayout::TopBottom ||
-+		g_libretroScreenLayout == LibretroScreenLayout::PictureInPicture ||
-+		g_libretroScreenLayout == LibretroScreenLayout::Stacked;
-+	auto& stats = m_presentScreenStats;
-+	const auto now = std::chrono::steady_clock::now();
-+	if (m_presentLastFrameCounter != ~0u && bothShown)
-+	{
-+		if (stats.frames == 0)
-+			stats.windowStart = now;
-+		stats.frames++;
-+		if (m_presentFrameScreens == 1)
-+			stats.tvOnly++;
-+		else if (m_presentFrameScreens == 2)
-+			stats.gamePadOnly++;
-+		if (m_presentFrameGamePadFirst)
-+			stats.gamePadFirst++;
-+		if (now - stats.windowStart >= std::chrono::seconds(5))
-+		{
-+			if (!stats.reported || stats.tvOnly || stats.gamePadOnly)
-+				cemuLog_log(LogType::Force, "[Vulkan-LR] screens per frame, last {} frames: {} TV only, {} GamePad only, {} GamePad first",
-+					stats.frames, stats.tvOnly, stats.gamePadOnly, stats.gamePadFirst);
-+			stats = {};
-+			stats.reported = true;
-+		}
-+	}
-+	m_presentLastFrameCounter = currentFrame;
-+	m_presentFrameScreens = screen;
-+	m_presentFrameGamePadFirst = padView;
-+}
-+
- void VulkanRenderer::DrawBackbufferQuad(LatteTextureView* texView, RendererOutputShader* shader, bool useLinearTexFilter, sint32 imageX, sint32 imageY, sint32 imageWidth, sint32 imageHeight, bool padView, bool clearBackground)
- {
- 	// Skip screens the DRC layout says we don't present (Disabled mode skips
-@@ -3931,14 +3979,13 @@ void VulkanRenderer::DrawBackbufferQuad(LatteTextureView* texView, RendererOutpu
+@@ -3931,14 +3933,13 @@ void VulkanRenderer::DrawBackbufferQuad(LatteTextureView* texView, RendererOutpu
  
  		if (m_presentImage != VK_NULL_HANDLE)
  		{
@@ -93,12 +40,10 @@ index cbee7b2..6370a37 100644
  			UpdatePresentationImageColorSpace();
  			FreeRetiredPresentationImages(false);
  			if (LibretroDRC_OutputFollowsScreen(padView))
-@@ -3948,10 +3995,18 @@ void VulkanRenderer::DrawBackbufferQuad(LatteTextureView* texView, RendererOutpu
+@@ -3948,10 +3949,16 @@ void VulkanRenderer::DrawBackbufferQuad(LatteTextureView* texView, RendererOutpu
  				UpdatePresentationImageSize((uint32)width, (uint32)height, padView);
  			}
  
-+			CountPresentedScreens(padView);
-+
 +			// Pick destination sub-region from the DRC layout. Top-left origin
 +			// matches Vulkan dstOffsets convention.
 +			int dx = 0, dy = 0, dw = (int)m_presentWidth, dh = (int)m_presentHeight;
@@ -115,7 +60,7 @@ index cbee7b2..6370a37 100644
  
  			// Blit source texture to presentation image (GPU-only, no CPU readback)
  			draw_endRenderPass();
-@@ -3970,21 +4025,22 @@ void VulkanRenderer::DrawBackbufferQuad(LatteTextureView* texView, RendererOutpu
+@@ -3970,21 +3977,22 @@ void VulkanRenderer::DrawBackbufferQuad(LatteTextureView* texView, RendererOutpu
  			VkImageSubresourceRange fullRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
  			VkImageMemoryBarrier dstBarrier{};
  			dstBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -145,7 +90,7 @@ index cbee7b2..6370a37 100644
  			if (!preservePrior)
  			{
  				VkClearColorValue clearColor{};
-@@ -4009,11 +4065,6 @@ void VulkanRenderer::DrawBackbufferQuad(LatteTextureView* texView, RendererOutpu
+@@ -4009,11 +4017,6 @@ void VulkanRenderer::DrawBackbufferQuad(LatteTextureView* texView, RendererOutpu
  					0, 0, nullptr, 0, nullptr, 1, &clearBarrier);
  			}
  
@@ -158,10 +103,10 @@ index cbee7b2..6370a37 100644
  			// the size the guest asked for. They differ whenever a resolution
  			// overwrite is in effect - a graphic pack, or the core's own
 diff --git a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h
-index 265e083..6f5d362 100644
+index 265e083..f5d26fc 100644
 --- a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h
 +++ b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h
-@@ -667,11 +667,28 @@ public:
+@@ -667,11 +667,16 @@ public:
  	bool m_libretroFramePending = false;
  	uint32 m_presentWidth = 0;
  	uint32 m_presentHeight = 0;
@@ -169,6 +114,7 @@ index 265e083..6f5d362 100644
 -	// last touched, so the first DrawBackbufferQuad of each frame clears it
 -	// before the blit and subsequent blits in that frame preserve prior
 -	// content. ~0u sentinel = no blit yet.
+-	uint32 m_presentLastFrameCounter = ~0u;
 +	// Where each screen (0 TV, 1 GamePad) was last blitted in m_presentImage.
 +	// The image keeps its content across frames, so a screen moving (a layout
 +	// or GamePad Position change) is the one time it is cleared again - or the
@@ -179,18 +125,6 @@ index 265e083..6f5d362 100644
 +		int x = 0, y = 0, width = 0, height = 0;
 +	};
 +	PresentScreenRect m_presentScreenRect[2];
-+	// Which screens each Cemu frame (LatteGPUState.frameCounter) blitted, for
-+	// the log of frames that carried only one of the two screens.
- 	uint32 m_presentLastFrameCounter = ~0u;
-+	uint8 m_presentFrameScreens = 0;
-+	bool m_presentFrameGamePadFirst = false;
-+	struct PresentScreenStats
-+	{
-+		uint32 frames = 0, tvOnly = 0, gamePadOnly = 0, gamePadFirst = 0;
-+		bool reported = false;
-+		std::chrono::steady_clock::time_point windowStart{};
-+	} m_presentScreenStats;
-+	void CountPresentedScreens(bool padView);
  	// Whether the image itself is an sRGB format. The view handed to the
  	// frontend is always UNORM, so this decides one thing only: whether a blit
  	// into the image encodes linear -> sRGB on the way in. See
