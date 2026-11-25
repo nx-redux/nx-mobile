@@ -132,6 +132,11 @@ enum class SkinVariant {
     @SerialName("vb") VB,
     /** The WonderSwan (and Color): the X cursor as the d-pad, the Y cursor as DPAD2 on the face's spot, B / A, START and ROTATE. */
     @SerialName("ws") WS,
+    /**
+     * The Wii U GamePad: two 16:9 screens (the TV over the GamePad, the touch screen), the left stick and d-pad, A B X Y,
+     * L R and ZL ZR (L2 R2), the right stick (`CSTICK`), L3 R3, − + (SELECT START), HOME and SWAP.
+     */
+    @SerialName("wiiu") WIIU,
 }
 
 /**
